@@ -1,0 +1,1143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RPG Reactor</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            overflow: hidden;
+            background-color: #1e1e1e;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+            color: #cccccc;
+        }
+
+        #app {
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Menu Bar */
+        #menu-bar {
+            background-color: #2d2d30;
+            border-bottom: 1px solid #3e3e42;
+            display: flex;
+            padding: 0;
+            user-select: none;
+        }
+
+        .menu-item {
+            padding: 8px 16px;
+            cursor: pointer;
+            font-size: 13px;
+            transition: background-color 0.15s;
+        }
+
+        .menu-item:hover {
+            background-color: #3e3e42;
+        }
+
+        /* Toolbar */
+        #toolbar {
+            background-color: #2d2d30;
+            border-bottom: 1px solid #3e3e42;
+            padding: 8px;
+            display: flex;
+            gap: 4px;
+        }
+
+        .tool-button {
+            background-color: #3e3e42;
+            border: 1px solid #555555;
+            color: #cccccc;
+            padding: 6px 12px;
+            cursor: pointer;
+            font-size: 12px;
+            border-radius: 3px;
+            transition: background-color 0.15s;
+        }
+
+        .tool-button:hover {
+            background-color: #505050;
+        }
+
+        .tool-button:active {
+            background-color: #2a2a2a;
+        }
+
+        .tool-button.active {
+            background-color: #007acc;
+            border-color: #007acc;
+        }
+
+        /* Main Content Area */
+        #main-content {
+            flex: 1;
+            display: flex;
+            overflow: hidden;
+        }
+
+        /* Welcome Screen */
+        #welcome-screen {
+            flex: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 40px;
+        }
+
+        .welcome-button:hover {
+            opacity: 0.9;
+            transform: translateY(-2px);
+            transition: all 0.2s;
+        }
+
+        .welcome-button:active {
+            transform: translateY(0);
+        }
+
+        /* Editor UI */
+        #editor-ui {
+            display: flex;
+            flex: 1;
+        }
+
+        /* Sidebar */
+        #sidebar {
+            width: 420px;
+            background-color: #252526;
+            border-right: 1px solid #3e3e42;
+            display: flex;
+            flex-direction: column;
+            overflow-y: hidden;
+        }
+
+        .sidebar-section {
+            border-bottom: 1px solid #3e3e42;
+        }
+
+        .sidebar-header {
+            background-color: #2d2d30;
+            padding: 8px 12px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            color: #999999;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .sidebar-header:hover {
+            background-color: #3e3e42;
+        }
+
+        .sidebar-content {
+            padding: 8px;
+        }
+
+        .tree-item {
+            padding: 6px 8px;
+            cursor: pointer;
+            font-size: 13px;
+            border-radius: 3px;
+            margin: 2px 0;
+        }
+
+        .tree-item:hover {
+            background-color: #2a2a2a;
+        }
+
+        .tree-item.selected {
+            background-color: #094771;
+        }
+
+        /* Workspace */
+        #workspace {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background-color: #1e1e1e;
+        }
+
+        #workspace-tabs {
+            background-color: #2d2d30;
+            border-bottom: 1px solid #3e3e42;
+            display: flex;
+            min-height: 35px;
+        }
+
+        .workspace-tab {
+            padding: 8px 16px;
+            background-color: #2d2d30;
+            border-right: 1px solid #3e3e42;
+            cursor: pointer;
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .workspace-tab.active {
+            background-color: #1e1e1e;
+        }
+
+        .workspace-tab:hover {
+            background-color: #3e3e42;
+        }
+
+        .workspace-tab.active:hover {
+            background-color: #1e1e1e;
+        }
+
+        .tab-close {
+            font-size: 16px;
+            line-height: 1;
+            opacity: 0.6;
+        }
+
+        .tab-close:hover {
+            opacity: 1;
+        }
+
+        #canvas-container {
+            flex: 1;
+            background-color: #111111;
+            position: relative;
+            overflow: auto;  /* Changed from hidden to auto for scrollbars */
+            width: 100%;
+            height: 100%;
+        }
+
+
+        .property-group {
+            border-bottom: 1px solid #3e3e42;
+            padding: 12px;
+        }
+
+        .property-label {
+            font-size: 12px;
+            color: #999999;
+            margin-bottom: 4px;
+        }
+
+        .property-input {
+            width: 100%;
+            background-color: #3e3e42;
+            border: 1px solid #555555;
+            color: #cccccc;
+            padding: 6px 8px;
+            font-size: 13px;
+            border-radius: 3px;
+        }
+
+        .property-input:focus {
+            outline: none;
+            border-color: #007acc;
+        }
+
+        /* Status Bar */
+        #status-bar {
+            background-color: #007acc;
+            color: white;
+            padding: 4px 12px;
+            font-size: 12px;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        /* Scrollbar styling */
+        ::-webkit-scrollbar {
+            width: 10px;
+            height: 10px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #1e1e1e;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #424242;
+            border-radius: 5px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #4e4e4e;
+        }
+
+        /* Database Viewer */
+        #database-viewer {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0, 0, 0, 0.8);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        #database-viewer.active {
+            display: flex;
+        }
+
+        .database-window {
+            background-color: #1e1e1e;
+            border: 1px solid #3e3e42;
+            border-radius: 8px;
+            width: 90%;
+            max-width: 1200px;
+            height: 80%;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+        }
+
+        .database-header {
+            background-color: #2d2d30;
+            padding: 12px 16px;
+            border-bottom: 1px solid #3e3e42;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-radius: 8px 8px 0 0;
+        }
+
+        .database-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: #cccccc;
+        }
+
+        .database-close {
+            background: none;
+            border: none;
+            color: #999;
+            font-size: 24px;
+            cursor: pointer;
+            padding: 0;
+            width: 30px;
+            height: 30px;
+            line-height: 1;
+        }
+
+        .database-close:hover {
+            color: #fff;
+        }
+
+        .database-content {
+            flex: 1;
+            display: flex;
+            overflow: hidden;
+        }
+
+        .database-navigation {
+            width: 200px;
+            background-color: #1e1e1e;
+            border-right: 1px solid #3e3e42;
+            overflow-y: auto;
+        }
+
+        .database-nav-item {
+            padding: 12px 16px;
+            cursor: pointer;
+            border-bottom: 1px solid #2d2d30;
+            font-size: 13px;
+            color: #cccccc;
+            transition: background-color 0.2s;
+        }
+
+        .database-nav-item:hover {
+            background-color: #2a2a2a;
+        }
+
+        .database-nav-item.active {
+            background-color: #094771;
+            border-left: 3px solid #007acc;
+            padding-left: 13px;
+        }
+
+        .database-main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .database-section-title {
+            background-color: #000;
+            padding: 14px 20px;
+            border-bottom: 2px solid #007acc;
+            font-size: 20px;
+            font-weight: 600;
+            color: #fff;
+        }
+
+        .database-entries-content {
+            flex: 1;
+            display: flex;
+            overflow: hidden;
+        }
+
+        .database-list {
+            flex: 1;
+            background-color: #252526;
+            overflow-y: auto;
+        }
+
+        .database-list-item {
+            padding: 10px 16px;
+            cursor: pointer;
+            border-bottom: 1px solid #2d2d30;
+            font-size: 13px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .database-list-item:hover {
+            background-color: #2a2a2a;
+        }
+
+        .database-list-item.selected {
+            background-color: #094771;
+        }
+
+        .database-list-id {
+            color: #999;
+            font-size: 11px;
+        }
+
+        .database-detail {
+            flex: 1;
+            padding: 0;
+            overflow-y: auto;
+            overflow-x: hidden;
+            background-color: #2d2d30;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .database-section {
+            border-bottom: 1px solid #3e3e42;
+        }
+
+        .database-section-header {
+            background-color: #000;
+            padding: 10px 16px;
+            font-size: 15px;
+            font-weight: 600;
+            color: #fff;
+        }
+
+        .database-section-content {
+            padding: 16px;
+            background-color: #2d2d30;
+        }
+
+        /* Grid layout for database sections */
+        .database-sections-grid {
+            display: grid;
+            grid-template-columns: minmax(300px, 400px) 1fr;
+            gap: 16px;
+            max-width: 100%;
+            box-sizing: border-box;
+        }
+
+        .database-section.full-width {
+            grid-column: 1 / -1;
+        }
+
+        .database-section {
+            min-width: 0; /* Allow grid items to shrink */
+        }
+
+        .database-preview {
+            background-color: #252526;
+            border: 1px solid #3e3e42;
+            border-radius: 4px;
+            padding: 16px;
+            margin-bottom: 12px;
+            text-align: center;
+            min-height: 100px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .form-row {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 12px;
+            align-items: center;
+        }
+
+        .form-group {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .form-group-fixed {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .sprite-preview {
+            image-rendering: pixelated;
+            image-rendering: -moz-crisp-edges;
+            image-rendering: crisp-edges;
+        }
+
+        .icon-preview {
+            width: 32px;
+            height: 32px;
+            image-rendering: pixelated;
+            image-rendering: -moz-crisp-edges;
+            image-rendering: crisp-edges;
+            transform: scale(2);
+        }
+
+        .database-field {
+            margin-bottom: 16px;
+        }
+
+        .database-field-label {
+            font-size: 13px;
+            color: #ccc;
+            min-width: 80px;
+            white-space: nowrap;
+        }
+
+        .database-field-value {
+            background-color: #1e1e1e;
+            border: 1px solid #555;
+            color: #ccc;
+            padding: 4px 8px;
+            font-size: 13px;
+            border-radius: 2px;
+            font-family: inherit;
+        }
+
+        .database-field-value:focus {
+            outline: none;
+            border-color: #007acc;
+            background-color: #252526;
+        }
+
+        .database-field-value:read-only {
+            background-color: #2d2d30;
+            color: #999;
+        }
+
+        .database-field-value-small {
+            width: 60px;
+        }
+
+        .database-field-value-medium {
+            width: 200px;
+        }
+
+        .traits-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 8px;
+        }
+
+        .traits-table th {
+            background-color: #3e3e42;
+            padding: 6px 8px;
+            font-size: 12px;
+            text-align: left;
+            font-weight: 600;
+            border: 1px solid #555;
+        }
+
+        .traits-table td {
+            background-color: #1e1e1e;
+            padding: 6px 8px;
+            font-size: 12px;
+            border: 1px solid #555;
+        }
+
+        /* Stylized graphic preview boxes */
+        .graphic-preview-box {
+            background: linear-gradient(135deg, #2a2d30 0%, #1e2022 100%);
+            border: 2px solid #4a4d50;
+            border-radius: 8px;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+            transition: border-color 0.2s;
+        }
+
+        .graphic-preview-box:hover {
+            border-color: #007acc;
+        }
+
+        .graphic-preview-label {
+            font-size: 13px;
+            font-weight: 600;
+            color: #007acc;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .graphic-canvas-container {
+            background: #1a1d1e;
+            border: 1px solid #3e3e42;
+            border-radius: 4px;
+            padding: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 80px;
+            min-height: 80px;
+        }
+
+        .graphic-selector-button {
+            background: linear-gradient(to bottom, #007acc 0%, #005a9e 100%);
+            border: none;
+            color: white;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 500;
+            transition: all 0.2s;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        }
+
+        .graphic-selector-button:hover {
+            background: linear-gradient(to bottom, #0098ff 0%, #007acc 100%);
+            box-shadow: 0 3px 6px rgba(0, 122, 204, 0.3);
+            transform: translateY(-1px);
+        }
+
+        .graphic-selector-button:active {
+            transform: translateY(0);
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+        }
+
+        .graphics-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+            margin-bottom: 16px;
+            max-width: 100%;
+        }
+
+        @media (max-width: 900px) {
+            .graphics-grid {
+                grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            }
+        }
+
+        /* Audio Player Styles */
+        .audio-player-controls {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 16px;
+            align-items: center;
+        }
+
+        .audio-player-button {
+            background: #007acc;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 13px;
+        }
+
+        .audio-player-button:hover {
+            background: #005a9e;
+        }
+
+        .audio-player-button:disabled {
+            background: #555;
+            cursor: not-allowed;
+        }
+
+        .audio-player-info {
+            background-color: #1e1e1e;
+            border: 1px solid #555;
+            padding: 12px;
+            border-radius: 4px;
+            margin-bottom: 16px;
+        }
+
+        .audio-player-info .current-track {
+            font-size: 14px;
+            color: #007acc;
+            margin-bottom: 4px;
+        }
+
+        .audio-player-info .track-time {
+            font-size: 12px;
+            color: #999;
+        }
+
+        .audio-track-item {
+            padding: 8px 12px;
+            cursor: pointer;
+            border-bottom: 1px solid #3e3e42;
+            font-size: 13px;
+        }
+
+        .audio-track-item:hover {
+            background-color: #2a2d2e;
+        }
+
+        .audio-track-item.playing {
+            background-color: #1e3a52;
+            color: #007acc;
+        }
+
+        .volume-control {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .volume-slider {
+            width: 100px;
+        }
+
+        .audio-tab {
+            background: #2d2d30;
+            color: #ccc;
+            border: none;
+            padding: 8px 16px;
+            cursor: pointer;
+            font-size: 13px;
+            border-top-left-radius: 4px;
+            border-top-right-radius: 4px;
+            transition: background 0.2s;
+        }
+
+        .audio-tab:hover {
+            background: #3e3e42;
+        }
+
+        .audio-tab.active {
+            background: #007acc;
+            color: white;
+        }
+
+        .audio-control-slider {
+            -webkit-appearance: none;
+            width: 100%;
+            height: 6px;
+            border-radius: 3px;
+            background: #3e3e42;
+            outline: none;
+        }
+
+        .audio-control-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: #007acc;
+            cursor: pointer;
+        }
+
+        .audio-control-slider::-moz-range-thumb {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: #007acc;
+            cursor: pointer;
+            border: none;
+        }
+
+        @keyframes pulse {
+            0%, 100% {
+                opacity: 1;
+            }
+            50% {
+                opacity: 0.5;
+            }
+        }
+
+        /* Modal Styles */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            z-index: 10000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal-content {
+            background-color: #2d2d30;
+            border: 1px solid #3e3e42;
+            border-radius: 6px;
+            max-width: 600px;
+            width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+        }
+
+        .modal-header {
+            background-color: #252526;
+            padding: 16px 20px;
+            border-bottom: 1px solid #3e3e42;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-header h2 {
+            margin: 0;
+            color: #cccccc;
+            font-size: 18px;
+        }
+
+        .modal-close {
+            color: #cccccc;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+            line-height: 1;
+            transition: color 0.15s;
+        }
+
+        .modal-close:hover {
+            color: #007acc;
+        }
+
+        .modal-body {
+            padding: 20px;
+            color: #cccccc;
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <!-- Splash Screen -->
+        <div id="splash-screen" style="
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #1e1e1e;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 10000;
+            flex-direction: column;
+        ">
+            <img src="images/logo.png" alt="RPG Reactor" style="max-width: 500px; width: 80%; height: auto; margin-bottom: 24px;" onerror="this.style.display='none'">
+            <div style="color: #007acc; font-size: 18px; animation: pulse 1.5s infinite;">Loading...</div>
+        </div>
+
+        <!-- Toolbar - only shown when project is loaded -->
+        <div id="toolbar" class="project-only" style="display: none;">
+            <button class="tool-button" data-action="save">💾 Save</button>
+            <button class="tool-button" data-action="save-all">💾 Save All</button>
+            <div style="width: 1px; background: #555; margin: 0 4px;"></div>
+            <button class="tool-button" data-action="playtest">▶ Playtest</button>
+            <div style="width: 1px; background: #555; margin: 0 4px;"></div>
+            <!-- Drawing Tools -->
+            <button class="tool-button tool-draw-mode active" data-tool="pencil" title="Pencil Tool">✏️ Pencil</button>
+            <button class="tool-button tool-draw-mode" data-tool="rectangle" title="Rectangle Tool">▢ Rectangle</button>
+            <button class="tool-button tool-draw-mode" data-tool="circle" title="Circle Tool">⭕ Circle</button>
+            <button class="tool-button tool-draw-mode" data-tool="fill" title="Fill Tool">🪣 Fill</button>
+            <div style="width: 1px; background: #555; margin: 0 4px;"></div>
+            <button class="tool-button" data-action="eraser" title="Eraser (Delete tiles)">🧹 Eraser</button>
+        </div>
+
+        <!-- Main Content -->
+        <div id="main-content">
+            <!-- Welcome Screen - shown when no project is loaded -->
+            <div id="welcome-screen">
+                <div style="text-align: center; max-width: 600px;">
+                    <!-- Logo -->
+                    <img src="images/logo.png" alt="RPG Reactor" style="max-width: 400px; width: 100%; height: auto; margin-bottom: 24px;" onerror="this.style.display='none'">
+
+                    <h1 style="font-size: 48px; margin-bottom: 16px; color: #007acc;">RPG Reactor</h1>
+                    <p style="font-size: 18px; color: #999; margin-bottom: 40px;">
+                        Create amazing RPG games with an open-source, cross-platform engine
+                    </p>
+
+                    <div style="display: flex; gap: 20px; justify-content: center; margin-bottom: 60px;">
+                        <button class="welcome-button" data-action="new-project" style="
+                            background: #007acc;
+                            color: white;
+                            border: none;
+                            padding: 16px 32px;
+                            font-size: 16px;
+                            border-radius: 4px;
+                            cursor: pointer;
+                            font-weight: 600;
+                        ">
+                            New Project
+                        </button>
+                        <button class="welcome-button" data-action="open-project" style="
+                            background: #3e3e42;
+                            color: white;
+                            border: 1px solid #555;
+                            padding: 16px 32px;
+                            font-size: 16px;
+                            border-radius: 4px;
+                            cursor: pointer;
+                            font-weight: 600;
+                        ">
+                            Open Project
+                        </button>
+                    </div>
+
+                    <div style="text-align: left; background: #252526; padding: 24px; border-radius: 8px; border: 1px solid #3e3e42;">
+                        <h3 style="margin-top: 0; color: #ccc; margin-bottom: 16px;">Getting Started</h3>
+                        <ul style="color: #999; line-height: 1.8; margin: 0;">
+                            <li>Create a new project to start building your RPG</li>
+                            <li>Design maps, events, and game mechanics</li>
+                            <li>Test your game instantly with the built-in playtest feature</li>
+                            <li>Export your game for Windows, Mac, and Linux</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Editor UI - only shown when project is loaded -->
+            <div id="editor-ui" class="project-only" style="display: none; flex: 1; display: none;">
+                <!-- Sidebar -->
+                <div id="sidebar">
+                    <!-- Tileset Palette Section -->
+                    <div class="sidebar-section" id="tileset-palette-section" style="display: none;">
+                        <div class="sidebar-header">Tileset Palette</div>
+                        <div class="sidebar-content" id="tileset-palette-content" style="padding: 0; max-height: 400px; overflow: auto;">
+                            <!-- Tileset palette viewer will be initialized here -->
+                        </div>
+                    </div>
+
+                    <div class="sidebar-section">
+                        <div class="sidebar-header">Maps</div>
+                        <div class="sidebar-content" id="maps-list" style="max-height: 300px; overflow-y: auto;">
+                            <div class="tree-item">No maps yet</div>
+                        </div>
+                    </div>
+                    <div class="sidebar-section">
+                        <div class="sidebar-header">Resources</div>
+                        <div class="sidebar-content">
+                            <div class="tree-item">Characters</div>
+                            <div class="tree-item">Tilesets</div>
+                            <div class="tree-item">Audio</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Workspace -->
+                <div id="workspace">
+                    <div id="workspace-tabs"></div>
+                    <div id="canvas-container"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Status Bar -->
+        <div id="status-bar">
+            <span>RPG Reactor v0.1.0</span>
+            <span>Ready</span>
+        </div>
+    </div>
+
+    <!-- Database Viewer Modal -->
+    <div id="database-viewer">
+        <div class="database-window">
+            <div class="database-header">
+                <div class="database-title">Database</div>
+                <button class="database-close" id="database-close-btn">×</button>
+            </div>
+            <div class="database-content">
+                <div class="database-navigation" id="database-navigation"></div>
+                <div class="database-main-content">
+                    <div class="database-entries-content">
+                        <div style="display: flex; flex-direction: column; min-width: 250px; max-width: 250px; border-right: 1px solid #3e3e42;">
+                            <div class="database-section-title" id="database-viewer-title">Select a category</div>
+                            <div class="database-list" id="database-list"></div>
+                        </div>
+                        <div class="database-detail" id="database-detail">
+                            <p style="color: #999; text-align: center; margin-top: 100px;">Select an entry from the list</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Image Picker Modal -->
+    <div id="image-picker-modal" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(0, 0, 0, 0.8); display: none; justify-content: center; align-items: center; z-index: 1001;">
+        <div style="background-color: #1e1e1e; border: 1px solid #3e3e42; border-radius: 8px; width: 90%; max-width: 900px; height: 80%; display: flex; flex-direction: column; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);">
+            <div style="background-color: #2d2d30; padding: 12px 16px; border-bottom: 1px solid #3e3e42; display: flex; justify-content: space-between; align-items: center; border-radius: 8px 8px 0 0;">
+                <div id="image-picker-title" style="font-size: 16px; font-weight: 600; color: #cccccc;">Select Image</div>
+                <button id="image-picker-close-btn" style="background: none; border: none; color: #999; font-size: 24px; cursor: pointer; padding: 0; width: 30px; height: 30px; line-height: 1;">×</button>
+            </div>
+            <div style="flex: 1; display: flex; overflow: hidden;">
+                <div id="image-picker-list" style="width: 300px; background-color: #252526; border-right: 1px solid #3e3e42; overflow-y: auto;"></div>
+                <div id="image-picker-preview" style="flex: 1; padding: 20px; overflow-y: auto; background-color: #2d2d30; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+                    <p style="color: #999; text-align: center;">Select an image to preview</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- About Modal -->
+    <div id="about-modal" class="modal">
+        <div class="modal-content" style="max-width: 500px; text-align: center;">
+            <div class="modal-header">
+                <h2>About RPG Reactor</h2>
+                <span class="modal-close" onclick="document.getElementById('about-modal').style.display='none'">&times;</span>
+            </div>
+            <div class="modal-body">
+                <img src="images/logo.png" alt="RPG Reactor" style="max-width: 300px; width: 100%; height: auto; margin-bottom: 24px;" onerror="this.style.display='none'">
+
+                <h3 style="color: #007acc; margin-bottom: 16px;">RPG Reactor v0.1.0</h3>
+
+                <p style="color: #ccc; line-height: 1.6; margin-bottom: 16px;">
+                    An open-source, cross-platform RPG game engine built with NW.js and Pixi.js
+                </p>
+
+                <p style="color: #999; font-size: 13px; line-height: 1.6; margin-bottom: 16px;">
+                    Create amazing RPG games with a professional editor that runs on Windows, Mac, and Linux.
+                    Fully compatible with RPG Maker MZ projects.
+                </p>
+
+                <p style="color: #999; font-size: 12px;">
+                    License: CC0-1.0 (Public Domain)
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Audio Player Modal -->
+    <div id="audio-player-modal" class="modal">
+        <div class="modal-content" style="max-width: 900px;">
+            <div class="modal-header">
+                <h2>♪ Audio Player</h2>
+                <span class="modal-close" onclick="document.getElementById('audio-player-modal').style.display='none'">&times;</span>
+            </div>
+            <div class="modal-body">
+                <!-- Audio Type Tabs -->
+                <div style="display: flex; gap: 4px; margin-bottom: 16px; border-bottom: 2px solid #3e3e42;">
+                    <button class="audio-tab active" data-type="bgm">BGM (Music)</button>
+                    <button class="audio-tab" data-type="bgs">BGS (Ambient)</button>
+                    <button class="audio-tab" data-type="me">ME (Jingles)</button>
+                    <button class="audio-tab" data-type="se">SE (Effects)</button>
+                </div>
+
+                <!-- Player Info -->
+                <div class="audio-player-info" id="audio-player-info">
+                    <div class="current-track" id="current-track-name">No track selected</div>
+                    <div class="track-time" id="track-time">0:00 / 0:00</div>
+                </div>
+
+                <!-- Playback Controls -->
+                <div class="audio-player-controls">
+                    <button class="audio-player-button" id="btn-play" disabled>▶ Play</button>
+                    <button class="audio-player-button" id="btn-pause" disabled>⏸ Pause</button>
+                    <button class="audio-player-button" id="btn-stop" disabled>⏹ Stop</button>
+                    <button class="audio-player-button" id="btn-loop">🔁 Loop: Off</button>
+                </div>
+
+                <!-- Audio Controls Grid -->
+                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; margin-top: 16px; padding: 12px; background: #252526; border-radius: 4px;">
+                    <!-- Volume Control -->
+                    <div>
+                        <label style="display: block; font-size: 12px; color: #ccc; margin-bottom: 4px;">Volume</label>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <input type="range" class="audio-control-slider" id="volume-slider" min="0" max="100" value="80" style="flex: 1;">
+                            <span style="font-size: 12px; color: #ccc; min-width: 40px;" id="volume-value">80%</span>
+                        </div>
+                    </div>
+
+                    <!-- Pitch Control -->
+                    <div>
+                        <label style="display: block; font-size: 12px; color: #ccc; margin-bottom: 4px;">Pitch</label>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <input type="range" class="audio-control-slider" id="pitch-slider" min="50" max="150" value="100" style="flex: 1;">
+                            <span style="font-size: 12px; color: #ccc; min-width: 40px;" id="pitch-value">100%</span>
+                        </div>
+                    </div>
+
+                    <!-- Pan Control -->
+                    <div>
+                        <label style="display: block; font-size: 12px; color: #ccc; margin-bottom: 4px;">Pan</label>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <input type="range" class="audio-control-slider" id="pan-slider" min="-100" max="100" value="0" style="flex: 1;">
+                            <span style="font-size: 12px; color: #ccc; min-width: 40px;" id="pan-value">Center</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Track List -->
+                <div style="display: grid; grid-template-columns: 1fr; gap: 0; max-height: 350px; overflow-y: auto; border: 1px solid #555; border-radius: 4px; margin-top: 16px;">
+                    <div id="audio-track-list" style="background: #1e1e1e;">
+                        <p style="color: #999; padding: 20px; text-align: center;">Please load a project first</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="node_modules/pixi.js/dist/pixi.min.js"></script>
+    <!-- Core data managers -->
+    <script src="src/ProjectManager.js"></script>
+    <script src="src/DatabaseManager.js"></script>
+    <!-- Map editing subsystems -->
+    <script src="src/TilemapManager.js"></script>
+    <script src="src/RegionManager.js"></script>
+    <script src="src/MapEditor.js"></script>
+    <script src="src/TilesetPaletteViewer.js"></script>
+    <!-- Refactored modules -->
+    <script src="src/RendererManager.js"></script>
+    <script src="src/UIManager.js"></script>
+    <script src="src/ProjectController.js"></script>
+    <script src="src/AudioPlayer.js"></script>
+    <script src="src/PlaytestManager.js"></script>
+    <!-- Database editor modules (load before main DatabaseEditorUI) -->
+    <script src="src/database/DatabaseCommonUI.js"></script>
+    <script src="src/database/DatabaseItemBaseEditor.js"></script>
+    <script src="src/database/DatabaseActorEditor.js"></script>
+    <script src="src/database/DatabaseClassEditor.js"></script>
+    <script src="src/database/DatabaseSkillEditor.js"></script>
+    <script src="src/database/DatabaseItemEditor.js"></script>
+    <script src="src/database/DatabaseWeaponEditor.js"></script>
+    <script src="src/database/DatabaseArmorEditor.js"></script>
+    <script src="src/database/DatabaseEnemyEditor.js"></script>
+    <script src="src/database/DatabaseTroopEditor.js"></script>
+    <script src="src/database/DatabaseStateEditor.js"></script>
+    <script src="src/database/DatabaseAnimationEditor.js"></script>
+    <script src="src/database/DatabaseTilesetEditor.js"></script>
+    <script src="src/DatabaseEditorUI.js"></script>
+    <!-- Main orchestrator -->
+    <script src="src/main.js"></script>
+</body>
+</html>

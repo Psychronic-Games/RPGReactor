@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cat:*)",
+      "Bash(python3:*)",
+      "Bash(taskkill:*)",
+      "Bash(nul)",
+      "Bash(cmd /c RPGReactor.bat)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

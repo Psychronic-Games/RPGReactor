@@ -1,0 +1,40 @@
+# NW.js binaries (platform-specific, users should download their own)
+nwjs-win/
+nwjs-linux/
+nwjs-mac/
+
+# Node modules (if any)
+node_modules/
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE/Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Log files
+*.log
+npm-debug.log*
+
+# Backup files
+*.backup
+*.bak
+*~
+
+# Temporary files
+tmp/
+temp/
+
+# Complex template folder (keep only Barebones)
+template/Complex/
+
+# Template asset folders (too large for GitHub, provide separately)
+template/Barebones/audio/
+template/Barebones/img/
+template/Barebones/effects/
