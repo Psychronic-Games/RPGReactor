@@ -8,9 +8,12 @@ class TilesetPaletteViewer {
         this.fs = null;
         this.path = null;
         this.currentTileset = null;
-        this.currentLayer = 'A1'; // Default to A1
+        this.currentLayer = 'A'; // Default to A (merged A1-A5)
         this.tilesetTextures = {}; // Cache for loaded tileset textures
         this.selectedTiles = []; // Currently selected tiles for painting
+        this.mapEditor = null; // Reference to MapEditor for auto-toggling erase mode
+        this.cachedLayerCanvas = null; // OPTIMIZATION: Cache rendered layer to avoid re-rendering on selection change
+        this.enabled = true; // Whether the palette is enabled for interaction
 
         // Initialize Node.js modules if running in NW.js
         if (typeof nw !== 'undefined') {
@@ -19,17 +22,44 @@ class TilesetPaletteViewer {
         }
     }
 
+    // Set reference to MapEditor
+    setMapEditor(mapEditor) {
+        this.mapEditor = mapEditor;
+    }
+
+    // Enable or disable palette interaction
+    setEnabled(enabled) {
+        this.enabled = enabled;
+        const paletteContainer = document.getElementById('tileset-palette-content');
+        if (paletteContainer) {
+            if (enabled) {
+                paletteContainer.style.opacity = '1';
+                paletteContainer.style.pointerEvents = 'auto';
+            } else {
+                paletteContainer.style.opacity = '0.5';
+                paletteContainer.style.pointerEvents = 'none';
+            }
+        }
+    }
+
+    // Update project path when switching projects
+    setProjectPath(newProjectPath) {
+        this.projectPath = newProjectPath;
+
+        // Clear cached data from previous project
+        this.tilesetTextures = {};
+        this.currentTileset = null;
+        this.selectedTiles = [];
+        this.cachedLayerCanvas = null;
+    }
+
     // Initialize the palette viewer UI in the sidebar
     initializeUI(container) {
         container.innerHTML = `
-            <div id="tileset-palette-container" style="display: flex; flex-direction: column; height: 100%;">
+            <div id="tileset-palette-container" style="display: flex; flex-direction: column; flex: 1; min-height: 0;">
                 <!-- Layer Tabs -->
-                <div id="tileset-tabs" style="display: flex; flex-wrap: wrap; gap: 2px; padding: 8px; background-color: #1e1e1e; border-bottom: 1px solid #3e3e42;">
-                    ${this.createLayerTab('A1')}
-                    ${this.createLayerTab('A2')}
-                    ${this.createLayerTab('A3')}
-                    ${this.createLayerTab('A4')}
-                    ${this.createLayerTab('A5')}
+                <div id="tileset-tabs" style="display: flex; flex-wrap: wrap; gap: 2px; padding: 8px; background-color: var(--color-bg-surface); border-bottom: 1px solid var(--color-border); flex-shrink: 0;">
+                    ${this.createLayerTab('A')}
                     ${this.createLayerTab('B')}
                     ${this.createLayerTab('C')}
                     ${this.createLayerTab('D')}
@@ -38,9 +68,9 @@ class TilesetPaletteViewer {
                 </div>
 
                 <!-- Tileset Preview Canvas -->
-                <div id="tileset-preview-container" style="flex: 1; overflow: auto; background-color: #1e1e1e; position: relative; min-height: 0;">
+                <div id="tileset-preview-container" style="flex: 1; overflow: auto; background-color: transparent; position: relative; min-height: 0;">
                     <canvas id="tileset-preview-canvas" style="display: block; image-rendering: pixelated; cursor: crosshair; min-width: 100%; min-height: 100%;"></canvas>
-                    <div id="tileset-empty-message" style="display: none; padding: 20px; text-align: center; color: #666; font-size: 11px;">
+                    <div id="tileset-empty-message" style="display: none; padding: 20px; text-align: center; color: var(--color-text-dim); font-size: 11px;">
                         No tileset image assigned<br/>for this layer
                     </div>
                 </div>
@@ -49,7 +79,7 @@ class TilesetPaletteViewer {
                 <div id="region-ui-container" style="flex: 1; display: none;"></div>
 
                 <!-- Selection Info -->
-                <div id="selection-info" style="padding: 8px; background-color: #252526; border-top: 1px solid #3e3e42; font-size: 10px; color: #999;">
+                <div id="selection-info" style="padding: 8px; background-color: var(--color-bg-list-item); border-top: 1px solid var(--color-border); font-size: 10px; color: var(--color-text-muted); flex-shrink: 0;">
                     <div>No tiles selected</div>
                 </div>
             </div>
@@ -68,9 +98,9 @@ class TilesetPaletteViewer {
                 style="
                     padding: 4px 8px;
                     font-size: 10px;
-                    background-color: ${isActive ? '#37373d' : '#2d2d30'};
-                    border: 1px solid ${isActive ? '#007acc' : '#555'};
-                    color: ${isActive ? '#fff' : '#ccc'};
+                    background-color: ${isActive ? 'var(--color-bg-hover)' : 'var(--color-bg-menubar)'};
+                    border: 1px solid ${isActive ? 'var(--color-link)' : 'var(--color-border-input)'};
+                    color: ${isActive ? 'var(--color-text-strong)' : 'var(--color-text)'};
                     border-radius: 3px;
                     cursor: pointer;
                     transition: all 0.2s;
@@ -107,12 +137,22 @@ class TilesetPaletteViewer {
 
                 let x = Math.floor(canvasX / 48); // 48px per tile
                 let y = Math.floor(canvasY / 48);
+                let actualLayer = this.currentLayer;
+
+                // Handle merged 'A' layer - determine which sub-layer was clicked
+                if (this.currentLayer === 'A' && this.mergedALayerOffsets) {
+                    const clickResult = this.getSubLayerFromY(canvasY);
+                    if (clickResult) {
+                        actualLayer = clickResult.layer;
+                        y = Math.floor((canvasY - clickResult.startY) / 48);
+                    }
+                }
 
                 // Adjust for split layout on B-E layers only (not autotiles A1-A4 or A5)
-                const isSplitLayer = ['B', 'C', 'D', 'E'].includes(this.currentLayer);
+                const isSplitLayer = ['B', 'C', 'D', 'E'].includes(actualLayer);
                 if (isSplitLayer) {
                     // Calculate half height based on actual image height
-                    const img = this.tilesetTextures[this.currentLayer];
+                    const img = this.tilesetTextures[actualLayer];
                     const halfHeight = img ? (img.height / 48) : 16; // Image height in tiles
                     if (y >= halfHeight) {
                         // Clicked on bottom half - adjust x coordinate
@@ -123,7 +163,7 @@ class TilesetPaletteViewer {
 
                 // For autotiles (A1-A4), coordinates are already correct - each grid cell is one "kind"
 
-                selectionStart = { x, y };
+                selectionStart = { x, y, layer: actualLayer };
                 this.updateTileSelection(selectionStart, selectionStart);
             });
 
@@ -139,12 +179,22 @@ class TilesetPaletteViewer {
 
                     let x = Math.floor(canvasX / 48);
                     let y = Math.floor(canvasY / 48);
+                    let actualLayer = this.currentLayer;
+
+                    // Handle merged 'A' layer - determine which sub-layer was clicked
+                    if (this.currentLayer === 'A' && this.mergedALayerOffsets) {
+                        const clickResult = this.getSubLayerFromY(canvasY);
+                        if (clickResult) {
+                            actualLayer = clickResult.layer;
+                            y = Math.floor((canvasY - clickResult.startY) / 48);
+                        }
+                    }
 
                     // Adjust for split layout on B-E layers only (not autotiles A1-A4 or A5)
-                    const isSplitLayer = ['B', 'C', 'D', 'E'].includes(this.currentLayer);
+                    const isSplitLayer = ['B', 'C', 'D', 'E'].includes(actualLayer);
                     if (isSplitLayer) {
                         // Calculate half height based on actual image height
-                        const img = this.tilesetTextures[this.currentLayer];
+                        const img = this.tilesetTextures[actualLayer];
                         const halfHeight = img ? (img.height / 48) : 16; // Image height in tiles
                         if (y >= halfHeight) {
                             x += 8;
@@ -154,7 +204,7 @@ class TilesetPaletteViewer {
 
                     // For autotiles (A1-A4), coordinates are already correct - each grid cell is one "kind"
 
-                    this.updateTileSelection(selectionStart, { x, y });
+                    this.updateTileSelection(selectionStart, { x, y, layer: actualLayer });
                 }
             });
 
@@ -174,9 +224,9 @@ class TilesetPaletteViewer {
         // Update tab styles
         document.querySelectorAll('.tileset-layer-tab').forEach(tab => {
             const isActive = tab.dataset.layer === layerName;
-            tab.style.backgroundColor = isActive ? '#37373d' : '#2d2d30';
-            tab.style.borderColor = isActive ? '#007acc' : '#555';
-            tab.style.color = isActive ? '#fff' : '#ccc';
+            tab.style.backgroundColor = isActive ? 'var(--color-bg-hover)' : 'var(--color-bg-menubar)';
+            tab.style.borderColor = isActive ? 'var(--color-link)' : 'var(--color-border-input)';
+            tab.style.color = isActive ? 'var(--color-text-strong)' : 'var(--color-text)';
             tab.style.fontWeight = isActive ? '600' : '400';
             if (isActive) {
                 tab.classList.add('active');
@@ -204,13 +254,24 @@ class TilesetPaletteViewer {
             if (regionContainer) regionContainer.style.display = 'none';
             if (selectionInfo) selectionInfo.style.display = 'block';
 
+            // Hide regions overlay when switching away from R tab
+            this.onTilesetLayerSelected?.();
+
             // Render the selected layer
             this.renderCurrentLayer();
+
+            // Trigger layer changed callback to update layer highlights
+            if (this.onLayerChanged) {
+                this.onLayerChanged(layerName);
+            }
+
+            // Don't trigger callback - allow browsing layers without disabling event mode
+            // Users can browse different layers to select tiles for events
         }
     }
 
     // Load tileset for the current map
-    loadTilesetForMap(mapData) {
+    async loadTilesetForMap(mapData) {
         if (!mapData || !this.fs) return;
 
         try {
@@ -229,12 +290,10 @@ class TilesetPaletteViewer {
                 return;
             }
 
-            console.log('Loaded tileset:', this.currentTileset.name);
+            // Load all tileset images (wait for them to complete)
+            await this.loadTilesetImages();
 
-            // Load all tileset images
-            this.loadTilesetImages();
-
-            // Render the current layer
+            // Render the current layer (now that images are loaded)
             this.renderCurrentLayer();
         } catch (error) {
             console.error('Error loading tileset:', error);
@@ -262,7 +321,6 @@ class TilesetPaletteViewer {
                 await new Promise((resolve) => {
                     img.onload = () => {
                         this.tilesetTextures[layerKey] = img;
-                        console.log(`Loaded tileset image for layer ${layerKey}:`, name);
                         resolve();
                     };
                     img.onerror = () => {
@@ -290,6 +348,14 @@ class TilesetPaletteViewer {
         if (!canvas) return;
 
         const ctx = canvas.getContext('2d');
+
+        // Handle merged 'A' layer (A1-A5 stacked)
+        if (this.currentLayer === 'A') {
+            this.renderMergedALayer(ctx, canvas, emptyMessage);
+            this.cacheCurrentLayer(canvas);
+            return;
+        }
+
         const img = this.tilesetTextures[this.currentLayer];
 
         if (!img) {
@@ -307,21 +373,33 @@ class TilesetPaletteViewer {
 
         if (isAutotileLayer) {
             // Autotiles: show compact preview grid (one tile per "kind")
-            this.renderAutotilePalette(ctx, img, this.currentLayer);
+            // First draw checkerboard, then render autotile palette on top
+            const tempCanvas = document.createElement('canvas');
+            const tempCtx = tempCanvas.getContext('2d');
+            this.renderAutotilePalette(tempCtx, img, this.currentLayer);
+
+            // Set main canvas size to match
+            canvas.width = tempCanvas.width;
+            canvas.height = tempCanvas.height;
+
+            // Draw checkerboard on main canvas
+            this.drawCheckerboard(ctx, canvas.width, canvas.height);
+
+            // Draw autotile palette on top
+            ctx.drawImage(tempCanvas, 0, 0);
         } else if (this.currentLayer === 'A5') {
             // A5 is 384x768 - display as-is, no splitting needed
             const scale = 1;
             canvas.width = img.width * scale;
             canvas.height = img.height * scale;
 
-            console.log(`Canvas sized for layer A5: ${canvas.width}x${canvas.height}, img: ${img.width}x${img.height}`);
-
+            // Draw checkerboard background for transparency
+            this.drawCheckerboard(ctx, canvas.width, canvas.height);
             ctx.imageSmoothingEnabled = false;
             ctx.drawImage(img, 0, 0, img.width, img.height, 0, 0, img.width * scale, img.height * scale);
 
             this.drawGrid(ctx, img.width, img.height, scale);
 
-            console.log(`Canvas actual size: ${canvas.offsetWidth}x${canvas.offsetHeight}, client: ${canvas.clientWidth}x${canvas.clientHeight}`);
         } else {
             // Regular tile layers (B, C, D, E) are 768px wide
             // RPG Maker style: split the 768px wide image into two 384px columns stacked vertically
@@ -331,8 +409,8 @@ class TilesetPaletteViewer {
             canvas.width = halfWidth * scale;
             canvas.height = img.height * 2 * scale; // Double height to fit both halves
 
-            console.log(`Canvas sized for layer ${this.currentLayer}: ${canvas.width}x${canvas.height}, img: ${img.width}x${img.height}`);
-
+            // Draw checkerboard background for transparency
+            this.drawCheckerboard(ctx, canvas.width, canvas.height);
             ctx.imageSmoothingEnabled = false;
 
             // Draw left half at top
@@ -342,9 +420,101 @@ class TilesetPaletteViewer {
             ctx.drawImage(img, halfWidth, 0, halfWidth, img.height, 0, img.height * scale, halfWidth * scale, img.height * scale);
 
             this.drawGrid(ctx, halfWidth, img.height * 2, scale);
-
-            console.log(`Canvas actual size: ${canvas.offsetWidth}x${canvas.offsetHeight}, client: ${canvas.clientWidth}x${canvas.clientHeight}`);
         }
+
+        // OPTIMIZATION: Cache the rendered layer for fast redrawing during selection
+        this.cacheCurrentLayer(canvas);
+    }
+
+    // Cache the current canvas content for fast redraws
+    cacheCurrentLayer(canvas) {
+        if (!this.cachedLayerCanvas) {
+            this.cachedLayerCanvas = document.createElement('canvas');
+        }
+        this.cachedLayerCanvas.width = canvas.width;
+        this.cachedLayerCanvas.height = canvas.height;
+        const cacheCtx = this.cachedLayerCanvas.getContext('2d');
+        cacheCtx.drawImage(canvas, 0, 0);
+    }
+
+    // Restore cached layer to main canvas (fast redraw)
+    restoreCachedLayer() {
+        if (!this.cachedLayerCanvas) return;
+        const canvas = document.getElementById('tileset-preview-canvas');
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(this.cachedLayerCanvas, 0, 0);
+    }
+
+    renderMergedALayer(ctx, canvas, emptyMessage) {
+        // Render A1-A5 stacked vertically
+        canvas.style.display = 'block';
+        emptyMessage.style.display = 'none';
+
+        let currentY = 0;
+        const layersToRender = ['A1', 'A2', 'A3', 'A4', 'A5'];
+        const layerHeights = [];
+
+        // Calculate total height needed
+        for (const layer of layersToRender) {
+            const img = this.tilesetTextures[layer];
+            if (!img) continue;
+
+            let height;
+            if (layer === 'A1') {
+                height = 2 * 48; // 2 rows (8 cols × 2 rows)
+            } else if (layer === 'A2' || layer === 'A3') {
+                height = 4 * 48; // 4 rows each
+            } else if (layer === 'A4') {
+                height = 6 * 48; // 6 rows
+            } else if (layer === 'A5') {
+                height = img.height; // Full A5 height
+            }
+            layerHeights.push({ layer, height, startY: currentY });
+            currentY += height;
+        }
+
+        // Determine canvas width - use widest layer (A2/A3/A4/A5 are 8 cols = 384px)
+        const canvasWidth = 384; // 8 columns × 48px (A1 is narrower at 2 cols = 96px)
+        canvas.width = canvasWidth;
+        canvas.height = currentY;
+
+        // Draw checkerboard background for transparency
+        this.drawCheckerboard(ctx, canvas.width, canvas.height);
+
+        // Render each layer
+        for (const layerInfo of layerHeights) {
+            const { layer, startY } = layerInfo;
+            const img = this.tilesetTextures[layer];
+            if (!img) continue;
+
+            // Save context and translate to layer position
+            ctx.save();
+            ctx.translate(0, startY);
+
+            // Create a temporary canvas for this layer
+            const tempCanvas = document.createElement('canvas');
+            const tempCtx = tempCanvas.getContext('2d');
+
+            if (['A1', 'A2', 'A3', 'A4'].includes(layer)) {
+                this.renderAutotilePalette(tempCtx, img, layer);
+                ctx.drawImage(tempCanvas, 0, 0);
+            } else if (layer === 'A5') {
+                tempCanvas.width = img.width;
+                tempCanvas.height = img.height;
+                // Note: Checkerboard is drawn on main canvas, temp canvas just draws the image
+                tempCtx.imageSmoothingEnabled = false;
+                tempCtx.drawImage(img, 0, 0);
+                this.drawGrid(tempCtx, img.width, img.height, 1);
+                ctx.drawImage(tempCanvas, 0, 0);
+            }
+
+            ctx.restore();
+        }
+
+        // Store layer offsets for click detection
+        this.mergedALayerOffsets = layerHeights;
     }
 
     renderAutotilePalette(ctx, img, layer) {
@@ -352,35 +522,38 @@ class TilesetPaletteViewer {
         const tileSize = 48; // Each preview tile is 48x48
 
         // Autotile palette layout:
-        // A1: 4 rows × 2 cols (water/animated) + 4 rows × 4 cols (waterfalls) = 8 kinds
-        // A2: 8 rows × 4 cols = 32 kinds (ground autotiles)
-        // A3: 8 rows × 4 cols = 32 kinds (building/wall autotiles)
-        // A4: 10 rows × 4 cols = 40 kinds (wall top autotiles)
+        // A1: 16 kinds (8 cols × 2 rows - water types + waterfalls spread horizontally)
+        // A2: 32 kinds (8 cols × 4 rows - ground autotiles)
+        // A3: 32 kinds (8 cols × 4 rows - building/wall autotiles)
+        // A4: 48 kinds (8 cols × 6 rows - wall and roof autotiles)
+        //     Even rows (0,2,4): Roofs 2×3 blocks, Odd rows (1,3,5): Walls 2×2 blocks
 
         let gridCols, gridRows;
 
         switch(layer) {
             case 'A1':
-                gridCols = 2;
-                gridRows = 4;
+                gridCols = 8;
+                gridRows = 2;
                 break;
             case 'A2':
-                gridCols = 4;
-                gridRows = 8;
+                gridCols = 8;
+                gridRows = 4;
                 break;
             case 'A3':
-                gridCols = 4;
-                gridRows = 8;
+                gridCols = 8;
+                gridRows = 4;
                 break;
             case 'A4':
-                gridCols = 4;
-                gridRows = 10;
+                gridCols = 8;
+                gridRows = 6;
                 break;
         }
 
         canvas.width = gridCols * tileSize;
         canvas.height = gridRows * tileSize;
 
+        // Clear canvas (no checkerboard here - it's drawn by the caller)
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
         ctx.imageSmoothingEnabled = false;
 
         // Draw each autotile preview
@@ -388,26 +561,10 @@ class TilesetPaletteViewer {
             for (let col = 0; col < gridCols; col++) {
                 const destX = col * tileSize;
                 const destY = row * tileSize;
+                const kindIndex = row * gridCols + col;
 
-                // Extract the preview tile from the source image
-                // For autotiles, we take the top-left mini-tile (2x2 arrangement)
-                const srcX = col * tileSize * 2; // Autotiles are 2 tiles wide
-                const srcY = row * tileSize * 3; // Autotiles are 3 tiles tall (for A2-A4)
-
-                if (layer === 'A1') {
-                    // A1 is special - different layout for water vs waterfalls
-                    const kindIndex = row * gridCols + col;
-                    this.drawA1Preview(ctx, img, kindIndex, destX, destY, tileSize);
-                } else {
-                    // A2, A3, A4: Take top-left 48x48 section of each autotile block
-                    ctx.drawImage(
-                        img,
-                        srcX, srcY,
-                        tileSize, tileSize,
-                        destX, destY,
-                        tileSize, tileSize
-                    );
-                }
+                // Draw properly assembled autotile preview
+                this.drawAutotilePreview(ctx, img, layer, kindIndex, destX, destY, tileSize);
             }
         }
 
@@ -415,29 +572,56 @@ class TilesetPaletteViewer {
         this.drawGrid(ctx, canvas.width, canvas.height, 1);
     }
 
-    drawA1Preview(ctx, img, kindIndex, destX, destY, tileSize) {
-        // A1 layout is special:
-        // Kinds 0-3: Ocean, Deep Ocean, Beach, Sea (top 4 rows, cols 0-1)
-        // Kinds 4-7: Waterfalls (rows 4-7, arranged differently)
+    drawAutotilePreview(ctx, img, layer, kindIndex, destX, destY, tileSize) {
+        // Each autotile "kind" is arranged in a 2x3 block (96px wide, 144px tall for A2-A4)
+        // The top-left tile (48x48) is the preview tile used in the palette
 
         let srcX, srcY;
 
-        if (kindIndex < 4) {
-            // Water tiles (animated) - top 4 kinds
-            const col = kindIndex % 2;
-            const row = Math.floor(kindIndex / 2);
-            srcX = col * tileSize * 2;
-            srcY = row * tileSize * 3;
-        } else {
-            // Waterfall tiles - bottom 4 kinds
-            const waterfallIndex = kindIndex - 4;
-            const col = waterfallIndex % 2;
-            const row = Math.floor(waterfallIndex / 2);
-            srcX = (col + 2) * tileSize * 2; // Offset by 2 columns
-            srcY = row * tileSize * 3;
+        if (layer === 'A1') {
+            // A1: 8 cols × 2 rows palette layout
+            // Palette shows: Water A, Rocks C, Water B, Rocks C overlay, Water D, Waterfall E, Water D, Waterfall E (row 1)
+            // Tileset IMAGE has 4 source rows, each with blocks at positions [0, 3, 4, 7]
+            const paletteCol = kindIndex % 8;  // 0-7
+            const paletteRow = Math.floor(kindIndex / 8);  // 0 or 1
+
+            // RPG Maker MZ A1 structure (from corescript)
+            const kindToBlock = [
+                [0, 0], [0, 1], [3, 0], [3, 1], [4, 0], [7, 0], [4, 1], [7, 1], // kinds 0-7
+                [0, 2], [3, 2], [0, 3], [3, 3], [4, 2], [7, 2], [4, 3], [7, 3]  // kinds 8-15
+            ];
+
+            const [block, sourceRow] = kindToBlock[kindIndex];
+
+            srcX = block * tileSize * 2;  // Block position in pixels
+            srcY = sourceRow * tileSize * 3;  // Source row in pixels
+        } else if (layer === 'A2') {
+            // A2: Ground autotiles (8 columns × 4 rows of 2x3 blocks)
+            const col = kindIndex % 8;
+            const row = Math.floor(kindIndex / 8);
+            srcX = col * tileSize * 2;  // Each block is 2 tiles (96px) wide
+            srcY = row * tileSize * 3;  // Each block is 3 tiles (144px) tall
+        } else if (layer === 'A3') {
+            // A3: Building/wall autotiles (8 columns × 4 rows of 2x2 blocks)
+            const col = kindIndex % 8;
+            const row = Math.floor(kindIndex / 8);
+            srcX = col * tileSize * 2;  // Each block is 2 tiles (96px) wide
+            srcY = row * tileSize * 2;  // Each block is 2 tiles (96px) tall for A3
+        } else if (layer === 'A4') {
+            // A4: Wall and roof autotiles (8 columns × 6 rows)
+            // Even rows: Roofs (2×3), Odd rows: Walls (2×2)
+            const col = kindIndex % 8;
+            const row = Math.floor(kindIndex / 8);
+            srcX = col * tileSize * 2;  // Each block is 2 tiles (96px) wide
+
+            // Calculate Y position: roofs are 3 tiles tall, walls are 2 tiles tall
+            // Pattern: Roof(3) Wall(2) Roof(3) Wall(2) Roof(3) Wall(2)
+            const pairIndex = Math.floor(row / 2);  // Which roof+wall pair (0, 1, or 2)
+            const isWall = row % 2 === 1;
+            srcY = pairIndex * tileSize * 5 + (isWall ? tileSize * 3 : 0);
         }
 
-        // Draw the preview (top-left mini-tile)
+        // Extract just the top-left preview tile (48x48)
         ctx.drawImage(
             img,
             srcX, srcY,
@@ -446,6 +630,7 @@ class TilesetPaletteViewer {
             tileSize, tileSize
         );
     }
+
 
     drawGrid(ctx, width, height, scale) {
         ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
@@ -483,26 +668,127 @@ class TilesetPaletteViewer {
         const width = maxX - minX + 1;
         const height = maxY - minY + 1;
 
+        // Determine the actual layer (use layer from start if available, else currentLayer)
+        const actualLayer = start.layer || this.currentLayer;
+
         // Store selected tiles
         this.selectedTiles = [];
         for (let y = minY; y <= maxY; y++) {
             for (let x = minX; x <= maxX; x++) {
-                this.selectedTiles.push({ x, y, layer: this.currentLayer });
+                this.selectedTiles.push({ x, y, layer: actualLayer });
             }
         }
 
-        // Re-render with selection overlay
-        this.renderCurrentLayer();
-        this.drawSelectionOverlay(minX, minY, width, height);
+        // OPTIMIZATION: Use cached layer instead of re-rendering
+        this.restoreCachedLayer();
+        this.drawSelectionOverlay(minX, minY, width, height, actualLayer);
 
         // Update selection info
         const info = document.getElementById('selection-info');
         if (info) {
-            info.innerHTML = `<div>Selected: ${width}x${height} tiles (${this.selectedTiles.length} tiles) on layer ${this.currentLayer}</div>`;
+            const displayLayer = this.currentLayer === 'A' ? actualLayer : this.currentLayer;
+            info.innerHTML = `<div>Selected: ${width}x${height} tiles (${this.selectedTiles.length} tiles) on layer ${displayLayer}</div>`;
+        }
+
+        // Auto-toggle erase mode based on tile transparency
+        this.autoToggleEraseMode();
+    }
+
+    // Check if selected tiles are transparent and auto-toggle erase mode
+    autoToggleEraseMode() {
+        if (!this.mapEditor) return;
+
+        const isTransparent = this.isSelectionTransparent();
+
+        if (isTransparent && !this.mapEditor.eraserMode) {
+            // Enable erase mode when selecting transparent tile
+            this.mapEditor.setEraserMode(true);
+        } else if (!isTransparent) {
+            // ALWAYS disable erase mode when selecting non-transparent tile
+            // This ensures that after using eraser, selecting a real tile lets you paint again
+            this.mapEditor.setEraserMode(false);
+
+            // Auto-activate previous tool (or pencil if no previous tool) if no tool is currently selected
+            if (!this.mapEditor.currentTool && !this.mapEditor.shadowPenMode) {
+                // Use previous tool, or default to pencil
+                const toolToActivate = this.mapEditor.previousTool || 'pencil';
+                this.mapEditor.setTool(toolToActivate);
+
+                // Update button UI state
+                const toolBtn = document.querySelector(`[data-tool="${toolToActivate}"]`);
+                if (toolBtn) {
+                    // Remove active from all tool buttons first
+                    document.querySelectorAll('.tool-draw-mode').forEach(btn => {
+                        btn.classList.remove('active');
+                    });
+                    // Add active to the restored tool button
+                    toolBtn.classList.add('active');
+                }
+            }
         }
     }
 
-    drawSelectionOverlay(x, y, width, height) {
+    // Check if the currently selected tiles are fully transparent
+    isSelectionTransparent() {
+        if (!this.selectedTiles || this.selectedTiles.length === 0) {
+            return false;
+        }
+
+        // Use the palette canvas which has the processed tiles rendered
+        const canvas = document.getElementById('tileset-preview-canvas');
+        if (!canvas) return false;
+
+        const ctx = canvas.getContext('2d');
+        const tileSize = 48;
+
+        // Check each selected tile
+        for (const tile of this.selectedTiles) {
+            let checkX = tile.x * tileSize;
+            let checkY = tile.y * tileSize;
+
+            // For split layers (B-E), adjust coordinates if x >= 8
+            const layer = tile.layer || this.currentLayer;
+            const isSplitLayer = ['B', 'C', 'D', 'E'].includes(layer);
+
+            if (isSplitLayer && tile.x >= 8) {
+                const img = this.tilesetTextures[layer];
+                const halfHeight = img ? (img.height / 48) : 16;
+                checkX = (tile.x - 8) * tileSize;
+                checkY = (tile.y + halfHeight) * tileSize;
+            }
+
+            // Handle merged 'A' layer offsets
+            if (this.currentLayer === 'A' && tile.layer && this.mergedALayerOffsets) {
+                const sublayerInfo = this.mergedALayerOffsets.find(info => info.layer === tile.layer);
+                if (sublayerInfo) {
+                    checkY = tile.y * tileSize + sublayerInfo.startY;
+                }
+            }
+
+            // Sample the center area of the tile
+            try {
+                const imageData = ctx.getImageData(checkX + 12, checkY + 12, 24, 24);
+                const data = imageData.data;
+
+                // Check if any pixel has non-zero alpha
+                for (let i = 3; i < data.length; i += 4) {
+                    if (data[i] > 0) {
+                        // Found a non-transparent pixel
+                        return false;
+                    }
+                }
+            } catch (e) {
+                // If we can't read the image data, assume not transparent
+                console.warn('Could not check transparency:', e);
+                return false;
+            }
+        }
+
+        // All selected tiles are fully transparent
+        return true;
+    }
+
+    drawSelectionOverlay(x, y, width, height, layer = null) {
         const canvas = document.getElementById('tileset-preview-canvas');
         if (!canvas) return;
 
@@ -510,17 +796,26 @@ class TilesetPaletteViewer {
         const scale = 1;
         const tileSize = 48 * scale;
 
-        // For split layout (B-E layers only, not autotiles A1-A4 or A5), need to handle tiles from right half (x >= 8)
-        // These are drawn in the bottom half of the canvas
-        const isSplitLayer = ['B', 'C', 'D', 'E'].includes(this.currentLayer);
-
         // Convert original image coordinates to canvas coordinates
         let canvasX = x;
         let canvasY = y;
 
+        // Handle merged 'A' layer - add Y offset for the sublayer
+        if (this.currentLayer === 'A' && layer && this.mergedALayerOffsets) {
+            const sublayerInfo = this.mergedALayerOffsets.find(info => info.layer === layer);
+            if (sublayerInfo) {
+                canvasY = y + (sublayerInfo.startY / 48); // Add sublayer offset in tiles
+            }
+        }
+
+        // For split layout (B-E layers only, not autotiles A1-A4 or A5), need to handle tiles from right half (x >= 8)
+        // These are drawn in the bottom half of the canvas
+        const actualLayer = layer || this.currentLayer;
+        const isSplitLayer = ['B', 'C', 'D', 'E'].includes(actualLayer);
+
         if (isSplitLayer && x >= 8) {
             // Right half of original image (x 8-15) displays in bottom half
-            const img = this.tilesetTextures[this.currentLayer];
+            const img = this.tilesetTextures[actualLayer];
             const halfHeight = img ? (img.height / 48) : 16; // Image height in tiles
             canvasX = x - 8;  // Map x 8-15 to canvas x 0-7
             canvasY = y + halfHeight; // Offset down by the image height
@@ -550,6 +845,7 @@ class TilesetPaletteViewer {
 
     // Get currently selected tiles for painting
     getSelectedTiles() {
+        // console.log('getSelectedTiles called, returning:', this.selectedTiles);
         return this.selectedTiles;
     }
 
@@ -560,6 +856,33 @@ class TilesetPaletteViewer {
         const info = document.getElementById('selection-info');
         if (info) {
             info.innerHTML = '<div>No tiles selected</div>';
+        }
+    }
+
+    // Helper to determine which sub-layer of merged 'A' was clicked
+    getSubLayerFromY(canvasY) {
+        if (!this.mergedALayerOffsets) return null;
+
+        for (const layerInfo of this.mergedALayerOffsets) {
+            if (canvasY >= layerInfo.startY && canvasY < layerInfo.startY + layerInfo.height) {
+                return layerInfo;
+            }
+        }
+        return null;
+    }
+
+    // Draw a checkerboard pattern to represent transparency
+    drawCheckerboard(ctx, width, height, squareSize = 8) {
+        const color1 = 'var(--color-syntax-comment)'; // Gray
+        const color2 = 'var(--color-text-muted)'; // Light gray
+
+        for (let y = 0; y < height; y += squareSize) {
+            for (let x = 0; x < width; x += squareSize) {
+                // Alternate colors in checkerboard pattern
+                const isEven = (Math.floor(x / squareSize) + Math.floor(y / squareSize)) % 2 === 0;
+                ctx.fillStyle = isEven ? color1 : color2;
+                ctx.fillRect(x, y, squareSize, squareSize);
+            }
         }
     }
 }

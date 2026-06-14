@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>XHR Test</title>
+</head>
+<body>
+    <h1>Testing XHR with relative URLs in NW.js</h1>
+    <div id="log"></div>
+
+    <script>
+        const log = (msg) => {
+            console.log(msg);
+            document.getElementById('log').innerHTML += msg + '<br>';
+        };
+
+        // Test 1: Relative URL
+        log('Test 1: Loading effects/HitPhysical.efkefc with relative URL...');
+        const xhr1 = new XMLHttpRequest();
+        xhr1.open('GET', 'effects/HitPhysical.efkefc', true);
+        xhr1.responseType = 'arraybuffer';
+        xhr1.onload = function() {
+            log('✓ SUCCESS! Loaded ' + xhr1.response.byteLength + ' bytes');
+        };
+        xhr1.onerror = function() {
+            log('✗ FAILED with relative URL');
+        };
+        xhr1.send(null);
+    </script>
+</body>
+</html>

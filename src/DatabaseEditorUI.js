@@ -13,6 +13,9 @@ class DatabaseEditorUI {
         // Animation preview state
         this.animationPreviews = {};
 
+        // Clipboard for list copy/cut/paste
+        this.listClipboard = null;  // { type, entry }
+
         // Initialize modular editors
         this.commonUI = new DatabaseCommonUI(databaseManager, { getCurrentProject: () => this.currentProject });
         this.actorEditor = new DatabaseActorEditor(databaseManager, { getCurrentProject: () => this.currentProject }, this.commonUI, this);
@@ -26,6 +29,9 @@ class DatabaseEditorUI {
         this.animationEditor = new DatabaseAnimationEditor(databaseManager, { getCurrentProject: () => this.currentProject }, this.commonUI, this);
         this.troopEditor = new DatabaseTroopEditor(databaseManager, { getCurrentProject: () => this.currentProject }, this.commonUI, this);
         this.tilesetEditor = new DatabaseTilesetEditor(databaseManager, { getCurrentProject: () => this.currentProject }, this.commonUI, this);
+        this.system1Editor = new DatabaseSystem1Editor(databaseManager, { getCurrentProject: () => this.currentProject }, this.commonUI, this);
+        this.system2Editor = new DatabaseSystem2Editor(databaseManager, { getCurrentProject: () => this.currentProject }, this.commonUI, this);
+        this.commonEventEditor = new DatabaseCommonEventEditor(databaseManager, { getCurrentProject: () => this.currentProject }, this.commonUI, this);
     }
 
     /**
@@ -44,6 +50,56 @@ class DatabaseEditorUI {
         }
     }
 
+    cleanupDatabaseListChrome() {
+        const listEl = document.getElementById('database-list');
+        const parent = listEl?.parentNode;
+        if (!parent) return;
+
+        parent.querySelectorAll('.database-search-container, .database-button-bar, .database-change-max-btn').forEach(el => el.remove());
+
+        if (this._listKeyHandler) {
+            document.removeEventListener('keydown', this._listKeyHandler);
+            this._listKeyHandler = null;
+        }
+
+        if (this.tilesetEditor?.cleanupListKeyHandler) {
+            this.tilesetEditor.cleanupListKeyHandler();
+        }
+    }
+
+    setActiveDatabaseNav(type) {
+        document.querySelectorAll('.database-nav-item').forEach(item => {
+            item.classList.toggle('active', item.dataset.type === type);
+        });
+    }
+
+    prepareDatabaseSection(type, title, options = {}) {
+        const viewer = document.getElementById('database-viewer');
+        const titleEl = document.getElementById('database-viewer-title');
+        const listEl = document.getElementById('database-list');
+        const listPanelEl = document.getElementById('database-list-panel');
+        const detailEl = document.getElementById('database-detail');
+        const showListPanel = options.showListPanel !== false;
+
+        this.cleanupDatabaseListChrome();
+        this.setActiveDatabaseNav(type);
+
+        if (titleEl) titleEl.textContent = title;
+        if (listEl) listEl.innerHTML = '';
+        if (detailEl) {
+            detailEl.style.flex = showListPanel ? '' : '1';
+            detailEl.innerHTML = '';
+        }
+        if (listPanelEl) {
+            listPanelEl.style.display = showListPanel ? '' : 'none';
+        }
+        if (viewer) {
+            viewer.classList.add('active');
+        }
+
+        return { viewer, titleEl, listEl, listPanelEl, detailEl };
+    }
+
     /**
      * Open database viewer for a specific type
      */
@@ -53,7 +109,14 @@ class DatabaseEditorUI {
             return;
         }
 
+        // Stop any playing animations when switching sections
+        if (this.animationEditor && this.animationEditor._currentEffekseerStop) {
+            this.animationEditor._currentEffekseerStop();
+            this.animationEditor._currentEffekseerStop = null;
+        }
+
         console.log('Opening database:', type);
+        this.cleanupDatabaseListChrome();
 
         // Get data based on type
         let data, title;
@@ -106,17 +169,22 @@ class DatabaseEditorUI {
                 data = this.databaseManager.getCommonEvents();
                 title = 'Common Events';
                 break;
+            case 'system1': {
+                // Show System 1 editor
+                const { detailEl } = this.prepareDatabaseSection('system1', 'System 1', { showListPanel: false });
+
+                this.system1Editor.showSystem1Detail(detailEl);
+                return;
+            }
+            case 'system2': {
+                // Show System 2 editor
+                const { detailEl } = this.prepareDatabaseSection('system2', 'System 2', { showListPanel: false });
+
+                this.system2Editor.showSystem2Detail(detailEl);
+                return;
+            }
             case 'types': {
-                // Update active nav item
-                const navEl = document.getElementById('database-navigation');
-                if (navEl) {
-                    document.querySelectorAll('.database-nav-item').forEach(item => {
-                        item.classList.remove('active');
-                        if (item.dataset.type === 'types') {
-                            item.classList.add('active');
-                        }
-                    });
-                }
+                this.prepareDatabaseSection('types', 'Types');
                 // Types editor uses System.json - delegate to callback
                 if (this.callbacks.showTypesEditor) {
                     this.callbacks.showTypesEditor();
@@ -124,16 +192,7 @@ class DatabaseEditorUI {
                 return;
             }
             case 'terms': {
-                // Update active nav item
-                const navEl = document.getElementById('database-navigation');
-                if (navEl) {
-                    document.querySelectorAll('.database-nav-item').forEach(item => {
-                        item.classList.remove('active');
-                        if (item.dataset.type === 'terms') {
-                            item.classList.add('active');
-                        }
-                    });
-                }
+                this.prepareDatabaseSection('terms', 'Terms');
                 // Terms editor uses System.json - delegate to callback
                 if (this.callbacks.showTermsEditor) {
                     this.callbacks.showTermsEditor();
@@ -174,53 +233,467 @@ class DatabaseEditorUI {
             });
         }
 
+        const listPanelEl = document.getElementById('database-list-panel');
+
         titleEl.textContent = title;
         listEl.innerHTML = '';
-        detailEl.innerHTML = '<p style="color: #999; text-align: center; margin-top: 100px;">Select an entry from the list</p>';
+        detailEl.style.flex = ''; // Reset detail flex
+        if (listPanelEl) {
+            listPanelEl.style.display = ''; // Reset list panel display
+        }
+        detailEl.innerHTML = '<p style="color: var(--color-text-muted); text-align: center; margin-top: 100px;">Select an entry from the list</p>';
 
-        // Populate list
-        data.forEach((entry) => {
-            const item = document.createElement('div');
-            item.className = 'database-list-item';
+        // Remove any existing button bar and search container first
+        const existingButtonBar = listEl.parentNode.querySelector('.database-button-bar');
+        if (existingButtonBar) {
+            existingButtonBar.remove();
+        }
+        const existingSearch = listEl.parentNode.querySelector('.database-search-container');
+        if (existingSearch) {
+            existingSearch.remove();
+        }
 
-            const nameSpan = document.createElement('span');
-            nameSpan.textContent = entry.name || 'Unnamed';
+        // Add search bar before populating list
+        const searchContainer = document.createElement('div');
+        searchContainer.className = 'database-search-container';
+        searchContainer.style.cssText = 'padding: 8px; background-color: var(--color-bg-menubar); border-bottom: 1px solid var(--color-border); flex-shrink: 0;';
 
-            const idSpan = document.createElement('span');
-            idSpan.className = 'database-list-id';
-            idSpan.textContent = `#${entry.id || '?'}`;
+        const searchInput = document.createElement('input');
+        searchInput.type = 'text';
+        searchInput.placeholder = `Search ${title}...`;
+        searchInput.style.cssText = `
+            width: 100%;
+            padding: 6px 10px;
+            background-color: var(--color-bg-panel);
+            border: 1px solid var(--color-border-input);
+            border-radius: 3px;
+            color: var(--color-text);
+            font-size: 12px;
+            box-sizing: border-box;
+        `;
 
-            item.appendChild(nameSpan);
-            item.appendChild(idSpan);
-
-            item.addEventListener('click', () => {
-                // Remove selection from all items
-                document.querySelectorAll('.database-list-item').forEach(i => i.classList.remove('selected'));
-                item.classList.add('selected');
-
-                // Show detail
-                this.showDatabaseDetail(entry, type);
-            });
-
-            listEl.appendChild(item);
+        // Add focus/blur listeners for yellow-gold border
+        searchInput.addEventListener('focus', () => {
+            searchInput.style.borderColor = 'var(--color-accent-border-strong)';
+            searchInput.style.outline = 'none';
         });
+        searchInput.addEventListener('blur', () => {
+            searchInput.style.borderColor = 'var(--color-border-input)';
+        });
+
+        searchContainer.appendChild(searchInput);
+
+        // Insert search bar before the list
+        listEl.parentNode.insertBefore(searchContainer, listEl);
+
+        // Function to populate list with optional filter
+        const populateList = (filterText = '') => {
+            listEl.innerHTML = '';
+            const filteredData = filterText
+                ? data.filter(entry => {
+                    const name = (entry.name || 'Unnamed').toLowerCase();
+                    const id = String(entry.id || '');
+                    return name.includes(filterText.toLowerCase()) || id.includes(filterText);
+                })
+                : data;
+
+            filteredData.forEach((entry) => {
+                const item = document.createElement('div');
+                item.className = 'database-list-item';
+                item.dataset.entryName = entry.name || 'Unnamed';
+
+                const nameSpan = document.createElement('span');
+                nameSpan.textContent = entry.name || 'Unnamed';
+
+                const idSpan = document.createElement('span');
+                idSpan.className = 'database-list-id';
+                idSpan.textContent = `#${entry.id || '?'}`;
+
+                item.appendChild(nameSpan);
+                item.appendChild(idSpan);
+
+                item.addEventListener('click', () => {
+                    // Remove selection from all items
+                    document.querySelectorAll('.database-list-item').forEach(i => i.classList.remove('selected'));
+                    item.classList.add('selected');
+
+                    // Show detail
+                    this.showDatabaseDetail(entry, type);
+                });
+
+                // Right-click context menu
+                item.addEventListener('contextmenu', (e) => {
+                    e.preventDefault();
+                    // Select this item
+                    document.querySelectorAll('.database-list-item').forEach(i => i.classList.remove('selected'));
+                    item.classList.add('selected');
+                    this.showDatabaseDetail(entry, type);
+
+                    this.showListContextMenu(e.clientX, e.clientY, entry, data, type, populateList, searchInput, detailEl);
+                });
+
+                listEl.appendChild(item);
+            });
+        };
+
+        // Add/Delete button bar
+        const buttonBar = document.createElement('div');
+        buttonBar.className = 'database-button-bar';
+        buttonBar.style.cssText = 'display: flex; gap: 4px; padding: 6px 8px; background-color: var(--color-bg-menubar); border-bottom: 1px solid var(--color-border); flex-shrink: 0;';
+
+        const addBtn = document.createElement('button');
+        addBtn.textContent = 'New';
+        addBtn.style.cssText = 'flex: 1; padding: 4px 8px; background-color: var(--color-bg-panel); color: var(--color-text); border: 1px solid var(--color-border-input); border-radius: 3px; cursor: pointer; font-size: 11px; transition: background-color 0.2s;';
+        addBtn.onmouseenter = () => { addBtn.style.backgroundColor = 'var(--color-accent-tint-25)'; };
+        addBtn.onmouseleave = () => { addBtn.style.backgroundColor = 'var(--color-bg-panel)'; };
+        addBtn.onclick = () => {
+            snapshotForUndo();
+            const newEntry = this.addDatabaseEntry(type);
+            if (newEntry) {
+                data.push(newEntry);
+                populateList(searchInput.value);
+            }
+        };
+
+        const deleteBtn = document.createElement('button');
+        deleteBtn.textContent = 'Delete';
+        deleteBtn.style.cssText = 'flex: 1; padding: 4px 8px; background-color: var(--color-bg-panel); color: var(--color-text); border: 1px solid var(--color-border-input); border-radius: 3px; cursor: pointer; font-size: 11px; transition: background-color 0.2s;';
+        deleteBtn.onmouseenter = () => { deleteBtn.style.backgroundColor = 'rgba(255, 80, 80, 0.25)'; };
+        deleteBtn.onmouseleave = () => { deleteBtn.style.backgroundColor = 'var(--color-bg-panel)'; };
+        deleteBtn.onclick = () => {
+            const selectedItem = listEl.querySelector('.database-list-item.selected');
+            if (!selectedItem) { alert('Select an entry to delete'); return; }
+            const entryName = selectedItem.dataset.entryName || 'this entry';
+            if (!confirm(`Delete "${entryName}"?`)) return;
+
+            const idText = selectedItem.querySelector('.database-list-id')?.textContent;
+            const entryId = idText ? parseInt(idText.replace('#', '')) : null;
+            if (entryId !== null) {
+                snapshotForUndo();
+                this.deleteDatabaseEntry(type, entryId);
+                const idx = data.findIndex(d => d && d.id === entryId);
+                if (idx >= 0) data.splice(idx, 1);
+                populateList(searchInput.value);
+                detailEl.innerHTML = '<p style="color: var(--color-text-muted); text-align: center; margin-top: 100px;">Select an entry from the list</p>';
+            }
+        };
+
+        buttonBar.appendChild(addBtn);
+        buttonBar.appendChild(deleteBtn);
+        listEl.parentNode.insertBefore(buttonBar, searchContainer);
+
+        // "Change Maximum" button at bottom of list panel
+        const changeMaxBtn = document.createElement('button');
+        changeMaxBtn.textContent = 'Change Maximum';
+        changeMaxBtn.style.cssText = 'width: 100%; padding: 6px 8px; background-color: var(--color-bg-panel); color: var(--color-text); border: 1px solid var(--color-border-input); border-top: none; cursor: pointer; font-size: 11px; transition: background-color 0.2s; flex-shrink: 0;';
+        changeMaxBtn.onmouseenter = () => { changeMaxBtn.style.backgroundColor = 'var(--color-accent-tint-25)'; };
+        changeMaxBtn.onmouseleave = () => { changeMaxBtn.style.backgroundColor = 'var(--color-bg-panel)'; };
+        changeMaxBtn.onclick = () => {
+            const currentMax = this.databaseManager.getMaxEntries(type);
+            this.showChangeMaximumModal(title, type, currentMax, (newMax) => {
+                const templates = this.getDefaultTemplates();
+                const template = templates[type];
+                if (!template) return;
+
+                this.databaseManager.changeMaximum(type, newMax, template);
+
+                // Refresh the list
+                const freshData = this.databaseManager.data[type].filter(e => e !== null);
+                data.length = 0;
+                freshData.forEach(e => data.push(e));
+                populateList(searchInput.value);
+                detailEl.innerHTML = '<p style="color: var(--color-text-muted); text-align: center; margin-top: 100px;">Select an entry from the list</p>';
+                this.updateStatus(`${title} maximum changed to ${newMax}`);
+            });
+        };
+
+        // Remove any existing change max button
+        const existingMaxBtn = listEl.parentNode.querySelector('.database-change-max-btn');
+        if (existingMaxBtn) existingMaxBtn.remove();
+        changeMaxBtn.className = 'database-change-max-btn';
+        listEl.parentNode.appendChild(changeMaxBtn);
+
+        // Populate initial list
+        populateList();
+
+        // Add search input listener
+        searchInput.addEventListener('input', (e) => {
+            populateList(e.target.value);
+        });
+
+        // Undo stack for this viewer session
+        const undoStack = [];
+        const snapshotForUndo = () => {
+            undoStack.push(JSON.parse(JSON.stringify(this.databaseManager.data[type])));
+        };
+        const performUndo = () => {
+            if (undoStack.length === 0) return;
+            this.databaseManager.data[type] = undoStack.pop();
+            data.length = 0;
+            this.databaseManager.data[type].forEach(e => { if (e) data.push(e); });
+            populateList(searchInput.value);
+            detailEl.innerHTML = '<p style="color: var(--color-text-muted); text-align: center; margin-top: 100px;">Select an entry from the list</p>';
+            this.updateStatus('Undo');
+        };
+        // Store snapshot function so operation methods can call it
+        this._snapshotForUndo = snapshotForUndo;
+
+        // Remove previous keyboard handler if navigating between categories
+        if (this._listKeyHandler) {
+            document.removeEventListener('keydown', this._listKeyHandler);
+        }
+
+        // Keyboard shortcuts for list operations
+        const getSelectedEntry = () => {
+            const selectedItem = listEl.querySelector('.database-list-item.selected');
+            if (!selectedItem) return null;
+            const idText = selectedItem.querySelector('.database-list-id')?.textContent;
+            const entryId = idText ? parseInt(idText.replace('#', '')) : null;
+            return entryId !== null ? data.find(d => d && d.id === entryId) : null;
+        };
+
+        const listKeyHandler = (e) => {
+            // Only when database viewer is active and not typing in an input
+            if (!viewer.classList.contains('active')) return;
+            const tag = document.activeElement?.tagName;
+            if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+
+            // Delete key (no modifier needed)
+            if (e.key === 'Delete') {
+                const entry = getSelectedEntry();
+                if (!entry) return;
+                e.preventDefault();
+                snapshotForUndo();
+                const template = this.getDefaultTemplates()[type];
+                if (template) {
+                    const blank = { ...JSON.parse(JSON.stringify(template)), id: entry.id, name: '' };
+                    this.databaseManager.data[type][entry.id] = blank;
+                    const idx = data.findIndex(d => d && d.id === entry.id);
+                    if (idx >= 0) data[idx] = blank;
+                }
+                populateList(searchInput.value);
+                detailEl.innerHTML = '<p style="color: var(--color-text-muted); text-align: center; margin-top: 100px;">Select an entry from the list</p>';
+                this.updateStatus('Entry cleared');
+                return;
+            }
+
+            if (!e.ctrlKey && !e.metaKey) return;
+
+            if (e.key === 'z') {
+                e.preventDefault();
+                performUndo();
+            } else if (e.key === 'c') {
+                const entry = getSelectedEntry();
+                if (!entry) return;
+                e.preventDefault();
+                this.copyListEntry(entry, type);
+            } else if (e.key === 'x') {
+                const entry = getSelectedEntry();
+                if (!entry) return;
+                e.preventDefault();
+                this.cutListEntry(entry, data, type, populateList, searchInput, detailEl);
+            } else if (e.key === 'v') {
+                const entry = getSelectedEntry();
+                if (!entry || !this.listClipboard || this.listClipboard.type !== type) return;
+                e.preventDefault();
+                this.pasteListEntry(entry, data, type, populateList, searchInput, detailEl);
+            } else if (e.key === 'd') {
+                const entry = getSelectedEntry();
+                if (!entry) return;
+                e.preventDefault();
+                this.duplicateListEntry(entry, data, type, populateList, searchInput);
+            }
+        };
+        this._listKeyHandler = listKeyHandler;
+        document.addEventListener('keydown', listKeyHandler);
 
         // Show viewer
         viewer.classList.add('active');
 
-        // Set up close button
-        const closeBtn = document.getElementById('database-close-btn');
-        closeBtn.onclick = () => {
+        // Take snapshot of database data for Cancel/revert
+        this._dataSnapshot = JSON.parse(JSON.stringify(this.databaseManager.data));
+
+        // Shared close/cleanup logic
+        const closeViewer = () => {
+            // Stop any playing animations when closing database
+            if (this.animationEditor && this.animationEditor._currentEffekseerStop) {
+                this.animationEditor._currentEffekseerStop();
+                this.animationEditor._currentEffekseerStop = null;
+            }
+
             // Also close tileset editor if it's open
             const tilesetEditorContainer = document.getElementById('tileset-editor-main-container');
             if (tilesetEditorContainer && tilesetEditorContainer.style.display !== 'none') {
                 tilesetEditorContainer.style.display = 'none';
             }
+            if (this._listKeyHandler) {
+                document.removeEventListener('keydown', this._listKeyHandler);
+                this._listKeyHandler = null;
+            }
             viewer.classList.remove('active');
         };
 
-        // Don't close on background click - user must use X button
-        // (Removed background click to prevent accidental closes)
+        // Set up close button (X) - same as Cancel
+        const closeBtn = document.getElementById('database-close-btn');
+        closeBtn.onclick = () => {
+            // Revert to snapshot
+            if (this._dataSnapshot) {
+                Object.assign(this.databaseManager.data, this._dataSnapshot);
+                this._dataSnapshot = null;
+            }
+            closeViewer();
+        };
+
+        // OK button - save to disk and close
+        const okBtn = document.getElementById('database-ok-btn');
+        okBtn.onclick = async () => {
+            const projectPath = this.currentProject?.path;
+            if (projectPath) {
+                await this.databaseManager.saveAllData(projectPath);
+                this.updateStatus('Database saved');
+            }
+            this._dataSnapshot = null;
+            closeViewer();
+        };
+
+        // Cancel button - revert changes and close
+        const cancelBtn = document.getElementById('database-cancel-btn');
+        cancelBtn.onclick = () => {
+            if (this._dataSnapshot) {
+                Object.assign(this.databaseManager.data, this._dataSnapshot);
+                this._dataSnapshot = null;
+            }
+            closeViewer();
+        };
+
+        // Apply button - save to disk, stay open
+        const applyBtn = document.getElementById('database-apply-btn');
+        applyBtn.onclick = async () => {
+            const projectPath = this.currentProject?.path;
+            if (projectPath) {
+                await this.databaseManager.saveAllData(projectPath);
+                this.updateStatus('Database saved');
+                // Update snapshot to current state so Cancel reverts to this point
+                this._dataSnapshot = JSON.parse(JSON.stringify(this.databaseManager.data));
+                applyBtn.style.backgroundColor = 'var(--color-accent)';
+                applyBtn.style.color = 'var(--color-bg-deep)';
+                setTimeout(() => {
+                    applyBtn.style.backgroundColor = '';
+                    applyBtn.style.color = '';
+                }, 200);
+            }
+        };
+    }
+
+    /**
+     * Show context menu for database list items
+     */
+    showListContextMenu(x, y, entry, data, type, populateList, searchInput, detailEl) {
+        const existing = document.getElementById('database-list-context-menu');
+        if (existing) existing.remove();
+
+        const menu = document.createElement('div');
+        menu.id = 'database-list-context-menu';
+        menu.style.cssText = `
+            position: fixed; left: ${x}px; top: ${y}px; background-color: var(--color-bg-list-item);
+            border: 1px solid var(--color-border); border-radius: 4px; padding: 4px; z-index: 10004;
+            min-width: 160px; box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+        `;
+
+        const canPaste = this.listClipboard && this.listClipboard.type === type;
+
+        const items = [
+            { label: 'Copy', action: () => this.copyListEntry(entry, type), enabled: true },
+            { label: 'Cut', action: () => this.cutListEntry(entry, data, type, populateList, searchInput, detailEl), enabled: true },
+            { label: 'Paste', action: () => this.pasteListEntry(entry, data, type, populateList, searchInput, detailEl), enabled: canPaste },
+            { label: 'Duplicate', action: () => this.duplicateListEntry(entry, data, type, populateList, searchInput), enabled: true },
+        ];
+
+        items.forEach(item => {
+            const mi = document.createElement('div');
+            mi.textContent = item.label;
+            mi.style.cssText = `padding: 5px 12px; cursor: ${item.enabled ? 'pointer' : 'not-allowed'}; color: ${item.enabled ? 'var(--color-text)' : 'var(--color-text-dim)'}; font-size: 12px; border-radius: 2px;`;
+            if (item.enabled) {
+                mi.onmouseenter = () => { mi.style.backgroundColor = 'var(--color-accent-tint-25)'; };
+                mi.onmouseleave = () => { mi.style.backgroundColor = ''; };
+                mi.onclick = () => { item.action(); menu.remove(); };
+            }
+            menu.appendChild(mi);
+        });
+
+        document.body.appendChild(menu);
+
+        // Keep menu in viewport
+        const rect = menu.getBoundingClientRect();
+        if (rect.right > window.innerWidth) menu.style.left = (window.innerWidth - rect.width - 4) + 'px';
+        if (rect.bottom > window.innerHeight) menu.style.top = (window.innerHeight - rect.height - 4) + 'px';
+
+        const closeMenu = (e) => {
+            if (!menu.contains(e.target)) { menu.remove(); document.removeEventListener('mousedown', closeMenu); }
+        };
+        setTimeout(() => document.addEventListener('mousedown', closeMenu), 50);
+    }
+
+    copyListEntry(entry, type) {
+        const copied = JSON.parse(JSON.stringify(entry));
+        delete copied.id;
+        this.listClipboard = { type, entry: copied };
+        this.updateStatus('Entry copied to clipboard');
+    }
+
+    cutListEntry(entry, data, type, populateList, searchInput, detailEl) {
+        if (this._snapshotForUndo) this._snapshotForUndo();
+
+        // Copy data to clipboard (without name change)
+        const copied = JSON.parse(JSON.stringify(entry));
+        delete copied.id;
+        this.listClipboard = { type, entry: copied };
+
+        // Replace source slot with blank template, keeping the ID
+        const template = this.getDefaultTemplates()[type];
+        if (template) {
+            const blank = { ...JSON.parse(JSON.stringify(template)), id: entry.id, name: '' };
+            this.databaseManager.data[type][entry.id] = blank;
+
+            const idx = data.findIndex(d => d && d.id === entry.id);
+            if (idx >= 0) data[idx] = blank;
+        }
+
+        populateList(searchInput.value);
+        detailEl.innerHTML = '<p style="color: var(--color-text-muted); text-align: center; margin-top: 100px;">Select an entry from the list</p>';
+        this.updateStatus('Entry cut to clipboard');
+    }
+
+    pasteListEntry(targetEntry, data, type, populateList, searchInput, detailEl) {
+        if (!this.listClipboard || this.listClipboard.type !== type) return;
+        if (!targetEntry) return;
+        if (this._snapshotForUndo) this._snapshotForUndo();
+
+        // Overwrite target slot with clipboard data, keeping the target's ID
+        const pasted = JSON.parse(JSON.stringify(this.listClipboard.entry));
+        pasted.id = targetEntry.id;
+
+        this.databaseManager.data[type][targetEntry.id] = pasted;
+
+        const idx = data.findIndex(d => d && d.id === targetEntry.id);
+        if (idx >= 0) data[idx] = pasted;
+
+        populateList(searchInput.value);
+        this.showDatabaseDetail(pasted, type);
+        this.updateStatus('Entry pasted');
+    }
+
+    duplicateListEntry(entry, data, type, populateList, searchInput) {
+        if (this._snapshotForUndo) this._snapshotForUndo();
+        const cloned = JSON.parse(JSON.stringify(entry));
+        delete cloned.id;
+        cloned.name = (cloned.name || 'Unnamed') + ' (Copy)';
+        const newEntry = this.databaseManager.addEntry(type, cloned);
+        if (newEntry) {
+            data.push(newEntry);
+            populateList(searchInput.value);
+            this.updateStatus('Entry duplicated');
+        }
     }
 
     /**
@@ -245,6 +718,8 @@ class DatabaseEditorUI {
             { name: 'Animations', type: 'animations' },
             { name: 'Tilesets', type: 'tilesets' },
             { name: 'Common Events', type: 'commonEvents' },
+            { name: 'System 1', type: 'system1' },
+            { name: 'System 2', type: 'system2' },
             { name: 'Types', type: 'types' },
             { name: 'Terms', type: 'terms' }
         ];
@@ -293,10 +768,48 @@ class DatabaseEditorUI {
             this.tilesetEditor.showTilesetDetail(detailEl, entry);
         } else if (type === 'animations') {
             this.animationEditor.showAnimationDetail(detailEl, entry);
+        } else if (type === 'commonEvents') {
+            this.commonEventEditor.showCommonEventDetail(detailEl, entry);
         } else {
             // Generic display for other types
             this.showGenericDetail(detailEl, entry, type);
         }
+    }
+
+    /**
+     * Get default entry templates for each database type
+     */
+    getDefaultTemplates() {
+        return {
+            actors: { name: 'New Actor', nickname: '', classId: 1, initialLevel: 1, maxLevel: 99, profile: '', characterName: '', characterIndex: 0, faceName: '', faceIndex: 0, battlerName: '', equips: [0,0,0,0,0], traits: [], note: '' },
+            classes: { name: 'New Class', expParams: [30,20,30,30], params: [[1],[1],[1],[1],[1],[1],[1],[1]], learnings: [], traits: [], note: '' },
+            skills: { name: 'New Skill', iconIndex: 0, description: '', stypeId: 1, scope: 1, occasion: 1, mpCost: 0, tpCost: 0, tpGain: 0, hitType: 0, animationId: 0, speed: 0, successRate: 100, repeats: 1, message1: '', message2: '', message3: '', message4: '', damage: { type: 0, elementId: -1, formula: '0', variance: 20, critical: false }, effects: [], note: '' },
+            items: { name: 'New Item', iconIndex: 0, description: '', itypeId: 1, price: 0, consumable: true, scope: 0, occasion: 0, speed: 0, successRate: 100, repeats: 1, hitType: 0, animationId: 0, damage: { type: 0, elementId: -1, formula: '0', variance: 20, critical: false }, effects: [], note: '' },
+            weapons: { name: 'New Weapon', iconIndex: 0, description: '', wtypeId: 1, price: 0, params: [0,0,0,0,0,0,0,0], traits: [], animationId: 0, note: '' },
+            armors: { name: 'New Armor', iconIndex: 0, description: '', atypeId: 1, etypeId: 2, price: 0, params: [0,0,0,0,0,0,0,0], traits: [], note: '' },
+            enemies: { name: 'New Enemy', battlerName: '', battlerHue: 0, params: [100,0,10,10,10,10,10,10], exp: 0, gold: 0, dropItems: [{kind:0,dataId:1,denominator:1},{kind:0,dataId:1,denominator:1},{kind:0,dataId:1,denominator:1}], actions: [{skillId:1,conditionType:0,conditionParam1:0,conditionParam2:0,rating:5}], traits: [], note: '' },
+            troops: { name: 'New Troop', members: [], pages: [], note: '' },
+            states: { name: 'New State', iconIndex: 0, restriction: 0, priority: 50, removeAtBattleEnd: false, removeByRestriction: false, autoRemovalTiming: 0, minTurns: 1, maxTurns: 1, removeByDamage: false, chanceByDamage: 100, removeByWalking: false, stepsToRemove: 100, traits: [], note: '', message1: '', message2: '', message3: '', message4: '' },
+            animations: { name: 'New Animation', flashTimings: [], soundTimings: [], effectName: '', offsetX: 0, offsetY: 0, rotation: { x: 0, y: 0, z: 0 }, scale: 100, speed: 100 },
+            tilesets: { name: 'New Tileset', mode: 0, tilesetNames: ['', '', '', '', '', '', '', '', ''], flags: new Array(8192).fill(0), note: '' },
+            commonEvents: { name: 'New Common Event', trigger: 0, switchId: 1, list: [{code:0,indent:0,parameters:[]}] }
+        };
+    }
+
+    /**
+     * Add a new database entry with appropriate default template
+     */
+    addDatabaseEntry(type) {
+        const template = this.getDefaultTemplates()[type];
+        if (!template) return null;
+        return this.databaseManager.addEntry(type, { ...template });
+    }
+
+    /**
+     * Delete a database entry
+     */
+    deleteDatabaseEntry(type, id) {
+        this.databaseManager.deleteEntry(type, id);
     }
 
     /**
@@ -308,7 +821,7 @@ class DatabaseEditorUI {
 
         wrapper.innerHTML = `
             <h3>${entry.name || 'Entry #' + entry.id}</h3>
-            <pre style="background: #1e1e1e; padding: 16px; border-radius: 4px; overflow: auto; max-height: 600px;">${JSON.stringify(entry, null, 2)}</pre>
+            <pre style="background: var(--color-bg-surface); padding: 16px; border-radius: 4px; overflow: auto; max-height: 600px;">${JSON.stringify(entry, null, 2)}</pre>
         `;
 
         container.appendChild(wrapper);
@@ -502,7 +1015,9 @@ class DatabaseEditorUI {
 
                 // Use file:// protocol for NW.js
                 const path = require('path');
-                const imgPath = 'file://' + path.join(this.currentProject.path, 'img', 'characters', entry.characterName + '.png').replace(/\\/g, '/');
+                // Add .png extension if not already present (RPG Maker stores names without extension)
+                const filename = entry.characterName.endsWith('.png') ? entry.characterName : entry.characterName + '.png';
+                const imgPath = 'file://' + path.join(this.currentProject.path, 'img', 'characters', filename).replace(/\\/g, '/');
 
                 console.log('Loading character sprite:', imgPath);
 
@@ -531,48 +1046,58 @@ class DatabaseEditorUI {
                     row = charRow;
                 }
 
-                // Animation frames: 1-0-1-2 pattern (standing-left-standing-right)
-                const frames = [1, 0, 1, 2];
-                let frameIndex = 0;
+                // Pre-cache frames to offscreen canvases for smooth animation
+                const frameIndices = [1, 0, 1, 2];
+                const cachedFrames = [];
 
-                const animate = () => {
-                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                // Pre-render all frames
+                frameIndices.forEach(frameNum => {
+                    const offscreenCanvas = document.createElement('canvas');
+                    offscreenCanvas.width = canvas.width;
+                    offscreenCanvas.height = canvas.height;
+                    const offscreenCtx = offscreenCanvas.getContext('2d');
 
                     let frameX, frameY, frameWidth, frameHeight;
 
                     if (isBigCharacter) {
-                        // Big character: 3 frames horizontal, 4 directions vertical
                         frameWidth = characterWidth;
                         frameHeight = characterHeight;
-                        frameX = frames[frameIndex] * characterWidth;
-                        frameY = 0; // Down direction
+                        frameX = frameNum * characterWidth;
+                        frameY = 0;
                     } else {
-                        // Normal character: each character is 3 frames wide
                         frameWidth = characterWidth;
                         frameHeight = characterHeight;
-                        frameX = (col * 3 + frames[frameIndex]) * characterWidth;
-                        frameY = (row * 4) * characterHeight; // Down direction
+                        frameX = (col * 3 + frameNum) * characterWidth;
+                        frameY = (row * 4) * characterHeight;
                     }
 
-                    ctx.drawImage(
+                    offscreenCtx.drawImage(
                         img,
                         frameX, frameY,
                         frameWidth, frameHeight,
                         0, 0,
-                        canvas.width, canvas.height
+                        offscreenCanvas.width, offscreenCanvas.height
                     );
 
-                    frameIndex = (frameIndex + 1) % frames.length;
+                    cachedFrames.push(offscreenCanvas);
+                });
+
+                // Simple animation using cached frames
+                let currentFrame = 0;
+
+                const animate = () => {
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    ctx.drawImage(cachedFrames[currentFrame], 0, 0);
+                    currentFrame = (currentFrame + 1) % cachedFrames.length;
                 };
 
-                // Animate at ~8 FPS
                 setInterval(animate, 125);
                 animate();
             };
             img.onerror = (e) => {
                 console.error('Failed to load character sprite:', imgPath, e);
                 const errorMsg = document.createElement('span');
-                errorMsg.style.color = '#999';
+                errorMsg.style.color = 'var(--color-text-muted)';
                 errorMsg.style.fontSize = '11px';
                 errorMsg.textContent = 'Image not found';
                 charCanvasContainer.appendChild(errorMsg);
@@ -580,7 +1105,7 @@ class DatabaseEditorUI {
             img.src = imgPath;
             } else {
                 const noImageMsg = document.createElement('span');
-                noImageMsg.style.color = '#999';
+                noImageMsg.style.color = 'var(--color-text-muted)';
                 noImageMsg.style.fontSize = '11px';
                 noImageMsg.textContent = 'No image set';
                 charCanvasContainer.appendChild(noImageMsg);
@@ -646,7 +1171,7 @@ class DatabaseEditorUI {
                 faceImg.onerror = (e) => {
                     console.error('Failed to load face graphic:', faceImgPath, e);
                     const errorMsg = document.createElement('span');
-                    errorMsg.style.color = '#999';
+                    errorMsg.style.color = 'var(--color-text-muted)';
                     errorMsg.style.fontSize = '11px';
                     errorMsg.textContent = 'Image not found';
                     faceCanvasContainer.appendChild(errorMsg);
@@ -654,7 +1179,7 @@ class DatabaseEditorUI {
                 faceImg.src = faceImgPath;
             } else {
                 const noFaceMsg = document.createElement('span');
-                noFaceMsg.style.color = '#999';
+                noFaceMsg.style.color = 'var(--color-text-muted)';
                 noFaceMsg.style.fontSize = '11px';
                 noFaceMsg.textContent = 'No image set';
                 faceCanvasContainer.appendChild(noFaceMsg);
@@ -717,7 +1242,7 @@ class DatabaseEditorUI {
                 svImg.onerror = (e) => {
                     console.error('Failed to load SV battler:', svImgPath, e);
                     const errorMsg = document.createElement('span');
-                    errorMsg.style.color = '#999';
+                    errorMsg.style.color = 'var(--color-text-muted)';
                     errorMsg.style.fontSize = '11px';
                     errorMsg.textContent = 'Image not found';
                     svCanvasContainer.appendChild(errorMsg);
@@ -725,7 +1250,7 @@ class DatabaseEditorUI {
                 svImg.src = svImgPath;
             } else {
                 const noSvMsg = document.createElement('span');
-                noSvMsg.style.color = '#999';
+                noSvMsg.style.color = 'var(--color-text-muted)';
                 noSvMsg.style.fontSize = '11px';
                 noSvMsg.textContent = 'No image set';
                 svCanvasContainer.appendChild(noSvMsg);
@@ -744,12 +1269,64 @@ class DatabaseEditorUI {
             preview.appendChild(graphicsContainer);
 
         } else if ((type === 'items' || type === 'weapons' || type === 'armors' || type === 'skills') && entry.iconIndex !== undefined) {
-            // Show item icon
+            // Show item icon with click handler
+            const iconWrapper = document.createElement('div');
+            iconWrapper.style.cssText = `
+                display: inline-block;
+                cursor: pointer;
+                padding: 4px;
+                border-radius: 4px;
+                transition: background-color 0.2s;
+                position: relative;
+            `;
+            iconWrapper.title = 'Click to change icon';
+
             const canvas = document.createElement('canvas');
             canvas.width = 32;
             canvas.height = 32;
             canvas.className = 'icon-preview';
-            preview.appendChild(canvas);
+            iconWrapper.appendChild(canvas);
+
+            // Add hover indicator overlay
+            const hoverIndicator = document.createElement('div');
+            hoverIndicator.style.cssText = `
+                position: absolute;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: rgba(0, 0, 0, 0.75);
+                border-radius: 4px;
+                display: none;
+                align-items: center;
+                justify-content: center;
+                pointer-events: none;
+            `;
+            // Sleek futuristic folder/browse icon
+            hoverIndicator.innerHTML = `
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M3 7C3 5.89543 3.89543 5 5 5H9L11 7H19C20.1046 7 21 7.89543 21 9V17C21 18.1046 20.1046 19 19 19H5C3.89543 19 3 18.1046 3 17V7Z"
+                          stroke="var(--color-accent-bright)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    <path d="M9 12H15M12 9V15"
+                          stroke="var(--color-accent-bright)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+            `;
+            iconWrapper.appendChild(hoverIndicator);
+
+            // Add hover effect
+            iconWrapper.onmouseenter = () => {
+                iconWrapper.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
+                hoverIndicator.style.display = 'flex';
+            };
+            iconWrapper.onmouseleave = () => {
+                iconWrapper.style.backgroundColor = '';
+                hoverIndicator.style.display = 'none';
+            };
+
+            // Add click handler
+            iconWrapper.onclick = () => this.selectIcon(entry, type);
+
+            preview.appendChild(iconWrapper);
 
             const ctx = canvas.getContext('2d');
             const img = new Image();
@@ -757,8 +1334,6 @@ class DatabaseEditorUI {
             // Use file:// protocol for NW.js
             const path = require('path');
             const imgPath = 'file://' + path.join(this.currentProject.path, 'img', 'system', 'IconSet.png');
-
-            console.log('Loading icon:', imgPath);
 
             img.onload = () => {
                 // IconSet is 16 icons wide, each 32x32
@@ -778,12 +1353,12 @@ class DatabaseEditorUI {
             };
             img.onerror = (e) => {
                 console.error('Failed to load icon:', imgPath, e);
-                preview.innerHTML = '<span style="color: #999;">Icon not found</span>';
+                preview.innerHTML = '<span style="color: var(--color-text-muted);">Icon not found</span>';
             };
             img.src = imgPath;
 
         } else {
-            preview.innerHTML = '<span style="color: #999;">No preview available</span>';
+            preview.innerHTML = '<span style="color: var(--color-text-muted);">No preview available</span>';
         }
 
         container.appendChild(preview);
@@ -809,19 +1384,19 @@ class DatabaseEditorUI {
                 return;
             }
 
-            this.showImagePicker('Select Character Sprite', files, (selectedFile) => {
+            this.showImagePicker('Select Character Sprite', files, (selectedFile, selectedIndex) => {
                 actor.characterName = selectedFile;
-
-                const indexChoice = prompt('Enter character index (0-7) on the sprite sheet:', actor.characterIndex || '0');
-                if (indexChoice !== null) {
-                    actor.characterIndex = parseInt(indexChoice);
-                }
+                actor.characterIndex = selectedIndex;
 
                 this.showDatabaseDetail(actor, 'actors');
                 this.updateStatus('Character sprite updated');
             }, (fileName) => {
                 // Preview callback - show full sprite sheet
                 return 'file://' + path.join(this.currentProject.path, 'img', 'characters', fileName + '.png');
+            }, actor.characterName, {
+                sheetType: 'character',
+                currentIndex: actor.characterIndex || 0,
+                selectButtonLabel: 'Select Sprite'
             });
         } catch (error) {
             console.error('Error reading characters folder:', error);
@@ -849,18 +1424,18 @@ class DatabaseEditorUI {
                 return;
             }
 
-            this.showImagePicker('Select Face Graphic', files, (selectedFile) => {
+            this.showImagePicker('Select Face Graphic', files, (selectedFile, selectedIndex) => {
                 actor.faceName = selectedFile;
-
-                const indexChoice = prompt('Enter face index (0-7) on the face sheet:', actor.faceIndex || '0');
-                if (indexChoice !== null) {
-                    actor.faceIndex = parseInt(indexChoice);
-                }
+                actor.faceIndex = selectedIndex;
 
                 this.showDatabaseDetail(actor, 'actors');
                 this.updateStatus('Face graphic updated');
             }, (fileName) => {
                 return 'file://' + path.join(this.currentProject.path, 'img', 'faces', fileName + '.png');
+            }, actor.faceName, {
+                sheetType: 'face',
+                currentIndex: actor.faceIndex || 0,
+                selectButtonLabel: 'Select Face'
             });
         } catch (error) {
             console.error('Error reading faces folder:', error);
@@ -902,7 +1477,348 @@ class DatabaseEditorUI {
         }
     }
 
-    showImagePicker(title, files, onSelectCallback, getImagePathCallback) {
+    selectIcon(entry, type) {
+        if (typeof nw === 'undefined') {
+            alert('Icon selection requires NW.js');
+            return;
+        }
+
+        const path = require('path');
+        const iconSetPath = path.join(this.currentProject.path, 'img', 'system', 'IconSet.png');
+
+        this.showIconPicker(entry.iconIndex || 0, (selectedIconIndex) => {
+            // Update the icon index
+            entry.iconIndex = selectedIconIndex;
+
+            // Save to database based on type
+            switch(type) {
+                case 'items':
+                    this.databaseManager.updateItem(entry.id, entry);
+                    break;
+                case 'weapons':
+                    this.databaseManager.updateWeapon(entry.id, entry);
+                    break;
+                case 'armors':
+                    this.databaseManager.updateArmor(entry.id, entry);
+                    break;
+                case 'skills':
+                    this.databaseManager.updateSkill(entry.id, entry);
+                    break;
+                case 'states':
+                    this.databaseManager.updateState(entry.id, entry);
+                    break;
+            }
+
+            // Refresh the detail view
+            this.showDatabaseDetail(entry, type);
+            this.updateStatus('Icon updated');
+        }, iconSetPath);
+    }
+
+    showIconPicker(currentIconIndex, onSelectCallback, iconSetPath) {
+        // Create modal overlay
+        const modal = document.createElement('div');
+        modal.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0, 0, 0, 0.8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10000;
+        `;
+
+        // Create picker container
+        const container = document.createElement('div');
+        container.style.cssText = `
+            background-color: var(--color-bg-surface);
+            border: 1px solid var(--color-border);
+            border-radius: 8px;
+            max-width: 90vw;
+            max-height: 80vh;
+            display: flex;
+            flex-direction: column;
+        `;
+
+        // Title
+        const title = document.createElement('h2');
+        title.textContent = 'Select Icon';
+        title.style.cssText = 'margin: 0; padding: 20px 20px 16px 20px; color: var(--color-text-strong); font-size: 16px;';
+        container.appendChild(title);
+
+        // Scrollable canvas area
+        const canvasContainer = document.createElement('div');
+        canvasContainer.style.cssText = `
+            flex: 1;
+            overflow-y: auto;
+            overflow-x: hidden;
+            padding: 0 20px;
+        `;
+
+        // Canvas for icon grid
+        const canvas = document.createElement('canvas');
+        canvas.style.cssText = `
+            display: block;
+            border: 1px solid var(--color-border);
+            cursor: pointer;
+            image-rendering: pixelated;
+            margin: 0 auto;
+        `;
+        canvasContainer.appendChild(canvas);
+        container.appendChild(canvasContainer);
+
+        // Bottom section with selection info and buttons (sticky)
+        const bottomSection = document.createElement('div');
+        bottomSection.style.cssText = `
+            background-color: var(--color-bg-panel);
+            border-top: 1px solid var(--color-border);
+            padding: 16px 20px;
+        `;
+
+        // Selected icon display
+        const selectedInfo = document.createElement('div');
+        selectedInfo.style.cssText = 'margin: 0 0 16px 0; color: var(--color-text-strong); font-size: 13px;';
+        selectedInfo.textContent = `Selected Icon: ${currentIconIndex}`;
+        bottomSection.appendChild(selectedInfo);
+
+        // Buttons
+        const buttonContainer = document.createElement('div');
+        buttonContainer.style.cssText = 'display: flex; gap: 8px; justify-content: flex-end;';
+
+        const cancelBtn = document.createElement('button');
+        cancelBtn.textContent = 'Cancel';
+        cancelBtn.className = 'rr-btn-secondary';
+        cancelBtn.onclick = () => document.body.removeChild(modal);
+
+        const okBtn = document.createElement('button');
+        okBtn.textContent = 'OK';
+        okBtn.style.cssText = 'padding: 8px 16px; background-color: var(--color-accent); color: var(--color-bg-deep); border: 1px solid var(--color-accent); border-radius: 4px; cursor: pointer; font-weight: bold; transition: background-color 0.2s;';
+        okBtn.onmouseenter = () => {
+            okBtn.style.backgroundColor = 'var(--color-accent-muted)';
+        };
+        okBtn.onmouseleave = () => {
+            okBtn.style.backgroundColor = 'var(--color-accent)';
+        };
+
+        let selectedIconIndex = currentIconIndex;
+
+        okBtn.onclick = () => {
+            onSelectCallback(selectedIconIndex);
+            document.body.removeChild(modal);
+        };
+
+        buttonContainer.appendChild(cancelBtn);
+        buttonContainer.appendChild(okBtn);
+        bottomSection.appendChild(buttonContainer);
+        container.appendChild(bottomSection);
+
+        modal.appendChild(container);
+        document.body.appendChild(modal);
+
+        // Load and draw iconset
+        const img = new Image();
+        img.onload = () => {
+            const iconsPerRow = 16;
+            const iconSize = 32;
+            const scale = 2; // Show icons at 2x size for easier selection
+
+            // Calculate grid dimensions
+            const imgRows = Math.ceil(img.height / iconSize);
+            canvas.width = iconsPerRow * iconSize * scale;
+            canvas.height = imgRows * iconSize * scale;
+
+            const ctx = canvas.getContext('2d');
+
+            // OPTIMIZATION: Pre-cache the icon sheet to an offscreen canvas
+            const cachedIconSheet = document.createElement('canvas');
+            cachedIconSheet.width = canvas.width;
+            cachedIconSheet.height = canvas.height;
+            const cacheCtx = cachedIconSheet.getContext('2d');
+
+            // Draw all icons once to the cache
+            for (let row = 0; row < imgRows; row++) {
+                for (let col = 0; col < iconsPerRow; col++) {
+                    cacheCtx.drawImage(
+                        img,
+                        col * iconSize, row * iconSize,
+                        iconSize, iconSize,
+                        col * iconSize * scale, row * iconSize * scale,
+                        iconSize * scale, iconSize * scale
+                    );
+                }
+            }
+
+            // Draw selection highlight - now just copies cached canvas + draws highlight
+            const drawSelection = (iconIndex) => {
+                // Copy cached icon sheet (single fast operation)
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                ctx.drawImage(cachedIconSheet, 0, 0);
+
+                // Draw highlight
+                const col = iconIndex % iconsPerRow;
+                const row = Math.floor(iconIndex / iconsPerRow);
+                ctx.strokeStyle = ThemeColors.resolve('--color-accent-bright', '#ffd700');
+                ctx.lineWidth = 3;
+                ctx.strokeRect(
+                    col * iconSize * scale + 1.5,
+                    row * iconSize * scale + 1.5,
+                    iconSize * scale - 3,
+                    iconSize * scale - 3
+                );
+            };
+
+            // Initial selection highlight
+            drawSelection(selectedIconIndex);
+
+            // Click handler
+            canvas.onclick = (e) => {
+                const rect = canvas.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+
+                const col = Math.floor(x / (iconSize * scale));
+                const row = Math.floor(y / (iconSize * scale));
+                selectedIconIndex = row * iconsPerRow + col;
+
+                selectedInfo.textContent = `Selected Icon: ${selectedIconIndex}`;
+                drawSelection(selectedIconIndex);
+            };
+        };
+
+        img.src = 'file://' + iconSetPath;
+
+        // Close on background click
+        modal.onclick = (e) => {
+            if (e.target === modal) {
+                document.body.removeChild(modal);
+            }
+        };
+    }
+
+    /**
+     * Show a styled modal for changing the maximum number of database entries
+     */
+    showChangeMaximumModal(title, type, currentMax, onConfirm) {
+        // Overlay
+        const overlay = document.createElement('div');
+        overlay.style.cssText = `
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            display: flex; align-items: center; justify-content: center;
+            z-index: 10000;
+        `;
+
+        // Modal container
+        const modal = document.createElement('div');
+        modal.style.cssText = `
+            background: var(--color-bg-menubar); border: 1px solid var(--color-border); border-radius: 6px;
+            width: 360px; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+            display: flex; flex-direction: column;
+        `;
+
+        // Header
+        const header = document.createElement('div');
+        header.style.cssText = `
+            background: var(--color-bg-panel); padding: 16px 20px;
+            border-bottom: 1px solid var(--color-border);
+            display: flex; justify-content: space-between; align-items: center;
+            border-radius: 6px 6px 0 0;
+        `;
+        header.innerHTML = `
+            <h2 style="margin: 0; color: var(--color-text); font-size: 18px;">Change Maximum</h2>
+            <span class="modal-close" style="color: var(--color-text); font-size: 28px; font-weight: bold; cursor: pointer; line-height: 1;">&times;</span>
+        `;
+        modal.appendChild(header);
+
+        // Body
+        const body = document.createElement('div');
+        body.style.cssText = 'padding: 20px;';
+
+        const label = document.createElement('div');
+        label.style.cssText = 'color: var(--color-text); font-size: 13px; margin-bottom: 12px;';
+        label.textContent = `Set the maximum number of ${title}:`;
+        body.appendChild(label);
+
+        const input = document.createElement('input');
+        input.type = 'number';
+        input.min = '1';
+        input.value = currentMax;
+        input.style.cssText = `
+            width: 100%; padding: 8px 10px; box-sizing: border-box;
+            background: var(--color-bg-panel); border: 1px solid var(--color-border-input); border-radius: 3px;
+            color: var(--color-text); font-size: 14px;
+        `;
+        body.appendChild(input);
+
+        // Warning message (shown when decreasing)
+        const warning = document.createElement('div');
+        warning.style.cssText = 'color: #ff8800; font-size: 12px; margin-top: 8px; display: none;';
+        body.appendChild(warning);
+
+        input.addEventListener('input', () => {
+            const val = parseInt(input.value);
+            if (!isNaN(val) && val < currentMax) {
+                warning.textContent = `Warning: This will remove entries ${val + 1} through ${currentMax}.`;
+                warning.style.display = 'block';
+            } else {
+                warning.style.display = 'none';
+            }
+        });
+
+        modal.appendChild(body);
+
+        // Footer buttons
+        const footer = document.createElement('div');
+        footer.style.cssText = 'padding: 12px 20px; display: flex; justify-content: flex-end; gap: 8px; border-top: 1px solid var(--color-border); background-color: var(--color-bg-panel);';
+
+        const cancelBtn = document.createElement('button');
+        cancelBtn.textContent = 'Cancel';
+        cancelBtn.className = 'rr-btn-secondary';
+
+        const okBtn = document.createElement('button');
+        okBtn.textContent = 'OK';
+        okBtn.style.cssText = 'padding: 8px 16px; background: var(--color-accent); color: var(--color-bg-deep); border: 1px solid var(--color-accent); border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: bold;';
+        okBtn.onmouseenter = () => { okBtn.style.backgroundColor = 'var(--color-accent-muted)'; };
+        okBtn.onmouseleave = () => { okBtn.style.backgroundColor = 'var(--color-accent)'; };
+
+        const close = () => document.body.removeChild(overlay);
+
+        cancelBtn.onclick = close;
+        header.querySelector('.modal-close').onclick = close;
+        overlay.onclick = (e) => { if (e.target === overlay) close(); };
+
+        okBtn.onclick = () => {
+            const newMax = parseInt(input.value);
+            if (isNaN(newMax) || newMax < 1) {
+                input.style.borderColor = 'var(--color-danger-pressed)';
+                return;
+            }
+            close();
+            onConfirm(newMax);
+        };
+
+        // Enter key submits
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') okBtn.click();
+            if (e.key === 'Escape') close();
+        });
+
+        footer.appendChild(cancelBtn);
+        footer.appendChild(okBtn);
+        modal.appendChild(footer);
+
+        overlay.appendChild(modal);
+        document.body.appendChild(overlay);
+
+        // Focus and select the input
+        input.focus();
+        input.select();
+    }
+
+    showImagePicker(title, files, onSelectCallback, getImagePathCallback, currentFile, options = {}) {
         const modal = document.getElementById('image-picker-modal');
         const titleEl = document.getElementById('image-picker-title');
         const listEl = document.getElementById('image-picker-list');
@@ -911,16 +1827,16 @@ class DatabaseEditorUI {
 
         titleEl.textContent = title;
         listEl.innerHTML = '';
-        previewEl.innerHTML = '<p style="color: #999; text-align: center;">Select an image to preview</p>';
+        previewEl.innerHTML = '<p style="color: var(--color-text-muted); text-align: center;">Select an image to preview</p>';
 
         // Populate file list
         files.forEach((file) => {
             const item = document.createElement('div');
-            item.style.cssText = 'padding: 10px 16px; cursor: pointer; border-bottom: 1px solid #2d2d30; font-size: 13px;';
+            item.style.cssText = 'padding: 10px 16px; cursor: pointer; border-bottom: 1px solid var(--color-bg-menubar); font-size: 13px;';
             item.textContent = file;
 
             item.addEventListener('mouseenter', () => {
-                item.style.backgroundColor = '#2a2a2a';
+                item.style.backgroundColor = 'var(--color-bg-button)';
             });
 
             item.addEventListener('mouseleave', () => {
@@ -936,24 +1852,148 @@ class DatabaseEditorUI {
                     i.style.backgroundColor = '';
                 });
                 item.classList.add('selected');
-                item.style.backgroundColor = '#094771';
+                item.style.backgroundColor = 'var(--color-selection-deep)';
 
                 // Show preview
                 const imagePath = getImagePathCallback(file);
-                previewEl.innerHTML = `
-                    <div style="display: flex; flex-direction: column; align-items: center; gap: 16px; width: 100%;">
-                        <div style="font-size: 14px; font-weight: 600; color: #007acc;">${file}</div>
-                        <div style="background: #1a1d1e; border: 2px solid #3e3e42; border-radius: 8px; padding: 16px; max-width: 100%; overflow: auto;">
-                            <img src="${imagePath}" style="image-rendering: pixelated; image-rendering: -moz-crisp-edges; image-rendering: crisp-edges; max-width: 100%; display: block;" />
-                        </div>
-                        <button id="image-picker-select-btn" style="background: linear-gradient(to bottom, #007acc 0%, #005a9e 100%); border: none; color: white; padding: 10px 24px; border-radius: 4px; cursor: pointer; font-size: 14px; font-weight: 500;">Select This Image</button>
-                    </div>
-                `;
+                const isCharacterSheet = options.sheetType === 'character';
+                const isFaceSheet = options.sheetType === 'face';
+                const hasSheetSelection = isCharacterSheet || isFaceSheet;
+                const isBigCharacter = isCharacterSheet && (file.startsWith('$') || file.startsWith('!$'));
+                const sheetColumns = isFaceSheet ? 4 : (isBigCharacter ? 1 : 4);
+                const sheetRows = isFaceSheet ? 2 : (isBigCharacter ? 1 : 2);
+                const maxIndex = sheetColumns * sheetRows - 1;
+                let selectedIndex = file === currentFile ? parseInt(options.currentIndex || 0) : 0;
+                if (isNaN(selectedIndex) || selectedIndex < 0 || selectedIndex > maxIndex) selectedIndex = 0;
+
+                previewEl.innerHTML = '';
+
+                const wrapper = document.createElement('div');
+                wrapper.style.cssText = 'display: flex; flex-direction: column; align-items: center; gap: 16px; width: 100%;';
+
+                const filenameEl = document.createElement('div');
+                filenameEl.style.cssText = 'font-size: 14px; font-weight: 600; color: var(--color-accent);';
+                filenameEl.textContent = file;
+                wrapper.appendChild(filenameEl);
+
+                if (hasSheetSelection) {
+                    const instructions = document.createElement('div');
+                    instructions.style.cssText = 'font-size: 12px; color: var(--color-text-muted); text-align: center;';
+                    instructions.textContent = isBigCharacter
+                        ? 'This is a single-character sheet.'
+                        : 'Click a square on the image to choose the index.';
+                    wrapper.appendChild(instructions);
+                }
+
+                const imageFrame = document.createElement('div');
+                imageFrame.style.cssText = 'background: #1a1d1e; border: 2px solid var(--color-border); border-radius: 8px; padding: 16px; max-width: 100%; overflow: auto;';
+
+                const imageWrap = document.createElement('div');
+                imageWrap.style.cssText = 'position: relative; display: inline-block; line-height: 0;';
+
+                const img = document.createElement('img');
+                img.src = imagePath;
+                img.style.cssText = 'image-rendering: pixelated; image-rendering: -moz-crisp-edges; image-rendering: crisp-edges; max-width: 100%; display: block;';
+                imageWrap.appendChild(img);
+
+                let selectedInfo = null;
+                const selectionCells = [];
+
+                const updateSelection = () => {
+                    selectionCells.forEach((cell, index) => {
+                        const selected = index === selectedIndex;
+                        cell.style.borderColor = selected ? 'var(--color-accent)' : 'rgba(255, 255, 255, 0.35)';
+                        cell.style.backgroundColor = selected ? 'rgba(212, 175, 55, 0.18)' : 'transparent';
+                        cell.style.boxShadow = selected ? '0 0 0 2px rgba(0, 0, 0, 0.9), 0 0 12px rgba(212, 175, 55, 0.8)' : 'none';
+                    });
+
+                    if (selectedInfo) {
+                        selectedInfo.textContent = `${isFaceSheet ? 'Face' : 'Character'} index: ${selectedIndex}`;
+                    }
+                };
+
+                if (hasSheetSelection) {
+                    const overlay = document.createElement('div');
+                    overlay.style.cssText = 'position: absolute; inset: 0; pointer-events: none;';
+                    imageWrap.appendChild(overlay);
+
+                    for (let index = 0; index <= maxIndex; index++) {
+                        const col = index % sheetColumns;
+                        const row = Math.floor(index / sheetColumns);
+                        const cell = document.createElement('div');
+                        cell.style.cssText = `
+                            position: absolute;
+                            left: ${(col / sheetColumns) * 100}%;
+                            top: ${(row / sheetRows) * 100}%;
+                            width: ${100 / sheetColumns}%;
+                            height: ${100 / sheetRows}%;
+                            box-sizing: border-box;
+                            border: 3px solid rgba(255, 255, 255, 0.35);
+                            cursor: pointer;
+                            pointer-events: auto;
+                            transition: border-color 0.12s, background-color 0.12s, box-shadow 0.12s;
+                        `;
+                        cell.title = `Index ${index}`;
+                        cell.addEventListener('mouseenter', () => {
+                            if (index !== selectedIndex) cell.style.borderColor = 'rgba(212, 175, 55, 0.85)';
+                        });
+                        cell.addEventListener('mouseleave', updateSelection);
+                        cell.addEventListener('click', () => {
+                            selectedIndex = index;
+                            updateSelection();
+                        });
+                        overlay.appendChild(cell);
+                        selectionCells.push(cell);
+                    }
+                }
+
+                imageFrame.appendChild(imageWrap);
+                wrapper.appendChild(imageFrame);
+
+                if (hasSheetSelection) {
+                    selectedInfo = document.createElement('div');
+                    selectedInfo.style.cssText = 'font-size: 12px; color: var(--color-accent);';
+                    wrapper.appendChild(selectedInfo);
+                    updateSelection();
+                }
+
+                const buttonRow = document.createElement('div');
+                buttonRow.style.cssText = 'display: flex; gap: 8px; align-items: center;';
+
+                const selectBtn = document.createElement('button');
+                selectBtn.id = 'image-picker-select-btn';
+                selectBtn.textContent = options.selectButtonLabel || 'Select This Image';
+                selectBtn.style.cssText = 'background: var(--color-accent); border: 1px solid var(--color-accent); color: var(--color-bg-deep); padding: 10px 24px; border-radius: 4px; cursor: pointer; font-size: 14px; font-weight: bold;';
+                buttonRow.appendChild(selectBtn);
+
+                const openFolderBtn = document.createElement('button');
+                openFolderBtn.id = 'image-picker-open-folder-btn';
+                openFolderBtn.textContent = 'Open in Folder';
+                openFolderBtn.title = 'Open containing folder in file manager';
+                openFolderBtn.style.cssText = 'background: var(--color-border-subtle); border: 1px solid var(--color-border-input); color: var(--color-text-strong); padding: 10px 16px; border-radius: 4px; cursor: pointer; font-size: 13px;';
+                buttonRow.appendChild(openFolderBtn);
+
+                wrapper.appendChild(buttonRow);
+                previewEl.appendChild(wrapper);
 
                 // Add select button handler
-                document.getElementById('image-picker-select-btn').addEventListener('click', () => {
+                selectBtn.addEventListener('click', () => {
                     modal.style.display = 'none';
-                    onSelectCallback(file);
+                    onSelectCallback(file, selectedIndex);
+                });
+
+                // Add open-in-folder button handler
+                openFolderBtn.addEventListener('mouseenter', () => openFolderBtn.style.background = 'var(--color-accent-tint-25)');
+                openFolderBtn.addEventListener('mouseleave', () => openFolderBtn.style.background = 'var(--color-border-subtle)');
+                openFolderBtn.addEventListener('click', () => {
+                    // Strip file:// prefix to get the filesystem path
+                    let filePath = imagePath;
+                    if (filePath.startsWith('file://')) {
+                        filePath = decodeURIComponent(filePath.replace('file://', ''));
+                    }
+                    if (typeof nw !== 'undefined' && nw.Shell) {
+                        nw.Shell.showItemInFolder(filePath);
+                    }
                 });
             });
 
@@ -962,6 +2002,16 @@ class DatabaseEditorUI {
 
         // Show modal
         modal.style.display = 'flex';
+
+        // Auto-select current file if provided
+        if (currentFile) {
+            const items = Array.from(listEl.children);
+            const match = items.find(item => item.textContent === currentFile);
+            if (match) {
+                match.click();
+                match.scrollIntoView({ block: 'center' });
+            }
+        }
 
         // Close button handler
         closeBtn.onclick = () => {
@@ -979,14 +2029,7 @@ class DatabaseEditorUI {
             return;
         }
 
-        const viewer = document.getElementById('database-viewer');
-        viewer.classList.add('active');
-
-        const titleEl = document.getElementById('database-viewer-title');
-        titleEl.textContent = 'Types';
-
-        const listEl = document.getElementById('database-list');
-        const detailEl = document.getElementById('database-detail');
+        const { listEl, detailEl } = this.prepareDatabaseSection('types', 'Types');
 
         listEl.innerHTML = `
             <div class="database-list-item" data-type="elements">Elements</div>
@@ -996,7 +2039,7 @@ class DatabaseEditorUI {
             <div class="database-list-item" data-type="equipTypes">Equipment Types</div>
         `;
 
-        detailEl.innerHTML = '<p style="color: #999; text-align: center; margin-top: 100px;">Select a type category from the list</p>';
+        detailEl.innerHTML = '<p style="color: var(--color-text-muted); text-align: center; margin-top: 100px;">Select a type category from the list</p>';
 
         // Add click handlers
         listEl.querySelectorAll('.database-list-item').forEach(item => {
@@ -1011,21 +2054,104 @@ class DatabaseEditorUI {
     }
 
     /**
-     * Show detail for a specific type category
+     * Show detail for a specific type category.
+     * Pretty title, count badge, add/remove controls, live persistence to
+     * system data on every keystroke. Index 0 is reserved as "(None)" per
+     * the MZ convention for type arrays — shown as a disabled placeholder
+     * and skipped from removal so external IDs stay stable.
      */
     showTypeDetail(system, category) {
         const detailEl = document.getElementById('database-detail');
-        const data = system[category] || [];
+        if (!system[category]) system[category] = [''];
+        const data = system[category];
 
-        let html = `<h3>${category}</h3><div class="database-section-content">`;
-        data.forEach((value, index) => {
-            html += `<div style="margin-bottom: 8px;">
-                <span style="color: #888;">[${index}]</span>
-                <input type="text" value="${value || ''}" style="width: 300px; background: #2d2d30; border: 1px solid #555; color: #ccc; padding: 4px;">
-            </div>`;
-        });
-        html += '</div>';
-        detailEl.innerHTML = html;
+        const categoryTitles = {
+            elements:    { title: 'Elements',         description: 'Damage element types referenced by skills, items, weapons, and enemy resist/weakness traits.' },
+            skillTypes:  { title: 'Skill Types',      description: 'Skill categories used by the Skills menu and the battle command list.' },
+            weaponTypes: { title: 'Weapon Types',     description: 'Weapon categories referenced by equipment trait restrictions and animations.' },
+            armorTypes:  { title: 'Armor Types',      description: 'Armor categories referenced by equipment trait restrictions.' },
+            equipTypes:  { title: 'Equipment Slots',  description: 'Equipment slot labels (Weapon, Shield, Head, Body, Accessory, ...).' }
+        };
+        const meta = categoryTitles[category] || { title: category, description: '' };
+
+        const render = () => {
+            const totalCount = data.length;
+            const realCount = data.length - 1; // exclude reserved index 0
+
+            let rowsHtml = '';
+            // Skip index 0 visually -- it's the MZ "(None)" placeholder that
+            // shouldn't be exposed as an editable row. It still occupies the
+            // slot internally so 1-based references stay stable.
+            data.forEach((value, index) => {
+                if (index === 0) return;
+                rowsHtml += `
+                    <div class="rr-types-row" data-index="${index}" style="display: grid; grid-template-columns: 48px 1fr 84px; gap: 12px; align-items: center; padding: 8px 12px; background: var(--color-bg-list-item); border: 1px solid var(--color-border); border-radius: 3px; margin-bottom: 6px;">
+                        <div style="text-align: center; font-size: 11px; color: var(--color-text-muted); font-family: var(--font-mono); padding: 4px 0; background: var(--color-bg-deep); border-radius: 3px; border: 1px solid var(--color-border-subtle);">${String(index).padStart(3, '0')}</div>
+                        <input type="text" class="rr-types-input database-field-value" data-index="${index}" value="${(value || '').replace(/"/g, '&quot;')}" placeholder="Type ${index} name…">
+                        <button class="rr-btn-chip-danger rr-types-remove" data-index="${index}">Remove</button>
+                    </div>
+                `;
+            });
+
+            detailEl.innerHTML = `
+                <div style="display: flex; flex-direction: column; height: 100%; padding: 16px; overflow-y: auto;">
+                    <!-- Header banner -->
+                    <div style="background: var(--color-bg-deep); padding: 14px 18px; border-bottom: 2px solid var(--color-accent-border-mid); margin-bottom: 16px; border-radius: 4px 4px 0 0;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; gap: 12px;">
+                            <div>
+                                <div style="font-size: 18px; font-weight: 600; color: var(--color-text-strong);">${meta.title}</div>
+                                <div style="font-size: 11px; color: var(--color-text-muted); margin-top: 2px;">${meta.description}</div>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <span style="font-size: 11px; color: var(--color-text-muted);">Total:</span>
+                                <span style="font-size: 13px; color: var(--color-accent-bright); font-weight: 600; font-family: var(--font-mono); padding: 4px 10px; background: var(--color-accent-tint-15); border: 1px solid var(--color-accent-border); border-radius: 3px;" id="rr-types-count">${realCount}</span>
+                                <button class="rr-btn-chip" id="rr-types-add" style="padding: 6px 14px;">+ Add</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Rows -->
+                    <div class="rr-types-rows">${rowsHtml}</div>
+                </div>
+            `;
+
+            // Wire input persistence
+            detailEl.querySelectorAll('.rr-types-input').forEach(input => {
+                input.addEventListener('input', (e) => {
+                    const idx = parseInt(e.target.dataset.index);
+                    data[idx] = e.target.value;
+                });
+            });
+
+            // Wire remove buttons (skip reserved index 0)
+            detailEl.querySelectorAll('.rr-types-remove').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const idx = parseInt(btn.dataset.index);
+                    if (idx === 0) return;
+                    if (data.length <= 2 && data[idx] === '') {
+                        // Allow remove even on empty
+                    }
+                    data.splice(idx, 1);
+                    render();
+                });
+            });
+
+            // Add button
+            const addBtn = detailEl.querySelector('#rr-types-add');
+            if (addBtn) {
+                addBtn.addEventListener('click', () => {
+                    data.push('');
+                    render();
+                    // Focus the new input
+                    setTimeout(() => {
+                        const inputs = detailEl.querySelectorAll('.rr-types-input');
+                        const last = inputs[inputs.length - 1];
+                        if (last) { last.focus(); last.select(); }
+                    }, 0);
+                });
+            }
+        };
+        render();
     }
 
     /**
@@ -1038,22 +2164,16 @@ class DatabaseEditorUI {
             return;
         }
 
-        const viewer = document.getElementById('database-viewer');
-        viewer.classList.add('active');
-
-        const titleEl = document.getElementById('database-viewer-title');
-        titleEl.textContent = 'Terms';
-
-        const listEl = document.getElementById('database-list');
-        const detailEl = document.getElementById('database-detail');
+        const { listEl, detailEl } = this.prepareDatabaseSection('terms', 'Terms');
 
         listEl.innerHTML = `
             <div class="database-list-item" data-category="basic">Basic</div>
             <div class="database-list-item" data-category="commands">Commands</div>
             <div class="database-list-item" data-category="params">Parameters</div>
+            <div class="database-list-item" data-category="messages">Messages</div>
         `;
 
-        detailEl.innerHTML = '<p style="color: #999; text-align: center; margin-top: 100px;">Select a terms category from the list</p>';
+        detailEl.innerHTML = '<p style="color: var(--color-text-muted); text-align: center; margin-top: 100px;">Select a terms category from the list</p>';
 
         // Add click handlers
         listEl.querySelectorAll('.database-list-item').forEach(item => {
@@ -1068,21 +2188,196 @@ class DatabaseEditorUI {
     }
 
     /**
-     * Show detail for a specific terms category
+     * Show detail for a specific terms category. Terms have a fixed schema in
+     * MZ: basic[8], commands[23], params[10] are arrays; messages is a keyed
+     * object (alwaysDash, touchUI, victory, etc.). Persistence is direct
+     * mutation of the system.terms object on every keystroke.
      */
     showTermDetail(terms, category) {
         const detailEl = document.getElementById('database-detail');
-        const data = terms[category] || [];
 
-        let html = `<h3>${category}</h3><div class="database-section-content">`;
+        const arrayCategoryMeta = {
+            basic: {
+                title: 'Basic Terms',
+                description: 'Labels shown on status panels, level-up screens, and the bestiary.',
+                labels: ['Level', 'Level (Abbreviation)', 'HP', 'HP (Abbreviation)', 'MP', 'MP (Abbreviation)', 'TP', 'TP (Abbreviation)']
+            },
+            commands: {
+                title: 'Command Terms',
+                description: 'Battle command and menu labels.',
+                labels: [
+                    'Fight',         'Escape',        'Attack',        'Guard',
+                    'Item',          'Skill',         'Equip',         'Status',
+                    'Formation',     'Save',          'Game End',      'Options',
+                    'Weapon',        'Armor',         'Key Item',      'Equip',
+                    'Optimize',      'Clear',         'New Game',      'Continue',
+                    '(Reserved)',    'To Title',      'Cancel'
+                ]
+            },
+            params: {
+                title: 'Parameters',
+                description: 'Stat names used in the status menu, equipment screen, and damage formulas.',
+                labels: [
+                    'Max HP', 'Max MP', 'Attack', 'Defense',
+                    'Magic Attack', 'Magic Defense', 'Agility', 'Luck',
+                    'Hit',           'Evasion'
+                ]
+            }
+        };
+
+        // Object-keyed Messages schema. Groups are presentation-only.
+        // hint shows what %1 / %2 / %3 will be replaced with at runtime.
+        const messagesSchema = {
+            title: 'Messages',
+            description: 'Game messages and option labels. %1, %2, %3 are placeholders the engine fills in at runtime (e.g. "%1 took %2 damage!" → "Harold took 25 damage!"). The hint under each field shows what each placeholder becomes.',
+            groups: [
+                { label: 'Options Menu', fields: [
+                    { key: 'alwaysDash',      label: 'Always Dash' },
+                    { key: 'commandRemember', label: 'Command Remember' },
+                    { key: 'touchUI',         label: 'Touch UI' }
+                ]},
+                { label: 'Audio Volume', fields: [
+                    { key: 'bgmVolume', label: 'BGM Volume' },
+                    { key: 'bgsVolume', label: 'BGS Volume' },
+                    { key: 'meVolume',  label: 'ME Volume' },
+                    { key: 'seVolume',  label: 'SE Volume' }
+                ]},
+                { label: 'Menu & Save / Load', fields: [
+                    { key: 'possession',  label: 'Possession' },
+                    { key: 'expTotal',    label: 'EXP Total',  hint: '%1 = "EXP" term from Basic' },
+                    { key: 'expNext',     label: 'EXP To Next', hint: '%1 = "Level" term from Basic' },
+                    { key: 'saveMessage', label: 'Save Message' },
+                    { key: 'loadMessage', label: 'Load Message' },
+                    { key: 'file',        label: 'File' },
+                    { key: 'autosave',    label: 'Autosave' },
+                    { key: 'partyName',   label: 'Party Name',  hint: '%1 = party leader name' }
+                ]},
+                { label: 'Battle Flow', fields: [
+                    { key: 'emerge',         label: 'Enemy Emerge',     hint: '%1 = enemy name' },
+                    { key: 'preemptive',     label: 'Preemptive Attack', hint: '%1 = party name' },
+                    { key: 'surprise',       label: 'Surprise Attack',   hint: '%1 = party name' },
+                    { key: 'escapeStart',    label: 'Escape Start',      hint: '%1 = party name' },
+                    { key: 'escapeFailure',  label: 'Escape Failure' },
+                    { key: 'victory',        label: 'Victory',           hint: '%1 = party name' },
+                    { key: 'defeat',         label: 'Defeat',            hint: '%1 = party name' },
+                    { key: 'obtainExp',      label: 'Obtain EXP',        hint: '%1 = amount, %2 = "EXP" term' },
+                    { key: 'obtainGold',     label: 'Obtain Gold',       hint: '%1 = amount (use \\\\G for currency icon)' },
+                    { key: 'obtainItem',     label: 'Obtain Item',       hint: '%1 = item name' },
+                    { key: 'levelUp',        label: 'Level Up',          hint: '%1 = actor name, %2 = "Level" term, %3 = new level' },
+                    { key: 'obtainSkill',    label: 'Obtain Skill',      hint: '%1 = skill name' },
+                    { key: 'useItem',        label: 'Use Item',          hint: '%1 = actor name, %2 = item or skill name' }
+                ]},
+                { label: 'Battle Damage', fields: [
+                    { key: 'criticalToEnemy', label: 'Critical To Enemy' },
+                    { key: 'criticalToActor', label: 'Critical To Actor' },
+                    { key: 'actorDamage',     label: 'Actor Damage',     hint: '%1 = actor name, %2 = damage amount' },
+                    { key: 'actorRecovery',   label: 'Actor Recovery',   hint: '%1 = actor name, %2 = stat name, %3 = amount' },
+                    { key: 'actorGain',       label: 'Actor Gain',       hint: '%1 = actor name, %2 = stat name, %3 = amount' },
+                    { key: 'actorLoss',       label: 'Actor Loss',       hint: '%1 = actor name, %2 = stat name, %3 = amount' },
+                    { key: 'actorDrain',      label: 'Actor Drain',      hint: '%1 = actor name, %2 = stat name, %3 = amount' },
+                    { key: 'actorNoDamage',   label: 'Actor No Damage',  hint: '%1 = actor name' },
+                    { key: 'actorNoHit',      label: 'Actor No Hit',     hint: '%1 = actor name' },
+                    { key: 'enemyDamage',     label: 'Enemy Damage',     hint: '%1 = enemy name, %2 = damage amount' },
+                    { key: 'enemyRecovery',   label: 'Enemy Recovery',   hint: '%1 = enemy name, %2 = stat name, %3 = amount' },
+                    { key: 'enemyGain',       label: 'Enemy Gain',       hint: '%1 = enemy name, %2 = stat name, %3 = amount' },
+                    { key: 'enemyLoss',       label: 'Enemy Loss',       hint: '%1 = enemy name, %2 = stat name, %3 = amount' },
+                    { key: 'enemyDrain',      label: 'Enemy Drain',      hint: '%1 = enemy name, %2 = stat name, %3 = amount' },
+                    { key: 'enemyNoDamage',   label: 'Enemy No Damage',  hint: '%1 = enemy name' },
+                    { key: 'enemyNoHit',      label: 'Enemy No Hit',     hint: '%1 = enemy name' }
+                ]},
+                { label: 'Battle Effects', fields: [
+                    { key: 'evasion',         label: 'Evasion',          hint: '%1 = target name' },
+                    { key: 'magicEvasion',    label: 'Magic Evasion',    hint: '%1 = target name' },
+                    { key: 'magicReflection', label: 'Magic Reflection', hint: '%1 = target name' },
+                    { key: 'counterAttack',   label: 'Counter Attack',   hint: '%1 = counter-attacker name' },
+                    { key: 'substitute',      label: 'Substitute',       hint: '%1 = protector name, %2 = original target name' },
+                    { key: 'buffAdd',         label: 'Buff Add',         hint: '%1 = target name, %2 = stat name' },
+                    { key: 'debuffAdd',       label: 'Debuff Add',       hint: '%1 = target name, %2 = stat name' },
+                    { key: 'buffRemove',      label: 'Buff Remove',      hint: '%1 = target name, %2 = stat name' },
+                    { key: 'actionFailure',   label: 'Action Failure',   hint: '%1 = target name' }
+                ]}
+            ]
+        };
+
+        if (category === 'messages') {
+            if (!terms.messages || typeof terms.messages !== 'object') terms.messages = {};
+            const data = terms.messages;
+            const meta = messagesSchema;
+
+            let bodyHtml = '';
+            meta.groups.forEach(group => {
+                bodyHtml += `
+                    <div style="font-size: 12px; font-weight: 700; color: var(--color-accent-bright); text-transform: uppercase; letter-spacing: 0.5px; margin: 18px 0 8px; padding-bottom: 4px; border-bottom: 1px solid var(--color-accent-border-mid);">${group.label}</div>
+                `;
+                group.fields.forEach(field => {
+                    const value = data[field.key] != null ? String(data[field.key]) : '';
+                    const hintHtml = field.hint
+                        ? `<div style="grid-column: 2; font-size: 11px; color: var(--color-text-muted); margin-top: 3px;">${field.hint}</div>`
+                        : '';
+                    bodyHtml += `
+                        <div style="display: grid; grid-template-columns: 200px 1fr; gap: 12px 12px; align-items: center; padding: 6px 12px; background: var(--color-bg-list-item); border: 1px solid var(--color-border); border-radius: 3px; margin-bottom: 4px;">
+                            <div style="font-size: 12px; color: var(--color-text-muted); font-weight: 600;">${field.label}</div>
+                            <input type="text" class="rr-terms-msg-input database-field-value" data-key="${field.key}" value="${value.replace(/"/g, '&quot;')}" placeholder="(default)">
+                            ${hintHtml}
+                        </div>
+                    `;
+                });
+            });
+
+            detailEl.innerHTML = `
+                <div style="display: flex; flex-direction: column; height: 100%; padding: 16px; overflow-y: auto;">
+                    <div style="background: var(--color-bg-deep); padding: 14px 18px; border-bottom: 2px solid var(--color-accent-border-mid); margin-bottom: 16px; border-radius: 4px 4px 0 0;">
+                        <div style="font-size: 18px; font-weight: 600; color: var(--color-text-strong);">${meta.title}</div>
+                        <div style="font-size: 11px; color: var(--color-text-muted); margin-top: 2px;">${meta.description}</div>
+                    </div>
+                    ${bodyHtml}
+                </div>
+            `;
+
+            detailEl.querySelectorAll('.rr-terms-msg-input').forEach(input => {
+                input.addEventListener('input', (e) => {
+                    data[e.target.dataset.key] = e.target.value;
+                });
+            });
+            return;
+        }
+
+        if (!terms[category]) terms[category] = [];
+        const data = terms[category];
+        const meta = arrayCategoryMeta[category] || { title: category, description: '', labels: [] };
+
+        // Ensure data length matches the schema (MZ may not allocate trailing slots)
+        const targetLen = Math.max(data.length, meta.labels.length);
+        while (data.length < targetLen) data.push('');
+
+        let rowsHtml = '';
         data.forEach((value, index) => {
-            html += `<div style="margin-bottom: 8px;">
-                <span style="color: #888;">[${index}]</span>
-                <input type="text" value="${value || ''}" style="width: 300px; background: #2d2d30; border: 1px solid #555; color: #ccc; padding: 4px;">
-            </div>`;
+            const label = meta.labels[index] || `Slot ${index}`;
+            rowsHtml += `
+                <div style="display: grid; grid-template-columns: 48px 180px 1fr; gap: 12px; align-items: center; padding: 8px 12px; background: var(--color-bg-list-item); border: 1px solid var(--color-border); border-radius: 3px; margin-bottom: 6px;">
+                    <div style="text-align: center; font-size: 11px; color: var(--color-text-muted); font-family: var(--font-mono); padding: 4px 0; background: var(--color-bg-deep); border-radius: 3px; border: 1px solid var(--color-border-subtle);">${String(index).padStart(3, '0')}</div>
+                    <div style="font-size: 12px; color: var(--color-text-muted); font-weight: 600;">${label}</div>
+                    <input type="text" class="rr-terms-input database-field-value" data-index="${index}" value="${(value || '').replace(/"/g, '&quot;')}" placeholder="(default)">
+                </div>
+            `;
         });
-        html += '</div>';
-        detailEl.innerHTML = html;
+
+        detailEl.innerHTML = `
+            <div style="display: flex; flex-direction: column; height: 100%; padding: 16px; overflow-y: auto;">
+                <div style="background: var(--color-bg-deep); padding: 14px 18px; border-bottom: 2px solid var(--color-accent-border-mid); margin-bottom: 16px; border-radius: 4px 4px 0 0;">
+                    <div style="font-size: 18px; font-weight: 600; color: var(--color-text-strong);">${meta.title}</div>
+                    <div style="font-size: 11px; color: var(--color-text-muted); margin-top: 2px;">${meta.description}</div>
+                </div>
+                ${rowsHtml}
+            </div>
+        `;
+
+        detailEl.querySelectorAll('.rr-terms-input').forEach(input => {
+            input.addEventListener('input', (e) => {
+                const idx = parseInt(e.target.dataset.index);
+                data[idx] = e.target.value;
+            });
+        });
     }
 
 }

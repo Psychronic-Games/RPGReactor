@@ -1,0 +1,1919 @@
+/* =============================================================================
+ * RPG Reactor — Theme System
+ *
+ * Single source of truth for every color, border, radius, shadow and easing
+ * used by the editor. All component CSS / inline styles should reference these
+ * `--token` variables via `var(--token-name)` rather than hard-coded hex.
+ *
+ * To add a new theme (light mode, pink, high-contrast, etc.):
+ *   1. Add a body class block below (e.g. `body.theme-light { ... }`)
+ *   2. Override only the tokens that change for that theme; everything else
+ *      inherits from the default `:root` block.
+ *   3. Add a UI toggle in Options/Settings that sets `document.body.className`.
+ *
+ * The default theme is the "Gold" theme — black surfaces with translucent
+ * gold accents, white text on dark, gray text for secondary content. Intended
+ * to feel "premium editor", echoing tools like the MZ database with a more
+ * cinematic palette.
+ *
+ * Pattern naming:
+ *   --color-{role}{-state}   roles use semantic intent, not "blue" / "gold"
+ *   --radius-{size}          radius scale: sm < md < lg
+ *   --shadow-{role}          drop shadow for surfaces above the page
+ *   --space-{size}           spacing scale (multiples of 4px)
+ * ============================================================================= */
+
+:root {
+    /* ---------- Brand accent (default: gold) ------------------------------- */
+    --color-accent:               #d4af37;
+    --color-accent-bright:        #ffd700;
+    --color-accent-hover:         #e8b817;        /* gold hover state */
+    --color-accent-shadow:        #2a2200;        /* deep gold-tinted shadow */
+    --color-accent-on:            #000000;        /* text on solid accent fill */
+    --color-accent-tint-10:       rgba(255, 215, 0, 0.10);
+    --color-accent-tint-15:       rgba(255, 215, 0, 0.15);
+    --color-accent-tint-25:       rgba(255, 215, 0, 0.25);
+    --color-accent-tint-30:       rgba(255, 215, 0, 0.30);
+    --color-accent-tint-35:       rgba(255, 215, 0, 0.35);
+    --color-accent-tint-40:       rgba(255, 215, 0, 0.40);
+    --color-accent-border:        rgba(255, 215, 0, 0.50);
+    --color-accent-border-mid:    rgba(255, 215, 0, 0.60);
+    --color-accent-border-strong: rgba(255, 215, 0, 0.80);
+
+    --color-accent-muted:         #e8c252;        /* less saturated gold */
+    --color-accent-deep:          #b8960c;        /* darker gold (active/pressed) */
+
+    /* Secondary accent: classic IDE blue, used for links/focus where gold
+       would clash. Themes can repaint this too. */
+    --color-link:                 #007acc;
+    --color-link-bright:          #4a9eff;
+    --color-selection-deep:       #094771;        /* selected row dark blue */
+    --color-selection-mid:        #1e3a52;        /* hover-selected blue */
+
+    /* ---------- Danger / red palette (form errors, destructive UI) -------- */
+    --color-danger-bright:        #ff6b6b;
+    --color-danger-light:         #ff8080;
+    --color-danger-soft:          #c94646;
+    --color-danger-pressed:       #ff4444;
+    --color-danger-bg-deep:       #2a1a1a;
+
+    /* ---------- Syntax highlight palette (VS Code Dark+ derived) ---------- */
+    --color-syntax-keyword:       #569cd6;
+    --color-syntax-type:          #4ec9b0;
+    --color-syntax-function:      #dcdcaa;
+    --color-syntax-string:        #ce9178;
+    --color-syntax-comment:       #808080;
+
+    /* ---------- Surfaces (background layers from deepest to lightest) ----- */
+    --color-bg-deep:              #000000;        /* modal/header strip */
+    --color-bg-base:              #1a1a1a;        /* primary canvas */
+    --color-bg-panel:             #111111;        /* group panels inside canvas */
+    --color-bg-surface:           #1e1e1e;        /* general modal/dialog body */
+    --color-bg-menubar:           #2d2d30;        /* menu bar / titlebar strip */
+    --color-bg-toolbar:           #111111;        /* very-dark top toolbar / modal header (original black look) */
+    --color-bg-input:             #2d2d2d;        /* form inputs */
+    --color-bg-input-alt:         #3c3c3c;        /* secondary inputs / readonly */
+    --color-bg-button:            #2a2a2a;        /* default button face */
+    --color-bg-button-hover:      #424242;        /* button hover */
+    --color-bg-button-active:     #4e4e4e;        /* button pressed */
+    --color-bg-list-item:         #252526;        /* sidebar/list row */
+    --color-bg-list-item-alt:     #222222;        /* alternating row */
+    --color-bg-hover:             #37373d;        /* hover on interactive rows */
+    --color-bg-selected:          #264f78;        /* selected row (legacy IDE blue) */
+
+    /* ---------- Borders / dividers ----------------------------------------- */
+    --color-border:               #3e3e42;        /* default panel border */
+    --color-border-input:         #555555;        /* default input border */
+    --color-border-subtle:        #333333;        /* faint divider */
+
+    /* ---------- Text ------------------------------------------------------- */
+    --color-text:                 #cccccc;        /* default body text */
+    --color-text-strong:          #ffffff;        /* headings / emphasized */
+    --color-text-muted:           #999999;        /* labels / secondary */
+    --color-text-dim:             #666666;        /* tertiary / placeholder */
+    --color-text-link:            var(--color-accent-bright);
+
+    /* ---------- Semantic status colors ------------------------------------- */
+    --color-success:              #2d7a2d;
+    --color-success-border:       #3a9a3a;
+    --color-danger:               #5a2d2d;
+    --color-danger-border:        #6d3535;
+    --color-info:                 #2d5a7a;
+    --color-info-border:          #3a7a9a;
+    --color-warning:              #9a7a2d;
+    --color-warning-border:       #b89940;
+
+    /* ---------- Scale: radius ---------------------------------------------- */
+    --radius-sm:                  2px;
+    --radius-md:                  3px;
+    --radius-lg:                  6px;
+    --radius-pill:                999px;
+
+    /* ---------- Scale: spacing (multiples of 4) ---------------------------- */
+    --space-1:                    4px;
+    --space-2:                    8px;
+    --space-3:                    12px;
+    --space-4:                    16px;
+    --space-5:                    20px;
+    --space-6:                    24px;
+
+    /* ---------- Shadows ---------------------------------------------------- */
+    --shadow-popup:               0 4px 12px rgba(0, 0, 0, 0.6);
+    --shadow-modal:               0 8px 32px rgba(0, 0, 0, 0.7);
+    --shadow-inset:               inset 0 0 0 1px rgba(0, 0, 0, 0.3);
+
+    /* ---------- Transitions ------------------------------------------------ */
+    --ease-fast:                  0.10s ease;
+    --ease-base:                  0.15s ease;
+    --ease-slow:                  0.25s ease;
+
+    /* ---------- Typography ------------------------------------------------- */
+    --font-ui:                    -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+    --font-mono:                  'Consolas', 'Menlo', 'Courier New', monospace;
+    --font-size-xs:               10px;
+    --font-size-sm:               11px;
+    --font-size-base:             12px;
+    --font-size-lg:               14px;
+    --font-size-xl:               16px;
+}
+
+/* =============================================================================
+ * Theme overrides (additional themes go below this line).
+ *
+ * To switch themes at runtime set `data-theme` on the <html> element:
+ *   document.documentElement.setAttribute('data-theme', 'light');  // or 'dark'
+ * The default (no attribute, or 'dark') uses the `:root` block above.
+ *
+ * Each theme block below should only override tokens that change; tokens that
+ * stay the same inherit from the default `:root` block automatically.
+ * ============================================================================= */
+
+/* -----------------------------------------------------------------------------
+ * LIGHT THEME — inverse of the default Gold-on-Dark. Surfaces are bright with
+ * dark text; gold accent darkened to deep-goldenrod so it still pops on white.
+ * Same contrast targets as the dark theme on every interactive element.
+ * --------------------------------------------------------------------------- */
+:root[data-theme="light"] {
+    /* ---------- Brand accent (darker gold so it pops on light) ------------- */
+    --color-accent:               #a07b08;
+    --color-accent-bright:        #b8860b;        /* deep goldenrod */
+    --color-accent-hover:         #d4a017;
+    --color-accent-shadow:        #f4e8a1;        /* light gold tinted shadow */
+    --color-accent-on:            #ffffff;        /* text on solid accent fill */
+    --color-accent-tint-10:       rgba(184, 134, 11, 0.10);
+    --color-accent-tint-15:       rgba(184, 134, 11, 0.15);
+    --color-accent-tint-25:       rgba(184, 134, 11, 0.25);
+    --color-accent-tint-30:       rgba(184, 134, 11, 0.30);
+    --color-accent-tint-35:       rgba(184, 134, 11, 0.35);
+    --color-accent-tint-40:       rgba(184, 134, 11, 0.40);
+    --color-accent-border:        rgba(184, 134, 11, 0.55);
+    --color-accent-border-mid:    rgba(184, 134, 11, 0.70);
+    --color-accent-border-strong: rgba(184, 134, 11, 0.85);
+
+    --color-accent-muted:         #c9a542;
+    --color-accent-deep:          #7a5d05;        /* darker (active/pressed) */
+
+    /* ---------- Link / blue palette (darker for light bg contrast) -------- */
+    --color-link:                 #0066b3;
+    --color-link-bright:          #0078d4;
+    --color-selection-deep:       #b3dcff;        /* selected row tint */
+    --color-selection-mid:        #d6ecff;        /* hover-selected */
+
+    /* ---------- Danger / red palette ------------------------------------- */
+    --color-danger-bright:        #c83232;
+    --color-danger-light:         #d44a4a;
+    --color-danger-soft:          #a22020;
+    --color-danger-pressed:       #b30000;
+    --color-danger-bg-deep:       #fde2e2;
+
+    /* ---------- Syntax highlight palette (VS Code Light+ derived) -------- */
+    --color-syntax-keyword:       #0451a5;
+    --color-syntax-type:          #267f99;
+    --color-syntax-function:      #795e26;
+    --color-syntax-string:        #a31515;
+    --color-syntax-comment:       #008000;
+
+    /* ---------- Surfaces -------------------------------------------------
+     *   Page chrome is neutral light gray — panels, modals, menus all read
+     *   gray, NOT beige. Only interactive accents (buttons, dropdowns,
+     *   selected/hover rows) pop in yellow-gold so the brand still reads
+     *   without making the whole UI feel tinted.
+     * --------------------------------------------------------------------- */
+    --color-bg-deep:              #ffffff;        /* extreme: paper white */
+    --color-bg-base:              #e0e0e0;        /* gray (page bg) */
+    --color-bg-panel:             #ededed;        /* lighter gray (group panels) */
+    --color-bg-surface:           #ffffff;        /* pure white (content area / modal body) */
+    --color-bg-menubar:           #cfcfcf;        /* mid gray (menu strip) */
+    --color-bg-toolbar:           #cfcfcf;        /* matches menubar in light (no separate hierarchy) */
+    --color-bg-input:             #ffe97a;        /* SATURATED YELLOW (inputs/dropdowns pop) */
+    --color-bg-input-alt:         #fae47e;        /* deeper yellow (readonly/alt) */
+    --color-bg-button:            #ffe97a;        /* YELLOW button accent */
+    --color-bg-button-hover:      #f5d540;
+    --color-bg-button-active:     #d4b020;
+    --color-bg-list-item:         #ededed;        /* neutral gray row */
+    --color-bg-list-item-alt:     #e3e3e3;
+    --color-bg-hover:             #fff3a8;        /* YELLOW on hover (accent) */
+    --color-bg-selected:          #e6c520;        /* gold selection */
+
+    /* ---------- Borders / dividers (neutral grays) ----------------------- */
+    --color-border:               #c5c5c5;
+    --color-border-input:         #a6841e;        /* yellow-gold input border for visibility */
+    --color-border-subtle:        #dddddd;
+
+    /* ---------- Text (dark on light) ------------------------------------- */
+    --color-text:                 #1f1f1f;
+    --color-text-strong:          #000000;
+    --color-text-muted:           #555555;
+    --color-text-dim:             #888888;
+    /* --color-text-link inherits the same var() expression — resolves to
+       the light-theme --color-accent-bright (#b8860b) automatically. */
+
+    /* ---------- Semantic status colors (light tints) --------------------- */
+    --color-success:              #d5ecd5;
+    --color-success-border:       #5cb85c;
+    --color-danger:               #fadbd8;
+    --color-danger-border:        #e74c3c;
+    --color-info:                 #d1ecf1;
+    --color-info-border:          #5bc0de;
+    --color-warning:              #fff3cd;
+    --color-warning-border:       #ddb244;
+
+    /* ---------- Shadows (subtler on light bg) ---------------------------- */
+    --shadow-popup:               0 4px 12px rgba(0, 0, 0, 0.15);
+    --shadow-modal:               0 8px 32px rgba(0, 0, 0, 0.22);
+    --shadow-inset:               inset 0 0 0 1px rgba(0, 0, 0, 0.06);
+}
+
+/* Match Chromium's OS-level dropdown/popup color scheme to the light theme,
+ * otherwise the native popup behind any non-shimmed <select> renders dark. */
+:root[data-theme="light"] select,
+:root[data-theme="light"] input,
+:root[data-theme="bubblegum-light"] select,
+:root[data-theme="bubblegum-light"] input,
+:root[data-theme="ocean-light"] select,
+:root[data-theme="ocean-light"] input,
+:root[data-theme="cascadia-light"] select,
+:root[data-theme="cascadia-light"] input,
+:root[data-theme="underworld-light"] select,
+:root[data-theme="underworld-light"] input,
+:root[data-theme="creamsicle-light"] select,
+:root[data-theme="creamsicle-light"] input,
+:root[data-theme="royalty-light"] select,
+:root[data-theme="royalty-light"] input {
+    color-scheme: light;
+}
+
+/* -----------------------------------------------------------------------------
+ * Dark-surface island. Apply to areas that should stay dark and cinematic even
+ * when a light theme is active — main map canvas, animation preview, animation
+ * frame strip, etc. The selectors re-declare the dark-theme token values
+ * INSIDE the element, so any `var(--…)` reference under this subtree resolves
+ * to the dark values while the surrounding UI keeps its theme.
+ * --------------------------------------------------------------------------- */
+.rr-dark-surface {
+    --color-bg-deep:              #000000;
+    --color-bg-base:              #1a1a1a;
+    --color-bg-panel:             #111111;
+    --color-bg-surface:           #1e1e1e;
+    --color-bg-input:             #2d2d2d;
+    --color-bg-input-alt:         #3c3c3c;
+    --color-bg-button:            #2a2a2a;
+    --color-bg-button-hover:      #424242;
+    --color-bg-button-active:     #4e4e4e;
+    --color-bg-list-item:         #252526;
+    --color-bg-list-item-alt:     #222222;
+    --color-bg-hover:             #37373d;
+    --color-bg-selected:          #264f78;
+    --color-border:               #3e3e42;
+    --color-border-input:         #555555;
+    --color-border-subtle:        #333333;
+    --color-text:                 #cccccc;
+    --color-text-strong:          #ffffff;
+    --color-text-muted:           #999999;
+    --color-text-dim:             #666666;
+    color-scheme: dark;
+    background-color: var(--color-bg-base);
+    color: var(--color-text);
+}
+
+/* -----------------------------------------------------------------------------
+ * BUBBLEGUM DARK — pink/cute on dark with slightly pink-tinted surfaces. Same
+ * structural contrast as the default Gold Dark, just with magenta-pink as the
+ * brand accent and a hint of warm pink tone in the chrome surfaces.
+ * --------------------------------------------------------------------------- */
+:root[data-theme="bubblegum-dark"] {
+    /* ---------- Brand accent (vivid hot pink) ----------------------------- */
+    --color-accent:               #d63384;
+    --color-accent-bright:        #ff6fa8;
+    --color-accent-hover:         #ff8fb9;
+    --color-accent-shadow:        #3d001f;
+    --color-accent-on:            #ffffff;
+    --color-accent-tint-10:       rgba(255, 111, 168, 0.10);
+    --color-accent-tint-15:       rgba(255, 111, 168, 0.15);
+    --color-accent-tint-25:       rgba(255, 111, 168, 0.25);
+    --color-accent-tint-30:       rgba(255, 111, 168, 0.30);
+    --color-accent-tint-35:       rgba(255, 111, 168, 0.35);
+    --color-accent-tint-40:       rgba(255, 111, 168, 0.40);
+    --color-accent-border:        rgba(255, 111, 168, 0.50);
+    --color-accent-border-mid:    rgba(255, 111, 168, 0.60);
+    --color-accent-border-strong: rgba(255, 111, 168, 0.80);
+    --color-accent-muted:         #e88aaf;
+    --color-accent-deep:          #b30359;
+
+    /* ---------- Surfaces (pink-tinted dark) ------------------------------ */
+    --color-bg-deep:              #050003;
+    --color-bg-base:              #1c1316;
+    --color-bg-panel:             #16101a;
+    --color-bg-surface:           #211719;
+    --color-bg-menubar:           #2e1f25;
+    --color-bg-toolbar:           #1a1014;
+    --color-bg-input:             #2e1f26;
+    --color-bg-input-alt:         #3e2935;
+    --color-bg-button:            #2a181f;
+    --color-bg-button-hover:      #422b37;
+    --color-bg-button-active:     #4e3340;
+    --color-bg-list-item:         #251820;
+    --color-bg-list-item-alt:     #21161e;
+    --color-bg-hover:             #37202c;
+    --color-bg-selected:          #6e2851;
+
+    /* ---------- Borders (pink-tinted) ------------------------------------ */
+    --color-border:               #4a2b3a;
+    --color-border-input:         #5d3a4a;
+    --color-border-subtle:        #3a2128;
+
+    /* ---------- Text (slight pink-warm tint) ----------------------------- */
+    --color-text:                 #d8ccd2;
+    --color-text-strong:          #ffffff;
+    --color-text-muted:           #a39197;
+    --color-text-dim:             #6e5b62;
+}
+
+/* -----------------------------------------------------------------------------
+ * BUBBLEGUM LIGHT — pink/cute on light pastel. Surfaces are pink-tinted whites
+ * with deep pink accent text and saturated pink interactive elements.
+ * --------------------------------------------------------------------------- */
+:root[data-theme="bubblegum-light"] {
+    /* ---------- Brand accent (darker pink so it pops on light) ----------- */
+    --color-accent:               #ad1457;
+    --color-accent-bright:        #c2185b;
+    --color-accent-hover:         #d81b60;
+    --color-accent-shadow:        #fce4ec;
+    --color-accent-on:            #ffffff;
+    --color-accent-tint-10:       rgba(194, 24, 91, 0.10);
+    --color-accent-tint-15:       rgba(194, 24, 91, 0.15);
+    --color-accent-tint-25:       rgba(194, 24, 91, 0.25);
+    --color-accent-tint-30:       rgba(194, 24, 91, 0.30);
+    --color-accent-tint-35:       rgba(194, 24, 91, 0.35);
+    --color-accent-tint-40:       rgba(194, 24, 91, 0.40);
+    --color-accent-border:        rgba(194, 24, 91, 0.55);
+    --color-accent-border-mid:    rgba(194, 24, 91, 0.70);
+    --color-accent-border-strong: rgba(194, 24, 91, 0.85);
+    --color-accent-muted:         #d75088;
+    --color-accent-deep:          #880e4f;
+
+    /* ---------- Link / blue palette -------------------------------------- */
+    --color-link:                 #0066b3;
+    --color-link-bright:          #0078d4;
+    --color-selection-deep:       #b3dcff;
+    --color-selection-mid:        #d6ecff;
+
+    /* ---------- Danger / red palette ------------------------------------- */
+    --color-danger-bright:        #c83232;
+    --color-danger-light:         #d44a4a;
+    --color-danger-soft:          #a22020;
+    --color-danger-pressed:       #b30000;
+    --color-danger-bg-deep:       #fde2e2;
+
+    /* ---------- Syntax highlight palette --------------------------------- */
+    --color-syntax-keyword:       #0451a5;
+    --color-syntax-type:          #267f99;
+    --color-syntax-function:      #795e26;
+    --color-syntax-string:        #a31515;
+    --color-syntax-comment:       #008000;
+
+    /* ---------- Surfaces (pink-tinted white / light) --------------------- */
+    --color-bg-deep:              #ffffff;
+    --color-bg-base:              #f0e8eb;
+    --color-bg-panel:             #faf3f5;
+    --color-bg-surface:           #ffffff;
+    --color-bg-menubar:           #d8c9cf;
+    --color-bg-toolbar:           #d8c9cf;
+    --color-bg-input:             #ffd1e8;          /* PINK input/dropdown */
+    --color-bg-input-alt:         #ffadc8;          /* deeper pink */
+    --color-bg-button:            #ffc8de;
+    --color-bg-button-hover:      #ff9bc1;
+    --color-bg-button-active:     #ff80b0;
+    --color-bg-list-item:         #f7eef2;
+    --color-bg-list-item-alt:     #ede2e8;
+    --color-bg-hover:             #ffd1e8;          /* pink on hover */
+    --color-bg-selected:          #ff6fa8;          /* vivid pink selection */
+
+    /* ---------- Borders -------------------------------------------------- */
+    --color-border:               #cdb6be;
+    --color-border-input:         #d75088;
+    --color-border-subtle:        #e8d4dc;
+
+    /* ---------- Text (dark on light) ------------------------------------- */
+    --color-text:                 #1f1f1f;
+    --color-text-strong:          #000000;
+    --color-text-muted:           #555555;
+    --color-text-dim:             #888888;
+
+    /* ---------- Semantic status colors (light tints) --------------------- */
+    --color-success:              #d5ecd5;
+    --color-success-border:       #5cb85c;
+    --color-danger:               #fadbd8;
+    --color-danger-border:        #e74c3c;
+    --color-info:                 #d1ecf1;
+    --color-info-border:          #5bc0de;
+    --color-warning:              #fff3cd;
+    --color-warning-border:       #ddb244;
+
+    /* ---------- Shadows -------------------------------------------------- */
+    --shadow-popup:               0 4px 12px rgba(0, 0, 0, 0.15);
+    --shadow-modal:               0 8px 32px rgba(0, 0, 0, 0.22);
+    --shadow-inset:               inset 0 0 0 1px rgba(0, 0, 0, 0.06);
+}
+
+/* -----------------------------------------------------------------------------
+ * OCEAN DARK — cool blue accents on slightly blue-tinted dark surfaces.
+ * --------------------------------------------------------------------------- */
+:root[data-theme="ocean-dark"] {
+    /* ---------- Brand accent (vivid sky blue) ----------------------------- */
+    --color-accent:               #2980b9;
+    --color-accent-bright:        #5dade2;
+    --color-accent-hover:         #74b9d8;
+    --color-accent-shadow:        #001a2e;
+    --color-accent-on:            #ffffff;
+    --color-accent-tint-10:       rgba(93, 173, 226, 0.10);
+    --color-accent-tint-15:       rgba(93, 173, 226, 0.15);
+    --color-accent-tint-25:       rgba(93, 173, 226, 0.25);
+    --color-accent-tint-30:       rgba(93, 173, 226, 0.30);
+    --color-accent-tint-35:       rgba(93, 173, 226, 0.35);
+    --color-accent-tint-40:       rgba(93, 173, 226, 0.40);
+    --color-accent-border:        rgba(93, 173, 226, 0.50);
+    --color-accent-border-mid:    rgba(93, 173, 226, 0.60);
+    --color-accent-border-strong: rgba(93, 173, 226, 0.80);
+    --color-accent-muted:         #7fb3d5;
+    --color-accent-deep:          #1f618d;
+
+    /* ---------- Surfaces (blue-tinted dark) ------------------------------ */
+    --color-bg-deep:              #000508;
+    --color-bg-base:              #131a1f;
+    --color-bg-panel:             #0d1418;
+    --color-bg-surface:           #16191e;
+    --color-bg-menubar:           #1a2530;
+    --color-bg-toolbar:           #0d141a;
+    --color-bg-input:             #1f2a36;
+    --color-bg-input-alt:         #2b3a4a;
+    --color-bg-button:            #1a242e;
+    --color-bg-button-hover:      #2a3a4a;
+    --color-bg-button-active:     #344657;
+    --color-bg-list-item:         #1a212a;
+    --color-bg-list-item-alt:     #161d24;
+    --color-bg-hover:             #243340;
+    --color-bg-selected:          #2d5a7a;
+
+    /* ---------- Borders (blue-tinted) ------------------------------------ */
+    --color-border:               #2a3d4d;
+    --color-border-input:         #3a4f60;
+    --color-border-subtle:        #1f2a32;
+
+    /* ---------- Text (slight cool tint) ---------------------------------- */
+    --color-text:                 #cbd5da;
+    --color-text-strong:          #ffffff;
+    --color-text-muted:           #8095a0;
+    --color-text-dim:             #4d5c66;
+}
+
+/* -----------------------------------------------------------------------------
+ * OCEAN LIGHT — cool blue accents on cool light blue-gray pastel.
+ * --------------------------------------------------------------------------- */
+:root[data-theme="ocean-light"] {
+    /* ---------- Brand accent (medium blue for light bg contrast) --------- */
+    --color-accent:               #2980b9;
+    --color-accent-bright:        #2e86c1;
+    --color-accent-hover:         #1a5d8a;
+    --color-accent-shadow:        #d4e6f1;
+    --color-accent-on:            #ffffff;
+    --color-accent-tint-10:       rgba(46, 134, 193, 0.10);
+    --color-accent-tint-15:       rgba(46, 134, 193, 0.15);
+    --color-accent-tint-25:       rgba(46, 134, 193, 0.25);
+    --color-accent-tint-30:       rgba(46, 134, 193, 0.30);
+    --color-accent-tint-35:       rgba(46, 134, 193, 0.35);
+    --color-accent-tint-40:       rgba(46, 134, 193, 0.40);
+    --color-accent-border:        rgba(46, 134, 193, 0.55);
+    --color-accent-border-mid:    rgba(46, 134, 193, 0.70);
+    --color-accent-border-strong: rgba(46, 134, 193, 0.85);
+    --color-accent-muted:         #6fb5d8;
+    --color-accent-deep:          #1a4e72;
+
+    /* ---------- Link / blue palette -------------------------------------- */
+    --color-link:                 #0066b3;
+    --color-link-bright:          #0078d4;
+    --color-selection-deep:       #b3dcff;
+    --color-selection-mid:        #d6ecff;
+
+    /* ---------- Danger / red palette ------------------------------------- */
+    --color-danger-bright:        #c83232;
+    --color-danger-light:         #d44a4a;
+    --color-danger-soft:          #a22020;
+    --color-danger-pressed:       #b30000;
+    --color-danger-bg-deep:       #fde2e2;
+
+    /* ---------- Syntax highlight palette --------------------------------- */
+    --color-syntax-keyword:       #0451a5;
+    --color-syntax-type:          #267f99;
+    --color-syntax-function:      #795e26;
+    --color-syntax-string:        #a31515;
+    --color-syntax-comment:       #008000;
+
+    /* ---------- Surfaces (cool blue-gray tints) -------------------------- */
+    --color-bg-deep:              #ffffff;
+    --color-bg-base:              #e8eef2;
+    --color-bg-panel:             #f3f7fa;
+    --color-bg-surface:           #ffffff;
+    --color-bg-menubar:           #c8d4dc;
+    --color-bg-toolbar:           #c8d4dc;
+    --color-bg-input:             #d6ecf5;          /* BLUE input/dropdown */
+    --color-bg-input-alt:         #aed6f1;          /* deeper blue */
+    --color-bg-button:            #c9e1f0;
+    --color-bg-button-hover:      #95c5e0;
+    --color-bg-button-active:     #5dade2;
+    --color-bg-list-item:         #ecf3f7;
+    --color-bg-list-item-alt:     #e0e9ef;
+    --color-bg-hover:             #d6ecf5;
+    --color-bg-selected:          #5dade2;
+
+    /* ---------- Borders -------------------------------------------------- */
+    --color-border:               #b8c5cd;
+    --color-border-input:         #5dade2;
+    --color-border-subtle:        #d8e2e8;
+
+    /* ---------- Text (dark on light) ------------------------------------- */
+    --color-text:                 #1f1f1f;
+    --color-text-strong:          #000000;
+    --color-text-muted:           #555555;
+    --color-text-dim:             #888888;
+
+    /* ---------- Semantic status colors ----------------------------------- */
+    --color-success:              #d5ecd5;
+    --color-success-border:       #5cb85c;
+    --color-danger:               #fadbd8;
+    --color-danger-border:        #e74c3c;
+    --color-info:                 #d1ecf1;
+    --color-info-border:          #5bc0de;
+    --color-warning:              #fff3cd;
+    --color-warning-border:       #ddb244;
+
+    /* ---------- Shadows -------------------------------------------------- */
+    --shadow-popup:               0 4px 12px rgba(0, 0, 0, 0.15);
+    --shadow-modal:               0 8px 32px rgba(0, 0, 0, 0.22);
+    --shadow-inset:               inset 0 0 0 1px rgba(0, 0, 0, 0.06);
+}
+
+/* -----------------------------------------------------------------------------
+ * CASCADIA DARK — Pacific NW evergreen, forest green accents on dark surfaces
+ * with a subtle pine tint in the chrome.
+ * --------------------------------------------------------------------------- */
+:root[data-theme="cascadia-dark"] {
+    /* ---------- Brand accent (vivid emerald) ----------------------------- */
+    --color-accent:               #228b22;
+    --color-accent-bright:        #51cf66;
+    --color-accent-hover:         #6dde7e;
+    --color-accent-shadow:        #001a08;
+    --color-accent-on:            #ffffff;
+    --color-accent-tint-10:       rgba(81, 207, 102, 0.10);
+    --color-accent-tint-15:       rgba(81, 207, 102, 0.15);
+    --color-accent-tint-25:       rgba(81, 207, 102, 0.25);
+    --color-accent-tint-30:       rgba(81, 207, 102, 0.30);
+    --color-accent-tint-35:       rgba(81, 207, 102, 0.35);
+    --color-accent-tint-40:       rgba(81, 207, 102, 0.40);
+    --color-accent-border:        rgba(81, 207, 102, 0.50);
+    --color-accent-border-mid:    rgba(81, 207, 102, 0.60);
+    --color-accent-border-strong: rgba(81, 207, 102, 0.80);
+    --color-accent-muted:         #7fcc8a;
+    --color-accent-deep:          #145214;
+
+    /* ---------- Surfaces (green-tinted dark) ----------------------------- */
+    --color-bg-deep:              #001008;
+    --color-bg-base:              #0f1a13;
+    --color-bg-panel:             #0c1610;
+    --color-bg-surface:           #131e17;
+    --color-bg-menubar:           #1a2820;
+    --color-bg-toolbar:           #0c1410;
+    --color-bg-input:             #1a2820;
+    --color-bg-input-alt:         #243828;
+    --color-bg-button:            #162018;
+    --color-bg-button-hover:      #243a2a;
+    --color-bg-button-active:     #2e472e;
+    --color-bg-list-item:         #15201a;
+    --color-bg-list-item-alt:     #121d17;
+    --color-bg-hover:             #243a2a;
+    --color-bg-selected:          #2d5a3a;
+
+    /* ---------- Borders (green-tinted) ----------------------------------- */
+    --color-border:               #2a4530;
+    --color-border-input:         #3a5a40;
+    --color-border-subtle:        #1f2f23;
+
+    /* ---------- Text (slight cool-green tint) ---------------------------- */
+    --color-text:                 #cdd5cf;
+    --color-text-strong:          #ffffff;
+    --color-text-muted:           #8c9a90;
+    --color-text-dim:             #5a6660;
+}
+
+/* -----------------------------------------------------------------------------
+ * CASCADIA LIGHT — forest green accents on cool green-gray pastel surfaces.
+ * --------------------------------------------------------------------------- */
+:root[data-theme="cascadia-light"] {
+    /* ---------- Brand accent (forest green, visible on light) ------------ */
+    --color-accent:               #228b22;
+    --color-accent-bright:        #2e7d32;
+    --color-accent-hover:         #1b5e20;
+    --color-accent-shadow:        #d4e9d4;
+    --color-accent-on:            #ffffff;
+    --color-accent-tint-10:       rgba(46, 125, 50, 0.10);
+    --color-accent-tint-15:       rgba(46, 125, 50, 0.15);
+    --color-accent-tint-25:       rgba(46, 125, 50, 0.25);
+    --color-accent-tint-30:       rgba(46, 125, 50, 0.30);
+    --color-accent-tint-35:       rgba(46, 125, 50, 0.35);
+    --color-accent-tint-40:       rgba(46, 125, 50, 0.40);
+    --color-accent-border:        rgba(46, 125, 50, 0.55);
+    --color-accent-border-mid:    rgba(46, 125, 50, 0.70);
+    --color-accent-border-strong: rgba(46, 125, 50, 0.85);
+    --color-accent-muted:         #6fb56f;
+    --color-accent-deep:          #0a3d0a;
+
+    /* ---------- Link / blue palette -------------------------------------- */
+    --color-link:                 #0066b3;
+    --color-link-bright:          #0078d4;
+    --color-selection-deep:       #b3dcff;
+    --color-selection-mid:        #d6ecff;
+
+    /* ---------- Danger / red palette ------------------------------------- */
+    --color-danger-bright:        #c83232;
+    --color-danger-light:         #d44a4a;
+    --color-danger-soft:          #a22020;
+    --color-danger-pressed:       #b30000;
+    --color-danger-bg-deep:       #fde2e2;
+
+    /* ---------- Syntax highlight palette --------------------------------- */
+    --color-syntax-keyword:       #0451a5;
+    --color-syntax-type:          #267f99;
+    --color-syntax-function:      #795e26;
+    --color-syntax-string:        #a31515;
+    --color-syntax-comment:       #008000;
+
+    /* ---------- Surfaces (cool green-gray tints) ------------------------- */
+    --color-bg-deep:              #ffffff;
+    --color-bg-base:              #e8efe9;
+    --color-bg-panel:             #f3f9f4;
+    --color-bg-surface:           #ffffff;
+    --color-bg-menubar:           #c8d6c9;
+    --color-bg-toolbar:           #c8d6c9;
+    --color-bg-input:             #d8f0d8;          /* GREEN input/dropdown */
+    --color-bg-input-alt:         #aedbae;          /* deeper green */
+    --color-bg-button:            #c9e6c9;
+    --color-bg-button-hover:      #95c595;
+    --color-bg-button-active:     #5dbb5d;
+    --color-bg-list-item:         #ecf5ec;
+    --color-bg-list-item-alt:     #e0ebe0;
+    --color-bg-hover:             #d8f0d8;
+    --color-bg-selected:          #5dbb5d;
+
+    /* ---------- Borders -------------------------------------------------- */
+    --color-border:               #b8cbb8;
+    --color-border-input:         #5dbb5d;
+    --color-border-subtle:        #d8e2d8;
+
+    /* ---------- Text (dark on light) ------------------------------------- */
+    --color-text:                 #1f1f1f;
+    --color-text-strong:          #000000;
+    --color-text-muted:           #555555;
+    --color-text-dim:             #888888;
+
+    /* ---------- Semantic status colors ----------------------------------- */
+    --color-success:              #d5ecd5;
+    --color-success-border:       #5cb85c;
+    --color-danger:               #fadbd8;
+    --color-danger-border:        #e74c3c;
+    --color-info:                 #d1ecf1;
+    --color-info-border:          #5bc0de;
+    --color-warning:              #fff3cd;
+    --color-warning-border:       #ddb244;
+
+    /* ---------- Shadows -------------------------------------------------- */
+    --shadow-popup:               0 4px 12px rgba(0, 0, 0, 0.15);
+    --shadow-modal:               0 8px 32px rgba(0, 0, 0, 0.22);
+    --shadow-inset:               inset 0 0 0 1px rgba(0, 0, 0, 0.06);
+}
+
+/* -----------------------------------------------------------------------------
+ * UNDERWORLD DARK — deep blood-red accents on dark with subtle crimson tint.
+ * --------------------------------------------------------------------------- */
+:root[data-theme="underworld-dark"] {
+    --color-accent:               #c0392b;
+    --color-accent-bright:        #e74c3c;
+    --color-accent-hover:         #ec5f4f;
+    --color-accent-shadow:        #2c0808;
+    --color-accent-on:            #ffffff;
+    --color-accent-tint-10:       rgba(231, 76, 60, 0.10);
+    --color-accent-tint-15:       rgba(231, 76, 60, 0.15);
+    --color-accent-tint-25:       rgba(231, 76, 60, 0.25);
+    --color-accent-tint-30:       rgba(231, 76, 60, 0.30);
+    --color-accent-tint-35:       rgba(231, 76, 60, 0.35);
+    --color-accent-tint-40:       rgba(231, 76, 60, 0.40);
+    --color-accent-border:        rgba(231, 76, 60, 0.50);
+    --color-accent-border-mid:    rgba(231, 76, 60, 0.60);
+    --color-accent-border-strong: rgba(231, 76, 60, 0.80);
+    --color-accent-muted:         #d97366;
+    --color-accent-deep:          #7d201a;
+
+    --color-bg-deep:              #0c0303;
+    --color-bg-base:              #1a1010;
+    --color-bg-panel:             #15090a;
+    --color-bg-surface:           #1e1213;
+    --color-bg-menubar:           #2a181a;
+    --color-bg-toolbar:           #15090a;
+    --color-bg-input:             #2a1818;
+    --color-bg-input-alt:         #3a2424;
+    --color-bg-button:            #1f1414;
+    --color-bg-button-hover:      #382828;
+    --color-bg-button-active:     #4a3434;
+    --color-bg-list-item:         #1f1414;
+    --color-bg-list-item-alt:     #1c1010;
+    --color-bg-hover:             #3a262a;
+    --color-bg-selected:          #7d2828;
+
+    --color-border:               #4a2828;
+    --color-border-input:         #5a3434;
+    --color-border-subtle:        #2a1818;
+
+    --color-text:                 #d8cccd;
+    --color-text-strong:          #ffffff;
+    --color-text-muted:           #a08585;
+    --color-text-dim:             #6a5050;
+}
+
+/* -----------------------------------------------------------------------------
+ * UNDERWORLD LIGHT — deep red accents on red-tinted light pastel.
+ * --------------------------------------------------------------------------- */
+:root[data-theme="underworld-light"] {
+    --color-accent:               #c0392b;
+    --color-accent-bright:        #c62828;
+    --color-accent-hover:         #8e0000;
+    --color-accent-shadow:        #ffdfdf;
+    --color-accent-on:            #ffffff;
+    --color-accent-tint-10:       rgba(198, 40, 40, 0.10);
+    --color-accent-tint-15:       rgba(198, 40, 40, 0.15);
+    --color-accent-tint-25:       rgba(198, 40, 40, 0.25);
+    --color-accent-tint-30:       rgba(198, 40, 40, 0.30);
+    --color-accent-tint-35:       rgba(198, 40, 40, 0.35);
+    --color-accent-tint-40:       rgba(198, 40, 40, 0.40);
+    --color-accent-border:        rgba(198, 40, 40, 0.55);
+    --color-accent-border-mid:    rgba(198, 40, 40, 0.70);
+    --color-accent-border-strong: rgba(198, 40, 40, 0.85);
+    --color-accent-muted:         #d76060;
+    --color-accent-deep:          #6e0a0a;
+
+    --color-link:                 #0066b3;
+    --color-link-bright:          #0078d4;
+    --color-selection-deep:       #b3dcff;
+    --color-selection-mid:        #d6ecff;
+
+    --color-danger-bright:        #c83232;
+    --color-danger-light:         #d44a4a;
+    --color-danger-soft:          #a22020;
+    --color-danger-pressed:       #b30000;
+    --color-danger-bg-deep:       #fde2e2;
+
+    --color-syntax-keyword:       #0451a5;
+    --color-syntax-type:          #267f99;
+    --color-syntax-function:      #795e26;
+    --color-syntax-string:        #a31515;
+    --color-syntax-comment:       #008000;
+
+    --color-bg-deep:              #ffffff;
+    --color-bg-base:              #f2e8e8;
+    --color-bg-panel:             #faf3f3;
+    --color-bg-surface:           #ffffff;
+    --color-bg-menubar:           #d8c8c8;
+    --color-bg-toolbar:           #d8c8c8;
+    --color-bg-input:             #ffd1d1;
+    --color-bg-input-alt:         #ffabab;
+    --color-bg-button:            #ffc8c8;
+    --color-bg-button-hover:      #ff9595;
+    --color-bg-button-active:     #ff6060;
+    --color-bg-list-item:         #f7eded;
+    --color-bg-list-item-alt:     #ede0e0;
+    --color-bg-hover:             #ffd1d1;
+    --color-bg-selected:          #ff6060;
+
+    --color-border:               #cdb6b6;
+    --color-border-input:         #d75050;
+    --color-border-subtle:        #e8d4d4;
+
+    --color-text:                 #1f1f1f;
+    --color-text-strong:          #000000;
+    --color-text-muted:           #555555;
+    --color-text-dim:             #888888;
+
+    --color-success:              #d5ecd5;
+    --color-success-border:       #5cb85c;
+    --color-danger:               #fadbd8;
+    --color-danger-border:        #e74c3c;
+    --color-info:                 #d1ecf1;
+    --color-info-border:          #5bc0de;
+    --color-warning:              #fff3cd;
+    --color-warning-border:       #ddb244;
+
+    --shadow-popup:               0 4px 12px rgba(0, 0, 0, 0.15);
+    --shadow-modal:               0 8px 32px rgba(0, 0, 0, 0.22);
+    --shadow-inset:               inset 0 0 0 1px rgba(0, 0, 0, 0.06);
+}
+
+/* -----------------------------------------------------------------------------
+ * CREAMSICLE DARK — bright orange accents on warm-orange-tinted dark.
+ * --------------------------------------------------------------------------- */
+:root[data-theme="creamsicle-dark"] {
+    --color-accent:               #e67e22;
+    --color-accent-bright:        #ff9f43;
+    --color-accent-hover:         #ffb06f;
+    --color-accent-shadow:        #2a1500;
+    --color-accent-on:            #ffffff;
+    --color-accent-tint-10:       rgba(255, 159, 67, 0.10);
+    --color-accent-tint-15:       rgba(255, 159, 67, 0.15);
+    --color-accent-tint-25:       rgba(255, 159, 67, 0.25);
+    --color-accent-tint-30:       rgba(255, 159, 67, 0.30);
+    --color-accent-tint-35:       rgba(255, 159, 67, 0.35);
+    --color-accent-tint-40:       rgba(255, 159, 67, 0.40);
+    --color-accent-border:        rgba(255, 159, 67, 0.50);
+    --color-accent-border-mid:    rgba(255, 159, 67, 0.60);
+    --color-accent-border-strong: rgba(255, 159, 67, 0.80);
+    --color-accent-muted:         #f0b58c;
+    --color-accent-deep:          #a05010;
+
+    --color-bg-deep:              #0a0500;
+    --color-bg-base:              #1a1610;
+    --color-bg-panel:             #150f08;
+    --color-bg-surface:           #1e1810;
+    --color-bg-menubar:           #2a1f15;
+    --color-bg-toolbar:           #150f08;
+    --color-bg-input:             #2a1f18;
+    --color-bg-input-alt:         #3a2c20;
+    --color-bg-button:            #1f1810;
+    --color-bg-button-hover:      #382c20;
+    --color-bg-button-active:     #4a3c2c;
+    --color-bg-list-item:         #1f1810;
+    --color-bg-list-item-alt:     #1c1610;
+    --color-bg-hover:             #3a2c20;
+    --color-bg-selected:          #804020;
+
+    --color-border:               #4a3826;
+    --color-border-input:         #5a4530;
+    --color-border-subtle:        #2a201a;
+
+    --color-text:                 #d8d0cc;
+    --color-text-strong:          #ffffff;
+    --color-text-muted:           #a0928a;
+    --color-text-dim:             #6a5d50;
+}
+
+/* -----------------------------------------------------------------------------
+ * CREAMSICLE LIGHT — deep orange accents on warm cream pastel
+ * (the namesake: vanilla cream + tangerine).
+ * --------------------------------------------------------------------------- */
+:root[data-theme="creamsicle-light"] {
+    --color-accent:               #e67e22;
+    --color-accent-bright:        #d35400;
+    --color-accent-hover:         #a04000;
+    --color-accent-shadow:        #ffe8d0;
+    --color-accent-on:            #ffffff;
+    --color-accent-tint-10:       rgba(211, 84, 0, 0.10);
+    --color-accent-tint-15:       rgba(211, 84, 0, 0.15);
+    --color-accent-tint-25:       rgba(211, 84, 0, 0.25);
+    --color-accent-tint-30:       rgba(211, 84, 0, 0.30);
+    --color-accent-tint-35:       rgba(211, 84, 0, 0.35);
+    --color-accent-tint-40:       rgba(211, 84, 0, 0.40);
+    --color-accent-border:        rgba(211, 84, 0, 0.55);
+    --color-accent-border-mid:    rgba(211, 84, 0, 0.70);
+    --color-accent-border-strong: rgba(211, 84, 0, 0.85);
+    --color-accent-muted:         #e08a3a;
+    --color-accent-deep:          #6e2a00;
+
+    --color-link:                 #0066b3;
+    --color-link-bright:          #0078d4;
+    --color-selection-deep:       #b3dcff;
+    --color-selection-mid:        #d6ecff;
+
+    --color-danger-bright:        #c83232;
+    --color-danger-light:         #d44a4a;
+    --color-danger-soft:          #a22020;
+    --color-danger-pressed:       #b30000;
+    --color-danger-bg-deep:       #fde2e2;
+
+    --color-syntax-keyword:       #0451a5;
+    --color-syntax-type:          #267f99;
+    --color-syntax-function:      #795e26;
+    --color-syntax-string:        #a31515;
+    --color-syntax-comment:       #008000;
+
+    --color-bg-deep:              #ffffff;
+    --color-bg-base:              #faf3e8;
+    --color-bg-panel:             #fefaef;
+    --color-bg-surface:           #ffffff;
+    --color-bg-menubar:           #e8d8c0;
+    --color-bg-toolbar:           #e8d8c0;
+    --color-bg-input:             #ffd8a8;
+    --color-bg-input-alt:         #ffb56e;
+    --color-bg-button:            #ffd0a0;
+    --color-bg-button-hover:      #ffac68;
+    --color-bg-button-active:     #ff8c30;
+    --color-bg-list-item:         #fff5e8;
+    --color-bg-list-item-alt:     #f5e8d8;
+    --color-bg-hover:             #ffd8a8;
+    --color-bg-selected:          #ff8c30;
+
+    --color-border:               #cdb8a0;
+    --color-border-input:         #d77a30;
+    --color-border-subtle:        #ead8c0;
+
+    --color-text:                 #1f1f1f;
+    --color-text-strong:          #000000;
+    --color-text-muted:           #555555;
+    --color-text-dim:             #888888;
+
+    --color-success:              #d5ecd5;
+    --color-success-border:       #5cb85c;
+    --color-danger:               #fadbd8;
+    --color-danger-border:        #e74c3c;
+    --color-info:                 #d1ecf1;
+    --color-info-border:          #5bc0de;
+    --color-warning:              #fff3cd;
+    --color-warning-border:       #ddb244;
+
+    --shadow-popup:               0 4px 12px rgba(0, 0, 0, 0.15);
+    --shadow-modal:               0 8px 32px rgba(0, 0, 0, 0.22);
+    --shadow-inset:               inset 0 0 0 1px rgba(0, 0, 0, 0.06);
+}
+
+/* -----------------------------------------------------------------------------
+ * ROYALTY DARK — royal purple primary with gold trim. Text & highlights are
+ * vibrant purple; panel/input borders and accent outlines are gold.
+ * --------------------------------------------------------------------------- */
+:root[data-theme="royalty-dark"] {
+    /* ---------- Brand accent (royal purple text/highlights) -------------- */
+    --color-accent:               #7d3c98;
+    --color-accent-bright:        #af7ac5;
+    --color-accent-hover:         #c39bd3;
+    --color-accent-shadow:        #1a0028;
+    --color-accent-on:            #ffffff;
+    --color-accent-tint-10:       rgba(175, 122, 197, 0.10);
+    --color-accent-tint-15:       rgba(175, 122, 197, 0.15);
+    --color-accent-tint-25:       rgba(175, 122, 197, 0.25);
+    --color-accent-tint-30:       rgba(175, 122, 197, 0.30);
+    --color-accent-tint-35:       rgba(175, 122, 197, 0.35);
+    --color-accent-tint-40:       rgba(175, 122, 197, 0.40);
+
+    /* ---------- GOLD TRIM: accent borders are gold-tinted ---------------- */
+    --color-accent-border:        rgba(212, 175, 55, 0.55);
+    --color-accent-border-mid:    rgba(212, 175, 55, 0.70);
+    --color-accent-border-strong: rgba(212, 175, 55, 0.90);
+
+    --color-accent-muted:         #c8a8d4;
+    --color-accent-deep:          #5b2c70;
+
+    /* ---------- Surfaces (purple-tinted dark) ---------------------------- */
+    --color-bg-deep:              #0a0414;
+    --color-bg-base:              #1a0f2e;
+    --color-bg-panel:             #150826;
+    --color-bg-surface:           #20132d;
+    --color-bg-menubar:           #2e1a3e;
+    --color-bg-toolbar:           #150826;
+    --color-bg-input:             #2a1838;
+    --color-bg-input-alt:         #382248;
+    --color-bg-button:            #1f1130;
+    --color-bg-button-hover:      #3a2848;
+    --color-bg-button-active:     #4c3858;
+    --color-bg-list-item:         #1e1228;
+    --color-bg-list-item-alt:     #1a0f22;
+    --color-bg-hover:             #3a2848;
+    --color-bg-selected:          #5a2580;
+
+    /* ---------- GOLD TRIM: panel/input borders are gold ------------------ */
+    --color-border:               #6e5510;
+    --color-border-input:         #b8860b;
+    --color-border-subtle:        #3d2f08;
+
+    /* ---------- Text (purple-tinted whites) ------------------------------ */
+    --color-text:                 #d8cce0;
+    --color-text-strong:          #ffffff;
+    --color-text-muted:           #9c8aab;
+    --color-text-dim:             #6a5a78;
+}
+
+/* -----------------------------------------------------------------------------
+ * ROYALTY LIGHT — deep purple primary with gold trim on light purple pastel.
+ * --------------------------------------------------------------------------- */
+:root[data-theme="royalty-light"] {
+    /* ---------- Brand accent (deep purple visible on light) -------------- */
+    --color-accent:               #6c1d8e;
+    --color-accent-bright:        #8e44ad;
+    --color-accent-hover:         #5b2c70;
+    --color-accent-shadow:        #f0e0fa;
+    --color-accent-on:            #ffffff;
+    --color-accent-tint-10:       rgba(142, 68, 173, 0.10);
+    --color-accent-tint-15:       rgba(142, 68, 173, 0.15);
+    --color-accent-tint-25:       rgba(142, 68, 173, 0.25);
+    --color-accent-tint-30:       rgba(142, 68, 173, 0.30);
+    --color-accent-tint-35:       rgba(142, 68, 173, 0.35);
+    --color-accent-tint-40:       rgba(142, 68, 173, 0.40);
+
+    /* ---------- GOLD TRIM: accent borders are gold-tinted ---------------- */
+    --color-accent-border:        rgba(184, 134, 11, 0.65);
+    --color-accent-border-mid:    rgba(184, 134, 11, 0.80);
+    --color-accent-border-strong: rgba(184, 134, 11, 0.95);
+
+    --color-accent-muted:         #b585cc;
+    --color-accent-deep:          #4a0d6e;
+
+    /* ---------- Link / blue palette -------------------------------------- */
+    --color-link:                 #0066b3;
+    --color-link-bright:          #0078d4;
+    --color-selection-deep:       #b3dcff;
+    --color-selection-mid:        #d6ecff;
+
+    /* ---------- Danger / red palette ------------------------------------- */
+    --color-danger-bright:        #c83232;
+    --color-danger-light:         #d44a4a;
+    --color-danger-soft:          #a22020;
+    --color-danger-pressed:       #b30000;
+    --color-danger-bg-deep:       #fde2e2;
+
+    /* ---------- Syntax highlight palette --------------------------------- */
+    --color-syntax-keyword:       #0451a5;
+    --color-syntax-type:          #267f99;
+    --color-syntax-function:      #795e26;
+    --color-syntax-string:        #a31515;
+    --color-syntax-comment:       #008000;
+
+    /* ---------- Surfaces (light purple pastel) --------------------------- */
+    --color-bg-deep:              #ffffff;
+    --color-bg-base:              #ede5f2;
+    --color-bg-panel:             #f9f3fb;
+    --color-bg-surface:           #ffffff;
+    --color-bg-menubar:           #d4c4d8;
+    --color-bg-toolbar:           #d4c4d8;
+    --color-bg-input:             #e8c9f0;         /* PURPLE input/dropdown */
+    --color-bg-input-alt:         #c79de0;
+    --color-bg-button:            #d4b3e4;
+    --color-bg-button-hover:      #b58cd1;
+    --color-bg-button-active:     #9b59b6;
+    --color-bg-list-item:         #f3e8f7;
+    --color-bg-list-item-alt:     #e8d8ed;
+    --color-bg-hover:             #e8c9f0;
+    --color-bg-selected:          #9b59b6;
+
+    /* ---------- GOLD TRIM: panel/input borders are gold ------------------ */
+    --color-border:               #c9a82c;
+    --color-border-input:         #a6841e;
+    --color-border-subtle:        #ead67a;
+
+    /* ---------- Text (dark on light) ------------------------------------- */
+    --color-text:                 #1f1f1f;
+    --color-text-strong:          #000000;
+    --color-text-muted:           #555555;
+    --color-text-dim:             #888888;
+
+    /* ---------- Semantic status colors ----------------------------------- */
+    --color-success:              #d5ecd5;
+    --color-success-border:       #5cb85c;
+    --color-danger:               #fadbd8;
+    --color-danger-border:        #e74c3c;
+    --color-info:                 #d1ecf1;
+    --color-info-border:          #5bc0de;
+    --color-warning:              #fff3cd;
+    --color-warning-border:       #ddb244;
+
+    /* ---------- Shadows -------------------------------------------------- */
+    --shadow-popup:               0 4px 12px rgba(0, 0, 0, 0.15);
+    --shadow-modal:               0 8px 32px rgba(0, 0, 0, 0.22);
+    --shadow-inset:               inset 0 0 0 1px rgba(0, 0, 0, 0.06);
+}
+
+/* Placeholder for future palette additions — copy a block above and edit
+ * the accent + token values for that palette/mode. Don't forget to add the
+ * new "<palette>-light" name to the multi-selector light-mode overrides
+ * below + in styles.css. */
+ * ============================================================================= */
+
+/* =============================================================================
+ * Reusable utility classes built on the token system.
+ *
+ * Components in src/ should prefer these classes over inline styles. New
+ * patterns we add (e.g. .rr-modal-header, .rr-gold-dropdown) should be added
+ * here, not duplicated inline across files.
+ * ============================================================================= */
+
+/* ---------- Form grid layout (consistent label/input alignment) ---------- */
+
+/* Two-column form: labels in column 1 (right-aligned, fixed width), controls
+ * in column 2 (stretchy). Use .rr-form-grid-pair to split into two side-by-side
+ * label/input groups in one row. Use .rr-form-grid-full for fields that should
+ * span both columns (Name, Description). Replaces the wobbly .form-row +
+ * .form-group + .form-group-fixed combination that produced inconsistent
+ * indentation depending on label length. */
+.rr-form-grid {
+    display: grid;
+    grid-template-columns: minmax(80px, auto) 1fr;
+    column-gap: 12px;
+    row-gap: 10px;
+    align-items: center;
+}
+.rr-form-grid > label,
+.rr-form-grid > .rr-form-label {
+    color: var(--color-text-muted);
+    font-size: var(--font-size-base);
+    text-align: right;
+    font-weight: 600;
+    letter-spacing: 0.2px;
+    white-space: nowrap;
+}
+.rr-form-grid > .rr-form-full {
+    grid-column: 1 / -1;
+}
+/* Two-up: row of "label: input    label: input" with even widths. */
+.rr-form-grid > .rr-form-pair {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: minmax(80px, auto) 1fr minmax(80px, auto) 1fr;
+    column-gap: 12px;
+    align-items: center;
+}
+/* Four-up: same idea, four "label: input" pairs in one row. Used for tight
+ * groups of related fields where individual stacking would waste vertical
+ * space and feel airy. The four input cells share width evenly via 1fr each. */
+.rr-form-grid > .rr-form-quad {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns:
+        minmax(70px, auto) minmax(0, 1fr)
+        minmax(50px, auto) minmax(0, 1fr)
+        minmax(60px, auto) minmax(0, 1fr)
+        minmax(70px, auto) minmax(0, 1fr);
+    column-gap: 10px;
+    align-items: center;
+}
+.rr-form-grid > .rr-form-pair > label,
+.rr-form-grid > .rr-form-pair > .rr-form-label,
+.rr-form-grid > .rr-form-quad > label,
+.rr-form-grid > .rr-form-quad > .rr-form-label {
+    color: var(--color-text-muted);
+    font-size: var(--font-size-base);
+    text-align: right;
+    font-weight: 600;
+    white-space: nowrap;
+}
+/* Inputs/selects/textareas inside the grid fill their cell unless capped. */
+.rr-form-grid input[type="text"],
+.rr-form-grid input[type="number"],
+.rr-form-grid input[type="email"],
+.rr-form-grid select,
+.rr-form-grid textarea,
+.rr-form-grid .rr-form-pair input[type="text"],
+.rr-form-grid .rr-form-pair input[type="number"],
+.rr-form-grid .rr-form-pair select,
+.rr-form-grid .rr-form-quad input[type="text"],
+.rr-form-grid .rr-form-quad input[type="number"],
+.rr-form-grid .rr-form-quad select {
+    width: 100%;
+    box-sizing: border-box;
+}
+
+/* ---------- Form controls ------------------------------------------------- */
+
+/* Global theming for every native <select>. We strip the OS chrome with
+ * `appearance: none` and draw our own gold caret via background-image so the
+ * collapsed state stays consistent across the app. Option entries also use
+ * theme tokens; Chromium honors those rules for its popup (the OS highlight
+ * on the focused option is the one piece we can't fully repaint without a
+ * full custom replacement -- use .anim-gold-dropdown + _attachGoldDropdown
+ * for instances where total popup control matters). */
+select {
+    background-color: var(--color-bg-input);
+    border: 1px solid var(--color-accent-border);
+    color: var(--color-text-strong);
+    border-radius: var(--radius-md);
+    padding: 4px 22px 4px 8px;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    -webkit-appearance: none;
+    appearance: none;
+    /* color-scheme forces Chromium's OS popup into the matching variant.
+       accent-color overrides the focused option's highlight to our gold.
+       Light theme overrides color-scheme to 'light' further below. */
+    color-scheme: dark;
+    accent-color: var(--color-accent);
+    /* Gold caret indicator drawn via two background gradients */
+    background-image:
+        linear-gradient(45deg, transparent 50%, var(--color-accent-bright) 50%),
+        linear-gradient(135deg, var(--color-accent-bright) 50%, transparent 50%);
+    background-position: calc(100% - 12px) calc(50% - 2px), calc(100% - 7px) calc(50% - 2px);
+    background-size: 5px 5px, 5px 5px;
+    background-repeat: no-repeat;
+    outline: none;
+    transition: border-color var(--ease-base);
+}
+select:hover  { border-color: var(--color-accent-border-strong); }
+select:focus  { border-color: var(--color-accent-bright); }
+
+select option,
+option {
+    background: var(--color-bg-panel);
+    color: var(--color-text-strong);
+    padding: 4px 8px;
+    font-weight: 600;
+}
+select option:checked,
+option:checked {
+    background: var(--color-accent-tint-25);
+    color: var(--color-text-strong);
+    box-shadow: 0 0 10px 100px var(--color-accent-tint-25) inset;
+}
+select option:hover,
+option:hover {
+    background: var(--color-accent-tint-15);
+    color: var(--color-text-strong);
+}
+
+.rr-input,
+.rr-select {
+    width: 100%;
+    padding: var(--space-2);
+    background: var(--color-bg-input);
+    border: 1px solid var(--color-border-input);
+    color: var(--color-text);
+    border-radius: var(--radius-md);
+    font-size: var(--font-size-base);
+    font-family: inherit;
+    box-sizing: border-box;
+    outline: none;
+    transition: border-color var(--ease-base);
+}
+.rr-input:focus,
+.rr-select:focus {
+    border-color: var(--color-accent-border-strong);
+}
+
+/* Checkbox: black with white checkmark, gold border accent.
+ * Applied globally to every input[type="checkbox"] -- the app's "default"
+ * checkbox look. Pre-existing inline styling like `cursor: pointer` continues
+ * to compose normally. */
+input[type="checkbox"],
+.rr-checkbox {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 14px;
+    height: 14px;
+    background: var(--color-bg-deep);
+    border: 1px solid var(--color-accent-border);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    position: relative;
+    margin: 0;
+    vertical-align: middle;
+    transition: border-color var(--ease-fast);
+}
+input[type="checkbox"]:hover,
+.rr-checkbox:hover {
+    border-color: var(--color-accent-border-strong);
+}
+input[type="checkbox"]:checked::after,
+.rr-checkbox:checked::after {
+    content: '';
+    position: absolute;
+    left: 3px;
+    top: -1px;
+    width: 4px;
+    height: 9px;
+    border: solid var(--color-text-strong);
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+}
+input[type="checkbox"]:disabled,
+.rr-checkbox:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+/* Radio buttons: same family as the checkbox — black fill, gold border accent,
+ * gold dot when checked. Applied globally so every `<input type="radio">` in
+ * the app gets the theme treatment without per-instance edits. */
+input[type="radio"],
+.rr-radio {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 14px;
+    height: 14px;
+    background: var(--color-bg-deep);
+    border: 1px solid var(--color-accent-border);
+    border-radius: 50%;
+    cursor: pointer;
+    position: relative;
+    margin: 0;
+    vertical-align: middle;
+    transition: border-color var(--ease-fast);
+}
+input[type="radio"]:hover,
+.rr-radio:hover {
+    border-color: var(--color-accent-border-strong);
+}
+input[type="radio"]:checked::after,
+.rr-radio:checked::after {
+    content: '';
+    position: absolute;
+    width: 8px;
+    height: 8px;
+    background: var(--color-accent-bright);
+    border-radius: 50%;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+}
+/* Range slider: dark track with gold-accent thumb. Applied to all
+ * <input type="range"> so the app's sliders match the rest of the theme. */
+input[type="range"],
+.rr-range {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 20px;
+    background: transparent;
+    cursor: pointer;
+    margin: 0;
+    padding: 0;
+    outline: none;
+}
+input[type="range"]::-webkit-slider-runnable-track,
+.rr-range::-webkit-slider-runnable-track {
+    height: 4px;
+    background: var(--color-bg-deep);
+    border: 1px solid var(--color-border-input);
+    border-radius: 999px;
+}
+input[type="range"]::-moz-range-track,
+.rr-range::-moz-range-track {
+    height: 4px;
+    background: var(--color-bg-deep);
+    border: 1px solid var(--color-border-input);
+    border-radius: 999px;
+}
+input[type="range"]::-webkit-slider-thumb,
+.rr-range::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 14px;
+    height: 14px;
+    background: var(--color-accent-bright);
+    border: 1px solid var(--color-accent-border-strong);
+    border-radius: 50%;
+    margin-top: -6px;
+    cursor: pointer;
+    transition: transform var(--ease-fast);
+}
+input[type="range"]::-moz-range-thumb,
+.rr-range::-moz-range-thumb {
+    width: 14px;
+    height: 14px;
+    background: var(--color-accent-bright);
+    border: 1px solid var(--color-accent-border-strong);
+    border-radius: 50%;
+    cursor: pointer;
+    transition: transform var(--ease-fast);
+}
+input[type="range"]:hover::-webkit-slider-thumb,
+.rr-range:hover::-webkit-slider-thumb {
+    transform: scale(1.15);
+}
+input[type="range"]:hover::-moz-range-thumb,
+.rr-range:hover::-moz-range-thumb {
+    transform: scale(1.15);
+}
+input[type="range"]:disabled,
+.rr-range:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+input[type="radio"]:disabled,
+.rr-radio:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+/* ---------- Buttons ------------------------------------------------------- */
+
+.rr-button {
+    padding: 7px 18px;
+    background: var(--color-bg-input);
+    border: 1px solid var(--color-border-input);
+    color: var(--color-text);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    font-size: var(--font-size-base);
+    transition: background var(--ease-base), border-color var(--ease-base);
+}
+.rr-button:hover {
+    background: var(--color-accent-tint-25);
+    border-color: var(--color-accent);
+}
+
+.rr-button-primary {
+    padding: 7px 18px;
+    background: var(--color-accent);
+    border: 1px solid var(--color-accent);
+    color: var(--color-accent-on);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    font-size: var(--font-size-base);
+    font-weight: bold;
+    transition: background var(--ease-base);
+}
+.rr-button-primary:hover {
+    background: var(--color-accent-bright);
+}
+
+/* Secondary modal button -- pairs with .rr-button-primary at the same physical
+ * size (7px x 18px) so Cancel never looks shrunken next to Save/OK in a modal
+ * footer. Same gold-hover convention as the chip family. */
+.rr-btn-secondary {
+    padding: 7px 18px;
+    background: var(--color-bg-deep);
+    border: 1px solid var(--color-border-input);
+    color: var(--color-text);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    font-size: var(--font-size-base);
+    font-weight: 600;
+    transition: color var(--ease-base), border-color var(--ease-base);
+}
+.rr-btn-secondary:hover {
+    color: var(--color-accent-bright);
+    border-color: var(--color-accent-bright);
+}
+.rr-btn-secondary:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+.rr-btn-secondary:disabled:hover {
+    color: var(--color-text);
+    border-color: var(--color-border-input);
+}
+
+/* Input-affix browse button -- the "..." (or "Browse") button glued to the
+ * right edge of a text input. Sized to match input vertical height (6px x 12px,
+ * 12px font) so it stays flush. Black fill keeps the input itself visually
+ * dominant; hover lifts the affix to gold. */
+.rr-btn-browse {
+    padding: 6px 12px;
+    background: var(--color-bg-deep);
+    border: 1px solid var(--color-border-input);
+    color: var(--color-text);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    font-size: var(--font-size-base);
+    font-weight: 600;
+    white-space: nowrap;
+    transition: color var(--ease-base), border-color var(--ease-base);
+}
+.rr-btn-browse:hover {
+    color: var(--color-accent-bright);
+    border-color: var(--color-accent-bright);
+}
+.rr-btn-browse:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+.rr-btn-browse:disabled:hover {
+    color: var(--color-text);
+    border-color: var(--color-border-input);
+}
+
+/* Chip buttons -- compact secondary actions inside lists / table rows.
+ *
+ * Pattern: solid black fill so they stay distinct from the row + panel behind
+ * them, muted bold text in normal state, only the border + text recolor on
+ * hover so they "wake up" with a clear directional signal.
+ *
+ *  .rr-btn-chip          gold hover (safe / non-destructive)
+ *  .rr-btn-chip-danger   red  hover (destructive)
+ *
+ * Established for the SE & Flash Timings Edit/Remove buttons; reuse anywhere
+ * a row needs Edit/Remove/Configure-style actions. Avoids the over-saturated
+ * "filled gold button" look for ubiquitous secondary actions.
+ */
+.rr-btn-chip,
+.rr-btn-chip-danger {
+    padding: 3px 12px;
+    background: var(--color-bg-deep);
+    border: 1px solid var(--color-border-input);
+    color: var(--color-text);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    white-space: nowrap;
+    transition: color var(--ease-base), border-color var(--ease-base), background var(--ease-base);
+}
+.rr-btn-chip:hover {
+    color: var(--color-accent-bright);
+    border-color: var(--color-accent-bright);
+}
+.rr-btn-chip-danger:hover {
+    color: var(--color-danger-bright);
+    border-color: var(--color-danger-bright);
+}
+.rr-btn-chip:disabled,
+.rr-btn-chip-danger:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+.rr-btn-chip:disabled:hover,
+.rr-btn-chip-danger:disabled:hover {
+    color: var(--color-text);
+    border-color: var(--color-border-input);
+}
+
+/* ---------- Modal ---------------------------------------------------------- */
+
+.rr-modal-overlay {
+    display: flex;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.75);
+    z-index: 10500;
+    align-items: center;
+    justify-content: center;
+}
+.rr-modal {
+    background: var(--color-bg-base);
+    border: 1px solid var(--color-accent-tint-40);
+    border-radius: var(--radius-lg);
+    display: flex;
+    flex-direction: column;
+    box-shadow: var(--shadow-modal);
+    max-height: 88vh;
+}
+.rr-modal-header {
+    background: var(--color-bg-deep);
+    padding: var(--space-3) var(--space-4);
+    border-bottom: 1px solid var(--color-border);
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.rr-modal-title {
+    font-size: var(--font-size-lg);
+    font-weight: 600;
+    color: var(--color-text-strong);
+    letter-spacing: 0.5px;
+}
+.rr-modal-close {
+    background: none;
+    border: none;
+    color: var(--color-text-muted);
+    font-size: 22px;
+    cursor: pointer;
+    padding: 0;
+    line-height: 1;
+    transition: color var(--ease-base);
+}
+.rr-modal-close:hover {
+    color: var(--color-accent-bright);
+}
+.rr-modal-body {
+    padding: var(--space-4) var(--space-5);
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+}
+.rr-modal-footer {
+    background: var(--color-bg-deep);
+    padding: var(--space-3) var(--space-4);
+    border-top: 1px solid var(--color-border);
+    border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+}
+
+/* ---------- Gold dropdown (custom select replacement) -------------------- */
+
+.rr-gold-dropdown,
+.anim-gold-dropdown {
+    position: relative;
+    padding: 6px 24px 6px 10px;
+    background: var(--color-accent-tint-15);
+    border: 1px solid var(--color-accent-border);
+    color: var(--color-accent-bright);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    outline: none;
+    user-select: none;
+    text-align: left;
+    transition: border-color var(--ease-fast);
+}
+.rr-gold-dropdown:hover,
+.anim-gold-dropdown:hover {
+    border-color: var(--color-accent-border-strong);
+}
+.rr-gold-dropdown::after,
+.anim-gold-dropdown::after {
+    content: '▼';
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 9px;
+}
+
+.rr-gold-dropdown-popup {
+    position: fixed;
+    background: var(--color-bg-base);
+    border: 1px solid var(--color-accent-border-strong);
+    border-radius: var(--radius-md);
+    z-index: 100000;
+    box-shadow: var(--shadow-popup);
+    overflow: hidden;
+}
+.rr-gold-dropdown-option {
+    padding: 6px 12px;
+    cursor: pointer;
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    color: var(--color-text);
+    transition: background var(--ease-fast), color var(--ease-fast);
+}
+.rr-gold-dropdown-option:hover {
+    background: var(--color-accent-tint-10);
+    color: var(--color-accent-bright);
+}
+.rr-gold-dropdown-option.active {
+    background: var(--color-accent-tint-15);
+    color: var(--color-accent-bright);
+}
+
+/* ---------- Hue slider (color picker) ------------------------------------
+ * Selectors are scoped via `input[type="range"]` to give them the same
+ * specificity as the global range rules above, so the rainbow track wins
+ * source-order rather than being overridden. */
+
+input[type="range"].hue-slider,
+input[type="range"].rr-hue-slider {
+    -webkit-appearance: none;
+    appearance: none;
+    height: 14px;
+    background: transparent;
+    border-radius: 7px;
+    outline: none;
+    cursor: pointer;
+    border: none;
+}
+input[type="range"].hue-slider::-webkit-slider-runnable-track,
+input[type="range"].rr-hue-slider::-webkit-slider-runnable-track {
+    height: 14px;
+    background: linear-gradient(to right,
+        hsl(0,100%,50%),
+        hsl(60,100%,50%),
+        hsl(120,100%,50%),
+        hsl(180,100%,50%),
+        hsl(240,100%,50%),
+        hsl(300,100%,50%),
+        hsl(360,100%,50%));
+    border-radius: 7px;
+    border: 1px solid var(--color-border-input);
+}
+input[type="range"].hue-slider::-moz-range-track,
+input[type="range"].rr-hue-slider::-moz-range-track {
+    height: 14px;
+    background: linear-gradient(to right,
+        hsl(0,100%,50%),
+        hsl(60,100%,50%),
+        hsl(120,100%,50%),
+        hsl(180,100%,50%),
+        hsl(240,100%,50%),
+        hsl(300,100%,50%),
+        hsl(360,100%,50%));
+    border-radius: 7px;
+    border: 1px solid var(--color-border-input);
+}
+input[type="range"].hue-slider::-webkit-slider-thumb,
+input[type="range"].rr-hue-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 8px;
+    height: 18px;
+    background: var(--color-text-strong);
+    border: 1px solid var(--color-bg-deep);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    margin-top: -3px;
+    box-shadow: 0 0 2px rgba(0, 0, 0, 0.6);
+    transform: none;
+}
+input[type="range"].hue-slider::-moz-range-thumb,
+input[type="range"].rr-hue-slider::-moz-range-thumb {
+    width: 8px;
+    height: 18px;
+    background: var(--color-text-strong);
+    border: 1px solid var(--color-bg-deep);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transform: none;
+}
+
+/* ─── Themed color-picker swatches ─────────────────────────────────────────
+   Native <input type="color"> looks generic across platforms. Style the
+   visible swatch + its border via ::-webkit-color-swatch pseudo-elements so
+   it matches the app accent + has a hover state. Used by Animation Generator
+   param panel (.rr-ag-param[type="color"]) and any future themed color
+   pickers (apply the .rr-color-swatch class). */
+.rr-ag-param[type="color"],
+input.rr-color-swatch[type="color"] {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 64px;
+    height: 28px;
+    padding: 2px;
+    border: 1.5px solid var(--color-border-input);
+    border-radius: var(--radius-md, 4px);
+    background: var(--color-bg-input-alt);
+    cursor: pointer;
+    transition: border-color 0.12s ease, box-shadow 0.12s ease;
+    box-shadow: inset 0 0 0 1px var(--color-accent-shadow, rgba(0,0,0,0.4));
+}
+.rr-ag-param[type="color"]:hover,
+input.rr-color-swatch[type="color"]:hover {
+    border-color: var(--color-accent-bright);
+    box-shadow: 0 0 0 2px var(--color-accent-tint-15, rgba(255, 215, 0, 0.15)),
+                inset 0 0 0 1px var(--color-accent-shadow, rgba(0,0,0,0.4));
+}
+.rr-ag-param[type="color"]:focus,
+input.rr-color-swatch[type="color"]:focus {
+    outline: none;
+    border-color: var(--color-accent-bright);
+    box-shadow: 0 0 0 2px var(--color-accent-tint-25, rgba(255, 215, 0, 0.25));
+}
+.rr-ag-param[type="color"]::-webkit-color-swatch-wrapper,
+input.rr-color-swatch[type="color"]::-webkit-color-swatch-wrapper {
+    padding: 0;
+}
+.rr-ag-param[type="color"]::-webkit-color-swatch,
+input.rr-color-swatch[type="color"]::-webkit-color-swatch {
+    border: 1px solid var(--color-border-strong, var(--color-border-input));
+    border-radius: var(--radius-sm, 2px);
+}
+
+/* ─── Custom themed color swatch + picker popup ───────────────────────────── */
+.rr-color-swatch-btn {
+    width: 90px;
+    height: 26px;
+    padding: 0;
+    border: 1.5px solid var(--color-border-input);
+    border-radius: var(--radius-md, 4px);
+    cursor: pointer;
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    box-shadow: inset 0 0 0 1px rgba(0,0,0,0.25);
+    transition: border-color 0.12s ease, box-shadow 0.12s ease, transform 0.08s ease;
+}
+.rr-color-swatch-btn:hover {
+    border-color: var(--color-accent-bright);
+    box-shadow: 0 0 0 2px var(--color-accent-tint-15, rgba(255, 215, 0, 0.15)),
+                inset 0 0 0 1px rgba(0,0,0,0.25);
+}
+.rr-color-swatch-btn:active {
+    transform: translateY(1px);
+}
+.rr-color-swatch-hex {
+    font-family: var(--font-mono, monospace);
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+    /* Use mix-blend-mode so the text reads on any background color */
+    color: #fff;
+    mix-blend-mode: difference;
+    pointer-events: none;
+}
+
+.rr-color-popup {
+    position: fixed;
+    z-index: 10500;
+    background: var(--color-bg-panel);
+    border: 1px solid var(--color-accent-border, var(--color-border));
+    border-radius: var(--radius-md, 4px);
+    padding: 10px;
+    box-shadow: var(--shadow-modal, 0 8px 24px rgba(0,0,0,0.45));
+    width: 232px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    font-size: 11px;
+    color: var(--color-text);
+}
+.rr-color-popup-row {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+}
+.rr-color-popup-preview {
+    width: 36px;
+    height: 24px;
+    border: 1px solid var(--color-border-input);
+    border-radius: var(--radius-sm, 2px);
+    box-shadow: inset 0 0 0 1px rgba(0,0,0,0.25);
+    flex-shrink: 0;
+}
+.rr-color-popup-hex {
+    flex: 1;
+    padding: 4px 8px;
+    font-family: var(--font-mono, monospace);
+    font-size: 11px;
+    background: var(--color-bg-input-alt);
+    color: var(--color-text);
+    border: 1px solid var(--color-border-input);
+    border-radius: var(--radius-sm, 3px);
+    text-transform: uppercase;
+}
+.rr-color-popup-hex:focus {
+    outline: none;
+    border-color: var(--color-accent-bright);
+}
+/* 2D saturation/value picker: drag to pick S+V at the current hue.
+   Background is set inline (rebuilt when hue changes). */
+.rr-color-popup-sv {
+    width: 100%;
+    height: 130px;
+    border: 1px solid var(--color-border-input);
+    border-radius: var(--radius-sm, 3px);
+    position: relative;
+    cursor: crosshair;
+    box-shadow: inset 0 0 0 1px rgba(0,0,0,0.25);
+    user-select: none;
+}
+.rr-color-popup-sv-cursor {
+    position: absolute;
+    width: 11px;
+    height: 11px;
+    border: 2px solid #fff;
+    border-radius: 50%;
+    box-shadow: 0 0 0 1px rgba(0,0,0,0.7);
+    pointer-events: none;
+    transform: translate(-50%, -50%);
+    left: 0;
+    top: 0;
+}
+
+/* 1D hue strip: drag to pick hue (0-360°). */
+.rr-color-popup-hue {
+    width: 100%;
+    height: 18px;
+    border: 1px solid var(--color-border-input);
+    border-radius: var(--radius-sm, 3px);
+    position: relative;
+    cursor: crosshair;
+    box-shadow: inset 0 0 0 1px rgba(0,0,0,0.25);
+    user-select: none;
+    background: linear-gradient(to right,
+        hsl(0,   100%, 50%),
+        hsl(60,  100%, 50%),
+        hsl(120, 100%, 50%),
+        hsl(180, 100%, 50%),
+        hsl(240, 100%, 50%),
+        hsl(300, 100%, 50%),
+        hsl(360, 100%, 50%));
+}
+.rr-color-popup-hue-cursor {
+    position: absolute;
+    top: -2px;
+    bottom: -2px;
+    width: 4px;
+    background: rgba(255,255,255,0.0);
+    border: 2px solid #fff;
+    border-radius: 2px;
+    box-shadow: 0 0 0 1px rgba(0,0,0,0.7);
+    pointer-events: none;
+    transform: translateX(-50%);
+    left: 0;
+}

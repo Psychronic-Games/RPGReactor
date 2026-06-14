@@ -1,0 +1,255 @@
+/**
+ * ShowBattleAnimationEditor - Editor for Show Battle Animation event command (code 337)
+ */
+class ShowBattleAnimationEditor {
+    constructor(databaseManager, projectController) {
+        this.databaseManager = databaseManager;
+        this.projectController = projectController;
+        this.modal = null;
+        this.callback = null;
+
+        // Parameters: [enemyIndex, animationId, targetAll]
+        this.enemyIndex = 0; // 0-7 (enemy member index)
+        this.animationId = 1;
+        this.targetAll = false;
+    }
+
+    show(command, callback) {
+        this.callback = callback;
+
+        if (command && command.code === 337) {
+            const params = command.parameters;
+            this.enemyIndex = params[0] !== undefined ? params[0] : 0;
+            this.animationId = params[1] || 1;
+            this.targetAll = params[2] || false;
+            // If enemyIndex is -1, that means target all was checked
+            if (this.enemyIndex === -1) {
+                this.targetAll = true;
+                this.enemyIndex = 0;
+            }
+        } else {
+            this.enemyIndex = 0;
+            this.animationId = 1;
+            this.targetAll = false;
+        }
+
+        if (!this.modal) {
+            this.createModal();
+        }
+
+        this.renderContent();
+        this.modal.style.display = 'flex';
+    }
+
+    createModal() {
+        this.modal = document.createElement('div');
+        this.modal.className = 'show-battle-animation-editor-modal';
+        this.modal.style.cssText = `
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            z-index: 10005;
+            justify-content: center;
+            align-items: center;
+        `;
+
+        const container = document.createElement('div');
+        container.className = 'show-battle-animation-container';
+        container.style.cssText = `
+            background-color: var(--color-bg-surface);
+            border: 1px solid var(--color-border);
+            border-radius: 6px;
+            width: 450px;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+        `;
+
+        this.modal.appendChild(container);
+
+        this.modal.addEventListener('click', (e) => {
+            if (e.target === this.modal) {
+                this.close();
+            }
+        });
+
+        document.body.appendChild(this.modal);
+    }
+
+    renderContent() {
+        const container = this.modal.querySelector('.show-battle-animation-container');
+        container.innerHTML = '';
+
+        // Header
+        const header = document.createElement('div');
+        header.style.cssText = `
+            padding: 12px 16px;
+            background-color: var(--color-bg-panel);
+            border-bottom: 1px solid var(--color-border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-top-left-radius: 6px;
+            border-top-right-radius: 6px;
+        `;
+        header.innerHTML = `
+            <h3 style="margin: 0; color: var(--color-text-strong); font-size: 16px;">Show Battle Animation</h3>
+            <button class="close-btn" style="background: none; border: none; color: var(--color-text-strong); font-size: 20px; cursor: pointer; padding: 0; width: 24px; height: 24px;">\u00d7</button>
+        `;
+        container.appendChild(header);
+
+        header.querySelector('.close-btn').addEventListener('click', () => this.close());
+
+        // Content
+        const content = document.createElement('div');
+        content.style.cssText = `
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        `;
+
+        // Enemy index selector
+        content.appendChild(this.createEnemyIndexSelector());
+
+        // Animation dropdown
+        content.appendChild(this.createAnimationSelector());
+
+        // Entire Troop checkbox
+        const troopRow = document.createElement('div');
+        troopRow.style.cssText = 'display: flex; align-items: center; gap: 8px; padding-top: 8px; border-top: 1px solid var(--color-border);';
+
+        const troopCheckbox = document.createElement('input');
+        troopCheckbox.type = 'checkbox';
+        troopCheckbox.id = 'target-all-337';
+        troopCheckbox.checked = this.targetAll;
+        troopCheckbox.addEventListener('change', (e) => {
+            this.targetAll = e.target.checked;
+        });
+
+        const troopLabel = document.createElement('label');
+        troopLabel.htmlFor = 'target-all-337';
+        troopLabel.textContent = 'Entire Troop';
+        troopLabel.style.cssText = 'color: var(--color-text); font-size: 13px; cursor: pointer;';
+
+        troopRow.appendChild(troopCheckbox);
+        troopRow.appendChild(troopLabel);
+        content.appendChild(troopRow);
+
+        container.appendChild(content);
+
+        // Footer
+        const footer = document.createElement('div');
+        footer.style.cssText = `
+            padding: 12px 16px;
+            border-top: 1px solid var(--color-border);
+            background-color: var(--color-bg-panel);
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+        `;
+
+        const cancelBtn = document.createElement('button');
+        cancelBtn.textContent = 'Cancel';
+        cancelBtn.className = 'rr-btn-secondary';
+        cancelBtn.addEventListener('click', () => this.close());
+
+        const okBtn = document.createElement('button');
+        okBtn.textContent = 'OK';
+        okBtn.style.cssText = `
+            padding: 6px 20px;
+            background-color: var(--color-accent);
+            color: var(--color-bg-deep);
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: bold;
+        `;
+        okBtn.addEventListener('click', () => this.save());
+
+        footer.appendChild(cancelBtn);
+        footer.appendChild(okBtn);
+        container.appendChild(footer);
+    }
+
+    createEnemyIndexSelector() {
+        const section = document.createElement('div');
+        section.style.cssText = 'display: flex; align-items: center; gap: 8px;';
+        const label = document.createElement('span');
+        label.textContent = 'Enemy:';
+        label.style.cssText = 'color: var(--color-text); font-size: 13px; min-width: 100px;';
+        const select = document.createElement('select');
+        select.style.cssText = 'padding:6px 10px; background-color:var(--color-bg-input); color:var(--color-text); border:1px solid var(--color-border-input); border-radius:3px; font-size:12px; flex:1;';
+        for (let i = 0; i <= 7; i++) {
+            const option = document.createElement('option');
+            option.value = i;
+            option.textContent = `#${i + 1}`;
+            option.selected = (this.enemyIndex === i);
+            select.appendChild(option);
+        }
+        select.addEventListener('change', (e) => { this.enemyIndex = parseInt(e.target.value); });
+        section.appendChild(label);
+        section.appendChild(select);
+        return section;
+    }
+
+    createAnimationSelector() {
+        const section = document.createElement('div');
+        section.style.cssText = 'display: flex; align-items: center; gap: 8px; padding-top: 8px; border-top: 1px solid var(--color-border);';
+
+        const label = document.createElement('span');
+        label.textContent = 'Animation:';
+        label.style.cssText = 'color: var(--color-text); font-size: 13px; min-width: 100px;';
+
+        const select = document.createElement('select');
+        select.style.cssText = 'padding:6px 10px; background-color:var(--color-bg-input); color:var(--color-text); border:1px solid var(--color-border-input); border-radius:3px; font-size:12px; flex:1;';
+
+        const animations = this.databaseManager.data.animations || [];
+        for (let i = 1; i < animations.length; i++) {
+            if (!animations[i]) continue;
+            const option = document.createElement('option');
+            option.value = i;
+            option.textContent = `${i.toString().padStart(4, '0')}: ${animations[i].name || 'Unnamed'}`;
+            option.selected = (this.animationId === i);
+            select.appendChild(option);
+        }
+
+        select.addEventListener('change', (e) => { this.animationId = parseInt(e.target.value); });
+
+        section.appendChild(label);
+        section.appendChild(select);
+        return section;
+    }
+
+    buildCommand() {
+        return {
+            code: 337,
+            indent: 0,
+            parameters: [this.targetAll ? -1 : this.enemyIndex, this.animationId, this.targetAll]
+        };
+    }
+
+    save() {
+        if (this.callback) {
+            const command = this.buildCommand();
+            this.callback(command);
+        }
+        this.close();
+    }
+
+    close() {
+        if (this.modal) {
+            this.modal.style.display = 'none';
+        }
+    }
+}
+
+// Export
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = ShowBattleAnimationEditor;
+}

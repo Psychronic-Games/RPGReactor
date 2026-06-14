@@ -13,6 +13,21 @@ class ProjectManager {
         }
     }
 
+    getEngineVersion() {
+        if (!this.fs || !this.path || typeof process === 'undefined') {
+            return '0.0.0';
+        }
+
+        try {
+            const packagePath = this.path.join(process.cwd(), 'package.json');
+            const packageData = JSON.parse(this.fs.readFileSync(packagePath, 'utf8'));
+            return packageData.version || '0.0.0';
+        } catch (error) {
+            console.warn('Could not read RPG Reactor version from package.json:', error);
+            return '0.0.0';
+        }
+    }
+
     async createNewProject(targetPath, projectName) {
         if (!this.fs || !this.path) {
             console.error('File system not available');
@@ -24,7 +39,8 @@ class ProjectManager {
 
             // Get the template path (relative to current working directory in NW.js)
             const cwd = process.cwd();
-            const templatePath = this.path.join(cwd, 'template');
+            const templatePath = this.path.join(cwd, 'template', 'Demo');
+            const engineVersion = this.getEngineVersion();
 
             console.log('Looking for template at:', templatePath);
 
@@ -46,9 +62,9 @@ class ProjectManager {
             // Create RPG Reactor project file
             const projectData = {
                 name: projectName,
-                version: '0.1.0',
+                version: engineVersion,
                 engine: 'RPG Reactor',
-                engineVersion: '0.1.0',
+                engineVersion: engineVersion,
                 created: new Date().toISOString(),
                 modified: new Date().toISOString()
             };
@@ -118,11 +134,12 @@ class ProjectManager {
                 const rmmzFile = this.path.join(projectPath, 'game.rmmzproject');
                 if (this.fs.existsSync(rmmzFile)) {
                     // Import RPG Maker project
+                    const engineVersion = this.getEngineVersion();
                     projectData = {
                         name: this.path.basename(projectPath),
-                        version: '0.1.0',
+                        version: engineVersion,
                         engine: 'RPG Reactor',
-                        engineVersion: '0.1.0',
+                        engineVersion: engineVersion,
                         imported: true,
                         importedFrom: 'RPG Maker MZ',
                         path: projectPath
@@ -160,10 +177,33 @@ class ProjectManager {
             const { path, maps, ...dataToSave } = projectData;
 
             this.fs.writeFileSync(projectFilePath, JSON.stringify(dataToSave, null, 2));
+
+            // Save MapInfos.json if maps data exists
+            if (maps) {
+                this.saveMapInfos(projectData.path, maps);
+            }
+
             console.log('Project saved successfully!');
             return true;
         } catch (error) {
             console.error('Error saving project:', error);
+            return false;
+        }
+    }
+
+    saveMapInfos(projectPath, mapsData) {
+        if (!this.fs || !this.path) {
+            console.error('File system not available');
+            return false;
+        }
+
+        try {
+            const mapInfosPath = this.path.join(projectPath, 'data', 'MapInfos.json');
+            this.fs.writeFileSync(mapInfosPath, JSON.stringify(mapsData, null, 0)); // No formatting for RPG Maker compatibility
+            console.log('MapInfos.json saved successfully!');
+            return true;
+        } catch (error) {
+            console.error('Error saving MapInfos.json:', error);
             return false;
         }
     }

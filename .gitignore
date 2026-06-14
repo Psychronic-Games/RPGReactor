@@ -34,7 +34,6 @@ temp/
 # Complex template folder (keep only Barebones)
 template/Complex/
 
-# Template asset folders (too large for GitHub, provide separately)
-template/Barebones/audio/
-template/Barebones/img/
-template/Barebones/effects/
+# Build output directories
+dist/
+.nw-cache/

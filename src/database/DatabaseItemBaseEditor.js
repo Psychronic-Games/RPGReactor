@@ -16,7 +16,7 @@ class DatabaseItemBaseEditor {
     createIconSection(entry, type) {
         const iconSection = document.createElement('div');
         iconSection.className = 'database-section';
-        iconSection.style.borderBottom = '2px solid #007acc';
+        iconSection.style.borderBottom = '2px solid var(--color-link)';
         iconSection.innerHTML = '<div class="database-section-header">Icon</div>';
         const iconContent = document.createElement('div');
         iconContent.className = 'database-section-content';
@@ -93,7 +93,7 @@ class DatabaseItemBaseEditor {
                                     <td>${this.commonUI.getTraitValue(trait)}</td>
                                 </tr>
                             `).join('') :
-                            '<tr><td colspan="2" style="text-align: center; color: #999;">No traits</td></tr>'}
+                            '<tr><td colspan="2" style="text-align: center; color: var(--color-text-muted);">No traits</td></tr>'}
                     </tbody>
                 </table>
             </div>

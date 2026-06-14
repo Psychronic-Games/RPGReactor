@@ -7,9 +7,17 @@ class RegionManager {
         this.regionLayer = null;
         this.enabled = false;
         this.selectedRegion = 1; // Default region to paint
+        this.selectedTiles = [{ x: 0, y: 0, regionId: 1 }]; // Track selected region like tileset palette
 
         // RPG Maker MZ region colors (1-63 have predefined colors)
         this.regionColors = this.generateRegionColors();
+
+        // Canvas for region palette
+        this.canvas = null;
+        this.ctx = null;
+        this.tileSize = 48; // Match tileset palette tile size
+        this.columns = 8; // 8 columns of regions
+        this.rows = Math.ceil(256 / this.columns); // 256 regions (0-255), so 32 rows
     }
 
     // Generate color palette for regions (similar to RPG Maker MZ)
@@ -95,20 +103,21 @@ class RegionManager {
                     // Draw border
                     regionGraphic.stroke({ color: color, width: 1, alpha: 0.8 });
 
-                    // Add region number text
+                    // Add region number text (bigger and fully opaque)
                     const text = new PIXI.Text({
                         text: regionId.toString(),
                         style: {
                             fontFamily: 'Arial',
-                            fontSize: 12,
+                            fontSize: 18,
                             fontWeight: 'bold',
                             fill: 0xFFFFFF,
-                            stroke: { color: 0x000000, width: 3 }
+                            stroke: { color: 0x000000, width: 4, join: 'round' }
                         }
                     });
                     text.anchor.set(0.5, 0.5);
                     text.x = x * TILE_WIDTH + TILE_WIDTH / 2;
                     text.y = y * TILE_HEIGHT + TILE_HEIGHT / 2;
+                    text.alpha = 1.0; // Fully opaque text
 
                     this.regionLayer.addChild(regionGraphic);
                     this.regionLayer.addChild(text);
@@ -150,168 +159,113 @@ class RegionManager {
     // Initialize the region palette UI
     initializeUI(container) {
         container.innerHTML = `
-            <div id="region-palette-container" style="display: flex; flex-direction: column; height: 100%; background-color: #1e1e1e;">
-                <!-- Region Selector -->
-                <div style="padding: 8px; background-color: #252526; border-bottom: 1px solid #3e3e42;">
-                    <div style="font-size: 11px; color: #999; margin-bottom: 4px;">Selected Region</div>
-                    <div style="display: flex; gap: 8px; align-items: center;">
-                        <input
-                            type="number"
-                            id="region-selector-input"
-                            min="1"
-                            max="255"
-                            value="${this.selectedRegion}"
-                            style="
-                                width: 60px;
-                                background-color: #3e3e42;
-                                border: 1px solid #555;
-                                color: #ccc;
-                                padding: 4px 6px;
-                                font-size: 12px;
-                                border-radius: 3px;
-                            "
-                        />
-                        <div
-                            id="region-color-preview"
-                            style="
-                                width: 24px;
-                                height: 24px;
-                                border: 1px solid #555;
-                                border-radius: 3px;
-                                background-color: #${this.regionColors[this.selectedRegion].toString(16).padStart(6, '0')};
-                            "
-                        ></div>
-                        <button
-                            id="region-clear-btn"
-                            style="
-                                padding: 4px 8px;
-                                font-size: 11px;
-                                background-color: #d14949;
-                                border: 1px solid #555;
-                                color: #fff;
-                                border-radius: 3px;
-                                cursor: pointer;
-                            "
-                        >Clear (0)</button>
-                    </div>
+            <div id="region-palette-container" style="display: flex; flex-direction: column; height: 100%; background-color: var(--color-bg-surface);">
+                <!-- Region Info -->
+                <div id="region-selection-info" style="padding: 8px; background-color: var(--color-bg-list-item); border-bottom: 1px solid var(--color-border);">
+                    <div style="font-size: 11px; color: var(--color-text-muted);">Selected: Region <span id="selected-region-number">1</span></div>
                 </div>
 
-                <!-- Region Color Grid -->
-                <div style="flex: 1; overflow-y: auto; padding: 8px;">
-                    <div style="font-size: 11px; color: #999; margin-bottom: 8px;">Quick Select</div>
-                    <div id="region-grid" style="
-                        display: grid;
-                        grid-template-columns: repeat(8, 1fr);
-                        gap: 4px;
-                    ">
-                        ${this.createRegionGrid()}
-                    </div>
-                </div>
-
-                <!-- Region Tools -->
-                <div style="padding: 8px; background-color: #252526; border-top: 1px solid #3e3e42;">
-                    <button
-                        id="region-toggle-btn"
-                        style="
-                            width: 100%;
-                            padding: 8px;
-                            font-size: 12px;
-                            background-color: ${this.enabled ? '#007acc' : '#3e3e42'};
-                            border: 1px solid #555;
-                            color: #fff;
-                            border-radius: 3px;
-                            cursor: pointer;
-                        "
-                    >
-                        ${this.enabled ? '👁 Hide Regions' : '👁 Show Regions'}
-                    </button>
+                <!-- Region Palette Canvas (scrollable) -->
+                <div id="region-palette-scroll" style="flex: 1; overflow-y: auto; background-color: var(--color-bg-menubar);">
+                    <canvas id="region-palette-canvas" style="display: block; image-rendering: pixelated;"></canvas>
                 </div>
             </div>
         `;
 
-        this.setupUIEventListeners();
+        // Create and setup canvas
+        this.canvas = document.getElementById('region-palette-canvas');
+        if (this.canvas) {
+            this.ctx = this.canvas.getContext('2d');
+            this.setupCanvas();
+            this.renderRegionPalette();
+            this.setupPaletteEventListeners();
+        }
     }
 
-    // Create the region selection grid
-    createRegionGrid() {
-        let html = '';
-        // Show first 64 regions in grid
-        for (let i = 1; i <= 64; i++) {
+    // Setup canvas dimensions
+    setupCanvas() {
+        if (!this.canvas || !this.ctx) return;
+
+        const canvasWidth = this.columns * this.tileSize;
+        const canvasHeight = this.rows * this.tileSize;
+
+        this.canvas.width = canvasWidth;
+        this.canvas.height = canvasHeight;
+        this.canvas.style.width = canvasWidth + 'px';
+        this.canvas.style.height = canvasHeight + 'px';
+    }
+
+    // Render the region palette
+    renderRegionPalette() {
+        if (!this.ctx) return;
+
+        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+
+        // Draw all 256 regions (0-255)
+        for (let i = 0; i < 256; i++) {
+            const col = i % this.columns;
+            const row = Math.floor(i / this.columns);
+            const x = col * this.tileSize;
+            const y = row * this.tileSize;
+
+            // Draw region square
             const color = this.regionColors[i];
-            html += `
-                <div
-                    class="region-grid-item"
-                    data-region="${i}"
-                    style="
-                        width: 100%;
-                        aspect-ratio: 1;
-                        background-color: #${color.toString(16).padStart(6, '0')};
-                        border: 2px solid ${i === this.selectedRegion ? '#fff' : '#555'};
-                        border-radius: 3px;
-                        cursor: pointer;
-                        display: flex;
-                        align-items: center;
-                        justify-content: center;
-                        font-size: 10px;
-                        font-weight: bold;
-                        color: #fff;
-                        text-shadow: 0 0 2px #000, 0 0 2px #000;
-                        transition: transform 0.1s;
-                    "
-                    title="Region ${i}"
-                >${i}</div>
-            `;
+            this.ctx.fillStyle = '#' + color.toString(16).padStart(6, '0');
+            this.ctx.fillRect(x, y, this.tileSize, this.tileSize);
+
+            // Draw border
+            this.ctx.strokeStyle = '#555';
+            this.ctx.lineWidth = 1;
+            this.ctx.strokeRect(x, y, this.tileSize, this.tileSize);
+
+            // Draw region number (bigger and fully opaque)
+            this.ctx.fillStyle = '#fff';
+            this.ctx.font = 'bold 18px Arial';
+            this.ctx.textAlign = 'center';
+            this.ctx.textBaseline = 'middle';
+            this.ctx.strokeStyle = '#000';
+            this.ctx.lineWidth = 4;
+            this.ctx.lineJoin = 'round';
+            this.ctx.miterLimit = 2;
+            this.ctx.strokeText(i.toString(), x + this.tileSize / 2, y + this.tileSize / 2);
+            this.ctx.fillText(i.toString(), x + this.tileSize / 2, y + this.tileSize / 2);
         }
-        return html;
+
+        // Draw selection highlight
+        this.drawSelection();
     }
 
-    // Setup event listeners for region UI
-    setupUIEventListeners() {
-        // Region selector input
-        const input = document.getElementById('region-selector-input');
-        if (input) {
-            input.addEventListener('change', (e) => {
-                let value = parseInt(e.target.value);
-                value = Math.max(1, Math.min(255, value));
-                e.target.value = value;
-                this.selectRegion(value);
-            });
+    // Draw selection highlight on canvas
+    drawSelection() {
+        if (!this.ctx || !this.selectedTiles || this.selectedTiles.length === 0) return;
+
+        for (const tile of this.selectedTiles) {
+            const regionId = tile.regionId;
+            const col = regionId % this.columns;
+            const row = Math.floor(regionId / this.columns);
+            const x = col * this.tileSize;
+            const y = row * this.tileSize;
+
+            // Draw white selection border
+            this.ctx.strokeStyle = '#fff';
+            this.ctx.lineWidth = 3;
+            this.ctx.strokeRect(x + 1.5, y + 1.5, this.tileSize - 3, this.tileSize - 3);
         }
+    }
 
-        // Clear button (select region 0)
-        const clearBtn = document.getElementById('region-clear-btn');
-        if (clearBtn) {
-            clearBtn.addEventListener('click', () => {
-                this.selectRegion(0);
-                if (input) input.value = 0;
-            });
-        }
+    // Setup event listeners for palette canvas
+    setupPaletteEventListeners() {
+        if (!this.canvas) return;
 
-        // Toggle visibility button
-        const toggleBtn = document.getElementById('region-toggle-btn');
-        if (toggleBtn) {
-            toggleBtn.addEventListener('click', () => {
-                this.toggleRegions();
-                toggleBtn.style.backgroundColor = this.enabled ? '#007acc' : '#3e3e42';
-                toggleBtn.textContent = this.enabled ? '👁 Hide Regions' : '👁 Show Regions';
-            });
-        }
+        this.canvas.addEventListener('click', (e) => {
+            const rect = this.canvas.getBoundingClientRect();
+            const x = Math.floor((e.clientX - rect.left) / this.tileSize);
+            const y = Math.floor((e.clientY - rect.top) / this.tileSize);
+            const regionId = y * this.columns + x;
 
-        // Region grid items
-        document.querySelectorAll('.region-grid-item').forEach(item => {
-            item.addEventListener('click', () => {
-                const region = parseInt(item.dataset.region);
-                this.selectRegion(region);
-                if (input) input.value = region;
-            });
-
-            item.addEventListener('mouseenter', () => {
-                item.style.transform = 'scale(1.1)';
-            });
-
-            item.addEventListener('mouseleave', () => {
-                item.style.transform = 'scale(1)';
-            });
+            if (regionId >= 0 && regionId <= 255) {
+                this.selectRegion(regionId);
+            }
         });
     }
 
@@ -319,21 +273,19 @@ class RegionManager {
     selectRegion(regionId) {
         this.selectedRegion = regionId;
 
-        // Update color preview
-        const preview = document.getElementById('region-color-preview');
-        if (preview && regionId > 0) {
-            preview.style.backgroundColor = '#' + this.regionColors[regionId].toString(16).padStart(6, '0');
-        } else if (preview) {
-            preview.style.backgroundColor = '#000000';
+        // Update selectedTiles array (similar to tileset palette)
+        const col = regionId % this.columns;
+        const row = Math.floor(regionId / this.columns);
+        this.selectedTiles = [{ x: col, y: row, regionId: regionId }];
+
+        // Update selection info display
+        const regionNumberSpan = document.getElementById('selected-region-number');
+        if (regionNumberSpan) {
+            regionNumberSpan.textContent = regionId;
         }
 
-        // Update grid selection
-        document.querySelectorAll('.region-grid-item').forEach(item => {
-            const itemRegion = parseInt(item.dataset.region);
-            item.style.border = itemRegion === regionId ? '2px solid #fff' : '2px solid #555';
-        });
-
-        console.log(`Selected region: ${regionId}`);
+        // Redraw palette to show new selection
+        this.renderRegionPalette();
     }
 
     // Refresh the region overlay when map data changes

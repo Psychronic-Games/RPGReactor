@@ -1,4 +1,1 @@
-[
-null,
-{"id":1,"expanded":false,"name":"MAP001","order":1,"parentId":0,"scrollX":411.55555555555554,"scrollY":320.8888888888889}
-]
+[null,{"id":1,"expanded":false,"name":"MAP001","order":1,"parentId":0,"scrollX":411.55555555555554,"scrollY":320.8888888888889},{"id":2,"expanded":true,"name":"Station 37 - Crew Quarters Copy","order":2,"parentId":0,"scrollX":0,"scrollY":0},{"id":3,"expanded":false,"name":"Station 37 - Observation Hallway Copy","order":3,"parentId":0,"scrollX":0,"scrollY":0}]

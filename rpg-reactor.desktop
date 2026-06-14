@@ -1,0 +1,11 @@
+#!/usr/bin/env xdg-open
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=RPG Reactor
+Comment=Open-source RPG game engine
+Exec="/mnt/sda1/Dropbox/Family Room/SharedProduction/RPG Reactor/RPGReactor.sh"
+Icon=/mnt/sda1/Dropbox/Family Room/SharedProduction/RPG Reactor/images/icon.png
+Terminal=false
+Categories=Development;Game;
+StartupWMClass=rpg-reactor

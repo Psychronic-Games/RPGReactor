@@ -1,0 +1,498 @@
+/**
+ * BattleTestConfigModal - Configure party for battle testing
+ * Allows selecting actors, levels, and equipment before launching a battle test.
+ * Writes testBattlers/testTroopId to System.json and spawns NW.js with 'btest'.
+ */
+
+class BattleTestConfigModal {
+    constructor(databaseManager, project, troopId, battleback1Name, battleback2Name, playtestManager) {
+        this.databaseManager = databaseManager;
+        this.project = project;
+        this.troopId = troopId;
+        this.battleback1Name = battleback1Name;
+        this.battleback2Name = battleback2Name;
+        this.playtestManager = playtestManager;
+
+        // Party configuration: array of battler configs
+        this.battlers = [];
+        this.selectedBattlerIndex = 0;
+
+        // Initialize with default party from System.json testBattlers or actors
+        this.initializeBattlers();
+    }
+
+    initializeBattlers() {
+        const system = this.databaseManager.getSystem();
+        const existingBattlers = system && system.testBattlers;
+
+        if (existingBattlers && existingBattlers.length > 0) {
+            this.battlers = JSON.parse(JSON.stringify(existingBattlers));
+        } else {
+            // Default: first actor at level 1 with default equipment
+            const actors = this.databaseManager.getActors();
+            if (actors.length > 0) {
+                const actor = actors[0];
+                this.battlers = [{
+                    actorId: actor.id,
+                    level: actor.initialLevel || 1,
+                    equips: actor.equips ? [...actor.equips] : [0, 0, 0, 0, 0]
+                }];
+            } else {
+                this.battlers = [{
+                    actorId: 1,
+                    level: 1,
+                    equips: [0, 0, 0, 0, 0]
+                }];
+            }
+        }
+    }
+
+    show() {
+        this.modal = document.createElement('div');
+        this.modal.style.cssText = `
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background-color: rgba(0, 0, 0, 0.8); display: flex;
+            align-items: center; justify-content: center; z-index: 10002;
+        `;
+
+        const dialog = document.createElement('div');
+        dialog.style.cssText = `
+            background-color: var(--color-bg-surface); border: 1px solid var(--color-border); border-radius: 8px;
+            padding: 20px; width: 520px; max-width: 90vw; max-height: 85vh;
+            display: flex; flex-direction: column;
+        `;
+
+        // Title
+        const title = document.createElement('h3');
+        title.textContent = 'Battle Test Configuration';
+        title.style.cssText = 'margin: 0 0 16px 0; color: var(--color-text-strong); font-size: 15px;';
+        dialog.appendChild(title);
+
+        // Battler tabs row
+        const tabsRow = document.createElement('div');
+        tabsRow.id = 'btest-tabs-row';
+        tabsRow.style.cssText = 'display: flex; align-items: center; gap: 4px; margin-bottom: 12px; flex-wrap: wrap;';
+        dialog.appendChild(tabsRow);
+
+        // Battler config area
+        const configArea = document.createElement('div');
+        configArea.id = 'btest-config-area';
+        configArea.style.cssText = 'flex: 1; overflow-y: auto;';
+        dialog.appendChild(configArea);
+
+        // Buttons
+        const btnRow = document.createElement('div');
+        btnRow.style.cssText = 'display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; flex-shrink: 0;';
+
+        const cancelBtn = this.createButton('Cancel', () => this.close());
+        cancelBtn.style.backgroundColor = 'var(--color-bg-button)';
+        cancelBtn.onmouseenter = () => { cancelBtn.style.backgroundColor = 'var(--color-accent-tint-25)'; cancelBtn.style.borderColor = 'var(--color-accent)'; };
+        cancelBtn.onmouseleave = () => { cancelBtn.style.backgroundColor = 'var(--color-bg-button)'; cancelBtn.style.borderColor = 'var(--color-text-dim)'; };
+
+        const okBtn = document.createElement('button');
+        okBtn.textContent = 'OK';
+        okBtn.style.cssText = 'padding: 8px 16px; background-color: var(--color-accent); color: var(--color-bg-deep); border: 1px solid var(--color-accent); border-radius: 4px; cursor: pointer; font-weight: bold;';
+        okBtn.onmouseenter = () => { okBtn.style.backgroundColor = 'var(--color-accent-muted)'; };
+        okBtn.onmouseleave = () => { okBtn.style.backgroundColor = 'var(--color-accent)'; };
+        okBtn.onclick = () => this.launch();
+
+        btnRow.appendChild(cancelBtn);
+        btnRow.appendChild(okBtn);
+        dialog.appendChild(btnRow);
+
+        this.modal.appendChild(dialog);
+        this.modal.onclick = (e) => { if (e.target === this.modal) this.close(); };
+        document.body.appendChild(this.modal);
+
+        this.renderTabs();
+        this.renderConfig();
+    }
+
+    close() {
+        if (this.modal && this.modal.parentNode) {
+            document.body.removeChild(this.modal);
+        }
+    }
+
+    createButton(label, onclick) {
+        const btn = document.createElement('button');
+        btn.textContent = label;
+        btn.style.cssText = 'padding: 8px 16px; background-color: var(--color-bg-panel); color: var(--color-text-strong); border: 1px solid var(--color-text-dim); border-radius: 4px; cursor: pointer;';
+        btn.onmouseenter = () => { btn.style.backgroundColor = 'var(--color-accent-tint-35)'; btn.style.borderColor = 'var(--color-bg-deep)'; };
+        btn.onmouseleave = () => { btn.style.backgroundColor = 'var(--color-bg-panel)'; btn.style.borderColor = 'var(--color-text-dim)'; };
+        btn.onclick = onclick;
+        return btn;
+    }
+
+    // ==========================================
+    // TABS
+    // ==========================================
+
+    renderTabs() {
+        const row = document.getElementById('btest-tabs-row');
+        if (!row) return;
+        row.innerHTML = '';
+
+        const actors = this.databaseManager.getActors();
+
+        this.battlers.forEach((battler, idx) => {
+            const actor = this.databaseManager.getActor(battler.actorId);
+            const tab = document.createElement('button');
+            tab.textContent = actor ? actor.name : `Actor #${battler.actorId}`;
+            tab.style.cssText = `
+                padding: 4px 12px; border: 1px solid var(--color-border-input); border-radius: 3px; cursor: pointer; font-size: 12px;
+                ${idx === this.selectedBattlerIndex
+                    ? 'background-color: var(--color-accent-tint-30); color: var(--color-text-strong); border-color: var(--color-accent-bright);'
+                    : 'background-color: var(--color-bg-menubar); color: var(--color-text-muted);'}
+            `;
+            tab.onclick = () => {
+                this.selectedBattlerIndex = idx;
+                this.renderTabs();
+                this.renderConfig();
+            };
+            row.appendChild(tab);
+        });
+
+        // Add button
+        const addBtn = document.createElement('button');
+        addBtn.textContent = '+';
+        addBtn.title = 'Add party member';
+        addBtn.style.cssText = 'padding: 4px 10px; background-color: var(--color-bg-menubar); color: var(--color-text); border: 1px solid var(--color-border-input); border-radius: 3px; cursor: pointer; font-size: 14px;';
+        addBtn.onmouseenter = () => { addBtn.style.backgroundColor = 'var(--color-accent-tint-25)'; };
+        addBtn.onmouseleave = () => { addBtn.style.backgroundColor = 'var(--color-bg-menubar)'; };
+        addBtn.onclick = () => this.addBattler();
+        row.appendChild(addBtn);
+
+        // Remove button
+        if (this.battlers.length > 1) {
+            const removeBtn = document.createElement('button');
+            removeBtn.textContent = '\u2212';
+            removeBtn.title = 'Remove selected party member';
+            removeBtn.style.cssText = 'padding: 4px 10px; background-color: var(--color-bg-menubar); color: #f44; border: 1px solid var(--color-border-input); border-radius: 3px; cursor: pointer; font-size: 14px;';
+            removeBtn.onmouseenter = () => { removeBtn.style.backgroundColor = 'rgba(255, 100, 100, 0.2)'; };
+            removeBtn.onmouseleave = () => { removeBtn.style.backgroundColor = 'var(--color-bg-menubar)'; };
+            removeBtn.onclick = () => this.removeBattler();
+            row.appendChild(removeBtn);
+        }
+    }
+
+    addBattler() {
+        const actors = this.databaseManager.getActors();
+        if (actors.length === 0) return;
+        // Pick the next actor not already in party, or default to first
+        const usedIds = this.battlers.map(b => b.actorId);
+        const nextActor = actors.find(a => !usedIds.includes(a.id)) || actors[0];
+        this.battlers.push({
+            actorId: nextActor.id,
+            level: nextActor.initialLevel || 1,
+            equips: nextActor.equips ? [...nextActor.equips] : [0, 0, 0, 0, 0]
+        });
+        this.selectedBattlerIndex = this.battlers.length - 1;
+        this.renderTabs();
+        this.renderConfig();
+    }
+
+    removeBattler() {
+        if (this.battlers.length <= 1) return;
+        this.battlers.splice(this.selectedBattlerIndex, 1);
+        if (this.selectedBattlerIndex >= this.battlers.length) {
+            this.selectedBattlerIndex = this.battlers.length - 1;
+        }
+        this.renderTabs();
+        this.renderConfig();
+    }
+
+    // ==========================================
+    // CONFIG AREA
+    // ==========================================
+
+    renderConfig() {
+        const area = document.getElementById('btest-config-area');
+        if (!area) return;
+        area.innerHTML = '';
+
+        if (this.battlers.length === 0) {
+            area.innerHTML = '<div style="color: var(--color-text-dim); text-align: center; padding: 20px;">No party members</div>';
+            return;
+        }
+
+        const battler = this.battlers[this.selectedBattlerIndex];
+        const actors = this.databaseManager.getActors();
+        const system = this.databaseManager.getSystem() || {};
+        const equipTypes = system.equipTypes || [];
+        const weaponTypes = system.weaponTypes || [];
+        const armorTypes = system.armorTypes || [];
+
+        // Actor selector
+        const actorRow = this.createFormRow('Actor:');
+        const actorSelect = document.createElement('select');
+        actorSelect.style.cssText = 'flex: 1; background: var(--color-bg-menubar); border: 1px solid var(--color-border-input); color: var(--color-text); padding: 4px; border-radius: 3px;';
+        actors.forEach(actor => {
+            const opt = document.createElement('option');
+            opt.value = actor.id;
+            opt.textContent = `#${actor.id} ${actor.name}`;
+            if (actor.id === battler.actorId) opt.selected = true;
+            actorSelect.appendChild(opt);
+        });
+        actorSelect.onchange = () => {
+            const newActorId = parseInt(actorSelect.value);
+            const newActor = this.databaseManager.getActor(newActorId);
+            battler.actorId = newActorId;
+            battler.level = (newActor && newActor.initialLevel) || 1;
+            battler.equips = (newActor && newActor.equips) ? [...newActor.equips] : [0, 0, 0, 0, 0];
+            this.renderTabs();
+            this.renderConfig();
+        };
+        actorRow.appendChild(actorSelect);
+        area.appendChild(actorRow);
+
+        // Level
+        const levelRow = this.createFormRow('Level:');
+        const levelInput = document.createElement('input');
+        levelInput.type = 'number';
+        levelInput.min = 1;
+        levelInput.max = 99;
+        levelInput.value = battler.level || 1;
+        levelInput.style.cssText = 'width: 60px; background: var(--color-bg-menubar); border: 1px solid var(--color-border-input); color: var(--color-text); padding: 4px; border-radius: 3px;';
+        levelInput.onchange = () => {
+            battler.level = Math.max(1, Math.min(99, parseInt(levelInput.value) || 1));
+            levelInput.value = battler.level;
+            this.renderStats(area, battler);
+        };
+        levelRow.appendChild(levelInput);
+        area.appendChild(levelRow);
+
+        // Equipment
+        const equipHeader = document.createElement('div');
+        equipHeader.style.cssText = 'color: var(--color-text-muted); font-size: 12px; font-weight: 500; margin: 12px 0 6px 0; border-bottom: 1px solid var(--color-border); padding-bottom: 4px;';
+        equipHeader.textContent = 'Equipment';
+        area.appendChild(equipHeader);
+
+        const actor = this.databaseManager.getActor(battler.actorId);
+        const equipSlots = this.getEquipSlots(actor);
+
+        // Ensure equips array is long enough
+        while (battler.equips.length < equipSlots.length) {
+            battler.equips.push(0);
+        }
+
+        equipSlots.forEach((etypeId, slotIndex) => {
+            const slotName = equipTypes[etypeId] || `Slot ${slotIndex + 1}`;
+            const row = this.createFormRow(slotName + ':');
+
+            const select = document.createElement('select');
+            select.style.cssText = 'flex: 1; background: var(--color-bg-menubar); border: 1px solid var(--color-border-input); color: var(--color-text); padding: 4px; border-radius: 3px; font-size: 12px;';
+            select.innerHTML = '<option value="0">(None)</option>';
+
+            if (etypeId === 1) {
+                // Weapon slot
+                const weapons = this.databaseManager.getWeapons();
+                weapons.forEach(weapon => {
+                    if (weapon) {
+                        const wtype = weaponTypes[weapon.wtypeId] || 'Weapon';
+                        const selected = weapon.id === battler.equips[slotIndex] ? 'selected' : '';
+                        select.innerHTML += `<option value="${weapon.id}" ${selected}>${weapon.name} (${wtype})</option>`;
+                    }
+                });
+            } else {
+                // Armor slot
+                const armors = this.databaseManager.getArmors();
+                armors.forEach(armor => {
+                    if (armor && armor.etypeId === etypeId) {
+                        const atype = armorTypes[armor.atypeId] || 'Armor';
+                        const selected = armor.id === battler.equips[slotIndex] ? 'selected' : '';
+                        select.innerHTML += `<option value="${armor.id}" ${selected}>${armor.name} (${atype})</option>`;
+                    }
+                });
+            }
+
+            select.onchange = () => {
+                battler.equips[slotIndex] = parseInt(select.value);
+                this.renderStats(area, battler);
+            };
+
+            row.appendChild(select);
+            area.appendChild(row);
+        });
+
+        // Stats display
+        const statsHeader = document.createElement('div');
+        statsHeader.style.cssText = 'color: var(--color-text-muted); font-size: 12px; font-weight: 500; margin: 12px 0 6px 0; border-bottom: 1px solid var(--color-border); padding-bottom: 4px;';
+        statsHeader.textContent = 'Stats';
+        area.appendChild(statsHeader);
+
+        const statsContainer = document.createElement('div');
+        statsContainer.id = 'btest-stats-display';
+        area.appendChild(statsContainer);
+
+        this.renderStats(area, battler);
+    }
+
+    renderStats(area, battler) {
+        const container = document.getElementById('btest-stats-display');
+        if (!container) return;
+        container.innerHTML = '';
+
+        const stats = this.calculateStats(battler);
+        const paramNames = ['Max HP', 'Max MP', 'ATK', 'DEF', 'MAT', 'MDF', 'AGI', 'LUK'];
+
+        const grid = document.createElement('div');
+        grid.style.cssText = 'display: grid; grid-template-columns: 1fr 1fr; gap: 4px 16px;';
+
+        paramNames.forEach((name, idx) => {
+            const row = document.createElement('div');
+            row.style.cssText = 'display: flex; justify-content: space-between; font-size: 12px;';
+            row.innerHTML = `<span style="color: var(--color-text-muted);">${name}:</span><span style="color: var(--color-text);">${stats[idx]}</span>`;
+            grid.appendChild(row);
+        });
+
+        container.appendChild(grid);
+    }
+
+    calculateStats(battler) {
+        const actor = this.databaseManager.getActor(battler.actorId);
+        if (!actor) return [0, 0, 0, 0, 0, 0, 0, 0];
+
+        const classData = this.databaseManager.getClass(actor.classId);
+        if (!classData || !classData.params) return [0, 0, 0, 0, 0, 0, 0, 0];
+
+        const level = Math.max(1, Math.min(99, battler.level || 1));
+        const stats = [];
+
+        for (let paramIdx = 0; paramIdx < 8; paramIdx++) {
+            // Base stat from class curve at level
+            let base = 0;
+            if (classData.params[paramIdx] && classData.params[paramIdx][level] !== undefined) {
+                base = classData.params[paramIdx][level];
+            }
+
+            // Add equipment bonuses
+            let equipBonus = 0;
+            if (battler.equips) {
+                const equipSlots = this.getEquipSlots(actor);
+                battler.equips.forEach((equipId, slotIndex) => {
+                    if (equipId <= 0) return;
+                    const etypeId = equipSlots[slotIndex];
+                    let item = null;
+                    if (etypeId === 1) {
+                        item = this.databaseManager.getWeapon(equipId);
+                    } else {
+                        item = this.databaseManager.getArmor(equipId);
+                    }
+                    if (item && item.params && item.params[paramIdx] !== undefined) {
+                        equipBonus += item.params[paramIdx];
+                    }
+                });
+            }
+
+            stats.push(base + equipBonus);
+        }
+
+        return stats;
+    }
+
+    getEquipSlots(actor) {
+        const system = this.databaseManager.getSystem();
+        if (!system || !system.equipTypes) {
+            return [1, 2, 3, 4, 5];
+        }
+
+        const slots = [];
+        for (let i = 1; i < system.equipTypes.length; i++) {
+            slots.push(i);
+        }
+
+        // Check for dual-wield trait (code 55, dataId 1)
+        if (slots.length >= 2 && this.isDualWield(actor)) {
+            slots[1] = 1;
+        }
+
+        return slots;
+    }
+
+    isDualWield(actor) {
+        if (!actor) return false;
+        if (actor.traits) {
+            for (const trait of actor.traits) {
+                if (trait.code === 55 && trait.dataId === 1) return true;
+            }
+        }
+        const actorClass = this.databaseManager.getClass(actor.classId);
+        if (actorClass && actorClass.traits) {
+            for (const trait of actorClass.traits) {
+                if (trait.code === 55 && trait.dataId === 1) return true;
+            }
+        }
+        return false;
+    }
+
+    createFormRow(label) {
+        const row = document.createElement('div');
+        row.style.cssText = 'display: flex; align-items: center; gap: 8px; margin-bottom: 6px;';
+        const labelEl = document.createElement('label');
+        labelEl.style.cssText = 'width: 80px; color: var(--color-text-muted); font-size: 12px; text-align: right; flex-shrink: 0;';
+        labelEl.textContent = label;
+        row.appendChild(labelEl);
+        return row;
+    }
+
+    // ==========================================
+    // LAUNCH
+    // ==========================================
+
+    async launch() {
+        const system = this.databaseManager.getSystem();
+        if (!system) {
+            alert('System data not available');
+            return;
+        }
+
+        system.testBattlers = this.battlers;
+        system.testTroopId = this.troopId;
+        system.battleback1Name = this.battleback1Name;
+        system.battleback2Name = this.battleback2Name;
+
+        const path = require('path');
+        const fs = require('fs');
+        const dataDir = path.join(this.project.path, 'data');
+
+        // The game engine loads Test_-prefixed files in btest mode.
+        // Write all database files with Test_ prefix so the game has current data.
+        const dm = this.databaseManager;
+        const testFiles = [
+            ['Actors.json', dm.data.actors],
+            ['Classes.json', dm.data.classes],
+            ['Skills.json', dm.data.skills],
+            ['Items.json', dm.data.items],
+            ['Weapons.json', dm.data.weapons],
+            ['Armors.json', dm.data.armors],
+            ['Enemies.json', dm.data.enemies],
+            ['Troops.json', dm.data.troops],
+            ['States.json', dm.data.states],
+            ['Animations.json', dm.data.animations],
+            ['Tilesets.json', dm.data.tilesets],
+            ['CommonEvents.json', dm.data.commonEvents],
+            ['System.json', system],
+            ['MapInfos.json', dm.data.mapInfos],
+        ];
+
+        try {
+            for (const [filename, data] of testFiles) {
+                fs.writeFileSync(path.join(dataDir, 'Test_' + filename), JSON.stringify(data));
+            }
+        } catch (e) {
+            alert('Failed to write test data: ' + e.message);
+            return;
+        }
+
+        // Also save normal System.json so testTroopId persists
+        try {
+            fs.writeFileSync(path.join(dataDir, 'System.json'), JSON.stringify(system, null, 2));
+        } catch (e) {
+            // Non-fatal, test files are what matter
+        }
+
+        this.close();
+        this.playtestManager.battleTest(this.project.path);
+    }
+}

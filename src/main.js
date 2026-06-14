@@ -9,11 +9,13 @@ class RPGReactor {
 
         // UI and Controller layer
         this.uiManager = null;
-        this.rendererManager = null;
         this.projectController = null;
         this.audioPlayer = null;
         this.playtestManager = null;
         this.databaseEditorUI = null;
+        this.sidebarResizer = null;
+        this.buildManager = null;
+        this.pluginManager = null;
 
         // Map editing subsystems
         this.tilemapManager = null;
@@ -21,13 +23,21 @@ class RPGReactor {
         this.mapEditor = null;
         this.tilesetEditor = null;
         this.tilesetPaletteViewer = null;
+        this.eventManager = null;
+
+        // PERFORMANCE: Cache last displayed coordinates to avoid unnecessary DOM updates
+        this.lastDisplayedCoords = { x: null, y: null };
 
         // Initialize
         this.init();
     }
 
     async init() {
-        console.log('RPG Reactor initializing...');
+        // Set application icon for taskbar/dock (important for Linux)
+        this.setApplicationIcon();
+
+        // Initialize performance profiler
+        window.perfProfiler = new PerformanceProfiler();
 
         // Wait for DOM to be ready
         if (document.readyState === 'loading') {
@@ -35,6 +45,10 @@ class RPGReactor {
                 document.addEventListener('DOMContentLoaded', resolve);
             });
         }
+
+        // Initialize Effekseer runtime for animation previews (delayed to ensure library is loaded)
+        // Use setTimeout to allow Effekseer library to fully initialize
+        setTimeout(() => this.initEffekseer(), 100);
 
         // Initialize UI Manager with callbacks to this main app
         this.uiManager = new UIManager({
@@ -46,12 +60,31 @@ class RPGReactor {
             playtest: () => this.playtest(),
             openDatabase: (type) => this.openDatabase(type),
             showAudioPlayer: () => this.audioPlayer.showAudioPlayer(),
+            showOptions: () => this.optionsManager.show(),
+            showForgeLauncher: () => this.forgeManager.showLauncher(),
+            openForgeTool: (toolId) => this.forgeManager.openTool(toolId),
+            showPluginManager: () => this.showPluginManager(),
             showAbout: () => this.showAbout(),
-            getMapEditor: () => this.mapEditor
+            getMapEditor: () => this.mapEditor,
+            getEventManager: () => this.eventManager,
+            toggleEventMode: () => this.toggleEventMode(),
+            disableEventModeIfActive: () => this.disableEventModeIfActive(),
+            openBuildManager: () => this.buildManager.open(),
+            openDistEditor: () => this.distEditorManager.open()
         });
 
-        // Initialize Renderer Manager
-        this.rendererManager = new RendererManager();
+        // Initialize Sidebar Resizer for resizable panels
+        this.sidebarResizer = new SidebarResizer();
+        this.sidebarResizer.initialize();
+
+        // Keep sidebar layout correct on window resize and scale toolbar icons
+        window.addEventListener('resize', () => {
+            if (this.sidebarResizer) {
+                this.sidebarResizer.refresh();
+            }
+            this.resetSidebarScroll();
+            this.scaleToolbarIcons();
+        });
 
         // Initialize Project Controller
         this.projectController = new ProjectController(
@@ -62,24 +95,155 @@ class RPGReactor {
 
         // Set up callback for when maps are loaded
         this.projectController.onMapLoaded = () => {
+            // Remember current event mode state
+            const wasInEventMode = this.eventManager ? this.eventManager.eventMode : false;
+
             this.showTilesetPalette();
 
-            // Initialize map editor for tile painting
+            // Initialize or recreate map editor for tile painting
             if (!this.mapEditor && this.tilesetPaletteViewer) {
                 this.mapEditor = new MapEditor(
                     this.projectController.getTilemapManager(),
                     this.tilesetPaletteViewer
                 );
-                this.mapEditor.setupMapInteraction();
-                console.log('Map editor initialized');
+
+                // Give palette viewer reference to map editor for auto-toggling erase mode
+                this.tilesetPaletteViewer.setMapEditor(this.mapEditor);
+
+                // Set region manager reference
+                this.mapEditor.setRegionManager(this.projectController.getRegionManager());
+
+                // Set up coordinate tracking callback for tileset mode
+                this.mapEditor.onCoordinatesChange = (x, y) => {
+                    this.updateMapCoordinates(x, y);
+                };
+
+                // Set up undo/redo state change callback
+                this.mapEditor.onUndoStateChange = (canUndo, canRedo) => {
+                    this.uiManager.updateUndoRedoButtons(canUndo, canRedo);
+                };
+
+                // Register with project controller so it can update references when switching projects
+                this.projectController.setMapEditor(this.mapEditor);
+
+                // PERFORMANCE: Wrap MapEditor methods for profiling
+                if (window.perfProfiler) {
+                    perfProfiler.wrapMethod(this.mapEditor, 'paintTile', 'MapEditor');
+                    perfProfiler.wrapMethod(this.mapEditor, 'updateTilePreview', 'MapEditor');
+                    perfProfiler.wrapMethod(this.mapEditor, 'hideTilePreview', 'MapEditor');
+                    perfProfiler.wrapMethod(this.mapEditor, 'toggleShadow', 'MapEditor');
+                    perfProfiler.wrapMethod(this.mapEditor, 'paintRectangle', 'MapEditor');
+                    perfProfiler.wrapMethod(this.mapEditor, 'paintCircle', 'MapEditor');
+                    perfProfiler.wrapMethod(this.mapEditor, 'eraseTile', 'MapEditor');
+                }
+            } else if (this.mapEditor) {
+                // Update MapEditor's references in case they changed (e.g., project switch)
+                // This ensures it has the current TilemapManager
+                this.mapEditor.tilemapManager = this.projectController.getTilemapManager();
+                this.mapEditor.regionManager = this.projectController.getRegionManager();
             }
+
+            // Re-setup map interaction for the new map (important when switching maps)
+            if (this.mapEditor) {
+                this.mapEditor.setupMapInteraction();
+
+                // Clear undo history when loading a new map
+                this.mapEditor.clearUndoHistory();
+            }
+
+            // Initialize event manager
+            if (!this.eventManager) {
+                this.eventManager = new EventManager(
+                    this.projectController,
+                    this.databaseManager
+                );
+
+                // Set sidebar resizer reference
+                if (this.sidebarResizer) {
+                    this.eventManager.setSidebarResizer(this.sidebarResizer);
+                }
+
+            }
+
+            // Always reinitialize event layer with current TilemapManager
+            // This is important when switching projects or maps
+            this.eventManager.initializeEventLayer(this.projectController.getTilemapManager());
+            this.projectController.eventManager = this.eventManager;
+
+            // Set current map for event manager
+            if (this.eventManager) {
+                const currentMap = this.projectController.getTilemapManager().currentMap;
+                this.eventManager.setCurrentMap(currentMap);
+
+                // Set up coordinate tracking callback
+                this.eventManager.onCoordinatesChange = (x, y) => {
+                    this.updateMapCoordinates(x, y);
+                };
+
+                // Set up undo/redo state change callback
+                this.eventManager.onUndoStateChange = (canUndo, canRedo) => {
+                    this.uiManager.updateUndoRedoButtons(canUndo, canRedo);
+                };
+
+                // Clear undo history when loading a new map
+                this.eventManager.clearUndoHistory();
+            }
+
+            // Set up zoom change callback
+            const tilemapManager = this.projectController.getTilemapManager();
+            if (tilemapManager) {
+                tilemapManager.onZoomChange = () => {
+                    this.updateMapZoom();
+                };
+            }
+
+            // Restore event mode state if it was on
+            if (wasInEventMode && this.eventManager) {
+                this.eventManager.setEventMode(true);
+                if (this.mapEditor) {
+                    this.mapEditor.setEnabled(false);
+                }
+                // Make sure button shows active state
+                const button = document.getElementById('toolbar-event-manager-btn');
+                if (button) {
+                    button.classList.add('active');
+                }
+            } else {
+                // Make sure tileset mode is properly enabled
+                if (this.mapEditor) {
+                    this.mapEditor.setEnabled(true);
+                }
+                // Make sure button shows inactive state
+                const button = document.getElementById('toolbar-event-manager-btn');
+                if (button) {
+                    button.classList.remove('active');
+                }
+            }
+
+            // Update map info banner
+            this.updateMapInfoBanner();
         };
 
         // Initialize Audio Player
         this.audioPlayer = new AudioPlayer();
 
+        // Initialize Options Manager (theme/preferences modal)
+        this.optionsManager = new OptionsManager();
+
+        // Initialize Forge tool suite (character generator etc.)
+        this.forgeManager = new ForgeManager(this.projectController);
+
         // Initialize Playtest Manager
         this.playtestManager = new PlaytestManager();
+
+        // Initialize Build Manager
+        this.buildManager = new BuildManager();
+
+        // Initialize Editor Distribution Manager
+        this.distEditorManager = new DistEditorManager();
+
+        // Initialize Plugin Manager
+        this.pluginManager = new PluginManager(this.projectController);
 
         // Set up UI event handlers
         this.uiManager.setupEventHandlers();
@@ -93,38 +257,25 @@ class RPGReactor {
         // Set up database navigation
         this.setupDatabaseNavigation();
 
+        // PERFORMANCE: Wrap main.js methods for profiling
+        if (window.perfProfiler) {
+            perfProfiler.wrapMethod(this, 'updateMapCoordinates', 'Main');
+        }
+
         // Start with welcome screen (Pixi will initialize when project loads)
         this.uiManager.showWelcomeScreen();
 
-        console.log('RPG Reactor initialized successfully!');
-        console.log('Pixi.js version:', PIXI.VERSION);
+        // DevTools can be toggled via Help > Developer Tools or F12
 
-        if (typeof nw !== 'undefined') {
-            console.log('NW.js version:', nw.process.versions['nw']);
-            console.log('Chromium version:', nw.process.versions['chromium']);
+        // Pixi is initialized in ProjectController, no RendererManager needed
 
-            // Force open DevTools for debugging
-            setTimeout(() => {
-                const win = nw.Window.get();
-                console.log('Attempting to open DevTools...');
-                console.log('Window object:', win);
-                console.log('showDevTools method exists:', typeof win.showDevTools === 'function');
-                win.showDevTools();
-            }, 500);
-        }
-
-        // Set up a callback for when projects are loaded to initialize renderer
-        const originalShowEditorUI = this.uiManager.showEditorUI.bind(this.uiManager);
-        this.uiManager.showEditorUI = async () => {
-            // Initialize Pixi BEFORE showing editor UI
-            if (!this.rendererManager.getApp()) {
-                await this.rendererManager.initPixi();
-                this.projectController.setRendererApp(this.rendererManager.getApp());
+        // Disable browser context menu on canvas and canvas container
+        document.addEventListener('contextmenu', (e) => {
+            if (e.target.tagName === 'CANVAS' || e.target.id === 'canvas-container') {
+                e.preventDefault();
+                return false;
             }
-
-            // Then show the UI
-            originalShowEditorUI();
-        };
+        });
 
         // Auto-load last opened project
         await this.projectController.checkAutoLoadProject();
@@ -148,11 +299,20 @@ class RPGReactor {
     }
 
     // Playtest orchestration
-    playtest() {
+    async playtest() {
         const project = this.projectController.getCurrentProject();
         if (!project) {
             this.uiManager.updateStatus('No project loaded');
             return;
+        }
+
+        if (this.projectController.repairInvalidSystemMapReferences) {
+            await this.projectController.repairInvalidSystemMapReferences();
+        }
+
+        // Stop any audio playing in the editor before launching playtest
+        if (this.audioPlayer) {
+            this.audioPlayer.stopExternal();
         }
 
         const success = this.playtestManager.playtest(project.path);
@@ -163,22 +323,153 @@ class RPGReactor {
 
     // Show about dialog
     showAbout() {
-        console.log('showAbout() called');
         const modal = document.getElementById('about-modal');
-        console.log('About modal element:', modal);
         if (modal) {
-            console.log('Setting about modal display to flex');
             modal.style.display = 'flex';
+        }
+    }
+
+    // Show plugin manager
+    showPluginManager() {
+        if (!this.projectController.isProjectLoaded()) {
+            alert('Please load a project first.');
+            return;
+        }
+        if (this.pluginManager) {
+            this.pluginManager.show();
+        }
+    }
+
+    // Toggle event mode
+    toggleEventMode() {
+        if (!this.eventManager) {
+            this.uiManager.updateStatus('Load a map first');
+            return;
+        }
+
+        // Ensure event manager has reference to tileset palette viewer
+        if (this.tilesetPaletteViewer) {
+            this.eventManager.setTilesetPaletteViewer(this.tilesetPaletteViewer);
+        }
+
+        // Toggle event mode
+        const newMode = !this.eventManager.eventMode;
+        this.eventManager.setEventMode(newMode);
+
+        // Disable/enable map editor based on event mode
+        if (this.mapEditor) {
+            this.mapEditor.setEnabled(!newMode);
+            // Disable shadow pen when entering event mode
+            if (newMode && this.mapEditor.shadowPenMode) {
+                this.mapEditor.setShadowPenMode(false);
+            }
+            // Re-setup map interaction when returning to tileset mode
+            if (!newMode) {
+                this.mapEditor.setupMapInteraction();
+            }
+        }
+
+        // Clear tileset palette selection when entering event mode
+        if (newMode && this.tilesetPaletteViewer) {
+            this.tilesetPaletteViewer.clearSelection();
+        }
+
+        // Deselect all tileset tool buttons when entering event mode
+        if (newMode) {
+            document.querySelectorAll('.tool-draw-mode').forEach(btn => {
+                btn.classList.remove('active');
+            });
         } else {
-            console.error('about-modal element not found!');
+            // Re-select the default tool (pencil) when exiting event mode
+            if (this.mapEditor) {
+                this.mapEditor.setTool('pencil');
+            }
+            document.querySelectorAll('.tool-draw-mode').forEach(btn => {
+                btn.classList.remove('active');
+                if (btn.dataset.tool === 'pencil') {
+                    btn.classList.add('active');
+                }
+            });
+        }
+
+        // Update button appearance
+        const button = document.getElementById('toolbar-event-manager-btn');
+        if (button) {
+            if (newMode) {
+                button.classList.add('active');
+            } else {
+                button.classList.remove('active');
+            }
+        }
+
+        // Update undo/redo button states based on the current mode
+        if (newMode) {
+            // Event mode - update buttons based on event manager undo state
+            this.uiManager.updateUndoRedoButtons(
+                this.eventManager.canUndo(),
+                this.eventManager.canRedo()
+            );
+        } else {
+            // Map editor mode - update buttons based on map editor undo state
+            if (this.mapEditor) {
+                this.uiManager.updateUndoRedoButtons(
+                    this.mapEditor.canUndo(),
+                    this.mapEditor.canRedo()
+                );
+            }
+        }
+
+        // Update status
+        this.uiManager.updateStatus(newMode ? 'Event mode enabled' : 'Event mode disabled');
+    }
+
+    // Disable event mode if currently active (called when switching to tileset tools)
+    disableEventModeIfActive() {
+        if (!this.eventManager) return;
+
+        // If event mode is currently active, deactivate it
+        if (this.eventManager.eventMode) {
+
+            this.eventManager.setEventMode(false);
+
+            // Enable map editor
+            if (this.mapEditor) {
+                this.mapEditor.setEnabled(true);
+                // Re-setup map interaction when returning to tileset mode
+                this.mapEditor.setupMapInteraction();
+            }
+
+            // Clear tileset selection (important to prevent janky behavior)
+            if (this.tilesetPaletteViewer) {
+                this.tilesetPaletteViewer.clearSelection();
+            }
+
+            // Re-select the default tool (pencil)
+            if (this.mapEditor) {
+                this.mapEditor.setTool('pencil');
+            }
+            document.querySelectorAll('.tool-draw-mode').forEach(btn => {
+                btn.classList.remove('active');
+                if (btn.dataset.tool === 'pencil') {
+                    btn.classList.add('active');
+                }
+            });
+
+            // Update button appearance
+            const button = document.getElementById('toolbar-event-manager-btn');
+            if (button) {
+                button.classList.remove('active');
+            }
+
+            // Update status
+            this.uiManager.updateStatus('Tileset mode enabled');
         }
     }
 
     // Show tileset palette viewer
-    showTilesetPalette() {
+    async showTilesetPalette() {
         const tilemapManager = this.projectController.getTilemapManager();
         if (!tilemapManager) {
-            console.warn('Tilemap manager not initialized');
             return;
         }
 
@@ -187,196 +478,168 @@ class RPGReactor {
         const paletteContent = document.getElementById('tileset-palette-content');
 
         if (!paletteSection || !paletteContent) {
-            console.warn('Tileset palette section not found in DOM');
             return;
         }
 
         // Get current map data
         const mapData = tilemapManager.currentMap;
         if (!mapData) {
-            console.warn('No map data available for tileset palette');
             paletteSection.style.display = 'none';
             return;
         }
 
-        // Show the palette section
-        paletteSection.style.display = 'block';
+        // Show the palette section (use 'flex' to ensure flex layout is active)
+        paletteSection.style.display = 'flex';
 
         // Initialize tileset palette viewer if not already done
         if (!this.tilesetPaletteViewer) {
             const project = this.projectController.getCurrentProject();
+            this.tilemapManager = this.projectController.getTilemapManager();
             this.tilesetPaletteViewer = new TilesetPaletteViewer(
-                this.rendererManager.getApp(),
+                this.tilemapManager.app,
                 project.path
             );
             this.projectController.setTilesetPaletteViewer(this.tilesetPaletteViewer);
+
+            // Initialize the UI only once
+            this.tilesetPaletteViewer.initializeUI(paletteContent);
+
+            // Set up region tab callback
+            this.tilesetPaletteViewer.onRegionTabSelected = () => {
+                const regionContainer = document.getElementById('region-ui-container');
+                const regionManager = this.projectController.getRegionManager();
+                if (regionContainer && regionManager) {
+                    regionManager.initializeUI(regionContainer);
+                    regionManager.createRegionLayer();
+                    regionManager.setVisible(true);
+                }
+            };
+
+            // Set up tileset layer selection callback - disable event mode when switching to tileset mode
+            this.tilesetPaletteViewer.onTilesetLayerSelected = () => {
+                // Hide regions overlay when switching away from R tab
+                const regionManager = this.projectController.getRegionManager();
+                if (regionManager) {
+                    regionManager.setVisible(false);
+                }
+
+                // If event mode is currently active, deactivate it
+                if (this.eventManager && this.eventManager.eventMode) {
+                    this.eventManager.setEventMode(false);
+
+                    // Enable map editor
+                    if (this.mapEditor) {
+                        this.mapEditor.setEnabled(true);
+                        // Re-setup map interaction when returning to tileset mode
+                        this.mapEditor.setupMapInteraction();
+                    }
+
+                    // Update button appearance
+                    const button = document.getElementById('toolbar-event-manager-btn');
+                    if (button) {
+                        button.classList.remove('active');
+                    }
+
+                    // Update status
+                    this.uiManager.updateStatus('Tileset mode enabled');
+                }
+            };
+
+            // Set up layer changed callback to update layer highlights
+            this.tilesetPaletteViewer.onLayerChanged = (layerName) => {
+                const tilemapManager = this.projectController.getTilemapManager();
+                if (tilemapManager && tilemapManager.renderLayerHighlights) {
+                    tilemapManager.renderLayerHighlights();
+                }
+            };
         }
 
-        // Initialize the UI
-        this.tilesetPaletteViewer.initializeUI(paletteContent);
+        // Always ensure event manager has reference to tileset palette viewer
+        if (this.eventManager && this.tilesetPaletteViewer) {
+            this.eventManager.setTilesetPaletteViewer(this.tilesetPaletteViewer);
+        }
 
-        // Set up region tab callback
-        this.tilesetPaletteViewer.onRegionTabSelected = () => {
-            const regionContainer = document.getElementById('region-ui-container');
-            const regionManager = this.projectController.getRegionManager();
-            if (regionContainer && regionManager) {
-                regionManager.initializeUI(regionContainer);
-                regionManager.createRegionLayer();
-                regionManager.renderRegions();
-            }
-        };
+        // Load the tileset for the current map (wait for images to load)
+        await this.tilesetPaletteViewer.loadTilesetForMap(mapData);
 
-        // Load the tileset for the current map
-        this.tilesetPaletteViewer.loadTilesetForMap(mapData);
+        // Update resize handles visibility and force layout recalculation
+        if (this.sidebarResizer) {
+            this.sidebarResizer.refresh();
+        }
 
-        console.log('Tileset palette viewer shown for map:', mapData.displayName || mapData.id);
+        // Fix for NW.js/Linux: when new content is created inside overflow:hidden containers,
+        // the browser can silently set scrollTop, hiding the header/tabs at the top.
+        // Reset all scroll positions to ensure the sidebar headers are visible.
+        this.resetSidebarScroll();
     }
 
-    openDatabase(type) {
-        if (!this.projectController.isProjectLoaded()) {
-            alert('Please load a project first');
+    // Reset scroll positions on the sidebar and all its sections.
+    // When NW.js/Chromium creates content inside overflow:hidden containers,
+    // it can silently set scrollTop, pushing headers out of view.
+    resetSidebarScroll() {
+        const resetAll = () => {
+            const sidebar = document.getElementById('sidebar');
+            if (sidebar) sidebar.scrollTop = 0;
+
+            // Reset all resizable sections
+            document.querySelectorAll('.resizable-section').forEach(section => {
+                section.scrollTop = 0;
+            });
+
+            // Reset sidebar-content containers (except maps list which manages its own scroll)
+            document.querySelectorAll('.sidebar-content').forEach(content => {
+                if (content.id !== 'maps-list') {
+                    content.scrollTop = 0;
+                }
+            });
+        };
+
+        // Reset immediately
+        resetAll();
+        // Reset after layout settles (next frame)
+        requestAnimationFrame(resetAll);
+        // Reset once more after a short delay for NW.js layout quirks
+        setTimeout(resetAll, 50);
+    }
+
+    // Scale toolbar icons to fit available width.
+    // At full size: 32px icons. Shrinks proportionally when the window is narrow.
+    scaleToolbarIcons() {
+        const toolbar = document.getElementById('toolbar');
+        if (!toolbar || toolbar.style.display === 'none') return;
+
+        const maxSize = 32;
+        const minSize = 16;
+
+        // Temporarily set to max size and allow overflow for accurate measurement
+        toolbar.style.setProperty('--toolbar-icon-size', maxSize + 'px');
+        toolbar.style.overflow = 'visible';
+
+        // Force reflow to get accurate scrollWidth at full icon size
+        const naturalWidth = toolbar.scrollWidth;
+        const availableWidth = toolbar.clientWidth;
+
+        // Restore overflow
+        toolbar.style.overflow = '';
+
+        if (naturalWidth <= availableWidth) {
+            // Plenty of room, use full size
             return;
         }
 
-        console.log('Opening database:', type);
+        // Calculate how much space the icons occupy vs fixed elements (labels, separators, gaps, padding)
+        const iconCount = toolbar.querySelectorAll('.tool-button img').length;
+        const totalIconWidth = iconCount * maxSize;
+        const fixedWidth = naturalWidth - totalIconWidth;
 
-        // Get data based on type
-        let data, title;
-        switch(type) {
-            case 'actors':
-                data = this.databaseManager.getActors();
-                title = 'Actors';
-                break;
-            case 'classes':
-                data = this.databaseManager.getClasses();
-                title = 'Classes';
-                break;
-            case 'skills':
-                data = this.databaseManager.getSkills();
-                title = 'Skills';
-                break;
-            case 'items':
-                data = this.databaseManager.getItems();
-                title = 'Items';
-                break;
-            case 'weapons':
-                data = this.databaseManager.getWeapons();
-                title = 'Weapons';
-                break;
-            case 'armors':
-                data = this.databaseManager.getArmors();
-                title = 'Armors';
-                break;
-            case 'enemies':
-                data = this.databaseManager.getEnemies();
-                title = 'Enemies';
-                break;
-            case 'troops':
-                data = this.databaseManager.getTroops();
-                title = 'Troops';
-                break;
-            case 'states':
-                data = this.databaseManager.getStates();
-                title = 'States';
-                break;
-            case 'animations':
-                data = this.databaseManager.getAnimations();
-                title = 'Animations';
-                break;
-            case 'tilesets':
-                // Tilesets use custom editor
-                this.showTilesetEditor();
-                return;
-            case 'commonEvents':
-                data = this.databaseManager.getCommonEvents();
-                title = 'Common Events';
-                break;
-            case 'types':
-                // Types editor uses System.json
-                this.showTypesEditor();
-                return;
-            case 'terms':
-                // Terms editor uses System.json
-                this.showTermsEditor();
-                return;
-            default:
-                alert('Unknown database type: ' + type);
-                return;
-        }
-
-        // Show database viewer
-        this.showDatabaseViewer(title, data, type);
+        // Solve for icon size: iconCount * newSize + fixedWidth <= availableWidth
+        const newSize = Math.max(minSize, Math.min(maxSize, Math.floor((availableWidth - fixedWidth) / iconCount)));
+        toolbar.style.setProperty('--toolbar-icon-size', newSize + 'px');
     }
 
-    showDatabaseViewer(title, data, type) {
-        const viewer = document.getElementById('database-viewer');
-        const navEl = document.getElementById('database-navigation');
-        const titleEl = document.getElementById('database-viewer-title');
-        const listEl = document.getElementById('database-list');
-        const detailEl = document.getElementById('database-detail');
-
-        // Set up navigation if not already done
-        if (navEl && navEl.children.length === 0) {
-            this.setupDatabaseNavigation();
-        }
-
-        // Update active nav item
-        if (navEl) {
-            document.querySelectorAll('.database-nav-item').forEach(item => {
-                item.classList.remove('active');
-                if (item.dataset.type === type) {
-                    item.classList.add('active');
-                }
-            });
-        }
-
-        titleEl.textContent = title;
-        listEl.innerHTML = '';
-        detailEl.innerHTML = '<p style="color: #999; text-align: center; margin-top: 100px;">Select an entry from the list</p>';
-
-        // Populate list
-        data.forEach((entry) => {
-            const item = document.createElement('div');
-            item.className = 'database-list-item';
-
-            const nameSpan = document.createElement('span');
-            nameSpan.textContent = entry.name || 'Unnamed';
-
-            const idSpan = document.createElement('span');
-            idSpan.className = 'database-list-id';
-            idSpan.textContent = `#${entry.id || '?'}`;
-
-            item.appendChild(nameSpan);
-            item.appendChild(idSpan);
-
-            item.addEventListener('click', () => {
-                // Remove selection from all items
-                document.querySelectorAll('.database-list-item').forEach(i => i.classList.remove('selected'));
-                item.classList.add('selected');
-
-                // Show detail
-                this.showDatabaseDetail(entry, type);
-            });
-
-            listEl.appendChild(item);
-        });
-
-        // Show viewer
-        viewer.classList.add('active');
-
-        // Set up close button
-        const closeBtn = document.getElementById('database-close-btn');
-        closeBtn.onclick = () => {
-            viewer.classList.remove('active');
-        };
-
-        // Don't close on background click - user must use X button
-        // (Removed background click to prevent accidental closes)
-    }
-
-
-
-    // Tileset editor methods
+    // ==========================================
+    // TILESET EDITOR
+    // ==========================================
     showTilesetEditor() {
         // Hide database viewer
         const viewer = document.getElementById('database-viewer');
@@ -387,7 +650,7 @@ class RPGReactor {
         if (!editorContainer) {
             editorContainer = document.createElement('div');
             editorContainer.id = 'tileset-editor-main-container';
-            editorContainer.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 10000; background-color: #1e1e1e; display: none;';
+            editorContainer.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 10000; background-color: var(--color-bg-surface); display: none;';
             document.body.appendChild(editorContainer);
         }
 
@@ -398,7 +661,7 @@ class RPGReactor {
         if (!this.tilesetEditor) {
             const project = this.projectController.getCurrentProject();
             this.tilesetEditor = new TilesetEditor(
-                this.rendererManager.getApp(),
+                this.tilemapManager.app,
                 project.path,
                 this.databaseManager
             );
@@ -413,8 +676,6 @@ class RPGReactor {
                 this.closeTilesetEditor();
             };
         }
-
-        console.log('Tileset editor shown');
     }
 
     closeTilesetEditor() {
@@ -425,10 +686,7 @@ class RPGReactor {
         }
 
         // Show database viewer with tilesets
-        const data = this.databaseManager.getTilesets();
-        this.showDatabaseViewer('Tilesets', data, 'tilesets');
-
-        console.log('Tileset editor closed');
+        this.openDatabase('tilesets');
     }
 
 
@@ -447,7 +705,7 @@ class RPGReactor {
                 this.projectController.getCurrentProject(),
                 {
                     updateStatus: (msg) => this.updateStatus(msg),
-                    getRendererApp: () => this.rendererManager.getApp(),
+                    getRendererApp: () => this.tilemapManager?.app || null,
                     showTilesetEditor: () => this.showTilesetEditor(),
                     closeTilesetEditor: () => this.closeTilesetEditor(),
                     showTypesEditor: () => this.showTypesEditor(),
@@ -455,6 +713,7 @@ class RPGReactor {
                 }
             );
         }
+        this.databaseEditorUI.playtestManager = this.playtestManager;
         this.databaseEditorUI.setupDatabaseNavigation();
     }
 
@@ -470,7 +729,7 @@ class RPGReactor {
                 this.projectController.getCurrentProject(),
                 {
                     updateStatus: (msg) => this.updateStatus(msg),
-                    getRendererApp: () => this.rendererManager.getApp(),
+                    getRendererApp: () => this.tilemapManager?.app || null,
                     showTilesetEditor: () => this.showTilesetEditor(),
                     closeTilesetEditor: () => this.closeTilesetEditor(),
                     showTypesEditor: () => this.showTypesEditor(),
@@ -479,8 +738,9 @@ class RPGReactor {
             );
         }
 
-        // Update project reference in case it changed
+        // Update project reference and playtest manager in case they changed
         this.databaseEditorUI.setCurrentProject(this.projectController.getCurrentProject());
+        this.databaseEditorUI.playtestManager = this.playtestManager;
 
         // Delegate to DatabaseEditorUI
         this.databaseEditorUI.openDatabase(type);
@@ -498,18 +758,8 @@ class RPGReactor {
         }
     }
 
-    showAbout() {
-        const modal = document.getElementById('about-modal');
-        if (modal) {
-            console.log('Setting about modal display to flex');
-            modal.style.display = 'flex';
-        } else {
-            console.error('about-modal element not found!');
-        }
-    }
     async loadMap(mapId) {
         if (!this.tilemapManager) {
-            console.error('Tilemap manager not initialized');
             return;
         }
 
@@ -534,8 +784,16 @@ class RPGReactor {
             // Initialize map editor for tile painting
             if (!this.mapEditor && this.tilesetPaletteViewer) {
                 this.mapEditor = new MapEditor(this.tilemapManager, this.tilesetPaletteViewer);
+
+                // Give palette viewer reference to map editor for auto-toggling erase mode
+                this.tilesetPaletteViewer.setMapEditor(this.mapEditor);
+
+                // Set region manager reference
+                if (this.projectController) {
+                    this.mapEditor.setRegionManager(this.projectController.getRegionManager());
+                }
+
                 this.mapEditor.setupMapInteraction();
-                console.log('Map editor initialized');
             }
         } else {
             this.updateStatus(`Failed to load map ${mapId}`);
@@ -543,15 +801,148 @@ class RPGReactor {
     }
 
     updateStatus(message) {
-        const statusBar = document.querySelector('#status-bar span:last-child');
-        if (statusBar) {
-            statusBar.textContent = message;
-            setTimeout(() => {
-                statusBar.textContent = 'Ready';
-            }, 3000);
+        // Status bar removed - status updates handled by UIManager
+    }
+
+    // Update map info banner with current map information
+    updateMapInfoBanner() {
+        const tilemapManager = this.projectController.getTilemapManager();
+        if (!tilemapManager || !tilemapManager.currentMap) {
+            return;
+        }
+
+        const map = tilemapManager.currentMap;
+        const mapInfoContent = document.getElementById('map-info-content');
+        const mapIdEl = document.getElementById('map-id');
+        const mapNameEl = document.getElementById('map-name');
+        const mapDimensionsEl = document.getElementById('map-dimensions');
+
+        if (mapInfoContent && mapIdEl && mapNameEl && mapDimensionsEl) {
+            // Show the map info content
+            mapInfoContent.style.display = 'block';
+
+            // Format map ID with leading zeros (e.g., 001, 002, etc.)
+            const mapIdStr = String(map.id).padStart(3, '0');
+            mapIdEl.textContent = mapIdStr;
+
+            // Display map name from MapInfos.json (the actual map name)
+            // Fallback to displayName from Map file if MapInfos not available
+            const mapInfos = this.projectController.getMapInfos();
+            const mapInfo = mapInfos && mapInfos[map.id];
+            const mapName = (mapInfo && mapInfo.name) ? mapInfo.name : (map.displayName || 'Unnamed Map');
+            mapNameEl.textContent = mapName;
+
+            // Display dimensions
+            mapDimensionsEl.textContent = `${map.width} x ${map.height}`;
+        }
+
+        // Update zoom level
+        this.updateMapZoom();
+    }
+
+    // Update zoom level display
+    updateMapZoom() {
+        const tilemapManager = this.projectController.getTilemapManager();
+        if (!tilemapManager || !tilemapManager.container) {
+            return;
+        }
+
+        const zoomEl = document.getElementById('map-zoom');
+        if (zoomEl) {
+            const scale = tilemapManager.container.scale.x;
+            const zoomPercent = Math.round(scale * 100);
+            zoomEl.textContent = `${zoomPercent}%`;
+        }
+    }
+
+    // Update map coordinates display (called from EventManager and MapEditor)
+    updateMapCoordinates(x, y) {
+        // PERFORMANCE: Skip DOM update if coordinates haven't changed
+        if (this.lastDisplayedCoords.x === x && this.lastDisplayedCoords.y === y) {
+            return;
+        }
+
+        this.lastDisplayedCoords.x = x;
+        this.lastDisplayedCoords.y = y;
+
+        const coordsEl = document.getElementById('map-coordinates');
+
+        if (coordsEl) {
+            if (x !== null && y !== null) {
+                coordsEl.textContent = `${x}, ${y}`;
+            } else {
+                coordsEl.textContent = '--,--';
+            }
+        }
+    }
+
+    // Initialize Effekseer runtime for animation previews
+    initEffekseer() {
+        if (typeof effekseer === 'undefined') {
+            window._effekseerReady = false;
+            return;
+        }
+
+        const onLoad = () => {
+            window._effekseerReady = true;
+        };
+
+        const onError = (message) => {
+            window._effekseerReady = false;
+        };
+
+        try {
+            effekseer.initRuntime('libs/effekseer.wasm', onLoad, onError);
+        } catch (e) {
+            window._effekseerReady = false;
+        }
+    }
+
+    setApplicationIcon() {
+        // Set the window icon for taskbar/dock (critical for Linux)
+        try {
+            const win = nw.Window.get();
+            const path = require('path');
+            const fs = require('fs');
+            const iconPath = path.join(process.cwd(), 'images', 'icon.png');
+
+            // Set the window icon - this is what fixes the taskbar icon issue
+            win.setShowInTaskbar(true);
+
+            // On Linux, we need to set the icon explicitly at runtime
+            if (process.platform === 'linux') {
+                // Try multiple approaches for Linux
+                win.setIcon(iconPath);
+
+                // Also try setting it as a data URL for better compatibility
+                if (fs.existsSync(iconPath)) {
+                    const iconData = fs.readFileSync(iconPath);
+                    const base64Icon = iconData.toString('base64');
+                    const dataUrl = `data:image/png;base64,${base64Icon}`;
+
+                    // Try setting with data URL
+                    setTimeout(() => {
+                        try {
+                            win.setIcon(dataUrl);
+                        } catch (e) {
+                            // File path method already applied
+                        }
+                    }, 100);
+                }
+            } else if (process.platform === 'win32') {
+                // Windows uses .ico from package.json, but we can also set it here
+                const icoPath = path.join(process.cwd(), 'images', 'icon.ico');
+                win.setIcon(icoPath);
+            }
+            // macOS uses .icns from package.json automatically
+        } catch (error) {
+            // Icon setting is non-critical, silently continue
         }
     }
 }
 
 // Initialize the application
 const reactor = new RPGReactor();
+
+// Make reactor globally accessible for subsystems that need it
+window.reactor = reactor;

@@ -1,27 +1,38 @@
 {
   "name": "rpg-reactor",
-  "version": "0.1.0",
+  "version": "0.9.0",
   "description": "An open-source, cross-platform RPG game engine",
   "main": "index.html",
   "scripts": {
     "start": "nw .",
-    "dev": "nw ."
+    "dev": "nw .",
+    "test": "node --test",
+    "build": "node build-scripts/build.js",
+    "build:win": "node build-scripts/build.js --platform=win",
+    "build:mac": "node build-scripts/build.js --platform=mac",
+    "build:linux": "node build-scripts/build.js --platform=linux",
+    "convert-icon": "node build-scripts/convert-icon.js"
   },
   "window": {
     "title": "RPG Reactor",
     "width": 1280,
     "height": 720,
-    "min_width": 800,
-    "min_height": 600,
+    "min_width": 1280,
+    "min_height": 720,
     "icon": "images/icon.png",
-    "show_devtools": true,
-    "toolbar": false
+    "show_devtools": false,
+    "frame": true,
+    "toolbar": false,
+    "show": true
   },
-  "chromium-args": "--enable-logging --disable-direct-composition",
+  "name_for_display": "RPG Reactor",
+  "single-instance": false,
+  "chromium-args": "--enable-logging --disable-direct-composition --window-size=1280,720 --class=rpg-reactor",
   "webkit": {
     "plugin": true
   },
   "dependencies": {
+    "gif.js": "^0.2.0",
     "pixi.js": "^8.0.0"
   },
   "keywords": [
@@ -31,6 +42,10 @@
     "nwjs",
     "pixijs"
   ],
-  "author": "",
-  "license": "CC0-1.0"
+  "author": "Psychronic",
+  "license": "MIT",
+  "devDependencies": {
+    "nw-builder": "^4.16.0",
+    "png-to-ico": "^3.0.1"
+  }
 }

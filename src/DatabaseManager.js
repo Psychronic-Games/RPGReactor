@@ -33,13 +33,11 @@ class DatabaseManager {
 
     async loadAllData(projectPath) {
         if (!this.fs || !this.path) {
-            console.error('File system not available');
             return false;
         }
 
         try {
             const dataPath = this.path.join(projectPath, 'data');
-            console.log('Loading database from:', dataPath);
 
             // Load all database files
             this.data.actors = await this.loadJSON(dataPath, 'Actors.json');
@@ -57,17 +55,8 @@ class DatabaseManager {
             this.data.system = await this.loadJSON(dataPath, 'System.json');
             this.data.mapInfos = await this.loadJSON(dataPath, 'MapInfos.json');
 
-            console.log('Database loaded successfully!');
-            console.log('Actors:', this.data.actors.filter(a => a).length);
-            console.log('Classes:', this.data.classes.filter(c => c).length);
-            console.log('Skills:', this.data.skills.filter(s => s).length);
-            console.log('Items:', this.data.items.filter(i => i).length);
-            console.log('Weapons:', this.data.weapons.filter(w => w).length);
-            console.log('Armors:', this.data.armors.filter(a => a).length);
-
             return true;
         } catch (error) {
-            console.error('Error loading database:', error);
             return false;
         }
     }
@@ -76,7 +65,6 @@ class DatabaseManager {
         const filePath = this.path.join(basePath, filename);
 
         if (!this.fs.existsSync(filePath)) {
-            console.warn(`File not found: ${filename}`);
             return filename === 'System.json' ? {} : [];
         }
 
@@ -84,14 +72,12 @@ class DatabaseManager {
             const content = this.fs.readFileSync(filePath, 'utf8');
             return JSON.parse(content);
         } catch (error) {
-            console.error(`Error loading ${filename}:`, error);
             return filename === 'System.json' ? {} : [];
         }
     }
 
     async saveJSON(projectPath, filename, data) {
         if (!this.fs || !this.path) {
-            console.error('File system not available');
             return false;
         }
 
@@ -100,10 +86,8 @@ class DatabaseManager {
             const filePath = this.path.join(dataPath, filename);
 
             this.fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
-            console.log(`Saved ${filename}`);
             return true;
         } catch (error) {
-            console.error(`Error saving ${filename}:`, error);
             return false;
         }
     }
@@ -222,7 +206,95 @@ class DatabaseManager {
         this.data.classes[id] = data;
     }
 
-    // Add more update methods as needed...
+    updateSkill(id, data) {
+        this.data.skills[id] = data;
+    }
+
+    updateItem(id, data) {
+        this.data.items[id] = data;
+    }
+
+    updateWeapon(id, data) {
+        this.data.weapons[id] = data;
+    }
+
+    updateArmor(id, data) {
+        this.data.armors[id] = data;
+    }
+
+    updateEnemy(id, data) {
+        this.data.enemies[id] = data;
+    }
+
+    updateState(id, data) {
+        this.data.states[id] = data;
+    }
+
+    updateAnimation(id, data) {
+        this.data.animations[id] = data;
+    }
+
+    updateTroop(id, data) {
+        this.data.troops[id] = data;
+    }
+
+    updateTileset(id, data) {
+        this.data.tilesets[id] = data;
+    }
+
+    updateCommonEvent(id, data) {
+        this.data.commonEvents[id] = data;
+    }
+
+    addEntry(dataKey, template) {
+        if (!this.data[dataKey]) return null;
+        template.id = this.data[dataKey].length;
+        this.data[dataKey].push(template);
+        return template;
+    }
+
+    deleteEntry(dataKey, id) {
+        if (!this.data[dataKey]) return;
+        this.data[dataKey][id] = null;
+    }
+
+    /**
+     * Get the current maximum count for a database type
+     * (array length - 1, since index 0 is null)
+     */
+    getMaxEntries(dataKey) {
+        if (!this.data[dataKey]) return 0;
+        return Math.max(0, this.data[dataKey].length - 1);
+    }
+
+    /**
+     * Change the maximum number of entries for a database type.
+     * If increasing, adds new default entries. If decreasing, truncates.
+     * @param {string} dataKey - The database key (e.g. 'actors')
+     * @param {number} newMax - The new maximum count
+     * @param {object} template - Default template for new entries
+     * @returns {boolean} Whether the operation succeeded
+     */
+    changeMaximum(dataKey, newMax, template) {
+        if (!this.data[dataKey] || newMax < 1) return false;
+
+        const currentMax = this.getMaxEntries(dataKey);
+
+        if (newMax > currentMax) {
+            // Add new entries
+            for (let i = currentMax + 1; i <= newMax; i++) {
+                const newEntry = JSON.parse(JSON.stringify(template));
+                newEntry.id = i;
+                newEntry.name = '';
+                this.data[dataKey][i] = newEntry;
+            }
+        } else if (newMax < currentMax) {
+            // Truncate array
+            this.data[dataKey].length = newMax + 1;
+        }
+
+        return true;
+    }
 
     async saveAllData(projectPath) {
         if (!this.fs || !this.path) return false;
@@ -243,10 +315,8 @@ class DatabaseManager {
             await this.saveJSON(projectPath, 'System.json', this.data.system);
             await this.saveJSON(projectPath, 'MapInfos.json', this.data.mapInfos);
 
-            console.log('All database files saved successfully!');
             return true;
         } catch (error) {
-            console.error('Error saving database:', error);
             return false;
         }
     }
