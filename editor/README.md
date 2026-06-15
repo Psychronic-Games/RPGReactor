@@ -1,6 +1,6 @@
 # RPG Reactor
 
-An open-source, cross-platform RPG game engine and editor built on NW.js and PixiJS v8. Create 2D RPG games with a complete development environment featuring map editing, event scripting, database management, and game testing capabilities.
+An open-source, cross-platform RPG game editor and runtime for RPG Maker MV/MZ-compatible projects, built on NW.js and PixiJS v8. RPG Reactor provides its own modern PIXI 8 runtime while preserving compatibility with RPG Maker project data and targeting backwards compatibility with RPG Maker MZ plugins. Create 2D RPG games with a complete development environment featuring map editing, event scripting, database management, and game testing capabilities.
 
 ## Features
 
