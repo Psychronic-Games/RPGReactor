@@ -1,8 +1,5 @@
 @echo off
-REM RPG Reactor Launcher Script
+REM Convenience launcher for source checkouts. The NW.js app lives in editor\.
 
-REM Get the directory where this script is located
-cd /d "%~dp0"
-
-REM Launch the application using Windows-specific NW.js binaries
-nwjs-win\nw.exe .
+cd /d "%~dp0editor"
+call RPGReactor.bat %*

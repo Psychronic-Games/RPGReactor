@@ -1,12 +1,5 @@
 #!/bin/bash
-# RPG Reactor Launcher Script for macOS
+# Convenience launcher for source checkouts. The NW.js app lives in editor/.
 
-# Get the directory where this script is located
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-
-# Change to the project directory
-cd "$SCRIPT_DIR"
-
-# Launch the application using macOS-specific NW.js binaries
-# macOS uses .app bundle structure
-./nwjs-mac/nwjs.app/Contents/MacOS/nwjs .
+exec "$SCRIPT_DIR/editor/RPGReactor.command" "$@"
