@@ -17,6 +17,18 @@ RPGReactor/
 └── README.md
 ```
 
+## Development Launchers
+
+The root launcher scripts are for opening RPG Reactor from a source checkout while developing or testing the app. They are not the final packaged game/editor executables; they start the editor through a local NW.js runtime that you download separately.
+
+| File | Platform | Purpose |
+|------|----------|---------|
+| `RPGReactor.sh` | Linux | Opens the editor with `nwjs-linux/nw` |
+| `RPGReactor.bat` | Windows | Opens the editor with `nwjs-win/nw.exe` |
+| `RPGReactor.command` | macOS | Opens the editor with `nwjs-mac/nwjs.app` |
+
+Each script looks for the matching `nwjs-*` folder at the repository root or inside `editor/`, then launches the app from `editor/`.
+
 ## Build From Source
 
 RPG Reactor runs as an NW.js desktop app. Source checkouts do not include NW.js platform binaries, `node_modules/`, build output, saves, or local project templates.
