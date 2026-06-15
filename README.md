@@ -2,7 +2,9 @@
 
 RPG Reactor 0.9 is an open-source, cross-platform RPG game editor and runtime for RPG Maker MV/MZ-compatible projects. RPG Reactor provides its own modern PIXI 8-based runtime while preserving compatibility with RPG Maker project data and targeting backwards compatibility with RPG Maker MZ plugins.
 
-Use RPG Reactor to create, edit, playtest, and package 2D RPGs with familiar RPG Maker-style maps, events, database records, plugins, and deployment workflows, without depending on the original RPG Maker runtime.
+Use RPG Reactor to create, edit, playtest, and package 2D RPGs with familiar RPG Maker-style maps, events, database records, plugins, and deployment workflows, without depending on the original RPG Maker runtime or editor.
+
+Pre-built download binaries are available at <https://psychronic.itch.io/rpg-reactor>.
 
 ## Repository Layout
 
@@ -15,15 +17,61 @@ RPGReactor/
 └── README.md
 ```
 
-## Development
+## Build From Source
+
+RPG Reactor runs as an NW.js desktop app. Source checkouts do not include NW.js platform binaries, `node_modules/`, build output, saves, or local project templates.
+
+1. Clone the repository:
+
+```bash
+git clone git@github.com:Psychronic-Games/RPGReactor.git
+cd RPGReactor
+```
+
+2. Install the editor dependency:
 
 ```bash
 cd editor
 npm install
-npm start
+cd ..
 ```
 
-RPG Reactor runs on NW.js. Source checkouts do not include NW.js platform binaries, `node_modules/`, build output, saves, or local project templates.
+3. Download NW.js for your platform from <https://dl.nwjs.io/>. Use the normal or SDK build for your OS and CPU architecture.
+
+4. Extract NW.js and rename/place the extracted folder at the repository root:
+
+```text
+RPGReactor/
+├── editor/
+├── runtime/
+├── nwjs-linux/   # Linux: contains the nw executable
+├── nwjs-win/     # Windows: contains nw.exe
+└── nwjs-mac/     # macOS: contains nwjs.app
+```
+
+You can also place the same `nwjs-*` folder inside `editor/`; the launchers check both locations.
+
+5. Launch RPG Reactor:
+
+```bash
+# Linux
+chmod +x RPGReactor.sh
+./RPGReactor.sh
+
+# Windows
+RPGReactor.bat
+
+# macOS
+chmod +x RPGReactor.command
+./RPGReactor.command
+```
+
+For direct NW.js launch during development:
+
+```bash
+cd editor
+../nwjs-linux/nw .
+```
 
 ## Runtime
 
