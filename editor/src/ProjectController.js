@@ -30,6 +30,31 @@ class ProjectController {
         return path.join(projectPath, '.rpgreactor.lock');
     }
 
+    getProjectOpenLogPath() {
+        if (typeof nw === 'undefined') return null;
+
+        const path = require('path');
+        const os = require('os');
+        const basePath = nw.App?.dataPath || path.join(os.homedir(), '.config', 'rpg-reactor');
+        return path.join(basePath, 'project-open.log');
+    }
+
+    logProjectOpen(stage, details = {}) {
+        if (typeof nw === 'undefined') return;
+
+        try {
+            const fs = require('fs');
+            const path = require('path');
+            const logPath = this.getProjectOpenLogPath();
+            if (!logPath) return;
+
+            fs.mkdirSync(path.dirname(logPath), { recursive: true });
+            fs.appendFileSync(logPath, `${new Date().toISOString()} ${stage} ${JSON.stringify(details)}\n`);
+        } catch (error) {
+            console.warn('Could not write project-open log:', error);
+        }
+    }
+
     isProcessRunning(pid) {
         if (!pid || typeof process === 'undefined') return false;
         try {
@@ -111,6 +136,8 @@ class ProjectController {
             return;
         }
 
+        this.logProjectOpen('auto-load:start', { projectPath: lastProjectPath });
+
         if (typeof nw === 'undefined') {
             return;
         }
@@ -119,6 +146,7 @@ class ProjectController {
 
         // Check if the project path still exists
         if (!fs.existsSync(lastProjectPath)) {
+            this.logProjectOpen('auto-load:missing-path', { projectPath: lastProjectPath });
             localStorage.removeItem('lastProjectPath');
             return;
         }
@@ -128,6 +156,11 @@ class ProjectController {
         try {
             // Load the project
             const loadedProject = await this.projectManager.loadProject(lastProjectPath);
+            this.logProjectOpen('auto-load:loadProject', {
+                projectPath: lastProjectPath,
+                loaded: !!loadedProject,
+                name: loadedProject?.name || null
+            });
 
             if (loadedProject && this.acquireProjectLock(loadedProject.path)) {
                 this.currentProject = loadedProject;
@@ -135,10 +168,12 @@ class ProjectController {
                 this.uiManager.updateStatus('Opened project: ' + this.currentProject.name);
                 await this.populateProjectUI();
             } else {
+                this.logProjectOpen('auto-load:failed', { projectPath: lastProjectPath });
                 this.uiManager.updateStatus('Failed to load last project');
             }
         } catch (error) {
             console.error(`Error loading last project at ${lastProjectPath}:`, error);
+            this.logProjectOpen('auto-load:error', { projectPath: lastProjectPath, error: error.message || String(error) });
             this.uiManager.updateStatus('Error loading last project');
         }
     }
@@ -224,10 +259,17 @@ class ProjectController {
                 const projectPath = input.value || e.target.value;
                 if (projectPath) {
                     try {
+                        this.logProjectOpen('manual-open:start', { projectPath });
                         this.uiManager.updateStatus('Loading project...');
 
                         // Use ProjectManager to load the project
                         const loadedProject = await this.projectManager.loadProject(projectPath);
+                        this.logProjectOpen('manual-open:loadProject', {
+                            projectPath,
+                            loaded: !!loadedProject,
+                            name: loadedProject?.name || null,
+                            mapCount: loadedProject?.maps?.filter(Boolean).length || 0
+                        });
 
                         if (loadedProject && this.acquireProjectLock(loadedProject.path)) {
                             this.currentProject = loadedProject;
@@ -238,11 +280,13 @@ class ProjectController {
                             this.uiManager.updateStatus('Opened project: ' + this.currentProject.name);
                             await this.populateProjectUI();
                         } else {
+                            this.logProjectOpen('manual-open:failed', { projectPath });
                             alert(`Failed to load project. Make sure it's a valid RPG Reactor or RPG Maker project.\n\n${projectPath}`);
                             this.uiManager.updateStatus('Error loading project');
                         }
                     } catch (error) {
                         console.error(`Error opening project at ${projectPath}:`, error);
+                        this.logProjectOpen('manual-open:error', { projectPath, error: error.message || String(error) });
                         alert(`Error opening project:\n${projectPath}\n\n${error.message || error}`);
                         this.uiManager.updateStatus('Error loading project');
                     }
@@ -261,10 +305,13 @@ class ProjectController {
     async populateProjectUI() {
         // Load database
         this.uiManager.updateStatus('Loading database...');
+        this.logProjectOpen('populate:start', { projectPath: this.currentProject?.path || null });
         const dbLoaded = await this.databaseManager.loadAllData(this.currentProject.path);
+        this.logProjectOpen('populate:database', { loaded: dbLoaded });
 
         if (!dbLoaded) {
             this.uiManager.updateStatus('Error loading database');
+            this.logProjectOpen('populate:database-failed');
             return;
         }
 
@@ -347,6 +394,7 @@ class ProjectController {
 
         // Populate maps list
         this.renderMapsList();
+        this.logProjectOpen('populate:maps-rendered', { mapCount: this.currentProject.maps?.filter(Boolean).length || 0 });
 
         // Auto-load last edited map or first map
         const lastMapId = localStorage.getItem(this.getLastMapStorageKey()) || localStorage.getItem('lastMapId');
@@ -359,11 +407,17 @@ class ProjectController {
         }
 
         if (mapToLoad) {
+            this.logProjectOpen('populate:load-map', { mapId: mapToLoad });
             const loaded = await this.loadMap(mapToLoad);
+            this.logProjectOpen('populate:load-map-result', { mapId: mapToLoad, loaded });
             if (!loaded) {
                 for (const map of this.currentProject.maps) {
                     if (!map || map.id === mapToLoad) continue;
-                    if (await this.loadMap(map.id)) break;
+                    this.logProjectOpen('populate:fallback-map', { mapId: map.id });
+                    if (await this.loadMap(map.id)) {
+                        this.logProjectOpen('populate:fallback-map-result', { mapId: map.id, loaded: true });
+                        break;
+                    }
                 }
             }
         }
@@ -376,6 +430,7 @@ class ProjectController {
 
         this.uiManager.updateStatus('Project loaded successfully');
         this.projectLoaded = true;
+        this.logProjectOpen('populate:complete', { projectPath: this.currentProject.path });
 
         // Notify audio player that project is loaded (via global reactor instance)
         if (window.reactor && window.reactor.audioPlayer) {
