@@ -138,6 +138,7 @@ class ProjectController {
                 this.uiManager.updateStatus('Failed to load last project');
             }
         } catch (error) {
+            console.error(`Error loading last project at ${lastProjectPath}:`, error);
             this.uiManager.updateStatus('Error loading last project');
         }
     }
@@ -220,23 +221,29 @@ class ProjectController {
             input.setAttribute('nwdirectory', '');
             input.setAttribute('nwworkingdir', require('os').homedir());
             input.addEventListener('change', async (e) => {
-                const projectPath = e.target.value;
+                const projectPath = input.value || e.target.value;
                 if (projectPath) {
-                    this.uiManager.updateStatus('Loading project...');
+                    try {
+                        this.uiManager.updateStatus('Loading project...');
 
-                    // Use ProjectManager to load the project
-                    const loadedProject = await this.projectManager.loadProject(projectPath);
+                        // Use ProjectManager to load the project
+                        const loadedProject = await this.projectManager.loadProject(projectPath);
 
-                    if (loadedProject && this.acquireProjectLock(loadedProject.path)) {
-                        this.currentProject = loadedProject;
-                        // Save last opened project path
-                        localStorage.setItem('lastProjectPath', projectPath);
+                        if (loadedProject && this.acquireProjectLock(loadedProject.path)) {
+                            this.currentProject = loadedProject;
+                            // Save last opened project path
+                            localStorage.setItem('lastProjectPath', projectPath);
 
-                        await this.uiManager.showEditorUI();
-                        this.uiManager.updateStatus('Opened project: ' + this.currentProject.name);
-                        await this.populateProjectUI();
-                    } else {
-                        alert('Failed to load project. Make sure it\'s a valid RPG Reactor or RPG Maker project.');
+                            await this.uiManager.showEditorUI();
+                            this.uiManager.updateStatus('Opened project: ' + this.currentProject.name);
+                            await this.populateProjectUI();
+                        } else {
+                            alert(`Failed to load project. Make sure it's a valid RPG Reactor or RPG Maker project.\n\n${projectPath}`);
+                            this.uiManager.updateStatus('Error loading project');
+                        }
+                    } catch (error) {
+                        console.error(`Error opening project at ${projectPath}:`, error);
+                        alert(`Error opening project:\n${projectPath}\n\n${error.message || error}`);
                         this.uiManager.updateStatus('Error loading project');
                     }
                 }
