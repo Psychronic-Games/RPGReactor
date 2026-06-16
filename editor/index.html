@@ -671,10 +671,14 @@
             try {
                 const fs = require('fs');
                 const path = require('path');
+                const appDir = path.dirname(decodeURIComponent(window.location.pathname));
                 const candidates = [
+                    path.join(appDir, 'node_modules', 'pixi.js', 'dist', 'pixi.min.js'),
+                    path.join(appDir, 'runtime', 'libs', 'pixi8.js'),
                     path.join(process.cwd(), 'node_modules', 'pixi.js', 'dist', 'pixi.min.js'),
                     path.join(process.cwd(), '..', 'runtime', 'libs', 'pixi8.js'),
-                    path.join(process.cwd(), 'runtime', 'libs', 'pixi8.js')
+                    path.join(process.cwd(), 'runtime', 'libs', 'pixi8.js'),
+                    path.join(process.cwd(), 'package.nw', 'runtime', 'libs', 'pixi8.js')
                 ];
 
                 for (const candidate of candidates) {
