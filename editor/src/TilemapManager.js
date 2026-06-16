@@ -203,6 +203,7 @@ class TilemapManager {
 
             return true;
         } catch (error) {
+            console.error(`Error loading map ${mapId}:`, error);
             return false;
         }
     }

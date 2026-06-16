@@ -352,7 +352,13 @@ class ProjectController {
         }
 
         if (mapToLoad) {
-            this.loadMap(mapToLoad);
+            const loaded = await this.loadMap(mapToLoad);
+            if (!loaded) {
+                for (const map of this.currentProject.maps) {
+                    if (!map || map.id === mapToLoad) continue;
+                    if (await this.loadMap(map.id)) break;
+                }
+            }
         }
 
         // Update window title
@@ -862,7 +868,7 @@ class ProjectController {
 
     async loadMap(mapId) {
         if (!this.tilemapManager) {
-            return;
+            return false;
         }
 
         this.uiManager.updateStatus(`Loading map ${mapId}...`);
@@ -882,8 +888,11 @@ class ProjectController {
             if (this.onMapLoaded) {
                 this.onMapLoaded();
             }
+
+            return true;
         } else {
             this.uiManager.updateStatus(`Failed to load map ${mapId}`);
+            return false;
         }
     }
 
