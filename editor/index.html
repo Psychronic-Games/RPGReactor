@@ -668,7 +668,26 @@
     <script src="node_modules/pixi.js/dist/pixi.min.js"></script>
     <script>
         if (typeof PIXI === 'undefined') {
-            document.write('<script src="../runtime/libs/pixi8.js"><\/script>');
+            try {
+                const fs = require('fs');
+                const path = require('path');
+                const candidates = [
+                    path.join(process.cwd(), 'node_modules', 'pixi.js', 'dist', 'pixi.min.js'),
+                    path.join(process.cwd(), '..', 'runtime', 'libs', 'pixi8.js'),
+                    path.join(process.cwd(), 'runtime', 'libs', 'pixi8.js')
+                ];
+
+                for (const candidate of candidates) {
+                    if (!fs.existsSync(candidate)) continue;
+
+                    const script = document.createElement('script');
+                    script.text = fs.readFileSync(candidate, 'utf8') + `\n//# sourceURL=file://${candidate.replace(/\\/g, '/')}`;
+                    document.head.appendChild(script);
+                    if (typeof PIXI !== 'undefined') break;
+                }
+            } catch (error) {
+                console.error('Failed to load PixiJS fallback:', error);
+            }
         }
     </script>
     <script>
