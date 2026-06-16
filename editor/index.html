@@ -667,6 +667,15 @@
 
     <script src="node_modules/pixi.js/dist/pixi.min.js"></script>
     <script>
+        if (typeof PIXI === 'undefined') {
+            document.write('<script src="../runtime/libs/pixi8.js"><\/script>');
+        }
+    </script>
+    <script>
+        if (typeof PIXI === 'undefined') {
+            throw new Error('PixiJS failed to load. Run npm install in editor/ or keep runtime/libs/pixi8.js beside the editor source.');
+        }
+
         // Define __dirname for Effekseer compatibility in NW.js
         if (typeof __dirname === 'undefined') {
             window.__dirname = process.cwd();
