@@ -71,6 +71,22 @@ class CharacterGenerator {
         this._forgePreviewCacheDescriptor = null;
         this._forgePreviewRaf = 0;
         this._forgePreviewNeedsThumbnails = false;
+
+        if (typeof window !== 'undefined') {
+            window.addEventListener('rr-language-changed', () => {
+                if (!this.root) return;
+                const project = this.projectController?.getCurrentProject?.() || this.projectController?.currentProject;
+                if (!project) {
+                    this.root.innerHTML = `<div style="padding:40px;text-align:center;color:var(--color-text-muted);font-size:12px;">${this._t('forge.openProject')}</div>`;
+                    return;
+                }
+                this._render();
+            });
+        }
+    }
+
+    _t(key, params = {}) {
+        return typeof window !== 'undefined' && window.I18n ? window.I18n.t(key, params) : key;
     }
 
     get sheetWidth()  { return this.frameWidth  * 3; }
@@ -81,7 +97,7 @@ class CharacterGenerator {
         const project = projectController?.getCurrentProject?.() || projectController?.currentProject;
         this.root = containerEl;
         if (!project) {
-            this.root.innerHTML = '<div style="padding:40px;text-align:center;color:var(--color-text-muted);font-size:12px;">Open a project to use Forge tools.</div>';
+            this.root.innerHTML = `<div style="padding:40px;text-align:center;color:var(--color-text-muted);font-size:12px;">${this._t('forge.openProject')}</div>`;
             return;
         }
         this.projectPath = project.path;
@@ -190,11 +206,11 @@ class CharacterGenerator {
         this.root.innerHTML = `
             <div style="display:flex;flex-direction:column;height:100%;min-height:0;">
                 <div style="display:flex;align-items:flex-end;gap:2px;padding:0 16px;background:var(--color-bg-panel);border-bottom:1px solid var(--color-border);flex-shrink:0;">
-                    ${this._tabBtn('procedural', 'Procedural')}
-                    ${this._tabBtn('forge',       'Outfit Forge')}
-                    ${this._tabBtn('parts',       'Parts (PNG)')}
+                    ${this._tabBtn('procedural', this._t('forge.tab.procedural'))}
+                    ${this._tabBtn('forge',       this._t('forge.tab.outfit'))}
+                    ${this._tabBtn('parts',       this._t('forge.tab.parts'))}
                     <div style="margin-left:auto;display:flex;align-items:center;gap:6px;padding:6px 0 5px;">
-                        <label style="font-size:10px;color:var(--color-text-muted);">Style:</label>
+                        <label style="font-size:10px;color:var(--color-text-muted);">${this._t('forge.style')}</label>
                         <select class="rr-cg-style-select rr-input" style="padding:3px 8px;font-size:11px;min-width:120px;">
                             ${this._characterStyles().map(s => `<option value="${s.id}" ${this.characterStyle === s.id ? 'selected' : ''}>${s.name}</option>`).join('')}
                         </select>
@@ -901,7 +917,7 @@ class CharacterGenerator {
                     <select class="rr-forge-debug-zone rr-input" style="font-size:11px;padding:3px 7px;min-width:112px;" ${this._forgeDebugZones ? '' : 'disabled'}>
                         ${debugZoneOptions.map(z => `<option value="${z.key}" ${this._forgeDebugZone === z.key ? 'selected' : ''}>${z.label}</option>`).join('')}
                     </select>
-                    <button class="rr-forge-save rr-btn" style="font-size:11px;padding:5px 14px;cursor:pointer;background:var(--color-accent-bright);color:var(--color-bg-base);border-radius:4px;font-weight:700;">Generate &amp; Save to Library</button>
+                    <button class="rr-forge-save rr-btn" style="font-size:11px;padding:5px 14px;cursor:pointer;background:var(--color-accent-bright);color:var(--color-bg-base);border-radius:4px;font-weight:700;">${this._t('forge.generateSave')}</button>
                 </div>
                 ${debugLegend}
                 ${zoneEditControls}
@@ -1861,7 +1877,7 @@ class CharacterGenerator {
             <div style="display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding:20px 16px;gap:12px;background:var(--color-bg-base);overflow-y:auto;">
                 <!-- Direction buttons -->
                 <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:center;">
-                    <span style="font-size:10px;color:var(--color-text-muted);">Frame:</span>
+                    <span style="font-size:10px;color:var(--color-text-muted);">${this._t('forge.frame')}</span>
                     <input type="number" class="rr-cgp-fw rr-input" value="${this.frameWidth}" min="8" max="512" style="width:58px;padding:3px 6px;font-size:11px;">
                     <span style="font-size:10px;color:var(--color-text-muted);">×</span>
                     <input type="number" class="rr-cgp-fh rr-input" value="${this.frameHeight}" min="8" max="512" style="width:58px;padding:3px 6px;font-size:11px;">
@@ -1883,7 +1899,7 @@ class CharacterGenerator {
                 <!-- Sheet thumbnail + Main canvas, side by side -->
                 <div style="display:flex;gap:12px;align-items:flex-start;justify-content:center;flex-wrap:wrap;">
                     <div style="display:flex;flex-direction:column;align-items:center;gap:4px;">
-                        <div style="font-size:9px;color:var(--color-text-dim);text-transform:uppercase;">Sheet</div>
+                        <div style="font-size:9px;color:var(--color-text-dim);text-transform:uppercase;">${this._t('forge.sheet').replace(':', '')}</div>
                         <div style="background:var(--color-checker,#1a1a2e);border:1px solid var(--color-border-input);border-radius:4px;padding:4px;">
                             <canvas class="rr-cgp-sheet" width="${this.frameWidth * 3}" height="${this.frameHeight * 4}"
                                 style="width:${sheetW}px;height:${sheetH}px;image-rendering:pixelated;display:block;cursor:pointer;"></canvas>
@@ -1899,7 +1915,7 @@ class CharacterGenerator {
                 </div>
 
                 <div style="display:flex;gap:5px;align-items:center;font-size:10px;color:var(--color-text-muted);">
-                    <span>Frame:</span>
+                    <span>${this._t('forge.frame')}</span>
                     ${[0, 1, 2].map(i => `<button class="rr-cgp-frame" data-frame="${i}" style="padding:3px 8px;font-size:10px;cursor:pointer;border-radius:3px;border:1px solid var(--color-border-input);background:${this.walkFrame === i ? 'var(--color-bg-button-active)' : 'var(--color-bg-button)'};color:var(--color-text-strong);">${i + 1}</button>`).join('')}
                 </div>
 
@@ -1928,13 +1944,13 @@ class CharacterGenerator {
 
         <!-- Footer -->
         <div style="padding:10px 18px;border-top:1px solid var(--color-border-subtle);background:var(--color-bg-panel);display:flex;align-items:center;gap:10px;flex-shrink:0;">
-            <label style="font-size:12px;color:var(--color-text-muted);">Save as:</label>
+            <label style="font-size:12px;color:var(--color-text-muted);">${this._t('forge.saveAs')}</label>
             <input type="text" class="rr-cgp-name rr-input" placeholder="Hero" style="width:160px;padding:4px 8px;font-size:12px;">
             <span style="font-size:10px;color:var(--color-text-dim);">→ img/characters/$&lt;name&gt;.png (${this.sheetWidth}×${this.sheetHeight})</span>
             <button class="rr-cgp-bulk-import rr-btn-chip" style="padding:6px 12px;margin-left:auto;color:var(--color-accent-bright);">Import Parts...</button>
             <span class="rr-cgp-template-status" style="font-size:10px;color:var(--color-text-dim);min-width:120px;"></span>
             <div>
-                <button class="rr-cgp-save rr-btn-chip" style="padding:6px 18px;color:var(--color-accent-bright);">Save Sheet</button>
+                <button class="rr-cgp-save rr-btn-chip" style="padding:6px 18px;color:var(--color-accent-bright);">${this._t('forge.saveSheet')}</button>
             </div>
         </div>`;
     }
@@ -3947,11 +3963,11 @@ ${sheetJs}
         <div style="display:flex;flex-direction:column;height:100%;min-height:0;">
             <!-- Toolbar -->
             <div style="padding:8px 16px;background:var(--color-bg-panel);border-bottom:1px solid var(--color-border-subtle);display:flex;align-items:center;gap:12px;flex-shrink:0;">
-                <label style="font-size:11px;color:var(--color-text-muted);">Frame:</label>
+                <label style="font-size:11px;color:var(--color-text-muted);">${this._t('forge.frame')}</label>
                 <input type="number" class="rr-cg-fw rr-input" value="${this.frameWidth}"  min="8" max="512" style="width:58px;padding:3px 6px;font-size:11px;">
                 <span style="font-size:11px;color:var(--color-text-muted);">×</span>
                 <input type="number" class="rr-cg-fh rr-input" value="${this.frameHeight}" min="8" max="512" style="width:58px;padding:3px 6px;font-size:11px;">
-                <span style="font-size:10px;color:var(--color-text-dim);margin-left:6px;">Sheet: ${sheetW}×${sheetH}</span>
+                <span style="font-size:10px;color:var(--color-text-dim);margin-left:6px;">${this._t('forge.sheet')} ${sheetW}×${sheetH}</span>
             </div>
 
             <div style="display:grid;grid-template-columns:200px 1fr 260px;flex:1;min-height:0;">
@@ -4001,12 +4017,12 @@ ${sheetJs}
             </div>
 
             <div class="rr-modal-footer" style="padding:10px 18px;border-top:1px solid var(--color-border-subtle);background:var(--color-bg-panel);display:flex;align-items:center;gap:10px;flex-shrink:0;">
-                <label style="font-size:12px;color:var(--color-text-muted);">Save as:</label>
+                <label style="font-size:12px;color:var(--color-text-muted);">${this._t('forge.saveAs')}</label>
                 <input type="text" class="rr-cg-name-input rr-input" placeholder="MyHero" style="width:180px;padding:4px 8px;font-size:12px;">
                 <span style="font-size:10px;color:var(--color-text-dim);">→ img/characters/$&lt;name&gt;.png</span>
                 <div style="margin-left:auto;display:flex;gap:8px;">
                     <button class="rr-cg-refresh rr-btn-chip" style="padding:6px 14px;">↻ Reload Parts</button>
-                    <button class="rr-cg-save rr-btn-chip" style="padding:6px 18px;color:var(--color-accent-bright);">Save Sheet</button>
+                    <button class="rr-cg-save rr-btn-chip" style="padding:6px 18px;color:var(--color-accent-bright);">${this._t('forge.saveSheet')}</button>
                 </div>
             </div>
         </div>`;

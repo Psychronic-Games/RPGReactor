@@ -236,15 +236,16 @@ class SetMovementRouteEditor {
             font-size: 12px;
         `;
 
-        select.appendChild(this._option('-1', 'Player', this.characterId === -1));
-        select.appendChild(this._option('0', 'This Event', this.characterId === 0));
+        select.appendChild(this._option('-1', 'Player', this.characterId === -1, true));
+        select.appendChild(this._option('0', 'This Event', this.characterId === 0, true));
 
         const events = this._getEventOptions();
         events.forEach(ev => {
             select.appendChild(this._option(
                 String(ev.id),
                 `${String(ev.id).padStart(3, '0')}: ${ev.name}`,
-                this.characterId === ev.id
+                this.characterId === ev.id,
+                false
             ));
         });
 
@@ -935,7 +936,7 @@ class SetMovementRouteEditor {
 
         // File dropdown
         const fileOptions = [{ value: '', text: '(None)' }]
-            .concat(seFiles.map(f => ({ value: f, text: f })));
+            .concat(seFiles.map(f => ({ value: f, text: f, i18n: false })));
         content.appendChild(this._labeledSelect('File:', fileOptions, se.name, 'dlg-se-file'));
 
         // Volume slider
@@ -1138,10 +1139,10 @@ class SetMovementRouteEditor {
     }
 
     /** Create an <option> element */
-    _option(value, text, selected) {
+    _option(value, text, selected, translate = false) {
         const o = document.createElement('option');
         o.value = value;
-        o.textContent = text;
+        o.textContent = translate && window.I18n ? window.I18n.tText(text) : text;
         if (selected) o.selected = true;
         return o;
     }
@@ -1155,7 +1156,7 @@ class SetMovementRouteEditor {
         cb.checked = checked;
         cb.addEventListener('change', () => onChange(cb.checked));
         row.appendChild(cb);
-        row.appendChild(document.createTextNode(label));
+        row.appendChild(document.createTextNode(window.I18n ? window.I18n.tText(label) : label));
         return row;
     }
 
@@ -1165,7 +1166,7 @@ class SetMovementRouteEditor {
         row.style.cssText = 'display: flex; align-items: center; gap: 8px;';
 
         const lbl = document.createElement('span');
-        lbl.textContent = label;
+        lbl.textContent = window.I18n ? window.I18n.tText(label) : label;
         lbl.style.cssText = 'color: var(--color-text); font-size: 12px; min-width: 70px;';
 
         const input = document.createElement('input');
@@ -1191,7 +1192,7 @@ class SetMovementRouteEditor {
         row.style.cssText = 'display: flex; align-items: center; gap: 8px;';
 
         const lbl = document.createElement('span');
-        lbl.textContent = label;
+        lbl.textContent = window.I18n ? window.I18n.tText(label) : label;
         lbl.style.cssText = 'color: var(--color-text); font-size: 12px; min-width: 70px;';
 
         const sel = document.createElement('select');
@@ -1203,7 +1204,7 @@ class SetMovementRouteEditor {
         options.forEach(opt => {
             const o = document.createElement('option');
             o.value = (opt.value != null) ? opt.value : opt.text;
-            o.textContent = opt.text;
+            o.textContent = opt.i18n === false || !window.I18n ? opt.text : window.I18n.tText(opt.text);
             if (String(opt.value) === String(selectedValue)) o.selected = true;
             sel.appendChild(o);
         });
@@ -1219,7 +1220,7 @@ class SetMovementRouteEditor {
         row.style.cssText = 'display: flex; align-items: center; gap: 8px;';
 
         const lbl = document.createElement('span');
-        lbl.textContent = label;
+        lbl.textContent = window.I18n ? window.I18n.tText(label) : label;
         lbl.style.cssText = 'color: var(--color-text); font-size: 12px; min-width: 70px;';
 
         const slider = document.createElement('input');

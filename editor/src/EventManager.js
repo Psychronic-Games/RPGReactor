@@ -188,7 +188,7 @@ class EventManager {
         // Create event container if it doesn't exist
         if (!this.eventContainer) {
             this.eventContainer = new PIXI.Container();
-            this.eventContainer.name = 'events';
+            this.eventContainer.label = 'events';
             tilemapManager.container.addChild(this.eventContainer);
             console.log('Event container created');
         }
@@ -210,7 +210,7 @@ class EventManager {
         // Create starting position container
         if (!this.startingPositionContainer) {
             this.startingPositionContainer = new PIXI.Container();
-            this.startingPositionContainer.name = 'startingPositions';
+            this.startingPositionContainer.label = 'startingPositions';
             tilemapManager.container.addChild(this.startingPositionContainer);
         }
 
@@ -1689,13 +1689,15 @@ class EventManager {
         container.addChild(graphics);
 
         // Add label text
-        const text = new PIXI.Text(label, {
-            fontSize: 9,
-            fill: 0xffffff,
-            align: 'center',
-            fontWeight: 'bold',
-            stroke: 0x000000,
-            strokeThickness: 2
+        const text = new PIXI.Text({
+            text: label,
+            style: {
+                fontSize: 9,
+                fill: 0xffffff,
+                align: 'center',
+                fontWeight: 'bold',
+                stroke: { color: 0x000000, width: 2 }
+            }
         });
         text.x = this.tilemapManager.TILE_WIDTH / 2;
         text.y = this.tilemapManager.TILE_HEIGHT / 2;
@@ -1764,12 +1766,14 @@ class EventManager {
         }
 
         // Add event name text at the bottom of the tile
-        const text = new PIXI.Text(event.name, {
-            fontSize: 8,
-            fill: 0xffffff,
-            align: 'center',
-            stroke: 0x000000,
-            strokeThickness: 2
+        const text = new PIXI.Text({
+            text: event.name,
+            style: {
+                fontSize: 8,
+                fill: 0xffffff,
+                align: 'center',
+                stroke: { color: 0x000000, width: 2 }
+            }
         });
         text.x = this.tilemapManager.TILE_WIDTH / 2;
         text.y = this.tilemapManager.TILE_HEIGHT - 6; // Position near bottom

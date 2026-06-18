@@ -24,133 +24,141 @@
             flex-direction: column;
         ">
             <img src="images/splash-screen.png" alt="RPG Reactor" style="width: 100%; height: auto; margin-bottom: 24px;" onerror="this.style.display='none'">
-            <div style="color: #007acc; font-size: 18px; animation: pulse 1.5s infinite;">Loading...</div>
+            <div data-i18n="app.loading" style="color: #007acc; font-size: 18px; animation: pulse 1.5s infinite;">Loading...</div>
         </div>
 
         <!-- HTML Menu Bar (replaces non-functional native menu on Linux) -->
         <div id="html-menu-bar" style="background-color: var(--color-bg-toolbar); color: var(--color-text); border-bottom: 1px solid var(--color-border); display: flex; padding: 0; user-select: none; font-size: 13px; flex-shrink: 0;">
             <div class="html-menu-item" data-menu="file" style="position: relative; padding: 8px 16px; cursor: pointer;">
-                File
+                <span data-i18n="menu.file">File</span>
                 <div class="html-submenu" id="submenu-file" style="display: none; position: absolute; top: 100%; left: 0; background-color: var(--color-bg-toolbar); color: var(--color-text); border: 1px solid var(--color-border); min-width: 200px; z-index: 10000; box-shadow: var(--shadow-popup);">
-                    <div class="html-menu-option" data-action="new-project" style="padding: 8px 16px; cursor: pointer;">New Project</div>
-                    <div class="html-menu-option" data-action="open-project" style="padding: 8px 16px; cursor: pointer;">Open Project</div>
+                    <div class="html-menu-option" data-action="new-project" data-i18n="menu.newProject" style="padding: 8px 16px; cursor: pointer;">New Project</div>
+                    <div class="html-menu-option" data-action="open-project" data-i18n="menu.openProject" style="padding: 8px 16px; cursor: pointer;">Open Project</div>
                     <div style="height: 1px; background: var(--color-border); margin: 4px 0;"></div>
-                    <div class="html-menu-option" data-action="close-project" style="padding: 8px 16px; cursor: pointer;">Close Project</div>
+                    <div class="html-menu-option" data-action="close-project" data-i18n="menu.closeProject" style="padding: 8px 16px; cursor: pointer;">Close Project</div>
                     <div style="height: 1px; background: var(--color-border); margin: 4px 0;"></div>
-                    <div class="html-menu-option" data-action="options" style="padding: 8px 16px; cursor: pointer;">Options...</div>
+                    <div class="html-menu-option" data-action="options" data-i18n="menu.options" style="padding: 8px 16px; cursor: pointer;">Options...</div>
                     <div style="height: 1px; background: var(--color-border); margin: 4px 0;"></div>
-                    <div class="html-menu-option" data-action="exit" style="padding: 8px 16px; cursor: pointer;">Exit</div>
+                    <div class="html-menu-option" data-action="exit" data-i18n="menu.exit" style="padding: 8px 16px; cursor: pointer;">Exit</div>
                 </div>
             </div>
             <div class="html-menu-item" data-menu="database" style="position: relative; padding: 8px 16px; cursor: pointer;">
-                Database
+                <span data-i18n="menu.database">Database</span>
                 <div class="html-submenu" id="submenu-database" style="display: none; position: absolute; top: 100%; left: 0; background-color: var(--color-bg-toolbar); color: var(--color-text); border: 1px solid var(--color-border); min-width: 200px; z-index: 10000; box-shadow: var(--shadow-popup);">
-                    <div class="html-menu-option" data-db="actors" style="padding: 8px 16px; cursor: pointer;">Actors</div>
-                    <div class="html-menu-option" data-db="classes" style="padding: 8px 16px; cursor: pointer;">Classes</div>
-                    <div class="html-menu-option" data-db="skills" style="padding: 8px 16px; cursor: pointer;">Skills</div>
-                    <div class="html-menu-option" data-db="items" style="padding: 8px 16px; cursor: pointer;">Items</div>
-                    <div class="html-menu-option" data-db="weapons" style="padding: 8px 16px; cursor: pointer;">Weapons</div>
-                    <div class="html-menu-option" data-db="armors" style="padding: 8px 16px; cursor: pointer;">Armors</div>
+                    <div class="html-menu-option" data-db="actors" data-i18n="menu.actors" style="padding: 8px 16px; cursor: pointer;">Actors</div>
+                    <div class="html-menu-option" data-db="classes" data-i18n="menu.classes" style="padding: 8px 16px; cursor: pointer;">Classes</div>
+                    <div class="html-menu-option" data-db="skills" data-i18n="menu.skills" style="padding: 8px 16px; cursor: pointer;">Skills</div>
+                    <div class="html-menu-option" data-db="items" data-i18n="menu.items" style="padding: 8px 16px; cursor: pointer;">Items</div>
+                    <div class="html-menu-option" data-db="weapons" data-i18n="menu.weapons" style="padding: 8px 16px; cursor: pointer;">Weapons</div>
+                    <div class="html-menu-option" data-db="armors" data-i18n="menu.armors" style="padding: 8px 16px; cursor: pointer;">Armors</div>
                     <div style="height: 1px; background: var(--color-border); margin: 4px 0;"></div>
-                    <div class="html-menu-option" data-db="enemies" style="padding: 8px 16px; cursor: pointer;">Enemies</div>
-                    <div class="html-menu-option" data-db="troops" style="padding: 8px 16px; cursor: pointer;">Troops</div>
-                    <div class="html-menu-option" data-db="states" style="padding: 8px 16px; cursor: pointer;">States</div>
+                    <div class="html-menu-option" data-db="enemies" data-i18n="menu.enemies" style="padding: 8px 16px; cursor: pointer;">Enemies</div>
+                    <div class="html-menu-option" data-db="troops" data-i18n="menu.troops" style="padding: 8px 16px; cursor: pointer;">Troops</div>
+                    <div class="html-menu-option" data-db="states" data-i18n="menu.states" style="padding: 8px 16px; cursor: pointer;">States</div>
                     <div style="height: 1px; background: var(--color-border); margin: 4px 0;"></div>
-                    <div class="html-menu-option" data-db="animations" style="padding: 8px 16px; cursor: pointer;">Animations</div>
-                    <div class="html-menu-option" data-db="tilesets" style="padding: 8px 16px; cursor: pointer;">Tilesets</div>
-                    <div class="html-menu-option" data-db="commonEvents" style="padding: 8px 16px; cursor: pointer;">Common Events</div>
+                    <div class="html-menu-option" data-db="animations" data-i18n="menu.animations" style="padding: 8px 16px; cursor: pointer;">Animations</div>
+                    <div class="html-menu-option" data-db="tilesets" data-i18n="menu.tilesets" style="padding: 8px 16px; cursor: pointer;">Tilesets</div>
+                    <div class="html-menu-option" data-db="commonEvents" data-i18n="menu.commonEvents" style="padding: 8px 16px; cursor: pointer;">Common Events</div>
                     <div style="height: 1px; background: var(--color-border); margin: 4px 0;"></div>
-                    <div class="html-menu-option" data-db="system" style="padding: 8px 16px; cursor: pointer;">System</div>
-                    <div class="html-menu-option" data-db="types" style="padding: 8px 16px; cursor: pointer;">Types</div>
-                    <div class="html-menu-option" data-db="terms" style="padding: 8px 16px; cursor: pointer;">Terms</div>
+                    <div class="html-menu-option" data-db="system" data-i18n="menu.system" style="padding: 8px 16px; cursor: pointer;">System</div>
+                    <div class="html-menu-option" data-db="types" data-i18n="menu.types" style="padding: 8px 16px; cursor: pointer;">Types</div>
+                    <div class="html-menu-option" data-db="terms" data-i18n="menu.terms" style="padding: 8px 16px; cursor: pointer;">Terms</div>
                 </div>
             </div>
             <div class="html-menu-item" data-menu="plugins" style="position: relative; padding: 8px 16px; cursor: pointer;">
-                Plugins
+                <span data-i18n="menu.plugins">Plugins</span>
                 <div class="html-submenu" id="submenu-plugins" style="display: none; position: absolute; top: 100%; left: 0; background-color: var(--color-bg-toolbar); color: var(--color-text); border: 1px solid var(--color-border); min-width: 200px; z-index: 10000; box-shadow: var(--shadow-popup);">
-                    <div class="html-menu-option" data-action="manage-plugins" style="padding: 8px 16px; cursor: pointer;">Manage Plugins</div>
+                    <div class="html-menu-option" data-action="manage-plugins" data-i18n="menu.managePlugins" style="padding: 8px 16px; cursor: pointer;">Manage Plugins</div>
                 </div>
             </div>
             <div class="html-menu-item" data-menu="tools" style="position: relative; padding: 8px 16px; cursor: pointer;">
-                Tools
+                <span data-i18n="menu.tools">Tools</span>
                 <div class="html-submenu" id="submenu-tools" style="display: none; position: absolute; top: 100%; left: 0; background-color: var(--color-bg-toolbar); color: var(--color-text); border: 1px solid var(--color-border); min-width: 200px; z-index: 10000; box-shadow: var(--shadow-popup);">
-                    <div class="html-menu-option" data-action="toggle-event-mode" style="padding: 8px 16px; cursor: pointer;">Event Manager</div>
-                    <div class="html-menu-option" data-action="audio-player" style="padding: 8px 16px; cursor: pointer;">♪ Audio Player</div>
+                    <div class="html-menu-option" data-action="toggle-event-mode" data-i18n="menu.eventManager" style="padding: 8px 16px; cursor: pointer;">Event Manager</div>
+                    <div class="html-menu-option" data-action="audio-player" data-i18n="menu.audioPlayer" style="padding: 8px 16px; cursor: pointer;">♪ Audio Player</div>
                 </div>
             </div>
             <div class="html-menu-item" data-menu="forge" style="position: relative; padding: 8px 16px; cursor: pointer;">
-                Forge
+                <span data-i18n="menu.forge">Forge</span>
                 <div class="html-submenu" id="submenu-forge" style="display: none; position: absolute; top: 100%; left: 0; background-color: var(--color-bg-toolbar); color: var(--color-text); border: 1px solid var(--color-border); min-width: 200px; z-index: 10000; box-shadow: var(--shadow-popup);">
-                    <div class="html-menu-option" data-action="forge-launcher" style="padding: 8px 16px; cursor: pointer;">Forge Launcher</div>
+                    <div class="html-menu-option" data-action="forge-launcher" data-i18n="menu.forgeLauncher" style="padding: 8px 16px; cursor: pointer;">Forge Launcher</div>
                     <div style="height: 1px; background: var(--color-border); margin: 4px 0;"></div>
-                    <div class="html-menu-option" data-action="forge-character-generator" style="padding: 8px 16px; cursor: pointer;">Character Generator</div>
-                    <div class="html-menu-option" data-action="forge-animation-generator" style="padding: 8px 16px; cursor: pointer;">Animation Generator</div>
-                    <div class="html-menu-option" data-action="forge-sound-effect-generator" style="padding: 8px 16px; cursor: pointer;">Sound Effect Generator</div>
+                    <div class="html-menu-option" data-action="forge-character-generator" data-i18n="menu.characterGenerator" style="padding: 8px 16px; cursor: pointer;">Character Generator</div>
+                    <div class="html-menu-option" data-action="forge-animation-generator" data-i18n="menu.animationGenerator" style="padding: 8px 16px; cursor: pointer;">Animation Generator</div>
+                    <div class="html-menu-option" data-action="forge-sound-effect-generator" data-i18n="menu.soundEffectGenerator" style="padding: 8px 16px; cursor: pointer;">Sound Effect Generator</div>
                 </div>
             </div>
             <div class="html-menu-item" data-menu="build" style="position: relative; padding: 8px 16px; cursor: pointer;">
-                Build
+                <span data-i18n="menu.build">Build</span>
                 <div class="html-submenu" id="submenu-build" style="display: none; position: absolute; top: 100%; left: 0; background-color: var(--color-bg-toolbar); color: var(--color-text); border: 1px solid var(--color-border); min-width: 200px; z-index: 10000; box-shadow: var(--shadow-popup);">
-                    <div class="html-menu-option" data-action="build-deployment" style="padding: 8px 16px; cursor: pointer;">Deploy Game...</div>
+                    <div class="html-menu-option" data-action="build-deployment" data-i18n="menu.deployGame" style="padding: 8px 16px; cursor: pointer;">Deploy Game...</div>
                     <div style="border-top: 1px solid var(--color-border); margin: 4px 0;"></div>
-                    <div class="html-menu-option" data-action="dist-editor" style="padding: 8px 16px; cursor: pointer;">Deploy Editor...</div>
+                    <div class="html-menu-option" data-action="dist-editor" data-i18n="menu.deployEditor" style="padding: 8px 16px; cursor: pointer;">Deploy Editor...</div>
                 </div>
             </div>
             <div class="html-menu-item" data-menu="help" style="position: relative; padding: 8px 16px; cursor: pointer;">
-                Help
+                <span data-i18n="menu.help">Help</span>
                 <div class="html-submenu" id="submenu-help" style="display: none; position: absolute; top: 100%; left: 0; background-color: var(--color-bg-toolbar); color: var(--color-text); border: 1px solid var(--color-border); min-width: 200px; z-index: 10000; box-shadow: var(--shadow-popup);">
-                    <div class="html-menu-option" data-action="devtools" style="padding: 8px 16px; cursor: pointer;">Developer Tools</div>
+                    <div class="html-menu-option" data-action="devtools" data-i18n="menu.developerTools" style="padding: 8px 16px; cursor: pointer;">Developer Tools</div>
                     <div style="height: 1px; background: var(--color-border); margin: 4px 0;"></div>
-                    <div class="html-menu-option" data-action="about" style="padding: 8px 16px; cursor: pointer;">About RPG Reactor</div>
+                    <div class="html-menu-option" data-action="about" data-i18n="menu.about" style="padding: 8px 16px; cursor: pointer;">About RPG Reactor</div>
                 </div>
             </div>
+            <button type="button" class="html-menu-option" data-action="options" title="Language" aria-label="Language" data-i18n-title="options.language" data-i18n-aria="options.language" style="display:flex;align-items:center;justify-content:center;width:34px;padding:0;margin:3px 8px 3px 0;cursor:pointer;background:transparent;color:var(--color-text);border:1px solid transparent;border-radius:4px;">
+                <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false" style="display:block;pointer-events:none;">
+                    <circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="1.7"/>
+                    <path d="M3.8 12h16.4M12 3.5c2.1 2.4 3.2 5.2 3.2 8.5S14.1 18.1 12 20.5M12 3.5C9.9 5.9 8.8 8.7 8.8 12s1.1 6.1 3.2 8.5" fill="none" stroke="currentColor" stroke-width="1.45" stroke-linecap="round"/>
+                    <path d="M6.3 7.2h11.4M6.3 16.8h11.4" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" opacity="0.75"/>
+                    <path d="M17.4 5.1h4.1v3.5h-1.2l-1 1.3-1-1.3h-.9z" fill="var(--color-accent-bright)" stroke="currentColor" stroke-width="0.8" stroke-linejoin="round"/>
+                </svg>
+            </button>
         </div>
 
         <!-- Toolbar - only shown when project is loaded -->
         <div id="toolbar" class="project-only" style="display: none;">
-            <button class="tool-button" data-action="new-project" title="New Project"><img src="images/icon-new-project.png"></button>
-            <button class="tool-button" data-action="open-project" title="Open Project"><img src="images/icon-open-project.png"></button>
-            <button class="tool-button" data-action="save" title="Save Project"><img src="images/icon-save.png"></button>
+            <button class="tool-button" data-action="new-project" title="New Project" data-i18n-title="toolbar.title.newProject"><img src="images/icon-new-project.png"></button>
+            <button class="tool-button" data-action="open-project" title="Open Project" data-i18n-title="toolbar.title.openProject"><img src="images/icon-open-project.png"></button>
+            <button class="tool-button" data-action="save" title="Save Project" data-i18n-title="toolbar.title.saveProject"><img src="images/icon-save.png"></button>
             <div class="toolbar-separator"></div>
-            <button class="tool-button" id="undo-btn" data-action="undo" title="Undo (Ctrl+Z)" disabled><img src="images/icon-undo.png"></button>
-            <button class="tool-button" id="redo-btn" data-action="redo" title="Redo (Ctrl+Y)" disabled><img src="images/icon-redo.png"></button>
+            <button class="tool-button" id="undo-btn" data-action="undo" title="Undo (Ctrl+Z)" data-i18n-title="toolbar.title.undo" disabled><img src="images/icon-undo.png"></button>
+            <button class="tool-button" id="redo-btn" data-action="redo" title="Redo (Ctrl+Y)" data-i18n-title="toolbar.title.redo" disabled><img src="images/icon-redo.png"></button>
             <div class="toolbar-separator"></div>
-            <button class="tool-button" data-action="playtest" title="Playtest"><img src="images/icon-playtest.png"></button>
+            <button class="tool-button" data-action="playtest" title="Playtest" data-i18n-title="toolbar.title.playtest"><img src="images/icon-playtest.png"></button>
             <div class="toolbar-separator"></div>
             <!-- Drawing Tools -->
-            <span class="toolbar-label">Tileset:</span>
-            <button class="tool-button tool-draw-mode active" data-tool="pencil" title="Single Tile Tool"><img src="images/icon-single.png"></button>
-            <button class="tool-button tool-draw-mode" data-tool="rectangle" title="Rectangular Area Tool"><img src="images/icon-area.png"></button>
-            <button class="tool-button tool-draw-mode" data-tool="circle" title="Circular Area Tool"><img src="images/icon-circular-area.png"></button>
-            <button class="tool-button tool-draw-mode" data-tool="fill" title="Fill Tool"><img src="images/icon-fill.png"></button>
+            <span class="toolbar-label" data-i18n="toolbar.tileset">Tileset:</span>
+            <button class="tool-button tool-draw-mode active" data-tool="pencil" title="Single Tile Tool" data-i18n-title="toolbar.title.singleTile"><img src="images/icon-single.png"></button>
+            <button class="tool-button tool-draw-mode" data-tool="rectangle" title="Rectangular Area Tool" data-i18n-title="toolbar.title.rectangle"><img src="images/icon-area.png"></button>
+            <button class="tool-button tool-draw-mode" data-tool="circle" title="Circular Area Tool" data-i18n-title="toolbar.title.circle"><img src="images/icon-circular-area.png"></button>
+            <button class="tool-button tool-draw-mode" data-tool="fill" title="Fill Tool" data-i18n-title="toolbar.title.fill"><img src="images/icon-fill.png"></button>
             <div class="toolbar-separator"></div>
-            <button class="tool-button" data-action="shadow-pen" title="Shadow Pen (Toggle shadows on tiles)" style="font-size: var(--toolbar-icon-size); line-height: 1;">🌓</button>
-            <button class="tool-button" data-action="eraser" title="Erase Tiles (Layer-Aware)"><img src="images/icon-erase.png" onerror="this.style.display='none';"></button>
+            <button class="tool-button" data-action="shadow-pen" title="Shadow Pen (Toggle shadows on tiles)" data-i18n-title="toolbar.title.shadowPen" style="font-size: var(--toolbar-icon-size); line-height: 1;">🌓</button>
+            <button class="tool-button" data-action="eraser" title="Erase Tiles (Layer-Aware)" data-i18n-title="toolbar.title.eraser"><img src="images/icon-erase.png" onerror="this.style.display='none';"></button>
             <div class="toolbar-separator"></div>
             <!-- Layer Selection -->
-            <span class="toolbar-label">Layer:</span>
-            <button class="tool-button layer-mode active" data-layer="auto" title="Auto-Select Layer (Smart Stacking)"><img src="images/icon-LA.png" onerror="this.style.display='none'; this.parentElement.innerHTML='LA';"></button>
-            <button class="tool-button layer-mode" data-layer="0" title="Layer 1"><img src="images/icon-L1.png" onerror="this.style.display='none'; this.parentElement.innerHTML='L1';"></button>
-            <button class="tool-button layer-mode" data-layer="1" title="Layer 2"><img src="images/icon-L2.png" onerror="this.style.display='none'; this.parentElement.innerHTML='L2';"></button>
-            <button class="tool-button layer-mode" data-layer="2" title="Layer 3"><img src="images/icon-L3.png" onerror="this.style.display='none'; this.parentElement.innerHTML='L3';"></button>
-            <button class="tool-button layer-mode" data-layer="3" title="Layer 4"><img src="images/icon-L4.png" onerror="this.style.display='none'; this.parentElement.innerHTML='L4';"></button>
+            <span class="toolbar-label" data-i18n="toolbar.layer">Layer:</span>
+            <button class="tool-button layer-mode active" data-layer="auto" title="Auto-Select Layer (Smart Stacking)" data-i18n-title="toolbar.title.autoLayer"><img src="images/icon-LA.png" onerror="this.style.display='none'; this.parentElement.innerHTML='LA';"></button>
+            <button class="tool-button layer-mode" data-layer="0" title="Layer 1" data-i18n-title="toolbar.title.layer1"><img src="images/icon-L1.png" onerror="this.style.display='none'; this.parentElement.innerHTML='L1';"></button>
+            <button class="tool-button layer-mode" data-layer="1" title="Layer 2" data-i18n-title="toolbar.title.layer2"><img src="images/icon-L2.png" onerror="this.style.display='none'; this.parentElement.innerHTML='L2';"></button>
+            <button class="tool-button layer-mode" data-layer="2" title="Layer 3" data-i18n-title="toolbar.title.layer3"><img src="images/icon-L3.png" onerror="this.style.display='none'; this.parentElement.innerHTML='L3';"></button>
+            <button class="tool-button layer-mode" data-layer="3" title="Layer 4" data-i18n-title="toolbar.title.layer4"><img src="images/icon-L4.png" onerror="this.style.display='none'; this.parentElement.innerHTML='L4';"></button>
 
             <!-- Tools Section -->
             <div class="toolbar-separator"></div>
-            <span class="toolbar-label">Tools:</span>
-            <button class="tool-button" id="toolbar-event-manager-btn" data-action="toggle-event-mode" title="Event Manager"><img src="images/icon-event.png" onerror="this.style.display='none'; this.parentElement.innerHTML='EV';"></button>
-            <button class="tool-button" id="toolbar-database-btn" data-action="open-database" title="Database">
+            <span class="toolbar-label" data-i18n="toolbar.tools">Tools:</span>
+            <button class="tool-button" id="toolbar-event-manager-btn" data-action="toggle-event-mode" title="Event Manager" data-i18n-title="toolbar.title.eventManager"><img src="images/icon-event.png" onerror="this.style.display='none'; this.parentElement.innerHTML='EV';"></button>
+            <button class="tool-button" id="toolbar-database-btn" data-action="open-database" title="Database" data-i18n-title="toolbar.title.database">
                 <img src="images/icon-database.png" onerror="this.style.display='none'; this.parentElement.innerHTML='DB';">
             </button>
-            <button class="tool-button" id="toolbar-plugins-btn" data-action="open-plugins" title="Plugins">
+            <button class="tool-button" id="toolbar-plugins-btn" data-action="open-plugins" title="Plugins" data-i18n-title="toolbar.title.plugins">
                 <img src="images/icon-plugins.png" onerror="this.style.display='none'; this.parentElement.innerHTML='PL';">
             </button>
-            <button class="tool-button" data-action="audio-player" title="Audio Player"><img src="images/icon-audioplayer.png" onerror="this.style.display='none'; this.parentElement.innerHTML='♪';"></button>
+            <button class="tool-button" data-action="audio-player" title="Audio Player" data-i18n-title="toolbar.title.audioPlayer"><img src="images/icon-audioplayer.png" onerror="this.style.display='none'; this.parentElement.innerHTML='♪';"></button>
 
             <!-- Forge Section -->
             <div class="toolbar-separator"></div>
-            <span class="toolbar-label">Forge:</span>
-            <button class="tool-button" data-action="forge-launcher" title="Forge - Development Tool Suite"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M 11 3 C 16 3, 21 7, 21 12 C 21 16, 18 20, 14 20 C 12 20, 10 19, 10 17 C 13 17, 16 16, 17 13 C 18 9, 15 5, 11 3 Z" fill="#ffd700"/><path d="M 11 18 L 8 22 L 6 21 L 10 17 Z" fill="#ffd700"/><ellipse cx="6" cy="21.5" rx="2" ry="1.3" fill="#ffd700"/><path d="M 7.03 4.43 L 6.29 5.18 L 4.31 7.16 L 1.83 9.64 L 4.55 12.36 L 7.03 9.88 L 20.16 23.01 A 1.40 1.40 0 0 0 22.15 23.01 A 1.40 1.40 0 0 0 22.15 21.03 L 9.01 7.90 L 9.76 7.16 L 12.00 4.93 Z" fill="#ffd700"/><path d="M 2.5 -0.5 Q 3.0 2.0 5.5 2.5 Q 3.0 3.0 2.5 5.5 Q 2.0 3.0 -0.5 2.5 Q 2.0 2.0 2.5 -0.5 Z" fill="#fff066"/></svg></button>
+            <span class="toolbar-label" data-i18n="toolbar.forge">Forge:</span>
+            <button class="tool-button" data-action="forge-launcher" title="Forge - Development Tool Suite" data-i18n-title="toolbar.title.forgeLauncher"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M 11 3 C 16 3, 21 7, 21 12 C 21 16, 18 20, 14 20 C 12 20, 10 19, 10 17 C 13 17, 16 16, 17 13 C 18 9, 15 5, 11 3 Z" fill="#ffd700"/><path d="M 11 18 L 8 22 L 6 21 L 10 17 Z" fill="#ffd700"/><ellipse cx="6" cy="21.5" rx="2" ry="1.3" fill="#ffd700"/><path d="M 7.03 4.43 L 6.29 5.18 L 4.31 7.16 L 1.83 9.64 L 4.55 12.36 L 7.03 9.88 L 20.16 23.01 A 1.40 1.40 0 0 0 22.15 23.01 A 1.40 1.40 0 0 0 22.15 21.03 L 9.01 7.90 L 9.76 7.16 L 12.00 4.93 Z" fill="#ffd700"/><path d="M 2.5 -0.5 Q 3.0 2.0 5.5 2.5 Q 3.0 3.0 2.5 5.5 Q 2.0 3.0 -0.5 2.5 Q 2.0 2.0 2.5 -0.5 Z" fill="#fff066"/></svg></button>
         </div>
 
         <!-- Main Content -->
@@ -163,7 +171,7 @@
 
                     <h1 style="font-size: 48px; margin-bottom: 16px; color: #007acc;">RPG Reactor</h1>
                     <p style="font-size: 18px; color: var(--color-text-muted); margin-bottom: 40px;">
-                        Create amazing RPG games with an open-source, cross-platform engine
+                        <span data-i18n="welcome.tagline">Create amazing RPG games with an open-source, cross-platform engine</span>
                     </p>
 
                     <div style="display: flex; gap: 20px; justify-content: center; margin-bottom: 60px;">
@@ -177,7 +185,7 @@
                             cursor: pointer;
                             font-weight: 600;
                         ">
-                            New Project
+                            <span data-i18n="menu.newProject">New Project</span>
                         </button>
                         <button class="welcome-button" data-action="open-project" style="
                             background: var(--color-border);
@@ -189,17 +197,17 @@
                             cursor: pointer;
                             font-weight: 600;
                         ">
-                            Open Project
+                            <span data-i18n="menu.openProject">Open Project</span>
                         </button>
                     </div>
 
                     <div style="text-align: left; background: var(--color-bg-list-item); padding: 24px; border-radius: 8px; border: 1px solid var(--color-border);">
-                        <h3 style="margin-top: 0; color: var(--color-text); margin-bottom: 16px;">Getting Started</h3>
+                        <h3 data-i18n="welcome.gettingStarted" style="margin-top: 0; color: var(--color-text); margin-bottom: 16px;">Getting Started</h3>
                         <ul style="color: var(--color-text-muted); line-height: 1.8; margin: 0;">
-                            <li>Create a new project to start building your RPG</li>
-                            <li>Design maps, events, and game mechanics</li>
-                            <li>Test your game instantly with the built-in playtest feature</li>
-                            <li>Export your game for Windows, Mac, and Linux</li>
+                            <li data-i18n="welcome.step.create">Create a new project to start building your RPG</li>
+                            <li data-i18n="welcome.step.design">Design maps, events, and game mechanics</li>
+                            <li data-i18n="welcome.step.test">Test your game instantly with the built-in playtest feature</li>
+                            <li data-i18n="welcome.step.export">Export your game for Windows, Mac, and Linux</li>
                         </ul>
                     </div>
                 </div>
@@ -211,7 +219,7 @@
                 <div id="sidebar">
                     <!-- Tileset Palette Section -->
                     <div class="sidebar-section resizable-section" id="tileset-palette-section" style="display: none; flex: 2; min-height: 150px;">
-                        <div class="sidebar-header">Tileset Palette</div>
+                        <div class="sidebar-header" data-i18n="sidebar.tilesetPalette">Tileset Palette</div>
                         <div class="sidebar-content" id="tileset-palette-content" style="padding: 0; overflow: hidden; min-height: 0; display: flex; flex-direction: column;">
                             <!-- Tileset palette viewer will be initialized here -->
                         </div>
@@ -220,24 +228,24 @@
 
                     <!-- Events Section -->
                     <div class="sidebar-section resizable-section" id="events-section" style="display: none; flex: 1; min-height: 100px;">
-                        <div class="sidebar-header">Events</div>
+                        <div class="sidebar-header" data-i18n="sidebar.events">Events</div>
                         <div class="sidebar-content" id="events-list" style="overflow-y: auto; padding: 0; min-height: 0;">
-                            <div class="tree-item" style="color: var(--color-text-muted);">No events on this map</div>
+                            <div class="tree-item" data-i18n="sidebar.noEvents" style="color: var(--color-text-muted);">No events on this map</div>
                         </div>
                     </div>
                     <div class="resize-handle" data-target="events-section" style="display: none;"></div>
 
                     <div class="sidebar-section resizable-section" style="flex: 1; min-height: 100px; display: flex; flex-direction: column;">
-                        <div class="sidebar-header">Maps</div>
+                        <div class="sidebar-header" data-i18n="sidebar.maps">Maps</div>
                         <div style="display: flex; background-color: var(--color-bg-list-item); border-bottom: 1px solid var(--color-border);">
-                            <div id="map-tree-tab" class="map-tab active" style="flex: 1; padding: 6px 12px; text-align: center; cursor: pointer; font-size: 12px; border-right: 1px solid var(--color-border); background-color: var(--color-bg-surface); color: var(--color-text);">Map Tree</div>
-                            <div id="quick-access-tab" class="map-tab" style="flex: 1; padding: 6px 12px; text-align: center; cursor: pointer; font-size: 12px; background-color: var(--color-bg-list-item); color: var(--color-text-muted);">Quick Access</div>
+                            <div id="map-tree-tab" class="map-tab active" data-i18n="sidebar.mapTree" style="flex: 1; padding: 6px 12px; text-align: center; cursor: pointer; font-size: 12px; border-right: 1px solid var(--color-border); background-color: var(--color-bg-surface); color: var(--color-text);">Map Tree</div>
+                            <div id="quick-access-tab" class="map-tab" data-i18n="sidebar.quickAccess" style="flex: 1; padding: 6px 12px; text-align: center; cursor: pointer; font-size: 12px; background-color: var(--color-bg-list-item); color: var(--color-text-muted);">Quick Access</div>
                         </div>
                         <div class="sidebar-content" id="maps-list" style="overflow-y: auto; flex: 1;">
-                            <div class="tree-item">No maps yet</div>
+                            <div class="tree-item" data-i18n="sidebar.noMaps">No maps yet</div>
                         </div>
                         <div class="sidebar-content" id="quick-access-list" style="overflow-y: auto; flex: 1; display: none;">
-                            <div class="tree-item">No quick access maps yet</div>
+                            <div class="tree-item" data-i18n="sidebar.noQuickAccessMaps">No quick access maps yet</div>
                         </div>
                     </div>
                 </div>
@@ -248,11 +256,11 @@
                         <!-- Map Info (populated when map is loaded) -->
                         <div id="map-info-content">
                             <div id="map-info-left">
-                                <span class="map-info-item">Map <span class="map-info-value" id="map-id">---</span>: <span class="map-info-value" id="map-name">No Map Loaded</span></span>
+                                <span class="map-info-item"><span data-i18n="workspace.map">Map</span> <span class="map-info-value" id="map-id">---</span>: <span class="map-info-value" id="map-name" data-i18n="workspace.noMapLoaded">No Map Loaded</span></span>
                                 <span class="map-info-item">(<span class="map-info-value" id="map-dimensions">-- x --</span>)</span>
                             </div>
                             <div id="map-info-right">
-                                <span class="map-info-item">Zoom: <span class="map-info-value" id="map-zoom">100%</span></span>
+                                <span class="map-info-item"><span data-i18n="workspace.zoom">Zoom:</span> <span class="map-info-value" id="map-zoom">100%</span></span>
                                 <span class="map-info-item">(<span class="map-info-value" id="map-coordinates">--,--</span>)</span>
                             </div>
                         </div>
@@ -267,7 +275,7 @@
     <div id="event-editor-modal" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.8); display: none; justify-content: center; align-items: center; z-index: 10000;">
         <div style="background-color: var(--color-bg-surface); border: 1px solid var(--color-border); border-radius: 8px; width: 95%; max-width: 1400px; height: 97%; max-height: 1000px; display: flex; flex-direction: column; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);">
             <div style="background-color: var(--color-bg-toolbar); padding: 12px 16px; border-bottom: 1px solid var(--color-border); display: flex; justify-content: space-between; align-items: center; border-radius: 8px 8px 0 0;">
-                <div style="font-size: 16px; font-weight: 600; color: var(--color-text);">Event Editor</div>
+                <div data-i18n="modal.eventEditor" style="font-size: 16px; font-weight: 600; color: var(--color-text);">Event Editor</div>
                 <button id="event-editor-close-btn" style="background: none; border: none; color: var(--color-text-muted); font-size: 24px; cursor: pointer; padding: 0; width: 30px; height: 30px; line-height: 1;">×</button>
             </div>
             <div id="event-editor-content" style="flex: 1; overflow: hidden;"></div>
@@ -521,9 +529,9 @@
                 </div>
             </div>
             <div class="database-footer" id="database-footer">
-                <button class="database-footer-btn" id="database-ok-btn">OK</button>
-                <button class="database-footer-btn" id="database-cancel-btn">Cancel</button>
-                <button class="database-footer-btn" id="database-apply-btn">Apply</button>
+                <button class="database-footer-btn" id="database-ok-btn" data-i18n="common.ok">OK</button>
+                <button class="database-footer-btn" id="database-cancel-btn" data-i18n="common.cancel">Cancel</button>
+                <button class="database-footer-btn" id="database-apply-btn" data-i18n="common.apply">Apply</button>
             </div>
         </div>
     </div>
@@ -548,24 +556,35 @@
     <div id="about-modal" class="modal">
         <div class="modal-content" style="max-width: 500px; text-align: center;">
             <div class="modal-header">
-                <h2>About RPG Reactor</h2>
+                <h2 data-i18n="about.title">About RPG Reactor</h2>
                 <span class="modal-close" onclick="document.getElementById('about-modal').style.display='none'">&times;</span>
             </div>
             <div class="modal-body">
                 <img src="images/logo.png" alt="RPG Reactor" style="max-width: 300px; width: 100%; height: auto; margin-bottom: 24px;" onerror="this.style.display='none'">
 
-                <h3 style="color: #e8b817; margin-bottom: 16px;">RPG Reactor v0.9.0</h3>
+                <h3 data-i18n="about.version" style="color: #e8b817; margin-bottom: 16px;">RPG Reactor v0.91</h3>
 
-                <p style="color: var(--color-text); line-height: 1.6; margin-bottom: 16px;">
+                <p data-i18n="about.description" style="color: var(--color-text); line-height: 1.6; margin-bottom: 16px;">
                     An open-source, cross-platform RPG game engine built with NW.js and PixiJS v8
                 </p>
 
-                <p style="color: var(--color-text-muted); font-size: 13px; line-height: 1.6; margin-bottom: 16px;">
+                <p data-i18n="about.compatibility" style="color: var(--color-text-muted); font-size: 13px; line-height: 1.6; margin-bottom: 16px;">
                     Create amazing RPG games with a professional editor that runs on Windows, Mac, and Linux.
                     Compatible with RPG Maker MZ and MV projects in most cases; runtime compatibility depends primarily on the project's corescripts and plugins.
                 </p>
 
-                <p style="color: var(--color-text-muted); font-size: 12px;">
+                <div style="margin: 18px auto; padding: 14px; max-width: 360px; background: var(--color-bg-panel); border: 1px solid var(--color-border); border-radius: 6px; text-align: left;">
+                    <div data-i18n="about.linksTitle" style="color: var(--color-accent-bright); font-weight: 700; font-size: 13px; margin-bottom: 10px; text-align: center;">Psychronic Links</div>
+                    <div style="display: grid; gap: 8px; font-size: 13px;">
+                        <a class="external-link" href="https://psychronic.itch.io" data-i18n="about.itch" style="color: var(--color-link); text-decoration: none;">Itch.io - Plugins And Tools</a>
+                        <a class="external-link" href="https://store.steampowered.com/developer/psychronic" data-i18n="about.steam" style="color: var(--color-link); text-decoration: none;">Steam - Psychronic Games</a>
+                        <a class="external-link" href="https://github.com/Psychronic-Games?tab=repositories" data-i18n="about.github" style="color: var(--color-link); text-decoration: none;">GitHub - Other Projects</a>
+                        <a class="external-link" href="https://www.youtube.com/@PsychronicGames" data-i18n="about.youtube" style="color: var(--color-link); text-decoration: none;">YouTube - Psychronic Games</a>
+                        <a class="external-link" href="https://discord.gg/hXacc38PTw" data-i18n="about.discord" style="color: var(--color-link); text-decoration: none;">Discord - Join The Community</a>
+                    </div>
+                </div>
+
+                <p data-i18n="about.license" style="color: var(--color-text-muted); font-size: 12px;">
                     License: MIT
                 </p>
             </div>
@@ -579,21 +598,21 @@
     <div id="audio-player-modal" class="modal">
         <div class="modal-content" style="max-width: 900px;">
             <div class="modal-header">
-                <h2>♪ Audio Player</h2>
+                <h2 data-i18n="modal.audioPlayer">♪ Audio Player</h2>
                 <span class="modal-close" onclick="document.getElementById('audio-player-modal').style.display='none'">&times;</span>
             </div>
             <div class="modal-body">
                 <!-- Audio Type Tabs -->
                 <div style="display: flex; gap: 4px; margin-bottom: 16px; border-bottom: 2px solid var(--color-border);">
-                    <button class="audio-tab active" data-type="bgm">BGM (Music)</button>
-                    <button class="audio-tab" data-type="bgs">BGS (Ambient)</button>
-                    <button class="audio-tab" data-type="me">ME (Jingles)</button>
-                    <button class="audio-tab" data-type="se">SE (Effects)</button>
+                    <button class="audio-tab active" data-type="bgm" data-i18n="audio.bgm">BGM (Music)</button>
+                    <button class="audio-tab" data-type="bgs" data-i18n="audio.bgs">BGS (Ambient)</button>
+                    <button class="audio-tab" data-type="me" data-i18n="audio.me">ME (Jingles)</button>
+                    <button class="audio-tab" data-type="se" data-i18n="audio.se">SE (Effects)</button>
                 </div>
 
                 <!-- Player Info -->
                 <div class="audio-player-info" id="audio-player-info">
-                    <div class="current-track" id="current-track-name">No track selected</div>
+                    <div class="current-track" id="current-track-name" data-i18n="audio.noTrackSelected">No track selected</div>
                     <div class="track-time" id="track-time">0:00 / 0:00</div>
                 </div>
 
@@ -606,16 +625,16 @@
 
                 <!-- Playback Controls -->
                 <div class="audio-player-controls">
-                    <button class="audio-player-button" id="btn-play" disabled title="Play">
+                    <button class="audio-player-button" id="btn-play" disabled title="Play" data-i18n-title="audio.play">
                         <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
                     </button>
-                    <button class="audio-player-button" id="btn-pause" disabled title="Pause">
+                    <button class="audio-player-button" id="btn-pause" disabled title="Pause" data-i18n-title="audio.pause">
                         <svg viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
                     </button>
-                    <button class="audio-player-button" id="btn-stop" disabled title="Stop">
+                    <button class="audio-player-button" id="btn-stop" disabled title="Stop" data-i18n-title="audio.stop">
                         <svg viewBox="0 0 24 24"><path d="M6 6h12v12H6z"/></svg>
                     </button>
-                    <button class="audio-player-button" id="btn-loop" title="Loop: Off">
+                    <button class="audio-player-button" id="btn-loop" title="Loop: Off" data-i18n-title="audio.loopOff">
                         <svg viewBox="0 0 24 24"><path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/></svg>
                     </button>
                 </div>
@@ -624,7 +643,7 @@
                 <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; margin-top: 16px; padding: 12px; background: var(--color-bg-menubar); border-radius: 4px; border: 1px solid var(--color-border-subtle);">
                     <!-- Volume Control -->
                     <div>
-                        <label style="display: block; font-size: 12px; color: var(--color-text); margin-bottom: 4px;">Volume</label>
+                        <label data-i18n="audio.volume" style="display: block; font-size: 12px; color: var(--color-text); margin-bottom: 4px;">Volume</label>
                         <div style="display: flex; align-items: center; gap: 8px;">
                             <input type="range" class="audio-control-slider" id="volume-slider" min="0" max="100" value="80" style="flex: 1;">
                             <span style="font-size: 12px; color: var(--color-text); min-width: 40px;" id="volume-value">80%</span>
@@ -633,7 +652,7 @@
 
                     <!-- Pitch Control -->
                     <div>
-                        <label style="display: block; font-size: 12px; color: var(--color-text); margin-bottom: 4px;">Pitch</label>
+                        <label data-i18n="audio.pitch" style="display: block; font-size: 12px; color: var(--color-text); margin-bottom: 4px;">Pitch</label>
                         <div style="display: flex; align-items: center; gap: 8px;">
                             <input type="range" class="audio-control-slider" id="pitch-slider" min="50" max="150" value="100" style="flex: 1;">
                             <span style="font-size: 12px; color: var(--color-text); min-width: 40px;" id="pitch-value">100%</span>
@@ -642,7 +661,7 @@
 
                     <!-- Pan Control -->
                     <div>
-                        <label style="display: block; font-size: 12px; color: var(--color-text); margin-bottom: 4px;">Pan</label>
+                        <label data-i18n="audio.pan" style="display: block; font-size: 12px; color: var(--color-text); margin-bottom: 4px;">Pan</label>
                         <div style="display: flex; align-items: center; gap: 8px;">
                             <input type="range" class="audio-control-slider" id="pan-slider" min="-100" max="100" value="0" style="flex: 1;">
                             <span style="font-size: 12px; color: var(--color-text); min-width: 40px;" id="pan-value">Center</span>
@@ -658,14 +677,13 @@
                     </div>
                     <!-- Track List -->
                     <div id="audio-track-list" style="background: var(--color-bg-surface); flex: 1; overflow-y: auto;">
-                        <p style="color: var(--color-text-muted); padding: 20px; text-align: center;">Please load a project first</p>
+                        <p data-i18n="audio.loadProjectFirst" style="color: var(--color-text-muted); padding: 20px; text-align: center;">Please load a project first</p>
                     </div>
                 </div>
             </div>
         </div>
     </div>
 
-    <script src="node_modules/pixi.js/dist/pixi.min.js"></script>
     <script>
         if (typeof PIXI === 'undefined') {
             try {
@@ -673,12 +691,10 @@
                 const path = require('path');
                 const appDir = path.dirname(decodeURIComponent(window.location.pathname));
                 const candidates = [
-                    path.join(appDir, 'node_modules', 'pixi.js', 'dist', 'pixi.min.js'),
-                    path.join(appDir, 'runtime', 'libs', 'pixi8.js'),
-                    path.join(process.cwd(), 'node_modules', 'pixi.js', 'dist', 'pixi.min.js'),
-                    path.join(process.cwd(), '..', 'runtime', 'libs', 'pixi8.js'),
-                    path.join(process.cwd(), 'runtime', 'libs', 'pixi8.js'),
-                    path.join(process.cwd(), 'package.nw', 'runtime', 'libs', 'pixi8.js')
+                    path.join(appDir, 'runtime', 'libs', 'pixi.js'),
+                    path.join(process.cwd(), '..', 'runtime', 'libs', 'pixi.js'),
+                    path.join(process.cwd(), 'runtime', 'libs', 'pixi.js'),
+                    path.join(process.cwd(), 'package.nw', 'runtime', 'libs', 'pixi.js')
                 ];
 
                 for (const candidate of candidates) {
@@ -696,7 +712,7 @@
     </script>
     <script>
         if (typeof PIXI === 'undefined') {
-            throw new Error('PixiJS failed to load. Run npm install in editor/ or keep runtime/libs/pixi8.js beside the editor source.');
+            throw new Error('PixiJS failed to load. Keep runtime/libs/pixi.js beside the editor source or run npm install in editor/.');
         }
 
         // Define __dirname for Effekseer compatibility in NW.js
@@ -707,6 +723,7 @@
     <script src="libs/effekseer.min.js"></script>
     <!-- Performance profiler -->
     <script src="src/utils/ThemeColors.js"></script>
+    <script src="src/I18nManager.js"></script>
     <script src="src/OptionsManager.js"></script>
     <!-- Forge tool suite -->
     <!-- CharacterGenerator: helpers + registry + class (order matters) -->
@@ -802,7 +819,30 @@
     <script src="src/forge/AnimationGenerator/animations/HolyAura.js"></script>
     <script src="src/forge/AnimationGenerator/animations/ChromaticPulse.js"></script>
     <script src="src/forge/AnimationGenerator/animations/Shockwave.js"></script>
-    <script src="node_modules/gif.js/dist/gif.js"></script>
+    <script>
+        if (typeof GIF === 'undefined') {
+            try {
+                const fs = require('fs');
+                const path = require('path');
+                const appDir = path.dirname(decodeURIComponent(window.location.pathname));
+                const candidates = [
+                    path.join(appDir, 'node_modules', 'gif.js', 'dist', 'gif.js'),
+                    path.join(process.cwd(), 'node_modules', 'gif.js', 'dist', 'gif.js')
+                ];
+                for (const candidate of candidates) {
+                    if (!fs.existsSync(candidate)) continue;
+                    const worker = path.join(path.dirname(candidate), 'gif.worker.js');
+                    if (fs.existsSync(worker)) window.RR_GIF_WORKER_SCRIPT = 'file://' + worker.replace(/\\/g, '/');
+                    const script = document.createElement('script');
+                    script.text = fs.readFileSync(candidate, 'utf8') + `\n//# sourceURL=file://${candidate.replace(/\\/g, '/')}`;
+                    document.head.appendChild(script);
+                    break;
+                }
+            } catch (error) {
+                console.warn('Optional GIF encoder failed to load:', error);
+            }
+        }
+    </script>
     <script src="src/forge/AnimationGenerator/AnimationGenerator.js"></script>
     <script src="src/forge/SoundEffectGenerator/SoundEffectGenerator.js"></script>
     <script src="src/forge/ForgeManager.js"></script>

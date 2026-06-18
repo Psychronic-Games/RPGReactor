@@ -141,13 +141,13 @@ class GetLocationInfoEditor {
         const infoSelect = document.createElement('select');
         infoSelect.style.cssText = 'padding: 6px 10px; background-color: var(--color-bg-input); color: var(--color-text); border: 1px solid var(--color-border-input); border-radius: 3px; font-size: 12px; flex: 1;';
         infoSelect.innerHTML = `
-            <option value="0" ${this.infoType === 0 ? 'selected' : ''}>Terrain Tag</option>
-            <option value="1" ${this.infoType === 1 ? 'selected' : ''}>Event ID</option>
-            <option value="2" ${this.infoType === 2 ? 'selected' : ''}>Tile ID (Layer 1)</option>
-            <option value="3" ${this.infoType === 3 ? 'selected' : ''}>Tile ID (Layer 2)</option>
-            <option value="4" ${this.infoType === 4 ? 'selected' : ''}>Tile ID (Layer 3)</option>
-            <option value="5" ${this.infoType === 5 ? 'selected' : ''}>Tile ID (Layer 4)</option>
-            <option value="6" ${this.infoType === 6 ? 'selected' : ''}>Region ID</option>
+            <option value="0" ${this.infoType === 0 ? 'selected' : ''}>${window.I18n ? window.I18n.tText('Terrain Tag') : 'Terrain Tag'}</option>
+            <option value="1" ${this.infoType === 1 ? 'selected' : ''}>${window.I18n ? window.I18n.tText('Event ID') : 'Event ID'}</option>
+            <option value="2" ${this.infoType === 2 ? 'selected' : ''}>${window.I18n ? window.I18n.tText('Tile ID (Layer 1)') : 'Tile ID (Layer 1)'}</option>
+            <option value="3" ${this.infoType === 3 ? 'selected' : ''}>${window.I18n ? window.I18n.tText('Tile ID (Layer 2)') : 'Tile ID (Layer 2)'}</option>
+            <option value="4" ${this.infoType === 4 ? 'selected' : ''}>${window.I18n ? window.I18n.tText('Tile ID (Layer 3)') : 'Tile ID (Layer 3)'}</option>
+            <option value="5" ${this.infoType === 5 ? 'selected' : ''}>${window.I18n ? window.I18n.tText('Tile ID (Layer 4)') : 'Tile ID (Layer 4)'}</option>
+            <option value="6" ${this.infoType === 6 ? 'selected' : ''}>${window.I18n ? window.I18n.tText('Region ID') : 'Region ID'}</option>
         `;
         infoSelect.addEventListener('change', (e) => {
             this.infoType = parseInt(e.target.value);

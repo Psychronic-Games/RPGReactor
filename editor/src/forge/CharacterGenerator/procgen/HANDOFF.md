@@ -1,12 +1,13 @@
 # Procgen Outfit Generator — Handoff
 
-This file captures everything a fresh Claude session needs to continue the procgen outfit work without re-deriving the context.
+This file captures everything a fresh session needs to continue the procgen outfit work without re-deriving the context.
 
-## ⭐ CURRENT STATE (2026-06-13 redesign — READ THIS FIRST)
+## CURRENT STATE (2026-06-18 - READ THIS FIRST)
 
-The "one blob" problem is SOLVED. The generator was rebuilt around the headline
-insight from reading every artist part: **each zone gets its own palette FAMILY,
-and the contrast between families is what makes pieces read as separate armor.**
+The "one blob" problem is solved for the current Looseleaf generator direction.
+The generator was rebuilt around the headline insight from reading every artist
+part: **each zone gets its own palette FAMILY, and the contrast between families
+is what makes pieces read as separate armor.**
 
 What exists now:
 - `procgen/view_part.js` — a viewer that crops any part to its bbox, prints a
@@ -20,22 +21,36 @@ What exists now:
 - `procgen/outfit_engine.js` — the engine (UMD: runs in Node AND the browser).
   FAMILIES (luminance ramps) + ACCENTS (off-ramp glows) + a palette BUILDER that
   assigns letters per family + role-based PAINTERS (head/torso/arms/belt/legs/
-  boots) + EXTENSIONS (helmetCrown/pauldron/spikes). `generateOutfit(config,body)`
-  → `{palette, sheet}`. Also exports `UI_SCHEMA` + `defaultConfig()` for the editor.
-- `procgen/gen_outfit.js` — thin Node CLI: loads body, runs `outfit_configs.js`
-  through the engine, writes part .js files. `node procgen/gen_outfit.js`
-- `procgen/outfit_configs.js` — NEW per-zone schema (zones: {style,family,accent,
-  params}; extensions:[…]). Space Warrior = steel helmet+chest, gunmetal arms,
-  leather+gold belt, navy legs, iron boots, steel cyan-rim pauldrons.
+  boots) + EXTENSIONS (pauldron/armGauntlet/spikes). `generateOutfit(config, body)`
+  returns `{ palette, sheet }`. Also exports `UI_SCHEMA` + `defaultConfig()` for
+  the editor.
+- `procgen/styles/looseleaf.js` and `procgen/styles/psychronic.js` — style
+  adapters. Looseleaf uses the shared painters directly; Psychronic swaps in
+  Psychronic-specific anatomy, classifiers, painters, and extensions.
+- `procgen/outfits/nova_sentinel.js` — the shared Nova Sentinel recipe. It
+  provides matching Outfit Forge part sets and default configs for both
+  `looseleaf` and `psychronic`.
+- `procgen/gen_outfit.js` — thin Node CLI: loads body templates, runs configured
+  outfits through the engine, writes part `.js` files.
+- `procgen/render_png.js` — Node smoke/render utility for generated outfits.
+- `procgen/outfit_configs.js` — legacy/simple config entry point still present
+  for direct CLI generation. The current editor default comes from
+  `procgen/outfits/nova_sentinel.js`.
 - **In-editor "Outfit Forge" tab** (CharacterGenerator.js, methods grouped under
   the `TAB — OUTFIT FORGE` banner). A third tab beside Procedural/Parts. Per-zone
   material+accent dropdowns and param toggles, extension enable+params, live 4-dir
   preview (CharacterRenderer), walk toggle, and "Generate & Save to Library" which
-  writes the part .js into `styles/looseleaf/parts/full outfits/` and registers it.
+  writes the part `.js` into `styles/<style>/parts/full outfits/` and registers it.
+- Generated Looseleaf full outfits currently exist under
+  `styles/looseleaf/parts/full outfits/`, including `full-outfits-looseleaf-nova-sentinel.js`.
+- The Psychronic style currently has a body base and Outfit Forge adapter path;
+  full generated Psychronic outfit-library output still needs visual validation.
 
-Resume points / polish ideas: side-view pauldron is subtle; reactor shows on the
-back too; could add more zone styles (cloth robe, open-face helmet) — they slot in
-as new `style` entries in PAINTERS + UI_SCHEMA. The history below is kept for context.
+Resume points / polish ideas: visually validate Psychronic Nova Sentinel, tune
+Psychronic-specific painter proportions, add more recipes beyond Nova Sentinel,
+add more zone styles (cloth robe, open-face helmet), and add small Node tests for
+palette/config/sheet generation. New zone styles slot in as new `style` entries
+in PAINTERS/PSYCHRONIC_PAINTERS + UI_SCHEMA. The history below is kept for context.
 
 ## The goal
 
@@ -44,14 +59,19 @@ A procedural outfit generator for the Character Generator that:
 1. Produces **endless outfits** as Character Generator parts (category `full outfits`), driven by a config object so adding a new outfit means adding a config, NOT new generator code.
 2. Outputs follow the same conventions as the artist's hand-drawn parts under `src/forge/CharacterGenerator/styles/looseleaf/parts/{torso,headwear,shoulderwear,armwear,handwear,waistwear,legwear,footwear}/`.
 3. Eventually exposes the config-object structure to the user as sliders/dropdowns in an in-editor UI so users can generate their own outfits.
-4. Currently targets the **Space Warrior** outfit as the first config, used to validate that the system produces output that visually matches the artist's quality.
+4. Currently targets the **Nova Sentinel** outfit as the shared first recipe, used to validate that the system produces output that visually matches the artist's quality across Looseleaf and Psychronic styles.
 
 ## Where the code lives
 
-- `src/forge/CharacterGenerator/procgen/gen_outfit.js` — generator framework + modules
-- `src/forge/CharacterGenerator/procgen/outfit_configs.js` — outfit configurations
-- Output goes to `src/forge/CharacterGenerator/styles/looseleaf/parts/full outfits/full-outfits-looseleaf-<id>.js`
+- `src/forge/CharacterGenerator/procgen/outfit_engine.js` — browser/Node generator core
+- `src/forge/CharacterGenerator/procgen/styles/` — style adapters (`looseleaf`, `psychronic`)
+- `src/forge/CharacterGenerator/procgen/outfits/nova_sentinel.js` — current shared recipe
+- `src/forge/CharacterGenerator/procgen/gen_outfit.js` — CLI generator wrapper
+- `src/forge/CharacterGenerator/procgen/render_png.js` — CLI render/smoke utility
+- `src/forge/CharacterGenerator/procgen/outfit_configs.js` — simple legacy config list for direct generation
+- Output goes to `src/forge/CharacterGenerator/styles/<style>/parts/full outfits/full-outfits-<style>-<id>.js`
 - Body reference: `src/forge/CharacterGenerator/styles/looseleaf/parts/body/male/body-looseleaf-looseleaf-male-body-01.js`
+- Psychronic body reference: `src/forge/CharacterGenerator/styles/psychronic/parts/body/male/body-psychronic-psychronic-body-male-01.js`
 - Run with: `node src/forge/CharacterGenerator/procgen/gen_outfit.js`
 
 ## Architectural history (what we've tried)
@@ -85,41 +105,29 @@ A procedural outfit generator for the Character Generator that:
 
 5. **Arms in walk frames swing** — the artist draws each frame's arm at the body's per-frame arm position. Need to detect arm centres per frame (already implemented in `findArmCentres` / per-row run analysis).
 
-## What the user wants done NEXT
+## Completed analysis work
 
-The user explicitly asked for **parallel subagent analysis** of every part category. OpenCode's agent tool failed in this session. Switching to Claude (which has working Task tool for subagents) to:
+The older "spin up agents for every part category" task is complete. The outputs
+live in `procgen/analysis/*.md`, and `PATTERN_LANGUAGE.md` is the synthesis the
+generator currently implements.
 
-1. **Spin up 6 parallel agents**, one per category:
-   - `headwear/` (52 files) — helmet/visor/crown/hood/bandana shape and pattern conventions
-   - `torso/` (32 files) — breastplate/cloak/coat/vest shape and pattern conventions
-   - `shoulderwear/` (8 files) — pauldron shapes that extend beyond the body
-   - `armwear/` + `handwear/` (6 + 5 files) — gauntlet/bracelet/glove conventions
-   - `waistwear/` (7 files) — belt shape, buckle, contrast color
-   - `legwear/` + `footwear/` (8 + 6 files) — pants leg-tubes, walk-cycle handling, boot shapes
+If the generated art starts drifting, re-run the same style of analysis against
+the relevant source part category and update `PATTERN_LANGUAGE.md` before making
+large painter changes.
 
-   Each agent should report:
-   - Palette structure (letter count, role mapping, hex gradient)
-   - Silhouette shape conventions (where it starts, tapers, ends)
-   - Pattern conventions inside (letter triples, vertical bands, horizontal seam rows, rivets, accent columns)
-   - Per-direction differences (front vs side vs back)
-   - Per-frame variations (walk-cycle bob/limb-swing)
-   - Color family typically used
+## Recommended next work
 
-2. **Synthesize agent findings** into a documented "pattern language" for each zone.
-
-3. **Redesign `gen_outfit.js`** based on the pattern language so output matches artist quality. Key changes likely needed:
-   - **Per-zone palettes** instead of one outfit-wide palette. Each zone (head/torso/arms/belt/legs/boots) gets its own color family.
-   - **Letter-triple row patterns** with 3-row segment seams (the quilted look).
-   - **Helmet as extension**, not painter — stamps its own pinched-dome shape.
-   - **Chest plate shape** with pec curves at top and narrowing taper to belt.
-   - **Pauldrons** as extensions extending beyond the shoulder silhouette.
-   - **Arm tubes** with their own outline so they're visible even when fused with the chest in side view.
-
-4. **Validate** by regenerating the Space Warrior outfit and visually confirming each zone reads as a distinct armor piece.
-
-## Reading the agent reports
-
-Each agent should read 10–15 files from their assigned category and look for COMMON patterns vs per-file variations. The agent's output will be the spec for the corresponding module rewrite.
+1. Smoke-test `generateOutfit(engine.defaultConfig('looseleaf'), body.template)`
+   and `generateOutfit(engine.defaultConfig('psychronic'), body.template)` after
+   generator edits.
+2. Visually validate Nova Sentinel in the editor's Outfit Forge tab for all 4
+   directions and all 3 walk frames.
+3. Tune Psychronic-specific zone masks/painters until the outfit reads as armor
+   rather than a recolored body suit.
+4. Add new recipes as recipe modules under `procgen/outfits/` instead of growing
+   ad-hoc config branches in the editor.
+5. Add small Node tests for palette building, recipe defaults, style selection,
+   and generated sheet dimensions.
 
 ## Body geometry quick reference
 
@@ -142,16 +150,15 @@ Each agent should read 10–15 files from their assigned category and look for C
 - Best pants: `legwear-looseleaf-pants-01.js`
 - Best boots: `footwear-looseleaf-boots-01.js`
 
-## Critical user feedback to NEVER violate
-
-- **NEVER offer to pause, split work, or check in mid-task.** This has been raised twice as a major friction point. See `~/.claude/projects/-mnt-sda1-Dropbox-Family-Room-SharedProduction-RPG-Reactor/memory/feedback_dont_pressure_stop.md`. Just do the work until it's done or blocked by a real error.
-- The user wants the system to keep building over time toward user-facing sliders. Code can be long; that's fine. Don't truncate or oversimplify.
-
-## How to resume in fresh Claude session
+## How to resume in a fresh session
 
 1. Read this file.
-2. Read `gen_outfit.js` and `outfit_configs.js` to understand current state.
-3. Run `node src/forge/CharacterGenerator/procgen/gen_outfit.js` to see current output. Inspect the generated file to see what gets produced.
-4. Open 6 parallel Task subagents using the prompts described in "What the user wants done NEXT" section above.
-5. After all agents return, synthesize and rewrite gen_outfit.js with per-zone palettes + letter-triple patterns + helmet/pauldron extensions + per-frame arm/leg adaptation.
-6. Iterate with the user from there.
+2. Read `PATTERN_LANGUAGE.md`, `outfit_engine.js`, `procgen/styles/*.js`, and
+   `procgen/outfits/nova_sentinel.js`.
+3. Run `node src/forge/CharacterGenerator/procgen/gen_outfit.js` to see current
+   generated output. Inspect the generated file to see what gets produced.
+4. For UI behavior, open the editor, open Forge -> Character Generator -> Outfit
+   Forge, and check Looseleaf/Psychronic style output across all directions and
+   walk frames.
+5. Make painter/recipe changes in the engine or recipe modules, not by editing
+   generated `full outfits` output by hand unless the goal is a one-off asset.

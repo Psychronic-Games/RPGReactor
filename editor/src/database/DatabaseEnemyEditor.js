@@ -82,7 +82,7 @@ class DatabaseEnemyEditor {
 
         // Parameters Section
         const params = enemy.params || [0, 0, 0, 0, 0, 0, 0, 0];
-        const paramNames = ['Max HP', 'Max MP', 'Attack', 'Defense', 'M.Attack', 'M.Defense', 'Agility', 'Luck'];
+        const paramNames = ['Max HP', 'Max MP', 'Attack', 'Defense', 'M.Attack', 'M.Defense', 'Agility', 'Luck'].map(name => window.I18n ? window.I18n.tText(name) : name);
         const paramsSection = document.createElement('div');
         paramsSection.className = 'database-section';
         paramsSection.style.flexShrink = '0';

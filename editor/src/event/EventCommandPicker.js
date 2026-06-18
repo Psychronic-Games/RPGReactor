@@ -236,6 +236,18 @@ class EventCommandPicker {
         };
     }
 
+    _t(key, params = {}) {
+        return typeof window !== 'undefined' && window.I18n ? window.I18n.t(key, params) : key;
+    }
+
+    _commandName(name) {
+        return typeof window !== 'undefined' && window.I18n?.tEventCommandName ? window.I18n.tEventCommandName(name) : name;
+    }
+
+    _sectionName(name) {
+        return typeof window !== 'undefined' && window.I18n?.tEventSectionName ? window.I18n.tEventSectionName(name) : name;
+    }
+
     /**
      * Show the command picker
      */
@@ -244,6 +256,9 @@ class EventCommandPicker {
 
         if (!this.modal) {
             this.createModal();
+            if (typeof window !== 'undefined') window.addEventListener('rr-language-changed', () => {
+                if (this.modal?.style.display === 'flex') this.renderContent();
+            });
         }
 
         this.renderContent();
@@ -315,7 +330,7 @@ class EventCommandPicker {
             border-top-right-radius: 6px;
         `;
         header.innerHTML = `
-            <h3 style="margin: 0; color: var(--color-text-strong); font-size: 16px;">Select Event Command</h3>
+            <h3 style="margin: 0; color: var(--color-text-strong); font-size: 16px;">${this._t('event.selectCommand')}</h3>
             <button class="close-btn" style="background: none; border: none; color: var(--color-text-strong); font-size: 20px; cursor: pointer; padding: 0; width: 24px; height: 24px;">×</button>
         `;
         container.appendChild(header);
@@ -335,7 +350,7 @@ class EventCommandPicker {
         const tabs = ['tab1', 'tab2', 'tab3'];
         tabs.forEach((tabKey, index) => {
             const tab = document.createElement('button');
-            tab.textContent = this.commandData[tabKey].name;
+            tab.textContent = this._sectionName(this.commandData[tabKey].name);
             tab.style.cssText = `
                 padding: 8px 16px;
                 background-color: ${index === this.currentTab ? 'var(--color-accent-bright)' : 'var(--color-bg-input-alt)'};
@@ -410,7 +425,7 @@ class EventCommandPicker {
             justify-content: flex-end;
         `;
         footer.innerHTML = `
-            <button class="cancel-btn rr-btn-secondary">Cancel</button>
+            <button class="cancel-btn rr-btn-secondary">${this._t('common.cancel')}</button>
         `;
         container.appendChild(footer);
 
@@ -429,7 +444,7 @@ class EventCommandPicker {
         `;
 
         const title = document.createElement('div');
-        title.textContent = section.title;
+        title.textContent = this._sectionName(section.title);
         title.style.cssText = `
             font-weight: bold;
             font-size: 13px;
@@ -440,7 +455,7 @@ class EventCommandPicker {
 
         section.commands.forEach(command => {
             const commandBtn = document.createElement('button');
-            commandBtn.textContent = command.name;
+            commandBtn.textContent = this._commandName(command.name);
             commandBtn.style.cssText = `
                 width: 100%;
                 padding: 6px 10px;

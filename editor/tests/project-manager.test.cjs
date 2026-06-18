@@ -41,7 +41,7 @@ test('runtime corescript files are present', () => {
         'reactor_scenes.js',
         'reactor_sprites.js',
         'reactor_windows.js',
-        path.join('libs', 'pixi7.js'),
+        path.join('libs', 'pixi.js'),
         path.join('libs', 'pixi_compat.js')
     ];
 
@@ -70,7 +70,7 @@ test('ProjectManager creates starter projects with current engine metadata', asy
         assert.equal(fs.existsSync(path.join(targetPath, 'Demo')), false);
         assert.equal(fs.existsSync(path.join(targetPath, 'template')), false);
         assert.equal(fs.existsSync(path.join(targetPath, 'js', 'reactor_plugins.js')), true);
-        assert.equal(fs.existsSync(path.join(targetPath, 'js', 'libs', 'pixi7.js')), true);
+        assert.equal(fs.existsSync(path.join(targetPath, 'js', 'libs', 'pixi.js')), true);
 
         const projectData = readJson(path.join(targetPath, 'project.rpgreactor'));
         assert.equal(projectData.name, 'My Test RPG');

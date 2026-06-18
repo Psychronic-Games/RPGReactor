@@ -345,7 +345,7 @@ class SwitchVariablePicker {
             if (!isNaN(maxNum) && maxNum > 0 && maxNum <= 5000) {
                 this.setMaxCount(maxNum);
             } else {
-                alert('Please enter a valid number between 1 and 5000.');
+                alert(window.I18n ? window.I18n.tText('Please enter a valid number between 1 and 5000.') : 'Please enter a valid number between 1 and 5000.');
             }
         }
     }

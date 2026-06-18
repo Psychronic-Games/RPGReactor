@@ -390,15 +390,15 @@ function generateChecksums() {
         logWarn('  runtime/ not found — new project creation will be unavailable in this package');
     }
 
-    // Cherry-pick pixi.min.js
-    const pixiSrc = path.join(appRoot, 'node_modules', 'pixi.js', 'dist', 'pixi.min.js');
+    // Cherry-pick PixiJS for editor fallback loading.
+    const pixiSrc = path.join(appRoot, '..', 'runtime', 'libs', 'pixi.js');
     if (fs.existsSync(pixiSrc)) {
-        const pixiDest = path.join(stageRoot, 'node_modules', 'pixi.js', 'dist');
+        const pixiDest = path.join(stageRoot, 'runtime', 'libs');
         fs.mkdirSync(pixiDest, { recursive: true });
-        fs.copyFileSync(pixiSrc, path.join(pixiDest, 'pixi.min.js'));
-        logDim('  Cherry-picked node_modules/pixi.js/dist/pixi.min.js');
+        fs.copyFileSync(pixiSrc, path.join(pixiDest, 'pixi.js'));
+        logDim('  Cherry-picked runtime/libs/pixi.js');
     } else {
-        logWarn('  pixi.min.js not found — skipping');
+        logWarn('  runtime/libs/pixi.js not found — skipping');
     }
 
     // Count staged files

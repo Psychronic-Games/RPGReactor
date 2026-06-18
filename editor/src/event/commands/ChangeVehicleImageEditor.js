@@ -94,10 +94,11 @@ class ChangeVehicleImageEditor {
 
         const vehicleSelect = document.createElement('select');
         vehicleSelect.style.cssText = 'padding: 6px 10px; background-color: var(--color-bg-input); color: var(--color-text); border: 1px solid var(--color-border-input); border-radius: 3px; font-size: 12px; flex: 1;';
+        const t = text => window.I18n ? window.I18n.tText(text) : text;
         vehicleSelect.innerHTML = `
-            <option value="0" ${this.vehicleType === 0 ? 'selected' : ''}>Boat</option>
-            <option value="1" ${this.vehicleType === 1 ? 'selected' : ''}>Ship</option>
-            <option value="2" ${this.vehicleType === 2 ? 'selected' : ''}>Airship</option>
+            <option value="0" ${this.vehicleType === 0 ? 'selected' : ''}>${t('Boat')}</option>
+            <option value="1" ${this.vehicleType === 1 ? 'selected' : ''}>${t('Ship')}</option>
+            <option value="2" ${this.vehicleType === 2 ? 'selected' : ''}>${t('Airship')}</option>
         `;
         vehicleSelect.addEventListener('change', (e) => {
             this.vehicleType = parseInt(e.target.value);

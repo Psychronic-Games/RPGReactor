@@ -24,11 +24,12 @@ class DatabaseItemEditor {
         wrapper.style.padding = '16px';
         wrapper.style.position = 'relative';
 
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const scopeNames = ['None', 'One Enemy', 'All Enemies', '3 Random', '4 Random', '2 Random', '1 Random',
-                           'One Ally', 'All Allies', 'One Ally (Dead)', 'All Allies (Dead)', 'User'];
-        const occasionNames = ['Always', 'Battle Only', 'Menu Only', 'Never'];
-        const hitTypeNames = ['Certain', 'Physical', 'Magical'];
-        const damageTypeNames = ['None', 'HP Damage', 'MP Damage', 'HP Recover', 'MP Recover', 'HP Drain', 'MP Drain'];
+                           'One Ally', 'All Allies', 'One Ally (Dead)', 'All Allies (Dead)', 'User'].map(tt);
+        const occasionNames = ['Always', 'Battle Only', 'Menu Only', 'Never'].map(tt);
+        const hitTypeNames = ['Certain', 'Physical', 'Magical'].map(tt);
+        const damageTypeNames = ['None', 'HP Damage', 'MP Damage', 'HP Recover', 'MP Recover', 'HP Drain', 'MP Drain'].map(tt);
 
         // Get system elements for the damage element dropdown
         const systemData = this.databaseManager.getSystem();
@@ -59,8 +60,8 @@ class DatabaseItemEditor {
                     <div class="rr-form-quad">
                         <label>Item Type</label>
                         <select class="database-field-value" data-field="itypeId" data-item-id="${item.id}">
-                            <option value="1" ${item.itypeId === 1 ? 'selected' : ''}>Regular Item</option>
-                            <option value="2" ${item.itypeId === 2 ? 'selected' : ''}>Key Item</option>
+                            <option value="1" ${item.itypeId === 1 ? 'selected' : ''}>${tt('Regular Item')}</option>
+                            <option value="2" ${item.itypeId === 2 ? 'selected' : ''}>${tt('Key Item')}</option>
                         </select>
                         <label>Price</label>
                         <input type="number" class="database-field-value" value="${item.price || 0}" data-field="price" data-item-id="${item.id}">
@@ -77,7 +78,7 @@ class DatabaseItemEditor {
                     <label>Consumable</label>
                     <div style="display: flex; align-items: center; gap: 8px;">
                         <input type="checkbox" ${item.consumable ? 'checked' : ''} data-field="consumable" data-item-id="${item.id}">
-                        <span style="color: var(--color-text-muted); font-size: 11px;">Item is removed from inventory after use</span>
+                        <span style="color: var(--color-text-muted); font-size: 11px;">${tt('Item is removed from inventory after use')}</span>
                     </div>
                 </div>
             </div>
@@ -157,7 +158,7 @@ class DatabaseItemEditor {
                     <div class="form-group-fixed">
                         <label class="database-field-label">Element:</label>
                         <select class="database-field-value" style="width: 150px;" data-field="damage.elementId" data-item-id="${item.id}">
-                            <option value="-1" ${damage.elementId === -1 ? 'selected' : ''}>Normal Attack</option>
+                            <option value="-1" ${damage.elementId === -1 ? 'selected' : ''}>${tt('Normal Attack')}</option>
                             ${elements.map((name, idx) => idx > 0 && name ? `<option value="${idx}" ${damage.elementId === idx ? 'selected' : ''}>${name}</option>` : '').join('')}
                         </select>
                     </div>

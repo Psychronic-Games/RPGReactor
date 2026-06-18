@@ -349,7 +349,7 @@ class ControlVariablesEditor {
 
         const operations = [
             { value: 0, label: 'Set' },
-            { value: 1, label: 'Add' },
+            { value: 1, label: 'Add Operation' },
             { value: 2, label: 'Sub' },
             { value: 3, label: 'Mul' },
             { value: 4, label: 'Div' },

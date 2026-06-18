@@ -1,6 +1,6 @@
 # RPG Reactor
 
-RPG Reactor 0.9 is an open-source, cross-platform RPG game editor and runtime for RPG Maker MV/MZ-compatible projects, built on NW.js and PixiJS v8. RPG Reactor provides its own modern PIXI 8 runtime while preserving compatibility with RPG Maker project data and targeting backwards compatibility with RPG Maker MZ plugins. Create 2D RPG games with a complete development environment featuring map editing, event scripting, database management, and game testing capabilities.
+RPG Reactor 0.91 is an open-source, cross-platform RPG game editor and runtime for RPG Maker MV/MZ-compatible projects, built on NW.js and PixiJS v8. RPG Reactor provides its own modern PIXI 8 runtime while preserving compatibility with RPG Maker project data and targeting backwards compatibility with RPG Maker MZ plugins. Create 2D RPG games with a complete development environment featuring map editing, event scripting, database management, and game testing capabilities.
 
 ## Features
 
@@ -120,7 +120,14 @@ Procedural sprite-sheet generator for visual effects and projectile animations.
 - **Export**: Save bake-ready PNG sprite sheets for use in MZ animations *and* save a transparent animated GIF of the live preview for documentation / sharing
 
 #### Character Generator
-Composable character sprite generator for actor portraits and walking sprites.
+Composable character sprite generator for actor walking sprites and generated outfit parts.
+
+- **Style selector**: Built-in `Looseleaf` and `Psychronic` styles share the same part format while allowing style-specific anatomy and painter adapters
+- **Procedural tab**: Renders layered ASCII/template parts from the part registry, with configurable frame size, alignment, palette overrides, and 3x4 walking-sheet export
+- **Outfit Forge tab**: Generates full-outfit Character Generator parts from recipe data. The current shared recipe is `Nova Sentinel`, available for both Looseleaf and Psychronic styles through `procgen/outfits/nova_sentinel.js`
+- **Outfit engine**: Browser/Node-compatible generator in `src/forge/CharacterGenerator/procgen/outfit_engine.js`, with per-zone palette families, role-based painters, extensions such as pauldrons/gauntlets, live 4-direction preview, walk preview, zone debug overlays, and save-to-library output under `styles/<style>/parts/full outfits/`
+- **Template analyzer**: Imports PNG/JPEG/WebP sprite sheets, classifies pixels into material letters, supports material-paint correction, and emits style-specific `RR_CG_BODY_TEMPLATE_SHEETS[style][variant]` snippets for body-template work
+- **Parts (PNG) tab**: Layers user-supplied PNG sprite-sheet parts from the active project's `forge/character_generator/styles/<style>/parts/` folder with draggable ordering
 
 #### Sound Effect Generator
 Procedural SFX generator for impacts, UI clicks, and stingers.
@@ -131,9 +138,19 @@ Switch the editor's look from **File → Options**:
 
 - **Palettes**: Default (gold), Bubblegum (pink), Ocean (blue), Cascadia (forest green), Underworld (red), Orange Creamsicle (orange/cream), Royalty (purple with gold trim)
 - **Modes**: Dark and Light for every palette
+- **Palette picker**: Compact swatch dropdown with high-contrast themed rows and selected/hover highlights
 - Map editor canvas stays dark in every theme (cinematic feel)
 - Theme choice persists across sessions in `localStorage`
 - All themes built on a single CSS custom-property system (`css/theme.css`); adding a palette is a copy-paste block plus one line in the picker registry
+
+### Localization
+
+Switch the editor language from **File → Options** or the top-menu language button. Language changes apply immediately and persist across sessions in `localStorage`.
+
+- **Languages**: English, Japanese, Spanish, Traditional Chinese, Simplified Chinese, Russian, Portuguese, German, French, and Greek
+- **Current coverage**: editor shell, menu bar, toolbar titles/labels, welcome screen, Options modal, Forge launcher, Audio Player shell labels, About dialog, database/event editor chrome, many fixed event-command forms, high-visibility Forge tools, and common status/alert text
+- **Architecture**: `src/I18nManager.js` provides dictionaries, `I18n.t(key)`, `data-i18n`/`data-i18n-title`/`data-i18n-aria` DOM binding, exact-text fallback for generated editor chrome, mutation observation for dynamic UI, and a `rr-language-changed` event for dynamic UI rerenders
+- Project-authored content such as actor/item/switch/map/event/audio names remains untranslated so RPG project data is not modified by editor language changes
 
 ## Installation
 
@@ -160,10 +177,10 @@ RPG Reactor runs on NW.js (not system Node.js). You need the NW.js runtime for y
 
 ```bash
 # Clone the repository
-git clone git@github.com:Psychronic-Games/RPGReactor.git
+git clone https://github.com/Psychronic-Games/RPGReactor.git
 cd RPGReactor/editor
 
-# Install the one runtime dependency (PixiJS)
+# Install editor dependencies
 npm install
 
 # Download NW.js for your platform and place it in:
@@ -270,11 +287,20 @@ Database shortcuts are scoped to the active database section. Plugin Manager als
 ## Technical Details
 
 - **Runtime**: NW.js 0.92.0 (Chromium + Node.js)
-- **Rendering**: PixiJS 8.0.0
+- **Rendering**: PixiJS 8.0.0 runtime, with compatibility shims and bundled PIXI 7-era library support for imported RPG Maker projects/plugins
 - **Animation Effects**: Effekseer
 - **Data Format**: RPG Maker MZ compatible JSON; RPG Maker MV projects are also compatible in most cases depending on corescripts and plugins
 - **Tile Size**: 48x48 pixels
 - **Supported Platforms**: Windows (x64), macOS (x64), Linux (x64)
+
+### Tests
+
+The current automated test suite is intentionally small but covers project scaffold/import behavior, runtime file presence, local Markdown links, i18n dictionary/key consistency, and core Outfit Forge generation invariants:
+
+```bash
+cd editor
+npm test
+```
 
 ### Build Architecture
 Both game builds and editor distribution builds use `worker_threads` to run in background threads without blocking the UI. Workers communicate via `postMessage` with `{ type: 'log', message, color }` for build log output and `{ type: 'progress', percent, status }` for progress bar updates. ESM `import()` hangs silently in NW.js worker threads, so all build workers use CommonJS exclusively.

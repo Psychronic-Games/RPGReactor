@@ -997,12 +997,16 @@ class SoundEffectGenerator {
         this._docMouseUpHandler = null;
     }
 
+    _t(text) {
+        return window.I18n ? window.I18n.tText(text) : text;
+    }
+
     renderInto(containerEl, projectController) {
         this.projectController = projectController;
         const project = projectController?.getCurrentProject?.() || projectController?.currentProject;
         this.root = containerEl;
         if (!project) {
-            this.root.innerHTML = '<div style="padding: 40px; text-align: center; color: var(--color-text-muted); font-size: 12px;">Open a project to use Forge tools.</div>';
+            this.root.innerHTML = `<div style="padding: 40px; text-align: center; color: var(--color-text-muted); font-size: 12px;">${this._t('Open a project to use Forge tools.')}</div>`;
             return;
         }
         this.projectPath = project.path;
@@ -1152,7 +1156,7 @@ class SoundEffectGenerator {
         }
         let archetypeHtml = '';
         for (const [cat, list] of groups) {
-            archetypeHtml += `<div style="padding: 8px 14px 6px; font-size: 9px; font-weight: 700; color: var(--color-accent-bright); text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid var(--color-border-subtle); margin-top: 6px;">${cat}</div>`;
+            archetypeHtml += `<div style="padding: 8px 14px 6px; font-size: 9px; font-weight: 700; color: var(--color-accent-bright); text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid var(--color-border-subtle); margin-top: 6px;">${this._t(cat)}</div>`;
             for (const a of list) {
                 archetypeHtml += `
                     <div class="rr-sfx-arch" data-id="${a.id}" style="padding: 9px 14px; cursor: pointer; font-size: 12px; color: var(--color-text); background: ${a.id === this.activeArchetypeId ? 'var(--color-bg-hover)' : 'transparent'}; border-left: 3px solid ${a.id === this.activeArchetypeId ? 'var(--color-accent-bright)' : 'transparent'};">
@@ -1164,7 +1168,7 @@ class SoundEffectGenerator {
         }
 
         const jitterBtns = Object.keys(JITTER_STRENGTHS).map(k =>
-            `<button class="rr-sfx-jitter-btn" data-strength="${k}" style="padding: 4px 10px; background: ${this.jitterStrength === k ? 'var(--color-bg-button-active)' : 'var(--color-bg-button)'}; color: var(--color-text-strong); border: none; ${k === 'mild' ? 'border-radius: 3px 0 0 3px;' : k === 'wild' ? 'border-radius: 0 3px 3px 0;' : ''} border-left: ${k !== 'mild' ? '1px solid var(--color-border-input)' : 'none'}; cursor: pointer; font-size: 10px; font-weight: 600; text-transform: capitalize;">${k}</button>`
+            `<button class="rr-sfx-jitter-btn" data-strength="${k}" style="padding: 4px 10px; background: ${this.jitterStrength === k ? 'var(--color-bg-button-active)' : 'var(--color-bg-button)'}; color: var(--color-text-strong); border: none; ${k === 'mild' ? 'border-radius: 3px 0 0 3px;' : k === 'wild' ? 'border-radius: 0 3px 3px 0;' : ''} border-left: ${k !== 'mild' ? '1px solid var(--color-border-input)' : 'none'}; cursor: pointer; font-size: 10px; font-weight: 600; text-transform: capitalize;">${this._t(k)}</button>`
         ).join('');
 
         this.root.innerHTML = `
@@ -1172,30 +1176,30 @@ class SoundEffectGenerator {
                 <!-- Toolbar -->
                 <div style="padding: 10px 16px; background: var(--color-bg-panel); border-bottom: 1px solid var(--color-border-subtle); display: flex; gap: 10px; align-items: center; flex-shrink: 0; flex-wrap: wrap;">
                     <div style="display: inline-flex; border: 1px solid var(--color-border-input); border-radius: 4px; overflow: hidden;">
-                        <button class="rr-sfx-mode-btn" data-mode="sound"   style="padding: 5px 14px; background: ${this.mode === 'sound'   ? 'var(--color-bg-button-active)' : 'var(--color-bg-button)'}; color: var(--color-text-strong); border: none; cursor: pointer; font-size: 11px; font-weight: 600;">Sound</button>
-                        <button class="rr-sfx-mode-btn" data-mode="pattern" style="padding: 5px 14px; background: ${this.mode === 'pattern' ? 'var(--color-bg-button-active)' : 'var(--color-bg-button)'}; color: var(--color-text-strong); border: none; border-left: 1px solid var(--color-border-input); cursor: pointer; font-size: 11px; font-weight: 600;">Pattern</button>
+                        <button class="rr-sfx-mode-btn" data-mode="sound"   style="padding: 5px 14px; background: ${this.mode === 'sound'   ? 'var(--color-bg-button-active)' : 'var(--color-bg-button)'}; color: var(--color-text-strong); border: none; cursor: pointer; font-size: 11px; font-weight: 600;">${this._t('Sound')}</button>
+                        <button class="rr-sfx-mode-btn" data-mode="pattern" style="padding: 5px 14px; background: ${this.mode === 'pattern' ? 'var(--color-bg-button-active)' : 'var(--color-bg-button)'}; color: var(--color-text-strong); border: none; border-left: 1px solid var(--color-border-input); cursor: pointer; font-size: 11px; font-weight: 600;">${this._t('Pattern')}</button>
                     </div>
-                    <button class="rr-sfx-play rr-btn-chip" style="padding: 6px 18px; color: var(--color-accent-bright);">▶ Play</button>
-                    <button class="rr-sfx-stop rr-btn-chip" style="padding: 6px 14px;">■ Stop</button>
+                    <button class="rr-sfx-play rr-btn-chip" style="padding: 6px 18px; color: var(--color-accent-bright);">▶ ${this._t('Play')}</button>
+                    <button class="rr-sfx-stop rr-btn-chip" style="padding: 6px 14px;">■ ${this._t('Stop')}</button>
                     <div style="display: flex; align-items: center; gap: 0; border: 1px solid var(--color-border-input); border-radius: 3px; overflow: hidden;">
-                        <button class="rr-sfx-rand rr-btn-chip" style="padding: 5px 12px; border-radius: 0; border: none;">🎲 Randomize</button>
+                        <button class="rr-sfx-rand rr-btn-chip" style="padding: 5px 12px; border-radius: 0; border: none;">🎲 ${this._t('Randomize')}</button>
                         <div style="display: inline-flex; border-left: 1px solid var(--color-border-input);">${jitterBtns}</div>
                     </div>
-                    <button class="rr-sfx-reset rr-btn-chip" style="padding: 6px 14px;">↻ Reset</button>
+                    <button class="rr-sfx-reset rr-btn-chip" style="padding: 6px 14px;">↻ ${this._t('Reset')}</button>
                     ${this.mode === 'pattern' ? `
                         <div style="display: flex; align-items: center; gap: 6px; margin-left: 8px;">
                             <label style="font-size: 11px; color: var(--color-text-muted);">BPM:</label>
                             <input type="number" class="rr-sfx-bpm rr-input" value="${this.bpm}" min="40" max="300" style="width: 60px; padding: 3px 6px; font-size: 11px;">
                         </div>
-                        <button class="rr-sfx-pattern-clear rr-btn-chip" style="padding: 6px 12px;">Clear Pattern</button>
+                        <button class="rr-sfx-pattern-clear rr-btn-chip" style="padding: 6px 12px;">${this._t('Clear Pattern')}</button>
                     ` : ''}
-                    <div class="rr-sfx-duration" style="margin-left: auto; font-size: 11px; color: var(--color-text-muted);">Duration: 0.00s</div>
+                    <div class="rr-sfx-duration" style="margin-left: auto; font-size: 11px; color: var(--color-text-muted);">${this._t('Duration:')} 0.00s</div>
                 </div>
 
                 <div style="display: grid; grid-template-columns: 240px 1fr 320px; flex: 1; min-height: 0;">
                     <!-- Archetypes -->
                     <div class="rr-sfx-archetypes" style="background: var(--color-bg-panel); border-right: 1px solid var(--color-border); overflow-y: auto;">
-                        <div style="padding: 6px 14px 8px; font-size: 9px; font-weight: 700; color: var(--color-accent-bright); text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid var(--color-border-subtle);">Archetypes</div>
+                        <div style="padding: 6px 14px 8px; font-size: 9px; font-weight: 700; color: var(--color-accent-bright); text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid var(--color-border-subtle);">${this._t('Archetypes')}</div>
                         ${archetypeHtml}
                     </div>
 
@@ -1203,35 +1207,35 @@ class SoundEffectGenerator {
                     ${this.mode === 'sound' ? `
                         <div class="rr-dark-surface" style="display: flex; flex-direction: column; padding: 16px; gap: 14px; overflow-y: auto;">
                             <div>
-                                <div style="font-size: 10px; color: var(--color-text-muted); margin-bottom: 4px; display: flex; justify-content: space-between;"><span>Waveform</span><span style="font-size: 9px; color: var(--color-text-dim);">amplitude × time</span></div>
+                                <div style="font-size: 10px; color: var(--color-text-muted); margin-bottom: 4px; display: flex; justify-content: space-between;"><span>${this._t('Waveform')}</span><span style="font-size: 9px; color: var(--color-text-dim);">${this._t('amplitude x time')}</span></div>
                                 <div style="background: var(--color-bg-deep); border: 1px solid var(--color-border-input); border-radius: 4px; padding: 4px;">
                                     <canvas class="rr-sfx-waveform" width="640" height="160" style="width: 100%; height: 160px; display: block;"></canvas>
                                 </div>
                             </div>
                             <div>
-                                <div style="font-size: 10px; color: var(--color-text-muted); margin-bottom: 4px; display: flex; justify-content: space-between;"><span>Envelope (ADSR)</span><span style="font-size: 9px; color: var(--color-text-dim);">gain × time</span></div>
+                                <div style="font-size: 10px; color: var(--color-text-muted); margin-bottom: 4px; display: flex; justify-content: space-between;"><span>${this._t('Envelope (ADSR)')}</span><span style="font-size: 9px; color: var(--color-text-dim);">${this._t('gain x time')}</span></div>
                                 <div style="background: var(--color-bg-deep); border: 1px solid var(--color-border-input); border-radius: 4px; padding: 4px;">
                                     <canvas class="rr-sfx-envelope" width="640" height="80" style="width: 100%; height: 80px; display: block;"></canvas>
                                 </div>
                             </div>
                             <div>
-                                <div style="font-size: 10px; color: var(--color-text-muted); margin-bottom: 4px; display: flex; justify-content: space-between;"><span>Pitch Curve</span><span style="font-size: 9px; color: var(--color-text-dim);">frequency × time</span></div>
+                                <div style="font-size: 10px; color: var(--color-text-muted); margin-bottom: 4px; display: flex; justify-content: space-between;"><span>${this._t('Pitch Curve')}</span><span style="font-size: 9px; color: var(--color-text-dim);">${this._t('frequency x time')}</span></div>
                                 <div style="background: var(--color-bg-deep); border: 1px solid var(--color-border-input); border-radius: 4px; padding: 4px;">
                                     <canvas class="rr-sfx-pitch" width="640" height="80" style="width: 100%; height: 80px; display: block;"></canvas>
                                 </div>
                             </div>
                             <div style="font-size: 10px; color: var(--color-text-dim); padding-top: 6px; border-top: 1px solid var(--color-border-subtle);">
-                                Visualizers update live as you tune sliders. Click Play to hear the result.
+                                ${this._t('Visualizers update live as you tune sliders. Click Play to hear the result.')}
                             </div>
                         </div>
                     ` : `
                         <div class="rr-dark-surface" style="display: flex; flex-direction: column; padding: 14px; gap: 8px; overflow: auto;">
                             <div style="font-size: 10px; color: var(--color-text-muted); margin-bottom: 4px;">
-                                Pattern Editor — click or drag cells to place/erase notes. Rows = pitch (top = high), columns = time (16th notes at BPM).
+                                ${this._t('Pattern Editor - click or drag cells to place/erase notes. Rows = pitch (top = high), columns = time (16th notes at BPM).')}
                             </div>
                             ${this._renderPatternGrid()}
                             <div style="font-size: 9px; color: var(--color-text-dim); padding-top: 8px; border-top: 1px solid var(--color-border-subtle); margin-top: 4px;">
-                                ${this.pattern.size} note${this.pattern.size === 1 ? '' : 's'} placed. Pattern length: ${(PATTERN_STEPS * 60 / this.bpm / 4).toFixed(2)}s at ${this.bpm} BPM.
+                                ${this._t('Notes placed:')} ${this.pattern.size}. ${this._t('Pattern length:')} ${(PATTERN_STEPS * 60 / this.bpm / 4).toFixed(2)}s ${this._t('at')} ${this.bpm} BPM.
                             </div>
                         </div>
                     `}
@@ -1244,11 +1248,11 @@ class SoundEffectGenerator {
 
                 <!-- Footer -->
                 <div style="padding: 12px 18px; border-top: 1px solid var(--color-border-subtle); background: var(--color-bg-panel); display: flex; align-items: center; gap: 10px; flex-shrink: 0;">
-                    <label style="font-size: 12px; color: var(--color-text-muted);">Default name:</label>
+                    <label style="font-size: 12px; color: var(--color-text-muted);">${this._t('Default name:')}</label>
                     <input type="text" class="rr-sfx-name rr-input" placeholder="MySFX" style="width: 200px; padding: 4px 8px; font-size: 12px;">
-                    <div style="font-size: 10px; color: var(--color-text-dim);">defaults to audio/se/ — pick any location in the dialog</div>
+                    <div style="font-size: 10px; color: var(--color-text-dim);">${this._t('defaults to audio/se/ - pick any location in the dialog')}</div>
                     <div class="rr-sfx-save-status" style="font-size: 10px; color: var(--color-accent-bright); opacity: 0; transition: opacity 0.3s; margin-left: 8px; max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"></div>
-                    <button class="rr-sfx-save rr-btn-chip" style="margin-left: auto; padding: 6px 18px; color: var(--color-accent-bright);">Bake & Save…</button>
+                    <button class="rr-sfx-save rr-btn-chip" style="margin-left: auto; padding: 6px 18px; color: var(--color-accent-bright);">${this._t('Bake & Save...')}</button>
                 </div>
             </div>
         `;
@@ -1289,23 +1293,23 @@ class SoundEffectGenerator {
         }
         let html = '';
         for (const [groupName, params] of groups) {
-            html += `<div style="font-size: 11px; font-weight: 700; color: var(--color-accent-bright); text-transform: uppercase; letter-spacing: 0.5px; margin: 14px 0 8px; padding-bottom: 4px; border-bottom: 1px solid var(--color-accent-border-mid);">${groupName}</div>`;
+            html += `<div style="font-size: 11px; font-weight: 700; color: var(--color-accent-bright); text-transform: uppercase; letter-spacing: 0.5px; margin: 14px 0 8px; padding-bottom: 4px; border-bottom: 1px solid var(--color-accent-border-mid);">${this._t(groupName)}</div>`;
             for (const p of params) {
                 const val = this.params[p.key];
                 if (p.type === 'select') {
                     html += `
-                        <div style="margin-bottom: 10px; display: grid; grid-template-columns: 90px 1fr; gap: 8px; align-items: center;" title="${p.description}">
-                            <label style="font-size: 11px; color: var(--color-text);">${p.label}</label>
+                        <div style="margin-bottom: 10px; display: grid; grid-template-columns: 90px 1fr; gap: 8px; align-items: center;" title="${this._t(p.description)}">
+                            <label style="font-size: 11px; color: var(--color-text);">${this._t(p.label)}</label>
                             <select class="rr-sfx-param rr-select" data-key="${p.key}" style="padding: 3px 6px; font-size: 11px;">
-                                ${p.options.map(o => `<option value="${o.value}" ${o.value === val ? 'selected' : ''}>${o.label}</option>`).join('')}
+                                ${p.options.map(o => `<option value="${o.value}" ${o.value === val ? 'selected' : ''}>${this._t(o.label)}</option>`).join('')}
                             </select>
                         </div>
                     `;
                 } else if (p.type === 'slider') {
                     html += `
-                        <div style="margin-bottom: 8px;" title="${p.description}">
+                        <div style="margin-bottom: 8px;" title="${this._t(p.description)}">
                             <div style="display: flex; justify-content: space-between; font-size: 10px; margin-bottom: 2px;">
-                                <span style="color: var(--color-text); font-weight: 600;">${p.label}</span>
+                                <span style="color: var(--color-text); font-weight: 600;">${this._t(p.label)}</span>
                                 <span class="rr-sfx-val" data-key="${p.key}" style="color: var(--color-text-muted); font-family: var(--font-mono);">${(+val).toFixed(p.step < 0.01 ? 4 : 2)}</span>
                             </div>
                             <input type="range" class="rr-sfx-param rr-range" data-key="${p.key}" min="${p.min}" max="${p.max}" step="${p.step}" value="${val}" style="width: 100%;">
@@ -1329,7 +1333,7 @@ class SoundEffectGenerator {
                 this._drawEnvelope();
                 this._drawPitch();
                 const dur = this.root.querySelector('.rr-sfx-duration');
-                if (dur) dur.textContent = `Duration: ${(buffer.length / buffer.sampleRate).toFixed(2)}s`;
+                if (dur) dur.textContent = `${this._t('Duration:')} ${(buffer.length / buffer.sampleRate).toFixed(2)}s`;
             } catch (e) {
                 console.warn('Visualizer render failed:', e);
             }
@@ -1441,7 +1445,7 @@ class SoundEffectGenerator {
         if (p.waveform === 'noise') {
             ctx.fillStyle = ThemeColors.resolve('--color-text-muted', '#999');
             ctx.font = '11px sans-serif'; ctx.textAlign = 'center';
-            ctx.fillText('Noise — no pitch curve', w / 2, h / 2 + 4);
+            ctx.fillText(this._t('Noise - no pitch curve'), w / 2, h / 2 + 4);
             return;
         }
 
@@ -1623,7 +1627,7 @@ class SoundEffectGenerator {
     async _saveSfx() {
         const nameInput = this.root.querySelector('.rr-sfx-name');
         const rawName = (nameInput.value || '').trim().replace(/\.(wav|ogg)$/i, '');
-        if (!rawName) { alert('Enter a name for the sound effect.'); return; }
+        if (!rawName) { alert(this._t('Enter a name for the sound effect.')); return; }
 
         let buffer;
         try {
@@ -1632,7 +1636,7 @@ class SoundEffectGenerator {
                 : await this.synth.renderOffline(this.params);
         } catch (e) {
             console.error('SoundEffectGenerator render:', e);
-            alert('Failed to render: ' + e.message);
+            alert(`${this._t('Failed to render:')} ${e.message}`);
             return;
         }
         const wav = audioBufferToWav(buffer);
@@ -1653,10 +1657,10 @@ class SoundEffectGenerator {
             if (!file || !file.path) return;
             try {
                 fs.writeFileSync(file.path, Buffer.from(wav));
-                this._showSaveStatus(`Saved → ${file.path}`);
+                this._showSaveStatus(`${this._t('Saved:')} ${file.path}`);
             } catch (err) {
                 console.error('SoundEffectGenerator save:', err);
-                alert('Failed to save: ' + err.message);
+                alert(`${this._t('Failed to save:')} ${err.message}`);
             } finally {
                 picker.remove();
             }

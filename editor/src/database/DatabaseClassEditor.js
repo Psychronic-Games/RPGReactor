@@ -92,7 +92,7 @@ class DatabaseClassEditor {
         const section = document.createElement('div');
         section.className = 'database-section';
 
-        const paramNames = ['Max HP', 'Max MP', 'Attack', 'Defense', 'M.Attack', 'M.Defense', 'Agility', 'Luck'];
+        const paramNames = ['Max HP', 'Max MP', 'Attack', 'Defense', 'M.Attack', 'M.Defense', 'Agility', 'Luck'].map(name => window.I18n ? window.I18n.tText(name) : name);
         const paramColors = ['#FF3366', '#33CCFF', '#FF9933', '#FFD700', '#9966FF', '#33FF99', '#FF66CC', '#66FFFF'];
         const params = classEntry.params || [];
 

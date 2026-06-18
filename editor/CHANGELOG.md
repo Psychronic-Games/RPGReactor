@@ -7,6 +7,66 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.91] - 2026-06-18
+
+RPG Reactor 0.91 expands the editor from English-only/deep-partial UI coverage into a multilingual release candidate, refreshes the Options palette/language UX, documents the current project state for GitHub, and continues the Pixi v8 cleanup.
+
+### Release Highlights
+
+- **Ten editor languages** — English, Japanese, Spanish, Traditional Chinese, Simplified Chinese, Russian, Portuguese, German, French, and Greek are registered in the browser-global i18n manager.
+- **Instant language switching** — users can switch language from `File -> Options` or the top-menu language button without restarting the editor.
+- **Deep editor localization pass** — database/editor chrome, event editor surfaces, many fixed event-command forms, About, Forge, Audio Player, and common alerts/status messages now route through i18n while project-authored game data remains untouched.
+- **Palette dropdown polish** — the Options palette picker now shows color swatches, can overflow outside the modal, and uses theme tokens so open rows stay high-contrast like the Language dropdown.
+- **Pixi runtime packaging cleanup** — the bundled Pixi v8 runtime now uses the canonical `runtime/libs/pixi.js` path in runtime, packaging, and tests.
+
+### Documentation
+
+#### Changed
+
+- Updated repository/editor documentation to match the current Forge Character Generator state, including Outfit Forge, Nova Sentinel recipes, Looseleaf/Psychronic style support, and the small current Node test baseline.
+- Clarified that PSYCHRONIC plugin GitHub sync notes refer to a maintainer-local/private Complex template plugin workspace, not files included in the public RPG Reactor repository.
+- Refreshed the Character Generator procgen handoff so it points to `outfit_engine.js`, style adapters, `procgen/outfits/nova_sentinel.js`, generated full-outfit outputs, and current Psychronic validation work instead of the older single-style/agent-analysis phase.
+- Added a root `CHANGELOG.md` so GitHub visitors can see release progress without opening the editor subfolder.
+- Updated root/editor README version text to RPG Reactor 0.91 and refreshed the localization/theming documentation for the current Options UI.
+
+### Localization
+
+#### Added
+
+- Added `src/I18nManager.js` with English, Japanese, Spanish, Traditional Chinese, Simplified Chinese, Russian, Portuguese, German, French, and Greek dictionaries, persisted `rr-settings.language`, `I18n.t(key)`, `data-i18n`/`data-i18n-title`/`data-i18n-aria` DOM binding, exact-text translation for generated editor chrome, mutation observation, and a `rr-language-changed` event for dynamic UI refreshes.
+- Added a Language selector to `File -> Options` and a top-menu language button. Switching language applies immediately without restarting the editor.
+- Localized the stable UI layer: splash/loading text, menu bar/submenus, toolbar labels and titles, welcome screen, sidebar shell labels, map info static labels, Options modal, About dialog, Forge launcher/sidebar/welcome tiles, Audio Player shell labels, and common project/map status or alert messages.
+- Localized database/editor chrome and fixed event editor surfaces including command picker/list/context menus, event page UI, switch/variable pickers, graphic/animation pickers, Battle Test config, traits/effects, and many fixed event-command form labels/options.
+- Added event command/category name maps so all supported languages share the same event-command localization path.
+- Added `data-rr-i18n-skip` for complex custom controls whose internal DOM should not be rewritten by the generic exact-text pass.
+
+### Tests
+
+#### Added
+
+- Added Node tests for Outfit Forge generator invariants: Nova Sentinel recipe/style wiring, Looseleaf and Psychronic generated sheet dimensions, palette-letter validity, skin-letter detection, family/accent validation, and family/accent reuse.
+- Added a lightweight Markdown link test for project documentation files so stale local doc links fail in `npm test`.
+- Added i18n tests for supported-language dictionary completeness, language persistence/apply behavior, missing localized-key references, and high-visibility localized labels that should not fall back to English.
+
+### Options and Theming
+
+#### Changed
+
+- Replaced the native Palette `<select>` with a custom swatch dropdown so every palette row can show representative colors consistently across platforms.
+- Moved Palette dropdown styling into `css/theme.css` theme-token classes instead of inline computed colors. The closed trigger now matches native select styling, and the open menu rows use native option-style dark/high-contrast surfaces with gold selected/hover states.
+- Allowed the Options modal body to overflow visibly so the Palette dropdown can extend outside the modal instead of clipping.
+
+### Runtime and Packaging
+
+#### Changed
+
+- Renamed bundled Pixi runtime from `runtime/libs/pixi8.js` to canonical `runtime/libs/pixi.js`, and updated runtime script loading, editor distribution packaging, and tests to use `js/libs/pixi.js` in generated projects.
+
+#### Fixed
+
+- Removed direct editor shell script tags that pointed at missing `node_modules` Pixi/GIF files.
+- Fixed low-risk Pixi v8 deprecation warnings including texture wrap mode, container labels, and text constructor/stroke style usage.
+
 ### Forge — Character Generator
 
 #### Changed
@@ -250,7 +310,7 @@ Continued v7→v8 migration: fixed Effekseer animations not rendering in battle,
 
 #### Added — `template/*/js/libs/pixi_compat.js`
 
-- **`PIXI.Container.prototype._position` accessor (KEY FIX)** — v8 stores its internal position `ObservablePoint` in `this._position` (pixi8.js line 7129). Some MZ plugins (notably MOG_BattleCursor's `BattleCursorSprite` constructor: `this._position = {}; this._position.x = 0; ...`) use `_position` as a custom data-struct field name, REPLACING v8's observable with a plain object. After that, `sprite.x = N` writes to a plain field instead of the ObservablePoint, so v8's transform-dirty notification never fires and the sprite's `localTransform` stays `NaN`. v8's renderer culls anything with NaN transforms, so the entire subtree silently disappears.
+- **`PIXI.Container.prototype._position` accessor (KEY FIX)** — v8 stores its internal position `ObservablePoint` in `this._position` (pixi.js line 7129). Some MZ plugins (notably MOG_BattleCursor's `BattleCursorSprite` constructor: `this._position = {}; this._position.x = 0; ...`) use `_position` as a custom data-struct field name, REPLACING v8's observable with a plain object. After that, `sprite.x = N` writes to a plain field instead of the ObservablePoint, so v8's transform-dirty notification never fires and the sprite's `localTransform` stays `NaN`. v8's renderer culls anything with NaN transforms, so the entire subtree silently disappears.
   - Shim installs an accessor on `Container.prototype._position`. The setter captures the `ObservablePoint` when v8's ctor assigns one (stashed as `__pixiPositionObservable`). When a plain object is later assigned, x/y values are copied into the saved observable and `_onUpdate` is triggered. Subsequent reads return the observable. Plugin-side `this._position.xOffset = 5` etc. still works — extra keys are added as own properties on the observable.
   - Backwards-compatible with any plugin using the same `_position` clobber pattern, not just MOG_BattleCursor. **No plugin file edits required.**
 - **`PIXI.Sprite.prototype.allowChildren` getter** — always returns `true`, swallows the constructor's `this.allowChildren = false` assignment. Suppresses v8's "addChild on a Sprite" deprecation warning spam. (v8 still iterates Sprite children in `collectRenderablesSimple` regardless of `allowChildren`, so this is purely a warning fix.)
@@ -344,7 +404,7 @@ Follow-up runtime work on the v7→v8 migration: with the bundle and corescript 
   - **3-tier runtime acquisition**: Checks bundled local dirs (`nwjs-linux/`, `nwjs-win/`, `nwjs-mac/`) → `.nw-cache/` → downloads from `dl.nwjs.io`
   - **Partial download protection**: Uses `.part` suffix during download to prevent corrupt cached files
   - **SHA256SUMS.txt** generated for all output archives
-  - **Whitelist-based staging**: Only includes editor files needed for distribution (`src/`, `css/`, `images/`, `libs/`, `build-scripts/`, player-facing `template/Demo/`, launcher scripts, docs, cherry-picked `pixi.min.js`); excludes dev artifacts (`.git/`, `node_modules/`, `save/`, template dev dirs like `REACTOR_CORE_DUMP_MIDDEV/`, `RMMZ_Corescript/`, `PIXI5/`, `PIXI8/`, `Backup/`, `Screenshots/`)
+  - **Whitelist-based staging**: Only includes editor files needed for distribution (`src/`, `css/`, `images/`, `libs/`, `build-scripts/`, player-facing `template/Demo/`, launcher scripts, docs, bundled `runtime/libs/pixi.js`); excludes dev artifacts (`.git/`, `node_modules/`, `save/`, template dev dirs like `REACTOR_CORE_DUMP_MIDDEV/`, `RMMZ_Corescript/`, `PIXI5/`, `PIXI8/`, `Backup/`, `Screenshots/`)
   - **Bootstrap launchers** (minimal packages): Platform-specific scripts that download + extract NW.js on first run (bash for Linux/macOS, batch + PowerShell for Windows)
   - Worker: `build-scripts/dist-editor-worker.js`, Manager: `src/DistEditorManager.js`
 - **Custom icons for built executables**: Game and editor builds now embed custom icons instead of the default NW.js compass icon

@@ -145,7 +145,7 @@ class ChangeParameterEditor {
         paramTypes.forEach(pt => {
             const option = document.createElement('option');
             option.value = pt.value;
-            option.textContent = pt.label;
+            option.textContent = window.I18n ? window.I18n.tText(pt.label) : pt.label;
             option.selected = (this.paramType === pt.value);
             paramSelect.appendChild(option);
         });

@@ -4376,7 +4376,7 @@ Window.prototype._createContainer = function() {
 };
 
 Window.prototype._createBackSprite = function() {
-    // v8: SpritePipe (pixi8.js:47884) does NOT walk children of leaf Sprites.
+    // v8: SpritePipe (pixi.js:47884) does NOT walk children of leaf Sprites.
     // _backSprite is purely a parent for the TilingSprite that fills the
     // window background, so using Container (which IS walked) makes the
     // TilingSprite child actually render. Without this, window backgrounds

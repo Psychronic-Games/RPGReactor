@@ -21,6 +21,10 @@ class BattleTestConfigModal {
         this.initializeBattlers();
     }
 
+    _t(text) {
+        return window.I18n ? window.I18n.tText(text) : text;
+    }
+
     initializeBattlers() {
         const system = this.databaseManager.getSystem();
         const existingBattlers = system && system.testBattlers;
@@ -64,7 +68,7 @@ class BattleTestConfigModal {
 
         // Title
         const title = document.createElement('h3');
-        title.textContent = 'Battle Test Configuration';
+        title.textContent = this._t('Battle Test Configuration');
         title.style.cssText = 'margin: 0 0 16px 0; color: var(--color-text-strong); font-size: 15px;';
         dialog.appendChild(title);
 
@@ -90,7 +94,7 @@ class BattleTestConfigModal {
         cancelBtn.onmouseleave = () => { cancelBtn.style.backgroundColor = 'var(--color-bg-button)'; cancelBtn.style.borderColor = 'var(--color-text-dim)'; };
 
         const okBtn = document.createElement('button');
-        okBtn.textContent = 'OK';
+        okBtn.textContent = this._t('OK');
         okBtn.style.cssText = 'padding: 8px 16px; background-color: var(--color-accent); color: var(--color-bg-deep); border: 1px solid var(--color-accent); border-radius: 4px; cursor: pointer; font-weight: bold;';
         okBtn.onmouseenter = () => { okBtn.style.backgroundColor = 'var(--color-accent-muted)'; };
         okBtn.onmouseleave = () => { okBtn.style.backgroundColor = 'var(--color-accent)'; };
@@ -103,6 +107,7 @@ class BattleTestConfigModal {
         this.modal.appendChild(dialog);
         this.modal.onclick = (e) => { if (e.target === this.modal) this.close(); };
         document.body.appendChild(this.modal);
+        if (window.I18n) window.I18n.applyText(this.modal);
 
         this.renderTabs();
         this.renderConfig();
@@ -116,7 +121,7 @@ class BattleTestConfigModal {
 
     createButton(label, onclick) {
         const btn = document.createElement('button');
-        btn.textContent = label;
+        btn.textContent = this._t(label);
         btn.style.cssText = 'padding: 8px 16px; background-color: var(--color-bg-panel); color: var(--color-text-strong); border: 1px solid var(--color-text-dim); border-radius: 4px; cursor: pointer;';
         btn.onmouseenter = () => { btn.style.backgroundColor = 'var(--color-accent-tint-35)'; btn.style.borderColor = 'var(--color-bg-deep)'; };
         btn.onmouseleave = () => { btn.style.backgroundColor = 'var(--color-bg-panel)'; btn.style.borderColor = 'var(--color-text-dim)'; };
@@ -138,7 +143,7 @@ class BattleTestConfigModal {
         this.battlers.forEach((battler, idx) => {
             const actor = this.databaseManager.getActor(battler.actorId);
             const tab = document.createElement('button');
-            tab.textContent = actor ? actor.name : `Actor #${battler.actorId}`;
+            tab.textContent = actor ? actor.name : `${this._t('Actor')} #${battler.actorId}`;
             tab.style.cssText = `
                 padding: 4px 12px; border: 1px solid var(--color-border-input); border-radius: 3px; cursor: pointer; font-size: 12px;
                 ${idx === this.selectedBattlerIndex
@@ -156,7 +161,7 @@ class BattleTestConfigModal {
         // Add button
         const addBtn = document.createElement('button');
         addBtn.textContent = '+';
-        addBtn.title = 'Add party member';
+        addBtn.title = this._t('Add party member');
         addBtn.style.cssText = 'padding: 4px 10px; background-color: var(--color-bg-menubar); color: var(--color-text); border: 1px solid var(--color-border-input); border-radius: 3px; cursor: pointer; font-size: 14px;';
         addBtn.onmouseenter = () => { addBtn.style.backgroundColor = 'var(--color-accent-tint-25)'; };
         addBtn.onmouseleave = () => { addBtn.style.backgroundColor = 'var(--color-bg-menubar)'; };
@@ -167,7 +172,7 @@ class BattleTestConfigModal {
         if (this.battlers.length > 1) {
             const removeBtn = document.createElement('button');
             removeBtn.textContent = '\u2212';
-            removeBtn.title = 'Remove selected party member';
+            removeBtn.title = this._t('Remove selected party member');
             removeBtn.style.cssText = 'padding: 4px 10px; background-color: var(--color-bg-menubar); color: #f44; border: 1px solid var(--color-border-input); border-radius: 3px; cursor: pointer; font-size: 14px;';
             removeBtn.onmouseenter = () => { removeBtn.style.backgroundColor = 'rgba(255, 100, 100, 0.2)'; };
             removeBtn.onmouseleave = () => { removeBtn.style.backgroundColor = 'var(--color-bg-menubar)'; };
@@ -212,7 +217,7 @@ class BattleTestConfigModal {
         area.innerHTML = '';
 
         if (this.battlers.length === 0) {
-            area.innerHTML = '<div style="color: var(--color-text-dim); text-align: center; padding: 20px;">No party members</div>';
+            area.innerHTML = `<div style="color: var(--color-text-dim); text-align: center; padding: 20px;">${this._t('No party members')}</div>`;
             return;
         }
 
@@ -265,7 +270,7 @@ class BattleTestConfigModal {
         // Equipment
         const equipHeader = document.createElement('div');
         equipHeader.style.cssText = 'color: var(--color-text-muted); font-size: 12px; font-weight: 500; margin: 12px 0 6px 0; border-bottom: 1px solid var(--color-border); padding-bottom: 4px;';
-        equipHeader.textContent = 'Equipment';
+        equipHeader.textContent = this._t('Equipment');
         area.appendChild(equipHeader);
 
         const actor = this.databaseManager.getActor(battler.actorId);
@@ -282,7 +287,7 @@ class BattleTestConfigModal {
 
             const select = document.createElement('select');
             select.style.cssText = 'flex: 1; background: var(--color-bg-menubar); border: 1px solid var(--color-border-input); color: var(--color-text); padding: 4px; border-radius: 3px; font-size: 12px;';
-            select.innerHTML = '<option value="0">(None)</option>';
+            select.innerHTML = `<option value="0">${this._t('(None)')}</option>`;
 
             if (etypeId === 1) {
                 // Weapon slot
@@ -318,7 +323,7 @@ class BattleTestConfigModal {
         // Stats display
         const statsHeader = document.createElement('div');
         statsHeader.style.cssText = 'color: var(--color-text-muted); font-size: 12px; font-weight: 500; margin: 12px 0 6px 0; border-bottom: 1px solid var(--color-border); padding-bottom: 4px;';
-        statsHeader.textContent = 'Stats';
+        statsHeader.textContent = this._t('Stats');
         area.appendChild(statsHeader);
 
         const statsContainer = document.createElement('div');
@@ -334,7 +339,7 @@ class BattleTestConfigModal {
         container.innerHTML = '';
 
         const stats = this.calculateStats(battler);
-        const paramNames = ['Max HP', 'Max MP', 'ATK', 'DEF', 'MAT', 'MDF', 'AGI', 'LUK'];
+        const paramNames = ['Max HP', 'Max MP', 'Attack', 'Defense', 'M.Attack', 'M.Defense', 'Agility', 'Luck'].map(name => this._t(name));
 
         const grid = document.createElement('div');
         grid.style.cssText = 'display: grid; grid-template-columns: 1fr 1fr; gap: 4px 16px;';
@@ -431,7 +436,7 @@ class BattleTestConfigModal {
         row.style.cssText = 'display: flex; align-items: center; gap: 8px; margin-bottom: 6px;';
         const labelEl = document.createElement('label');
         labelEl.style.cssText = 'width: 80px; color: var(--color-text-muted); font-size: 12px; text-align: right; flex-shrink: 0;';
-        labelEl.textContent = label;
+        labelEl.textContent = this._t(label);
         row.appendChild(labelEl);
         return row;
     }
@@ -443,7 +448,7 @@ class BattleTestConfigModal {
     async launch() {
         const system = this.databaseManager.getSystem();
         if (!system) {
-            alert('System data not available');
+            alert(this._t('System data not available'));
             return;
         }
 
@@ -481,7 +486,7 @@ class BattleTestConfigModal {
                 fs.writeFileSync(path.join(dataDir, 'Test_' + filename), JSON.stringify(data));
             }
         } catch (e) {
-            alert('Failed to write test data: ' + e.message);
+            alert(`${this._t('Failed to write test data:')} ${e.message}`);
             return;
         }
 

@@ -3,7 +3,7 @@
 //=============================================================================
 
 const scriptUrls = [
-    "js/libs/pixi7.js",
+    "js/libs/pixi.js",
     "js/libs/pixi_compat.js",
     "js/libs/pako.min.js",
     "js/libs/localforage.min.js",

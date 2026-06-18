@@ -137,7 +137,7 @@ class ChangeEnemyHPEditor {
 
         const deathLabel = document.createElement('label');
         deathLabel.htmlFor = 'allow-death-331';
-        deathLabel.textContent = 'Allow Death';
+        deathLabel.textContent = window.I18n ? window.I18n.tText('Allow Death') : 'Allow Death';
         deathLabel.style.cssText = 'color: var(--color-text); font-size: 13px; cursor: pointer;';
 
         deathRow.appendChild(deathCheckbox);

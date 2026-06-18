@@ -1,6 +1,6 @@
 # RPG Reactor
 
-RPG Reactor 0.9 is an open-source, cross-platform RPG game editor and runtime for RPG Maker MV/MZ-compatible projects. RPG Reactor provides its own modern PIXI 8-based runtime while preserving compatibility with RPG Maker project data and targeting backwards compatibility with RPG Maker MZ plugins.
+RPG Reactor 0.91 is an open-source, cross-platform RPG game editor and runtime for RPG Maker MV/MZ-compatible projects. RPG Reactor provides its own modern PIXI 8-based runtime while preserving compatibility with RPG Maker project data and targeting backwards compatibility with RPG Maker MZ plugins.
 
 Use RPG Reactor to create, edit, playtest, and package 2D RPGs with familiar RPG Maker-style maps, events, database records, plugins, and deployment workflows, without depending on the original RPG Maker runtime or editor.
 
@@ -12,10 +12,18 @@ Pre-built download binaries are available at <https://psychronic.itch.io/rpg-rea
 RPGReactor/
 ├── editor/   # RPG Reactor editor app source
 ├── runtime/  # Game runtime corescript copied into new projects
+├── docs/     # Maintainer workflows and project notes
 ├── RPGReactor.sh / .bat / .command
+├── CHANGELOG.md
 ├── LICENSE
 └── README.md
 ```
+
+## Documentation
+
+- [Editor README](editor/README.md): detailed feature list, source launch steps, project structure, shortcuts, and technical notes.
+- [Changelog](CHANGELOG.md): GitHub-facing release progress and links to the detailed editor changelog.
+- [Maintainer docs](docs/README.md): workflows that are useful for project maintenance but are not required for normal editor use.
 
 ## Development Launchers
 
@@ -36,7 +44,7 @@ RPG Reactor runs as an NW.js desktop app. Source checkouts do not include NW.js 
 1. Clone the repository:
 
 ```bash
-git clone git@github.com:Psychronic-Games/RPGReactor.git
+git clone https://github.com/Psychronic-Games/RPGReactor.git
 cd RPGReactor
 ```
 

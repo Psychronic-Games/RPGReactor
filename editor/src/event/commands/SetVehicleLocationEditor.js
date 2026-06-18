@@ -114,9 +114,9 @@ class SetVehicleLocationEditor {
         const vehicleSelect = document.createElement('select');
         vehicleSelect.style.cssText = 'padding: 6px 10px; background-color: var(--color-bg-input); color: var(--color-text); border: 1px solid var(--color-border-input); border-radius: 3px; font-size: 12px; flex: 1;';
         vehicleSelect.innerHTML = `
-            <option value="0" ${this.vehicle === 0 ? 'selected' : ''}>Boat</option>
-            <option value="1" ${this.vehicle === 1 ? 'selected' : ''}>Ship</option>
-            <option value="2" ${this.vehicle === 2 ? 'selected' : ''}>Airship</option>
+            <option value="0" ${this.vehicle === 0 ? 'selected' : ''}>${window.I18n ? window.I18n.tText('Boat') : 'Boat'}</option>
+            <option value="1" ${this.vehicle === 1 ? 'selected' : ''}>${window.I18n ? window.I18n.tText('Ship') : 'Ship'}</option>
+            <option value="2" ${this.vehicle === 2 ? 'selected' : ''}>${window.I18n ? window.I18n.tText('Airship') : 'Airship'}</option>
         `;
         vehicleSelect.addEventListener('change', (e) => {
             this.vehicle = parseInt(e.target.value);

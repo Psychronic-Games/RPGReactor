@@ -228,15 +228,16 @@ class ConditionalBranchEditor {
             border-radius: 3px;
             font-size: 12px;
         `;
+        const t = text => window.I18n ? window.I18n.tText(text) : text;
         select.innerHTML = `
-            <option value="0">Switch</option>
-            <option value="1">Variable</option>
-            <option value="2">Self Switch</option>
-            <option value="7">Gold</option>
-            <option value="8">Item</option>
-            <option value="9">Weapon</option>
-            <option value="10">Armor</option>
-            <option value="12">Script</option>
+            <option value="0">${t('Switch')}</option>
+            <option value="1">${t('Variable')}</option>
+            <option value="2">${t('Self Switch')}</option>
+            <option value="7">${t('Gold')}</option>
+            <option value="8">${t('Item')}</option>
+            <option value="9">${t('Weapon')}</option>
+            <option value="10">${t('Armor')}</option>
+            <option value="12">${t('Script')}</option>
         `;
         select.value = this.conditionType.toString();
         select.addEventListener('change', (e) => {
@@ -418,13 +419,14 @@ class ConditionalBranchEditor {
             font-size: 12px;
             width: 150px;
         `;
+        const t = text => window.I18n ? window.I18n.tText(text) : text;
         compSelect.innerHTML = `
-            <option value="0">Equal to (==)</option>
-            <option value="1">Greater or Equal (>=)</option>
-            <option value="2">Less or Equal (<=)</option>
-            <option value="3">Greater than (>)</option>
-            <option value="4">Less than (<)</option>
-            <option value="5">Not Equal (!=)</option>
+            <option value="0">${t('Equal to (==)')}</option>
+            <option value="1">${t('Greater or Equal (>=)')}</option>
+            <option value="2">${t('Less or Equal (<=)')}</option>
+            <option value="3">${t('Greater than (>)')}</option>
+            <option value="4">${t('Less than (<)')}</option>
+            <option value="5">${t('Not Equal (!=)')}</option>
         `;
         compSelect.value = this.variableComparison.toString();
         compSelect.addEventListener('change', (e) => {

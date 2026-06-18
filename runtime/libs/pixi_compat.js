@@ -1292,7 +1292,7 @@
     // Subclasses (Sprite_Battler, BattleCursorSprite, etc.) inherit this.
     // -------------------------------------------------------------------------
     // After reading v8's actual implementation: Sprite's collectRenderablesSimple
-    // (pixi8.js:12259) already iterates `this.children` after drawing its own
+    // (pixi.js:12259) already iterates `this.children` after drawing its own
     // texture. So children of Sprites DO render in v8 -- the "leaf nodes can't
     // have children" warning is just a deprecation notice, not a behavior
     // change for the current version. An attempt to swap renderPipeId from
@@ -1320,7 +1320,7 @@
     // -------------------------------------------------------------------------
     // v8 only: rescue `_position` from plugin clobbering. v8 stores the
     // ObservablePoint used for `container.position` in `this._position`
-    // (pixi8.js line 7129: `this._position = new ObservablePoint(this, 0, 0)`).
+    // (pixi.js line 7129: `this._position = new ObservablePoint(this, 0, 0)`).
     // Some MZ plugins (e.g. MOG_BattleCursor's BattleCursorSprite ctor:
     //   this._position = {};  this._position.x = 0;  this._position.y = 0;
     // ...) use `_position` as their own custom data struct, REPLACING v8's
@@ -1567,7 +1567,7 @@
         };
         // Exact formulas from PIXI v8's official advanced-blend-modes module
         // (pixi.js/advanced-blend-modes -> MultiplyBlend/ScreenBlend/OverlayBlend).
-        // We replicate them here because the vanilla pixi8.js bundle does not
+        // We replicate them here because the vanilla pixi.js bundle does not
         // ship advanced blend modes; without registration these blend mode
         // names silently fall through to 'normal'.
         registerBlendMode(
@@ -2308,4 +2308,3 @@
         console.log("pixi_compat: UltraMode7V8 render hook installed (Tilemap.Layer.render override)");
     };
 })();
-

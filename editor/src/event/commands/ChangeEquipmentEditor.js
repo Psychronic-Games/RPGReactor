@@ -156,7 +156,7 @@ class ChangeEquipmentEditor {
         slots.forEach(slot => {
             const option = document.createElement('option');
             option.value = slot.value;
-            option.textContent = slot.label;
+            option.textContent = window.I18n ? window.I18n.tText(slot.label) : slot.label;
             option.selected = (this.equipSlot === slot.value);
             slotSelect.appendChild(option);
         });
@@ -185,7 +185,7 @@ class ChangeEquipmentEditor {
         // None option
         const noneOption = document.createElement('option');
         noneOption.value = 0;
-        noneOption.textContent = 'None';
+        noneOption.textContent = window.I18n ? window.I18n.tText('None') : 'None';
         noneOption.selected = (this.equipId === 0);
         equipSelect.appendChild(noneOption);
 

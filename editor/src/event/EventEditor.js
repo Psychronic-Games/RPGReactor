@@ -11,14 +11,24 @@ class EventEditor {
         this.currentPageIndex = 0;
         this.clipboard = null; // For copy/paste event pages
         this.commandList = new EventCommandList(this); // Command list manager
+
+        if (typeof window !== 'undefined') window.addEventListener('rr-language-changed', () => {
+            const container = document.querySelector('.event-editor-container');
+            if (container && this.currentEvent) this.showEventEditor(container, this.currentEvent);
+        });
+    }
+
+    _t(key, params = {}) {
+        return typeof window !== 'undefined' && window.I18n ? window.I18n.t(key, params) : key;
     }
 
     /**
      * Show event editor panel
      */
     showEventEditor(container, event) {
+        const sameEvent = this.currentEvent === event;
         this.currentEvent = event;
-        this.currentPageIndex = 0;
+        if (!sameEvent) this.currentPageIndex = 0;
 
         // Ensure event has at least one page
         if (!event.pages || event.pages.length === 0) {
@@ -120,7 +130,7 @@ class EventEditor {
         topRow.innerHTML = `
             <div style="flex: 1; display: flex; align-items: center; gap: 16px;">
                 <div>
-                    <label style="font-weight: bold; margin-right: 8px;">Event Name:</label>
+                    <label style="font-weight: bold; margin-right: 8px;">${this._t('event.name')}</label>
                     <input type="text"
                            class="event-name-input"
                            value="${event.name || ''}"
@@ -128,7 +138,7 @@ class EventEditor {
                            data-event-id="${event.id}">
                 </div>
                 <div>
-                    <label style="font-weight: bold; margin-right: 8px;">Position:</label>
+                    <label style="font-weight: bold; margin-right: 8px;">${this._t('event.position')}</label>
                     <span>X: ${event.x}, Y: ${event.y}</span>
                 </div>
             </div>
@@ -145,7 +155,7 @@ class EventEditor {
         noteRow.style.alignItems = 'flex-start';
         noteRow.style.gap = '8px';
         noteRow.innerHTML = `
-            <label style="font-weight: bold; min-width: 80px; flex-shrink: 0;">Note:</label>
+            <label style="font-weight: bold; min-width: 80px; flex-shrink: 0;">${this._t('event.note')}</label>
             <textarea class="event-note-input"
                       style="flex: 1; padding: 4px 8px; min-height: 40px; resize: vertical; font-family: monospace; font-size: 11px; background: var(--color-bg-surface); color: var(--color-text); border: 1px solid var(--color-border-input);"
                       data-event-id="${event.id}">${event.note || ''}</textarea>
@@ -223,11 +233,11 @@ class EventEditor {
         `;
 
         const buttons = [
-            { label: 'New Event Page', action: 'new' },
-            { label: 'Copy Event Page', action: 'copy' },
-            { label: 'Paste Event Page', action: 'paste' },
-            { label: 'Delete Event Page', action: 'delete' },
-            { label: 'Clear Event Page', action: 'clear' }
+            { label: this._t('event.newPage'), action: 'new' },
+            { label: this._t('event.copyPage'), action: 'copy' },
+            { label: this._t('event.pastePage'), action: 'paste' },
+            { label: this._t('event.deletePage'), action: 'delete' },
+            { label: this._t('event.clearPage'), action: 'clear' }
         ];
 
         buttons.forEach(btn => {
@@ -272,7 +282,7 @@ class EventEditor {
 
         event.pages.forEach((page, index) => {
             const tab = document.createElement('button');
-            tab.textContent = `Page ${index + 1}`;
+            tab.textContent = this._t('event.page', { number: index + 1 });
             tab.className = 'event-page-tab';
             tab.dataset.pageIndex = index;
             const active = index === this.currentPageIndex;
@@ -315,7 +325,7 @@ class EventEditor {
         header.style.borderRadius = '4px';
         header.style.marginBottom = '6px';
         header.style.flexShrink = '0';
-        header.textContent = 'Contents';
+        header.textContent = this._t('event.contents');
 
         const contentsArea = document.createElement('div');
         contentsArea.className = 'event-contents-area';
@@ -333,13 +343,13 @@ class EventEditor {
         if (currentPage && currentPage.list && currentPage.list.length > 0) {
             contentsArea.innerHTML = `
                 <div style="color: var(--color-text-muted);">
-                    Event commands list (${currentPage.list.length} commands)
+                    ${this._t('event.commandListPlaceholder', { count: currentPage.list.length })}
                     <br><br>
-                    Command editor interface will be implemented here.
+                    ${this._t('event.commandEditorPlaceholder')}
                 </div>
             `;
         } else {
-            contentsArea.innerHTML = '<div style="color: var(--color-text-muted);">No commands defined yet.</div>';
+            contentsArea.innerHTML = `<div style="color: var(--color-text-muted);">${this._t('event.noCommandsDefined')}</div>`;
         }
 
         column.appendChild(header);
@@ -373,7 +383,7 @@ class EventEditor {
 
         // OK button
         const okButton = document.createElement('button');
-        okButton.textContent = 'OK';
+        okButton.textContent = this._t('common.ok');
         okButton.style.cssText = buttonStyle;
         okButton.addEventListener('mouseenter', () => okButton.style.backgroundColor = 'var(--color-accent-tint-25)');
         okButton.addEventListener('mouseleave', () => okButton.style.backgroundColor = 'var(--color-bg-panel)');
@@ -383,7 +393,7 @@ class EventEditor {
 
         // Cancel button
         const cancelButton = document.createElement('button');
-        cancelButton.textContent = 'Cancel';
+        cancelButton.textContent = this._t('common.cancel');
         cancelButton.style.cssText = buttonStyle;
         cancelButton.addEventListener('mouseenter', () => cancelButton.style.backgroundColor = 'var(--color-accent-tint-25)');
         cancelButton.addEventListener('mouseleave', () => cancelButton.style.backgroundColor = 'var(--color-bg-panel)');
@@ -393,7 +403,7 @@ class EventEditor {
 
         // Apply button
         const applyButton = document.createElement('button');
-        applyButton.textContent = 'Apply';
+        applyButton.textContent = this._t('common.apply');
         applyButton.style.cssText = buttonStyle;
         applyButton.addEventListener('mouseenter', () => applyButton.style.backgroundColor = 'var(--color-accent-tint-25)');
         applyButton.addEventListener('mouseleave', () => applyButton.style.backgroundColor = 'var(--color-bg-panel)');
@@ -458,7 +468,7 @@ class EventEditor {
         // Create header with info
         const header = document.createElement('div');
         header.style.cssText = 'color: var(--color-text-muted); margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--color-border);';
-        header.textContent = `Event Commands (${currentPage.list ? currentPage.list.length : 0} total)`;
+        header.textContent = this._t('event.commandsTotal', { count: currentPage.list ? currentPage.list.length : 0 });
         contentsArea.appendChild(header);
 
         // Render interactive command list
@@ -551,7 +561,7 @@ class EventEditor {
         }
 
         if (!pageData) {
-            alert('No page in clipboard to paste.');
+            alert(this._t('event.noPageClipboard'));
             return;
         }
 
@@ -571,11 +581,11 @@ class EventEditor {
      */
     deleteCurrentPage() {
         if (this.currentEvent.pages.length <= 1) {
-            alert('Cannot delete the last page. An event must have at least one page.');
+            alert(this._t('event.cannotDeleteLastPage'));
             return;
         }
 
-        if (confirm('Are you sure you want to delete this page?')) {
+        if (confirm(this._t('event.deletePageConfirm'))) {
             this.currentEvent.pages.splice(this.currentPageIndex, 1);
             this.currentPageIndex = Math.max(0, this.currentPageIndex - 1);
 
@@ -591,7 +601,7 @@ class EventEditor {
      * Clear current page (reset to defaults)
      */
     clearCurrentPage() {
-        if (confirm('Are you sure you want to clear this page? All settings will be reset.')) {
+        if (confirm(this._t('event.clearPageConfirm'))) {
             this.currentEvent.pages[this.currentPageIndex] = this.createDefaultPage();
             this.renderCurrentPage();
         }

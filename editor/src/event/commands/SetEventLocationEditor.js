@@ -155,8 +155,8 @@ class SetEventLocationEditor {
             flex: 1;
         `;
         charSelect.innerHTML = `
-            <option value="-1">Player</option>
-            <option value="0">This Event</option>
+            <option value="-1">${window.I18n ? window.I18n.tText('Player') : 'Player'}</option>
+            <option value="0">${window.I18n ? window.I18n.tText('This Event') : 'This Event'}</option>
         `;
         // Add event IDs 1-20 (can be extended)
         for (let i = 1; i <= 20; i++) {
@@ -191,7 +191,7 @@ class SetEventLocationEditor {
 
         types.forEach(({ value, label }) => {
             const btn = document.createElement('button');
-            btn.textContent = label;
+            btn.textContent = window.I18n ? window.I18n.tText(label) : label;
             btn.style.cssText = `
                 flex: 1;
                 padding: 8px;
@@ -390,11 +390,11 @@ class SetEventLocationEditor {
             flex: 1;
         `;
         select.innerHTML = `
-            <option value="0">Retain</option>
-            <option value="2">Down ▼</option>
-            <option value="4">Left ◄</option>
-            <option value="6">Right ►</option>
-            <option value="8">Up ▲</option>
+            <option value="0">${window.I18n ? window.I18n.tText('Retain') : 'Retain'}</option>
+            <option value="2">${window.I18n ? window.I18n.tText('Down') : 'Down'} ▼</option>
+            <option value="4">${window.I18n ? window.I18n.tText('Left') : 'Left'} ◄</option>
+            <option value="6">${window.I18n ? window.I18n.tText('Right') : 'Right'} ►</option>
+            <option value="8">${window.I18n ? window.I18n.tText('Up') : 'Up'} ▲</option>
         `;
         select.value = this.direction.toString();
         select.addEventListener('change', (e) => {

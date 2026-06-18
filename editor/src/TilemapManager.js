@@ -229,7 +229,7 @@ class TilemapManager {
             promises.push(
                 PIXI.Assets.load(fileUrl).then(texture => {
                     // Set texture wrap mode to CLAMP to prevent tiling/repeating (PIXI v8 API)
-                    texture.source.style.wrapMode = 'clamp-to-edge';
+                    texture.source.style.addressMode = 'clamp-to-edge';
                     texture.source.style.scaleMode = 'nearest'; // Pixel-perfect
                     // PIXI v8 defaults to proper alpha handling for PNG files
                     this.tilesetTextures[idx] = texture;
@@ -1375,9 +1375,9 @@ class TilemapManager {
 
             // Set texture wrap mode based on looping settings
             if (parallaxLoopX || parallaxLoopY) {
-                texture.source.style.wrapMode = 'repeat';
+                texture.source.style.addressMode = 'repeat';
             } else {
-                texture.source.style.wrapMode = 'clamp-to-edge';
+                texture.source.style.addressMode = 'clamp-to-edge';
             }
 
             // If looping, use TilingSprite for seamless tiling

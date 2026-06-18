@@ -168,11 +168,12 @@ class SelectItemEditor {
             font-size: 12px;
             width: 180px;
         `;
+        const t = text => window.I18n ? window.I18n.tText(text) : text;
         itemTypeSelect.innerHTML = `
-            <option value="1">Regular Item</option>
-            <option value="2">Key Item</option>
-            <option value="3">Hidden Item A</option>
-            <option value="4">Hidden Item B</option>
+            <option value="1">${t('Regular Item')}</option>
+            <option value="2">${t('Key Item')}</option>
+            <option value="3">${t('Hidden Item A')}</option>
+            <option value="4">${t('Hidden Item B')}</option>
         `;
         itemTypeSelect.value = this.itemType.toString();
         itemTypeSelect.addEventListener('change', (e) => {

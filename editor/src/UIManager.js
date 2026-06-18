@@ -81,9 +81,10 @@ class UIManager {
 
         // HTML Menu Bar - Handle menu option clicks
         document.addEventListener('click', (e) => {
-            if (e.target.classList.contains('html-menu-option')) {
-                const action = e.target.getAttribute('data-action');
-                const db = e.target.getAttribute('data-db');
+            const option = e.target.closest('.html-menu-option');
+            if (option) {
+                const action = option.getAttribute('data-action');
+                const db = option.getAttribute('data-db');
 
                 // Close all submenus
                 document.querySelectorAll('.html-submenu').forEach(sub => {
@@ -95,6 +96,17 @@ class UIManager {
                 } else if (db) {
                     this.callbacks.openDatabase(db);
                 }
+            }
+        });
+
+        document.addEventListener('click', (e) => {
+            const link = e.target.closest('a.external-link');
+            if (!link) return;
+            const href = link.getAttribute('href');
+            if (!href) return;
+            if (typeof nw !== 'undefined' && nw.Shell?.openExternal) {
+                e.preventDefault();
+                nw.Shell.openExternal(href);
             }
         });
     }

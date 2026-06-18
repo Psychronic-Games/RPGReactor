@@ -50,6 +50,8 @@ class RPGReactor {
         // Use setTimeout to allow Effekseer library to fully initialize
         setTimeout(() => this.initEffekseer(), 100);
 
+        if (window.I18n) window.I18n.apply(document);
+
         // Initialize UI Manager with callbacks to this main app
         this.uiManager = new UIManager({
             newProject: () => this.projectController.newProject(),
@@ -302,7 +304,7 @@ class RPGReactor {
     async playtest() {
         const project = this.projectController.getCurrentProject();
         if (!project) {
-            this.uiManager.updateStatus('No project loaded');
+            this.uiManager.updateStatus(window.I18n ? window.I18n.t('status.noProjectLoaded') : 'No project loaded');
             return;
         }
 
@@ -317,7 +319,7 @@ class RPGReactor {
 
         const success = this.playtestManager.playtest(project.path);
         if (!success) {
-            this.uiManager.updateStatus('Playtest mode not yet implemented');
+            this.uiManager.updateStatus(window.I18n ? window.I18n.t('status.playtestNotImplemented') : 'Playtest mode not yet implemented');
         }
     }
 
@@ -332,7 +334,7 @@ class RPGReactor {
     // Show plugin manager
     showPluginManager() {
         if (!this.projectController.isProjectLoaded()) {
-            alert('Please load a project first.');
+            alert(window.I18n ? window.I18n.t('alert.loadProjectFirst') : 'Please load a project first.');
             return;
         }
         if (this.pluginManager) {
@@ -343,7 +345,7 @@ class RPGReactor {
     // Toggle event mode
     toggleEventMode() {
         if (!this.eventManager) {
-            this.uiManager.updateStatus('Load a map first');
+            this.uiManager.updateStatus(window.I18n ? window.I18n.t('status.loadMapFirst') : 'Load a map first');
             return;
         }
 
@@ -420,7 +422,9 @@ class RPGReactor {
         }
 
         // Update status
-        this.uiManager.updateStatus(newMode ? 'Event mode enabled' : 'Event mode disabled');
+        this.uiManager.updateStatus(window.I18n
+            ? window.I18n.t(newMode ? 'status.eventModeEnabled' : 'status.eventModeDisabled')
+            : (newMode ? 'Event mode enabled' : 'Event mode disabled'));
     }
 
     // Disable event mode if currently active (called when switching to tileset tools)

@@ -142,10 +142,11 @@ class ShopProcessingEditor {
             // Item type dropdown
             const typeSelect = document.createElement('select');
             typeSelect.style.cssText = 'padding: 6px 10px; background-color: var(--color-bg-input); color: var(--color-text); border: 1px solid var(--color-border-input); border-radius: 3px; font-size: 12px; width: 100px;';
+            const t = text => window.I18n ? window.I18n.tText(text) : text;
             typeSelect.innerHTML = `
-                <option value="0" ${good.itemType === 0 ? 'selected' : ''}>Item</option>
-                <option value="1" ${good.itemType === 1 ? 'selected' : ''}>Weapon</option>
-                <option value="2" ${good.itemType === 2 ? 'selected' : ''}>Armor</option>
+                <option value="0" ${good.itemType === 0 ? 'selected' : ''}>${t('Item')}</option>
+                <option value="1" ${good.itemType === 1 ? 'selected' : ''}>${t('Weapon')}</option>
+                <option value="2" ${good.itemType === 2 ? 'selected' : ''}>${t('Armor')}</option>
             `;
             typeSelect.addEventListener('change', (e) => {
                 good.itemType = parseInt(e.target.value);

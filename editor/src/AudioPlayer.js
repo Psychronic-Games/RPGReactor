@@ -8,6 +8,14 @@ class AudioPlayer {
 
         // Initialize audio player immediately so it's available for event commands
         this.initializeAudioPlayer();
+        window.addEventListener('rr-language-changed', () => {
+            this.updateLoopButton();
+            this.updatePanValueLabel();
+        });
+    }
+
+    _t(key) {
+        return window.I18n ? window.I18n.t(key) : key;
     }
 
     setCurrentProject(project) {
@@ -286,8 +294,7 @@ class AudioPlayer {
             if (currentChannel && currentChannel.panNode) {
                 currentChannel.panNode.pan.value = pan;
             }
-            const panText = pan === 0 ? 'Center' : (pan > 0 ? `R${Math.abs(e.target.value)}` : `L${Math.abs(e.target.value)}`);
-            document.getElementById('pan-value').textContent = panText;
+            this.updatePanValueLabel();
         });
 
         // Tab switching
@@ -332,7 +339,16 @@ class AudioPlayer {
         document.getElementById('volume-value').textContent = '100%';
         document.getElementById('pitch-slider').value = 100;
         document.getElementById('pitch-value').textContent = '100%';
+        this.updatePanValueLabel();
         this.updateLoopButton();
+    }
+
+    updatePanValueLabel() {
+        const panSlider = document.getElementById('pan-slider');
+        const panValue = document.getElementById('pan-value');
+        if (!panSlider || !panValue) return;
+        const raw = parseInt(panSlider.value, 10) || 0;
+        panValue.textContent = raw === 0 ? this._t('audio.center') : (raw > 0 ? `R${Math.abs(raw)}` : `L${Math.abs(raw)}`);
     }
 
     initWebAudio() {
@@ -385,7 +401,7 @@ class AudioPlayer {
     updateLoopButton() {
         const btn = document.getElementById('btn-loop');
         if (!btn) return;
-        btn.title = this.audioPlayer.loop ? 'Loop: On' : 'Loop: Off';
+        btn.title = this.audioPlayer.loop ? this._t('audio.loopOn') : this._t('audio.loopOff');
         if (this.audioPlayer.loop) {
             btn.classList.add('active-toggle');
         } else {

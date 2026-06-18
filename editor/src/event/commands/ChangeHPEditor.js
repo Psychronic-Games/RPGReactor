@@ -140,7 +140,7 @@ class ChangeHPEditor {
 
         const deathLabel = document.createElement('label');
         deathLabel.htmlFor = 'allow-death-311';
-        deathLabel.textContent = 'Allow Death';
+        deathLabel.textContent = window.I18n ? window.I18n.tText('Allow Death') : 'Allow Death';
         deathLabel.style.cssText = 'color: var(--color-text); font-size: 13px; cursor: pointer;';
 
         deathRow.appendChild(deathCheckbox);

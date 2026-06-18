@@ -48,24 +48,24 @@ const FORGE_ICONS = {
 const FORGE_TOOLS = [
     {
         id: 'character-generator',
-        name: 'Character Generator',
-        description: 'Build character sprite sheets from layered parts.',
+        nameKey: 'menu.characterGenerator',
+        descriptionKey: 'forge.characterGenerator.description',
         icon: FORGE_ICONS.characterGenerator,
         ctor: () => new CharacterGenerator(),
         getter: 'characterGenerator'
     },
     {
         id: 'animation-generator',
-        name: 'Animation Generator',
-        description: 'Bake procedural animation sprite sheets (geometric, particle, etc.).',
+        nameKey: 'menu.animationGenerator',
+        descriptionKey: 'forge.animationGenerator.description',
         icon: FORGE_ICONS.animationGenerator,
         ctor: () => new AnimationGenerator(),
         getter: 'animationGenerator'
     },
     {
         id: 'sound-effect-generator',
-        name: 'Sound Effect Generator',
-        description: 'Procedural SFX synth — sfxr-style archetypes + Web Audio.',
+        nameKey: 'menu.soundEffectGenerator',
+        descriptionKey: 'forge.soundEffectGenerator.description',
         icon: FORGE_ICONS.soundEffectGenerator,
         ctor: () => new SoundEffectGenerator(),
         getter: 'soundEffectGenerator'
@@ -79,6 +79,13 @@ class ForgeManager {
         this.workspaceModal = null;
         this.activeToolId = null;
         // Tool instances are lazy-cached on this object via tool.getter.
+        window.addEventListener('rr-language-changed', () => {
+            if (this.workspaceModal && this.workspaceModal.style.display !== 'none') this._renderWorkspace();
+        });
+    }
+
+    _t(key) {
+        return window.I18n ? window.I18n.t(key) : key;
     }
 
     /** Open the workspace (called by toolbar button + File>Forge>Forge Launcher). */
@@ -121,30 +128,31 @@ class ForgeManager {
     _renderWorkspace() {
         const sidebarHtml = FORGE_TOOLS.map(tool => {
             const active = tool.id === this.activeToolId;
+            const name = this._t(tool.nameKey);
             return `
                 <div class="rr-forge-sidebar-item" data-tool-id="${tool.id}" style="padding: 10px 14px; cursor: pointer; font-size: 12px; color: var(--color-text); background: ${active ? 'var(--color-bg-hover)' : 'transparent'}; border-left: 3px solid ${active ? 'var(--color-accent-bright)' : 'transparent'}; display: flex; align-items: center; gap: 8px;">
                     <span style="line-height: 1; color: var(--color-accent-bright); flex-shrink: 0; width: 18px; height: 18px; display: inline-flex; align-items: center; justify-content: center;">${tool.icon(18)}</span>
-                    <span>${tool.name}</span>
+                    <span>${name}</span>
                 </div>
             `;
         }).join('');
 
         const activeTool = FORGE_TOOLS.find(t => t.id === this.activeToolId);
-        const titleSuffix = activeTool ? ` | ${activeTool.name}` : '';
+        const titleSuffix = activeTool ? ` | ${this._t(activeTool.nameKey)}` : '';
 
         this.workspaceModal.innerHTML = `
             <div class="rr-modal" style="width: 98vw; height: 96vh; background: var(--color-bg-surface); border: 1px solid var(--color-border); border-radius: 8px; display: flex; flex-direction: column; box-shadow: var(--shadow-modal); overflow: hidden;">
                 <div class="rr-modal-header" style="padding: 12px 18px; border-bottom: 1px solid var(--color-border-subtle); background: var(--color-bg-toolbar); display: flex; justify-content: space-between; align-items: center; border-radius: 8px 8px 0 0; flex-shrink: 0;">
                     <div style="display: flex; align-items: center; gap: 10px;">
                         <span style="color: var(--color-accent-bright); line-height: 1; display: inline-flex;">${FORGE_ICONS.forge(22)}</span>
-                        <div class="rr-modal-title" style="font-size: 15px; font-weight: 700; color: var(--color-text-strong);">Forge${titleSuffix}</div>
+                        <div class="rr-modal-title" style="font-size: 15px; font-weight: 700; color: var(--color-text-strong);">${this._t('menu.forge')}${titleSuffix}</div>
                     </div>
                     <button class="rr-forge-close" style="background: none; border: none; color: var(--color-text-muted); font-size: 22px; cursor: pointer; line-height: 1;">&times;</button>
                 </div>
 
                 <div style="display: grid; grid-template-columns: 200px 1fr; flex: 1; min-height: 0;">
                     <div class="rr-forge-sidebar" style="background: var(--color-bg-panel); border-right: 1px solid var(--color-border); overflow-y: auto; padding: 8px 0;">
-                        <div style="padding: 6px 14px 8px; font-size: 9px; font-weight: 700; color: var(--color-accent-bright); text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid var(--color-border-subtle);">Tools</div>
+                        <div style="padding: 6px 14px 8px; font-size: 9px; font-weight: 700; color: var(--color-accent-bright); text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid var(--color-border-subtle);">${this._t('forge.tools')}</div>
                         ${sidebarHtml}
                     </div>
                     <div class="rr-forge-content" style="overflow: hidden; min-width: 0; display: flex; flex-direction: column;">
@@ -194,8 +202,8 @@ class ForgeManager {
         const tilesHtml = FORGE_TOOLS.map(tool => `
             <button class="rr-forge-tile" data-tool-id="${tool.id}" style="display: flex; flex-direction: column; gap: 8px; align-items: center; padding: 18px; background: var(--color-bg-panel); border: 1px solid var(--color-border); border-radius: 6px; cursor: pointer; transition: border-color var(--ease-base), background var(--ease-base); width: 200px; text-align: center;">
                 <div style="line-height: 1; color: var(--color-accent-bright); display: inline-flex;">${tool.icon(40)}</div>
-                <div style="font-size: 13px; font-weight: 700; color: var(--color-text-strong);">${tool.name}</div>
-                <div style="font-size: 11px; color: var(--color-text-muted); line-height: 1.4;">${tool.description}</div>
+                <div style="font-size: 13px; font-weight: 700; color: var(--color-text-strong);">${this._t(tool.nameKey)}</div>
+                <div style="font-size: 11px; color: var(--color-text-muted); line-height: 1.4;">${this._t(tool.descriptionKey)}</div>
             </button>
         `).join('');
 
@@ -205,8 +213,8 @@ class ForgeManager {
             <div class="rr-forge-welcome" style="padding: 40px; display: flex; flex-direction: column; gap: 20px; align-items: center; justify-content: flex-start;">
                 <div style="text-align: center; display: flex; flex-direction: column; align-items: center;">
                     <div style="color: var(--color-accent-bright); margin-bottom: 8px; display: inline-flex;">${FORGE_ICONS.forge(44)}</div>
-                    <div style="font-size: 18px; font-weight: 700; color: var(--color-text-strong);">Forge</div>
-                    <div style="font-size: 12px; color: var(--color-text-muted); margin-top: 4px;">Asset-generation tool suite. Pick a tool from the sidebar or below.</div>
+                    <div style="font-size: 18px; font-weight: 700; color: var(--color-text-strong);">${this._t('menu.forge')}</div>
+                    <div style="font-size: 12px; color: var(--color-text-muted); margin-top: 4px;">${this._t('forge.welcome')}</div>
                 </div>
                 <div class="rr-forge-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 16px; max-width: 700px; width: 100%;">
                     ${tilesHtml}

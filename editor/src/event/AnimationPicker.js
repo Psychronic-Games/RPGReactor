@@ -23,6 +23,10 @@ class AnimationPicker {
         this._isPlaying = false;
     }
 
+    _t(text) {
+        return window.I18n ? window.I18n.tText(text) : text;
+    }
+
     /**
      * Show the animation picker modal
      * @param {number} currentAnimId - Currently selected animation ID
@@ -87,7 +91,7 @@ class AnimationPicker {
             flex-shrink: 0;
         `;
         header.innerHTML = `
-            <h3 style="margin: 0; color: var(--color-text-strong); font-size: 16px;">Select Animation</h3>
+            <h3 style="margin: 0; color: var(--color-text-strong); font-size: 16px;">${this._t('Select Animation')}</h3>
             <button style="background: none; border: none; color: var(--color-text-strong); font-size: 20px; cursor: pointer; padding: 0; width: 24px; height: 24px;">×</button>
         `;
         header.querySelector('button').addEventListener('click', () => this._close());
@@ -115,7 +119,7 @@ class AnimationPicker {
         // Search input
         const searchInput = document.createElement('input');
         searchInput.type = 'text';
-        searchInput.placeholder = 'Search animations...';
+        searchInput.placeholder = this._t('Search animations...');
         searchInput.style.cssText = `
             margin: 8px;
             padding: 6px 10px;
@@ -169,12 +173,12 @@ class AnimationPicker {
         `;
 
         const cancelBtn = document.createElement('button');
-        cancelBtn.textContent = 'Cancel';
+        cancelBtn.textContent = this._t('Cancel');
         cancelBtn.className = 'rr-btn-secondary';
         cancelBtn.addEventListener('click', () => this._close());
 
         const okBtn = document.createElement('button');
-        okBtn.textContent = 'OK';
+        okBtn.textContent = this._t('OK');
         okBtn.style.cssText = `
             padding: 6px 20px;
             background-color: var(--color-accent);
@@ -204,9 +208,9 @@ class AnimationPicker {
         const items = [];
 
         // (None) entry
-        const noneItem = this._createListItem(0, '(None)', null);
+        const noneItem = this._createListItem(0, this._t('(None)'), null);
         listContainer.appendChild(noneItem);
-        items.push({ el: noneItem, name: '(none)', id: 0 });
+        items.push({ el: noneItem, name: this._t('(None)').toLowerCase(), id: 0 });
 
         if (this.selectedId === 0) {
             noneItem.style.backgroundColor = 'var(--color-selection-mid)';
@@ -219,7 +223,7 @@ class AnimationPicker {
             if (!anim) continue;
 
             const isEffekseer = anim.effectName !== undefined;
-            const typeBadge = isEffekseer ? 'Effekseer' : 'Sprite';
+            const typeBadge = isEffekseer ? 'Effekseer' : this._t('Sprite');
             const badgeColor = isEffekseer ? 'var(--color-link-bright)' : 'var(--color-syntax-type)';
 
             const item = this._createListItem(i, anim.name, { typeBadge, badgeColor });
@@ -320,13 +324,13 @@ class AnimationPicker {
         panel.innerHTML = '';
 
         if (animId === 0) {
-            panel.innerHTML = '<div style="color: var(--color-text-muted); margin-top: 40px; font-size: 13px;">(None) - No animation</div>';
+            panel.innerHTML = `<div style="color: var(--color-text-muted); margin-top: 40px; font-size: 13px;">${this._t('(None) - No animation')}</div>`;
             return;
         }
 
         const animation = this.databaseManager.getAnimation(animId);
         if (!animation) {
-            panel.innerHTML = '<div style="color: #f88; margin-top: 40px; font-size: 13px;">Animation data not found</div>';
+            panel.innerHTML = `<div style="color: #f88; margin-top: 40px; font-size: 13px;">${this._t('Animation data not found')}</div>`;
             return;
         }
 
@@ -342,12 +346,12 @@ class AnimationPicker {
             align-self: flex-start;
         `;
         if (isEffekseer) {
-            typeBadge.textContent = 'Effekseer Animation';
+            typeBadge.textContent = this._t('Effekseer Animation');
             typeBadge.style.backgroundColor = 'var(--color-link-bright)22';
             typeBadge.style.color = 'var(--color-link-bright)';
             typeBadge.style.border = '1px solid var(--color-link-bright)44';
         } else {
-            typeBadge.textContent = 'Sprite Animation';
+            typeBadge.textContent = this._t('Sprite Animation');
             typeBadge.style.backgroundColor = 'var(--color-syntax-type)22';
             typeBadge.style.color = 'var(--color-syntax-type)';
             typeBadge.style.border = '1px solid var(--color-syntax-type)44';
@@ -378,7 +382,7 @@ class AnimationPicker {
         controls.style.cssText = 'display: flex; gap: 8px; margin-top: 10px; align-items: center;';
 
         const playBtn = document.createElement('button');
-        playBtn.textContent = 'Play';
+        playBtn.textContent = this._t('Play');
         playBtn.style.cssText = `
             padding: 5px 16px;
             background-color: var(--color-bg-button);
@@ -392,7 +396,7 @@ class AnimationPicker {
         playBtn.addEventListener('mouseleave', () => { playBtn.style.backgroundColor = 'var(--color-bg-button)'; playBtn.style.borderColor = 'var(--color-border-input)'; });
 
         const stopBtn = document.createElement('button');
-        stopBtn.textContent = 'Stop';
+        stopBtn.textContent = this._t('Stop');
         stopBtn.style.cssText = `
             padding: 5px 16px;
             background-color: var(--color-bg-button);
@@ -501,7 +505,7 @@ class AnimationPicker {
                 ctx.restore();
             });
 
-            frameLabel.textContent = `Frame: ${frameIndex + 1} / ${animation.frames.length}`;
+            frameLabel.textContent = `${this._t('Frame:')} ${frameIndex + 1} / ${animation.frames.length}`;
         };
 
         const play = () => {
@@ -548,7 +552,7 @@ class AnimationPicker {
                 ctx.fillStyle = ThemeColors.resolve('--color-text-muted', '#999999');
                 ctx.font = '13px Arial';
                 ctx.textAlign = 'center';
-                ctx.fillText('No sprite sheets found', canvas.width / 2, canvas.height / 2);
+                ctx.fillText(this._t('No sprite sheets found'), canvas.width / 2, canvas.height / 2);
                 return;
             }
             renderFrame(0);
@@ -566,7 +570,7 @@ class AnimationPicker {
             ctx.fillStyle = ThemeColors.resolve('--color-text-muted', '#999999');
             ctx.font = '13px Arial';
             ctx.textAlign = 'center';
-            ctx.fillText('Effekseer library not loaded', canvas.width / 2, canvas.height / 2);
+            ctx.fillText(this._t('Effekseer library not loaded'), canvas.width / 2, canvas.height / 2);
             return;
         }
 
@@ -587,7 +591,7 @@ class AnimationPicker {
                     ctx.fillStyle = '#ff6666';
                     ctx.font = '13px Arial';
                     ctx.textAlign = 'center';
-                    ctx.fillText('Effekseer initialization timeout', canvas.width / 2, canvas.height / 2);
+                    ctx.fillText(this._t('Effekseer initialization timeout'), canvas.width / 2, canvas.height / 2);
                 }
             };
 
@@ -595,7 +599,7 @@ class AnimationPicker {
             ctx.fillStyle = ThemeColors.resolve('--color-text-muted', '#999999');
             ctx.font = '13px Arial';
             ctx.textAlign = 'center';
-            ctx.fillText('Effekseer initializing... Please wait', canvas.width / 2, canvas.height / 2);
+            ctx.fillText(this._t('Effekseer initializing... Please wait'), canvas.width / 2, canvas.height / 2);
             setTimeout(checkReady, 500);
             return;
         }
@@ -613,7 +617,7 @@ class AnimationPicker {
                 ctx2d.fillStyle = '#ff6666';
                 ctx2d.font = '13px Arial';
                 ctx2d.textAlign = 'center';
-                ctx2d.fillText('WebGL not supported', canvas.width / 2, canvas.height / 2);
+                ctx2d.fillText(this._t('WebGL not supported'), canvas.width / 2, canvas.height / 2);
                 return;
             }
 
@@ -638,7 +642,7 @@ class AnimationPicker {
                 ctx2d.fillStyle = ThemeColors.resolve('--color-text-muted', '#999999');
                 ctx2d.font = '13px Arial';
                 ctx2d.textAlign = 'center';
-                ctx2d.fillText('No effect specified', canvas.width / 2, canvas.height / 2);
+                ctx2d.fillText(this._t('No effect specified'), canvas.width / 2, canvas.height / 2);
             }
             return;
         }
@@ -681,7 +685,7 @@ class AnimationPicker {
             }
             if (accumulator > fixedTimeStep * 5) accumulator = 0;
 
-            frameLabel.textContent = `Frame: ${currentFrame}`;
+            frameLabel.textContent = `${this._t('Frame:')} ${currentFrame}`;
 
             gl.viewport(0, 0, canvas.width, canvas.height);
             gl.clearColor(0, 0, 0, 1);

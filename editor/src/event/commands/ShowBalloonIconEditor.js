@@ -166,8 +166,8 @@ class ShowBalloonIconEditor {
             flex: 1;
         `;
         charSelect.innerHTML = `
-            <option value="-1">Player</option>
-            <option value="0">This Event</option>
+            <option value="-1">${window.I18n ? window.I18n.tText('Player') : 'Player'}</option>
+            <option value="0">${window.I18n ? window.I18n.tText('This Event') : 'This Event'}</option>
         `;
 
         // Get current map events

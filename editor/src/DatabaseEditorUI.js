@@ -32,6 +32,42 @@ class DatabaseEditorUI {
         this.system1Editor = new DatabaseSystem1Editor(databaseManager, { getCurrentProject: () => this.currentProject }, this.commonUI, this);
         this.system2Editor = new DatabaseSystem2Editor(databaseManager, { getCurrentProject: () => this.currentProject }, this.commonUI, this);
         this.commonEventEditor = new DatabaseCommonEventEditor(databaseManager, { getCurrentProject: () => this.currentProject }, this.commonUI, this);
+
+        if (typeof window !== 'undefined') {
+            window.addEventListener('rr-language-changed', () => {
+                this.setupDatabaseNavigation();
+                this.refreshDatabaseChrome();
+            });
+        }
+    }
+
+    _t(key, params = {}) {
+        return typeof window !== 'undefined' && window.I18n ? window.I18n.t(key, params) : key;
+    }
+
+    _dbTitle(type, fallback = type) {
+        return typeof window !== 'undefined' && window.I18n?.tDbType ? window.I18n.tDbType(type, fallback) : fallback;
+    }
+
+    _selectEntryMarkup() {
+        return `<p style="color: var(--color-text-muted); text-align: center; margin-top: 100px;">${this._t('db.selectEntry')}</p>`;
+    }
+
+    refreshDatabaseChrome() {
+        document.querySelectorAll('.database-nav-item').forEach(item => {
+            item.textContent = this._dbTitle(item.dataset.type, item.dataset.fallbackName || item.textContent);
+        });
+        const titleEl = document.getElementById('database-viewer-title');
+        const active = document.querySelector('.database-nav-item.active');
+        if (titleEl && active) titleEl.textContent = this._dbTitle(active.dataset.type, titleEl.textContent);
+        const searchInput = document.querySelector('.database-search-container input');
+        if (searchInput && active) searchInput.placeholder = this._t('db.search', { title: this._dbTitle(active.dataset.type) });
+        const addBtn = document.querySelector('.database-add-btn');
+        if (addBtn) addBtn.textContent = this._t('common.new');
+        const deleteBtn = document.querySelector('.database-delete-btn');
+        if (deleteBtn) deleteBtn.textContent = this._t('common.delete');
+        const changeMaxBtn = document.querySelector('.database-change-max-btn');
+        if (changeMaxBtn) changeMaxBtn.textContent = this._t('db.changeMaximum');
     }
 
     /**
@@ -105,7 +141,7 @@ class DatabaseEditorUI {
      */
     openDatabase(type) {
         if (!this.currentProject) {
-            alert('Please load a project first');
+            alert(this._t('alert.loadProjectFirst'));
             return;
         }
 
@@ -123,43 +159,43 @@ class DatabaseEditorUI {
         switch(type) {
             case 'actors':
                 data = this.databaseManager.getActors();
-                title = 'Actors';
+                title = this._dbTitle(type, 'Actors');
                 break;
             case 'classes':
                 data = this.databaseManager.getClasses();
-                title = 'Classes';
+                title = this._dbTitle(type, 'Classes');
                 break;
             case 'skills':
                 data = this.databaseManager.getSkills();
-                title = 'Skills';
+                title = this._dbTitle(type, 'Skills');
                 break;
             case 'items':
                 data = this.databaseManager.getItems();
-                title = 'Items';
+                title = this._dbTitle(type, 'Items');
                 break;
             case 'weapons':
                 data = this.databaseManager.getWeapons();
-                title = 'Weapons';
+                title = this._dbTitle(type, 'Weapons');
                 break;
             case 'armors':
                 data = this.databaseManager.getArmors();
-                title = 'Armors';
+                title = this._dbTitle(type, 'Armors');
                 break;
             case 'enemies':
                 data = this.databaseManager.getEnemies();
-                title = 'Enemies';
+                title = this._dbTitle(type, 'Enemies');
                 break;
             case 'troops':
                 data = this.databaseManager.getTroops();
-                title = 'Troops';
+                title = this._dbTitle(type, 'Troops');
                 break;
             case 'states':
                 data = this.databaseManager.getStates();
-                title = 'States';
+                title = this._dbTitle(type, 'States');
                 break;
             case 'animations':
                 data = this.databaseManager.getAnimations();
-                title = 'Animations';
+                title = this._dbTitle(type, 'Animations');
                 break;
             case 'tilesets':
                 // Tilesets use custom editor within modal
@@ -167,24 +203,24 @@ class DatabaseEditorUI {
                 return;
             case 'commonEvents':
                 data = this.databaseManager.getCommonEvents();
-                title = 'Common Events';
+                title = this._dbTitle(type, 'Common Events');
                 break;
             case 'system1': {
                 // Show System 1 editor
-                const { detailEl } = this.prepareDatabaseSection('system1', 'System 1', { showListPanel: false });
+                const { detailEl } = this.prepareDatabaseSection('system1', this._dbTitle('system1', 'System 1'), { showListPanel: false });
 
                 this.system1Editor.showSystem1Detail(detailEl);
                 return;
             }
             case 'system2': {
                 // Show System 2 editor
-                const { detailEl } = this.prepareDatabaseSection('system2', 'System 2', { showListPanel: false });
+                const { detailEl } = this.prepareDatabaseSection('system2', this._dbTitle('system2', 'System 2'), { showListPanel: false });
 
                 this.system2Editor.showSystem2Detail(detailEl);
                 return;
             }
             case 'types': {
-                this.prepareDatabaseSection('types', 'Types');
+                this.prepareDatabaseSection('types', this._dbTitle('types', 'Types'));
                 // Types editor uses System.json - delegate to callback
                 if (this.callbacks.showTypesEditor) {
                     this.callbacks.showTypesEditor();
@@ -192,7 +228,7 @@ class DatabaseEditorUI {
                 return;
             }
             case 'terms': {
-                this.prepareDatabaseSection('terms', 'Terms');
+                this.prepareDatabaseSection('terms', this._dbTitle('terms', 'Terms'));
                 // Terms editor uses System.json - delegate to callback
                 if (this.callbacks.showTermsEditor) {
                     this.callbacks.showTermsEditor();
@@ -200,7 +236,7 @@ class DatabaseEditorUI {
                 return;
             }
             default:
-                alert('Unknown database type: ' + type);
+                alert(this._t('db.unknownType', { type }));
                 return;
         }
 
@@ -241,7 +277,7 @@ class DatabaseEditorUI {
         if (listPanelEl) {
             listPanelEl.style.display = ''; // Reset list panel display
         }
-        detailEl.innerHTML = '<p style="color: var(--color-text-muted); text-align: center; margin-top: 100px;">Select an entry from the list</p>';
+        detailEl.innerHTML = this._selectEntryMarkup();
 
         // Remove any existing button bar and search container first
         const existingButtonBar = listEl.parentNode.querySelector('.database-button-bar');
@@ -260,7 +296,7 @@ class DatabaseEditorUI {
 
         const searchInput = document.createElement('input');
         searchInput.type = 'text';
-        searchInput.placeholder = `Search ${title}...`;
+        searchInput.placeholder = this._t('db.search', { title });
         searchInput.style.cssText = `
             width: 100%;
             padding: 6px 10px;
@@ -291,7 +327,7 @@ class DatabaseEditorUI {
             listEl.innerHTML = '';
             const filteredData = filterText
                 ? data.filter(entry => {
-                    const name = (entry.name || 'Unnamed').toLowerCase();
+                    const name = (entry.name || this._t('common.unnamed')).toLowerCase();
                     const id = String(entry.id || '');
                     return name.includes(filterText.toLowerCase()) || id.includes(filterText);
                 })
@@ -300,10 +336,10 @@ class DatabaseEditorUI {
             filteredData.forEach((entry) => {
                 const item = document.createElement('div');
                 item.className = 'database-list-item';
-                item.dataset.entryName = entry.name || 'Unnamed';
+                item.dataset.entryName = entry.name || this._t('common.unnamed');
 
                 const nameSpan = document.createElement('span');
-                nameSpan.textContent = entry.name || 'Unnamed';
+                nameSpan.textContent = entry.name || this._t('common.unnamed');
 
                 const idSpan = document.createElement('span');
                 idSpan.className = 'database-list-id';
@@ -342,7 +378,8 @@ class DatabaseEditorUI {
         buttonBar.style.cssText = 'display: flex; gap: 4px; padding: 6px 8px; background-color: var(--color-bg-menubar); border-bottom: 1px solid var(--color-border); flex-shrink: 0;';
 
         const addBtn = document.createElement('button');
-        addBtn.textContent = 'New';
+        addBtn.className = 'database-add-btn';
+        addBtn.textContent = this._t('common.new');
         addBtn.style.cssText = 'flex: 1; padding: 4px 8px; background-color: var(--color-bg-panel); color: var(--color-text); border: 1px solid var(--color-border-input); border-radius: 3px; cursor: pointer; font-size: 11px; transition: background-color 0.2s;';
         addBtn.onmouseenter = () => { addBtn.style.backgroundColor = 'var(--color-accent-tint-25)'; };
         addBtn.onmouseleave = () => { addBtn.style.backgroundColor = 'var(--color-bg-panel)'; };
@@ -356,15 +393,16 @@ class DatabaseEditorUI {
         };
 
         const deleteBtn = document.createElement('button');
-        deleteBtn.textContent = 'Delete';
+        deleteBtn.className = 'database-delete-btn';
+        deleteBtn.textContent = this._t('common.delete');
         deleteBtn.style.cssText = 'flex: 1; padding: 4px 8px; background-color: var(--color-bg-panel); color: var(--color-text); border: 1px solid var(--color-border-input); border-radius: 3px; cursor: pointer; font-size: 11px; transition: background-color 0.2s;';
         deleteBtn.onmouseenter = () => { deleteBtn.style.backgroundColor = 'rgba(255, 80, 80, 0.25)'; };
         deleteBtn.onmouseleave = () => { deleteBtn.style.backgroundColor = 'var(--color-bg-panel)'; };
         deleteBtn.onclick = () => {
             const selectedItem = listEl.querySelector('.database-list-item.selected');
-            if (!selectedItem) { alert('Select an entry to delete'); return; }
+            if (!selectedItem) { alert(this._t('db.selectEntryToDelete')); return; }
             const entryName = selectedItem.dataset.entryName || 'this entry';
-            if (!confirm(`Delete "${entryName}"?`)) return;
+            if (!confirm(this._t('db.deleteConfirm', { name: entryName }))) return;
 
             const idText = selectedItem.querySelector('.database-list-id')?.textContent;
             const entryId = idText ? parseInt(idText.replace('#', '')) : null;
@@ -374,7 +412,7 @@ class DatabaseEditorUI {
                 const idx = data.findIndex(d => d && d.id === entryId);
                 if (idx >= 0) data.splice(idx, 1);
                 populateList(searchInput.value);
-                detailEl.innerHTML = '<p style="color: var(--color-text-muted); text-align: center; margin-top: 100px;">Select an entry from the list</p>';
+                detailEl.innerHTML = this._selectEntryMarkup();
             }
         };
 
@@ -384,7 +422,7 @@ class DatabaseEditorUI {
 
         // "Change Maximum" button at bottom of list panel
         const changeMaxBtn = document.createElement('button');
-        changeMaxBtn.textContent = 'Change Maximum';
+        changeMaxBtn.textContent = this._t('db.changeMaximum');
         changeMaxBtn.style.cssText = 'width: 100%; padding: 6px 8px; background-color: var(--color-bg-panel); color: var(--color-text); border: 1px solid var(--color-border-input); border-top: none; cursor: pointer; font-size: 11px; transition: background-color 0.2s; flex-shrink: 0;';
         changeMaxBtn.onmouseenter = () => { changeMaxBtn.style.backgroundColor = 'var(--color-accent-tint-25)'; };
         changeMaxBtn.onmouseleave = () => { changeMaxBtn.style.backgroundColor = 'var(--color-bg-panel)'; };
@@ -402,8 +440,8 @@ class DatabaseEditorUI {
                 data.length = 0;
                 freshData.forEach(e => data.push(e));
                 populateList(searchInput.value);
-                detailEl.innerHTML = '<p style="color: var(--color-text-muted); text-align: center; margin-top: 100px;">Select an entry from the list</p>';
-                this.updateStatus(`${title} maximum changed to ${newMax}`);
+                detailEl.innerHTML = this._selectEntryMarkup();
+                this.updateStatus(this._t('db.maximumChanged', { title, max: newMax }));
             });
         };
 
@@ -432,7 +470,7 @@ class DatabaseEditorUI {
             data.length = 0;
             this.databaseManager.data[type].forEach(e => { if (e) data.push(e); });
             populateList(searchInput.value);
-            detailEl.innerHTML = '<p style="color: var(--color-text-muted); text-align: center; margin-top: 100px;">Select an entry from the list</p>';
+            detailEl.innerHTML = this._selectEntryMarkup();
             this.updateStatus('Undo');
         };
         // Store snapshot function so operation methods can call it
@@ -472,8 +510,8 @@ class DatabaseEditorUI {
                     if (idx >= 0) data[idx] = blank;
                 }
                 populateList(searchInput.value);
-                detailEl.innerHTML = '<p style="color: var(--color-text-muted); text-align: center; margin-top: 100px;">Select an entry from the list</p>';
-                this.updateStatus('Entry cleared');
+                detailEl.innerHTML = this._selectEntryMarkup();
+                this.updateStatus(this._t('db.entryCleared'));
                 return;
             }
 
@@ -550,7 +588,7 @@ class DatabaseEditorUI {
             const projectPath = this.currentProject?.path;
             if (projectPath) {
                 await this.databaseManager.saveAllData(projectPath);
-                this.updateStatus('Database saved');
+                this.updateStatus(this._t('db.saved'));
             }
             this._dataSnapshot = null;
             closeViewer();
@@ -572,7 +610,7 @@ class DatabaseEditorUI {
             const projectPath = this.currentProject?.path;
             if (projectPath) {
                 await this.databaseManager.saveAllData(projectPath);
-                this.updateStatus('Database saved');
+                this.updateStatus(this._t('db.saved'));
                 // Update snapshot to current state so Cancel reverts to this point
                 this._dataSnapshot = JSON.parse(JSON.stringify(this.databaseManager.data));
                 applyBtn.style.backgroundColor = 'var(--color-accent)';
@@ -603,10 +641,10 @@ class DatabaseEditorUI {
         const canPaste = this.listClipboard && this.listClipboard.type === type;
 
         const items = [
-            { label: 'Copy', action: () => this.copyListEntry(entry, type), enabled: true },
-            { label: 'Cut', action: () => this.cutListEntry(entry, data, type, populateList, searchInput, detailEl), enabled: true },
-            { label: 'Paste', action: () => this.pasteListEntry(entry, data, type, populateList, searchInput, detailEl), enabled: canPaste },
-            { label: 'Duplicate', action: () => this.duplicateListEntry(entry, data, type, populateList, searchInput), enabled: true },
+            { label: this._t('common.copy'), action: () => this.copyListEntry(entry, type), enabled: true },
+            { label: this._t('common.cut'), action: () => this.cutListEntry(entry, data, type, populateList, searchInput, detailEl), enabled: true },
+            { label: this._t('common.paste'), action: () => this.pasteListEntry(entry, data, type, populateList, searchInput, detailEl), enabled: canPaste },
+            { label: this._t('common.duplicate'), action: () => this.duplicateListEntry(entry, data, type, populateList, searchInput), enabled: true },
         ];
 
         items.forEach(item => {
@@ -638,7 +676,7 @@ class DatabaseEditorUI {
         const copied = JSON.parse(JSON.stringify(entry));
         delete copied.id;
         this.listClipboard = { type, entry: copied };
-        this.updateStatus('Entry copied to clipboard');
+        this.updateStatus(this._t('db.entryCopied'));
     }
 
     cutListEntry(entry, data, type, populateList, searchInput, detailEl) {
@@ -660,8 +698,8 @@ class DatabaseEditorUI {
         }
 
         populateList(searchInput.value);
-        detailEl.innerHTML = '<p style="color: var(--color-text-muted); text-align: center; margin-top: 100px;">Select an entry from the list</p>';
-        this.updateStatus('Entry cut to clipboard');
+        detailEl.innerHTML = this._selectEntryMarkup();
+        this.updateStatus(this._t('db.entryCut'));
     }
 
     pasteListEntry(targetEntry, data, type, populateList, searchInput, detailEl) {
@@ -680,19 +718,19 @@ class DatabaseEditorUI {
 
         populateList(searchInput.value);
         this.showDatabaseDetail(pasted, type);
-        this.updateStatus('Entry pasted');
+        this.updateStatus(this._t('db.entryPasted'));
     }
 
     duplicateListEntry(entry, data, type, populateList, searchInput) {
         if (this._snapshotForUndo) this._snapshotForUndo();
         const cloned = JSON.parse(JSON.stringify(entry));
         delete cloned.id;
-        cloned.name = (cloned.name || 'Unnamed') + ' (Copy)';
+        cloned.name = (cloned.name || this._t('common.unnamed')) + ` (${this._t('common.copy')})`;
         const newEntry = this.databaseManager.addEntry(type, cloned);
         if (newEntry) {
             data.push(newEntry);
             populateList(searchInput.value);
-            this.updateStatus('Entry duplicated');
+            this.updateStatus(this._t('db.entryDuplicated'));
         }
     }
 
@@ -727,8 +765,9 @@ class DatabaseEditorUI {
         categories.forEach(category => {
             const item = document.createElement('div');
             item.className = 'database-nav-item';
-            item.textContent = category.name;
+            item.textContent = this._dbTitle(category.type, category.name);
             item.dataset.type = category.type;
+            item.dataset.fallbackName = category.name;
 
             item.addEventListener('click', () => {
                 this.openDatabase(category.type);
@@ -774,6 +813,7 @@ class DatabaseEditorUI {
             // Generic display for other types
             this.showGenericDetail(detailEl, entry, type);
         }
+        if (window.I18n) window.I18n.applyText(detailEl);
     }
 
     /**

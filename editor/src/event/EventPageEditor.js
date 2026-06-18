@@ -10,6 +10,10 @@ class EventPageEditor {
         this.switchVariablePicker = new SwitchVariablePicker(databaseManager, projectController);
     }
 
+    _t(key, params = {}) {
+        return typeof window !== 'undefined' && window.I18n ? window.I18n.t(key, params) : key;
+    }
+
     /**
      * Render the complete page configuration
      */
@@ -81,7 +85,7 @@ class EventPageEditor {
         const actors = this.databaseManager.getActors() || [];
 
         section.innerHTML = `
-            <div style="font-weight: bold; margin-bottom: 4px; font-size: 13px;">Conditions</div>
+            <div style="font-weight: bold; margin-bottom: 4px; font-size: 13px;">${this._t('event.conditions')}</div>
 
             <!-- Switch 1 -->
             <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 4px; min-width: 0;">
@@ -90,7 +94,7 @@ class EventPageEditor {
                        data-field="switch1Valid"
                        data-page-index="${pageIndex}"
                        ${conditions.switch1Valid ? 'checked' : ''}>
-                <label style="min-width: 70px; flex-shrink: 0; font-size: 12px;">Switch 1:</label>
+                <label style="min-width: 70px; flex-shrink: 0; font-size: 12px;">${this._t('event.switch1')}</label>
                 <button class="switch-picker-btn"
                         data-field="switch1Id"
                         data-page-index="${pageIndex}"
@@ -107,7 +111,7 @@ class EventPageEditor {
                        data-field="switch2Valid"
                        data-page-index="${pageIndex}"
                        ${conditions.switch2Valid ? 'checked' : ''}>
-                <label style="min-width: 70px; flex-shrink: 0; font-size: 12px;">Switch 2:</label>
+                <label style="min-width: 70px; flex-shrink: 0; font-size: 12px;">${this._t('event.switch2')}</label>
                 <button class="switch-picker-btn"
                         data-field="switch2Id"
                         data-page-index="${pageIndex}"
@@ -124,7 +128,7 @@ class EventPageEditor {
                        data-field="variableValid"
                        data-page-index="${pageIndex}"
                        ${conditions.variableValid ? 'checked' : ''}>
-                <label style="min-width: 70px; flex-shrink: 0; font-size: 12px;">Variable ≥:</label>
+                <label style="min-width: 70px; flex-shrink: 0; font-size: 12px;">${this._t('event.variable')}</label>
                 <button class="variable-picker-btn"
                         data-field="variableId"
                         data-page-index="${pageIndex}"
@@ -148,7 +152,7 @@ class EventPageEditor {
                        data-field="selfSwitchValid"
                        data-page-index="${pageIndex}"
                        ${conditions.selfSwitchValid ? 'checked' : ''}>
-                <label style="min-width: 70px; flex-shrink: 0; font-size: 12px;">Self Switch:</label>
+                <label style="min-width: 70px; flex-shrink: 0; font-size: 12px;">${this._t('event.selfSwitch')}</label>
                 <select class="condition-select"
                         data-field="selfSwitchCh"
                         data-page-index="${pageIndex}"
@@ -168,7 +172,7 @@ class EventPageEditor {
                        data-field="itemValid"
                        data-page-index="${pageIndex}"
                        ${conditions.itemValid ? 'checked' : ''}>
-                <label style="min-width: 70px; flex-shrink: 0; font-size: 12px;">Item:</label>
+                <label style="min-width: 70px; flex-shrink: 0; font-size: 12px;">${this._t('event.item')}</label>
                 <select class="condition-select"
                         data-field="itemId"
                         data-page-index="${pageIndex}"
@@ -185,7 +189,7 @@ class EventPageEditor {
                        data-field="actorValid"
                        data-page-index="${pageIndex}"
                        ${conditions.actorValid ? 'checked' : ''}>
-                <label style="min-width: 70px; flex-shrink: 0; font-size: 12px;">Actor:</label>
+                <label style="min-width: 70px; flex-shrink: 0; font-size: 12px;">${this._t('event.actor')}</label>
                 <select class="condition-select"
                         data-field="actorId"
                         data-page-index="${pageIndex}"
@@ -219,7 +223,7 @@ class EventPageEditor {
         const directionName = directionNames[image.direction] || 'Down';
 
         section.innerHTML = `
-            <div style="font-weight: bold; margin-bottom: 4px; font-size: 13px;">Image</div>
+            <div style="font-weight: bold; margin-bottom: 4px; font-size: 13px;">${this._t('event.image')}</div>
 
             <div style="display: flex; flex-direction: column; gap: 4px;">
                 <!-- Preview Canvas -->
@@ -233,21 +237,21 @@ class EventPageEditor {
                 <!-- Browse Button -->
                 <div style="display: flex; align-items: center; gap: 4px; min-width: 0;">
                     <button class="image-browse-button rr-btn-browse"
-                            data-page-index="${pageIndex}">Browse...</button>
+                            data-page-index="${pageIndex}">${this._t('event.browse')}</button>
                     <input type="text"
                            class="image-input image-name-display"
                            data-field="characterName"
                            data-page-index="${pageIndex}"
                            value="${image.characterName || ''}"
-                           placeholder="None"
+                           placeholder="${this._t('event.none')}"
                            readonly
                            style="flex: 1; min-width: 0; padding: 3px 6px; background: var(--color-bg-surface); color: var(--color-text); border: 1px solid var(--color-border-input); font-size: 11px;">
                 </div>
 
                 <!-- Info Display -->
                 <div style="display: flex; flex-direction: column; gap: 1px; font-size: 10px; color: var(--color-text-muted);">
-                    <span>Index: <strong style="color: var(--color-text);">${image.characterIndex || 0}</strong> | Dir: <strong style="color: var(--color-text);">${directionName}</strong></span>
-                    <span>Pattern: <strong style="color: var(--color-text);">${image.pattern || 0}</strong>${image.tileId > 0 ? ` | Tile: <strong style="color: var(--color-text);">${image.tileId}</strong>` : ''}</span>
+                    <span>${this._t('event.index')} <strong style="color: var(--color-text);">${image.characterIndex || 0}</strong> | ${this._t('event.dir')} <strong style="color: var(--color-text);">${directionName}</strong></span>
+                    <span>${this._t('event.pattern')} <strong style="color: var(--color-text);">${image.pattern || 0}</strong>${image.tileId > 0 ? ` | ${this._t('event.tile')} <strong style="color: var(--color-text);">${image.tileId}</strong>` : ''}</span>
                 </div>
             </div>
         `;
@@ -557,7 +561,7 @@ class EventPageEditor {
         section.style.borderRadius = '4px';
 
         section.innerHTML = `
-            <div style="font-weight: bold; margin-bottom: 4px; font-size: 13px;">Options</div>
+            <div style="font-weight: bold; margin-bottom: 4px; font-size: 13px;">${this._t('event.options')}</div>
 
             <div style="display: flex; flex-direction: column; gap: 3px;">
                 <div style="display: flex; align-items: center; gap: 6px;">
@@ -566,7 +570,7 @@ class EventPageEditor {
                            data-field="walkAnime"
                            data-page-index="${pageIndex}"
                            ${page.walkAnime ? 'checked' : ''}>
-                    <label style="font-size: 12px;">Walking Animation</label>
+                    <label style="font-size: 12px;">${this._t('event.walkingAnimation')}</label>
                 </div>
 
                 <div style="display: flex; align-items: center; gap: 6px;">
@@ -575,7 +579,7 @@ class EventPageEditor {
                            data-field="stepAnime"
                            data-page-index="${pageIndex}"
                            ${page.stepAnime ? 'checked' : ''}>
-                    <label style="font-size: 12px;">Stepping Animation</label>
+                    <label style="font-size: 12px;">${this._t('event.steppingAnimation')}</label>
                 </div>
 
                 <div style="display: flex; align-items: center; gap: 6px;">
@@ -584,7 +588,7 @@ class EventPageEditor {
                            data-field="directionFix"
                            data-page-index="${pageIndex}"
                            ${page.directionFix ? 'checked' : ''}>
-                    <label style="font-size: 12px;">Direction Fix</label>
+                    <label style="font-size: 12px;">${this._t('event.directionFix')}</label>
                 </div>
 
                 <div style="display: flex; align-items: center; gap: 6px;">
@@ -593,7 +597,7 @@ class EventPageEditor {
                            data-field="through"
                            data-page-index="${pageIndex}"
                            ${page.through ? 'checked' : ''}>
-                    <label style="font-size: 12px;">Through</label>
+                    <label style="font-size: 12px;">${this._t('event.through')}</label>
                 </div>
             </div>
         `;
@@ -615,24 +619,24 @@ class EventPageEditor {
         section.style.borderRadius = '4px';
 
         section.innerHTML = `
-            <div style="font-weight: bold; margin-bottom: 4px; font-size: 13px;">Autonomous Movement</div>
+            <div style="font-weight: bold; margin-bottom: 4px; font-size: 13px;">${this._t('event.autonomousMovement')}</div>
 
             <div style="display: flex; flex-direction: column; gap: 4px;">
                 <div style="display: flex; align-items: center; gap: 6px; min-width: 0;">
-                    <label style="min-width: 70px; flex-shrink: 0; font-size: 12px;">Type:</label>
+                    <label style="min-width: 70px; flex-shrink: 0; font-size: 12px;">${this._t('event.type')}</label>
                     <select class="movement-select"
                             data-field="moveType"
                             data-page-index="${pageIndex}"
                             style="flex: 1; min-width: 0; padding: 3px; font-size: 11px;">
-                        <option value="0" ${page.moveType === 0 ? 'selected' : ''}>Fixed</option>
-                        <option value="1" ${page.moveType === 1 ? 'selected' : ''}>Random</option>
-                        <option value="2" ${page.moveType === 2 ? 'selected' : ''}>Approach</option>
-                        <option value="3" ${page.moveType === 3 ? 'selected' : ''}>Custom</option>
+                        <option value="0" ${page.moveType === 0 ? 'selected' : ''}>${this._t('event.fixed')}</option>
+                        <option value="1" ${page.moveType === 1 ? 'selected' : ''}>${this._t('event.random')}</option>
+                        <option value="2" ${page.moveType === 2 ? 'selected' : ''}>${this._t('event.approach')}</option>
+                        <option value="3" ${page.moveType === 3 ? 'selected' : ''}>${this._t('event.custom')}</option>
                     </select>
                 </div>
 
                 <div style="display: flex; align-items: center; gap: 6px; min-width: 0;">
-                    <label style="min-width: 70px; flex-shrink: 0; font-size: 12px;">Speed:</label>
+                    <label style="min-width: 70px; flex-shrink: 0; font-size: 12px;">${this._t('event.speed')}</label>
                     <select class="movement-select"
                             data-field="moveSpeed"
                             data-page-index="${pageIndex}"
@@ -640,23 +644,23 @@ class EventPageEditor {
                         <option value="1" ${page.moveSpeed === 1 ? 'selected' : ''}>1: x8 slower</option>
                         <option value="2" ${page.moveSpeed === 2 ? 'selected' : ''}>2: x4 slower</option>
                         <option value="3" ${page.moveSpeed === 3 ? 'selected' : ''}>3: x2 slower</option>
-                        <option value="4" ${page.moveSpeed === 4 ? 'selected' : ''}>4: Normal</option>
+                        <option value="4" ${page.moveSpeed === 4 ? 'selected' : ''}>4: ${this._t('event.normal')}</option>
                         <option value="5" ${page.moveSpeed === 5 ? 'selected' : ''}>5: x2 faster</option>
                         <option value="6" ${page.moveSpeed === 6 ? 'selected' : ''}>6: x4 faster</option>
                     </select>
                 </div>
 
                 <div style="display: flex; align-items: center; gap: 6px; min-width: 0;">
-                    <label style="min-width: 70px; flex-shrink: 0; font-size: 12px;">Frequency:</label>
+                    <label style="min-width: 70px; flex-shrink: 0; font-size: 12px;">${this._t('event.frequency')}</label>
                     <select class="movement-select"
                             data-field="moveFrequency"
                             data-page-index="${pageIndex}"
                             style="flex: 1; min-width: 0; padding: 3px; font-size: 11px;">
-                        <option value="1" ${page.moveFrequency === 1 ? 'selected' : ''}>1: Lowest</option>
-                        <option value="2" ${page.moveFrequency === 2 ? 'selected' : ''}>2: Lower</option>
-                        <option value="3" ${page.moveFrequency === 3 ? 'selected' : ''}>3: Normal</option>
-                        <option value="4" ${page.moveFrequency === 4 ? 'selected' : ''}>4: Higher</option>
-                        <option value="5" ${page.moveFrequency === 5 ? 'selected' : ''}>5: Highest</option>
+                        <option value="1" ${page.moveFrequency === 1 ? 'selected' : ''}>1: ${this._t('event.lowest')}</option>
+                        <option value="2" ${page.moveFrequency === 2 ? 'selected' : ''}>2: ${this._t('event.lower')}</option>
+                        <option value="3" ${page.moveFrequency === 3 ? 'selected' : ''}>3: ${this._t('event.normal')}</option>
+                        <option value="4" ${page.moveFrequency === 4 ? 'selected' : ''}>4: ${this._t('event.higher')}</option>
+                        <option value="5" ${page.moveFrequency === 5 ? 'selected' : ''}>5: ${this._t('event.highest')}</option>
                     </select>
                 </div>
             </div>
@@ -679,16 +683,16 @@ class EventPageEditor {
         section.style.borderRadius = '4px';
 
         section.innerHTML = `
-            <div style="font-weight: bold; margin-bottom: 4px; font-size: 13px;">Priority</div>
+            <div style="font-weight: bold; margin-bottom: 4px; font-size: 13px;">${this._t('event.priority')}</div>
 
             <div style="display: flex; align-items: center; gap: 6px;">
                 <select class="priority-select"
                         data-field="priorityType"
                         data-page-index="${pageIndex}"
                         style="flex: 1; padding: 3px; font-size: 11px;">
-                    <option value="0" ${page.priorityType === 0 ? 'selected' : ''}>Below Characters</option>
-                    <option value="1" ${page.priorityType === 1 ? 'selected' : ''}>Same as Characters</option>
-                    <option value="2" ${page.priorityType === 2 ? 'selected' : ''}>Above Characters</option>
+                    <option value="0" ${page.priorityType === 0 ? 'selected' : ''}>${this._t('event.belowCharacters')}</option>
+                    <option value="1" ${page.priorityType === 1 ? 'selected' : ''}>${this._t('event.sameAsCharacters')}</option>
+                    <option value="2" ${page.priorityType === 2 ? 'selected' : ''}>${this._t('event.aboveCharacters')}</option>
                 </select>
             </div>
         `;
@@ -710,18 +714,18 @@ class EventPageEditor {
         section.style.borderRadius = '4px';
 
         section.innerHTML = `
-            <div style="font-weight: bold; margin-bottom: 4px; font-size: 13px;">Trigger</div>
+            <div style="font-weight: bold; margin-bottom: 4px; font-size: 13px;">${this._t('event.trigger')}</div>
 
             <div style="display: flex; align-items: center; gap: 6px;">
                 <select class="trigger-select"
                         data-field="trigger"
                         data-page-index="${pageIndex}"
                         style="flex: 1; padding: 3px; font-size: 11px;">
-                    <option value="0" ${page.trigger === 0 ? 'selected' : ''}>Action Button</option>
-                    <option value="1" ${page.trigger === 1 ? 'selected' : ''}>Player Touch</option>
-                    <option value="2" ${page.trigger === 2 ? 'selected' : ''}>Event Touch</option>
-                    <option value="3" ${page.trigger === 3 ? 'selected' : ''}>Autorun</option>
-                    <option value="4" ${page.trigger === 4 ? 'selected' : ''}>Parallel</option>
+                    <option value="0" ${page.trigger === 0 ? 'selected' : ''}>${this._t('event.actionButton')}</option>
+                    <option value="1" ${page.trigger === 1 ? 'selected' : ''}>${this._t('event.playerTouch')}</option>
+                    <option value="2" ${page.trigger === 2 ? 'selected' : ''}>${this._t('event.eventTouch')}</option>
+                    <option value="3" ${page.trigger === 3 ? 'selected' : ''}>${this._t('event.autorun')}</option>
+                    <option value="4" ${page.trigger === 4 ? 'selected' : ''}>${this._t('event.parallel')}</option>
                 </select>
             </div>
         `;
@@ -737,7 +741,7 @@ class EventPageEditor {
      */
     generateOptionsFromArray(array, selectedId) {
         if (!array || array.length === 0) {
-            return '<option value="1">None available</option>';
+            return `<option value="1">${this._t('event.noneAvailable')}</option>`;
         }
 
         return array

@@ -2202,7 +2202,7 @@ class AnimationGenerator {
 
         // Locate gif.worker.js relative to the project root — NW.js
         // resolves URLs against the loaded HTML's directory.
-        const workerScript = 'node_modules/gif.js/dist/gif.worker.js';
+        const workerScript = window.RR_GIF_WORKER_SCRIPT || 'node_modules/gif.js/dist/gif.worker.js';
 
         // Build the encoder. Each frame's delay matches the user's
         // active loop length / frame count, so the GIF plays at the

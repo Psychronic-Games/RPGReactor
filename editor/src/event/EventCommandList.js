@@ -361,6 +361,17 @@ class EventCommandList {
 
         // Set up keyboard shortcuts
         this.setupKeyboardShortcuts();
+        if (typeof window !== 'undefined') window.addEventListener('rr-language-changed', () => {
+            if (this.currentPage) this.refreshCommandList(this.currentPage, this.currentPageIndex);
+        });
+    }
+
+    _t(key, params = {}) {
+        return typeof window !== 'undefined' && window.I18n ? window.I18n.t(key, params) : key;
+    }
+
+    _commandName(name) {
+        return typeof window !== 'undefined' && window.I18n?.tEventCommandName ? window.I18n.tEventCommandName(name) : name;
     }
 
     /**
@@ -415,7 +426,7 @@ class EventCommandList {
         container.innerHTML = '';
 
         if (!page.list || page.list.length === 0) {
-            container.innerHTML = '<div style="color: var(--color-text-muted); padding: 8px;">No commands. Right-click to add commands.</div>';
+            container.innerHTML = `<div style="color: var(--color-text-muted); padding: 8px;">${this._t('event.noCommands')}</div>`;
             this.attachEmptyContextMenu(container, page, pageIndex);
             return;
         }
@@ -963,7 +974,8 @@ class EventCommandList {
             657: { name: 'Plugin Args', color: 'var(--color-syntax-comment)' }
         };
 
-        const info = commandNames[code] || { name: `Unknown (${code})`, color: '#f88' };
+        const rawInfo = commandNames[code] || { name: `Unknown (${code})`, color: '#f88' };
+        const info = { ...rawInfo, name: this._commandName(rawInfo.name) };
 
         let description = '';
         let faceIcon = null;
@@ -2064,7 +2076,7 @@ class EventCommandList {
                 menu.appendChild(divider);
             } else {
                 const menuItem = document.createElement('div');
-                menuItem.textContent = item.label;
+                menuItem.textContent = window.I18n ? window.I18n.tText(item.label) : item.label;
                 menuItem.style.cssText = `
                     padding: 6px 12px;
                     cursor: ${item.disabled ? 'not-allowed' : 'pointer'};
@@ -4696,7 +4708,7 @@ class EventCommandList {
         }
 
         if (!commands || commands.length === 0) {
-            alert('No event commands in clipboard to paste.');
+            alert(window.I18n ? window.I18n.tText('No event commands in clipboard to paste.') : 'No event commands in clipboard to paste.');
             return;
         }
 

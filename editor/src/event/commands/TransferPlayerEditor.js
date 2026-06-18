@@ -263,12 +263,13 @@ class TransferPlayerEditor {
             font-size: 12px;
             width: 150px;
         `;
+        const t = text => window.I18n ? window.I18n.tText(text) : text;
         directionSelect.innerHTML = `
-            <option value="0" ${this.direction === 0 ? 'selected' : ''}>Retain</option>
-            <option value="2" ${this.direction === 2 ? 'selected' : ''}>Down</option>
-            <option value="4" ${this.direction === 4 ? 'selected' : ''}>Left</option>
-            <option value="6" ${this.direction === 6 ? 'selected' : ''}>Right</option>
-            <option value="8" ${this.direction === 8 ? 'selected' : ''}>Up</option>
+            <option value="0" ${this.direction === 0 ? 'selected' : ''}>${t('Retain')}</option>
+            <option value="2" ${this.direction === 2 ? 'selected' : ''}>${t('Down')}</option>
+            <option value="4" ${this.direction === 4 ? 'selected' : ''}>${t('Left')}</option>
+            <option value="6" ${this.direction === 6 ? 'selected' : ''}>${t('Right')}</option>
+            <option value="8" ${this.direction === 8 ? 'selected' : ''}>${t('Up')}</option>
         `;
         directionSelect.addEventListener('change', (e) => {
             this.direction = parseInt(e.target.value);
@@ -297,9 +298,9 @@ class TransferPlayerEditor {
             width: 150px;
         `;
         fadeSelect.innerHTML = `
-            <option value="0" ${this.fadeType === 0 ? 'selected' : ''}>Black</option>
-            <option value="1" ${this.fadeType === 1 ? 'selected' : ''}>White</option>
-            <option value="2" ${this.fadeType === 2 ? 'selected' : ''}>None</option>
+            <option value="0" ${this.fadeType === 0 ? 'selected' : ''}>${t('Black')}</option>
+            <option value="1" ${this.fadeType === 1 ? 'selected' : ''}>${t('White')}</option>
+            <option value="2" ${this.fadeType === 2 ? 'selected' : ''}>${t('None')}</option>
         `;
         fadeSelect.addEventListener('change', (e) => {
             this.fadeType = parseInt(e.target.value);

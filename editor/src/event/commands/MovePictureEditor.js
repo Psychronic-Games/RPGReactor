@@ -210,7 +210,7 @@ class MovePictureEditor {
         options.forEach(opt => {
             const option = document.createElement('option');
             option.value = opt.value;
-            option.textContent = opt.text;
+            option.textContent = window.I18n ? window.I18n.tText(opt.text) : opt.text;
             option.selected = (this[property] === opt.value);
             select.appendChild(option);
         });

@@ -12,6 +12,10 @@ class DatabaseTraitEditor {
         this.onSaveCallback = null;
     }
 
+    _t(text) {
+        return window.I18n ? window.I18n.tText(text) : text;
+    }
+
     /**
      * Show trait editor modal
      * @param {Object} entry - The database entry (class, weapon, armor, state, or actor)
@@ -101,7 +105,7 @@ class DatabaseTraitEditor {
             const tabBtn = document.createElement('button');
             tabBtn.className = 'trait-tab';
             tabBtn.dataset.tab = tab.id;
-            tabBtn.textContent = tab.label;
+            tabBtn.textContent = this._t(tab.label);
             tabBtn.style.cssText = `
                 flex: 1;
                 padding: 12px;
@@ -164,6 +168,7 @@ class DatabaseTraitEditor {
         this.loadTabContent(activeTab, tabContent, trait);
 
         document.body.appendChild(overlay);
+        if (window.I18n) window.I18n.applyText(overlay);
     }
 
     switchTab(clickedBtn, tabContent, trait) {
@@ -203,6 +208,7 @@ class DatabaseTraitEditor {
                 this.createOtherTab(container, trait);
                 break;
         }
+        if (window.I18n) window.I18n.applyText(container);
     }
 
     createRatesTab(container, trait) {
@@ -227,7 +233,7 @@ class DatabaseTraitEditor {
                 <input type="radio" name="trait-type" value="12" ${trait.code === 12 ? 'checked' : ''}>
                 <span style="color: var(--color-text-strong); min-width: 100px;">Debuff Rate</span>
                 <select class="debuff-select" data-code="12" style="flex: 1; padding: 6px; background: var(--color-bg-button); border: 1px solid var(--color-bg-button-hover); color: var(--color-text-strong); border-radius: 4px;">
-                    ${['Max HP', 'Max MP', 'Attack', 'Defense', 'M.Attack', 'M.Defense', 'Agility', 'Luck'].map((param, idx) =>
+                    ${['Max HP', 'Max MP', 'Attack', 'Defense', 'M.Attack', 'M.Defense', 'Agility', 'Luck'].map(param => this._t(param)).map((param, idx) =>
                         `<option value="${idx}" ${trait.code === 12 && trait.dataId === idx ? 'selected' : ''}>${param}</option>`
                     ).join('')}
                 </select>
@@ -269,7 +275,7 @@ class DatabaseTraitEditor {
                 <input type="radio" name="trait-type" value="21" ${trait.code === 21 ? 'checked' : ''}>
                 <span style="color: var(--color-text-strong); min-width: 100px;">Parameter</span>
                 <select class="param-select" data-code="21" style="flex: 1; padding: 6px; background: var(--color-bg-button); border: 1px solid var(--color-bg-button-hover); color: var(--color-text-strong); border-radius: 4px;">
-                    ${['Max HP', 'Max MP', 'Attack', 'Defense', 'M.Attack', 'M.Defense', 'Agility', 'Luck'].map((param, idx) =>
+                    ${['Max HP', 'Max MP', 'Attack', 'Defense', 'M.Attack', 'M.Defense', 'Agility', 'Luck'].map(param => this._t(param)).map((param, idx) =>
                         `<option value="${idx}" ${trait.code === 21 && trait.dataId === idx ? 'selected' : ''}>${param}</option>`
                     ).join('')}
                 </select>
@@ -282,7 +288,7 @@ class DatabaseTraitEditor {
                 <input type="radio" name="trait-type" value="22" ${trait.code === 22 ? 'checked' : ''}>
                 <span style="color: var(--color-text-strong); min-width: 100px;">Ex-Parameter</span>
                 <select class="exparam-select" data-code="22" style="flex: 1; padding: 6px; background: var(--color-bg-button); border: 1px solid var(--color-bg-button-hover); color: var(--color-text-strong); border-radius: 4px;">
-                    ${['Hit Rate', 'Evasion Rate', 'Critical Rate', 'Critical Evasion', 'Magic Evasion', 'Magic Reflection', 'Counter Attack', 'HP Regeneration', 'MP Regeneration', 'TP Regeneration'].map((param, idx) =>
+                    ${['Hit Rate', 'Evasion Rate', 'Critical Rate', 'Critical Evasion', 'Magic Evasion', 'Magic Reflection', 'Counter Attack', 'HP Regeneration', 'MP Regeneration', 'TP Regeneration'].map(param => this._t(param)).map((param, idx) =>
                         `<option value="${idx}" ${trait.code === 22 && trait.dataId === idx ? 'selected' : ''}>${param}</option>`
                     ).join('')}
                 </select>
@@ -296,7 +302,7 @@ class DatabaseTraitEditor {
                 <input type="radio" name="trait-type" value="23" ${trait.code === 23 ? 'checked' : ''}>
                 <span style="color: var(--color-text-strong); min-width: 100px;">Sp-Parameter</span>
                 <select class="spparam-select" data-code="23" style="flex: 1; padding: 6px; background: var(--color-bg-button); border: 1px solid var(--color-bg-button-hover); color: var(--color-text-strong); border-radius: 4px;">
-                    ${['Target Rate', 'Guard Effect', 'Recovery Effect', 'Pharmacology', 'MP Cost Rate', 'TP Charge Rate', 'Physical Damage', 'Magical Damage', 'Floor Damage', 'Experience'].map((param, idx) =>
+                    ${['Target Rate', 'Guard Effect', 'Recovery Effect', 'Pharmacology', 'MP Cost Rate', 'TP Charge Rate', 'Physical Damage', 'Magical Damage', 'Floor Damage', 'Experience'].map(param => this._t(param)).map((param, idx) =>
                         `<option value="${idx}" ${trait.code === 23 && trait.dataId === idx ? 'selected' : ''}>${param}</option>`
                     ).join('')}
                 </select>
@@ -466,8 +472,8 @@ class DatabaseTraitEditor {
                 <input type="radio" name="trait-type" value="55" ${trait.code === 55 ? 'checked' : ''}>
                 <span style="color: var(--color-text-strong); min-width: 100px;">Slot Type</span>
                 <select class="slottype-select" data-code="55" style="flex: 1; padding: 6px; background: var(--color-bg-button); border: 1px solid var(--color-bg-button-hover); color: var(--color-text-strong); border-radius: 4px;">
-                    <option value="0" ${trait.code === 55 && trait.dataId === 0 ? 'selected' : ''}>Normal</option>
-                    <option value="1" ${trait.code === 55 && trait.dataId === 1 ? 'selected' : ''}>Dual Wield</option>
+                    <option value="0" ${trait.code === 55 && trait.dataId === 0 ? 'selected' : ''}>${this._t('Normal')}</option>
+                    <option value="1" ${trait.code === 55 && trait.dataId === 1 ? 'selected' : ''}>${this._t('Dual Wield')}</option>
                 </select>
             </div>
         `;
@@ -489,10 +495,10 @@ class DatabaseTraitEditor {
                 <input type="radio" name="trait-type" value="62" ${trait.code === 62 ? 'checked' : ''}>
                 <span style="color: var(--color-text-strong); min-width: 110px;">Special Flag</span>
                 <select class="specialflag-select" data-code="62" style="flex: 1; padding: 6px; background: var(--color-bg-button); border: 1px solid var(--color-bg-button-hover); color: var(--color-text-strong); border-radius: 4px;">
-                    <option value="0" ${trait.code === 62 && trait.dataId === 0 ? 'selected' : ''}>Auto Battle</option>
-                    <option value="1" ${trait.code === 62 && trait.dataId === 1 ? 'selected' : ''}>Guard</option>
-                    <option value="2" ${trait.code === 62 && trait.dataId === 2 ? 'selected' : ''}>Substitute</option>
-                    <option value="3" ${trait.code === 62 && trait.dataId === 3 ? 'selected' : ''}>Preserve TP</option>
+                    <option value="0" ${trait.code === 62 && trait.dataId === 0 ? 'selected' : ''}>${this._t('Auto Battle')}</option>
+                    <option value="1" ${trait.code === 62 && trait.dataId === 1 ? 'selected' : ''}>${this._t('Guard')}</option>
+                    <option value="2" ${trait.code === 62 && trait.dataId === 2 ? 'selected' : ''}>${this._t('Substitute')}</option>
+                    <option value="3" ${trait.code === 62 && trait.dataId === 3 ? 'selected' : ''}>${this._t('Preserve TP')}</option>
                 </select>
             </div>
 
@@ -500,10 +506,10 @@ class DatabaseTraitEditor {
                 <input type="radio" name="trait-type" value="63" ${trait.code === 63 ? 'checked' : ''}>
                 <span style="color: var(--color-text-strong); min-width: 110px;">Collapse Effect</span>
                 <select class="collapse-select" data-code="63" style="flex: 1; padding: 6px; background: var(--color-bg-button); border: 1px solid var(--color-bg-button-hover); color: var(--color-text-strong); border-radius: 4px;">
-                    <option value="0" ${trait.code === 63 && trait.dataId === 0 ? 'selected' : ''}>Normal</option>
-                    <option value="1" ${trait.code === 63 && trait.dataId === 1 ? 'selected' : ''}>Boss</option>
-                    <option value="2" ${trait.code === 63 && trait.dataId === 2 ? 'selected' : ''}>Instant</option>
-                    <option value="3" ${trait.code === 63 && trait.dataId === 3 ? 'selected' : ''}>No Disappear</option>
+                    <option value="0" ${trait.code === 63 && trait.dataId === 0 ? 'selected' : ''}>${this._t('Normal')}</option>
+                    <option value="1" ${trait.code === 63 && trait.dataId === 1 ? 'selected' : ''}>${this._t('Boss')}</option>
+                    <option value="2" ${trait.code === 63 && trait.dataId === 2 ? 'selected' : ''}>${this._t('Instant')}</option>
+                    <option value="3" ${trait.code === 63 && trait.dataId === 3 ? 'selected' : ''}>${this._t('No Disappear')}</option>
                 </select>
             </div>
 
@@ -511,12 +517,12 @@ class DatabaseTraitEditor {
                 <input type="radio" name="trait-type" value="64" ${trait.code === 64 ? 'checked' : ''}>
                 <span style="color: var(--color-text-strong); min-width: 110px;">Party Ability</span>
                 <select class="party-select" data-code="64" style="flex: 1; padding: 6px; background: var(--color-bg-button); border: 1px solid var(--color-bg-button-hover); color: var(--color-text-strong); border-radius: 4px;">
-                    <option value="0" ${trait.code === 64 && trait.dataId === 0 ? 'selected' : ''}>Encounter Half</option>
-                    <option value="1" ${trait.code === 64 && trait.dataId === 1 ? 'selected' : ''}>Encounter None</option>
-                    <option value="2" ${trait.code === 64 && trait.dataId === 2 ? 'selected' : ''}>Cancel Surprise</option>
-                    <option value="3" ${trait.code === 64 && trait.dataId === 3 ? 'selected' : ''}>Raise Preemptive</option>
-                    <option value="4" ${trait.code === 64 && trait.dataId === 4 ? 'selected' : ''}>Gold Double</option>
-                    <option value="5" ${trait.code === 64 && trait.dataId === 5 ? 'selected' : ''}>Drop Item Double</option>
+                    <option value="0" ${trait.code === 64 && trait.dataId === 0 ? 'selected' : ''}>${this._t('Encounter Half')}</option>
+                    <option value="1" ${trait.code === 64 && trait.dataId === 1 ? 'selected' : ''}>${this._t('Encounter None')}</option>
+                    <option value="2" ${trait.code === 64 && trait.dataId === 2 ? 'selected' : ''}>${this._t('Cancel Surprise')}</option>
+                    <option value="3" ${trait.code === 64 && trait.dataId === 3 ? 'selected' : ''}>${this._t('Raise Preemptive')}</option>
+                    <option value="4" ${trait.code === 64 && trait.dataId === 4 ? 'selected' : ''}>${this._t('Gold Double')}</option>
+                    <option value="5" ${trait.code === 64 && trait.dataId === 5 ? 'selected' : ''}>${this._t('Drop Item Double')}</option>
                 </select>
             </div>
         `;
@@ -619,7 +625,7 @@ class DatabaseTraitEditor {
         // Validate that a trait type is selected
         if (!trait.code) {
             console.warn('DatabaseTraitEditor.saveTrait - Cannot save trait without a type selected');
-            alert('Please select a trait type before saving.');
+            alert(this._t('Please select a trait type before saving.'));
             return false;
         }
 

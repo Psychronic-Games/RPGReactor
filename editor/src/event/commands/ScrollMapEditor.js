@@ -232,12 +232,12 @@ class ScrollMapEditor {
             flex: 1;
         `;
         speedSelect.innerHTML = `
-            <option value="1">1: Slowest</option>
-            <option value="2">2: Slower</option>
-            <option value="3">3: Slow</option>
-            <option value="4">4: Normal</option>
-            <option value="5">5: Fast</option>
-            <option value="6">6: Fastest</option>
+            <option value="1">${window.I18n ? window.I18n.tText('1: Slowest') : '1: Slowest'}</option>
+            <option value="2">${window.I18n ? window.I18n.tText('2: Slower') : '2: Slower'}</option>
+            <option value="3">${window.I18n ? window.I18n.tText('3: Slow') : '3: Slow'}</option>
+            <option value="4">${window.I18n ? window.I18n.tText('4: Normal') : '4: Normal'}</option>
+            <option value="5">${window.I18n ? window.I18n.tText('5: Fast') : '5: Fast'}</option>
+            <option value="6">${window.I18n ? window.I18n.tText('6: Fastest') : '6: Fastest'}</option>
         `;
         speedSelect.value = this.speed.toString();
         speedSelect.addEventListener('change', (e) => {

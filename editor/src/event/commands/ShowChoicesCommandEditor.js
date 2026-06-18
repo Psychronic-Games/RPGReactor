@@ -263,15 +263,16 @@ class ShowChoicesCommandEditor {
             border-radius: 3px;
             font-size: 12px;
         `;
+        const t = text => window.I18n ? window.I18n.tText(text) : text;
         cancelSelect.innerHTML = `
-            <option value="-2">Disallow</option>
-            <option value="-1">Branch</option>
-            <option value="0">Choice 1</option>
-            <option value="1">Choice 2</option>
-            <option value="2">Choice 3</option>
-            <option value="3">Choice 4</option>
-            <option value="4">Choice 5</option>
-            <option value="5">Choice 6</option>
+            <option value="-2">${t('Disallow')}</option>
+            <option value="-1">${t('Branch')}</option>
+            <option value="0">${t('Choice 1')}</option>
+            <option value="1">${t('Choice 2')}</option>
+            <option value="2">${t('Choice 3')}</option>
+            <option value="3">${t('Choice 4')}</option>
+            <option value="4">${t('Choice 5')}</option>
+            <option value="5">${t('Choice 6')}</option>
         `;
         cancelSelect.value = this.cancelType.toString();
         cancelSelect.addEventListener('change', (e) => {
@@ -300,12 +301,12 @@ class ShowChoicesCommandEditor {
             font-size: 12px;
         `;
         defaultSelect.innerHTML = `
-            <option value="0">Choice 1</option>
-            <option value="1">Choice 2</option>
-            <option value="2">Choice 3</option>
-            <option value="3">Choice 4</option>
-            <option value="4">Choice 5</option>
-            <option value="5">Choice 6</option>
+            <option value="0">${t('Choice 1')}</option>
+            <option value="1">${t('Choice 2')}</option>
+            <option value="2">${t('Choice 3')}</option>
+            <option value="3">${t('Choice 4')}</option>
+            <option value="4">${t('Choice 5')}</option>
+            <option value="5">${t('Choice 6')}</option>
         `;
         defaultSelect.value = this.defaultType.toString();
         defaultSelect.addEventListener('change', (e) => {
@@ -334,9 +335,9 @@ class ShowChoicesCommandEditor {
             font-size: 12px;
         `;
         posSelect.innerHTML = `
-            <option value="0">Left</option>
-            <option value="1">Middle</option>
-            <option value="2">Right</option>
+            <option value="0">${t('Left')}</option>
+            <option value="1">${t('Middle')}</option>
+            <option value="2">${t('Right')}</option>
         `;
         posSelect.value = this.positionType.toString();
         posSelect.addEventListener('change', (e) => {
@@ -365,9 +366,9 @@ class ShowChoicesCommandEditor {
             font-size: 12px;
         `;
         bgSelect.innerHTML = `
-            <option value="0">Window</option>
-            <option value="1">Dim</option>
-            <option value="2">Transparent</option>
+            <option value="0">${t('Window')}</option>
+            <option value="1">${t('Dim')}</option>
+            <option value="2">${t('Transparent')}</option>
         `;
         bgSelect.value = this.background.toString();
         bgSelect.addEventListener('change', (e) => {

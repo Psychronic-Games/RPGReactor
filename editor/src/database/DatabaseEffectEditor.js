@@ -19,11 +19,13 @@ class DatabaseEffectEditor {
             31: 'Add Buff', 32: 'Add Debuff', 33: 'Remove Buff', 34: 'Remove Debuff',
             41: 'Special Effect', 42: 'Grow', 43: 'Learn Skill', 44: 'Common Event'
         };
-        return names[code] || `Effect ${code}`;
+        const name = names[code];
+        return name ? (window.I18n ? window.I18n.tText(name) : name) : `Effect ${code}`;
     }
 
     static getEffectValue(effect, dbManager) {
-        const p = ['Max HP', 'Max MP', 'Attack', 'Defense', 'M.Attack', 'M.Defense', 'Agility', 'Luck'];
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
+        const p = ['Max HP', 'Max MP', 'Attack', 'Defense', 'M.Attack', 'M.Defense', 'Agility', 'Luck'].map(tt);
         switch (effect.code) {
             case 11: case 12: {
                 const pct = Math.round(effect.value1 * 100);
@@ -38,7 +40,7 @@ class DatabaseEffectEditor {
                 return `${name} (${Math.round(effect.value1 * 100)}%)`;
             }
             case 31: case 32:
-                return `${p[effect.dataId] || 'Param'} (${effect.value1} turns)`;
+                return `${p[effect.dataId] || 'Param'} (${effect.value1} ${tt('turns')})`;
             case 33: case 34:
                 return `${p[effect.dataId] || 'Param'}`;
             case 41: {
@@ -178,6 +180,7 @@ class DatabaseEffectEditor {
                 this.createSpecialTab(container, effect, optStyle, selStyle, numStyle);
                 break;
         }
+        if (window.I18n) window.I18n.applyText(container);
     }
 
     createRecoveryTab(container, effect, optStyle, selStyle, numStyle) {
@@ -233,7 +236,8 @@ class DatabaseEffectEditor {
     }
 
     createBuffTab(container, effect, optStyle, selStyle, numStyle) {
-        const paramNames = ['Max HP', 'Max MP', 'Attack', 'Defense', 'M.Attack', 'M.Defense', 'Agility', 'Luck'];
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
+        const paramNames = ['Max HP', 'Max MP', 'Attack', 'Defense', 'M.Attack', 'M.Defense', 'Agility', 'Luck'].map(tt);
         const paramOpts = paramNames.map((name, idx) =>
             `<option value="${idx}" ${effect.dataId === idx ? 'selected' : ''}>${name}</option>`
         ).join('');
@@ -244,14 +248,14 @@ class DatabaseEffectEditor {
                 <span style="color: var(--color-text-strong); min-width: 110px;">Add Buff</span>
                 <select class="effect-sel" data-code="31" style="${selStyle}">${paramOpts}</select>
                 <input type="number" class="effect-val" data-code="31" data-field="value1" value="${effect.code === 31 ? effect.value1 : 5}" min="1" style="${numStyle}">
-                <span style="color: var(--color-text-muted);">turns</span>
+                <span style="color: var(--color-text-muted);">${tt('turns')}</span>
             </div>
             <div class="effect-option" style="${optStyle}">
                 <input type="radio" name="effect-type" value="32" ${effect.code === 32 ? 'checked' : ''}>
                 <span style="color: var(--color-text-strong); min-width: 110px;">Add Debuff</span>
                 <select class="effect-sel" data-code="32" style="${selStyle}">${paramOpts}</select>
                 <input type="number" class="effect-val" data-code="32" data-field="value1" value="${effect.code === 32 ? effect.value1 : 5}" min="1" style="${numStyle}">
-                <span style="color: var(--color-text-muted);">turns</span>
+                <span style="color: var(--color-text-muted);">${tt('turns')}</span>
             </div>
             <div class="effect-option" style="${optStyle}">
                 <input type="radio" name="effect-type" value="33" ${effect.code === 33 ? 'checked' : ''}>
@@ -268,7 +272,8 @@ class DatabaseEffectEditor {
     }
 
     createSpecialTab(container, effect, optStyle, selStyle, numStyle) {
-        const paramNames = ['Max HP', 'Max MP', 'Attack', 'Defense', 'M.Attack', 'M.Defense', 'Agility', 'Luck'];
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
+        const paramNames = ['Max HP', 'Max MP', 'Attack', 'Defense', 'M.Attack', 'M.Defense', 'Agility', 'Luck'].map(tt);
         const paramOpts = paramNames.map((name, idx) =>
             `<option value="${idx}" ${effect.dataId === idx ? 'selected' : ''}>${name}</option>`
         ).join('');
@@ -288,7 +293,7 @@ class DatabaseEffectEditor {
                 <input type="radio" name="effect-type" value="41" ${effect.code === 41 ? 'checked' : ''}>
                 <span style="color: var(--color-text-strong); min-width: 110px;">Special Effect</span>
                 <select class="effect-sel" data-code="41" style="${selStyle}">
-                    <option value="0" ${effect.code === 41 && effect.dataId === 0 ? 'selected' : ''}>Escape</option>
+                    <option value="0" ${effect.code === 41 && effect.dataId === 0 ? 'selected' : ''}>${tt('Escape')}</option>
                 </select>
             </div>
             <div class="effect-option" style="${optStyle}">
@@ -378,7 +383,7 @@ class DatabaseEffectEditor {
 
     saveEffect(effect) {
         if (!effect.code) {
-            alert('Please select an effect type before saving.');
+            alert(window.I18n ? window.I18n.tText('Please select an effect type before saving.') : 'Please select an effect type before saving.');
             return false;
         }
 

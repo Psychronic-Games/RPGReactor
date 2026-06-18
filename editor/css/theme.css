@@ -1250,6 +1250,93 @@ option:hover {
     color: var(--color-text-strong);
 }
 
+.rr-opt-palette-wrap {
+    position: relative;
+    width: 100%;
+}
+.rr-opt-palette-trigger {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 6px 8px;
+    background: var(--color-bg-input);
+    border: 1px solid var(--color-accent-border);
+    color: var(--color-text-strong);
+    border-radius: var(--radius-md);
+    font-size: var(--font-size-base);
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    outline: none;
+    transition: border-color var(--ease-base);
+}
+.rr-opt-palette-trigger:hover,
+.rr-opt-palette-trigger:focus {
+    border-color: var(--color-accent-bright);
+}
+.rr-opt-palette-trigger-content {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+.rr-opt-palette-caret {
+    color: var(--color-accent-bright);
+    font-size: 10px;
+}
+.rr-opt-palette-menu {
+    display: none;
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    z-index: 10600;
+    background: var(--color-bg-panel);
+    border: 1px solid var(--color-accent-border);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-modal);
+    overflow: hidden;
+}
+.rr-opt-palette-item {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 8px;
+    background: var(--color-bg-panel);
+    color: var(--color-text-strong);
+    border: none;
+    border-bottom: 1px solid var(--color-border-subtle);
+    text-align: left;
+    cursor: pointer;
+    font-size: var(--font-size-base);
+    font-weight: 600;
+    font-family: inherit;
+}
+.rr-opt-palette-item:last-child {
+    border-bottom: none;
+}
+.rr-opt-palette-item:hover {
+    background: var(--color-accent-tint-15);
+}
+.rr-opt-palette-item.is-selected {
+    background: var(--color-accent-tint-25);
+    box-shadow: 0 0 10px 100px var(--color-accent-tint-25) inset;
+}
+.rr-opt-palette-swatches,
+.rr-opt-palette-trigger-swatches {
+    display: inline-flex;
+    gap: 3px;
+    flex: 0 0 auto;
+}
+.rr-opt-palette-swatch {
+    width: 14px;
+    height: 14px;
+    border-radius: var(--radius-md);
+    border: 1px solid rgba(255, 255, 255, 0.25);
+}
+
 .rr-input,
 .rr-select {
     width: 100%;

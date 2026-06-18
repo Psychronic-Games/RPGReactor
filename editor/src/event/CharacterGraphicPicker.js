@@ -15,6 +15,10 @@ class CharacterGraphicPicker {
         console.log('Project Path:', this.currentProject?.path);
     }
 
+    _t(text) {
+        return window.I18n ? window.I18n.tText(text) : text;
+    }
+
     /**
      * Show the character graphic picker
      */
@@ -62,7 +66,7 @@ class CharacterGraphicPicker {
             border-radius: 8px 8px 0 0;
         `;
         header.innerHTML = `
-            <div style="font-size: 16px; font-weight: 600; color: var(--color-accent);">Select Character Graphic</div>
+            <div style="font-size: 16px; font-weight: 600; color: var(--color-accent);">${this._t('Select Character Graphic')}</div>
             <button id="char-picker-close" style="background: none; border: none; color: var(--color-text-muted); font-size: 24px; cursor: pointer; padding: 0; width: 30px; height: 30px; line-height: 1;">×</button>
         `;
 
@@ -109,9 +113,9 @@ class CharacterGraphicPicker {
             gap: 8px;
         `;
         footer.innerHTML = `
-            <button id="char-picker-clear" style="padding: 8px 16px; background: var(--color-bg-button); color: var(--color-text); border: 1px solid var(--color-border-input); border-radius: 3px; cursor: pointer; transition: background-color 0.15s;">Clear</button>
-            <button id="char-picker-ok" style="padding: 8px 16px; background: var(--color-accent); color: var(--color-bg-deep); border: 1px solid var(--color-accent); border-radius: 3px; cursor: pointer; transition: background-color 0.15s; font-weight: bold;">OK</button>
-            <button id="char-picker-cancel" class="rr-btn-secondary">Cancel</button>
+            <button id="char-picker-clear" style="padding: 8px 16px; background: var(--color-bg-button); color: var(--color-text); border: 1px solid var(--color-border-input); border-radius: 3px; cursor: pointer; transition: background-color 0.15s;">${this._t('Clear')}</button>
+            <button id="char-picker-ok" style="padding: 8px 16px; background: var(--color-accent); color: var(--color-bg-deep); border: 1px solid var(--color-accent); border-radius: 3px; cursor: pointer; transition: background-color 0.15s; font-weight: bold;">${this._t('OK')}</button>
+            <button id="char-picker-cancel" class="rr-btn-secondary">${this._t('Cancel')}</button>
         `;
 
         body.appendChild(fileList);
@@ -128,6 +132,7 @@ class CharacterGraphicPicker {
 
         // Setup event listeners
         this.setupPickerEvents(modal, currentCharacterName, currentCharacterIndex, currentPattern, currentDirection);
+        if (window.I18n) window.I18n.applyText(modal);
     }
 
     /**
@@ -138,7 +143,7 @@ class CharacterGraphicPicker {
         console.log('Loading character files from project:', projectPath);
 
         if (!projectPath) {
-            fileList.innerHTML = '<div style="color: var(--color-text-muted); padding: 12px;">No project loaded</div>';
+            fileList.innerHTML = `<div style="color: var(--color-text-muted); padding: 12px;">${this._t('No project loaded')}</div>`;
             console.warn('No project path available');
             return;
         }
@@ -151,7 +156,7 @@ class CharacterGraphicPicker {
             const path = require('path');
 
             if (!fs.existsSync(charactersPath)) {
-                fileList.innerHTML = '<div style="color: var(--color-text-muted); padding: 12px;">Characters folder not found</div>';
+                fileList.innerHTML = `<div style="color: var(--color-text-muted); padding: 12px;">${this._t('Characters folder not found')}</div>`;
                 console.warn('Characters folder does not exist:', charactersPath);
                 return;
             }
@@ -171,8 +176,8 @@ class CharacterGraphicPicker {
             fileList.innerHTML = '';
 
             if (files.length === 0) {
-                fileList.innerHTML = '<div style="color: var(--color-text-muted); padding: 12px;">No character images found in img/characters folder</div>';
-                previewArea.innerHTML = '<div style="color: var(--color-text-muted);">No character files available</div>';
+                fileList.innerHTML = `<div style="color: var(--color-text-muted); padding: 12px;">${this._t('No character images found in img/characters folder')}</div>`;
+                previewArea.innerHTML = `<div style="color: var(--color-text-muted);">${this._t('No character files available')}</div>`;
                 return;
             }
 
@@ -230,12 +235,12 @@ class CharacterGraphicPicker {
             if (currentFile) {
                 this.showSpritePreview(previewArea, currentFile.fullName, currentFile.baseName);
             } else {
-                previewArea.innerHTML = '<div style="color: var(--color-text-muted);">Select a character file from the list</div>';
+                previewArea.innerHTML = `<div style="color: var(--color-text-muted);">${this._t('Select a character file from the list')}</div>`;
             }
 
         } catch (error) {
             console.error('Error loading character files:', error);
-            fileList.innerHTML = '<div style="color: #f88; padding: 12px;">Error loading files</div>';
+            fileList.innerHTML = `<div style="color: #f88; padding: 12px;">${this._t('Error loading files')}</div>`;
         }
     }
 
@@ -282,14 +287,14 @@ class CharacterGraphicPicker {
             const info = document.createElement('div');
             info.style.cssText = 'font-size: 12px; color: var(--color-text-muted); margin-bottom: 16px;';
             info.textContent = isSingleCharacter
-                ? 'Single Character Sprite Sheet'
-                : 'Multi-Character Sprite Sheet (8 characters)';
+                ? this._t('Single Character Sprite Sheet')
+                : this._t('Multi-Character Sprite Sheet (8 characters)');
             previewArea.appendChild(info);
 
             // Instructions
             const instructions = document.createElement('div');
             instructions.style.cssText = 'font-size: 12px; color: var(--color-link); margin-bottom: 16px; text-align: center;';
-            instructions.textContent = 'Click on the specific frame you want to use';
+            instructions.textContent = this._t('Click on the specific frame you want to use');
             previewArea.appendChild(instructions);
 
             // Calculate scale for frame canvases based on sprite dimensions
@@ -328,9 +333,9 @@ class CharacterGraphicPicker {
             console.error('Failed to load character sprite:', imagePath);
             previewArea.innerHTML = `
                 <div style="color: #f88; padding: 20px; text-align: center;">
-                    Failed to load image:<br>
-                    ${filename}<br><br>
-                    <small>Check console for details</small>
+                    ${this._t('Failed to load image:')}<br>
+                    ${fullFilename}<br><br>
+                    <small>${this._t('Check console for details')}</small>
                 </div>
             `;
         };
@@ -347,10 +352,10 @@ class CharacterGraphicPicker {
         const frameHeight = spriteHeight / 4;
 
         const directions = [
-            { label: 'Down', row: 0, direction: 2 },
-            { label: 'Left', row: 1, direction: 4 },
-            { label: 'Right', row: 2, direction: 6 },
-            { label: 'Up', row: 3, direction: 8 }
+            { label: this._t('Down'), row: 0, direction: 2 },
+            { label: this._t('Left'), row: 1, direction: 4 },
+            { label: this._t('Right'), row: 2, direction: 6 },
+            { label: this._t('Up'), row: 3, direction: 8 }
         ];
 
         directions.forEach(dir => {
@@ -415,15 +420,15 @@ class CharacterGraphicPicker {
             `;
 
             const charTitle = document.createElement('div');
-            charTitle.textContent = `Character ${charIndex}`;
+            charTitle.textContent = `${this._t('Character')} ${charIndex}`;
             charTitle.style.cssText = 'color: var(--color-link); font-size: 13px; font-weight: 600; margin-bottom: 8px;';
             charContainer.appendChild(charTitle);
 
             const directions = [
-                { label: 'Down', row: 0, direction: 2 },
-                { label: 'Left', row: 1, direction: 4 },
-                { label: 'Right', row: 2, direction: 6 },
-                { label: 'Up', row: 3, direction: 8 }
+                { label: this._t('Down'), row: 0, direction: 2 },
+                { label: this._t('Left'), row: 1, direction: 4 },
+                { label: this._t('Right'), row: 2, direction: 6 },
+                { label: this._t('Up'), row: 3, direction: 8 }
             ];
 
             directions.forEach(dir => {
@@ -577,7 +582,7 @@ class CharacterGraphicPicker {
                 }
                 closeModal();
             } else {
-                alert('Please select a character frame');
+                alert(this._t('Please select a character frame'));
             }
         });
 

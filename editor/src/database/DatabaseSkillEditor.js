@@ -25,11 +25,12 @@ class DatabaseSkillEditor {
         wrapper.style.position = 'relative';
 
         // Lookup arrays
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const scopeNames = ['None', 'One Enemy', 'All Enemies', '3 Random', '4 Random', '2 Random', '1 Random',
-                           'One Ally', 'All Allies', 'One Ally (Dead)', 'All Allies (Dead)', 'User'];
-        const occasionNames = ['Always', 'Battle Only', 'Menu Only', 'Never'];
-        const damageTypeNames = ['None', 'HP Damage', 'MP Damage', 'HP Recover', 'MP Recover', 'HP Drain', 'MP Drain'];
-        const hitTypeNames = ['Certain', 'Physical', 'Magical'];
+                           'One Ally', 'All Allies', 'One Ally (Dead)', 'All Allies (Dead)', 'User'].map(tt);
+        const occasionNames = ['Always', 'Battle Only', 'Menu Only', 'Never'].map(tt);
+        const damageTypeNames = ['None', 'HP Damage', 'MP Damage', 'HP Recover', 'MP Recover', 'HP Drain', 'MP Drain'].map(tt);
+        const hitTypeNames = ['Certain', 'Physical', 'Magical'].map(tt);
 
         // Get skill types from system data
         const skillTypeNames = this.databaseManager.getSystem()?.skillTypes || [];
@@ -208,7 +209,7 @@ class DatabaseSkillEditor {
                     <div class="form-group-fixed">
                         <label class="database-field-label">Element:</label>
                         <select class="database-field-value" style="width: 150px;" data-field="damage.elementId" data-skill-id="${skill.id}">
-                            <option value="-1" ${damage.elementId === -1 ? 'selected' : ''}>Normal Attack</option>
+                            <option value="-1" ${damage.elementId === -1 ? 'selected' : ''}>${tt('Normal Attack')}</option>
                             ${elementNames.map((name, idx) => idx > 0 && name ? `<option value="${idx}" ${damage.elementId === idx ? 'selected' : ''}>${name}</option>` : '').join('')}
                         </select>
                     </div>

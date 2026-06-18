@@ -419,9 +419,9 @@ class MessageCommandEditor {
             font-size: 12px;
         `;
         bgSelect.innerHTML = `
-            <option value="0">Window</option>
-            <option value="1">Dim</option>
-            <option value="2">Transparent</option>
+            <option value="0">${window.I18n ? window.I18n.tText('Window') : 'Window'}</option>
+            <option value="1">${window.I18n ? window.I18n.tText('Dim') : 'Dim'}</option>
+            <option value="2">${window.I18n ? window.I18n.tText('Transparent') : 'Transparent'}</option>
         `;
         bgSelect.value = this.background.toString();
         bgSelect.addEventListener('change', (e) => {
@@ -450,9 +450,9 @@ class MessageCommandEditor {
             font-size: 12px;
         `;
         posSelect.innerHTML = `
-            <option value="0">Top</option>
-            <option value="1">Middle</option>
-            <option value="2">Bottom</option>
+            <option value="0">${window.I18n ? window.I18n.tText('Top') : 'Top'}</option>
+            <option value="1">${window.I18n ? window.I18n.tText('Middle') : 'Middle'}</option>
+            <option value="2">${window.I18n ? window.I18n.tText('Bottom') : 'Bottom'}</option>
         `;
         posSelect.value = this.positionType.toString();
         posSelect.addEventListener('change', (e) => {

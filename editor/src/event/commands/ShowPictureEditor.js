@@ -301,7 +301,7 @@ class ShowPictureEditor {
         options.forEach(opt => {
             const option = document.createElement('option');
             option.value = opt.value;
-            option.textContent = opt.text;
+            option.textContent = window.I18n ? window.I18n.tText(opt.text) : opt.text;
             option.selected = (this.origin === opt.value);
             select.appendChild(option);
         });
@@ -345,7 +345,7 @@ class ShowPictureEditor {
         options.forEach(opt => {
             const option = document.createElement('option');
             option.value = opt.value;
-            option.textContent = opt.text;
+            option.textContent = window.I18n ? window.I18n.tText(opt.text) : opt.text;
             option.selected = (this.designationType === opt.value);
             select.appendChild(option);
         });
@@ -391,7 +391,7 @@ class ShowPictureEditor {
         options.forEach(opt => {
             const option = document.createElement('option');
             option.value = opt.value;
-            option.textContent = opt.text;
+            option.textContent = window.I18n ? window.I18n.tText(opt.text) : opt.text;
             option.selected = (this.blendMode === opt.value);
             select.appendChild(option);
         });

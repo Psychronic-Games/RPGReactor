@@ -21,8 +21,9 @@ class DatabaseStateEditor {
         wrapper.style.padding = '16px';
         wrapper.style.overflowY = 'auto';
 
-        const restrictionNames = ['None', 'Attack Enemy', 'Attack Anyone', 'Attack Ally', 'Cannot Move'];
-        const removalNames = ['None', 'End of Action', 'End of Turn'];
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
+        const restrictionNames = ['None', 'Attack Enemy', 'Attack Anyone', 'Attack Ally', 'Cannot Move'].map(tt);
+        const removalNames = ['None', 'End of Action', 'End of Turn'].map(tt);
 
         // General Settings with icon
         const generalWrapper = document.createElement('div');
