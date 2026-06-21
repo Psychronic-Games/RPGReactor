@@ -33,6 +33,10 @@ class RPGReactor {
     }
 
     async init() {
+        if (this.relaunchFramelessForWine()) return;
+
+        this.centerWindowOnStartup();
+
         // Set application icon for taskbar/dock (important for Linux)
         this.setApplicationIcon();
 
@@ -45,6 +49,8 @@ class RPGReactor {
                 document.addEventListener('DOMContentLoaded', resolve);
             });
         }
+
+        this.applyCompatibilityWindowFixes();
 
         // Initialize Effekseer runtime for animation previews (delayed to ensure library is loaded)
         // Use setTimeout to allow Effekseer library to fully initialize
@@ -908,7 +914,23 @@ class RPGReactor {
             const win = nw.Window.get();
             const path = require('path');
             const fs = require('fs');
-            const iconPath = path.join(process.cwd(), 'images', 'icon.png');
+            const appRootCandidates = [
+                typeof __dirname !== 'undefined' ? __dirname : null,
+                path.join(process.cwd(), 'package.nw'),
+                process.cwd(),
+                typeof __dirname !== 'undefined' ? path.resolve(__dirname, '..') : null
+            ].filter(Boolean);
+
+            const findIcon = (fileName) => {
+                for (const root of appRootCandidates) {
+                    const candidate = path.join(root, 'images', fileName);
+                    if (fs.existsSync(candidate)) return candidate;
+                }
+                return null;
+            };
+
+            const pngIconPath = findIcon('icon.png');
+            const icoIconPath = findIcon('icon.ico');
 
             // Set the window icon - this is what fixes the taskbar icon issue
             win.setShowInTaskbar(true);
@@ -916,11 +938,11 @@ class RPGReactor {
             // On Linux, we need to set the icon explicitly at runtime
             if (process.platform === 'linux') {
                 // Try multiple approaches for Linux
-                win.setIcon(iconPath);
+                if (pngIconPath) win.setIcon(pngIconPath);
 
                 // Also try setting it as a data URL for better compatibility
-                if (fs.existsSync(iconPath)) {
-                    const iconData = fs.readFileSync(iconPath);
+                if (pngIconPath) {
+                    const iconData = fs.readFileSync(pngIconPath);
                     const base64Icon = iconData.toString('base64');
                     const dataUrl = `data:image/png;base64,${base64Icon}`;
 
@@ -934,14 +956,206 @@ class RPGReactor {
                     }, 100);
                 }
             } else if (process.platform === 'win32') {
-                // Windows uses .ico from package.json, but we can also set it here
-                const icoPath = path.join(process.cwd(), 'images', 'icon.ico');
-                win.setIcon(icoPath);
+                const iconPath = icoIconPath || pngIconPath;
+                if (iconPath) win.setIcon(iconPath);
             }
             // macOS uses .icns from package.json automatically
         } catch (error) {
             // Icon setting is non-critical, silently continue
         }
+    }
+
+    centerWindowOnStartup() {
+        if (typeof nw === 'undefined') return;
+
+        try {
+            const win = nw.Window.get();
+            if (typeof win.setPosition === 'function') {
+                win.setPosition('center');
+                return;
+            }
+
+            const width = win.width || 1280;
+            const height = win.height || 720;
+            const left = Math.max(0, Math.round(((window.screen.availWidth || window.screen.width) - width) / 2));
+            const top = Math.max(0, Math.round(((window.screen.availHeight || window.screen.height) - height) / 2));
+            win.moveTo(left, top);
+        } catch (error) {
+            // Centering is a startup nicety; never block app load.
+        }
+    }
+
+    isWineRuntime() {
+        if (typeof process === 'undefined' || process.platform !== 'win32') return false;
+
+        const env = process.env || {};
+        if (env.WINEPREFIX || env.WINEARCH || env.WINELOADERNOEXEC || env.WINESERVER || env.WINEDEBUG || env.WINEESYNC || env.WINEFSYNC ||
+            env.STEAM_COMPAT_DATA_PATH || env.STEAM_COMPAT_CLIENT_INSTALL_PATH || env.PROTONPATH || env.PROTON_LOG || env.SteamGameId) {
+            return true;
+        }
+
+        try {
+            const fs = require('fs');
+            if (fs.existsSync('Z:\\proc\\version') || fs.existsSync('Z:\\usr\\bin\\wine')) {
+                return true;
+            }
+        } catch (error) {
+            // Try the Wine registry keys below.
+        }
+
+        try {
+            const { execFileSync } = require('child_process');
+            const options = { stdio: 'ignore', windowsHide: true, timeout: 1000 };
+            execFileSync('reg', ['query', 'HKCU\\Software\\Wine'], options);
+            return true;
+        } catch (error) {
+            try {
+                const { execFileSync } = require('child_process');
+                execFileSync('reg', ['query', 'HKLM\\Software\\Wine'], { stdio: 'ignore', windowsHide: true, timeout: 1000 });
+                return true;
+            } catch (innerError) {
+                return false;
+            }
+        }
+    }
+
+    isFramelessCompatibilityMode() {
+        try {
+            const params = new URLSearchParams(window.location.search);
+            return params.get('rrFrameless') === '1' || params.get('rrWineFrame') === '0';
+        } catch (error) {
+            return false;
+        }
+    }
+
+    applyCompatibilityWindowFixes() {
+        if (typeof nw === 'undefined') return;
+
+        const framelessCompatibility = this.isFramelessCompatibilityMode();
+        const wineRuntime = this.isWineRuntime();
+        if (!framelessCompatibility && !wineRuntime) return;
+
+        try {
+            if (wineRuntime) document.documentElement.classList.add('rr-wine-runtime');
+            if (framelessCompatibility) {
+                document.documentElement.classList.add('rr-frameless-runtime');
+                this.installCompatibilityTitlebar();
+            }
+        } catch (error) {
+            // Non-critical visual hint only.
+        }
+
+        try {
+            const win = nw.Window.get();
+
+            // Wine/Proton can expose an empty native menu band in NW.js Windows builds.
+            // That shifts painting without shifting hit-testing, so mouse clicks
+            // land one title/menu-bar height away from the visible controls.
+            try { win.menu = null; } catch (error) {}
+            try { win.setShowInTaskbar(true); } catch (error) {}
+
+            const stabilizeClientArea = () => {
+                try {
+                    const width = win.width;
+                    const height = win.height;
+                    if (!width || !height) return;
+                    win.resizeTo(width, height + 1);
+                    setTimeout(() => {
+                        try { win.resizeTo(width, height); } catch (error) {}
+                    }, 50);
+                } catch (error) {
+                    // Wine compatibility fix is best-effort.
+                }
+            };
+
+            setTimeout(stabilizeClientArea, 50);
+            setTimeout(stabilizeClientArea, 500);
+        } catch (error) {
+            // Running under Wine should not prevent the app from loading.
+        }
+    }
+
+    relaunchFramelessForWine() {
+        if (!this.isWineRuntime() || typeof nw === 'undefined') return false;
+
+        try {
+            const params = new URLSearchParams(window.location.search);
+            if (params.get('rrWineFrame') === '0') return false;
+
+            params.set('rrWineFrame', '0');
+            params.set('rrFrameless', '1');
+            const url = new URL(window.location.href);
+            url.search = params.toString();
+
+            const current = nw.Window.get();
+            const options = {
+                frame: false,
+                toolbar: false,
+                show: true,
+                width: current.width || 1280,
+                height: current.height || 720,
+                min_width: 1280,
+                min_height: 720,
+                position: 'center',
+                resizable: true,
+                icon: 'images/icon.png'
+            };
+
+            nw.Window.open(url.toString(), options, () => {
+                try { current.close(true); } catch (error) {}
+            });
+
+            return true;
+        } catch (error) {
+            return false;
+        }
+    }
+
+    installCompatibilityTitlebar() {
+        if (document.getElementById('compat-titlebar')) return;
+
+        const titlebar = document.createElement('div');
+        titlebar.id = 'compat-titlebar';
+        titlebar.innerHTML = `
+            <div class="compat-titlebar-icon"><img src="images/icon.png" alt=""></div>
+            <div class="compat-titlebar-title">RPG Reactor | Reactor One</div>
+            <div class="compat-titlebar-controls">
+                <button type="button" data-window-action="minimize" title="Minimize">&minus;</button>
+                <button type="button" data-window-action="maximize" title="Maximize">□</button>
+                <button type="button" data-window-action="close" title="Close">×</button>
+            </div>
+        `;
+
+        document.body.insertBefore(titlebar, document.body.firstChild);
+
+        const win = nw.Window.get();
+        titlebar.querySelector('[data-window-action="minimize"]').addEventListener('click', () => win.minimize());
+        titlebar.querySelector('[data-window-action="maximize"]').addEventListener('click', () => {
+            try {
+                if (this.compatWindowRestoreBounds) {
+                    const bounds = this.compatWindowRestoreBounds;
+                    this.compatWindowRestoreBounds = null;
+                    win.moveTo(bounds.x, bounds.y);
+                    win.resizeTo(bounds.width, bounds.height);
+                    return;
+                }
+
+                this.compatWindowRestoreBounds = {
+                    x: win.x,
+                    y: win.y,
+                    width: win.width,
+                    height: win.height
+                };
+
+                const screenLeft = typeof window.screen.availLeft === 'number' ? window.screen.availLeft : 0;
+                const screenTop = typeof window.screen.availTop === 'number' ? window.screen.availTop : 0;
+                win.moveTo(screenLeft, screenTop);
+                win.resizeTo(window.screen.availWidth, window.screen.availHeight);
+            } catch (error) {
+                // Avoid native maximize under Proton; it can reintroduce a host titlebar.
+            }
+        });
+        titlebar.querySelector('[data-window-action="close"]').addEventListener('click', () => win.close());
     }
 }
 

@@ -153,13 +153,26 @@ function _replaceExeIcon(exe, icoBuf) {
     const icoEntryCount = icoBuf.readUInt16LE(4);
     if (icoEntryCount < 1) return null;
 
-    // Read first ICO directory entry (16 bytes at offset 6)
-    const icoWidth    = icoBuf[6];
-    const icoHeight   = icoBuf[7];
-    const icoBpp      = icoBuf.readUInt16LE(6 + 6);
-    const icoDataSize = icoBuf.readUInt32LE(6 + 8);
-    const icoDataOff  = icoBuf.readUInt32LE(6 + 12);
-    const icoData     = icoBuf.slice(icoDataOff, icoDataOff + icoDataSize);
+    const icoEntries = [];
+    for (let i = 0; i < icoEntryCount; i++) {
+        const entryOff = 6 + i * 16;
+        const width = icoBuf[entryOff] || 256;
+        const height = icoBuf[entryOff + 1] || 256;
+        const dataSize = icoBuf.readUInt32LE(entryOff + 8);
+        const dataOff = icoBuf.readUInt32LE(entryOff + 12);
+        if (dataOff + dataSize <= icoBuf.length) {
+            icoEntries.push({
+                rawWidth: icoBuf[entryOff],
+                rawHeight: icoBuf[entryOff + 1],
+                width,
+                height,
+                bpp: icoBuf.readUInt16LE(entryOff + 6),
+                dataSize,
+                data: icoBuf.slice(dataOff, dataOff + dataSize),
+            });
+        }
+    }
+    if (icoEntries.length === 0) return null;
 
     // ── Parse PE headers ────────────────────────────────────────────
     if (exe.length < 64) return null;
@@ -259,24 +272,36 @@ function _replaceExeIcon(exe, icoBuf) {
     }
     if (iconSlots.length === 0) return null;
 
-    // Sort by data size descending — pick the largest slot that fits
+    // Sort PE slots by data size descending and choose the largest ICO entry
+    // that fits. Multi-size .ico files often put a 256px entry last; using only
+    // the first entry can leave Windows builds with the default/blank icon.
     iconSlots.sort((a, b) => b.de.dataSize - a.de.dataSize);
-    const target = iconSlots.find(s => s.de.dataSize >= icoData.length);
-    if (!target) return null; // new icon too large for any slot
+    icoEntries.sort((a, b) => (b.width * b.height) - (a.width * a.height));
+
+    let target = null;
+    let icoEntry = null;
+    for (const entry of icoEntries) {
+        target = iconSlots.find(s => s.de.dataSize >= entry.data.length);
+        if (target) {
+            icoEntry = entry;
+            break;
+        }
+    }
+    if (!target || !icoEntry) return null; // new icon too large for any slot
 
     // ── Write new icon data ─────────────────────────────────────────
     const result = Buffer.from(exe);
 
     const dataFO = rva2fo(target.de.dataRVA);
-    icoData.copy(result, dataFO);
+    icoEntry.data.copy(result, dataFO);
 
     // Zero-pad remaining space in the slot
-    if (icoData.length < target.de.dataSize) {
-        result.fill(0, dataFO + icoData.length, dataFO + target.de.dataSize);
+    if (icoEntry.data.length < target.de.dataSize) {
+        result.fill(0, dataFO + icoEntry.data.length, dataFO + target.de.dataSize);
     }
 
     // Update the data entry's size field
-    result.writeUInt32LE(icoData.length, target.de.foff + 4);
+    result.writeUInt32LE(icoEntry.data.length, target.de.foff + 4);
 
     // ── Update RT_GROUP_ICON ────────────────────────────────────────
     // Set count=1 and point the single entry to our replaced icon.
@@ -292,13 +317,13 @@ function _replaceExeIcon(exe, icoBuf) {
             result.writeUInt16LE(1, gfo + 4);
 
             // Write single GRPICONDIRENTRY at offset +6 (14 bytes)
-            result[gfo + 6]  = icoWidth;    // bWidth  (0 = 256+)
-            result[gfo + 7]  = icoHeight;   // bHeight (0 = 256+)
+            result[gfo + 6]  = icoEntry.rawWidth;    // bWidth  (0 = 256+)
+            result[gfo + 7]  = icoEntry.rawHeight;   // bHeight (0 = 256+)
             result[gfo + 8]  = 0;           // bColorCount
             result[gfo + 9]  = 0;           // bReserved
             result.writeUInt16LE(1, gfo + 10);              // wPlanes
-            result.writeUInt16LE(icoBpp, gfo + 12);         // wBitCount
-            result.writeUInt32LE(icoData.length, gfo + 14); // dwBytesInRes
+            result.writeUInt16LE(icoEntry.bpp, gfo + 12);   // wBitCount
+            result.writeUInt32LE(icoEntry.data.length, gfo + 14); // dwBytesInRes
             result.writeUInt16LE(target.id, gfo + 18);      // nID
 
             // Update the GROUP_ICON data entry size (6 header + 14 entry = 20)

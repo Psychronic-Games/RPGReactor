@@ -1,6 +1,6 @@
 {
   "name": "rpg-reactor",
-  "version": "0.92.0",
+  "version": "0.93.0",
   "description": "An open-source, cross-platform RPG game engine",
   "main": "index.html",
   "scripts": {
@@ -19,6 +19,7 @@
     "height": 720,
     "min_width": 1280,
     "min_height": 720,
+    "position": "center",
     "icon": "images/icon.png",
     "show_devtools": false,
     "frame": true,

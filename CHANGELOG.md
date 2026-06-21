@@ -8,13 +8,21 @@ This root changelog summarizes public release progress for GitHub. The detailed 
 
 ### Changed
 
-- Bumped current development version to RPG Reactor 0.92.
-- Started 0.92 UI polish with a distinct themed Audio Player control card for Volume, Pitch, and Pan.
+- Bumped current development version to RPG Reactor 0.93.
+- Continued UI polish with a distinct themed Audio Player control card for Volume, Pitch, and Pan.
 - Added the Rarely Typical Players Podcast YouTube channel to the Help/About links.
 - Updated the editor window title to use `RPG Reactor | <Game Title>` and refresh on project load, close, language changes, and System 1 game-title edits.
+- Reworked Windows and Linux platform editor packages so the editor payload is appended to the branded executable while the plain NW.js executable remains clean for playtesting, avoiding duplicate full runtime copies.
+- Windows editor packages now use a frameless compatibility mode with RPG Reactor's own title controls, centered startup, and manual maximize/restore behavior for cleaner Proton/Wine behavior on Linux.
+- Replaced emoji language flags in Options with SVG flag badges so Windows/Chromium displays real flag icons instead of regional-letter abbreviations.
 
 ### Fixed
 
+- Fixed playtest launch from final Windows editor builds by avoiding the editor `package.nw` runtime when opening game projects.
+- Fixed macOS editor distribution packaging to keep a clean `nwjs-mac/nwjs.app` runtime for playtesting separate from the editor `.app` bundle.
+- Fixed Windows taskbar/app icon handling in packaged editor builds by resolving icons from packaged paths and improving multi-size ICO embedding.
+- Fixed Windows editor builds under Proton/Wine showing a white native client-area band and offset mouse hit-testing by using frameless compatibility mode.
+- Fixed final editor startup positioning so the splash/editor window opens centered instead of crammed into the upper-left corner.
 - Fixed Forge launcher tiles losing their themed title/description styling when the generic localization text pass flattened complex button markup.
 - Fixed database list rows not updating live while editing an entry name in the detail panel.
 - Fixed actor image preview cards overflowing outside the Images section in the database modal.

@@ -311,7 +311,7 @@ const RR_I18N_STRINGS = {
         'options.languageNote': 'Language applies immediately to localized editor interface text. Some deep editor forms will be localized incrementally.',
 
         'about.title': 'About RPG Reactor',
-        'about.version': 'RPG Reactor v0.92',
+        'about.version': 'RPG Reactor v0.93',
         'about.description': 'An open-source, cross-platform RPG game engine built with NW.js and PixiJS v8',
         'about.compatibility': 'Create amazing RPG games with a professional editor that runs on Windows, Mac, and Linux. Compatible with RPG Maker MZ and MV projects in most cases; runtime compatibility depends primarily on the project\'s corescripts and plugins.',
         'about.linksTitle': 'Psychronic Links',
@@ -569,7 +569,7 @@ const RR_I18N_STRINGS = {
         'options.languageNote': '言語は対応済みのエディターUIテキストにすぐ適用されます。一部の詳細フォームは順次ローカライズします。',
 
         'about.title': 'RPG Reactor について',
-        'about.version': 'RPG Reactor v0.92',
+        'about.version': 'RPG Reactor v0.93',
         'about.description': 'NW.js と PixiJS v8 で構築された、オープンソースのクロスプラットフォームRPGゲームエンジンです',
         'about.compatibility': 'Windows、Mac、Linux で動作する本格的なエディターで、すばらしいRPGを作成できます。多くの場合、RPG Maker MZ / MV プロジェクトと互換性がありますが、ランタイム互換性は主にプロジェクトのコアスクリプトとプラグインに依存します。',
         'about.linksTitle': 'Psychronic リンク',
@@ -827,7 +827,7 @@ const RR_I18N_STRINGS = {
         'options.languageNote': 'El idioma se aplica de inmediato al texto localizado de la interfaz. Algunos formularios avanzados se localizarán gradualmente.',
 
         'about.title': 'Acerca de RPG Reactor',
-        'about.version': 'RPG Reactor v0.92',
+        'about.version': 'RPG Reactor v0.93',
         'about.description': 'Un motor de juegos RPG de código abierto y multiplataforma creado con NW.js y PixiJS v8',
         'about.compatibility': 'Crea juegos RPG increíbles con un editor profesional que funciona en Windows, Mac y Linux. Es compatible con proyectos de RPG Maker MZ y MV en la mayoría de los casos; la compatibilidad en tiempo de ejecución depende principalmente de los corescripts y plugins del proyecto.',
         'about.linksTitle': 'Enlaces de Psychronic',

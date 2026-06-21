@@ -1159,6 +1159,7 @@ class DatabaseEditorUI {
             };
             img.onerror = (e) => {
                 console.error('Failed to load character sprite:', imgPath, e);
+                canvas.remove();
                 const errorMsg = document.createElement('span');
                 errorMsg.style.color = 'var(--color-text-muted)';
                 errorMsg.style.fontSize = '11px';
@@ -1233,6 +1234,7 @@ class DatabaseEditorUI {
                 };
                 faceImg.onerror = (e) => {
                     console.error('Failed to load face graphic:', faceImgPath, e);
+                    faceCanvas.remove();
                     const errorMsg = document.createElement('span');
                     errorMsg.style.color = 'var(--color-text-muted)';
                     errorMsg.style.fontSize = '11px';
@@ -1304,6 +1306,7 @@ class DatabaseEditorUI {
                 };
                 svImg.onerror = (e) => {
                     console.error('Failed to load SV battler:', svImgPath, e);
+                    svCanvas.remove();
                     const errorMsg = document.createElement('span');
                     errorMsg.style.color = 'var(--color-text-muted)';
                     errorMsg.style.fontSize = '11px';

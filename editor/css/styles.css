@@ -15,6 +15,77 @@
             color: var(--color-text);
         }
 
+        html.rr-wine-runtime,
+        html.rr-wine-runtime body {
+            background-color: var(--color-bg-toolbar);
+        }
+
+        #compat-titlebar {
+            display: none;
+        }
+
+        html.rr-frameless-runtime #compat-titlebar {
+            height: 24px;
+            display: flex;
+            align-items: center;
+            background: #202326;
+            color: #f0f0f0;
+            border-bottom: 1px solid #111;
+            font-size: 12px;
+            line-height: 24px;
+            user-select: none;
+            -webkit-app-region: drag;
+        }
+
+        .compat-titlebar-icon {
+            width: 28px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .compat-titlebar-icon img {
+            width: 14px;
+            height: 14px;
+        }
+
+        .compat-titlebar-title {
+            flex: 1;
+            text-align: center;
+            font-weight: 600;
+            overflow: hidden;
+            white-space: nowrap;
+            text-overflow: ellipsis;
+        }
+
+        .compat-titlebar-controls {
+            display: flex;
+            height: 100%;
+            -webkit-app-region: no-drag;
+        }
+
+        .compat-titlebar-controls button {
+            width: 42px;
+            height: 100%;
+            border: none;
+            background: transparent;
+            color: #f0f0f0;
+            font: inherit;
+            cursor: pointer;
+        }
+
+        .compat-titlebar-controls button:hover {
+            background: rgba(255, 255, 255, 0.12);
+        }
+
+        .compat-titlebar-controls button[data-window-action="close"]:hover {
+            background: #c42b1c;
+        }
+
+        html.rr-frameless-runtime #app {
+            height: calc(100% - 24px);
+        }
+
         #app {
             width: 100%;
             height: 100%;
@@ -954,6 +1025,7 @@
             width: 100%;
             max-width: 160px;
             box-sizing: border-box;
+            text-align: center;
         }
 
         .graphic-canvas-container canvas {

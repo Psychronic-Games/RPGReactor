@@ -199,6 +199,30 @@ function createArchive(archiveName, sourceDir, innerDirName) {
     logGood(`Created: ${archiveName} (${sizeMB} MB)`);
 }
 
+function createNwPackage(sourceDir, destPath) {
+    if (fs.existsSync(destPath)) fs.rmSync(destPath, { force: true });
+    execSync(`cd "${sourceDir}" && zip -qr "${destPath}" .`, { stdio: 'pipe' });
+}
+
+function appendPackageToExecutable(exePath, packagePath) {
+    fs.appendFileSync(exePath, fs.readFileSync(packagePath));
+}
+
+function writeWindowsFramelessPackageConfig(stageRoot) {
+    const packagePath = path.join(stageRoot, 'package.json');
+    if (!fs.existsSync(packagePath)) return null;
+
+    const original = fs.readFileSync(packagePath, 'utf8');
+    const pkg = JSON.parse(fs.readFileSync(packagePath, 'utf8'));
+    pkg.main = 'index.html?rrFrameless=1';
+    pkg.window = pkg.window || {};
+    pkg.window.frame = false;
+    pkg.window.toolbar = false;
+    pkg.window.position = 'center';
+    fs.writeFileSync(packagePath, JSON.stringify(pkg, null, 2));
+    return original;
+}
+
 // ── Bootstrap launchers for minimal packages ────────────────────────
 function writeBootstrapLaunchers(dest) {
     logInfo('Writing bootstrap launchers (download-on-demand)...');
@@ -390,6 +414,18 @@ function generateChecksums() {
         logWarn('  runtime/ not found — new project creation will be unavailable in this package');
     }
 
+    // Copy the default project template used by new project creation.
+    const templateCandidates = [
+        path.join(appRoot, 'template', 'Demo'),
+        path.join(appRoot, '..', 'template', 'Demo'),
+    ];
+    const templateSrc = templateCandidates.find(candidate => fs.existsSync(path.join(candidate, 'project.rpgreactor')));
+    if (templateSrc) {
+        copyDirRecursive(templateSrc, path.join(stageRoot, 'template', 'Demo'));
+    } else {
+        logWarn('  template/Demo not found — generated starter projects will be used instead');
+    }
+
     // Cherry-pick PixiJS for editor fallback loading.
     const pixiSrc = path.join(appRoot, '..', 'runtime', 'libs', 'pixi.js');
     if (fs.existsSync(pixiSrc)) {
@@ -432,15 +468,39 @@ function generateChecksums() {
                 logInfo('Acquiring NW.js runtime...');
                 await acquireRuntime(plat, appDir, pBase, share * 0.6, true);
 
+                if (plat === 'osx') {
+                    const cleanApp = path.join(appDir, 'nwjs.app');
+                    const playtestRuntime = path.join(appDir, 'nwjs-mac', 'nwjs.app');
+                    if (fs.existsSync(cleanApp)) {
+                        logInfo('Keeping clean macOS playtest runtime...');
+                        copyDirRecursive(cleanApp, playtestRuntime);
+                        logInfo('  Playtest runtime: nwjs-mac/nwjs.app');
+                    }
+                }
+
                 // Copy editor files into package.nw (or app.nw for macOS)
                 logInfo('Copying editor files...');
                 progress(Math.round(pBase + share * 0.6), 'Copying editor files...');
 
+                const executablePackage = path.join(pkgDir, 'editor-package.nw');
                 if (plat === 'osx') {
                     // macOS: editor files go inside .app bundle
                     const appBundle = fs.readdirSync(appDir).find(f => f.endsWith('.app'));
                     const appNwDir = path.join(appDir, appBundle || 'nwjs.app', 'Contents', 'Resources', 'app.nw');
                     copyDirRecursive(stageRoot, appNwDir);
+                } else if (plat === 'win' || plat === 'linux') {
+                    // Keep nw.exe/nw clean for playtest. The editor payload is
+                    // appended to the branded executable instead of placed in
+                    // package.nw, because package.nw contaminates sibling NW
+                    // launches and makes playtest reload the editor.
+                    const originalPackageJson = plat === 'win' ? writeWindowsFramelessPackageConfig(stageRoot) : null;
+                    try {
+                        createNwPackage(stageRoot, executablePackage);
+                    } finally {
+                        if (originalPackageJson !== null) {
+                            fs.writeFileSync(path.join(stageRoot, 'package.json'), originalPackageJson);
+                        }
+                    }
                 } else {
                     copyDirRecursive(stageRoot, path.join(appDir, 'package.nw'));
                 }
@@ -453,9 +513,11 @@ function generateChecksums() {
                     const oldExe = path.join(appDir, 'nw');
                     const newExe = path.join(appDir, 'RPGReactor');
                     if (fs.existsSync(oldExe)) {
-                        fs.renameSync(oldExe, newExe);
+                        fs.copyFileSync(oldExe, newExe);
+                        appendPackageToExecutable(newExe, executablePackage);
                         fs.chmodSync(newExe, '755');
                         logInfo('  Executable: RPGReactor');
+                        logInfo('  Playtest runtime: nw');
                     }
                     // Simple launcher script
                     fs.writeFileSync(path.join(appDir, 'RPGReactor.sh'), [
@@ -470,8 +532,10 @@ function generateChecksums() {
                     const oldExe = path.join(appDir, 'nw.exe');
                     const newExe = path.join(appDir, 'RPG Reactor.exe');
                     if (fs.existsSync(oldExe)) {
-                        fs.renameSync(oldExe, newExe);
+                        fs.copyFileSync(oldExe, newExe);
+                        appendPackageToExecutable(newExe, executablePackage);
                         logInfo('  Executable: RPG Reactor.exe');
+                        logInfo('  Playtest runtime: nw.exe');
                     }
                 } else if (plat === 'osx') {
                     const oldApp = path.join(appDir, 'nwjs.app');

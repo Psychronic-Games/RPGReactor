@@ -9,13 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Bumped current development version to RPG Reactor 0.92.
+- Bumped current development version to RPG Reactor 0.93.
 - Audio Player Volume/Pitch/Pan controls now sit in a distinct themed card instead of blending into the modal background.
 - Added the Rarely Typical Players Podcast YouTube channel to the Help/About links.
 - Updated the editor window title to use `RPG Reactor | <Game Title>` and refresh on project load, close, language changes, and System 1 game-title edits.
+- Reworked Windows/Linux platform editor distribution packaging to append the editor payload into the branded executable, leaving the plain NW.js runtime clean for playtesting without shipping a second full runtime copy.
+- Windows editor distribution packages now use frameless compatibility mode with RPG Reactor title controls, centered startup, and manual maximize/restore behavior to avoid Proton/Wine native-frame artifacts on Linux.
+- Replaced native emoji flags in the Options language picker with SVG flag badges so Windows/Chromium shows actual flags instead of `JP`/`EN`-style regional indicator text.
 
 ### Fixed
 
+- Fixed playtest launch from final Windows editor builds by resolving a clean NW.js runtime and launching game projects with the project directory as the child process working directory.
+- Fixed final Linux editor playtest launch by avoiding contaminated sibling `nw` runtimes when a loose editor `package.nw` is present.
+- Fixed macOS editor distribution builds to keep a separate clean `nwjs-mac/nwjs.app` runtime for playtest instead of reusing the editor `.app` bundle.
+- Fixed packaged Windows editor taskbar icons by resolving icon files from packaged app paths and embedding the best-fitting entry from multi-size `.ico` files.
+- Fixed Windows builds run through Proton/Wine showing a harsh white native client-area/menu band with vertically offset mouse hit-testing.
+- Fixed packaged editor startup placement so the splash screen and editor window open centered on screen.
 - Fixed Forge launcher tiles losing their themed title/description styling when the generic localization text pass flattened complex button markup.
 - Fixed database list rows not updating live while editing an entry name in the detail panel.
 - Fixed actor image preview cards overflowing outside the Images section in the database modal.

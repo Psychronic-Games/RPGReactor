@@ -1,6 +1,6 @@
 # RPG Reactor
 
-RPG Reactor 0.92 is an open-source, cross-platform RPG game editor and runtime for RPG Maker MV/MZ-compatible projects, built on NW.js and PixiJS v8. RPG Reactor provides its own modern PIXI 8 runtime while preserving compatibility with RPG Maker project data and targeting backwards compatibility with RPG Maker MZ plugins. Create 2D RPG games with a complete development environment featuring map editing, event scripting, database management, and game testing capabilities.
+RPG Reactor 0.93 is an open-source, cross-platform RPG game editor and runtime for RPG Maker MV/MZ-compatible projects, built on NW.js and PixiJS v8. RPG Reactor provides its own modern PIXI 8 runtime while preserving compatibility with RPG Maker project data and targeting backwards compatibility with RPG Maker MZ plugins. Create 2D RPG games with a complete development environment featuring map editing, event scripting, database management, and game testing capabilities.
 
 ## Features
 
@@ -76,6 +76,7 @@ Comprehensive editors for all game data with right-click context menu clipboard 
 - **Debug mode**: Test with development features enabled
 - **Process management**: Start and stop playtests easily
 - **Start-map validation**: Repairs invalid player and vehicle start-map references before launch when maps have been deleted
+- **Packaged editor support**: Final editor builds launch playtests through a clean NW.js runtime on Windows, macOS, and Linux so the editor package is not accidentally relaunched as the game
 
 ### Build & Deploy (Games)
 - **Cross-platform builds**: Package games for Windows, macOS, Linux, and Web (HTML5)
@@ -96,6 +97,8 @@ Package the RPG Reactor editor itself for distribution on itch.io, GitHub Releas
 - **NW.js editions**: Normal or SDK (includes DevTools for development/debugging)
 - **3-tier runtime acquisition**: Checks bundled local → `.nw-cache/` → downloads from `dl.nwjs.io`
 - **SHA256 checksums**: Automatically generated for all output archives
+- **Playtest-safe runtime layout**: Windows/Linux platform packages append the editor payload to the branded executable while leaving `nw.exe`/`nw` clean for playtest; macOS keeps a separate clean `nwjs-mac/nwjs.app` runtime
+- **Windows compatibility mode**: Windows editor packages use frameless RPG Reactor title controls, centered startup, and manual maximize/restore behavior so running the Windows build under Proton/Wine on Linux avoids native-frame white bars and click offsets
 - Access from **Build → Package Editor for Distribution...**
 
 ### Forge — In-editor Asset Generators
@@ -169,7 +172,7 @@ chmod +x RPGReactor.sh
 The launcher automatically installs a desktop entry and icon on first run.
 
 #### Windows
-Extract the `.zip` and double-click `RPGReactor.bat`.
+Extract the `.zip` and double-click `RPG Reactor.exe`.
 
 #### macOS
 Extract the `.zip` and double-click `RPGReactor.command` (or run from Terminal).

@@ -37,34 +37,29 @@ class ProjectManager {
         try {
             console.log(`Creating new project: ${projectName} at ${targetPath}`);
 
-            const runtimePath = this.getRuntimePath();
             const engineVersion = this.getEngineVersion();
-
-            if (!runtimePath) {
-                console.error('Runtime corescript directory not found. Expected runtime/ beside the editor source.');
-                console.error('Current working directory:', process.cwd());
-                return false;
-            }
+            const templatePath = this.getTemplateProjectPath();
 
             // Create target directory if it doesn't exist
             if (!this.fs.existsSync(targetPath)) {
                 this.fs.mkdirSync(targetPath, { recursive: true });
             }
 
-            await this.createStarterProject(targetPath, projectName, engineVersion, runtimePath);
+            if (templatePath) {
+                await this.copyDirectory(templatePath, targetPath);
+                this.updateCopiedTemplateProject(targetPath, projectName, engineVersion);
+            } else {
+                const runtimePath = this.getRuntimePath();
 
-            // Create RPG Reactor project file
-            const projectData = {
-                name: projectName,
-                version: engineVersion,
-                engine: 'RPG Reactor',
-                engineVersion: engineVersion,
-                created: new Date().toISOString(),
-                modified: new Date().toISOString()
-            };
+                if (!runtimePath) {
+                    console.error('Runtime corescript directory not found. Expected runtime/ beside the editor source.');
+                    console.error('Current working directory:', process.cwd());
+                    return false;
+                }
 
-            const projectFilePath = this.path.join(targetPath, 'project.rpgreactor');
-            this.fs.writeFileSync(projectFilePath, JSON.stringify(projectData, null, 2));
+                await this.createStarterProject(targetPath, projectName, engineVersion, runtimePath);
+                this.writeProjectMetadata(targetPath, projectName, engineVersion);
+            }
 
             console.log('Project created successfully!');
             return true;
@@ -116,6 +111,59 @@ class ProjectManager {
         }
 
         return null;
+    }
+
+    getTemplateProjectPath() {
+        if (!this.fs || !this.path || typeof process === 'undefined') return null;
+
+        const cwd = process.cwd();
+        const candidates = [
+            this.path.join(cwd, 'template', 'Demo'),
+            this.path.join(cwd, '..', 'template', 'Demo')
+        ];
+
+        for (const candidate of candidates) {
+            if (this.fs.existsSync(this.path.join(candidate, 'project.rpgreactor'))) {
+                return candidate;
+            }
+        }
+
+        return null;
+    }
+
+    updateCopiedTemplateProject(targetPath, projectName, engineVersion) {
+        this.writeProjectMetadata(targetPath, projectName, engineVersion);
+
+        const packagePath = this.path.join(targetPath, 'package.json');
+        if (this.fs.existsSync(packagePath)) {
+            const packageData = JSON.parse(this.fs.readFileSync(packagePath, 'utf8'));
+            packageData.name = this.slugify(projectName);
+            packageData.version = engineVersion;
+            packageData.window = packageData.window || {};
+            packageData.window.title = projectName;
+            this.writeJson(packagePath, packageData);
+        }
+
+        const systemPath = this.path.join(targetPath, 'data', 'System.json');
+        if (this.fs.existsSync(systemPath)) {
+            const systemData = JSON.parse(this.fs.readFileSync(systemPath, 'utf8'));
+            systemData.gameTitle = projectName;
+            this.writeJson(systemPath, systemData);
+        }
+    }
+
+    writeProjectMetadata(targetPath, projectName, engineVersion) {
+        const now = new Date().toISOString();
+        const projectData = {
+            name: projectName,
+            version: engineVersion,
+            engine: 'RPG Reactor',
+            engineVersion: engineVersion,
+            created: now,
+            modified: now
+        };
+
+        this.writeJson(this.path.join(targetPath, 'project.rpgreactor'), projectData);
     }
 
     async createStarterProject(targetPath, projectName, engineVersion, runtimePath) {

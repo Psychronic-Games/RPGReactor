@@ -93,6 +93,23 @@ class OptionsManager {
         if (window.I18n) window.I18n.setLanguage(next);
     }
 
+    _languageFlagHtml(languageId) {
+        const svgByLanguage = {
+            en: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 16"><rect width="24" height="16" fill="#fff"/><path stroke="#b22234" stroke-width="1.23" d="M0 .6h24M0 3.1h24M0 5.5h24M0 8h24M0 10.5h24M0 12.9h24M0 15.4h24"/><rect width="10.5" height="8.6" fill="#3c3b6e"/></svg>',
+            ja: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 16"><rect width="24" height="16" fill="#fff"/><circle cx="12" cy="8" r="4.2" fill="#bc002d"/></svg>',
+            es: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 16"><rect width="24" height="16" fill="#c60b1e"/><rect y="4" width="24" height="8" fill="#ffc400"/></svg>',
+            'zh-Hant': '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 16"><rect width="24" height="16" fill="#fe0000"/><rect width="10.5" height="8.5" fill="#000095"/><circle cx="5.25" cy="4.25" r="2.1" fill="#fff"/></svg>',
+            'zh-Hans': '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 16"><rect width="24" height="16" fill="#de2910"/><polygon points="5,2 5.7,4.2 8,4.2 6.1,5.5 6.8,7.7 5,6.4 3.2,7.7 3.9,5.5 2,4.2 4.3,4.2" fill="#ffde00"/></svg>',
+            ru: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 16"><rect width="24" height="16" fill="#fff"/><rect y="5.33" width="24" height="5.34" fill="#0039a6"/><rect y="10.67" width="24" height="5.33" fill="#d52b1e"/></svg>',
+            pt: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 16"><rect width="9.6" height="16" fill="#006600"/><rect x="9.6" width="14.4" height="16" fill="#ff0000"/><circle cx="9.6" cy="8" r="3" fill="#ffcc00"/></svg>',
+            de: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 16"><rect width="24" height="5.33" fill="#000"/><rect y="5.33" width="24" height="5.34" fill="#dd0000"/><rect y="10.67" width="24" height="5.33" fill="#ffce00"/></svg>',
+            fr: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 16"><rect width="8" height="16" fill="#0055a4"/><rect x="8" width="8" height="16" fill="#fff"/><rect x="16" width="8" height="16" fill="#ef4135"/></svg>',
+            el: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 16"><rect width="24" height="16" fill="#0d5eaf"/><path stroke="#fff" stroke-width="1.78" d="M0 2.67h24M0 6.22h24M0 9.78h24M0 13.33h24"/><rect width="8.9" height="8.9" fill="#0d5eaf"/><path stroke="#fff" stroke-width="1.78" d="M4.45 0v8.9M0 4.45h8.9"/></svg>'
+        };
+        const svg = svgByLanguage[languageId] || svgByLanguage.en;
+        return `<span class="rr-lang-flag" style="background-image: url('data:image/svg+xml,${encodeURIComponent(svg)}');"></span>`;
+    }
+
     show() {
         if (!this.modal) this._createModal();
         this._renderContent();
@@ -130,8 +147,11 @@ class OptionsManager {
             </button>
         `).join('');
 
-        const languageOptionsHtml = (window.I18n ? window.I18n.languages() : [{ id: 'en', nativeName: 'English' }]).map(lang =>
-            `<option value="${lang.id}" ${lang.id === (this.settings.language || 'en') ? 'selected' : ''}>${lang.flag ? lang.flag + ' ' : ''}${lang.nativeName}</option>`
+        const languages = window.I18n ? window.I18n.languages() : [{ id: 'en', nativeName: 'English' }];
+        const currentLanguageId = this.settings.language || 'en';
+        const currentLanguageMeta = languages.find(lang => lang.id === currentLanguageId) || languages[0];
+        const languageOptionsHtml = languages.map(lang =>
+            `<button type="button" class="rr-opt-language-item${lang.id === currentLanguageId ? ' is-selected' : ''}" data-language="${lang.id}">${this._languageFlagHtml(lang.id)}<span>${lang.nativeName}</span></button>`
         ).join('');
 
         const currentPaletteMeta = THEME_PALETTES.find(p => p.id === currentPalette) || THEME_PALETTES[0];
@@ -149,9 +169,19 @@ class OptionsManager {
 
                     <div style="display: grid; grid-template-columns: 120px 1fr; gap: 12px 16px; align-items: center; padding: 6px 4px;">
                         <label style="font-size: 12px; color: var(--color-text-muted);">${t('options.language')}</label>
-                        <select class="rr-opt-language" style="width: 100%; padding: 6px 8px; font-size: 12px;">
-                            ${languageOptionsHtml}
-                        </select>
+                        <div class="rr-opt-language-wrap" data-rr-i18n-skip="true">
+                            <input type="hidden" class="rr-opt-language" value="${currentLanguageId}">
+                            <button type="button" class="rr-opt-language-trigger">
+                                <span class="rr-opt-language-trigger-content">
+                                    ${this._languageFlagHtml(currentLanguageMeta.id)}
+                                    <span class="rr-opt-language-trigger-label">${currentLanguageMeta.nativeName}</span>
+                                </span>
+                                <span class="rr-opt-language-caret">▼</span>
+                            </button>
+                            <div class="rr-opt-language-menu">
+                                ${languageOptionsHtml}
+                            </div>
+                        </div>
 
                         <div style="grid-column: 2; font-size: 11px; color: var(--color-text-muted); margin-top: -4px;">${t('options.languageNote')}</div>
 
@@ -197,6 +227,9 @@ class OptionsManager {
         const paletteTriggerSwatches = this.modal.querySelector('.rr-opt-palette-trigger-swatches');
         const paletteTriggerLabel = this.modal.querySelector('.rr-opt-palette-trigger-label');
         const languageSelect = this.modal.querySelector('.rr-opt-language');
+        const languageTrigger = this.modal.querySelector('.rr-opt-language-trigger');
+        const languageMenu = this.modal.querySelector('.rr-opt-language-menu');
+        const languageTriggerContent = this.modal.querySelector('.rr-opt-language-trigger-content');
         const modeButtons = this.modal.querySelectorAll('.rr-opt-mode-btn');
         const paletteDesc = this.modal.querySelector('.rr-opt-palette-desc');
 
@@ -211,8 +244,23 @@ class OptionsManager {
             if (btn.dataset.mode === currentMode) btn.dataset.active = 'true';
         });
 
-        languageSelect.addEventListener('change', () => {
-            this.applyLanguage(languageSelect.value);
+        languageTrigger.addEventListener('click', () => {
+            languageMenu.style.display = languageMenu.dataset.open === 'true' ? 'none' : 'block';
+            languageMenu.dataset.open = languageMenu.style.display === 'block' ? 'true' : 'false';
+        });
+
+        this.modal.querySelectorAll('.rr-opt-language-item').forEach(item => {
+            item.addEventListener('click', () => {
+                const meta = languages.find(lang => lang.id === item.dataset.language) || languages[0];
+                languageSelect.value = meta.id;
+                languageTriggerContent.innerHTML = `${this._languageFlagHtml(meta.id)}<span class="rr-opt-language-trigger-label">${meta.nativeName}</span>`;
+                this.modal.querySelectorAll('.rr-opt-language-item').forEach(btn => {
+                    btn.classList.toggle('is-selected', btn === item);
+                });
+                languageMenu.style.display = 'none';
+                languageMenu.dataset.open = 'false';
+                this.applyLanguage(meta.id);
+            });
         });
 
         paletteTrigger.addEventListener('click', () => {
@@ -235,6 +283,10 @@ class OptionsManager {
         });
 
         this.modal.querySelector('.rr-modal').addEventListener('click', (e) => {
+            if (!e.target.closest('.rr-opt-language-wrap')) {
+                languageMenu.style.display = 'none';
+                languageMenu.dataset.open = 'false';
+            }
             if (!e.target.closest('.rr-opt-palette-wrap')) paletteMenu.style.display = 'none';
         });
 
