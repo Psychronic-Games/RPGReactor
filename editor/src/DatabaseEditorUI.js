@@ -205,6 +205,9 @@ class DatabaseEditorUI {
                 data = this.databaseManager.getCommonEvents();
                 title = this._dbTitle(type, 'Common Events');
                 break;
+            case 'system':
+                this.openDatabase('system1');
+                return;
             case 'system1': {
                 // Show System 1 editor
                 const { detailEl } = this.prepareDatabaseSection('system1', this._dbTitle('system1', 'System 1'), { showListPanel: false });

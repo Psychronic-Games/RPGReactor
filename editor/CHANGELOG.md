@@ -24,6 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed rectangle, circle, and fill eraser tools so they work without selected palette tiles, preserve eraser mode when changing drawing tools, and never show selected-tile placement previews while erasing.
 - Fixed eraser state edge cases where focus changes, Region tab selection, or a `null` active draw tool could leave Eraser visually selected but internally unable to erase.
 - Fixed Plugin Manager saves for standard RPG Maker MV/MZ projects so `js/plugins.js` stays compatible with RPG Maker's expected `name`/`status`/`description`/`parameters` entries while Reactor-only parsed help, author, and URL metadata remains editor-only.
+- Fixed Database > System in the native top menu by exposing separate System 1 and System 2 entries and routing the legacy `system` database type to System 1 instead of showing an unknown-type error.
 
 ## [0.93.0] - 2026-06-21
 

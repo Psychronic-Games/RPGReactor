@@ -52,7 +52,8 @@ Comprehensive editors for all game data with right-click context menu clipboard 
 | **Animations** | Create battle animations with sprite frames or Effekseer effects |
 | **Tilesets** | Configure tile passage, terrain tags, special flags, Change Maximum, and Ctrl+C/Ctrl+V slot copy/paste |
 | **Common Events** | Script reusable event sequences with trigger conditions |
-| **System** | Game-wide settings including title, party, audio, and battle options |
+| **System 1** | Game-wide settings including title, party, audio, battleback, title screen, and vehicle options |
+| **System 2** | Menu commands, item categories, magic skills, attack motions, editor settings, asset sizes, and advanced options |
 
 ### Audio Player
 - **Multi-channel playback**: BGM, BGS, ME, and SE tracks

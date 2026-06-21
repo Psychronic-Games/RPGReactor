@@ -296,8 +296,12 @@ class UIManager {
         }));
         databaseMenu.append(new nw.MenuItem({ type: 'separator' }));
         databaseMenu.append(new nw.MenuItem({
-            label: 'System',
-            click: () => this.callbacks.openDatabase('system')
+            label: 'System 1',
+            click: () => this.callbacks.openDatabase('system1')
+        }));
+        databaseMenu.append(new nw.MenuItem({
+            label: 'System 2',
+            click: () => this.callbacks.openDatabase('system2')
         }));
         databaseMenu.append(new nw.MenuItem({
             label: 'Types',

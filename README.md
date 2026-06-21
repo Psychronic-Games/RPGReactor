@@ -29,6 +29,7 @@ RPGReactor/
 
 - **0.93.1 deployment fixes** improve final editor builds with a self-contained macOS `.app`, cleaner Windows playtest launching, quieter Windows Chromium logging, and more reliable map erasing on imported RPG Maker maps.
 - **RPG Maker compatibility fixes** keep existing MV/MZ `js/plugins.js` files in RPG Maker-readable format while Reactor uses richer plugin metadata only inside the editor UI.
+- **Database navigation fixes** expose System 1 and System 2 directly from the top Database menu so it opens the same sections as the database sidebar.
 - **Forge Character Generator** includes procedural Outfit Forge and Hair Forge tools for generating RPG Maker-style walking-sheet parts from inside the editor.
 - **Hair Forge** supports live 4-direction walk previews, generated hair library output, multiple procedural hair styles including Short Spiky and Center Part Long, expanded color palettes, eye-zone protection, and tunable hair-pattern controls.
 
