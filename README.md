@@ -1,6 +1,6 @@
 # RPG Reactor
 
-RPG Reactor 0.93 is an open-source, cross-platform RPG game editor and runtime for RPG Maker MV/MZ-compatible projects. RPG Reactor provides its own modern PIXI 8-based runtime while preserving compatibility with RPG Maker project data and targeting backwards compatibility with RPG Maker MZ plugins.
+RPG Reactor 0.93.1 is an open-source, cross-platform RPG game editor and runtime for RPG Maker MV/MZ-compatible projects. RPG Reactor provides its own modern PIXI 8-based runtime while preserving compatibility with RPG Maker project data and targeting backwards compatibility with RPG Maker MZ plugins.
 
 Use RPG Reactor to create, edit, playtest, and package 2D RPGs with familiar RPG Maker-style maps, events, database records, plugins, and deployment workflows, without depending on the original RPG Maker runtime or editor.
 
@@ -27,7 +27,8 @@ RPGReactor/
 
 ## Current Highlights
 
-- **0.93 packaging polish** improves final editor builds with reliable Windows/macOS/Linux playtest launching, cleaner Windows taskbar icons, centered startup, and Proton/Wine-friendly Windows behavior on Linux.
+- **0.93.1 deployment fixes** improve final editor builds with a self-contained macOS `.app`, cleaner Windows playtest launching, quieter Windows Chromium logging, and more reliable map erasing on imported RPG Maker maps.
+- **RPG Maker compatibility fixes** keep existing MV/MZ `js/plugins.js` files in RPG Maker-readable format while Reactor uses richer plugin metadata only inside the editor UI.
 - **Forge Character Generator** includes procedural Outfit Forge and Hair Forge tools for generating RPG Maker-style walking-sheet parts from inside the editor.
 - **Hair Forge** supports live 4-direction walk previews, generated hair library output, multiple procedural hair styles including Short Spiky and Center Part Long, expanded color palettes, eye-zone protection, and tunable hair-pattern controls.
 

@@ -5,6 +5,26 @@ All notable changes to RPG Reactor will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.93.1] - 2026-06-21
+
+### Changed
+
+- Bumped current development version to RPG Reactor 0.93.1.
+- Reworked macOS editor distribution packages so the zip contains only a self-contained `RPG Reactor.app` instead of a sibling runtime folder or loose Chromium files.
+- Windows editor distribution packages now remove `--enable-logging` from the packaged editor payload to avoid noisy Chromium logging output in final builds.
+
+### Fixed
+
+- Fixed macOS packaged editor startup by placing the editor payload at `Contents/Resources/app.nw`, the standard NW.js macOS bundle location.
+- Fixed macOS packaged playtest by embedding a clean internal `playtest-runtime/nwjs.app` inside `RPG Reactor.app` and symlinking it to the bundled NW.js framework to avoid doubling package size.
+- Fixed macOS playtest runtime discovery when NW.js reports paths from helper processes instead of the outer app executable.
+- Fixed Windows packaged playtest to prefer the clean adjacent `nw.exe` before any stale `nwjs-win` runtime folders and to suppress playtest console flicker.
+- Fixed Windows distribution builds producing Chromium `Invalid logging destination` noise by stripping `--enable-logging` from the packaged editor config.
+- Fixed erasing existing imported RPG Maker map tiles by making auto eraser mode target the topmost real layer at each cell, including layer 0 base/autotile data.
+- Fixed rectangle, circle, and fill eraser tools so they work without selected palette tiles, preserve eraser mode when changing drawing tools, and never show selected-tile placement previews while erasing.
+- Fixed eraser state edge cases where focus changes, Region tab selection, or a `null` active draw tool could leave Eraser visually selected but internally unable to erase.
+- Fixed Plugin Manager saves for standard RPG Maker MV/MZ projects so `js/plugins.js` stays compatible with RPG Maker's expected `name`/`status`/`description`/`parameters` entries while Reactor-only parsed help, author, and URL metadata remains editor-only.
+
 ## [0.93.0] - 2026-06-21
 
 ### Changed

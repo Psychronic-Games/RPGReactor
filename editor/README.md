@@ -1,11 +1,12 @@
 # RPG Reactor
 
-RPG Reactor 0.93 is an open-source, cross-platform RPG game editor and runtime for RPG Maker MV/MZ-compatible projects, built on NW.js and PixiJS v8. RPG Reactor provides its own modern PIXI 8 runtime while preserving compatibility with RPG Maker project data and targeting backwards compatibility with RPG Maker MZ plugins. Create 2D RPG games with a complete development environment featuring map editing, event scripting, database management, and game testing capabilities.
+RPG Reactor 0.93.1 is an open-source, cross-platform RPG game editor and runtime for RPG Maker MV/MZ-compatible projects, built on NW.js and PixiJS v8. RPG Reactor provides its own modern PIXI 8 runtime while preserving compatibility with RPG Maker project data and targeting backwards compatibility with RPG Maker MZ plugins. Create 2D RPG games with a complete development environment featuring map editing, event scripting, database management, and game testing capabilities.
 
 ## Features
 
 ### Map Editor
 - **Multiple drawing tools**: Pencil, rectangle, circle area, fill bucket, and eraser
+- **Layer-aware erasing**: Eraser works as a modifier across pencil, rectangle, circle, and fill tools, targets the topmost real tile in auto mode, and supports imported RPG Maker maps with existing layer-0 base/autotile data
 - **Layer system**: Four tile layers (0-3) with auto-layer mode for intelligent placement
 - **Shadow pen mode**: Special layer effects for depth and atmosphere
 - **Undo/redo**: Full history support (up to 50 steps)
@@ -70,6 +71,7 @@ Comprehensive editors for all game data with right-click context menu clipboard 
 - **Load order management**: Arrange plugin execution order
 - **Parameter configuration**: Edit plugin settings through the UI
 - **Multi-select actions**: Shift-click and Ctrl/Cmd-click plugins to copy, cut, paste, duplicate, or remove groups across windows
+- **RPG Maker-safe saves**: Existing MV/MZ projects keep `js/plugins.js` in RPG Maker's standard `name`/`status`/`description`/`parameters` format; Reactor-only parsed help, author, and URL metadata stays editor-only
 
 ### Playtest
 - **One-click testing**: Launch your game instantly from the editor
@@ -97,7 +99,7 @@ Package the RPG Reactor editor itself for distribution on itch.io, GitHub Releas
 - **NW.js editions**: Normal or SDK (includes DevTools for development/debugging)
 - **3-tier runtime acquisition**: Checks bundled local → `.nw-cache/` → downloads from `dl.nwjs.io`
 - **SHA256 checksums**: Automatically generated for all output archives
-- **Playtest-safe runtime layout**: Windows/Linux platform packages append the editor payload to the branded executable while leaving `nw.exe`/`nw` clean for playtest; macOS keeps a separate clean `nwjs-mac/nwjs.app` runtime
+- **Playtest-safe runtime layout**: Windows/Linux platform packages append the editor payload to the branded executable while leaving `nw.exe`/`nw` clean for playtest; macOS packages as a self-contained `.app` with an internal clean playtest runtime that symlinks to the bundled NW.js framework
 - **Windows compatibility mode**: Windows editor packages use frameless RPG Reactor title controls, centered startup, and manual maximize/restore behavior so running the Windows build under Proton/Wine on Linux avoids native-frame white bars and click offsets
 - Access from **Build → Package Editor for Distribution...**
 

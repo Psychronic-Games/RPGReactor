@@ -4,6 +4,7 @@
 class PlaytestManager {
     constructor() {
         this.playtestProcess = null;
+        this.lastResolveDebug = null;
     }
 
     playtest(projectPath) {
@@ -57,20 +58,26 @@ class PlaytestManager {
 
         const nwPath = this.resolveNwExecutable(path, fs);
         if (!nwPath) {
-            console.error('Could not find a plain NW.js executable for playtest. Packaged editor builds must include nw.exe/nw or an nwjs-* runtime folder.');
+            console.error('Could not find an NW.js executable for playtest. Packaged editor builds must include nw.exe/nw, a macOS app executable, or an nwjs-* runtime folder.');
+            if (this.lastResolveDebug) {
+                console.error('NW.js playtest resolver diagnostics:', this.lastResolveDebug);
+            }
             return false;
         }
 
         console.log('NW.js executable path:', nwPath);
         console.log('Project path:', projectPath);
 
-        // Launch NW.js from the project directory. Using "." avoids app-path
-        // parsing issues with spaces in Windows paths.
+        // Launch NW.js from the project directory. Windows uses "." to avoid
+        // app-path parsing issues with spaces; macOS passes the absolute path
+        // so a bundled editor app can still launch an external project.
         // Pass mode parameter ('test' for playtest, 'btest' for battle test)
-        this.playtestProcess = spawn(nwPath, ['.', mode], {
+        const appPathArg = process.platform === 'darwin' ? projectPath : '.';
+        this.playtestProcess = spawn(nwPath, [appPathArg, mode], {
             cwd: projectPath,
             stdio: 'ignore',
-            detached: false
+            detached: false,
+            windowsHide: true
         });
 
         this.playtestProcess.on('error', (err) => {
@@ -91,7 +98,22 @@ class PlaytestManager {
         const execPath = process.execPath;
         const execDir = path.dirname(execPath);
         const appRoot = this.resolveAppRoot(path, fs);
+        const macAppBundleRoots = process.platform === 'darwin'
+            ? this.resolveMacAppBundleRoots(path, fs, execPath, appRoot)
+            : [];
+        const macHasEmbeddedAppNw = macAppBundleRoots.some(root => fs.existsSync(path.join(root, 'Contents', 'Resources', 'app.nw')));
         const candidates = [];
+        this.lastResolveDebug = {
+            platform: process.platform,
+            execPath,
+            execDir,
+            appRoot,
+            cwd: typeof process !== 'undefined' ? process.cwd() : null,
+            dirname: typeof __dirname !== 'undefined' ? __dirname : null,
+            nwAppStartPath: typeof nw !== 'undefined' && nw.App ? nw.App.startPath : null,
+            macAppBundleRoots,
+            candidates,
+        };
 
         const addCandidate = (candidate) => {
             if (candidate && !candidates.includes(candidate)) {
@@ -100,13 +122,24 @@ class PlaytestManager {
         };
 
         if (process.platform === 'win32') {
-            addCandidate(path.join(execDir, 'nwjs-win', 'nw.exe'));
-            addCandidate(path.join(appRoot, 'nwjs-win', 'nw.exe'));
-            addCandidate(path.join(appRoot, '..', 'nwjs-win', 'nw.exe'));
             if (!fs.existsSync(path.join(execDir, 'package.nw'))) {
                 addCandidate(path.join(execDir, 'nw.exe'));
             }
+            addCandidate(path.join(execDir, 'nwjs-win', 'nw.exe'));
+            addCandidate(path.join(appRoot, 'nwjs-win', 'nw.exe'));
+            addCandidate(path.join(appRoot, '..', 'nwjs-win', 'nw.exe'));
         } else if (process.platform === 'darwin') {
+            for (const appBundleRoot of macAppBundleRoots) {
+                addCandidate(path.join(appBundleRoot, 'Contents', 'Resources', 'playtest-runtime', 'nwjs.app', 'Contents', 'MacOS', 'nwjs'));
+                if (!fs.existsSync(path.join(appBundleRoot, 'Contents', 'Resources', 'app.nw'))) {
+                    addCandidate(path.join(appBundleRoot, 'Contents', 'MacOS', 'nwjs'));
+                }
+            }
+            if (path.basename(execPath) === 'nwjs' && !macHasEmbeddedAppNw) {
+                addCandidate(execPath);
+            } else if (!macHasEmbeddedAppNw) {
+                addCandidate(path.join(execDir, 'nwjs'));
+            }
             const packageRoot = path.resolve(execDir, '..', '..', '..');
             addCandidate(path.join(packageRoot, 'nwjs-mac', 'nwjs.app', 'Contents', 'MacOS', 'nwjs'));
             addCandidate(path.join(execDir, 'nwjs-mac', 'nwjs.app', 'Contents', 'MacOS', 'nwjs'));
@@ -130,12 +163,77 @@ class PlaytestManager {
         // In source/dev launchers process.execPath is already the generic NW binary.
         const basename = path.basename(execPath).toLowerCase();
         if ((process.platform === 'win32' && basename === 'nw.exe') ||
-            (process.platform === 'darwin' && basename === 'nwjs') ||
+            (process.platform === 'darwin' && basename === 'nwjs' && !macHasEmbeddedAppNw) ||
             (process.platform !== 'win32' && process.platform !== 'darwin' && basename === 'nw')) {
             return execPath;
         }
 
+        console.warn('Checked NW.js playtest candidates:', candidates);
         return null;
+    }
+
+    resolveMacAppBundleRoots(path, fs, execPath, appRoot) {
+        const roots = [];
+        const addRoot = (candidate) => {
+            if (!candidate || roots.includes(candidate)) return;
+            if (path.basename(candidate).endsWith('.app') && fs.existsSync(path.join(candidate, 'Contents'))) {
+                roots.push(candidate);
+            }
+        };
+        const walkFrom = (start) => {
+            if (!start) return;
+            let current = start;
+            try {
+                if (!fs.existsSync(current) || !fs.statSync(current).isDirectory()) {
+                    current = path.dirname(current);
+                }
+            } catch (_) {
+                current = path.dirname(current);
+            }
+
+            while (current && current !== path.dirname(current)) {
+                addRoot(current);
+                current = path.dirname(current);
+            }
+        };
+
+        walkFrom(execPath);
+        walkFrom(typeof __dirname !== 'undefined' ? __dirname : null);
+        walkFrom(typeof process !== 'undefined' ? process.cwd() : null);
+        walkFrom(appRoot);
+        if (typeof nw !== 'undefined' && nw.App && nw.App.startPath) {
+            walkFrom(nw.App.startPath);
+        }
+
+        const scanForApps = (start) => {
+            if (!start) return;
+            let dir = start;
+            try {
+                if (!fs.existsSync(dir) || !fs.statSync(dir).isDirectory()) {
+                    dir = path.dirname(dir);
+                }
+            } catch (_) {
+                dir = path.dirname(dir);
+            }
+
+            for (let depth = 0; dir && dir !== path.dirname(dir) && depth < 8; depth++) {
+                try {
+                    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+                        if (entry.isDirectory() && entry.name.endsWith('.app')) {
+                            addRoot(path.join(dir, entry.name));
+                        }
+                    }
+                } catch (_) {}
+                dir = path.dirname(dir);
+            }
+        };
+
+        scanForApps(execPath);
+        scanForApps(typeof __dirname !== 'undefined' ? __dirname : null);
+        scanForApps(typeof process !== 'undefined' ? process.cwd() : null);
+        scanForApps(appRoot);
+
+        return roots;
     }
 
     resolveAppRoot(path, fs) {

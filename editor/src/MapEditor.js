@@ -80,11 +80,11 @@ class MapEditor {
             this.previousTool = this.currentTool;
         }
         this.currentTool = tool;
-        this.eraserMode = false;
     }
 
     setEraserMode(enabled) {
         this.eraserMode = enabled;
+        this.hideTilePreview();
 
         // Update eraser button UI state
         const eraserBtn = document.querySelector('[data-action="eraser"]');
@@ -349,6 +349,7 @@ class MapEditor {
         container.off('pointermove');
         container.off('pointerup');
         container.off('pointerupoutside');
+        container.off('pointercancel');
         container.off('pointerleave');
 
         // Make container interactive
@@ -395,8 +396,11 @@ class MapEditor {
             // Hide preview when starting to draw
             this.hideTilePreview();
 
-            // For pencil and fill, apply immediately
-            if (this.currentTool === 'pencil') {
+            // Eraser works independently of the active draw tool. Shape tools
+            // apply on pointerup so the user can drag out the area first.
+            if (this.eraserMode && this.currentTool !== 'rectangle' && this.currentTool !== 'circle') {
+                this.paintTile(tileX, tileY);
+            } else if (this.currentTool === 'pencil') {
                 this.paintTile(tileX, tileY);
             } else if (this.currentTool === 'fill') {
                 this.fillArea(tileX, tileY);
@@ -426,7 +430,10 @@ class MapEditor {
             }
 
             if (this.isDrawing) {
-                if (this.currentTool === 'pencil' || this.shadowPenMode) {
+                if (this.eraserMode && this.currentTool !== 'rectangle' && this.currentTool !== 'circle') {
+                    this.paintTile(tileX, tileY);
+                    this.updateTilePreview(tileX, tileY);
+                } else if (this.currentTool === 'pencil' || this.shadowPenMode) {
                     this.paintTile(tileX, tileY);
                     // Show preview at cursor position for immediate visual feedback
                     this.updateTilePreview(tileX, tileY);
@@ -463,6 +470,11 @@ class MapEditor {
             this.resetDrawingState(true);
         });
 
+        container.on('pointercancel', () => {
+            if (!this.isDrawing) return;
+            this.resetDrawingState(true);
+        });
+
         // Mouse leave - hide tile preview and clear coordinates
         container.on('pointerleave', () => {
             this.hideTilePreview();
@@ -472,6 +484,21 @@ class MapEditor {
                 this.onCoordinatesChange(null, null);
             }
         });
+
+        if (typeof window !== 'undefined') {
+            if (this._windowBlurHandler) {
+                window.removeEventListener('blur', this._windowBlurHandler);
+            }
+            this._windowBlurHandler = () => {
+                if (this.isDrawing) {
+                    this.resetDrawingState(true);
+                } else {
+                    this.hideTilePreview();
+                    this.clearPreview();
+                }
+            };
+            window.addEventListener('blur', this._windowBlurHandler);
+        }
     }
 
     // Update autotiles surrounding a painted area (not the painted tiles themselves)
@@ -562,6 +589,12 @@ class MapEditor {
         this.lastPaintedTile.y = y;
         this.lastPaintedTile.quadrant = -1;
 
+        // If eraser mode, erase tiles layer-aware (no tile selection needed)
+        if (this.eraserMode) {
+            this.eraseTilesAtPositions([{ x, y }]);
+            return;
+        }
+
         // Handle region painting (layer 5)
         if (currentLayer === 'R') {
             if (!this.regionManager || !this.regionManager.selectedTiles || this.regionManager.selectedTiles.length === 0) {
@@ -576,12 +609,6 @@ class MapEditor {
             if (this.regionManager.enabled) {
                 this.regionManager.renderRegions();
             }
-            return;
-        }
-
-        // If eraser mode, erase tiles layer-aware (no tile selection needed)
-        if (this.eraserMode) {
-            this.eraseTile(x, y, data, width, height, layerSize);
             return;
         }
 
@@ -1044,6 +1071,17 @@ class MapEditor {
         const minY = Math.min(start.y, end.y);
         const maxY = Math.max(start.y, end.y);
 
+        if (this.eraserMode) {
+            const positions = [];
+            for (let y = minY; y <= maxY; y++) {
+                for (let x = minX; x <= maxX; x++) {
+                    positions.push({ x, y });
+                }
+            }
+            this.eraseTilesAtPositions(positions);
+            return;
+        }
+
         // Get selected tiles from palette
         const selectedTiles = this.tilesetPaletteViewer.selectedTiles;
         if (!selectedTiles || selectedTiles.length === 0) {
@@ -1199,6 +1237,20 @@ class MapEditor {
         const minY = Math.floor(centerY - radius);
         const maxY = Math.ceil(centerY + radius);
 
+        if (this.eraserMode) {
+            const positions = [];
+            for (let y = minY; y <= maxY; y++) {
+                for (let x = minX; x <= maxX; x++) {
+                    const dist = Math.sqrt(Math.pow(x - centerX, 2) + Math.pow(y - centerY, 2));
+                    if (dist <= radius) {
+                        positions.push({ x, y });
+                    }
+                }
+            }
+            this.eraseTilesAtPositions(positions);
+            return;
+        }
+
         // Get selected tiles from palette
         const selectedTiles = this.tilesetPaletteViewer.selectedTiles;
         if (!selectedTiles || selectedTiles.length === 0) {
@@ -1346,6 +1398,11 @@ class MapEditor {
     fillArea(startX, startY) {
         if (!this.tilemapManager.currentMap) return;
 
+        if (this.eraserMode) {
+            this.eraseFillArea(startX, startY);
+            return;
+        }
+
         const { width, height, data } = this.tilemapManager.currentMap;
         const currentLayer = this.tilesetPaletteViewer.currentLayer;
         const layerIndex = this.getLayerIndex(currentLayer);
@@ -1485,6 +1542,10 @@ class MapEditor {
             );
             this.previewLayer.stroke({ width: 2, color: 0xffffff, alpha: 0.8 });
 
+            if (this.eraserMode) {
+                return;
+            }
+
             // Try to draw tile preview
             try {
                 const selectedTiles = this.tilesetPaletteViewer.selectedTiles;
@@ -1531,6 +1592,25 @@ class MapEditor {
             const radius = Math.sqrt(
                 Math.pow(current.x - start.x, 2) + Math.pow(current.y - start.y, 2)
             );
+
+            if (this.eraserMode) {
+                const minX = Math.floor(centerX - radius);
+                const maxX = Math.ceil(centerX + radius);
+                const minY = Math.floor(centerY - radius);
+                const maxY = Math.ceil(centerY + radius);
+                for (let y = minY; y <= maxY; y++) {
+                    for (let x = minX; x <= maxX; x++) {
+                        const dist = Math.sqrt(Math.pow(x - centerX, 2) + Math.pow(y - centerY, 2));
+                        if (dist <= radius) {
+                            const borderGraphics = new PIXI.Graphics();
+                            borderGraphics.rect(x * tileWidth, y * tileHeight, tileWidth, tileHeight);
+                            borderGraphics.stroke({ width: 2, color: 0xffffff, alpha: 0.8 });
+                            this.previewLayer.addChild(borderGraphics);
+                        }
+                    }
+                }
+                return;
+            }
 
             // Try to draw tile preview and track tiles for border
             const tilesInCircle = [];
@@ -1915,6 +1995,20 @@ class MapEditor {
         // Clear existing preview
         this.tilePreviewContainer.removeChildren();
 
+        if (this.eraserMode) {
+            const outlineGraphics = new PIXI.Graphics();
+            outlineGraphics.rect(
+                tileX * this.tilemapManager.TILE_WIDTH,
+                tileY * this.tilemapManager.TILE_HEIGHT,
+                this.tilemapManager.TILE_WIDTH,
+                this.tilemapManager.TILE_HEIGHT
+            );
+            outlineGraphics.stroke({ width: 2, color: 0xffffff, alpha: 0.8 });
+            this.tilePreviewContainer.addChild(outlineGraphics);
+            this.tilePreviewContainer.visible = true;
+            return;
+        }
+
         // Get the current layer from palette
         const currentLayer = this.tilesetPaletteViewer.currentLayer;
 
@@ -2215,29 +2309,13 @@ class MapEditor {
         const basePos = y * width + x;
 
         if (this.layerMode === 'auto') {
-            // Get the currently selected layer from the palette
-            const currentLayer = this.tilesetPaletteViewer.currentLayer;
-
-            // Check if the selected layer is A1-A5 (autotiles)
-            const isAutotileLayer = ['A', 'A1', 'A2', 'A3', 'A4', 'A5'].includes(currentLayer);
-
-            if (isAutotileLayer) {
-                // A1-A5: Erase ALL layers (0-3) at this position
-                // A tiles should erase both A and B-E tiles
-                for (let layer = 0; layer <= 3; layer++) {
-                    const layerIndex = layer * layerSize + basePos;
-                    data[layerIndex] = 0;
-                }
-            } else {
-                // B-E: Erase only from B-E layers (top-most first)
-                // Check layers from top to bottom (3, 2, 1) - NOT layer 0 which contains autotiles
-                for (let layer = 3; layer >= 1; layer--) {
-                    const index = layer * layerSize + basePos;
-                    if (data[index] !== 0) {
-                        // Found a tile, erase it
-                        data[index] = 0;
-                        return;
-                    }
+            // Auto erase should target the topmost actual tile, not the current
+            // palette tab. Imported maps often have existing base tiles on layer 0.
+            for (let layer = 3; layer >= 0; layer--) {
+                const index = layer * layerSize + basePos;
+                if (data[index] !== 0) {
+                    data[index] = 0;
+                    return [layer];
                 }
             }
         } else {
@@ -2245,9 +2323,112 @@ class MapEditor {
             const targetLayer = this.layerMode;
             if (targetLayer >= 0 && targetLayer <= 3) {
                 const index = targetLayer * layerSize + basePos;
-                data[index] = 0;
+                if (data[index] !== 0) {
+                    data[index] = 0;
+                    return [targetLayer];
+                }
             }
         }
+
+        return [];
+    }
+
+    eraseTilesAtPositions(positions) {
+        if (!this.tilemapManager.currentMap) return 0;
+
+        const { width, height, data } = this.tilemapManager.currentMap;
+        const layerSize = width * height;
+        const affectedTiles = new Set();
+        const erasedPositions = [];
+        const visited = new Set();
+
+        for (const pos of positions) {
+            const x = pos.x;
+            const y = pos.y;
+            const key = `${x},${y}`;
+            if (visited.has(key)) continue;
+            visited.add(key);
+            if (x < 0 || x >= width || y < 0 || y >= height) continue;
+
+            const erasedLayers = this.eraseTile(x, y, data, width, height, layerSize);
+            if (erasedLayers.length > 0) {
+                erasedPositions.push({ x, y });
+                for (let layer = 0; layer <= 3; layer++) {
+                    affectedTiles.add(`${x},${y},${layer}`);
+                }
+            }
+        }
+
+        if (affectedTiles.size === 0) return 0;
+
+        const tilesToUpdate = [];
+        for (const tileKey of affectedTiles) {
+            const [x, y, layer] = tileKey.split(',').map(Number);
+            tilesToUpdate.push({ x, y, layer });
+        }
+        this.tilemapManager.updateTiles(tilesToUpdate);
+
+        for (const pos of erasedPositions) {
+            this.updateNeighboringAutotiles(pos.x, pos.y);
+        }
+
+        return erasedPositions.length;
+    }
+
+    getEraseTargetAt(x, y, data, width, layerSize) {
+        const basePos = y * width + x;
+
+        if (this.layerMode === 'auto') {
+            for (let layer = 3; layer >= 0; layer--) {
+                const tileId = data[layer * layerSize + basePos];
+                if (tileId !== 0) {
+                    return { layer, tileId };
+                }
+            }
+        } else if (this.layerMode >= 0 && this.layerMode <= 3) {
+            const tileId = data[this.layerMode * layerSize + basePos];
+            if (tileId !== 0) {
+                return { layer: this.layerMode, tileId };
+            }
+        }
+
+        return null;
+    }
+
+    eraseFillArea(startX, startY) {
+        if (!this.tilemapManager.currentMap) return 0;
+
+        const { width, height, data } = this.tilemapManager.currentMap;
+        if (startX < 0 || startX >= width || startY < 0 || startY >= height) return 0;
+
+        const layerSize = width * height;
+        const target = this.getEraseTargetAt(startX, startY, data, width, layerSize);
+        if (!target) return 0;
+
+        const stack = [{ x: startX, y: startY }];
+        const visited = new Set();
+        const positions = [];
+
+        while (stack.length > 0) {
+            const { x, y } = stack.pop();
+            const key = `${x},${y}`;
+            if (visited.has(key)) continue;
+            visited.add(key);
+            if (x < 0 || x >= width || y < 0 || y >= height) continue;
+
+            const current = this.getEraseTargetAt(x, y, data, width, layerSize);
+            if (!current || current.layer !== target.layer || current.tileId !== target.tileId) {
+                continue;
+            }
+
+            positions.push({ x, y });
+            stack.push({ x: x + 1, y });
+            stack.push({ x: x - 1, y });
+            stack.push({ x, y: y + 1 });
+            stack.push({ x, y: y - 1 });
+        }
+
+        return this.eraseTilesAtPositions(positions);
     }
 
     // Toggle shadow on any tile quadrant
@@ -3051,6 +3232,10 @@ class MapEditor {
         if (this.tilePreviewContainer) {
             this.tilePreviewContainer.destroy({ children: true });
             this.tilePreviewContainer = null;
+        }
+        if (typeof window !== 'undefined' && this._windowBlurHandler) {
+            window.removeEventListener('blur', this._windowBlurHandler);
+            this._windowBlurHandler = null;
         }
     }
 }

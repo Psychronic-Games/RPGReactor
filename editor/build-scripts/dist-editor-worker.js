@@ -184,14 +184,15 @@ async function acquireRuntime(platform, targetDir, pBase, pSpan, flat) {
 }
 
 // ── Archive creation ────────────────────────────────────────────────
-function createArchive(archiveName, sourceDir, innerDirName) {
+function createArchive(archiveName, sourceDir, innerDirName, preserveSymlinks) {
     const outPath = path.join(outputDir, archiveName);
     logInfo(`Creating archive: ${archiveName}`);
 
     if (archiveName.endsWith('.tar.gz')) {
         execSync(`tar czf "${outPath}" -C "${sourceDir}" "${innerDirName}"`, { stdio: 'pipe' });
     } else {
-        execSync(`cd "${sourceDir}" && zip -qr "${outPath}" "${innerDirName}"`, { stdio: 'pipe' });
+        const flags = preserveSymlinks ? '-qry' : '-qr';
+        execSync(`cd "${sourceDir}" && zip ${flags} "${outPath}" "${innerDirName}"`, { stdio: 'pipe' });
     }
 
     const stats = fs.statSync(outPath);
@@ -208,6 +209,91 @@ function appendPackageToExecutable(exePath, packagePath) {
     fs.appendFileSync(exePath, fs.readFileSync(packagePath));
 }
 
+function prepareMacAppBundleForEditor(appBundle, appSourceDir) {
+    const contentsDir = path.join(appBundle, 'Contents');
+    const resourcesDir = path.join(contentsDir, 'Resources');
+    const appNwPath = path.join(resourcesDir, 'app.nw');
+    const plistPath = path.join(contentsDir, 'Info.plist');
+
+    // macOS NW.js expects the app payload in Contents/Resources/app.nw.
+    if (fs.existsSync(appNwPath)) fs.rmSync(appNwPath, { recursive: true, force: true });
+    copyDirRecursive(appSourceDir, appNwPath);
+
+    if (fs.existsSync(plistPath)) {
+        let plist = fs.readFileSync(plistPath, 'utf8');
+        plist = plist.replace(/<key>CFBundleName<\/key>\s*<string>[^<]+<\/string>/, '<key>CFBundleName</key>\n\t<string>RPG Reactor</string>');
+        plist = plist.replace(/<key>CFBundleDisplayName<\/key>\s*<string>[^<]+<\/string>/, '<key>CFBundleDisplayName</key>\n\t<string>RPG Reactor</string>');
+        fs.writeFileSync(plistPath, plist);
+    }
+}
+
+function copyMacRuntimeResourcesForPlaytest(src, dest, relBase) {
+    fs.mkdirSync(dest, { recursive: true });
+    const entries = fs.readdirSync(src, { withFileTypes: true });
+
+    for (const entry of entries) {
+        const relPath = path.join(relBase, entry.name);
+        if (relPath === 'app.nw' || relPath === 'playtest-runtime') {
+            continue;
+        }
+
+        const s = path.join(src, entry.name);
+        const d = path.join(dest, entry.name);
+        if (entry.isDirectory()) {
+            copyMacRuntimeResourcesForPlaytest(s, d, relPath);
+        } else if (entry.isSymbolicLink()) {
+            fs.symlinkSync(fs.readlinkSync(s), d);
+        } else {
+            fs.copyFileSync(s, d);
+        }
+    }
+}
+
+function installMacPlaytestRuntime(appBundle) {
+    const contentsDir = path.join(appBundle, 'Contents');
+    const macOsDir = path.join(contentsDir, 'MacOS');
+    const resourcesDir = path.join(contentsDir, 'Resources');
+    const playtestRoot = path.join(resourcesDir, 'playtest-runtime');
+    const playtestApp = path.join(playtestRoot, 'nwjs.app');
+    const playtestContents = path.join(playtestApp, 'Contents');
+    const playtestMacOs = path.join(playtestContents, 'MacOS');
+    const playtestResources = path.join(playtestContents, 'Resources');
+
+    fs.rmSync(playtestRoot, { recursive: true, force: true });
+    fs.mkdirSync(playtestMacOs, { recursive: true });
+
+    for (const file of ['Info.plist', 'PkgInfo']) {
+        const src = path.join(contentsDir, file);
+        if (fs.existsSync(src)) {
+            fs.copyFileSync(src, path.join(playtestContents, file));
+        }
+    }
+
+    const outerExecutable = path.join(macOsDir, 'nwjs');
+    const playtestExecutable = path.join(playtestMacOs, 'nwjs');
+    fs.copyFileSync(outerExecutable, playtestExecutable);
+    fs.chmodSync(playtestExecutable, '755');
+
+    fs.symlinkSync('../../../../Frameworks', path.join(playtestContents, 'Frameworks'), 'dir');
+    copyMacRuntimeResourcesForPlaytest(resourcesDir, playtestResources, '');
+
+    const plistPath = path.join(playtestContents, 'Info.plist');
+    if (fs.existsSync(plistPath)) {
+        let plist = fs.readFileSync(plistPath, 'utf8');
+        plist = plist.replace(/<key>CFBundleName<\/key>\s*<string>[^<]+<\/string>/, '<key>CFBundleName</key>\n\t<string>RPG Reactor Playtest</string>');
+        plist = plist.replace(/<key>CFBundleDisplayName<\/key>\s*<string>[^<]+<\/string>/, '<key>CFBundleDisplayName</key>\n\t<string>RPG Reactor Playtest</string>');
+        fs.writeFileSync(plistPath, plist);
+    }
+}
+
+function pruneMacRuntimeSidecars(appDir) {
+    for (const entry of fs.readdirSync(appDir)) {
+        if (entry !== 'nwjs.app') {
+            fs.rmSync(path.join(appDir, entry), { recursive: true, force: true });
+        }
+    }
+}
+
 function writeWindowsFramelessPackageConfig(stageRoot) {
     const packagePath = path.join(stageRoot, 'package.json');
     if (!fs.existsSync(packagePath)) return null;
@@ -215,6 +301,12 @@ function writeWindowsFramelessPackageConfig(stageRoot) {
     const original = fs.readFileSync(packagePath, 'utf8');
     const pkg = JSON.parse(fs.readFileSync(packagePath, 'utf8'));
     pkg.main = 'index.html?rrFrameless=1';
+    if (typeof pkg['chromium-args'] === 'string') {
+        pkg['chromium-args'] = pkg['chromium-args']
+            .split(/\s+/)
+            .filter(arg => arg && !arg.startsWith('--enable-logging'))
+            .join(' ');
+    }
     pkg.window = pkg.window || {};
     pkg.window.frame = false;
     pkg.window.toolbar = false;
@@ -464,30 +556,21 @@ function generateChecksums() {
                 const pkgDir = path.join(stagingDir, `pkg-${plat}`);
                 const appDir = path.join(pkgDir, 'RPGReactor');
 
-                // Copy NW.js runtime flat to app directory
+                // Copy NW.js runtime flat to the platform package.
                 logInfo('Acquiring NW.js runtime...');
                 await acquireRuntime(plat, appDir, pBase, share * 0.6, true);
-
                 if (plat === 'osx') {
-                    const cleanApp = path.join(appDir, 'nwjs.app');
-                    const playtestRuntime = path.join(appDir, 'nwjs-mac', 'nwjs.app');
-                    if (fs.existsSync(cleanApp)) {
-                        logInfo('Keeping clean macOS playtest runtime...');
-                        copyDirRecursive(cleanApp, playtestRuntime);
-                        logInfo('  Playtest runtime: nwjs-mac/nwjs.app');
-                    }
+                    pruneMacRuntimeSidecars(appDir);
                 }
 
-                // Copy editor files into package.nw (or app.nw for macOS)
+                // Package editor files for platform-specific launch handling.
                 logInfo('Copying editor files...');
                 progress(Math.round(pBase + share * 0.6), 'Copying editor files...');
 
                 const executablePackage = path.join(pkgDir, 'editor-package.nw');
                 if (plat === 'osx') {
-                    // macOS: editor files go inside .app bundle
-                    const appBundle = fs.readdirSync(appDir).find(f => f.endsWith('.app'));
-                    const appNwDir = path.join(appDir, appBundle || 'nwjs.app', 'Contents', 'Resources', 'app.nw');
-                    copyDirRecursive(stageRoot, appNwDir);
+                    // macOS app payload is copied into the branded .app bundle
+                    // during finalization below.
                 } else if (plat === 'win' || plat === 'linux') {
                     // Keep nw.exe/nw clean for playtest. The editor payload is
                     // appended to the branded executable instead of placed in
@@ -541,8 +624,11 @@ function generateChecksums() {
                     const oldApp = path.join(appDir, 'nwjs.app');
                     const newApp = path.join(appDir, 'RPG Reactor.app');
                     if (fs.existsSync(oldApp)) {
+                        prepareMacAppBundleForEditor(oldApp, stageRoot);
+                        installMacPlaytestRuntime(oldApp);
                         fs.renameSync(oldApp, newApp);
                         logInfo('  App bundle: RPG Reactor.app');
+                        logInfo('  Playtest runtime: RPG Reactor.app/Contents/Resources/playtest-runtime/nwjs.app');
                     }
                 }
 
@@ -578,7 +664,7 @@ function generateChecksums() {
                 // Archive
                 const archLabel = plat === 'win' ? 'win-x64' : plat === 'osx' ? 'osx-x64' : 'linux-x64';
                 const ext = plat === 'linux' ? 'tar.gz' : 'zip';
-                createArchive(`RPGReactor-v${appVersion}-${archLabel}.${ext}`, pkgDir, 'RPGReactor');
+                createArchive(`RPGReactor-v${appVersion}-${archLabel}.${ext}`, pkgDir, 'RPGReactor', plat === 'osx');
 
                 // Clean up per-platform dir
                 fs.rmSync(pkgDir, { recursive: true, force: true });
