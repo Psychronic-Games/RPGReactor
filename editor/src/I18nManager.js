@@ -185,6 +185,7 @@ Object.assign(RR_EVENT_SECTION_NAMES, {
 
 const RR_I18N_STRINGS = {
     en: {
+        'app.title': 'RPG Reactor',
         'app.loading': 'Loading...',
         'menu.file': 'File',
         'menu.newProject': 'New Project',
@@ -310,7 +311,7 @@ const RR_I18N_STRINGS = {
         'options.languageNote': 'Language applies immediately to localized editor interface text. Some deep editor forms will be localized incrementally.',
 
         'about.title': 'About RPG Reactor',
-        'about.version': 'RPG Reactor v0.91',
+        'about.version': 'RPG Reactor v0.92',
         'about.description': 'An open-source, cross-platform RPG game engine built with NW.js and PixiJS v8',
         'about.compatibility': 'Create amazing RPG games with a professional editor that runs on Windows, Mac, and Linux. Compatible with RPG Maker MZ and MV projects in most cases; runtime compatibility depends primarily on the project\'s corescripts and plugins.',
         'about.linksTitle': 'Psychronic Links',
@@ -318,6 +319,7 @@ const RR_I18N_STRINGS = {
         'about.steam': 'Steam - Psychronic Games',
         'about.github': 'GitHub - Other Projects',
         'about.youtube': 'YouTube - Psychronic Games',
+        'about.rarelyTypicalPlayers': 'YouTube - Rarely Typical Players Podcast',
         'about.discord': 'Discord - Join The Community',
         'about.license': 'License: MIT',
 
@@ -344,6 +346,7 @@ const RR_I18N_STRINGS = {
         'forge.openProject': 'Open a project to use Forge tools.',
         'forge.tab.procedural': 'Procedural',
         'forge.tab.outfit': 'Outfit Forge',
+        'forge.tab.hair': 'Hair Forge',
         'forge.tab.parts': 'Parts (PNG)',
         'forge.style': 'Style:',
         'forge.frame': 'Frame:',
@@ -440,6 +443,7 @@ const RR_I18N_STRINGS = {
         'alert.loadProjectFirst': 'Please load a project first.'
     },
     ja: {
+        'app.title': 'RPG Reactor',
         'app.loading': '読み込み中...',
         'menu.file': 'ファイル',
         'menu.newProject': '新規プロジェクト',
@@ -565,7 +569,7 @@ const RR_I18N_STRINGS = {
         'options.languageNote': '言語は対応済みのエディターUIテキストにすぐ適用されます。一部の詳細フォームは順次ローカライズします。',
 
         'about.title': 'RPG Reactor について',
-        'about.version': 'RPG Reactor v0.91',
+        'about.version': 'RPG Reactor v0.92',
         'about.description': 'NW.js と PixiJS v8 で構築された、オープンソースのクロスプラットフォームRPGゲームエンジンです',
         'about.compatibility': 'Windows、Mac、Linux で動作する本格的なエディターで、すばらしいRPGを作成できます。多くの場合、RPG Maker MZ / MV プロジェクトと互換性がありますが、ランタイム互換性は主にプロジェクトのコアスクリプトとプラグインに依存します。',
         'about.linksTitle': 'Psychronic リンク',
@@ -573,6 +577,7 @@ const RR_I18N_STRINGS = {
         'about.steam': 'Steam - Psychronic のゲーム',
         'about.github': 'GitHub - その他のプロジェクト',
         'about.youtube': 'YouTube - Psychronic Games',
+        'about.rarelyTypicalPlayers': 'YouTube - Rarely Typical Players Podcast',
         'about.discord': 'Discord - コミュニティに参加',
         'about.license': 'ライセンス: MIT',
 
@@ -599,6 +604,7 @@ const RR_I18N_STRINGS = {
         'forge.openProject': 'フォージツールを使うにはプロジェクトを開いてください。',
         'forge.tab.procedural': '手続き型',
         'forge.tab.outfit': 'Outfit Forge',
+        'forge.tab.hair': 'Hair Forge',
         'forge.tab.parts': 'パーツ (PNG)',
         'forge.style': 'スタイル:',
         'forge.frame': 'フレーム:',
@@ -695,6 +701,7 @@ const RR_I18N_STRINGS = {
         'alert.loadProjectFirst': '先にプロジェクトを読み込んでください。'
     },
     es: {
+        'app.title': 'RPG Reactor',
         'app.loading': 'Cargando...',
         'menu.file': 'Archivo',
         'menu.newProject': 'Nuevo proyecto',
@@ -820,7 +827,7 @@ const RR_I18N_STRINGS = {
         'options.languageNote': 'El idioma se aplica de inmediato al texto localizado de la interfaz. Algunos formularios avanzados se localizarán gradualmente.',
 
         'about.title': 'Acerca de RPG Reactor',
-        'about.version': 'RPG Reactor v0.91',
+        'about.version': 'RPG Reactor v0.92',
         'about.description': 'Un motor de juegos RPG de código abierto y multiplataforma creado con NW.js y PixiJS v8',
         'about.compatibility': 'Crea juegos RPG increíbles con un editor profesional que funciona en Windows, Mac y Linux. Es compatible con proyectos de RPG Maker MZ y MV en la mayoría de los casos; la compatibilidad en tiempo de ejecución depende principalmente de los corescripts y plugins del proyecto.',
         'about.linksTitle': 'Enlaces de Psychronic',
@@ -828,6 +835,7 @@ const RR_I18N_STRINGS = {
         'about.steam': 'Steam - Juegos De Psychronic',
         'about.github': 'GitHub - Otros Proyectos',
         'about.youtube': 'YouTube - Psychronic Games',
+        'about.rarelyTypicalPlayers': 'YouTube - Rarely Typical Players Podcast',
         'about.discord': 'Discord - Únete A La Comunidad',
         'about.license': 'Licencia: MIT',
 
@@ -854,6 +862,7 @@ const RR_I18N_STRINGS = {
         'forge.openProject': 'Abre un proyecto para usar las herramientas de Forja.',
         'forge.tab.procedural': 'Procedural',
         'forge.tab.outfit': 'Outfit Forge',
+        'forge.tab.hair': 'Hair Forge',
         'forge.tab.parts': 'Partes (PNG)',
         'forge.style': 'Estilo:',
         'forge.frame': 'Fotograma:',
@@ -953,7 +962,7 @@ const RR_I18N_STRINGS = {
 
 const RR_ADDITIONAL_LOCALES = {
     'zh-Hant': {
-        'app.loading': '載入中...',
+        'app.title': 'RPG Reactor', 'app.loading': '載入中...',
         'menu.file': '檔案', 'menu.newProject': '新增專案', 'menu.openProject': '開啟專案', 'menu.closeProject': '關閉專案', 'menu.options': '選項...', 'menu.exit': '結束',
         'menu.database': '資料庫', 'menu.actors': '角色', 'menu.classes': '職業', 'menu.skills': '技能', 'menu.items': '物品', 'menu.weapons': '武器', 'menu.armors': '防具', 'menu.enemies': '敵人', 'menu.troops': '敵群', 'menu.states': '狀態', 'menu.animations': '動畫', 'menu.tilesets': '圖塊組', 'menu.commonEvents': '共通事件', 'menu.system': '系統', 'menu.types': '類型', 'menu.terms': '用語',
         'menu.plugins': '外掛', 'menu.managePlugins': '管理外掛', 'menu.tools': '工具', 'menu.eventManager': '事件管理器', 'menu.audioPlayer': '♪ 音訊播放器', 'menu.forge': '鍛造坊', 'menu.forgeLauncher': '鍛造坊啟動器', 'menu.characterGenerator': '角色產生器', 'menu.animationGenerator': '動畫產生器', 'menu.soundEffectGenerator': '音效產生器', 'menu.build': '建置', 'menu.deployGame': '匯出遊戲...', 'menu.deployEditor': '匯出編輯器...', 'menu.help': '說明', 'menu.developerTools': '開發者工具', 'menu.about': '關於 RPG Reactor',
@@ -963,14 +972,14 @@ const RR_ADDITIONAL_LOCALES = {
         'modal.eventEditor': '事件編輯器', 'modal.audioPlayer': '♪ 音訊播放器', 'audio.bgm': 'BGM (音樂)', 'audio.bgs': 'BGS (環境音)', 'audio.me': 'ME (短樂句)', 'audio.se': 'SE (音效)', 'audio.noTrackSelected': '未選擇音軌', 'audio.play': '播放', 'audio.pause': '暫停', 'audio.stop': '停止', 'audio.loopOff': '循環: 關', 'audio.loopOn': '循環: 開', 'audio.volume': '音量', 'audio.pitch': '音高', 'audio.pan': '聲像', 'audio.center': '中央', 'audio.loadProjectFirst': '請先載入專案',
         'common.done': '完成', 'common.ok': '確定', 'common.cancel': '取消', 'common.apply': '套用', 'common.new': '新增', 'common.delete': '刪除', 'common.copy': '複製', 'common.cut': '剪下', 'common.paste': '貼上', 'common.duplicate': '建立副本', 'common.unnamed': '未命名',
         'options.title': '選項', 'options.appearance': '外觀', 'options.language': '語言', 'options.palette': '配色', 'options.mode': '模式', 'options.dark': '深色', 'options.light': '淺色', 'options.themeNote': '主題會立即套用。請重新開啟已開啟的編輯器分頁以刷新 Canvas 繪製元素。', 'options.languageNote': '語言會立即套用到已本地化的編輯器介面文字。部分深層表單會逐步本地化。',
-        'about.title': '關於 RPG Reactor', 'about.description': '使用 NW.js 與 PixiJS v8 打造的開源跨平台 RPG 遊戲引擎', 'about.compatibility': '使用可在 Windows、Mac 與 Linux 上執行的專業編輯器製作精彩 RPG 遊戲。多數情況下相容 RPG Maker MZ 與 MV 專案；執行階段相容性主要取決於專案的核心腳本與外掛。', 'about.linksTitle': 'Psychronic 連結', 'about.itch': 'Itch.io - 外掛與工具', 'about.steam': 'Steam - Psychronic 遊戲', 'about.github': 'GitHub - 其他專案', 'about.youtube': 'YouTube - Psychronic Games', 'about.discord': 'Discord - 加入社群', 'about.license': '授權: MIT',
-        'forge.tools': '工具', 'forge.welcome': '資產產生工具組。請從側邊欄或下方選擇工具。', 'forge.openProject': '請開啟專案以使用鍛造坊工具。', 'forge.tab.procedural': '程序化', 'forge.tab.outfit': '服裝鍛造坊', 'forge.tab.parts': '部件 (PNG)', 'forge.style': '風格:', 'forge.frame': '影格:', 'forge.sheet': '圖表:', 'forge.saveAs': '另存為:', 'forge.saveSheet': '儲存圖表', 'forge.generateSave': '產生並儲存到素材庫',
+        'about.title': '關於 RPG Reactor', 'about.description': '使用 NW.js 與 PixiJS v8 打造的開源跨平台 RPG 遊戲引擎', 'about.compatibility': '使用可在 Windows、Mac 與 Linux 上執行的專業編輯器製作精彩 RPG 遊戲。多數情況下相容 RPG Maker MZ 與 MV 專案；執行階段相容性主要取決於專案的核心腳本與外掛。', 'about.linksTitle': 'Psychronic 連結', 'about.itch': 'Itch.io - 外掛與工具', 'about.steam': 'Steam - Psychronic 遊戲', 'about.github': 'GitHub - 其他專案', 'about.youtube': 'YouTube - Psychronic Games', 'about.rarelyTypicalPlayers': 'YouTube - Rarely Typical Players Podcast', 'about.discord': 'Discord - 加入社群', 'about.license': '授權: MIT',
+        'forge.tools': '工具', 'forge.welcome': '資產產生工具組。請從側邊欄或下方選擇工具。', 'forge.openProject': '請開啟專案以使用鍛造坊工具。', 'forge.tab.procedural': '程序化', 'forge.tab.outfit': '服裝鍛造坊', 'forge.tab.hair': '髮型鍛造坊', 'forge.tab.parts': '部件 (PNG)', 'forge.style': '風格:', 'forge.frame': '影格:', 'forge.sheet': '圖表:', 'forge.saveAs': '另存為:', 'forge.saveSheet': '儲存圖表', 'forge.generateSave': '產生並儲存到素材庫',
         'db.system1': '系統 1', 'db.system2': '系統 2', 'db.search': '搜尋 {title}...', 'db.selectEntry': '從清單選擇項目', 'db.changeMaximum': '變更最大值', 'db.selectEntryToDelete': '選擇要刪除的項目', 'db.deleteConfirm': '刪除「{name}」？', 'db.unknownType': '未知資料庫類型: {type}', 'db.saved': '資料庫已儲存',
         'event.name': '事件名稱:', 'event.position': '位置:', 'event.note': '備註:', 'event.newPage': '新增事件頁', 'event.copyPage': '複製事件頁', 'event.pastePage': '貼上事件頁', 'event.deletePage': '刪除事件頁', 'event.clearPage': '清除事件頁', 'event.page': '頁面 {number}', 'event.contents': '內容', 'event.selectCommand': '選擇事件指令', 'event.conditions': '條件', 'event.image': '圖片', 'event.options': '選項', 'event.autonomousMovement': '自主移動', 'event.priority': '優先順序', 'event.trigger': '觸發',
         'status.noProjectLoaded': '未載入專案', 'status.playtestNotImplemented': '尚未實作測試遊玩模式', 'status.loadMapFirst': '請先載入地圖', 'status.eventModeEnabled': '事件模式已啟用', 'status.eventModeDisabled': '事件模式已停用', 'alert.loadProjectFirst': '請先載入專案。'
     },
     'zh-Hans': {
-        'app.loading': '加载中...',
+        'app.title': 'RPG Reactor', 'app.loading': '加载中...',
         'menu.file': '文件', 'menu.newProject': '新建项目', 'menu.openProject': '打开项目', 'menu.closeProject': '关闭项目', 'menu.options': '选项...', 'menu.exit': '退出',
         'menu.database': '数据库', 'menu.actors': '角色', 'menu.classes': '职业', 'menu.skills': '技能', 'menu.items': '物品', 'menu.weapons': '武器', 'menu.armors': '防具', 'menu.enemies': '敌人', 'menu.troops': '敌群', 'menu.states': '状态', 'menu.animations': '动画', 'menu.tilesets': '图块组', 'menu.commonEvents': '公共事件', 'menu.system': '系统', 'menu.types': '类型', 'menu.terms': '术语',
         'menu.plugins': '插件', 'menu.managePlugins': '管理插件', 'menu.tools': '工具', 'menu.eventManager': '事件管理器', 'menu.audioPlayer': '♪ 音频播放器', 'menu.forge': '锻造坊', 'menu.forgeLauncher': '锻造坊启动器', 'menu.characterGenerator': '角色生成器', 'menu.animationGenerator': '动画生成器', 'menu.soundEffectGenerator': '音效生成器', 'menu.build': '构建', 'menu.deployGame': '导出游戏...', 'menu.deployEditor': '导出编辑器...', 'menu.help': '帮助', 'menu.developerTools': '开发者工具', 'menu.about': '关于 RPG Reactor',
@@ -980,14 +989,14 @@ const RR_ADDITIONAL_LOCALES = {
         'modal.eventEditor': '事件编辑器', 'modal.audioPlayer': '♪ 音频播放器', 'audio.bgm': 'BGM (音乐)', 'audio.bgs': 'BGS (环境音)', 'audio.me': 'ME (短乐句)', 'audio.se': 'SE (音效)', 'audio.noTrackSelected': '未选择音轨', 'audio.play': '播放', 'audio.pause': '暂停', 'audio.stop': '停止', 'audio.loopOff': '循环: 关', 'audio.loopOn': '循环: 开', 'audio.volume': '音量', 'audio.pitch': '音高', 'audio.pan': '声像', 'audio.center': '居中', 'audio.loadProjectFirst': '请先加载项目',
         'common.done': '完成', 'common.ok': '确定', 'common.cancel': '取消', 'common.apply': '应用', 'common.new': '新建', 'common.delete': '删除', 'common.copy': '复制', 'common.cut': '剪切', 'common.paste': '粘贴', 'common.duplicate': '复制副本', 'common.unnamed': '未命名',
         'options.title': '选项', 'options.appearance': '外观', 'options.language': '语言', 'options.palette': '配色', 'options.mode': '模式', 'options.dark': '深色', 'options.light': '浅色', 'options.themeNote': '主题会立即应用。请重新打开已打开的编辑器标签以刷新 Canvas 绘制元素。', 'options.languageNote': '语言会立即应用到已本地化的编辑器界面文字。部分深层表单会逐步本地化。',
-        'about.title': '关于 RPG Reactor', 'about.description': '使用 NW.js 和 PixiJS v8 构建的开源跨平台 RPG 游戏引擎', 'about.compatibility': '使用可在 Windows、Mac 和 Linux 上运行的专业编辑器制作精彩 RPG 游戏。多数情况下兼容 RPG Maker MZ 和 MV 项目；运行时兼容性主要取决于项目的核心脚本和插件。', 'about.linksTitle': 'Psychronic 链接', 'about.itch': 'Itch.io - 插件和工具', 'about.steam': 'Steam - Psychronic 游戏', 'about.github': 'GitHub - 其他项目', 'about.youtube': 'YouTube - Psychronic Games', 'about.discord': 'Discord - 加入社区', 'about.license': '许可证: MIT',
-        'forge.tools': '工具', 'forge.welcome': '资源生成工具套件。请从侧边栏或下方选择工具。', 'forge.openProject': '请打开项目以使用锻造坊工具。', 'forge.tab.procedural': '程序化', 'forge.tab.outfit': '服装锻造坊', 'forge.tab.parts': '部件 (PNG)', 'forge.style': '风格:', 'forge.frame': '帧:', 'forge.sheet': '图表:', 'forge.saveAs': '另存为:', 'forge.saveSheet': '保存图表', 'forge.generateSave': '生成并保存到素材库',
+        'about.title': '关于 RPG Reactor', 'about.description': '使用 NW.js 和 PixiJS v8 构建的开源跨平台 RPG 游戏引擎', 'about.compatibility': '使用可在 Windows、Mac 和 Linux 上运行的专业编辑器制作精彩 RPG 游戏。多数情况下兼容 RPG Maker MZ 和 MV 项目；运行时兼容性主要取决于项目的核心脚本和插件。', 'about.linksTitle': 'Psychronic 链接', 'about.itch': 'Itch.io - 插件和工具', 'about.steam': 'Steam - Psychronic 游戏', 'about.github': 'GitHub - 其他项目', 'about.youtube': 'YouTube - Psychronic Games', 'about.rarelyTypicalPlayers': 'YouTube - Rarely Typical Players Podcast', 'about.discord': 'Discord - 加入社区', 'about.license': '许可证: MIT',
+        'forge.tools': '工具', 'forge.welcome': '资源生成工具套件。请从侧边栏或下方选择工具。', 'forge.openProject': '请打开项目以使用锻造坊工具。', 'forge.tab.procedural': '程序化', 'forge.tab.outfit': '服装锻造坊', 'forge.tab.hair': '发型锻造坊', 'forge.tab.parts': '部件 (PNG)', 'forge.style': '风格:', 'forge.frame': '帧:', 'forge.sheet': '图表:', 'forge.saveAs': '另存为:', 'forge.saveSheet': '保存图表', 'forge.generateSave': '生成并保存到素材库',
         'db.system1': '系统 1', 'db.system2': '系统 2', 'db.search': '搜索 {title}...', 'db.selectEntry': '从列表选择项目', 'db.changeMaximum': '更改最大值', 'db.selectEntryToDelete': '选择要删除的项目', 'db.deleteConfirm': '删除“{name}”？', 'db.unknownType': '未知数据库类型: {type}', 'db.saved': '数据库已保存',
         'event.name': '事件名称:', 'event.position': '位置:', 'event.note': '备注:', 'event.newPage': '新建事件页', 'event.copyPage': '复制事件页', 'event.pastePage': '粘贴事件页', 'event.deletePage': '删除事件页', 'event.clearPage': '清除事件页', 'event.page': '页面 {number}', 'event.contents': '内容', 'event.selectCommand': '选择事件指令', 'event.conditions': '条件', 'event.image': '图片', 'event.options': '选项', 'event.autonomousMovement': '自主移动', 'event.priority': '优先级', 'event.trigger': '触发',
         'status.noProjectLoaded': '未加载项目', 'status.playtestNotImplemented': '尚未实现测试游玩模式', 'status.loadMapFirst': '请先加载地图', 'status.eventModeEnabled': '事件模式已启用', 'status.eventModeDisabled': '事件模式已停用', 'alert.loadProjectFirst': '请先加载项目。'
     },
     ru: {
-        'app.loading': 'Загрузка...',
+        'app.title': 'RPG Reactor', 'app.loading': 'Загрузка...',
         'menu.file': 'Файл', 'menu.newProject': 'Новый Проект', 'menu.openProject': 'Открыть Проект', 'menu.closeProject': 'Закрыть Проект', 'menu.options': 'Параметры...', 'menu.exit': 'Выход',
         'menu.database': 'База Данных', 'menu.actors': 'Актёры', 'menu.classes': 'Классы', 'menu.skills': 'Навыки', 'menu.items': 'Предметы', 'menu.weapons': 'Оружие', 'menu.armors': 'Броня', 'menu.enemies': 'Враги', 'menu.troops': 'Группы Врагов', 'menu.states': 'Состояния', 'menu.animations': 'Анимации', 'menu.tilesets': 'Тайлсеты', 'menu.commonEvents': 'Общие События', 'menu.system': 'Система', 'menu.types': 'Типы', 'menu.terms': 'Термины',
         'menu.plugins': 'Плагины', 'menu.managePlugins': 'Управление Плагинами', 'menu.tools': 'Инструменты', 'menu.eventManager': 'Менеджер Событий', 'menu.audioPlayer': '♪ Аудиоплеер', 'menu.forge': 'Кузница', 'menu.forgeLauncher': 'Запуск Кузницы', 'menu.characterGenerator': 'Генератор Персонажей', 'menu.animationGenerator': 'Генератор Анимаций', 'menu.soundEffectGenerator': 'Генератор Звуков', 'menu.build': 'Сборка', 'menu.deployGame': 'Экспорт Игры...', 'menu.deployEditor': 'Экспорт Редактора...', 'menu.help': 'Справка', 'menu.developerTools': 'Инструменты Разработчика', 'menu.about': 'О RPG Reactor',
@@ -997,14 +1006,14 @@ const RR_ADDITIONAL_LOCALES = {
         'modal.eventEditor': 'Редактор Событий', 'modal.audioPlayer': '♪ Аудиоплеер', 'audio.bgm': 'BGM (Музыка)', 'audio.bgs': 'BGS (Атмосфера)', 'audio.me': 'ME (Джинглы)', 'audio.se': 'SE (Эффекты)', 'audio.noTrackSelected': 'Трек не выбран', 'audio.play': 'Играть', 'audio.pause': 'Пауза', 'audio.stop': 'Стоп', 'audio.loopOff': 'Повтор: Выкл', 'audio.loopOn': 'Повтор: Вкл', 'audio.volume': 'Громкость', 'audio.pitch': 'Тон', 'audio.pan': 'Панорама', 'audio.center': 'Центр', 'audio.loadProjectFirst': 'Сначала загрузите проект',
         'common.done': 'Готово', 'common.ok': 'OK', 'common.cancel': 'Отмена', 'common.apply': 'Применить', 'common.new': 'Новый', 'common.delete': 'Удалить', 'common.copy': 'Копировать', 'common.cut': 'Вырезать', 'common.paste': 'Вставить', 'common.duplicate': 'Дублировать', 'common.unnamed': 'Без имени',
         'options.title': 'Параметры', 'options.appearance': 'Внешний Вид', 'options.language': 'Язык', 'options.palette': 'Палитра', 'options.mode': 'Режим', 'options.dark': 'Тёмный', 'options.light': 'Светлый', 'options.themeNote': 'Тема применяется сразу. Переоткройте вкладки редактора, чтобы обновить элементы Canvas.', 'options.languageNote': 'Язык сразу применяется к локализованному тексту интерфейса. Некоторые глубокие формы будут локализованы постепенно.',
-        'about.title': 'О RPG Reactor', 'about.description': 'Открытый кроссплатформенный RPG-движок на NW.js и PixiJS v8', 'about.compatibility': 'Создавайте потрясающие RPG в профессиональном редакторе для Windows, Mac и Linux. В большинстве случаев совместим с проектами RPG Maker MZ и MV; совместимость во время выполнения в основном зависит от corescripts и плагинов проекта.', 'about.linksTitle': 'Ссылки Psychronic', 'about.itch': 'Itch.io - Плагины И Инструменты', 'about.steam': 'Steam - Игры Psychronic', 'about.github': 'GitHub - Другие Проекты', 'about.youtube': 'YouTube - Psychronic Games', 'about.discord': 'Discord - Присоединиться К Сообществу', 'about.license': 'Лицензия: MIT',
-        'forge.tools': 'Инструменты', 'forge.welcome': 'Набор инструментов генерации ресурсов. Выберите инструмент на боковой панели или ниже.', 'forge.openProject': 'Откройте проект, чтобы использовать инструменты Кузницы.', 'forge.tab.procedural': 'Процедурно', 'forge.tab.outfit': 'Кузница Костюмов', 'forge.tab.parts': 'Части (PNG)', 'forge.style': 'Стиль:', 'forge.frame': 'Кадр:', 'forge.sheet': 'Лист:', 'forge.saveAs': 'Сохранить как:', 'forge.saveSheet': 'Сохранить Лист', 'forge.generateSave': 'Создать И Сохранить В Библиотеку',
+        'about.title': 'О RPG Reactor', 'about.description': 'Открытый кроссплатформенный RPG-движок на NW.js и PixiJS v8', 'about.compatibility': 'Создавайте потрясающие RPG в профессиональном редакторе для Windows, Mac и Linux. В большинстве случаев совместим с проектами RPG Maker MZ и MV; совместимость во время выполнения в основном зависит от corescripts и плагинов проекта.', 'about.linksTitle': 'Ссылки Psychronic', 'about.itch': 'Itch.io - Плагины И Инструменты', 'about.steam': 'Steam - Игры Psychronic', 'about.github': 'GitHub - Другие Проекты', 'about.youtube': 'YouTube - Psychronic Games', 'about.rarelyTypicalPlayers': 'YouTube - Rarely Typical Players Podcast', 'about.discord': 'Discord - Присоединиться К Сообществу', 'about.license': 'Лицензия: MIT',
+        'forge.tools': 'Инструменты', 'forge.welcome': 'Набор инструментов генерации ресурсов. Выберите инструмент на боковой панели или ниже.', 'forge.openProject': 'Откройте проект, чтобы использовать инструменты Кузницы.', 'forge.tab.procedural': 'Процедурно', 'forge.tab.outfit': 'Кузница Костюмов', 'forge.tab.hair': 'Кузница Волос', 'forge.tab.parts': 'Части (PNG)', 'forge.style': 'Стиль:', 'forge.frame': 'Кадр:', 'forge.sheet': 'Лист:', 'forge.saveAs': 'Сохранить как:', 'forge.saveSheet': 'Сохранить Лист', 'forge.generateSave': 'Создать И Сохранить В Библиотеку',
         'db.system1': 'Система 1', 'db.system2': 'Система 2', 'db.search': 'Поиск {title}...', 'db.selectEntry': 'Выберите запись из списка', 'db.changeMaximum': 'Изменить максимум', 'db.selectEntryToDelete': 'Выберите запись для удаления', 'db.deleteConfirm': 'Удалить «{name}»?', 'db.unknownType': 'Неизвестный тип базы данных: {type}', 'db.saved': 'База данных сохранена',
         'event.name': 'Имя События:', 'event.position': 'Позиция:', 'event.note': 'Заметка:', 'event.newPage': 'Новая Страница События', 'event.copyPage': 'Копировать Страницу', 'event.pastePage': 'Вставить Страницу', 'event.deletePage': 'Удалить Страницу', 'event.clearPage': 'Очистить Страницу', 'event.page': 'Страница {number}', 'event.contents': 'Содержимое', 'event.selectCommand': 'Выберите Команду События', 'event.conditions': 'Условия', 'event.image': 'Изображение', 'event.options': 'Опции', 'event.autonomousMovement': 'Автономное Движение', 'event.priority': 'Приоритет', 'event.trigger': 'Триггер',
         'status.noProjectLoaded': 'Проект не загружен', 'status.playtestNotImplemented': 'Режим теста пока не реализован', 'status.loadMapFirst': 'Сначала загрузите карту', 'status.eventModeEnabled': 'Режим событий включён', 'status.eventModeDisabled': 'Режим событий отключён', 'alert.loadProjectFirst': 'Сначала загрузите проект.'
     },
     pt: {
-        'app.loading': 'Carregando...',
+        'app.title': 'RPG Reactor', 'app.loading': 'Carregando...',
         'menu.file': 'Arquivo', 'menu.newProject': 'Novo Projeto', 'menu.openProject': 'Abrir Projeto', 'menu.closeProject': 'Fechar Projeto', 'menu.options': 'Opções...', 'menu.exit': 'Sair',
         'menu.database': 'Banco De Dados', 'menu.actors': 'Atores', 'menu.classes': 'Classes', 'menu.skills': 'Habilidades', 'menu.items': 'Itens', 'menu.weapons': 'Armas', 'menu.armors': 'Armaduras', 'menu.enemies': 'Inimigos', 'menu.troops': 'Grupos Inimigos', 'menu.states': 'Estados', 'menu.animations': 'Animações', 'menu.tilesets': 'Tilesets', 'menu.commonEvents': 'Eventos Comuns', 'menu.system': 'Sistema', 'menu.types': 'Tipos', 'menu.terms': 'Termos',
         'menu.plugins': 'Extensões', 'menu.managePlugins': 'Gerenciar Extensões', 'menu.tools': 'Ferramentas', 'menu.eventManager': 'Gerenciador De Eventos', 'menu.audioPlayer': '♪ Reprodutor De Áudio', 'menu.forge': 'Forja', 'menu.forgeLauncher': 'Inicializador Da Forja', 'menu.characterGenerator': 'Gerador De Personagens', 'menu.animationGenerator': 'Gerador De Animações', 'menu.soundEffectGenerator': 'Gerador De Efeitos Sonoros', 'menu.build': 'Compilar', 'menu.deployGame': 'Exportar Jogo...', 'menu.deployEditor': 'Exportar Editor...', 'menu.help': 'Ajuda', 'menu.developerTools': 'Ferramentas De Desenvolvedor', 'menu.about': 'Sobre O RPG Reactor',
@@ -1014,14 +1023,14 @@ const RR_ADDITIONAL_LOCALES = {
         'modal.eventEditor': 'Editor De Eventos', 'modal.audioPlayer': '♪ Reprodutor De Áudio', 'audio.bgm': 'BGM (Música)', 'audio.bgs': 'BGS (Ambiente)', 'audio.me': 'ME (Vinhetas)', 'audio.se': 'SE (Efeitos)', 'audio.noTrackSelected': 'Nenhuma faixa selecionada', 'audio.play': 'Reproduzir', 'audio.pause': 'Pausar', 'audio.stop': 'Parar', 'audio.loopOff': 'Loop: Desligado', 'audio.loopOn': 'Loop: Ligado', 'audio.volume': 'Volume', 'audio.pitch': 'Tom', 'audio.pan': 'Pan', 'audio.center': 'Centro', 'audio.loadProjectFirst': 'Carregue um projeto primeiro',
         'common.done': 'Concluído', 'common.ok': 'OK', 'common.cancel': 'Cancelar', 'common.apply': 'Aplicar', 'common.new': 'Novo', 'common.delete': 'Excluir', 'common.copy': 'Copiar', 'common.cut': 'Recortar', 'common.paste': 'Colar', 'common.duplicate': 'Duplicar', 'common.unnamed': 'Sem Nome',
         'options.title': 'Opções', 'options.appearance': 'Aparência', 'options.language': 'Idioma', 'options.palette': 'Paleta', 'options.mode': 'Modo', 'options.dark': 'Escuro', 'options.light': 'Claro', 'options.themeNote': 'O tema é aplicado imediatamente. Reabra abas do editor para atualizar elementos desenhados em Canvas.', 'options.languageNote': 'O idioma é aplicado imediatamente ao texto localizado da interface. Alguns formulários profundos serão localizados gradualmente.',
-        'about.title': 'Sobre O RPG Reactor', 'about.description': 'Um motor RPG aberto e multiplataforma criado com NW.js e PixiJS v8', 'about.compatibility': 'Crie jogos RPG incríveis com um editor profissional que roda no Windows, Mac e Linux. Compatível com projetos RPG Maker MZ e MV na maioria dos casos; a compatibilidade em tempo de execução depende principalmente dos corescripts e plugins do projeto.', 'about.linksTitle': 'Links Da Psychronic', 'about.itch': 'Itch.io - Plugins E Ferramentas', 'about.steam': 'Steam - Jogos Da Psychronic', 'about.github': 'GitHub - Outros Projetos', 'about.youtube': 'YouTube - Psychronic Games', 'about.discord': 'Discord - Entrar Na Comunidade', 'about.license': 'Licença: MIT',
-        'forge.tools': 'Ferramentas', 'forge.welcome': 'Suíte de ferramentas de geração de recursos. Escolha uma ferramenta na barra lateral ou abaixo.', 'forge.openProject': 'Abra um projeto para usar as ferramentas da Forja.', 'forge.tab.procedural': 'Procedural', 'forge.tab.outfit': 'Forja De Roupas', 'forge.tab.parts': 'Partes (PNG)', 'forge.style': 'Estilo:', 'forge.frame': 'Quadro:', 'forge.sheet': 'Folha:', 'forge.saveAs': 'Salvar como:', 'forge.saveSheet': 'Salvar Folha', 'forge.generateSave': 'Gerar E Salvar Na Biblioteca',
+        'about.title': 'Sobre O RPG Reactor', 'about.description': 'Um motor RPG aberto e multiplataforma criado com NW.js e PixiJS v8', 'about.compatibility': 'Crie jogos RPG incríveis com um editor profissional que roda no Windows, Mac e Linux. Compatível com projetos RPG Maker MZ e MV na maioria dos casos; a compatibilidade em tempo de execução depende principalmente dos corescripts e plugins do projeto.', 'about.linksTitle': 'Links Da Psychronic', 'about.itch': 'Itch.io - Plugins E Ferramentas', 'about.steam': 'Steam - Jogos Da Psychronic', 'about.github': 'GitHub - Outros Projetos', 'about.youtube': 'YouTube - Psychronic Games', 'about.rarelyTypicalPlayers': 'YouTube - Rarely Typical Players Podcast', 'about.discord': 'Discord - Entrar Na Comunidade', 'about.license': 'Licença: MIT',
+        'forge.tools': 'Ferramentas', 'forge.welcome': 'Suíte de ferramentas de geração de recursos. Escolha uma ferramenta na barra lateral ou abaixo.', 'forge.openProject': 'Abra um projeto para usar as ferramentas da Forja.', 'forge.tab.procedural': 'Procedural', 'forge.tab.outfit': 'Forja De Roupas', 'forge.tab.hair': 'Forja De Cabelo', 'forge.tab.parts': 'Partes (PNG)', 'forge.style': 'Estilo:', 'forge.frame': 'Quadro:', 'forge.sheet': 'Folha:', 'forge.saveAs': 'Salvar como:', 'forge.saveSheet': 'Salvar Folha', 'forge.generateSave': 'Gerar E Salvar Na Biblioteca',
         'db.system1': 'Sistema 1', 'db.system2': 'Sistema 2', 'db.search': 'Buscar {title}...', 'db.selectEntry': 'Selecione uma entrada da lista', 'db.changeMaximum': 'Alterar Máximo', 'db.selectEntryToDelete': 'Selecione uma entrada para excluir', 'db.deleteConfirm': 'Excluir "{name}"?', 'db.unknownType': 'Tipo de banco de dados desconhecido: {type}', 'db.saved': 'Banco de dados salvo',
         'event.name': 'Nome Do Evento:', 'event.position': 'Posição:', 'event.note': 'Nota:', 'event.newPage': 'Nova Página De Evento', 'event.copyPage': 'Copiar Página De Evento', 'event.pastePage': 'Colar Página De Evento', 'event.deletePage': 'Excluir Página De Evento', 'event.clearPage': 'Limpar Página De Evento', 'event.page': 'Página {number}', 'event.contents': 'Conteúdo', 'event.selectCommand': 'Selecionar Comando De Evento', 'event.conditions': 'Condições', 'event.image': 'Imagem', 'event.options': 'Opções', 'event.autonomousMovement': 'Movimento Autônomo', 'event.priority': 'Prioridade', 'event.trigger': 'Gatilho',
         'status.noProjectLoaded': 'Nenhum projeto carregado', 'status.playtestNotImplemented': 'Modo de teste ainda não implementado', 'status.loadMapFirst': 'Carregue um mapa primeiro', 'status.eventModeEnabled': 'Modo de eventos ativado', 'status.eventModeDisabled': 'Modo de eventos desativado', 'alert.loadProjectFirst': 'Carregue um projeto primeiro.'
     },
     de: {
-        'app.loading': 'Laden...',
+        'app.title': 'RPG Reactor', 'app.loading': 'Laden...',
         'menu.file': 'Datei', 'menu.newProject': 'Neues Projekt', 'menu.openProject': 'Projekt öffnen', 'menu.closeProject': 'Projekt schließen', 'menu.options': 'Optionen...', 'menu.exit': 'Beenden',
         'menu.database': 'Datenbank', 'menu.actors': 'Akteure', 'menu.classes': 'Klassen', 'menu.skills': 'Fähigkeiten', 'menu.items': 'Gegenstände', 'menu.weapons': 'Waffen', 'menu.armors': 'Rüstungen', 'menu.enemies': 'Gegner', 'menu.troops': 'Truppen', 'menu.states': 'Zustände', 'menu.animations': 'Animationen', 'menu.tilesets': 'Tilesets', 'menu.commonEvents': 'Gemeinsame Ereignisse', 'menu.system': 'System', 'menu.types': 'Typen', 'menu.terms': 'Begriffe',
         'menu.plugins': 'Erweiterungen', 'menu.managePlugins': 'Erweiterungen verwalten', 'menu.tools': 'Werkzeuge', 'menu.eventManager': 'Ereignisverwaltung', 'menu.audioPlayer': '♪ Audioplayer', 'menu.forge': 'Schmiede', 'menu.forgeLauncher': 'Schmiede starten', 'menu.characterGenerator': 'Charaktergenerator', 'menu.animationGenerator': 'Animationsgenerator', 'menu.soundEffectGenerator': 'Soundeffektgenerator', 'menu.build': 'Erstellen', 'menu.deployGame': 'Spiel exportieren...', 'menu.deployEditor': 'Editor exportieren...', 'menu.help': 'Hilfe', 'menu.developerTools': 'Entwicklerwerkzeuge', 'menu.about': 'Über RPG Reactor',
@@ -1031,14 +1040,14 @@ const RR_ADDITIONAL_LOCALES = {
         'modal.eventEditor': 'Ereigniseditor', 'modal.audioPlayer': '♪ Audioplayer', 'audio.bgm': 'BGM (Musik)', 'audio.bgs': 'BGS (Ambiente)', 'audio.me': 'ME (Jingles)', 'audio.se': 'SE (Effekte)', 'audio.noTrackSelected': 'Kein Track ausgewählt', 'audio.play': 'Abspielen', 'audio.pause': 'Pause', 'audio.stop': 'Stopp', 'audio.loopOff': 'Schleife: Aus', 'audio.loopOn': 'Schleife: Ein', 'audio.volume': 'Lautstärke', 'audio.pitch': 'Tonhöhe', 'audio.pan': 'Panorama', 'audio.center': 'Mitte', 'audio.loadProjectFirst': 'Bitte zuerst ein Projekt laden',
         'common.done': 'Fertig', 'common.ok': 'OK', 'common.cancel': 'Abbrechen', 'common.apply': 'Anwenden', 'common.new': 'Neu', 'common.delete': 'Löschen', 'common.copy': 'Kopieren', 'common.cut': 'Ausschneiden', 'common.paste': 'Einfügen', 'common.duplicate': 'Duplizieren', 'common.unnamed': 'Unbenannt',
         'options.title': 'Optionen', 'options.appearance': 'Darstellung', 'options.language': 'Sprache', 'options.palette': 'Palette', 'options.mode': 'Modus', 'options.dark': 'Dunkel', 'options.light': 'Hell', 'options.themeNote': 'Das Design wird sofort angewendet. Öffne aktive Editor-Tabs erneut, um Canvas-Elemente zu aktualisieren.', 'options.languageNote': 'Die Sprache wird sofort auf lokalisierte Editor-Texte angewendet. Einige tiefe Editorformulare werden schrittweise lokalisiert.',
-        'about.title': 'Über RPG Reactor', 'about.description': 'Eine quelloffene, plattformübergreifende RPG-Engine mit NW.js und PixiJS v8', 'about.compatibility': 'Erstelle großartige RPGs mit einem professionellen Editor für Windows, Mac und Linux. In den meisten Fällen kompatibel mit RPG Maker MZ- und MV-Projekten; Laufzeitkompatibilität hängt hauptsächlich von Corescripts und Plugins des Projekts ab.', 'about.linksTitle': 'Psychronic-Links', 'about.itch': 'Itch.io - Plugins und Werkzeuge', 'about.steam': 'Steam - Psychronic Games', 'about.github': 'GitHub - Weitere Projekte', 'about.youtube': 'YouTube - Psychronic Games', 'about.discord': 'Discord - Community beitreten', 'about.license': 'Lizenz: MIT',
-        'forge.tools': 'Werkzeuge', 'forge.welcome': 'Werkzeugsuite zur Asset-Erzeugung. Wähle ein Werkzeug in der Seitenleiste oder unten.', 'forge.openProject': 'Öffne ein Projekt, um Schmiede-Werkzeuge zu verwenden.', 'forge.tab.procedural': 'Prozedural', 'forge.tab.outfit': 'Outfit-Schmiede', 'forge.tab.parts': 'Teile (PNG)', 'forge.style': 'Stil:', 'forge.frame': 'Frame:', 'forge.sheet': 'Sheet:', 'forge.saveAs': 'Speichern als:', 'forge.saveSheet': 'Sheet speichern', 'forge.generateSave': 'Erzeugen und in Bibliothek speichern',
+        'about.title': 'Über RPG Reactor', 'about.description': 'Eine quelloffene, plattformübergreifende RPG-Engine mit NW.js und PixiJS v8', 'about.compatibility': 'Erstelle großartige RPGs mit einem professionellen Editor für Windows, Mac und Linux. In den meisten Fällen kompatibel mit RPG Maker MZ- und MV-Projekten; Laufzeitkompatibilität hängt hauptsächlich von Corescripts und Plugins des Projekts ab.', 'about.linksTitle': 'Psychronic-Links', 'about.itch': 'Itch.io - Plugins und Werkzeuge', 'about.steam': 'Steam - Psychronic Games', 'about.github': 'GitHub - Weitere Projekte', 'about.youtube': 'YouTube - Psychronic Games', 'about.rarelyTypicalPlayers': 'YouTube - Rarely Typical Players Podcast', 'about.discord': 'Discord - Community beitreten', 'about.license': 'Lizenz: MIT',
+        'forge.tools': 'Werkzeuge', 'forge.welcome': 'Werkzeugsuite zur Asset-Erzeugung. Wähle ein Werkzeug in der Seitenleiste oder unten.', 'forge.openProject': 'Öffne ein Projekt, um Schmiede-Werkzeuge zu verwenden.', 'forge.tab.procedural': 'Prozedural', 'forge.tab.outfit': 'Outfit-Schmiede', 'forge.tab.hair': 'Haar-Schmiede', 'forge.tab.parts': 'Teile (PNG)', 'forge.style': 'Stil:', 'forge.frame': 'Frame:', 'forge.sheet': 'Sheet:', 'forge.saveAs': 'Speichern als:', 'forge.saveSheet': 'Sheet speichern', 'forge.generateSave': 'Erzeugen und in Bibliothek speichern',
         'db.system1': 'System 1', 'db.system2': 'System 2', 'db.search': '{title} suchen...', 'db.selectEntry': 'Eintrag aus der Liste auswählen', 'db.changeMaximum': 'Maximum ändern', 'db.selectEntryToDelete': 'Eintrag zum Löschen auswählen', 'db.deleteConfirm': '„{name}“ löschen?', 'db.unknownType': 'Unbekannter Datenbanktyp: {type}', 'db.saved': 'Datenbank gespeichert',
         'event.name': 'Ereignisname:', 'event.position': 'Position:', 'event.note': 'Notiz:', 'event.newPage': 'Neue Ereignisseite', 'event.copyPage': 'Ereignisseite kopieren', 'event.pastePage': 'Ereignisseite einfügen', 'event.deletePage': 'Ereignisseite löschen', 'event.clearPage': 'Ereignisseite leeren', 'event.page': 'Seite {number}', 'event.contents': 'Inhalt', 'event.selectCommand': 'Ereignisbefehl auswählen', 'event.conditions': 'Bedingungen', 'event.image': 'Bild', 'event.options': 'Optionen', 'event.autonomousMovement': 'Autonome Bewegung', 'event.priority': 'Priorität', 'event.trigger': 'Auslöser',
         'status.noProjectLoaded': 'Kein Projekt geladen', 'status.playtestNotImplemented': 'Testmodus noch nicht implementiert', 'status.loadMapFirst': 'Zuerst eine Karte laden', 'status.eventModeEnabled': 'Ereignismodus aktiviert', 'status.eventModeDisabled': 'Ereignismodus deaktiviert', 'alert.loadProjectFirst': 'Bitte zuerst ein Projekt laden.'
     },
     fr: {
-        'app.loading': 'Chargement...',
+        'app.title': 'RPG Reactor', 'app.loading': 'Chargement...',
         'menu.file': 'Fichier', 'menu.newProject': 'Nouveau projet', 'menu.openProject': 'Ouvrir un projet', 'menu.closeProject': 'Fermer le projet', 'menu.options': 'Options...', 'menu.exit': 'Quitter',
         'menu.database': 'Base de données', 'menu.actors': 'Acteurs', 'menu.classes': 'Classes', 'menu.skills': 'Compétences', 'menu.items': 'Objets', 'menu.weapons': 'Armes', 'menu.armors': 'Armures', 'menu.enemies': 'Ennemis', 'menu.troops': 'Groupes', 'menu.states': 'États', 'menu.animations': 'Animations', 'menu.tilesets': 'Tilesets', 'menu.commonEvents': 'Événements communs', 'menu.system': 'Système', 'menu.types': 'Types', 'menu.terms': 'Termes',
         'menu.plugins': 'Extensions', 'menu.managePlugins': 'Gérer les extensions', 'menu.tools': 'Outils', 'menu.eventManager': 'Gestionnaire d’événements', 'menu.audioPlayer': '♪ Lecteur audio', 'menu.forge': 'Forge', 'menu.forgeLauncher': 'Lanceur de forge', 'menu.characterGenerator': 'Générateur de personnages', 'menu.animationGenerator': 'Générateur d’animations', 'menu.soundEffectGenerator': 'Générateur d’effets sonores', 'menu.build': 'Compilation', 'menu.deployGame': 'Exporter le jeu...', 'menu.deployEditor': 'Exporter l’éditeur...', 'menu.help': 'Aide', 'menu.developerTools': 'Outils développeur', 'menu.about': 'À propos de RPG Reactor',
@@ -1048,14 +1057,14 @@ const RR_ADDITIONAL_LOCALES = {
         'modal.eventEditor': 'Éditeur d’événements', 'modal.audioPlayer': '♪ Lecteur audio', 'audio.bgm': 'BGM (Musique)', 'audio.bgs': 'BGS (Ambiance)', 'audio.me': 'ME (Jingles)', 'audio.se': 'SE (Effets)', 'audio.noTrackSelected': 'Aucune piste sélectionnée', 'audio.play': 'Lire', 'audio.pause': 'Pause', 'audio.stop': 'Arrêter', 'audio.loopOff': 'Boucle: désactivée', 'audio.loopOn': 'Boucle: activée', 'audio.volume': 'Volume', 'audio.pitch': 'Hauteur', 'audio.pan': 'Panoramique', 'audio.center': 'Centre', 'audio.loadProjectFirst': 'Veuillez d’abord charger un projet',
         'common.done': 'Terminé', 'common.ok': 'OK', 'common.cancel': 'Annuler', 'common.apply': 'Appliquer', 'common.new': 'Nouveau', 'common.delete': 'Supprimer', 'common.copy': 'Copier', 'common.cut': 'Couper', 'common.paste': 'Coller', 'common.duplicate': 'Dupliquer', 'common.unnamed': 'Sans nom',
         'options.title': 'Options', 'options.appearance': 'Apparence', 'options.language': 'Langue', 'options.palette': 'Palette', 'options.mode': 'Mode', 'options.dark': 'Sombre', 'options.light': 'Clair', 'options.themeNote': 'Le thème s’applique immédiatement. Rouvrez les onglets d’éditeur ouverts pour rafraîchir les éléments Canvas.', 'options.languageNote': 'La langue s’applique immédiatement au texte localisé de l’interface. Certains formulaires profonds seront localisés progressivement.',
-        'about.title': 'À propos de RPG Reactor', 'about.description': 'Un moteur RPG open source multiplateforme construit avec NW.js et PixiJS v8', 'about.compatibility': 'Créez des RPG incroyables avec un éditeur professionnel pour Windows, Mac et Linux. Compatible avec les projets RPG Maker MZ et MV dans la plupart des cas; la compatibilité à l’exécution dépend surtout des corescripts et plugins du projet.', 'about.linksTitle': 'Liens Psychronic', 'about.itch': 'Itch.io - Plugins et outils', 'about.steam': 'Steam - Jeux Psychronic', 'about.github': 'GitHub - Autres projets', 'about.youtube': 'YouTube - Psychronic Games', 'about.discord': 'Discord - Rejoindre la communauté', 'about.license': 'Licence: MIT',
-        'forge.tools': 'Outils', 'forge.welcome': 'Suite d’outils de génération d’assets. Choisissez un outil dans la barre latérale ou ci-dessous.', 'forge.openProject': 'Ouvrez un projet pour utiliser les outils de la forge.', 'forge.tab.procedural': 'Procédural', 'forge.tab.outfit': 'Forge de tenues', 'forge.tab.parts': 'Pièces (PNG)', 'forge.style': 'Style:', 'forge.frame': 'Image:', 'forge.sheet': 'Feuille:', 'forge.saveAs': 'Enregistrer sous:', 'forge.saveSheet': 'Enregistrer la feuille', 'forge.generateSave': 'Générer et enregistrer dans la bibliothèque',
+        'about.title': 'À propos de RPG Reactor', 'about.description': 'Un moteur RPG open source multiplateforme construit avec NW.js et PixiJS v8', 'about.compatibility': 'Créez des RPG incroyables avec un éditeur professionnel pour Windows, Mac et Linux. Compatible avec les projets RPG Maker MZ et MV dans la plupart des cas; la compatibilité à l’exécution dépend surtout des corescripts et plugins du projet.', 'about.linksTitle': 'Liens Psychronic', 'about.itch': 'Itch.io - Plugins et outils', 'about.steam': 'Steam - Jeux Psychronic', 'about.github': 'GitHub - Autres projets', 'about.youtube': 'YouTube - Psychronic Games', 'about.rarelyTypicalPlayers': 'YouTube - Rarely Typical Players Podcast', 'about.discord': 'Discord - Rejoindre la communauté', 'about.license': 'Licence: MIT',
+        'forge.tools': 'Outils', 'forge.welcome': 'Suite d’outils de génération d’assets. Choisissez un outil dans la barre latérale ou ci-dessous.', 'forge.openProject': 'Ouvrez un projet pour utiliser les outils de la forge.', 'forge.tab.procedural': 'Procédural', 'forge.tab.outfit': 'Forge de tenues', 'forge.tab.hair': 'Forge de cheveux', 'forge.tab.parts': 'Pièces (PNG)', 'forge.style': 'Style:', 'forge.frame': 'Image:', 'forge.sheet': 'Feuille:', 'forge.saveAs': 'Enregistrer sous:', 'forge.saveSheet': 'Enregistrer la feuille', 'forge.generateSave': 'Générer et enregistrer dans la bibliothèque',
         'db.system1': 'Système 1', 'db.system2': 'Système 2', 'db.search': 'Rechercher {title}...', 'db.selectEntry': 'Sélectionnez une entrée dans la liste', 'db.changeMaximum': 'Modifier le maximum', 'db.selectEntryToDelete': 'Sélectionnez une entrée à supprimer', 'db.deleteConfirm': 'Supprimer « {name} » ?', 'db.unknownType': 'Type de base de données inconnu: {type}', 'db.saved': 'Base de données enregistrée',
         'event.name': 'Nom de l’événement:', 'event.position': 'Position:', 'event.note': 'Note:', 'event.newPage': 'Nouvelle page d’événement', 'event.copyPage': 'Copier la page d’événement', 'event.pastePage': 'Coller la page d’événement', 'event.deletePage': 'Supprimer la page d’événement', 'event.clearPage': 'Effacer la page d’événement', 'event.page': 'Page {number}', 'event.contents': 'Contenu', 'event.selectCommand': 'Sélectionner une commande d’événement', 'event.conditions': 'Conditions', 'event.image': 'Image', 'event.options': 'Options', 'event.autonomousMovement': 'Mouvement autonome', 'event.priority': 'Priorité', 'event.trigger': 'Déclencheur',
         'status.noProjectLoaded': 'Aucun projet chargé', 'status.playtestNotImplemented': 'Mode test non encore implémenté', 'status.loadMapFirst': 'Chargez d’abord une carte', 'status.eventModeEnabled': 'Mode événements activé', 'status.eventModeDisabled': 'Mode événements désactivé', 'alert.loadProjectFirst': 'Veuillez d’abord charger un projet.'
     },
     el: {
-        'app.loading': 'Φόρτωση...',
+        'app.title': 'RPG Reactor', 'app.loading': 'Φόρτωση...',
         'menu.file': 'Αρχείο', 'menu.newProject': 'Νέο έργο', 'menu.openProject': 'Άνοιγμα έργου', 'menu.closeProject': 'Κλείσιμο έργου', 'menu.options': 'Επιλογές...', 'menu.exit': 'Έξοδος',
         'menu.database': 'Βάση δεδομένων', 'menu.actors': 'Ηθοποιοί', 'menu.classes': 'Κλάσεις', 'menu.skills': 'Δεξιότητες', 'menu.items': 'Αντικείμενα', 'menu.weapons': 'Όπλα', 'menu.armors': 'Πανοπλίες', 'menu.enemies': 'Εχθροί', 'menu.troops': 'Ομάδες εχθρών', 'menu.states': 'Καταστάσεις', 'menu.animations': 'Κινούμενα', 'menu.tilesets': 'Tilesets', 'menu.commonEvents': 'Κοινά γεγονότα', 'menu.system': 'Σύστημα', 'menu.types': 'Τύποι', 'menu.terms': 'Όροι',
         'menu.plugins': 'Πρόσθετα', 'menu.managePlugins': 'Διαχείριση προσθέτων', 'menu.tools': 'Εργαλεία', 'menu.eventManager': 'Διαχειριστής γεγονότων', 'menu.audioPlayer': '♪ Αναπαραγωγή ήχου', 'menu.forge': 'Σφυρηλατήριο', 'menu.forgeLauncher': 'Εκκίνηση σφυρηλατηρίου', 'menu.characterGenerator': 'Γεννήτρια χαρακτήρων', 'menu.animationGenerator': 'Γεννήτρια κινουμένων', 'menu.soundEffectGenerator': 'Γεννήτρια ηχητικών εφέ', 'menu.build': 'Δημιουργία', 'menu.deployGame': 'Εξαγωγή παιχνιδιού...', 'menu.deployEditor': 'Εξαγωγή editor...', 'menu.help': 'Βοήθεια', 'menu.developerTools': 'Εργαλεία προγραμματιστή', 'menu.about': 'Σχετικά με το RPG Reactor',
@@ -1065,8 +1074,8 @@ const RR_ADDITIONAL_LOCALES = {
         'modal.eventEditor': 'Editor γεγονότων', 'modal.audioPlayer': '♪ Αναπαραγωγή ήχου', 'audio.bgm': 'BGM (Μουσική)', 'audio.bgs': 'BGS (Ατμόσφαιρα)', 'audio.me': 'ME (Jingles)', 'audio.se': 'SE (Εφέ)', 'audio.noTrackSelected': 'Δεν έχει επιλεγεί κομμάτι', 'audio.play': 'Αναπαραγωγή', 'audio.pause': 'Παύση', 'audio.stop': 'Στοπ', 'audio.loopOff': 'Επανάληψη: Όχι', 'audio.loopOn': 'Επανάληψη: Ναι', 'audio.volume': 'Ένταση', 'audio.pitch': 'Τόνος', 'audio.pan': 'Πανόραμα', 'audio.center': 'Κέντρο', 'audio.loadProjectFirst': 'Φορτώστε πρώτα ένα έργο',
         'common.done': 'Τέλος', 'common.ok': 'OK', 'common.cancel': 'Άκυρο', 'common.apply': 'Εφαρμογή', 'common.new': 'Νέο', 'common.delete': 'Διαγραφή', 'common.copy': 'Αντιγραφή', 'common.cut': 'Αποκοπή', 'common.paste': 'Επικόλληση', 'common.duplicate': 'Διπλότυπο', 'common.unnamed': 'Χωρίς όνομα',
         'options.title': 'Επιλογές', 'options.appearance': 'Εμφάνιση', 'options.language': 'Γλώσσα', 'options.palette': 'Παλέτα', 'options.mode': 'Λειτουργία', 'options.dark': 'Σκούρο', 'options.light': 'Ανοιχτό', 'options.themeNote': 'Το θέμα εφαρμόζεται αμέσως. Ανοίξτε ξανά τα ανοιχτά tabs editor για ανανέωση στοιχείων Canvas.', 'options.languageNote': 'Η γλώσσα εφαρμόζεται αμέσως στο μεταφρασμένο κείμενο του editor. Ορισμένες βαθιές φόρμες θα μεταφραστούν σταδιακά.',
-        'about.title': 'Σχετικά με το RPG Reactor', 'about.description': 'Μια ανοιχτή, πολυπλατφορμική RPG μηχανή με NW.js και PixiJS v8', 'about.compatibility': 'Δημιουργήστε εντυπωσιακά RPG με επαγγελματικό editor για Windows, Mac και Linux. Συμβατό με έργα RPG Maker MZ και MV στις περισσότερες περιπτώσεις· η συμβατότητα εκτέλεσης εξαρτάται κυρίως από τα corescripts και plugins του έργου.', 'about.linksTitle': 'Σύνδεσμοι Psychronic', 'about.itch': 'Itch.io - Plugins και εργαλεία', 'about.steam': 'Steam - Παιχνίδια Psychronic', 'about.github': 'GitHub - Άλλα έργα', 'about.youtube': 'YouTube - Psychronic Games', 'about.discord': 'Discord - Συμμετοχή στην κοινότητα', 'about.license': 'Άδεια: MIT',
-        'forge.tools': 'Εργαλεία', 'forge.welcome': 'Σουίτα εργαλείων παραγωγής assets. Επιλέξτε εργαλείο από την πλαϊνή μπάρα ή παρακάτω.', 'forge.openProject': 'Ανοίξτε ένα έργο για χρήση των εργαλείων σφυρηλατηρίου.', 'forge.tab.procedural': 'Διαδικαστικό', 'forge.tab.outfit': 'Σφυρηλατήριο ενδυμάτων', 'forge.tab.parts': 'Μέρη (PNG)', 'forge.style': 'Στυλ:', 'forge.frame': 'Καρέ:', 'forge.sheet': 'Φύλλο:', 'forge.saveAs': 'Αποθήκευση ως:', 'forge.saveSheet': 'Αποθήκευση φύλλου', 'forge.generateSave': 'Δημιουργία και αποθήκευση στη βιβλιοθήκη',
+        'about.title': 'Σχετικά με το RPG Reactor', 'about.description': 'Μια ανοιχτή, πολυπλατφορμική RPG μηχανή με NW.js και PixiJS v8', 'about.compatibility': 'Δημιουργήστε εντυπωσιακά RPG με επαγγελματικό editor για Windows, Mac και Linux. Συμβατό με έργα RPG Maker MZ και MV στις περισσότερες περιπτώσεις· η συμβατότητα εκτέλεσης εξαρτάται κυρίως από τα corescripts και plugins του έργου.', 'about.linksTitle': 'Σύνδεσμοι Psychronic', 'about.itch': 'Itch.io - Plugins και εργαλεία', 'about.steam': 'Steam - Παιχνίδια Psychronic', 'about.github': 'GitHub - Άλλα έργα', 'about.youtube': 'YouTube - Psychronic Games', 'about.rarelyTypicalPlayers': 'YouTube - Rarely Typical Players Podcast', 'about.discord': 'Discord - Συμμετοχή στην κοινότητα', 'about.license': 'Άδεια: MIT',
+        'forge.tools': 'Εργαλεία', 'forge.welcome': 'Σουίτα εργαλείων παραγωγής assets. Επιλέξτε εργαλείο από την πλαϊνή μπάρα ή παρακάτω.', 'forge.openProject': 'Ανοίξτε ένα έργο για χρήση των εργαλείων σφυρηλατηρίου.', 'forge.tab.procedural': 'Διαδικαστικό', 'forge.tab.outfit': 'Σφυρηλατήριο ενδυμάτων', 'forge.tab.hair': 'Σφυρηλατήριο μαλλιών', 'forge.tab.parts': 'Μέρη (PNG)', 'forge.style': 'Στυλ:', 'forge.frame': 'Καρέ:', 'forge.sheet': 'Φύλλο:', 'forge.saveAs': 'Αποθήκευση ως:', 'forge.saveSheet': 'Αποθήκευση φύλλου', 'forge.generateSave': 'Δημιουργία και αποθήκευση στη βιβλιοθήκη',
         'db.system1': 'Σύστημα 1', 'db.system2': 'Σύστημα 2', 'db.search': 'Αναζήτηση {title}...', 'db.selectEntry': 'Επιλέξτε καταχώρηση από τη λίστα', 'db.changeMaximum': 'Αλλαγή μέγιστου', 'db.selectEntryToDelete': 'Επιλέξτε καταχώρηση για διαγραφή', 'db.deleteConfirm': 'Διαγραφή «{name}»;', 'db.unknownType': 'Άγνωστος τύπος βάσης δεδομένων: {type}', 'db.saved': 'Η βάση δεδομένων αποθηκεύτηκε',
         'event.name': 'Όνομα γεγονότος:', 'event.position': 'Θέση:', 'event.note': 'Σημείωση:', 'event.newPage': 'Νέα σελίδα γεγονότος', 'event.copyPage': 'Αντιγραφή σελίδας γεγονότος', 'event.pastePage': 'Επικόλληση σελίδας γεγονότος', 'event.deletePage': 'Διαγραφή σελίδας γεγονότος', 'event.clearPage': 'Καθαρισμός σελίδας γεγονότος', 'event.page': 'Σελίδα {number}', 'event.contents': 'Περιεχόμενα', 'event.selectCommand': 'Επιλογή εντολής γεγονότος', 'event.conditions': 'Συνθήκες', 'event.image': 'Εικόνα', 'event.options': 'Επιλογές', 'event.autonomousMovement': 'Αυτόνομη κίνηση', 'event.priority': 'Προτεραιότητα', 'event.trigger': 'Ενεργοποίηση',
         'status.noProjectLoaded': 'Δεν έχει φορτωθεί έργο', 'status.playtestNotImplemented': 'Η λειτουργία δοκιμής δεν έχει υλοποιηθεί ακόμη', 'status.loadMapFirst': 'Φορτώστε πρώτα έναν χάρτη', 'status.eventModeEnabled': 'Η λειτουργία γεγονότων ενεργοποιήθηκε', 'status.eventModeDisabled': 'Η λειτουργία γεγονότων απενεργοποιήθηκε', 'alert.loadProjectFirst': 'Φορτώστε πρώτα ένα έργο.'
@@ -1349,6 +1358,7 @@ class I18nManager {
     apply(root = document) {
         if (!root || !root.querySelectorAll) return;
         document.documentElement.lang = this.language;
+        this.applyApplicationTitle();
 
         root.querySelectorAll('[data-i18n]').forEach(el => {
             el.textContent = this.t(el.getAttribute('data-i18n'));
@@ -1368,6 +1378,16 @@ class I18nManager {
         this.applyText(root);
     }
 
+    applyApplicationTitle() {
+        if (typeof document === 'undefined') return;
+        if (typeof window !== 'undefined' && window.reactor && window.reactor.projectController && typeof window.reactor.projectController.updateWindowTitle === 'function') {
+            window.reactor.projectController.updateWindowTitle();
+            return;
+        }
+        document.title = this.t('app.title');
+        if (typeof nw !== 'undefined') nw.Window.get().title = document.title;
+    }
+
     applyText(root = document) {
         if (!root || !root.querySelectorAll) return;
         const selectors = [
@@ -1380,6 +1400,7 @@ class I18nManager {
         root.querySelectorAll(selectors).forEach(el => {
             if (el.hasAttribute('data-rr-i18n-skip') || el.closest('[data-rr-i18n-skip]')) return;
             if (el.hasAttribute('data-i18n') || el.querySelector('input, select, textarea, button')) return;
+            if (el.children && el.children.length) return;
             const source = el.getAttribute('data-i18n-text-source') || el.textContent.trim();
             if (!source) return;
             const translated = this.tText(source);

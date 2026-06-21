@@ -777,6 +777,10 @@
             justify-content: center;
             align-items: center;
             gap: 8px;
+            width: 100%;
+            max-width: 100%;
+            box-sizing: border-box;
+            min-width: 0;
         }
 
         .form-row {
@@ -920,6 +924,9 @@
             align-items: center;
             gap: 10px;
             box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+            min-width: 0;
+            max-width: 100%;
+            box-sizing: border-box;
         }
 
         .graphic-preview-box:hover {
@@ -944,10 +951,15 @@
             justify-content: center;
             min-width: 80px;
             min-height: 80px;
+            width: 100%;
+            max-width: 160px;
+            box-sizing: border-box;
         }
 
         .graphic-canvas-container canvas {
             will-change: contents;
+            max-width: 100%;
+            height: auto;
         }
 
         .graphic-selector-button {
@@ -961,6 +973,8 @@
             font-weight: 500;
             transition: all 0.2s;
             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+            max-width: 100%;
+            white-space: normal;
         }
 
         .graphic-selector-button:hover {
@@ -978,16 +992,13 @@
 
         .graphics-grid {
             display: grid;
-            grid-template-columns: repeat(3, 1fr);
+            grid-template-columns: repeat(auto-fit, minmax(min(150px, 100%), 1fr));
             gap: 16px;
             margin-bottom: 16px;
+            width: 100%;
             max-width: 100%;
-        }
-
-        @media (max-width: 900px) {
-            .graphics-grid {
-                grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            }
+            min-width: 0;
+            box-sizing: border-box;
         }
 
         /* Audio Player Styles */
@@ -1060,6 +1071,18 @@
         .audio-player-info .track-time {
             font-size: 12px;
             color: var(--color-text-muted);
+        }
+
+        .audio-control-card {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 16px;
+            margin-top: 16px;
+            padding: 14px;
+            background: var(--color-bg-panel);
+            border: 1px solid var(--color-border);
+            border-radius: 6px;
+            box-shadow: inset 0 1px 0 var(--color-accent-tint-10), 0 2px 8px rgba(0, 0, 0, 0.18);
         }
 
         .audio-track-item {

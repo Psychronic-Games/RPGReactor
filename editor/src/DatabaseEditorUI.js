@@ -336,9 +336,11 @@ class DatabaseEditorUI {
             filteredData.forEach((entry) => {
                 const item = document.createElement('div');
                 item.className = 'database-list-item';
+                item.dataset.entryId = String(entry.id || '');
                 item.dataset.entryName = entry.name || this._t('common.unnamed');
 
                 const nameSpan = document.createElement('span');
+                nameSpan.className = 'database-list-name';
                 nameSpan.textContent = entry.name || this._t('common.unnamed');
 
                 const idSpan = document.createElement('span');
@@ -813,7 +815,28 @@ class DatabaseEditorUI {
             // Generic display for other types
             this.showGenericDetail(detailEl, entry, type);
         }
+        this.wireLiveDatabaseNameSync(detailEl, entry);
         if (window.I18n) window.I18n.applyText(detailEl);
+    }
+
+    wireLiveDatabaseNameSync(detailEl, entry) {
+        const nameField = detailEl.querySelector('[data-field="name"]');
+        if (!nameField || !entry) return;
+
+        const syncName = () => {
+            entry.name = nameField.value || '';
+            const listEl = document.getElementById('database-list');
+            const item = Array.from(listEl?.querySelectorAll('.database-list-item') || [])
+                .find(el => el.dataset.entryId === String(entry.id || ''));
+            if (!item) return;
+            const displayName = entry.name || this._t('common.unnamed');
+            item.dataset.entryName = displayName;
+            const nameSpan = item.querySelector('.database-list-name');
+            if (nameSpan) nameSpan.textContent = displayName;
+        };
+
+        nameField.addEventListener('input', syncName);
+        nameField.addEventListener('change', syncName);
     }
 
     /**

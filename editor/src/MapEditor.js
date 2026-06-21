@@ -1164,7 +1164,7 @@ class MapEditor {
 
         this.tilemapManager.updateTiles(tilesToUpdate);
 
-        // WORKAROUND: Force layer bitmap cache refresh to ensure erased tiles disappear visually
+        // WORKAROUND: Force layer texture cache refresh to ensure erased tiles disappear visually
         // Without this, sprites can persist even though data is set to 0
         const affectedLayerContainers = new Set();
         for (const pos of tilesToUpdate) {
@@ -1178,10 +1178,10 @@ class MapEditor {
             if (pixiLayer) affectedLayerContainers.add(pixiLayer);
         }
         for (const layer of affectedLayerContainers) {
-            if (layer.cacheAsBitmap) {
-                layer.cacheAsBitmap = false;
+            if (layer.isCachedAsTexture) {
+                layer.cacheAsTexture(false);
                 // Force immediate re-cache to refresh display
-                setTimeout(() => { layer.cacheAsBitmap = true; }, 0);
+                setTimeout(() => { layer.cacheAsTexture(true); }, 0);
             }
         }
     }
@@ -1321,7 +1321,7 @@ class MapEditor {
 
         this.tilemapManager.updateTiles(tilesToUpdate);
 
-        // WORKAROUND: Force layer bitmap cache refresh to ensure erased tiles disappear visually
+        // WORKAROUND: Force layer texture cache refresh to ensure erased tiles disappear visually
         const affectedLayerContainers = new Set();
         for (const pos of tilesToUpdate) {
             let pixiLayer;
@@ -1334,10 +1334,10 @@ class MapEditor {
             if (pixiLayer) affectedLayerContainers.add(pixiLayer);
         }
         for (const layer of affectedLayerContainers) {
-            if (layer.cacheAsBitmap) {
-                layer.cacheAsBitmap = false;
+            if (layer.isCachedAsTexture) {
+                layer.cacheAsTexture(false);
                 // Force immediate re-cache to refresh display
-                setTimeout(() => { layer.cacheAsBitmap = true; }, 0);
+                setTimeout(() => { layer.cacheAsTexture(true); }, 0);
             }
         }
     }

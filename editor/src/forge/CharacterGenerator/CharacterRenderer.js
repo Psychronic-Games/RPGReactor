@@ -51,8 +51,11 @@ class CharacterRenderer {
             p.descriptor?.category === 'body' && p.descriptor?.template?.sheet
         );
         let globalShiftPxX = 0, globalShiftPxY = 0;
-        if (bodyDraw) {
-            const sheet = bodyDraw.descriptor.template.sheet;
+        const bodyTemplate = bodyDraw?.descriptor?.template;
+        const preserveBodyCellPosition = bodyTemplate?.preserveCellPosition === true
+            || (bodyDraw?.descriptor?.category === 'body' && bodyDraw?.descriptor?.id && !bodyDraw.descriptor.id.startsWith('body-looseleaf-') && !bodyDraw.descriptor.id.startsWith('body-psychronic-'));
+        if (bodyDraw && !preserveBodyCellPosition) {
+            const sheet = bodyTemplate.sheet;
             const bbox = (typeof RR_CG_sheetContentBbox === 'function')
                 ? RR_CG_sheetContentBbox(sheet)
                 : null;

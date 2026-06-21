@@ -71,6 +71,11 @@ class CharacterGenerator {
         this._forgePreviewCacheDescriptor = null;
         this._forgePreviewRaf = 0;
         this._forgePreviewNeedsThumbnails = false;
+        this._hairCfgByStyle     = {};
+        this._hairPreviewZoom    = 4;
+        this._hairPreviewCache   = new Map();
+        this._hairPreviewCacheOwner = null;
+        this._hairPreviewCacheDescriptor = null;
 
         if (typeof window !== 'undefined') {
             window.addEventListener('rr-language-changed', () => {
@@ -187,8 +192,11 @@ class CharacterGenerator {
         if (this._animTimer) { clearInterval(this._animTimer); this._animTimer = null; }
         if (this._procAnimTimer) { clearInterval(this._procAnimTimer); this._procAnimTimer = null; }
         if (this._forgeAnimTimer) { clearInterval(this._forgeAnimTimer); this._forgeAnimTimer = null; }
+        if (this._hairAnimTimer) { clearInterval(this._hairAnimTimer); this._hairAnimTimer = null; }
         this.previewAnimating = false;
         this.proceduralAnimating = false;
+        this._forgeWalking = false;
+        this._hairWalking = false;
     }
     close() { this.detach(); }
 
@@ -208,6 +216,7 @@ class CharacterGenerator {
                 <div style="display:flex;align-items:flex-end;gap:2px;padding:0 16px;background:var(--color-bg-panel);border-bottom:1px solid var(--color-border);flex-shrink:0;">
                     ${this._tabBtn('procedural', this._t('forge.tab.procedural'))}
                     ${this._tabBtn('forge',       this._t('forge.tab.outfit'))}
+                    ${this._tabBtn('hair',        this._t('forge.tab.hair'))}
                     ${this._tabBtn('parts',       this._t('forge.tab.parts'))}
                     <div style="margin-left:auto;display:flex;align-items:center;gap:6px;padding:6px 0 5px;">
                         <label style="font-size:10px;color:var(--color-text-muted);">${this._t('forge.style')}</label>
@@ -219,6 +228,7 @@ class CharacterGenerator {
                 <div style="flex:1;min-height:0;overflow:hidden;display:flex;flex-direction:column;">
                     ${this.activeTab === 'procedural' ? this._proceduralHTML()
                         : this.activeTab === 'forge' ? this._forgeHTML()
+                        : this.activeTab === 'hair' ? this._hairHTML()
                         : this._partsHTML()}
                 </div>
             </div>`;
@@ -233,6 +243,12 @@ class CharacterGenerator {
                 if (this._forgeAnimTimer) {
                     clearInterval(this._forgeAnimTimer);
                     this._forgeAnimTimer = null;
+                    this._forgeWalking = false;
+                }
+                if (this._hairAnimTimer) {
+                    clearInterval(this._hairAnimTimer);
+                    this._hairAnimTimer = null;
+                    this._hairWalking = false;
                 }
                 this.activeTab = btn.dataset.tab;
                 this._render();
@@ -248,6 +264,9 @@ class CharacterGenerator {
         } else if (this.activeTab === 'forge') {
             this._wireForgeEvents();
             this._drawForgePreview();
+        } else if (this.activeTab === 'hair') {
+            this._wireHairEvents();
+            this._drawHairPreview();
         } else {
             this._ensurePartsFolder();
             this._loadConfig();
@@ -287,6 +306,7 @@ class CharacterGenerator {
         this.imageCache.clear();
         this.selectedProceduralPartId = null;
         this._forgeDescCache = null;
+        this._hairDescCache = null;
         this._savedLayerOrder = this._savedLayerOrderByStyle[this.characterStyle] || [];
         this._saveConfig();
         this._render();
@@ -472,7 +492,7 @@ class CharacterGenerator {
         catch (e) { console.warn('Outfit Forge: generate failed', e); return null; }
         return {
             id: 'forge-preview', category: 'full outfits', name: cfg.name,
-            tags: cfg.tags, params: [],
+            tags: config.tags, params: [],
             template: { palette: result.palette, sheet: result.sheet },
             draw(buf, W, H, direction, frame, params) {
                 RR_CG_drawTemplatePart(buf, W, H, direction, frame, params, this);
@@ -515,6 +535,7 @@ class CharacterGenerator {
         } else {
             return null;
         }
+        config.tags = this._forgeTags({ tags: [] });
         let result;
         try { result = eng.generateOutfit(config, body); }
         catch (e) { console.warn('Outfit Forge: thumbnail generation failed', e); return null; }
@@ -1339,8 +1360,8 @@ class CharacterGenerator {
         if (zoneEditClear) zoneEditClear.addEventListener('click', () => {
             const ok = window.confirm('Clear all painted zone edits for this style? This cannot be undone.');
             if (!ok) return;
-            const style = this.characterStyle || 'looseleaf';
-            if (this._forgeZoneEdits) this._forgeZoneEdits[style] = {};
+            const scope = this._forgeZoneEditScopeKey();
+            if (this._forgeZoneEdits) this._forgeZoneEdits[scope] = {};
             this._drawForgePreview();
         });
         const copyZoneEditText = async (text, successMsg) => {
@@ -1357,10 +1378,12 @@ class CharacterGenerator {
         };
         if (zoneEditCopy) zoneEditCopy.addEventListener('click', async () => {
             const zone = this._forgeZoneEditZone || 'head';
+            this._ensureForgeZoneEditPayloadSeeded(zone);
             const text = JSON.stringify(this._forgeZoneEditPayload(zone), null, 2);
             await copyZoneEditText(text, `Copied ${zone} zone JSON.`);
         });
         if (zoneEditCopyAll) zoneEditCopyAll.addEventListener('click', async () => {
+            this._ensureForgeZoneEditPayloadSeeded();
             const text = JSON.stringify(this._forgeZoneEditPayload(), null, 2);
             await copyZoneEditText(text, 'Copied all zone edit JSON.');
         });
@@ -1396,28 +1419,59 @@ class CharacterGenerator {
         if (saveBtn) saveBtn.addEventListener('click', () => this._saveForgeOutfit());
     }
 
-    _toggleForgeWalk() {
-        if (this._forgeAnimTimer) {
-            clearInterval(this._forgeAnimTimer);
-            this._forgeAnimTimer = null;
-            this._forgeWalking = false;
-            this._forgeFrame = 1;
-            this._drawForgePreview();
-        } else {
-            this._forgeWalking = true;
-            const seq = [1, 0, 1, 2];
-            let i = 0;
-            this._forgeAnimTimer = setInterval(() => {
-                this._forgeFrame = seq[i % seq.length];
-                i++;
-                this._drawForgePreview();
-            }, 180);
+    _previewWalkSpec(kind) {
+        if (kind === 'hair') return {
+            timerKey: '_hairAnimTimer', walkingKey: '_hairWalking', frameKey: '_hairFrame', buttonSelector: '.rr-hair-walk', draw: () => this._drawHairPreview()
+        };
+        return {
+            timerKey: '_forgeAnimTimer', walkingKey: '_forgeWalking', frameKey: '_forgeFrame', buttonSelector: '.rr-forge-walk', draw: () => this._drawForgePreview()
+        };
+    }
+
+    _setPreviewWalkButton(spec) {
+        const btn = this.root && this.root.querySelector(spec.buttonSelector);
+        if (!btn) return;
+        btn.textContent = this[spec.walkingKey] ? 'Stop Walk' : 'Play Walk';
+        btn.style.background = this[spec.walkingKey] ? 'var(--color-bg-button-active)' : 'var(--color-bg-button)';
+    }
+
+    _stopPreviewWalk(kind, redraw = true) {
+        const spec = this._previewWalkSpec(kind);
+        if (this[spec.timerKey]) clearInterval(this[spec.timerKey]);
+        this[spec.timerKey] = null;
+        this[spec.walkingKey] = false;
+        if (redraw) {
+            this[spec.frameKey] = 1;
+            spec.draw();
         }
-        const btn = this.root && this.root.querySelector('.rr-forge-walk');
-        if (btn) {
-            btn.textContent = this._forgeWalking ? 'Stop Walk' : 'Play Walk';
-            btn.style.background = this._forgeWalking ? 'var(--color-bg-button-active)' : 'var(--color-bg-button)';
-        }
+        this._setPreviewWalkButton(spec);
+    }
+
+    _togglePreviewWalk(kind) {
+        const spec = this._previewWalkSpec(kind);
+        if (this[spec.timerKey]) { this._stopPreviewWalk(kind, true); return; }
+        this[spec.walkingKey] = true;
+        const seq = [1, 0, 1, 2];
+        let i = 0;
+        this[spec.timerKey] = setInterval(() => {
+            this[spec.frameKey] = seq[i % seq.length];
+            i++;
+            spec.draw();
+        }, 180);
+        this._setPreviewWalkButton(spec);
+    }
+
+    _toggleForgeWalk() { this._togglePreviewWalk('forge'); }
+
+    _forgeTags(cfg = this._forgeConfig()) {
+        const styleId = this.characterStyle || 'looseleaf';
+        const tags = new Set(Array.isArray(cfg && cfg.tags) ? cfg.tags : []);
+        for (const style of this._characterStyles()) tags.delete(style.id);
+        tags.delete('male');
+        tags.delete('female');
+        tags.add(styleId);
+        tags.add(this.gender || 'male');
+        return Array.from(tags);
     }
 
     _forgeEngineConfig(cfg = this._forgeConfig()) {
@@ -1425,7 +1479,7 @@ class CharacterGenerator {
             style: this.characterStyle || 'looseleaf',
             name: cfg.name,
             category: cfg.category,
-            tags: cfg.tags,
+            tags: this._forgeTags(cfg),
             paletteTheme: cfg.paletteTheme,
             customPalettes: cfg.customPalettes,
             zones: cfg.zones,
@@ -1436,6 +1490,7 @@ class CharacterGenerator {
 
     _forgeBodyTemplateShift(bodyTemplate, W, H) {
         if (typeof RR_CG_sheetContentBbox !== 'function' || typeof RR_CG_canonicalSheetDims !== 'function') return { x: 0, y: 0 };
+        if (bodyTemplate && bodyTemplate.preserveCellPosition === true) return { x: 0, y: 0 };
         const bbox = RR_CG_sheetContentBbox(bodyTemplate.sheet);
         const dims = RR_CG_canonicalSheetDims(bodyTemplate.sheet);
         if (!bbox || !dims) return { x: 0, y: 0 };
@@ -1468,6 +1523,7 @@ class CharacterGenerator {
             hands: 'rgba(255,179,107,0.45)',
             spikes: 'rgba(214,255,70,0.42)'
         };
+        const authoredZones = this._drawForgeAuthoredZoneOverlay(ctx, W, H, dir, frame, selected, colors);
         let debug;
         try { debug = eng.debugClassifyFrame(this._forgeEngineConfig(), bodyTemplate.sheet[dir][frame], dir, bodyTemplate.palette, frame); }
         catch (e) { console.warn('Outfit Forge zone debug failed', e); return; }
@@ -1480,6 +1536,7 @@ class CharacterGenerator {
                 const zoneCell = row[x];
                 const cellZones = Array.isArray(zoneCell) ? zoneCell : (zoneCell ? [zoneCell] : []);
                 for (const zone of cellZones) {
+                    if (authoredZones.has(zone)) continue;
                     if (!zone || (selected !== 'all' && selected !== zone)) continue;
                     if (this._forgeZoneEditMode && zone === (this._forgeZoneEditZone || 'head')) continue;
                     const dx = x + shift.x;
@@ -1490,6 +1547,26 @@ class CharacterGenerator {
                 }
             }
         }
+    }
+
+    _drawForgeAuthoredZoneOverlay(ctx, W, H, dir, frame, selected, colors) {
+        const drawn = new Set();
+        const editZone = this._forgeZoneEditZone || 'head';
+        const zones = selected === 'all' ? this._forgeZoneEditZoneKeys() : [selected];
+        for (const zone of zones) {
+            if (!zone || zone === 'all') continue;
+            if (this._forgeZoneEditMode && zone === editZone) continue;
+            const ranges = this._forgeBuiltInZoneEditRanges(dir, frame, zone);
+            if (!ranges || !ranges.length) continue;
+            ctx.fillStyle = colors[zone] || 'rgba(255,255,255,0.35)';
+            for (const [y, x0, x1] of ranges) {
+                for (let x = x0; x <= x1; x++) {
+                    if (x >= 0 && y >= 0 && x < W && y < H) ctx.fillRect(x, y, 1, 1);
+                }
+            }
+            drawn.add(zone);
+        }
+        return drawn;
     }
 
     _forgeZoneColors(alpha = 0.58) {
@@ -1507,19 +1584,56 @@ class CharacterGenerator {
         };
     }
 
-    _forgeZoneEditFrame(dir, frame, create = false) {
+    _forgeZoneEditScopeKey() {
         const style = this.characterStyle || 'looseleaf';
+        const gender = this.gender || 'male';
+        const bodyId = this._activeBodyId ? (this._activeBodyId() || '') : '';
+        return `${style}:${gender}:${bodyId}`;
+    }
+
+    _forgeZoneEditZoneKeys() {
+        const schema = this._forgeSchema();
+        const zones = schema && Array.isArray(schema.zones) ? schema.zones.map(z => z.key) : [];
+        const exts = schema && Array.isArray(schema.extensions) ? schema.extensions.map(ex => ex.type === 'pauldron' ? 'shoulders' : ex.type) : [];
+        return Array.from(new Set(zones.concat(exts)));
+    }
+
+    _forgeZoneEditFrame(dir, frame, create = false) {
+        const scope = this._forgeZoneEditScopeKey();
         const key = `${dir}:${frame}`;
         if (!this._forgeZoneEdits) this._forgeZoneEdits = {};
         if (create) {
-            this._forgeZoneEdits[style] = this._forgeZoneEdits[style] || {};
-            this._forgeZoneEdits[style][key] = this._forgeZoneEdits[style][key] || {};
-            const edit = this._forgeZoneEdits[style][key];
+            this._forgeZoneEdits[scope] = this._forgeZoneEdits[scope] || {};
+            this._forgeZoneEdits[scope][key] = this._forgeZoneEdits[scope][key] || {};
+            const edit = this._forgeZoneEdits[scope][key];
             if (!Object.prototype.hasOwnProperty.call(edit, '_seededZones')) {
                 Object.defineProperty(edit, '_seededZones', { value: new Set(), enumerable: false });
             }
+            if (!Object.prototype.hasOwnProperty.call(edit, '_editedZones')) {
+                Object.defineProperty(edit, '_editedZones', { value: new Set(), enumerable: false });
+            }
+            if (!Object.prototype.hasOwnProperty.call(edit, '_seedSources')) {
+                Object.defineProperty(edit, '_seedSources', { value: new Map(), enumerable: false });
+            }
         }
-        return this._forgeZoneEdits[style] && this._forgeZoneEdits[style][key] ? this._forgeZoneEdits[style][key] : null;
+        return this._forgeZoneEdits[scope] && this._forgeZoneEdits[scope][key] ? this._forgeZoneEdits[scope][key] : null;
+    }
+
+    _forgeBuiltInZoneEditRanges(dir, frame, zone) {
+        const eng = this._outfitEngine();
+        if (!eng || typeof eng.builtInZoneEditPayload !== 'function') return null;
+        const payload = eng.builtInZoneEditPayload(this._forgeEngineConfig(), zone);
+        return payload && payload.frames && payload.frames[`${dir}:${frame}`] && payload.frames[`${dir}:${frame}`][zone] || null;
+    }
+
+    _forgeRangesToEditSet(ranges, W, H) {
+        const next = new Set();
+        for (const [y, x0, x1] of ranges || []) {
+            for (let x = x0; x <= x1; x++) {
+                if (x >= 0 && y >= 0 && x < W && y < H) next.add(`${x},${y}`);
+            }
+        }
+        return next;
     }
 
     _ensureForgeZoneEditSeeded(dir, frame, zone, bodyTemplate, W, H) {
@@ -1528,6 +1642,19 @@ class CharacterGenerator {
         if (!edit) return;
         if (!Object.prototype.hasOwnProperty.call(edit, '_seededZones')) {
             Object.defineProperty(edit, '_seededZones', { value: new Set(), enumerable: false });
+        }
+        if (!Object.prototype.hasOwnProperty.call(edit, '_editedZones')) {
+            Object.defineProperty(edit, '_editedZones', { value: new Set(), enumerable: false });
+        }
+        if (!Object.prototype.hasOwnProperty.call(edit, '_seedSources')) {
+            Object.defineProperty(edit, '_seedSources', { value: new Map(), enumerable: false });
+        }
+        const builtInRanges = this._forgeBuiltInZoneEditRanges(dir, frame, zone);
+        if (builtInRanges && builtInRanges.length && !edit._editedZones.has(zone)) {
+            edit[zone] = this._forgeRangesToEditSet(builtInRanges, W, H);
+            edit._seededZones.add(zone);
+            edit._seedSources.set(zone, 'built-in');
+            return;
         }
         if (edit._seededZones.has(zone)) return;
         const previous = edit[zone] instanceof Set ? edit[zone] : null;
@@ -1554,6 +1681,23 @@ class CharacterGenerator {
         if (previous) for (const key of previous) next.add(key);
         edit[zone] = next;
         edit._seededZones.add(zone);
+        edit._seedSources.set(zone, 'debug');
+    }
+
+    _ensureForgeZoneEditPayloadSeeded(onlyZone = null) {
+        const body = this._forgeBodyTemplate();
+        if (!body || !body.sheet) return;
+        const zones = onlyZone ? [onlyZone] : this._forgeZoneEditZoneKeys();
+        const W = this.frameWidth || 144;
+        const H = this.frameHeight || 144;
+        for (let dir = 0; dir < 4; dir++) {
+            const frames = body.sheet[dir] || [];
+            const nFrames = Math.max(3, frames.length || 0);
+            for (let frame = 0; frame < nFrames; frame++) {
+                if (!frames[frame]) continue;
+                for (const zone of zones) this._ensureForgeZoneEditSeeded(dir, frame, zone, body, W, H);
+            }
+        }
     }
 
     _paintForgeZoneEdit(dir, frame, x, y) {
@@ -1577,7 +1721,13 @@ class CharacterGenerator {
                 }
             }
         }
-        if (changed) this._scheduleForgePreview({ skipThumbnails: true });
+        if (changed) {
+            if (!Object.prototype.hasOwnProperty.call(edit, '_editedZones')) {
+                Object.defineProperty(edit, '_editedZones', { value: new Set(), enumerable: false });
+            }
+            edit._editedZones.add(zone);
+            this._scheduleForgePreview({ skipThumbnails: true });
+        }
     }
 
     _drawForgeZoneEdits(ctx, W, H, dir, frame) {
@@ -1598,7 +1748,8 @@ class CharacterGenerator {
 
     _forgeZoneEditPayload(onlyZone = null) {
         const style = this.characterStyle || 'looseleaf';
-        const edits = (this._forgeZoneEdits && this._forgeZoneEdits[style]) || {};
+        const scope = this._forgeZoneEditScopeKey();
+        const edits = (this._forgeZoneEdits && this._forgeZoneEdits[scope]) || {};
         const frames = {};
         for (const [frameKey, zones] of Object.entries(edits)) {
             const outZones = {};
@@ -1662,7 +1813,7 @@ class CharacterGenerator {
         const frame = (this._forgeFrame === undefined) ? 1 : this._forgeFrame;
         const W = this.frameWidth || 144, H = this.frameHeight || 144;
         const drawDebugOverlays = this._forgeDebugZones && !this._forgeWalking;
-        const cacheOwner = `${this.characterStyle || 'looseleaf'}|${this._activeBodyId()}|${W}x${H}`;
+        const cacheOwner = `${this.characterStyle || 'looseleaf'}|${this.gender || 'male'}|${this._activeBodyId()}|${W}x${H}`;
         if (this._forgePreviewCacheOwner !== cacheOwner || this._forgePreviewCacheDescriptor !== outfit) {
             this._forgePreviewCacheOwner = cacheOwner;
             this._forgePreviewCacheDescriptor = outfit;
@@ -1702,8 +1853,7 @@ class CharacterGenerator {
         this._forgeSyncZoneLayers();
         const slug = (cfg.name || 'outfit').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'outfit';
         const styleId = this.characterStyle || 'looseleaf';
-        const styleTags = new Set(this._characterStyles().map(s => s.id));
-        const tags = (cfg.tags || []).filter(t => !styleTags.has(t)).concat(styleId);
+        const tags = this._forgeTags(cfg);
         const partId = `full-outfits-${styleId}-${slug}`;
         const config = Object.assign(this._forgeEngineConfig(cfg), { style: styleId, category: 'full outfits', tags });
         let result;
@@ -1740,6 +1890,345 @@ class CharacterGenerator {
             draw(buf, W, H, direction, frame, params) { RR_CG_drawTemplatePart(buf, W, H, direction, frame, params, this); }
         };
         RR_CHARACTER_REGISTRY.push(descriptor);
+        setStatus(`Saved “${cfg.name}” → ${partId}.js (available in Procedural parts).`, true);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    //  TAB — HAIR FORGE (procedural hair generator)
+    //  Generates a normal `hair` template part from the active body/head anchors.
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    _hairEngine() {
+        if (this._hairEngineCache !== undefined) return this._hairEngineCache;
+        try {
+            const path = require('path');
+            const abs = path.join(process.cwd(), 'src', 'forge', 'CharacterGenerator', 'procgen', 'hair_engine.js');
+            this._hairEngineCache = require(abs);
+        } catch (e) {
+            console.warn('Hair Forge: failed to load engine', e);
+            this._hairEngineCache = null;
+        }
+        return this._hairEngineCache;
+    }
+
+    _hairBodyTemplate() { return this._forgeBodyTemplate(); }
+
+    _hairConfig() {
+        const styleId = this.characterStyle || 'looseleaf';
+        const eng = this._hairEngine();
+        const defaults = eng && typeof eng.defaultConfig === 'function' ? eng.defaultConfig(styleId) : {
+            params: { bangs: true, sideLocks: true, backVolume: true, outline: true, eyeZoneX: 1, eyeZoneY: 7, eyeZoneWidth: 3, eyeZoneHeight: 5, lowerBanding: 3, lowerScraggle: 2 }
+        };
+        if (this._hairCfgByStyle && this._hairCfgByStyle[styleId]) {
+            const cached = this._hairCfgByStyle[styleId];
+            cached.params = Object.assign({}, defaults.params || {}, cached.params || {});
+            return cached;
+        }
+        const cfg = eng && typeof eng.defaultConfig === 'function' ? eng.defaultConfig(styleId) : {
+            name: 'Layered Bob', category: 'hair', style: styleId, tags: [styleId, 'hair', 'procgen'],
+            hairStyle: 'layered-bob', length: 'medium', color: 'chestnut', params: defaults.params
+        };
+        cfg.params = Object.assign({}, defaults.params || {}, cfg.params || {});
+        cfg.tags = Array.from(new Set([...(cfg.tags || []), styleId, this.gender || 'male', 'hair', 'procgen']));
+        this._hairCfgByStyle = this._hairCfgByStyle || {};
+        this._hairCfgByStyle[styleId] = cfg;
+        return cfg;
+    }
+
+    _hairEngineConfig(cfg = this._hairConfig()) {
+        const styleId = this.characterStyle || 'looseleaf';
+        return Object.assign({}, cfg, {
+            style: styleId,
+            category: 'hair',
+            tags: Array.from(new Set([...(cfg.tags || []), styleId, this.gender || 'male', 'hair', 'procgen']))
+        });
+    }
+
+    _hairDescriptor() {
+        const eng = this._hairEngine();
+        const body = this._hairBodyTemplate();
+        if (!eng || !body) return null;
+        const cfg = this._hairConfig();
+        let result;
+        try { result = eng.generateHair(this._hairEngineConfig(cfg), body); }
+        catch (e) { console.warn('Hair Forge: generate failed', e); return null; }
+        return {
+            id: 'hair-forge-preview', category: 'hair', name: cfg.name,
+            tags: this._hairEngineConfig(cfg).tags, params: [],
+            template: { palette: result.palette, sheet: result.sheet },
+            draw(buf, W, H, direction, frame, params) {
+                RR_CG_drawTemplatePart(buf, W, H, direction, frame, params, this);
+            }
+        };
+    }
+
+    _hairHTML() {
+        const eng = this._hairEngine();
+        const body = this._hairBodyTemplate();
+        if (!eng || !body) {
+            return `<div style="padding:24px;color:var(--color-text-muted);font-size:12px;">
+                Hair Forge needs the hair engine and a body part loaded.
+                ${!eng ? '<br>Engine failed to load (see console).' : ''}
+                ${!body ? '<br>No body part found in the registry.' : ''}
+            </div>`;
+        }
+        const cfg = this._hairConfig();
+        const schema = eng.UI_SCHEMA || { styles: [], lengths: [], colors: [] };
+        const zoom = this._hairPreviewZoom || 4;
+        const cw = (this.frameWidth || 144) * zoom, ch = (this.frameHeight || 144) * zoom;
+        const frame = this._hairFrame === undefined ? 1 : this._hairFrame;
+        const esc = (s) => String(s ?? '').replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
+        const opt = (items, value, valueKey = 'value') => (items || []).map(item => {
+            const v = item[valueKey];
+            return `<option value="${v}" ${v === value ? 'selected' : ''}>${item.label}</option>`;
+        }).join('');
+        const activeColor = (schema.colors || []).find(color => color.key === cfg.color) || (schema.colors || [])[0] || { key: cfg.color || '', label: cfg.color || 'Color', swatch: 'transparent' };
+        const canvases = ['Front', 'Left', 'Right', 'Back'].map((label, d) => `
+            <div style="text-align:center;">
+                <canvas class="rr-hair-canvas" data-dir="${d}" width="${this.frameWidth || 144}" height="${this.frameHeight || 144}"
+                    style="width:${cw}px;height:${ch}px;image-rendering:pixelated;background:var(--color-checker,#1a1a2e);border:1px solid var(--color-border-input);border-radius:4px;"></canvas>
+                <div style="font-size:9px;color:var(--color-text-muted);margin-top:2px;">${label}</div>
+            </div>`).join('');
+        return `<div style="display:flex;height:100%;min-height:0;">
+            <div class="rr-hair-controls-scroll" style="width:300px;flex-shrink:0;overflow-y:auto;padding:14px;border-right:1px solid var(--color-border);background:var(--color-bg-base);">
+                <div style="font-size:12px;font-weight:800;color:var(--color-text-dim);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px;">Hair Forge</div>
+                <div style="font-size:12px;color:var(--color-text-muted);line-height:1.35;margin-bottom:12px;">Procedural hair aligned to the active body head and eye-line anchors, with frame-aware walk bobbing.</div>
+                <label style="font-size:10px;color:var(--color-text-muted);display:block;margin-bottom:3px;">Hair name</label>
+                <input type="text" class="rr-hair-name rr-input" value="${String(cfg.name || '').replace(/"/g, '&quot;')}" style="width:100%;font-size:12px;padding:5px 8px;margin-bottom:10px;">
+                <label style="font-size:10px;color:var(--color-text-muted);display:block;margin-bottom:3px;">Style</label>
+                <select class="rr-hair-input rr-input" data-hair-field="hairStyle" style="width:100%;font-size:12px;padding:5px 8px;margin-bottom:10px;">${opt(schema.styles, cfg.hairStyle)}</select>
+                <label style="font-size:10px;color:var(--color-text-muted);display:block;margin-bottom:3px;">Length</label>
+                <select class="rr-hair-input rr-input" data-hair-field="length" style="width:100%;font-size:12px;padding:5px 8px;margin-bottom:10px;">${opt(schema.lengths, cfg.length)}</select>
+                <label style="font-size:10px;color:var(--color-text-muted);display:block;margin-bottom:3px;">Color</label>
+                <button type="button" class="rr-hair-color-choice rr-input" data-hair-color-value="${esc(activeColor.key)}" style="width:100%;display:flex;align-items:center;gap:8px;font-size:12px;padding:5px 8px;margin-bottom:12px;text-align:left;cursor:pointer;">
+                    <span style="width:14px;height:14px;flex:0 0 auto;border-radius:3px;border:1px solid var(--color-border-input);background:${activeColor.swatch || 'transparent'};"></span>
+                    <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(activeColor.label)}</span>
+                </button>
+                ${['bangs:Front Bangs', 'sideLocks:Side Locks', 'outline:Pixel Outline'].map(row => {
+                    const [key, label] = row.split(':');
+                    return `<label style="display:flex;align-items:center;gap:7px;font-size:12px;color:var(--color-text);margin-bottom:8px;"><input type="checkbox" class="rr-hair-input" data-hair-param="${key}" ${cfg.params && cfg.params[key] !== false ? 'checked' : ''}>${label}</label>`;
+                }).join('')}
+                <div style="margin:12px 0 10px;padding:10px;border:1px solid var(--color-border-subtle);border-radius:6px;background:var(--color-bg-panel);">
+                    <div style="font-size:10px;font-weight:800;color:var(--color-text-dim);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px;">Eye Zone</div>
+                    <div style="font-size:10px;color:var(--color-text-muted);line-height:1.3;margin-bottom:8px;">Adjusts the protected eye area for front-view hair. Increase Y to move it lower.</div>
+                    ${[
+                        ['eyeZoneX', 'X Offset', -6, 6, 1],
+                        ['eyeZoneY', 'Y Offset', -2, 10, 1],
+                        ['eyeZoneWidth', 'Width', 1, 6, 1],
+                        ['eyeZoneHeight', 'Height', 1, 8, 1]
+                    ].map(([key, label, min, max, step]) => `
+                        <label style="display:grid;grid-template-columns:78px 1fr 36px;gap:6px;align-items:center;font-size:11px;color:var(--color-text);margin-bottom:6px;">
+                            <span>${label}</span>
+                            <input type="range" class="rr-hair-input" data-hair-param="${key}" min="${min}" max="${max}" step="${step}" value="${cfg.params && cfg.params[key] != null ? cfg.params[key] : 0}">
+                            <input type="number" class="rr-hair-input rr-input" data-hair-param="${key}" min="${min}" max="${max}" step="${step}" value="${cfg.params && cfg.params[key] != null ? cfg.params[key] : 0}" style="font-size:10px;padding:2px 4px;width:36px;">
+                        </label>`).join('')}
+                </div>
+                <div style="margin:12px 0 10px;padding:10px;border:1px solid var(--color-border-subtle);border-radius:6px;background:var(--color-bg-panel);">
+                    <div style="font-size:10px;font-weight:800;color:var(--color-text-dim);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px;">Hair Pattern</div>
+                    <div style="font-size:10px;color:var(--color-text-muted);line-height:1.3;margin-bottom:8px;">Tunes lower-hair shading and tip roughness for side/back views.</div>
+                    ${[
+                        ['lowerBanding', 'Lower Banding', 0, 5, 1],
+                        ['lowerScraggle', 'Scraggle', 0, 5, 1]
+                    ].map(([key, label, min, max, step]) => `
+                        <label style="display:grid;grid-template-columns:92px 1fr 36px;gap:6px;align-items:center;font-size:11px;color:var(--color-text);margin-bottom:6px;">
+                            <span>${label}</span>
+                            <input type="range" class="rr-hair-input" data-hair-param="${key}" min="${min}" max="${max}" step="${step}" value="${cfg.params && cfg.params[key] != null ? cfg.params[key] : 0}">
+                            <input type="number" class="rr-hair-input rr-input" data-hair-param="${key}" min="${min}" max="${max}" step="${step}" value="${cfg.params && cfg.params[key] != null ? cfg.params[key] : 0}" style="font-size:10px;padding:2px 4px;width:36px;">
+                        </label>`).join('')}
+                </div>
+                <button class="rr-hair-save rr-btn" style="width:100%;font-size:12px;padding:7px 14px;margin-top:10px;cursor:pointer;background:var(--color-accent-bright);color:var(--color-bg-base);border-radius:4px;font-weight:800;">${this._t('forge.generateSave')}</button>
+                <div class="rr-hair-status" style="font-size:10px;color:var(--color-text-muted);min-height:16px;margin-top:10px;"></div>
+            </div>
+            <div style="flex:1;min-width:0;overflow-y:auto;padding:16px;display:flex;flex-direction:column;align-items:center;gap:12px;">
+                <div style="display:flex;align-items:center;gap:12px;">
+                    <button class="rr-hair-walk" style="padding:5px 12px;font-size:11px;cursor:pointer;border-radius:3px;border:1px solid var(--color-border-input);background:${this._hairWalking ? 'var(--color-bg-button-active)' : 'var(--color-bg-button)'};color:var(--color-text-strong);">${this._hairWalking ? 'Stop Walk' : 'Play Walk'}</button>
+                    <label style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--color-text-muted);">Frame
+                        <select class="rr-hair-frame rr-input" style="font-size:11px;padding:3px 7px;">${[0,1,2].map(v => `<option value="${v}" ${frame === v ? 'selected' : ''}>${v}</option>`).join('')}</select>
+                    </label>
+                    <label style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--color-text-muted);">Zoom
+                        <select class="rr-hair-preview-zoom rr-input" style="font-size:11px;padding:3px 7px;">${[2,3,4,5,6,8].map(v => `<option value="${v}" ${zoom === v ? 'selected' : ''}>${v}x</option>`).join('')}</select>
+                    </label>
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">${canvases}</div>
+            </div>
+        </div>`;
+    }
+
+    _wireHairEvents() {
+        const rootEl = this.root;
+        if (!rootEl) return;
+        const cfg = this._hairConfig();
+        const invalidate = () => {
+            this._hairDescCache = null;
+            this._hairPreviewCache.clear();
+            this._drawHairPreview();
+        };
+        const nameEl = rootEl.querySelector('.rr-hair-name');
+        if (nameEl) nameEl.addEventListener('input', () => { cfg.name = nameEl.value; this._hairDescCache = null; });
+        rootEl.querySelectorAll('.rr-hair-input').forEach(el => {
+            el.addEventListener('change', () => {
+                const field = el.getAttribute('data-hair-field');
+                const param = el.getAttribute('data-hair-param');
+                if (field) cfg[field] = el.value;
+                if (param) {
+                    cfg.params = cfg.params || {};
+                    cfg.params[param] = el.type === 'checkbox' ? el.checked : (el.type === 'number' || el.type === 'range' ? parseFloat(el.value) : el.value);
+                    rootEl.querySelectorAll(`.rr-hair-input[data-hair-param="${param}"]`).forEach(peer => {
+                        if (peer !== el && peer.type !== 'checkbox') peer.value = el.value;
+                    });
+                }
+                invalidate();
+            });
+        });
+        let hairColorMenu = null;
+        let hairColorDocHandler = null;
+        const closeHairColorMenu = () => {
+            if (hairColorMenu && hairColorMenu.parentNode) hairColorMenu.parentNode.removeChild(hairColorMenu);
+            hairColorMenu = null;
+            if (hairColorDocHandler) document.removeEventListener('mousedown', hairColorDocHandler, true);
+            hairColorDocHandler = null;
+        };
+        const colorBtn = rootEl.querySelector('.rr-hair-color-choice');
+        if (colorBtn) colorBtn.addEventListener('click', e => {
+            e.preventDefault();
+            e.stopPropagation();
+            const schema = this._hairEngine()?.UI_SCHEMA || { colors: [] };
+            const options = schema.colors || [];
+            if (!options.length) return;
+            closeHairColorMenu();
+            const rect = colorBtn.getBoundingClientRect();
+            const vw = window.innerWidth || document.documentElement.clientWidth || 900;
+            const vh = window.innerHeight || document.documentElement.clientHeight || 700;
+            const desiredH = Math.min(300, Math.max(150, options.length * 30 + 8));
+            const below = vh - rect.bottom - 8;
+            const above = rect.top - 8;
+            const openUp = below < 170 && above > below;
+            const maxH = Math.max(120, Math.min(desiredH, openUp ? above : below));
+            const width = Math.max(rect.width, 210);
+            const left = Math.max(8, Math.min(rect.left, vw - width - 8));
+            const top = openUp ? Math.max(8, rect.top - maxH - 4) : Math.min(vh - maxH - 8, rect.bottom + 4);
+            hairColorMenu = document.createElement('div');
+            hairColorMenu.className = 'rr-hair-color-menu';
+            hairColorMenu.style.cssText = `position:fixed;left:${left}px;top:${top}px;width:${width}px;max-height:${maxH}px;overflow-y:auto;padding:5px;z-index:100000;border:1px solid var(--color-accent-bright);border-radius:6px;background:var(--color-bg-base);box-shadow:0 8px 24px rgba(0,0,0,.45);`;
+            options.forEach(opt => {
+                const row = document.createElement('button');
+                row.type = 'button';
+                row.style.cssText = `width:100%;display:flex;align-items:center;gap:8px;margin-bottom:4px;padding:6px 7px;border:1px solid ${opt.key === cfg.color ? 'var(--color-accent-bright)' : 'var(--color-border-subtle)'};border-radius:4px;background:${opt.key === cfg.color ? 'var(--color-bg-button-active)' : 'var(--color-bg-panel)'};color:var(--color-text);font-size:12px;text-align:left;cursor:pointer;`;
+                const swatch = document.createElement('span');
+                swatch.style.cssText = `width:14px;height:14px;flex:0 0 auto;border-radius:3px;border:1px solid var(--color-border-input);background:${opt.swatch || 'transparent'};`;
+                const label = document.createElement('span');
+                label.style.cssText = 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+                label.textContent = opt.label || opt.key;
+                row.appendChild(swatch);
+                row.appendChild(label);
+                row.addEventListener('click', ev => {
+                    ev.preventDefault();
+                    ev.stopPropagation();
+                    cfg.color = opt.key;
+                    this._hairDescCache = null;
+                    this._hairPreviewCache.clear();
+                    closeHairColorMenu();
+                    this._renderPreservingScroll();
+                });
+                hairColorMenu.appendChild(row);
+            });
+            hairColorMenu.addEventListener('mousedown', ev => ev.stopPropagation());
+            document.body.appendChild(hairColorMenu);
+            hairColorDocHandler = (ev) => {
+                if (hairColorMenu && !hairColorMenu.contains(ev.target) && ev.target !== colorBtn) closeHairColorMenu();
+            };
+            document.addEventListener('mousedown', hairColorDocHandler, true);
+        });
+        const frameEl = rootEl.querySelector('.rr-hair-frame');
+        if (frameEl) frameEl.addEventListener('change', () => {
+            this._stopPreviewWalk('hair', false);
+            const nextFrame = parseInt(frameEl.value, 10);
+            this._hairFrame = Math.max(0, Math.min(2, Number.isFinite(nextFrame) ? nextFrame : 1));
+            this._drawHairPreview();
+        });
+        const zoomEl = rootEl.querySelector('.rr-hair-preview-zoom');
+        if (zoomEl) zoomEl.addEventListener('change', () => {
+            this._hairPreviewZoom = Math.max(2, Math.min(8, parseInt(zoomEl.value, 10) || 4));
+            this._renderPreservingScroll();
+        });
+        const walkBtn = rootEl.querySelector('.rr-hair-walk');
+        if (walkBtn) walkBtn.addEventListener('click', () => this._togglePreviewWalk('hair'));
+        const saveBtn = rootEl.querySelector('.rr-hair-save');
+        if (saveBtn) saveBtn.addEventListener('click', () => this._saveHairPart());
+    }
+
+    _drawHairPreview() {
+        if (!this.root) return;
+        const canvases = this.root.querySelectorAll('.rr-hair-canvas');
+        if (!canvases.length) return;
+        const bodyDesc = RR_CHARACTER_REGISTRY.find(x => x.id === this._activeBodyId());
+        if (!bodyDesc) return;
+        if (!this._hairDescCache) this._hairDescCache = this._hairDescriptor();
+        const hair = this._hairDescCache;
+        const frame = this._hairFrame === undefined ? 1 : this._hairFrame;
+        const W = this.frameWidth || 144, H = this.frameHeight || 144;
+        const cacheOwner = `${this.characterStyle || 'looseleaf'}|${this.gender || 'male'}|${this._activeBodyId()}|${W}x${H}`;
+        if (this._hairPreviewCacheOwner !== cacheOwner || this._hairPreviewCacheDescriptor !== hair) {
+            this._hairPreviewCacheOwner = cacheOwner;
+            this._hairPreviewCacheDescriptor = hair;
+            this._hairPreviewCache.clear();
+        }
+        canvases.forEach(canvas => {
+            const dir = parseInt(canvas.getAttribute('data-dir'), 10) || 0;
+            const parts = [{ descriptor: bodyDesc, params: CharacterRenderer.resolveParams(bodyDesc, { alignX: 'center', alignY: 'middle' }) }];
+            if (hair) parts.push({ descriptor: hair, params: {} });
+            try {
+                const cacheKey = `${dir}:${frame}`;
+                let img = this._hairPreviewCache.get(cacheKey);
+                if (!img) {
+                    img = CharacterRenderer.render(W, H, dir, frame, parts);
+                    this._hairPreviewCache.set(cacheKey, img);
+                }
+                const ctx = canvas.getContext('2d');
+                ctx.clearRect(0, 0, W, H);
+                ctx.putImageData(img, 0, 0);
+            } catch (e) { console.warn('Hair Forge preview error', e); }
+        });
+    }
+
+    _saveHairPart() {
+        const status = this.root && this.root.querySelector('.rr-hair-status');
+        const setStatus = (msg, ok) => { if (status) { status.textContent = msg; status.style.color = ok ? 'var(--color-accent-bright)' : 'var(--color-text-muted)'; } };
+        const eng = this._hairEngine();
+        const body = this._hairBodyTemplate();
+        if (!eng || !body) { setStatus('Engine or body unavailable.', false); return; }
+        const cfg = this._hairConfig();
+        const styleId = this.characterStyle || 'looseleaf';
+        const slug = (cfg.name || 'hair').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'hair';
+        const partId = `hair-${styleId}-${slug}`;
+        const config = this._hairEngineConfig(cfg);
+        let result;
+        try { result = eng.generateHair(config, body); }
+        catch (e) { setStatus('Generation failed: ' + e.message, false); return; }
+        const palLines = Object.entries(result.palette)
+            .map(([letter, slot]) => `        ${JSON.stringify(letter)}: { hex: ${JSON.stringify(slot.hex)}, material: ${JSON.stringify(slot.material || '')} }`).join(',\n');
+        const dirNames = ['Front', 'Left', 'Right', 'Back'];
+        const sheetLines = result.sheet.map((dir, di) =>
+            `        // ${dirNames[di]}\n        [\n` +
+            dir.map((fr, fi) => `            // Frame ${fi}\n            [\n` +
+                fr.map(r => `                ${this._formatTemplateRowLiteral(r, 144)}`).join(',\n') + `\n            ]`).join(',\n') +
+            `\n        ]`).join(',\n');
+        const js = `// Procedurally generated hair "${cfg.name}" — built in the Hair Forge.\n` +
+`RR_CHARACTER_REGISTRY.push({\n    id: ${JSON.stringify(partId)},\n    category: "hair",\n    name: ${JSON.stringify(cfg.name)},\n    tags: ${JSON.stringify(config.tags)},\n    params: [],\n    template: {\n        palette: {\n${palLines}\n        },\n        sheet: [\n${sheetLines}\n        ]\n    },\n    draw(buf, W, H, direction, frame, params) {\n        RR_CG_drawTemplatePart(buf, W, H, direction, frame, params, this);\n    }\n});\n`;
+        try {
+            const fs = require('fs'), path = require('path');
+            const dir = path.join(process.cwd(), 'src', 'forge', 'CharacterGenerator', 'styles', styleId, 'parts', 'hair');
+            fs.mkdirSync(dir, { recursive: true });
+            fs.writeFileSync(path.join(dir, `${partId}.js`), js, 'utf8');
+        } catch (e) { setStatus('Could not write file: ' + e.message, false); return; }
+        for (let k = RR_CHARACTER_REGISTRY.length - 1; k >= 0; k--) {
+            if (RR_CHARACTER_REGISTRY[k].id === partId) RR_CHARACTER_REGISTRY.splice(k, 1);
+        }
+        RR_CHARACTER_REGISTRY.push({
+            id: partId, category: 'hair', name: cfg.name, tags: config.tags, params: [],
+            template: { palette: result.palette, sheet: result.sheet },
+            draw(buf, W, H, direction, frame, params) { RR_CG_drawTemplatePart(buf, W, H, direction, frame, params, this); }
+        });
         setStatus(`Saved “${cfg.name}” → ${partId}.js (available in Procedural parts).`, true);
     }
 
@@ -2236,6 +2725,10 @@ class CharacterGenerator {
         this.root.querySelectorAll('.rr-cgp-gender').forEach(btn => {
             btn.addEventListener('click', () => {
                 this.gender = btn.dataset.gender;
+                this._forgeDescCache = null;
+                this._forgePreviewCache?.clear?.();
+                this._forgePreviewCacheOwner = null;
+                this._forgePreviewCacheDescriptor = null;
                 // Tabs are pure filters — the layer list stays exactly as the
                 // user arranged it. If the previously selected part is hidden
                 // by the filter, the picker won't focus anything until the
@@ -2771,6 +3264,7 @@ class CharacterGenerator {
             ).join(',\n') +
             `\n        ]`
         ).join(',\n');
+        const preserveCellPosition = String(category).toLowerCase() === 'body';
         return `// Auto-generated by Bulk Import. Edit colours/materials via the editor.
 RR_CHARACTER_REGISTRY.push({
     id: ${JSON.stringify(partId)},
@@ -2779,6 +3273,7 @@ RR_CHARACTER_REGISTRY.push({
     tags: [${JSON.stringify(this.characterStyle)}, ${JSON.stringify(this.gender)}],
     params: [],
     template: {
+        preserveCellPosition: ${preserveCellPosition ? 'true' : 'false'},
         palette: {
 ${paletteJs}
         },
@@ -2857,7 +3352,7 @@ ${sheetJs}
                     sctx.imageSmoothingEnabled = false;
                     sctx.drawImage(img, 0, 0);
 
-                    const crop = this._guessFirstTemplateCell(source.width, source.height);
+                    const crop = this._guessFirstTemplateCell(source.width, source.height, file.name);
 
                     // Collect cell crops (full sheet or single cell) once so we
                     // can build a single shared palette of EVERY unique colour.
@@ -2865,10 +3360,10 @@ ${sheetJs}
                     if (crop.sheetCols === 3 && crop.sheetRows === 4) {
                         for (let dir = 0; dir < 4; dir++) {
                             for (let frame = 0; frame < 3; frame++) {
-                                const x0 = Math.round(frame * crop.cellW);
-                                const y0 = Math.round(dir * crop.cellH);
-                                const x1 = Math.round((frame + 1) * crop.cellW);
-                                const y1 = Math.round((dir + 1) * crop.cellH);
+                                const x0 = Math.round(crop.x + frame * crop.cellW);
+                                const y0 = Math.round(crop.y + dir * crop.cellH);
+                                const x1 = Math.round(crop.x + (frame + 1) * crop.cellW);
+                                const y1 = Math.round(crop.y + (dir + 1) * crop.cellH);
                                 cellCrops.push({
                                     x: x0, y: y0,
                                     w: Math.max(1, Math.min(source.width - x0, x1 - x0)),
@@ -2950,7 +3445,26 @@ ${sheetJs}
         });
     }
 
-    _guessFirstTemplateCell(width, height) {
+    _guessFirstTemplateCell(width, height, fileName = '') {
+        const baseName = String(fileName).replace(/\.[^.]+$/, '');
+        const isExplicitSingleCharacter = baseName.startsWith('$') || baseName.startsWith('!$');
+        const ratio = width / Math.max(1, height);
+
+        // RPG Maker's normal character sheet is 8 characters laid out as 12x8
+        // animation cells: 4 character columns x 2 character rows, with each
+        // character being a 3x4 walk sheet. If we let the generic 3x4 detector
+        // catch these first, each imported frame becomes four characters wide
+        // and the generated part appears horizontally offset.
+        if (!isExplicitSingleCharacter && width >= 48 && height >= 32 && width % 12 === 0 && height % 8 === 0 && ratio >= 1.15 && ratio <= 1.85) {
+            const cellW = width / 12;
+            const cellH = height / 8;
+            const characterW = cellW * 3;
+            const characterH = cellH * 4;
+            if (cellW >= 8 && cellH >= 8 && characterW <= 256 && characterH <= 256) {
+                return { x: 0, y: 0, w: characterW, h: characterH, mode: 'first character from 12x8 RPG Maker sheet', sheetCols: 3, sheetRows: 4, cellW, cellH };
+            }
+        }
+
         if (width >= 3 && height >= 4 && width % 3 === 0 && height % 4 === 0) {
             const cellW = width / 3;
             const cellH = height / 4;
@@ -2958,8 +3472,7 @@ ${sheetJs}
                 return { x: 0, y: 0, w: cellW, h: cellH, mode: 'first 3x4 sheet cell', sheetCols: 3, sheetRows: 4, cellW, cellH };
             }
         }
-        const sheetRatio = width / Math.max(1, height);
-        if (width >= 24 && height >= 32 && sheetRatio >= 0.45 && sheetRatio <= 0.90) {
+        if (width >= 24 && height >= 32 && ratio >= 0.45 && ratio <= 0.90) {
             const cellW = width / 3;
             const cellH = height / 4;
             return {

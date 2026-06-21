@@ -108,3 +108,40 @@ test('high-visibility localized labels do not fall back to English', () => {
         }
     }
 });
+
+test('generic exact-text pass preserves complex controls', () => {
+    const { manager } = loadI18nForTest();
+
+    class FakeElement {
+        constructor(text, children = []) {
+            this._textContent = text;
+            this.children = children;
+            this.attrs = new Map();
+        }
+
+        get textContent() { return this._textContent; }
+        set textContent(value) {
+            this._textContent = value;
+            this.children = [];
+        }
+
+        hasAttribute(name) { return this.attrs.has(name); }
+        getAttribute(name) { return this.attrs.get(name); }
+        setAttribute(name, value) { this.attrs.set(name, String(value)); }
+        closest() { return null; }
+        querySelector() { return null; }
+    }
+
+    const complexButton = new FakeElement('Character Generator\nGenerate character sprites', [{}]);
+    const simpleButton = new FakeElement('Plugins');
+    const root = {
+        querySelectorAll(selector) {
+            return selector === '[placeholder]' ? [] : [complexButton, simpleButton];
+        }
+    };
+
+    manager.applyText(root);
+
+    assert.equal(complexButton.children.length, 1, 'complex button children remain intact');
+    assert.equal(simpleButton.getAttribute('data-i18n-text-source'), 'Plugins');
+});

@@ -155,6 +155,9 @@ class DatabaseSystem1Editor {
                     const sysField = e.target.dataset.systemField;
                     if (sysField) {
                         system[sysField] = e.target.value;
+                        if (sysField === 'gameTitle' && window.reactor?.projectController?.updateWindowTitle) {
+                            window.reactor.projectController.updateWindowTitle();
+                        }
                         console.log(`Updated system.${sysField} to:`, e.target.value);
                     }
                 });

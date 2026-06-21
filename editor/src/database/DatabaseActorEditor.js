@@ -313,7 +313,7 @@ class DatabaseActorEditor {
                     <td>${this.commonUI.getTraitValue(trait)}</td>
                 </tr>
             `).join('') :
-            '<tr><td colspan="3" style="text-align: center; color: var(--color-text-muted);">No traits</td></tr>';
+            '<tr><td style="width: 3px; padding: 0; border: none; background: transparent;"></td><td colspan="2" style="text-align: center; color: var(--color-text-muted); font-style: italic; padding: 12px;">No traits</td></tr>';
 
         section.innerHTML = `
             <div class="database-section-header">Traits</div>

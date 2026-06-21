@@ -7,7 +7,7 @@ const baseZones = {
     head:  { enabled: true, layer: 60, style: 'helmet',    family: 'steel',    accent: 'cyan', params: { visor: true, openFace: false, crest: true, earModule: 'compact' } },
     torso: { enabled: true, layer: 40, style: 'plated',    family: 'steel',    accent: 'cyan', params: { reactor: true } },
     arms:  { enabled: true, layer: 50, style: 'gauntlet',  family: 'gunmetal', accent: 'cyan', params: { powerStrip: true, wristBand: true, glove: true } },
-    belt:  { enabled: true, layer: 45, style: 'utility',   family: 'leather',  accent: 'gold', params: { buckle: true, studs: true, height: 0.7 } },
+    belt:  { enabled: true, layer: 45, style: 'utility',   family: 'gold',     accent: 'gold', params: { buckle: true, studs: true, height: 0.7 } },
     legs:  { enabled: true, layer: 20, style: 'segmented', family: 'navy',     accent: 'cyan', params: { kneeAccent: true } },
     boots: { enabled: true, layer: 30, style: 'heavy',     family: 'iron',     accent: '',     params: {} }
 };

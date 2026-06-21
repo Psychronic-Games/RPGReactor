@@ -1,6 +1,6 @@
 # RPG Reactor
 
-RPG Reactor 0.91 is an open-source, cross-platform RPG game editor and runtime for RPG Maker MV/MZ-compatible projects, built on NW.js and PixiJS v8. RPG Reactor provides its own modern PIXI 8 runtime while preserving compatibility with RPG Maker project data and targeting backwards compatibility with RPG Maker MZ plugins. Create 2D RPG games with a complete development environment featuring map editing, event scripting, database management, and game testing capabilities.
+RPG Reactor 0.92 is an open-source, cross-platform RPG game editor and runtime for RPG Maker MV/MZ-compatible projects, built on NW.js and PixiJS v8. RPG Reactor provides its own modern PIXI 8 runtime while preserving compatibility with RPG Maker project data and targeting backwards compatibility with RPG Maker MZ plugins. Create 2D RPG games with a complete development environment featuring map editing, event scripting, database management, and game testing capabilities.
 
 ## Features
 
@@ -126,6 +126,8 @@ Composable character sprite generator for actor walking sprites and generated ou
 - **Procedural tab**: Renders layered ASCII/template parts from the part registry, with configurable frame size, alignment, palette overrides, and 3x4 walking-sheet export
 - **Outfit Forge tab**: Generates full-outfit Character Generator parts from recipe data. The current shared recipe is `Nova Sentinel`, available for both Looseleaf and Psychronic styles through `procgen/outfits/nova_sentinel.js`
 - **Outfit engine**: Browser/Node-compatible generator in `src/forge/CharacterGenerator/procgen/outfit_engine.js`, with per-zone palette families, role-based painters, extensions such as pauldrons/gauntlets, live 4-direction preview, walk preview, zone debug overlays, and save-to-library output under `styles/<style>/parts/full outfits/`
+- **Hair Forge tab**: Generates 4-direction walking hair parts with live walk preview, save-to-library output, expanded palettes (`auburn`, `platinum`, `rose`, `violet`, `navy`, `emerald`), front-view Eye Zone controls, and Hair Pattern sliders for lower-hair banding/scraggle or Short Spiky triangular texture.
+- **Hair Forge styles**: Includes `Layered Bob`, `Long Layered`, `Short Shag`, `Short Spiky`, and `Center Part Long`. Short Spiky uses style-specific spike silhouettes, spiky side bangs, connected rear spikes, and length-aware back/nape behavior; Center Part Long uses symmetrical straight strands, a visible middle part, smooth side bangs, face-framing long curtains, and subtle walk-frame sway.
 - **Template analyzer**: Imports PNG/JPEG/WebP sprite sheets, classifies pixels into material letters, supports material-paint correction, and emits style-specific `RR_CG_BODY_TEMPLATE_SHEETS[style][variant]` snippets for body-template work
 - **Parts (PNG) tab**: Layers user-supplied PNG sprite-sheet parts from the active project's `forge/character_generator/styles/<style>/parts/` folder with draggable ordering
 

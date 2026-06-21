@@ -866,9 +866,9 @@ class TilemapManager {
                 case 4: pixiLayer = this.layers.shadow; break;
             }
 
-            // PERFORMANCE: Invalidate bitmap cache when painting tiles
-            if (pixiLayer && pixiLayer.cacheAsBitmap) {
-                pixiLayer.cacheAsBitmap = false;
+            // PERFORMANCE: Invalidate texture cache when painting tiles
+            if (pixiLayer && pixiLayer.isCachedAsTexture) {
+                pixiLayer.cacheAsTexture(false);
                 affectedLayers.add(pixiLayer);
             }
 
@@ -923,8 +923,8 @@ class TilemapManager {
             clearTimeout(this.recacheLayersTimer);
             this.recacheLayersTimer = setTimeout(() => {
                 for (const layer of affectedLayers) {
-                    if (layer && !layer.cacheAsBitmap) {
-                        layer.cacheAsBitmap = true;
+                    if (layer && !layer.isCachedAsTexture) {
+                        layer.cacheAsTexture(true);
                     }
                 }
             }, 500); // Wait 500ms after last paint before re-caching
@@ -1034,22 +1034,22 @@ class TilemapManager {
         }
     }
 
-    // PERFORMANCE: Cache static layers as bitmaps for faster rendering
+    // PERFORMANCE: Cache static layers as textures for faster rendering
     cacheStaticLayers() {
-        // Cache non-animated layers as bitmaps
+        // Cache non-animated layers as textures
         // This converts all sprites in a layer into a single texture, much faster to render
         // Don't cache ground layer if it has A1 animations
         if (this.a1TilePositions && this.a1TilePositions.length === 0) {
             // No A1 tiles, safe to cache all layers
-            if (this.layers.ground) this.layers.ground.cacheAsBitmap = true;
+            if (this.layers.ground) this.layers.ground.cacheAsTexture(true);
         }
 
         // Always cache these layers (no animations)
-        if (this.layers.lower1) this.layers.lower1.cacheAsBitmap = true;
-        if (this.layers.lower2) this.layers.lower2.cacheAsBitmap = true;
-        if (this.layers.lower3) this.layers.lower3.cacheAsBitmap = true;
-        if (this.layers.upper4) this.layers.upper4.cacheAsBitmap = true;
-        if (this.layers.upper5) this.layers.upper5.cacheAsBitmap = true;
+        if (this.layers.lower1) this.layers.lower1.cacheAsTexture(true);
+        if (this.layers.lower2) this.layers.lower2.cacheAsTexture(true);
+        if (this.layers.lower3) this.layers.lower3.cacheAsTexture(true);
+        if (this.layers.upper4) this.layers.upper4.cacheAsTexture(true);
+        if (this.layers.upper5) this.layers.upper5.cacheAsTexture(true);
     }
 
     // Pause/resume lazy-loading during user interaction

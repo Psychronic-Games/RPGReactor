@@ -21,7 +21,20 @@ class ProjectController {
 
         if (typeof window !== 'undefined') {
             window.addEventListener('beforeunload', () => this.releaseProjectLock());
+            window.addEventListener('rr-language-changed', () => this.updateWindowTitle());
         }
+    }
+
+    updateWindowTitle() {
+        const appTitle = (typeof window !== 'undefined' && window.I18n)
+            ? window.I18n.t('app.title')
+            : 'RPG Reactor';
+        const gameTitle = this.currentProject
+            ? (this.databaseManager.data.system?.gameTitle || this.currentProject.name || '')
+            : '';
+        const title = gameTitle ? `${appTitle} | ${gameTitle}` : appTitle;
+        if (typeof document !== 'undefined') document.title = title;
+        if (typeof nw !== 'undefined') nw.Window.get().title = title;
     }
 
     getProjectLockPath(projectPath) {
@@ -191,6 +204,7 @@ class ProjectController {
         this.uiManager.showWelcomeScreen();
         this.uiManager.updateStatus('Project closed');
         this.projectLoaded = false;
+        this.updateWindowTitle();
     }
 
     async newProject() {
@@ -422,11 +436,7 @@ class ProjectController {
             }
         }
 
-        // Update window title
-        if (typeof nw !== 'undefined') {
-            const gameTitle = this.databaseManager.data.system?.gameTitle || this.currentProject.name;
-            nw.Window.get().title = `RPG Reactor | ${gameTitle}`;
-        }
+        this.updateWindowTitle();
 
         this.uiManager.updateStatus('Project loaded successfully');
         this.projectLoaded = true;
