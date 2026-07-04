@@ -4,6 +4,25 @@ All notable changes to RPG Reactor will be documented in this file.
 
 This root changelog summarizes public release progress for GitHub. The detailed editor changelog lives at [`editor/CHANGELOG.md`](editor/CHANGELOG.md).
 
+## [0.94] - 2026-06-27
+
+### Added
+
+- Effekseer Animation Generator grew into a full composition tool: an Animation-Generator-style **layer system** (stack any animations into one exported .efkefc, with per-layer visibility, opacity, ordering and timing windows) and **keyframes** — parameter states pinned to chosen frames, compiled to native Effekseer curves (colors, size, spin) with **texture cross-fades** between keyframes; plus a master frame-count control, an AG-style layers panel, corrected solid-surface texturing with proper backface culling, and a professional-pack-derived recipe library (the format engine now reads Effekseer binary versions up to 1710, covering all 316 effects in the Complex template).
+- Added an **Effekseer Animation Generator** to the Forge: generate native Effekseer particle effects (`.efkefc`) from recipes — no external Effekseer editor needed. Ships with 80 recipes at full parity with the standard Animation Generator's catalog across all eight categories: Geometric (including 4D Hypercube/Pentachoron/Hypersphere with baked 4D rotation and an emergent Galaxy Spiral), Symbolic (all 17 glyphs), Object (12 real 3D meshes from sword to crystal gem), Interface (10 sci-fi panels at pixel parity via baked sprite-sheet playback), Energy (including Portal, Magic Circle, and Teleport Column), Elements, Effect, and Physical. Wireframe or solid-textured rendering with custom texture upload that wraps shapes like a globe; seamless or continuous steady-state looping; crash-proof live preview through the game's own Effekseer runtime with realtime 3D orientation controls; and one-click export into the project's `effects/` folder. The underlying `.efkefc`/`.efkmodel` format engine is validated by byte-identical round-trips of all 120 stock MZ effects.
+- Added a procedural **Mini Skirt** option for the Outfit Forge Legs zone, selectable as a second Legs-slot preset in both Looseleaf and Psychronic styles, with crisp vertical pleats that survive on dark ramps, optional anatomical knee pads, and a stronger triangular A-line flare that extends the cloth past the body's per-row silhouette (instead of being trapped inside the body outline). Tunable `hem` (scaled over waist-to-knee, so `0` is a micro-skirt), `waistband`, `pleats`, and `kneeAccent` params are exposed in the Legs zone card.
+
+### Changed
+
+- Bumped current development version to RPG Reactor 0.94.
+
+### Fixed
+
+- Fixed Outfit Forge Mini Skirt cleanup so side-view frames no longer leave orphan leg-palette outline/bridge pixels below the skirt hem.
+- Fixed Outfit Forge Mini Skirt `Knee plates` so it now renders separate knee pads at the anatomical knees above the boot/shin band instead of being an ignored segmented-pants-only toggle; the skirt waistband is constrained to one visible row so it cannot consume most of a short skirt.
+- Fixed Psychronic Mini Skirt placement by rejecting classifier rows above the real legs anchor, preventing torso/belt rows from being painted as skirt cloth.
+- Fixed Forge card number fields feeling laggy while typing by avoiding full preview regeneration on every numeric keystroke.
+
 ## [0.93.1] - 2026-06-21
 
 ### Changed

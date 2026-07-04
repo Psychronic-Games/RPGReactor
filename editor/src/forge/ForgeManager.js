@@ -42,7 +42,10 @@ const FORGE_ICONS = {
     animationGenerator: (size) => `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="display: block;" aria-hidden="true"><rect x="2.5" y="9" width="19" height="11.5" rx="1"/><path d="M2.5 9 L6 4 L22.5 4 L22.5 9 Z"/><line x1="8" y1="9" x2="11.5" y2="4"/><line x1="14" y1="9" x2="17.5" y2="4"/><line x1="20" y1="9" x2="22.2" y2="6.5"/></svg>`,
 
     // Speaker with two sound waves.
-    soundEffectGenerator: (size) => `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="display: block;" aria-hidden="true"><path d="M11 5 L7 9 H3 V15 H7 L11 19 Z" fill="currentColor"/><path d="M15 9c1.6 1.6 1.6 4.4 0 6"/><path d="M18 6c3.2 3.2 3.2 8.8 0 12"/></svg>`
+    soundEffectGenerator: (size) => `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="display: block;" aria-hidden="true"><path d="M11 5 L7 9 H3 V15 H7 L11 19 Z" fill="currentColor"/><path d="M15 9c1.6 1.6 1.6 4.4 0 6"/><path d="M18 6c3.2 3.2 3.2 8.8 0 12"/></svg>`,
+
+    // Particle burst — core dot with radiating sparks of varied length.
+    effekseerGenerator: (size) => `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="display: block;" aria-hidden="true"><circle cx="12" cy="12" r="2.4" fill="currentColor" stroke="none"/><line x1="12" y1="7.5" x2="12" y2="3.5"/><line x1="12" y1="16.5" x2="12" y2="20.5"/><line x1="7.5" y1="12" x2="3.5" y2="12"/><line x1="16.5" y1="12" x2="20.5" y2="12"/><line x1="8.8" y1="8.8" x2="6.6" y2="6.6"/><line x1="15.2" y1="15.2" x2="17.4" y2="17.4"/><line x1="15.2" y1="8.8" x2="16.8" y2="7.2"/><line x1="8.8" y1="15.2" x2="7.2" y2="16.8"/></svg>`
 };
 
 const FORGE_TOOLS = [
@@ -61,6 +64,14 @@ const FORGE_TOOLS = [
         icon: FORGE_ICONS.animationGenerator,
         ctor: () => new AnimationGenerator(),
         getter: 'animationGenerator'
+    },
+    {
+        id: 'effekseer-generator',
+        nameKey: 'menu.effekseerGenerator',
+        descriptionKey: 'forge.effekseerGenerator.description',
+        icon: FORGE_ICONS.effekseerGenerator,
+        ctor: () => new EffekseerGenerator(),
+        getter: 'effekseerGenerator'
     },
     {
         id: 'sound-effect-generator',
