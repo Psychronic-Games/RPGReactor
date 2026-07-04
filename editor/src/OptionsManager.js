@@ -104,7 +104,13 @@ class OptionsManager {
             pt: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 16"><rect width="9.6" height="16" fill="#006600"/><rect x="9.6" width="14.4" height="16" fill="#ff0000"/><circle cx="9.6" cy="8" r="3" fill="#ffcc00"/></svg>',
             de: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 16"><rect width="24" height="5.33" fill="#000"/><rect y="5.33" width="24" height="5.34" fill="#dd0000"/><rect y="10.67" width="24" height="5.33" fill="#ffce00"/></svg>',
             fr: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 16"><rect width="8" height="16" fill="#0055a4"/><rect x="8" width="8" height="16" fill="#fff"/><rect x="16" width="8" height="16" fill="#ef4135"/></svg>',
-            el: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 16"><rect width="24" height="16" fill="#0d5eaf"/><path stroke="#fff" stroke-width="1.78" d="M0 2.67h24M0 6.22h24M0 9.78h24M0 13.33h24"/><rect width="8.9" height="8.9" fill="#0d5eaf"/><path stroke="#fff" stroke-width="1.78" d="M4.45 0v8.9M0 4.45h8.9"/></svg>'
+            el: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 16"><rect width="24" height="16" fill="#0d5eaf"/><path stroke="#fff" stroke-width="1.78" d="M0 2.67h24M0 6.22h24M0 9.78h24M0 13.33h24"/><rect width="8.9" height="8.9" fill="#0d5eaf"/><path stroke="#fff" stroke-width="1.78" d="M4.45 0v8.9M0 4.45h8.9"/></svg>',
+            // Korean: split flag by project decision — left half South Korea
+            // (taegeuk), right half North Korea (star banner).
+            ko: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 16"><rect width="12" height="16" fill="#fff"/><path d="M3.6 8a2.4 2.4 0 0 1 4.8 0z" fill="#cd2e3a"/><path d="M8.4 8a2.4 2.4 0 0 1-4.8 0z" fill="#0047a0"/><rect x="12" width="12" height="16" fill="#024fa2"/><rect x="12" y="3" width="12" height="10" fill="#fff"/><rect x="12" y="3.8" width="12" height="8.4" fill="#ed1c27"/><circle cx="16.5" cy="8" r="2.6" fill="#fff"/><polygon points="16.5,5.9 17.1,7.5 18.8,7.5 17.4,8.5 17.9,10.1 16.5,9.1 15.1,10.1 15.6,8.5 14.2,7.5 15.9,7.5" fill="#ed1c27"/></svg>',
+            // Arabic: Saudi flag (software convention) — green field, dashed
+            // band suggesting the shahada, sword beneath.
+            ar: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 16"><rect width="24" height="16" fill="#165d31"/><path stroke="#fff" stroke-width="1.1" stroke-dasharray="2.2 1.1" d="M4 5.5h16"/><path stroke="#fff" stroke-width="1" d="M5 10.5h13"/><path d="M18 9.9l2.6.6-2.6.6z" fill="#fff"/></svg>'
         };
         const svg = svgByLanguage[languageId] || svgByLanguage.en;
         return `<span class="rr-lang-flag" style="background-image: url('data:image/svg+xml,${encodeURIComponent(svg)}');"></span>`;

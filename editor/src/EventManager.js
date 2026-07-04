@@ -565,23 +565,23 @@ class EventManager {
 
         // Menu items
         const menuItems = [
-            { label: 'New Event', action: createEventAction, enabled: !eventAtPos },
-            { label: 'Edit Event', action: () => this.editEvent(eventAtPos), enabled: !!eventAtPos },
+            { label: this._t('eventCtx.newEvent'), action: createEventAction, enabled: !eventAtPos },
+            { label: this._t('eventCtx.editEvent'), action: () => this.editEvent(eventAtPos), enabled: !!eventAtPos },
             { separator: true },
-            { label: 'Cut Event', action: () => this.cutEvent(eventAtPos), enabled: !!eventAtPos },
-            { label: 'Copy Event', action: () => this.copyEvent(eventAtPos), enabled: !!eventAtPos },
-            { label: 'Paste Event', action: () => this.pasteEvent(tileX, tileY), enabled: true },
-            { label: 'Delete Event', action: () => this.deleteEvent(eventAtPos), enabled: !!eventAtPos },
+            { label: this._t('eventCtx.cutEvent'), action: () => this.cutEvent(eventAtPos), enabled: !!eventAtPos },
+            { label: this._t('eventCtx.copyEvent'), action: () => this.copyEvent(eventAtPos), enabled: !!eventAtPos },
+            { label: this._t('eventCtx.pasteEvent'), action: () => this.pasteEvent(tileX, tileY), enabled: true },
+            { label: this._t('eventCtx.deleteEvent'), action: () => this.deleteEvent(eventAtPos), enabled: !!eventAtPos },
             { separator: true },
-            { label: 'Find Event...', action: () => this.showFindDialog(), enabled: true },
-            { label: 'Find Next Event', action: () => this.findNext(), enabled: this.currentSearchResults.length > 0 },
-            { label: 'Find Previous Event', action: () => this.findPrevious(), enabled: this.currentSearchResults.length > 0 },
+            { label: this._t('eventCtx.findEvent'), action: () => this.showFindDialog(), enabled: true },
+            { label: this._t('eventCtx.findNext'), action: () => this.findNext(), enabled: this.currentSearchResults.length > 0 },
+            { label: this._t('eventCtx.findPrev'), action: () => this.findPrevious(), enabled: this.currentSearchResults.length > 0 },
             { separator: true },
-            { label: 'Set Starting Position', submenu: [
-                { label: 'Player', action: () => this.setStartingPosition(tileX, tileY, 'player') },
-                { label: 'Boat', action: () => this.setStartingPosition(tileX, tileY, 'boat') },
-                { label: 'Ship', action: () => this.setStartingPosition(tileX, tileY, 'ship') },
-                { label: 'Airship', action: () => this.setStartingPosition(tileX, tileY, 'airship') }
+            { label: this._t('eventCtx.setStart'), submenu: [
+                { label: this._t('eventCtx.player'), action: () => this.setStartingPosition(tileX, tileY, 'player') },
+                { label: this._t('eventCtx.boat'), action: () => this.setStartingPosition(tileX, tileY, 'boat') },
+                { label: this._t('eventCtx.ship'), action: () => this.setStartingPosition(tileX, tileY, 'ship') },
+                { label: this._t('eventCtx.airship'), action: () => this.setStartingPosition(tileX, tileY, 'airship') }
             ] }
         ];
 
@@ -634,7 +634,7 @@ class EventManager {
                     });
 
                     subMenuItem.addEventListener('mouseenter', () => {
-                        subMenuItem.style.backgroundColor = 'var(--color-selection-deep)';
+                        subMenuItem.style.backgroundColor = 'var(--color-accent-tint-25)';
                     });
 
                     subMenuItem.addEventListener('mouseleave', () => {
@@ -647,7 +647,7 @@ class EventManager {
                 menuItem.appendChild(submenu);
 
                 menuItem.addEventListener('mouseenter', () => {
-                    menuItem.style.backgroundColor = 'var(--color-selection-deep)';
+                    menuItem.style.backgroundColor = 'var(--color-accent-tint-25)';
                     submenu.style.display = 'block';
                 });
 
@@ -675,7 +675,7 @@ class EventManager {
                     });
 
                     menuItem.addEventListener('mouseenter', () => {
-                        menuItem.style.backgroundColor = 'var(--color-selection-deep)';
+                        menuItem.style.backgroundColor = 'var(--color-accent-tint-25)';
                     });
 
                     menuItem.addEventListener('mouseleave', () => {
@@ -1266,6 +1266,10 @@ class EventManager {
     }
 
     // Show find dialog
+    _t(key, params) {
+        return window.I18n ? window.I18n.t(key, params) : key;
+    }
+
     showFindDialog() {
         if (this.findDialog) {
             this.findDialog.remove();
@@ -1287,9 +1291,9 @@ class EventManager {
         `;
 
         this.findDialog.innerHTML = `
-            <h3 style="margin-top: 0; color: var(--color-text);">Find Event</h3>
+            <h3 style="margin-top: 0; color: var(--color-text);" data-i18n="eventFind.title">Find Event</h3>
             <div style="margin-bottom: 16px;">
-                <label style="display: block; color: var(--color-text-muted); margin-bottom: 4px;">Search by name or ID:</label>
+                <label style="display: block; color: var(--color-text-muted); margin-bottom: 4px;" data-i18n="eventFind.searchBy">Search by name or ID:</label>
                 <input type="text" id="event-search-input" style="
                     width: 100%;
                     background-color: var(--color-bg-surface);
@@ -1301,7 +1305,7 @@ class EventManager {
                 ">
             </div>
             <div style="display: flex; gap: 8px; justify-content: flex-end;">
-                <button id="event-search-cancel" class="rr-btn-secondary">Cancel</button>
+                <button id="event-search-cancel" class="rr-btn-secondary" data-i18n="common.cancel">Cancel</button>
                 <button id="event-search-find" style="
                     background-color: var(--color-link);
                     border: none;
@@ -1309,11 +1313,12 @@ class EventManager {
                     padding: 8px 16px;
                     cursor: pointer;
                     border-radius: 3px;
-                ">Find</button>
+                " data-i18n="eventFind.find">Find</button>
             </div>
         `;
 
         document.body.appendChild(this.findDialog);
+        if (window.I18n && window.I18n.apply) window.I18n.apply(this.findDialog);
 
         const input = document.getElementById('event-search-input');
         const findBtn = document.getElementById('event-search-find');

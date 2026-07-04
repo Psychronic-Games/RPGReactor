@@ -1299,3 +1299,32 @@
             padding: 20px;
             color: var(--color-text);
         }
+
+        /* ── Map Properties modal buttons ─────────────────────────────
+           Footer buttons match the header strip (toolbar tone) with the
+           primary action carried by the theme accent — no hardcoded blue. */
+        .map-props-btn {
+            padding: 6px 18px;
+            background-color: var(--color-bg-toolbar);
+            border: 1px solid var(--color-border);
+            color: var(--color-text);
+            border-radius: 4px;
+            font-size: 13px;
+            cursor: pointer;
+            transition: background-color 0.15s, border-color 0.15s, color 0.15s;
+        }
+
+        .map-props-btn:hover {
+            background-color: var(--color-bg-button-hover);
+        }
+
+        .map-props-btn.primary {
+            border-color: var(--color-accent-border-strong);
+            color: var(--color-accent-bright);
+            font-weight: 600;
+        }
+
+        .map-props-btn.primary:hover {
+            background-color: var(--color-accent-tint-15);
+            border-color: var(--color-accent-bright);
+        }

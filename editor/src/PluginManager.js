@@ -1960,18 +1960,19 @@ class PluginManager {
             font-size: 12px;
         `;
 
+        const t = (key, params) => (window.I18n ? window.I18n.t(key, params) : key);
         const selectedCount = this.selectedPluginIndices.has(index) ? this.getSelectedPluginIndices().length : 1;
-        const copyLabel = selectedCount > 1 ? `Copy ${selectedCount} Plugins` : 'Copy';
-        const cutLabel = selectedCount > 1 ? `Cut ${selectedCount} Plugins` : 'Cut';
-        const duplicateLabel = selectedCount > 1 ? `Duplicate ${selectedCount} Plugins` : 'Duplicate';
-        const removeLabel = selectedCount > 1 ? `Remove ${selectedCount} Plugins` : 'Remove Plugin';
+        const copyLabel = selectedCount > 1 ? t('pluginCtx.copyN', { n: selectedCount }) : t('common.copy');
+        const cutLabel = selectedCount > 1 ? t('pluginCtx.cutN', { n: selectedCount }) : t('common.cut');
+        const duplicateLabel = selectedCount > 1 ? t('pluginCtx.duplicateN', { n: selectedCount }) : t('common.duplicate');
+        const removeLabel = selectedCount > 1 ? t('pluginCtx.removeN', { n: selectedCount }) : t('pluginCtx.removePlugin');
 
         const items = options.pasteOnly
-            ? [{ label: 'Paste Plugin', shortcut: 'Ctrl+V', action: () => this._pastePlugin(index) }]
+            ? [{ label: t('pluginCtx.pastePlugin'), shortcut: 'Ctrl+V', action: () => this._pastePlugin(index) }]
             : [
                 { label: copyLabel, shortcut: 'Ctrl+C', action: () => this._copyPlugin(index, false) },
                 { label: cutLabel, shortcut: 'Ctrl+X', action: () => this._copyPlugin(index, true) },
-                { label: 'Paste Above', shortcut: 'Ctrl+V', action: () => this._pastePlugin(index) },
+                { label: t('pluginCtx.pasteAbove'), shortcut: 'Ctrl+V', action: () => this._pastePlugin(index) },
                 null, // separator
                 { label: duplicateLabel, action: () => this._duplicatePlugin(index) },
                 { label: removeLabel, shortcut: 'Del', action: () => this._removeSelectedPlugins() },
@@ -2004,7 +2005,7 @@ class PluginManager {
                 row.appendChild(shortcutSpan);
             }
             if (!entry.disabled) {
-                row.addEventListener('mouseenter', () => row.style.backgroundColor = 'var(--color-selection-deep)');
+                row.addEventListener('mouseenter', () => row.style.backgroundColor = 'var(--color-accent-tint-25)');
                 row.addEventListener('mouseleave', () => row.style.backgroundColor = '');
                 row.addEventListener('click', () => {
                     this._hidePluginContextMenu();

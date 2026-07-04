@@ -39,10 +39,10 @@ function loadI18nForTest(savedSettings = null) {
 
 test('i18n dictionaries expose every supported language for every English key', () => {
     const { RR_LANGUAGES, RR_I18N_STRINGS } = loadI18nForTest();
-    assert.deepEqual(Array.from(RR_LANGUAGES, lang => lang.id), ['en', 'ja', 'es', 'zh-Hant', 'zh-Hans', 'ru', 'pt', 'de', 'fr', 'el']);
+    assert.deepEqual(Array.from(RR_LANGUAGES, lang => lang.id), ['en', 'ja', 'es', 'zh-Hant', 'zh-Hans', 'ru', 'pt', 'de', 'fr', 'el', 'ko', 'ar']);
 
     const englishKeys = Array.from(Object.keys(RR_I18N_STRINGS.en)).sort();
-    for (const lang of ['ja', 'es', 'zh-Hant', 'zh-Hans', 'ru', 'pt', 'de', 'fr', 'el']) {
+    for (const lang of ['ja', 'es', 'zh-Hant', 'zh-Hans', 'ru', 'pt', 'de', 'fr', 'el', 'ko', 'ar']) {
         assert.deepEqual(Array.from(Object.keys(RR_I18N_STRINGS[lang])).sort(), englishKeys, `${lang} keys match English keys`);
     }
 });

@@ -98,6 +98,11 @@ class AnimationGenerator {
         this._layerTmp = null;
     }
 
+    /** Verbatim-label translation (animation/param names live in data). */
+    _tx(label) {
+        return window.I18n && window.I18n.tText ? window.I18n.tText(label) : label;
+    }
+
     renderInto(containerEl, projectController) {
         this.projectController = projectController;
         const project = projectController?.getCurrentProject?.() || projectController?.currentProject;
@@ -733,7 +738,7 @@ class AnimationGenerator {
         const banner = isSingle
             ? `<div style="background: var(--color-bg-input-alt); border: 1px solid var(--color-border-subtle); border-radius: 4px; padding: 8px 10px; display: flex; flex-direction: column; gap: 6px;">
                     <div style="font-size: 10px; color: var(--color-text-dim); text-transform: uppercase; letter-spacing: 0.3px;">Single Preview</div>
-                    <div style="font-size: 13px; color: var(--color-text); font-weight: 600;">${anim.name}</div>
+                    <div style="font-size: 13px; color: var(--color-text); font-weight: 600;">${this._tx(anim.name)}</div>
                     <div style="font-size: 10px; color: var(--color-text-muted);">${cat ? cat.name : ''} — not added to the stack yet. Tune the params below, then commit:</div>
                     <button class="rr-ag-commit-single rr-btn-chip" style="padding: 6px 10px; font-size: 11px; color: var(--color-accent-bright); margin-top: 2px;">+ Add as Layer</button>
                 </div>`
@@ -748,10 +753,10 @@ class AnimationGenerator {
                     : '';
                 return `<div style="background: var(--color-bg-input-alt); border: 1px solid var(--color-border-subtle); border-radius: 4px; padding: 8px 10px; display: flex; flex-direction: column; gap: 6px;">
                     <div style="font-size: 10px; color: var(--color-text-dim); text-transform: uppercase; letter-spacing: 0.3px;">Editing Layer${kfBadge}</div>
-                    <div style="font-size: 13px; color: var(--color-text); font-weight: 600;">${anim.name}</div>
+                    <div style="font-size: 13px; color: var(--color-text); font-weight: 600;">${this._tx(anim.name)}</div>
                     <div style="font-size: 10px; color: var(--color-text-muted);">${cat ? cat.name : ''} · changes apply directly to this layer.${kfHint}</div>
                     <button class="rr-ag-dup-layer rr-btn-chip" data-cat="${target.categoryId}" data-anim="${target.animationId}" style="padding: 6px 10px; font-size: 11px; color: var(--color-accent-bright); margin-top: 2px;" title="Add another instance of this animation as a new top layer">+ Add Another Copy</button>
-                    <div style="font-size: 9px; color: var(--color-text-dim); line-height: 1.3;">Adds a fresh copy of <strong>${anim.name}</strong> on top of the stack. The new copy starts with default params — tweak it independently.</div>
+                    <div style="font-size: 9px; color: var(--color-text-dim); line-height: 1.3;">Adds a fresh copy of <strong>${this._tx(anim.name)}</strong> on top of the stack. The new copy starts with default params — tweak it independently.</div>
                 </div>`;
             })();
         return `
@@ -877,7 +882,7 @@ class AnimationGenerator {
                 <input type="text" class="rr-ag-search rr-input" placeholder="Search animations…" value="${search.replace(/"/g, '&quot;')}" style="padding: 4px 8px; font-size: 11px;">
                 <select class="rr-ag-cat-filter rr-select" style="padding: 4px 6px; font-size: 11px;">
                     <option value="all" ${catFilter === 'all' ? 'selected' : ''}>All Categories</option>
-                    ${ANIMATION_CATEGORIES.map(c => `<option value="${c.id}" ${catFilter === c.id ? 'selected' : ''}>${c.name}</option>`).join('')}
+                    ${ANIMATION_CATEGORIES.map(c => `<option value="${c.id}" ${catFilter === c.id ? 'selected' : ''}>${this._tx(c.name)}</option>`).join('')}
                 </select>
                 <div style="font-size: 9px; color: var(--color-text-dim); line-height: 1.4;">Click a row to preview standalone. Click <strong style="color: var(--color-accent-bright);">+</strong> to add it as a layer.</div>
             </div>
@@ -902,12 +907,12 @@ class AnimationGenerator {
             );
             if (animations.length === 0) continue;
             matchCount += animations.length;
-            html += `<div style="padding: 8px 12px 4px; font-size: 9px; font-weight: 700; color: var(--color-accent-bright); text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid var(--color-border-subtle);">${cat.name}</div>`;
+            html += `<div style="padding: 8px 12px 4px; font-size: 9px; font-weight: 700; color: var(--color-accent-bright); text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid var(--color-border-subtle);">${this._tx(cat.name)}</div>`;
             for (const anim of animations) {
                 const active = isPreviewing(cat.id, anim.id);
                 html += `
                     <div class="rr-ag-anim-item" data-cat="${cat.id}" data-anim="${anim.id}" title="${(anim.description || '').replace(/"/g, '&quot;')}" style="padding: 6px 4px 6px 12px; cursor: pointer; font-size: 12px; color: var(--color-text); border-bottom: 1px solid var(--color-border-subtle); display: flex; justify-content: space-between; align-items: center; background: ${active ? 'var(--color-bg-hover)' : 'transparent'}; border-left: 3px solid ${active ? 'var(--color-accent-bright)' : 'transparent'};">
-                        <span style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis;">${anim.name}</span>
+                        <span style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis;">${this._tx(anim.name)}</span>
                         <button class="rr-ag-anim-add rr-btn-chip" data-cat="${cat.id}" data-anim="${anim.id}" title="Add as new layer" style="padding: 2px 8px; margin-left: 6px; font-size: 12px; color: var(--color-accent-bright); font-weight: 700;">+</button>
                     </div>
                 `;
@@ -926,7 +931,7 @@ class AnimationGenerator {
             if (p.type === 'color') {
                 html += `
                     <div style="margin-bottom: 10px; display: grid; grid-template-columns: 90px 1fr; gap: 8px; align-items: center;">
-                        <label style="font-size: 11px; color: var(--color-text-muted);">${p.label}</label>
+                        <label style="font-size: 11px; color: var(--color-text-muted);">${this._tx(p.label)}</label>
                         <button type="button" class="rr-color-swatch-btn" data-key="${p.key}" title="Click to choose color" style="background: ${val}; justify-self: start;"></button>
                     </div>
                 `;

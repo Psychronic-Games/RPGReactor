@@ -19,6 +19,13 @@ class AudioPlayer {
     }
 
     setCurrentProject(project) {
+        // Switching projects must not carry the old project's audio across —
+        // whatever is playing belongs to files of the previous project.
+        const oldPath = this.currentProject && this.currentProject.path;
+        const newPath = project && project.path;
+        if (this.audioPlayer && oldPath && newPath !== oldPath) {
+            this.stopExternal();
+        }
         this.currentProject = project;
     }
 

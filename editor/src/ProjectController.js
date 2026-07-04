@@ -210,7 +210,7 @@ class ProjectController {
     async newProject() {
         if (typeof nw !== 'undefined') {
             // First, ask for project name
-            const projectName = prompt('Enter project name:', 'My RPG Project');
+            const projectName = prompt('Enter project name:', 'Reactor One');
             if (!projectName) return;
 
             // Use NW.js chooser for directory selection
@@ -1023,6 +1023,10 @@ class ProjectController {
         this.tilesetPaletteViewer = viewer;
     }
 
+    _t(key, params) {
+        return window.I18n ? window.I18n.t(key, params) : key;
+    }
+
     // Show context menu for map
     showMapContextMenu(x, y, mapId) {
         // Remove any existing context menu
@@ -1052,21 +1056,21 @@ class ProjectController {
         const canDeleteMap = !!map && typeof nw !== 'undefined' && remainingMapCount > 0;
 
         const menuItems = [
-            { label: 'Edit Map', action: () => this.editMap(mapId) },
-            { label: 'New Map', action: () => this.createNewMap() },
-            { label: 'Load Sample Map', action: () => this.loadSampleMap(), enabled: false },
+            { label: this._t('mapCtx.editMap'), action: () => this.editMap(mapId) },
+            { label: this._t('mapCtx.newMap'), action: () => this.createNewMap() },
+            { label: this._t('mapCtx.loadSample'), action: () => this.loadSampleMap(), enabled: false },
             {
-                label: isInQuickAccess ? 'Remove From Quick Access' : 'Add To Quick Access',
+                label: this._t(isInQuickAccess ? 'mapCtx.removeQuick' : 'mapCtx.addQuick'),
                 action: () => this.toggleQuickAccess(mapId)
             },
             { separator: true },
-            { label: 'Copy Map', action: () => this.copyMap(mapId), enabled: true },
-            { label: 'Paste Map', action: () => this.pasteMap(), enabled: true },
-            { label: 'Delete Map', action: () => this.deleteMap(mapId), enabled: canDeleteMap },
+            { label: this._t('mapCtx.copyMap'), action: () => this.copyMap(mapId), enabled: true },
+            { label: this._t('mapCtx.pasteMap'), action: () => this.pasteMap(), enabled: true },
+            { label: this._t('mapCtx.deleteMap'), action: () => this.deleteMap(mapId), enabled: canDeleteMap },
             { separator: true },
-            { label: 'Shift', action: () => this.shiftMap(mapId), enabled: false },
-            { label: 'Generate Dungeon', action: () => this.generateDungeon(mapId), enabled: false },
-            { label: 'Save Map As Image', action: () => this.saveMapAsImage(mapId), enabled: !!map && typeof nw !== 'undefined' }
+            { label: this._t('mapCtx.shift'), action: () => this.shiftMap(mapId), enabled: false },
+            { label: this._t('mapCtx.generateDungeon'), action: () => this.generateDungeon(mapId), enabled: false },
+            { label: this._t('mapCtx.saveImage'), action: () => this.saveMapAsImage(mapId), enabled: !!map && typeof nw !== 'undefined' }
         ];
 
         menuItems.forEach(item => {
@@ -1087,11 +1091,15 @@ class ProjectController {
                 `;
 
                 if (isEnabled) {
+                    // Accent hover — same convention as the menubar dropdowns
+                    // (.html-menu-option:hover), not the old hardcoded blue.
                     menuItem.addEventListener('mouseenter', () => {
-                        menuItem.style.backgroundColor = 'var(--color-selection-deep)';
+                        menuItem.style.backgroundColor = 'var(--color-accent-tint-25)';
+                        menuItem.style.color = 'var(--color-text-strong)';
                     });
                     menuItem.addEventListener('mouseleave', () => {
                         menuItem.style.backgroundColor = 'transparent';
+                        menuItem.style.color = 'var(--color-text)';
                     });
                     menuItem.addEventListener('click', () => {
                         item.action();
@@ -1256,7 +1264,7 @@ class ProjectController {
 
         // Update modal title
         const title = document.getElementById('map-properties-title');
-        title.textContent = isNewMap ? 'New Map' : 'Map Properties';
+        title.textContent = isNewMap ? this._t('mapCtx.newMap') : this._t('mapProps.title');
 
         // Populate form fields
         this.populateMapPropertiesForm(mapData);
@@ -1391,7 +1399,7 @@ class ProjectController {
 
     populateAudioDropdown(selectId, type) {
         const select = document.getElementById(selectId);
-        select.innerHTML = '<option value="">(None)</option>';
+        select.innerHTML = `<option value="">${this._t('common.none')}</option>`;
 
         if (!this.currentProject || !this.currentProject.path || typeof nw === 'undefined') {
             return;
@@ -1466,42 +1474,54 @@ class ProjectController {
     playMapAudioPreview(type) {
         const audioPlayer = window.reactor?.audioPlayer;
         if (!audioPlayer) {
-            this.updateMapAudioPreviewStatus(type, 'Audio player unavailable', true);
+            this.updateMapAudioPreviewStatus(type, this._t('mapProps.audioUnavailable'), true);
             return;
         }
 
         const name = document.getElementById(`map-${type}-select`)?.value || '';
         if (!name) {
-            audioPlayer.stopExternal(type);
-            this.updateMapAudioPreviewStatus(type, 'No track selected', true);
+            this.stopMapAudioPreview(type);
+            this.updateMapAudioPreviewStatus(type, this._t('mapProps.noTrack'), true);
             return;
         }
 
         const filePath = this.getMapAudioPreviewPath(type);
         if (!filePath) {
-            this.updateMapAudioPreviewStatus(type, `${name} not found`, true);
+            this.updateMapAudioPreviewStatus(type, this._t('mapProps.notFound', { name }), true);
             return;
         }
 
         audioPlayer.playExternal(filePath, this.getMapAudioPreviewParams(type));
-        this.updateMapAudioPreviewStatus(type, `Previewing ${name}`);
+        // The previews share the global bgm/bgs channels with the music
+        // player — remember WE started this one, so closing the modal only
+        // stops our preview and never the user's own music.
+        this._mapAudioPreviewActive = this._mapAudioPreviewActive || {};
+        this._mapAudioPreviewActive[type] = true;
+        this.updateMapAudioPreviewStatus(type, this._t('mapProps.previewing', { name }));
     }
 
     pauseMapAudioPreview(type) {
+        if (!this._mapAudioPreviewActive?.[type]) return;   // nothing of ours is playing
         const audioPlayer = window.reactor?.audioPlayer;
         const channel = audioPlayer?.getChannel?.(type);
         if (!channel) return;
         channel.audio.pause();
         channel.playing = false;
-        this.updateMapAudioPreviewStatus(type, 'Preview paused');
+        this.updateMapAudioPreviewStatus(type, this._t('mapProps.previewPaused'));
     }
 
     stopMapAudioPreview(type) {
-        const audioPlayer = window.reactor?.audioPlayer;
-        if (audioPlayer) {
-            audioPlayer.stopExternal(type);
+        // Only stop the channel if the MODAL started playback on it — the
+        // music player shares these channels, and unconditional stops here
+        // killed the user's music on OK/Cancel.
+        if (this._mapAudioPreviewActive?.[type]) {
+            const audioPlayer = window.reactor?.audioPlayer;
+            if (audioPlayer) {
+                audioPlayer.stopExternal(type);
+            }
+            this._mapAudioPreviewActive[type] = false;
         }
-        this.updateMapAudioPreviewStatus(type, 'No preview playing');
+        this.updateMapAudioPreviewStatus(type, this._t('mapProps.noPreview'));
     }
 
     stopMapAudioPreviews() {
@@ -1552,8 +1572,8 @@ class ProjectController {
     populateBattlebackDropdowns() {
         const select1 = document.getElementById('map-battleback1-select');
         const select2 = document.getElementById('map-battleback2-select');
-        select1.innerHTML = '<option value="">(None)</option>';
-        select2.innerHTML = '<option value="">(None)</option>';
+        select1.innerHTML = `<option value="">${this._t('common.none')}</option>`;
+        select2.innerHTML = `<option value="">${this._t('common.none')}</option>`;
 
         if (!this.currentProject || !this.currentProject.path || typeof nw === 'undefined') {
             return;
@@ -1595,7 +1615,7 @@ class ProjectController {
 
     populateParallaxDropdown() {
         const select = document.getElementById('map-parallax-image-select');
-        select.innerHTML = '<option value="">(None)</option>';
+        select.innerHTML = `<option value="">${this._t('common.none')}</option>`;
 
         if (!this.currentProject || !this.currentProject.path || typeof nw === 'undefined') {
             return;
