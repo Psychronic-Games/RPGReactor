@@ -226,7 +226,13 @@
                                 generationTime: rf(period),
                                 generationTimeOffset: rf(ch.dt) },
                 translation: { type: 0, refEq: -1, position: v3(ch.dx, 0, 0) },
-                scaling: { type: 4, start: rf(S * 0.1), end: rf(S * 1.05), params: [0, 0, 0] },
+                // params [0,0,1] = LINEAR easing — [0,0,0] freezes the
+                // interpolation at the start value (the invisible-rings bug)
+                scaling: {
+                    type: 2, refEqS: rf(-1), refEqE: rf(-1),
+                    start: rv3(S * 0.1), end: rv3(S * 1.05),
+                    params: [0, 0, 1],
+                },
                 rendererCommon: {
                     colorTextureIndex: 0, alphaBlend: 2,
                     fadeOutType: 1, fadeOut: { frame: Math.round(period * 0.4), params: [0, 0, 0] },
@@ -245,7 +251,7 @@
             const heartLayer = (c, cycle, off) => B.makeNode(RR_EfkFormat.NODE_TYPE.SPRITE, {
                 commonValues: { ...bindAlways, maxGeneration: 99999, life: rf(cycle),
                                 generationTime: rf(Math.round(cycle / 2)), generationTimeOffset: rf(off) },
-                scaling: { type: 4, start: rf(S * 0.34), end: rf(S * 0.52), params: [0, 0, 0] },
+                scaling: { type: 4, start: rf(S * 0.34), end: rf(S * 0.52), params: [0, 0, 1] },
                 rendererCommon: {
                     colorTextureIndex: 2, alphaBlend: 2,
                     fadeInType: 1, fadeIn: { frame: Math.round(cycle * 0.35), params: [0, 0, 0] },
@@ -321,7 +327,7 @@
                     velocity: rv3(v3(-0.007, 0.001, -0.003), v3(0.007, 0.005, 0.003)),
                     acceleration: rv3(0),
                 },
-                scaling: { type: 4, start: rf(1.5, 2.3), end: rf(2.7, 3.6), params: [0, 0, 0] },
+                scaling: { type: 4, start: rf(1.5, 2.3), end: rf(2.7, 3.6), params: [0, 0, 1] },
                 rendererCommon: {
                     colorTextureIndex: 0, alphaBlend: 1,
                     fadeInType: 1, fadeIn: { frame: 26, params: [0, 0, 0] },
@@ -344,7 +350,7 @@
                     velocity: rv3(v3(-0.004, 0.002, -0.002), v3(0.004, 0.009, 0.002)),
                     acceleration: rv3(0),
                 },
-                scaling: { type: 4, start: rf(0.8, 1.3), end: rf(1.6, 2.2), params: [0, 0, 0] },
+                scaling: { type: 4, start: rf(0.8, 1.3), end: rf(1.6, 2.2), params: [0, 0, 1] },
                 rendererCommon: {
                     colorTextureIndex: 0, alphaBlend: 1,
                     fadeInType: 1, fadeIn: { frame: 14, params: [0, 0, 0] },
@@ -357,7 +363,7 @@
             const glowBed = B.makeNode(RR_EfkFormat.NODE_TYPE.SPRITE, {
                 commonValues: { ...bindAlways, maxGeneration: 99999, life: rf(58), generationTime: rf(29) },
                 translation: { type: 0, refEq: -1, position: v3(0, -0.6, 0) },
-                scaling: { type: 4, start: rf(2.3), end: rf(3.1), params: [0, 0, 0] },
+                scaling: { type: 4, start: rf(2.3), end: rf(3.1), params: [0, 0, 1] },
                 rendererCommon: {
                     colorTextureIndex: 3, alphaBlend: 2,
                     fadeInType: 1, fadeIn: { frame: 20, params: [0, 0, 0] },
@@ -388,7 +394,7 @@
                     velocity: rv3(v3(-0.003, 0.011, -0.002), v3(0.003, 0.024, 0.002)),
                     acceleration: rv3(0),
                 },
-                scaling: { type: 4, start: rf(0.16, 0.3), end: rf(0.4, 0.62), params: [0, 0, 0] },
+                scaling: { type: 4, start: rf(0.16, 0.3), end: rf(0.4, 0.62), params: [0, 0, 1] },
                 rendererCommon: {
                     colorTextureIndex: 5, alphaBlend: 2,
                     fadeInType: 1, fadeIn: { frame: 6, params: [0, 0, 0] },
@@ -415,7 +421,7 @@
                     elements: [{ type: 1, seed: 11, scale: 0.7, strength: 0.006, octave: 1 }],
                     locationAbs: { type: 0 },
                 },
-                scaling: { type: 4, start: rf(0.08, 0.2), end: rf(0), params: [0, 0, 0] },
+                scaling: { type: 4, start: rf(0.08, 0.2), end: rf(0), params: [0, 0, 1] },
                 rendererCommon: { colorTextureIndex: 2, alphaBlend: 2,
                     fadeInType: 1, fadeIn: { frame: 8, params: [0, 0, 0] } },
                 rendererParams: { allColor: U.fixedColor({ ...bub, a: 220 }) },

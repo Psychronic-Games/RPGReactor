@@ -95,7 +95,7 @@
                     rotation: rv3(AXES[axis].min, AXES[axis].max),
                     velocity: rv3(AXES[axis].vel(spin)), acceleration: rv3(0),
                 },
-                scaling: { type: 4, start: rf(size * 0.88), end: rf(size * 1.1), params: [0, 0, 0] },
+                scaling: { type: 4, start: rf(size * 0.88), end: rf(size * 1.1), params: [0, 0, 1] },
                 rendererCommon: {
                     colorTextureIndex: 4, alphaBlend: 2,
                     fadeInType: 1, fadeIn: { frame: Math.round(cycle * 0.35), params: [0, 0, 0] },
@@ -124,7 +124,7 @@
                         velocity: rv3(v3(0, 0, -Math.max(0.05, Math.abs(speed) * 1.8)), v3(0, 0, Math.max(0.05, Math.abs(speed) * 1.8))),
                         acceleration: rv3(0),
                     },
-                    scaling: { type: 4, start: rf(0.55, 0.75), end: rf(0.15), params: [0, 0, 0] },
+                    scaling: { type: 4, start: rf(0.55, 0.75), end: rf(0.15), params: [0, 0, 1] },
                     rendererCommon: {
                         colorTextureIndex: 5, alphaBlend: 2,
                         fadeInType: 1, fadeIn: { frame: 3, params: [0, 0, 0] },
@@ -182,7 +182,7 @@
             const discharges = B.makeNode(RR_EfkFormat.NODE_TYPE.SPRITE, {
                 commonValues: { ...L.BIND, maxGeneration: 99999, life: rf(5, 10), generationTime: rf(3, 7) },
                 generationLocation: { type: 1, radius: rf(S * 0.5, S * 0.6), rotationX: rf(0, 360), rotationY: rf(0, 360) },
-                scaling: { type: 4, start: rf(0.5, 0.9), end: rf(0), params: [0, 0, 0] },
+                scaling: { type: 4, start: rf(0.5, 0.9), end: rf(0), params: [0, 0, 1] },
                 rendererCommon: { colorTextureIndex: 5, alphaBlend: 2 },
                 rendererParams: { allColor: L.fixed(WHITE, 255) },
             });
@@ -199,7 +199,7 @@
                     generationTime: rf(Math.round(cycle / 2)),
                     generationTimeOffset: rf(offset || 0),
                 },
-                scaling: { type: 4, start: rf(from), end: rf(to), params: [0, 0, 0] },
+                scaling: { type: 4, start: rf(from), end: rf(to), params: [0, 0, 1] },
                 rendererCommon: {
                     colorTextureIndex: tex ?? 0, alphaBlend: 2,
                     fadeInType: 1, fadeIn: { frame: Math.round(cycle * 0.35), params: [0, 0, 0] },
@@ -344,7 +344,7 @@
                     velocity: rv3(v3(-0.06, 0.04, -0.06), v3(0.06, 0.16, 0.06)),
                     acceleration: rv3(0),
                 },
-                scaling: { type: 4, start: rf(0.2, 0.5), end: rf(0), params: [0, 0, 0] },
+                scaling: { type: 4, start: rf(0.2, 0.5), end: rf(0), params: [0, 0, 1] },
                 rendererCommon: { colorTextureIndex: 1 },
                 rendererParams: { allColor: U.easeColor({ r: 255, g: 255, b: 255, a: 255 }, { ...c, a: 0 }) },
             });
@@ -428,7 +428,7 @@
                                         generationTime: rf(Math.round(cycle * 0.35)),
                                         generationTimeOffset: rf((i * 23) % 30) },
                         translation: { type: 0, refEq: -1, position: v3(x, 1.75, zBase + 0.1) },
-                        scaling: { type: 4, start: rf(spacing * 0.5), end: rf(spacing * 0.9), params: [0, 0, 0] },
+                        scaling: { type: 4, start: rf(spacing * 0.5), end: rf(spacing * 0.9), params: [0, 0, 1] },
                         rendererCommon: {
                             colorTextureIndex: 2, alphaBlend: 2,
                             uv: { type: 3,
@@ -457,7 +457,7 @@
                     commonValues: { ...bindAlways, maxGeneration: 99999, life: rf(20, 45),
                                     generationTime: rf(Math.max(1, 60 / p.stars)) },
                     generationLocation: { type: 0, location: rv3(v3(-W * 1.2, 0.5, -2), v3(W * 1.2, 4.5, -1)) },
-                    scaling: { type: 4, start: rf(0.12, 0.3), end: rf(0.05), params: [0, 0, 0] },
+                    scaling: { type: 4, start: rf(0.12, 0.3), end: rf(0.05), params: [0, 0, 1] },
                     rendererCommon: { colorTextureIndex: 1, alphaBlend: 2,
                         fadeInType: 1, fadeIn: { frame: 8, params: [0, 0, 0] },
                         fadeOutType: 1, fadeOut: { frame: 8, params: [0, 0, 0] } },
@@ -577,7 +577,7 @@
                                     translationBindType: 2, rotationBindType: 2, scalingBindType: 2 },
                     generationLocation: { type: 3, division: 24, radius: rf(H * 1.2, H * 2.1),
                                           angleStart: rf(0), angleEnd: rf(360), circleType: 0, axisDirection: 1, angleNoize: rf(8) },
-                    scaling: { type: 4, start: rf(0.15, 0.4), end: rf(0), params: [0, 0, 0] },
+                    scaling: { type: 4, start: rf(0.15, 0.4), end: rf(0), params: [0, 0, 1] },
                     rendererCommon: { colorTextureIndex: 6, alphaBlend: 2,
                         fadeInType: 1, fadeIn: { frame: 8, params: [0, 0, 0] } },
                     rendererParams: { allColor: U.easeColor({ ...WHITE, a: 230 }, { ...col, a: 0 }) },
@@ -702,7 +702,7 @@
                         elements: [{ type: 9, control: 1.6, minRange: 0, maxRange: 4 }],
                         locationAbs: { type: 0 },
                     },
-                    scaling: { type: 4, start: rf(0.05, 0.13), end: rf(0), params: [0, 0, 0] },
+                    scaling: { type: 4, start: rf(0.05, 0.13), end: rf(0), params: [0, 0, 1] },
                     rendererCommon: {
                         colorTextureIndex: 2,
                         fadeInType: 1, fadeIn: { frame: 8, params: [0, 0, 0] },
@@ -801,7 +801,7 @@
                     life: rf(45),
                     generationTime: rf(95),
                 },
-                scaling: { type: 4, start: rf(0.85), end: rf(1.18), params: [0, 0, 0] },
+                scaling: { type: 4, start: rf(0.85), end: rf(1.18), params: [0, 0, 1] },
                 rendererCommon: {
                     colorTextureIndex: 1,
                     fadeInType: 1, fadeIn: { frame: 10, params: [0, 0, 0] },
@@ -841,7 +841,7 @@
                     generationTime: rf(Math.max(0.5, 30 / Math.max(1, p.sparks))),
                 },
                 generationLocation: { type: 1, radius: rf(0.98, 1.02), rotationX: rf(0, 360), rotationY: rf(0, 360) },
-                scaling: { type: 4, start: rf(0.06, 0.16), end: rf(0), params: [0, 0, 0] },
+                scaling: { type: 4, start: rf(0.06, 0.16), end: rf(0), params: [0, 0, 1] },
                 rendererCommon: { colorTextureIndex: 2 },
                 rendererParams: { allColor: U.fixedColor({ r: 255, g: 255, b: 255, a: 255 }) },
             });
@@ -1042,7 +1042,7 @@
                 commonValues: { ...bindAlways, maxGeneration: 99999, life: rf(cycle),
                                 generationTime: rf(Math.round(cycle / 2)), generationTimeOffset: rf(offset || 0) },
                 translation: { type: 0, refEq: -1, position: v3(0, y || 0, 0) },
-                scaling: { type: 4, start: rf(from), end: rf(to), params: [0, 0, 0] },
+                scaling: { type: 4, start: rf(from), end: rf(to), params: [0, 0, 1] },
                 rendererCommon: {
                     colorTextureIndex: tex, alphaBlend: 2,
                     fadeInType: 1, fadeIn: { frame: Math.round(cycle * 0.35), params: [0, 0, 0] },
@@ -1124,7 +1124,7 @@
                                     translationBindType: 2, rotationBindType: 2, scalingBindType: 2 },
                     generationLocation: { type: 3, division: 24, radius: rf(radius * 0.97, radius * 1.03),
                                           angleStart: rf(0), angleEnd: rf(360), circleType: 0, axisDirection: 1, angleNoize: rf(3) },
-                    scaling: { type: 4, start: rf(0.5, 0.7), end: rf(0.14), params: [0, 0, 0] },
+                    scaling: { type: 4, start: rf(0.5, 0.7), end: rf(0.14), params: [0, 0, 1] },
                     rendererCommon: { colorTextureIndex: 4, alphaBlend: 2,
                         fadeInType: 1, fadeIn: { frame: 4, params: [0, 0, 0] },
                         fadeOutType: 1, fadeOut: { frame: 8, params: [0, 0, 0] } },
@@ -1160,7 +1160,7 @@
                         velocity: rv3(v3(-0.003, -0.03, -0.003), v3(0.003, -0.014, 0.003)),
                         acceleration: rv3(0),
                     },
-                    scaling: { type: 4, start: rf(0.25, 0.5), end: rf(0.08), params: [0, 0, 0] },
+                    scaling: { type: 4, start: rf(0.25, 0.5), end: rf(0.08), params: [0, 0, 1] },
                     rendererCommon: { colorTextureIndex: 4, alphaBlend: 2,
                         fadeInType: 1, fadeIn: { frame: 8, params: [0, 0, 0] } },
                     rendererParams: { allColor: L.fixed(mote, 235) },
@@ -1275,7 +1275,7 @@
                     velocity: rv3(v3(0, 0.006, 0), v3(0, 0.02, 0)),
                     acceleration: rv3(0),
                 },
-                scaling: { type: 4, start: rf(0.04, 0.11), end: rf(0), params: [0, 0, 0] },
+                scaling: { type: 4, start: rf(0.04, 0.11), end: rf(0), params: [0, 0, 1] },
                 rendererCommon: { colorTextureIndex: 2 },
                 rendererParams: { allColor: U.fixedColor({ ...c2, a: 255 }) },
             });
@@ -1334,7 +1334,7 @@
             const pulseRing = B.makeNode(RR_EfkFormat.NODE_TYPE.RING, {
                 commonValues: { ...bindAlways, maxGeneration: 99999, life: rf(34), generationTime: rf(80) },
                 rotation: FLAT,
-                scaling: { type: 4, start: rf(0.18), end: rf(1.28), params: [0, 0, 0] },
+                scaling: { type: 4, start: rf(0.18), end: rf(1.28), params: [0, 0, 1] },
                 rendererCommon: {
                     colorTextureIndex: 0, alphaBlend: 2,
                     fadeOutType: 1, fadeOut: { frame: 16, params: [0, 0, 0] },
@@ -1354,7 +1354,7 @@
                 commonValues: { ...bindAlways, maxGeneration: 99999, life: rf(52), generationTime: rf(26) },
                 translation: { type: 0, refEq: -1, position: v3(0, 0.06, 0) },
                 rotation: FLAT,
-                scaling: { type: 4, start: rf(0.95), end: rf(1.3), params: [0, 0, 0] },
+                scaling: { type: 4, start: rf(0.95), end: rf(1.3), params: [0, 0, 1] },
                 rendererCommon: {
                     colorTextureIndex: 5, alphaBlend: 2,
                     fadeInType: 1, fadeIn: { frame: 18, params: [0, 0, 0] },
@@ -1503,7 +1503,7 @@
                     velocity: rv3(v3(-0.004, dir * p.rise * 0.012, -0.004), v3(0.004, dir * p.rise * 0.028, 0.004)),
                     acceleration: rv3(0),
                 },
-                scaling: { type: 4, start: rf(0.08, 0.2), end: rf(0), params: [0, 0, 0] },
+                scaling: { type: 4, start: rf(0.08, 0.2), end: rf(0), params: [0, 0, 1] },
                 rendererCommon: { colorTextureIndex: 1 },
                 rendererParams: { allColor: U.fixedColor({ ...c2, a: 255 }) },
             });
@@ -1520,7 +1520,7 @@
                     location: rv3(v3(-p.radius * 0.8, -h / 2, -p.radius * 0.8),
                                   v3(p.radius * 0.8, h / 2, p.radius * 0.8)),
                 },
-                scaling: { type: 4, start: rf(0.1, 0.28), end: rf(0), params: [0, 0, 0] },
+                scaling: { type: 4, start: rf(0.1, 0.28), end: rf(0), params: [0, 0, 1] },
                 rendererCommon: { colorTextureIndex: 1 },
                 rendererParams: { allColor: U.fixedColor({ r: 255, g: 255, b: 255, a: 255 }) },
             });

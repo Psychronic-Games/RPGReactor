@@ -35,7 +35,7 @@ RR_EFK_RECIPE_REGISTRY.push({
         // ── act 1: GATHER — a violet ring contracts into the heart
         const gather = B.makeNode(RR_EfkFormat.NODE_TYPE.RING, {
             commonValues: { ...bindAlways, maxGeneration: 1, life: rf(Math.round(D * 0.18)) },
-            scaling: { type: 4, start: rf(R * 0.6), end: rf(R * 0.07), params: [0, 0, 0] },
+            scaling: { type: 4, start: rf(R * 0.6), end: rf(R * 0.07), params: [0, 0, 1] },
             rendererCommon: {
                 colorTextureIndex: 0, alphaBlend: 2,
                 fadeInType: 1, fadeIn: { frame: 3, params: [0, 0, 0] },
@@ -55,7 +55,7 @@ RR_EFK_RECIPE_REGISTRY.push({
         const inkWave = B.makeNode(RR_EfkFormat.NODE_TYPE.RING, {
             commonValues: { ...bindAlways, maxGeneration: 2, life: rf(Math.round(D * 0.42)),
                             generationTime: rf(Math.round(D * 0.2)), generationTimeOffset: rf(t0) },
-            scaling: { type: 4, start: rf(R * 0.08), end: rf(R * 0.62), params: [0, 0, 0] },
+            scaling: { type: 4, start: rf(R * 0.08), end: rf(R * 0.62), params: [0, 0, 1] },
             rendererCommon: {
                 colorTextureIndex: 0, alphaBlend: 1,   // darkness swallows
                 fadeOutType: 1, fadeOut: { frame: Math.round(D * 0.2), params: [0, 0, 0] },
@@ -87,7 +87,7 @@ RR_EFK_RECIPE_REGISTRY.push({
         const heart = (size, tex, color, alpha, cycle, offset) => B.makeNode(RR_EfkFormat.NODE_TYPE.SPRITE, {
             commonValues: { ...bindAlways, maxGeneration: 99999, life: rf(cycle),
                             generationTime: rf(Math.round(cycle / 2)), generationTimeOffset: rf(offset || t0) },
-            scaling: { type: 4, start: rf(size * 0.82), end: rf(size * 1.12), params: [0, 0, 0] },
+            scaling: { type: 4, start: rf(size * 0.82), end: rf(size * 1.12), params: [0, 0, 1] },
             rendererCommon: {
                 colorTextureIndex: tex, alphaBlend: color === INK ? 1 : 2,
                 fadeInType: 1, fadeIn: { frame: Math.round(cycle * 0.35), params: [0, 0, 0] },

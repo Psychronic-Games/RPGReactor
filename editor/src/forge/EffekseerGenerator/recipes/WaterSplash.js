@@ -32,7 +32,7 @@
             const column = B.makeNode(RR_EfkFormat.NODE_TYPE.SPRITE, {
                 commonValues: { ...L.BIND, maxGeneration: 1, life: rf(Math.round(D * 0.4)) },
                 translation: { type: 0, refEq: -1, position: v3(0, 3.2, 0) },
-                scaling: { type: 4, start: rf(2.2), end: rf(3.4), params: [0, 0, 0] },
+                scaling: { type: 4, start: rf(2.2), end: rf(3.4), params: [0, 0, 1] },
                 rendererCommon: { colorTextureIndex: 3, alphaBlend: 2, fadeInType: 1, fadeIn: { frame: 2, params: [0, 0, 0] }, fadeOutType: 1, fadeOut: { frame: Math.round(D * 0.2), params: [0, 0, 0] } },
                 rendererParams: { allColor: L.fixed(foam, 210) },
             });

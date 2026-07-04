@@ -45,7 +45,7 @@ const RR_EfkRecipeUtil = {
     /** Easing AllTypeColor from one rgba to another (linear ease). */
     easeColor(from, to) {
         const rc = (c) => ({ mode: 0, _reserved: 0, max: c, min: c });
-        return { type: 2, easing: { start: rc(from), end: rc(to), params: [0, 0, 0] } };
+        return { type: 2, easing: { start: rc(from), end: rc(to), params: [0, 0, 1] } };
     },
 
     /** Scale a color's brightness, keeping alpha. */

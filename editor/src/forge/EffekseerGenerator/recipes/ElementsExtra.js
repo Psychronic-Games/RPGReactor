@@ -58,7 +58,7 @@
                     velocity: rv3(v3(-spd * 1.25, -spread, -spread), v3(-spd * 0.8, spread, spread)),
                     acceleration: rv3(v3(0, grav, 0)),
                 },
-                scaling: { type: 4, start: rf(sizes[0]), end: rf(sizes[1]), params: [0, 0, 0] },
+                scaling: { type: 4, start: rf(sizes[0]), end: rf(sizes[1]), params: [0, 0, 1] },
                 rendererCommon: {
                     colorTextureIndex: tex, alphaBlend: 2,
                     fadeInType: 1, fadeIn: { frame: 2, params: [0, 0, 0] },
@@ -84,7 +84,7 @@
                         rotation: rv3(v3(0, 0, -3.14), v3(0, 0, 3.14)),
                         velocity: rv3(v3(0, 0, 0.02)), acceleration: rv3(0),
                     },
-                    scaling: { type: 4, start: rf(S * 1.0), end: rf(S * 1.25), params: [0, 0, 0] },
+                    scaling: { type: 4, start: rf(S * 1.0), end: rf(S * 1.25), params: [0, 0, 1] },
                     rendererCommon: {
                         colorTextureIndex: 3, alphaBlend: 2,
                         fadeInType: 1, fadeIn: { frame: 9, params: [0, 0, 0] },

@@ -49,10 +49,10 @@ const ease = (c1, a1, c2, a2) => ({
     easing: {
         start: { mode: 0, _reserved: 0, max: { ...c1, a: a1 }, min: { ...c1, a: a1 } },
         end: { mode: 0, _reserved: 0, max: { ...c2, a: a2 }, min: { ...c2, a: a2 } },
-        params: [0, 0, 0],
+        params: [0, 0, 1],
     },
 });
-const growEase = (from, to) => ({ type: 4, start: rf(from[0] ?? from, from[1] ?? from), end: rf(to[0] ?? to, to[1] ?? to), params: [0, 0, 0] });
+const growEase = (from, to) => ({ type: 4, start: rf(from[0] ?? from, from[1] ?? from), end: rf(to[0] ?? to, to[1] ?? to), params: [0, 0, 1] });
 
 const L = {
     BIND, timing, fades, fixed, ease, growEase,

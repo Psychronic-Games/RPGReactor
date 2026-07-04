@@ -158,7 +158,7 @@
                     velocity: rv3(v3(vel * 0.7, -0.0004, -vel * 0.16), v3(vel * 1.15, 0.0004, vel * 0.16)),
                     acceleration: rv3(0),
                 },
-                scaling: { type: 4, start: rf(opts.sizeMin, opts.sizeMax), end: rf(opts.sizeMin * 0.4), params: [0, 0, 0] },
+                scaling: { type: 4, start: rf(opts.sizeMin, opts.sizeMax), end: rf(opts.sizeMin * 0.4), params: [0, 0, 1] },
                 rendererCommon: {
                     colorTextureIndex: opts.tex,
                     fadeInType: 1, fadeIn: { frame: 8, params: [0, 0, 0] },
@@ -213,7 +213,7 @@
                     generationTime: rf(Math.max(0.5, 60 / Math.max(1, p.bgStars))),
                 },
                 generationLocation: { type: 1, radius: rf(0.3, 1.15), rotationX: rf(0, 360), rotationY: rf(0, 360) },
-                scaling: { type: 4, start: rf(0.015, 0.04), end: rf(0), params: [0, 0, 0] },
+                scaling: { type: 4, start: rf(0.015, 0.04), end: rf(0), params: [0, 0, 1] },
                 rendererCommon: { colorTextureIndex: 2 },
                 rendererParams: { allColor: U.fixedColor({ r: 255, g: 255, b: 255, a: 200 }) },
             });

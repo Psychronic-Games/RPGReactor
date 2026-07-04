@@ -223,7 +223,7 @@
                             generationTime: rf(Math.max(0.5, p.life / p.sparks / 1.5)),
                         },
                         generationLocation: { type: 2, modelIndex: 1, modelType: 2 },   // corner model, VERTEX_RANDOM
-                        scaling: { type: 4, start: rf(0.5, 1.3), end: rf(0), params: [0, 0, 0] },
+                        scaling: { type: 4, start: rf(0.5, 1.3), end: rf(0), params: [0, 0, 1] },
                         rendererCommon: { colorTextureIndex: 4 },
                         rendererParams: { allColor: U.fixedColor(accent) },
                     }));
