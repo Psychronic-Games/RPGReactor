@@ -317,18 +317,31 @@ const POLYTOPES_3D = {
 // shading), spherical UVs (texture wraps the shape like a globe — same
 // visual convention as the AG's textured shapes). Seam-crossing faces get
 // their low-u vertices shifted +1 so the texture doesn't smear.
-function solidPolytopeFrame(verts, facePolys) {
+function solidPolytopeFrame(verts, facePolys, orientOutward = false) {
     const vertices = [];
     const faces = [];
     const sphericalUV = (p) => {
         const n = norm(p);
-        // Same orientation as surfaceSolid (calibrated on the earth-
-        // textured sphere's EXTERIOR): u flipped, v flipped.
-        return [0.5 - Math.atan2(n[2], n[0]) / (Math.PI * 2), 1 - Math.acos(Math.max(-1, Math.min(1, n[1]))) / Math.PI];
+        // Calibrated against the earth-textured sphere under the default
+        // category Y-flip: V reads unmirrored, U keeps the mirrored sense
+        // (user-verified on the icosahedron — the flat-shaded face path
+        // reads longitude opposite to the smooth surface grid).
+        return [0.5 - Math.atan2(n[2], n[0]) / (Math.PI * 2), Math.acos(Math.max(-1, Math.min(1, n[1]))) / Math.PI];
     };
     for (const poly of facePolys) {
-        const pts = poly.map(i => verts[i]);
-        const n = norm(cross(sub(pts[1], pts[0]), sub(pts[2], pts[0])));
+        let pts = poly.map(i => verts[i]);
+        let n = norm(cross(sub(pts[1], pts[0]), sub(pts[2], pts[0])));
+        // Convex origin-centered polytopes: faces listed in arbitrary
+        // order (adjacentTriples etc.) wind half inward — culling then
+        // eats them as the shape spins. Flip any face whose normal
+        // points at the centroid.
+        if (orientOutward) {
+            const c = pts.reduce((a, q) => [a[0] + q[0], a[1] + q[1], a[2] + q[2]], [0, 0, 0]).map((x) => x / pts.length);
+            if (n[0] * c[0] + n[1] * c[1] + n[2] * c[2] < 0) {
+                pts = pts.slice().reverse();
+                n = [-n[0], -n[1], -n[2]];
+            }
+        }
         const uvs = pts.map(sphericalUV);
         const us = uvs.map(u => u[0]);
         if (Math.max(...us) - Math.min(...us) > 0.5) {
@@ -369,7 +382,18 @@ const POLYTOPES_4D = {
             const d = a ^ b;
             if (d === 1 || d === 2 || d === 4 || d === 8) edges.push([a, b]);
         }
-        return { verts, edges, projDist: 3, scale: 0.62 };
+        // The 24 square 2-faces: two axes vary, the other two sit at ±1.
+        // (Solid style textures these; wire style keeps using the edges.)
+        const facePolys = [];
+        const bit = [8, 4, 2, 1];
+        for (let i = 0; i < 4; i++) for (let j = i + 1; j < 4; j++) {
+            const [k, l] = [0, 1, 2, 3].filter((a) => a !== i && a !== j);
+            for (const sk of [0, bit[k]]) for (const sl of [0, bit[l]]) {
+                const base = sk + sl;
+                facePolys.push([base, base + bit[i], base + bit[i] + bit[j], base + bit[j]]);
+            }
+        }
+        return { verts, edges, facePolys, projDist: 3, scale: 0.62 };
     },
     pentachoron: () => {
         // Regular 5-cell: 5 vertices, all pairs are edges.
@@ -380,7 +404,9 @@ const POLYTOPES_4D = {
         ].map(p => mul4(p, 0.72));
         const edges = [];
         for (let a = 0; a < 5; a++) for (let b = a + 1; b < 5; b++) edges.push([a, b]);
-        return { verts, edges, projDist: 3.4, scale: 0.9 };
+        const facePolys = [];
+        for (let a = 0; a < 5; a++) for (let b = a + 1; b < 5; b++) for (let c2 = b + 1; c2 < 5; c2++) facePolys.push([a, b, c2]);
+        return { verts, edges, facePolys, projDist: 3.4, scale: 0.9 };
     },
     // 3-sphere: nested 2-sphere shells at constant-w slices. Under the 4D
     // double rotation the shells morph through each other (the AG's
@@ -434,16 +460,31 @@ const SURFACES = {
     },
     cylinder: {
         segU: 20, segV: 6, closedU: true, closedV: false,
+        // v runs top→bottom like the sphere: same texture orientation and
+        // the same outward winding (bottom-up v shows the INSIDE surface).
         fn: (u, v) => {
             const th = u * Math.PI * 2;
-            return [Math.cos(th) * 0.75, (v - 0.5) * 2.2, Math.sin(th) * 0.75];
+            return [Math.cos(th) * 0.75, (0.5 - v) * 2.2, Math.sin(th) * 0.75];
+        },
+    },
+    // Tornado funnel: concave trumpet profile — wide flared crown easing
+    // into a narrow throat that ends in an OPEN ring mouth (r stays > 0),
+    // not a sharp apex.
+    funnel: {
+        segU: 20, segV: 9, closedU: true, closedV: false,
+        fn: (u, v) => {
+            const th = u * Math.PI * 2;
+            const r = 0.16 + 0.92 * Math.pow(v, 2.3);
+            return [Math.cos(th) * r, (0.5 - v) * 2.2, Math.sin(th) * r];
         },
     },
     cone: {
         segU: 20, segV: 6, closedU: true, closedV: false,
+        // v=0 at the apex (top), like the sphere's pole — texture upright,
+        // faces wound outward.
         fn: (u, v) => {
-            const th = u * Math.PI * 2, r = (1 - v) * 1.05;
-            return [Math.cos(th) * r, v * 2.2 - 0.9, Math.sin(th) * r];
+            const th = u * Math.PI * 2, r = v * 1.05;
+            return [Math.cos(th) * r, 1.3 - v * 2.2, Math.sin(th) * r];
         },
     },
     // closedU false: the half-twist means the u seam only lines up with a
@@ -502,7 +543,11 @@ function surfaceSolid(def) {
             // v flipped. The pre-winding calibration ("u as-is") was made
             // while unknowingly looking at the shell's INSIDE, which
             // mirrors the map horizontally — hence the u flip now.
-            vertices.push({ p, n: norm(p), uv: [1 - i / def.segU, 1 - j / def.segV] });
+            // UVs compensate the default category Y-flip (a pi X-rotation
+            // baked by _composeStack): it turns the model upside down AND
+            // swaps the visible hemisphere, so both axes re-invert here for
+            // custom textures to read upright in the editor and in-game.
+            vertices.push({ p, n: norm(p), uv: [i / def.segU, j / def.segV] });
         }
     }
     const faces = [];
@@ -821,6 +866,7 @@ const SHAPE_DEFS = {
     torus:        { kind: 'surface' },
     cylinder:     { kind: 'surface' },
     cone:         { kind: 'surface' },
+    funnel:       { kind: 'surface' },
     mobius:       { kind: 'surface' },
     // curves
     helix:        { kind: 'curve' },
@@ -853,14 +899,18 @@ function buildGeometry(shape, opts = {}) {
     const thickness = opts.thickness ?? 0.05;
 
     if (def.kind === '4d') {
-        const { verts, edges, projDist, scale } = POLYTOPES_4D[shape](opts);
+        const { verts, edges, facePolys, projDist, scale } = POLYTOPES_4D[shape](opts);
         const frames = [];
         const F = Math.max(2, opts.frames ?? 96);
         const turns = Math.max(1, Math.round(opts.morphTurns ?? 1));
+        const solid = opts.style === 'solid' && facePolys;
         for (let f = 0; f < F; f++) {
             const t = (f / F) * Math.PI * 2 * turns;
             const projected = verts.map(v => mul(project4(rotate4(v, t, t * 0.5), projDist), scale));
-            frames.push(strutFrame(projected, edges, thickness));
+            // Solid: real textured faces every morph frame — the texture
+            // folds through itself with the 4D rotation instead of
+            // smearing along edge struts like a glow accent.
+            frames.push(solid ? solidPolytopeFrame(projected, facePolys, true) : strutFrame(projected, edges, thickness));
         }
         // Sparks spawn on the frame-0 corners; they ride the container spin,
         // and the 4D morph keeps them near the structure.
@@ -871,7 +921,7 @@ function buildGeometry(shape, opts = {}) {
     if (def.kind === '3d') {
         const { verts, edges, facePolys } = POLYTOPES_3D[shape]();
         const frame = (opts.style === 'solid' && facePolys)
-            ? solidPolytopeFrame(verts, facePolys)
+            ? solidPolytopeFrame(verts, facePolys, true)
             : strutFrame(verts, edges, thickness);
         return { mesh: { ...frame, scale: 1 }, spawnVertices: verts };
     }

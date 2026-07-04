@@ -1,65 +1,70 @@
 /**
- * Water Splash — staged composition (pro grammar): impact flash → crown
- * ring pair → droplet fountain with glint dust → fine spray → translucent
- * water body → settling ripple, drifting droplets, and mist.
+ * Water Splash — WaterOne-style: impact flash, droplet crown thrown up
+ * with gravity, a bursting cluster of rimmed bubbles, splash column,
+ * expanding foam ring on the ground plane and cool mist body.
  */
-RR_EFK_RECIPE_REGISTRY.push({
-    id: 'water-splash',
-    name: 'Water Splash',
-    category: 'Elements',
-    textures: ['glow_soft', 'particle_hard', 'ring_soft', 'streak', 'spark', 'smoke'],
-    params: [
-        { key: 'color',  label: 'Water Color',  type: 'color',  default: '#5fb4ff' },
-        { key: 'foam',   label: 'Foam Color',   type: 'color',  default: '#eaf6ff' },
-        { key: 'count',  label: 'Droplets',     type: 'range',  default: 30, min: 8, max: 90, step: 1 },
-        { key: 'size',   label: 'Size',         type: 'range',  default: 10, min: 3, max: 30, step: 1 },
-        { key: 'life',   label: 'Duration',     type: 'range',  default: 50, min: 20, max: 100, step: 1 },
-        { key: 'mist',   label: 'Mist',         type: 'toggle', default: true },
-    ],
-    build(p) {
-        const B = RR_EfkBuilder;
-        const U = RR_EfkRecipeUtil;
-        const L = RR_EfkLayers;
-        const { rf, v3 } = B;
-        const water = U.hexToRgba(p.color);
-        const foam = U.hexToRgba(p.foam);
-        const D = p.life;
+(function () {
+    const D2R = Math.PI / 180;
+    RR_EFK_RECIPE_REGISTRY.push({
+        id: 'water-splash',
+        name: 'Water Splash',
+        category: 'Elements',
+        textures: ['glow_soft', 'particle_hard', 'ring_soft', 'streak', 'spark', 'smoke', 'bubble', 'noise'],
+        params: [
+            { key: 'color',  label: 'Water Color',  type: 'color',  default: '#5fb4ff' },
+            { key: 'foam',   label: 'Foam Color',   type: 'color',  default: '#eaf6ff' },
+            { key: 'count',  label: 'Droplets',     type: 'range',  default: 30, min: 8, max: 90, step: 1 },
+            { key: 'size',   label: 'Size',         type: 'range',  default: 10, min: 3, max: 30, step: 1 },
+            { key: 'life',   label: 'Duration',     type: 'range',  default: 50, min: 20, max: 100, step: 1 },
+            { key: 'mist',   label: 'Mist',         type: 'toggle', default: true },
+        ],
+        build(p) {
+            const B = RR_EfkBuilder;
+            const U = RR_EfkRecipeUtil;
+            const L = RR_EfkLayers;
+            const { rf, v3 } = B;
+            const col = U.hexToRgba(p.color);
+            const foam = U.hexToRgba(p.foam);
+            const WHITE = { r: 255, g: 255, b: 255 };
+            const D = p.life;
 
-        const children = [
-            // Act 1 — impact
-            L.flash({ tex: 0, color: foam, size: 4.5, start: 0, duration: Math.round(D * 0.2), alpha: 220 }),
-            L.shockRing({ tex: 2, color: foam, size: 7, width: 0.1, count: 2, cadence: 6,
-                          start: 0, duration: Math.round(D * 0.45), billboard: 2 }),
-            // Act 2 — crown fountain: big droplets + fine spray, both dusted
-            L.burst({ tex: 1, color: foam, color2: water, count: p.count, size: 0.6, speed: 0.05,
-                      gravity: 0.0042, up: true, start: 1, duration: D, lifeJitter: 0.4,
-                      fadeOut: Math.round(D * 0.2), dust: { tex: 4, color: foam, size: 0.2 } }),
-            L.burst({ tex: 4, color: foam, count: Math.round(p.count * 0.8), size: 0.25, speed: 0.075,
-                      gravity: 0.0036, up: true, start: 2, duration: D, lifeJitter: 0.5 }),
-            // Body — translucent water mass (normal blend) + inner shimmer
-            L.glow({ tex: 0, color: U.dim(water, 0.6), size: 3.2, blend: 1, alpha: 90,
-                     start: 1, duration: Math.round(D * 0.7), fadeIn: 3, fadeOut: Math.round(D * 0.35) }),
-            L.glow({ tex: 0, color: water, size: 2.2, pulseTo: 2.8, alpha: 150,
-                     start: 1, duration: Math.round(D * 0.6), fadeOut: Math.round(D * 0.3) }),
-            // Act 3 — settle: low wide ripple + drifting droplets
-            L.shockRing({ tex: 2, color: water, size: 9, width: 0.07, count: 1,
-                          start: Math.round(D * 0.35), duration: Math.round(D * 0.6), billboard: 2, alpha: 130 }),
-            L.motes({ tex: 1, color: water, count: 10, size: 0.2, radius: 1.6, vy: 0.006,
-                      start: Math.round(D * 0.3), duration: Math.round(D * 0.8), cadence: 3 }),
-        ];
-        if (p.mist) {
-            children.push(L.puffs({ tex: 5, color: U.dim(water, 0.9), count: 6, size: 1.7, area: 1.1,
-                                    rise: 0.012, alpha: 70, start: Math.round(D * 0.15), duration: Math.round(D * 1.2) }));
-        }
+            // Central splash column — vertical streak that rises and dies
+            const column = B.makeNode(RR_EfkFormat.NODE_TYPE.SPRITE, {
+                commonValues: { ...L.BIND, maxGeneration: 1, life: rf(Math.round(D * 0.4)) },
+                translation: { type: 0, refEq: -1, position: v3(0, 3.2, 0) },
+                scaling: { type: 4, start: rf(2.2), end: rf(3.4), params: [0, 0, 0] },
+                rendererCommon: { colorTextureIndex: 3, alphaBlend: 2, fadeInType: 1, fadeIn: { frame: 2, params: [0, 0, 0] }, fadeOutType: 1, fadeOut: { frame: Math.round(D * 0.2), params: [0, 0, 0] } },
+                rendererParams: { allColor: L.fixed(foam, 210) },
+            });
 
-        const S = p.size * 0.09;
-        return [B.makeNode(RR_EfkFormat.NODE_TYPE.NONE, {
-            commonValues: {
-                translationBindType: 2, rotationBindType: 2, scalingBindType: 2,
-                maxGeneration: 1, life: rf(Math.round(D * 2.4) + 30), removeWhenChildrenIsExtinct: 1,
-            },
-            scaling: { type: 0, refEq: -1, scale: v3(S, S, S) },
-            children,
-        })];
-    },
-});
+            const kids = [
+                L.flash({ tex: 0, color: WHITE, from: 3, to: 7, size: 6, duration: 7, alpha: 245, fadeOut: 5 }),
+                column,
+                // droplet crown: foam streaks thrown up, arcing back down
+                L.burst({ tex: 4, color: foam, color2: col, count: p.count, size: 0.9, speed: 0.16, up: true,
+                          gravity: 0.006, duration: Math.round(D * 0.55), cadence: 0.2,
+                          dust: { tex: 4, color: foam, size: 0.4 }, fadeOut: 8 }),
+                // bubble blast — two waves, rimmed bubble texture
+                L.burst({ tex: 6, color: foam, count: Math.round(p.count * 0.8), size: 1.35, speed: 0.10, radius: 0.9,
+                          start: 2, duration: Math.round(D * 0.7), cadence: 0.3, fadeOut: 12 }),
+                L.burst({ tex: 6, color: col, count: Math.round(p.count * 0.6), size: 0.85, speed: 0.07, radius: 0.6,
+                          start: 6, duration: Math.round(D * 0.8), cadence: 0.4, fadeOut: 14 }),
+                // cool watery body: mottled noise + soft halo
+                L.glow({ tex: 7, color: col, size: 7, pulseTo: 9, duration: Math.round(D * 0.6), alpha: 175, fadeIn: 3, fadeOut: Math.round(D * 0.3) }),
+                L.glow({ tex: 0, color: col, size: 9.5, duration: Math.round(D * 0.55), alpha: 85, fadeOut: Math.round(D * 0.3) }),
+                // ground foam rings
+                L.act({ duration: D + 10, tiltX: -72 * D2R }, [
+                    L.shockRing({ tex: 2, color: foam, size: 15, from: 2, width: 0.13, duration: Math.round(D * 0.5), alpha: 210, billboard: 2 }),
+                    L.shockRing({ tex: 2, color: col, size: 19, from: 3, width: 0.2, start: 5, duration: Math.round(D * 0.6), alpha: 130, billboard: 2 }),
+                ]),
+                L.motes({ tex: 4, color: foam, count: 16, size: 0.32, radius: 2.6, vy: 0.02, duration: D, cadence: 1.6 }),
+            ];
+            if (p.mist) {
+                kids.push(L.puffs({ tex: 5, color: foam, count: 8, size: 4.5, area: 2, rise: 0.02, alpha: 70,
+                                    start: Math.round(D * 0.12), duration: Math.round(D * 0.9), cadence: 2.5,
+                                    fadeOut: Math.round(D * 0.35) }));
+            }
+            return [L.act({ duration: D + 30, scale: p.size / 10 }, kids)];
+        },
+    });
+})();

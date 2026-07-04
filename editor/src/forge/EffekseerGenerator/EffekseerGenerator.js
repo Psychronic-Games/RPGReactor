@@ -636,6 +636,48 @@ class EffekseerGenerator {
                     children: layerNodes,
                 })];
             }
+            // Recipes in the later categories (Energy onward, following
+            // the sidebar's alphabetical order) were authored Y-up and
+            // render upside-down in MZ's Y-down world — beams pointing
+            // down, objects inverted. Flip them upright by default with a
+            // π X-rotation wrapper; user tilt keyframes stack on top.
+            const FLIP_CATEGORIES = ['Energy', 'Fire', 'Geometric', 'Interface', 'Object', 'Physical', 'Symbolic'];
+            if (FLIP_CATEGORIES.includes(recipe.category)) {
+                for (const n of layerNodes) {
+                    // WhenCreating binds snapshot the parent transform at
+                    // spawn — the flip would silently no-op (same rule as
+                    // the tilt wrapper above).
+                    if (n.commonValues.translationBindType === 1) n.commonValues.translationBindType = 2;
+                    if (n.commonValues.rotationBindType === 1) n.commonValues.rotationBindType = 2;
+                }
+                layerNodes = [RR_EfkBuilder.makeNode(RR_EfkFormat.NODE_TYPE.NONE, {
+                    commonValues: { ...bindAlways, maxGeneration: 1, life: rf(36000) },
+                    rotation: { type: 0, refEq: -1, rotation: v3(Math.PI, 0, 0) },
+                    children: layerNodes,
+                })];
+            }
+
+            // Layer opacity (Layers panel slider): scale every alpha in
+            // the subtree. All color shapes (fixed/random/easing/fcurve)
+            // store alpha as 'a' inside {r,g,b,a} leaves, so a deep walk
+            // over the color-bearing keys covers every node type.
+            const op = entry.opacity ?? 1;
+            if (op < 1) {
+                const COLOR_KEYS = ['allColor', 'outerColor', 'centerColor', 'innerColor',
+                    'colorLeft', 'colorLeftMiddle', 'colorCenter', 'colorCenterMiddle',
+                    'colorRight', 'colorRightMiddle'];
+                const scaleA = (obj) => {
+                    if (!obj || typeof obj !== 'object') return;
+                    if (typeof obj.a === 'number') obj.a = Math.round(obj.a * op);
+                    for (const v of Object.values(obj)) scaleA(v);
+                };
+                (function walkOp(list) {
+                    for (const n of list) {
+                        if (n.rendererParams) for (const k of COLOR_KEYS) scaleA(n.rendererParams[k]);
+                        walkOp(n.children || []);
+                    }
+                })(layerNodes);
+            }
             nodes.push(...layerNodes);
         }
         // Master duration: the WHOLE effect ends at this frame — in the
@@ -688,6 +730,7 @@ class EffekseerGenerator {
     renderInto(contentEl, projectController) {
         // Fresh DOM → the old canvas (and its GL context) is going away.
         this._teardownPreview();
+        this._closeColorPicker();
 
         this.projectController = projectController;
         this.contentEl = contentEl;
@@ -1093,7 +1136,7 @@ class EffekseerGenerator {
             if (s.type === 'layers') return this._renderLayerCards(recipe);
             const label = `<label style="font-size: 11px; color: var(--color-text-muted); display: block; margin-bottom: 3px;">${this._tx(s.label)}</label>`;
             if (s.type === 'color') {
-                return `<div>${label}<input type="color" data-param="${s.key}" value="${v}" style="width: 100%; height: 26px; padding: 0; border: 1px solid var(--color-border); border-radius: 3px; background: none; cursor: pointer;"></div>`;
+                return `<div>${label}<button type="button" class="rr-color-swatch-btn rr-efk-color" data-ckey="${s.key}" title="Click to choose color" style="background: ${v}; width: 100%; height: 26px; display: block;"></button></div>`;
             }
             if (s.type === 'toggle') {
                 return `<div style="display: flex; align-items: center; gap: 8px;"><input type="checkbox" data-param="${s.key}" ${v ? 'checked' : ''} style="cursor: pointer;"><span style="font-size: 11px; color: var(--color-text-muted);">${this._tx(s.label)}</span></div>`;
@@ -1198,6 +1241,17 @@ class EffekseerGenerator {
                 const badge = host.querySelector(`[data-param-value="${key}"]`);
                 if (badge) badge.textContent = value;
                 this._scheduleRebuild();
+            });
+        });
+
+        host.querySelectorAll('.rr-efk-color').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const key = btn.dataset.ckey;
+                this._openColorPicker(btn, this._values()[key] || '#ffffff', (hex) => {
+                    this._values()[key] = hex;
+                    this._scheduleRebuild();
+                });
             });
         });
 
@@ -1427,6 +1481,175 @@ class EffekseerGenerator {
         return vals.layers;
     }
 
+    /**
+     * Themed color picker popup — same look and behavior as the standard
+     * Animation Generator page (hex field, saturation/value area, hue
+     * strip; styled by the shared .rr-color-popup rules in theme.css).
+     * Callback-based: onChange(hex) fires live as the user drags.
+     */
+    _openColorPicker(swatchEl, initialColor, onChange) {
+        this._closeColorPicker();
+        initialColor = (initialColor || '#ffffff').toUpperCase();
+
+        const hexToRgb = (h) => {
+            const t = h.replace('#', '');
+            return [parseInt(t.substr(0, 2), 16), parseInt(t.substr(2, 2), 16), parseInt(t.substr(4, 2), 16)];
+        };
+        const rgbToHex = (r, g, b) => '#' + [r, g, b].map(c =>
+            Math.max(0, Math.min(255, Math.round(c))).toString(16).padStart(2, '0')
+        ).join('').toUpperCase();
+        const rgbToHsv = (r, g, b) => {
+            r /= 255; g /= 255; b /= 255;
+            const max = Math.max(r, g, b), min = Math.min(r, g, b);
+            const v = max, d = max - min;
+            const sat = max === 0 ? 0 : d / max;
+            let h = 0;
+            if (d !== 0) {
+                if      (max === r) h = ((g - b) / d) % 6;
+                else if (max === g) h = (b - r) / d + 2;
+                else                h = (r - g) / d + 4;
+                h *= 60;
+                if (h < 0) h += 360;
+            }
+            return [h, sat, v];
+        };
+        const hsvToRgb = (h, sat, v) => {
+            const c = v * sat;
+            const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+            const m = v - c;
+            let r = 0, g = 0, b = 0;
+            if      (h < 60)  { r = c; g = x; }
+            else if (h < 120) { r = x; g = c; }
+            else if (h < 180) { g = c; b = x; }
+            else if (h < 240) { g = x; b = c; }
+            else if (h < 300) { r = x; b = c; }
+            else              { r = c; b = x; }
+            return [Math.round((r + m) * 255), Math.round((g + m) * 255), Math.round((b + m) * 255)];
+        };
+
+        let [r0, g0, b0] = hexToRgb(initialColor);
+        let [curH, curS, curV] = rgbToHsv(r0, g0, b0);
+
+        const popup = document.createElement('div');
+        popup.className = 'rr-color-popup';
+        popup.innerHTML = `
+            <div class="rr-color-popup-row">
+                <div class="rr-color-popup-preview" style="background: ${initialColor};"></div>
+                <input type="text" class="rr-color-popup-hex" value="${initialColor}" maxlength="7" spellcheck="false">
+            </div>
+            <div class="rr-color-popup-sv">
+                <div class="rr-color-popup-sv-cursor"></div>
+            </div>
+            <div class="rr-color-popup-hue">
+                <div class="rr-color-popup-hue-cursor"></div>
+            </div>
+        `;
+        document.body.appendChild(popup);
+
+        const hexInput  = popup.querySelector('.rr-color-popup-hex');
+        const preview   = popup.querySelector('.rr-color-popup-preview');
+        const svArea    = popup.querySelector('.rr-color-popup-sv');
+        const svCursor  = popup.querySelector('.rr-color-popup-sv-cursor');
+        const hueStrip  = popup.querySelector('.rr-color-popup-hue');
+        const hueCursor = popup.querySelector('.rr-color-popup-hue-cursor');
+
+        const refreshSvBackground = () => {
+            svArea.style.background =
+                `linear-gradient(to bottom, transparent, #000), ` +
+                `linear-gradient(to right, #fff, hsl(${curH}, 100%, 50%))`;
+        };
+        const positionCursors = () => {
+            svCursor.style.left = `${curS * 100}%`;
+            svCursor.style.top  = `${(1 - curV) * 100}%`;
+            hueCursor.style.left = `${(curH / 360) * 100}%`;
+        };
+        const commit = (hex, source) => {
+            preview.style.background = hex;
+            swatchEl.style.background = hex;
+            if (source !== 'hex') hexInput.value = hex;
+            onChange(hex);
+        };
+        const applyHsv = (source) => {
+            const [r, g, b] = hsvToRgb(curH, curS, curV);
+            commit(rgbToHex(r, g, b), source);
+        };
+        const applyHex = (hex) => {
+            if (!/^#[0-9a-f]{6}$/i.test(hex)) return;
+            hex = hex.toUpperCase();
+            const [r, g, b] = hexToRgb(hex);
+            const [h, sat, v] = rgbToHsv(r, g, b);
+            if (sat > 0.01) curH = h;   // keep hue steady on grayscale input
+            curS = sat; curV = v;
+            refreshSvBackground();
+            positionCursors();
+            commit(hex, 'hex');
+        };
+
+        refreshSvBackground();
+        positionCursors();
+
+        hexInput.addEventListener('input', () => {
+            let v = hexInput.value.trim();
+            if (v && v[0] !== '#') v = '#' + v;
+            applyHex(v);
+        });
+
+        const drag = (area, apply) => {
+            area.addEventListener('mousedown', (e) => {
+                e.preventDefault();
+                apply(e);
+                const move = (ev) => apply(ev);
+                const up = () => {
+                    document.removeEventListener('mousemove', move);
+                    document.removeEventListener('mouseup', up);
+                };
+                document.addEventListener('mousemove', move);
+                document.addEventListener('mouseup', up);
+            });
+        };
+        drag(svArea, (e) => {
+            const rect = svArea.getBoundingClientRect();
+            curS = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+            curV = 1 - Math.max(0, Math.min(1, (e.clientY - rect.top) / rect.height));
+            positionCursors();
+            applyHsv('sv');
+        });
+        drag(hueStrip, (e) => {
+            const rect = hueStrip.getBoundingClientRect();
+            curH = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width)) * 360;
+            refreshSvBackground();
+            positionCursors();
+            applyHsv('hue');
+        });
+
+        const popW = popup.offsetWidth  || 232;
+        const popH = popup.offsetHeight || 220;
+        const rect = swatchEl.getBoundingClientRect();
+        let px = rect.left + rect.width / 2 - popW / 2;
+        let py = rect.bottom + 6;
+        px = Math.max(8, Math.min(px, window.innerWidth  - popW - 8));
+        py = Math.max(8, Math.min(py, window.innerHeight - popH - 8));
+        popup.style.left = `${px}px`;
+        popup.style.top  = `${py}px`;
+
+        const closeHandler = (e) => {
+            if (popup.contains(e.target) || e.target === swatchEl) return;
+            this._closeColorPicker();
+        };
+        setTimeout(() => document.addEventListener('click', closeHandler), 0);
+        popup._closeHandler = closeHandler;
+        this._colorPopup = popup;
+    }
+
+    _closeColorPicker() {
+        if (!this._colorPopup) return;
+        if (this._colorPopup._closeHandler) {
+            document.removeEventListener('click', this._colorPopup._closeHandler);
+        }
+        this._colorPopup.remove();
+        this._colorPopup = null;
+    }
+
     _renderLayerCards(recipe) {
         const layers = this._composerLayers(recipe);
         const { schemas, labels } = recipe.composer;
@@ -1434,7 +1657,7 @@ class EffekseerGenerator {
             const lab = `<label style="font-size: 10px; color: var(--color-text-muted); display: block; margin-bottom: 2px;">${this._tx(s.label)}</label>`;
             const data = `data-lidx="${idx}" data-lkey="${s.key}"`;
             if (s.type === 'color') {
-                return `<div>${lab}<input type="color" ${data} value="${v}" style="width: 100%; height: 22px; padding: 0; border: 1px solid var(--color-border); border-radius: 3px; background: none; cursor: pointer;"></div>`;
+                return `<div>${lab}<button type="button" class="rr-color-swatch-btn rr-efk-lcolor" data-clidx="${idx}" data-clkey="${s.key}" title="Click to choose color" style="background: ${v}; width: 100%; height: 22px; display: block;"></button></div>`;
             }
             if (s.type === 'toggle') {
                 return `<div style="display: flex; align-items: center; gap: 6px; padding-top: 12px;"><input type="checkbox" ${data} ${v ? 'checked' : ''} style="cursor: pointer;"><span style="font-size: 10px; color: var(--color-text-muted);">${this._tx(s.label)}</span></div>`;
@@ -1491,6 +1714,18 @@ class EffekseerGenerator {
                 const badge = host.querySelector(`[data-lval="${idx}:${key}"]`);
                 if (badge) badge.textContent = value;
                 this._scheduleRebuild();
+            });
+        });
+        host.querySelectorAll('.rr-efk-lcolor').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const idx = +btn.dataset.clidx;
+                const key = btn.dataset.clkey;
+                if (!layers[idx]) return;
+                this._openColorPicker(btn, layers[idx][key] || '#ffffff', (hex) => {
+                    layers[idx][key] = hex;
+                    this._scheduleRebuild();
+                });
             });
         });
         host.querySelectorAll('.rr-efk-layer-del').forEach(btn => {

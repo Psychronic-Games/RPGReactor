@@ -45,15 +45,18 @@
         { id: 'helix',        name: 'Double Helix',     shape: 'helix' },
     ];
 
-    const BUILTIN_TEXTURES = ['streak', 'glow_soft', 'particle_hard', 'ring_soft', 'spark', 'smoke'];
+    const BUILTIN_TEXTURES = ['streak', 'glow_soft', 'particle_hard', 'ring_soft', 'spark', 'smoke', 'flat', 'noise', 'checker'];
 
     for (const def of SHAPES) {
         const kind = RR_EfkModel.SHAPE_KINDS[def.shape];
         const is4D = kind === '4d';
-        // Solid style exists everywhere it has geometry to fill: surfaces
-        // and 3D polytopes (spherical-UV faces). 4D shapes and the helix
-        // stay wireframe-only.
-        const hasSolid = kind === 'surface' || kind === '3d';
+        // Solid style exists everywhere it has geometry to fill: surfaces,
+        // 3D polytopes, and the 4D shapes with real 2-faces (hypercube,
+        // pentachoron — their faces re-texture every morph frame). The
+        // hypersphere and helix stay wireframe-only: shells/coils have no
+        // faces to fill.
+        const hasSolid = kind === 'surface' || kind === '3d' ||
+                         def.shape === 'hypercube' || def.shape === 'pentachoron';
 
         const params = [
             ...(hasSolid ? [{
@@ -64,6 +67,14 @@
                 ],
             }] : []),
             { key: 'customTex', label: 'Custom Texture', type: 'texture', default: '' },
+            { key: 'texScale', label: 'Pattern Scale', type: 'range', default: 1, min: 1, max: 8, step: 1 },
+            { key: 'surfTex', label: 'Surface Texture', type: 'select', default: 'noise',
+              options: [
+                  { value: 'noise', label: 'Soft Noise' },
+                  { value: 'flat', label: 'Flat' },
+                  { value: 'checker', label: 'Checker' },
+                  { value: 'streak', label: 'Glow Streak' },
+              ] },
             { key: 'color',     label: 'Color',          type: 'color',  default: '#59d8ff' },
             { key: 'size',      label: 'Size',           type: 'range',  default: 5, min: 2, max: 14, step: 1 },
             { key: 'thickness', label: 'Edge Thickness', type: 'range',  default: 5, min: 1, max: 14, step: 1 },
@@ -72,7 +83,7 @@
             { key: 'spinZ',     label: 'Spin Z (°/s)',   type: 'range',  default: 0, min: -120, max: 120, step: 1 },
             ...(is4D ? [{ key: 'morph', label: '4D Morph (turns/loop)', type: 'range', default: 1, min: 1, max: 3, step: 1 }] : []),
             { key: 'flow',      label: 'Texture Flow',   type: 'range',  default: 6, min: 0, max: 20, step: 1 },
-            { key: 'opacity',   label: 'Opacity',        type: 'range',  default: 24, min: 4, max: 32, step: 1 },
+            { key: 'opacity',   label: 'Opacity',        type: 'range',  default: 24, min: 0, max: 32, step: 1 },
             { key: 'sparks',    label: 'Sparks',         type: 'range',  default: 0, min: 0, max: 60, step: 1 },
             { key: 'accent',    label: 'Spark Color',    type: 'color',  default: '#ffffff' },
             { key: 'life',      label: is4D ? 'Morph Cycle (frames)' : 'Spark Cadence Base', type: 'range', default: is4D ? 240 : 120, min: 30, max: 480, step: 1 },
@@ -119,7 +130,8 @@
                 const bindAlways = { translationBindType: 2, rotationBindType: 2, scalingBindType: 2 };
                 // Wireframes always use the streak texture (index 0);
                 // an uploaded texture is appended after the built-ins.
-                const texIndex = p.customTex ? BUILTIN_TEXTURES.length : 0;
+                const texIndex = p.customTex ? BUILTIN_TEXTURES.length
+                    : (hasSolid && (p.style === 'solid' || p.customTex) ? Math.max(0, BUILTIN_TEXTURES.indexOf(p.surfTex || 'noise')) : 0);
                 const alpha = Math.min(255, Math.round(p.opacity * 8));
 
                 // Continuous playback — spin is EXACT °/s (rad/frame).
@@ -164,22 +176,27 @@
                         // their Flow slider drives the body-rotation above.
                         // Wireframes KEEP flow: on struts a texture only
                         // reads through motion.
-                        ...(p.flow > 0 && !(isSolid && p.customTex) ? {
-                            uv: {
+                        ...((() => {
+                            // Pattern Scale tiles the built-in texture across
+                            // the surface (REPEAT wrap) — at 1 the gradient
+                            // maps once and its dark end owns one side of the
+                            // shape; higher repeats read as a wrapped pattern.
+                            const reps = isSolid ? Math.max(1, p.texScale || 1) : 1;
+                            const scrolls = p.flow > 0 && !(isSolid && p.customTex);
+                            if (!scrolls && reps === 1) return {};
+                            // Solid: scroll along LONGITUDE (reads as the
+                            // surface rotating); wire: along the struts.
+                            // Snapped to whole repeats per loop.
+                            const v = Math.max(1, Math.round(p.flow * 0.002 * p.life)) / p.life;
+                            const speed = !scrolls ? { x: 0, y: 0 }
+                                : (isSolid ? { x: v, y: 0 } : { x: 0, y: v });
+                            return { uv: {
                                 type: 3,
                                 position: { max: { x: 0, y: 0 }, min: { x: 0, y: 0 } },
-                                size: { max: { x: 1, y: 1 }, min: { x: 1, y: 1 } },
-                                // Solid: scroll along LONGITUDE (reads as the
-                                // surface rotating); wire: along the struts.
-                                // Snapped to whole repeats per loop.
-                                speed: (() => {
-                                    const v = Math.max(1, Math.round(p.flow * 0.002 * p.life)) / p.life;
-                                    return isSolid
-                                        ? { max: { x: v, y: 0 }, min: { x: v, y: 0 } }
-                                        : { max: { x: 0, y: v }, min: { x: 0, y: v } };
-                                })(),
-                            },
-                        } : {}),
+                                size: { max: { x: reps, y: reps }, min: { x: reps, y: reps } },
+                                speed: { max: speed, min: speed },
+                            } };
+                        })()),
                     },
                     rendererParams: {
                         modelIndex: 0,

@@ -30,78 +30,231 @@
         category: 'Energy',
         continuous: true,
         prewarm: 60,
-        textures: ['glow_soft', 'ring_soft', 'particle_hard'],
+        textures: ['glow_soft', 'ring_soft', 'particle_hard', 'noise', 'rays', 'spark', 'streak', 'shard', 'slash'],
         params: [
             { key: 'color',  label: 'Energy Color', type: 'color', default: '#66c8ff' },
             { key: 'accent', label: 'Ring Color',   type: 'color', default: '#ffffff' },
             { key: 'size',   label: 'Size',         type: 'range', default: 5, min: 2, max: 12, step: 1 },
             { key: 'spin',   label: 'Orbit Speed',  type: 'range', default: 40, min: 5, max: 150, step: 1 },
             { key: 'motes',  label: 'Motes',        type: 'range', default: 12, min: 0, max: 40, step: 1 },
+            { key: 'shells', label: 'Energy Arcs',  type: 'range', default: 4, min: 0, max: 8, step: 1 },
+            { key: 'bolts',  label: 'Plasma Bolts', type: 'range', default: 4, min: 0, max: 24, step: 1 },
+            { key: 'pulse',  label: 'Pulse Rate',   type: 'range', default: 10, min: 2, max: 20, step: 1 },
             { key: 'life',   label: 'Loop Length',  type: 'range', default: 120, min: 30, max: 300, step: 1 },
         ],
+        buildModels(p, M) {
+            const geo = M.buildGeometry('sphere', { style: 'solid', thickness: 0.01 });
+            return [{ path: `Model/rr_ebplasma_v${M.MESH_REV || 1}.efkmodel`, mesh: geo.mesh }];
+        },
         build(p) {
             const B = RR_EfkBuilder;
             const U = RR_EfkRecipeUtil;
-            const { rf, rv3, v3, v2 } = B;
-            const c = U.hexToRgba(p.color);
-            const accent = U.hexToRgba(p.accent);
-            const bindAlways = { translationBindType: 2, rotationBindType: 2, scalingBindType: 2 };
-            const spin = (dps) => dps * D2R / 60;   // exact °/s
+            const L = RR_EfkLayers;
+            const { rf, rv3, v3 } = B;
+            const col = U.hexToRgba(p.color);
+            const acc = U.hexToRgba(p.accent);
+            const WHITE = { r: 255, g: 255, b: 255 };
+            const LONG = 36000;
+            const S = p.size;
+            const w = p.spin * (Math.PI / 180) / 60;     // orbit rad/frame
+            const D2Re = Math.PI / 180;
 
-            const core = B.makeNode(RR_EfkFormat.NODE_TYPE.SPRITE, {
-                commonValues: { ...bindAlways, maxGeneration: 1, life: rf(LONG) },
-                scaling: { type: 0, refEq: -1, scale: v3(1.5, 1.5, 1.5) },
-                rendererCommon: { colorTextureIndex: 0 },
-                rendererParams: { allColor: U.fixedColor({ ...c, a: 220 }) },
-            });
-
-            const ring = (tiltX) => B.makeNode(RR_EfkFormat.NODE_TYPE.RING, {
-                commonValues: { ...bindAlways, maxGeneration: 1, life: rf(LONG) },
-                rotation: { type: 0, refEq: -1, rotation: v3(tiltX, 0, 0) },
-                rendererCommon: { colorTextureIndex: 1 },
-                rendererParams: {
-                    billboard: 2,
-                    vertexCount: 32,
-                    outerLocation: { type: 0, location: v2(1.15, 0) },
-                    innerLocation: { type: 0, location: v2(0.85, 0) },
-                    outerColor: U.fixedColor({ ...accent, a: 0 }),
-                    centerColor: U.fixedColor({ ...accent, a: 200 }),
-                    innerColor: U.fixedColor({ ...accent, a: 0 }),
-                },
-            });
-
-            const motes = B.makeNode(RR_EfkFormat.NODE_TYPE.SPRITE, {
-                commonValues: {
-                    ...bindAlways,
-                    maxGeneration: 99999,
-                    life: rf(Math.round(p.life * 0.4), Math.round(p.life * 0.8)),
-                    generationTime: rf(Math.max(0.5, p.life / Math.max(1, p.motes) / 2)),
-                },
-                generationLocation: {
-                    type: 1,   // sphere shell
-                    radius: rf(1.1, 1.5),
-                    rotationX: rf(0, 360),
-                    rotationY: rf(0, 360),
-                },
-                scaling: { type: 4, start: rf(0.2, 0.5), end: rf(0), params: [0, 0, 0] },
-                rendererCommon: { colorTextureIndex: 2 },
-                rendererParams: { allColor: U.fixedColor({ ...c, a: 255 }) },
-            });
-
-            const nodes = [core, ring(0), ring(Math.PI / 2)];
-            if (p.motes > 0) nodes.push(motes);
-
-            return [B.makeNode(RR_EfkFormat.NODE_TYPE.NONE, {
-                commonValues: { ...bindAlways, maxGeneration: 1, life: rf(LONG) },
+            // Screen-plane churning plasma layer (noise texture spinning)
+            const churn = (size, alpha, zSpin, tex) => B.makeNode(RR_EfkFormat.NODE_TYPE.SPRITE, {
+                commonValues: { ...L.BIND, maxGeneration: 1, life: rf(LONG) },
                 rotation: {
-                    type: 1,
-                    refEqP: rf(-1), refEqV: rf(-1), refEqA: rf(-1),
-                    rotation: rv3(0),
-                    velocity: rv3(v3(spin(p.spin * 0.4), spin(p.spin), spin(p.spin * 0.15))),
-                    acceleration: rv3(0),
+                    type: 1, refEqP: rf(-1), refEqV: rf(-1), refEqA: rf(-1),
+                    rotation: rv3(v3(0, 0, -3.14), v3(0, 0, 3.14)),
+                    velocity: rv3(v3(0, 0, zSpin)), acceleration: rv3(0),
                 },
-                scaling: { type: 0, refEq: -1, scale: v3(p.size, p.size, p.size) },
-                children: nodes,
+                scaling: { type: 0, refEq: -1, scale: v3(size, size, 1) },
+                rendererCommon: { colorTextureIndex: tex, alphaBlend: 2 },
+                rendererParams: { allColor: L.fixed(alpha.c, alpha.a) },
+            });
+
+            // Flickering ray star: each generation spawns at a fresh
+            // random angle and crossfades into the last — the spike
+            // pattern itself keeps changing instead of reading as a
+            // static stamp.
+            // World-anchored (billboard: 2): rotating the camera around
+            // the ball parallaxes the planes and shows the spin — a
+            // camera-facing billboard would look frozen from every angle.
+            const HPI = Math.PI / 2;
+            const AXES = {
+                z: { min: v3(0, 0, -3.14), max: v3(0, 0, 3.14), vel: (sp) => v3(0, 0, sp) },
+                x: { min: v3(-3.14, HPI, 0), max: v3(3.14, HPI, 0), vel: (sp) => v3(sp, 0, 0) },
+                y: { min: v3(HPI, -3.14, 0), max: v3(HPI, 3.14, 0), vel: (sp) => v3(0, sp, 0) },
+            };
+            const rayFlicker = (size, alpha, spin, cycle, axis) => B.makeNode(RR_EfkFormat.NODE_TYPE.SPRITE, {
+                commonValues: {
+                    ...L.BIND, maxGeneration: 99999, life: rf(cycle),
+                    generationTime: rf(Math.round(cycle / 2)),
+                },
+                rotation: {
+                    type: 1, refEqP: rf(-1), refEqV: rf(-1), refEqA: rf(-1),
+                    rotation: rv3(AXES[axis].min, AXES[axis].max),
+                    velocity: rv3(AXES[axis].vel(spin)), acceleration: rv3(0),
+                },
+                scaling: { type: 4, start: rf(size * 0.88), end: rf(size * 1.1), params: [0, 0, 0] },
+                rendererCommon: {
+                    colorTextureIndex: 4, alphaBlend: 2,
+                    fadeInType: 1, fadeIn: { frame: Math.round(cycle * 0.35), params: [0, 0, 0] },
+                    fadeOutType: 1, fadeOut: { frame: Math.round(cycle * 0.4), params: [0, 0, 0] },
+                },
+                rendererParams: { billboard: 2, allColor: L.fixed(alpha.c, alpha.a) },
+            });
+
+            // Orbiting bead streams: sparks marching in order around
+            // around the orb by tilted spinners, each twirling as it rides
+            // — spiral energy strips, not flat ring bands.
+            const shell = (radius, tilt, tiltZ, speed, alpha) => B.makeNode(RR_EfkFormat.NODE_TYPE.NONE, {
+                commonValues: { ...L.BIND, maxGeneration: 1, life: rf(LONG) },
+                rotation: {
+                    type: 1, refEqP: rf(-1), refEqV: rf(-1), refEqA: rf(-1),
+                    rotation: rv3(v3(tilt, 0, tiltZ)), velocity: rv3(v3(0, speed, 0)), acceleration: rv3(0),
+                },
+                children: [B.makeNode(RR_EfkFormat.NODE_TYPE.SPRITE, {
+                    commonValues: { maxGeneration: 99999, life: rf(24, 32), generationTime: rf(1.6, 2.4),
+                                    translationBindType: 2, rotationBindType: 2, scalingBindType: 2 },
+                    generationLocation: { type: 3, division: 28, radius: rf(radius * 0.97, radius * 1.03),
+                                          angleStart: rf(0), angleEnd: rf(360), circleType: 0, axisDirection: 1, angleNoize: rf(2) },
+                    rotation: {
+                        type: 1, refEqP: rf(-1), refEqV: rf(-1), refEqA: rf(-1),
+                        rotation: rv3(v3(0, 0, -3.14), v3(0, 0, 3.14)),
+                        velocity: rv3(v3(0, 0, -Math.max(0.05, Math.abs(speed) * 1.8)), v3(0, 0, Math.max(0.05, Math.abs(speed) * 1.8))),
+                        acceleration: rv3(0),
+                    },
+                    scaling: { type: 4, start: rf(0.55, 0.75), end: rf(0.15), params: [0, 0, 0] },
+                    rendererCommon: {
+                        colorTextureIndex: 5, alphaBlend: 2,
+                        fadeInType: 1, fadeIn: { frame: 3, params: [0, 0, 0] },
+                        fadeOutType: 1, fadeOut: { frame: 8, params: [0, 0, 0] },
+                    },
+                    rendererParams: { allColor: U.easeColor({ r: 255, g: 255, b: 255, a: Math.min(255, alpha + 55) }, { ...col, a: 0 }) },
+                })],
+            });
+
+            // Plasma-globe bolts: movers strike OUT from the electrode
+            // toward the shell (never backward, per the reference), jagged
+            // via turbulence, dying as they reach the glass — each drops a
+            // white-hot ribbon = a bolt that constantly re-strikes.
+            const boltSpeed = S * 0.03;
+            const filaments = Array.from({ length: p.bolts }, (_, i) => i).map((i) => B.makeNode(RR_EfkFormat.NODE_TYPE.NONE, {
+                commonValues: { ...L.BIND, maxGeneration: 1, life: rf(LONG) },
+                rotation: {
+                    type: 1, refEqP: rf(-1), refEqV: rf(-1), refEqA: rf(-1),
+                    rotation: rv3(v3((25 + i * 40) * D2Re, 0, i * 1.4)),
+                    velocity: rv3(v3(0, w * (0.8 + i * 0.25) * (i % 2 ? -1 : 1), 0)), acceleration: rv3(0),
+                },
+                children: [B.makeNode(RR_EfkFormat.NODE_TYPE.NONE, {
+                    commonValues: { maxGeneration: 99999, life: rf(16, 24), generationTime: rf(6 + i * 3),
+                                    translationBindType: 2, rotationBindType: 2, scalingBindType: 2 },
+                    generationLocation: { type: 1, radius: rf(S * 0.1, S * 0.16), rotationX: rf(0, 360), rotationY: rf(0, 360) },
+                    translation: {
+                        type: 1, refEqP: rf(-1), refEqV: rf(-1), refEqA: rf(-1),
+                        location: rv3(0),
+                        velocity: rv3(v3(-boltSpeed, -boltSpeed, -boltSpeed), v3(boltSpeed, boltSpeed, boltSpeed)),
+                        acceleration: rv3(0),
+                    },
+                    localForceField: {
+                        elements: [{ type: 1, seed: 3 + i, scale: 0.7, strength: 0.03, octave: 1 }],
+                        locationAbs: { type: 0 },
+                    },
+                    children: [B.makeNode(RR_EfkFormat.NODE_TYPE.TRACK, {
+                        commonValues: { maxGeneration: 16, life: rf(9, 14), generationTime: rf(1.5) },
+                        rendererCommon: { colorTextureIndex: 0, alphaBlend: 2 },
+                        rendererParams: {
+                            sizeFor: { type: 0, size: 0 },
+                            sizeMiddle: { type: 0, size: 0.09 },
+                            sizeBack: { type: 0, size: 0.01 },
+                            colorLeft: { type: 0, fixed: { ...acc, a: 0 } },
+                            colorLeftMiddle: { type: 0, fixed: { ...acc, a: 0 } },
+                            colorCenter: { type: 0, fixed: { ...WHITE, a: 235 } },
+                            colorCenterMiddle: { type: 0, fixed: { ...acc, a: 160 } },
+                            colorRight: { type: 0, fixed: { ...acc, a: 0 } },
+                            colorRightMiddle: { type: 0, fixed: { ...acc, a: 0 } },
+                        },
+                    })],
+                })],
+            }));
+
+            // Surface discharge glints: brief bright pops on the shell
+            const discharges = B.makeNode(RR_EfkFormat.NODE_TYPE.SPRITE, {
+                commonValues: { ...L.BIND, maxGeneration: 99999, life: rf(5, 10), generationTime: rf(3, 7) },
+                generationLocation: { type: 1, radius: rf(S * 0.5, S * 0.6), rotationX: rf(0, 360), rotationY: rf(0, 360) },
+                scaling: { type: 4, start: rf(0.5, 0.9), end: rf(0), params: [0, 0, 0] },
+                rendererCommon: { colorTextureIndex: 5, alphaBlend: 2 },
+                rendererParams: { allColor: L.fixed(WHITE, 255) },
+            });
+
+            // Breathing layer: overlapping regenerating sprites, each one
+            // swelling from -> to over its life with crossfading alpha, so
+            // the heart visibly throbs forever (a LONG-life ease is a
+            // ten-minute breath = looks frozen).
+            const pulse = (from, to, cycleBase, alpha, tex, offset) => {
+                const cycle = Math.max(8, Math.round(cycleBase * 10 / p.pulse));
+                return B.makeNode(RR_EfkFormat.NODE_TYPE.SPRITE, {
+                commonValues: {
+                    ...L.BIND, maxGeneration: 99999, life: rf(cycle),
+                    generationTime: rf(Math.round(cycle / 2)),
+                    generationTimeOffset: rf(offset || 0),
+                },
+                scaling: { type: 4, start: rf(from), end: rf(to), params: [0, 0, 0] },
+                rendererCommon: {
+                    colorTextureIndex: tex ?? 0, alphaBlend: 2,
+                    fadeInType: 1, fadeIn: { frame: Math.round(cycle * 0.35), params: [0, 0, 0] },
+                    fadeOutType: 1, fadeOut: { frame: Math.round(cycle * 0.4), params: [0, 0, 0] },
+                },
+                rendererParams: { allColor: L.fixed(alpha.c, alpha.a) },
+            });
+            };
+
+            const kids = [
+                // layered heart: throbbing white core inside a breathing
+                // colored envelope, wrapped in counter-churning skins
+                L.glow({ tex: 0, color: WHITE, size: S * 0.32, duration: LONG, alpha: 235 }),
+                pulse(S * 0.3, S * 0.5, 34, { c: WHITE, a: 200 }, 0),
+                pulse(S * 0.6, S * 0.9, 52, { c: col, a: 190 }, 0),
+                pulse(S * 0.75, S * 0.62, 52, { c: col, a: 150 }, 0, 26),
+                churn(S * 1.05, { c: col, a: 235 }, 0.032, 3),
+                churn(S * 0.95, { c: acc, a: 130 }, -0.042, 3),
+                pulse(S * 0.85, S * 1.15, 44, { c: col, a: 120 }, 3, 15),
+                // corona: faint filament star + breathing halo
+                rayFlicker(S * 1.75, { c: col, a: 95 }, Math.max(0.035, w * 1.2), 46, 'z'),
+                rayFlicker(S * 1.55, { c: acc, a: 75 }, -Math.max(0.025, w * 0.8), 34, 'x'),
+                rayFlicker(S * 1.35, { c: WHITE, a: 65 }, Math.max(0.05, w * 1.7), 26, 'y'),
+                pulse(S * 1.9, S * 2.35, 80, { c: col, a: 55 }, 0),
+                // shells + filaments + discharges
+                ...Array.from({ length: p.shells }, (_, i) => shell(
+                    S * (0.88 + i * 0.12),
+                    (40 + i * 34) * D2Re,
+                    i * 0.85,
+                    w * (1.1 + i * 0.28) * (i % 2 ? -1 : 1),
+                    200 - i * 14)),
+                // 3D plasma sphere: mottled solid sphere tumbling on two
+                // axes inside the billboard skins (geometry spin — solids
+                // must never UV-scroll or the poles churn)
+                B.makeNode(RR_EfkFormat.NODE_TYPE.MODEL, {
+                    commonValues: { ...L.BIND, maxGeneration: 1, life: rf(LONG) },
+                    rotation: {
+                        type: 1, refEqP: rf(-1), refEqV: rf(-1), refEqA: rf(-1),
+                        rotation: rv3(0),
+                        velocity: rv3(v3(w * 0.5, w * 1.3, 0)), acceleration: rv3(0),
+                    },
+                    scaling: { type: 0, refEq: -1, scale: v3(S * 0.52, S * 0.52, S * 0.52) },
+                    rendererCommon: { colorTextureIndex: 3, alphaBlend: 2 },
+                    rendererParams: { modelIndex: 0, culling: 1, billboard: 2, allColor: L.fixed(col, 210) },
+                }),
+                ...filaments,
+            ];
+            if (p.motes > 0) {
+                kids.push(discharges);
+                kids.push(L.motes({ tex: 5, color: acc, count: p.motes, size: 0.28, radius: S * 0.9, vy: 0.012,
+                                    duration: p.life, cadence: Math.max(1, p.life / p.motes), stream: true }));
+            }
+            return [B.makeNode(RR_EfkFormat.NODE_TYPE.NONE, {
+                commonValues: { ...L.BIND, maxGeneration: 1, life: rf(LONG) },
+                children: kids,
             })];
         },
     });
@@ -117,7 +270,7 @@
         params: [
             { key: 'color',  label: 'Beam Color',  type: 'color', default: '#7fe6ff' },
             { key: 'width',  label: 'Width',       type: 'range', default: 4, min: 1, max: 12, step: 1 },
-            { key: 'height', label: 'Height',      type: 'range', default: 14, min: 6, max: 30, step: 1 },
+            { key: 'height', label: 'Height',      type: 'range', default: 14, min: 1, max: 30, step: 1 },
             { key: 'flow',   label: 'Energy Flow', type: 'range', default: 10, min: 1, max: 20, step: 1 },
             { key: 'life',   label: 'Loop Length', type: 'range', default: 120, min: 30, max: 300, step: 1 },
         ],
@@ -137,7 +290,7 @@
             // sheath with a DIAGONAL scroll (reads as energy spiraling up
             // the beam), and a wide soft halo. Single-layer beams look
             // like glowing pipes; layering is what sells "energy".
-            const layer = (radiusMul, alpha, color, uvSpeed) => B.makeNode(RR_EfkFormat.NODE_TYPE.MODEL, {
+            const layer = (radiusMul, alpha, color, uvSpeed, wraps) => B.makeNode(RR_EfkFormat.NODE_TYPE.MODEL, {
                 commonValues: { ...bindAlways, maxGeneration: 1, life: rf(LONG) },
                 scaling: { type: 0, refEq: -1, scale: v3(p.width * radiusMul, p.height * 0.45, p.width * radiusMul) },
                 rendererCommon: {
@@ -145,16 +298,19 @@
                     uv: {
                         type: 3,
                         position: { max: { x: 0, y: 0 }, min: { x: 0, y: 0 } },
-                        size: { max: { x: 1, y: 1 }, min: { x: 1, y: 1 } },
+                        // Multiple wraps around the circumference — a single
+                        // wrap parks the streak's bright band on ONE side and
+                        // the whole beam reads off-center.
+                        size: { max: { x: wraps, y: 1 }, min: { x: wraps, y: 1 } },
                         speed: { max: uvSpeed, min: uvSpeed },
                     },
                 },
                 rendererParams: { modelIndex: 0, allColor: U.fixedColor({ ...color, a: alpha }) },
             });
 
-            const core = layer(0.16, 255, { r: 255, g: 255, b: 255 }, { x: 0, y: flowV * 1.6 });
-            const sheath = layer(0.36, 150, c, { x: flowV * 0.5, y: flowV });      // diagonal → spiral
-            const halo = layer(0.58, 45, c, { x: 0, y: flowV * 0.6 });
+            const core = layer(0.16, 255, { r: 255, g: 255, b: 255 }, { x: 0, y: -flowV * 1.6 }, 4);
+            const sheath = layer(0.36, 150, c, { x: flowV * 0.5, y: -flowV }, 3);   // diagonal → spiral
+            const halo = layer(0.58, 45, c, { x: 0, y: -flowV * 0.6 }, 2);
 
             // Source charge (bottom) and muzzle burst (top): layered glows
             // plus a stream of sparks spraying off the tip.
@@ -212,7 +368,7 @@
         category: 'Energy',
         continuous: true,
         prewarm: 150,
-        textures: ['streak', 'spark'],
+        textures: ['streak', 'spark', 'noise', 'glow_soft'],
         params: [
             { key: 'color',    label: 'Curtain Color', type: 'color', default: '#52ffb8' },
             { key: 'color2',   label: 'Fringe Color',  type: 'color', default: '#7f7fff' },
@@ -224,69 +380,93 @@
         build(p) {
             const B = RR_EfkBuilder;
             const U = RR_EfkRecipeUtil;
+            const L = RR_EfkLayers;
             const { rf, rv3, v3 } = B;
-            const c1 = U.hexToRgba(p.color);
-            const c2 = U.hexToRgba(p.color2);
+            const main = U.hexToRgba(p.color);
+            const fringe = U.hexToRgba(p.color2);
             const bindAlways = { translationBindType: 2, rotationBindType: 2, scalingBindType: 2 };
-            const half = p.width * 0.5;
+            const W = p.width * 0.5;
+            const D = p.life;
 
-            const curtains = B.makeNode(RR_EfkFormat.NODE_TYPE.SPRITE, {
-                commonValues: {
-                    maxGeneration: 99999,
-                    life: rf(Math.round(p.life * 0.55), Math.round(p.life * 0.9)),
-                    generationTime: rf(Math.max(1, p.life / p.curtains / 1.4)),
-                },
-                generationLocation: { type: 0, location: rv3(v3(-half, 2, -1), v3(half, 4, 1)) },
-                translation: {
-                    type: 1,
-                    refEqP: rf(-1), refEqV: rf(-1), refEqA: rf(-1),
-                    location: rv3(0),
-                    velocity: rv3(v3(-0.02, 0, 0), v3(0.02, 0, 0)),
-                    acceleration: rv3(0),
-                },
-                rotation: {
-                    type: 1,
-                    refEqP: rf(-1), refEqV: rf(-1), refEqA: rf(-1),
-                    rotation: rv3(v3(0, 0, -0.12), v3(0, 0, 0.12)),
-                    velocity: rv3(v3(0, 0, -0.001), v3(0, 0, 0.001)),
-                    acceleration: rv3(0),
-                },
-                scaling: {
-                    type: 1,
-                    refEqP: rf(-1), refEqV: rf(-1), refEqA: rf(-1),
-                    position: rv3(v3(1.5, 5, 1), v3(3, 8, 1)),
-                    velocity: rv3(v3(-0.002, 0.004, 0), v3(0.002, 0.008, 0)),
-                    acceleration: rv3(0),
-                },
-                rendererCommon: {
-                    colorTextureIndex: 0,
-                    fadeInType: 1,
-                    fadeIn: { frame: 25, params: [0, 0, 0] },
-                    fadeOutType: 1,
-                    fadeOut: { frame: 30, params: [0, 0, 0] },
-                },
-                rendererParams: {
-                    allColor: U.easeColor({ ...c1, a: 120 }, { ...c2, a: 40 }),
-                },
-            });
-
-            const stars = B.makeNode(RR_EfkFormat.NODE_TYPE.SPRITE, {
-                commonValues: {
-                    maxGeneration: 99999,
-                    life: rf(20, 60),
-                    generationTime: rf(Math.max(1, p.life / Math.max(1, p.stars) / 1.2)),
-                },
-                generationLocation: { type: 0, location: rv3(v3(-half, -2, -2), v3(half, 8, 2)) },
-                scaling: { type: 4, start: rf(0.2, 0.7), end: rf(0), params: [0, 0, 0] },
-                rendererCommon: { colorTextureIndex: 1 },
-                rendererParams: { allColor: U.fixedColor({ r: 255, g: 255, b: 255, a: 220 }) },
-            });
-
-            const nodes = [curtains];
-            if (p.stars > 0) nodes.push(stars);
+            // SIGNATURE: undulating light curtains — tall shimmering
+            // panels that breathe and drift, main color banded with the
+            // fringe color. (Energy is Y-flipped in the editor, so the
+            // sky band sits at +y and shimmer drifts -y to read as
+            // upward.)
+            const kids = [];
+            // Two overlapping rows (front = main color, back = fringe,
+            // offset half a step and deeper) — panels wide enough to
+            // merge into one flowing sheet instead of a picket fence.
+            const row = (colorRow, zBase, xShift, alphaMul, hMul) => {
+                for (let i = 0; i < p.curtains; i++) {
+                    const spacing = 2 * W / p.curtains;
+                    const x = -W + (i + 0.5) * spacing + xShift;
+                    const h = (4.6 + ((i * 53) % 5) * 0.7) * hMul;
+                    const cycle = 60 + ((i * 37) % 50);
+                    kids.push(B.makeNode(RR_EfkFormat.NODE_TYPE.SPRITE, {
+                        commonValues: { ...bindAlways, maxGeneration: 99999, life: rf(cycle),
+                                        generationTime: rf(Math.round(cycle / 2)),
+                                        generationTimeOffset: rf((i * 13) % 40) },
+                        translation: {
+                            type: 1, refEqP: rf(-1), refEqV: rf(-1), refEqA: rf(-1),
+                            location: rv3(v3(x - 0.3, 1.4, zBase - 0.2), v3(x + 0.3, 2.1, zBase + 0.2)),
+                            velocity: rv3(v3(-0.007, -0.004, 0), v3(0.007, -0.001, 0)),
+                            acceleration: rv3(0),
+                        },
+                        rotation: { type: 0, refEq: -1, rotation: v3(0, 0, ((i * 29) % 13 - 6) * 0.016) },
+                        scaling: { type: 0, refEq: -1, scale: v3(spacing * 2.8, h, 1) },
+                        rendererCommon: {
+                            colorTextureIndex: 0, alphaBlend: 2,
+                            fadeInType: 1, fadeIn: { frame: Math.round(cycle * 0.35), params: [0, 0, 0] },
+                            fadeOutType: 1, fadeOut: { frame: Math.round(cycle * 0.4), params: [0, 0, 0] },
+                        },
+                        rendererParams: { billboard: 2, allColor: L.fixed(colorRow, Math.round(70 * alphaMul)) },
+                    }));
+                    // shimmer striation riding each panel
+                    kids.push(B.makeNode(RR_EfkFormat.NODE_TYPE.SPRITE, {
+                        commonValues: { ...bindAlways, maxGeneration: 99999, life: rf(Math.round(cycle * 0.7)),
+                                        generationTime: rf(Math.round(cycle * 0.35)),
+                                        generationTimeOffset: rf((i * 23) % 30) },
+                        translation: { type: 0, refEq: -1, position: v3(x, 1.75, zBase + 0.1) },
+                        scaling: { type: 4, start: rf(spacing * 0.5), end: rf(spacing * 0.9), params: [0, 0, 0] },
+                        rendererCommon: {
+                            colorTextureIndex: 2, alphaBlend: 2,
+                            uv: { type: 3,
+                                  position: { max: { x: 0, y: 0 }, min: { x: 0, y: 0 } },
+                                  size: { max: { x: 1, y: 2 }, min: { x: 1, y: 2 } },
+                                  speed: { max: { x: 0, y: 0.008 }, min: { x: 0, y: 0.008 } } },
+                            fadeInType: 1, fadeIn: { frame: Math.round(cycle * 0.25), params: [0, 0, 0] },
+                            fadeOutType: 1, fadeOut: { frame: Math.round(cycle * 0.28), params: [0, 0, 0] },
+                        },
+                        rendererParams: { billboard: 2, allColor: L.fixed(colorRow, 55) },
+                    }));
+                }
+            };
+            row(main, -0.3, 0, 1.0, 1.0);
+            row(fringe, -1.0, W / p.curtains, 0.75, 1.25);
+            // sky wash behind the curtains
+            kids.push(B.makeNode(RR_EfkFormat.NODE_TYPE.SPRITE, {
+                commonValues: { ...bindAlways, maxGeneration: 1, life: rf(36000) },
+                translation: { type: 0, refEq: -1, position: v3(0, 2.2, -1.6) },
+                scaling: { type: 0, refEq: -1, scale: v3(W * 2.4, 4.4, 1) },
+                rendererCommon: { colorTextureIndex: 3, alphaBlend: 2 },
+                rendererParams: { allColor: L.fixed(U.dim(main, 0.5), 40) },
+            }));
+            if (p.stars > 0) {
+                kids.push(B.makeNode(RR_EfkFormat.NODE_TYPE.SPRITE, {
+                    commonValues: { ...bindAlways, maxGeneration: 99999, life: rf(20, 45),
+                                    generationTime: rf(Math.max(1, 60 / p.stars)) },
+                    generationLocation: { type: 0, location: rv3(v3(-W * 1.2, 0.5, -2), v3(W * 1.2, 4.5, -1)) },
+                    scaling: { type: 4, start: rf(0.12, 0.3), end: rf(0.05), params: [0, 0, 0] },
+                    rendererCommon: { colorTextureIndex: 1, alphaBlend: 2,
+                        fadeInType: 1, fadeIn: { frame: 8, params: [0, 0, 0] },
+                        fadeOutType: 1, fadeOut: { frame: 8, params: [0, 0, 0] } },
+                    rendererParams: { allColor: L.fixed({ r: 255, g: 255, b: 255 }, 220) },
+                }));
+            }
             return [B.makeNode(RR_EfkFormat.NODE_TYPE.NONE, {
-                commonValues: { ...bindAlways, maxGeneration: 1, life: rf(LONG) },
-                children: nodes,
+                commonValues: { ...bindAlways, maxGeneration: 1, life: rf(36000) },
+                children: kids,
             })];
         },
     });
@@ -298,137 +478,115 @@
         category: 'Energy',
         continuous: true,
         prewarm: 90,
-        textures: ['glow_soft', 'ring_soft', 'particle_hard', 'streak'],
+        textures: ['glow_soft', 'ring_soft', 'particle_hard', 'streak', 'smoke', 'noise', 'spark'],
         params: [
-            { key: 'color',  label: 'Accretion Color', type: 'color', default: '#b06cff' },
+            { key: 'color',  label: 'Accretion Color', type: 'color', default: '#f2b570' },
             { key: 'size',   label: 'Size',            type: 'range', default: 6, min: 2, max: 14, step: 1 },
             { key: 'spin',   label: 'Spin (°/s)',      type: 'range', default: 60, min: 10, max: 180, step: 1 },
             { key: 'debris', label: 'Infalling Debris', type: 'range', default: 24, min: 4, max: 60, step: 1 },
+            { key: 'density', label: 'Disk Material', type: 'range', default: 10, min: 2, max: 20, step: 1 },
             { key: 'life',   label: 'Loop Length',     type: 'range', default: 150, min: 60, max: 300, step: 1 },
         ],
         build(p) {
             const B = RR_EfkBuilder;
             const U = RR_EfkRecipeUtil;
-            const { rf, rv3, v3, v2 } = B;
-            const c = U.hexToRgba(p.color);
-            const bindAlways = { translationBindType: 2, rotationBindType: 2, scalingBindType: 2 };
-            const spin = (dps) => dps * D2R / 60;   // exact °/s
+            const L = RR_EfkLayers;
+            const { rf, rv3, v3 } = B;
+            const col = U.hexToRgba(p.color);
+            const ember = U.dim(col, 0.35);          // dark outer ramp stop
+            const deep = U.dim(col, 0.14);           // near-black rim
+            const WHITE = { r: 255, g: 255, b: 255 };
+            const LONG = 36000;
+            const spin = p.spin * (Math.PI / 180) / 60;
+            const D2Rl = Math.PI / 180;
+            // Singularity proportions: thin disk out to ~3.8x the horizon,
+            // differential rotation (inner fast), cream-gold -> ember -> black.
+            const H = p.size * 0.75;                 // event horizon diameter
 
-            // The void: normal-blend near-black disc that eats the backdrop.
-            const void_ = B.makeNode(RR_EfkFormat.NODE_TYPE.SPRITE, {
-                commonValues: { ...bindAlways, maxGeneration: 1, life: rf(LONG) },
-                scaling: { type: 0, refEq: -1, scale: v3(1.1, 1.1, 1.1) },
+            const horizon = B.makeNode(RR_EfkFormat.NODE_TYPE.SPRITE, {
+                commonValues: { ...L.BIND, maxGeneration: 1, life: rf(LONG) },
+                scaling: { type: 0, refEq: -1, scale: v3(H, H, 1) },
+                rendererCommon: { colorTextureIndex: 2, alphaBlend: 1 },
+                rendererParams: { allColor: L.fixed({ r: 0, g: 0, b: 0 }, 255) },
+            });
+            const shadowHalo = B.makeNode(RR_EfkFormat.NODE_TYPE.SPRITE, {
+                commonValues: { ...L.BIND, maxGeneration: 1, life: rf(LONG) },
+                scaling: { type: 0, refEq: -1, scale: v3(H * 1.6, H * 1.6, 1) },
                 rendererCommon: { colorTextureIndex: 0, alphaBlend: 1 },
-                rendererParams: { allColor: U.fixedColor({ r: 5, g: 2, b: 10, a: 235 }) },
+                rendererParams: { allColor: L.fixed({ r: 0, g: 0, b: 0 }, 205) },
             });
+            const photon = L.shockRing({ tex: 1, color: WHITE, size: H * 1.06, from: H * 1.06, width: 0.05,
+                                         duration: LONG, alpha: 255 });
+            const photonGlow = L.shockRing({ tex: 1, color: col, size: H * 1.15, from: H * 1.12, width: 0.12,
+                                             duration: LONG, alpha: 150 });
 
-            // Swirling accretion: two counter-scrolling streak bands —
-            // the moving luminance reads as orbiting hot matter.
-            const swirl = (rOut, rIn, speedMul, alpha, rotX = 0.5) => B.makeNode(RR_EfkFormat.NODE_TYPE.RING, {
-                commonValues: { ...bindAlways, maxGeneration: 1, life: rf(LONG) },
-                rotation: { type: 0, refEq: -1, rotation: v3(rotX, 0, 0) },
-                rendererCommon: {
-                    colorTextureIndex: 3,
-                    // UV size MUST be a whole number of repeats around the
-                    // ring (EVFX pack convention: 2/4/8) — a fractional
-                    // window can't tile, leaving a hard seam at the closure.
-                    uv: {
-                        type: 3,
-                        position: { max: { x: 0, y: 0 }, min: { x: 0, y: 0 } },
-                        size: { max: { x: 3, y: 1 }, min: { x: 3, y: 1 } },
-                        speed: { max: { x: p.spin * 0.0006 * speedMul, y: 0 },
-                                 min: { x: p.spin * 0.0006 * speedMul, y: 0 } },
-                    },
-                },
-                rendererParams: {
-                    billboard: 2,
-                    vertexCount: 48,
-                    outerLocation: { type: 0, location: v2(rOut, 0) },
-                    innerLocation: { type: 0, location: v2(rIn, 0) },
-                    outerColor: U.fixedColor({ ...c, a: 0 }),
-                    centerColor: U.fixedColor({ ...c, a: alpha }),
-                    innerColor: U.fixedColor({ ...U.dim(c, 0.4), a: Math.round(alpha * 0.35) }),
-                },
-            });
-
-            // Photon ring: razor-thin bright rim hugging the horizon.
-            const lensing = B.makeNode(RR_EfkFormat.NODE_TYPE.RING, {
-                commonValues: { ...bindAlways, maxGeneration: 1, life: rf(LONG) },
-                rendererCommon: { colorTextureIndex: 1 },
-                rendererParams: {
-                    billboard: 0,
-                    vertexCount: 48,
-                    outerLocation: { type: 0, location: v2(1.22, 0) },
-                    innerLocation: { type: 0, location: v2(1.06, 0) },
-                    outerColor: U.fixedColor({ r: 255, g: 240, b: 220, a: 0 }),
-                    centerColor: U.fixedColor({ r: 255, g: 240, b: 220, a: 150 }),
-                    innerColor: U.fixedColor({ r: 255, g: 240, b: 220, a: 0 }),
-                },
-            });
-
-            // Debris spawns on a wide disc and is pulled in by a REAL
-            // attractive force field centered on the effect.
-            const debris = B.makeNode(RR_EfkFormat.NODE_TYPE.SPRITE, {
-                commonValues: {
-                    ...bindAlways,
-                    maxGeneration: 99999,
-                    life: rf(Math.round(p.life * 0.3), Math.round(p.life * 0.6)),
-                    generationTime: rf(Math.max(0.5, p.life / p.debris / 1.5)),
-                },
-                generationLocation: {
-                    type: 3,
-                    division: 24,
-                    radius: rf(2.2, 3.2),
-                    angleStart: rf(0),
-                    angleEnd: rf(360),
-                    circleType: 0,
-                    axisDirection: 1,
-                    angleNoize: rf(180),
-                },
-                localForceField: {
-                    elements: [{ type: 9, control: 2.2, minRange: 0, maxRange: 6 }],   // AttractiveForce
-                    locationAbs: { type: 0 },
-                },
-                scaling: { type: 4, start: rf(0.3, 0.7), end: rf(0), params: [0, 0, 0] },
-                rendererCommon: { colorTextureIndex: 2 },
-                rendererParams: { allColor: U.easeColor({ ...c, a: 255 }, { r: 255, g: 255, b: 255, a: 0 }) },
-            });
-
-            // Debris rides a fast-spinning frame while the attractive
-            // field pulls it in → genuine inward spirals.
-            const debrisSpinner = B.makeNode(RR_EfkFormat.NODE_TYPE.NONE, {
-                commonValues: { ...bindAlways, maxGeneration: 1, life: rf(LONG) },
+            // One streak-scrolled disk band (tilted nearly edge-on: thin disk)
+            const band = (size, width, inner, center, alphaC, tilt, speed, uvSpeed, tex, reps) => B.makeNode(RR_EfkFormat.NODE_TYPE.NONE, {
+                commonValues: { ...L.BIND, maxGeneration: 1, life: rf(LONG) },
                 rotation: {
-                    type: 1,
-                    refEqP: rf(-1), refEqV: rf(-1), refEqA: rf(-1),
-                    rotation: rv3(0),
-                    velocity: rv3(v3(0, spin(p.spin * 2), 0)),
-                    acceleration: rv3(0),
+                    type: 1, refEqP: rf(-1), refEqV: rf(-1), refEqA: rf(-1),
+                    rotation: rv3(v3(tilt, 0, 0)), velocity: rv3(v3(0, speed, 0)), acceleration: rv3(0),
                 },
-                children: [debris],
+                children: [B.makeNode(RR_EfkFormat.NODE_TYPE.RING, {
+                    commonValues: { maxGeneration: 1, life: rf(LONG), translationBindType: 2, rotationBindType: 2, scalingBindType: 2 },
+                    scaling: { type: 0, refEq: -1, scale: v3(size, size, size) },
+                    rendererCommon: {
+                        colorTextureIndex: tex, alphaBlend: 2,
+                        uv: { type: 3,
+                              position: { max: { x: 0, y: 0 }, min: { x: 0, y: 0 } },
+                              size: { max: { x: reps, y: 1 }, min: { x: reps, y: 1 } },
+                              speed: { max: { x: uvSpeed, y: 0 }, min: { x: uvSpeed, y: 0 } } },
+                    },
+                    rendererParams: {
+                        billboard: 2, vertexCount: 64,
+                        outerLocation: { type: 0, location: { x: 1 + width, y: 0 } },
+                        innerLocation: { type: 0, location: { x: 1 - width, y: 0 } },
+                        outerColor: L.fixed(deep, 0),
+                        centerColor: L.fixed(center, alphaC),
+                        innerColor: L.fixed(inner, Math.round(alphaC * 0.85)),
+                    },
+                })],
+            });
+
+            const TILT = 80 * D2Rl;
+            const dens = p.density / 10;
+            const A = (a) => Math.min(255, Math.round(a * dens));
+            const disk = [
+                // inner: white-hot edge, cream-gold body, fastest spin
+                band(H * 1.5, 0.3, WHITE, col, A(255), TILT, spin * 2.0, 0.02, 5, 2),
+                band(H * 1.55, 0.26, col, col, A(200), TILT, spin * 1.7, 0.015, 5, 3),
+                // hot filament stream threading the inner disk
+                band(H * 1.45, 0.06, WHITE, WHITE, A(235), TILT, spin * 2.2, 0.024, 3, 8),
+                // mid: gold -> ember
+                band(H * 2.3, 0.32, col, ember, A(220), TILT, spin * 1.2, 0.012, 5, 3),
+                // outer: ember fading to black rim, slow
+                band(H * 3.4, 0.3, ember, deep, A(160), TILT, spin * 0.6, 0.008, 5, 2),
+            ];
+
+            if (p.density >= 13) {
+                disk.push(band(H * 2.1, 0.05, WHITE, col, A(180), TILT, spin * 1.5, 0.02, 3, 6));
+            }
+            const infall = B.makeNode(RR_EfkFormat.NODE_TYPE.NONE, {
+                commonValues: { ...L.BIND, maxGeneration: 1, life: rf(LONG) },
+                rotation: {
+                    type: 1, refEqP: rf(-1), refEqV: rf(-1), refEqA: rf(-1),
+                    rotation: rv3(v3(TILT, 0, 0)), velocity: rv3(v3(0, spin * 1.7, 0)), acceleration: rv3(0),
+                },
+                children: [B.makeNode(RR_EfkFormat.NODE_TYPE.SPRITE, {
+                    commonValues: { maxGeneration: 99999, life: rf(Math.round(p.life * 0.35), Math.round(p.life * 0.6)), generationTime: rf(Math.max(0.6, p.life / p.debris)),
+                                    translationBindType: 2, rotationBindType: 2, scalingBindType: 2 },
+                    generationLocation: { type: 3, division: 24, radius: rf(H * 1.2, H * 2.1),
+                                          angleStart: rf(0), angleEnd: rf(360), circleType: 0, axisDirection: 1, angleNoize: rf(8) },
+                    scaling: { type: 4, start: rf(0.15, 0.4), end: rf(0), params: [0, 0, 0] },
+                    rendererCommon: { colorTextureIndex: 6, alphaBlend: 2,
+                        fadeInType: 1, fadeIn: { frame: 8, params: [0, 0, 0] } },
+                    rendererParams: { allColor: U.easeColor({ ...WHITE, a: 230 }, { ...col, a: 0 }) },
+                })],
             });
 
             return [B.makeNode(RR_EfkFormat.NODE_TYPE.NONE, {
-                commonValues: { ...bindAlways, maxGeneration: 1, life: rf(LONG) },
-                rotation: {
-                    type: 1,
-                    refEqP: rf(-1), refEqV: rf(-1), refEqA: rf(-1),
-                    rotation: rv3(0),
-                    velocity: rv3(v3(0, spin(p.spin), 0)),
-                    acceleration: rv3(0),
-                },
-                scaling: { type: 0, refEq: -1, scale: v3(p.size, p.size, p.size) },
-                children: [
-                    void_,
-                    swirl(1.9, 1.05, 1, 210),            // accretion disc
-                    swirl(1.5, 1.0, -1.7, 130),          // inner counter-band
-                    // Light lensed OVER the poles: the same band stood
-                    // vertically, facing the camera — the Interstellar
-                    // "gravity bends the disc's light around the hole" look.
-                    swirl(1.42, 1.08, 0.7, 95, Math.PI / 2),
-                    lensing,
-                    debrisSpinner,
-                ],
+                commonValues: { ...L.BIND, maxGeneration: 1, life: rf(LONG) },
+                children: [shadowHalo, horizon, photon, photonGlow, ...disk, infall],
             })];
         },
     });
@@ -832,7 +990,7 @@
         category: 'Energy',
         continuous: true,
         prewarm: 90,
-        textures: ['glow_soft', 'particle_hard'],
+        textures: ['glow_soft', 'particle_hard', 'ring_soft', 'streak', 'spark', 'noise'],
         params: [
             { key: 'color',    label: 'Aura Color', type: 'color', default: '#ffe9a0' },
             { key: 'beam',     label: 'Ray Color',  type: 'color', default: '#fff8dc' },
@@ -868,66 +1026,149 @@
         build(p) {
             const B = RR_EfkBuilder;
             const U = RR_EfkRecipeUtil;
+            const L = RR_EfkLayers;
             const { rf, rv3, v3 } = B;
-            const c = U.hexToRgba(p.color);
-            const beam = U.hexToRgba(p.beam);
+            const gold = U.hexToRgba(p.color);
+            const ray = U.hexToRgba(p.beam);
             const mote = U.hexToRgba(p.moteCol);
+            const WHITE = { r: 255, g: 255, b: 255 };
+            const S = p.size;
+            const w = p.spin * (Math.PI / 180) / 60;
             const bindAlways = { translationBindType: 2, rotationBindType: 2, scalingBindType: 2 };
 
-            const rays = B.makeNode(RR_EfkFormat.NODE_TYPE.MODEL, {
+            // Breathing layer (regenerating crossfade — a LONG-life ease
+            // reads frozen).
+            const pulse = (from, to, cycle, color, alpha, tex, offset, y) => B.makeNode(RR_EfkFormat.NODE_TYPE.SPRITE, {
+                commonValues: { ...bindAlways, maxGeneration: 99999, life: rf(cycle),
+                                generationTime: rf(Math.round(cycle / 2)), generationTimeOffset: rf(offset || 0) },
+                translation: { type: 0, refEq: -1, position: v3(0, y || 0, 0) },
+                scaling: { type: 4, start: rf(from), end: rf(to), params: [0, 0, 0] },
+                rendererCommon: {
+                    colorTextureIndex: tex, alphaBlend: 2,
+                    fadeInType: 1, fadeIn: { frame: Math.round(cycle * 0.35), params: [0, 0, 0] },
+                    fadeOutType: 1, fadeOut: { frame: Math.round(cycle * 0.4), params: [0, 0, 0] },
+                },
+                rendererParams: { allColor: L.fixed(color, alpha) },
+            });
+
+            // Grace descending: a tall soft column of light from above.
+            const beam = B.makeNode(RR_EfkFormat.NODE_TYPE.SPRITE, {
+                commonValues: { ...bindAlways, maxGeneration: 1, life: rf(LONG) },
+                translation: { type: 0, refEq: -1, position: v3(0, S * 0.55, 0) },
+                scaling: { type: 0, refEq: -1, scale: v3(S * 0.75, S * 2.1, 1) },
+                rendererCommon: { colorTextureIndex: 0, alphaBlend: 2 },
+                rendererParams: { allColor: L.fixed(ray, 55) },
+            });
+
+            // Twin ray fans (the model), counter-rotating for shimmer.
+            const fan = (speed, alpha, scale) => B.makeNode(RR_EfkFormat.NODE_TYPE.MODEL, {
                 commonValues: { ...bindAlways, maxGeneration: 1, life: rf(LONG) },
                 rotation: {
-                    type: 1,
-                    refEqP: rf(-1), refEqV: rf(-1), refEqA: rf(-1),
-                    rotation: rv3(0),
-                    velocity: rv3(v3(0, 0, p.spin * D2R / 60)),
-                    acceleration: rv3(0),
+                    type: 1, refEqP: rf(-1), refEqV: rf(-1), refEqA: rf(-1),
+                    rotation: rv3(v3(0, 0, -3.14), v3(0, 0, 3.14)),
+                    velocity: rv3(v3(0, 0, speed)), acceleration: rv3(0),
                 },
-                rendererCommon: { colorTextureIndex: 0 },
-                rendererParams: { modelIndex: 0, allColor: U.fixedColor({ ...beam, a: 120 }) },
+                scaling: { type: 0, refEq: -1, scale: v3(scale, scale, scale) },
+                rendererCommon: { colorTextureIndex: 0, alphaBlend: 2 },
+                rendererParams: { modelIndex: 0, culling: 2, allColor: L.fixed(ray, alpha) },
             });
 
-            const core = B.makeNode(RR_EfkFormat.NODE_TYPE.SPRITE, {
+            // The halo: a golden ring floating overhead.
+            const halo = B.makeNode(RR_EfkFormat.NODE_TYPE.RING, {
                 commonValues: { ...bindAlways, maxGeneration: 1, life: rf(LONG) },
-                scaling: { type: 0, refEq: -1, scale: v3(0.85, 0.85, 0.85) },
-                rendererCommon: { colorTextureIndex: 0 },
-                rendererParams: { allColor: U.fixedColor({ ...c, a: 200 }) },
+                translation: { type: 0, refEq: -1, position: v3(0, S * 1.1, 0) },
+                rotation: { type: 0, refEq: -1, rotation: v3(72 * (Math.PI / 180), 0, 0) },
+                scaling: { type: 0, refEq: -1, scale: v3(S * 0.55, S * 0.55, S * 0.55) },
+                rendererCommon: { colorTextureIndex: 2, alphaBlend: 2 },
+                rendererParams: {
+                    billboard: 2, vertexCount: 40,
+                    outerLocation: { type: 0, location: { x: 1.12, y: 0 } },
+                    innerLocation: { type: 0, location: { x: 0.88, y: 0 } },
+                    outerColor: L.fixed(gold, 0),
+                    centerColor: L.fixed(WHITE, 220),
+                    innerColor: L.fixed(gold, 120),
+                },
             });
 
-            const motes = B.makeNode(RR_EfkFormat.NODE_TYPE.SPRITE, {
-                commonValues: {
-                    ...bindAlways,
-                    maxGeneration: 99999,
-                    life: rf(40, 80),
-                    generationTime: rf(Math.max(1, 60 / Math.max(1, p.motes))),
-                },
-                generationLocation: {
-                    type: 3, division: 16, radius: rf(0.15, 0.6),
-                    angleStart: rf(0), angleEnd: rf(360),
-                    circleType: 0, axisDirection: 1, angleNoize: rf(0),
-                },
+            // Rising light shafts around the body.
+            const shafts = B.makeNode(RR_EfkFormat.NODE_TYPE.SPRITE, {
+                commonValues: { ...bindAlways, maxGeneration: 99999, life: rf(38, 55), generationTime: rf(4, 7) },
+                generationLocation: { type: 3, division: 12, radius: rf(S * 0.6, S * 0.95),
+                                      angleStart: rf(0), angleEnd: rf(360), circleType: 0, axisDirection: 1, angleNoize: rf(6) },
                 translation: {
-                    type: 1,
-                    refEqP: rf(-1), refEqV: rf(-1), refEqA: rf(-1),
+                    type: 1, refEqP: rf(-1), refEqV: rf(-1), refEqA: rf(-1),
                     location: rv3(0),
-                    velocity: rv3(v3(-0.002, 0.004, -0.002), v3(0.002, 0.012, 0.002)),
+                    // negative y: this category is Y-flipped in the editor,
+                    // so world-down velocity reads as RISING on screen
+                    velocity: rv3(v3(0, -0.035, 0), v3(0, -0.018, 0)),
                     acceleration: rv3(0),
                 },
-                scaling: { type: 4, start: rf(0.05, 0.14), end: rf(0), params: [0, 0, 0] },
+                scaling: { type: 0, refEq: -1, scale: v3(0.4, 3.6, 1) },
                 rendererCommon: {
-                    colorTextureIndex: 1,
+                    colorTextureIndex: 3, alphaBlend: 2,
                     fadeInType: 1, fadeIn: { frame: 10, params: [0, 0, 0] },
+                    fadeOutType: 1, fadeOut: { frame: 14, params: [0, 0, 0] },
                 },
-                rendererParams: { allColor: U.fixedColor(mote) },
+                rendererParams: { allColor: L.fixed(ray, 120) },
             });
 
-            const children = [rays, core];
-            if (p.motes > 0) children.push(motes);
+            // Marching bead orbits — glints circling the body.
+            const orbit = (tilt, tiltZ, speed, radius, alpha) => B.makeNode(RR_EfkFormat.NODE_TYPE.NONE, {
+                commonValues: { ...bindAlways, maxGeneration: 1, life: rf(LONG) },
+                rotation: {
+                    type: 1, refEqP: rf(-1), refEqV: rf(-1), refEqA: rf(-1),
+                    rotation: rv3(v3(tilt, 0, tiltZ)), velocity: rv3(v3(0, speed, 0)), acceleration: rv3(0),
+                },
+                children: [B.makeNode(RR_EfkFormat.NODE_TYPE.SPRITE, {
+                    commonValues: { maxGeneration: 99999, life: rf(22, 30), generationTime: rf(1.8, 2.6),
+                                    translationBindType: 2, rotationBindType: 2, scalingBindType: 2 },
+                    generationLocation: { type: 3, division: 24, radius: rf(radius * 0.97, radius * 1.03),
+                                          angleStart: rf(0), angleEnd: rf(360), circleType: 0, axisDirection: 1, angleNoize: rf(3) },
+                    scaling: { type: 4, start: rf(0.5, 0.7), end: rf(0.14), params: [0, 0, 0] },
+                    rendererCommon: { colorTextureIndex: 4, alphaBlend: 2,
+                        fadeInType: 1, fadeIn: { frame: 4, params: [0, 0, 0] },
+                        fadeOutType: 1, fadeOut: { frame: 8, params: [0, 0, 0] } },
+                    rendererParams: { allColor: L.fixed(mote, alpha) },
+                })],
+            });
 
+            const D2Rh = Math.PI / 180;
+            const kids = [
+                beam,
+                fan(Math.max(0.006, w), 130, 1),
+                fan(-Math.max(0.004, w * 0.6), 80, 0.78),
+                halo,
+                pulse(S * 1.45, S * 1.7, 78, gold, 60, 0, 0, S * 1.1),   // halo glow breathing
+                shafts,
+                // golden heart: layered breathing
+                L.glow({ tex: 0, color: WHITE, size: S * 0.3, duration: LONG, alpha: 220 }),
+                pulse(S * 0.55, S * 0.85, 46, gold, 150, 0),
+                pulse(S * 0.75, S * 1.0, 64, gold, 95, 5, 23),
+                pulse(S * 0.9, S * 1.2, 90, ray, 60, 0, 45),
+                orbit(65 * D2Rh, 0.4, Math.max(0.012, w * 1.3), S * 1.05, 235),
+                orbit(112 * D2Rh, -0.7, -Math.max(0.009, w), S * 1.2, 190),
+            ];
+            if (p.motes > 0) {
+                kids.push(B.makeNode(RR_EfkFormat.NODE_TYPE.SPRITE, {
+                    commonValues: { ...bindAlways, maxGeneration: 99999, life: rf(45, 80),
+                                    generationTime: rf(Math.max(1, 120 / p.motes)) },
+                    generationLocation: { type: 3, division: 16, radius: rf(S * 0.3, S * 0.95),
+                                          angleStart: rf(0), angleEnd: rf(360), circleType: 2, axisDirection: 1, angleNoize: rf(10) },
+                    translation: {
+                        type: 1, refEqP: rf(-1), refEqV: rf(-1), refEqA: rf(-1),
+                        location: rv3(0),
+                        velocity: rv3(v3(-0.003, -0.03, -0.003), v3(0.003, -0.014, 0.003)),
+                        acceleration: rv3(0),
+                    },
+                    scaling: { type: 4, start: rf(0.25, 0.5), end: rf(0.08), params: [0, 0, 0] },
+                    rendererCommon: { colorTextureIndex: 4, alphaBlend: 2,
+                        fadeInType: 1, fadeIn: { frame: 8, params: [0, 0, 0] } },
+                    rendererParams: { allColor: L.fixed(mote, 235) },
+                }));
+            }
             return [B.makeNode(RR_EfkFormat.NODE_TYPE.NONE, {
                 commonValues: { ...bindAlways, maxGeneration: 1, life: rf(LONG) },
-                scaling: { type: 0, refEq: -1, scale: v3(p.size, p.size, p.size) },
-                children,
+                children: kids,
             })];
         },
     });
@@ -941,7 +1182,7 @@
         category: 'Energy',
         continuous: true,
         prewarm: 90,
-        textures: ['ring_soft', 'glow_soft', 'particle_hard'],
+        textures: ['ring_soft', 'glow_soft', 'particle_hard', 'runes', 'spark', 'noise', 'streak'],
         params: [
             { key: 'color',     label: 'Primary Color',   type: 'color', default: '#b45cff' },
             { key: 'color2',    label: 'Secondary Color', type: 'color', default: '#5c8cff' },
@@ -993,8 +1234,13 @@
 
             const ring = (radius, width, col, alpha) => B.makeNode(RR_EfkFormat.NODE_TYPE.RING, {
                 commonValues: { ...bindAlways, maxGeneration: 1, life: rf(LONG) },
+                // Flat in the circle's ground plane (world-fixed) — the
+                // default camera-facing billboard hung these in screen
+                // space, detached from the tilted assembly.
+                rotation: { type: 0, refEq: -1, rotation: v3(Math.PI / 2, 0, 0) },
                 rendererCommon: { colorTextureIndex: 0 },
                 rendererParams: {
+                    billboard: 2,
                     vertexCount: 48,
                     outerLocation: { type: 0, location: v2(radius + width, 0) },
                     innerLocation: { type: 0, location: v2(radius - width, 0) },
@@ -1042,16 +1288,92 @@
                 rendererParams: { allColor: U.fixedColor({ ...U.dim(c1, 0.8), a: 70 }) },
             });
 
-            const children = [
-                ring(1.0, 0.06, c1, 240),
-                ring(0.76, 0.035, c2, 200),
+            // Rotating rune inscription: flat ring bands with the glyph
+            // strip scrolled around them (counter-scrolling inner band).
+            const FLAT = { type: 0, refEq: -1, rotation: v3(Math.PI / 2, 0, 0) };
+            const runeBand = (radius, width, col, alpha, scroll) => B.makeNode(RR_EfkFormat.NODE_TYPE.RING, {
+                commonValues: { ...bindAlways, maxGeneration: 1, life: rf(LONG) },
+                rotation: FLAT,
+                scaling: { type: 0, refEq: -1, scale: v3(radius, radius, radius) },
+                rendererCommon: {
+                    colorTextureIndex: 3, alphaBlend: 2,
+                    uv: { type: 3,
+                          position: { max: { x: 0, y: 0 }, min: { x: 0, y: 0 } },
+                          size: { max: { x: 6, y: 1 }, min: { x: 6, y: 1 } },
+                          speed: { max: { x: scroll, y: 0 }, min: { x: scroll, y: 0 } } },
+                },
+                rendererParams: {
+                    billboard: 2, vertexCount: 64,
+                    outerLocation: { type: 0, location: { x: 1 + width, y: 0 } },
+                    innerLocation: { type: 0, location: { x: 1 - width, y: 0 } },
+                    outerColor: U.fixedColor({ ...col, a: 0 }),
+                    centerColor: U.fixedColor({ ...col, a: alpha }),
+                    innerColor: U.fixedColor({ ...col, a: Math.round(alpha * 0.35) }),
+                },
+            });
+
+            // Light pillars standing at the star's vertices.
+            const pillars = [];
+            for (let i = 0; i < p.points; i++) {
+                const a = (i / p.points) * Math.PI * 2 - Math.PI / 2;
+                pillars.push(B.makeNode(RR_EfkFormat.NODE_TYPE.SPRITE, {
+                    commonValues: { ...bindAlways, maxGeneration: 99999, life: rf(34, 50),
+                                    generationTime: rf(20), generationTimeOffset: rf((i * 9) % 28) },
+                    translation: { type: 0, refEq: -1, position: v3(Math.cos(a) * 0.8, 0.55, Math.sin(a) * 0.8) },
+                    scaling: { type: 0, refEq: -1, scale: v3(0.1, 1.15, 1) },
+                    rendererCommon: {
+                        colorTextureIndex: 6, alphaBlend: 2,
+                        fadeInType: 1, fadeIn: { frame: 14, params: [0, 0, 0] },
+                        fadeOutType: 1, fadeOut: { frame: 16, params: [0, 0, 0] },
+                    },
+                    rendererParams: { allColor: U.fixedColor({ ...c2, a: 150 }) },
+                }));
+            }
+
+            // Activation pulse: a flat ring sweeps outward periodically.
+            const pulseRing = B.makeNode(RR_EfkFormat.NODE_TYPE.RING, {
+                commonValues: { ...bindAlways, maxGeneration: 99999, life: rf(34), generationTime: rf(80) },
+                rotation: FLAT,
+                scaling: { type: 4, start: rf(0.18), end: rf(1.28), params: [0, 0, 0] },
+                rendererCommon: {
+                    colorTextureIndex: 0, alphaBlend: 2,
+                    fadeOutType: 1, fadeOut: { frame: 16, params: [0, 0, 0] },
+                },
+                rendererParams: {
+                    billboard: 2, vertexCount: 48,
+                    outerLocation: { type: 0, location: { x: 1.09, y: 0 } },
+                    innerLocation: { type: 0, location: { x: 0.91, y: 0 } },
+                    outerColor: U.fixedColor({ ...c1, a: 0 }),
+                    centerColor: U.fixedColor({ r: 255, g: 255, b: 255, a: 170 }),
+                    innerColor: U.fixedColor({ ...c1, a: 60 }),
+                },
+            });
+
+            // Breathing heart: noise shimmer over the soft glow.
+            const shimmer = B.makeNode(RR_EfkFormat.NODE_TYPE.SPRITE, {
+                commonValues: { ...bindAlways, maxGeneration: 99999, life: rf(52), generationTime: rf(26) },
+                translation: { type: 0, refEq: -1, position: v3(0, 0.06, 0) },
+                rotation: FLAT,
+                scaling: { type: 4, start: rf(0.95), end: rf(1.3), params: [0, 0, 0] },
+                rendererCommon: {
+                    colorTextureIndex: 5, alphaBlend: 2,
+                    fadeInType: 1, fadeIn: { frame: 18, params: [0, 0, 0] },
+                    fadeOutType: 1, fadeOut: { frame: 21, params: [0, 0, 0] },
+                },
+                rendererParams: { billboard: 2, allColor: U.fixedColor({ ...c1, a: 60 }) },
+            });
+
+            // Split spin from statics: rings/bands with a fixed X-tilt
+            // PRECESS (Euler) inside a Y-spinning parent — hula hoops.
+            // Only the star models and the pillars ride the spinner; the
+            // bands rotate their runes via UV scroll instead.
+            const spinKids = [
                 model(0, c1),   // star
                 model(1, c2),   // rune ticks
-                glow,
+                ...pillars,
             ];
-            if (p.sparkles > 0) children.push(sparkles);
-
-            return [B.makeNode(RR_EfkFormat.NODE_TYPE.NONE, {
+            if (p.sparkles > 0) spinKids.push(sparkles);
+            const spinner = B.makeNode(RR_EfkFormat.NODE_TYPE.NONE, {
                 commonValues: { ...bindAlways, maxGeneration: 1, life: rf(LONG) },
                 rotation: {
                     type: 1,
@@ -1060,8 +1382,27 @@
                     velocity: rv3(v3(0, p.spin * D2R / 60, 0)),
                     acceleration: rv3(0),
                 },
+                children: spinKids,
+            });
+
+            return [B.makeNode(RR_EfkFormat.NODE_TYPE.NONE, {
+                commonValues: { ...bindAlways, maxGeneration: 1, life: rf(LONG) },
+                // Tip the whole circle toward the camera so it reads as a
+                // proper ellipse instead of an edge-on line.
+                rotation: { type: 0, refEq: -1, rotation: v3(0.34, 0, 0) },
                 scaling: { type: 0, refEq: -1, scale: v3(p.size, p.size, p.size) },
-                children,
+                children: [
+                    spinner,
+                    runeBand(1.02, 0.09, c1, 230, 0.004),
+                    runeBand(0.62, 0.11, c2, 170, -0.006),
+                    ring(1.14, 0.03, c1, 240),
+                    ring(0.9, 0.025, c1, 200),
+                    ring(0.74, 0.02, c2, 190),
+                    ring(0.5, 0.02, c2, 160),
+                    glow,
+                    shimmer,
+                    pulseRing,
+                ],
             })];
         },
     });
@@ -1115,6 +1456,10 @@
                     life: rf(ringLife),
                     generationTime: rf(Math.max(1, ringLife / p.rings)),
                 },
+                // Flat horizontal hoops (world-fixed): the column swirl then
+                // spins them about their own axis — invisible, as it should
+                // be — instead of flipping them edge-on like paper sheets.
+                rotation: { type: 0, refEq: -1, rotation: v3(Math.PI / 2, 0, 0) },
                 generationLocation: { type: 0, location: rv3(v3(0, -dir * h / 2, 0)) },
                 translation: {
                     type: 1,
@@ -1129,6 +1474,7 @@
                     fadeOutType: 1, fadeOut: { frame: 14, params: [0, 0, 0] },
                 },
                 rendererParams: {
+                    billboard: 2,
                     vertexCount: 40,
                     outerLocation: { type: 0, location: v2(p.radius * 1.05, 0) },
                     innerLocation: { type: 0, location: v2(p.radius * 0.85, 0) },
@@ -1191,7 +1537,7 @@
                         type: 3,
                         position: { max: { x: 0, y: 0 }, min: { x: 0, y: 0 } },
                         size: { max: { x: 1, y: 1 }, min: { x: 1, y: 1 } },
-                        speed: { max: { x: 0, y: -dir * p.rise * 0.006 }, min: { x: 0, y: -dir * p.rise * 0.006 } },
+                        speed: { max: { x: 0, y: dir * p.rise * 0.006 }, min: { x: 0, y: dir * p.rise * 0.006 } },
                     },
                 },
                 rendererParams: { modelIndex: 0, allColor: U.fixedColor({ ...U.dim(c, 0.8), a: 58 }) },

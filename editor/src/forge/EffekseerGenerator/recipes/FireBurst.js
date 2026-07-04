@@ -31,15 +31,19 @@ RR_EFK_RECIPE_REGISTRY.push({
 
         const children = [
             // Act 1 — ignition
-            L.flash({ tex: 0, color: WHITE, size: 5.5, start: 0, duration: Math.round(D * 0.22), alpha: 245 }),
-            L.flash({ tex: 0, color: hot, size: 7, from: 3, to: 8.5, start: 1, duration: Math.round(D * 0.35), alpha: 170 }),
-            L.shockRing({ tex: 2, color: hot, size: 8, width: 0.14, count: 2, cadence: 5, start: 0, duration: Math.round(D * 0.4) }),
+            L.flash({ tex: 0, color: WHITE, size: 7.5, start: 0, duration: Math.round(D * 0.22), alpha: 245 }),
+            L.flash({ tex: 0, color: hot, size: 10, from: 4, to: 12, start: 1, duration: Math.round(D * 0.45), alpha: 185 }),
             // Act 2 — ember fountain (two granularities, both dusted)
-            L.burst({ tex: 1, color: hot, color2: tip, count: p.count, size: 0.85, speed: spd, gravity: 0.0022,
-                      up: true, start: 1, duration: D, lifeJitter: 0.45, fadeOut: Math.round(D * 0.3),
-                      dust: { tex: 4, color: WHITE } }),
-            L.burst({ tex: 4, color: { r: 255, g: 220, b: 150 }, count: Math.round(p.count * 0.7), size: 0.35,
-                      speed: spd * 1.4, gravity: 0.0016, up: true, start: 2, duration: D, lifeJitter: 0.5 }),
+            // SIGNATURE: flame tongues — buoyant fire licking upward from
+            // a tight base (a flare, not a radial spark shotgun).
+            L.burst({ tex: 0, color: hot, color2: tip, count: p.count, size: 3.4,
+                      speed: 0.075, up: true, gravity: -0.0045, radius: 0.9,
+                      duration: Math.round(D * 0.8), cadence: 0.6, fadeOut: 10 }),
+            L.burst({ tex: 5, color: U.dim(hot, 0.7), count: Math.round(p.count * 0.5), size: 3.8,
+                      speed: 0.055, up: true, gravity: -0.0035, radius: 0.7, blend: 1, alpha: 185,
+                      start: 3, duration: Math.round(D * 0.75), cadence: 0.9, fadeOut: 12 }),
+            L.burst({ tex: 4, color: { r: 255, g: 220, b: 150 }, count: Math.round(p.count * 0.3), size: 0.3,
+                      speed: 0.05, up: true, gravity: -0.002, duration: Math.round(D * 0.7), cadence: 1.2, fadeOut: 8 }),
             // Act 3 — flame licks
             L.tendrils({ tex: 0, color: hot, count: 5, speed: 0.035, curl: 0.03, tail: 18, width: 0.16,
                          start: 2, duration: Math.round(D * 0.7), alpha: 220 }),

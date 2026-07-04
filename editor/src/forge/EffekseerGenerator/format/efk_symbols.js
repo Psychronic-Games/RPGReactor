@@ -78,12 +78,24 @@ function polyArea(pts) {
 
 function earClip(ptsIn) {
     // Ensure CCW.
-    const pts = polyArea(ptsIn) < 0 ? [...ptsIn].reverse() : [...ptsIn];
+    const raw = polyArea(ptsIn) < 0 ? [...ptsIn].reverse() : [...ptsIn];
+    // Drop consecutive (near-)duplicate points — SVG-sampled outlines are
+    // full of them, and a duplicate sitting on an ear's edge blocks every
+    // ear until the clipper stalls and drops whole regions.
+    const pts = [];
+    for (const q of raw) {
+        const prev = pts[pts.length - 1];
+        if (!prev || Math.hypot(q[0] - prev[0], q[1] - prev[1]) > 1e-5) pts.push(q);
+    }
+    while (pts.length > 1 &&
+           Math.hypot(pts[0][0] - pts[pts.length - 1][0], pts[0][1] - pts[pts.length - 1][1]) <= 1e-5) pts.pop();
     const idx = pts.map((_, i) => i);
     const tris = [];
     const cross2 = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+    // STRICT interior test: a vertex exactly ON the candidate ear's edge
+    // (shared boundary point) must not veto the ear.
     const inTri = (p, a, b, c) =>
-        cross2(a, b, p) >= -1e-12 && cross2(b, c, p) >= -1e-12 && cross2(c, a, p) >= -1e-12;
+        cross2(a, b, p) > 1e-9 && cross2(b, c, p) > 1e-9 && cross2(c, a, p) > 1e-9;
     let guard = 0;
     while (idx.length > 3 && guard++ < 10000) {
         let clipped = false;
@@ -232,29 +244,39 @@ const SYMBOLS = {
         P([[0, -1], [0.87, 0.5], [-0.87, 0.5]]),
     ],
     cross: () => [
-        P([[-0.22, 1], [0.22, 1], [0.22, 0.28], [0.8, 0.28], [0.8, -0.14], [0.22, -0.14],
-           [0.22, -1], [-0.22, -1], [-0.22, -0.14], [-0.8, -0.14], [-0.8, 0.28], [-0.22, 0.28]]),
+        // Latin cross: the crossbar sits ABOVE center, about 2/3 up the
+        // upright on screen (positive y here — user-verified orientation).
+        P([[-0.22, 1], [0.22, 1], [0.22, 0.55], [0.8, 0.55], [0.8, 0.13], [0.22, 0.13],
+           [0.22, -1], [-0.22, -1], [-0.22, 0.13], [-0.8, 0.13], [-0.8, 0.55], [-0.22, 0.55]]),
     ],
     // Hilal, using the AG's exact construction: the inner circle is
     // internally TANGENT to the outer at (1, 0) — innerR + offset = 1 —
     // so the crescent tips meet in a point. Star nestled in the bite.
     'crescent-star': () => {
-        const thinness = 0.55;
-        const innerR = 1 - thinness * 0.55;
-        const offset = thinness * 0.55;
+        // Two INTERSECTING circles (not tangent): the horns are the two
+        // real intersection points, and the path is one simple polygon —
+        // outer arc the long way around the left, inner arc back up the
+        // left bulge. (The old slit-annulus construction was degenerate at
+        // the tangency and the triangulator filled it as a blob.)
+        const ri = 0.82, d = 0.45;
+        const hx = (1 + d * d - ri * ri) / (2 * d);
+        const hy = Math.sqrt(Math.max(0, 1 - hx * hx));
+        const t1 = Math.atan2(hy, hx);                      // upper horn (outer angle)
         const pts = [];
-        const N = 40;
-        for (let k = 0; k <= N; k++) {                       // outer, CCW through the left
-            const a = 0.03 + (k / N) * (Math.PI * 2 - 0.06);
+        const N = 36;
+        for (let k = 0; k <= N; k++) {                      // outer: CCW, upper horn → lower horn
+            const a = t1 + (k / N) * (Math.PI * 2 - 2 * t1);
             pts.push([Math.cos(a), Math.sin(a)]);
         }
-        for (let k = N; k >= 0; k--) {                       // inner, back CW
-            const a = 0.05 + (k / N) * (Math.PI * 2 - 0.1);
-            pts.push([offset + innerR * Math.cos(a), innerR * Math.sin(a)]);
+        const pLow = Math.atan2(-hy, hx - d);               // lower horn (inner angle)
+        const end = -pLow - Math.PI * 2;                    // upper horn, one turn down
+        for (let k = 1; k <= N; k++) {                      // inner: back up the left bulge
+            const a = pLow + (k / N) * (end - pLow);
+            pts.push([d + ri * Math.cos(a), ri * Math.sin(a)]);
         }
         return [
             P(pts),
-            P(star(5, 0.32, 0.122, 90).map(([x, y]) => [x + offset + innerR * 0.6, y]),
+            P(star(5, 0.32, 0.122, 90).map(([x, y]) => [x + 0.62, y]),
               { role: 'secondary' }),
         ];
     },
@@ -418,8 +440,14 @@ const SYMBOLS = {
     // The AG's exact stargate: outer triangle, 5-vertex chevron whose
     // feet land on the base, and an annular ring floating above the apex.
     stargate: () => [
-        P([[-0.83, -1.0], [0, 0.505], [0.83, -1.0]], { fill: false }),
-        P([[0.42, -1.0], [0.52, -0.76], [0, 0.157], [-0.52, -0.76], [-0.42, -1.0]], { fill: false }),
+        // OPEN paths: closing them drew a stray baseline along y=-1
+        // (user: "bottom line not supposed to be there").
+        P([[-0.83, -1.0], [0, 0.505], [0.83, -1.0]], { fill: false, closed: false }),
+        P([[0.42, -1.0], [0.52, -0.76], [0, 0.157], [-0.52, -0.76], [-0.42, -1.0]], { fill: false, closed: false }),
+        // Foot caps: close each leg's bottom individually (a single
+        // full-width baseline is exactly what we removed earlier).
+        P([[-0.83, -1.0], [-0.42, -1.0]], { fill: false, closed: false }),
+        P([[0.42, -1.0], [0.83, -1.0]], { fill: false, closed: false }),
         { annulus: { rOuter: 0.191, rInner: 0.104, n: 24, cy: 0.809 }, role: 'secondary',
           pts: [], closed: true, fill: true, wireOnly: false, solidOnly: false },
     ],
