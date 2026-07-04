@@ -69,6 +69,17 @@ function syntheticFrame(points) {
     return rows.map(row => row.join(''));
 }
 
+function expectedMiniSkirtKneePadY(anchors) {
+    const legs = anchors.legs;
+    const bootTop = anchors.bands && Number.isFinite(anchors.bands.bootTop) ? anchors.bands.bootTop : legs.maxY;
+    const minKneeY = legs.minY + 2;
+    const maxKneeY = Math.max(minKneeY, bootTop - 2);
+    const kneeY = Number.isFinite(legs.kneeY) && legs.kneeY >= minKneeY && legs.kneeY <= maxKneeY
+        ? legs.kneeY
+        : Math.max(minKneeY, Math.min(maxKneeY, legs.minY + Math.round(engine.miniSkirtClothSpan(anchors) * 0.35)));
+    return Math.max(minKneeY, kneeY - 1);
+}
+
 test('Nova Sentinel recipe exposes Looseleaf and Psychronic part sets', () => {
     assert.equal(novaSentinel.key, 'nova-sentinel');
     assert.equal(novaSentinel.label, 'Nova Sentinel');
@@ -87,6 +98,238 @@ test('Nova Sentinel recipe exposes Looseleaf and Psychronic part sets', () => {
         assert.equal(config.zones.belt.family, 'gold');
         assert.equal(config.zones.belt.accent, 'gold');
         assert.equal(config.extensions.length, 2);
+    }
+});
+
+test('Nova Sentinel recipe exposes a Mini Skirt preset for the Legs slot in each style', () => {
+    for (const partSet of novaSentinel.partSets) {
+        const style = partSet.style;
+        const legsPresets = partSet.parts.filter(p => p.kind === 'zone' && p.key === 'legs');
+        assert.ok(legsPresets.length >= 2,
+            `${style} Nova Sentinel offers more than one Legs preset`);
+        const mini = legsPresets.find(p => p.label === 'Mini Skirt');
+        assert.ok(mini, `${style} offers a Mini Skirt legs preset`);
+        assert.equal(mini.spec.style, 'miniSkirt');
+        assert.equal(mini.spec.family, 'navy');
+        assert.equal(mini.spec.accent, 'cyan');
+        assert.equal(mini.spec.params.kneeAccent, true);
+        assert.equal(mini.spec.params.hem, 0.35);
+        assert.equal(mini.spec.params.waistband, true);
+        assert.equal(mini.spec.params.pleats, true);
+    }
+});
+
+test('Outfit engine registers a miniSkirt legs painter for every built-in style', () => {
+    assert.equal(typeof engine.PAINTERS.legs.miniSkirt, 'function',
+        'Looseleaf PAINTERS.legs exposes a miniSkirt painter');
+    assert.equal(typeof engine.PSYCHRONIC_PAINTERS.legs.miniSkirt, 'function',
+        'Psychronic PAINTERS.legs exposes a miniSkirt painter');
+    assert.ok(engine.UI_SCHEMA.zones.some(z => z.key === 'legs' && z.styles.includes('miniSkirt')),
+        'UI_SCHEMA legs zone advertises the miniSkirt style');
+    const legsZone = engine.UI_SCHEMA.zones.find(z => z.key === 'legs');
+    const hemParam = legsZone.params.find(p => p.key === 'hem');
+    const kneeParam = legsZone.params.find(p => p.key === 'kneeAccent');
+    assert.ok(hemParam && hemParam.type === 'float' && hemParam.default === 0.35 && hemParam.min === 0 && hemParam.max === 1 && hemParam.step === 0.05,
+        'legs zone exposes a short, fine-step hem float param for miniSkirt');
+    assert.deepEqual(hemParam.styles, ['miniSkirt'], 'hem is only shown for miniSkirt');
+    assert.deepEqual(kneeParam.styles, ['segmented', 'miniSkirt'], 'knee plates are shown for segmented legs and miniSkirt knee pads');
+    for (const partSet of engine.UI_SCHEMA.partSets) {
+        if (partSet.style !== 'looseleaf' && partSet.style !== 'psychronic') continue;
+        assert.ok(partSet.parts.some(p => p.kind === 'zone' && p.key === 'legs' && p.label === 'Mini Skirt'),
+            `${partSet.style} browser UI schema includes the Mini Skirt preset`);
+    }
+});
+
+test('Outfit engine generates a valid Mini Skirt sheet that leaves bare legs visible', () => {
+    for (const style of ['looseleaf', 'psychronic']) {
+        const body = loadRegistryPart(bodyPathForStyle(style));
+        const config = engine.defaultConfig(style);
+        config.zones.legs.style = 'miniSkirt';
+        config.zones.legs.params = Object.assign({}, config.zones.legs.params, { kneeAccent: true, hem: 0.35, waistband: true, pleats: true });
+
+        const result = engine.generateOutfit(config, body.template);
+        const built = engine.buildPalette(config);
+
+        // Same structural shape as the segmented outfit generation path.
+        assert.equal(Object.keys(result.palette).length, 34, `${style} miniSkirt palette matches the Nova Sentinel size`);
+        assert.equal(result.sheet.length, 4);
+        for (const [di, dir] of result.sheet.entries()) {
+            assert.equal(dir.length, 3, `${style} miniSkirt direction ${di} has three walk frames`);
+            for (const [fi, frame] of dir.entries()) {
+                assert.equal(frame.length, 144);
+                for (const row of frame) assert.equal(row.length, 144);
+            }
+        }
+
+        const paletteLetters = new Set(Object.keys(result.palette));
+        const usedLetters = new Set(result.sheet.flat(2).join('').replace(/\s/g, '').split(''));
+        assert.ok(usedLetters.size > 0, `${style} miniSkirt is not blank`);
+        for (const letter of usedLetters) {
+            assert.ok(paletteLetters.has(letter), `${style} miniSkirt only uses palette letters (${letter})`);
+        }
+
+        // The miniSkirt should paint the upper legs and leave the lower legs
+        // transparent in this layer so the body skin shows through. Find the
+        // legs zone Y-range from a front-view debug frame and compare leg
+        // paint density between the upper and lower halves of the legs.
+        const legLetters = new Set(Object.values(built.zonePalettes.legs || {}).filter(Boolean));
+        const debug = engine.debugClassifyFrame(
+            config, body.template.sheet[0][1], 0, body.template.palette, 1
+        );
+        const legs = debug.anchors.legs;
+        const minY = legs.minY, maxY = legs.maxY;
+        // Compute the engine's actual hemY using the same wider
+        // belt-bottom→ankle span the miniSkirt painter and flare pass use, so
+        // this assertion stays in sync with the runtime definition of hem.
+        const span = engine.miniSkirtClothSpan(debug.anchors);
+        const ankleY = debug.anchors.bands && Number.isFinite(debug.anchors.bands.ankleY)
+            ? debug.anchors.bands.ankleY
+            : maxY;
+        const hemY = Math.max(minY, Math.min(debug.anchors.bands.bootTop - 1, minY + Math.floor(span * (config.zones.legs.params.hem ?? 0.35))));
+        if (style === 'psychronic') {
+            assert.ok(hemY < legs.kneeY,
+                `${style} default miniSkirt hem (${hemY}) sits above the anatomical knee (${legs.kneeY})`);
+        }
+
+        const front = result.sheet[0][1];
+        let paintedAboveHem = 0, paintedBelowHem = 0;
+        for (let y = minY; y <= maxY; y++) {
+            for (let x = 0; x < front[y].length; x++) {
+                if (legLetters.has(front[y][x])) {
+                    if (y <= hemY) paintedAboveHem++;
+                    else paintedBelowHem++;
+                }
+            }
+        }
+        assert.ok(paintedAboveHem > 0,
+            `${style} miniSkirt paints leg pixels above the hem`);
+        assert.ok(paintedBelowHem < paintedAboveHem,
+            `${style} miniSkirt leaves fewer leg pixels below the hem than above (skirt is shorter than full pants)`);
+
+        // Visible pleats — the skirt cloth above the hem must use more than one
+        // leg-ramp letter (outline + shadow = visible shading stripes, not a
+        // flat single-letter wash). Larger legs zones (Psychronic) get the full
+        // crown gradient and reach 5+ distinct letters; a tight legs zone
+        // (Looseleaf) still produces 2+ because the painter emits the outline
+        // edge, the dark waistband, and crisp shadow crease stripes.
+        const distinctLettersAboveHem = new Set();
+        for (let y = minY; y <= hemY; y++) {
+            for (let x = 0; x < front[y].length; x++) {
+                if (legLetters.has(front[y][x])) distinctLettersAboveHem.add(front[y][x]);
+            }
+        }
+        assert.ok(distinctLettersAboveHem.size >= 2,
+            `${style} miniSkirt above-hem cloth uses ${distinctLettersAboveHem.size} distinct leg letters (need >= 2 for visible pleat shading)`);
+
+        // A-line flare beyond the body silhouette — the skirt must paint leg
+        // cloth OUTSIDE the body's per-row silhouette at some row above the
+        // hem. A real skirt flares past the hips instead of being trapped
+        // inside the body outline like pants. The applyMiniSkirtFlare pass
+        // stamps these pixels beyond the per-row body extent.
+        let flaredPixels = 0;
+        for (let y = minY; y <= hemY; y++) {
+            const ext = debug.anchors.rowExtent && debug.anchors.rowExtent[y];
+            if (!ext) continue;
+            const row = front[y];
+            for (let x = 0; x < row.length; x++) {
+                if (!legLetters.has(row[x])) continue;
+                if (x < ext[0] || x > ext[1]) flaredPixels++;
+            }
+        }
+        assert.ok(flaredPixels > 0,
+            `${style} miniSkirt flares at least one pixel beyond the per-row body silhouette (got ${flaredPixels})`);
+
+        const hemExtent = debug.anchors.rowExtent && debug.anchors.rowExtent[hemY];
+        assert.ok(hemExtent, `${style} has a body extent on the miniSkirt hem row`);
+        let skirtMinX = Infinity, skirtMaxX = -Infinity;
+        for (let x = 0; x < front[hemY].length; x++) {
+            if (!legLetters.has(front[hemY][x])) continue;
+            skirtMinX = Math.min(skirtMinX, x);
+            skirtMaxX = Math.max(skirtMaxX, x);
+        }
+        const hemOutset = Math.max(hemExtent[0] - skirtMinX, skirtMaxX - hemExtent[1]);
+        assert.ok(hemOutset >= 4,
+            `${style} miniSkirt hem flares into a triangular skirt silhouette (outset ${hemOutset}px)`);
+
+        const kneePadY = expectedMiniSkirtKneePadY(debug.anchors);
+        assert.ok(kneePadY > hemY, `${style} miniSkirt knee pads sit below the skirt hem`);
+        assert.ok(kneePadY < debug.anchors.bands.bootTop,
+            `${style} miniSkirt knee pads sit above the boot/shin band`);
+        let frontKneePadPixels = 0;
+        for (let y = kneePadY - 1; y <= kneePadY + 1; y++) {
+            const row = front[y] || '';
+            for (let x = 0; x < row.length; x++) {
+                if (legLetters.has(row[x])) frontKneePadPixels++;
+            }
+        }
+        assert.ok(frontKneePadPixels > 0,
+            `${style} miniSkirt paints knee pads at the anatomical knee when Knee plates is enabled`);
+        if (style === 'psychronic') {
+            assert.ok(kneePadY <= legs.kneeY - 1,
+                `${style} miniSkirt knee pads are centered above the detected knee row`);
+        }
+
+        if (style === 'psychronic') {
+            const microConfig = engine.defaultConfig(style);
+            microConfig.zones.legs.style = 'miniSkirt';
+            microConfig.zones.legs.params = { kneeAccent: false, hem: 0, waistband: true, pleats: true };
+            const micro = engine.generateOutfit(microConfig, body.template);
+            const microBuilt = engine.buildPalette(microConfig);
+            const microLetters = new Set(Object.values(microBuilt.zonePalettes.legs || {}).filter(Boolean));
+            const microDebug = engine.debugClassifyFrame(
+                microConfig, body.template.sheet[0][1], 0, body.template.palette, 1
+            );
+            let belowMicroHemPixels = 0;
+            for (let y = microDebug.anchors.legs.minY + 1; y < microDebug.anchors.bands.bootTop; y++) {
+                const row = micro.sheet[0][1][y] || '';
+                for (let x = 0; x < row.length; x++) {
+                    if (microLetters.has(row[x])) belowMicroHemPixels++;
+                }
+            }
+            assert.equal(belowMicroHemPixels, 0,
+                'psychronic hem=0 miniSkirt does not extend toward the knees or boot tops');
+
+            const legsOnlyConfig = engine.defaultConfig(style);
+            for (const zone of Object.keys(legsOnlyConfig.zones)) legsOnlyConfig.zones[zone].enabled = zone === 'legs';
+            legsOnlyConfig.extensions = [];
+            legsOnlyConfig.zones.legs.style = 'miniSkirt';
+            legsOnlyConfig.zones.legs.params = { kneeAccent: true, hem: 0.35, waistband: true, pleats: true };
+            const legsOnly = engine.generateOutfit(legsOnlyConfig, body.template);
+            const legsOnlyDebug = engine.debugClassifyFrame(
+                legsOnlyConfig, body.template.sheet[0][1], 0, body.template.palette, 1
+            );
+            for (let y = legsOnlyDebug.anchors.bands.beltTop; y < legsOnlyDebug.anchors.legs.minY; y++) {
+                assert.equal((legsOnly.sheet[0][1][y] || '').trim(), '',
+                    `psychronic Mini Skirt paints no cloth above legs.minY row ${legsOnlyDebug.anchors.legs.minY}`);
+            }
+        }
+
+        // Below the hem, only explicit knee pads may use leg-palette pixels;
+        // the skirt cloth and underfill passes must otherwise leave the outfit
+        // layer transparent so the body legs show through. This specifically
+        // guards side-view orphan outline/bridge bands.
+        for (let directionIndex = 0; directionIndex < result.sheet.length; directionIndex++) {
+            const directionDebug = engine.debugClassifyFrame(
+                config, body.template.sheet[directionIndex][1], directionIndex, body.template.palette, 1
+            );
+            const dLegs = directionDebug.anchors.legs;
+            const dSpan = engine.miniSkirtClothSpan(directionDebug.anchors);
+            const dAnkleY = directionDebug.anchors.bands && Number.isFinite(directionDebug.anchors.bands.ankleY)
+                ? directionDebug.anchors.bands.ankleY
+                : dLegs.maxY;
+            const dHemY = Math.max(dLegs.minY, Math.min(directionDebug.anchors.bands.bootTop - 1, dLegs.minY + Math.floor(dSpan * (config.zones.legs.params.hem ?? 0.35))));
+            let belowHemLegPixels = 0;
+            for (let y = dHemY + 1; y <= dAnkleY; y++) {
+                const dKneePadY = expectedMiniSkirtKneePadY(directionDebug.anchors);
+                if (Math.abs(y - dKneePadY) <= 1) continue;
+                const row = result.sheet[directionIndex][1][y] || '';
+                for (let x = 0; x < row.length; x++) {
+                    if (legLetters.has(row[x])) belowHemLegPixels++;
+                }
+            }
+            assert.equal(belowHemLegPixels, 0,
+                `${style} direction ${directionIndex} miniSkirt leaves no stray leg-palette pixels below the hem outside knee pads`);
+        }
     }
 });
 

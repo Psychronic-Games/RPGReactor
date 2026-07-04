@@ -152,6 +152,11 @@ class UIManager {
                     this.callbacks.openForgeTool('sound-effect-generator');
                 }
                 break;
+            case 'forge-effekseer-generator':
+                if (this.callbacks.openForgeTool) {
+                    this.callbacks.openForgeTool('effekseer-generator');
+                }
+                break;
             case 'manage-plugins':
                 if (this.callbacks.showPluginManager) {
                     this.callbacks.showPluginManager();

@@ -782,7 +782,9 @@ class CharacterGenerator {
             const zc = cfg.zones[z.key] || {};
             const famSwatch = (schema.families.find(f => f.name === zc.family) || {}).swatch;
             const accSwatch = (schema.accents.find(a => a.name === (zc.accent || '')) || {}).swatch;
-            const paramRows = z.params.map(p => {
+            const activeStyle = zc.style || (z.styles && z.styles[0]) || '';
+            const visibleParams = (z.params || []).filter(p => !p.styles || p.styles.includes(activeStyle));
+            const paramRows = visibleParams.map(p => {
                 if (p.type === 'bool') return `
                     <label style="display:flex;align-items:center;gap:6px;font-size:10px;color:var(--color-text);margin-top:4px;">
                         <input type="checkbox" class="rr-forge-input" data-forge-zone="${z.key}" data-forge-param="${p.key}" ${zc.params && zc.params[p.key] ? 'checked' : ''}>
@@ -800,7 +802,7 @@ class CharacterGenerator {
                 return `
                     <label style="display:flex;align-items:center;justify-content:space-between;gap:6px;font-size:10px;color:var(--color-text);margin-top:4px;">
                         ${p.label}
-                        ${numberControl(`data-forge-zone="${z.key}" data-forge-param="${p.key}"`, zc.params && zc.params[p.key] != null ? zc.params[p.key] : p.default, p.min, p.max, p.type === 'float' ? 0.1 : 1)}
+                        ${numberControl(`data-forge-zone="${z.key}" data-forge-param="${p.key}"`, zc.params && zc.params[p.key] != null ? zc.params[p.key] : p.default, p.min, p.max, p.step || (p.type === 'float' ? 0.1 : 1))}
                     </label>`;
             }).join('');
             return `<div draggable="true" data-forge-layer-card="zone:${z.key}" style="border:1px solid var(--color-border-subtle);border-radius:5px;padding:8px 10px;margin-bottom:8px;background:var(--color-bg-panel);opacity:${zc.enabled !== false ? 1 : 0.55};cursor:grab;">
@@ -1050,7 +1052,23 @@ class CharacterGenerator {
         };
         rootEl.querySelectorAll('.rr-forge-input').forEach(el => {
             el.addEventListener('change', () => apply(el));
-            if (el.type === 'number') el.addEventListener('input', () => apply(el));
+            // Sliders (range) update live during drag; number fields update on
+            // a short debounce. This keeps typing responsive but avoids the old
+            // per-keystroke rebuild that made fields laggy and interrupted
+            // in-progress values (e.g. typing "0.42" before the decimal lands).
+            if (el.type === 'range') el.addEventListener('input', () => apply(el));
+            if (el.type === 'number') {
+                let numberInputTimer = 0;
+                el.addEventListener('input', () => {
+                    if (numberInputTimer) clearTimeout(numberInputTimer);
+                    numberInputTimer = setTimeout(() => {
+                        const raw = String(el.value || '').trim();
+                        if (!raw || raw === '-' || raw === '.' || raw === '-.') return;
+                        if (!Number.isFinite(parseFloat(raw))) return;
+                        apply(el);
+                    }, 180);
+                });
+            }
         });
         rootEl.querySelectorAll('.rr-forge-num-step').forEach(btn => {
             btn.addEventListener('click', e => {
@@ -1065,7 +1083,10 @@ class CharacterGenerator {
                 const decimals = (String(input.step || '').split('.')[1] || '').length;
                 const next = Math.max(min, Math.min(max, (parseFloat(input.value) || 0) + delta));
                 input.value = decimals ? next.toFixed(decimals) : String(Math.round(next));
-                input.dispatchEvent(new Event('input', { bubbles: true }));
+                // Spinner buttons should update live — dispatch `change` (not
+                // `input`) so the apply handler runs once per click without
+                // any per-keystroke input listener.
+                input.dispatchEvent(new Event('change', { bubbles: true }));
             });
         });
         rootEl.querySelectorAll('[data-forge-layer-card] input, [data-forge-layer-card] select, [data-forge-layer-card] textarea, [data-forge-layer-card] button').forEach(el => {

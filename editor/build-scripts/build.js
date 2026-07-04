@@ -98,6 +98,28 @@ function copyDirFiltered(src, dest, relBase) {
     }
 }
 
+function slugifyPackageName(value) {
+    const slug = String(value || 'game')
+        .toLowerCase()
+        .replace(/[^a-z0-9._-]+/g, '-')
+        .replace(/^-+|-+$/g, '');
+    return slug || 'game';
+}
+
+function normalizeStagedPackage(stagingDir, gameName) {
+    const stagedPackagePath = path.join(stagingDir, 'package.json');
+    if (!fs.existsSync(stagedPackagePath)) return;
+
+    const stagedPackage = JSON.parse(fs.readFileSync(stagedPackagePath, 'utf8'));
+    const titleSlug = slugifyPackageName(gameName);
+    const currentName = slugifyPackageName(stagedPackage.name);
+    stagedPackage.name = currentName === 'rmmz-game'
+        ? `rpg-reactor-${titleSlug}`
+        : currentName;
+
+    fs.writeFileSync(stagedPackagePath, JSON.stringify(stagedPackage, null, 2));
+}
+
 // Create staging directory with clean game files
 const stagingDir = path.join(os.tmpdir(), `rpgreactor-build-${Date.now()}`);
 console.log('Creating staging directory...');
@@ -105,6 +127,7 @@ console.log(`  ${stagingDir}\n`);
 
 console.log('Staging game files (excluding dev/backup files)...');
 copyDirFiltered(projectPath, stagingDir, '');
+normalizeStagedPackage(stagingDir, gameName);
 console.log('\nStaging complete.\n');
 
 // Ensure output directory exists

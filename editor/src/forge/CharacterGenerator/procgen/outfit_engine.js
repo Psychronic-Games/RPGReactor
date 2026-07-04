@@ -853,6 +853,310 @@ function cleanSidePantsShade(p, sideT, t, backEdge = 0, phase = 0) {
     return rampShade(p, -0.46 + crown * 1.08 + beltTuck + lowerTaper + backEdge);
 }
 
+// Mini-skirt shade shared by the Looseleaf and Psychronic leg painters and by
+// the post-paint flare pass (applyMiniSkirtFlare). The skirt is ONE cloth that
+// spans both hips (no inseam split) and stops at a tunable hem fraction.
+// Below the hem the painter returns null so the skirt cloth is transparent and
+// the underlying body legs show through; optional knee pads are stamped by a
+// separate pass at the anatomical knees.
+//
+// Above the hem the cloth gets:
+//   • a dark waistband strip right under the belt (with a hard top outline row);
+//   • a lit crown across the centre of the hips, darker toward the outer edges;
+//   • CRISP vertical pleats — alternating shadow-crease / highlight-ridge
+//     columns on a 4px period — instead of weak shade nudges that wash out on
+//     dark navy/gunmetal ramps. The crease/ridge columns OVERRIDE the crown
+//     shade so pleats read as actual folds at every width, even on the dark
+//     families;
+//   • a single dark hem line at the bottom of the cloth.
+//
+// The legs-zone anchors (legs.minY/maxY, centreX, halfWidth, rowExtent) auto-
+// track the per-frame bob/stride so the painter is direction- and walk-aware
+// without special-casing frames. The shade is also reused for the flare
+// pixels beyond the body silhouette — there, positions outside the half-width
+// produce crown=0 (edge shading), which is what gives the A-line bell its
+// darker outer edges.
+// Wider hem span for the mini-skirt than the legs-zone alone gives. The legs
+// zone is short on some bodies (Looseleaf: beltBottom 0.72 → bootTop 0.78 =
+// only ~4 rows), so a hem fraction of the legs zone produces a barely-below-
+// the-belt band that is mostly waistband + hem line with no room for pleats.
+// Mapping hem to beltBottom→ankleY instead (~0.23 of bodyH on Looseleaf,
+// ~0.32 on Psychronic) gives the user a meaningful mid-thigh→long-dress
+// range and leaves enough cloth rows for the pleat pattern to show.
+function skirtSpan(anchors) {
+    const legs = anchors && anchors.legs;
+    if (!legs) return 1;
+    const top = legs.minY;
+    const ankleY = anchors.bands && Number.isFinite(anchors.bands.ankleY) ? anchors.bands.ankleY : null;
+    const bootTop = anchors.bands && Number.isFinite(anchors.bands.bootTop) ? anchors.bands.bootTop : legs.maxY;
+    const bottom = (ankleY != null && ankleY > top) ? ankleY : Math.max(legs.maxY, bootTop);
+    return Math.max(1, bottom - top);
+}
+
+function miniSkirtHemFraction(params) {
+    return Math.max(0, Math.min(1,
+        Number.isFinite(Number(params && params.hem)) ? Number(params.hem) : 0.35));
+}
+
+function miniSkirtClothSpan(anchors) {
+    const legs = anchors && anchors.legs;
+    if (!legs) return 1;
+    const bootTop = anchors.bands && Number.isFinite(anchors.bands.bootTop) ? anchors.bands.bootTop : legs.maxY;
+    const kneeY = Number.isFinite(legs.kneeY) && legs.kneeY > legs.minY + 2 && legs.kneeY < bootTop
+        ? legs.kneeY
+        : bootTop;
+    return Math.max(1, kneeY - legs.minY);
+}
+
+function miniSkirtWaistbandRows(anchors, params) {
+    if (!params || !params.waistband) return 0;
+    return 1;
+}
+
+function miniSkirtKneePadY(anchors) {
+    const legs = anchors && anchors.legs;
+    if (!legs) return NaN;
+    const bootTop = anchors.bands && Number.isFinite(anchors.bands.bootTop) ? anchors.bands.bootTop : legs.maxY;
+    const minKneeY = legs.minY + 2;
+    const maxKneeY = Math.max(minKneeY, bootTop - 2);
+    const kneeY = Number.isFinite(legs.kneeY) && legs.kneeY >= minKneeY && legs.kneeY <= maxKneeY
+        ? legs.kneeY
+        : Math.max(minKneeY, Math.min(maxKneeY, legs.minY + Math.round(miniSkirtClothSpan(anchors) * 0.35)));
+    return Math.max(minKneeY, kneeY - 1);
+}
+
+function miniSkirtShade(p, x, y, direction, anchors, params, frame) {
+    const legs = anchors.legs;
+    if (!legs) return null;
+    if (y < legs.minY) return null;
+    const span = miniSkirtClothSpan(anchors);
+    const tt = (y - legs.minY) / span;                       // 0..hem across the skirt cloth
+    const hem = miniSkirtHemFraction(params);
+    if (tt > hem) return null;
+    const lt = hem <= 0 ? 0 : Math.min(1, tt / hem);         // 0..1 within the skirt cloth
+    // Single darker waistband row right under the belt. Keeping this to one
+    // pixel row is important for very short skirts; a multi-row band can read
+    // as nearly the whole garment.
+    const waistbandRows = miniSkirtWaistbandRows(anchors, params);
+    if (waistbandRows) {
+        const rowsFromTop = y - legs.minY;
+        if (rowsFromTop < waistbandRows) return p.shadow || p.base;
+    }
+    // Single-row dark hem line so the bottom of the cloth reads as a crisp fold.
+    if (hem > 0 && tt > hem - 1 / span) return p.shadow || p.base;
+
+    if (direction === 0 || direction === 3) {
+        const cx = legs.centreX;
+        const half = Math.max(2, legs.halfWidth);
+        const pos = (x - (cx - half)) / Math.max(2, half * 2); // 0 left hip .. 1 right hip
+        const crown = 1 - Math.min(1, Math.abs(pos - 0.5) / 0.42); // 1 centre .. 0 edges
+        // Crisp pleats — alternating shadow crease / highlight ridge columns on
+        // a 4px period. Returning the role letter directly (instead of nudging
+        // a shade value) preserves the contrast on dark ramps like navy and
+        // gunmetal so the folds actually read.
+        if (params.pleats) {
+            const id = direction === 3 ? 1 : 0;
+            const phase = (((x - cx) + id + (frame || 0)) % 4 + 4) % 4;
+            if (phase === 2) return p.shadow || p.base;            // deep crease
+            if (phase === 0) return p.highlight || p.lit || p.base; // bright ridge
+        }
+        return rampShade(p, -0.34 + crown * 1.00);
+    }
+
+    // Profile: lit leans toward the front hip, shadow at the rear, with the
+    // same 4px pleat period running vertically across the side silhouette.
+    const ext = anchors.rowExtent && anchors.rowExtent[y];
+    if (!ext) return p.shadow || p.base;
+    const width = Math.max(1, ext[1] - ext[0]);
+    const sideT = (x - ext[0]) / width;                       // 0 rear .. 1 front
+    const frontSign = direction === 1 ? 1 : -1;
+    const litFwd = Math.max(0, (sideT - 0.5) * frontSign) * 2; // 0..1 toward the front
+    if (params.pleats) {
+        const phase = (((x - ext[0]) + (frame || 0) * 2) % 4 + 4) % 4;
+        if (phase === 2) return p.shadow || p.base;
+        if (phase === 0) return p.highlight || p.lit || p.base;
+    }
+    return rampShade(p, -0.34 + litFwd * 0.90);
+}
+
+// Mini-skirt A-line flare pass — gives the skirt the freedom to extend BEYOND
+// the body silhouette (the way a real skirt bell past the hips/thighs). Runs
+// AFTER the main paint loop and applyLegUnderfill but BEFORE the internal
+// piece-separation pass, so the new skirt pixels participate in the boundary
+// outline (skirt↔belt, skirt↔boots) the same way the in-silhouette pixels do.
+//
+// Shape: an A-line bell anchored at the waist (legs.minY) that grows from a
+// narrower waistband half-width to a much wider hem half-width. Pleats/
+// waistband/hem shading come from the same miniSkirtShade helper so the flare
+// continues the cloth's pattern seamlessly. A 1px outline is stamped around the
+// outer silhouette of the flare so the bell has a clean dark frame.
+//
+// Behaviour is gated on `config.zones.legs.style === 'miniSkirt'` so segmented
+// legs and other styles are unaffected. Direction- and frame-aware so the
+// flare bobs with the walk stride.
+function applyMiniSkirtFlare(buf, zoneMap, layerMap, anchors, built, config, zoneLayer, direction, frame) {
+    const spec = config && config.zones && config.zones.legs;
+    if (!spec || spec.enabled === false || spec.style !== 'miniSkirt') return 0;
+    const p = built && built.zonePalettes && built.zonePalettes.legs;
+    if (!p) return 0;
+    const legs = anchors.legs;
+    if (!legs) return 0;
+    const params = spec.params || {};
+    const hem = miniSkirtHemFraction(params);
+    const span = miniSkirtClothSpan(anchors);
+    // Use the same wider belt-bottom→ankle span as the painter so the hem
+    // fraction means the same thing for the in-silhouette cloth and the flare.
+    // Allow hemY to extend below legs.maxY (past bootTop into the boots band)
+    // so long skirts/dresses can flare over the bare legs; the boots painter
+    // has a higher layer and won't be overwritten inside the body silhouette.
+    // `Math.floor` (not `Math.round`) keeps hemY on the LAST row where the
+    // painter still returns a letter — `Math.round` could bump hemY to the
+    // first row where miniSkirtShade returns null (no fill), but the outline
+    // pass at that empty row still stamps one row down from the cloth above,
+    // leaving a floaty orphan dark "leg gap hole" band on side views.
+    const bootTop = anchors.bands && Number.isFinite(anchors.bands.bootTop) ? anchors.bands.bootTop : legs.maxY;
+    const hemY = Math.max(legs.minY, Math.min(bootTop - 1, legs.minY + Math.floor(span * hem)));
+    const legLayer = zoneLayer('legs');
+    const legLetters = new Set(Object.values(p).filter(Boolean));
+    const cx = legs.centreX;
+    const baseHalf = Math.max(2, legs.halfWidth || 6);
+    // A-line flare: how far past the body silhouette the cloth extends at the
+    // hem. This is intentionally broad so the bottom reads as a triangular
+    // skirt bell instead of pants hugging the leg columns.
+    const flareMax = Math.max(4, Math.round(baseHalf * 0.90));
+    const waistHalf = Math.max(2, Math.round(baseHalf * 0.72));
+    const hemHalf = baseHalf + flareMax;
+    const H = buf.length;
+    const W = H ? buf[0].length : 0;
+    if (W <= 0) return 0;
+
+    // Track pixels already painted by the legs zone (in-silhouette cloth) so
+    // the flare pass only fills transparent neighbours and doesn't overwrite
+    // the inner cloth or higher-priority layers (boots, belt).
+    const isLegPaint = (x, y) =>
+        !!(zoneMap[y] && zoneMap[y][x] === 'legs') || !!(buf[y] && legLetters.has(buf[y][x]));
+    const higherPriorityAt = (x, y) => buf[y][x] !== ' ' && Number.isFinite(layerMap[y][x]) && layerMap[y][x] > legLayer;
+
+    const fills = [];
+    const flarePixels = new Set();
+    for (let y = legs.minY; y <= hemY; y++) {
+        const tt = (y - legs.minY) / span;
+        const lt = Math.min(1, tt / hem);
+        // A-line triangle: narrow near the waistband, broad at the hem.
+        const skirtHalf = Math.round(waistHalf + (hemHalf - waistHalf) * lt);
+        let leftBound, rightBound;
+        if (direction === 1 || direction === 2) {
+            // Profile uses the row centre, not the row's tight leg width, so
+            // the silhouette still flares into a skirt triangle from the side.
+            const ext = anchors.rowExtent && anchors.rowExtent[y];
+            const rowCx = ext ? Math.round((ext[0] + ext[1]) / 2) : cx;
+            leftBound = rowCx - skirtHalf;
+            rightBound = rowCx + skirtHalf;
+        } else {
+            leftBound = cx - skirtHalf;
+            rightBound = cx + skirtHalf;
+        }
+        for (let x = leftBound; x <= rightBound; x++) {
+            if (x < 0 || x >= W) continue;
+            if (isLegPaint(x, y)) continue;                 // don't overwrite inner cloth
+            if (higherPriorityAt(x, y)) continue;            // respect boots/belt above
+            const letter = miniSkirtShade(p, x, y, direction, anchors, params, frame);
+            if (!letter) continue;
+            fills.push([x, y, letter]);
+            flarePixels.add(`${x},${y}`);
+        }
+    }
+
+    // Outer silhouette outline (1px dark stroke around the bell) so the skirt
+    // reads as a separate cloth piece instead of a fuzzy region of cloth
+    // pixels. Stroked OUTSIDE the flare pixels so the line frames the bell.
+    // The stroke is only stamped on the sides and top of the flare — never
+    // below hemY — so an orphan dark band doesn't get drawn across the bare
+    // legs below the skirt (which previously read as an open-leg gap hole on
+    // the side view).
+    const outlineFills = [];
+    for (const [x, y] of fills.map(f => [f[0], f[1]])) {
+        for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) {
+            const nx = x + dx, ny = y + dy;
+            if (nx < 0 || ny < 0 || nx >= W || ny >= H) continue;
+            if (ny < legs.minY || ny > hemY) continue; // don't stroke outside the skirt cloth
+            const key = `${nx},${ny}`;
+            if (isLegPaint(nx, ny)) continue;
+            if (flarePixels.has(key)) continue;
+            if (higherPriorityAt(nx, ny)) continue;
+            outlineFills.push([nx, ny, p.outline]);
+            flarePixels.add(key);
+        }
+    }
+
+    // Apply outline first so the dark stroke sits behind the cloth edge (and
+    // the inner cloth overwrites it where they meet on the silhouette boundary).
+    for (const [x, y, letter] of outlineFills) {
+        buf[y][x] = letter;
+        zoneMap[y][x] = 'legs';
+        layerMap[y][x] = Number.isFinite(legLayer) ? legLayer : layerMap[y][x];
+    }
+    for (const [x, y, letter] of fills) {
+        buf[y][x] = letter;
+        zoneMap[y][x] = 'legs';
+        layerMap[y][x] = Number.isFinite(legLayer) ? legLayer : layerMap[y][x];
+    }
+    return fills.length + outlineFills.length;
+}
+
+function applyMiniSkirtKneePads(buf, zoneMap, layerMap, anchors, built, config, zoneLayer, direction) {
+    const spec = config && config.zones && config.zones.legs;
+    if (!spec || spec.enabled === false || spec.style !== 'miniSkirt' || !spec.params || !spec.params.kneeAccent) return 0;
+    const p = built && built.zonePalettes && built.zonePalettes.legs;
+    if (!p) return 0;
+    const legs = anchors.legs;
+    const kneeY = miniSkirtKneePadY(anchors);
+    if (!legs || !Number.isFinite(kneeY)) return 0;
+    const H = buf.length;
+    const W = H ? buf[0].length : 0;
+    const legLayer = zoneLayer('legs');
+    const bootLayer = zoneLayer('boots');
+    const padLayer = Math.max(
+        Number.isFinite(legLayer) ? legLayer : 0,
+        Number.isFinite(bootLayer) ? bootLayer + 1 : 0
+    );
+    const higherPriorityAt = (x, y) => buf[y][x] !== ' ' && Number.isFinite(layerMap[y][x]) && layerMap[y][x] > padLayer;
+    const ext = anchors.rowExtent && anchors.rowExtent[kneeY];
+    const bodyLeft = ext ? ext[0] : legs.centreX - legs.halfWidth;
+    const bodyRight = ext ? ext[1] : legs.centreX + legs.halfWidth;
+    const bodyWidth = Math.max(1, bodyRight - bodyLeft);
+    const centers = (direction === 0 || direction === 3)
+        ? [legs.centreX - Math.max(3, Math.round(legs.halfWidth * 0.52)), legs.centreX + Math.max(3, Math.round(legs.halfWidth * 0.52))]
+        : [direction === 1 ? bodyLeft + Math.round(bodyWidth * 0.38) : bodyRight - Math.round(bodyWidth * 0.38)];
+    const padRx = Math.max(2, Math.round(legs.halfWidth * 0.20));
+    const padRy = 1;
+    const fills = [];
+    for (const cx of centers) {
+        for (let y = kneeY - padRy; y <= kneeY + padRy; y++) {
+            if (y < 0 || y >= H) continue;
+            for (let x = cx - padRx; x <= cx + padRx; x++) {
+                if (x < 0 || x >= W) continue;
+                if (higherPriorityAt(x, y)) continue;
+                const dx = Math.abs(x - cx) / Math.max(1, padRx);
+                const dy = Math.abs(y - kneeY) / Math.max(1, padRy);
+                if (dx * dx + dy * dy > 1.1) continue;
+                const edge = dx > 0.72 || dy > 0.64;
+                const letter = edge ? (p.outline || p.shadow || p.base)
+                    : y < kneeY ? (p.lit || p.base)
+                    : y === kneeY ? (p.shadow || p.base)
+                    : (p.base || p.shadow);
+                fills.push([x, y, letter]);
+            }
+        }
+    }
+    for (const [x, y, letter] of fills) {
+        buf[y][x] = letter;
+        zoneMap[y][x] = 'legs';
+        layerMap[y][x] = Number.isFinite(padLayer) ? padLayer : layerMap[y][x];
+    }
+    return fills.length;
+}
+
 function bootSoleShade(p, dB, dL, dR, direction, x, boots) {
     if (dB <= 0) return p.outline;
     if (dB === 1) return p.shadow;
@@ -1246,6 +1550,20 @@ const PAINTERS = {
             const tubeCrown = 1 - Math.min(1, Math.abs(din - dout) / Math.max(3, legs.halfWidth * 0.28));
             const verticalShade = t > 0.78 ? -0.25 : 0;
             return rampShade(p, -0.60 + tubeCrown * 1.45 + shadePatchValue(x, y, direction * 1.4) * 0.28 + verticalShade);
+        },
+        // One-cloth mini-skirt spanning both hips from the belt down to a
+        // tunable hem fraction; below the hem the skirt cloth is transparent
+        // so body skin shows through unless the knee-pad pass is enabled.
+        // Pleats/waistband/hem stay anchored to the body's per-frame bob via
+        // the legs-zone anchors, so walk tracking is automatic.
+        miniSkirt(ctx, params, p) {
+            const { x, y, anchors, isEdge, direction, frame } = ctx;
+            const shade = miniSkirtShade(p, x, y, direction, anchors, params, frame);
+            if (!shade) return null;
+            const waistbandRows = miniSkirtWaistbandRows(anchors, params);
+            if (waistbandRows && y - anchors.legs.minY < waistbandRows) return shade;
+            if (isEdge) return p.outline;
+            return shade;
         }
     },
 
@@ -1820,6 +2138,20 @@ const PSYCHRONIC_PAINTERS = {
             if (Math.min(dL, dR) <= 1) return p.shadow;
             if (Math.min(dL, dR) === 2) return p.lit;
             return rampShade(p, -0.15 + shadePatchValue(x, y, direction * 1.7) * 0.24);
+        },
+        // One-cloth mini-skirt spanning both hips from the belt down to a
+        // tunable hem fraction; below the hem the skirt cloth is transparent so
+        // the Psychronic body legs show through unless the knee-pad pass is
+        // enabled. Shares the miniSkirtShade helper so walk tracking and
+        // anchors match the pants.
+        miniSkirt(ctx, params, p) {
+            const { x, y, anchors, isEdge, direction, frame } = ctx;
+            const shade = miniSkirtShade(p, x, y, direction, anchors, params, frame);
+            if (!shade) return null;
+            const waistbandRows = miniSkirtWaistbandRows(anchors, params);
+            if (waistbandRows && y - anchors.legs.minY < waistbandRows) return shade;
+            if (isEdge) return p.outline;
+            return shade;
         }
     },
 
@@ -2029,7 +2361,7 @@ function helmetEarWing(direction, anchors, p) {
     return pixels;
 }
 
-function applyLegUnderfill(buf, zoneMap, layerMap, anchors, built, zoneLayer, bridgeOnly = false) {
+function applyLegUnderfill(buf, zoneMap, layerMap, anchors, built, zoneLayer, bridgeOnly = false, maxY = Infinity, minY = 0) {
     const p = built && built.zonePalettes && built.zonePalettes.legs;
     if (!p) return 0;
     const H = buf.length;
@@ -2037,8 +2369,8 @@ function applyLegUnderfill(buf, zoneMap, layerMap, anchors, built, zoneLayer, br
     const legLayer = zoneLayer('legs');
     const legLetters = new Set(Object.values(p).filter(Boolean));
     const isLegPaint = (x, y) => !!(zoneMap[y] && zoneMap[y][x] === 'legs') || !!(buf[y] && legLetters.has(buf[y][x]));
-    const top = 0;
-    const bottom = H - 1;
+    const top = Math.max(0, minY);
+    const bottom = Math.min(H - 1, maxY);
     const fills = [];
     for (let y = top; y <= bottom; y++) {
         for (let x = 0; x < W; x++) {
@@ -2057,6 +2389,27 @@ function applyLegUnderfill(buf, zoneMap, layerMap, anchors, built, zoneLayer, br
         layerMap[y][x] = Number.isFinite(legLayer) ? legLayer : layerMap[y][x];
     }
     return fills.length;
+}
+
+// Cap for applyLegUnderfill when the legs style is miniSkirt — keeps underfill
+// from propagating orphan cloth bands below the hem (where the painter
+// deliberately returns null to leave the legs bare). Computed from the same
+// belt-bottom→ankle span as the painter/flare so it stays in sync.
+function miniSkirtHemMaxY(anchors, spec) {
+    if (!spec || spec.enabled === false || spec.style !== 'miniSkirt') return Infinity;
+    const legs = anchors && anchors.legs;
+    if (!legs) return Infinity;
+    const params = spec.params || {};
+    const hem = miniSkirtHemFraction(params);
+    const span = miniSkirtClothSpan(anchors);
+    const bootTop = anchors.bands && Number.isFinite(anchors.bands.bootTop) ? anchors.bands.bootTop : legs.maxY;
+    return Math.max(legs.minY, Math.min(bootTop - 1, legs.minY + Math.floor(span * hem)));
+}
+
+function miniSkirtHemMinY(anchors, spec) {
+    if (!spec || spec.enabled === false || spec.style !== 'miniSkirt') return 0;
+    const legs = anchors && anchors.legs;
+    return legs ? legs.minY : 0;
 }
 
 // ── Compositor — paint pass + extension pass for one frame ────────────────
@@ -2141,7 +2494,17 @@ function composeFrame(bodyFrame, direction, built, config, SKIN, frame = 0) {
         }
     }
 
-    applyLegUnderfill(buf, zoneMap, layerMap, anchors, built, zoneLayer);
+    const legUnderfillMaxY = miniSkirtHemMaxY(anchors, config.zones && config.zones.legs);
+    const legUnderfillMinY = miniSkirtHemMinY(anchors, config.zones && config.zones.legs);
+    applyLegUnderfill(buf, zoneMap, layerMap, anchors, built, zoneLayer, false, legUnderfillMaxY, legUnderfillMinY);
+
+    // Mini-skirt A-line flare — extends the skirt bell beyond the body
+    // silhouette (real skirts flare past the hips). Runs before the internal
+    // piece separation so the flare pixels participate in the skirt↔belt /
+    // skirt↔boots boundary outlines. Gated on legs.style === 'miniSkirt' so
+    // the segmented pants path is unaffected.
+    applyMiniSkirtFlare(buf, zoneMap, layerMap, anchors, built, config, zoneLayer, direction, frame);
+    applyMiniSkirtKneePads(buf, zoneMap, layerMap, anchors, built, config, zoneLayer, direction);
 
     // Internal piece separation: draw a 1px outline where two DIFFERENT zones
     // meet (arm↔torso, belt↔torso, legs↔belt). Without this the body's arms
@@ -2167,7 +2530,7 @@ function composeFrame(bodyFrame, direction, built, config, SKIN, frame = 0) {
     }
     for (const [y, x, letter] of sep) if (letter) buf[y][x] = letter;
     for (let i = 0; i < 8; i++) {
-        if (!applyLegUnderfill(buf, zoneMap, layerMap, anchors, built, zoneLayer, true)) break;
+        if (!applyLegUnderfill(buf, zoneMap, layerMap, anchors, built, zoneLayer, true, legUnderfillMaxY, legUnderfillMinY)) break;
     }
 
     const headSpec = config.zones && config.zones.head;
@@ -2210,7 +2573,7 @@ function composeFrame(bodyFrame, direction, built, config, SKIN, frame = 0) {
     });
 
     for (let i = 0; i < 8; i++) {
-        if (!applyLegUnderfill(buf, zoneMap, layerMap, anchors, built, zoneLayer, true)) break;
+        if (!applyLegUnderfill(buf, zoneMap, layerMap, anchors, built, zoneLayer, true, legUnderfillMaxY, legUnderfillMinY)) break;
     }
 
     // IMPORTANT: keep rows at the full canonical width W (do NOT trim trailing
@@ -2474,6 +2837,7 @@ const UI_SCHEMA = {
             { id: 'nova-arms', label: 'Arm Suit', kind: 'zone', key: 'arms', spec: { enabled: true, layer: 50, style: 'gauntlet', family: 'gunmetal', accent: 'cyan', params: { powerStrip: true, wristBand: true, glove: true } } },
             { id: 'nova-belt', label: 'Utility Belt', kind: 'zone', key: 'belt', spec: { enabled: true, layer: 45, style: 'utility', family: 'gold', accent: 'gold', params: { buckle: true, studs: true, height: 0.7 } } },
             { id: 'nova-legs', label: 'Leg Armor', kind: 'zone', key: 'legs', spec: { enabled: true, layer: 20, style: 'segmented', family: 'navy', accent: 'cyan', params: { kneeAccent: true } } },
+            { id: 'nova-miniskirt', label: 'Mini Skirt', kind: 'zone', key: 'legs', spec: { enabled: true, layer: 20, style: 'miniSkirt', family: 'navy', accent: 'cyan', params: { kneeAccent: true, hem: 0.35, waistband: true, pleats: true } } },
             { id: 'nova-boots', label: 'Heavy Boots', kind: 'zone', key: 'boots', spec: { enabled: true, layer: 30, style: 'heavy', family: 'iron', accent: '', params: {} } },
             { id: 'nova-pauldrons', label: 'Pauldrons', kind: 'ext', key: 'pauldron', spec: { enabled: true, layer: 55, family: 'steel', accent: 'cyan', params: { size: 1.0, layered: true, accentRim: false } } },
             { id: 'nova-gauntlets', label: 'Gauntlets', kind: 'ext', key: 'armGauntlet', spec: { enabled: true, layer: 55, family: 'gunmetal', accent: 'cyan', params: { powerStrip: true, wristBand: true, bulge: 2, banded: true } } }
@@ -2484,6 +2848,7 @@ const UI_SCHEMA = {
             { id: 'psychronic-nova-arms', label: 'Arm Suit', kind: 'zone', key: 'arms', spec: { enabled: true, layer: 50, style: 'gauntlet', family: 'gunmetal', accent: 'cyan', params: { powerStrip: true, wristBand: true, glove: true } } },
             { id: 'psychronic-nova-belt', label: 'Utility Belt', kind: 'zone', key: 'belt', spec: { enabled: true, layer: 45, style: 'utility', family: 'gold', accent: 'gold', params: { buckle: true, studs: true, height: 0.7 } } },
             { id: 'psychronic-nova-legs', label: 'Leg Armor', kind: 'zone', key: 'legs', spec: { enabled: true, layer: 20, style: 'segmented', family: 'navy', accent: 'cyan', params: { kneeAccent: true } } },
+            { id: 'psychronic-nova-miniskirt', label: 'Mini Skirt', kind: 'zone', key: 'legs', spec: { enabled: true, layer: 20, style: 'miniSkirt', family: 'navy', accent: 'cyan', params: { kneeAccent: true, hem: 0.35, waistband: true, pleats: true } } },
             { id: 'psychronic-nova-boots', label: 'Heavy Boots', kind: 'zone', key: 'boots', spec: { enabled: true, layer: 30, style: 'heavy', family: 'iron', accent: '', params: {} } },
             { id: 'psychronic-nova-pauldrons', label: 'Pauldrons', kind: 'ext', key: 'pauldron', spec: { enabled: true, layer: 55, family: 'steel', accent: 'cyan', params: { size: 1.0, layered: true, accentRim: false } } },
             { id: 'psychronic-nova-gauntlets', label: 'Gauntlets', kind: 'ext', key: 'armGauntlet', spec: { enabled: true, layer: 55, family: 'gunmetal', accent: 'cyan', params: { powerStrip: true, wristBand: true, bulge: 2, banded: true } } }
@@ -2505,8 +2870,11 @@ const UI_SCHEMA = {
           params: [ { key: 'buckle', type: 'bool', label: 'Buckle', default: true },
                     { key: 'studs', type: 'bool', label: 'Studs', default: true },
                     { key: 'height', type: 'float', label: 'Height', default: 0.7, min: 0.45, max: 1.25 } ] },
-        { key: 'legs',  label: 'Legs',     styles: ['segmented'], defaultLayer: 20,
-          params: [ { key: 'kneeAccent', type: 'bool', label: 'Knee plates', default: true } ] },
+        { key: 'legs',  label: 'Legs',     styles: ['segmented', 'miniSkirt'], defaultLayer: 20,
+          params: [ { key: 'kneeAccent', type: 'bool', label: 'Knee plates', default: true, styles: ['segmented', 'miniSkirt'] },
+                    { key: 'hem', type: 'float', label: 'Skirt hem', default: 0.35, min: 0, max: 1, step: 0.05, styles: ['miniSkirt'] },
+                    { key: 'waistband', type: 'bool', label: 'Skirt waistband', default: true, styles: ['miniSkirt'] },
+                    { key: 'pleats', type: 'bool', label: 'Skirt pleats', default: true, styles: ['miniSkirt'] } ] },
         { key: 'boots', label: 'Boots',    styles: ['heavy'], defaultLayer: 30, params: [] }
     ],
     extensions: [
@@ -2578,6 +2946,8 @@ return {
     FAMILIES, ACCENTS, UI_SCHEMA,
     buildPalette, detectSkinLetters, analyzeFrame, classifyPixel,
     faceBand, composeFrame, debugClassifyFrame, generateOutfit, defaultConfig, builtInZoneEditPayload,
-    PAINTERS, EXTENSIONS, ROLE_NAMES
+    PAINTERS, EXTENSIONS, ROLE_NAMES,
+    PSYCHRONIC_PAINTERS, PSYCHRONIC_EXTENSIONS,
+    skirtSpan, miniSkirtClothSpan
 };
 });

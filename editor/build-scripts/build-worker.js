@@ -91,6 +91,28 @@ function copyDirRecursive(src, dest) {
     }
 }
 
+function slugifyPackageName(value) {
+    const slug = String(value || 'game')
+        .toLowerCase()
+        .replace(/[^a-z0-9._-]+/g, '-')
+        .replace(/^-+|-+$/g, '');
+    return slug || 'game';
+}
+
+function normalizeStagedPackage(stagingDir, gameTitle) {
+    const stagedPackagePath = path.join(stagingDir, 'package.json');
+    if (!fs.existsSync(stagedPackagePath)) return;
+
+    const stagedPackage = JSON.parse(fs.readFileSync(stagedPackagePath, 'utf8'));
+    const titleSlug = slugifyPackageName(gameTitle);
+    const currentName = slugifyPackageName(stagedPackage.name);
+    stagedPackage.name = currentName === 'rmmz-game'
+        ? `rpg-reactor-${titleSlug}`
+        : currentName;
+
+    fs.writeFileSync(stagedPackagePath, JSON.stringify(stagedPackage, null, 2));
+}
+
 // ── Download helper (follows one redirect) ──────────────────────────
 function downloadFile(url, destPath, progressBase, progressSpan) {
     return new Promise((resolve, reject) => {
@@ -179,6 +201,7 @@ function downloadFile(url, destPath, progressBase, progressSpan) {
     logInfo('Staging game files...');
     progress(2, 'Staging game files...');
     copyDirFiltered(projectPath, stagingDir, '');
+    normalizeStagedPackage(stagingDir, gameTitle);
     logGood('Staging complete.');
     progress(10, 'Staging complete');
     logInfo('');

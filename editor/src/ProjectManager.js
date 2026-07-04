@@ -137,7 +137,7 @@ class ProjectManager {
         const packagePath = this.path.join(targetPath, 'package.json');
         if (this.fs.existsSync(packagePath)) {
             const packageData = JSON.parse(this.fs.readFileSync(packagePath, 'utf8'));
-            packageData.name = this.slugify(projectName);
+            packageData.name = this.getProjectPackageName(projectName);
             packageData.version = engineVersion;
             packageData.window = packageData.window || {};
             packageData.window.title = projectName;
@@ -234,7 +234,7 @@ class ProjectManager {
 
     getStarterPackage(projectName, engineVersion) {
         return {
-            name: this.slugify(projectName),
+            name: this.getProjectPackageName(projectName),
             version: engineVersion,
             main: 'index.html',
             'chromium-args': '--force-color-profile=srgb --window-size=1280,720',
@@ -405,6 +405,11 @@ class ProjectManager {
             .replace(/[^a-z0-9]+/g, '-')
             .replace(/^-+|-+$/g, '');
         return slug || 'rpg-reactor-game';
+    }
+
+    getProjectPackageName(projectName) {
+        const name = this.slugify(projectName);
+        return name === 'rmmz-game' ? 'rpg-reactor-game' : name;
     }
 
     escapeHtml(value) {

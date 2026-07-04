@@ -111,11 +111,16 @@ class DatabaseEditorUI {
 
     prepareDatabaseSection(type, title, options = {}) {
         const viewer = document.getElementById('database-viewer');
+        const navEl = document.getElementById('database-navigation');
         const titleEl = document.getElementById('database-viewer-title');
         const listEl = document.getElementById('database-list');
         const listPanelEl = document.getElementById('database-list-panel');
         const detailEl = document.getElementById('database-detail');
         const showListPanel = options.showListPanel !== false;
+
+        if (navEl && navEl.children.length === 0) {
+            this.setupDatabaseNavigation();
+        }
 
         this.cleanupDatabaseListChrome();
         this.setActiveDatabaseNav(type);
@@ -133,7 +138,92 @@ class DatabaseEditorUI {
             viewer.classList.add('active');
         }
 
+        this.takeDatabaseSnapshot();
+        this.setupDatabaseControls();
+
         return { viewer, titleEl, listEl, listPanelEl, detailEl };
+    }
+
+    closeDatabaseViewer() {
+        const viewer = document.getElementById('database-viewer');
+
+        if (this.animationEditor && this.animationEditor._currentEffekseerStop) {
+            this.animationEditor._currentEffekseerStop();
+            this.animationEditor._currentEffekseerStop = null;
+        }
+
+        const tilesetEditorContainer = document.getElementById('tileset-editor-main-container');
+        if (tilesetEditorContainer && tilesetEditorContainer.style.display !== 'none') {
+            tilesetEditorContainer.style.display = 'none';
+        }
+
+        if (this._listKeyHandler) {
+            document.removeEventListener('keydown', this._listKeyHandler);
+            this._listKeyHandler = null;
+        }
+
+        if (this.tilesetEditor?.cleanupListKeyHandler) {
+            this.tilesetEditor.cleanupListKeyHandler();
+        }
+
+        if (viewer) {
+            viewer.classList.remove('active');
+        }
+    }
+
+    revertDatabaseSnapshot() {
+        if (this._dataSnapshot) {
+            Object.assign(this.databaseManager.data, this._dataSnapshot);
+            this._dataSnapshot = null;
+        }
+    }
+
+    takeDatabaseSnapshot() {
+        this._dataSnapshot = JSON.parse(JSON.stringify(this.databaseManager.data));
+    }
+
+    setupDatabaseControls() {
+        const closeBtn = document.getElementById('database-close-btn');
+        const okBtn = document.getElementById('database-ok-btn');
+        const cancelBtn = document.getElementById('database-cancel-btn');
+        const applyBtn = document.getElementById('database-apply-btn');
+
+        const cancelAndClose = () => {
+            this.revertDatabaseSnapshot();
+            this.closeDatabaseViewer();
+        };
+
+        if (closeBtn) closeBtn.onclick = cancelAndClose;
+        if (cancelBtn) cancelBtn.onclick = cancelAndClose;
+
+        if (okBtn) {
+            okBtn.onclick = async () => {
+                const projectPath = this.currentProject?.path;
+                if (projectPath) {
+                    await this.databaseManager.saveAllData(projectPath);
+                    this.updateStatus(this._t('db.saved'));
+                }
+                this._dataSnapshot = null;
+                this.closeDatabaseViewer();
+            };
+        }
+
+        if (applyBtn) {
+            applyBtn.onclick = async () => {
+                const projectPath = this.currentProject?.path;
+                if (projectPath) {
+                    await this.databaseManager.saveAllData(projectPath);
+                    this.updateStatus(this._t('db.saved'));
+                    this._dataSnapshot = JSON.parse(JSON.stringify(this.databaseManager.data));
+                    applyBtn.style.backgroundColor = 'var(--color-accent)';
+                    applyBtn.style.color = 'var(--color-bg-deep)';
+                    setTimeout(() => {
+                        applyBtn.style.backgroundColor = '';
+                        applyBtn.style.color = '';
+                    }, 200);
+                }
+            };
+        }
     }
 
     /**
@@ -554,78 +644,8 @@ class DatabaseEditorUI {
         viewer.classList.add('active');
 
         // Take snapshot of database data for Cancel/revert
-        this._dataSnapshot = JSON.parse(JSON.stringify(this.databaseManager.data));
-
-        // Shared close/cleanup logic
-        const closeViewer = () => {
-            // Stop any playing animations when closing database
-            if (this.animationEditor && this.animationEditor._currentEffekseerStop) {
-                this.animationEditor._currentEffekseerStop();
-                this.animationEditor._currentEffekseerStop = null;
-            }
-
-            // Also close tileset editor if it's open
-            const tilesetEditorContainer = document.getElementById('tileset-editor-main-container');
-            if (tilesetEditorContainer && tilesetEditorContainer.style.display !== 'none') {
-                tilesetEditorContainer.style.display = 'none';
-            }
-            if (this._listKeyHandler) {
-                document.removeEventListener('keydown', this._listKeyHandler);
-                this._listKeyHandler = null;
-            }
-            viewer.classList.remove('active');
-        };
-
-        // Set up close button (X) - same as Cancel
-        const closeBtn = document.getElementById('database-close-btn');
-        closeBtn.onclick = () => {
-            // Revert to snapshot
-            if (this._dataSnapshot) {
-                Object.assign(this.databaseManager.data, this._dataSnapshot);
-                this._dataSnapshot = null;
-            }
-            closeViewer();
-        };
-
-        // OK button - save to disk and close
-        const okBtn = document.getElementById('database-ok-btn');
-        okBtn.onclick = async () => {
-            const projectPath = this.currentProject?.path;
-            if (projectPath) {
-                await this.databaseManager.saveAllData(projectPath);
-                this.updateStatus(this._t('db.saved'));
-            }
-            this._dataSnapshot = null;
-            closeViewer();
-        };
-
-        // Cancel button - revert changes and close
-        const cancelBtn = document.getElementById('database-cancel-btn');
-        cancelBtn.onclick = () => {
-            if (this._dataSnapshot) {
-                Object.assign(this.databaseManager.data, this._dataSnapshot);
-                this._dataSnapshot = null;
-            }
-            closeViewer();
-        };
-
-        // Apply button - save to disk, stay open
-        const applyBtn = document.getElementById('database-apply-btn');
-        applyBtn.onclick = async () => {
-            const projectPath = this.currentProject?.path;
-            if (projectPath) {
-                await this.databaseManager.saveAllData(projectPath);
-                this.updateStatus(this._t('db.saved'));
-                // Update snapshot to current state so Cancel reverts to this point
-                this._dataSnapshot = JSON.parse(JSON.stringify(this.databaseManager.data));
-                applyBtn.style.backgroundColor = 'var(--color-accent)';
-                applyBtn.style.color = 'var(--color-bg-deep)';
-                setTimeout(() => {
-                    applyBtn.style.backgroundColor = '';
-                    applyBtn.style.color = '';
-                }, 200);
-            }
-        };
+        this.takeDatabaseSnapshot();
+        this.setupDatabaseControls();
     }
 
     /**

@@ -2834,9 +2834,12 @@ class DatabaseTilesetEditor {
         // Show viewer
         viewer.classList.add('active');
 
-        // Set up close button
-        const closeBtn = document.getElementById('database-close-btn');
-        if (closeBtn) {
+        if (this.parentEditor?.setupDatabaseControls) {
+            this.parentEditor.takeDatabaseSnapshot?.();
+            this.parentEditor.setupDatabaseControls();
+        } else {
+            const closeBtn = document.getElementById('database-close-btn');
+            if (!closeBtn) return;
             closeBtn.onclick = () => {
                 // Also close tileset editor if it's open
                 const tilesetEditorContainer = document.getElementById('tileset-editor-main-container');

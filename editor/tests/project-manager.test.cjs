@@ -124,6 +124,15 @@ test('ProjectManager falls back to generated starter projects when Demo template
     }
 });
 
+test('ProjectManager avoids rmmz-game for new project package identity', () => {
+    const ProjectManager = loadBrowserClass(path.join(repoRoot, 'src', 'ProjectManager.js'), 'ProjectManager');
+    const manager = new ProjectManager();
+
+    assert.equal(manager.getProjectPackageName('RMMZ Game'), 'rpg-reactor-game');
+    assert.equal(manager.getStarterPackage('RMMZ Game', '1.2.3').name, 'rpg-reactor-game');
+    assert.equal(manager.getStarterPackage('Original Game', '1.2.3').name, 'original-game');
+});
+
 test('ProjectManager imports RPG Maker projects with current engine metadata', async () => {
     const ProjectManager = loadBrowserClass(path.join(repoRoot, 'src', 'ProjectManager.js'), 'ProjectManager');
     const packageJson = readJson(path.join(repoRoot, 'package.json'));

@@ -12,6 +12,17 @@ const baseZones = {
     boots: { enabled: true, layer: 30, style: 'heavy',     family: 'iron',     accent: '',     params: {} }
 };
 
+// Alternate legs preset — a one-cloth pleated mini-skirt using the navy/cyan
+// Nova Sentinel palette family so it sits beside the segmented leg armour as a
+// second Legs-slot pick. The hem defaults to a very short upper-thigh length and
+// leaves the bare legs visible below; optional knee plates render as separate
+// pads at the anatomical knees, outside the skirt cloth.
+const miniSkirtLegs = {
+    enabled: true, layer: 20, style: 'miniSkirt',
+    family: 'navy', accent: 'cyan',
+    params: { kneeAccent: true, hem: 0.35, waistband: true, pleats: true }
+};
+
 const baseExtensions = [
     { type: 'pauldron',    layer: 55, family: 'steel',    accent: 'cyan', params: { size: 1.0, layered: true, accentRim: false } },
     { type: 'armGauntlet', layer: 55, family: 'gunmetal', accent: 'cyan', params: { powerStrip: true, wristBand: true, bulge: 2, banded: true } }
@@ -34,6 +45,7 @@ function partSetForStyle(style) {
             { id: `${prefix}-arms`, label: 'Arm Suit', kind: 'zone', key: 'arms', spec: clone(baseZones.arms) },
             { id: `${prefix}-belt`, label: 'Utility Belt', kind: 'zone', key: 'belt', spec: clone(baseZones.belt) },
             { id: `${prefix}-legs`, label: 'Leg Armor', kind: 'zone', key: 'legs', spec: clone(baseZones.legs) },
+            { id: `${prefix}-miniskirt`, label: 'Mini Skirt', kind: 'zone', key: 'legs', spec: clone(miniSkirtLegs) },
             { id: `${prefix}-boots`, label: 'Heavy Boots', kind: 'zone', key: 'boots', spec: clone(baseZones.boots) },
             { id: `${prefix}-pauldrons`, label: 'Pauldrons', kind: 'ext', key: 'pauldron', spec: clone(baseExtensions[0]) },
             { id: `${prefix}-gauntlets`, label: 'Gauntlets', kind: 'ext', key: 'armGauntlet', spec: clone(baseExtensions[1]) }

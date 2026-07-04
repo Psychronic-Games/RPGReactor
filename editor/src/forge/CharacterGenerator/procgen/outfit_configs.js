@@ -8,6 +8,7 @@
 //     arms:  style 'gauntlet'    params { powerStrip, wristBand, glove }
 //     belt:  style 'utility'     params { buckle, studs }
 //     legs:  style 'segmented'   params { kneeAccent }
+//            style 'miniSkirt'   params { hem, waistband, pleats }
 //     boots: style 'heavy'       params {}
 //   extensions: [ { type:'pauldron'|'helmetCrown'|'spikes', family, accent?, params } ]
 //

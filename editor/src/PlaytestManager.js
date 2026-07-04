@@ -73,11 +73,18 @@ class PlaytestManager {
         // so a bundled editor app can still launch an external project.
         // Pass mode parameter ('test' for playtest, 'btest' for battle test)
         const appPathArg = process.platform === 'darwin' ? projectPath : '.';
-        this.playtestProcess = spawn(nwPath, [appPathArg, mode], {
+        const launchArgs = [appPathArg, mode];
+        const userDataDir = this.resolvePlaytestUserDataDir(path, fs);
+        if (userDataDir) {
+            launchArgs.unshift(`--user-data-dir=${userDataDir}`);
+            console.log('Playtest user data dir:', userDataDir);
+        }
+
+        this.playtestProcess = spawn(nwPath, launchArgs, {
             cwd: projectPath,
             stdio: 'ignore',
             detached: false,
-            windowsHide: true
+            windowsHide: false
         });
 
         this.playtestProcess.on('error', (err) => {
@@ -92,6 +99,38 @@ class PlaytestManager {
 
         console.log('Playtest process launched with PID:', this.playtestProcess.pid);
         return true;
+    }
+
+    resolvePlaytestUserDataDir(path, fs) {
+        if (process.platform !== 'win32') {
+            return null;
+        }
+
+        const baseDir = process.env.LOCALAPPDATA || process.env.APPDATA;
+        if (!baseDir) {
+            console.warn('LOCALAPPDATA/APPDATA not set; playtest will use NW.js default profile directory.');
+            return null;
+        }
+
+        const nwVersion = (process.versions && (process.versions.nw || process.versions['node-webkit'])) || 'unknown';
+        const versionDir = `nwjs-${this.slugifyPathSegment(nwVersion)}`;
+        const userDataDir = path.join(baseDir, 'RPGReactor', 'PlaytestProfile', versionDir);
+
+        try {
+            fs.mkdirSync(userDataDir, { recursive: true });
+            return userDataDir;
+        } catch (error) {
+            console.warn('Could not create isolated playtest profile directory:', error);
+            return null;
+        }
+    }
+
+    slugifyPathSegment(value) {
+        const slug = String(value || 'unknown')
+            .toLowerCase()
+            .replace(/[^a-z0-9._-]+/g, '-')
+            .replace(/^-+|-+$/g, '');
+        return slug || 'unknown';
     }
 
     resolveNwExecutable(path, fs) {
