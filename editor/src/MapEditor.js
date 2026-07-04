@@ -659,36 +659,12 @@ class MapEditor {
                     const isAutotile = baseTileId >= 1536 && baseTileId < 8192;
 
                     if (isAutotile) {
-                        // Autotiles (A1-A5) placement rules (matching paintSingleTileFromPalette)
+                        // Autotiles (A1-A5) placement rules (shared with
+                        // paintSingleTileFromPalette via classifyAutotile /
+                        // getAutotilePlacementLayer)
                         const basePos = targetY * width + targetX;
-                        const layer0Index = 0 * layerSize + basePos;
-                        const layer0Tile = data[layer0Index];
-
-                        // Determine if the tile being placed is A1 water or A1 decoration
-                        const isA1Tile = baseTileId >= 2048 && baseTileId < 2816;
-                        const isA2Tile = baseTileId >= 2816 && baseTileId < 4352;
-                        let isA1Decoration = false;
-                        if (isA1Tile) {
-                            const kind = Math.floor((baseTileId - 2048) / 48);
-                            if (kind < 4) {
-                                isA1Decoration = kind >= 2; // Kinds 2-3 are decorations
-                            } else {
-                                isA1Decoration = kind % 2 === 1; // Odd kinds are decorations
-                            }
-                        }
-                        const isA1Water = isA1Tile && !isA1Decoration;
-
-                        // Check if A2 decoration
-                        // A2 Field Type overlays: odd kinds (1,3,5,7...) overlay on even kinds (0,2,4,6...)
-                        // Right half decorations (trees, etc.): kind % 8 >= 4
-                        let isA2Decoration = false;
-                        if (isA2Tile) {
-                            const kind = Math.floor((baseTileId - 2816) / 48);
-                            // Odd kinds are overlays (pattern 2, 4, etc.) OR right half decorations
-                            const isFieldTypeOverlay = (kind % 2) === 1; // Odd kinds are overlays
-                            const isRightHalfDecoration = (kind % 8) >= 4; // Right half of each row
-                            isA2Decoration = isFieldTypeOverlay || isRightHalfDecoration;
-                        }
+                        const cls = this.classifyAutotile(baseTileId);
+                        const { isA1Water, isA1Decoration, isA2Decoration } = cls;
 
                         // Erase tiles based on what we're placing
                         if (!isA1Water) {
@@ -726,22 +702,7 @@ class MapEditor {
                         }
 
                         // Determine which layer this tile will be placed on
-                        let actualPlacementLayer;
-                        if (isA1Tile && !isA1Decoration) {
-                            // A1 water always goes on layer 0
-                            actualPlacementLayer = 0;
-                        } else if (isA1Decoration) {
-                            // A1 decorations stack on layer 1 over A1 water
-                            const layer0HasA1Water = layer0Tile >= 2048 && layer0Tile < 2816;
-                            actualPlacementLayer = layer0HasA1Water ? 1 : 0;
-                        } else if (isA2Decoration) {
-                            // A2 decorations stack on layer 1 over A2 ground
-                            const layer0HasA2Ground = layer0Tile >= 2816 && layer0Tile < 4352;
-                            actualPlacementLayer = layer0HasA2Ground ? 1 : 0;
-                        } else {
-                            // A2 ground, A3-A5: place on layer 0
-                            actualPlacementLayer = 0;
-                        }
+                        const actualPlacementLayer = this.getAutotilePlacementLayer(baseTileId, targetX, targetY);
 
                         // Place the tile with base shape
                         const targetLayerIndex = actualPlacementLayer * layerSize + basePos;
@@ -906,39 +867,10 @@ class MapEditor {
                     // - A1 range: 2048-2815, A2 range: 2816-4351
                     const basePos = mapY * width + mapX;
 
-                    // IMPORTANT: Check layers 0 and 1 BEFORE erasing, to determine placement layer
-                    const layer0Index = 0 * layerSize + basePos;
-                    const layer1Index = 1 * layerSize + basePos;
-                    const layer0Tile = data[layer0Index];
-                    const layer1Tile = data[layer1Index];
-
-                    // Determine tile type for placement logic
-                    const isA1Tile = baseTileId >= 2048 && baseTileId < 2816;
-                    const isA2Tile = baseTileId >= 2816 && baseTileId < 4352;
-
-                    // Check if A1 decoration
-                    let isA1Decoration = false;
-                    if (isA1Tile) {
-                        const kind = Math.floor((baseTileId - 2048) / 48);
-                        if (kind < 4) {
-                            isA1Decoration = kind >= 2; // Kinds 2-3 are decorations
-                        } else {
-                            isA1Decoration = kind % 2 === 1; // Odd kinds are decorations
-                        }
-                    }
-                    const isA1Water = isA1Tile && !isA1Decoration;
-
-                    // Check if A2 decoration
-                    // A2 Field Type overlays: odd kinds (1,3,5,7...) overlay on even kinds (0,2,4,6...)
-                    // Right half decorations (trees, etc.): kind % 8 >= 4
-                    let isA2Decoration = false;
-                    if (isA2Tile) {
-                        const kind = Math.floor((baseTileId - 2816) / 48);
-                        // Odd kinds are overlays (pattern 2, 4, etc.) OR right half decorations
-                        const isFieldTypeOverlay = (kind % 2) === 1; // Odd kinds are overlays
-                        const isRightHalfDecoration = (kind % 8) >= 4; // Right half of each row
-                        isA2Decoration = isFieldTypeOverlay || isRightHalfDecoration;
-                    }
+                    // Shared MZ classification (image-transparency based for
+                    // A2 — see classifyAutotile / isA2DecorationKind)
+                    const cls = this.classifyAutotile(baseTileId);
+                    const { isA1Water, isA1Decoration, isA2Decoration } = cls;
 
                     // Erase tiles based on what we're placing:
                     // - A1 water: erase layers 1-3 only
@@ -976,44 +908,9 @@ class MapEditor {
                         }
                     }
 
-                    // Determine which layer this tile will be placed on:
-                    // - A1 water: layer 0, but can stack on layer 1 if different water kind already exists
-                    // - A1 decorations: layer 1 if layer 0 has A1 water, else layer 0
-                    // - A2 decorations: layer 1 if layer 0 has A2 ground, else layer 0
-                    // - A2 ground / A3-A5: layer 0
-                    let actualPlacementLayer;
-                    if (isA1Tile && !isA1Decoration) {
-                        // A1 water: check if there's already water on layer 0
-                        const layer0IsA1Water = layer0Tile >= 2048 && layer0Tile < 2816;
-                        if (layer0IsA1Water) {
-                            // Check if it's a different water kind
-                            const layer0Kind = Math.floor((layer0Tile - 2048) / 48);
-                            const layer0IsDecoration = layer0Kind >= 2 && (layer0Kind < 4 || layer0Kind % 2 === 1);
-                            const currentKind = Math.floor((baseTileId - 2048) / 48);
-
-                            // If layer 0 has water (not decoration) and we're placing a different water kind, stack on layer 1
-                            if (!layer0IsDecoration && layer0Kind !== currentKind) {
-                                actualPlacementLayer = 1;
-                            } else {
-                                // Same kind or layer 0 is decoration - replace on layer 0
-                                actualPlacementLayer = 0;
-                            }
-                        } else {
-                            // No water on layer 0 - place on layer 0
-                            actualPlacementLayer = 0;
-                        }
-                    } else if (isA1Decoration) {
-                        // A1 decorations stack on layer 1 over A1 water
-                        const layer0HasA1Water = layer0Tile >= 2048 && layer0Tile < 2816;
-                        actualPlacementLayer = layer0HasA1Water ? 1 : 0;
-                    } else if (isA2Decoration) {
-                        // A2 decorations stack on layer 1 over A2 ground
-                        const layer0HasA2Ground = layer0Tile >= 2816 && layer0Tile < 4352;
-                        actualPlacementLayer = layer0HasA2Ground ? 1 : 0;
-                    } else {
-                        // A2 ground, A3-A5: place on layer 0
-                        actualPlacementLayer = 0;
-                    }
+                    // Determine which layer this tile will be placed on
+                    // (shared rules — see getAutotilePlacementLayer)
+                    const actualPlacementLayer = this.getAutotilePlacementLayer(baseTileId, mapX, mapY);
 
                     // First, place the tile in map data with base shape so it's included in neighbor checks
                     const targetLayerIndex = actualPlacementLayer * layerSize + basePos;
@@ -1202,26 +1099,8 @@ class MapEditor {
 
         this.tilemapManager.updateTiles(tilesToUpdate);
 
-        // WORKAROUND: Force layer texture cache refresh to ensure erased tiles disappear visually
-        // Without this, sprites can persist even though data is set to 0
-        const affectedLayerContainers = new Set();
-        for (const pos of tilesToUpdate) {
-            let pixiLayer;
-            switch (pos.layer) {
-                case 0: pixiLayer = this.tilemapManager.layers.ground; break;
-                case 1: pixiLayer = this.tilemapManager.layers.lower1; break;
-                case 2: pixiLayer = this.tilemapManager.layers.lower2; break;
-                case 3: pixiLayer = this.tilemapManager.layers.lower3; break;
-            }
-            if (pixiLayer) affectedLayerContainers.add(pixiLayer);
-        }
-        for (const layer of affectedLayerContainers) {
-            if (layer.isCachedAsTexture) {
-                layer.cacheAsTexture(false);
-                // Force immediate re-cache to refresh display
-                setTimeout(() => { layer.cacheAsTexture(true); }, 0);
-            }
-        }
+        // Cache refresh happens inside updateTiles (updateCacheTexture in
+        // place) — no uncache/recache flip needed here.
     }
 
     // Paint a circle of tiles
@@ -1373,25 +1252,8 @@ class MapEditor {
 
         this.tilemapManager.updateTiles(tilesToUpdate);
 
-        // WORKAROUND: Force layer texture cache refresh to ensure erased tiles disappear visually
-        const affectedLayerContainers = new Set();
-        for (const pos of tilesToUpdate) {
-            let pixiLayer;
-            switch (pos.layer) {
-                case 0: pixiLayer = this.tilemapManager.layers.ground; break;
-                case 1: pixiLayer = this.tilemapManager.layers.lower1; break;
-                case 2: pixiLayer = this.tilemapManager.layers.lower2; break;
-                case 3: pixiLayer = this.tilemapManager.layers.lower3; break;
-            }
-            if (pixiLayer) affectedLayerContainers.add(pixiLayer);
-        }
-        for (const layer of affectedLayerContainers) {
-            if (layer.isCachedAsTexture) {
-                layer.cacheAsTexture(false);
-                // Force immediate re-cache to refresh display
-                setTimeout(() => { layer.cacheAsTexture(true); }, 0);
-            }
-        }
+        // Cache refresh happens inside updateTiles (updateCacheTexture in
+        // place) — no uncache/recache flip needed here.
     }
 
     // Fill an area with the selected tile (flood fill)
@@ -1455,37 +1317,32 @@ class MapEditor {
                 const isAutotile = baseTileId >= 1536 && baseTileId < 8192;
 
                 if (isAutotile) {
-                    // Determine placement layer first
+                    // Shared MZ placement rules: decorations stack to the
+                    // second A-slot, ground replaces layer 0 (the old fill
+                    // stacked EVERYTHING to z1 — grass over grass at z1).
                     const basePos = y * width + x;
-                    const layer0Index = 0 * layerSize + basePos;
-                    const existingTile = data[layer0Index];
-                    const isA1Tile = existingTile >= 2048 && existingTile < 2816;
-                    const isA2Tile = existingTile >= 2816 && existingTile <= 4351;
+                    const cls = this.classifyAutotile(baseTileId);
+                    const actualPlacementLayer = this.getAutotilePlacementLayer(baseTileId, x, y);
 
-                    // Determine which layer this tile will be placed on
-                    const actualPlacementLayer = (isA1Tile || isA2Tile) ? 1 : 0;
-
-                    // NOW calculate the correct shape based on the actual placement layer
-                    const result = this.calculateAutotileShape(baseTileId, x, y, null, actualPlacementLayer);
-                    const fillTileId = result.tileId;
-
-                    // Erase B-E tiles on layers 1-3
+                    // Erase layers 1-3 (decorations spare existing A-tiles
+                    // there, matching the paint paths)
                     for (let layer = 1; layer <= 3; layer++) {
                         const layerIdx = layer * layerSize + basePos;
-                        data[layerIdx] = 0;
-                        affectedTiles.add(`${x},${y},${layer}`);
+                        if (layer === actualPlacementLayer) continue;
+                        const t = data[layerIdx];
+                        if (t > 0 && (!cls.isDecoration || t < 1536)) {
+                            data[layerIdx] = 0;
+                            affectedTiles.add(`${x},${y},${layer}`);
+                        }
                     }
 
-                    if (isA1Tile || isA2Tile) {
-                        // A1 or A2 tile exists, place new tile on layer 1
-                        const layer1Index = 1 * layerSize + basePos;
-                        data[layer1Index] = fillTileId;
-                        affectedTiles.add(`${x},${y},1`);
-                    } else {
-                        // No A1/A2 tile, place on layer 0
-                        data[layer0Index] = fillTileId;
-                        affectedTiles.add(`${x},${y},0`);
-                    }
+                    // Place base first so neighbor checks see it, then shape
+                    const targetIdx = actualPlacementLayer * layerSize + basePos;
+                    data[targetIdx] = baseTileId;
+                    const result = this.calculateAutotileShape(baseTileId, x, y, null, actualPlacementLayer);
+                    data[targetIdx] = result.tileId;
+                    affectedTiles.add(`${x},${y},${actualPlacementLayer}`);
+                    if (actualPlacementLayer === 1) affectedTiles.add(`${x},${y},0`);
                 } else {
                     // For non-autotiles, calculate tile ID normally
                     const fillTileId = this.getTileIdFromPalettePosition(paletteX, paletteY, tileLayer, x, y);
@@ -1711,8 +1568,12 @@ class MapEditor {
             // Get the base tile ID
             const baseTileId = this.getBaseTileIdFromPalettePosition(paletteTile.x, paletteTile.y, tileLayer);
 
-            // Calculate autotile shape based on preview pattern neighbors
-            const shapeResult = this.calculateAutotileShape(baseTileId, mapX, mapY, previewPattern);
+            // The preview must match what painting will produce: same
+            // target z-slot, and neighbor checks that see BOTH the pattern
+            // and the real map (isSameKindTile falls through to the map
+            // for cells outside the pattern).
+            const placeLayer = this.getAutotilePlacementLayer(baseTileId, mapX, mapY);
+            const shapeResult = this.calculateAutotileShape(baseTileId, mapX, mapY, previewPattern, placeLayer);
             const tileId = shapeResult.tileId;
 
             // Render the autotile preview using the same 4-subtile approach as TilemapManager
@@ -2068,6 +1929,14 @@ class MapEditor {
         const maxX = Math.max(...selectedTiles.map(t => t.x));
         const maxY = Math.max(...selectedTiles.map(t => t.y));
 
+        // The selection footprint acts as the autotile pattern, so a 2x2
+        // water selection previews with connected inner edges.
+        const hoverPattern = new Set();
+        for (const t of selectedTiles) {
+            hoverPattern.add(`${tileX + (t.x - minX)},${tileY + (t.y - minY)}`);
+        }
+        const map = this.tilemapManager.currentMap;
+
         // Create preview for each selected tile
         for (const tile of selectedTiles) {
             const offsetX = tile.x - minX;
@@ -2091,13 +1960,31 @@ class MapEditor {
 
             // Try to show actual tile texture if available
             if (tilesetTexture) {
-                // For single mode hover preview, just show the palette texture
-                // (No autotile shape calculation needed)
-                const tileTexture = this.getTileTextureFromPalette(tile.x, tile.y, layerToUse, tilesetTexture);
-                if (tileTexture) {
-                    const sprite = new PIXI.Sprite(tileTexture);
-                    sprite.alpha = 0.7; // Semi-transparent preview
-                    container.addChild(sprite);
+                const px = tileX + offsetX;
+                const py = tileY + offsetY;
+                const isAutotileLayer = ['A1', 'A2', 'A3', 'A4'].includes(layerToUse);
+                const baseTileId = isAutotileLayer
+                    ? this.getBaseTileIdFromPalettePosition(tile.x, tile.y, layerToUse)
+                    : 0;
+
+                if (baseTileId >= 2048 && baseTileId < 8192 && map &&
+                    px >= 0 && px < map.width && py >= 0 && py < map.height) {
+                    // Autotile: preview the EXACT tile that placement will
+                    // produce — same target z-slot, same shape, neighbors
+                    // from both the selection footprint and the real map.
+                    const placeLayer = this.getAutotilePlacementLayer(baseTileId, px, py);
+                    const shapeResult = this.calculateAutotileShape(baseTileId, px, py, hoverPattern, placeLayer);
+                    const auto = new PIXI.Container();
+                    auto.alpha = 0.7;
+                    this.renderAutotilePreviewToContainer(shapeResult.tileId, auto, tilesetTexture);
+                    container.addChild(auto);
+                } else {
+                    const tileTexture = this.getTileTextureFromPalette(tile.x, tile.y, layerToUse, tilesetTexture);
+                    if (tileTexture) {
+                        const sprite = new PIXI.Sprite(tileTexture);
+                        sprite.alpha = 0.7; // Semi-transparent preview
+                        container.addChild(sprite);
+                    }
                 }
             }
 
@@ -2162,9 +2049,12 @@ class MapEditor {
                     }
                 }
 
-                // bx/by are in half-tile units (24px), convert to pixels
-                srcX = bx * 24;
-                srcY = by * 24;
+                // bx/by are in FULL-tile units: the corescript samples at
+                // (bx*2 + qsx) half-tiles, i.e. bx*48 px. The old *24 here
+                // sampled the middle of the water block — lily pads
+                // previewed as the water corner-dots tile.
+                srcX = bx * 48;
+                srcY = by * 48;
             } else if (layer === 'A2') {
                 // A2: Ground autotiles (8 columns × 4 rows of 2x3 blocks)
                 // x,y are palette grid coordinates - extract top-left preview tile from 2x3 block
@@ -2643,17 +2533,75 @@ class MapEditor {
         }
     }
 
+    // ── MZ A-layer stacking rules (shared by paint, fill, and preview) ──
+    // A1 kinds 2-3 and odd kinds ≥5 are decorations/waterfalls; A2 kinds
+    // drawn with transparency (paths, fences, the dish) are decorations.
+    // Decorations stack onto the second A-slot (z1) whenever z0 already
+    // holds ANY A-tile; ground autotiles replace z0.
+    classifyAutotile(baseTileId) {
+        const isA1Tile = baseTileId >= 2048 && baseTileId < 2816;
+        const isA2Tile = baseTileId >= 2816 && baseTileId < 4352;
+        let isA1Decoration = false;
+        if (isA1Tile) {
+            const kind = Math.floor((baseTileId - 2048) / 48);
+            isA1Decoration = kind < 4 ? kind >= 2 : kind % 2 === 1;
+        }
+        let isA2Decoration = false;
+        if (isA2Tile) {
+            const kind = Math.floor((baseTileId - 2816) / 48);
+            isA2Decoration = this.tilemapManager.isA2DecorationKind(kind);
+        }
+        return {
+            isA1Tile,
+            isA2Tile,
+            isA1Decoration,
+            isA2Decoration,
+            isA1Water: isA1Tile && !isA1Decoration,
+            isDecoration: isA1Decoration || isA2Decoration,
+        };
+    }
+
+    // The z-slot an autotile will land in at (x, y) — MUST be shared by
+    // placement AND preview, or the preview shows a different shape than
+    // what painting produces.
+    getAutotilePlacementLayer(baseTileId, x, y) {
+        const { width, data } = this.tilemapManager.currentMap;
+        const layer0Tile = data[y * width + x];
+        const cls = this.classifyAutotile(baseTileId);
+        if (cls.isDecoration) {
+            // Decorations stack over ANY A-tile on layer 0 — water included
+            // (MZ: the dish sits at z1 over the water at z0).
+            const layer0HasATile = layer0Tile >= 1536 && layer0Tile < 8192;
+            return layer0HasATile ? 1 : 0;
+        }
+        if (cls.isA1Water) {
+            // A different water kind over existing water stacks on layer 1
+            // (deep-water pools inside water); same kind replaces layer 0.
+            const layer0IsA1 = layer0Tile >= 2048 && layer0Tile < 2816;
+            if (layer0IsA1) {
+                const layer0Kind = Math.floor((layer0Tile - 2048) / 48);
+                const layer0IsDecoration = layer0Kind >= 2 && (layer0Kind < 4 || layer0Kind % 2 === 1);
+                const currentKind = Math.floor((baseTileId - 2048) / 48);
+                if (!layer0IsDecoration && layer0Kind !== currentKind) return 1;
+            }
+            return 0;
+        }
+        // A2 ground, A3-A5: replace layer 0
+        return 0;
+    }
+
     // Calculate wall autotile shape (A3/A4 - only uses 4 cardinal directions, 16 shapes)
     calculateWallAutotileShape(baseTileId, x, y, previewPattern = null) {
         if (!this.tilemapManager.currentMap) return { tileId: baseTileId, shape: 0 };
 
         const { width, height } = this.tilemapManager.currentMap;
 
-        // Check 4 cardinal neighbors
+        // Check 4 cardinal neighbors. Horizontal checks allow the A4
+        // wall-beside-roof connection; vertical ones keep the eave edge.
         const top = this.isSameKindTile(baseTileId, x, y - 1, previewPattern);
-        const right = this.isSameKindTile(baseTileId, x + 1, y, previewPattern);
+        const right = this.isSameKindTile(baseTileId, x + 1, y, previewPattern, null, true);
         const bottom = this.isSameKindTile(baseTileId, x, y + 1, previewPattern);
-        const left = this.isSameKindTile(baseTileId, x - 1, y, previewPattern);
+        const left = this.isSameKindTile(baseTileId, x - 1, y, previewPattern, null, true);
 
         // RPG Maker MZ wall tile shape calculation
         // Based on actual data from Map001.json:
@@ -2716,8 +2664,10 @@ class MapEditor {
         if (isWaterfall) {
             const left = this.isSameKindTile(baseTileId, x - 1, y, previewPattern, currentLayer);
             const right = this.isSameKindTile(baseTileId, x + 1, y, previewPattern, currentLayer);
-            // Shape: 0 = both sides, 1 = left only, 2 = right only, 3 = neither
-            const shape = left ? (right ? 0 : 1) : (right ? 2 : 3);
+            // Shape = bitmask of OPEN sides: +1 left edge, +2 right edge
+            // (corpus-verified: MZ stores 1 when only the right neighbor
+            // exists, 2 when only the left — the old mapping was inverted)
+            const shape = (left ? 0 : 1) + (right ? 0 : 2);
             return { tileId: baseTileId + shape, shape: shape };
         }
 
@@ -2754,7 +2704,10 @@ class MapEditor {
         } else {
             // Use the pattern-based mapping for non-fully-surrounded tiles
             const shapeMap = {
-                0b0000: 47,  // No neighbors = isolated tile (uses top-left 2x2 of source for small circle/dot)
+                // Isolated tile = shape 46 (borders on all sides). 47 is the
+                // palette "demo" block — MZ NEVER stores it on maps
+                // (corpus: 2210 × shape 46, 0 × shape 47).
+                0b0000: 46,
 
                 // Edges (3 neighbors) - will be overridden below with diagonal checking
                 0b1110: 20,  // Missing top (has R+B+L) = TOP EDGE (default)
@@ -2841,7 +2794,7 @@ class MapEditor {
 
     // Check if a tile at position (x,y) is the same autotile kind as baseTileId
     // checkLayer: if provided, only check this specific layer (0-3). If null, check the specific layer being edited.
-    isSameKindTile(baseTileId, x, y, previewPattern = null, checkLayer = null) {
+    isSameKindTile(baseTileId, x, y, previewPattern = null, checkLayer = null, allowRoofMatch = false) {
         if (!this.tilemapManager.currentMap) return false;
 
         const { width, height, data } = this.tilemapManager.currentMap;
@@ -2849,18 +2802,19 @@ class MapEditor {
         // DEBUG: Check if position is in bounds
         const inBounds = x >= 0 && x < width && y >= 0 && y < height;
 
-        // If preview pattern is provided, check if the position exists in the pattern
-        if (previewPattern) {
-            return previewPattern.has(`${x},${y}`);
+        // Cells covered by the preview pattern count as same-kind; cells
+        // OUTSIDE it fall through to the real-map check below so previews
+        // connect to existing tiles exactly like the actual placement will
+        // (pattern-only checks made every 1x1 preview look "isolated").
+        if (previewPattern && previewPattern.has(`${x},${y}`)) {
+            return true;
         }
 
-        // Handle out-of-bounds differently based on tile type
+        // Out-of-bounds counts as "same kind" for ALL autotiles — the MZ
+        // editor continues cliffs/roofs/ground seamlessly off the map edge
+        // (corpus-verified: edge roofs/walls store fully-connected shapes).
         if (x < 0 || x >= width || y < 0 || y >= height) {
-            // For ground autotiles (A1/A2), treat out-of-bounds as "same kind"
-            // so they don't show borders at map edges
-            // A1: 2048-2815, A2: 2816-4351
-            const isGroundTile = baseTileId >= 2048 && baseTileId < 4352;
-            return isGroundTile; // Return true for ground tiles (no border), false for walls (border)
+            return baseTileId >= 2048 && baseTileId < 8192;
         }
 
         // Only check autotiles (A1-A4 range: 2048-8191)
@@ -2893,6 +2847,10 @@ class MapEditor {
 
         // If checkLayer is specified, only check that specific layer (RMMZ behavior)
         // Otherwise check all layers (old behavior for preview patterns)
+        // NOTE: checking both A-slots here sounds right but is WRONG — MZ
+        // stacks deep water (z1) over water (z0), and the non-matching-tile-
+        // blocks rule below would cut off the z0 check (corpus-verified:
+        // it broke 40k cells to fix 200).
         const layersToCheck = (checkLayer !== null && checkLayer !== undefined) ? [checkLayer] : [3, 2, 1, 0];
 
         // Check specified layer(s) for matching autotile
@@ -2953,12 +2911,20 @@ class MapEditor {
                         baseIsDecoration = baseKind % 2 === 1;
                     }
 
+                    const isWaterfallKind = (k) => k >= 5 && k % 2 === 1;
+                    const isWaterKind = (k) => (k < 4 ? k < 2 : k % 2 === 0);
+
                     // Decorations blend with OTHER decorations of the SAME kind only
-                    // They don't blend with water or other decoration types
+                    // EXCEPT waterfalls, which also connect to any water kind
+                    // (corpus-verified: MZ stores connected shapes at
+                    // water↔waterfall junctions, e.g. kinds 4↔5, 0↔9).
                     if (baseIsDecoration) {
                         // Check if neighbor is also a decoration of the same kind
                         if (tileKind === baseKind) {
                             return true; // Same decoration type - blend together
+                        }
+                        if (isWaterfallKind(baseKind) && isWaterKind(tileKind)) {
+                            return true; // Waterfall meets water - connected
                         }
                         return false; // Different kind or water - don't blend
                     }
@@ -2982,7 +2948,12 @@ class MapEditor {
                         // Different water kinds - don't blend (allows layering)
                         return false;
                     }
-                    // One is water, other is decoration - don't blend
+                    // Water meets a waterfall - connected (mirror of the
+                    // waterfall rule above)
+                    if (isWaterfallKind(tileKind)) {
+                        return true;
+                    }
+                    // One is water, other is a static decoration - don't blend
                 }
 
                 // A1 checking higher layers should skip them
@@ -3039,6 +3010,16 @@ class MapEditor {
                     } else {
                         return true;
                     }
+                } else if (allowRoofMatch && tileStart === 5888 && baseStart === 5888 &&
+                           Math.floor(baseKind / 8) % 2 === 1 &&
+                           Math.floor(tileKind / 8) % 2 === 0) {
+                    // A4 WALL beside an A4 ROOF (any kind): connected — the
+                    // wall face tucks under the roof slope with no side
+                    // border. HORIZONTAL neighbors only (the caller sets
+                    // allowRoofMatch): against a roof ABOVE, the wall keeps
+                    // its top edge — that's the eave line. Corpus-verified:
+                    // 2121 side junctions connected, 2316 top edges kept.
+                    return true;
                 } else if (tileStart === 2816 && baseStart === 2816) {
                     // A2 Field Type pairing: consecutive pairs are treated as same kind
                     // Pairs: (0,1), (2,3), (4,5), (6,7), (8,9), (10,11), etc.
@@ -3169,13 +3150,8 @@ class MapEditor {
                         data[index] = newTileId;
                         updateCount++;
 
-                        // Re-render this tile
-                        const pixiLayer = [
-                            this.tilemapManager.layers.ground,
-                            this.tilemapManager.layers.lower1,
-                            this.tilemapManager.layers.lower2,
-                            this.tilemapManager.layers.lower3
-                        ][layer];
+                        // Re-render this tile (☆-flag routing picks the stack)
+                        const pixiLayer = this.tilemapManager.tileTargetLayer(layer, newTileId);
 
                         if (pixiLayer) {
                             this.tilemapManager.clearTileSpritesAt(neighbor.x, neighbor.y, pixiLayer);

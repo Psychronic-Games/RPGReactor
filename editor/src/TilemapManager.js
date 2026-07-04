@@ -58,6 +58,17 @@ class TilemapManager {
 
         // Callbacks
         this.onZoomChange = null;
+        // Pixel-art layer caches: the cached texture gets scaled by the
+        // zoom, so it must sample nearest — cacheAsTexture defaults to
+        // 'linear', which blurred every zoom-in past 100%.
+        // resolution MUST be 1: PIXI defaults the cache to the renderer's
+        // resolution (devicePixelRatio), which rasterizes 48px tiles into
+        // dpr-times texels (first resample) before the zoom scale (second
+        // resample) — live sprites resample once, so on scaled desktops
+        // every cache/uncache cycle while painting made the art "breathe".
+        // At resolution 1 the cache is an exact 1:1 texel copy and renders
+        // pixel-identically to the live sprites.
+        this.layerCacheOptions = { scaleMode: 'nearest', resolution: 1 };
 
         // Animation state for A1 autotiles
         this.waterAnimationFrame = 0; // 0, 1, or 2 (ping-pong: 0→1→2→1→0)
@@ -210,6 +221,7 @@ class TilemapManager {
 
     async loadTilesetImages(tileset) {
         const imgPath = this.path.join(this.projectPath, 'img', 'tilesets');
+        this._a2DecorKinds = null;   // re-analyze decorations for the new sheet
 
         // Load all tileset images (A1-A5, B, C, D, E)
         const promises = [];
@@ -268,8 +280,14 @@ class TilemapManager {
         this.layers.lower1 = new PIXI.Container();
         this.layers.lower2 = new PIXI.Container();
         this.layers.lower3 = new PIXI.Container();
-        this.layers.upper4 = new PIXI.Container();
-        this.layers.upper5 = new PIXI.Container();
+        // MZ ☆ ("higher") tiles: one upper container per data z-slot,
+        // stacked ABOVE every lower container. A tile whose tileset flag
+        // has bit 0x10 renders up here regardless of its z-slot — that's
+        // how a ☆ roof piece at z2 covers a tree at z3 in MZ.
+        this.layers.upper0 = new PIXI.Container();
+        this.layers.upper1 = new PIXI.Container();
+        this.layers.upper2 = new PIXI.Container();
+        this.layers.upper3 = new PIXI.Container();
         this.layers.shadow = new PIXI.Container();
         this.layers.layerHighlight = new PIXI.Container();
 
@@ -278,16 +296,25 @@ class TilemapManager {
         this.layers.lower1.cullable = true;
         this.layers.lower2.cullable = true;
         this.layers.lower3.cullable = true;
-        this.layers.upper4.cullable = true;
-        this.layers.upper5.cullable = true;
+        this.layers.upper0.cullable = true;
+        this.layers.upper1.cullable = true;
+        this.layers.upper2.cullable = true;
+        this.layers.upper3.cullable = true;
         this.layers.shadow.cullable = true;
 
-        // PERFORMANCE: Build layer-to-name map for fast sprite tracking lookups
+        // PERFORMANCE: Build layer-to-name map for fast sprite tracking lookups.
+        // Upper containers map to their z-slot's name: a cell holds ONE tile
+        // per z-slot, so tracking keys stay per-slot no matter which stack
+        // (lower/upper) the sprite rendered into.
         this._layerNameMap = new Map([
             [this.layers.ground, 'ground'],
             [this.layers.lower1, 'lower1'],
             [this.layers.lower2, 'lower2'],
             [this.layers.lower3, 'lower3'],
+            [this.layers.upper0, 'ground'],
+            [this.layers.upper1, 'lower1'],
+            [this.layers.upper2, 'lower2'],
+            [this.layers.upper3, 'lower3'],
             [this.layers.shadow, 'shadow']
         ]);
 
@@ -299,8 +326,10 @@ class TilemapManager {
         this.container.addChild(this.layers.lower1);
         this.container.addChild(this.layers.lower2);
         this.container.addChild(this.layers.lower3);
-        this.container.addChild(this.layers.upper4);
-        this.container.addChild(this.layers.upper5);
+        this.container.addChild(this.layers.upper0);
+        this.container.addChild(this.layers.upper1);
+        this.container.addChild(this.layers.upper2);
+        this.container.addChild(this.layers.upper3);
         this.container.addChild(this.layers.layerHighlight);
 
         // Add panning support
@@ -380,7 +409,18 @@ class TilemapManager {
                 }
                 const maxScale = 5;
 
-                const newScale = Math.max(minScale, Math.min(maxScale, oldScale * scaleFactor));
+                // Quantize so a tile is a WHOLE number of device pixels:
+                // fractional tile sizes cause uneven pixel steps and the
+                // occasional hairline seam between uncached tile sprites.
+                let newScale = this._quantizeScale(
+                    Math.max(minScale, Math.min(maxScale, oldScale * scaleFactor)));
+                if (newScale === oldScale) {
+                    // Step at least one quantum in the intended direction
+                    // (at low zoom the 10% step can round back onto itself).
+                    newScale = this._quantizeScale(oldScale, scaleFactor > 1 ? 1 : -1);
+                }
+                if (newScale < minScale) newScale = this._quantizeScale(minScale, 1);
+                newScale = Math.min(maxScale, newScale);
 
                 if (newScale !== oldScale) {
                     this.pauseLazyLoading();
@@ -440,6 +480,20 @@ class TilemapManager {
     }
 
     /**
+     * Snap a zoom scale so one tile covers a whole number of DEVICE pixels
+     * (TILE_SIZE * scale * dpr ∈ ℤ). direction: 0 = nearest, 1 = up,
+     * -1 = down — always by at least one quantum when a direction is given.
+     */
+    _quantizeScale(scale, direction = 0) {
+        const dpr = window.devicePixelRatio || 1;
+        const unit = this.TILE_SIZE * dpr;
+        const steps = scale * unit;
+        if (direction > 0) return (Math.floor(steps) + 1) / unit;
+        if (direction < 0) return Math.max(1, Math.ceil(steps) - 1) / unit;
+        return Math.max(1, Math.round(steps)) / unit;
+    }
+
+    /**
      * Compute the min scale at which the current map fully fills the viewport,
      * and upscale the container if it's currently below that. Returns true if
      * scale was changed. Called on map load and on window resize so a small map
@@ -465,8 +519,11 @@ class TilemapManager {
 
         const currentScale = this.container.scale.x;
         if (currentScale < minScale) {
-            this.container.scale.set(minScale, minScale);
-            if (this.onZoomChange) this.onZoomChange(minScale);
+            // Quantize UP so the clamped zoom still maps one tile to a
+            // whole number of device pixels (stays >= the contain-fit floor).
+            const snapped = this._quantizeScale(minScale, 1);
+            this.container.scale.set(snapped, snapped);
+            if (this.onZoomChange) this.onZoomChange(snapped);
             return true;
         }
         return false;
@@ -696,8 +753,10 @@ class TilemapManager {
         this.layers.lower1.removeChildren();
         this.layers.lower2.removeChildren();
         this.layers.lower3.removeChildren();
-        this.layers.upper4.removeChildren();
-        this.layers.upper5.removeChildren();
+        this.layers.upper0.removeChildren();
+        this.layers.upper1.removeChildren();
+        this.layers.upper2.removeChildren();
+        this.layers.upper3.removeChildren();
         this.layers.shadow.removeChildren();
         this.layers.layerHighlight.removeChildren();
 
@@ -718,11 +777,11 @@ class TilemapManager {
         // Layer 4: Shadow bits (NOT tiles)
         // Layer 5: Region/collision data (NOT rendered)
 
-        // NOTE: For full RPG Maker MZ compatibility, tiles from layers 0-3 should be
-        // dynamically routed to upper/lower containers based on tileset.flags[tileId] & 0x10
-        // (the "star" flag). Currently, we use fixed layer assignments which works for most
-        // cases but may cause some tiles to render at the wrong z-order.
-        // See rmmz_core.js:2465-2471 (_addSpotTile) for reference implementation.
+        // MZ compatibility: tiles from layers 0-3 are routed to lower/upper
+        // containers based on tileset.flags[tileId] & 0x10 (the ☆ "higher"
+        // flag) via tileTargetLayer() — see rmmz_core Tilemap._addSpotTile.
+        // Without this, a ☆ roof piece at z2 rendered UNDER a tree at z3
+        // ("trees above buildings" bug).
 
         let tilesRendered = 0;
 
@@ -741,24 +800,8 @@ class TilemapManager {
             }
         }
 
-        // PERFORMANCE: Build A1 position map from FULL map (needed for A2/A3/A4 skip logic)
-        // Uses numeric keys (y * width + x) instead of string concatenation for speed
-        this.a1PositionMap = new Set();
-        this._a1MapWidth = width; // Store for key calculation in renderTile
-        for (let layerIndex = 0; layerIndex < 4; layerIndex++) {
-            const layerOffset = layerIndex * layerSize;
-            for (let i = 0; i < layerSize; i++) {
-                const tileId = data[layerOffset + i];
-                if (tileId >= 2048 && tileId < 2816) { // A1 tile
-                    this.a1PositionMap.add(i); // i = y * width + x
-                }
-            }
-        }
-
         // PERFORMANCE: Single pass over visible tiles for all 5 layers (0-4)
         // instead of 5 separate loops. This cuts iteration overhead by ~5x.
-        const pixiLayers = [this.layers.ground, this.layers.lower1, this.layers.lower2, this.layers.lower3];
-
         for (let y = startY; y < endY; y++) {
             for (let x = startX; x < endX; x++) {
                 // Layers 0-3: Tile data
@@ -766,11 +809,12 @@ class TilemapManager {
                     const index = layerIdx * layerSize + y * width + x;
                     const tileId = data[index];
                     if (tileId > 0) {
-                        this.renderTile(tileId, x, y, pixiLayers[layerIdx]);
+                        const target = this.tileTargetLayer(layerIdx, tileId);
+                        this.renderTile(tileId, x, y, target);
                         tilesRendered++;
                         // Track A1 tiles for animation
                         if (tileId >= 2048 && tileId < 2816) {
-                            this.a1TilePositions.push({x, y, layerIndex: layerIdx, tileId, pixiLayer: pixiLayers[layerIdx]});
+                            this.a1TilePositions.push({x, y, layerIndex: layerIdx, tileId, pixiLayer: target});
                         }
                     }
                 }
@@ -821,34 +865,6 @@ class TilemapManager {
         const layerSize = width * height;
         const affectedLayers = new Set();
 
-        // PRE-PASS: Update a1PositionMap for all affected positions BEFORE rendering
-        // This ensures the map is accurate when renderTile() checks it
-        if (this.a1PositionMap) {
-            const updatedPositions = new Set();
-            for (const pos of positions) {
-                const numKey = pos.y * width + pos.x;
-                if (!updatedPositions.has(numKey)) {
-                    updatedPositions.add(numKey);
-                    // Check all 4 layers at this position for A1 tiles
-                    let hasA1 = false;
-                    for (let layer = 0; layer <= 3; layer++) {
-                        const index = layer * layerSize + pos.y * width + pos.x;
-                        const tileId = data[index];
-                        if (tileId >= 2048 && tileId < 2816) { // A1 tile
-                            hasA1 = true;
-                            break;
-                        }
-                    }
-                    // Update map
-                    if (hasA1) {
-                        this.a1PositionMap.add(numKey);
-                    } else {
-                        this.a1PositionMap.delete(numKey);
-                    }
-                }
-            }
-        }
-
         for (const pos of positions) {
             const { x, y, layer: layerIdx } = pos;
 
@@ -856,7 +872,9 @@ class TilemapManager {
             if (x < 0 || x >= width || y < 0 || y >= height) continue;
             if (layerIdx < 0 || layerIdx > 4) continue;
 
-            // Get the layer container
+            // Get the layer container (canonical lower container for the
+            // z-slot — sprite-tracking keys are per-slot, so clearing via
+            // it removes the old sprite from either stack).
             let pixiLayer;
             switch (layerIdx) {
                 case 0: pixiLayer = this.layers.ground; break;
@@ -866,10 +884,19 @@ class TilemapManager {
                 case 4: pixiLayer = this.layers.shadow; break;
             }
 
-            // PERFORMANCE: Invalidate texture cache when painting tiles
-            if (pixiLayer && pixiLayer.isCachedAsTexture) {
-                pixiLayer.cacheAsTexture(false);
-                affectedLayers.add(pixiLayer);
+            // Track cached layers touched at this z-slot: their cache
+            // textures are refreshed IN PLACE after the sprite updates
+            // (updateCacheTexture below). The layer never flips to live
+            // rendering — an uncache→recache cycle rendered the art through
+            // a subtly different sampling path for ~500ms and made tiles
+            // visibly "breathe" on every paint click.
+            // Both stacks of the z-slot: the old sprite may live in the
+            // upper container (☆ tile) even though the new one won't.
+            const affected = layerIdx === 4 ? [pixiLayer] : this.containersForZ(layerIdx);
+            for (const c of affected) {
+                if (c && c.isCachedAsTexture) {
+                    affectedLayers.add(c);
+                }
             }
 
             // Clear the old tile sprites at this position
@@ -888,7 +915,8 @@ class TilemapManager {
             } else {
                 // Tile layers 0-3
                 if (tileValue > 0) {
-                    this.renderTile(tileValue, x, y, pixiLayer);
+                    const target = this.tileTargetLayer(layerIdx, tileValue);
+                    this.renderTile(tileValue, x, y, target);
 
                     // Track A1 tiles for animation
                     if (this.isTileA1(tileValue)) {
@@ -901,7 +929,7 @@ class TilemapManager {
                             x, y,
                             layerIndex: layerIdx,
                             tileId: tileValue,
-                            pixiLayer: pixiLayer
+                            pixiLayer: target
                         });
                     } else {
                         // Remove A1 tracking if tile is no longer A1
@@ -918,16 +946,13 @@ class TilemapManager {
             }
         }
 
-        // PERFORMANCE: Re-cache affected layers after a delay (debounced)
-        if (affectedLayers.size > 0) {
-            clearTimeout(this.recacheLayersTimer);
-            this.recacheLayersTimer = setTimeout(() => {
-                for (const layer of affectedLayers) {
-                    if (layer && !layer.isCachedAsTexture) {
-                        layer.cacheAsTexture(true);
-                    }
-                }
-            }, 500); // Wait 500ms after last paint before re-caching
+        // Refresh the touched caches in place — the cached texture
+        // re-renders with the new sprites on the next frame, and the
+        // layer never round-trips through live rendering.
+        for (const layer of affectedLayers) {
+            if (layer.isCachedAsTexture) {
+                layer.updateCacheTexture();
+            }
         }
     }
 
@@ -987,7 +1012,7 @@ class TilemapManager {
                 if (tile.isShadow) {
                     this.renderShadowTile(tile.tileValue, tile.x, tile.y);
                 } else {
-                    const layer = [this.layers.ground, this.layers.lower1, this.layers.lower2, this.layers.lower3][tile.layerIdx];
+                    const layer = this.tileTargetLayer(tile.layerIdx, tile.tileValue);
                     this.renderTile(tile.tileValue, tile.x, tile.y, layer);
 
                     // Track A1 tiles for animation
@@ -1041,15 +1066,17 @@ class TilemapManager {
         // Don't cache ground layer if it has A1 animations
         if (this.a1TilePositions && this.a1TilePositions.length === 0) {
             // No A1 tiles, safe to cache all layers
-            if (this.layers.ground) this.layers.ground.cacheAsTexture(true);
+            if (this.layers.ground) this.layers.ground.cacheAsTexture(this.layerCacheOptions);
         }
 
         // Always cache these layers (no animations)
-        if (this.layers.lower1) this.layers.lower1.cacheAsTexture(true);
-        if (this.layers.lower2) this.layers.lower2.cacheAsTexture(true);
-        if (this.layers.lower3) this.layers.lower3.cacheAsTexture(true);
-        if (this.layers.upper4) this.layers.upper4.cacheAsTexture(true);
-        if (this.layers.upper5) this.layers.upper5.cacheAsTexture(true);
+        if (this.layers.lower1) this.layers.lower1.cacheAsTexture(this.layerCacheOptions);
+        if (this.layers.lower2) this.layers.lower2.cacheAsTexture(this.layerCacheOptions);
+        if (this.layers.lower3) this.layers.lower3.cacheAsTexture(this.layerCacheOptions);
+        if (this.layers.upper0) this.layers.upper0.cacheAsTexture(this.layerCacheOptions);
+        if (this.layers.upper1) this.layers.upper1.cacheAsTexture(this.layerCacheOptions);
+        if (this.layers.upper2) this.layers.upper2.cacheAsTexture(this.layerCacheOptions);
+        if (this.layers.upper3) this.layers.upper3.cacheAsTexture(this.layerCacheOptions);
     }
 
     // Pause/resume lazy-loading during user interaction
@@ -1173,12 +1200,9 @@ class TilemapManager {
 
     // PERFORMANCE: Update A1 tile textures without recreating sprites
     updateA1TileTextures(tileId, x, y, layer) {
-        // Get the sprites for this tile
-        let layerName = 'unknown';
-        if (layer === this.layers.ground) layerName = 'ground';
-        else if (layer === this.layers.lower1) layerName = 'lower1';
-        else if (layer === this.layers.lower2) layerName = 'lower2';
-        else if (layer === this.layers.lower3) layerName = 'lower3';
+        // Get the sprites for this tile (upper containers map to their
+        // z-slot's name, so ☆-routed tiles resolve the same key)
+        const layerName = (this._layerNameMap && this._layerNameMap.get(layer)) || 'unknown';
 
         const key = `${layerName}_${x}_${y}`;
         const sprites = this.tileSprites[key];
@@ -1245,20 +1269,22 @@ class TilemapManager {
             const sy = (by * 2 + qsy) * h1;
 
             // PERFORMANCE: Use cached animation frame textures
-            // Apply 0.5px UV inset to prevent texture bleeding (same as RMMZ corescript _updateVertexBuffer)
-            const inset = 0.5;
+            // Exact texel frame: with nearest sampling + integer-pixel zoom
+            // there is no edge bleeding. The old 0.5px inset + stretch
+            // fattened thin art ~2% and made every cache/uncache cycle
+            // visibly "breathe" when painting.
             const animCacheKey = `a1_${kind}_${shape}_${i}_${bx}_${by}`;
             let animTexture = this.a1AnimationCache[animCacheKey];
             if (!animTexture) {
                 animTexture = new PIXI.Texture({
                     source: texture.source,
-                    frame: new PIXI.Rectangle(sx + inset, sy + inset, w1 - inset * 2, h1 - inset * 2)
+                    frame: new PIXI.Rectangle(sx, sy, w1, h1)
                 });
                 this.a1AnimationCache[animCacheKey] = animTexture;
             }
 
             sprite.texture = animTexture;
-            // Scale sprite to fill the full tile size (compensate for UV inset)
+            // Natural size (the frame is exactly one tile)
             sprite.width = w1;
             sprite.height = h1;
         }
@@ -1268,12 +1294,10 @@ class TilemapManager {
     clearTileSpritesAt(x, y, layer) {
         if (!layer) return;
 
-        // Determine layer name for sprite tracking key
-        let layerName = 'unknown';
-        if (layer === this.layers.ground) layerName = 'ground';
-        else if (layer === this.layers.lower1) layerName = 'lower1';
-        else if (layer === this.layers.lower2) layerName = 'lower2';
-        else if (layer === this.layers.lower3) layerName = 'lower3';
+        // Determine layer name for sprite tracking key (upper containers
+        // share their z-slot's name; sprites are removed from whichever
+        // container actually parents them via sprite.parent below)
+        const layerName = (this._layerNameMap && this._layerNameMap.get(layer)) || 'unknown';
 
         const key = `${layerName}_${x}_${y}`;
         const sprites = this.tileSprites[key];
@@ -1365,45 +1389,32 @@ class TilemapManager {
         // Convert to file:// URL for Pixi.js
         const fileUrl = 'file://' + parallaxPath.replace(/\\/g, '/');
 
-        // Check if parallax is "locked" (filename starts with !)
-        // Locked parallaxes move with the map, unlocked ones scroll independently
-        const isLocked = parallaxName.startsWith('!');
-
         try {
             // Load texture using PIXI.Assets.load() to ensure it's loaded before rendering
             const texture = await PIXI.Assets.load(fileUrl);
 
-            // Set texture wrap mode based on looping settings
-            if (parallaxLoopX || parallaxLoopY) {
-                texture.source.style.addressMode = 'repeat';
-            } else {
-                texture.source.style.addressMode = 'clamp-to-edge';
-            }
+            // MZ semantics: the parallax ALWAYS repeats to fill the map —
+            // in-game it's a screen-filling TilingSprite and the MZ editor
+            // tiles it across the whole map. The loop flags only control
+            // SCROLLING, not whether the image tiles. Nearest sampling
+            // keeps zoomed parallax consistent with the pixel-art tiles.
+            texture.source.style.addressMode = 'repeat';
+            texture.source.style.scaleMode = 'nearest';
 
-            // If looping, use TilingSprite for seamless tiling
-            if (parallaxLoopX || parallaxLoopY) {
-                const mapPixelWidth = this.currentMap.width * this.TILE_WIDTH;
-                const mapPixelHeight = this.currentMap.height * this.TILE_HEIGHT;
+            const mapPixelWidth = this.currentMap.width * this.TILE_WIDTH;
+            const mapPixelHeight = this.currentMap.height * this.TILE_HEIGHT;
 
-                this.parallaxSprite = new PIXI.TilingSprite({
-                    texture: texture,
-                    width: mapPixelWidth * 2,
-                    height: mapPixelHeight * 2
-                });
+            this.parallaxSprite = new PIXI.TilingSprite({
+                texture: texture,
+                width: mapPixelWidth,
+                height: mapPixelHeight
+            });
+            this.parallaxSprite.x = 0;
+            this.parallaxSprite.y = 0;
 
-                // Center the tiling sprite
-                this.parallaxSprite.x = -mapPixelWidth / 2;
-                this.parallaxSprite.y = -mapPixelHeight / 2;
-
-                // Initialize tilePosition for scrolling
-                this.parallaxSprite.tilePosition = { x: 0, y: 0 };
-
-            } else {
-                // Use regular sprite if not looping
-                this.parallaxSprite = new PIXI.Sprite(texture);
-                this.parallaxSprite.x = 0;
-                this.parallaxSprite.y = 0;
-            }
+            // Initialize tilePosition for scrolling (wraps via texture
+            // repeat, so the sprite never needs to be oversized)
+            this.parallaxSprite.tilePosition = { x: 0, y: 0 };
 
             // Add to parallax layer
             this.layers.parallax.addChild(this.parallaxSprite);
@@ -1494,15 +1505,82 @@ class TilemapManager {
         return kind >= 5 && kind % 2 === 1;
     }
 
+    // ── A2 decoration classification ─────────────────────────────────────
+    // The MZ editor decides "does this A2 autotile REPLACE the ground (z0)
+    // or STACK onto the second A-slot (z1)?" from the ART: kinds drawn
+    // with transparent pixels (paths, fences, the dish) are decorations.
+    // There is no metadata for this — sample the sheet's alpha per kind.
+    isA2DecorationKind(kind) {
+        if (this._a2DecorKinds === null || this._a2DecorKinds === undefined) {
+            this._a2DecorKinds = this._analyzeA2Sheet();
+        }
+        if (this._a2DecorKinds) return !!this._a2DecorKinds[kind];
+        // Sheet pixels unavailable — positional fallback (right half of
+        // each kind row holds the decoration blocks in the stock sheets).
+        return (kind % 8) >= 4;
+    }
+
+    _analyzeA2Sheet() {
+        try {
+            const tex = this.tilesetTextures[1];   // A2 sheet
+            const src = tex && tex.source && tex.source.resource;
+            if (!src || !src.width) return null;
+            const canvas = document.createElement('canvas');
+            canvas.width = src.width;
+            canvas.height = src.height;
+            const ctx = canvas.getContext('2d', { willReadFrequently: true });
+            ctx.drawImage(src, 0, 0);
+            const blockW = src.width / 8, blockH = src.height / 4;   // 8×4 kinds
+            const kinds = [];
+            for (let k = 0; k < 32; k++) {
+                const px = ctx.getImageData((k % 8) * blockW, Math.floor(k / 8) * blockH, blockW, blockH).data;
+                let clear = 0;
+                for (let i = 3; i < px.length; i += 4) {
+                    if (px[i] < 16) clear++;
+                }
+                // >2% fully-transparent pixels → drawn as an overlay
+                kinds[k] = clear / (px.length / 4) > 0.02;
+            }
+            return kinds;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    // MZ ☆ ("higher") flag — rmmz_core Tilemap._isHigherTile: bit 0x10 in
+    // the tileset flags marks a tile that renders in the UPPER layer,
+    // above every non-☆ tile regardless of z-slot order.
+    isHigherTile(tileId) {
+        const flags = this.currentTileset && this.currentTileset.flags;
+        return !!(flags && (flags[tileId] & 0x10));
+    }
+
+    // The container a tile actually renders into: its z-slot's lower
+    // container normally, or the z-slot's upper container when ☆-flagged
+    // (mirrors rmmz_core Tilemap._addSpotTile routing).
+    tileTargetLayer(layerIdx, tileId) {
+        const L = this.layers;
+        return this.isHigherTile(tileId)
+            ? [L.upper0, L.upper1, L.upper2, L.upper3][layerIdx]
+            : [L.ground, L.lower1, L.lower2, L.lower3][layerIdx];
+    }
+
+    // Both containers a z-slot can render into — for cache invalidation
+    // when a tile at that slot changes (the old sprite may be in either).
+    containersForZ(layerIdx) {
+        const L = this.layers;
+        return [
+            [L.ground, L.lower1, L.lower2, L.lower3][layerIdx],
+            [L.upper0, L.upper1, L.upper2, L.upper3][layerIdx],
+        ].filter(Boolean);
+    }
+
     renderTile(tileId, x, y, layer) {
         if (tileId <= 0) return;
 
-        // PERFORMANCE: A2/A3/A4 tiles should not render if there's ANY A1 at this position
-        // Use pre-built position map instead of checking all layers
-        const isA2orHigher = tileId >= 2816 && tileId < 8192;
-        if (isA2orHigher && this.a1PositionMap && this.a1PositionMap.has(y * (this._a1MapWidth || 0) + x)) {
-            return; // A1 tile exists at this position, skip A2/A3/A4
-        }
+        // NOTE: there used to be a "skip A2+ wherever an A1 exists" rule
+        // here. MZ has no such rule — it renders every z-slot in order —
+        // and it hid legitimate A-decorations stacked at z1 over water.
 
         // Route to appropriate rendering method
         if (this.isAutotile(tileId)) {
@@ -1577,14 +1655,16 @@ class TilemapManager {
         }
 
         // PERFORMANCE: Cache textures to avoid recreating them
-        // Apply 0.5px UV inset to prevent texture bleeding (same as RMMZ corescript _updateVertexBuffer)
-        const inset = 0.5;
+        // Exact texel frame: with nearest sampling + integer-pixel zoom
+        // there is no edge bleeding. The old 0.5px inset + stretch
+        // fattened thin art ~2% and made every cache/uncache cycle
+        // visibly "breathe" when painting.
         const cacheKey = `${setNumber}_${sx}_${sy}`;
         let tileTexture = this.textureCache[cacheKey];
         if (!tileTexture) {
             tileTexture = new PIXI.Texture({
                 source: texture.source,
-                frame: new PIXI.Rectangle(sx + inset, sy + inset, w - inset * 2, h - inset * 2)
+                frame: new PIXI.Rectangle(sx, sy, w, h)
             });
             this.textureCache[cacheKey] = tileTexture;
         }
@@ -1592,7 +1672,7 @@ class TilemapManager {
         const sprite = new PIXI.Sprite(tileTexture);
         sprite.x = x * this.TILE_WIDTH;
         sprite.y = y * this.TILE_HEIGHT;
-        // Scale sprite to fill the full tile size (compensate for UV inset)
+        // Natural size (the frame is exactly one tile)
         sprite.width = w;
         sprite.height = h;
         sprite.roundPixels = true;
@@ -1719,14 +1799,16 @@ class TilemapManager {
             const dy1 = y * this.TILE_HEIGHT + Math.floor(i / 2) * h1;
 
             // PERFORMANCE: Cache autotile sub-textures
-            // Apply 0.5px UV inset to prevent texture bleeding (same as RMMZ corescript _updateVertexBuffer)
-            const inset = 0.5;
+            // Exact texel frame: with nearest sampling + integer-pixel zoom
+            // there is no edge bleeding. The old 0.5px inset + stretch
+            // fattened thin art ~2% and made every cache/uncache cycle
+            // visibly "breathe" when painting.
             const cacheKey = `auto_${setNumber}_${sx1}_${sy1}`;
             let tileTexture = this.textureCache[cacheKey];
             if (!tileTexture) {
                 tileTexture = new PIXI.Texture({
                     source: texture.source,
-                    frame: new PIXI.Rectangle(sx1 + inset, sy1 + inset, w1 - inset * 2, h1 - inset * 2)
+                    frame: new PIXI.Rectangle(sx1, sy1, w1, h1)
                 });
                 this.textureCache[cacheKey] = tileTexture;
             }
@@ -1734,7 +1816,7 @@ class TilemapManager {
             const sprite = new PIXI.Sprite(tileTexture);
             sprite.x = dx1;
             sprite.y = dy1;
-            // Scale sprite to fill the full tile size (compensate for UV inset)
+            // Natural size (the frame is exactly one tile)
             sprite.width = w1;
             sprite.height = h1;
             sprite.roundPixels = true;
@@ -1938,7 +2020,7 @@ class TilemapManager {
         this.clearTileAt(x, y, layerIndex);
 
         if (tileId > 0) {
-            const layer = [this.layers.ground, this.layers.lower, this.layers.upper][layerIndex];
+            const layer = this.tileTargetLayer(layerIndex, tileId);
             if (layer) {
                 this.renderTile(tileId, x, y, layer);
             }
@@ -1946,15 +2028,16 @@ class TilemapManager {
     }
 
     clearTileAt(x, y, layerIndex = 0) {
-        const layer = [this.layers.ground, this.layers.lower, this.layers.upper][layerIndex];
-        if (!layer) return;
-
-        // Remove existing sprite at this position
-        for (let i = layer.children.length - 1; i >= 0; i--) {
-            const child = layer.children[i];
-            if (child.x === x * this.TILE_WIDTH && child.y === y * this.TILE_HEIGHT) {
-                layer.removeChild(child);
-                child.destroy();
+        // The old sprite can live in either stack of the z-slot (☆ tiles
+        // render in the upper container).
+        for (const layer of this.containersForZ(layerIndex)) {
+            // Remove existing sprite at this position
+            for (let i = layer.children.length - 1; i >= 0; i--) {
+                const child = layer.children[i];
+                if (child.x === x * this.TILE_WIDTH && child.y === y * this.TILE_HEIGHT) {
+                    layer.removeChild(child);
+                    child.destroy();
+                }
             }
         }
     }
@@ -2069,34 +2152,26 @@ class TilemapManager {
 
             // Render layers 0-3. Layer 4 is shadow bits; layer 5 is regions.
             const layerSize = width * height;
-            const a1Positions = new Set();
-            for (let layerIndex = 0; layerIndex < 4; layerIndex++) {
-                const layerOffset = layerIndex * layerSize;
-                for (let i = 0; i < layerSize; i++) {
-                    const tileId = data[layerOffset + i];
-                    if (tileId >= 2048 && tileId < 2816) {
-                        a1Positions.add(i);
-                    }
-                }
-            }
 
-            const drawTileLayer = (layerIndex) => {
+            // Two passes per MZ's ☆ ("higher") flag: non-☆ tiles paint in
+            // z-slot order first, ☆ tiles paint above them all — same
+            // routing as the live tilemap (rmmz _addSpotTile).
+            const tsFlags = tileset && tileset.flags;
+            const isHigher = (tileId) => !!(tsFlags && (tsFlags[tileId] & 0x10));
+            const drawTileLayer = (layerIndex, higherPass) => {
                 for (let y = 0; y < height; y++) {
                     for (let x = 0; x < width; x++) {
                         const index = layerIndex * layerSize + y * width + x;
                         const tileId = data[index];
 
-                        if (tileId > 0) {
-                            if (tileId >= 2816 && tileId < 8192 && a1Positions.has(y * width + x)) {
-                                continue;
-                            }
+                        if (tileId > 0 && isHigher(tileId) === higherPass) {
                             this.drawTileToCanvas(ctx, tileId, x, y, tilesetImages, tileSize);
                         }
                     }
                 }
             };
 
-            drawTileLayer(0);
+            drawTileLayer(0, false);
 
             if (includeShadows) {
                 const shadowOffset = 4 * layerSize;
@@ -2111,7 +2186,10 @@ class TilemapManager {
             }
 
             for (let layerIndex = 1; layerIndex < 4; layerIndex++) {
-                drawTileLayer(layerIndex);
+                drawTileLayer(layerIndex, false);
+            }
+            for (let layerIndex = 0; layerIndex < 4; layerIndex++) {
+                drawTileLayer(layerIndex, true);
             }
 
             // Render events on top of tiles
@@ -2230,27 +2308,13 @@ class TilemapManager {
         const canvasWidth = mapWidth * tileSize;
         const canvasHeight = mapHeight * tileSize;
 
-        // Check if parallax is "locked" (filename starts with !)
-        const isLocked = parallaxName.startsWith('!');
-
-        if (isLocked) {
-            // Locked parallax - draw once centered/positioned
-            const x = (canvasWidth - img.width) / 2;
-            const y = (canvasHeight - img.height) / 2;
-            ctx.drawImage(img, x, y);
-        } else if (parallaxLoopX || parallaxLoopY) {
-            // Tiling parallax - tile it across the canvas
-            const pattern = ctx.createPattern(img,
-                parallaxLoopX && parallaxLoopY ? 'repeat' :
-                parallaxLoopX ? 'repeat-x' : 'repeat-y');
-
-            if (pattern) {
-                ctx.fillStyle = pattern;
-                ctx.fillRect(0, 0, canvasWidth, canvasHeight);
-            }
-        } else {
-            // Non-looping, non-locked - draw at top-left
-            ctx.drawImage(img, 0, 0);
+        // MZ semantics: the parallax always repeats to fill the map — the
+        // loop flags only control scrolling, and the "!" prefix only
+        // scroll-locking; neither affects whether the image tiles.
+        const pattern = ctx.createPattern(img, 'repeat');
+        if (pattern) {
+            ctx.fillStyle = pattern;
+            ctx.fillRect(0, 0, canvasWidth, canvasHeight);
         }
     }
 
