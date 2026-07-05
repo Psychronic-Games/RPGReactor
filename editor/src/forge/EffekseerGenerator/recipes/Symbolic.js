@@ -14,7 +14,13 @@
     const GLYPHS = [
         { id: 'pentagram',     name: 'Pentagram',        symbol: 'pentagram',     color: '#ff5f4a', color2: '#ffd27f' },
         { id: 'yin-yang',      name: 'Yin Yang',         symbol: 'yin-yang',      color: '#f5f5f5', color2: '#8a5cff' },
-        { id: 'cross',         name: 'Christian Cross',  symbol: 'cross',         color: '#ffd873' },
+        { id: 'cross',         name: 'Christian Cross',  symbol: 'cross',         color: '#ffd873',
+          variants: [
+              { value: 'cross', label: 'Latin' },
+              { value: 'cross-orthodox', label: 'Orthodox' },
+              { value: 'cross-greek', label: 'Greek' },
+              { value: 'cross-celtic', label: 'Celtic' },
+          ] },
         { id: 'star-of-david', name: 'Star of David',    symbol: 'star-of-david', color: '#6ea8ff' },
         { id: 'crescent-star', name: 'Crescent and Star', symbol: 'crescent-star', color: '#7fe6a0', color2: '#ffffff' },
         { id: 'peace',         name: 'Peace Symbol',     symbol: 'peace',         color: '#9fd0ff' },
@@ -44,6 +50,8 @@
             textures: (p) => [...BUILTIN_TEXTURES.map(n => `Texture/rr_${n}.png`),
                               ...(p.customTex ? [`Texture/${p.customTex}`] : [])],
             params: [
+                ...(def.variants ? [{ key: 'variant', label: 'Variant', type: 'select',
+                                      default: def.symbol, options: def.variants }] : []),
                 { key: 'style', label: 'Style', type: 'select', default: 'solid',
                   options: [
                       { value: 'wire', label: 'Glowing Outline' },
@@ -76,11 +84,12 @@
             buildModels(p, M) {
                 // Custom texture implies Solid style (see build()).
                 const style = p.customTex ? 'solid' : p.style;
-                const sym = RR_EfkSymbols.buildSymbol(def.symbol, {
+                const symName = (def.variants && p.variant) || def.symbol;
+                const sym = RR_EfkSymbols.buildSymbol(symName, {
                     style,
                     thickness: p.thickness * 0.009,
                 });
-                const tag = `${def.symbol}_${style}_t${p.thickness}`;
+                const tag = `${symName}_${style}_t${p.thickness}`;
                 const models = sym.parts.map((part, i) => ({
                     path: `Model/rr_sym_${tag}_${part.role}${i}.efkmodel`,
                     mesh: part.mesh,
@@ -110,7 +119,8 @@
                 const style = p.customTex ? 'solid' : p.style;
                 // One model node per color-role part. Model order matches
                 // buildModels: parts first (spawn model is last).
-                const sym = RR_EfkSymbols.buildSymbol(def.symbol, { style, thickness: p.thickness * 0.009 });
+                const symName = (def.variants && p.variant) || def.symbol;
+                const sym = RR_EfkSymbols.buildSymbol(symName, { style, thickness: p.thickness * 0.009 });
                 const isSolid = style === 'solid';
                 const nodes = sym.parts.map((part, i) => B.makeNode(RR_EfkFormat.NODE_TYPE.MODEL, {
                     commonValues: { ...bindAlways, maxGeneration: 1, life: rf(LONG) },

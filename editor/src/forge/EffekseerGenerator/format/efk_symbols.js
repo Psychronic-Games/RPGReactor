@@ -228,6 +228,9 @@ const P = (pts, opts = {}) => ({
     role: opts.role || 'primary',
     wireOnly: opts.wireOnly || false,
     solidOnly: opts.solidOnly || false,
+    // tiny z-offset for parts that overlap coplanar parts (solid fills
+    // z-fight at exactly z=0; wire struts don't care)
+    z: opts.z || 0,
 });
 
 const SYMBOLS = {
@@ -248,6 +251,36 @@ const SYMBOLS = {
         // upright on screen (positive y here — user-verified orientation).
         P([[-0.22, 1], [0.22, 1], [0.22, 0.55], [0.8, 0.55], [0.8, 0.13], [0.22, 0.13],
            [0.22, -1], [-0.22, -1], [-0.22, 0.13], [-0.8, 0.13], [-0.8, 0.55], [-0.22, 0.55]]),
+    ],
+    // Greek cross: four equal arms, centered.
+    'cross-greek': () => [
+        P([[-0.2, 0.85], [0.2, 0.85], [0.2, 0.2], [0.85, 0.2], [0.85, -0.2], [0.2, -0.2],
+           [0.2, -0.85], [-0.2, -0.85], [-0.2, -0.2], [-0.85, -0.2], [-0.85, 0.2], [-0.2, 0.2]]),
+    ],
+    // Russian Orthodox (eight-pointed): upright + small top bar + main
+    // bar + the slanted footrest (left end high). Overlapping rectangles
+    // with tiny z-steps so solid fills don't z-fight on the upright.
+    'cross-orthodox': () => {
+        const slant = (() => {
+            // footrest: a bar from (-0.42, -0.30) to (0.42, -0.62),
+            // half-thickness 0.09 perpendicular
+            const x0 = -0.42, y0 = -0.30, x1 = 0.42, y1 = -0.62;
+            const dx = x1 - x0, dy = y1 - y0, L = Math.hypot(dx, dy);
+            const nx = (-dy / L) * 0.09, ny = (dx / L) * 0.09;
+            return [[x0 + nx, y0 + ny], [x1 + nx, y1 + ny], [x1 - nx, y1 - ny], [x0 - nx, y0 - ny]];
+        })();
+        return [
+            P([[-0.16, 1], [0.16, 1], [0.16, -1], [-0.16, -1]]),                    // upright
+            P([[-0.7, 0.56], [0.7, 0.56], [0.7, 0.26], [-0.7, 0.26]], { z: 0.004 }), // main bar
+            P([[-0.38, 0.9], [0.38, 0.9], [0.38, 0.66], [-0.38, 0.66]], { z: 0.004 }), // top bar
+            P(slant, { z: 0.004 }),                                                  // footrest
+        ];
+    },
+    // Celtic cross: Latin proportions with a ring around the crossing.
+    'cross-celtic': () => [
+        P([[-0.2, 1], [0.2, 1], [0.2, 0.53], [0.78, 0.53], [0.78, 0.15], [0.2, 0.15],
+           [0.2, -1], [-0.2, -1], [-0.2, 0.15], [-0.78, 0.15], [-0.78, 0.53], [-0.2, 0.53]]),
+        { annulus: { rOuter: 0.56, rInner: 0.42, n: 40, cy: 0.34 }, role: 'primary', z: 0.004 },
     ],
     // Hilal, using the AG's exact construction: the inner circle is
     // internally TANGENT to the outer at (1, 0) — innerR + offset = 1 —
@@ -526,19 +559,20 @@ function buildSymbol(name, opts = {}) {
         if (part.wireOnly && solid) continue;
         if (part.solidOnly && !solid) continue;
         const role = part.role || 'primary';
+        let frame;
         if (part.annulus) {
-            const frame = annulusFrame(part.annulus.rOuter, part.annulus.rInner, part.annulus.n);
+            frame = annulusFrame(part.annulus.rOuter, part.annulus.rInner, part.annulus.n);
             const cy = part.annulus.cy || 0;
             if (cy) for (const v of frame.vertices) v.p[1] += cy;
-            push(role, frame);
-            continue;
-        }
-        if (solid && part.fill !== false && part.closed !== false && part.pts.length > 2) {
-            push(role, fillFrame(part.pts, uvOf));
+        } else if (solid && part.fill !== false && part.closed !== false && part.pts.length > 2) {
+            frame = fillFrame(part.pts, uvOf);
         } else {
             const pts3 = part.pts.map(p => [p[0], p[1], 0]);
-            push(role, M.strutFrame(pts3, outlineEdges(part), thickness));
+            frame = M.strutFrame(pts3, outlineEdges(part), thickness);
         }
+        // per-part z lift: overlapping solid fills z-fight at exactly z=0
+        if (part.z) for (const v of frame.vertices) v.p[2] += part.z;
+        push(role, frame);
     }
 
     const spawnVertices = [];
