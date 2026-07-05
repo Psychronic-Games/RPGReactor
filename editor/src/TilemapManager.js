@@ -332,8 +332,39 @@ class TilemapManager {
         this.container.addChild(this.layers.upper3);
         this.container.addChild(this.layers.layerHighlight);
 
+        // Containers are recreated on setup — re-apply any active layer
+        // dimming so switching maps keeps the editing context visible.
+        this.setLayerDimming(this._layerDimMode ?? 'auto');
+
         // Add panning support
         this.setupPanning();
+    }
+
+    /**
+     * MZ-style layer editing feedback: while a specific layer (0-3) is
+     * selected in the toolbar, every OTHER tile layer renders semi-
+     * transparent so it's obvious which tiles live on the active layer.
+     * 'auto' restores full opacity. Works per z-slot because each data
+     * z-slot renders into its own container (ground/lowerN plus its ☆
+     * upper twin); shadows belong to the A layer (z0) for this purpose.
+     */
+    setLayerDimming(layerMode) {
+        this._layerDimMode = layerMode;
+        const DIM = 0.35;
+        const sel = layerMode === 'auto' ? null : layerMode;
+        const apply = (name, z) => {
+            const layer = this.layers[name];
+            if (layer) layer.alpha = (sel === null || sel === z) ? 1 : DIM;
+        };
+        apply('ground', 0);
+        apply('upper0', 0);
+        apply('shadow', 0);
+        apply('lower1', 1);
+        apply('upper1', 1);
+        apply('lower2', 2);
+        apply('upper2', 2);
+        apply('lower3', 3);
+        apply('upper3', 3);
     }
 
     setupPanning() {

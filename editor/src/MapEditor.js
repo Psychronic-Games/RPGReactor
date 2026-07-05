@@ -176,6 +176,10 @@ class MapEditor {
 
     setLayerMode(mode) {
         this.layerMode = mode;
+        // MZ-style feedback: dim every other layer while one is selected
+        if (this.tilemapManager && this.tilemapManager.setLayerDimming) {
+            this.tilemapManager.setLayerDimming(mode);
+        }
     }
 
     setEnabled(enabled) {
