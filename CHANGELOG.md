@@ -4,6 +4,23 @@ All notable changes to RPG Reactor will be documented in this file.
 
 This root changelog summarizes public release progress for GitHub. The detailed editor changelog lives at [`editor/CHANGELOG.md`](editor/CHANGELOG.md).
 
+## [Unreleased]
+
+### Added
+
+- The Effekseer Animation Generator's **Interface** category was rebuilt as true 3D instruments and grown to **21 recipes** — every panel is now world-fixed geometry that rotates truthfully with the orientation gizmo instead of a flat billboard. New instruments include a build-your-own **Orbital Survey** solar system (per-planet sizes and custom planet-texture uploads), a wireframe **Starship Analysis** hull with tracking callouts, a **Reactor Core** wireframe torus, **Circular Gauge** and **Bar Meter** LED meters, a **Behavior Matrix** ternary plot, **Flight Prediction**, a living **Composite Waveform** oscilloscope, and a 3D **Battery** cell — and every interface can now display **user-typed text** (single-line Display Text or scrolling/blinking Paragraph Text) so one recipe reuses across many meanings.
+- A full Effekseer **Physical** attack pack for battle effects — Slash, Bite, Punch, Impale, Claw Rake, Crush, Arrow Hit, Parry, Whip Crack, and Blood (with Burst/Spray/Drip splatter patterns and full color control) — plus new **Energy** spell effects (Energy Boost, Energy Column, Binding Circle, Hex Forcefield) and **Christian Cross** variants (Latin, Orthodox, Greek, Celtic).
+- **MZ-style tile-layer dimming** in the map editor: selecting layer 1–4 fades the other layers so it's obvious which tiles live on the active layer.
+
+### Changed
+
+- Sharpened the Effekseer Magic Circle (legible runes, crisp inner star) and moved the Explosion recipe into the Physical category.
+
+### Fixed
+
+- Fixed Effekseer preview loading in the Database and Event animation pickers, rotation-gizmo jump/reset issues, and several beam/column rendering problems (hollow beam cores, half-circle columns, oversized bases).
+- **RPG Maker MV compatibility:** the PIXI8 runtime now boots and plays a large commercial MV project's full plugin stack through its intro with no errors and loads MV save files cleanly, and the MV compatibility layer restores MV's `Spriteset_Battle` battleback methods so MV battleback plugins no longer crash battle load — continued progress toward mixing and matching MV and MZ plugins in one project.
+
 ## [0.94] - 2026-06-27
 
 ### Added
