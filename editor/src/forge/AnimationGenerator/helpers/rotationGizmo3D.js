@@ -28,6 +28,12 @@ class RotationGizmo3D {
         this.tiltY = 0;
         this.tiltZ = 0;
         this.onChange = opts.onChange || (() => {});
+        // Optional trackball hook: (cur{x,y,z}, yawDeg, pitchDeg, rollDeg)
+        // → new {x,y,z}. When set, drags rotate the current orientation
+        // about the world axes instead of adding to Euler components (which
+        // veers/flips once the object is tilted). Callers that bake Euler
+        // rotations (EffekseerGenerator) supply their convention's math.
+        this.applyDrag = opts.applyDrag || null;
         // Sensitivity: degrees of rotation per pixel of drag.
         this.sensitivity = opts.sensitivity || 0.8;
         this.dragging = false;
@@ -71,7 +77,13 @@ class RotationGizmo3D {
         if (!this.dragging) return;
         const dx = e.clientX - this.lastMouse.x;
         const dy = e.clientY - this.lastMouse.y;
-        if (this.dragMode === 'rotate') {
+        if (this.applyDrag) {
+            const cur = { x: this.tiltX, y: this.tiltY, z: this.tiltZ };
+            const n = this.dragMode === 'rotate'
+                ? this.applyDrag(cur, dx * this.sensitivity, dy * this.sensitivity, 0)
+                : this.applyDrag(cur, 0, 0, dx * this.sensitivity);
+            this.tiltX = n.x; this.tiltY = n.y; this.tiltZ = n.z;
+        } else if (this.dragMode === 'rotate') {
             // Horizontal drag → yaw (tiltY); vertical drag → pitch (tiltX).
             this.tiltY = this._wrap(this.tiltY + dx * this.sensitivity);
             this.tiltX = this._wrap(this.tiltX + dy * this.sensitivity);

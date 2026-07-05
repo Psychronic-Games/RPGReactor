@@ -157,6 +157,95 @@ class EffekseerGenerator {
         return this._layer().values;
     }
 
+    // ── Orientation math (trackball) ─────────────────────────────────────
+    // Effekseer applies fixed rotations as Matrix43::RotationZXY (Z, then
+    // X, then Y, row-vector convention). Additive per-axis Euler editing
+    // (old behavior) veers and flips once the object is tilted — dragging
+    // must instead rotate the CURRENT orientation matrix about the world
+    // axes and extract fresh ZXY angles, picking the branch closest to the
+    // previous values so nothing ever jumps.
+
+    /** 3×3 rotation matrix for ZXY Euler degrees (Effekseer convention). */
+    static orientMatZXY(d) {
+        const r = Math.PI / 180;
+        const cx = Math.cos(d.x * r), sx = Math.sin(d.x * r);
+        const cy = Math.cos(d.y * r), sy = Math.sin(d.y * r);
+        const cz = Math.cos(d.z * r), sz = Math.sin(d.z * r);
+        return [
+            [cz * cy + sz * sx * sy, sz * cx, -cz * sy + sz * sx * cy],
+            [-sz * cy + cz * sx * sy, cz * cx, sz * sy + cz * sx * cy],
+            [cx * sy, -sx, cx * cy],
+        ];
+    }
+
+    /** ZXY Euler degrees from a rotation matrix, continuous with `prev`. */
+    static orientExtractZXY(M, prev) {
+        const r2d = 180 / Math.PI;
+        const sxc = Math.max(-1, Math.min(1, -M[2][1]));
+        const solution = (x) => {
+            const cx = Math.cos(x);
+            let y, z;
+            if (Math.abs(cx) > 1e-5) {
+                y = Math.atan2(M[2][0] / cx, M[2][2] / cx);
+                z = Math.atan2(M[0][1] / cx, M[1][1] / cx);
+            } else {
+                // gimbal lock: yaw/roll are coupled — keep the previous yaw
+                y = (prev.y || 0) / r2d;
+                z = Math.atan2(-M[1][0], M[0][0]);
+            }
+            return { x: x * r2d, y: y * r2d, z: z * r2d };
+        };
+        // unwrap each component to the turn nearest the previous value
+        const unwrap = (c, p) => c + 360 * Math.round(((p || 0) - c) / 360);
+        const score = (s) => {
+            const u = { x: unwrap(s.x, prev.x), y: unwrap(s.y, prev.y), z: unwrap(s.z, prev.z) };
+            return { u, d: Math.abs(u.x - (prev.x || 0)) + Math.abs(u.y - (prev.y || 0)) + Math.abs(u.z - (prev.z || 0)) };
+        };
+        const a = score(solution(Math.asin(sxc)));
+        const b = score(solution(Math.PI - Math.asin(sxc)));
+        return (a.d <= b.d ? a : b).u;
+    }
+
+    static _orientMul(A, B) {
+        const M = [[0, 0, 0], [0, 0, 0], [0, 0, 0]];
+        for (let i = 0; i < 3; i++) {
+            for (let j = 0; j < 3; j++) {
+                M[i][j] = A[i][0] * B[0][j] + A[i][1] * B[1][j] + A[i][2] * B[2][j];
+            }
+        }
+        return M;
+    }
+
+    /**
+     * Rotate the current orientation by a screen drag (degrees about the
+     * world Y/X/Z axes) and return continuous ZXY Euler degrees.
+     */
+    static orientApplyDrag(prevDeg, yawDeg, pitchDeg, rollDeg = 0) {
+        const A = EffekseerGenerator.orientMatZXY(prevDeg);
+        const B = EffekseerGenerator.orientMatZXY({ x: pitchDeg, y: yawDeg, z: rollDeg });
+        // row-vector convention: post-multiplying applies B in world space
+        return EffekseerGenerator.orientExtractZXY(EffekseerGenerator._orientMul(A, B), prevDeg);
+    }
+
+    /**
+     * The EXACT handle rotation that displays `target` when `baked` is
+     * already inside the effect: the root transform applies after the
+     * baked wrapper (row vectors), so R = Bᵀ·T. Componentwise Euler
+     * subtraction (the old delta) is only valid near identity — it made
+     * live drags veer and then visibly snap when the rebuild landed.
+     */
+    static orientDeltaZXY(baked, target, prevDelta) {
+        const B = EffekseerGenerator.orientMatZXY(baked);
+        const T = EffekseerGenerator.orientMatZXY(target);
+        const Bt = [
+            [B[0][0], B[1][0], B[2][0]],
+            [B[0][1], B[1][1], B[2][1]],
+            [B[0][2], B[1][2], B[2][2]],
+        ];
+        return EffekseerGenerator.orientExtractZXY(
+            EffekseerGenerator._orientMul(Bt, T), prevDelta || { x: 0, y: 0, z: 0 });
+    }
+
     /**
      * A keyframe's orientation (degrees). Stored as reserved __tilt* keys
      * inside the keyframe's values object so duplicate / delete / preset
@@ -181,9 +270,18 @@ class EffekseerGenerator {
         vals.__tiltX = x;
         vals.__tiltY = y;
         vals.__tiltZ = z;
-        const b = this._displayTilt;
-        this._tiltDelta = { x: x - b.x, y: y - b.y, z: z - b.z };
-        this._scheduleRebuild();
+        // exact live rotation (matrix delta, not componentwise Euler)
+        this._tiltDelta = EffekseerGenerator.orientDeltaZXY(
+            this._displayTilt, { x, y, z }, this._tiltDelta);
+        // Single layer + single keyframe (the common case): the root-handle
+        // rotation IS the exact display, so skip the rebuild entirely — the
+        // debounced rebuild's _play() restarted the animation from frame 0
+        // on every drag ("the angle resets when the animation replays").
+        // The tilt still reaches exports and later rebuilds through the
+        // keyframe values; multi-layer / keyframed stacks must rebuild so
+        // per-layer wrappers and FCurve tweens stay truthful.
+        const simple = this._stack.length === 1 && (this._layer().keyframes || []).length <= 1;
+        if (!simple) this._scheduleRebuild();
     }
 
     /** Point the gizmo (and the live-drag delta) at the active keyframe's
@@ -597,6 +695,32 @@ class EffekseerGenerator {
                 };
             }
 
+            // Recipes in the later categories (Energy onward, following
+            // the sidebar's alphabetical order) were authored Y-up and
+            // render upside-down in MZ's Y-down world — beams pointing
+            // down, objects inverted. Flip them upright with a π
+            // X-rotation wrapper applied INNERMOST — the tilt wrapper must
+            // wrap the flip (Tilt·Flip·tree) to match the live gizmo
+            // convention (Handle·Flip·tree). With the flip OUTERMOST the
+            // X-π conjugation negated the tilt's Y/Z components whenever a
+            // param rebuild swapped baked bytes in ("the angle changes
+            // when I change the fill level").
+            const FLIP_CATEGORIES = ['Energy', 'Fire', 'Geometric', 'Interface', 'Object', 'Physical', 'Symbolic'];
+            if (FLIP_CATEGORIES.includes(recipe.category)) {
+                for (const n of layerNodes) {
+                    // WhenCreating binds snapshot the parent transform at
+                    // spawn — the flip would silently no-op (same rule as
+                    // the tilt wrapper below).
+                    if (n.commonValues.translationBindType === 1) n.commonValues.translationBindType = 2;
+                    if (n.commonValues.rotationBindType === 1) n.commonValues.rotationBindType = 2;
+                }
+                layerNodes = [RR_EfkBuilder.makeNode(RR_EfkFormat.NODE_TYPE.NONE, {
+                    commonValues: { ...bindAlways, maxGeneration: 1, life: rf(36000) },
+                    rotation: { type: 0, refEq: -1, rotation: v3(Math.PI, 0, 0) },
+                    children: layerNodes,
+                })];
+            }
+
             // Progression window / transition / rotation wrapper.
             if ((entry.start || 0) > 0 || (entry.end || 0) > 0 || hasKf || crossfade || wrapperRotation) {
                 // EVERY node in the subtree must die with the window —
@@ -633,26 +757,6 @@ class EffekseerGenerator {
                     },
                     ...(wrapperScaling ? { scaling: wrapperScaling } : {}),
                     ...(wrapperRotation ? { rotation: wrapperRotation } : {}),
-                    children: layerNodes,
-                })];
-            }
-            // Recipes in the later categories (Energy onward, following
-            // the sidebar's alphabetical order) were authored Y-up and
-            // render upside-down in MZ's Y-down world — beams pointing
-            // down, objects inverted. Flip them upright by default with a
-            // π X-rotation wrapper; user tilt keyframes stack on top.
-            const FLIP_CATEGORIES = ['Energy', 'Fire', 'Geometric', 'Interface', 'Object', 'Physical', 'Symbolic'];
-            if (FLIP_CATEGORIES.includes(recipe.category)) {
-                for (const n of layerNodes) {
-                    // WhenCreating binds snapshot the parent transform at
-                    // spawn — the flip would silently no-op (same rule as
-                    // the tilt wrapper above).
-                    if (n.commonValues.translationBindType === 1) n.commonValues.translationBindType = 2;
-                    if (n.commonValues.rotationBindType === 1) n.commonValues.rotationBindType = 2;
-                }
-                layerNodes = [RR_EfkBuilder.makeNode(RR_EfkFormat.NODE_TYPE.NONE, {
-                    commonValues: { ...bindAlways, maxGeneration: 1, life: rf(36000) },
-                    rotation: { type: 0, refEq: -1, rotation: v3(Math.PI, 0, 0) },
                     children: layerNodes,
                 })];
             }
@@ -1027,7 +1131,11 @@ class EffekseerGenerator {
         const canvas = this.contentEl.querySelector('.rr-efk-gizmo');
         if (!canvas || typeof RotationGizmo3D === 'undefined') return;
         this._gizmo = new RotationGizmo3D(canvas, {
-            onChange: (tx, ty, tz) => this._setActiveTilt(tx, ty, tz)
+            onChange: (tx, ty, tz) => this._setActiveTilt(tx, ty, tz),
+            // trackball drags (see orientApplyDrag) — without this hook the
+            // widget's additive Euler editing flips once the object is tilted
+            applyDrag: (cur, yawDeg, pitchDeg, rollDeg) =>
+                EffekseerGenerator.orientApplyDrag(cur, yawDeg, pitchDeg, rollDeg),
         });
         this._syncTiltUI();
         const resetBtn = this.contentEl.querySelector('.rr-efk-gizmo-reset');
@@ -1061,11 +1169,13 @@ class EffekseerGenerator {
             } else {
                 // Rotating the object IS editing the gizmo's orientation —
                 // one shared state (the active keyframe), two input surfaces.
+                // Trackball: rotate the current orientation matrix about the
+                // world axes and re-extract continuous ZXY Euler — additive
+                // per-axis edits veer/flip once the object is tilted.
                 const t = this._activeTilt();
-                const tx = wrap180(t.x + dy * 0.5);
-                const ty = wrap180(t.y + dx * 0.5);
-                if (this._gizmo) this._gizmo.setRotation(tx, ty, t.z);
-                this._setActiveTilt(tx, ty, t.z);
+                const n = EffekseerGenerator.orientApplyDrag(t, dx * 0.5, dy * 0.5, 0);
+                if (this._gizmo) this._gizmo.setRotation(n.x, n.y, n.z);
+                this._setActiveTilt(n.x, n.y, n.z);
             }
         });
         window.addEventListener('mouseup', () => {
@@ -1144,6 +1254,14 @@ class EffekseerGenerator {
             if (s.type === 'select') {
                 const opts = s.options.map(o => `<option value="${o.value}" ${o.value === v ? 'selected' : ''}>${this._tx(o.label)}</option>`).join('');
                 return `<div>${label}<select data-param="${s.key}" class="rr-input" style="width: 100%; font-size: 12px; padding: 4px 6px;">${opts}</select></div>`;
+            }
+            if (s.type === 'text') {
+                const esc = String(v ?? '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+                return `<div>${label}<input type="text" data-param="${s.key}" class="rr-input" maxlength="${s.maxLen || 48}" value="${esc}" placeholder="${this._tx(s.label)}" style="width: 100%; font-size: 12px; padding: 4px 6px;"></div>`;
+            }
+            if (s.type === 'textarea') {
+                const esc = String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;');
+                return `<div>${label}<textarea data-param="${s.key}" class="rr-input" maxlength="${s.maxLen || 500}" rows="5" placeholder="${this._tx(s.label)}" style="width: 100%; font-size: 12px; padding: 4px 6px; resize: vertical; font-family: monospace;">${esc}</textarea></div>`;
             }
             if (s.type === 'texture') {
                 // AG-style texture picker: filename display + pick + clear.
@@ -1229,9 +1347,9 @@ class EffekseerGenerator {
                 const schema = recipe.params.find(s => s.key === key);
                 let value;
                 if (schema.type === 'toggle') value = input.checked;
-                else if (schema.type === 'color' || schema.type === 'select') value = input.value;
+                else if (schema.type === 'color' || schema.type === 'select' || schema.type === 'text' || schema.type === 'textarea') value = input.value;
                 else value = Number(input.value);
-                if (schema.type === 'select' || schema.type === 'toggle') {
+                if (schema.type === 'select' || schema.type === 'toggle' || schema.type === 'text' || schema.type === 'textarea') {
                     // STRUCTURAL param: keyframes must stay in lockstep or
                     // their node trees can't be paired for transitions.
                     for (const kf of this._layer().keyframes) kf[key] = value;
@@ -1378,6 +1496,19 @@ class EffekseerGenerator {
         return entry;
     }
 
+    /** path → {text, mode} map of every layer's user-text textures
+     *  (Display Text strips + Paragraph Text pages). */
+    _userTextMap() {
+        const map = new Map();
+        for (const entry of this._stack) {
+            const r = this._recipeOf(entry);
+            if (!r || !r.textTextures) continue;
+            const lp = RR_EfkRecipeUtil.resolveParams(r, entry.values);
+            for (const t of r.textTextures(lp)) map.set(t.path, { text: t.text, mode: t.mode || 'strip' });
+        }
+        return map;
+    }
+
     /** Data URL for a custom texture living at <project>/effects/Texture/<name>. */
     _customTextureDataUrl(baseName) {
         if (!this._customTexCache.has(baseName)) {
@@ -1421,7 +1552,7 @@ class EffekseerGenerator {
             return `#${f(0)}${f(8)}${f(4)}`;
         };
         for (const s of recipe.params) {
-            if (skip.has(s.key) || s.type === 'texture') continue;
+            if (skip.has(s.key) || s.type === 'texture' || s.type === 'text' || s.type === 'textarea') continue;
             // On keyframe 2+ only roll values the compiler can TWEEN —
             // randomizing structure desyncs the keyframe trees and kills
             // the transition (looks like "randomize broke the sliders").
@@ -2021,6 +2152,10 @@ class EffekseerGenerator {
                 if (/rr_bake_/.test(t)) bakeOwners.set(t, { recipe: r, params: lp });
             }
         }
+        // User-typed Display Text: recipes declare textTextures(p) →
+        // [{path, text}]; the path carries a content hash (the WASM core
+        // caches textures by path, same rule as bakes and uploads).
+        const textOwners = this._userTextMap();
         const redirect = (path) => {
             // Baked AG sprite sheets before the generic rr_*.png match —
             // their names are also rr_-prefixed.
@@ -2028,6 +2163,13 @@ class EffekseerGenerator {
                 if (path.endsWith(bakePath)) {
                     const baked = this._bakedSheet(owner.recipe, owner.params);
                     if (baked) return baked.dataUrl + '#.png';
+                }
+            }
+            for (const [textPath, t] of textOwners) {
+                if (path.endsWith(textPath)) {
+                    return (t.mode === 'para'
+                        ? RR_EfkTextures.userParaDataUrl(t.text)
+                        : RR_EfkTextures.userTextDataUrl(t.text)) + '#.png';
                 }
             }
             const builtin = /rr_([a-z0-9_]+)\.png$/i.exec(path);
@@ -2294,6 +2436,7 @@ class EffekseerGenerator {
             // effects/Texture/ when picked; baked AG sprite sheets are
             // rendered fresh from each layer's current params.
             const bytes = this._buildBytes();   // per-keyframe tilt bakes in _composeStack (also refreshes the merge)
+            const textOwners = this._userTextMap();
             for (const entry of this._stack) {
                 const r = this._recipeOf(entry);
                 if (!r) continue;
@@ -2305,6 +2448,12 @@ class EffekseerGenerator {
                             const b64 = baked.dataUrl.split(',')[1];
                             fs.writeFileSync(path.join(effectsDir, texPath), Buffer.from(b64, 'base64'));
                         }
+                        continue;
+                    }
+                    if (textOwners.has(texPath)) {
+                        const t = textOwners.get(texPath);
+                        fs.writeFileSync(path.join(effectsDir, texPath),
+                            Buffer.from(RR_EfkTextures.userTextPngBytes(t.text, t.mode)));
                         continue;
                     }
                     const builtin = /rr_([a-z0-9_]+)\.png$/i.exec(texPath);
