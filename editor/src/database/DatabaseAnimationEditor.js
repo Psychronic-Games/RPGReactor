@@ -3,6 +3,62 @@
  * Handles sprite-based and Effekseer animations
  */
 
+/**
+ * Load an .efkefc effect through Node fs instead of a URL fetch.
+ *
+ * The editor page lives on the chrome-extension:// scheme, whose URLs
+ * cannot reach files outside the app package — and since the source
+ * layout reorganization, project folders live outside editor/. So the
+ * effect binary is passed to loadEffect as an ArrayBuffer, and its
+ * resources (Texture/, Model/, relative to the effect file) are served
+ * as data URLs through the redirect hook. The '#.png' fragment keeps
+ * the runtime's extension sniffing on the Image() loading branch for
+ * textures (see EffekseerGenerator.js for the full explanation).
+ *
+ * NOTE: onLoad can fire synchronously inside loadEffect() when the WASM
+ * core already caches every referenced resource path — callers that use
+ * the returned effect inside onLoad must handle that timing.
+ *
+ * @returns the effekseer effect handle from context.loadEffect
+ * @throws if the effect file itself cannot be read
+ */
+function RR_loadEffekseerEffectFromFile(context, effectPath, scale, onLoad, onError) {
+    const fs = require('fs');
+    const path = require('path');
+    const baseDir = path.dirname(effectPath);
+    const bytes = fs.readFileSync(effectPath);
+    // Copy into a page-realm ArrayBuffer: NW.js runs Node and the DOM in
+    // separate JS contexts, so the Buffer's underlying ArrayBuffer fails
+    // loadEffect's `data instanceof ArrayBuffer` check — the runtime then
+    // returns a dead effect with no onload/onerror ever firing.
+    const arrayBuffer = new ArrayBuffer(bytes.byteLength);
+    new Uint8Array(arrayBuffer).set(bytes);
+    const redirect = (resPath) => {
+        try {
+            const rel = String(resPath).replace(/\\/g, '/');
+            const data = fs.readFileSync(path.join(baseDir, rel));
+            if (/\.(png|jpe?g|webp)$/i.test(rel)) {
+                const mime = /\.png$/i.test(rel) ? 'image/png'
+                    : /\.webp$/i.test(rel) ? 'image/webp' : 'image/jpeg';
+                return `data:${mime};base64,${data.toString('base64')}#.png`;
+            }
+            return `data:application/octet-stream;base64,${data.toString('base64')}`;
+        } catch (e) {
+            console.error('Effekseer resource not found:', resPath, e.message);
+            return resPath;
+        }
+    };
+    // Stall watchdog: a resource that never decodes leaves both callbacks
+    // unfired (same hazard the Forge guards against) — surface it instead
+    // of silently never enabling playback.
+    const watchdog = setTimeout(() => {
+        console.warn('Effekseer effect load stalled (no onload/onerror after 10s):', effectPath);
+    }, 10000);
+    const wrappedLoad = (...args) => { clearTimeout(watchdog); if (onLoad) onLoad(...args); };
+    const wrappedError = (...args) => { clearTimeout(watchdog); if (onError) onError(...args); };
+    return context.loadEffect(arrayBuffer, scale, wrappedLoad, wrappedError, redirect);
+}
+
 class DatabaseAnimationEditor {
     constructor(databaseManager, projectManager, commonUI, parentEditor) {
         this.databaseManager = databaseManager;
@@ -3510,12 +3566,7 @@ class DatabaseAnimationEditor {
             const path = require('path');
             const effectPath = path.join(currentProject.path, 'effects', animation.effectName + '.efkefc');
 
-            // Use relative path from the editor root instead of file:// URLs
-            // This allows Effekseer to properly resolve texture paths
-            const relativePath = path.relative(process.cwd(), effectPath).replace(/\\/g, '/');
-            const effectUrl = relativePath;
-
-            console.log('Loading Effekseer effect:', effectUrl);
+            console.log('Loading Effekseer effect:', effectPath);
 
             // Load effect with Effekseer
             const onLoad = () => {
@@ -3532,8 +3583,11 @@ class DatabaseAnimationEditor {
                 playBtn.style.opacity = '0.5';
             };
 
-            // Load effect - Effekseer will resolve resources relative to the effect file location
-            effect = effekseerContext.loadEffect(effectUrl, 1.0, onLoad, onError);
+            try {
+                effect = RR_loadEffekseerEffectFromFile(effekseerContext, effectPath, 1.0, onLoad, onError);
+            } catch (e) {
+                onError(e.message, effectPath);
+            }
         };
 
         // Render loop with fixed 60 FPS timestep
@@ -4348,11 +4402,8 @@ class DatabaseAnimationEditor {
             previewMessage.style.display = 'none';
 
             const effectPath = path.join(currentProject.path, 'effects', effectName + '.efkefc');
-            // Use relative path from the editor root instead of file:// URLs
-            const relativePath = path.relative(process.cwd(), effectPath).replace(/\\/g, '/');
-            const effectUrl = relativePath;
 
-            const onLoad = () => {
+            const startPlayback = () => {
                 if (currentPreviewEffect !== effectName) return; // Effect changed
 
                 previewHandle = previewEffekseerContext.play(previewEffect);
@@ -4416,8 +4467,8 @@ class DatabaseAnimationEditor {
                         previewEffekseerContext.drawHandle(previewHandle);
                         previewAnimationFrameId = requestAnimationFrame(render);
                     } else {
-                        // Effect finished, loop it
-                        playPreview(effectName);
+                        // Effect finished — replay the already-loaded effect
+                        startPlayback();
                     }
                     previewEffekseerContext.endDraw();
                 };
@@ -4431,8 +4482,30 @@ class DatabaseAnimationEditor {
                 previewMessage.textContent = 'Failed to load effect';
             };
 
-            // Load effect - Effekseer will resolve resources relative to the effect file location
-            previewEffect = previewEffekseerContext.loadEffect(effectUrl, 1.0, onLoad, onError);
+            // onLoad can fire synchronously inside loadEffect when the core
+            // already caches every resource — `pending` is not assigned yet
+            // in that case, so defer installation to after the call. The
+            // selection guard keeps a slow stale load from clobbering
+            // previewEffect after the user has picked a different effect.
+            let pending = null;
+            let syncLoaded = false;
+            const install = () => {
+                if (currentPreviewEffect !== effectName) return;
+                previewEffect = pending;
+                startPlayback();
+            };
+            const onLoad = () => {
+                if (pending) install();
+                else syncLoaded = true;
+            };
+
+            try {
+                pending = RR_loadEffekseerEffectFromFile(previewEffekseerContext, effectPath, 1.0, onLoad, onError);
+            } catch (e) {
+                onError(e.message);
+                return;
+            }
+            if (syncLoaded) install();
         };
 
         // Initialize preview

@@ -649,10 +649,14 @@ class AnimationPicker {
 
         const path = require('path');
         const effectPath = path.join(currentProject.path, 'effects', animation.effectName + '.efkefc');
-        const relativePath = path.relative(process.cwd(), effectPath).replace(/\\/g, '/');
 
+        // onLoad can fire synchronously inside loadEffect when the core
+        // already caches every resource — `effect` is not assigned yet in
+        // that case, so defer the autoplay to after the call.
+        let syncLoaded = false;
         const onLoad = () => {
             if (gen !== this._loadGeneration) return;
+            if (!effect) { syncLoaded = true; return; }
             play();
         };
 
@@ -662,7 +666,15 @@ class AnimationPicker {
             playBtn.style.opacity = '0.5';
         };
 
-        effect = effekseerContext.loadEffect(relativePath, 1.0, onLoad, onError);
+        // Loaded via Node fs + data-URL resources (RR_loadEffekseerEffectFromFile,
+        // defined in DatabaseAnimationEditor.js): chrome-extension:// URLs cannot
+        // reach project files outside the app package.
+        try {
+            effect = RR_loadEffekseerEffectFromFile(effekseerContext, effectPath, 1.0, onLoad, onError);
+        } catch (e) {
+            onError(e.message, effectPath);
+        }
+        if (syncLoaded && gen === this._loadGeneration) play();
 
         // Render loop
         let lastTime = Date.now();
