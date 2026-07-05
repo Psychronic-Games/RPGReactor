@@ -243,8 +243,10 @@ function loadAGRegistry() {
 test('baked recipes render through the real AG animations', () => {
     const registry = loadAGRegistry();
     const g = loadRecipes();
+    // Interface recipes went native-3D (2026-07-05); Portal is the
+    // remaining baked recipe (its surface is the AG water-ripple sim).
     const baked = g.R.filter((r) => r.bake);
-    assert.ok(baked.length >= 11, `expected ≥11 baked recipes, got ${baked.length}`);
+    assert.ok(baked.length >= 1, `expected ≥1 baked recipe, got ${baked.length}`);
     for (const recipe of baked) {
         const anim = registry.find((a) => a.id === recipe.bake.animationId);
         assert.ok(anim, `${recipe.id}: AG animation '${recipe.bake.animationId}' not found`);
