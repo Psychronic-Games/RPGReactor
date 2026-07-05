@@ -7939,6 +7939,352 @@ Object.assign(RR_I18N_STRINGS.id, { 'menu.build': 'Kompilasi' });
 Object.assign(RR_EVENT_COMMAND_NAMES.it, { 'Script': 'Codice script' });
 Object.assign(RR_EVENT_COMMAND_NAMES.vi, { 'Script': 'Tập lệnh' });
 
+// Effekseer Interface Display Text params (2026-07-05).
+Object.assign(RR_TEXT_TRANSLATIONS.ja, { 'Display Text': '表示テキスト', 'Paragraph Text': '本文テキスト', 'Text Position': 'テキスト位置', 'Message Color': 'メッセージの色' });
+Object.assign(RR_TEXT_TRANSLATIONS.es, { 'Display Text': 'Texto en pantalla', 'Paragraph Text': 'Texto de párrafo', 'Text Position': 'Posición del texto', 'Message Color': 'Color del mensaje' });
+Object.assign(RR_TEXT_TRANSLATIONS['zh-Hant'], { 'Display Text': '顯示文字', 'Paragraph Text': '段落文字', 'Text Position': '文字位置', 'Message Color': '訊息顏色' });
+Object.assign(RR_TEXT_TRANSLATIONS['zh-Hans'], { 'Display Text': '显示文字', 'Paragraph Text': '段落文字', 'Text Position': '文字位置', 'Message Color': '消息颜色' });
+Object.assign(RR_TEXT_TRANSLATIONS.ru, { 'Display Text': 'Отображаемый Текст', 'Paragraph Text': 'Текст Абзаца', 'Text Position': 'Позиция Текста', 'Message Color': 'Цвет Сообщения' });
+Object.assign(RR_TEXT_TRANSLATIONS.pt, { 'Display Text': 'Texto Exibido', 'Paragraph Text': 'Texto De Parágrafo', 'Text Position': 'Posição Do Texto', 'Message Color': 'Cor Da Mensagem' });
+Object.assign(RR_TEXT_TRANSLATIONS.de, { 'Display Text': 'Anzeigetext', 'Paragraph Text': 'Absatztext', 'Text Position': 'Textposition', 'Message Color': 'Nachrichtenfarbe' });
+Object.assign(RR_TEXT_TRANSLATIONS.fr, { 'Display Text': 'Texte affiché', 'Paragraph Text': 'Texte de paragraphe', 'Text Position': 'Position du texte', 'Message Color': 'Couleur du message' });
+Object.assign(RR_TEXT_TRANSLATIONS.el, { 'Display Text': 'Κείμενο οθόνης', 'Paragraph Text': 'Κείμενο παραγράφου', 'Text Position': 'Θέση κειμένου', 'Message Color': 'Χρώμα μηνύματος' });
+Object.assign(RR_TEXT_TRANSLATIONS.ko, { 'Display Text': '표시 텍스트', 'Paragraph Text': '단락 텍스트', 'Text Position': '텍스트 위치', 'Message Color': '메시지 색상' });
+Object.assign(RR_TEXT_TRANSLATIONS.ar, { 'Display Text': 'نص العرض', 'Paragraph Text': 'نص الفقرة', 'Text Position': 'موضع النص', 'Message Color': 'لون الرسالة' });
+Object.assign(RR_TEXT_TRANSLATIONS.it, { 'Display Text': 'Testo visualizzato', 'Paragraph Text': 'Testo del paragrafo', 'Text Position': 'Posizione del testo', 'Message Color': 'Colore del messaggio' });
+Object.assign(RR_TEXT_TRANSLATIONS.pl, { 'Display Text': 'Wyświetlany tekst', 'Paragraph Text': 'Tekst akapitu', 'Text Position': 'Pozycja tekstu', 'Message Color': 'Kolor wiadomości' });
+Object.assign(RR_TEXT_TRANSLATIONS.id, { 'Display Text': 'Teks Tampilan', 'Paragraph Text': 'Teks Paragraf', 'Text Position': 'Posisi Teks', 'Message Color': 'Warna Pesan' });
+Object.assign(RR_TEXT_TRANSLATIONS.vi, { 'Display Text': 'Văn bản hiển thị', 'Paragraph Text': 'Văn bản đoạn', 'Text Position': 'Vị trí văn bản', 'Message Color': 'Màu thông điệp' });
+Object.assign(RR_TEXT_TRANSLATIONS.th, { 'Display Text': 'ข้อความที่แสดง', 'Paragraph Text': 'ข้อความย่อหน้า', 'Text Position': 'ตำแหน่งข้อความ', 'Message Color': 'สีข้อความ' });
+Object.assign(RR_TEXT_TRANSLATIONS.tr, { 'Display Text': 'Görüntülenen metin', 'Paragraph Text': 'Paragraf metni', 'Text Position': 'Metin konumu', 'Message Color': 'Mesaj rengi' });
+
+// Effekseer Hex Dump spread params (2026-07-05).
+Object.assign(RR_TEXT_TRANSLATIONS.ja, { 'Horizontal Spread': '水平の広がり', 'Vertical Spread': '垂直の広がり' });
+Object.assign(RR_TEXT_TRANSLATIONS.es, { 'Horizontal Spread': 'Dispersión horizontal', 'Vertical Spread': 'Dispersión vertical' });
+Object.assign(RR_TEXT_TRANSLATIONS['zh-Hant'], { 'Horizontal Spread': '水平間距', 'Vertical Spread': '垂直間距' });
+Object.assign(RR_TEXT_TRANSLATIONS['zh-Hans'], { 'Horizontal Spread': '水平间距', 'Vertical Spread': '垂直间距' });
+Object.assign(RR_TEXT_TRANSLATIONS.ru, { 'Horizontal Spread': 'Горизонтальный Разброс', 'Vertical Spread': 'Вертикальный Разброс' });
+Object.assign(RR_TEXT_TRANSLATIONS.pt, { 'Horizontal Spread': 'Dispersão Horizontal', 'Vertical Spread': 'Dispersão Vertical' });
+Object.assign(RR_TEXT_TRANSLATIONS.de, { 'Horizontal Spread': 'Horizontale Streuung', 'Vertical Spread': 'Vertikale Streuung' });
+Object.assign(RR_TEXT_TRANSLATIONS.fr, { 'Horizontal Spread': 'Étalement horizontal', 'Vertical Spread': 'Étalement vertical' });
+Object.assign(RR_TEXT_TRANSLATIONS.el, { 'Horizontal Spread': 'Οριζόντια εξάπλωση', 'Vertical Spread': 'Κατακόρυφη εξάπλωση' });
+Object.assign(RR_TEXT_TRANSLATIONS.ko, { 'Horizontal Spread': '수평 간격', 'Vertical Spread': '수직 간격' });
+Object.assign(RR_TEXT_TRANSLATIONS.ar, { 'Horizontal Spread': 'الانتشار الأفقي', 'Vertical Spread': 'الانتشار الرأسي' });
+Object.assign(RR_TEXT_TRANSLATIONS.it, { 'Horizontal Spread': 'Distribuzione orizzontale', 'Vertical Spread': 'Distribuzione verticale' });
+Object.assign(RR_TEXT_TRANSLATIONS.pl, { 'Horizontal Spread': 'Rozrzut poziomy', 'Vertical Spread': 'Rozrzut pionowy' });
+Object.assign(RR_TEXT_TRANSLATIONS.id, { 'Horizontal Spread': 'Sebaran Horizontal', 'Vertical Spread': 'Sebaran Vertikal' });
+Object.assign(RR_TEXT_TRANSLATIONS.vi, { 'Horizontal Spread': 'Độ trải ngang', 'Vertical Spread': 'Độ trải dọc' });
+Object.assign(RR_TEXT_TRANSLATIONS.th, { 'Horizontal Spread': 'การกระจายแนวนอน', 'Vertical Spread': 'การกระจายแนวตั้ง' });
+Object.assign(RR_TEXT_TRANSLATIONS.tr, { 'Horizontal Spread': 'Yatay yayılım', 'Vertical Spread': 'Dikey yayılım' });
+
+// Effekseer Interface: width/height scale + new FUI recipes (2026-07-05).
+Object.assign(RR_TEXT_TRANSLATIONS.ja, { 'Width Scale': '幅スケール', 'Height Scale': '高さスケール', 'Planets': '惑星数', 'Orbital Survey': '軌道サーベイ', 'Star Chart': '星図', 'Reactor Core': 'リアクターコア', 'Xenobiology Scan': '異種生物スキャン' });
+Object.assign(RR_TEXT_TRANSLATIONS.es, { 'Width Scale': 'Escala de ancho', 'Height Scale': 'Escala de alto', 'Planets': 'Planetas', 'Orbital Survey': 'Estudio orbital', 'Star Chart': 'Carta estelar', 'Reactor Core': 'Núcleo del reactor', 'Xenobiology Scan': 'Escaneo xenobiológico' });
+Object.assign(RR_TEXT_TRANSLATIONS['zh-Hant'], { 'Width Scale': '寬度縮放', 'Height Scale': '高度縮放', 'Planets': '行星數', 'Orbital Survey': '軌道測繪', 'Star Chart': '星圖', 'Reactor Core': '反應爐核心', 'Xenobiology Scan': '異種生物掃描' });
+Object.assign(RR_TEXT_TRANSLATIONS['zh-Hans'], { 'Width Scale': '宽度缩放', 'Height Scale': '高度缩放', 'Planets': '行星数', 'Orbital Survey': '轨道测绘', 'Star Chart': '星图', 'Reactor Core': '反应堆核心', 'Xenobiology Scan': '异种生物扫描' });
+Object.assign(RR_TEXT_TRANSLATIONS.ru, { 'Width Scale': 'Масштаб Ширины', 'Height Scale': 'Масштаб Высоты', 'Planets': 'Планеты', 'Orbital Survey': 'Орбитальный Обзор', 'Star Chart': 'Звёздная Карта', 'Reactor Core': 'Ядро Реактора', 'Xenobiology Scan': 'Ксенобиологическое Сканирование' });
+Object.assign(RR_TEXT_TRANSLATIONS.pt, { 'Width Scale': 'Escala De Largura', 'Height Scale': 'Escala De Altura', 'Planets': 'Planetas', 'Orbital Survey': 'Levantamento Orbital', 'Star Chart': 'Carta Estelar', 'Reactor Core': 'Núcleo Do Reator', 'Xenobiology Scan': 'Varredura Xenobiológica' });
+Object.assign(RR_TEXT_TRANSLATIONS.de, { 'Width Scale': 'Breitenskala', 'Height Scale': 'Höhenskala', 'Planets': 'Planeten', 'Orbital Survey': 'Orbitalerfassung', 'Star Chart': 'Sternkarte', 'Reactor Core': 'Reaktorkern', 'Xenobiology Scan': 'Xenobiologie-Scan' });
+Object.assign(RR_TEXT_TRANSLATIONS.fr, { 'Width Scale': 'Échelle de largeur', 'Height Scale': 'Échelle de hauteur', 'Planets': 'Planètes', 'Orbital Survey': 'Relevé orbital', 'Star Chart': 'Carte stellaire', 'Reactor Core': 'Cœur du réacteur', 'Xenobiology Scan': 'Analyse xénobiologique' });
+Object.assign(RR_TEXT_TRANSLATIONS.el, { 'Width Scale': 'Κλίμακα πλάτους', 'Height Scale': 'Κλίμακα ύψους', 'Planets': 'Πλανήτες', 'Orbital Survey': 'Τροχιακή επισκόπηση', 'Star Chart': 'Αστρικός χάρτης', 'Reactor Core': 'Πυρήνας αντιδραστήρα', 'Xenobiology Scan': 'Ξενοβιολογική σάρωση' });
+Object.assign(RR_TEXT_TRANSLATIONS.ko, { 'Width Scale': '너비 배율', 'Height Scale': '높이 배율', 'Planets': '행성 수', 'Orbital Survey': '궤도 조사', 'Star Chart': '성도', 'Reactor Core': '원자로 코어', 'Xenobiology Scan': '외계생물 스캔' });
+Object.assign(RR_TEXT_TRANSLATIONS.ar, { 'Width Scale': 'مقياس العرض', 'Height Scale': 'مقياس الارتفاع', 'Planets': 'الكواكب', 'Orbital Survey': 'مسح مداري', 'Star Chart': 'خريطة النجوم', 'Reactor Core': 'قلب المفاعل', 'Xenobiology Scan': 'فحص الأحياء الغريبة' });
+Object.assign(RR_TEXT_TRANSLATIONS.it, { 'Width Scale': 'Scala larghezza', 'Height Scale': 'Scala altezza', 'Planets': 'Pianeti', 'Orbital Survey': 'Rilevamento orbitale', 'Star Chart': 'Carta stellare', 'Reactor Core': 'Nucleo del reattore', 'Xenobiology Scan': 'Scansione xenobiologica' });
+Object.assign(RR_TEXT_TRANSLATIONS.pl, { 'Width Scale': 'Skala szerokości', 'Height Scale': 'Skala wysokości', 'Planets': 'Planety', 'Orbital Survey': 'Przegląd orbitalny', 'Star Chart': 'Mapa gwiazd', 'Reactor Core': 'Rdzeń reaktora', 'Xenobiology Scan': 'Skan ksenobiologiczny' });
+Object.assign(RR_TEXT_TRANSLATIONS.id, { 'Width Scale': 'Skala Lebar', 'Height Scale': 'Skala Tinggi', 'Planets': 'Planet', 'Orbital Survey': 'Survei Orbital', 'Star Chart': 'Peta Bintang', 'Reactor Core': 'Inti Reaktor', 'Xenobiology Scan': 'Pemindaian Xenobiologi' });
+Object.assign(RR_TEXT_TRANSLATIONS.vi, { 'Width Scale': 'Tỷ lệ chiều rộng', 'Height Scale': 'Tỷ lệ chiều cao', 'Planets': 'Hành tinh', 'Orbital Survey': 'Khảo sát quỹ đạo', 'Star Chart': 'Bản đồ sao', 'Reactor Core': 'Lõi lò phản ứng', 'Xenobiology Scan': 'Quét sinh vật lạ' });
+Object.assign(RR_TEXT_TRANSLATIONS.th, { 'Width Scale': 'มาตราส่วนความกว้าง', 'Height Scale': 'มาตราส่วนความสูง', 'Planets': 'ดาวเคราะห์', 'Orbital Survey': 'สำรวจวงโคจร', 'Star Chart': 'แผนที่ดาว', 'Reactor Core': 'แกนเครื่องปฏิกรณ์', 'Xenobiology Scan': 'สแกนสิ่งมีชีวิตต่างดาว' });
+Object.assign(RR_TEXT_TRANSLATIONS.tr, { 'Width Scale': 'Genişlik ölçeği', 'Height Scale': 'Yükseklik ölçeği', 'Planets': 'Gezegenler', 'Orbital Survey': 'Yörünge taraması', 'Star Chart': 'Yıldız haritası', 'Reactor Core': 'Reaktör çekirdeği', 'Xenobiology Scan': 'Ksenobiyoloji taraması' });
+
+// Effekseer Behavior Matrix + Flight Prediction recipes (2026-07-05).
+(() => {
+    const T = {
+        ja: ['行動マトリクス', '逃走予測', '頂点1', '頂点2', '頂点3', 'パスラベル'],
+        es: ['Matriz de conducta', 'Predicción de fuga', 'Vértice 1', 'Vértice 2', 'Vértice 3', 'Etiqueta de ruta'],
+        'zh-Hant': ['行為矩陣', '逃逸預測', '頂點1', '頂點2', '頂點3', '路徑標籤'],
+        'zh-Hans': ['行为矩阵', '逃逸预测', '顶点1', '顶点2', '顶点3', '路径标签'],
+        ru: ['Матрица Поведения', 'Прогноз Побега', 'Вершина 1', 'Вершина 2', 'Вершина 3', 'Метка Пути'],
+        pt: ['Matriz De Comportamento', 'Previsão De Fuga', 'Vértice 1', 'Vértice 2', 'Vértice 3', 'Rótulo Do Caminho'],
+        de: ['Verhaltensmatrix', 'Fluchtprognose', 'Ecke 1', 'Ecke 2', 'Ecke 3', 'Pfadbeschriftung'],
+        fr: ['Matrice de comportement', 'Prédiction de fuite', 'Sommet 1', 'Sommet 2', 'Sommet 3', 'Étiquette de trajectoire'],
+        el: ['Μήτρα συμπεριφοράς', 'Πρόβλεψη φυγής', 'Κορυφή 1', 'Κορυφή 2', 'Κορυφή 3', 'Ετικέτα διαδρομής'],
+        ko: ['행동 매트릭스', '도주 예측', '꼭짓점 1', '꼭짓점 2', '꼭짓점 3', '경로 레이블'],
+        ar: ['مصفوفة السلوك', 'توقع الهروب', 'الزاوية 1', 'الزاوية 2', 'الزاوية 3', 'تسمية المسار'],
+        it: ['Matrice comportamentale', 'Previsione di fuga', 'Vertice 1', 'Vertice 2', 'Vertice 3', 'Etichetta percorso'],
+        pl: ['Macierz zachowań', 'Prognoza ucieczki', 'Wierzchołek 1', 'Wierzchołek 2', 'Wierzchołek 3', 'Etykieta ścieżki'],
+        id: ['Matriks Perilaku', 'Prediksi Pelarian', 'Sudut 1', 'Sudut 2', 'Sudut 3', 'Label Jalur'],
+        vi: ['Ma trận hành vi', 'Dự đoán đường chạy', 'Đỉnh 1', 'Đỉnh 2', 'Đỉnh 3', 'Nhãn đường đi'],
+        th: ['เมทริกซ์พฤติกรรม', 'พยากรณ์เส้นทางหนี', 'มุมที่ 1', 'มุมที่ 2', 'มุมที่ 3', 'ป้ายเส้นทาง'],
+        tr: ['Davranış matrisi', 'Kaçış tahmini', 'Köşe 1', 'Köşe 2', 'Köşe 3', 'Yol etiketi'],
+    };
+    const KEYS = ['Behavior Matrix', 'Flight Prediction', 'Corner 1', 'Corner 2', 'Corner 3', 'Path Label'];
+    // Mesh layout option + Flight Prediction shape sliders
+    const EXTRA = {
+        ja: { Mesh: 'メッシュ', 'Path Arc': 'パスの弧', Branches: '分岐数', 'Bar Meter': 'バーメーター', Orientation: '向き', Vertical: '縦', Horizontal: '横', Battery: 'バッテリー', Fill: '充電', Drain: '放電', Short: 'ショート' },
+        es: { Mesh: 'Malla', 'Path Arc': 'Arco de la ruta', Branches: 'Ramas', 'Bar Meter': 'Medidor de barras', Orientation: 'Orientación', Vertical: 'Vertical', Horizontal: 'Horizontal', Battery: 'Batería', Fill: 'Carga', Drain: 'Descarga', Short: 'Cortocircuito' },
+        'zh-Hant': { Mesh: '網狀', 'Path Arc': '路徑弧度', Branches: '分支數', 'Bar Meter': '條形儀表', Orientation: '方向', Vertical: '垂直', Horizontal: '水平', Battery: '電池', Fill: '充電', Drain: '放電', Short: '短路' },
+        'zh-Hans': { Mesh: '网状', 'Path Arc': '路径弧度', Branches: '分支数', 'Bar Meter': '条形仪表', Orientation: '方向', Vertical: '垂直', Horizontal: '水平', Battery: '电池', Fill: '充电', Drain: '放电', Short: '短路' },
+        ru: { Mesh: 'Сетка', 'Path Arc': 'Дуга Пути', Branches: 'Ветви', 'Bar Meter': 'Столбчатый Индикатор', Orientation: 'Ориентация', Vertical: 'Вертикально', Horizontal: 'Горизонтально', Battery: 'Батарея', Fill: 'Зарядка', Drain: 'Разрядка', Short: 'Замыкание' },
+        pt: { Mesh: 'Malha', 'Path Arc': 'Arco Do Caminho', Branches: 'Ramificações', 'Bar Meter': 'Medidor De Barras', Orientation: 'Orientação', Vertical: 'Vertical', Horizontal: 'Horizontal', Battery: 'Bateria', Fill: 'Carregar', Drain: 'Descarregar', Short: 'Curto-Circuito' },
+        de: { Mesh: 'Netz', 'Path Arc': 'Pfadbogen', Branches: 'Verzweigungen', 'Bar Meter': 'Balkenanzeige', Orientation: 'Ausrichtung', Vertical: 'Vertikal', Horizontal: 'Horizontal', Battery: 'Batterie', Fill: 'Laden', Drain: 'Entladen', Short: 'Kurzschluss' },
+        fr: { Mesh: 'Maillage', 'Path Arc': 'Arc de trajectoire', Branches: 'Branches', 'Bar Meter': 'Indicateur à barres', Orientation: 'Orientation', Vertical: 'Vertical', Horizontal: 'Horizontal', Battery: 'Batterie', Fill: 'Charge', Drain: 'Décharge', Short: 'Court-circuit' },
+        el: { Mesh: 'Πλέγμα', 'Path Arc': 'Τόξο διαδρομής', Branches: 'Διακλαδώσεις', 'Bar Meter': 'Μετρητής ράβδων', Orientation: 'Προσανατολισμός', Vertical: 'Κατακόρυφα', Horizontal: 'Οριζόντια', Battery: 'Μπαταρία', Fill: 'Φόρτιση', Drain: 'Εκφόρτιση', Short: 'Βραχυκύκλωμα' },
+        ko: { Mesh: '메시', 'Path Arc': '경로 곡률', Branches: '분기 수', 'Bar Meter': '바 미터', Orientation: '방향', Vertical: '세로', Horizontal: '가로', Battery: '배터리', Fill: '충전', Drain: '방전', Short: '합선' },
+        ar: { Mesh: 'شبكة', 'Path Arc': 'قوس المسار', Branches: 'التفرعات', 'Bar Meter': 'مقياس شريطي', Orientation: 'الاتجاه', Vertical: 'عمودي', Horizontal: 'أفقي', Battery: 'بطارية', Fill: 'شحن', Drain: 'تفريغ', Short: 'قصر كهربائي' },
+        it: { Mesh: 'Maglia', 'Path Arc': 'Arco del percorso', Branches: 'Ramificazioni', 'Bar Meter': 'Misuratore a barre', Orientation: 'Orientamento', Vertical: 'Verticale', Horizontal: 'Orizzontale', Battery: 'Batteria', Fill: 'Carica', Drain: 'Scarica', Short: 'Cortocircuito' },
+        pl: { Mesh: 'Siatka', 'Path Arc': 'Łuk ścieżki', Branches: 'Odgałęzienia', 'Bar Meter': 'Miernik słupkowy', Orientation: 'Orientacja', Vertical: 'Pionowo', Horizontal: 'Poziomo', Battery: 'Bateria', Fill: 'Ładowanie', Drain: 'Rozładowanie', Short: 'Zwarcie' },
+        id: { Mesh: 'Jala', 'Path Arc': 'Busur Jalur', Branches: 'Cabang', 'Bar Meter': 'Meter Batang', Orientation: 'Orientasi', Vertical: 'Vertikal', Horizontal: 'Horizontal', Battery: 'Baterai', Fill: 'Isi Daya', Drain: 'Kuras', Short: 'Korsleting' },
+        vi: { Mesh: 'Lưới', 'Path Arc': 'Cung đường đi', Branches: 'Nhánh', 'Bar Meter': 'Đồng hồ thanh', Orientation: 'Hướng', Vertical: 'Dọc', Horizontal: 'Ngang', Battery: 'Pin', Fill: 'Sạc', Drain: 'Xả', Short: 'Đoản mạch' },
+        th: { Mesh: 'ตาข่าย', 'Path Arc': 'ส่วนโค้งเส้นทาง', Branches: 'กิ่งแยก', 'Bar Meter': 'มาตรวัดแท่ง', Orientation: 'แนวการวาง', Vertical: 'แนวตั้ง', Horizontal: 'แนวนอน', Battery: 'แบตเตอรี่', Fill: 'ชาร์จ', Drain: 'คายประจุ', Short: 'ลัดวงจร' },
+        tr: { Mesh: 'Ağ', 'Path Arc': 'Yol yayı', Branches: 'Dallar', 'Bar Meter': 'Çubuk gösterge', Orientation: 'Yön', Vertical: 'Dikey', Horizontal: 'Yatay', Battery: 'Pil', Fill: 'Şarj', Drain: 'Deşarj', Short: 'Kısa devre' },
+    };
+    for (const [loc, kv] of Object.entries(EXTRA)) Object.assign(RR_TEXT_TRANSLATIONS[loc], kv);
+    for (const [loc, vals] of Object.entries(T)) {
+        KEYS.forEach((k, i) => { RR_TEXT_TRANSLATIONS[loc][k] = vals[i]; });
+    }
+})();
+
+// Physical attack recipes: Slash / Bite / Punch / Impale (2026-07-05).
+(() => {
+    const T = {
+        ja: ['斬撃', '噛みつき', 'パンチ', '串刺し', '斬撃数', '牙の数', 'ヒット数', 'スパイク数', 'スピード線'],
+        es: ['Tajo', 'Mordisco', 'Puñetazo', 'Empalar', 'Tajos', 'Dientes', 'Golpes', 'Púas', 'Líneas de velocidad'],
+        'zh-Hant': ['斬擊', '撕咬', '拳擊', '穿刺', '斬擊數', '牙齒數', '連擊數', '尖刺數', '速度線'],
+        'zh-Hans': ['斩击', '撕咬', '拳击', '穿刺', '斩击数', '牙齿数', '连击数', '尖刺数', '速度线'],
+        ru: ['Разрез', 'Укус', 'Удар', 'Пронзание', 'Разрезы', 'Зубы', 'Удары', 'Шипы', 'Линии Скорости'],
+        pt: ['Corte', 'Mordida', 'Soco', 'Empalar', 'Cortes', 'Dentes', 'Golpes', 'Espinhos', 'Linhas De Velocidade'],
+        de: ['Hieb', 'Biss', 'Schlag', 'Aufspießen', 'Hiebe', 'Zähne', 'Treffer', 'Stacheln', 'Tempolinien'],
+        fr: ['Entaille', 'Morsure', 'Coup de poing', 'Empalement', 'Entailles', 'Dents', 'Coups', 'Pointes', 'Lignes de vitesse'],
+        el: ['Σπαθιά', 'Δάγκωμα', 'Γροθιά', 'Παλούκωμα', 'Σπαθιές', 'Δόντια', 'Χτυπήματα', 'Καρφιά', 'Γραμμές ταχύτητας'],
+        ko: ['베기', '물기', '주먹질', '꿰뚫기', '베기 수', '이빨 수', '타격 수', '가시 수', '스피드 라인'],
+        ar: ['شق', 'عضة', 'لكمة', 'خوزقة', 'الشقوق', 'الأنياب', 'الضربات', 'الأسنة', 'خطوط السرعة'],
+        it: ['Fendente', 'Morso', 'Pugno', 'Impalare', 'Fendenti', 'Denti', 'Colpi', 'Spuntoni', 'Linee di velocità'],
+        pl: ['Cięcie', 'Ugryzienie', 'Cios', 'Nabicie', 'Cięcia', 'Zęby', 'Ciosy', 'Kolce', 'Linie prędkości'],
+        id: ['Tebasan', 'Gigitan', 'Pukulan', 'Tusukan', 'Tebasan', 'Gigi', 'Pukulan', 'Duri', 'Garis Kecepatan'],
+        vi: ['Chém', 'Cắn', 'Đấm', 'Xuyên thủng', 'Số nhát chém', 'Số răng', 'Số đòn', 'Số gai', 'Vạch tốc độ'],
+        th: ['ฟัน', 'กัด', 'ชก', 'เสียบทะลุ', 'จำนวนรอยฟัน', 'จำนวนเขี้ยว', 'จำนวนครั้ง', 'จำนวนหนาม', 'เส้นความเร็ว'],
+        tr: ['Kılıç darbesi', 'Isırık', 'Yumruk', 'Şişleme', 'Darbe sayısı', 'Dişler', 'Vuruşlar', 'Sivri uçlar', 'Hız çizgileri'],
+    };
+    const KEYS = ['Slash', 'Bite', 'Punch', 'Impale', 'Slashes', 'Teeth', 'Hits', 'Spikes', 'Speed Lines'];
+    const CURVE = { ja: '曲率', es: 'Curvatura', 'zh-Hant': '曲率', 'zh-Hans': '曲率',
+        ru: 'Кривизна', pt: 'Curvatura', de: 'Krümmung', fr: 'Courbure', el: 'Καμπυλότητα',
+        ko: '곡률', ar: 'الانحناء', it: 'Curvatura', pl: 'Krzywizna', id: 'Kelengkungan',
+        vi: 'Độ cong', th: 'ความโค้ง', tr: 'Eğrilik' };
+    for (const [loc, w] of Object.entries(CURVE)) RR_TEXT_TRANSLATIONS[loc].Curve = w;
+    // Physical wave 2: Claw Rake / Crush / Arrow Hit / Parry / Whip Crack / Blood
+    const T2 = {
+        ja: ['爪撃', '粉砕', '矢の命中', 'パリィ', 'ムチ打ち', '血しぶき', '爪の数', '矢の数', 'バウンド数', '放射', '噴射', '滴下', '飛沫数'],
+        es: ['Zarpazo', 'Aplastar', 'Impacto de flecha', 'Parada', 'Latigazo', 'Sangre', 'Garras', 'Flechas', 'Rebotes', 'Estallido', 'Chorro', 'Goteo', 'Salpicaduras'],
+        'zh-Hant': ['爪擊', '碾壓', '箭矢命中', '格擋', '鞭擊', '血液', '爪數', '箭數', '彈跳數', '爆濺', '噴射', '滴落', '血漬數'],
+        'zh-Hans': ['爪击', '碾压', '箭矢命中', '格挡', '鞭击', '血液', '爪数', '箭数', '弹跳数', '爆溅', '喷射', '滴落', '血渍数'],
+        ru: ['Удар Когтями', 'Раздавить', 'Попадание Стрелы', 'Парирование', 'Удар Кнутом', 'Кровь', 'Когти', 'Стрелы', 'Отскоки', 'Всплеск', 'Струя', 'Капли', 'Брызги'],
+        pt: ['Garras', 'Esmagar', 'Impacto De Flecha', 'Aparar', 'Chicotada', 'Sangue', 'Garras', 'Flechas', 'Ressaltos', 'Explosão', 'Jato', 'Gotejamento', 'Respingos'],
+        de: ['Krallenhieb', 'Zermalmen', 'Pfeiltreffer', 'Parade', 'Peitschenknall', 'Blut', 'Krallen', 'Pfeile', 'Aufpraller', 'Ausbruch', 'Strahl', 'Tropfen', 'Spritzer'],
+        fr: ['Coup de griffes', 'Écrasement', 'Impact de flèche', 'Parade', 'Coup de fouet', 'Sang', 'Griffes', 'Flèches', 'Rebonds', 'Éclat', 'Jet', 'Goutte', 'Éclaboussures'],
+        el: ['Νυχιά', 'Σύνθλιψη', 'Χτύπημα βέλους', 'Απόκρουση', 'Μαστίγωμα', 'Αίμα', 'Νύχια', 'Βέλη', 'Αναπηδήσεις', 'Έκρηξη', 'Πίδακας', 'Στάξιμο', 'Πιτσιλιές'],
+        ko: ['할퀴기', '분쇄', '화살 명중', '쳐내기', '채찍질', '피', '발톱 수', '화살 수', '튕김 수', '분출', '분사', '떨어짐', '핏자국 수'],
+        ar: ['خدش المخالب', 'سحق', 'إصابة سهم', 'صد', 'جلدة سوط', 'دم', 'المخالب', 'الأسهم', 'الارتدادات', 'تناثر', 'رشّ', 'تقطير', 'اللطخات'],
+        it: ['Artigliata', 'Schiacciamento', 'Impatto freccia', 'Parata', 'Frustata', 'Sangue', 'Artigli', 'Frecce', 'Rimbalzi', 'Scoppio', 'Getto', 'Gocciolamento', 'Schizzi'],
+        pl: ['Cios pazurami', 'Zmiażdżenie', 'Trafienie strzałą', 'Parowanie', 'Trzask bicza', 'Krew', 'Pazury', 'Strzały', 'Odbicia', 'Rozbryzg', 'Struga', 'Kapanie', 'Plamy'],
+        id: ['Cakaran', 'Hancurkan', 'Kena Panah', 'Tangkisan', 'Lecutan Cambuk', 'Darah', 'Cakar', 'Panah', 'Pantulan', 'Semburan', 'Semprotan', 'Tetesan', 'Cipratan'],
+        vi: ['Cào xé', 'Nghiền nát', 'Trúng tên', 'Đỡ đòn', 'Quất roi', 'Máu', 'Số vuốt', 'Số mũi tên', 'Số lần nảy', 'Bắn tóe', 'Phun', 'Nhỏ giọt', 'Vết bắn'],
+        th: ['ตะครุบข่วน', 'บดขยี้', 'ลูกธนูปัก', 'ปัดป้อง', 'หวดแส้', 'เลือด', 'จำนวนกรงเล็บ', 'จำนวนลูกธนู', 'จำนวนเด้ง', 'สาดกระจาย', 'พุ่ง', 'หยด', 'จำนวนรอยเลือด'],
+        tr: ['Pençe darbesi', 'Ezme', 'Ok isabeti', 'Savuşturma', 'Kırbaç şaklaması', 'Kan', 'Pençeler', 'Oklar', 'Sekmeler', 'Patlama', 'Fışkırma', 'Damlama', 'Sıçramalar'],
+    };
+    const KEYS2 = ['Claw Rake', 'Crush', 'Arrow Hit', 'Parry', 'Whip Crack', 'Blood',
+                   'Claws', 'Arrows', 'Bounces', 'Burst', 'Spray', 'Drip', 'Splats'];
+    for (const [loc, vals] of Object.entries(T2)) {
+        KEYS2.forEach((k, i) => { RR_TEXT_TRANSLATIONS[loc][k] = vals[i]; });
+    }
+    for (const [loc, vals] of Object.entries(T)) {
+        KEYS.forEach((k, i) => { RR_TEXT_TRANSLATIONS[loc][k] = vals[i]; });
+    }
+})();
+
+// Energy circle-family recipes (2026-07-05).
+(() => {
+    const T = {
+        ja: ['エナジーブースト', 'エナジーコラム', '拘束魔法陣'],
+        es: ['Impulso de energía', 'Columna de energía', 'Círculo de atadura'],
+        'zh-Hant': ['能量激發', '能量光柱', '束縛法陣'],
+        'zh-Hans': ['能量激发', '能量光柱', '束缚法阵'],
+        ru: ['Прилив Энергии', 'Столп Энергии', 'Круг Связывания'],
+        pt: ['Impulso De Energia', 'Coluna De Energia', 'Círculo De Aprisionamento'],
+        de: ['Energieschub', 'Energiesäule', 'Bannkreis'],
+        fr: ['Regain d’énergie', 'Colonne d’énergie', 'Cercle d’entrave'],
+        el: ['Ώθηση ενέργειας', 'Στήλη ενέργειας', 'Κύκλος δέσμευσης'],
+        ko: ['에너지 부스트', '에너지 기둥', '속박 마법진'],
+        ar: ['دفعة طاقة', 'عمود الطاقة', 'دائرة التقييد'],
+        it: ['Slancio di energia', 'Colonna di energia', 'Cerchio vincolante'],
+        pl: ['Zastrzyk energii', 'Kolumna energii', 'Krąg spętania'],
+        id: ['Dorongan Energi', 'Kolom Energi', 'Lingkaran Pengikat'],
+        vi: ['Tăng cường năng lượng', 'Cột năng lượng', 'Vòng trói buộc'],
+        th: ['เร่งพลังงาน', 'เสาพลังงาน', 'วงเวทพันธนาการ'],
+        tr: ['Enerji takviyesi', 'Enerji sütunu', 'Bağlama çemberi'],
+    };
+    const HEX = { ja: '六角フォースフィールド', es: 'Campo de fuerza hexagonal', 'zh-Hant': '六角力場',
+        'zh-Hans': '六角力场', ru: 'Гексагональное Силовое Поле', pt: 'Campo De Força Hexagonal',
+        de: 'Hexagonales Kraftfeld', fr: 'Champ de force hexagonal', el: 'Εξαγωνικό πεδίο δύναμης',
+        ko: '육각 포스필드', ar: 'حقل قوة سداسي', it: 'Campo di forza esagonale', pl: 'Heksagonalne pole siłowe',
+        id: 'Medan Gaya Heksagonal', vi: 'Trường lực lục giác', th: 'สนามพลังหกเหลี่ยม', tr: 'Altıgen güç kalkanı' };
+    for (const [loc, w] of Object.entries(HEX)) RR_TEXT_TRANSLATIONS[loc]['Hex Forcefield'] = w;
+    const KEYS = ['Energy Boost', 'Energy Column', 'Binding Circle'];
+    for (const [loc, vals] of Object.entries(T)) {
+        KEYS.forEach((k, i) => { RR_TEXT_TRANSLATIONS[loc][k] = vals[i]; });
+    }
+})();
+
+// Christian Cross variants (2026-07-05).
+(() => {
+    const T = {
+        ja: ['バリエーション', 'ラテン十字', '正教会十字', 'ギリシャ十字', 'ケルト十字'],
+        es: ['Variante', 'Latina', 'Ortodoxa', 'Griega', 'Celta'],
+        'zh-Hant': ['樣式變體', '拉丁十字', '東正教十字', '希臘十字', '凱爾特十字'],
+        'zh-Hans': ['样式变体', '拉丁十字', '东正教十字', '希腊十字', '凯尔特十字'],
+        ru: ['Вариант', 'Латинский', 'Православный', 'Греческий', 'Кельтский'],
+        pt: ['Variante', 'Latina', 'Ortodoxa', 'Grega', 'Celta'],
+        de: ['Variante', 'Lateinisch', 'Orthodox', 'Griechisch', 'Keltisch'],
+        fr: ['Variante', 'Latine', 'Orthodoxe', 'Grecque', 'Celtique'],
+        el: ['Παραλλαγή', 'Λατινικός', 'Ορθόδοξος', 'Ελληνικός', 'Κελτικός'],
+        ko: ['변형', '라틴 십자가', '정교회 십자가', '그리스 십자가', '켈트 십자가'],
+        ar: ['الطراز', 'لاتيني', 'أرثوذكسي', 'يوناني', 'كلتي'],
+        it: ['Variante', 'Latina', 'Ortodossa', 'Greca', 'Celtica'],
+        pl: ['Wariant', 'Łaciński', 'Prawosławny', 'Grecki', 'Celtycki'],
+        id: ['Varian', 'Latin', 'Ortodoks', 'Yunani', 'Keltik'],
+        vi: ['Biến thể', 'La-tinh', 'Chính thống giáo', 'Hy Lạp', 'Celtic'],
+        th: ['รูปแบบ', 'ละติน', 'ออร์โธดอกซ์', 'กรีก', 'เคลติก'],
+        tr: ['Varyant', 'Latin', 'Ortodoks', 'Yunan', 'Kelt'],
+    };
+    const KEYS = ['Variant', 'Latin', 'Orthodox', 'Greek', 'Celtic'];
+    for (const [loc, vals] of Object.entries(T)) {
+        KEYS.forEach((k, i) => { RR_TEXT_TRANSLATIONS[loc][k] = vals[i]; });
+    }
+})();
+
+// Effekseer Composite Waveform recipe (2026-07-05).
+Object.assign(RR_TEXT_TRANSLATIONS.ja, { 'Composite Waveform': '合成波形' });
+Object.assign(RR_TEXT_TRANSLATIONS.es, { 'Composite Waveform': 'Forma de onda compuesta' });
+Object.assign(RR_TEXT_TRANSLATIONS['zh-Hant'], { 'Composite Waveform': '複合波形' });
+Object.assign(RR_TEXT_TRANSLATIONS['zh-Hans'], { 'Composite Waveform': '复合波形' });
+Object.assign(RR_TEXT_TRANSLATIONS.ru, { 'Composite Waveform': 'Составная Волна' });
+Object.assign(RR_TEXT_TRANSLATIONS.pt, { 'Composite Waveform': 'Forma De Onda Composta' });
+Object.assign(RR_TEXT_TRANSLATIONS.de, { 'Composite Waveform': 'Komposit-Wellenform' });
+Object.assign(RR_TEXT_TRANSLATIONS.fr, { 'Composite Waveform': 'Forme d’onde composite' });
+Object.assign(RR_TEXT_TRANSLATIONS.el, { 'Composite Waveform': 'Σύνθετη κυματομορφή' });
+Object.assign(RR_TEXT_TRANSLATIONS.ko, { 'Composite Waveform': '합성 파형' });
+Object.assign(RR_TEXT_TRANSLATIONS.ar, { 'Composite Waveform': 'شكل موجة مركّب' });
+Object.assign(RR_TEXT_TRANSLATIONS.it, { 'Composite Waveform': 'Forma d’onda composita' });
+Object.assign(RR_TEXT_TRANSLATIONS.pl, { 'Composite Waveform': 'Przebieg złożony' });
+Object.assign(RR_TEXT_TRANSLATIONS.id, { 'Composite Waveform': 'Gelombang Komposit' });
+Object.assign(RR_TEXT_TRANSLATIONS.vi, { 'Composite Waveform': 'Dạng sóng tổng hợp' });
+Object.assign(RR_TEXT_TRANSLATIONS.th, { 'Composite Waveform': 'รูปคลื่นผสม' });
+Object.assign(RR_TEXT_TRANSLATIONS.tr, { 'Composite Waveform': 'Bileşik dalga formu' });
+
+// Effekseer Circular Gauge recipe (2026-07-05).
+Object.assign(RR_TEXT_TRANSLATIONS.ja, { 'Circular Gauge': '円形ゲージ', 'Fill Level': '充填レベル', 'Fill Mode': '充填モード', 'Hold': '保持', 'Segments': 'セグメント数' });
+Object.assign(RR_TEXT_TRANSLATIONS.es, { 'Circular Gauge': 'Indicador circular', 'Fill Level': 'Nivel de llenado', 'Fill Mode': 'Modo de llenado', 'Hold': 'Mantener', 'Segments': 'Segmentos' });
+Object.assign(RR_TEXT_TRANSLATIONS['zh-Hant'], { 'Circular Gauge': '環形量表', 'Fill Level': '填充等級', 'Fill Mode': '填充模式', 'Hold': '保持', 'Segments': '分段數' });
+Object.assign(RR_TEXT_TRANSLATIONS['zh-Hans'], { 'Circular Gauge': '环形仪表', 'Fill Level': '填充等级', 'Fill Mode': '填充模式', 'Hold': '保持', 'Segments': '分段数' });
+Object.assign(RR_TEXT_TRANSLATIONS.ru, { 'Circular Gauge': 'Круговой Индикатор', 'Fill Level': 'Уровень Заполнения', 'Fill Mode': 'Режим Заполнения', 'Hold': 'Удержание', 'Segments': 'Сегменты' });
+Object.assign(RR_TEXT_TRANSLATIONS.pt, { 'Circular Gauge': 'Indicador Circular', 'Fill Level': 'Nível De Preenchimento', 'Fill Mode': 'Modo De Preenchimento', 'Hold': 'Manter', 'Segments': 'Segmentos' });
+Object.assign(RR_TEXT_TRANSLATIONS.de, { 'Circular Gauge': 'Ringanzeige', 'Fill Level': 'Füllstand', 'Fill Mode': 'Füllmodus', 'Hold': 'Halten', 'Segments': 'Segmente' });
+Object.assign(RR_TEXT_TRANSLATIONS.fr, { 'Circular Gauge': 'Jauge circulaire', 'Fill Level': 'Niveau de remplissage', 'Fill Mode': 'Mode de remplissage', 'Hold': 'Maintenir', 'Segments': 'Segments' });
+Object.assign(RR_TEXT_TRANSLATIONS.el, { 'Circular Gauge': 'Κυκλικός μετρητής', 'Fill Level': 'Στάθμη πλήρωσης', 'Fill Mode': 'Λειτουργία πλήρωσης', 'Hold': 'Διατήρηση', 'Segments': 'Τμήματα' });
+Object.assign(RR_TEXT_TRANSLATIONS.ko, { 'Circular Gauge': '원형 게이지', 'Fill Level': '충전 레벨', 'Fill Mode': '충전 모드', 'Hold': '유지', 'Segments': '세그먼트' });
+Object.assign(RR_TEXT_TRANSLATIONS.ar, { 'Circular Gauge': 'مقياس دائري', 'Fill Level': 'مستوى الملء', 'Fill Mode': 'وضع الملء', 'Hold': 'تثبيت', 'Segments': 'الأجزاء' });
+Object.assign(RR_TEXT_TRANSLATIONS.it, { 'Circular Gauge': 'Indicatore circolare', 'Fill Level': 'Livello di riempimento', 'Fill Mode': 'Modalità riempimento', 'Hold': 'Mantieni', 'Segments': 'Segmenti' });
+Object.assign(RR_TEXT_TRANSLATIONS.pl, { 'Circular Gauge': 'Wskaźnik kołowy', 'Fill Level': 'Poziom wypełnienia', 'Fill Mode': 'Tryb wypełnienia', 'Hold': 'Utrzymaj', 'Segments': 'Segmenty' });
+Object.assign(RR_TEXT_TRANSLATIONS.id, { 'Circular Gauge': 'Indikator Melingkar', 'Fill Level': 'Tingkat Isi', 'Fill Mode': 'Mode Isi', 'Hold': 'Tahan', 'Segments': 'Segmen' });
+Object.assign(RR_TEXT_TRANSLATIONS.vi, { 'Circular Gauge': 'Đồng hồ tròn', 'Fill Level': 'Mức đầy', 'Fill Mode': 'Chế độ đầy', 'Hold': 'Giữ', 'Segments': 'Phân đoạn' });
+Object.assign(RR_TEXT_TRANSLATIONS.th, { 'Circular Gauge': 'มาตรวัดวงกลม', 'Fill Level': 'ระดับการเติม', 'Fill Mode': 'โหมดการเติม', 'Hold': 'คงไว้', 'Segments': 'ส่วนย่อย' });
+Object.assign(RR_TEXT_TRANSLATIONS.tr, { 'Circular Gauge': 'Dairesel gösterge', 'Fill Level': 'Doluluk seviyesi', 'Fill Mode': 'Doldurma modu', 'Hold': 'Tut', 'Segments': 'Bölümler' });
+Object.assign(RR_TEXT_TRANSLATIONS.ja, { 'Readout': 'リードアウト' });
+Object.assign(RR_TEXT_TRANSLATIONS.es, { 'Readout': 'Lectura digital' });
+Object.assign(RR_TEXT_TRANSLATIONS['zh-Hant'], { 'Readout': '數位讀數' });
+Object.assign(RR_TEXT_TRANSLATIONS['zh-Hans'], { 'Readout': '数字读数' });
+Object.assign(RR_TEXT_TRANSLATIONS.ru, { 'Readout': 'Индикация' });
+Object.assign(RR_TEXT_TRANSLATIONS.pt, { 'Readout': 'Leitura Digital' });
+Object.assign(RR_TEXT_TRANSLATIONS.de, { 'Readout': 'Anzeigewerte' });
+Object.assign(RR_TEXT_TRANSLATIONS.fr, { 'Readout': 'Affichage numérique' });
+Object.assign(RR_TEXT_TRANSLATIONS.el, { 'Readout': 'Ψηφιακή ένδειξη' });
+Object.assign(RR_TEXT_TRANSLATIONS.ko, { 'Readout': '판독값' });
+Object.assign(RR_TEXT_TRANSLATIONS.ar, { 'Readout': 'قراءة رقمية' });
+Object.assign(RR_TEXT_TRANSLATIONS.it, { 'Readout': 'Lettura digitale' });
+Object.assign(RR_TEXT_TRANSLATIONS.pl, { 'Readout': 'Odczyt cyfrowy' });
+Object.assign(RR_TEXT_TRANSLATIONS.id, { 'Readout': 'Pembacaan Digital' });
+Object.assign(RR_TEXT_TRANSLATIONS.vi, { 'Readout': 'Số liệu hiển thị' });
+Object.assign(RR_TEXT_TRANSLATIONS.th, { 'Readout': 'ตัวเลขแสดงผล' });
+Object.assign(RR_TEXT_TRANSLATIONS.tr, { 'Readout': 'Dijital gösterge' });
+
+// Effekseer Starship Analysis recipe (2026-07-05).
+Object.assign(RR_TEXT_TRANSLATIONS.ja, { 'Starship Analysis': '宇宙船解析' });
+Object.assign(RR_TEXT_TRANSLATIONS.es, { 'Starship Analysis': 'Análisis de nave estelar' });
+Object.assign(RR_TEXT_TRANSLATIONS['zh-Hant'], { 'Starship Analysis': '星艦分析' });
+Object.assign(RR_TEXT_TRANSLATIONS['zh-Hans'], { 'Starship Analysis': '星舰分析' });
+Object.assign(RR_TEXT_TRANSLATIONS.ru, { 'Starship Analysis': 'Анализ Звездолёта' });
+Object.assign(RR_TEXT_TRANSLATIONS.pt, { 'Starship Analysis': 'Análise De Nave Estelar' });
+Object.assign(RR_TEXT_TRANSLATIONS.de, { 'Starship Analysis': 'Raumschiff-Analyse' });
+Object.assign(RR_TEXT_TRANSLATIONS.fr, { 'Starship Analysis': 'Analyse du vaisseau' });
+Object.assign(RR_TEXT_TRANSLATIONS.el, { 'Starship Analysis': 'Ανάλυση διαστημόπλοιου' });
+Object.assign(RR_TEXT_TRANSLATIONS.ko, { 'Starship Analysis': '우주선 분석' });
+Object.assign(RR_TEXT_TRANSLATIONS.ar, { 'Starship Analysis': 'تحليل السفينة النجمية' });
+Object.assign(RR_TEXT_TRANSLATIONS.it, { 'Starship Analysis': 'Analisi astronave' });
+Object.assign(RR_TEXT_TRANSLATIONS.pl, { 'Starship Analysis': 'Analiza statku gwiezdnego' });
+Object.assign(RR_TEXT_TRANSLATIONS.id, { 'Starship Analysis': 'Analisis Kapal Bintang' });
+Object.assign(RR_TEXT_TRANSLATIONS.vi, { 'Starship Analysis': 'Phân tích phi thuyền' });
+Object.assign(RR_TEXT_TRANSLATIONS.th, { 'Starship Analysis': 'วิเคราะห์ยานอวกาศ' });
+Object.assign(RR_TEXT_TRANSLATIONS.tr, { 'Starship Analysis': 'Yıldız gemisi analizi' });
+
+// Effekseer Orbital Survey per-planet params (2026-07-05) — generated for
+// planets 1-6 so the solar-system builder is fully localized.
+(() => {
+    const PATTERNS = {
+        ja: (n) => [`惑星${n} サイズ`, `惑星${n} テクスチャ`],
+        es: (n) => [`Tamaño del planeta ${n}`, `Textura del planeta ${n}`],
+        'zh-Hant': (n) => [`行星${n}大小`, `行星${n}紋理`],
+        'zh-Hans': (n) => [`行星${n}大小`, `行星${n}纹理`],
+        ru: (n) => [`Размер Планеты ${n}`, `Текстура Планеты ${n}`],
+        pt: (n) => [`Tamanho Do Planeta ${n}`, `Textura Do Planeta ${n}`],
+        de: (n) => [`Planet ${n} Größe`, `Planet ${n} Textur`],
+        fr: (n) => [`Taille de la planète ${n}`, `Texture de la planète ${n}`],
+        el: (n) => [`Μέγεθος πλανήτη ${n}`, `Υφή πλανήτη ${n}`],
+        ko: (n) => [`행성 ${n} 크기`, `행성 ${n} 텍스처`],
+        ar: (n) => [`حجم الكوكب ${n}`, `نسيج الكوكب ${n}`],
+        it: (n) => [`Dimensione pianeta ${n}`, `Texture pianeta ${n}`],
+        pl: (n) => [`Rozmiar planety ${n}`, `Tekstura planety ${n}`],
+        id: (n) => [`Ukuran Planet ${n}`, `Tekstur Planet ${n}`],
+        vi: (n) => [`Kích thước hành tinh ${n}`, `Kết cấu hành tinh ${n}`],
+        th: (n) => [`ขนาดดาวเคราะห์ ${n}`, `พื้นผิวดาวเคราะห์ ${n}`],
+        tr: (n) => [`Gezegen ${n} boyutu`, `Gezegen ${n} dokusu`],
+    };
+    for (const [loc, fn] of Object.entries(PATTERNS)) {
+        for (let n = 1; n <= 6; n++) {
+            const [size, tex] = fn(n);
+            RR_TEXT_TRANSLATIONS[loc][`Planet ${n} Size`] = size;
+            RR_TEXT_TRANSLATIONS[loc][`Planet ${n} Texture`] = tex;
+        }
+    }
+})();
+
+// Effekseer Interface holo-construct params (2026-07-05).
+Object.assign(RR_TEXT_TRANSLATIONS.ja, { 'Holo Construct': 'ホログラム構造体', 'Construct Color': '構造体の色', 'Base Rings': 'ベースリング', 'Data Rain': 'データレイン', 'Glitch Bursts': 'グリッチバースト', 'Projector Beam': '投影ビーム', 'Scan Sweep': 'スキャンスイープ', 'Hologram Panel': 'ホログラムパネル' });
+Object.assign(RR_TEXT_TRANSLATIONS.es, { 'Holo Construct': 'Constructo holográfico', 'Construct Color': 'Color del constructo', 'Base Rings': 'Anillos de base', 'Data Rain': 'Lluvia de datos', 'Glitch Bursts': 'Ráfagas de glitch', 'Projector Beam': 'Haz proyector', 'Scan Sweep': 'Barrido de escaneo', 'Hologram Panel': 'Panel holográfico' });
+Object.assign(RR_TEXT_TRANSLATIONS['zh-Hant'], { 'Holo Construct': '全息結構', 'Construct Color': '結構顏色', 'Base Rings': '底座光環', 'Data Rain': '數據雨', 'Glitch Bursts': '故障閃爍', 'Projector Beam': '投影光束', 'Scan Sweep': '掃描線', 'Hologram Panel': '全息面板' });
+Object.assign(RR_TEXT_TRANSLATIONS['zh-Hans'], { 'Holo Construct': '全息结构', 'Construct Color': '结构颜色', 'Base Rings': '底座光环', 'Data Rain': '数据雨', 'Glitch Bursts': '故障闪烁', 'Projector Beam': '投影光束', 'Scan Sweep': '扫描线', 'Hologram Panel': '全息面板' });
+Object.assign(RR_TEXT_TRANSLATIONS.ru, { 'Holo Construct': 'Голо-Конструкция', 'Construct Color': 'Цвет Конструкции', 'Base Rings': 'Кольца Основания', 'Data Rain': 'Дождь Данных', 'Glitch Bursts': 'Всплески Помех', 'Projector Beam': 'Луч Проектора', 'Scan Sweep': 'Сканирующая Полоса', 'Hologram Panel': 'Голографическая Панель' });
+Object.assign(RR_TEXT_TRANSLATIONS.pt, { 'Holo Construct': 'Construto Holográfico', 'Construct Color': 'Cor Do Construto', 'Base Rings': 'Anéis Da Base', 'Data Rain': 'Chuva De Dados', 'Glitch Bursts': 'Rajadas De Glitch', 'Projector Beam': 'Feixe Projetor', 'Scan Sweep': 'Varredura De Escaneamento', 'Hologram Panel': 'Painel Holográfico' });
+Object.assign(RR_TEXT_TRANSLATIONS.de, { 'Holo Construct': 'Holo-Konstrukt', 'Construct Color': 'Konstruktfarbe', 'Base Rings': 'Basisringe', 'Data Rain': 'Datenregen', 'Glitch Bursts': 'Glitch-Ausbrüche', 'Projector Beam': 'Projektorstrahl', 'Scan Sweep': 'Scanlinie', 'Hologram Panel': 'Hologramm-Panel' });
+Object.assign(RR_TEXT_TRANSLATIONS.fr, { 'Holo Construct': 'Construction holographique', 'Construct Color': 'Couleur de la construction', 'Base Rings': 'Anneaux de base', 'Data Rain': 'Pluie de données', 'Glitch Bursts': 'Salves de glitch', 'Projector Beam': 'Faisceau projecteur', 'Scan Sweep': 'Ligne de balayage', 'Hologram Panel': 'Panneau holographique' });
+Object.assign(RR_TEXT_TRANSLATIONS.el, { 'Holo Construct': 'Ολογραφική κατασκευή', 'Construct Color': 'Χρώμα κατασκευής', 'Base Rings': 'Δακτύλιοι βάσης', 'Data Rain': 'Βροχή δεδομένων', 'Glitch Bursts': 'Εκρήξεις δυσλειτουργίας', 'Projector Beam': 'Δέσμη προβολέα', 'Scan Sweep': 'Γραμμή σάρωσης', 'Hologram Panel': 'Ολογραφικό πάνελ' });
+Object.assign(RR_TEXT_TRANSLATIONS.ko, { 'Holo Construct': '홀로 구조물', 'Construct Color': '구조물 색상', 'Base Rings': '베이스 링', 'Data Rain': '데이터 레인', 'Glitch Bursts': '글리치 버스트', 'Projector Beam': '프로젝터 빔', 'Scan Sweep': '스캔 스윕', 'Hologram Panel': '홀로그램 패널' });
+Object.assign(RR_TEXT_TRANSLATIONS.ar, { 'Holo Construct': 'بنية هولوغرامية', 'Construct Color': 'لون البنية', 'Base Rings': 'حلقات القاعدة', 'Data Rain': 'مطر البيانات', 'Glitch Bursts': 'ومضات الخلل', 'Projector Beam': 'شعاع العرض', 'Scan Sweep': 'خط المسح', 'Hologram Panel': 'لوحة الهولوغرام' });
+Object.assign(RR_TEXT_TRANSLATIONS.it, { 'Holo Construct': 'Costrutto olografico', 'Construct Color': 'Colore del costrutto', 'Base Rings': 'Anelli di base', 'Data Rain': 'Pioggia di dati', 'Glitch Bursts': 'Raffiche di glitch', 'Projector Beam': 'Raggio proiettore', 'Scan Sweep': 'Linea di scansione', 'Hologram Panel': 'Pannello olografico' });
+Object.assign(RR_TEXT_TRANSLATIONS.pl, { 'Holo Construct': 'Konstrukt holograficzny', 'Construct Color': 'Kolor konstruktu', 'Base Rings': 'Pierścienie podstawy', 'Data Rain': 'Deszcz danych', 'Glitch Bursts': 'Wybuchy zakłóceń', 'Projector Beam': 'Wiązka projektora', 'Scan Sweep': 'Linia skanowania', 'Hologram Panel': 'Panel holograficzny' });
+Object.assign(RR_TEXT_TRANSLATIONS.id, { 'Holo Construct': 'Konstruksi Hologram', 'Construct Color': 'Warna Konstruksi', 'Base Rings': 'Cincin Dasar', 'Data Rain': 'Hujan Data', 'Glitch Bursts': 'Ledakan Glitch', 'Projector Beam': 'Sinar Proyektor', 'Scan Sweep': 'Garis Pindai', 'Hologram Panel': 'Panel Hologram' });
+Object.assign(RR_TEXT_TRANSLATIONS.vi, { 'Holo Construct': 'Cấu trúc hologram', 'Construct Color': 'Màu cấu trúc', 'Base Rings': 'Vòng đế', 'Data Rain': 'Mưa dữ liệu', 'Glitch Bursts': 'Nhiễu glitch', 'Projector Beam': 'Chùm tia chiếu', 'Scan Sweep': 'Dòng quét', 'Hologram Panel': 'Bảng hologram' });
+Object.assign(RR_TEXT_TRANSLATIONS.th, { 'Holo Construct': 'โครงสร้างโฮโลแกรม', 'Construct Color': 'สีโครงสร้าง', 'Base Rings': 'วงแหวนฐาน', 'Data Rain': 'ฝนข้อมูล', 'Glitch Bursts': 'สัญญาณกลิตช์', 'Projector Beam': 'ลำแสงโปรเจกเตอร์', 'Scan Sweep': 'เส้นสแกน', 'Hologram Panel': 'แผงโฮโลแกรม' });
+Object.assign(RR_TEXT_TRANSLATIONS.tr, { 'Holo Construct': 'Holo yapı', 'Construct Color': 'Yapı rengi', 'Base Rings': 'Taban halkaları', 'Data Rain': 'Veri yağmuru', 'Glitch Bursts': 'Glitch patlamaları', 'Projector Beam': 'Projektör ışını', 'Scan Sweep': 'Tarama çizgisi', 'Hologram Panel': 'Hologram paneli' });
+
 class I18nManager {
     constructor() {
         this.SETTINGS_KEY = 'rr-settings';
