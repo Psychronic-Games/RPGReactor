@@ -311,6 +311,22 @@
             const core = layer(0.16, 255, { r: 255, g: 255, b: 255 }, { x: 0, y: -flowV * 1.6 }, 4);
             const sheath = layer(0.36, 150, c, { x: flowV * 0.5, y: -flowV }, 3);   // diagonal → spiral
             const halo = layer(0.58, 45, c, { x: 0, y: -flowV * 0.6 }, 2);
+            // center FILL: the cylinder layers are hollow walls, so from
+            // most angles the middle read as empty — a Y-axis billboard
+            // plane (always camera-facing, stays vertical) fills the core
+            const fill = B.makeNode(RR_EfkFormat.NODE_TYPE.SPRITE, {
+                commonValues: { ...bindAlways, maxGeneration: 1, life: rf(LONG) },
+                scaling: { type: 0, refEq: -1, scale: v3(p.width * 0.24, p.height * 0.88, 1) },
+                rendererCommon: {
+                    colorTextureIndex: 0,
+                    uv: { type: 3,
+                          position: { max: { x: 0, y: 0 }, min: { x: 0, y: 0 } },
+                          size: { max: { x: 1, y: 1 }, min: { x: 1, y: 1 } },
+                          speed: { max: { x: 0, y: -flowV * 1.6 }, min: { x: 0, y: -flowV * 1.6 } } },
+                },
+                rendererParams: { billboard: 1,
+                                  allColor: U.fixedColor({ r: 255, g: 255, b: 255, a: 245 }) },
+            });
 
             // Source charge (bottom) and muzzle burst (top): layered glows
             // plus a stream of sparks spraying off the tip.
@@ -352,7 +368,7 @@
             return [B.makeNode(RR_EfkFormat.NODE_TYPE.NONE, {
                 commonValues: { ...bindAlways, maxGeneration: 1, life: rf(LONG) },
                 children: [
-                    halo, sheath, core,
+                    halo, sheath, core, fill,
                     cap(-p.height * 0.5, p.width * 1.1, 200), capCore(-p.height * 0.5, p.width * 0.55),
                     cap(p.height * 0.5, p.width * 0.85, 220), capCore(p.height * 0.5, p.width * 0.45),
                     tipSparks,
@@ -1252,8 +1268,10 @@
 
             const model = (idx, col) => B.makeNode(RR_EfkFormat.NODE_TYPE.MODEL, {
                 commonValues: { ...bindAlways, maxGeneration: 1, life: rf(LONG) },
-                rendererCommon: { colorTextureIndex: 1 },
-                rendererParams: { modelIndex: idx, allColor: U.fixedColor({ ...col, a: 220 }) },
+                // streak, not glow_soft — soft glow mapped over thin struts
+                // is what made the star and rune ticks read as blurry
+                rendererCommon: { colorTextureIndex: 6 },
+                rendererParams: { modelIndex: idx, allColor: U.fixedColor({ ...col, a: 245 }) },
             });
 
             const sparkles = B.makeNode(RR_EfkFormat.NODE_TYPE.SPRITE, {
@@ -1525,25 +1543,32 @@
                 rendererParams: { allColor: U.fixedColor({ r: 255, g: 255, b: 255, a: 255 }) },
             });
 
-            // Holographic column body: a translucent cylinder with energy
-            // streaming upward along it — a real 3D volume, unlike the old
-            // stretched billboard (which looked warped from any angle).
-            const column = B.makeNode(RR_EfkFormat.NODE_TYPE.MODEL, {
+            // Holographic column body: concentric translucent cylinders,
+            // Energy-Beam style. The streak texture wraps THREE times
+            // around the circumference — a single wrap parks the bright
+            // band on one side and the column reads as half a circle —
+            // and the height is trimmed to end where the rings actually
+            // travel (the old h*0.5 poked above and below the ring span).
+            const colLayer = (radiusMul, alpha, uvSpeed, wraps) => B.makeNode(RR_EfkFormat.NODE_TYPE.MODEL, {
                 commonValues: { ...bindAlways, maxGeneration: 1, life: rf(LONG) },
-                scaling: { type: 0, refEq: -1, scale: v3(p.radius * 0.92, h * 0.5, p.radius * 0.92) },
+                scaling: { type: 0, refEq: -1,
+                           scale: v3(p.radius * radiusMul, h * 0.45, p.radius * radiusMul) },
                 rendererCommon: {
                     colorTextureIndex: 2,
                     uv: {
                         type: 3,
                         position: { max: { x: 0, y: 0 }, min: { x: 0, y: 0 } },
-                        size: { max: { x: 1, y: 1 }, min: { x: 1, y: 1 } },
-                        speed: { max: { x: 0, y: dir * p.rise * 0.006 }, min: { x: 0, y: dir * p.rise * 0.006 } },
+                        size: { max: { x: wraps, y: 1 }, min: { x: wraps, y: 1 } },
+                        speed: { max: { x: 0, y: dir * p.rise * 0.006 },
+                                 min: { x: 0, y: dir * p.rise * 0.006 } },
                     },
                 },
-                rendererParams: { modelIndex: 0, allColor: U.fixedColor({ ...U.dim(c, 0.8), a: 58 }) },
+                rendererParams: { modelIndex: 0, allColor: U.fixedColor({ ...U.dim(c, 0.8), a: alpha }) },
             });
+            const column = colLayer(0.92, 55, 0, 3);
+            const columnInner = colLayer(0.55, 80, 0, 3);
 
-            const children = [rings, column];
+            const children = [rings, column, columnInner];
             if (p.motes > 0) children.push(motes);
             if (p.glints > 0) children.push(glints);
 
@@ -1557,6 +1582,574 @@
                     acceleration: rv3(0),
                 },
                 children,
+            })];
+        },
+    });
+
+    // ── Energy Boost ─────────────────────────────────────────────────────
+    // Power-up aura: energy streams racing UP around the character, a
+    // pulsing ground ring, a breathing core, and rising motes — the
+    // classic "charging" stance.
+    RR_EFK_RECIPE_REGISTRY.push({
+        id: 'energy-boost',
+        name: 'Energy Boost',
+        category: 'Energy',
+        continuous: true,
+        prewarm: 80,
+        textures: ['streak', 'glow_soft', 'particle_hard', 'slash', 'ringthin'],
+        params: [
+            { key: 'color',     label: 'Primary Color',   type: 'color', default: '#66c8ff' },
+            { key: 'color2',    label: 'Secondary Color', type: 'color', default: '#eaf8ff' },
+            { key: 'size',      label: 'Size',            type: 'range', default: 7, min: 2, max: 16, step: 1 },
+            { key: 'rays',      label: 'Rays',            type: 'range', default: 14, min: 4, max: 30, step: 1 },
+            { key: 'intensity', label: 'Intensity',       type: 'range', default: 60, min: 20, max: 100, step: 5 },
+            { key: 'spin',      label: 'Spin (°/s)',      type: 'range', default: 18, min: -120, max: 120, step: 1 },
+            { key: 'sparkles',  label: 'Sparkles',        type: 'range', default: 16, min: 0, max: 50, step: 1 },
+        ],
+        build(p) {
+            const B = RR_EfkBuilder;
+            const U = RR_EfkRecipeUtil;
+            const { rf, rv3, v3, v2 } = B;
+            const c1 = U.hexToRgba(p.color);
+            const c2 = U.hexToRgba(p.color2);
+            const bindAlways = { translationBindType: 2, rotationBindType: 2, scalingBindType: 2 };
+            const inten = p.intensity / 60;
+            const kids = [];
+
+            // energy streams: tall streaks born on a circle, racing upward
+            kids.push(B.makeNode(RR_EfkFormat.NODE_TYPE.SPRITE, {
+                commonValues: { ...bindAlways, maxGeneration: 99999, life: rf(22, 34),
+                                generationTime: rf(Math.max(0.6, 26 / p.rays)) },
+                generationLocation: {
+                    type: 3, division: 24, radius: rf(0.5, 0.72),
+                    angleStart: rf(0), angleEnd: rf(360),
+                    circleType: 0, axisDirection: 1, angleNoize: rf(20),
+                },
+                translation: {
+                    type: 1, refEqP: rf(-1), refEqV: rf(-1), refEqA: rf(-1),
+                    location: rv3(v3(0, -0.6, 0)),
+                    velocity: rv3(v3(0, 0.05 * inten, 0), v3(0, 0.09 * inten, 0)),
+                    acceleration: rv3(v3(0, 0.002, 0)),
+                },
+                scaling: { type: 2, refEqS: rf(-1), refEqE: rf(-1),
+                           start: rv3(v3(0.1, 0.7, 1), v3(0.16, 1.1, 1)),
+                           end: rv3(v3(0.03, 1.5, 1), v3(0.06, 2, 1)),
+                           params: [0, 0, 1] },
+                rendererCommon: {
+                    colorTextureIndex: 0, alphaBlend: 2,
+                    fadeInType: 1, fadeIn: { frame: 5, params: [0, 0, 0] },
+                    fadeOutType: 1, fadeOut: { frame: 10, params: [0, 0, 0] },
+                },
+                rendererParams: { allColor: U.fixedColor({ ...c1, a: Math.round(200 * Math.min(1.27, inten)) }) },
+            }));
+            // hot inner streams (fewer, whiter, faster)
+            kids.push(B.makeNode(RR_EfkFormat.NODE_TYPE.SPRITE, {
+                commonValues: { ...bindAlways, maxGeneration: 99999, life: rf(16, 26),
+                                generationTime: rf(Math.max(1, 40 / p.rays)) },
+                generationLocation: {
+                    type: 3, division: 16, radius: rf(0.2, 0.4),
+                    angleStart: rf(0), angleEnd: rf(360),
+                    circleType: 0, axisDirection: 1, angleNoize: rf(30),
+                },
+                translation: {
+                    type: 1, refEqP: rf(-1), refEqV: rf(-1), refEqA: rf(-1),
+                    location: rv3(v3(0, -0.5, 0)),
+                    velocity: rv3(v3(0, 0.08 * inten, 0), v3(0, 0.13 * inten, 0)),
+                    acceleration: rv3(0),
+                },
+                scaling: { type: 0, refEq: -1, scale: v3(0.07, 1.3, 1) },
+                rendererCommon: {
+                    colorTextureIndex: 0, alphaBlend: 2,
+                    fadeInType: 1, fadeIn: { frame: 3, params: [0, 0, 0] },
+                    fadeOutType: 1, fadeOut: { frame: 8, params: [0, 0, 0] },
+                },
+                rendererParams: { allColor: U.fixedColor({ ...c2, a: 235 }) },
+            }));
+            // SWIRLING energy at the base: two counter-rotating fans of
+            // CRESCENT swooshes (slash texture — curved, tapered, crisp
+            // pointed ends) lying flat on the ground, plus a marching
+            // bead ring — a vortex, not an expanding blur
+            // SAWBLADE: curved teeth hooking OUTWARD around the perimeter
+            // (crescents flipped so the round belly faces the hub and the
+            // point trails tangentially), around a crisp hub ring
+            const swirlFan = (dps, radius, count, len, col, alpha) => {
+                const arcs = [];
+                for (let i = 0; i < count; i++) {
+                    const a2 = (i / count) * Math.PI * 2;
+                    arcs.push(B.makeNode(RR_EfkFormat.NODE_TYPE.SPRITE, {
+                        commonValues: { ...bindAlways, maxGeneration: 1, life: rf(LONG) },
+                        translation: { type: 0, refEq: -1,
+                                       position: v3(Math.cos(a2) * radius, Math.sin(a2) * radius, 0) },
+                        rotation: { type: 0, refEq: -1, rotation: v3(0, 0, a2 + Math.PI / 2) },
+                        scaling: { type: 0, refEq: -1, scale: v3(len, -len * 0.42, 1) },
+                        rendererCommon: { colorTextureIndex: 3, alphaBlend: 2 },
+                        rendererParams: { billboard: 2, allColor: U.fixedColor({ ...col, a: alpha }) },
+                    }));
+                }
+                return B.makeNode(RR_EfkFormat.NODE_TYPE.NONE, {
+                    commonValues: { ...bindAlways, maxGeneration: 1, life: rf(LONG) },
+                    translation: { type: 0, refEq: -1, position: v3(0, -0.6, 0) },
+                    rotation: {
+                        type: 1, refEqP: rf(-1), refEqV: rf(-1), refEqA: rf(-1),
+                        rotation: rv3(v3(Math.PI / 2, 0, 0)),
+                        velocity: rv3(v3(0, 0, dps * Math.PI / 180 / 60)),
+                        acceleration: rv3(0),
+                    },
+                    children: arcs,
+                });
+            };
+            // teeth ride OUTSIDE the hub ring, dense like a blade
+            kids.push(swirlFan(160, 0.66, 8, 0.5, c1, 235));
+            kids.push(swirlFan(-110, 0.42, 5, 0.38, c2, 170));
+            // the hub: fine double ring lines the teeth appear to grow
+            // from — an energy field boundary, not a solid disc
+            for (const [d, a3] of [[1.18, 210], [1.0, 120]]) {
+                kids.push(B.makeNode(RR_EfkFormat.NODE_TYPE.SPRITE, {
+                    commonValues: { ...bindAlways, maxGeneration: 1, life: rf(LONG) },
+                    translation: { type: 0, refEq: -1, position: v3(0, -0.6, 0) },
+                    rotation: { type: 0, refEq: -1, rotation: v3(Math.PI / 2, 0, 0) },
+                    scaling: { type: 0, refEq: -1, scale: v3(d, d, 1) },
+                    rendererCommon: { colorTextureIndex: 4, alphaBlend: 2 },
+                    rendererParams: { billboard: 2, allColor: U.fixedColor({ ...c1, a: a3 }) },
+                }));
+            }
+            // marching beads racing the vortex rim
+            kids.push(B.makeNode(RR_EfkFormat.NODE_TYPE.SPRITE, {
+                commonValues: { ...bindAlways, maxGeneration: 99999, life: rf(22), generationTime: rf(2.5) },
+                generationLocation: {
+                    type: 3, division: 14, radius: rf(0.72),
+                    angleStart: rf(0), angleEnd: rf(360),
+                    circleType: 0, axisDirection: 1, angleNoize: rf(0),
+                },
+                translation: { type: 0, refEq: -1, position: v3(0, -0.6, 0) },
+                scaling: { type: 4, start: rf(0.09), end: rf(0.02), params: [0, 0, 1] },
+                rendererCommon: {
+                    colorTextureIndex: 2, alphaBlend: 2,
+                    fadeInType: 1, fadeIn: { frame: 3, params: [0, 0, 0] },
+                    fadeOutType: 1, fadeOut: { frame: 9, params: [0, 0, 0] },
+                },
+                rendererParams: { allColor: U.fixedColor({ ...c2, a: 255 }) },
+            }));
+            // breathing core
+            kids.push(B.makeNode(RR_EfkFormat.NODE_TYPE.SPRITE, {
+                commonValues: { ...bindAlways, maxGeneration: 99999, life: rf(40), generationTime: rf(20) },
+                scaling: { type: 4, start: rf(0.9 * inten), end: rf(1.35 * inten), params: [0, 0, 1] },
+                rendererCommon: {
+                    colorTextureIndex: 1, alphaBlend: 2,
+                    fadeInType: 1, fadeIn: { frame: 14, params: [0, 0, 0] },
+                    fadeOutType: 1, fadeOut: { frame: 16, params: [0, 0, 0] },
+                },
+                rendererParams: { allColor: U.fixedColor({ ...U.dim(c1, 0.8), a: 70 }) },
+            }));
+            // rising sparkle motes
+            if (p.sparkles > 0) {
+                kids.push(B.makeNode(RR_EfkFormat.NODE_TYPE.SPRITE, {
+                    commonValues: { ...bindAlways, maxGeneration: 99999, life: rf(30, 55),
+                                    generationTime: rf(Math.max(0.6, 40 / p.sparkles)) },
+                    generationLocation: {
+                        type: 3, division: 20, radius: rf(0.15, 0.8),
+                        angleStart: rf(0), angleEnd: rf(360),
+                        circleType: 0, axisDirection: 1, angleNoize: rf(0),
+                    },
+                    translation: {
+                        type: 1, refEqP: rf(-1), refEqV: rf(-1), refEqA: rf(-1),
+                        location: rv3(v3(0, -0.5, 0)),
+                        velocity: rv3(v3(-0.004, 0.015, -0.004), v3(0.004, 0.05 * inten, 0.004)),
+                        acceleration: rv3(0),
+                    },
+                    scaling: { type: 4, start: rf(0.05, 0.12), end: rf(0), params: [0, 0, 1] },
+                    rendererCommon: { colorTextureIndex: 2, alphaBlend: 2 },
+                    rendererParams: { allColor: U.fixedColor({ ...c2, a: 255 }) },
+                }));
+            }
+
+            const D2R2 = Math.PI / 180;
+            return [B.makeNode(RR_EfkFormat.NODE_TYPE.NONE, {
+                commonValues: { ...bindAlways, maxGeneration: 1, life: rf(LONG) },
+                ...(p.spin ? { rotation: {
+                    type: 1, refEqP: rf(-1), refEqV: rf(-1), refEqA: rf(-1),
+                    rotation: rv3(0),
+                    velocity: rv3(v3(0, p.spin * D2R2 / 60, 0)),
+                    acceleration: rv3(0),
+                } } : {}),
+                scaling: { type: 0, refEq: -1, scale: v3(p.size, p.size, p.size) },
+                children: kids,
+            })];
+        },
+    });
+
+    // ── Energy Column ────────────────────────────────────────────────────
+    // A vertical pillar of light with CONCENTRIC RINGS rippling at the
+    // surface — beam-down/ascension staple.
+    RR_EFK_RECIPE_REGISTRY.push({
+        id: 'energy-column',
+        name: 'Energy Column',
+        category: 'Energy',
+        continuous: true,
+        prewarm: 80,
+        textures: ['streak', 'glow_soft', 'particle_hard', 'ringthin'],
+        buildModels(p, M) {
+            // the SAME stock solid cylinder Energy Beam uses (cache-shared)
+            // — its uv layout is the proven one for wrap-count layering
+            const geo = M.buildGeometry('cylinder', { style: 'solid' });
+            return [{ path: 'Model/rr_geo_cylinder_solid_t5.efkmodel', mesh: geo.mesh }];
+        },
+        params: [
+            { key: 'color',     label: 'Primary Color',   type: 'color', default: '#8fe6c0' },
+            { key: 'color2',    label: 'Secondary Color', type: 'color', default: '#f2fff8' },
+            { key: 'size',      label: 'Size',            type: 'range', default: 7, min: 2, max: 16, step: 1 },
+            { key: 'width',     label: 'Beam Width',      type: 'range', default: 5, min: 1, max: 14, step: 1 },
+            { key: 'rings',     label: 'Rings',           type: 'range', default: 3, min: 1, max: 6, step: 1 },
+            { key: 'spin',      label: 'Spin (°/s)',      type: 'range', default: 30, min: -120, max: 120, step: 1 },
+            { key: 'sparkles',  label: 'Sparkles',        type: 'range', default: 18, min: 0, max: 50, step: 1 },
+        ],
+        build(p) {
+            const B = RR_EfkBuilder;
+            const U = RR_EfkRecipeUtil;
+            const { rf, rv3, v3, v2 } = B;
+            const c1 = U.hexToRgba(p.color);
+            const c2 = U.hexToRgba(p.color2);
+            const bindAlways = { translationBindType: 2, rotationBindType: 2, scalingBindType: 2 };
+            const R = 0.1 + p.width * 0.055;   // narrow needle → wide tube
+            const kids = [];
+
+            // the column: a real 3D cylinder — outer energy wall with the
+            // texture FLOWING upward, plus a hotter inner tube flowing
+            // faster, and a soft core beam
+            // shared column span: base EXACTLY at the ring plane (-0.6),
+            // one common top — nothing pokes above or below the pad
+            const COL_H = 3.0;
+            const COL_Y = -0.6 + COL_H / 2;
+            // Energy-Beam layering, verbatim: white core (4 wraps), colored
+            // sheath with DIAGONAL scroll (3 wraps — the pieces sit
+            // symmetrically apart and travel AROUND the field), wide soft
+            // halo (2 wraps). Different wrap counts + speeds = layers can
+            // never move in lockstep.
+            const flowV = 0.004;
+            const layer = (radiusMul, alpha, color, uvSpeed, wraps) => B.makeNode(RR_EfkFormat.NODE_TYPE.MODEL, {
+                commonValues: { ...bindAlways, maxGeneration: 1, life: rf(LONG) },
+                translation: { type: 0, refEq: -1, position: v3(0, COL_Y, 0) },
+                scaling: { type: 0, refEq: -1, scale: v3(R * radiusMul, COL_H / 2, R * radiusMul) },
+                rendererCommon: {
+                    colorTextureIndex: 0,
+                    uv: { type: 3,
+                          position: { max: { x: 0, y: 0 }, min: { x: 0, y: 0 } },
+                          size: { max: { x: wraps, y: 1 }, min: { x: wraps, y: 1 } },
+                          speed: { max: uvSpeed, min: uvSpeed } },
+                },
+                rendererParams: { modelIndex: 0, allColor: U.fixedColor({ ...color, a: alpha }) },
+            });
+            kids.push(layer(0.35, 235, c2, { x: 0, y: -flowV * 1.6 }, 4));            // core
+            kids.push(layer(0.75, 150, c1, { x: flowV * 0.5, y: -flowV }, 3));        // spiral sheath
+            kids.push(layer(1.0, 45, c1, { x: 0, y: -flowV * 0.6 }, 2));              // halo
+
+            // CONCENTRIC SURFACE RINGS: crisp flat rings sized to the TUBE
+            // (they hug the column instead of dwarfing it) — ringhard
+            // quads, no gradient softness anywhere
+            for (let i = 0; i < p.rings; i++) {
+                const d = R * 2 * (1.25 + i * 0.55);
+                kids.push(B.makeNode(RR_EfkFormat.NODE_TYPE.SPRITE, {
+                    commonValues: { ...bindAlways, maxGeneration: 1, life: rf(LONG) },
+                    translation: { type: 0, refEq: -1, position: v3(0, -0.6 + i * 0.015, 0) },
+                    rotation: { type: 0, refEq: -1, rotation: v3(Math.PI / 2, 0, 0) },
+                    scaling: { type: 0, refEq: -1, scale: v3(d, d, 1) },
+                    rendererCommon: { colorTextureIndex: 3, alphaBlend: 2 },
+                    rendererParams: { billboard: 2,
+                        allColor: U.fixedColor({ ...c1, a: 235 - i * 28 }) },
+                }));
+            }
+            // …plus a crisp ripple pulse expanding through them
+            kids.push(B.makeNode(RR_EfkFormat.NODE_TYPE.SPRITE, {
+                commonValues: { ...bindAlways, maxGeneration: 99999, life: rf(30), generationTime: rf(38) },
+                translation: { type: 0, refEq: -1, position: v3(0, -0.58, 0) },
+                rotation: { type: 0, refEq: -1, rotation: v3(Math.PI / 2, 0, 0) },
+                scaling: { type: 4, start: rf(R * 2), end: rf(R * 2 * (1.4 + p.rings * 0.55)),
+                           params: [0, 0, 1] },
+                rendererCommon: {
+                    colorTextureIndex: 3, alphaBlend: 2,
+                    fadeOutType: 1, fadeOut: { frame: 14, params: [0, 0, 0] },
+                },
+                rendererParams: { billboard: 2, allColor: U.fixedColor({ ...c2, a: 170 }) },
+            }));
+            // particles spiraling up inside the column
+            if (p.sparkles > 0) {
+                kids.push(B.makeNode(RR_EfkFormat.NODE_TYPE.SPRITE, {
+                    commonValues: { ...bindAlways, maxGeneration: 99999, life: rf(35, 60),
+                                    generationTime: rf(Math.max(0.6, 44 / p.sparkles)) },
+                    generationLocation: {
+                        type: 3, division: 20, radius: rf(0.08, R * 0.85),
+                        angleStart: rf(0), angleEnd: rf(360),
+                        circleType: 0, axisDirection: 1, angleNoize: rf(0),
+                    },
+                    translation: {
+                        type: 1, refEqP: rf(-1), refEqV: rf(-1), refEqA: rf(-1),
+                        location: rv3(v3(0, -0.55, 0)),
+                        velocity: rv3(v3(-0.003, 0.02, -0.003), v3(0.003, 0.055, 0.003)),
+                        acceleration: rv3(0),
+                    },
+                    scaling: { type: 4, start: rf(0.05, 0.1), end: rf(0), params: [0, 0, 1] },
+                    rendererCommon: { colorTextureIndex: 2, alphaBlend: 2 },
+                    rendererParams: { allColor: U.fixedColor({ ...c2, a: 255 }) },
+                }));
+            }
+
+            const D2R2 = Math.PI / 180;
+            return [B.makeNode(RR_EfkFormat.NODE_TYPE.NONE, {
+                commonValues: { ...bindAlways, maxGeneration: 1, life: rf(LONG) },
+                ...(p.spin ? { rotation: {
+                    type: 1, refEqP: rf(-1), refEqV: rf(-1), refEqA: rf(-1),
+                    rotation: rv3(0),
+                    velocity: rv3(v3(0, p.spin * D2R2 / 60, 0)),
+                    acceleration: rv3(0),
+                } } : {}),
+                scaling: { type: 0, refEq: -1, scale: v3(p.size, p.size, p.size) },
+                children: kids,
+            })];
+        },
+    });
+
+    // ── Binding Circle ───────────────────────────────────────────────────
+    // Restraint spell: an upright rune cage around the target — two
+    // crossed vertical inscription bands + top/bottom seals + marching
+    // wardens, slowly rotating. The sharpened rune strip carries it.
+    RR_EFK_RECIPE_REGISTRY.push({
+        id: 'binding-circle',
+        name: 'Binding Circle',
+        category: 'Energy',
+        continuous: true,
+        prewarm: 80,
+        // ringhard, not ring_soft — the top/bottom seals read blurry with
+        // a gradient annulus; the cage wants crisp metal-band edges
+        textures: ['runes', 'ringhard', 'glow_soft', 'particle_hard'],
+        params: [
+            { key: 'color',     label: 'Primary Color',   type: 'color', default: '#c85cff' },
+            { key: 'color2',    label: 'Secondary Color', type: 'color', default: '#ff5ca8' },
+            { key: 'size',      label: 'Size',            type: 'range', default: 7, min: 2, max: 16, step: 1 },
+            { key: 'scroll',    label: 'Scroll Speed',    type: 'range', default: 5, min: 0, max: 15, step: 1 },
+            { key: 'spin',      label: 'Spin (°/s)',      type: 'range', default: 12, min: -120, max: 120, step: 1 },
+            { key: 'sparkles',  label: 'Sparkles',        type: 'range', default: 12, min: 0, max: 40, step: 1 },
+        ],
+        build(p) {
+            const B = RR_EfkBuilder;
+            const U = RR_EfkRecipeUtil;
+            const { rf, rv3, v3, v2 } = B;
+            const c1 = U.hexToRgba(p.color);
+            const c2 = U.hexToRgba(p.color2);
+            const bindAlways = { translationBindType: 2, rotationBindType: 2, scalingBindType: 2 };
+            const kids = [];
+
+            // upright inscription bands: rune rings standing in the world,
+            // crossed at 0°/60°/120°, glyphs scrolling around the target
+            for (let i = 0; i < 3; i++) {
+                kids.push(B.makeNode(RR_EfkFormat.NODE_TYPE.RING, {
+                    commonValues: { ...bindAlways, maxGeneration: 1, life: rf(LONG) },
+                    rotation: { type: 0, refEq: -1, rotation: v3(0, (i / 3) * Math.PI, 0) },
+                    scaling: { type: 0, refEq: -1, scale: v3(0.95, 0.95, 0.95) },
+                    rendererCommon: {
+                        colorTextureIndex: 0, alphaBlend: 2,
+                        uv: { type: 3,
+                              position: { max: { x: 0, y: 0 }, min: { x: 0, y: 0 } },
+                              size: { max: { x: 5, y: 1 }, min: { x: 5, y: 1 } },
+                              speed: { max: { x: (i % 2 ? -1 : 1) * p.scroll * 0.0008, y: 0 },
+                                       min: { x: (i % 2 ? -1 : 1) * p.scroll * 0.0008, y: 0 } } },
+                    },
+                    rendererParams: {
+                        billboard: 2, vertexCount: 64,
+                        outerLocation: { type: 0, location: v2(1.12, 0) },
+                        innerLocation: { type: 0, location: v2(0.88, 0) },
+                        outerColor: U.fixedColor({ ...c1, a: 0 }),
+                        centerColor: U.fixedColor({ ...c1, a: 235 }),
+                        innerColor: U.fixedColor({ ...c1, a: 60 }),
+                    },
+                }));
+            }
+            // top and bottom seals: flat rings capping the cage — UNIFORM
+            // vertex alpha so the crisp annulus texture supplies the edges
+            // (a 0→200→0 vertex gradient re-blurs whatever texture is used)
+            for (const [y, r] of [[1.05, 0.5], [-1.05, 0.5], [-1.18, 0.85]]) {
+                kids.push(B.makeNode(RR_EfkFormat.NODE_TYPE.RING, {
+                    commonValues: { ...bindAlways, maxGeneration: 1, life: rf(LONG) },
+                    rotation: { type: 0, refEq: -1, rotation: v3(Math.PI / 2, 0, 0) },
+                    translation: { type: 0, refEq: -1, position: v3(0, y, 0) },
+                    scaling: { type: 0, refEq: -1, scale: v3(r, r, r) },
+                    rendererCommon: { colorTextureIndex: 1, alphaBlend: 2 },
+                    rendererParams: {
+                        billboard: 2, vertexCount: 40,
+                        outerLocation: { type: 0, location: v2(1.1, 0) },
+                        innerLocation: { type: 0, location: v2(0.9, 0) },
+                        outerColor: U.fixedColor({ ...c2, a: 210 }),
+                        centerColor: U.fixedColor({ ...c2, a: 210 }),
+                        innerColor: U.fixedColor({ ...c2, a: 210 }),
+                    },
+                }));
+            }
+            // wardens: bright beads marching the cage's equator
+            kids.push(B.makeNode(RR_EfkFormat.NODE_TYPE.SPRITE, {
+                commonValues: { ...bindAlways, maxGeneration: 99999, life: rf(30), generationTime: rf(4) },
+                generationLocation: {
+                    type: 3, division: 12, radius: rf(0.95),
+                    angleStart: rf(0), angleEnd: rf(360),
+                    circleType: 0, axisDirection: 1, angleNoize: rf(0),
+                },
+                scaling: { type: 4, start: rf(0.12), end: rf(0.04), params: [0, 0, 1] },
+                rendererCommon: {
+                    colorTextureIndex: 3, alphaBlend: 2,
+                    fadeInType: 1, fadeIn: { frame: 4, params: [0, 0, 0] },
+                    fadeOutType: 1, fadeOut: { frame: 10, params: [0, 0, 0] },
+                },
+                rendererParams: { allColor: U.fixedColor({ ...c2, a: 255 }) },
+            }));
+            // suppression motes drifting DOWN inside the cage
+            if (p.sparkles > 0) {
+                kids.push(B.makeNode(RR_EfkFormat.NODE_TYPE.SPRITE, {
+                    commonValues: { ...bindAlways, maxGeneration: 99999, life: rf(35, 60),
+                                    generationTime: rf(Math.max(0.8, 40 / p.sparkles)) },
+                    generationLocation: {
+                        type: 3, division: 16, radius: rf(0.1, 0.7),
+                        angleStart: rf(0), angleEnd: rf(360),
+                        circleType: 0, axisDirection: 1, angleNoize: rf(0),
+                    },
+                    translation: {
+                        type: 1, refEqP: rf(-1), refEqV: rf(-1), refEqA: rf(-1),
+                        location: rv3(v3(0, 0.9, 0)),
+                        velocity: rv3(v3(-0.003, -0.035, -0.003), v3(0.003, -0.012, 0.003)),
+                        acceleration: rv3(0),
+                    },
+                    scaling: { type: 4, start: rf(0.05, 0.1), end: rf(0), params: [0, 0, 1] },
+                    rendererCommon: { colorTextureIndex: 3, alphaBlend: 2 },
+                    rendererParams: { allColor: U.fixedColor({ ...c1, a: 235 }) },
+                }));
+            }
+
+            const D2R2 = Math.PI / 180;
+            return [B.makeNode(RR_EfkFormat.NODE_TYPE.NONE, {
+                commonValues: { ...bindAlways, maxGeneration: 1, life: rf(LONG) },
+                ...(p.spin ? { rotation: {
+                    type: 1, refEqP: rf(-1), refEqV: rf(-1), refEqA: rf(-1),
+                    rotation: rv3(0),
+                    velocity: rv3(v3(0, p.spin * D2R2 / 60, 0)),
+                    acceleration: rv3(0),
+                } } : {}),
+                scaling: { type: 0, refEq: -1, scale: v3(p.size, p.size, p.size) },
+                children: kids,
+            })];
+        },
+    });
+
+    // ── Hex Forcefield ───────────────────────────────────────────────────
+    // Barrier bubble: a honeycomb lattice wrapped around a real sphere
+    // shell, slowly rotating and breathing, with impact shimmers flashing
+    // ON the shell surface and a bright rim.
+    RR_EFK_RECIPE_REGISTRY.push({
+        id: 'hex-forcefield',
+        name: 'Hex Forcefield',
+        category: 'Energy',
+        continuous: true,
+        prewarm: 60,
+        textures: ['hexgrid', 'glow_soft', 'ring_soft', 'streak'],
+        buildModels(p, M) {
+            return [{ path: `Model/rr_hexfield_sphere_v${M.MESH_REV || 1}.efkmodel`,
+                      mesh: M.buildGeometry('sphere', { style: 'solid' }).mesh }];
+        },
+        params: [
+            { key: 'color',    label: 'Primary Color',   type: 'color', default: '#4fb8ff' },
+            { key: 'color2',   label: 'Secondary Color', type: 'color', default: '#c8ecff' },
+            { key: 'size',     label: 'Size',            type: 'range', default: 7, min: 2, max: 16, step: 1 },
+            { key: 'texScale', label: 'Pattern Scale',   type: 'range', default: 3, min: 1, max: 8, step: 1 },
+            { key: 'spin',     label: 'Spin (°/s)',      type: 'range', default: 14, min: -120, max: 120, step: 1 },
+            { key: 'pulse',    label: 'Pulse Rate',      type: 'range', default: 6, min: 2, max: 20, step: 1 },
+            { key: 'sparkles', label: 'Sparkles',        type: 'range', default: 10, min: 0, max: 40, step: 1 },
+        ],
+        build(p) {
+            const B = RR_EfkBuilder;
+            const U = RR_EfkRecipeUtil;
+            const { rf, rv3, v3 } = B;
+            const c1 = U.hexToRgba(p.color);
+            const c2 = U.hexToRgba(p.color2);
+            const bindAlways = { translationBindType: 2, rotationBindType: 2, scalingBindType: 2 };
+            const kids = [];
+
+            // the shell: ONE honeycomb lattice, front faces only — with
+            // both sides visible the back-side pattern paints a second,
+            // misaligned lattice over the front ("hex layers"). Motion
+            // comes from the assembly spinner, not uv drift, so the
+            // lattice stays glued to the shell.
+            const yReps = Math.max(1, Math.round(p.texScale / 2));
+            kids.push(B.makeNode(RR_EfkFormat.NODE_TYPE.MODEL, {
+                commonValues: { ...bindAlways, maxGeneration: 1, life: rf(LONG) },
+                rendererCommon: {
+                    colorTextureIndex: 0, alphaBlend: 2,
+                    uv: { type: 3,
+                          position: { max: { x: 0, y: 0 }, min: { x: 0, y: 0 } },
+                          size: { max: { x: p.texScale, y: yReps }, min: { x: p.texScale, y: yReps } },
+                          speed: { max: { x: 0, y: 0 }, min: { x: 0, y: 0 } } },
+                },
+                rendererParams: { modelIndex: 0, billboard: 2, culling: 1,
+                                  allColor: U.fixedColor({ ...c1, a: 220 }) },
+            }));
+            // the ANIMATION: a bright energy meridian sweeping around the
+            // shell (streak texture scrolling in u) + a breathing whole-
+            // shell pulse riding the Pulse Rate
+            kids.push(B.makeNode(RR_EfkFormat.NODE_TYPE.MODEL, {
+                commonValues: { ...bindAlways, maxGeneration: 1, life: rf(LONG) },
+                rendererCommon: {
+                    colorTextureIndex: 3, alphaBlend: 2,
+                    uv: { type: 3,
+                          position: { max: { x: 0, y: 0 }, min: { x: 0, y: 0 } },
+                          size: { max: { x: 1, y: 1 }, min: { x: 1, y: 1 } },
+                          speed: { max: { x: p.pulse * 0.0006, y: 0 },
+                                   min: { x: p.pulse * 0.0006, y: 0 } } },
+                },
+                rendererParams: { modelIndex: 0, billboard: 2, culling: 1,
+                                  allColor: U.fixedColor({ ...c2, a: 120 }) },
+            }));
+            kids.push(B.makeNode(RR_EfkFormat.NODE_TYPE.MODEL, {
+                commonValues: { ...bindAlways, maxGeneration: 99999,
+                                life: rf(Math.max(14, Math.round(120 / p.pulse))),
+                                generationTime: rf(Math.max(16, Math.round(140 / p.pulse))) },
+                scaling: { type: 4, start: rf(1.01), end: rf(1.06), params: [0, 0, 1] },
+                rendererCommon: {
+                    colorTextureIndex: 3, alphaBlend: 2,
+                    fadeInType: 1, fadeIn: { frame: 6, params: [0, 0, 0] },
+                    fadeOutType: 1, fadeOut: { frame: 10, params: [0, 0, 0] },
+                },
+                rendererParams: { modelIndex: 0, billboard: 2, culling: 1,
+                                  allColor: U.fixedColor({ ...c2, a: 45 }) },
+            }));
+            // rim: soft ring glow facing the camera sells the bubble edge
+            kids.push(B.makeNode(RR_EfkFormat.NODE_TYPE.SPRITE, {
+                commonValues: { ...bindAlways, maxGeneration: 1, life: rf(LONG) },
+                scaling: { type: 0, refEq: -1, scale: v3(2.25, 2.25, 1) },
+                rendererCommon: { colorTextureIndex: 2, alphaBlend: 2 },
+                rendererParams: { billboard: 0, allColor: U.fixedColor({ ...c1, a: 110 }) },
+            }));
+            // impact shimmers: soft flashes popping ON the shell surface
+            if (p.sparkles > 0) {
+                kids.push(B.makeNode(RR_EfkFormat.NODE_TYPE.SPRITE, {
+                    commonValues: { ...bindAlways, maxGeneration: 99999, life: rf(10, 20),
+                                    generationTime: rf(Math.max(1, 30 / p.sparkles)) },
+                    generationLocation: { type: 2, modelIndex: 0, modelType: 2 },
+                    scaling: { type: 4, start: rf(0.12, 0.3), end: rf(0.02), params: [0, 0, 1] },
+                    rendererCommon: {
+                        colorTextureIndex: 1, alphaBlend: 2,
+                        fadeInType: 1, fadeIn: { frame: 2, params: [0, 0, 0] },
+                        fadeOutType: 1, fadeOut: { frame: 8, params: [0, 0, 0] },
+                    },
+                    rendererParams: { allColor: U.fixedColor({ ...c2, a: 235 }) },
+                }));
+            }
+
+            const D2R2 = Math.PI / 180;
+            return [B.makeNode(RR_EfkFormat.NODE_TYPE.NONE, {
+                commonValues: { ...bindAlways, maxGeneration: 1, life: rf(LONG) },
+                ...(p.spin ? { rotation: {
+                    type: 1, refEqP: rf(-1), refEqV: rf(-1), refEqA: rf(-1),
+                    rotation: rv3(0),
+                    velocity: rv3(v3(0, p.spin * D2R2 / 60, 0)),
+                    acceleration: rv3(0),
+                } } : {}),
+                scaling: { type: 0, refEq: -1, scale: v3(p.size, p.size, p.size) },
+                children: kids,
             })];
         },
     });
