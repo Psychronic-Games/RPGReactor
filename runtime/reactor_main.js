@@ -15,6 +15,7 @@ const scriptUrls = [
     "js/reactor_scenes.js",
     "js/reactor_sprites.js",
     "js/reactor_windows.js",
+    "js/reactor_mv_compat.js",
     "js/reactor_plugins.js"
 ];
 const effekseerWasmUrl = "js/libs/effekseer.wasm";
