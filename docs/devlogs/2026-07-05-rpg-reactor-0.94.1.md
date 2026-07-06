@@ -1,33 +1,37 @@
-# RPG Reactor 0.94.1: Black Screen Fixes, Big MV Compatibility Gains, and a Bigger Effekseer Forge
+# RPG Reactor 0.94.1: Make Your Own Effects with the Forge
 
-Hey everyone! The last few days were a heads-down push on runtime reliability and RPG Maker MV compatibility, plus a pile of new content for the Effekseer Animation Generator. Here's what's new in 0.94.1.
+RPG Reactor 0.94.1 is out. The headline this release is the Forge, the set of in-editor generators for making your own game assets without leaving the editor and without external tools.
 
-## The black screen bug is dead
+## Effekseer Animation Generator
 
-If your game ever froze on a black screen with nothing in the console, this one's for you. It turned out that resource loads (data files, images, audio) can silently die on slow or cloud-synced drives: no error, no timeout, nothing. The game would sit there waiting forever.
+You can now build native Effekseer particle effects (.efkefc) entirely inside RPG Reactor. Pick a recipe, turn the sliders, watch the live 3D preview, and export straight into your project. No Effekseer editor required, and the format engine is validated byte-for-byte against all 120 stock MZ effects.
 
-The runtime now watches every load from its own frame tick. Stalled requests retry automatically until they arrive, and files that are genuinely missing degrade gracefully (silent audio, blank image) with a clear console error instead of hanging your game. This works no matter which plugins you run, including plugins that replace the engine's own loading code.
+What's new in 0.94.1:
 
-## RPG Maker MV compatibility took a big leap
+- **21 sci-fi interface instruments, rebuilt in true 3D.** Orbital Survey lets you build your own solar system with per-planet sizes and custom planet textures. Starship Analysis draws a parametric wireframe ship with tracking callouts. There's a Reactor Core, Circular Gauge, Bar Meter, a segmented 3D Battery with drain/fill/short patterns, Behavior Matrix, Flight Prediction, and a living Composite Waveform oscilloscope. Every instrument rotates properly in 3D and takes your own text, so one recipe can mean whatever your game needs it to mean.
+- **A 10-recipe Physical attack pack** for battle effects: Slash, Bite, Punch, Impale, Claw Rake, Crush, Arrow Hit, Parry, Whip Crack, and Blood with adjustable splatter patterns and full color control.
+- **New Energy spells and symbols**: Energy Boost, Energy Column, Binding Circle, Hex Forcefield, four Christian Cross variants (Latin, Orthodox, Greek, Celtic), and jagged Ice Shards.
 
-The goal is simple: your MV and MZ plugins should run on Reactor's modern PIXI 8 runtime without rewrites, even mixed together in one project. To stress-test that, we've been running a huge commercial MV game with a 168-plugin stack (Yanfly, Victor Engine, MOG, SRD, LeTBS, and more) on Reactor.
+Everything supports layers, keyframes, custom textures, randomize, and presets. If you can describe the effect you want, you can probably assemble it here in a few minutes.
 
-As of 0.94.1 it boots, plays its cutscenes, saves and loads through its own custom menus, and runs LeTBS tactical battles all the way into combat turns with the movement grid, turn order, and battle HUD rendering correctly. Getting there meant restoring a long list of MV-era APIs the plugins expect: MV's battle scene structure, its sprite animation engine, character balloons, message sub-windows, gauge drawing, tone filters, and about 25 more gap-fills. There's more to do, but the foundation is now solid.
+## The Forge keeps growing
 
-## Effekseer Animation Generator: more toys
+The same idea runs through the whole Forge: generate assets, preview them live, save them into your project.
 
-- The Interface category was rebuilt as true 3D instruments and grew to 21 recipes, including a build-your-own solar system (Orbital Survey), Starship Analysis, Reactor Core, Circular Gauge, Bar Meter, a 3D Battery, Behavior Matrix, Flight Prediction, and a living Composite Waveform oscilloscope. Every panel rotates properly in 3D and can display your own text.
-- A new 10-recipe Physical attack pack: Slash, Bite, Punch, Impale, Claw Rake, Crush, Arrow Hit, Parry, Whip Crack, and Blood with adjustable splatter patterns.
-- New Energy spells (Energy Boost, Energy Column, Binding Circle, Hex Forcefield), Christian Cross variants (Latin, Orthodox, Greek, Celtic), and jagged Ice Shards.
+- **Animation Generator**: 80+ procedural 2D animations with layered composition and keyframe timelines, exported as bake-ready sprite sheets.
+- **Character Generator**: procedural Outfit Forge and Hair Forge tools that produce RPG Maker-style walking-sheet parts with live 4-direction previews.
 
-## Editor quality of life
+More generators and more recipes are on the way. If there's an asset type you keep buying or hand-drawing that you'd rather generate, tell us in the comments.
 
-- MZ-style tile-layer dimming in the map editor: pick layer 1 through 4 and the other layers fade so you can always see what you're editing.
-- All the new Forge content is localized across the editor's 17 languages.
-- Fixed Effekseer previews in the Database and Event animation pickers, plus a PIXI v8 compatibility fix for plugin hit-testing.
+## Fixes worth knowing about
 
-## Grab it
+- **Map editing**: MZ-style tile-layer dimming landed. Select layer 1 through 4 and the other layers fade, so you always know which layer you're painting. Layer erasing and imported-map autotile handling got fixes in the recent releases too.
+- **Playtest**: launching and relaunching playtests is reliable now, with proper profile isolation on Windows and a clean runtime layout in packaged builds.
+- **The silent black screen is fixed.** Resource loads that die without an error (common on slow or cloud-synced drives) used to hang games forever. The runtime now retries them automatically and reports genuinely missing files in the console instead of freezing.
+- All new Forge content is localized across the editor's 17 languages.
 
-The full source and release notes are on GitHub, and updated builds are coming to this page. As always, if something breaks, a screenshot plus your console output (F12) is the fastest way to get it fixed.
+## On RPG Maker compatibility
 
-Thanks for playing with RPG Reactor!
+The direction is unchanged: RPG Reactor aims to run your existing MV and MZ projects and plugins on its modern PIXI 8 runtime, even mixed in one project, while the editor and Forge move things forward in ways the original tools can't. Compatibility work continues every release; 0.94.1 shipped a large batch of MV runtime fixes, with more to come.
+
+Source and full release notes are on GitHub. If something breaks, a screenshot plus your console output (F12) is the fastest way to get it fixed.
