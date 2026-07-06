@@ -96,7 +96,7 @@ Package the RPG Reactor editor itself for distribution on itch.io, GitHub Releas
 - **3 package types**:
   - **Platform-Specific**: One archive per OS with bundled NW.js runtime (Linux → `.tar.gz`, Windows/macOS → `.zip`)
   - **Universal**: Single `.zip` containing all 3 platform runtimes
-  - **Minimal**: Editor-only package — bootstrap launchers auto-download NW.js on first run
+  - **Minimal**: Editor-only package, bootstrap launchers auto-download NW.js on first run
 - **NW.js editions**: Normal or SDK (includes DevTools for development/debugging)
 - **3-tier runtime acquisition**: Checks bundled local → `.nw-cache/` → downloads from `dl.nwjs.io`
 - **SHA256 checksums**: Automatically generated for all output archives
@@ -104,7 +104,7 @@ Package the RPG Reactor editor itself for distribution on itch.io, GitHub Releas
 - **Windows compatibility mode**: Windows editor packages use frameless RPG Reactor title controls, centered startup, and manual maximize/restore behavior so running the Windows build under Proton/Wine on Linux avoids native-frame white bars and click offsets
 - Access from **Build → Package Editor for Distribution...**
 
-### Forge — In-editor Asset Generators
+### Forge - In-editor Asset Generators
 
 Suite of in-editor tools for generating game assets without leaving RPG Reactor. Open from the **Forge** menu.
 
@@ -121,30 +121,30 @@ Procedural sprite-sheet generator for visual effects and projectile animations.
 - **3D pipeline**: Every shape supports static tilts + per-axis rotation cycles, glow halo, textured faces with backface culling, and depth-sorted edges
 - **Texture sources**:
   - PNG / JPG / WebP / BMP static images
-  - **Animated GIFs** — frames are decoded and played in sync with the animation's loop
-  - **Video files** (MP4, WebM, MOV, M4V, OGV, OGG) — seek-decoded to per-frame canvases on first load, also synced to the animation loop
+  - **Animated GIFs**, frames are decoded and played in sync with the animation's loop
+  - **Video files** (MP4, WebM, MOV, M4V, OGV, OGG), seek-decoded to per-frame canvases on first load, also synced to the animation loop
 - **Export**: Save bake-ready PNG sprite sheets for use in MZ animations *and* save a transparent animated GIF of the live preview for documentation / sharing
 
 #### Effekseer Animation Generator
-Recipe-driven generator for native Effekseer particle effects (`.efkefc`) — no external Effekseer editor needed. Exports drop straight into the project's `effects/` folder and play through the engine's bundled Effekseer runtime.
+Recipe-driven generator for native Effekseer particle effects (`.efkefc`), no external Effekseer editor needed. Exports drop straight into the project's `effects/` folder and play through the engine's bundled Effekseer runtime.
 
 - **Format engine**: In-house `.efkefc` reader/writer (binary version 1500) proven by byte-identical round-trips of all 120 stock MZ effects, plus an `.efkmodel` mesh writer (v3 single-frame and v5 multi-frame vertex animation)
-- **Recipe library** (80 recipes — full parity with the standard Animation Generator's catalog, all eight categories):
+- **Recipe library** (80 recipes, full parity with the standard Animation Generator's catalog, all eight categories):
   - **Geometric**: Hypercube, Pentachoron, and Hypersphere (4D shapes with genuine 4D double-rotation baked as multi-frame model animation), Cube, Pyramid, Octahedron, Star Tetrahedron, Icosahedron, Dodecahedron, Sphere, Torus, Cylinder, Cone, Möbius Strip, Double Helix, and a Galaxy Spiral whose arms emerge from a rotating hub launching world-frozen stars
   - **Symbolic**: all 17 glyphs from the standard Animation Generator (Pentagram, Yin Yang, Christian Cross, Star of David, Crescent and Star, Peace, Radioactive, Biohazard, Swastika, Hammer and Sickle, Heart, Dollar/Euro/Yen, Delta, Stargate, Trump) with two-color roles where the glyph calls for it
-  - **Object**: Sword, Knife, Hammer, Arrow, Bullet, Rock (seeded), Egg, Coin, Crown, Scythe, Circular Saw Blade, Crystal Gem — real 3D meshes from a lathe/prism/box kit, wireframe or solid-textured
-  - **Interface**: LCARS, Boot Screen, Hex Memory Dump, Network Nodes, Power Levels, Vital Signs Monitor, Radar Sweep, Tactical Map, Target Lock, Static — pixel parity via the standard generator's own canvas renders baked into sprite-sheet textures and played back with Effekseer UV animation
+  - **Object**: Sword, Knife, Hammer, Arrow, Bullet, Rock (seeded), Egg, Coin, Crown, Scythe, Circular Saw Blade, Crystal Gem, real 3D meshes from a lathe/prism/box kit, wireframe or solid-textured
+  - **Interface**: LCARS, Boot Screen, Hex Memory Dump, Network Nodes, Power Levels, Vital Signs Monitor, Radar Sweep, Tactical Map, Target Lock, Static, pixel parity via the standard generator's own canvas renders baked into sprite-sheet textures and played back with Effekseer UV animation
   - **Energy**: Energy Ball, Energy Beam, Aurora, Black Hole (real attractive-force-field debris infall), Portal, Energy Field, Energy Wisps (rainbow Track-ribbon tendrils), Holy Aura, Magic Circle, Teleport Column
   - **Elements**: Fire Burst, Water Splash, Wind Gust, Lightning Strike, Ice Shards, Shadow Pulse, Comet, Explosion, Light
   - **Effect**: Healing Ring, Hypnotize, Acid Trip, Chromatic Pulse, Poison Miasma
   - **Physical**: Shockwave
-- **Render styles**: Glowing wireframe struts (energy-line look, texture flow along edges) or Solid textured surfaces — seam-correct UV-sphere mapping, normal-blend faithful texture rendering, and untinted custom textures so e.g. a planet map wraps a sphere like a globe
+- **Render styles**: Glowing wireframe struts (energy-line look, texture flow along edges) or Solid textured surfaces, seam-correct UV-sphere mapping, normal-blend faithful texture rendering, and untinted custom textures so e.g. a planet map wraps a sphere like a globe
 - **Custom textures**: AG-style picker copies PNG/JPEG images into the project's `effects/Texture/` and maps them across the geometry
-- **Seamless loops by default**: spin rates snap to whole turns per loop, 4D morphs bake one model frame per game frame, texture flow snaps to whole repeats — restart pose equals start pose; steady-state effects (Portal, auras, columns…) skip looping entirely and emit continuously, with the preview pre-simulated into steady state
+- **Seamless loops by default**: spin rates snap to whole turns per loop, 4D morphs bake one model frame per game frame, texture flow snaps to whole repeats, restart pose equals start pose; steady-state effects (Portal, auras, columns…) skip looping entirely and emit continuously, with the preview pre-simulated into steady state
 - **Live preview**: in-memory playback through the same `effekseer.min.js` WebGL runtime the game uses (data-URL resources, zero disk writes), persistent render loop with background rebuild + seamless effect swap on every slider change
 - **3D controls**: left-drag rotates the effect (synced with the rotation gizmo), right/Shift-drag orbits the camera, scroll zooms; orientation is applied in realtime and baked into the exported file via an Always-bound container
-- **Layers**: stack any animations into one effect (＋ on each sidebar row), managed in an AG-style panel — visibility, opacity, reorder, duplicate, per-layer Delay/Duration windows — merged into a single .efkefc on export
-- **Keyframes**: pin full parameter states to chosen frames per layer; transitions compile to native Effekseer curves (colors, size, spin) and differing custom textures cross-fade — the pattern repeats every master cycle (the **Frames** field in the playback bar)
+- **Layers**: stack any animations into one effect (＋ on each sidebar row), managed in an AG-style panel, visibility, opacity, reorder, duplicate, per-layer Delay/Duration windows, merged into a single .efkefc on export
+- **Keyframes**: pin full parameter states to chosen frames per layer; transitions compile to native Effekseer curves (colors, size, spin) and differing custom textures cross-fade, the pattern repeats every master cycle (the **Frames** field in the playback bar)
 - **Randomize & presets**: a 🎲 Randomize button rolls all parameters (like the standard Animation Generator), and named presets save/recall parameter sets per project (`forge/effekseer_generator/presets.json`)
 
 #### Character Generator
@@ -152,7 +152,7 @@ Composable character sprite generator for actor walking sprites and generated ou
 
 - **Style selector**: Built-in `Looseleaf` and `Psychronic` styles share the same part format while allowing style-specific anatomy and painter adapters
 - **Procedural tab**: Renders layered ASCII/template parts from the part registry, with configurable frame size, alignment, palette overrides, and 3x4 walking-sheet export
-- **Outfit Forge tab**: Generates full-outfit Character Generator parts from recipe data. The current shared recipe is `Nova Sentinel`, available for both Looseleaf and Psychronic styles through `procgen/outfits/nova_sentinel.js`. The Legs slot offers a second preset, a procedural **Mini Skirt** — a one-cloth pleated triangular bell that flares past the body's per-row silhouette — beside the segmented leg armor. The skirt carries tunable `hem` (0–1 across waist-to-knee, default 0.35, with `0` as a micro-skirt), one-row `waistband`, `pleats`, and `kneeAccent` controls; below the hem the body legs show through except for optional knee pads stamped at the anatomical knees above the boot/shin band.
+- **Outfit Forge tab**: Generates full-outfit Character Generator parts from recipe data. The current shared recipe is `Nova Sentinel`, available for both Looseleaf and Psychronic styles through `procgen/outfits/nova_sentinel.js`. The Legs slot offers a second preset, a procedural **Mini Skirt**, a one-cloth pleated triangular bell that flares past the body's per-row silhouette, beside the segmented leg armor. The skirt carries tunable `hem` (0–1 across waist-to-knee, default 0.35, with `0` as a micro-skirt), one-row `waistband`, `pleats`, and `kneeAccent` controls; below the hem the body legs show through except for optional knee pads stamped at the anatomical knees above the boot/shin band.
 - **Outfit engine**: Browser/Node-compatible generator in `src/forge/CharacterGenerator/procgen/outfit_engine.js`, with per-zone palette families, role-based painters, extensions such as pauldrons/gauntlets, live 4-direction preview, walk preview, zone debug overlays, and save-to-library output under `styles/<style>/parts/full outfits/`
 - **Hair Forge tab**: Generates 4-direction walking hair parts with live walk preview, save-to-library output, expanded palettes (`auburn`, `platinum`, `rose`, `violet`, `navy`, `emerald`), front-view Eye Zone controls, and Hair Pattern sliders for lower-hair banding/scraggle or Short Spiky triangular texture.
 - **Hair Forge styles**: Includes `Layered Bob`, `Long Layered`, `Short Shag`, `Short Spiky`, and `Center Part Long`. Short Spiky uses style-specific spike silhouettes, spiky side bangs, connected rear spikes, and length-aware back/nape behavior; Center Part Long uses symmetrical straight strands, a visible middle part, smooth side bangs, face-framing long curtains, and subtle walk-frame sway.

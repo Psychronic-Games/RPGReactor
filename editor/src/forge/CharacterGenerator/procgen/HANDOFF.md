@@ -1,4 +1,4 @@
-# Procgen Outfit Generator — Handoff
+# Procgen Outfit Generator - Handoff
 
 This file captures everything a fresh session needs to continue the procgen outfit work without re-deriving the context.
 
@@ -10,34 +10,34 @@ part: **each zone gets its own palette FAMILY, and the contrast between families
 is what makes pieces read as separate armor.**
 
 What exists now:
-- `procgen/view_part.js` — a viewer that crops any part to its bbox, prints a
+- `procgen/view_part.js`, a viewer that crops any part to its bbox, prints a
   column ruler + the palette sorted by luminance, and can overlay the body
-  silhouette (`--overlay`). THIS is how you actually *see* parts — use it, don't
+  silhouette (`--overlay`). THIS is how you actually *see* parts, use it, don't
   read raw 144×144 JS. Usage: `node procgen/view_part.js <part.js> --all --overlay`
-- `procgen/analysis/*.md` — per-category pattern analysis from 8 agents that ran
+- `procgen/analysis/*.md`, per-category pattern analysis from 8 agents that ran
   the viewer on all 124 artist parts, synthesized into `PATTERN_LANGUAGE.md`.
   PATTERN_LANGUAGE.md is the spec the engine implements; read it before changing
   painters.
-- `procgen/outfit_engine.js` — the engine (UMD: runs in Node AND the browser).
+- `procgen/outfit_engine.js`, the engine (UMD: runs in Node AND the browser).
   FAMILIES (luminance ramps) + ACCENTS (off-ramp glows) + a palette BUILDER that
   assigns letters per family + role-based PAINTERS (head/torso/arms/belt/legs/
   boots) + EXTENSIONS (pauldron/armGauntlet/spikes). `generateOutfit(config, body)`
   returns `{ palette, sheet }`. Also exports `UI_SCHEMA` + `defaultConfig()` for
   the editor.
-- `procgen/styles/looseleaf.js` and `procgen/styles/psychronic.js` — style
+- `procgen/styles/looseleaf.js` and `procgen/styles/psychronic.js`, style
   adapters. Looseleaf uses the shared painters directly; Psychronic swaps in
   Psychronic-specific anatomy, classifiers, painters, and extensions.
-- `procgen/outfits/nova_sentinel.js` — the shared Nova Sentinel recipe. It
+- `procgen/outfits/nova_sentinel.js`, the shared Nova Sentinel recipe. It
   provides matching Outfit Forge part sets and default configs for both
   `looseleaf` and `psychronic`.
-- `procgen/gen_outfit.js` — thin Node CLI: loads body templates, runs configured
+- `procgen/gen_outfit.js`, thin Node CLI: loads body templates, runs configured
   outfits through the engine, writes part `.js` files.
-- `procgen/render_png.js` — Node smoke/render utility for generated outfits.
-- `procgen/outfit_configs.js` — legacy/simple config entry point still present
+- `procgen/render_png.js` - Node smoke/render utility for generated outfits.
+- `procgen/outfit_configs.js`, legacy/simple config entry point still present
   for direct CLI generation. The current editor default comes from
   `procgen/outfits/nova_sentinel.js`.
 - **In-editor "Outfit Forge" tab** (CharacterGenerator.js, methods grouped under
-  the `TAB — OUTFIT FORGE` banner). A third tab beside Procedural/Parts. Per-zone
+  the `TAB - OUTFIT FORGE` banner). A third tab beside Procedural/Parts. Per-zone
   material+accent dropdowns and param toggles, extension enable+params, live 4-dir
   preview (CharacterRenderer), walk toggle, and "Generate & Save to Library" which
   writes the part `.js` into `styles/<style>/parts/full outfits/` and registers it.
@@ -63,12 +63,12 @@ A procedural outfit generator for the Character Generator that:
 
 ## Where the code lives
 
-- `src/forge/CharacterGenerator/procgen/outfit_engine.js` — browser/Node generator core
-- `src/forge/CharacterGenerator/procgen/styles/` — style adapters (`looseleaf`, `psychronic`)
-- `src/forge/CharacterGenerator/procgen/outfits/nova_sentinel.js` — current shared recipe
-- `src/forge/CharacterGenerator/procgen/gen_outfit.js` — CLI generator wrapper
-- `src/forge/CharacterGenerator/procgen/render_png.js` — CLI render/smoke utility
-- `src/forge/CharacterGenerator/procgen/outfit_configs.js` — simple legacy config list for direct generation
+- `src/forge/CharacterGenerator/procgen/outfit_engine.js`, browser/Node generator core
+- `src/forge/CharacterGenerator/procgen/styles/`, style adapters (`looseleaf`, `psychronic`)
+- `src/forge/CharacterGenerator/procgen/outfits/nova_sentinel.js`, current shared recipe
+- `src/forge/CharacterGenerator/procgen/gen_outfit.js` - CLI generator wrapper
+- `src/forge/CharacterGenerator/procgen/render_png.js` - CLI render/smoke utility
+- `src/forge/CharacterGenerator/procgen/outfit_configs.js`, simple legacy config list for direct generation
 - Output goes to `src/forge/CharacterGenerator/styles/<style>/parts/full outfits/full-outfits-<style>-<id>.js`
 - Body reference: `src/forge/CharacterGenerator/styles/looseleaf/parts/body/male/body-looseleaf-looseleaf-male-body-01.js`
 - Psychronic body reference: `src/forge/CharacterGenerator/styles/psychronic/parts/body/male/body-psychronic-psychronic-body-male-01.js`
@@ -84,7 +84,7 @@ A procedural outfit generator for the Character Generator that:
 - Each "module" stamps an idealized rectangle at anchor coordinates (helmet box, chest rectangle, belt strip, leg rectangles).
 - Result: pieces are clearly separate, but they DON'T match the body silhouette per-frame and look static when the character walks.
 
-### Attempt 3 (current): Hybrid — painters + extensions
+### Attempt 3 (current): Hybrid, painters + extensions
 - **Painters** paint OVER body silhouette pixels (so legs match body's per-frame leg positions).
 - **Extensions** stamp extra geometry beyond the silhouette (helmet crown above head, pauldrons beyond shoulders).
 - Skin-letter + run-length detection separates arm/hand pixels from torso pixels.
@@ -95,15 +95,15 @@ A procedural outfit generator for the Character Generator that:
 
 ## Key insight that emerged from studying artist parts
 
-1. **Each zone uses a different COLOR FAMILY.** Chest plates are silver/steel grays. Belts are leather/gold or bronze. Pants are dark blue/black. The CONTRAST between zones is what makes them read as separate pieces. Current procgen uses one palette for everything — that's the "blob" feeling.
+1. **Each zone uses a different COLOR FAMILY.** Chest plates are silver/steel grays. Belts are leather/gold or bronze. Pants are dark blue/black. The CONTRAST between zones is what makes them read as separate pieces. Current procgen uses one palette for everything, that's the "blob" feeling.
 
-2. **Patterns use letter triples symmetrically inward**: `DAAACCCBBBBBCCCAAADD` — outline, mid-dark, mid-light, highlight, mid-light, mid-dark, outline. Every 3rd row swaps the center to `DCCCAAAFFFFFAAACCCDD` (the FFFFF is the "quilted seam"). This is what makes armor read as plated.
+2. **Patterns use letter triples symmetrically inward**: `DAAACCCBBBBBCCCAAADD`, outline, mid-dark, mid-light, highlight, mid-light, mid-dark, outline. Every 3rd row swaps the center to `DCCCAAAFFFFFAAACCCDD` (the FFFFF is the "quilted seam"). This is what makes armor read as plated.
 
-3. **Helmets are SHAPED procedurally** with their own outline — NOT traced from the head silhouette. Look at `metal-helmet-04.js` for the pinched-top dome with brow ridge and chin strap.
+3. **Helmets are SHAPED procedurally** with their own outline - NOT traced from the head silhouette. Look at `metal-helmet-04.js` for the pinched-top dome with brow ridge and chin strap.
 
 4. **Existing parts already align with the body** because the ARTIST designed them at the right body coordinates per frame. They're not traced from the body, but their bbox sits at exactly the right anatomical position.
 
-5. **Arms in walk frames swing** — the artist draws each frame's arm at the body's per-frame arm position. Need to detect arm centres per frame (already implemented in `findArmCentres` / per-row run analysis).
+5. **Arms in walk frames swing**, the artist draws each frame's arm at the body's per-frame arm position. Need to detect arm centres per frame (already implemented in `findArmCentres` / per-row run analysis).
 
 ## Completed analysis work
 
@@ -131,7 +131,7 @@ large painter changes.
 
 ## Body geometry quick reference
 
-- 144×144 cell, body content bbox: (48,36)–(93,107) — 46 wide × 72 tall, centred at col 70
+- 144×144 cell, body content bbox: (48,36)–(93,107) - 46 wide × 72 tall, centred at col 70
 - Skin-letter detection in body palette: A, C, D, E, I (warm peach hues)
 - Anatomical Y bands (as fractions of body height, used in `analyzeFrame`):
   - Head: 0.00 → 0.42 (rows 36–66)
