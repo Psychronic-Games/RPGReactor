@@ -134,13 +134,13 @@ DataManager._checkStalledDataFiles = function() {
         if (now - entry.time >= 10000) {
             entry.time = now;
             entry.attempts++;
-            if (entry.attempts < 3) {
-                console.warn("DataManager: stalled load, retrying " + src);
-                this.loadDataFile(name, src);
-            } else {
-                console.error("DataManager: giving up on stalled load " + src);
-                this.onXhrError(name, src, "data/" + src);
-            }
+            // Retry indefinitely: a genuinely missing file fires onerror
+            // immediately and takes the real error path; a silent stall is
+            // always a transient environment condition (throttled or
+            // dropped request), so giving up can only produce spurious
+            // fatal errors for a resource that would have arrived.
+            console.warn("DataManager: stalled load, retrying " + src + " (attempt " + entry.attempts + ")");
+            this.loadDataFile(name, src);
         }
     };
     for (const databaseFile of this._databaseFiles) {
@@ -1009,6 +1009,10 @@ ImageManager.clear = function() {
 };
 
 ImageManager.isReady = function() {
+    // Sweep every bitmap before answering: an early return on the first
+    // not-ready bitmap would serialize stall recovery to one file per
+    // watchdog period.
+    let ready = true;
     for (const cache of [this._cache, this._system]) {
         for (const url in cache) {
             const bitmap = cache[url];
@@ -1017,11 +1021,11 @@ ImageManager.isReady = function() {
             }
             if (!bitmap.isReady()) {
                 this._checkStalledBitmap(bitmap);
-                return false;
+                ready = false;
             }
         }
     }
-    return true;
+    return ready;
 };
 
 // An image load can silently die without firing onload OR onerror,
@@ -1032,13 +1036,8 @@ ImageManager.isReady = function() {
 ImageManager._checkStalledBitmap = function(bitmap) {
     if (bitmap._loadingState !== "loading" || !bitmap._loadStartTime) return;
     if (performance.now() - bitmap._loadStartTime < 10000) return;
-    if ((bitmap._loadAttempts || 0) < 3) {
-        console.warn("ImageManager: stalled load, retrying " + bitmap.url);
-        bitmap.retry();
-    } else {
-        console.error("ImageManager: giving up on stalled load " + bitmap.url);
-        bitmap._onError();
-    }
+    console.warn("ImageManager: stalled load, retrying " + bitmap.url + " (attempt " + (bitmap._loadAttempts || 0) + ")");
+    bitmap.retry();
 };
 
 ImageManager.throwLoadError = function(bitmap) {

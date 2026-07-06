@@ -1596,6 +1596,18 @@
     }
 
     // -------------------------------------------------------------------------
+    // v8: getBounds() returns a Bounds object; v5-v7 returned a Rectangle.
+    // Plugins call getBounds().contains(x, y) for hit tests (e.g. LeTBS
+    // TBSEntity.isMouseOverMe). Bounds already exposes x/y/width/height;
+    // give it Rectangle's contains() so those hit tests keep working.
+    if (PIXI.Bounds && PIXI.Bounds.prototype && !PIXI.Bounds.prototype.contains) {
+        PIXI.Bounds.prototype.contains = function(x, y) {
+            return this.rectangle.contains(x, y);
+        };
+        console.log("pixi_compat: added Bounds.contains (v8 getBounds returns Bounds, not Rectangle)");
+    }
+
+    // -------------------------------------------------------------------------
     // v8 only: MZGlobalUpgrade auto-wraps every MZ class whose prototype chain
     // contains a PIXI wrapper (Sprite, TilingSprite, Container, ObjectRenderer).
     // Wrapped constructors use Reflect.construct so v8's real class super-chain

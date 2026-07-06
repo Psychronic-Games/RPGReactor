@@ -5503,9 +5503,40 @@ Object.defineProperty(WebAudio.prototype, "pan", {
 WebAudio.prototype.isReady = function() {
     const ready = !!(this._buffers && this._buffers.length > 0);
     if (!ready) {
-        this._checkStalledLoad();
+        // Whoever polls a not-ready buffer is gating on it, so it must be
+        // under watchdog protection — self-register. This also revives
+        // "zombies": buffers a plugin cache still holds after some other
+        // code clear()ed or destroy()ed them (MZ treats buffers as
+        // disposable; MV-era audio caches assume they are reusable). A
+        // destroyed buffer nobody polls is never revived.
+        if (this._url) {
+            WebAudio._loadWatchList = WebAudio._loadWatchList || [];
+            if (WebAudio._loadWatchList.indexOf(this) < 0) {
+                WebAudio._loadWatchList.push(this);
+            }
+        }
+        // Sweep ALL loading buffers, not just this one: cache-level
+        // isReady() implementations short-circuit at the first not-ready
+        // buffer, which would serialize stall recovery to one file per
+        // watchdog period.
+        WebAudio._sweepStalledLoads();
     }
     return ready;
+};
+
+WebAudio._sweepStalledLoads = function() {
+    const list = WebAudio._loadWatchList;
+    if (!list || list.length === 0) return;
+    for (let i = list.length - 1; i >= 0; i--) {
+        const buffer = list[i];
+        const done = buffer._degradedToSilence ||
+            (buffer._buffers && buffer._buffers.length > 0 && buffer._isLoaded);
+        if (done) {
+            list.splice(i, 1);
+        } else {
+            buffer._checkStalledLoad();
+        }
+    }
 };
 
 /**
@@ -5647,6 +5678,15 @@ WebAudio.prototype.retry = function() {
 };
 
 WebAudio.prototype._startLoading = function() {
+    // Watchdog registration must happen even when the context guard below
+    // skips the actual load (a buffer created in a brief context-less
+    // window would otherwise be permanently inert and invisible to the
+    // stall sweep, deadlocking anything gating on AudioManager.isReady).
+    WebAudio._loadWatchList = WebAudio._loadWatchList || [];
+    if (WebAudio._loadWatchList.indexOf(this) < 0) {
+        WebAudio._loadWatchList.push(this);
+    }
+    this._stallCheckTime = 0;
     if (WebAudio._context) {
         const url = this._realUrl();
         if (Utils.isLocal()) {
@@ -5663,7 +5703,6 @@ WebAudio.prototype._startLoading = function() {
             this._createDecoder();
         }
         this._loadAttempts = (this._loadAttempts || 0) + 1;
-        this._stallCheckTime = 0;
     }
 };
 
@@ -5679,10 +5718,47 @@ WebAudio.prototype._startLoading = function() {
 // armed because the context was missing at creation time. Zero progress
 // for 10s -> retry (3 attempts) -> surface a real error.
 WebAudio.prototype._checkStalledLoad = function() {
-    if (this._isError || this._isLoaded) {
+    if (this._isLoaded) {
         return;
     }
-    const now = WebAudio._currentTime();
+    if (this._isError) {
+        // A real onerror fired (file missing or unreadable). Retry a few
+        // times, then degrade to SILENCE instead of erroring forever:
+        // plugin audio caches gate scene readiness on every cached buffer,
+        // so a permanently-errored buffer would deadlock the game over a
+        // missing sound file. Silence + a loud log is strictly better.
+        if (this._degradedToSilence) return;
+        const nowE = performance.now() / 1000;
+        if (!this._stallCheckTime) {
+            this._stallCheckTime = nowE;
+            return;
+        }
+        if (nowE - this._stallCheckTime < 10) return;
+        this._stallCheckTime = nowE;
+        if ((this._loadAttempts || 0) < 3) {
+            console.warn("WebAudio: load error, retrying " + this._url + " (attempt " + this._loadAttempts + ")");
+            this._startLoading();
+        } else if (WebAudio._context) {
+            console.error("WebAudio: '" + this._url + "' failed to load after retries; continuing with SILENCE. Check that the file exists.");
+            this._degradedToSilence = true;
+            this._buffers = [WebAudio._context.createBuffer(1, 1, 22050)];
+            this._totalTime = 0;
+            this._loopStartTime = 0;
+            this._loopLengthTime = 0;
+            this._isLoaded = true;
+            this._isError = false;
+            const listeners = this._loadListeners ? this._loadListeners.splice(0) : [];
+            for (const listener of listeners) {
+                try { listener(); } catch (e) { /* listener errors must not cascade */ }
+            }
+        }
+        return;
+    }
+    // performance.now, NOT AudioContext.currentTime: the context clock
+    // freezes while the context is suspended (e.g. during scene switches
+    // or in background windows), which blinds the stall detector exactly
+    // when loads are most likely to stall.
+    const now = performance.now() / 1000;
     const progressing =
         this._fetchedSize > 0 || (this._data && this._data.length > 0);
     if (!this._stallCheckTime || progressing) {
@@ -5691,13 +5767,12 @@ WebAudio.prototype._checkStalledLoad = function() {
     }
     if (now - this._stallCheckTime >= 10) {
         this._stallCheckTime = now;
-        if ((this._loadAttempts || 0) < 3) {
-            console.warn("WebAudio: stalled load, retrying " + this._url);
-            this._startLoading();
-        } else {
-            console.error("WebAudio: giving up on stalled load " + this._url);
-            this._onError();
-        }
+        // Retry indefinitely: a genuinely missing file fires onerror
+        // immediately and takes the real error path; a silent stall is a
+        // transient environment condition, so giving up can only produce
+        // spurious errors for audio that would have arrived.
+        console.warn("WebAudio: stalled load, retrying " + this._url + " (attempt " + (this._loadAttempts || 0) + ")");
+        this._startLoading();
     }
 };
 
