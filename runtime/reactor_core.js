@@ -5413,6 +5413,8 @@ WebAudio.prototype.clear = function() {
     this._isError = false;
     this._isPlaying = false;
     this._decoder = null;
+    this._loadAttempts = 0;
+    this._stallCheckTime = 0;
 };
 
 /**
@@ -5495,7 +5497,11 @@ Object.defineProperty(WebAudio.prototype, "pan", {
  * @returns {boolean} True if the audio data is ready to play.
  */
 WebAudio.prototype.isReady = function() {
-    return this._buffers && this._buffers.length > 0;
+    const ready = !!(this._buffers && this._buffers.length > 0);
+    if (!ready) {
+        this._checkStalledLoad();
+    }
+    return ready;
 };
 
 /**
@@ -5651,6 +5657,42 @@ WebAudio.prototype._startLoading = function() {
         this._destroyDecoder();
         if (this._shouldUseDecoder()) {
             this._createDecoder();
+        }
+        this._loadAttempts = (this._loadAttempts || 0) + 1;
+        this._stallCheckTime = 0;
+    }
+};
+
+// A loading request can silently die without firing onload OR onerror
+// (e.g., a dropped XHR in the burst of ~20 parallel audio loads during a
+// save-game load), leaving isReady() false forever. Anything gating on
+// AudioManager.isReady() -- preload plugins wrap Scene_Base.isReady with
+// it -- then deadlocks the scene: never started, stage never set, screen
+// permanently black. The stall check runs from isReady() itself: it is
+// polled every frame by exactly the code that is blocked waiting, and it
+// measures AudioContext time, so it works even when the window is
+// backgrounded (where setTimeout is throttled) and even if the load never
+// armed because the context was missing at creation time. Zero progress
+// for 10s -> retry (3 attempts) -> surface a real error.
+WebAudio.prototype._checkStalledLoad = function() {
+    if (this._isError || this._isLoaded) {
+        return;
+    }
+    const now = WebAudio._currentTime();
+    const progressing =
+        this._fetchedSize > 0 || (this._data && this._data.length > 0);
+    if (!this._stallCheckTime || progressing) {
+        this._stallCheckTime = now;
+        return;
+    }
+    if (now - this._stallCheckTime >= 10) {
+        this._stallCheckTime = now;
+        if ((this._loadAttempts || 0) < 3) {
+            console.warn("WebAudio: stalled load, retrying " + this._url);
+            this._startLoading();
+        } else {
+            console.error("WebAudio: giving up on stalled load " + this._url);
+            this._onError();
         }
     }
 };
