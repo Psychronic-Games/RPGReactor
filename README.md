@@ -1,6 +1,6 @@
 # RPG Reactor
 
-RPG Reactor 0.94 is an open-source, cross-platform RPG game editor and runtime for RPG Maker MV/MZ-compatible projects. RPG Reactor provides its own modern PIXI 8-based runtime while preserving compatibility with RPG Maker project data and targeting backwards compatibility with both RPG Maker MZ and MV plugins — including mixing plugins from both engines within a single project through complementary MZ and MV compatibility layers.
+RPG Reactor 0.94.1 is an open-source, cross-platform RPG game editor and runtime for RPG Maker MV/MZ-compatible projects. RPG Reactor provides its own modern PIXI 8-based runtime while preserving compatibility with RPG Maker project data and targeting backwards compatibility with both RPG Maker MZ and MV plugins — including mixing plugins from both engines within a single project through complementary MZ and MV compatibility layers.
 
 Use RPG Reactor to create, edit, playtest, and package 2D RPGs with familiar RPG Maker-style maps, events, database records, plugins, and deployment workflows, without depending on the original RPG Maker runtime or editor.
 
@@ -27,6 +27,7 @@ RPGReactor/
 
 ## Current Highlights
 
+- **0.94.1 MV compatibility and runtime resilience**: a large commercial MV project's full 168-plugin stack now boots, plays, saves/loads, and runs LeTBS tactical battles under the PIXI 8 runtime, and the runtime watchdogs every resource load so silently-dying requests (slow or syncing disks) retry instead of hanging the game on a black screen.
 - **0.94 development fixes** improve Windows playtest profile isolation, editor display scaling consistency, default project identity, and the existing 0.93.1 deployment fixes.
 - **RPG Maker compatibility fixes** keep existing MV/MZ `js/plugins.js` files in RPG Maker-readable format while Reactor uses richer plugin metadata only inside the editor UI.
 - **Database navigation fixes** expose System 1 and System 2 directly from the top Database menu so it opens the same sections as the database sidebar.

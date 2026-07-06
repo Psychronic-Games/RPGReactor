@@ -5,7 +5,7 @@ All notable changes to RPG Reactor will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.94.1] - 2026-07-05
 
 ### Added
 
@@ -18,6 +18,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Map editor **MZ-style layer dimming**: selecting a specific tile layer (1–4) renders every other layer at reduced opacity so it's obvious which tiles live on the active layer, with A restoring full opacity — implemented as per-container alpha (free per frame; the previous per-tile-overlay approach was disabled for freezing large maps).
 
 ### Changed
+
+- Bumped current development version to RPG Reactor 0.94.1.
 
 - Moved the Effekseer **Explosion** recipe from Elements to the Physical category.
 - Sharpened the Effekseer **Magic Circle**: the rune band is now a legible Futhark-style alphabet at higher resolution, and the inner star/tick struts use crisp textures instead of soft glow that blurred them. Ice Shards now use jagged, irregular seeded crystal models instead of a uniform hexagonal bipyramid.

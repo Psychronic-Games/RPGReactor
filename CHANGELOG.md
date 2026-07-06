@@ -4,7 +4,7 @@ All notable changes to RPG Reactor will be documented in this file.
 
 This root changelog summarizes public release progress for GitHub. The detailed editor changelog lives at [`editor/CHANGELOG.md`](editor/CHANGELOG.md).
 
-## [Unreleased]
+## [0.94.1] - 2026-07-05
 
 ### Added
 
@@ -14,12 +14,15 @@ This root changelog summarizes public release progress for GitHub. The detailed 
 
 ### Changed
 
+- Bumped current development version to RPG Reactor 0.94.1.
 - Sharpened the Effekseer Magic Circle (legible runes, crisp inner star) and moved the Explosion recipe into the Physical category.
 
 ### Fixed
 
 - Fixed Effekseer preview loading in the Database and Event animation pickers, rotation-gizmo jump/reset issues, and several beam/column rendering problems (hollow beam cores, half-circle columns, oversized bases).
-- **RPG Maker MV compatibility:** the PIXI8 runtime now boots and plays a large commercial MV project's full plugin stack through its intro with no errors and loads MV save files cleanly, and the MV compatibility layer restores MV's `Spriteset_Battle` battleback methods so MV battleback plugins no longer crash battle load — continued progress toward mixing and matching MV and MZ plugins in one project.
+- **RPG Maker MV compatibility:** the PIXI8 runtime now boots and plays a large commercial MV project's full 168-plugin stack — intro cutscenes, save/load through the game's own load menu, event-choice menus, and the LeTBS tactical battle system verified all the way into rendered combat turns (positioning, movement grid, turn order, battle HUD). The MV compatibility layer gained MV's `Spriteset_Battle` battleback chain, MV window-internal sprite aliases, MV's battle-field creation order, MV's cell-sheet animation engine restored on `Sprite_Animation` for plugins that subclass it, message sub-window creation chains (run exactly once per scene), character balloons and sprite-hosted animations as functional ports, `ToneFilter`, MV `Bitmap` tone/hue manipulation, the MV gauge/color API on `Window_Base`, `Game_Followers.forEach`, MV save-backup APIs, and ~25 more scan-driven gap-fills — each preserving MV's argument guards verbatim so plugin feature-detection keeps working.
+- **Runtime resilience:** resource loads that silently die (no onload, no onerror — common on slow or syncing disks) previously hung the game forever with a black screen and zero console errors. The runtime now watchdogs every database JSON, image, and audio load from the engine's own frame tick, retries stalls in parallel indefinitely, revives buffers that plugin caches still gate on after MZ code destroyed them, and degrades genuinely missing audio/images to silence/blank with a loud console error instead of deadlocking scene startup.
+- **PIXI v8:** `getBounds()` returns a `Bounds` object in v8 (v5–v7 returned a `Rectangle`); a `contains()` delegate keeps plugin hit tests working.
 
 ## [0.94] - 2026-06-27
 
