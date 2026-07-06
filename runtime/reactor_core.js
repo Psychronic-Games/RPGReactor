@@ -807,6 +807,20 @@ Graphics._updateAllElements = function() {
 
 Graphics._onTick = function(deltaTime) {
     this._fpsCounter.startTick();
+    // Resource watchdogs, driven from the runtime's own heartbeat so they
+    // work no matter which manager/prototype methods plugins replace.
+    // Throttled to ~1Hz.
+    const nowWd = performance.now();
+    if (!this._lastWatchdogSweep || nowWd - this._lastWatchdogSweep >= 1000) {
+        this._lastWatchdogSweep = nowWd;
+        try {
+            if (window.Bitmap && Bitmap._sweepStalledLoads) Bitmap._sweepStalledLoads();
+            if (window.WebAudio && WebAudio._sweepStalledLoads) WebAudio._sweepStalledLoads();
+            if (window.DataManager && DataManager._checkStalledDataFiles) DataManager._checkStalledDataFiles();
+        } catch (e) {
+            console.warn("Graphics._onTick: watchdog sweep threw", e);
+        }
+    }
     if (this._tickHandler) {
         // v5/v6/v7: callback receives delta as a number.
         // v8: callback receives the Ticker instance; extract its deltaTime.
@@ -1477,7 +1491,62 @@ Bitmap.snap = function(stage) {
  * @returns {boolean} True if the bitmap is ready to render.
  */
 Bitmap.prototype.isReady = function() {
-    return this._loadingState === "loaded" || this._loadingState === "none";
+    const ready = this._loadingState === "loaded" || this._loadingState === "none";
+    if (!ready && this._url) {
+        // Whoever polls a not-ready bitmap is gating on it — keep it under
+        // watchdog protection here, at the Bitmap level: manager-level
+        // isReady() implementations get replaced wholesale by plugins,
+        // which would blind any watchdog living there.
+        Bitmap._loadWatchList = Bitmap._loadWatchList || [];
+        if (Bitmap._loadWatchList.indexOf(this) < 0) {
+            Bitmap._loadWatchList.push(this);
+        }
+        Bitmap._sweepStalledLoads();
+    }
+    return ready;
+};
+
+Bitmap._sweepStalledLoads = function() {
+    const list = Bitmap._loadWatchList;
+    if (!list || list.length === 0) return;
+    const now = performance.now();
+    for (let i = list.length - 1; i >= 0; i--) {
+        const bitmap = list[i];
+        if (bitmap._loadingState === "loaded" || bitmap._loadingState === "none" ||
+            bitmap._degradedToBlank) {
+            list.splice(i, 1);
+            continue;
+        }
+        if (!bitmap._loadStartTime) {
+            bitmap._loadStartTime = now;
+            continue;
+        }
+        if (now - bitmap._loadStartTime < 10000) continue;
+        bitmap._loadStartTime = now;
+        bitmap._loadAttempts = bitmap._loadAttempts || 0;
+        if (bitmap._loadingState === "error") {
+            // A real onerror fired. Retry a few times, then degrade to a
+            // blank canvas with a loud log: plugin caches that gate scene
+            // readiness would otherwise deadlock the game on one missing
+            // image.
+            if (bitmap._loadAttempts < 3) {
+                console.warn("Bitmap: load error, retrying " + bitmap._url + " (attempt " + bitmap._loadAttempts + ")");
+                bitmap._startLoading();
+            } else {
+                console.error("Bitmap: '" + bitmap._url + "' failed to load after retries; continuing with a BLANK image. Check that the file exists.");
+                bitmap._degradedToBlank = true;
+                bitmap._loadingState = "none";
+                bitmap._createCanvas(32, 32);
+                bitmap._callLoadListeners();
+                list.splice(i, 1);
+            }
+        } else {
+            // Silent stall (no onload, no onerror): always transient —
+            // retry indefinitely.
+            console.warn("Bitmap: stalled load, retrying " + bitmap._url + " (attempt " + bitmap._loadAttempts + ")");
+            bitmap._startLoading();
+        }
+    }
 };
 
 /**
@@ -1977,10 +2046,14 @@ Bitmap.prototype._startLoading = function() {
     this._image.onerror = this._onError.bind(this);
     this._destroyCanvas();
     this._loadingState = "loading";
-    // Stall watchdog bookkeeping (see ImageManager.isReady): image loads
-    // can silently die without onload OR onerror.
+    // Stall watchdog bookkeeping (see Bitmap.isReady / _sweepStalledLoads):
+    // image loads can silently die without onload OR onerror.
     this._loadStartTime = performance.now();
     this._loadAttempts = (this._loadAttempts || 0) + 1;
+    Bitmap._loadWatchList = Bitmap._loadWatchList || [];
+    if (Bitmap._loadWatchList.indexOf(this) < 0) {
+        Bitmap._loadWatchList.push(this);
+    }
     if (Utils.hasEncryptedImages()) {
         this._startDecrypting();
     } else {
