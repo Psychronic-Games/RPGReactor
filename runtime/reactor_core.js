@@ -1977,6 +1977,10 @@ Bitmap.prototype._startLoading = function() {
     this._image.onerror = this._onError.bind(this);
     this._destroyCanvas();
     this._loadingState = "loading";
+    // Stall watchdog bookkeeping (see ImageManager.isReady): image loads
+    // can silently die without onload OR onerror.
+    this._loadStartTime = performance.now();
+    this._loadAttempts = (this._loadAttempts || 0) + 1;
     if (Utils.hasEncryptedImages()) {
         this._startDecrypting();
     } else {

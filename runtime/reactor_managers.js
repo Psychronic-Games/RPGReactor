@@ -113,6 +113,45 @@ DataManager.loadDataFile = function(name, src) {
     xhr.send();
 };
 
+// A data XHR can die without firing onload OR onerror, leaving
+// isDatabaseLoaded()/isMapLoaded() false forever — a hung boot or map
+// transfer with zero errors. Driven by those polled gates, and fully
+// self-sufficient (no hooks in loadDataFile — plugins like
+// YEP_X_CoreUpdatesOpt replace that method wholesale): derive what is
+// missing from _databaseFiles/$dataMap, time it, and re-fire whatever
+// loadDataFile implementation is live. 10s of no arrival -> retry
+// (3 attempts) -> surface a real load error.
+DataManager._checkStalledDataFiles = function() {
+    const now = performance.now();
+    this._loadWatch = this._loadWatch || {};
+    const track = (name, src) => {
+        if (!src) return;
+        let entry = this._loadWatch[name];
+        if (!entry) {
+            entry = this._loadWatch[name] = { attempts: 0, time: now, src: src };
+        }
+        entry.src = src;
+        if (now - entry.time >= 10000) {
+            entry.time = now;
+            entry.attempts++;
+            if (entry.attempts < 3) {
+                console.warn("DataManager: stalled load, retrying " + src);
+                this.loadDataFile(name, src);
+            } else {
+                console.error("DataManager: giving up on stalled load " + src);
+                this.onXhrError(name, src, "data/" + src);
+            }
+        }
+    };
+    for (const databaseFile of this._databaseFiles) {
+        if (!window[databaseFile.name]) track(databaseFile.name, databaseFile.src);
+    }
+    if (!window.$dataMap && this._lastMapSrc) track("$dataMap", this._lastMapSrc);
+    for (const name of Object.keys(this._loadWatch)) {
+        if (window[name]) delete this._loadWatch[name];
+    }
+};
+
 DataManager.onXhrLoad = function(xhr, name, src, url) {
     if (xhr.status < 400) {
         window[name] = JSON.parse(xhr.responseText);
@@ -131,6 +170,7 @@ DataManager.isDatabaseLoaded = function() {
     this.checkError();
     for (const databaseFile of this._databaseFiles) {
         if (!window[databaseFile.name]) {
+            this._checkStalledDataFiles();
             return false;
         }
     }
@@ -140,6 +180,7 @@ DataManager.isDatabaseLoaded = function() {
 DataManager.loadMapData = function(mapId) {
     if (mapId > 0) {
         const filename = "Map%1.json".format(mapId.padZero(3));
+        this._lastMapSrc = filename;
         this.loadDataFile("$dataMap", filename);
     } else {
         this.makeEmptyMap();
@@ -157,6 +198,7 @@ DataManager.makeEmptyMap = function() {
 
 DataManager.isMapLoaded = function() {
     this.checkError();
+    if (!$dataMap) this._checkStalledDataFiles();
     return !!$dataMap;
 };
 
@@ -974,11 +1016,29 @@ ImageManager.isReady = function() {
                 this.throwLoadError(bitmap);
             }
             if (!bitmap.isReady()) {
+                this._checkStalledBitmap(bitmap);
                 return false;
             }
         }
     }
     return true;
+};
+
+// An image load can silently die without firing onload OR onerror,
+// leaving its bitmap "loading" forever and isReady() false — a hung boot
+// or scene with zero errors. Polled from isReady() by exactly the code
+// that is blocked waiting. Zero progress for 10s -> retry (3 attempts) ->
+// surface a real load error (which offers the standard Retry screen).
+ImageManager._checkStalledBitmap = function(bitmap) {
+    if (bitmap._loadingState !== "loading" || !bitmap._loadStartTime) return;
+    if (performance.now() - bitmap._loadStartTime < 10000) return;
+    if ((bitmap._loadAttempts || 0) < 3) {
+        console.warn("ImageManager: stalled load, retrying " + bitmap.url);
+        bitmap.retry();
+    } else {
+        console.error("ImageManager: giving up on stalled load " + bitmap.url);
+        bitmap._onError();
+    }
 };
 
 ImageManager.throwLoadError = function(bitmap) {
