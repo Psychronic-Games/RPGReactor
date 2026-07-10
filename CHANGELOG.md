@@ -6,9 +6,47 @@ This root changelog summarizes public release progress for GitHub. The detailed 
 
 ## [Unreleased]
 
+## [0.94.2] - 2026-07-10
+
+Release overview: [RPG Reactor 0.94.2: Safer Saves and Better Deployments](docs/devlogs/2026-07-10-rpg-reactor-0.94.2.md).
+
 ### Added
 
 - The RPG Maker MV compatibility layer (`reactor_mv_compat.js`) now ships in the runtime folder and loads in every project. Previously it lived only in a local test project, so the 0.94.1 MV compatibility work was not actually included in new projects or the public runtime. It is inert in pure-MZ projects: every API it provides is gap-filled only when missing.
+- Outfit Forge now always shows part options as permanent dropdowns (and always-visible thumbnail lists), matching Procedural-tab discoverability for materials, accents, and style presets.
+- Added clean-checkout GitHub Actions coverage, runtime-manifest checks, generated-project smoke tests, save-safety tests, editor-distribution staging checks, and a no-NW.js web deployment smoke test.
+- Added File-menu Save Project and Playtest commands plus visible shortcut indicators and application shortcuts for New (`Ctrl+N`), Open (`Ctrl+O`), Save (`Ctrl+S`), and Playtest (`Ctrl+R`).
+- Added `F5` for a confirmed uncached editor reload and `F11` for native NW.js fullscreen.
+- Added optional desktop runtime locale filtering with an English fallback, reducing packaged game size without changing project translations.
+- Added optional deployment-time asset optimization: staged-only lossless Oxipng recompression and explicit-quality OGG Vorbis re-encoding, with smaller-valid-file replacement, loop-metadata preservation, per-file progress, and pinned SHA-256-verified FFmpeg acquisition.
+- Added optional Linux x86_64 AppImage output for both games and the editor. Existing Linux folders and ZIP archives remain available; AppImage tooling and its Type 2 runtime are pinned, verified, cached, and used only when requested on a Linux x86_64 build host.
+
+### Changed
+
+- Bumped RPG Reactor to version 0.94.2.
+- Save now persists the current map, all database files, project metadata, and the authoritative map list; map and project transitions prompt to save, discard, or cancel when changes are pending.
+- New-project fallback scaffolding is deterministic and runtime-valid, with complete display/font settings and an empty plugin configuration instead of inheriting demo plugins.
+- Deployment dialogs now provide themed searchable NW.js release selection, remember game and editor output directories independently, persist asset settings, and use consistent **ZIP archive** labels.
+
+### Fixed
+
+- Character Generator **Parts (PNG)** now scans both `forge/character_generator/styles/<style>/parts/` and the legacy Complex-template `forge/character_generator/parts/` path, with clearer empty-state copy and an Open Folder button.
+- Forge tools no longer keep a stale project path after switching or closing projects, so bake/save dialogs (including Animation Generator GIF export) default to the currently open project.
+- Hair Forge lower banding and scraggle sliders produce much larger, more visible pixel changes.
+- Character Generator style switches no longer composite active Looseleaf bodies, outfits, or hair behind Psychronic parts (or vice versa); incompatible layers remain remembered and return when switching back.
+- Windows splash startup no longer performs repeated one-pixel window-height nudges, which could appear as a several-pixel bounce after native frame and DPI rounding; Wine also avoids relaunching an already-frameless packaged window.
+- Fixed the Demo's New Game crash introduced by MV RenderTexture compatibility forwarding `resolution: undefined` into PixiJS 8.14, producing `NaN` snapshot dimensions and an incomplete framebuffer during `Scene_Title.terminate()`.
+- Database and project save failures now propagate to the UI instead of reporting false success, and database saves can no longer overwrite newer `MapInfos.json` data.
+- Editor distributions now include the GIF encoder, worker, and decoder dependency closure used by Animation Generator import/export, and fail packaging when required runtime files are absent.
+- Game deployment now validates the complete Reactor runtime and excludes development saves and backup directories from packaged output.
+- Valid RPG Maker MZ **Skip** commands (`code 109`) now display correctly in Common Events and troop events instead of appearing as unknown commands.
+- NW.js deployment now reuses packaged and cached runtimes consistently, searches every cache root before downloading, and supports latest-stable, editor-matched, or manually pinned runtime versions.
+- Game and full editor deployments can optionally install a SHA-256-verified, exact-version `nwjs-ffmpeg-prebuilt` codec overlay for additional H.264/AAC playback support.
+- Linux editor distributions are now produced as symlink-preserving `.zip` archives instead of `.tar.gz`.
+- Effekseer Layers now adapt beside or below the preview, animated opacity is applied correctly, and keyframe selection, add/delete, frame, Start Frame, and layer-timing edits remain synchronized.
+- Playtests now use Reactor-owned profiles isolated by project and NW.js version on Windows, macOS, and Linux, so deployed games and other projects cannot block launch.
+- Oxipng now initializes its supported single-thread WASM codec directly in NW.js workers instead of selecting an unavailable browser-thread build and reporting every PNG as unsupported.
+- Localized About dialogs now display the shared current application version instead of stale hard-coded version text.
 
 ## [0.94.1] - 2026-07-05
 

@@ -1440,6 +1440,50 @@ option:hover {
     border-color: var(--color-accent-border-strong);
 }
 
+.nw-version-menu {
+    position: fixed;
+    z-index: 20000;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 4px;
+    background: var(--color-bg-surface);
+    color: var(--color-text);
+    border: 1px solid var(--color-accent-border);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-popup);
+}
+.nw-version-menu[hidden] {
+    display: none;
+}
+.nw-version-option {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 6px 8px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    user-select: none;
+}
+.nw-version-option:hover,
+.nw-version-option.is-active {
+    background: var(--color-accent-tint-15);
+    color: var(--color-text-strong);
+}
+.nw-version-number {
+    font-weight: 600;
+}
+.nw-version-date {
+    color: var(--color-text-muted);
+    font-size: 10px;
+}
+.nw-version-message {
+    padding: 7px 8px;
+    color: var(--color-text-muted);
+    font-size: 10px;
+    line-height: 1.35;
+}
+
 /* Checkbox: black with white checkmark, gold border accent.
  * Applied globally to every input[type="checkbox"] -- the app's "default"
  * checkbox look. Pre-existing inline styling like `cursor: pointer` continues

@@ -10,6 +10,9 @@ class ProjectController {
         this.projectLoaded = false;
         this.lastLoadedProjectPath = null; // Track which project components are loaded for
         this.projectLockPath = null;
+        this.savedProjectState = null;
+        this.savedMapInfosState = null;
+        this.allowApplicationClose = false;
 
         // References to be set by main app
         this.app = null;
@@ -20,7 +23,18 @@ class ProjectController {
         this.eventManager = null;
 
         if (typeof window !== 'undefined') {
-            window.addEventListener('beforeunload', () => this.releaseProjectLock());
+            window.addEventListener('beforeunload', (event) => {
+                if (this.allowApplicationClose) {
+                    this.releaseProjectLock();
+                    return;
+                }
+                if (this.hasUnsavedChanges()) {
+                    event.preventDefault();
+                    event.returnValue = '';
+                    return '';
+                }
+                this.releaseProjectLock();
+            });
             window.addEventListener('rr-language-changed', () => this.updateWindowTitle());
         }
     }
@@ -191,23 +205,87 @@ class ProjectController {
         }
     }
 
-    closeProject() {
-        if (!this.projectLoaded) return;
+    serializeProjectState() {
+        if (!this.currentProject) return null;
+        const { path, maps, ...data } = this.currentProject;
+        return JSON.stringify(data);
+    }
 
-        // TODO: Add confirmation dialog if there are unsaved changes
+    captureProjectSavedState() {
+        this.savedProjectState = this.serializeProjectState();
+        this.savedMapInfosState = JSON.stringify(this.currentProject?.maps || []);
+    }
+
+    isProjectDirty() {
+        if (!this.currentProject || this.savedProjectState === null) return false;
+        return this.serializeProjectState() !== this.savedProjectState
+            || JSON.stringify(this.currentProject.maps || []) !== this.savedMapInfosState;
+    }
+
+    hasUnsavedChanges(scope = 'project') {
+        const mapDirty = !!this.tilemapManager?.isMapDirty?.();
+        if (scope === 'map') return mapDirty;
+        return mapDirty || this.isProjectDirty() || !!this.databaseManager?.isDirty?.();
+    }
+
+    async confirmUnsavedChanges(scope = 'project') {
+        if (!this.hasUnsavedChanges(scope)) return true;
+
+        const subject = scope === 'map' ? 'this map' : 'the project';
+        if (confirm(`There are unsaved changes in ${subject}. Save them now?`)) {
+            if (scope === 'map') {
+                const saved = this.tilemapManager?.saveMap?.() === true;
+                if (!saved) alert('The map could not be saved. The current view will remain open.');
+                return saved;
+            }
+            return await this.saveAll();
+        }
+
+        return confirm(`Discard the unsaved changes in ${subject}?`);
+    }
+
+    async closeProject() {
+        if (!this.projectLoaded) return;
+        if (!await this.confirmUnsavedChanges()) return;
+
         this.releaseProjectLock();
+        if (this.tilemapManager) this.tilemapManager.destroy();
+        this.tilemapManager = null;
+        this.lastLoadedProjectPath = null;
         this.currentProject = null;
+        this.savedProjectState = null;
+        this.savedMapInfosState = null;
 
         // Don't clear the saved path - keep it for next session
         // localStorage.removeItem('lastProjectPath');
 
+        this._notifyForgeProjectChanged();
         this.uiManager.showWelcomeScreen();
         this.uiManager.updateStatus('Project closed');
         this.projectLoaded = false;
         this.updateWindowTitle();
     }
 
+    async requestApplicationClose() {
+        if (!await this.confirmUnsavedChanges()) return false;
+        this.allowApplicationClose = true;
+        this.releaseProjectLock();
+        if (typeof nw !== 'undefined') nw.Window.get().close(true);
+        return true;
+    }
+
+    /** Drop stale Forge tool project paths when the open project changes. */
+    _notifyForgeProjectChanged() {
+        try {
+            const forge = (typeof window !== 'undefined' && window.reactor && window.reactor.forgeManager) || null;
+            if (forge && typeof forge.onProjectChanged === 'function') forge.onProjectChanged();
+        } catch (e) {
+            console.warn('Forge project-change notify failed:', e);
+        }
+    }
+
     async newProject() {
+        if (!await this.confirmUnsavedChanges()) return;
         if (typeof nw !== 'undefined') {
             // First, ask for project name
             const projectName = prompt('Enter project name:', 'Reactor One');
@@ -236,6 +314,7 @@ class ProjectController {
                         const loadedProject = await this.projectManager.loadProject(projectPath);
                         if (loadedProject && this.acquireProjectLock(loadedProject.path)) {
                             this.currentProject = loadedProject;
+                            this.lastLoadedProjectPath = null;
                             // Save last opened project path
                             localStorage.setItem('lastProjectPath', projectPath);
 
@@ -264,6 +343,7 @@ class ProjectController {
     }
 
     async openProject() {
+        if (!await this.confirmUnsavedChanges()) return;
         if (typeof nw !== 'undefined') {
             const input = document.createElement('input');
             input.setAttribute('type', 'file');
@@ -287,6 +367,7 @@ class ProjectController {
 
                         if (loadedProject && this.acquireProjectLock(loadedProject.path)) {
                             this.currentProject = loadedProject;
+                            this.lastLoadedProjectPath = null;
                             // Save last opened project path
                             localStorage.setItem('lastProjectPath', projectPath);
 
@@ -320,14 +401,29 @@ class ProjectController {
         // Load database
         this.uiManager.updateStatus('Loading database...');
         this.logProjectOpen('populate:start', { projectPath: this.currentProject?.path || null });
+        this._notifyForgeProjectChanged();
         const dbLoaded = await this.databaseManager.loadAllData(this.currentProject.path);
         this.logProjectOpen('populate:database', { loaded: dbLoaded });
 
         if (!dbLoaded) {
             this.uiManager.updateStatus('Error loading database');
             this.logProjectOpen('populate:database-failed');
+            this.releaseProjectLock();
+            if (this.tilemapManager) this.tilemapManager.destroy();
+            this.tilemapManager = null;
+            this.lastLoadedProjectPath = null;
+            this.currentProject = null;
+            this.projectLoaded = false;
+            this._notifyForgeProjectChanged();
+            await this.uiManager.showWelcomeScreen();
+            this.updateWindowTitle();
+            alert('The project database could not be loaded. Check the JSON files for parse errors.');
             return;
         }
+
+        // MapInfos is owned by the project controller; keep database readers on
+        // the same object so a database save cannot overwrite newer map metadata.
+        this.databaseManager.data.mapInfos = this.currentProject.maps || [];
 
         // Check if we've switched to a different project
         const projectHasChanged = this.lastLoadedProjectPath !== this.currentProject.path;
@@ -440,6 +536,7 @@ class ProjectController {
 
         this.uiManager.updateStatus('Project loaded successfully');
         this.projectLoaded = true;
+        this.captureProjectSavedState();
         this.logProjectOpen('populate:complete', { projectPath: this.currentProject.path });
 
         // Notify audio player that project is loaded (via global reactor instance)
@@ -917,31 +1014,53 @@ class ProjectController {
     }
 
     async saveProject() {
-        if (!this.projectLoaded || !this.currentProject) return;
+        return await this.saveAll();
+    }
 
-        // Save current map (including event changes)
-        if (this.tilemapManager && this.tilemapManager.currentMap) {
-            this.tilemapManager.saveMap();
+    async saveAll() {
+        if (!this.projectLoaded || !this.currentProject) return false;
+
+        if (typeof document !== 'undefined' && document.activeElement?.blur) {
+            document.activeElement.blur();
         }
 
-        const success = await this.projectManager.saveProject(this.currentProject);
-        if (success) {
-            this.uiManager.updateStatus('Project saved');
-        } else {
+        if (this.tilemapManager?.currentMap && this.tilemapManager.saveMap() !== true) {
+            this.uiManager.updateStatus('Error saving current map');
+            alert('The current map could not be saved.');
+            return false;
+        }
+
+        if (!await this.databaseManager.saveAllData(this.currentProject.path)) {
+            this.uiManager.updateStatus('Error saving database');
+            alert('One or more database files could not be saved.');
+            return false;
+        }
+
+        if (!await this.projectManager.saveProject(this.currentProject)) {
             this.uiManager.updateStatus('Error saving project');
+            alert('The project metadata or map list could not be saved.');
+            return false;
         }
-    }
 
-    saveAll() {
-        if (!this.projectLoaded) return;
-        // TODO: Implement save all
+        const databaseEditor = typeof window !== 'undefined' ? window.reactor?.databaseEditorUI : null;
+        const databaseViewer = typeof document !== 'undefined' ? document.getElementById('database-viewer') : null;
+        if (databaseEditor && databaseViewer?.classList.contains('active')) {
+            databaseEditor.takeDatabaseSnapshot();
+        }
+
+        this.captureProjectSavedState();
         this.uiManager.updateStatus('All files saved');
+        this.updateWindowTitle();
+        return true;
     }
 
-    async loadMap(mapId) {
+    async loadMap(mapId, options = {}) {
         if (!this.tilemapManager) {
             return false;
         }
+
+        if (this.tilemapManager.currentMap?.id === mapId && !options.forceReload) return true;
+        if (!options.skipDirtyCheck && !await this.confirmUnsavedChanges('map')) return false;
 
         this.uiManager.updateStatus(`Loading map ${mapId}...`);
 
@@ -1801,7 +1920,7 @@ class ProjectController {
 
         // OK button
         okBtn.addEventListener('click', async () => {
-            await this.saveMapProperties();
+            if (!await this.saveMapProperties()) return;
             this.stopMapAudioPreviews();
             document.getElementById('map-properties-modal').style.display = 'none';
         });
@@ -1950,7 +2069,15 @@ class ProjectController {
 
             // Save map file
             if (typeof nw !== 'undefined') {
-                this.writeMapDataFile(mapData);
+                if (!this.writeMapDataFile(mapData)) {
+                    alert('The new map file could not be saved.');
+                    return false;
+                }
+                if (!this.projectManager.saveMapInfos(this.currentProject.path, this.currentProject.maps)) {
+                    alert('The map list could not be saved.');
+                    return false;
+                }
+                this.savedMapInfosState = JSON.stringify(this.currentProject.maps || []);
             }
 
             // Refresh maps list
@@ -1978,9 +2105,19 @@ class ProjectController {
                 this.currentProject.maps[mapData.id].name = mapData.name;
             }
 
-            this.writeMapDataFile(mapData);
+            if (!this.writeMapDataFile(mapData)) {
+                alert('The map could not be saved.');
+                return false;
+            }
             if (this.projectManager && this.projectManager.saveMapInfos) {
-                this.projectManager.saveMapInfos(this.currentProject.path, this.currentProject.maps);
+                if (!this.projectManager.saveMapInfos(this.currentProject.path, this.currentProject.maps)) {
+                    alert('The map list could not be saved.');
+                    return false;
+                }
+            }
+            this.savedMapInfosState = JSON.stringify(this.currentProject.maps || []);
+            if (this.tilemapManager?.currentMap?.id === mapData.id) {
+                this.tilemapManager.captureSavedMapState();
             }
 
             // Refresh maps list to show updated name (this will also re-highlight the current map)
@@ -1990,7 +2127,7 @@ class ProjectController {
             if (this.tilemapManager && this.tilemapManager.currentMap && this.tilemapManager.currentMap.id === mapData.id) {
 
                 if (dimensionsChanged || tilesetChanged) {
-                    await this.loadMap(mapData.id);
+                    await this.loadMap(mapData.id, { forceReload: true, skipDirtyCheck: true });
                 } else {
                     // Just re-render parallax to reflect changes
                     await this.tilemapManager.renderParallax();
@@ -1999,6 +2136,7 @@ class ProjectController {
 
             this.uiManager.updateStatus(`Updated map: ${mapData.name}`);
         }
+        return true;
     }
 
     getEncounterListFromForm() {
@@ -2244,6 +2382,9 @@ class ProjectController {
 
         if (!confirm(message)) return;
 
+        const deletingLoadedMap = mapIdsToDelete.includes(this.tilemapManager?.currentMap?.id);
+        if (deletingLoadedMap && !await this.confirmUnsavedChanges('map')) return;
+
         try {
             const fs = require('fs');
             const path = require('path');
@@ -2269,7 +2410,10 @@ class ProjectController {
             await this.repairInvalidSystemMapReferences(mapIdsToDelete, remainingMaps[0]?.id || null);
 
             if (this.projectManager && this.projectManager.saveMapInfos) {
-                this.projectManager.saveMapInfos(this.currentProject.path, this.currentProject.maps);
+                if (!this.projectManager.saveMapInfos(this.currentProject.path, this.currentProject.maps)) {
+                    throw new Error('MapInfos.json could not be saved after deleting the map');
+                }
+                this.savedMapInfosState = JSON.stringify(this.currentProject.maps || []);
             }
             if (this.databaseManager?.data) {
                 this.databaseManager.data.mapInfos = this.currentProject.maps;
@@ -2284,7 +2428,7 @@ class ProjectController {
             this.renderQuickAccessList();
 
             if (deletingCurrentMap && nextMapId) {
-                await this.loadMap(nextMapId);
+                await this.loadMap(nextMapId, { forceReload: true, skipDirtyCheck: true });
             }
 
             this.uiManager.updateStatus(`Deleted map: ${map.name || String(mapId).padStart(3, '0')}`);
@@ -2352,7 +2496,9 @@ class ProjectController {
         });
 
         if (changed && this.databaseManager.saveJSON) {
-            await this.databaseManager.saveJSON(this.currentProject.path, 'System.json', system);
+            if (!await this.databaseManager.saveJSON(this.currentProject.path, 'System.json', system)) {
+                throw new Error('System.json could not be saved after repairing deleted map references');
+            }
             this.uiManager.updateStatus(`Updated starting positions to avoid deleted maps`);
         }
 

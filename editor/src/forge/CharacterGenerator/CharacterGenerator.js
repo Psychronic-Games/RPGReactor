@@ -99,16 +99,40 @@ class CharacterGenerator {
 
     renderInto(containerEl, projectController) {
         this.projectController = projectController;
-        const project = projectController?.getCurrentProject?.() || projectController?.currentProject;
         this.root = containerEl;
-        if (!project) {
+        if (!this._syncProjectPath()) {
             this.root.innerHTML = `<div style="padding:40px;text-align:center;color:var(--color-text-muted);font-size:12px;">${this._t('forge.openProject')}</div>`;
             return;
         }
-        this.projectPath = project.path;
         this._loadConfig();
         this._loadProceduralParts();
         this._render();
+    }
+
+    /** Re-read the open project path. Forge tools are cached across project switches. */
+    _syncProjectPath() {
+        const project = this.projectController?.getCurrentProject?.() || this.projectController?.currentProject;
+        const next = project?.path || null;
+        if (!next) {
+            this.projectPath = null;
+            return null;
+        }
+        if (next !== this.projectPath) {
+            this.projectPath = next;
+            if (this.imageCache && typeof this.imageCache.clear === 'function') this.imageCache.clear();
+            this.categories = [];
+            this.activeCategoryIndex = 0;
+        }
+        return this.projectPath;
+    }
+
+    _requireProjectPath() {
+        const path = this._syncProjectPath();
+        if (!path) {
+            alert(this._t('forge.openProject'));
+            return null;
+        }
+        return path;
     }
 
     _loadProceduralParts() {
@@ -752,25 +776,43 @@ class CharacterGenerator {
                 </span>
                 <button type="button" data-forge-remove-layer="${slot.id}" title="Remove ${slot.label}" style="border:0;background:transparent;color:var(--color-text-muted);cursor:pointer;padding:0 4px;font-size:15px;line-height:1;">×</button>
             </div>` : `<span style="font-size:11px;color:var(--color-text-muted);">No ${slot.label.toLowerCase()} selected</span>`;
+            const familyOpts = families.map(f => `<option value="${f.name}" ${f.name === familyVal ? 'selected' : ''}>${f.label || f.name}</option>`).join('');
+            const accentOpts = [`<option value="" ${!accentVal ? 'selected' : ''}>None</option>`]
+                .concat(accents.map(a => `<option value="${a.name}" ${a.name === accentVal ? 'selected' : ''}>${a.label || a.name}</option>`)).join('');
+            const presetSelect = `<label style="display:grid;grid-template-columns:58px 1fr;gap:5px 6px;align-items:center;margin-bottom:7px;">
+                <span style="font-size:11px;color:var(--color-text-muted);">Part</span>
+                <select class="rr-forge-preset-select rr-input" data-forge-slot-select="${slot.id}" style="width:100%;font-size:12px;padding:4px 6px;">
+                    <option value="">(None)</option>
+                    ${presets.map(part => {
+                        const val = `${part.setKey}::${part.id}`;
+                        const sel = selected && selected.setKey === part.setKey && selected.id === part.id ? 'selected' : '';
+                        return `<option value="${val}" ${sel}>${part.setLabel} — ${part.label}</option>`;
+                    }).join('')}
+                </select>
+            </label>`;
             const paletteControls = `<div style="display:grid;grid-template-columns:58px 1fr;gap:5px 6px;align-items:center;margin-bottom:8px;padding:6px;border:1px solid var(--color-border-subtle);border-radius:4px;background:var(--color-bg-base);">
                 <span style="font-size:11px;color:var(--color-text-muted);">Material</span>
-                ${choiceButton('family', familyVal, `data-forge-slot-palette="${slot.id}" data-forge-palette-field="family"`)}
+                <select class="rr-forge-palette-select rr-input" data-forge-slot-palette="${slot.id}" data-forge-palette-field="family" style="width:100%;font-size:12px;padding:4px 6px;">${familyOpts}</select>
                 <span style="font-size:11px;color:var(--color-text-muted);">Accent</span>
-                ${choiceButton('accent', accentVal, `data-forge-slot-palette="${slot.id}" data-forge-palette-field="accent"`)}
+                <select class="rr-forge-palette-select rr-input" data-forge-slot-palette="${slot.id}" data-forge-palette-field="accent" style="width:100%;font-size:12px;padding:4px 6px;">${accentOpts}</select>
             </div>`;
             return `<details class="rr-forge-slot" data-forge-slot="${slot.id}" open style="margin-bottom:8px;border:1px solid var(--color-border-subtle);border-radius:5px;background:var(--color-bg-panel);">
                 <summary style="cursor:pointer;padding:8px 9px;font-size:12px;font-weight:800;color:var(--color-text-strong);text-transform:uppercase;letter-spacing:0.45px;">${slot.label}</summary>
                 <div style="padding:0 9px 9px;">
+                    ${presetSelect}
                     <input class="rr-forge-part-search rr-input" data-forge-slot-search="${slot.id}" placeholder="Search style or part..." style="width:100%;font-size:12px;padding:5px 7px;margin-bottom:7px;">
-                    <div data-forge-slot-options="${slot.id}" style="display:none;max-height:190px;overflow-y:auto;padding:5px;margin:-2px 0 8px;border:1px solid var(--color-accent-bright);border-radius:5px;background:var(--color-bg-base);box-shadow:0 4px 10px rgba(0,0,0,.25);">
-                        ${presets.map(part => `<button type="button" class="rr-forge-preset" data-forge-preset-set="${part.setKey}" data-forge-preset-id="${part.id}" data-forge-search-label="${(part.setLabel + ' ' + part.label + ' ' + slot.label + ' style').toLowerCase()}"
-                            style="width:100%;display:flex;align-items:center;gap:8px;margin-bottom:6px;padding:7px;border:1px solid var(--color-border-subtle);border-radius:4px;background:var(--color-bg-base);color:var(--color-text);font-size:12px;text-align:left;cursor:pointer;">
+                    <div data-forge-slot-options="${slot.id}" style="display:block;max-height:190px;overflow-y:auto;padding:5px;margin:0 0 8px;border:1px solid var(--color-border-subtle);border-radius:5px;background:var(--color-bg-base);">
+                        ${presets.map(part => {
+                            const active = selected && selected.setKey === part.setKey && selected.id === part.id;
+                            return `<button type="button" class="rr-forge-preset" data-forge-preset-set="${part.setKey}" data-forge-preset-id="${part.id}" data-forge-search-label="${(part.setLabel + ' ' + part.label + ' ' + slot.label + ' style').toLowerCase()}"
+                            style="width:100%;display:flex;align-items:center;gap:8px;margin-bottom:6px;padding:7px;border:1px solid ${active ? 'var(--color-accent-bright)' : 'var(--color-border-subtle)'};border-radius:4px;background:${active ? 'var(--color-bg-button-active)' : 'var(--color-bg-base)'};color:var(--color-text);font-size:12px;text-align:left;cursor:pointer;">
                             ${partThumb(part, 'preset', 34)}
                             <span style="min-width:0;display:flex;flex-direction:column;line-height:1.2;">
                                 <span style="font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${part.setLabel}</span>
                                 <span style="font-size:11px;color:var(--color-text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${part.label}</span>
                             </span>
-                        </button>`).join('') || `<div style="font-size:11px;color:var(--color-text-muted);padding:4px 0;">No presets yet.</div>`}
+                        </button>`;
+                        }).join('') || `<div style="font-size:11px;color:var(--color-text-muted);padding:4px 0;">No presets yet.</div>`}
                         <div data-forge-slot-empty="${slot.id}" style="display:none;font-size:11px;color:var(--color-text-muted);padding:4px 0;">No matching style parts.</div>
                     </div>
                     <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:7px;">${pill}</div>
@@ -1240,31 +1282,69 @@ class CharacterGenerator {
             input.addEventListener('focus', runFilter);
             input.addEventListener('click', runFilter);
         });
-        rootEl.querySelectorAll('.rr-forge-preset').forEach(btn => {
-            btn.addEventListener('click', () => {
-                if (!schema) return;
-                const setKey = btn.getAttribute('data-forge-preset-set');
-                const partId = btn.getAttribute('data-forge-preset-id');
-                const set = (schema.partSets || []).find(s => s.key === setKey);
-                const part = set && (set.parts || []).find(p => p.id === partId);
-                if (!part || !part.spec) return;
-                const spec = JSON.parse(JSON.stringify(part.spec));
-                const layerId = `${part.kind}:${part.key}`;
-                applyThemeToSpec(spec, layerId);
-                cfg.selectedParts = cfg.selectedParts || {};
-                cfg.selectedParts[layerId] = { setKey, partId };
-                cfg.layerOrder = cfg.layerOrder || [];
-                if (!cfg.layerOrder.includes(layerId)) cfg.layerOrder.unshift(layerId);
-                if (part.kind === 'zone') {
-                    if (cfg.zones[part.key] && cfg.zones[part.key].layer != null) spec.layer = cfg.zones[part.key].layer;
-                    cfg.zones[part.key] = spec;
-                } else if (part.kind === 'ext') {
-                    if (cfg.exts[part.key] && cfg.exts[part.key].layer != null) spec.layer = cfg.exts[part.key].layer;
-                    cfg.exts[part.key] = spec;
+        const applyPresetPart = (setKey, partId) => {
+            if (!schema || !setKey || !partId) return;
+            const set = (schema.partSets || []).find(s => s.key === setKey);
+            const part = set && (set.parts || []).find(p => p.id === partId);
+            if (!part || !part.spec) return;
+            const spec = JSON.parse(JSON.stringify(part.spec));
+            const layerId = `${part.kind}:${part.key}`;
+            applyThemeToSpec(spec, layerId);
+            cfg.selectedParts = cfg.selectedParts || {};
+            cfg.selectedParts[layerId] = { setKey, partId };
+            cfg.layerOrder = cfg.layerOrder || [];
+            if (!cfg.layerOrder.includes(layerId)) cfg.layerOrder.unshift(layerId);
+            if (part.kind === 'zone') {
+                if (cfg.zones[part.key] && cfg.zones[part.key].layer != null) spec.layer = cfg.zones[part.key].layer;
+                cfg.zones[part.key] = spec;
+            } else if (part.kind === 'ext') {
+                if (cfg.exts[part.key] && cfg.exts[part.key].layer != null) spec.layer = cfg.exts[part.key].layer;
+                cfg.exts[part.key] = spec;
+            }
+            this._forgeSyncZoneLayers();
+            this._forgeDescCache = null;
+            this._renderPreservingScroll();
+        };
+        rootEl.querySelectorAll('.rr-forge-preset-select').forEach(sel => {
+            sel.addEventListener('change', () => {
+                const val = sel.value || '';
+                if (!val) {
+                    removeLayer(sel.getAttribute('data-forge-slot-select'));
+                    return;
                 }
-                this._forgeSyncZoneLayers();
+                const sep = val.indexOf('::');
+                if (sep < 0) return;
+                applyPresetPart(val.slice(0, sep), val.slice(sep + 2));
+            });
+        });
+        rootEl.querySelectorAll('.rr-forge-palette-select').forEach(sel => {
+            sel.addEventListener('change', () => {
+                const slotLayerId = sel.getAttribute('data-forge-slot-palette');
+                const paletteField = sel.getAttribute('data-forge-palette-field');
+                if (!slotLayerId || !paletteField) return;
+                const familySel = rootEl.querySelector(`select[data-forge-slot-palette="${slotLayerId}"][data-forge-palette-field="family"]`);
+                const accentSel = rootEl.querySelector(`select[data-forge-slot-palette="${slotLayerId}"][data-forge-palette-field="accent"]`);
+                const next = {
+                    family: familySel ? familySel.value : 'steel',
+                    accent: accentSel ? accentSel.value : ''
+                };
+                cfg.paletteTheme = 'custom';
+                cfg.customPalettes = cfg.customPalettes || {};
+                cfg.customPalettes[slotLayerId] = next;
+                if (slotLayerId.startsWith('zone:')) {
+                    const spec = cfg.zones[slotLayerId.slice(5)];
+                    if (spec) { spec.family = next.family; spec.accent = next.accent; }
+                } else if (slotLayerId.startsWith('ext:')) {
+                    const spec = cfg.exts[slotLayerId.slice(4)];
+                    if (spec) { spec.family = next.family; spec.accent = next.accent; }
+                }
                 this._forgeDescCache = null;
                 this._renderPreservingScroll();
+            });
+        });
+        rootEl.querySelectorAll('.rr-forge-preset').forEach(btn => {
+            btn.addEventListener('click', () => {
+                applyPresetPart(btn.getAttribute('data-forge-preset-set'), btn.getAttribute('data-forge-preset-id'));
             });
         });
         let draggedLayerCard = null;
@@ -2031,7 +2111,7 @@ class CharacterGenerator {
                 }).join('')}
                 <div style="margin:12px 0 10px;padding:10px;border:1px solid var(--color-border-subtle);border-radius:6px;background:var(--color-bg-panel);">
                     <div style="font-size:10px;font-weight:800;color:var(--color-text-dim);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px;">Eye Zone</div>
-                    <div style="font-size:10px;color:var(--color-text-muted);line-height:1.3;margin-bottom:8px;">Adjusts the protected eye area for front-view hair. Increase Y to move it lower.</div>
+                    <div style="font-size:10px;color:var(--color-text-muted);line-height:1.3;margin-bottom:8px;">Front view only. Adjusts the protected eye window so bangs do not cover eyes.</div>
                     ${[
                         ['eyeZoneX', 'X Offset', -6, 6, 1],
                         ['eyeZoneY', 'Y Offset', -2, 10, 1],
@@ -2046,7 +2126,7 @@ class CharacterGenerator {
                 </div>
                 <div style="margin:12px 0 10px;padding:10px;border:1px solid var(--color-border-subtle);border-radius:6px;background:var(--color-bg-panel);">
                     <div style="font-size:10px;font-weight:800;color:var(--color-text-dim);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px;">Hair Pattern</div>
-                    <div style="font-size:10px;color:var(--color-text-muted);line-height:1.3;margin-bottom:8px;">Tunes lower-hair shading and tip roughness for side/back views.</div>
+                    <div style="font-size:10px;color:var(--color-text-muted);line-height:1.3;margin-bottom:8px;">Lower-hair banding density and edge scraggle. Higher values are much more visible on side/back frames.</div>
                     ${[
                         ['lowerBanding', 'Lower Banding', 0, 5, 1],
                         ['lowerScraggle', 'Scraggle', 0, 5, 1]
@@ -2675,14 +2755,19 @@ class CharacterGenerator {
     }
 
     _proceduralPartDescriptors() {
-        const styleIds = new Set(this._characterStyles().map(s => s.id));
-        return RR_CHARACTER_REGISTRY.filter(d => {
-            const g = this._partGender(d);
-            if (g !== null && g !== this.gender) return false;
-            if (!d.tags) return true;
-            const styleTags = d.tags.filter(t => styleIds.has(t));
-            return !styleTags.length || styleTags.includes(this.characterStyle);
-        });
+        return RR_CHARACTER_REGISTRY.filter(d => this._isProceduralDescriptorCompatible(d));
+    }
+
+    _isProceduralDescriptorCompatible(descriptor) {
+        const gender = this._partGender(descriptor);
+        if (gender !== null && gender !== this.gender) return false;
+
+        const styleIds = new Set(this._characterStyles().map(style => style.id));
+        const tags = Array.isArray(descriptor.tags)
+            ? descriptor.tags.map(tag => String(tag).toLowerCase())
+            : [];
+        const styleTags = tags.filter(tag => styleIds.has(tag));
+        return styleTags.length === 0 || styleTags.includes(this.characterStyle);
     }
 
     _buildActiveParts() {
@@ -2691,6 +2776,7 @@ class CharacterGenerator {
             if (this.hiddenPartIds.has(id)) continue;
             const descriptor = RR_CHARACTER_REGISTRY.find(d => d.id === id);
             if (!descriptor) continue;
+            if (!this._isProceduralDescriptorCompatible(descriptor)) continue;
             const userValues = {
                 ...(this.partParams[id] || {}),
                 style: this.characterStyle,
@@ -3215,9 +3301,11 @@ class CharacterGenerator {
     }
 
     async _bulkImportFiles(files, category) {
+        const projectPath = this._requireProjectPath();
+        if (!projectPath) return;
         const fs = require('fs');
         const path = require('path');
-        const outDir = path.join(this.projectPath, 'forge', 'character_generator', 'styles', this.characterStyle, 'parts', category);
+        const outDir = path.join(projectPath, 'forge', 'character_generator', 'styles', this.characterStyle, 'parts', category);
         try { fs.mkdirSync(outDir, { recursive: true }); }
         catch (e) { alert('Could not create folder: ' + e.message); return; }
 
@@ -4441,6 +4529,8 @@ ${sheetJs}
     }
 
     _saveProceduralSheet() {
+        const projectPath = this._requireProjectPath();
+        if (!projectPath) return;
         const nameInput = this.root.querySelector('.rr-cgp-name');
         let name = (nameInput?.value || '').trim();
         if (!name) { alert('Enter a name for the character sheet.'); return; }
@@ -4468,7 +4558,7 @@ ${sheetJs}
 
         const fs   = require('fs');
         const path = require('path');
-        const outDir  = path.join(this.projectPath, 'img', 'characters');
+        const outDir  = path.join(projectPath, 'img', 'characters');
         const outPath = path.join(outDir, `$${name}.png`);
         try {
             fs.mkdirSync(outDir, { recursive: true });
@@ -4539,8 +4629,12 @@ ${sheetJs}
                             </div>
                         </div>
                     </div>
-                    <div style="font-size:10px;color:var(--color-text-dim);padding:4px 0;border-top:1px solid var(--color-border-subtle);">
-                        Parts folder: <code style="background:var(--color-bg-input-alt);padding:1px 5px;border-radius:2px;">forge/character_generator/parts/</code>
+                    <div style="font-size:10px;color:var(--color-text-dim);padding:4px 0;border-top:1px solid var(--color-border-subtle);display:flex;flex-wrap:wrap;align-items:center;gap:8px;">
+                        <span>Parts folders:
+                            <code style="background:var(--color-bg-input-alt);padding:1px 5px;border-radius:2px;">styles/${this.characterStyle}/parts/</code>
+                            + legacy <code style="background:var(--color-bg-input-alt);padding:1px 5px;border-radius:2px;">parts/</code>
+                        </span>
+                        <button type="button" class="rr-cg-open-parts rr-btn-chip" style="padding:2px 8px;font-size:10px;">Open Folder</button>
                     </div>
                 </div>
 
@@ -4565,7 +4659,9 @@ ${sheetJs}
     // ── Parts: filesystem ──────────────────────────────────────────────────────
 
     _configPath() {
-        return require('path').join(this.projectPath, 'forge', 'character_generator', 'config.json');
+        const projectPath = this._syncProjectPath();
+        if (!projectPath) return null;
+        return require('path').join(projectPath, 'forge', 'character_generator', 'config.json');
     }
 
     _setFrameSize(w, h) {
@@ -4580,7 +4676,9 @@ ${sheetJs}
 
     _loadConfig() {
         try {
-            const raw = require('fs').readFileSync(this._configPath(), 'utf8');
+            const configPath = this._configPath();
+            if (!configPath) { this._savedLayerOrder = []; this._savedLayerOrderByStyle = {}; return; }
+            const raw = require('fs').readFileSync(configPath, 'utf8');
             const cfg = JSON.parse(raw);
             if (cfg.frameWidth)  this.frameWidth  = parseInt(cfg.frameWidth)  || this.frameWidth;
             if (cfg.frameHeight) this.frameHeight = parseInt(cfg.frameHeight) || this.frameHeight;
@@ -4599,6 +4697,7 @@ ${sheetJs}
             const fs = require('fs');
             const path = require('path');
             const configPath = this._configPath();
+            if (!configPath) return;
             fs.mkdirSync(path.dirname(configPath), { recursive: true });
             fs.writeFileSync(configPath, JSON.stringify({
                 characterStyle: this.characterStyle,
@@ -4614,13 +4713,28 @@ ${sheetJs}
         } catch (e) { console.error('CharacterGenerator config save error:', e); }
     }
 
+    /** Style-scoped parts root (write target for new PNGs / folder structure). */
     _partsRoot() {
-        return require('path').join(this.projectPath, 'forge', 'character_generator', 'styles', this.characterStyle, 'parts');
+        const projectPath = this._syncProjectPath();
+        if (!projectPath) return null;
+        return require('path').join(projectPath, 'forge', 'character_generator', 'styles', this.characterStyle, 'parts');
+    }
+
+    /** All roots scanned for PNG parts: style path first, then legacy project parts/. */
+    _partsSearchRoots() {
+        const path = require('path');
+        const projectPath = this._syncProjectPath();
+        if (!projectPath) return [];
+        return [
+            path.join(projectPath, 'forge', 'character_generator', 'styles', this.characterStyle, 'parts'),
+            path.join(projectPath, 'forge', 'character_generator', 'parts')
+        ];
     }
 
     _ensurePartsFolder() {
         const fs = require('fs'), path = require('path');
         const partsRoot = this._partsRoot();
+        if (!partsRoot) return;
         try {
             fs.mkdirSync(partsRoot, { recursive: true });
             for (const c of ['accessories', 'armwear', 'body', 'eyes', 'footwear', 'full outfits', 'hair', 'handwear', 'heads', 'headwear', 'legwear', 'neckwear', 'shoulderwear', 'torso', 'waistwear']) {
@@ -4636,20 +4750,24 @@ ${sheetJs}
 
     _loadCategories() {
         const fs = require('fs'), path = require('path');
-        const partsRoot = this._partsRoot();
         const discovered = [];
-        const walk = (rel) => {
+        const seenNames = new Set();
+        const walk = (partsRoot, rel) => {
             const abs = rel ? path.join(partsRoot, rel) : partsRoot;
             let entries = [];
             try { entries = fs.readdirSync(abs, { withFileTypes: true }); } catch { return; }
             if (entries.some(e => e.isFile() && /\.png$/i.test(e.name)) && rel) {
-                discovered.push({ name: rel.replace(/\\/g, '/'), abs });
+                const name = rel.replace(/\\/g, '/');
+                if (!seenNames.has(name)) {
+                    seenNames.add(name);
+                    discovered.push({ name, abs });
+                }
             }
             for (const e of entries) {
-                if (e.isDirectory()) walk(rel ? path.join(rel, e.name) : e.name);
+                if (e.isDirectory()) walk(partsRoot, rel ? path.join(rel, e.name) : e.name);
             }
         };
-        walk('');
+        for (const root of this._partsSearchRoots()) walk(root, '');
         if (!discovered.length) { this.categories = []; return; }
         const saved = this._savedLayerOrder || [];
         const byName = new Map(discovered.map(d => [d.name, d]));
@@ -4686,7 +4804,7 @@ ${sheetJs}
     // ── Parts: rendering ──────────────────────────────────────────────────────
 
     _renderCategoryList() {
-        if (!this.categories.length) return `<div style="padding:20px;font-size:11px;color:var(--color-text-muted);text-align:center;line-height:1.45;">No ${this._styleDisplayName()} part categories found.<br>Add PNG folders under:<br><span style="font-family:monospace;font-size:10px;color:var(--color-text-dim);">forge/character_generator/styles/${this.characterStyle}/parts/</span><br>then reload.</div>`;
+        if (!this.categories.length) return `<div style="padding:20px;font-size:11px;color:var(--color-text-muted);text-align:center;line-height:1.45;">No PNG part categories found.<br>Add PNG folders under either:<br><span style="font-family:monospace;font-size:10px;color:var(--color-text-dim);">forge/character_generator/styles/${this.characterStyle}/parts/</span><br>or the legacy path<br><span style="font-family:monospace;font-size:10px;color:var(--color-text-dim);">forge/character_generator/parts/</span><br>then reload.<br><br><span style="color:var(--color-text-dim);">Procedural / Outfit / Hair Forge parts are JS templates and appear on the Procedural tab, not here.</span></div>`;
         const hdr = `<div style="padding:6px 10px 8px;font-size:9px;font-weight:700;color:var(--color-accent-bright);text-transform:uppercase;letter-spacing:0.5px;border-bottom:1px solid var(--color-border-subtle);display:flex;justify-content:space-between;"><span>Layers</span><span style="font-size:8px;color:var(--color-text-dim);font-weight:400;text-transform:none;">top = front</span></div>`;
         return hdr + this.categories.map((cat, idx) => `
             <div class="rr-cg-cat-row" data-cat-idx="${idx}" draggable="true" title="Drag to reorder layers" style="display:grid;grid-template-columns:1fr auto;align-items:center;background:${idx === this.activeCategoryIndex ? 'var(--color-bg-hover)' : 'transparent'};border-left:3px solid ${idx === this.activeCategoryIndex ? 'var(--color-accent-bright)' : 'transparent'};">
@@ -4813,7 +4931,27 @@ ${sheetJs}
         });
 
         this.root.querySelector('.rr-cg-refresh').addEventListener('click', () => {
+            this._syncProjectPath();
             this.imageCache.clear(); this._loadCategories(); this._render();
+        });
+
+        const openParts = this.root.querySelector('.rr-cg-open-parts');
+        if (openParts) openParts.addEventListener('click', () => {
+            const root = this._partsRoot();
+            if (!root) return;
+            try {
+                const fs = require('fs');
+                fs.mkdirSync(root, { recursive: true });
+                if (typeof nw !== 'undefined' && nw.Shell && typeof nw.Shell.openItem === 'function') {
+                    nw.Shell.openItem(root);
+                } else if (typeof require === 'function') {
+                    require('child_process').exec(
+                        process.platform === 'win32' ? `explorer "${root}"`
+                            : process.platform === 'darwin' ? `open "${root}"`
+                            : `xdg-open "${root}"`
+                    );
+                }
+            } catch (e) { console.warn('Open parts folder failed', e); }
         });
 
         this.root.querySelector('.rr-cg-save').addEventListener('click', () => this._savePartsSheet());
@@ -4881,6 +5019,8 @@ ${sheetJs}
     }
 
     _savePartsSheet() {
+        const projectPath = this._requireProjectPath();
+        if (!projectPath) return;
         const input = this.root.querySelector('.rr-cg-name-input');
         let name = (input?.value || '').trim();
         if (!name) { alert('Enter a name for the character sheet.'); return; }
@@ -4888,7 +5028,7 @@ ${sheetJs}
         const sheetCanvas = this.root.querySelector('.rr-cg-sheet-canvas');
         if (!sheetCanvas) return;
         const fs = require('fs'), path = require('path');
-        const outDir  = path.join(this.projectPath, 'img', 'characters');
+        const outDir  = path.join(projectPath, 'img', 'characters');
         const outPath = path.join(outDir, `$${name}.png`);
         try {
             fs.mkdirSync(outDir, { recursive: true });

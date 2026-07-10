@@ -163,10 +163,79 @@ test('EffekseerGenerator class has all required methods', () => {
         '_savePreset', '_applyPreset', '_deletePreset', '_renderLayerCards',
         '_wireLayerCards', '_composerLayers', '_bakedSheet', '_pickTexture',
         '_layer', '_values', '_stackMeta', '_retireEffect', '_flushRetired',
+        '_setKeyframeTime', '_setLayerStart', '_addKeyframe', '_deleteActiveKeyframe',
     ];
     for (const m of required) {
         assert.equal(typeof cls.prototype[m], 'function', `EffekseerGenerator.${m} is missing`);
     }
+});
+
+test('Effekseer Layers sit beside the preview and stack below it when narrow', () => {
+    const src = fs.readFileSync(path.join(repoRoot, 'src', 'forge', 'EffekseerGenerator', 'EffekseerGenerator.js'), 'utf8');
+    assert.match(src, /class="rr-efk-center"[^>]*overflow: auto;/,
+        'the center workspace must scroll when its content exceeds the available height');
+    assert.match(src, /\.rr-efk-workarea\s*\{[^}]*grid-template-columns: minmax\(300px, 320px\) minmax\(240px, 1fr\);[^}]*grid-template-areas: "layers preview";/,
+        'Layers must sit to the left of the preview when space permits');
+    assert.match(src, /@container \(max-width: 560px\)[\s\S]*?grid-template-areas: "preview" "layers";/,
+        'Layers must move below the preview when the center pane is narrow');
+    assert.match(src, /class="rr-efk-workarea"/,
+        'the preview and Layers must share one responsive work area');
+    assert.match(src, /class="rr-efk-preview-wrap"[^>]*width: min\(100%, 74vh\);/,
+        'the preview wrapper must fit the available workspace width');
+    assert.match(src, /class="rr-efk-canvas"[^>]*style="width: 100%;/,
+        'the canvas must size itself from the constrained preview wrapper');
+    assert.match(src, /class="rr-efk-playback"[^>]*flex-wrap: wrap;/,
+        'playback and export controls must wrap in narrow workspaces');
+    assert.match(src, /class="rr-efk-opacity-label"[^>]*>\$\{this\._tx\('Opacity'\)\}<\/label>/,
+        'the layer opacity slider must have a clear label');
+    assert.match(src, /rr-efk-lp-alpha-value[\s\S]*?value\.textContent = `\$\{Math\.round\(Number\(sl\.value\) \* 100\)\}%`;/,
+        'the layer opacity percentage must update while the slider moves');
+    assert.match(src, /class="rr-efk-kf-frame-group"[^>]*white-space: nowrap;/,
+        'the keyframe frame label and number must remain grouped');
+    assert.match(src, /class="rr-efk-lp-kfdel rr-btn-chip"/,
+        'layer cards with multiple keyframes must expose a remove button');
+    assert.match(src, /class="rr-efk-param-kf-frame-row"[^>]*grid-template-columns: minmax\(0, 1fr\) 64px;/,
+        'the inspector keyframe field must stay within its narrow column');
+    assert.match(src, /\.rr-efk-layout input\[type="number"\]::\-webkit-inner-spin-button,[\s\S]*?\-webkit-appearance: none;/,
+        'Effekseer number fields must not expose unthemed native spinner buttons');
+    assert.doesNotMatch(src, /kfFrameInput\.addEventListener\('change'/,
+        'keyboard stepping must not replace and defocus the inspector frame input');
+    assert.doesNotMatch(src, /inp\.addEventListener\('change',[\s\S]{0,120}_renderLayerBar/,
+        'keyboard stepping must not replace and defocus the layer-card frame input');
+});
+
+test('Effekseer layer and keyframe timing mutations stay synchronized', () => {
+    const src = fs.readFileSync(path.join(repoRoot, 'src', 'forge', 'EffekseerGenerator', 'EffekseerGenerator.js'), 'utf8');
+    const Gen = new Function(src + '; return EffekseerGenerator;')();
+    const gen = Object.create(Gen.prototype);
+    gen._effectDuration = 120;
+    gen._stack = [{
+        keyframes: [{ value: 1 }], activeKf: 0, values: { value: 1 },
+        start: 10, end: 40, kfTimes: [10],
+    }];
+
+    gen._setKeyframeTime(0, 0, 20);
+    assert.deepEqual(
+        { start: gen._stack[0].start, end: gen._stack[0].end, kfTimes: gen._stack[0].kfTimes },
+        { start: 20, end: 50, kfTimes: [20] },
+        'moving the only keyframe also moves the layer window without changing its duration');
+
+    gen._setLayerStart(0, 35);
+    assert.deepEqual(
+        { start: gen._stack[0].start, end: gen._stack[0].end, kfTimes: gen._stack[0].kfTimes },
+        { start: 35, end: 65, kfTimes: [35] },
+        'moving the layer start also moves its only keyframe');
+
+    assert.equal(gen._addKeyframe(0), true);
+    assert.equal(gen._stack[0].keyframes.length, 2);
+    assert.equal(gen._stack[0].activeKf, 1);
+    assert.deepEqual(gen._stack[0].kfTimes, [35, 65]);
+
+    assert.equal(gen._deleteActiveKeyframe(0), true);
+    assert.equal(gen._stack[0].keyframes.length, 1);
+    assert.equal(gen._stack[0].activeKf, 0);
+    assert.deepEqual(gen._stack[0].kfTimes, [35]);
+    assert.equal(gen._deleteActiveKeyframe(0), false, 'the final keyframe cannot be removed');
 });
 
 // Every declared param must actually be read somewhere in the recipe —

@@ -14,7 +14,8 @@
  * Project-side data layout (under <projectPath>/forge/):
  *   forge/
  *     character_generator/
- *       parts/<category>/*.png
+ *       styles/<style>/parts/<category>/*.{png,js}
+ *       parts/<category>/*.png   (legacy Complex-template path; still scanned)
  *       config.json
  *     ... (future tools)
  *
@@ -123,6 +124,23 @@ class ForgeManager {
             if (instance && typeof instance.detach === 'function') instance.detach();
         }
         if (this.workspaceModal) this.workspaceModal.style.display = 'none';
+    }
+
+    /**
+     * Drop cached tool state when the open project changes so saves/loads
+     * never target a previous project's path.
+     */
+    onProjectChanged() {
+        for (const tool of FORGE_TOOLS) {
+            const instance = this[tool.getter];
+            if (!instance) continue;
+            if (typeof instance.detach === 'function') instance.detach();
+            if ('projectPath' in instance) instance.projectPath = null;
+            if (instance.imageCache && typeof instance.imageCache.clear === 'function') instance.imageCache.clear();
+        }
+        if (this.workspaceModal && this.workspaceModal.style.display !== 'none') {
+            this._renderWorkspace();
+        }
     }
 
     _createWorkspace() {

@@ -1,0 +1,27 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: editor/package-lock.json
+      - name: Install editor dependencies
+        working-directory: editor
+        run: npm ci --ignore-scripts
+      - name: Syntax-check tracked JavaScript
+        run: git ls-files -z -- '*.js' '*.cjs' | xargs -0 -r -n 1 node --check
+      - name: Run editor tests
+        working-directory: editor
+        run: npm test
+      - name: Audit production dependencies
+        working-directory: editor
+        run: npm audit --omit=dev

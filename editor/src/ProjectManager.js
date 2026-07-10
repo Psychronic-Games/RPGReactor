@@ -39,6 +39,7 @@ class ProjectManager {
 
             const engineVersion = this.getEngineVersion();
             const templatePath = this.getTemplateProjectPath();
+            const runtimePath = this.getRuntimePath();
 
             // Create target directory if it doesn't exist
             if (!this.fs.existsSync(targetPath)) {
@@ -47,10 +48,11 @@ class ProjectManager {
 
             if (templatePath) {
                 await this.copyDirectory(templatePath, targetPath);
+                if (runtimePath) {
+                    await this.copyRuntimeIntoProject(runtimePath, this.path.join(targetPath, 'js'), true);
+                }
                 this.updateCopiedTemplateProject(targetPath, projectName, engineVersion);
             } else {
-                const runtimePath = this.getRuntimePath();
-
                 if (!runtimePath) {
                     console.error('Runtime corescript directory not found. Expected runtime/ beside the editor source.');
                     console.error('Current working directory:', process.cwd());
@@ -90,6 +92,20 @@ class ProjectManager {
                 await this.copyDirectory(sourcePath, targetPath);
             } else {
                 // Copy file
+                this.fs.copyFileSync(sourcePath, targetPath);
+            }
+        }
+    }
+
+    async copyRuntimeIntoProject(runtimePath, jsPath, preservePluginConfig = false) {
+        if (!this.fs.existsSync(jsPath)) this.fs.mkdirSync(jsPath, { recursive: true });
+        for (const entry of this.fs.readdirSync(runtimePath, { withFileTypes: true })) {
+            if (preservePluginConfig && entry.name === 'reactor_plugins.js') continue;
+            const sourcePath = this.path.join(runtimePath, entry.name);
+            const targetPath = this.path.join(jsPath, entry.name);
+            if (entry.isDirectory()) {
+                await this.copyDirectory(sourcePath, targetPath);
+            } else {
                 this.fs.copyFileSync(sourcePath, targetPath);
             }
         }
@@ -171,6 +187,7 @@ class ProjectManager {
         const dataPath = this.path.join(targetPath, 'data');
 
         await this.copyDirectory(runtimePath, jsPath);
+        this.writeText(this.path.join(jsPath, 'reactor_plugins.js'), 'var $plugins = [];\n');
 
         this.ensureDirectories(targetPath, [
             'audio/bgm', 'audio/bgs', 'audio/me', 'audio/se',
@@ -193,6 +210,8 @@ class ProjectManager {
             this.writeJson(this.path.join(dataPath, fileName), data);
         }
 
+        this.writeSolidPng(this.path.join(targetPath, 'img', 'system', 'Window.png'), 192, 192, [32, 32, 40, 255]);
+        this.writeSolidPng(this.path.join(targetPath, 'img', 'system', 'IconSet.png'), 512, 512, [0, 0, 0, 0]);
         this.copyEditorIcon(targetPath);
     }
 
@@ -211,6 +230,55 @@ class ProjectManager {
 
     writeJson(filePath, data) {
         this.writeText(filePath, JSON.stringify(data, null, 2));
+    }
+
+    writeSolidPng(filePath, width, height, rgba) {
+        const zlib = require('zlib');
+        const Buffer = require('buffer').Buffer;
+        const rowSize = width * 4 + 1;
+        const pixels = Buffer.alloc(rowSize * height);
+        for (let y = 0; y < height; y++) {
+            const row = y * rowSize;
+            pixels[row] = 0;
+            for (let x = 0; x < width; x++) {
+                const offset = row + 1 + x * 4;
+                pixels[offset] = rgba[0];
+                pixels[offset + 1] = rgba[1];
+                pixels[offset + 2] = rgba[2];
+                pixels[offset + 3] = rgba[3];
+            }
+        }
+
+        const crc32 = (buffer) => {
+            let crc = 0xffffffff;
+            for (const byte of buffer) {
+                crc ^= byte;
+                for (let bit = 0; bit < 8; bit++) {
+                    crc = (crc >>> 1) ^ ((crc & 1) ? 0xedb88320 : 0);
+                }
+            }
+            return (crc ^ 0xffffffff) >>> 0;
+        };
+        const chunk = (type, data) => {
+            const name = Buffer.from(type, 'ascii');
+            const length = Buffer.alloc(4);
+            length.writeUInt32BE(data.length);
+            const checksum = Buffer.alloc(4);
+            checksum.writeUInt32BE(crc32(Buffer.concat([name, data])));
+            return Buffer.concat([length, name, data, checksum]);
+        };
+
+        const header = Buffer.alloc(13);
+        header.writeUInt32BE(width, 0);
+        header.writeUInt32BE(height, 4);
+        header[8] = 8;
+        header[9] = 6;
+        this.fs.writeFileSync(filePath, Buffer.concat([
+            Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
+            chunk('IHDR', header),
+            chunk('IDAT', zlib.deflateSync(pixels)),
+            chunk('IEND', Buffer.alloc(0))
+        ]));
     }
 
     getStarterIndexHtml(projectName) {
@@ -350,6 +418,20 @@ class ProjectManager {
             airship: { bgm: { ...emptyAudio }, characterIndex: 0, characterName: '', startMapId: 0, startX: 0, startY: 0 },
             title1Name: '',
             title2Name: '',
+            titleBgm: { ...emptyAudio },
+            battleBgm: { ...emptyAudio },
+            victoryMe: { ...emptyAudio },
+            defeatMe: { ...emptyAudio },
+            gameoverMe: { ...emptyAudio },
+            battleSystem: 1,
+            tileSize: 48,
+            windowTone: [0, 0, 0, 0],
+            menuCommands: [true, true, true, true, true, true],
+            itemCategories: [true, true, true, true],
+            magicSkills: [1],
+            hasEncryptedImages: false,
+            hasEncryptedAudio: false,
+            encryptionKey: '',
             optDisplayTp: true,
             optDrawTitle: true,
             optExtraExp: false,
@@ -365,6 +447,10 @@ class ProjectManager {
             equipTypes: ['', 'Weapon', 'Shield', 'Head', 'Body', 'Accessory'],
             skillTypes: ['', 'Magic', 'Special'],
             weaponTypes: ['', 'Sword'],
+            attackMotions: new Array(13).fill(null).map((_, index) => ({
+                type: index === 1 ? 1 : 0,
+                weaponImageId: index === 1 ? 1 : 0
+            })),
             armorTypes: ['', 'General Armor'],
             switches: ['', 'Switch 1'],
             variables: ['', 'Variable 1'],
@@ -380,7 +466,19 @@ class ProjectManager {
             battleback1Name: '',
             battleback2Name: '',
             titleCommandWindow: { background: 0, offsetX: 0, offsetY: 0 },
-            advanced: {}
+            advanced: {
+                fallbackFonts: 'Verdana, sans-serif',
+                fontSize: 26,
+                gameId: 0,
+                mainFontFilename: '',
+                numberFontFilename: '',
+                screenHeight: 624,
+                screenScale: 1,
+                screenWidth: 816,
+                uiAreaHeight: 624,
+                uiAreaWidth: 816,
+                windowOpacity: 192
+            }
         };
     }
 
@@ -439,7 +537,9 @@ class ProjectManager {
             } else {
                 // Check if it's an RPG Maker project
                 const rmmzFile = this.path.join(projectPath, 'game.rmmzproject');
-                if (this.fs.existsSync(rmmzFile)) {
+                const rpgmvFile = this.path.join(projectPath, 'Game.rpgproject');
+                const rpgmvLowerFile = this.path.join(projectPath, 'game.rpgproject');
+                if (this.fs.existsSync(rmmzFile) || this.fs.existsSync(rpgmvFile) || this.fs.existsSync(rpgmvLowerFile)) {
                     // Import RPG Maker project
                     const engineVersion = this.getEngineVersion();
                     projectData = {
@@ -448,7 +548,7 @@ class ProjectManager {
                         engine: 'RPG Reactor',
                         engineVersion: engineVersion,
                         imported: true,
-                        importedFrom: 'RPG Maker MZ',
+                        importedFrom: this.fs.existsSync(rmmzFile) ? 'RPG Maker MZ' : 'RPG Maker MV',
                         path: projectPath
                     };
                 } else {
@@ -487,7 +587,9 @@ class ProjectManager {
 
             // Save MapInfos.json if maps data exists
             if (maps) {
-                this.saveMapInfos(projectData.path, maps);
+                if (!this.saveMapInfos(projectData.path, maps)) {
+                    return false;
+                }
             }
 
             console.log('Project saved successfully!');

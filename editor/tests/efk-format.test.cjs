@@ -13,13 +13,20 @@ const repoRoot = path.resolve(__dirname, '..', '..');
 const fmt = require(path.join(repoRoot, 'editor', 'src', 'forge', 'EffekseerGenerator', 'format', 'efk_format.js'));
 
 const effectsDir = path.join(repoRoot, 'template', 'Demo', 'effects');
-const files = fs.readdirSync(effectsDir).filter((f) => f.endsWith('.efkefc')).sort();
+const corpusPresent = fs.existsSync(effectsDir);
+const corpusSkip = corpusPresent ? false : 'template/Demo effect corpus is not present';
 
-test('stock effect corpus is present', () => {
+function getCorpusFiles() {
+    return fs.readdirSync(effectsDir).filter((f) => f.endsWith('.efkefc')).sort();
+}
+
+test('stock effect corpus is present', { skip: corpusSkip }, () => {
+    const files = getCorpusFiles();
     assert.ok(files.length >= 100, `expected the stock MZ corpus, found ${files.length} files`);
 });
 
-test('every stock effect parses to the exact end of BIN_', () => {
+test('every stock effect parses to the exact end of BIN_', { skip: corpusSkip }, () => {
+    const files = getCorpusFiles();
     const failures = [];
     for (const f of files) {
         try {
@@ -36,7 +43,8 @@ test('every stock effect parses to the exact end of BIN_', () => {
 // The strongest guarantee we have: parse → re-emit must reproduce the
 // original INFO and BIN_ chunks byte-for-byte for every stock effect.
 // (EDIT is intentionally not written — the runtime never reads it.)
-test('round-trip: every stock effect re-emits byte-identical INFO and BIN_', () => {
+test('round-trip: every stock effect re-emits byte-identical INFO and BIN_', { skip: corpusSkip }, () => {
+    const files = getCorpusFiles();
     for (const f of files) {
         const orig = new Uint8Array(fs.readFileSync(path.join(effectsDir, f)));
         const container = fmt.parseContainer(orig);
@@ -51,7 +59,8 @@ test('round-trip: every stock effect re-emits byte-identical INFO and BIN_', () 
 // INFO and BIN_ list the same resources but not necessarily in the same
 // order (the Effekseer editor sorts the two chunks differently), so
 // compare as sets.
-test('INFO chunk resource lists match BIN_ header lists', () => {
+test('INFO chunk resource lists match BIN_ header lists', { skip: corpusSkip }, () => {
+    const files = getCorpusFiles();
     for (const f of files) {
         const bytes = new Uint8Array(fs.readFileSync(path.join(effectsDir, f)));
         const effect = fmt.parseEfkefc(bytes);

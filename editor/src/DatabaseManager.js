@@ -5,6 +5,22 @@ class DatabaseManager {
     constructor() {
         this.fs = null;
         this.path = null;
+        this.savedState = {};
+        this.dataFiles = [
+            ['actors', 'Actors.json'],
+            ['classes', 'Classes.json'],
+            ['skills', 'Skills.json'],
+            ['items', 'Items.json'],
+            ['weapons', 'Weapons.json'],
+            ['armors', 'Armors.json'],
+            ['enemies', 'Enemies.json'],
+            ['troops', 'Troops.json'],
+            ['states', 'States.json'],
+            ['animations', 'Animations.json'],
+            ['tilesets', 'Tilesets.json'],
+            ['commonEvents', 'CommonEvents.json'],
+            ['system', 'System.json']
+        ];
 
         // Database storage
         this.data = {
@@ -38,25 +54,17 @@ class DatabaseManager {
 
         try {
             const dataPath = this.path.join(projectPath, 'data');
-
-            // Load all database files
-            this.data.actors = await this.loadJSON(dataPath, 'Actors.json');
-            this.data.classes = await this.loadJSON(dataPath, 'Classes.json');
-            this.data.skills = await this.loadJSON(dataPath, 'Skills.json');
-            this.data.items = await this.loadJSON(dataPath, 'Items.json');
-            this.data.weapons = await this.loadJSON(dataPath, 'Weapons.json');
-            this.data.armors = await this.loadJSON(dataPath, 'Armors.json');
-            this.data.enemies = await this.loadJSON(dataPath, 'Enemies.json');
-            this.data.troops = await this.loadJSON(dataPath, 'Troops.json');
-            this.data.states = await this.loadJSON(dataPath, 'States.json');
-            this.data.animations = await this.loadJSON(dataPath, 'Animations.json');
-            this.data.tilesets = await this.loadJSON(dataPath, 'Tilesets.json');
-            this.data.commonEvents = await this.loadJSON(dataPath, 'CommonEvents.json');
-            this.data.system = await this.loadJSON(dataPath, 'System.json');
-            this.data.mapInfos = await this.loadJSON(dataPath, 'MapInfos.json');
+            const loaded = {};
+            for (const [key, filename] of this.dataFiles) {
+                loaded[key] = await this.loadJSON(dataPath, filename);
+            }
+            loaded.mapInfos = await this.loadJSON(dataPath, 'MapInfos.json');
+            Object.assign(this.data, loaded);
+            this.captureSavedState();
 
             return true;
         } catch (error) {
+            console.error('Error loading database:', error);
             return false;
         }
     }
@@ -72,8 +80,32 @@ class DatabaseManager {
             const content = this.fs.readFileSync(filePath, 'utf8');
             return JSON.parse(content);
         } catch (error) {
-            return filename === 'System.json' ? {} : [];
+            console.error(`Error loading ${filename}:`, error);
+            throw new Error(`Could not parse ${filename}: ${error.message}`);
         }
+    }
+
+    serialize(data) {
+        return JSON.stringify(data);
+    }
+
+    captureSavedState(dataKey = null) {
+        const entries = dataKey
+            ? this.dataFiles.filter(([key]) => key === dataKey)
+            : this.dataFiles;
+        for (const [key] of entries) {
+            this.savedState[key] = this.serialize(this.data[key]);
+        }
+    }
+
+    getDirtyKeys() {
+        return this.dataFiles
+            .filter(([key]) => this.savedState[key] !== undefined && this.serialize(this.data[key]) !== this.savedState[key])
+            .map(([key]) => key);
+    }
+
+    isDirty() {
+        return this.getDirtyKeys().length > 0;
     }
 
     async saveJSON(projectPath, filename, data) {
@@ -86,8 +118,11 @@ class DatabaseManager {
             const filePath = this.path.join(dataPath, filename);
 
             this.fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
+            const entry = this.dataFiles.find(([, file]) => file === filename);
+            if (entry) this.captureSavedState(entry[0]);
             return true;
         } catch (error) {
+            console.error(`Error saving ${filename}:`, error);
             return false;
         }
     }
@@ -299,25 +334,13 @@ class DatabaseManager {
     async saveAllData(projectPath) {
         if (!this.fs || !this.path) return false;
 
-        try {
-            await this.saveJSON(projectPath, 'Actors.json', this.data.actors);
-            await this.saveJSON(projectPath, 'Classes.json', this.data.classes);
-            await this.saveJSON(projectPath, 'Skills.json', this.data.skills);
-            await this.saveJSON(projectPath, 'Items.json', this.data.items);
-            await this.saveJSON(projectPath, 'Weapons.json', this.data.weapons);
-            await this.saveJSON(projectPath, 'Armors.json', this.data.armors);
-            await this.saveJSON(projectPath, 'Enemies.json', this.data.enemies);
-            await this.saveJSON(projectPath, 'Troops.json', this.data.troops);
-            await this.saveJSON(projectPath, 'States.json', this.data.states);
-            await this.saveJSON(projectPath, 'Animations.json', this.data.animations);
-            await this.saveJSON(projectPath, 'Tilesets.json', this.data.tilesets);
-            await this.saveJSON(projectPath, 'CommonEvents.json', this.data.commonEvents);
-            await this.saveJSON(projectPath, 'System.json', this.data.system);
-            await this.saveJSON(projectPath, 'MapInfos.json', this.data.mapInfos);
-
-            return true;
-        } catch (error) {
-            return false;
+        const failed = [];
+        for (const [key, filename] of this.dataFiles) {
+            if (!await this.saveJSON(projectPath, filename, this.data[key])) {
+                failed.push(filename);
+            }
         }
+        if (failed.length) console.error(`Failed to save database files: ${failed.join(', ')}`);
+        return failed.length === 0;
     }
 }

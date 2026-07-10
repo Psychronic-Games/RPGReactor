@@ -1,6 +1,7 @@
 // Event command codes that take no parameters — editing them via double-click
 // is meaningless, so editCommand returns early instead of showing a placeholder alert.
 const NO_PARAM_EVENT_CODES = new Set([
+    109, // Skip
     115, // Exit Event Processing
     206, // Get on/off Vehicle
     214, // Erase Event
@@ -856,6 +857,7 @@ class EventCommandList {
             104: { name: 'Select Item', color: 'var(--color-syntax-type)' },
             105: { name: 'Show Scrolling Text', color: 'var(--color-syntax-type)' },
             108: { name: 'Comment', color: 'var(--color-syntax-string)' },
+            109: { name: 'Skip', color: 'var(--color-syntax-string)' },
             111: { name: 'Conditional Branch', color: 'var(--color-syntax-string)' },
             112: { name: 'Loop', color: 'var(--color-syntax-string)' },
             113: { name: 'Break Loop', color: 'var(--color-syntax-string)' },

@@ -74,54 +74,67 @@ class PlaytestManager {
         // Pass mode parameter ('test' for playtest, 'btest' for battle test)
         const appPathArg = process.platform === 'darwin' ? projectPath : '.';
         const launchArgs = [appPathArg, mode];
-        const userDataDir = this.resolvePlaytestUserDataDir(path, fs);
+        const userDataDir = this.resolvePlaytestUserDataDir(path, fs, projectPath);
         if (userDataDir) {
             launchArgs.unshift(`--user-data-dir=${userDataDir}`);
             console.log('Playtest user data dir:', userDataDir);
         }
 
-        this.playtestProcess = spawn(nwPath, launchArgs, {
+        const child = spawn(nwPath, launchArgs, {
             cwd: projectPath,
             stdio: 'ignore',
             detached: false,
             windowsHide: false
         });
+        this.playtestProcess = child;
 
-        this.playtestProcess.on('error', (err) => {
+        child.on('error', (err) => {
             console.error('Failed to launch playtest:', err);
-            this.playtestProcess = null;
+            if (this.playtestProcess === child) this.playtestProcess = null;
         });
 
-        this.playtestProcess.on('exit', (code, signal) => {
+        child.on('exit', (code, signal) => {
             console.log('Playtest process exited:', code, signal);
-            this.playtestProcess = null;
+            if (this.playtestProcess === child) this.playtestProcess = null;
         });
 
-        console.log('Playtest process launched with PID:', this.playtestProcess.pid);
+        console.log('Playtest process launched with PID:', child.pid);
         return true;
     }
 
-    resolvePlaytestUserDataDir(path, fs) {
-        if (process.platform !== 'win32') {
-            return null;
-        }
-
-        const baseDir = process.env.LOCALAPPDATA || process.env.APPDATA;
-        if (!baseDir) {
-            console.warn('LOCALAPPDATA/APPDATA not set; playtest will use NW.js default profile directory.');
-            return null;
-        }
-
-        const nwVersion = (process.versions && (process.versions.nw || process.versions['node-webkit'])) || 'unknown';
+    resolvePlaytestUserDataDir(path, fs, projectPath, options = {}) {
+        const os = require('os');
+        const crypto = require('crypto');
+        const platform = options.platform || process.platform;
+        const env = options.env || process.env;
+        const homeDir = options.homeDir || os.homedir();
+        const baseDir = options.baseDir || (platform === 'win32'
+            ? (env.LOCALAPPDATA || env.APPDATA || path.join(homeDir, 'AppData', 'Local'))
+            : platform === 'darwin'
+                ? path.join(homeDir, 'Library', 'Application Support')
+                : (env.XDG_CONFIG_HOME || path.join(homeDir, '.config')));
+        const nwVersion = options.nwVersion ||
+            ((process.versions && (process.versions.nw || process.versions['node-webkit'])) || 'unknown');
         const versionDir = `nwjs-${this.slugifyPathSegment(nwVersion)}`;
-        const userDataDir = path.join(baseDir, 'RPGReactor', 'PlaytestProfile', versionDir);
+        let canonicalProjectPath = path.resolve(projectPath);
+        try { canonicalProjectPath = fs.realpathSync(projectPath); } catch {}
+        if (platform === 'win32') canonicalProjectPath = canonicalProjectPath.toLowerCase();
+        const projectId = crypto.createHash('sha256').update(canonicalProjectPath).digest('hex').slice(0, 16);
+        const userDataDir = path.join(baseDir, 'RPGReactor', 'PlaytestProfile', versionDir, projectId);
 
         try {
             fs.mkdirSync(userDataDir, { recursive: true });
             return userDataDir;
         } catch (error) {
             console.warn('Could not create isolated playtest profile directory:', error);
-            return null;
+            const fallbackDir = path.join(os.tmpdir(), 'rpg-reactor-playtest-profile', versionDir, projectId);
+            try {
+                fs.mkdirSync(fallbackDir, { recursive: true });
+                return fallbackDir;
+            } catch (fallbackError) {
+                console.warn('Could not create fallback playtest profile directory:', fallbackError);
+                return null;
+            }
         }
     }
 
@@ -308,3 +321,5 @@ class PlaytestManager {
         return this.playtestProcess !== null;
     }
 }
+
+if (typeof module !== 'undefined' && module.exports) module.exports = PlaytestManager;

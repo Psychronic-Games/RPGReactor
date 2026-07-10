@@ -1282,7 +1282,7 @@ class DatabaseTroopEditor {
     getCommandColor(code) {
         if (code === 0) return 'var(--color-border-input)';
         if (code >= 101 && code <= 105) return 'var(--color-syntax-type)';
-        if (code === 108 || code === 408) return 'var(--color-syntax-string)';
+        if (code === 108 || code === 109 || code === 408) return 'var(--color-syntax-string)';
         if (code >= 111 && code <= 119) return 'var(--color-syntax-string)';
         if (code >= 121 && code <= 129) return 'var(--color-syntax-function)';
         if (code >= 201 && code <= 250) return 'var(--color-syntax-type)';
@@ -1297,7 +1297,7 @@ class DatabaseTroopEditor {
         const names = {
             0: 'End', 101: 'Show Text', 102: 'Show Choices', 103: 'Input Number',
             104: 'Select Item', 105: 'Show Scrolling Text',
-            108: 'Comment', 111: 'If', 112: 'Loop', 113: 'Break Loop',
+            108: 'Comment', 109: 'Skip', 111: 'If', 112: 'Loop', 113: 'Break Loop',
             115: 'Exit Event', 117: 'Common Event', 118: 'Label', 119: 'Jump to Label',
             121: 'Control Switches', 122: 'Control Variables',
             123: 'Control Self Switch', 124: 'Control Timer',

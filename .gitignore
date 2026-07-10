@@ -11,6 +11,12 @@ editor/nwjs-linux/
 editor/nwjs-mac/
 .nw-cache/
 editor/.nw-cache/
+.asset-tool-cache/
+editor/.asset-tool-cache/
+.nw-codec-cache/
+editor/.nw-codec-cache/
+.appimage-tool-cache/
+editor/.appimage-tool-cache/
 
 # OS-specific files
 .DS_Store

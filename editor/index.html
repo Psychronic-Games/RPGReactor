@@ -23,17 +23,19 @@
             z-index: 10000;
             flex-direction: column;
         ">
-            <img src="images/splash-screen.png" alt="RPG Reactor" style="width: 100%; height: auto; margin-bottom: 24px;" onerror="this.style.display='none'">
-            <div data-i18n="app.loading" style="color: #007acc; font-size: 18px; animation: pulse 1.5s infinite;">Loading...</div>
+            <img src="images/splash-screen.png" alt="RPG Reactor" width="1920" height="1200" style="width: 100%; height: auto; margin-bottom: 24px;" onerror="this.style.display='none'">
+            <div data-i18n="app.loading" style="color: #007acc; font-size: 18px; line-height: 22px; animation: pulse 1.5s infinite;">Loading...</div>
         </div>
 
         <!-- HTML Menu Bar (replaces non-functional native menu on Linux) -->
         <div id="html-menu-bar" style="background-color: var(--color-bg-toolbar); color: var(--color-text); border-bottom: 1px solid var(--color-border); display: flex; padding: 0; user-select: none; font-size: 13px; flex-shrink: 0;">
             <div class="html-menu-item" data-menu="file" style="position: relative; padding: 8px 16px; cursor: pointer;">
                 <span data-i18n="menu.file">File</span>
-                <div class="html-submenu" id="submenu-file" style="display: none; position: absolute; top: 100%; left: 0; background-color: var(--color-bg-toolbar); color: var(--color-text); border: 1px solid var(--color-border); min-width: 200px; z-index: 10000; box-shadow: var(--shadow-popup);">
-                    <div class="html-menu-option" data-action="new-project" data-i18n="menu.newProject" style="padding: 8px 16px; cursor: pointer;">New Project</div>
-                    <div class="html-menu-option" data-action="open-project" data-i18n="menu.openProject" style="padding: 8px 16px; cursor: pointer;">Open Project</div>
+                <div class="html-submenu" id="submenu-file" style="display: none; position: absolute; top: 100%; left: 0; background-color: var(--color-bg-toolbar); color: var(--color-text); border: 1px solid var(--color-border); min-width: 240px; z-index: 10000; box-shadow: var(--shadow-popup);">
+                    <div class="html-menu-option" data-action="new-project" style="padding: 8px 16px; cursor: pointer; display: flex; justify-content: space-between; gap: 24px;"><span data-i18n="menu.newProject">New Project</span><span style="color: var(--color-text-muted);">Ctrl+N</span></div>
+                    <div class="html-menu-option" data-action="open-project" style="padding: 8px 16px; cursor: pointer; display: flex; justify-content: space-between; gap: 24px;"><span data-i18n="menu.openProject">Open Project</span><span style="color: var(--color-text-muted);">Ctrl+O</span></div>
+                    <div class="html-menu-option" data-action="save-project" style="padding: 8px 16px; cursor: pointer; display: flex; justify-content: space-between; gap: 24px;"><span data-i18n="toolbar.title.saveProject">Save Project</span><span style="color: var(--color-text-muted);">Ctrl+S</span></div>
+                    <div class="html-menu-option" data-action="playtest" style="padding: 8px 16px; cursor: pointer; display: flex; justify-content: space-between; gap: 24px;"><span data-i18n="toolbar.title.playtest">Playtest</span><span style="color: var(--color-text-muted);">Ctrl+R</span></div>
                     <div style="height: 1px; background: var(--color-border); margin: 4px 0;"></div>
                     <div class="html-menu-option" data-action="close-project" data-i18n="menu.closeProject" style="padding: 8px 16px; cursor: pointer;">Close Project</div>
                     <div style="height: 1px; background: var(--color-border); margin: 4px 0;"></div>
@@ -563,7 +565,7 @@
             <div class="modal-body">
                 <img src="images/logo.png" alt="RPG Reactor" style="max-width: 300px; width: 100%; height: auto; margin-bottom: 24px;" onerror="this.style.display='none'">
 
-                <h3 data-i18n="about.version" style="color: #e8b817; margin-bottom: 16px;">RPG Reactor v0.94.1</h3>
+                <h3 data-i18n="about.version" style="color: #e8b817; margin-bottom: 16px;">RPG Reactor v0.94.2</h3>
 
                 <p data-i18n="about.description" style="color: var(--color-text); line-height: 1.6; margin-bottom: 16px;">
                     An open-source, cross-platform RPG game engine built with NW.js and PixiJS v8
@@ -828,8 +830,10 @@
                 const path = require('path');
                 const appDir = path.dirname(decodeURIComponent(window.location.pathname));
                 const candidates = [
+                    path.join(appDir, 'libs', 'gif.js'),
                     path.join(appDir, 'node_modules', 'gif.js', 'dist', 'gif.js'),
-                    path.join(process.cwd(), 'node_modules', 'gif.js', 'dist', 'gif.js')
+                    path.join(process.cwd(), 'node_modules', 'gif.js', 'dist', 'gif.js'),
+                    path.join(process.cwd(), '..', 'node_modules', 'gif.js', 'dist', 'gif.js')
                 ];
                 for (const candidate of candidates) {
                     if (!fs.existsSync(candidate)) continue;
@@ -1005,6 +1009,10 @@
     <script src="src/database/DatabaseCommonEventEditor.js"></script>
     <script src="src/DatabaseEditorUI.js"></script>
     <!-- Build Manager -->
+    <script src="src/DeploymentPathPreferences.js"></script>
+    <script src="src/DeploymentLocalePreferences.js"></script>
+    <script src="src/DeploymentAssetPreferences.js"></script>
+    <script src="src/NwVersionPicker.js"></script>
     <script src="src/BuildManager.js"></script>
     <!-- Editor Distribution Manager -->
     <script src="src/DistEditorManager.js"></script>

@@ -119,13 +119,17 @@ class UIManager {
             case 'open-project':
                 this.callbacks.openProject();
                 break;
+            case 'save-project':
+                this.callbacks.saveProject();
+                break;
+            case 'playtest':
+                this.callbacks.playtest();
+                break;
             case 'close-project':
                 this.callbacks.closeProject();
                 break;
             case 'exit':
-                if (typeof nw !== 'undefined') {
-                    nw.App.quit();
-                }
+                if (this.callbacks.exit) this.callbacks.exit();
                 break;
             case 'options':
                 if (this.callbacks.showOptions) {
@@ -395,6 +399,24 @@ class UIManager {
 
         // Keyboard shortcuts
         window.addEventListener('keydown', (e) => {
+            // F5 - Reload the editor without Chromium's cached application state.
+            if ((e.keyCode === 116 || e.key === 'F5') &&
+                !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey) {
+                e.preventDefault();
+                e.stopPropagation();
+                if (!e.repeat) this.confirmApplicationReload();
+                return false;
+            }
+
+            // F11 - Toggle native NW.js fullscreen mode.
+            if ((e.keyCode === 122 || e.key === 'F11') &&
+                !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey) {
+                e.preventDefault();
+                e.stopPropagation();
+                if (!e.repeat) nw.Window.get().toggleFullscreen();
+                return false;
+            }
+
             // F12 - Toggle developer tools
             if (e.keyCode === 123 || e.key === 'F12') { // 123 is keyCode for F12
                 e.preventDefault();
@@ -411,6 +433,21 @@ class UIManager {
                     win.showDevTools();
                 }
                 return false;
+            }
+
+            const shortcut = (e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey
+                ? {
+                    n: this.callbacks.newProject,
+                    o: this.callbacks.openProject,
+                    s: this.callbacks.saveProject,
+                    r: this.callbacks.playtest
+                }[e.key.toLowerCase()]
+                : null;
+            if (shortcut) {
+                e.preventDefault();
+                e.stopPropagation();
+                if (!e.repeat) shortcut();
+                return;
             }
 
             // Database and modal editors own their shortcuts. Do not let map/event
@@ -628,6 +665,95 @@ class UIManager {
             const modal = document.getElementById(id);
             return modal && modal.style.display && modal.style.display !== 'none';
         });
+    }
+
+    confirmApplicationReload() {
+        if (document.getElementById('rr-reload-confirm')) return false;
+
+        const overlay = document.createElement('div');
+        overlay.id = 'rr-reload-confirm';
+        overlay.className = 'rr-modal-overlay';
+
+        const modal = document.createElement('div');
+        modal.className = 'rr-modal';
+        modal.style.width = 'min(460px, 92vw)';
+        modal.setAttribute('role', 'alertdialog');
+        modal.setAttribute('aria-modal', 'true');
+        modal.setAttribute('aria-labelledby', 'rr-reload-confirm-title');
+
+        const header = document.createElement('div');
+        header.className = 'rr-modal-header';
+        const title = document.createElement('div');
+        title.id = 'rr-reload-confirm-title';
+        title.className = 'rr-modal-title';
+        title.textContent = 'Reload Application?';
+        const closeButton = document.createElement('button');
+        closeButton.type = 'button';
+        closeButton.className = 'rr-modal-close';
+        closeButton.setAttribute('aria-label', 'Cancel reload');
+        closeButton.textContent = '\u00d7';
+        header.append(title, closeButton);
+
+        const body = document.createElement('div');
+        body.className = 'rr-modal-body';
+        const message = document.createElement('p');
+        message.style.cssText = 'margin:0;color:var(--color-text);line-height:1.5;';
+        message.textContent = 'Reload RPG Reactor and simulate a browser restart?';
+        const warning = document.createElement('p');
+        warning.style.cssText = 'margin:0;padding:9px 10px;background:var(--color-danger-bg-deep);border:1px solid var(--color-danger-border);border-radius:var(--radius-md);color:var(--color-danger-light);font-weight:600;line-height:1.4;';
+        warning.textContent = 'Any unsaved changes will be lost.';
+        body.append(message, warning);
+
+        const footer = document.createElement('div');
+        footer.className = 'rr-modal-footer';
+        const cancelButton = document.createElement('button');
+        cancelButton.id = 'rr-reload-cancel';
+        cancelButton.type = 'button';
+        cancelButton.className = 'rr-btn-secondary';
+        cancelButton.textContent = 'Cancel';
+        const reloadButton = document.createElement('button');
+        reloadButton.id = 'rr-reload-accept';
+        reloadButton.type = 'button';
+        reloadButton.className = 'rr-button-primary';
+        reloadButton.textContent = 'Reload';
+        footer.append(cancelButton, reloadButton);
+        modal.append(header, body, footer);
+        overlay.appendChild(modal);
+
+        const close = () => {
+            document.removeEventListener('keydown', handleKeyDown, true);
+            overlay.remove();
+        };
+        const reload = () => {
+            close();
+            this.reloadApplicationIgnoringCache();
+        };
+        const handleKeyDown = event => {
+            if (event.key === 'Escape') {
+                event.preventDefault();
+                close();
+            }
+        };
+        closeButton.addEventListener('click', close);
+        cancelButton.addEventListener('click', close);
+        reloadButton.addEventListener('click', reload);
+        overlay.addEventListener('click', event => {
+            if (event.target === overlay) close();
+        });
+        document.addEventListener('keydown', handleKeyDown, true);
+        document.body.appendChild(overlay);
+        cancelButton.focus();
+        return true;
+    }
+
+    reloadApplicationIgnoringCache() {
+        const win = nw.Window.get();
+        if (win && typeof win.reloadIgnoringCache === 'function') {
+            win.reloadIgnoringCache();
+        } else {
+            window.location.reload();
+        }
+        return true;
     }
 
     handleToolbarAction(action) {

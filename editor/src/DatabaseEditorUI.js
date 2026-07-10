@@ -174,6 +174,9 @@ class DatabaseEditorUI {
     revertDatabaseSnapshot() {
         if (this._dataSnapshot) {
             Object.assign(this.databaseManager.data, this._dataSnapshot);
+            if (this.currentProject?.maps) {
+                this.databaseManager.data.mapInfos = this.currentProject.maps;
+            }
             this._dataSnapshot = null;
         }
     }
@@ -200,7 +203,11 @@ class DatabaseEditorUI {
             okBtn.onclick = async () => {
                 const projectPath = this.currentProject?.path;
                 if (projectPath) {
-                    await this.databaseManager.saveAllData(projectPath);
+                    const saved = await this.databaseManager.saveAllData(projectPath);
+                    if (!saved) {
+                        alert('One or more database files could not be saved.');
+                        return;
+                    }
                     this.updateStatus(this._t('db.saved'));
                 }
                 this._dataSnapshot = null;
@@ -212,7 +219,11 @@ class DatabaseEditorUI {
             applyBtn.onclick = async () => {
                 const projectPath = this.currentProject?.path;
                 if (projectPath) {
-                    await this.databaseManager.saveAllData(projectPath);
+                    const saved = await this.databaseManager.saveAllData(projectPath);
+                    if (!saved) {
+                        alert('One or more database files could not be saved.');
+                        return;
+                    }
                     this.updateStatus(this._t('db.saved'));
                     this._dataSnapshot = JSON.parse(JSON.stringify(this.databaseManager.data));
                     applyBtn.style.backgroundColor = 'var(--color-accent)';

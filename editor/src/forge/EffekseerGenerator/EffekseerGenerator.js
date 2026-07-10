@@ -143,13 +143,76 @@ class EffekseerGenerator {
         const K = layer.keyframes.length;
         const start = layer.start || 0;
         const span = (layer.end || 0) > start ? layer.end - start : (this._effectDuration || 120);
+        if (!Number.isInteger(layer.activeKf) || layer.activeKf < 0) layer.activeKf = 0;
+        if (layer.activeKf >= K) layer.activeKf = K - 1;
         if (!Array.isArray(layer.kfTimes)) layer.kfTimes = [];
         for (let i = 0; i < K; i++) {
-            if (typeof layer.kfTimes[i] !== 'number') {
+            if (!Number.isFinite(layer.kfTimes[i])) {
                 layer.kfTimes[i] = Math.round(start + (K > 1 ? (span * i) / (K - 1) : 0));
             }
         }
         layer.kfTimes.length = K;
+    }
+
+    _setKeyframeTime(layerIndex, keyframeIndex, frame) {
+        const layer = this._stack[layerIndex];
+        if (!layer) return null;
+        this._normalizeKfTimes(layer);
+        const index = Math.max(0, Math.min(layer.keyframes.length - 1, keyframeIndex));
+        const value = Math.max(0, Number(frame) || 0);
+        if (layer.keyframes.length === 1) {
+            const duration = (layer.end || 0) > (layer.start || 0) ? layer.end - (layer.start || 0) : 0;
+            layer.start = value;
+            if (duration > 0) layer.end = value + duration;
+        }
+        layer.kfTimes[index] = value;
+        return layer;
+    }
+
+    _setLayerStart(layerIndex, frame) {
+        const layer = this._stack[layerIndex];
+        if (!layer) return null;
+        this._normalizeKfTimes(layer);
+        const oldStart = layer.start || 0;
+        const value = Math.max(0, Number(frame) || 0);
+        const duration = (layer.end || 0) > oldStart ? layer.end - oldStart : 0;
+        const delta = value - oldStart;
+        layer.start = value;
+        if (duration > 0) layer.end = value + duration;
+        layer.kfTimes = layer.keyframes.length === 1
+            ? [value]
+            : layer.kfTimes.map((time) => Math.max(0, time + delta));
+        return layer;
+    }
+
+    _addKeyframe(layerIndex) {
+        const layer = this._stack[layerIndex];
+        if (!layer) return false;
+        this._normalizeKfTimes(layer);
+        layer.keyframes.push(JSON.parse(JSON.stringify(layer.keyframes[layer.activeKf])));
+        if (!((layer.end || 0) > (layer.start || 0))) {
+            layer.end = (layer.start || 0) + (this._effectDuration || 120);
+        }
+        layer.kfTimes.push(layer.end);
+        layer.activeKf = layer.keyframes.length - 1;
+        layer.values = layer.keyframes[layer.activeKf];
+        return true;
+    }
+
+    _deleteActiveKeyframe(layerIndex) {
+        const layer = this._stack[layerIndex];
+        if (!layer || layer.keyframes.length <= 1) return false;
+        this._normalizeKfTimes(layer);
+        layer.keyframes.splice(layer.activeKf, 1);
+        layer.kfTimes.splice(layer.activeKf, 1);
+        layer.activeKf = Math.min(layer.activeKf, layer.keyframes.length - 1);
+        layer.values = layer.keyframes[layer.activeKf];
+        if (layer.keyframes.length === 1) {
+            const duration = (layer.end || 0) > (layer.start || 0) ? layer.end - (layer.start || 0) : 0;
+            layer.start = layer.kfTimes[0];
+            layer.end = layer.start > 0 && duration > 0 ? layer.start + duration : 0;
+        }
+        return true;
     }
 
     /** The active layer's ACTIVE KEYFRAME values object. */
@@ -773,6 +836,9 @@ class EffekseerGenerator {
                 const scaleA = (obj) => {
                     if (!obj || typeof obj !== 'object') return;
                     if (typeof obj.a === 'number') obj.a = Math.round(obj.a * op);
+                    if (obj.type === 3 && obj.fcurve && obj.fcurve.a && Array.isArray(obj.fcurve.a.keys)) {
+                        obj.fcurve.a.keys = obj.fcurve.a.keys.map((a) => Math.round(a * op));
+                    }
                     for (const v of Object.values(obj)) scaleA(v);
                 };
                 (function walkOp(list) {
@@ -863,19 +929,54 @@ class EffekseerGenerator {
         const playIcon = '<svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" stroke="none" aria-hidden="true"><polygon points="5,3 21,12 5,21"/></svg>';
 
         contentEl.innerHTML = `
-            <div style="display: grid; grid-template-columns: 170px 1fr 250px; flex: 1; min-height: 0;">
+            <div class="rr-efk-layout" style="display: grid; grid-template-columns: 170px minmax(0, 1fr) 250px; flex: 1; min-height: 0;">
                 <div class="rr-efk-sidebar" style="background: var(--color-bg-panel); border-right: 1px solid var(--color-border); overflow-y: auto; padding-bottom: 8px;">
                     ${sidebarHtml}
                 </div>
-                <div style="display: flex; flex-direction: column; min-width: 0; background: var(--color-bg-surface); overflow-y: auto;">
-                    <div style="flex: 1; display: flex; align-items: center; justify-content: center; min-height: 240px; padding: 12px;">
-                        <div style="position: relative;">
-                            <canvas class="rr-efk-canvas" width="720" height="720" style="width: min(100%, 74vh); aspect-ratio: 1 / 1; height: auto; border: 1px solid var(--color-border); border-radius: 4px; background: #000; display: block; cursor: grab;" title="${this._t('efk.orbitHint')}"></canvas>
-                            <div class="rr-efk-overlay" style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--color-text-muted); font-size: 12px; pointer-events: none; text-align: center; padding: 0 20px;"></div>
+                <div class="rr-efk-center" style="display: flex; flex-direction: column; min-width: 0; background: var(--color-bg-surface); overflow: auto; container-type: inline-size;">
+                    <style>
+                        .rr-efk-layout input[type="number"] {
+                            -moz-appearance: textfield;
+                            appearance: textfield;
+                        }
+                        .rr-efk-layout input[type="number"]::-webkit-inner-spin-button,
+                        .rr-efk-layout input[type="number"]::-webkit-outer-spin-button {
+                            -webkit-appearance: none;
+                            margin: 0;
+                        }
+                        .rr-efk-workarea {
+                            display: grid;
+                            grid-template-columns: minmax(300px, 320px) minmax(240px, 1fr);
+                            grid-template-areas: "layers preview";
+                            flex: 1 0 auto;
+                            min-width: 0;
+                        }
+                        .rr-efk-preview-stage { grid-area: preview; }
+                        .rr-efk-layerbar {
+                            grid-area: layers;
+                            border-right: 1px solid var(--color-border-subtle);
+                        }
+                        @container (max-width: 560px) {
+                            .rr-efk-workarea {
+                                grid-template-columns: minmax(0, 1fr);
+                                grid-template-areas: "preview" "layers";
+                            }
+                            .rr-efk-layerbar {
+                                border-top: 1px solid var(--color-border-subtle);
+                                border-right: 0;
+                            }
+                        }
+                    </style>
+                    <div class="rr-efk-workarea">
+                        <div class="rr-efk-preview-stage" style="display: flex; align-items: center; justify-content: center; min-width: 0; min-height: 240px; padding: 12px;">
+                            <div class="rr-efk-preview-wrap" style="position: relative; width: min(100%, 74vh); flex: 0 0 auto;">
+                                <canvas class="rr-efk-canvas" width="720" height="720" style="width: 100%; aspect-ratio: 1 / 1; height: auto; box-sizing: border-box; border: 1px solid var(--color-border); border-radius: 4px; background: #000; display: block; cursor: grab;" title="${this._t('efk.orbitHint')}"></canvas>
+                                <div class="rr-efk-overlay" style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--color-text-muted); font-size: 12px; pointer-events: none; text-align: center; padding: 0 20px;"></div>
+                            </div>
                         </div>
+                        <div class="rr-efk-layerbar" style="min-width: 0; padding: 8px 14px;"></div>
                     </div>
-                    <div class="rr-efk-layerbar" style="padding: 8px 14px; border-top: 1px solid var(--color-border-subtle);"></div>
-                    <div style="display: flex; align-items: center; gap: 8px; padding: 8px 14px; border-top: 1px solid var(--color-border-subtle);">
+                    <div class="rr-efk-playback" style="display: flex; flex: 0 0 auto; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 14px; border-top: 1px solid var(--color-border-subtle);">
                         <button class="rr-efk-play rr-btn-chip" style="padding: 4px 12px; display: inline-flex; align-items: center; gap: 5px;">${playIcon} ${this._t('efk.play')}</button>
                         <button class="rr-efk-replay rr-btn-chip" style="padding: 4px 12px;">↻ ${this._t('efk.replay')}</button>
                         <button class="rr-efk-resetview rr-btn-chip" style="padding: 4px 12px;">⌂ ${this._t('efk.resetView')}</button>
@@ -1007,23 +1108,23 @@ class EffekseerGenerator {
             const kfs = entry.keyframes || [{}];
             this._normalizeKfTimes(entry);
             const kfChips = kfs.map((kf, k) =>
-                `<button class="rr-efk-lp-kf rr-btn-chip" data-i="${i}" data-kf="${k}" title="${this._t('efk.kfAtFrame')} ${entry.kfTimes[k]}" style="padding: 1px 9px; font-size: 10px; ${active && k === (entry.activeKf || 0) ? 'color: var(--color-accent-bright); border-color: var(--color-accent-border-strong); font-weight: 700;' : ''}">${k + 1}</button>`
+                `<button class="rr-efk-lp-kf rr-btn-chip" data-i="${i}" data-kf="${k}" title="${this._t('efk.kfAtFrame')} ${entry.kfTimes[k]}" style="padding: 1px 9px; font-size: 10px; ${k === (entry.activeKf || 0) ? 'color: var(--color-accent-bright); border-color: var(--color-accent-border-strong); font-weight: 700;' : ''}">${k + 1}</button>`
             ).join('');
             const kfFrameBox = `
-                <span style="font-size: 10px; color: var(--color-text-muted);" title="${this._t('efk.kfFrameField')} ${(entry.activeKf || 0) + 1}">@</span>
-                <input type="number" class="rr-efk-lp-kfframe rr-input" data-i="${i}" min="0" max="3600" step="1"
-                       value="${entry.kfTimes[entry.activeKf || 0]}" title="${this._t('efk.kfFrameField')} ${(entry.activeKf || 0) + 1}"
-                       style="width: 56px; font-size: 10px; padding: 1px 4px;">`;
+                <label class="rr-efk-kf-frame-group" style="display: inline-flex; align-items: center; gap: 5px; flex: 0 0 auto; margin-left: auto; font-size: 10px; color: var(--color-text-muted); white-space: nowrap;" title="${this._t('efk.kfFrameField')} ${(entry.activeKf || 0) + 1}">
+                    KF ${(entry.activeKf || 0) + 1} · ${this._t('efk.framesLabel')}
+                    <input type="number" class="rr-efk-lp-kfframe rr-input" data-i="${i}" min="0" max="3600" step="1"
+                           value="${entry.kfTimes[entry.activeKf || 0]}" style="width: 56px; font-size: 10px; padding: 1px 4px;">
+                </label>`;
             const btn = (cls, label, title) =>
                 `<button class="${cls} rr-btn-chip" data-i="${i}" title="${title}" style="padding: 1px 7px; font-size: 10px;">${label}</button>`;
             return `<div class="rr-efk-lp-card" data-i="${i}" style="border: 1px solid ${active ? 'var(--color-accent-bright)' : 'var(--color-border-subtle)'}; border-radius: 4px; padding: 6px 8px; cursor: pointer; background: ${active ? 'var(--color-bg-hover)' : 'var(--color-bg-input-alt)'}; opacity: ${entry.hidden ? 0.55 : 1}; display: flex; flex-direction: column; gap: 5px;">
-                <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px;">
+                <div style="display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px;">
                     <span style="display: inline-flex; gap: 7px; align-items: center; min-width: 0;">
                         ${btn('rr-efk-lp-eye', entry.hidden
                             ? '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity:.45"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>'
                             : '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>', this._t('efk.layerVisible'))}
-                        <span style="font-size: 12px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; ${entry.hidden ? 'opacity: 0.45;' : ''}">${r ? this._tx(r.name) : '?'}</span>
-                        <span style="font-size: 10px; color: var(--color-text-muted); white-space: nowrap;">· ${r ? this._tx(r.category) : ''}</span>
+                        <span title="${r ? `${this._tx(r.name)} · ${this._tx(r.category)}` : ''}" style="font-size: 12px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; ${entry.hidden ? 'opacity: 0.45;' : ''}">${r ? this._tx(r.name) : '?'}</span>
                     </span>
                     <span style="display: inline-flex; gap: 4px; flex-shrink: 0;">
                         ${btn('rr-efk-lp-up', '▲', this._t('efk.moveUp'))}
@@ -1032,13 +1133,18 @@ class EffekseerGenerator {
                         ${this._stack.length > 1 ? btn('rr-efk-lp-del', '✕', this._t('efk.removeStackLayer')) : ''}
                     </span>
                 </div>
-                <div style="display: flex; align-items: center; gap: 8px; border-top: 1px solid var(--color-border-subtle); padding-top: 5px;">
-                    <span style="font-size: 9px; color: var(--color-text-muted);">α</span>
-                    <input type="range" class="rr-efk-lp-alpha" data-i="${i}" min="0" max="1" step="0.01" value="${entry.opacity ?? 1}" style="flex: 1; min-width: 0;">
-                    <span style="font-size: 9px; color: var(--color-text-muted); min-width: 32px; text-align: right;">${Math.round((entry.opacity ?? 1) * 100)}%</span>
+                <div style="display: grid; grid-template-columns: auto minmax(80px, 1fr) 34px; align-items: center; gap: 8px; border-top: 1px solid var(--color-border-subtle); padding-top: 5px;">
+                    <label class="rr-efk-opacity-label" for="rr-efk-opacity-${i}" style="font-size: 10px; color: var(--color-text-muted);">${this._tx('Opacity')}</label>
+                    <input id="rr-efk-opacity-${i}" type="range" class="rr-efk-lp-alpha" data-i="${i}" min="0" max="1" step="0.01" value="${entry.opacity ?? 1}" style="width: 100%; min-width: 80px;">
+                    <span class="rr-efk-lp-alpha-value" style="font-size: 9px; color: var(--color-text-muted); text-align: right;">${Math.round((entry.opacity ?? 1) * 100)}%</span>
+                </div>
+                <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 6px;">
                     <span style="font-size: 9px; color: var(--color-text-muted);">KF</span>
-                    ${kfChips}
-                    <button class="rr-efk-lp-kfadd rr-btn-chip" data-i="${i}" title="${this._t('efk.addKeyframe')}" style="padding: 1px 7px; font-size: 9px;">＋</button>
+                    <span style="display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px;">
+                        ${kfChips}
+                        <button class="rr-efk-lp-kfadd rr-btn-chip" data-i="${i}" title="${this._t('efk.addKeyframe')}" style="padding: 1px 7px; font-size: 9px;">＋</button>
+                        ${kfs.length > 1 ? `<button class="rr-efk-lp-kfdel rr-btn-chip" data-i="${i}" title="${this._t('efk.delKeyframe')}" style="padding: 1px 7px; font-size: 9px;">−</button>` : ''}
+                    </span>
                     ${kfFrameBox}
                 </div>
             </div>`;
@@ -1086,6 +1192,8 @@ class EffekseerGenerator {
             sl.addEventListener('click', (e) => e.stopPropagation());
             sl.addEventListener('input', () => {
                 this._stack[+sl.dataset.i].opacity = Number(sl.value);
+                const value = sl.closest('.rr-efk-lp-card').querySelector('.rr-efk-lp-alpha-value');
+                if (value) value.textContent = `${Math.round(Number(sl.value) * 100)}%`;
                 this._scheduleRebuild();
             });
         });
@@ -1096,25 +1204,33 @@ class EffekseerGenerator {
         })));
         bar.querySelectorAll('.rr-efk-lp-kfframe').forEach(inp => {
             inp.addEventListener('click', (e) => e.stopPropagation());
+            inp.addEventListener('focus', () => {
+                const i = +inp.dataset.i;
+                if (this._activeLayer !== i) {
+                    this._activeLayer = i;
+                    this._renderParams();
+                }
+            });
             inp.addEventListener('input', () => {
                 const i = +inp.dataset.i;
                 const entry = this._stack[i];
-                this._normalizeKfTimes(entry);
-                const v = Math.max(0, Number(inp.value) || 0);
-                entry.kfTimes[entry.activeKf || 0] = v;
-                // A single keyframe's frame IS the layer's entry point:
-                // "this part kicks in at frame 100" — sync the delay.
-                if (entry.keyframes.length === 1) entry.start = v;
+                this._setKeyframeTime(i, entry.activeKf || 0, inp.value);
+                const timingFrame = this.contentEl.querySelector('.rr-efk-params .rr-efk-kf-frame');
+                if (timingFrame) timingFrame.value = inp.value;
+                const timingStart = this.contentEl.querySelector('[data-timing="start"]');
+                if (timingStart && entry.keyframes.length === 1) timingStart.value = entry.start;
                 this._scheduleRebuild();
             });
-            inp.addEventListener('change', () => this._renderLayerBar());
         });
         bar.querySelectorAll('.rr-efk-lp-kfadd').forEach(b => b.addEventListener('click', stop(() => {
             this._activeLayer = +b.dataset.i;
-            const l = this._layer();
-            l.keyframes.push(JSON.parse(JSON.stringify(l.keyframes[l.activeKf])));
-            l.activeKf = l.keyframes.length - 1;
-            if (!((l.end || 0) > (l.start || 0))) l.end = (l.start || 0) + (this._effectDuration || 120);
+            this._addKeyframe(this._activeLayer);
+            this._refreshAfterLayerChange();
+            this._scheduleRebuild();
+        })));
+        bar.querySelectorAll('.rr-efk-lp-kfdel').forEach(b => b.addEventListener('click', stop(() => {
+            this._activeLayer = +b.dataset.i;
+            if (!this._deleteActiveKeyframe(this._activeLayer)) return;
             this._refreshAfterLayerChange();
             this._scheduleRebuild();
         })));
@@ -1215,22 +1331,22 @@ class EffekseerGenerator {
             `<button class="rr-efk-kf rr-btn-chip" data-kf="${i}" title="${this._t('efk.kfAtFrame')} ${layer.kfTimes[i]}" style="padding: 2px 10px; font-size: 10px; ${i === layer.activeKf ? 'color: var(--color-accent-bright); border-color: var(--color-accent-border-strong); font-weight: 700;' : ''}">${i + 1}</button>`
         ).join('');
         const kfFrameRow = `
-            <div style="display: flex; align-items: center; gap: 8px; margin-top: 5px;">
-                <label style="font-size: 10px; color: var(--color-accent-bright); font-weight: 700; flex: 1; white-space: nowrap;">${this._t('efk.kfFrameField')} ${layer.activeKf + 1}:</label>
-                <input type="number" class="rr-efk-kf-frame rr-input" min="0" max="3600" step="1" value="${layer.kfTimes[layer.activeKf]}" style="width: 72px; font-size: 11px; padding: 3px 6px;">
+            <div class="rr-efk-param-kf-frame-row" style="display: grid; grid-template-columns: minmax(0, 1fr) 64px; align-items: center; gap: 8px; margin-top: 5px; min-width: 0;">
+                <label style="min-width: 0; font-size: 10px; color: var(--color-accent-bright); font-weight: 700;">KF ${layer.activeKf + 1} · ${this._t('efk.framesLabel')}</label>
+                <input type="number" class="rr-efk-kf-frame rr-input" min="0" max="3600" step="1" value="${layer.kfTimes[layer.activeKf]}" style="width: 100%; min-width: 0; box-sizing: border-box; font-size: 11px; padding: 3px 6px;">
             </div>`;
         const dur = (layer.end || 0) > (layer.start || 0) ? layer.end - (layer.start || 0) : 0;
         const timingHtml = `<div style="border: 1px solid var(--color-border-subtle); border-radius: 4px; padding: 8px; display: flex; flex-direction: column; gap: 8px;">
             <span style="font-size: 9px; font-weight: 700; color: var(--color-accent-bright); text-transform: uppercase; letter-spacing: 0.5px;">${this._t('efk.timing')}</span>
             <div style="display: flex; align-items: center; gap: 8px;">
-                <label style="font-size: 10px; color: var(--color-text-muted); flex: 1; white-space: nowrap;">${this._t('efk.delay')}</label>
+                <label style="font-size: 10px; color: var(--color-text-muted); flex: 1; white-space: nowrap;">${this._t('efk.startFrame')}</label>
                 <input type="number" data-timing="start" min="0" max="600" step="1" value="${layer.start || 0}" class="rr-input" style="width: 72px; font-size: 11px; padding: 3px 6px;">
             </div>
             <div style="display: flex; align-items: center; gap: 8px;">
                 <label style="font-size: 10px; color: var(--color-text-muted); flex: 1; white-space: nowrap;">${this._t('efk.durationShort')}</label>
                 <input type="number" data-timing="duration" min="0" max="1200" step="1" value="${dur}" class="rr-input" style="width: 72px; font-size: 11px; padding: 3px 6px;">
             </div>
-            <div><label style="font-size: 10px; color: var(--color-text-muted); display: block; margin-bottom: 3px;">${this._t('efk.keyframes')}</label>
+            <div style="border-top: 1px solid var(--color-border-subtle); padding-top: 7px;"><label style="font-size: 10px; color: var(--color-text-muted); display: block; margin-bottom: 3px;">${this._t('efk.keyframes')}</label>
                 <div style="display: flex; gap: 4px; flex-wrap: wrap; align-items: center;">
                     ${kfChips}
                     <button class="rr-efk-kf-add rr-btn-chip" title="${this._t('efk.addKeyframe')}" style="padding: 2px 8px; font-size: 10px;">＋</button>
@@ -1238,6 +1354,7 @@ class EffekseerGenerator {
                 </div>
                 ${kfFrameRow}
                 ${layer.keyframes.length > 1 ? `<div style="font-size: 10px; color: var(--color-accent-bright); margin-top: 4px; font-weight: 700;">${this._t('efk.editingKf')} ${layer.activeKf + 1} / ${layer.keyframes.length}</div>` : ''}
+                <div style="font-size: 9px; line-height: 1.35; color: var(--color-text-muted); margin-top: 5px;">${this._t('efk.kfHint')}</div>
             </div>
         </div>`;
 
@@ -1281,46 +1398,30 @@ class EffekseerGenerator {
         if (kfFrameInput) {
             kfFrameInput.addEventListener('input', () => {
                 const l = this._layer();
-                const v = Math.max(0, Number(kfFrameInput.value) || 0);
-                l.kfTimes[l.activeKf] = v;
-                if (l.keyframes.length === 1) l.start = v;
+                this._setKeyframeTime(this._activeLayer, l.activeKf, kfFrameInput.value);
+                const timingStart = host.querySelector('[data-timing="start"]');
+                if (timingStart && l.keyframes.length === 1) timingStart.value = l.start;
                 this._renderLayerBar();
                 this._scheduleRebuild();
             });
-            kfFrameInput.addEventListener('change', () => this._renderParams());
         }
         host.querySelectorAll('.rr-efk-kf').forEach(btn => {
             btn.addEventListener('click', () => {
                 this._layer().activeKf = +btn.dataset.kf;
-                this._renderParams();   // params panel now edits that keyframe
+                this._renderParams();
+                this._renderLayerBar();
             });
         });
         const kfAdd = host.querySelector('.rr-efk-kf-add');
         if (kfAdd) kfAdd.addEventListener('click', () => {
-            const l = this._layer();
-            l.keyframes.push(JSON.parse(JSON.stringify(l.keyframes[l.activeKf])));
-            l.activeKf = l.keyframes.length - 1;
-            // The transition needs a defined window — surface it in the
-            // Duration field; default to the master frame count. The new
-            // keyframe lands at the window's end.
-            if (!((l.end || 0) > (l.start || 0))) l.end = (l.start || 0) + (this._effectDuration || 120);
-            this._normalizeKfTimes(l);
-            l.kfTimes[l.activeKf] = l.end;
+            this._addKeyframe(this._activeLayer);
             this._renderParams();
             this._renderLayerBar();
             this._scheduleRebuild();
         });
         const kfDel = host.querySelector('.rr-efk-kf-del');
         if (kfDel) kfDel.addEventListener('click', () => {
-            const l = this._layer();
-            if (l.keyframes.length <= 1) return;
-            l.keyframes.splice(l.activeKf, 1);
-            if (Array.isArray(l.kfTimes)) l.kfTimes.splice(l.activeKf, 1);
-            l.activeKf = Math.max(0, l.activeKf - 1);
-            // Back to a single keyframe: drop the transition window so the
-            // layer is endless again — a leftover window kills/respawns
-            // continuous effects every cycle (reads as skipping).
-            if (l.keyframes.length === 1 && !(l.start > 0)) l.end = 0;
+            if (!this._deleteActiveKeyframe(this._activeLayer)) return;
             this._renderParams();
             this._renderLayerBar();
             this._scheduleRebuild();
@@ -1331,9 +1432,10 @@ class EffekseerGenerator {
                 const l = this._layer();
                 const v = Math.max(0, Number(input.value) || 0);
                 if (input.dataset.timing === 'start') {
-                    const dur2 = (l.end || 0) > (l.start || 0) ? l.end - (l.start || 0) : 0;
-                    l.start = v;
-                    if (dur2 > 0) l.end = v + dur2;   // delay shifts the window
+                    this._setLayerStart(this._activeLayer, v);
+                    const selectedFrame = host.querySelector('.rr-efk-kf-frame');
+                    if (selectedFrame) selectedFrame.value = l.kfTimes[l.activeKf];
+                    this._renderLayerBar();
                 } else {
                     l.end = v > 0 ? (l.start || 0) + v : 0;   // duration (0 = endless)
                 }

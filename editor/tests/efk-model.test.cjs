@@ -12,8 +12,10 @@ const repoRoot = path.resolve(__dirname, '..', '..');
 const M = require(path.join(repoRoot, 'editor', 'src', 'forge', 'EffekseerGenerator', 'format', 'efk_model.js'));
 
 const modelDir = path.join(repoRoot, 'template', 'Demo', 'effects', 'Model');
+const corpusPresent = fs.existsSync(modelDir);
+const corpusSkip = corpusPresent ? false : 'template/Demo model corpus is not present';
 
-test('every stock .efkmodel parses strictly', () => {
+test('every stock .efkmodel parses strictly', { skip: corpusSkip }, () => {
     const files = fs.readdirSync(modelDir).filter((f) => f.endsWith('.efkmodel'));
     assert.ok(files.length >= 4, 'expected stock models');
     for (const f of files) {

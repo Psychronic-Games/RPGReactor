@@ -105,19 +105,37 @@ class AnimationGenerator {
 
     renderInto(containerEl, projectController) {
         this.projectController = projectController;
-        const project = projectController?.getCurrentProject?.() || projectController?.currentProject;
         this.root = containerEl;
 
-        if (!project) {
+        if (!this._syncProjectPath()) {
             this.root.innerHTML = '<div style="padding: 40px; text-align: center; color: var(--color-text-muted); font-size: 12px;">Open a project to use Forge tools.</div>';
             return;
         }
-        this.projectPath = project.path;
         this._ensureFolders();
         this._loadConfig();
         this._initLayersIfEmpty();
         this._render();
         this._startPlayback();
+    }
+
+    _syncProjectPath() {
+        const project = this.projectController?.getCurrentProject?.() || this.projectController?.currentProject;
+        const next = project?.path || null;
+        if (!next) {
+            this.projectPath = null;
+            return null;
+        }
+        this.projectPath = next;
+        return this.projectPath;
+    }
+
+    _requireProjectPath() {
+        const p = this._syncProjectPath();
+        if (!p) {
+            alert('Open a project to use Forge tools.');
+            return null;
+        }
+        return p;
     }
 
     detach() {
@@ -128,9 +146,11 @@ class AnimationGenerator {
 
     // -- Filesystem -----------------------------------------------------------
     _ensureFolders() {
+        const projectPath = this._syncProjectPath();
+        if (!projectPath) return;
         const fs = require('fs');
         const path = require('path');
-        const root = path.join(this.projectPath, 'forge', 'animation_generator');
+        const root = path.join(projectPath, 'forge', 'animation_generator');
         try {
             fs.mkdirSync(root, { recursive: true });
             fs.mkdirSync(path.join(root, 'textures'), { recursive: true });
@@ -157,13 +177,17 @@ class AnimationGenerator {
     }
 
     _texturesDir() {
+        const projectPath = this._syncProjectPath();
+        if (!projectPath) return null;
         const path = require('path');
-        return path.join(this.projectPath, 'forge', 'animation_generator', 'textures');
+        return path.join(projectPath, 'forge', 'animation_generator', 'textures');
     }
 
     _configPath() {
+        const projectPath = this._syncProjectPath();
+        if (!projectPath) return null;
         const path = require('path');
-        return path.join(this.projectPath, 'forge', 'animation_generator', 'config.json');
+        return path.join(projectPath, 'forge', 'animation_generator', 'config.json');
     }
 
     _loadConfig() {
@@ -2149,9 +2173,12 @@ class AnimationGenerator {
         const canvas = this.root.querySelector('.rr-ag-sheet');
         if (!canvas) return;
 
+        const projectPath = this._requireProjectPath();
+        if (!projectPath) return;
+
         const fs = require('fs');
         const path = require('path');
-        const defaultDir = path.join(this.projectPath, 'img', 'animations');
+        const defaultDir = path.join(projectPath, 'img', 'animations');
         try { fs.mkdirSync(defaultDir, { recursive: true }); } catch (e) {}
 
         const base64 = canvas.toDataURL('image/png').replace(/^data:image\/png;base64,/, '');
@@ -2196,18 +2223,20 @@ class AnimationGenerator {
             alert('GIF encoder (gif.js) is not loaded.');
             return;
         }
+        const projectPath = this._requireProjectPath();
+        if (!projectPath) return;
         const input = this.root.querySelector('.rr-ag-name');
         let name = (input.value || '').trim() || 'animation';
         name = name.replace(/\.gif$/i, '');
 
         const fs = require('fs');
         const path = require('path');
-        const defaultDir = path.join(this.projectPath, 'img', 'animations');
+        const defaultDir = path.join(projectPath, 'img', 'animations');
         try { fs.mkdirSync(defaultDir, { recursive: true }); } catch (e) {}
 
         // Locate gif.worker.js relative to the project root — NW.js
         // resolves URLs against the loaded HTML's directory.
-        const workerScript = window.RR_GIF_WORKER_SCRIPT || 'node_modules/gif.js/dist/gif.worker.js';
+        const workerScript = window.RR_GIF_WORKER_SCRIPT || 'libs/gif.worker.js';
 
         // Build the encoder. Each frame's delay matches the user's
         // active loop length / frame count, so the GIF plays at the

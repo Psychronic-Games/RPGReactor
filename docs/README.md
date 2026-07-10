@@ -6,4 +6,9 @@ This folder contains project-maintenance workflows that are not required for nor
 
 Release progress for GitHub visitors is tracked in the root [`CHANGELOG.md`](../CHANGELOG.md). Detailed editor/runtime change history is tracked in [`editor/CHANGELOG.md`](../editor/CHANGELOG.md).
 
+Public release explanations:
+
+- [RPG Reactor 0.94.2: Safer Saves and Better Deployments](devlogs/2026-07-10-rpg-reactor-0.94.2.md)
+- [RPG Reactor 0.94.1: Make Your Own Effects with the Forge](devlogs/2026-07-05-rpg-reactor-0.94.1.md)
+
 The public RPG Reactor source checkout does not include the private Complex template plugin source folder. Treat these notes as an operator workflow for maintainers who have access to that external source material.

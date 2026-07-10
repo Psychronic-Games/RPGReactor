@@ -1003,16 +1003,34 @@ class SoundEffectGenerator {
 
     renderInto(containerEl, projectController) {
         this.projectController = projectController;
-        const project = projectController?.getCurrentProject?.() || projectController?.currentProject;
         this.root = containerEl;
-        if (!project) {
+        if (!this._syncProjectPath()) {
             this.root.innerHTML = `<div style="padding: 40px; text-align: center; color: var(--color-text-muted); font-size: 12px;">${this._t('Open a project to use Forge tools.')}</div>`;
             return;
         }
-        this.projectPath = project.path;
         this._ensureFolders();
         this._loadConfig();
         this._render();
+    }
+
+    _syncProjectPath() {
+        const project = this.projectController?.getCurrentProject?.() || this.projectController?.currentProject;
+        const next = project?.path || null;
+        if (!next) {
+            this.projectPath = null;
+            return null;
+        }
+        this.projectPath = next;
+        return this.projectPath;
+    }
+
+    _requireProjectPath() {
+        const p = this._syncProjectPath();
+        if (!p) {
+            alert(this._t('Open a project to use Forge tools.'));
+            return null;
+        }
+        return p;
     }
 
     detach() {
@@ -1025,9 +1043,11 @@ class SoundEffectGenerator {
 
     // ── Filesystem ────────────────────────────────────────────────────────────
     _ensureFolders() {
+        const projectPath = this._syncProjectPath();
+        if (!projectPath) return;
         const fs = require('fs');
         const path = require('path');
-        const root = path.join(this.projectPath, 'forge', 'sound_effect_generator');
+        const root = path.join(projectPath, 'forge', 'sound_effect_generator');
         try {
             fs.mkdirSync(root, { recursive: true });
             const readme = path.join(root, 'README.txt');
@@ -1038,13 +1058,15 @@ class SoundEffectGenerator {
                     'Play to preview, Save to bake to audio/se/<name>.wav.\n'
                 );
             }
-            fs.mkdirSync(path.join(this.projectPath, 'audio', 'se'), { recursive: true });
+            fs.mkdirSync(path.join(projectPath, 'audio', 'se'), { recursive: true });
         } catch (e) { console.error('SoundEffectGenerator: ensure folders:', e); }
     }
 
     _configPath() {
+        const projectPath = this._syncProjectPath();
+        if (!projectPath) return null;
         const path = require('path');
-        return path.join(this.projectPath, 'forge', 'sound_effect_generator', 'config.json');
+        return path.join(projectPath, 'forge', 'sound_effect_generator', 'config.json');
     }
 
     _loadConfig() {
@@ -1625,6 +1647,8 @@ class SoundEffectGenerator {
     }
 
     async _saveSfx() {
+        const projectPath = this._requireProjectPath();
+        if (!projectPath) return;
         const nameInput = this.root.querySelector('.rr-sfx-name');
         const rawName = (nameInput.value || '').trim().replace(/\.(wav|ogg)$/i, '');
         if (!rawName) { alert(this._t('Enter a name for the sound effect.')); return; }
@@ -1643,7 +1667,7 @@ class SoundEffectGenerator {
 
         const fs = require('fs');
         const path = require('path');
-        const defaultDir = path.join(this.projectPath, 'audio', 'se');
+        const defaultDir = path.join(projectPath, 'audio', 'se');
         try { fs.mkdirSync(defaultDir, { recursive: true }); } catch (e) {}
 
         const picker = document.createElement('input');

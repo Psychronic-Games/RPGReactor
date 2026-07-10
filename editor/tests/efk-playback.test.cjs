@@ -281,16 +281,21 @@ test('keyframes compile to FCurve color/scale/rotation tracks', async () => {
     const gen = new Gen();
     gen._stack = [{
         recipeId: 'energy-field', activeKf: 0, start: 0, end: 180,
+        opacity: 0.5,
         keyframes: [{ color: '#ff0000' }, { color: '#00ff00', size: 10 }, { color: '#0000ff', spin: 90 }],
     }];
     gen._activeLayer = 0;
     const bytes = gen._buildBytes();
     const back = RR_EfkFormat.parseEfkefc(bytes);
-    let fcColors = 0, fcRot = 0, fcScale = 0, keyCounts = new Set();
+    let fcColors = 0, fcRot = 0, fcScale = 0, keyCounts = new Set(), alphaKeys = [];
     (function walk(n) {
         if (n.type !== -1 && n.type !== undefined) {
             const ac = n.rendererParams && n.rendererParams.allColor;
-            if (ac && ac.type === 3) { fcColors++; keyCounts.add(ac.fcurve.r.keys.length); }
+            if (ac && ac.type === 3) {
+                fcColors++;
+                keyCounts.add(ac.fcurve.r.keys.length);
+                alphaKeys.push(...ac.fcurve.a.keys);
+            }
             if (n.rotation && n.rotation.type === 5) fcRot++;
             if (n.scaling && n.scaling.type === 5) fcScale++;
         }
@@ -300,6 +305,19 @@ test('keyframes compile to FCurve color/scale/rotation tracks', async () => {
     assert.ok(fcRot >= 1, 'expected FCurve rotation from keyframed spin');
     assert.ok(fcScale >= 1, 'expected FCurve wrapper scale from keyframed size');
     assert.ok([...keyCounts].every((c) => c >= 3), 'color tracks must carry the keyframe curve');
+    const fullOpacityGen = new Gen();
+    fullOpacityGen._stack = JSON.parse(JSON.stringify(gen._stack));
+    fullOpacityGen._stack[0].opacity = 1;
+    fullOpacityGen._activeLayer = 0;
+    const fullOpacityBack = RR_EfkFormat.parseEfkefc(fullOpacityGen._buildBytes());
+    const fullOpacityAlphaKeys = [];
+    (function walk(n) {
+        const ac = n.rendererParams && n.rendererParams.allColor;
+        if (ac && ac.type === 3) fullOpacityAlphaKeys.push(...ac.fcurve.a.keys);
+        (n.children || []).forEach(walk);
+    })(fullOpacityBack.root);
+    assert.deepEqual(alphaKeys, fullOpacityAlphaKeys.map((a) => Math.round(a * 0.5)),
+        'layer opacity must scale keyframed alpha tracks');
 });
 
 // Per-keyframe orientation: each keyframe carries its own __tilt* values

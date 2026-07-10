@@ -3,13 +3,17 @@
  * Does NOT use nw-builder (ESM import hangs in NW.js worker threads).
  * Instead, builds manually: copy NW.js runtime + game files + rename.
  */
-const { workerData, parentPort } = require('worker_threads');
+const { workerData, parentPort, threadId } = require('worker_threads');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const https = require('https');
 const { execSync } = require('child_process');
 const iconHelpers = require('./icon-helpers');
+const nwRuntime = require('./nw-runtime-utils');
+const nwCodec = require('./nw-codec-utils');
+const assetOptimizer = require('./asset-optimizer');
+const appImage = require('./appimage-utils');
 
 // ── Logging ──────────────────────────────────────────────────────────
 function log(msg, color)  { parentPort.postMessage({ type: 'log', message: msg, color: color || '#cccccc' }); }
@@ -30,26 +34,54 @@ const {
     projectName,
     platforms,
     outputDir,
-    nwVersion,       // e.g. "0.92.0"
+    nwVersion: requestedNwVersion,
+    nwVersionPolicy = 'exact',
+    editorNwVersion = requestedNwVersion,
     runtimeSource,   // 'bundled' or 'download'
     appRoot,         // editor app root for cache directory
+    editorExecPath,
+    includeProprietaryCodecs = false,
+    runtimeLocales = null,
+    assetOptimization = { png: false, ogg: false, oggQuality: 5 },
+    createLinuxAppImage = false,
+    appImageToolPath,
+    appImageRuntimePath,
 } = workerData;
+let nwVersion = requestedNwVersion;
+let nwVersionResolved = false;
 
 // Bundled NW.js directories (ship with RPG Reactor, include proprietary codecs)
 const bundledDirs = {
-    linux: path.join(appRoot, 'nwjs-linux'),
-    win:   path.join(appRoot, 'nwjs-win'),
-    osx:   path.join(appRoot, 'nwjs-mac'),
+    linux: [path.join(appRoot, 'nwjs-linux'), path.join(appRoot, '..', 'nwjs-linux')].find(candidate => fs.existsSync(candidate)),
+    win:   [path.join(appRoot, 'nwjs-win'), path.join(appRoot, '..', 'nwjs-win')].find(candidate => fs.existsSync(candidate)),
+    osx:   [path.join(appRoot, 'nwjs-mac'), path.join(appRoot, '..', 'nwjs-mac')].find(candidate => fs.existsSync(candidate)),
 };
 
-const cacheDir = path.join(appRoot, '.nw-cache');
+const cacheCandidates = nwRuntime.cacheDirectories(appRoot);
+const codecCacheCandidates = nwCodec.cacheDirectories(appRoot);
+
+function bundledRuntimeVersion(platform, bundledDir, packagedDir) {
+    if (packagedDir) return nwRuntime.normalizeVersion(editorNwVersion);
+    if (!bundledDir) return null;
+    try {
+        const marker = JSON.parse(fs.readFileSync(path.join(bundledDir, '.rpg-reactor-nw-runtime.json'), 'utf8'));
+        if (marker.platform === platform && marker.arch === 'x64') return nwRuntime.normalizeVersion(marker.version);
+    } catch {}
+    const hostPlatform = process.platform === 'win32' ? 'win' : process.platform === 'darwin' ? 'osx' : 'linux';
+    return platform === hostPlatform ? nwRuntime.normalizeVersion(editorNwVersion) : null;
+}
 
 // ── Exclusions for staging ──────────────────────────────────────────
 const EXCLUDED = new Set([
     'Backup',
+    'BACKUP',
+    'backup',
     'Screenshots',
+    'save',
     'project.rpgreactor',
     'game.rmmzproject',
+    'Game.rpgproject',
+    'game.rpgproject',
     path.join('js', 'REACTOR_CORE_DUMP_MIDDEV'),
     path.join('js', 'RMMZ_Corescript'),
     path.join('data', 'nul'),
@@ -61,7 +93,7 @@ function copyDirFiltered(src, dest, relBase) {
     const entries = fs.readdirSync(src, { withFileTypes: true });
     for (const entry of entries) {
         const relPath = path.join(relBase, entry.name);
-        if (EXCLUDED.has(relPath) || EXCLUDED.has(entry.name)) {
+        if (EXCLUDED.has(relPath)) {
             logDim(`  [skip] ${relPath}`);
             continue;
         }
@@ -91,6 +123,34 @@ function copyDirRecursive(src, dest) {
     }
 }
 
+function validateProjectRuntime(root) {
+    const required = [
+        'reactor_main.js', 'reactor_core.js', 'reactor_managers.js',
+        'reactor_objects.js', 'reactor_scenes.js', 'reactor_sprites.js',
+        'reactor_windows.js', 'reactor_mv_compat.js', 'reactor_plugins.js',
+        path.join('libs', 'pixi.js'), path.join('libs', 'pixi_compat.js'),
+        path.join('libs', 'pako.min.js'), path.join('libs', 'localforage.min.js'),
+        path.join('libs', 'effekseer.min.js'), path.join('libs', 'effekseer.wasm'),
+        path.join('libs', 'vorbisdecoder.js'),
+    ];
+    const jsRoot = path.join(root, 'js');
+    const metadataPath = path.join(root, 'project.rpgreactor');
+    let metadataRequiresReactor = false;
+    if (fs.existsSync(metadataPath)) {
+        try {
+            metadataRequiresReactor = JSON.parse(fs.readFileSync(metadataPath, 'utf8')).imported !== true;
+        } catch {
+            metadataRequiresReactor = true;
+        }
+    }
+    const reactorProject = metadataRequiresReactor
+        || required.some(file => file !== 'reactor_main.js' && fs.existsSync(path.join(jsRoot, file)));
+    if (!reactorProject) return false;
+    const missing = required.filter(file => !fs.existsSync(path.join(jsRoot, file)));
+    if (missing.length) throw new Error(`Project runtime is incomplete: ${missing.join(', ')}`);
+    return true;
+}
+
 function slugifyPackageName(value) {
     const slug = String(value || 'game')
         .toLowerCase()
@@ -114,12 +174,12 @@ function normalizeStagedPackage(stagingDir, gameTitle) {
 }
 
 // ── Download helper (follows one redirect) ──────────────────────────
-function downloadFile(url, destPath, progressBase, progressSpan) {
+function downloadFile(url, destPath, progressBase, progressSpan, reportProgress = true, requestOptions = {}) {
     return new Promise((resolve, reject) => {
         const doGet = (u) => {
-            https.get(u, (res) => {
-                if (res.statusCode === 301 || res.statusCode === 302) {
-                    doGet(res.headers.location);
+            const req = https.get(u, requestOptions, (res) => {
+                if ([301, 302, 303, 307, 308].includes(res.statusCode)) {
+                    doGet(new URL(res.headers.location, u).toString());
                     res.resume();
                     return;
                 }
@@ -133,7 +193,7 @@ function downloadFile(url, destPath, progressBase, progressSpan) {
                 let lastPct = -1;
                 res.on('data', (chunk) => {
                     downloaded += chunk.length;
-                    if (total > 0) {
+                    if (reportProgress && total > 0) {
                         const pct = Math.floor((downloaded / total) * 100);
                         if (pct !== lastPct && pct % 5 === 0) {
                             logDim(`  ${pct}% (${(downloaded / 1048576).toFixed(1)} MB)`);
@@ -145,14 +205,88 @@ function downloadFile(url, destPath, progressBase, progressSpan) {
                         }
                     }
                 });
-                const file = fs.createWriteStream(destPath);
+                const partPath = `${destPath}.${process.pid}.${threadId}.${Date.now()}.part`;
+                const file = fs.createWriteStream(partPath);
                 res.pipe(file);
-                file.on('finish', () => file.close(resolve));
-                file.on('error', reject);
+                file.on('finish', () => file.close(() => {
+                    fs.renameSync(partPath, destPath);
+                    resolve();
+                }));
+                file.on('error', (error) => {
+                    try { fs.rmSync(partPath, { force: true }); } catch {}
+                    reject(error);
+                });
             }).on('error', reject);
+            req.setTimeout(30000, () => req.destroy(new Error(`Timed out downloading ${u}`)));
         };
         doGet(url);
     });
+}
+
+function fetchJson(url) {
+    return new Promise((resolve, reject) => {
+        const request = (target) => {
+            const req = https.get(target, {
+            headers: { 'User-Agent': 'RPG-Reactor', Accept: 'application/vnd.github+json, application/json' },
+        }, (res) => {
+            if (res.statusCode === 301 || res.statusCode === 302) {
+                const redirect = new URL(res.headers.location, target).toString();
+                res.resume();
+                request(redirect);
+                return;
+            }
+            if (res.statusCode !== 200) {
+                reject(new Error(`HTTP ${res.statusCode} for ${target}`));
+                res.resume();
+                return;
+            }
+            let body = '';
+            res.setEncoding('utf8');
+            res.on('data', chunk => { body += chunk; });
+            res.on('end', () => {
+                try { resolve(JSON.parse(body)); } catch (error) { reject(error); }
+            });
+            }).on('error', reject);
+            req.setTimeout(30000, () => req.destroy(new Error(`Timed out requesting ${target}`)));
+        };
+        request(url);
+    });
+}
+
+async function ensureNwVersion() {
+    if (nwVersionResolved) return nwVersion;
+    nwVersion = await nwRuntime.resolveVersion({
+        policy: nwVersionPolicy,
+        exactVersion: requestedNwVersion,
+        editorVersion: editorNwVersion,
+        cacheDirectories: cacheCandidates,
+        fetchManifest: fetchJson,
+        onWarning: logWarn,
+    });
+    nwVersionResolved = true;
+    logInfo(`Resolved NW.js version: ${nwVersion}`);
+    return nwVersion;
+}
+
+async function installProprietaryCodec(platform, runtimeRoot, runtimeVersion, progressBase, progressSpan) {
+    logInfo(`Installing third-party FFmpeg codec for NW.js ${runtimeVersion} (${platform}-x64)...`);
+    const acquired = await nwCodec.acquireArchive({
+        version: runtimeVersion,
+        platform,
+        arch: 'x64',
+        cacheDirectories: codecCacheCandidates,
+        fetchRelease: fetchJson,
+        download: (url, destination) => downloadFile(url, destination, progressBase, progressSpan),
+        onWarning: logWarn,
+    });
+    const temp = path.join(os.tmpdir(), `rpgreactor-codec-${process.pid}-${threadId}-${Date.now()}`);
+    try {
+        const binary = nwCodec.extractBinary(acquired.archivePath, platform, temp);
+        const destination = nwCodec.installBinary(binary, runtimeRoot, platform, acquired);
+        logGood(`Proprietary codec installed: ${destination}`);
+    } finally {
+        fs.rmSync(temp, { recursive: true, force: true });
+    }
 }
 
 // ── Main build ──────────────────────────────────────────────────────
@@ -188,29 +322,61 @@ function downloadFile(url, destPath, progressBase, progressSpan) {
     logInfo(`Project: ${projectPath}`);
     logInfo(`Platform(s): ${platforms.join(', ')}`);
     logInfo(`Output: ${outputDir}`);
-    logInfo(`NW.js version: ${nwVersion}`);
+    logInfo(`NW.js version policy: ${nwVersionPolicy}${nwVersionPolicy === 'exact' ? ` (${requestedNwVersion})` : ''}`);
     logInfo(`Runtime source: ${runtimeSource}`);
+    logInfo(`Third-party proprietary codec: ${includeProprietaryCodecs ? 'enabled' : 'disabled'}`);
+    logInfo(`NW.js runtime locales: ${runtimeLocales ? runtimeLocales.join(', ') : 'all'}`);
+    logInfo(`Asset optimization: PNG ${assetOptimization.png ? 'enabled' : 'disabled'}, OGG ${assetOptimization.ogg ? `quality ${assetOptimization.oggQuality}` : 'disabled'}`);
+    logInfo(`Linux AppImage: ${createLinuxAppImage ? 'enabled' : 'disabled'}`);
     logInfo('');
+
+    if (createLinuxAppImage && (!platforms.includes('linux') || !appImage.supportsHost())) {
+        throw new Error('Linux AppImage requires Linux output on a Linux x86_64 build host.');
+    }
 
     // ── Progress math ────────────────────────────────────────────────
     // Steps: staging (10%) + per-platform (remaining 90% split evenly)
     const platformShare = 90 / platforms.length;
 
     // ── Stage project files ─────────────────────────────────────────
-    const stagingDir = path.join(os.tmpdir(), `rpgreactor-build-${Date.now()}`);
+    const stagingNonce = `${process.pid}-${threadId}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const stagingDir = path.join(os.tmpdir(), `rpgreactor-build-${stagingNonce}`);
+    try {
     logInfo('Staging game files...');
     progress(2, 'Staging game files...');
+    validateProjectRuntime(projectPath);
     copyDirFiltered(projectPath, stagingDir, '');
     normalizeStagedPackage(stagingDir, gameTitle);
+    if (assetOptimization.png || assetOptimization.ogg) {
+        logInfo('Optimizing staged assets...');
+        progress(6, 'Optimizing staged assets...');
+        const summary = await assetOptimizer.optimizeStagedAssets(stagingDir, assetOptimization, {
+            appRoot,
+            fetchRelease: fetchJson,
+            download: (url, destination, detail) => downloadFile(url, destination, 6, 2, detail.reportProgress),
+            onWarning: logWarn,
+            onStatus: logInfo,
+            onFile: (type, filePath, index, total) => {
+                const relativePath = path.relative(stagingDir, filePath);
+                logDim(`  [${type} ${index}/${total}] ${relativePath}`);
+                progress(8, `${type} ${index}/${total}: ${path.basename(filePath)}`);
+            },
+            onProgress: (type, completed, total) => {
+                if (!total) return;
+                const percent = Math.round((completed / total) * 100);
+                progress(8 + Math.round((completed / total) * 2), `${type} optimization ${percent}%`);
+            },
+        });
+        const saved = Math.max(0, summary.before - summary.after);
+        logGood(`Asset optimization complete: ${summary.png} PNG, ${summary.ogg} OGG updated; ${(saved / 1024 / 1024).toFixed(2)} MiB saved.`);
+    }
     logGood('Staging complete.');
     progress(10, 'Staging complete');
     logInfo('');
 
-    // Ensure output + cache dirs exist
+    // Ensure output exists. NW.js caches are created lazily for desktop misses.
     fs.mkdirSync(outputDir, { recursive: true });
-    fs.mkdirSync(cacheDir, { recursive: true });
 
-    try {
         for (let i = 0; i < platforms.length; i++) {
             const platform = platforms[i];
             const nwPlatform = platform === 'mac' ? 'osx' : platform;
@@ -247,23 +413,47 @@ function downloadFile(url, destPath, progressBase, progressSpan) {
             } else {
                 // ── Get NW.js runtime ───────────────────────────────
                 const bundledDir = bundledDirs[nwPlatform];
-                if (runtimeSource === 'bundled' && bundledDir && fs.existsSync(bundledDir)) {
-                    // Copy the bundled NW.js runtime (includes proprietary codecs)
-                    logInfo(`Copying bundled NW.js runtime (${bundledDir})...`);
+                const packagedDir = nwRuntime.packagedFlatRuntime(editorExecPath, nwPlatform);
+                const localRuntimeVersion = bundledRuntimeVersion(nwPlatform, bundledDir, bundledDir ? null : packagedDir);
+                const hasBundledRuntime = (bundledDir && fs.existsSync(bundledDir)) || packagedDir;
+                const requiresSelectedVersion = nwVersionPolicy === 'exact' || nwVersionPolicy === 'editor';
+                if (requiresSelectedVersion) await ensureNwVersion();
+                const localVersionMatches = !requiresSelectedVersion ||
+                    (localRuntimeVersion && localRuntimeVersion === nwVersion);
+                const canUseBundled = hasBundledRuntime && localVersionMatches &&
+                    (!includeProprietaryCodecs || localRuntimeVersion);
+                if (runtimeSource === 'bundled' && canUseBundled) {
+                    // Copy the local NW.js runtime before applying optional codec overlays.
+                    const sourceDir = bundledDir || packagedDir;
+                    logInfo(`Copying bundled NW.js runtime (${sourceDir})...`);
                     progress(Math.round(pRuntime + platformShare * 0.1), 'Copying NW.js runtime...');
-                    copyDirRecursive(bundledDir, platformOutDir);
+                    if (bundledDir) copyDirRecursive(bundledDir, platformOutDir);
+                    else nwRuntime.copyPackagedFlatRuntime(packagedDir, platformOutDir);
+                    if (localRuntimeVersion) {
+                        nwRuntime.writeRuntimeMarker(platformOutDir, {
+                            version: localRuntimeVersion, edition: 'normal', platform: nwPlatform, arch: 'x64',
+                        });
+                    }
                     logGood('NW.js runtime copied.');
                     progress(Math.round(pCopy), 'NW.js runtime copied');
+                    if (includeProprietaryCodecs) {
+                        await installProprietaryCodec(nwPlatform, platformOutDir, localRuntimeVersion,
+                            Math.round(pCopy), 0);
+                    }
                 } else {
                     if (runtimeSource === 'bundled') {
-                        logWarn(`Bundled NW.js not found for ${label} — falling back to download`);
+                        logWarn(hasBundledRuntime
+                            ? `Bundled NW.js does not match the selected version for ${label}; using the exact official runtime/cache.`
+                            : `Bundled NW.js not found for ${label} — falling back to download`);
                     }
                     // Download NW.js for the target platform
-                    const ext = nwPlatform === 'linux' ? 'tar.gz' : 'zip';
-                    const archiveName = `nwjs-v${nwVersion}-${nwPlatform}-x64.${ext}`;
-                    const archivePath = path.join(cacheDir, archiveName);
+                    await ensureNwVersion();
+                    const archiveName = nwRuntime.archiveName(nwVersion, nwPlatform, 'normal');
+                    let archivePath = nwRuntime.findCachedFile(cacheCandidates, archiveName);
 
-                    if (!fs.existsSync(archivePath)) {
+                    if (!archivePath) {
+                        const downloadCacheDir = nwRuntime.writableCacheDirectory(cacheCandidates);
+                        archivePath = path.join(downloadCacheDir, archiveName);
                         const url = `https://dl.nwjs.io/v${nwVersion}/${archiveName}`;
                         logInfo(`Downloading NW.js for ${label}...`);
                         logDim(`  ${url}`);
@@ -271,21 +461,17 @@ function downloadFile(url, destPath, progressBase, progressSpan) {
                         await downloadFile(url, archivePath, Math.round(pRuntime), Math.round(platformShare * 0.5));
                         logGood('Download complete.');
                     } else {
-                        logInfo(`Using cached NW.js: ${archiveName}`);
+                        logInfo(`Using cached NW.js: ${archivePath}`);
                     }
 
                     // Extract
                     logInfo('Extracting NW.js...');
                     progress(Math.round(pRuntime + platformShare * 0.5), 'Extracting NW.js...');
-                    const extractDir = path.join(cacheDir, `_extract_${Date.now()}`);
+                    const extractDir = path.join(os.tmpdir(), `rpgreactor-nw-extract-${process.pid}-${threadId}-${Date.now()}`);
                     fs.mkdirSync(extractDir, { recursive: true });
 
                     try {
-                        if (ext === 'tar.gz') {
-                            execSync(`tar xzf "${archivePath}" -C "${extractDir}"`, { stdio: 'pipe' });
-                        } else {
-                            execSync(`unzip -q -o "${archivePath}" -d "${extractDir}"`, { stdio: 'pipe' });
-                        }
+                        nwRuntime.extractArchive(archivePath, extractDir);
 
                         // The archive extracts to a subdirectory like nwjs-v0.92.0-linux-x64/
                         const extracted = fs.readdirSync(extractDir);
@@ -294,10 +480,25 @@ function downloadFile(url, destPath, progressBase, progressSpan) {
                             : extractDir;
 
                         copyDirRecursive(innerDir, platformOutDir);
+                        nwRuntime.writeRuntimeMarker(platformOutDir, {
+                            version: nwVersion, edition: 'normal', platform: nwPlatform, arch: 'x64',
+                        });
                         logGood('Extraction complete.');
                         progress(Math.round(pCopy), 'Extraction complete');
                     } finally {
                         fs.rmSync(extractDir, { recursive: true, force: true });
+                    }
+                    if (includeProprietaryCodecs) {
+                        await installProprietaryCodec(nwPlatform, platformOutDir, nwVersion,
+                            Math.round(pCopy), 0);
+                    }
+                }
+
+                if (runtimeLocales) {
+                    const localeResult = nwRuntime.pruneDesktopLocales(
+                        platformOutDir, nwPlatform, runtimeLocales, logWarn);
+                    if (localeResult.filtered) {
+                        logGood(`Runtime locales filtered (${localeResult.removed} files/directories removed).`);
                     }
                 }
 
@@ -381,6 +582,39 @@ function downloadFile(url, destPath, progressBase, progressSpan) {
                     }
                 } else {
                     logDim('  No icon/icon.png found — using default NW.js icon');
+                }
+
+                if (nwPlatform === 'linux' && createLinuxAppImage) {
+                    const fallbackIcon = path.join(appRoot, 'images', 'icon.png');
+                    const appImageIcon = fs.existsSync(iconPngPath) ? iconPngPath : fallbackIcon;
+                    const outputPath = path.join(outputDir, `${safeFolderName}-linux-x64.AppImage`);
+                    logInfo('Creating Linux AppImage...');
+                    progress(Math.round(pRename), 'Creating Linux AppImage...');
+                    const result = await appImage.createAppImage({
+                        sourceDir: platformOutDir,
+                        outputPath,
+                        executable: 'Game',
+                        displayName: gameTitle,
+                        appId: `rpg-reactor-${pkg.name || gameTitle}`,
+                        iconPath: appImageIcon,
+                        version: pkg.version || '1.0.0',
+                        comment: pkg.description || `${gameTitle} game`,
+                        categories: 'Game;',
+                        startupWMClass: slugifyPackageName(pkg.name || gameTitle),
+                        cacheDirectories: appImage.cacheDirectories(appRoot),
+                        download: (url, destination, detail) => downloadFile(
+                            url,
+                            destination,
+                            Math.round(pRename),
+                            Math.max(1, Math.round(platformShare * 0.1)),
+                            true,
+                            detail),
+                        onWarning: logWarn,
+                        toolPath: appImageToolPath,
+                        runtimePath: appImageRuntimePath,
+                    });
+                    logGood(`Created: ${path.basename(result.outputPath)}`);
+                    logDim(`  SHA-256: ${result.sha256}`);
                 }
             }
 

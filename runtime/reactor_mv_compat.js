@@ -2174,16 +2174,22 @@
                     if (scaleMode === 0) scaleMode = "linear";
                     if (scaleMode === 1) scaleMode = "nearest";
                     if (PIXI.TextureSource) {
-                        return originalCreate.call(this, {
+                        const options = {
                             width: width,
-                            height: height,
-                            scaleMode: scaleMode,
-                            resolution: resolution
-                        });
+                            height: height
+                        };
+                        if (scaleMode != null) options.scaleMode = scaleMode;
+                        if (Number.isFinite(resolution) && resolution > 0) options.resolution = resolution;
+                        return originalCreate.call(this, options);
                     }
                 } else if (PIXI.TextureSource && width && typeof width === "object") {
-                    width.width = Math.max(1, Number(width.width || 0));
-                    width.height = Math.max(1, Number(width.height || 0));
+                    const options = Object.assign({}, width);
+                    options.width = Math.max(1, Number(options.width || 0));
+                    options.height = Math.max(1, Number(options.height || 0));
+                    if (!Number.isFinite(options.resolution) || options.resolution <= 0) {
+                        delete options.resolution;
+                    }
+                    return originalCreate.call(this, options);
                 }
                 return originalCreate.apply(this, arguments);
             };
@@ -2236,6 +2242,18 @@
     }
 
     function installAudioFontCompatibility() {
+        const hasProjectFont = function(filename) {
+            if (typeof require !== "function" || typeof process === "undefined") return false;
+            try {
+                const fs = require("fs");
+                const path = require("path");
+                const mainFile = process.mainModule && process.mainModule.filename;
+                const root = mainFile ? path.dirname(mainFile) : process.cwd();
+                return fs.existsSync(path.join(root, "fonts", filename));
+            } catch (e) {
+                return false;
+            }
+        };
         if (global.AudioManager && AudioManager.createBuffer && !AudioManager.createBuffer.__mvCompatWrapped) {
             const originalCreateBuffer = AudioManager.createBuffer;
             AudioManager.createBuffer = function(folder, name) {
@@ -2252,7 +2270,8 @@
                     const fontsIndex = filename.lastIndexOf("/fonts/");
                     if (fontsIndex >= 0) filename = filename.slice(fontsIndex + 7);
                     if (filename.indexOf("fonts/") === 0) filename = filename.slice(6);
-                    if (filename === "mplus-1m-regular.woff" || filename === "mplus-2p-bold-sub.woff") {
+                    if ((filename === "mplus-1m-regular.woff" || filename === "mplus-2p-bold-sub.woff") &&
+                        !hasProjectFont(filename) && hasProjectFont("_decterm.ttf")) {
                         filename = "_decterm.ttf";
                     }
                 }

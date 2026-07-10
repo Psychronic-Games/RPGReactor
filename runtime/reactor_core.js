@@ -1462,10 +1462,12 @@ Bitmap.load = function(url) {
  * @returns {Bitmap} The new bitmap object.
  */
 Bitmap.snap = function(stage) {
-    const width = Graphics.width;
-    const height = Graphics.height;
+    const width = Math.max(1, Math.floor(Number(Graphics.width) || 0));
+    const height = Math.max(1, Math.floor(Number(Graphics.height) || 0));
     const bitmap = new Bitmap(width, height);
-    const renderTexture = PIXI.RenderTexture.create(width, height);
+    const renderTexture = PIXI.TextureSource
+        ? PIXI.RenderTexture.create({ width: width, height: height, resolution: 1 })
+        : PIXI.RenderTexture.create(width, height);
     if (stage) {
         const renderer = Graphics.app.renderer;
         if (PIXI.TextureSource) {
@@ -1480,7 +1482,7 @@ Bitmap.snap = function(stage) {
         canvas.width = 0;
         canvas.height = 0;
     }
-    renderTexture.destroy({ destroyBase: true });
+    renderTexture.destroy(PIXI.TextureSource ? true : { destroyBase: true });
     bitmap.baseTexture.update();
     return bitmap;
 };

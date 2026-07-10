@@ -1671,8 +1671,9 @@ function rowHairBounds(pixels, y) {
 
 function addLowerBandRows(pixels, y0, y1, amount, phase = 0) {
     if (amount <= 0) return;
-    const spacing = Math.max(3, 9 - amount);
-    const bandWidth = Math.max(1, Math.round(amount / 2));
+    // Stronger response: amount 1 = sparse stripes, 5 = dense multi-row bands.
+    const spacing = Math.max(2, 10 - amount * 1.5);
+    const bandWidth = Math.max(1, Math.round(amount * 0.85));
     for (let y = y0; y <= y1; y++) {
         const local = y - y0 + phase;
         const bandT = local % spacing;
@@ -1680,12 +1681,12 @@ function addLowerBandRows(pixels, y0, y1, amount, phase = 0) {
         const bounds = rowHairBounds(pixels, y);
         if (!bounds) continue;
         const width = bounds.maxX - bounds.minX + 1;
-        if (width < 8) continue;
-        const margin = Math.max(2, Math.round(width * 0.18));
-        const step = amount >= 4 ? 1 : 2;
-        const letter = bandT === 0 ? 'L' : 'H';
+        if (width < 6) continue;
+        const margin = Math.max(1, Math.round(width * (0.14 - amount * 0.01)));
+        const step = amount >= 3 ? 1 : 2;
+        const letter = bandT === 0 ? 'L' : (bandT === 1 ? 'H' : 'S');
         for (let x = bounds.minX + margin; x <= bounds.maxX - margin; x += step) {
-            if ((x + y + phase) % (amount >= 4 ? 3 : 4) !== 0) setIfHair(pixels, x, y, letter);
+            if ((x + y + phase) % (amount >= 3 ? 2 : 3) !== 0) setIfHair(pixels, x, y, letter);
         }
     }
 }
@@ -1706,38 +1707,45 @@ function fillLowerEdgeGaps(pixels, y0, y1) {
 function addLowerPatternControls(pixels, cx, eyeY, massBottom, half, direction, sway, tipSway, side, back, config = {}) {
     const banding = Math.round(paramNumber(config, 'lowerBanding', 3, 0, 5));
     const scraggle = Math.round(paramNumber(config, 'lowerScraggle', 2, 0, 5));
-    const y0 = Math.round(eyeY + (side ? 8 : back ? 10 : 9));
-    const y1 = Math.round(massBottom - 2);
+    const y0 = Math.round(eyeY + (side ? 6 : back ? 8 : 7));
+    const y1 = Math.round(massBottom - 1);
     if (y1 <= y0) return;
 
     addLowerBandRows(pixels, y0, y1, banding, direction * 2);
 
-    if (banding >= 2) {
-        const laneCount = Math.min(4, banding);
+    if (banding >= 1) {
+        const laneCount = Math.min(6, Math.max(1, banding + 1));
         for (let i = 0; i < laneCount; i++) {
             const t = laneCount === 1 ? 0.5 : i / (laneCount - 1);
-            const offset = Math.round(half * (-0.62 + t * 1.24));
-            const bow = (t - 0.5) * (side ? 2.0 : 1.4) + tipSway * 0.15;
-            addClippedHighlightLane(pixels, cx + sway + offset, y0 + 1, cx + sway + Math.round(offset * 0.78) + Math.round(tipSway * 0.35), y1, bow, i * 2);
+            const offset = Math.round(half * (-0.72 + t * 1.44));
+            const bow = (t - 0.5) * (side ? 2.6 : 1.8) + tipSway * 0.2;
+            addClippedHighlightLane(pixels, cx + sway + offset, y0 + 1, cx + sway + Math.round(offset * 0.72) + Math.round(tipSway * 0.4), y1, bow, i * 2);
         }
     }
-    if (banding >= 4) {
-        addClippedCurvedLine(pixels, cx + sway - Math.round(half * 0.34), y0 + 2, cx + sway - Math.round(half * 0.18) + tipSway, y1 - 1, 'S', -1.0, 5 - banding);
-        addClippedCurvedLine(pixels, cx + sway + Math.round(half * 0.34), y0 + 2, cx + sway + Math.round(half * 0.18) + tipSway, y1 - 1, 'S', 1.0, 5 - banding);
+    if (banding >= 3) {
+        addClippedCurvedLine(pixels, cx + sway - Math.round(half * 0.4), y0 + 1, cx + sway - Math.round(half * 0.16) + tipSway, y1, 'S', -1.4, 5 - banding);
+        addClippedCurvedLine(pixels, cx + sway + Math.round(half * 0.4), y0 + 1, cx + sway + Math.round(half * 0.16) + tipSway, y1, 'S', 1.4, 5 - banding);
+    }
+    if (banding >= 5) {
+        addClippedCurvedLine(pixels, cx + sway - Math.round(half * 0.18), y0 + 2, cx + sway - Math.round(half * 0.06) + tipSway, y1 - 1, 'H', -0.8, 0);
+        addClippedCurvedLine(pixels, cx + sway + Math.round(half * 0.18), y0 + 2, cx + sway + Math.round(half * 0.06) + tipSway, y1 - 1, 'H', 0.8, 0);
     }
 
-    if (scraggle <= 1) {
+    if (scraggle <= 0) {
         fillLowerEdgeGaps(pixels, Math.max(y0, y1 - 12), y1 + 1);
     } else {
-        const depth = Math.max(1, Math.round(scraggle / 2));
-        const spacing = Math.max(4, 10 - scraggle);
-        carveScallopedEdge(pixels, -1, Math.max(y0, y1 - 16), y1 + 1, spacing, depth);
-        carveScallopedEdge(pixels, 1, Math.max(y0, y1 - 16), y1 + 1, spacing, depth);
-        if (scraggle >= 4) {
-            for (const notch of [-0.52, -0.18, 0.18, 0.52]) {
+        // Depth scales hard: 1→1px, 3→3px, 5→5px edge bites.
+        const depth = Math.max(1, scraggle);
+        const spacing = Math.max(3, 11 - scraggle * 1.4);
+        const span = Math.max(y0, y1 - (10 + scraggle * 2));
+        carveScallopedEdge(pixels, -1, span, y1 + 1, spacing, depth);
+        carveScallopedEdge(pixels, 1, span, y1 + 1, spacing, depth);
+        if (scraggle >= 3) {
+            for (const notch of [-0.58, -0.32, -0.1, 0.1, 0.32, 0.58]) {
                 const nx = cx + sway + Math.round(half * notch);
                 erasePixel(pixels, nx, y1 + 1);
-                if (scraggle >= 5) erasePixel(pixels, nx, y1);
+                if (scraggle >= 4) erasePixel(pixels, nx, y1);
+                if (scraggle >= 5) erasePixel(pixels, nx + 1, y1 + 1);
             }
         }
     }
@@ -1746,7 +1754,9 @@ function addLowerPatternControls(pixels, cx, eyeY, massBottom, half, direction, 
 function carveScallopedEdge(pixels, sign, y0, y1, spacing = 7, maxDepth = 2) {
     for (let y = y0; y <= y1; y++) {
         const phase = ((y - y0) % spacing + spacing) % spacing;
-        const depth = Math.max(0, Math.min(maxDepth, Math.round((spacing / 2 - Math.abs(phase - spacing / 2)) / 1.5)));
+        const peak = spacing / 2;
+        // Full maxDepth at the scallop peak so high scraggle values bite hard.
+        const depth = Math.max(0, Math.min(maxDepth, Math.round(maxDepth * (1 - Math.abs(phase - peak) / Math.max(1, peak)))));
         if (depth <= 0) continue;
         const edge = rowOuterEdge(pixels, y, sign);
         if (edge == null) continue;

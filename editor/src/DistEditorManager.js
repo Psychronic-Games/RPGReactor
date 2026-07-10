@@ -17,7 +17,7 @@ class DistEditorManager {
 
                     <div style="flex: 1; display: flex; gap: 20px; padding: 20px; overflow: hidden; min-height: 0;">
                         <!-- Left Column: Build Options -->
-                        <div style="flex: 0 0 380px; overflow-y: auto;">
+                        <div style="flex: 0 0 392px; overflow-y: auto; padding-right: 12px; scrollbar-gutter: stable;">
                             <!-- Package Type -->
                             <div style="margin-bottom: 20px;">
                                 <h3 style="color: var(--color-text); margin-bottom: 10px; font-size: 15px;">Package Type</h3>
@@ -54,22 +54,29 @@ class DistEditorManager {
                                         <input type="checkbox" id="dist-platform-linux" value="linux" checked class="system-checkbox" style="margin-right: 10px;">
                                         <div style="flex: 1;">
                                             <div style="color: var(--color-text); font-weight: 600; font-size: 13px;">Linux (x64)</div>
-                                            <div style="color: var(--color-text-muted); font-size: 11px;">tar.gz archive for Linux 64-bit</div>
+                                            <div style="color: var(--color-text-muted); font-size: 11px;">ZIP archive for Linux 64-bit</div>
                                         </div>
                                     </label>
                                     <label class="dist-option-label" style="display: flex; align-items: center; padding: 8px 10px; background: var(--color-bg-panel); border: 1px solid var(--color-border); border-radius: 4px; cursor: pointer; transition: all 0.2s;">
                                         <input type="checkbox" id="dist-platform-win" value="win" class="system-checkbox" style="margin-right: 10px;">
                                         <div style="flex: 1;">
                                             <div style="color: var(--color-text); font-weight: 600; font-size: 13px;">Windows (x64)</div>
-                                            <div style="color: var(--color-text-muted); font-size: 11px;">zip archive for Windows 64-bit</div>
+                                            <div style="color: var(--color-text-muted); font-size: 11px;">ZIP archive for Windows 64-bit</div>
                                         </div>
                                     </label>
                                     <label class="dist-option-label" style="display: flex; align-items: center; padding: 8px 10px; background: var(--color-bg-panel); border: 1px solid var(--color-border); border-radius: 4px; cursor: pointer; transition: all 0.2s;">
                                         <input type="checkbox" id="dist-platform-osx" value="osx" class="system-checkbox" style="margin-right: 10px;">
                                         <div style="flex: 1;">
                                             <div style="color: var(--color-text); font-weight: 600; font-size: 13px;">macOS (x64)</div>
-                                            <div style="color: var(--color-text-muted); font-size: 11px;">zip archive for macOS 64-bit</div>
+                                            <div style="color: var(--color-text-muted); font-size: 11px;">ZIP archive for macOS 64-bit</div>
                                         </div>
+                                    </label>
+                                    <label id="dist-appimage-option" style="display: flex; align-items: flex-start; gap: 8px; padding: 8px 10px; background: var(--color-bg-panel); border: 1px solid var(--color-border); border-radius: 4px; cursor: pointer;">
+                                        <input id="dist-create-linux-appimage" type="checkbox" class="system-checkbox" style="width: 16px; height: 16px; min-width: 16px; min-height: 16px; max-width: 16px; max-height: 16px; flex: 0 0 16px; margin: 1px 0 0;">
+                                        <span>
+                                            <span style="display: block; color: var(--color-text); font-weight: 600; font-size: 12px;">Also create Linux AppImage</span>
+                                            <span id="dist-appimage-note" style="display: block; color: var(--color-text-muted); font-size: 10px; line-height: 1.35; margin-top: 2px;">Portable x86_64 file emitted beside the Linux ZIP.</span>
+                                        </span>
                                     </label>
                                 </div>
                             </div>
@@ -93,6 +100,22 @@ class DistEditorManager {
                                         </div>
                                     </label>
                                 </div>
+                                <div style="margin-top: 10px; display: grid; grid-template-columns: 130px minmax(0, 1fr); gap: 8px; align-items: center;">
+                                    <label for="dist-nw-version-policy" style="color: var(--color-text-muted); font-size: 11px;">NW.js version</label>
+                                    <select id="dist-nw-version-policy" class="rr-select" style="font-size: 12px; padding: 5px 7px;">
+                                        <option value="stable" selected>Latest stable</option>
+                                        <option value="editor">Same as editor</option>
+                                        <option value="exact">Specific version</option>
+                                    </select>
+                                    <label for="dist-nw-version-exact" style="color: var(--color-text-muted); font-size: 11px;">Specific version</label>
+                                    <input id="dist-nw-version-exact" class="rr-input" type="text" placeholder="Search versions..." autocomplete="off" spellcheck="false" disabled style="font-size: 12px; padding: 5px 7px;">
+                                    <div id="dist-nw-version-list" class="nw-version-menu" role="listbox" hidden></div>
+                                </div>
+                                <div style="color: var(--color-text-muted); font-size: 10px; margin-top: 5px; line-height: 1.35;">Matching local bundles and every NW.js cache are checked before downloading.</div>
+                                <label id="dist-codec-option" style="display: flex; align-items: center; gap: 8px; margin-top: 10px; padding: 8px 10px; background: var(--color-bg-panel); border: 1px solid var(--color-border); border-radius: 4px; cursor: pointer;">
+                                    <input id="dist-include-proprietary-codecs" type="checkbox" class="system-checkbox" style="width: 16px; height: 16px; min-width: 16px; min-height: 16px; max-width: 16px; max-height: 16px; flex: 0 0 16px; margin: 0;">
+                                    <span style="color: var(--color-text); font-weight: 600; font-size: 12px;">Include third-party H.264/AAC codec</span>
+                                </label>
                             </div>
                         </div>
 
@@ -143,6 +166,11 @@ class DistEditorManager {
 
         document.body.insertAdjacentHTML('beforeend', modalHTML);
         this.modal = document.getElementById('dist-editor-modal');
+        document.getElementById('dist-output-path').value =
+            DeploymentPathPreferences.load('editor', 'dist-editor');
+        this.versionPicker = new NwVersionPicker(
+            document.getElementById('dist-nw-version-exact'),
+            document.getElementById('dist-nw-version-list'));
         this.setupEventListeners();
     }
 
@@ -151,11 +179,16 @@ class DistEditorManager {
         const startBtn = document.getElementById('dist-start-btn');
         const cancelBtn = document.getElementById('dist-cancel-btn');
         const selectOutputBtn = document.getElementById('dist-select-output-btn');
+        const versionPolicy = document.getElementById('dist-nw-version-policy');
 
         closeBtn.addEventListener('click', () => this.close());
         startBtn.addEventListener('click', () => this.startBuild());
         cancelBtn.addEventListener('click', () => this.cancelBuild());
         selectOutputBtn.addEventListener('click', () => this.selectOutputDirectory());
+        versionPolicy.addEventListener('change', () => {
+            this.versionPicker.setEnabled(versionPolicy.value === 'exact');
+        });
+        document.getElementById('dist-platform-linux').addEventListener('change', () => this.updatePlatformVisibility());
 
         // Close on background click
         this.modal.addEventListener('click', (e) => {
@@ -200,6 +233,28 @@ class DistEditorManager {
         const type = this.modal.querySelector('input[name="dist-package-type"]:checked').value;
         const section = document.getElementById('dist-platform-section');
         section.style.display = type === 'platform' ? 'block' : 'none';
+        const codec = document.getElementById('dist-include-proprietary-codecs');
+        const codecOption = document.getElementById('dist-codec-option');
+        codec.disabled = type === 'minimal';
+        if (codec.disabled) codec.checked = false;
+        codecOption.style.opacity = codec.disabled ? '0.5' : '1';
+        codecOption.style.cursor = codec.disabled ? 'not-allowed' : 'pointer';
+        const appImageCheckbox = document.getElementById('dist-create-linux-appimage');
+        const appImageOption = document.getElementById('dist-appimage-option');
+        const appImageNote = document.getElementById('dist-appimage-note');
+        const hostSupported = typeof process !== 'undefined' && process.platform === 'linux' && process.arch === 'x64';
+        const linuxSelected = document.getElementById('dist-platform-linux').checked;
+        appImageCheckbox.disabled = !hostSupported || type !== 'platform' || !linuxSelected;
+        if (appImageCheckbox.disabled) appImageCheckbox.checked = false;
+        appImageOption.style.opacity = appImageCheckbox.disabled ? '0.5' : '1';
+        appImageOption.style.cursor = appImageCheckbox.disabled ? 'not-allowed' : 'pointer';
+        appImageNote.textContent = !hostSupported
+            ? 'Creation requires RPG Reactor running on Linux x86_64.'
+            : type !== 'platform'
+                ? 'Available for platform-specific Linux packages.'
+                : linuxSelected
+                    ? 'Portable x86_64 file emitted beside the Linux ZIP.'
+                    : 'Select Linux to enable this additional artifact.';
     }
 
     open() {
@@ -208,6 +263,7 @@ class DistEditorManager {
         this.resetProgress();
         this.updatePlatformVisibility();
         this.log('Ready. Select options and click "Start Build".', 'var(--color-text-muted)');
+        this.versionPicker.load().catch(() => {});
     }
 
     close() {
@@ -215,6 +271,7 @@ class DistEditorManager {
             if (!window.confirm('A build is in progress. Close anyway?')) return;
             this.cancelBuild();
         }
+        this.versionPicker.close();
         this.modal.style.display = 'none';
     }
 
@@ -224,7 +281,9 @@ class DistEditorManager {
         input.nwdirectory = true;
         input.addEventListener('change', () => {
             if (input.files.length > 0) {
-                document.getElementById('dist-output-path').value = input.files[0].path;
+                const outputPath = document.getElementById('dist-output-path');
+                outputPath.value = input.files[0].path;
+                DeploymentPathPreferences.save('editor', outputPath.value);
             }
         });
         input.click();
@@ -274,6 +333,8 @@ class DistEditorManager {
     async startBuild() {
         const packageType = this.modal.querySelector('input[name="dist-package-type"]:checked').value;
         const edition = this.modal.querySelector('input[name="dist-edition"]:checked').value;
+        const includeProprietaryCodecs = document.getElementById('dist-include-proprietary-codecs').checked;
+        const createLinuxAppImage = document.getElementById('dist-create-linux-appimage').checked;
 
         // Determine platforms
         let platforms;
@@ -308,7 +369,24 @@ class DistEditorManager {
             ? outputPath
             : pathModule.join(appRoot, outputPath);
 
-        const nwVersion = process.versions.nw || process.versions['node-webkit'] || '0.92.0';
+        const editorNwVersion = process.versions.nw || process.versions['node-webkit'];
+        if (!editorNwVersion) {
+            alert('Could not determine the editor NW.js version.');
+            return;
+        }
+        const nwVersionPolicy = document.getElementById('dist-nw-version-policy').value;
+        const exactNwVersion = document.getElementById('dist-nw-version-exact').value.trim().replace(/^v/i, '');
+        if (nwVersionPolicy === 'exact') {
+            try { await this.versionPicker.load(); }
+            catch {
+                alert('NW.js versions are unavailable. Connect to the internet or choose Same as editor.');
+                return;
+            }
+            if (!this.versionPicker.hasVersion(exactNwVersion)) {
+                alert('Select an available NW.js version from the searchable list.');
+                return;
+            }
+        }
 
         this.isBuilding = true;
         document.getElementById('dist-start-btn').style.display = 'none';
@@ -331,7 +409,12 @@ class DistEditorManager {
                     platforms,
                     packageType,
                     edition,
-                    nwVersion,
+                    nwVersion: nwVersionPolicy === 'exact' ? exactNwVersion : editorNwVersion,
+                    nwVersionPolicy,
+                    editorNwVersion,
+                    editorExecPath: process.execPath,
+                    includeProprietaryCodecs,
+                    createLinuxAppImage,
                     outputDir,
                 }
             });

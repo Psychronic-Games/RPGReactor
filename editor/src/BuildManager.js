@@ -53,6 +53,13 @@ class BuildManager {
                                             <div style="color: var(--color-text-muted); font-size: 11px;">Build for browser deployment (itch.io, web hosting)</div>
                                         </div>
                                     </label>
+                                    <label id="build-appimage-option" style="display: flex; align-items: flex-start; gap: 8px; padding: 8px 10px; background: var(--color-bg-panel); border: 1px solid var(--color-border); border-radius: 4px; cursor: pointer;">
+                                        <input id="build-create-linux-appimage" type="checkbox" class="system-checkbox" style="width: 16px; height: 16px; min-width: 16px; min-height: 16px; max-width: 16px; max-height: 16px; flex: 0 0 16px; margin: 1px 0 0;">
+                                        <span>
+                                            <span style="display: block; color: var(--color-text); font-weight: 600; font-size: 12px;">Also create Linux AppImage</span>
+                                            <span id="build-appimage-note" style="display: block; color: var(--color-text-muted); font-size: 10px; line-height: 1.35; margin-top: 2px;">Portable x86_64 file emitted beside the Linux folder.</span>
+                                        </span>
+                                    </label>
                                 </div>
                             </div>
 
@@ -62,20 +69,75 @@ class BuildManager {
                                     <label class="build-option-label" style="display: flex; align-items: center; padding: 8px 10px; background: var(--color-bg-panel); border: 1px solid var(--color-border); border-radius: 4px; cursor: pointer; transition: all 0.2s;">
                                         <input type="radio" name="build-runtime-source" value="bundled" checked class="system-radio" style="margin-right: 10px;">
                                         <div style="flex: 1;">
-                                            <div style="color: var(--color-text); font-weight: 600; font-size: 13px;">Use Bundled (Recommended)</div>
-                                            <div style="color: var(--color-text-muted); font-size: 11px;">Uses the NW.js included with RPG Reactor (includes FFMPEG with proprietary codecs)</div>
+                                            <div style="color: var(--color-text); font-weight: 600; font-size: 13px;">Automatic: Bundled / Cache First</div>
+                                            <div style="color: var(--color-text-muted); font-size: 11px;">Reuses RPG Reactor's runtime or a matching cached archive before downloading</div>
                                         </div>
                                     </label>
 
                                     <label class="build-option-label" style="display: flex; align-items: center; padding: 8px 10px; background: var(--color-bg-panel); border: 1px solid var(--color-border); border-radius: 4px; cursor: pointer; transition: all 0.2s;">
                                         <input type="radio" name="build-runtime-source" value="download" class="system-radio" style="margin-right: 10px;">
                                         <div style="flex: 1;">
-                                            <div style="color: var(--color-text); font-weight: 600; font-size: 13px;">Download from Web</div>
-                                            <div style="color: var(--color-text-muted); font-size: 11px;">Downloads NW.js from dl.nwjs.io (may lack proprietary codec support)</div>
+                                            <div style="color: var(--color-text); font-weight: 600; font-size: 13px;">Official Download / Cache</div>
+                                            <div style="color: var(--color-text-muted); font-size: 11px;">Uses a matching official cache, otherwise downloads from dl.nwjs.io</div>
                                         </div>
                                     </label>
                                 </div>
                                 <div style="color: var(--color-text-muted); font-size: 11px; margin-top: 4px;">Only applies to desktop platforms (Windows, macOS, Linux)</div>
+                                <div style="margin-top: 10px; display: grid; grid-template-columns: 130px minmax(0, 1fr); gap: 8px; align-items: center;">
+                                    <label for="build-nw-version-policy" style="color: var(--color-text-muted); font-size: 11px;">Fallback version</label>
+                                    <select id="build-nw-version-policy" class="rr-select" style="font-size: 12px; padding: 5px 7px;">
+                                        <option value="stable" selected>Latest stable</option>
+                                        <option value="editor">Same as editor</option>
+                                        <option value="exact">Specific version</option>
+                                    </select>
+                                    <label for="build-nw-version-exact" style="color: var(--color-text-muted); font-size: 11px;">Specific version</label>
+                                    <input id="build-nw-version-exact" class="rr-input" type="text" placeholder="Search versions..." autocomplete="off" spellcheck="false" disabled style="font-size: 12px; padding: 5px 7px;">
+                                    <div id="build-nw-version-list" class="nw-version-menu" role="listbox" hidden></div>
+                                </div>
+                                <div style="color: var(--color-text-muted); font-size: 10px; margin-top: 5px; line-height: 1.35;">Bundled and cached runtimes are checked before an official download.</div>
+                                <label style="display: flex; align-items: center; gap: 8px; margin-top: 10px; padding: 8px 10px; background: var(--color-bg-panel); border: 1px solid var(--color-border); border-radius: 4px; cursor: pointer;">
+                                    <input id="build-include-proprietary-codecs" type="checkbox" class="system-checkbox" style="width: 16px; height: 16px; min-width: 16px; min-height: 16px; max-width: 16px; max-height: 16px; flex: 0 0 16px; margin: 0;">
+                                    <span style="color: var(--color-text); font-weight: 600; font-size: 12px;">Include third-party H.264/AAC codec</span>
+                                </label>
+                            </div>
+
+                            <div style="margin-top: 10px;">
+                                <label style="display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: var(--color-bg-panel); border: 1px solid var(--color-border); border-radius: 4px; cursor: pointer;">
+                                    <input id="build-filter-locales" type="checkbox" class="system-checkbox" style="width: 16px; height: 16px; min-width: 16px; min-height: 16px; max-width: 16px; max-height: 16px; flex: 0 0 16px; margin: 0;">
+                                    <span style="color: var(--color-text); font-weight: 600; font-size: 12px;">Include selected locales only</span>
+                                </label>
+                                <div id="build-locale-selection" hidden style="margin-top: 8px; padding: 8px; background: var(--color-bg-panel); border: 1px solid var(--color-border); border-radius: 4px;">
+                                    <div style="display: flex; gap: 6px; margin-bottom: 6px;">
+                                        <button id="build-locales-all" type="button" class="graphic-selector-button" style="padding: 4px 8px; font-size: 10px;">Select All</button>
+                                        <button id="build-locales-english" type="button" class="graphic-selector-button" style="padding: 4px 8px; font-size: 10px;">English Only</button>
+                                    </div>
+                                    <div id="build-locale-list" style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 3px 8px; max-height: 170px; overflow-y: auto; padding-right: 4px;"></div>
+                                    <div style="color: var(--color-text-muted); font-size: 10px; line-height: 1.35; margin-top: 6px;">English (US) is always included as fallback. Desktop builds only.</div>
+                                </div>
+                            </div>
+
+                            <div style="margin-top: 20px;">
+                                <h3 style="color: var(--color-text); margin-bottom: 10px; font-size: 15px;">Asset Optimization</h3>
+                                <div style="display: flex; flex-direction: column; gap: 6px;">
+                                    <label style="display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: var(--color-bg-panel); border: 1px solid var(--color-border); border-radius: 4px; cursor: pointer;">
+                                        <input id="build-optimize-png" type="checkbox" class="system-checkbox" style="width: 16px; height: 16px; min-width: 16px; min-height: 16px; max-width: 16px; max-height: 16px; flex: 0 0 16px; margin: 0;">
+                                        <span style="color: var(--color-text); font-weight: 600; font-size: 12px;">Losslessly optimize PNG files (Oxipng)</span>
+                                    </label>
+                                    <label style="display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: var(--color-bg-panel); border: 1px solid var(--color-border); border-radius: 4px; cursor: pointer;">
+                                        <input id="build-optimize-ogg" type="checkbox" class="system-checkbox" style="width: 16px; height: 16px; min-width: 16px; min-height: 16px; max-width: 16px; max-height: 16px; flex: 0 0 16px; margin: 0;">
+                                        <span style="color: var(--color-text); font-weight: 600; font-size: 12px;">Re-encode OGG audio (lossy)</span>
+                                    </label>
+                                </div>
+                                <div style="margin-top: 8px; display: grid; grid-template-columns: 130px minmax(0, 1fr); gap: 8px; align-items: center;">
+                                    <label for="build-ogg-quality" style="color: var(--color-text-muted); font-size: 11px;">OGG quality</label>
+                                    <select id="build-ogg-quality" class="rr-select" style="font-size: 12px; padding: 5px 7px;">
+                                        <option value="3">3 - Standard / Smaller</option>
+                                        <option value="5" selected>5 - High</option>
+                                        <option value="7">7 - Very High</option>
+                                        <option value="10">10 - Maximum</option>
+                                    </select>
+                                </div>
+                                <div style="color: var(--color-text-muted); font-size: 10px; line-height: 1.35; margin-top: 6px;">Only smaller validated results replace staged assets.</div>
                             </div>
                         </div>
 
@@ -126,9 +188,113 @@ class BuildManager {
 
         document.body.insertAdjacentHTML('beforeend', modalHTML);
         this.modal = document.getElementById('build-modal');
+        document.getElementById('build-output-path').value =
+            DeploymentPathPreferences.load('game', 'dist');
+        this.setupLocaleOptions();
+        this.setupAssetOptimizationOptions();
+        this.versionPicker = new NwVersionPicker(
+            document.getElementById('build-nw-version-exact'),
+            document.getElementById('build-nw-version-list'));
 
         // Set up event listeners
         this.setupEventListeners();
+    }
+
+    setupLocaleOptions() {
+        const preference = DeploymentLocalePreferences.load();
+        const toggle = document.getElementById('build-filter-locales');
+        const selection = document.getElementById('build-locale-selection');
+        const list = document.getElementById('build-locale-list');
+        const selected = new Set(preference.locales);
+        let displayNames = null;
+        try { displayNames = new Intl.DisplayNames(['en'], { type: 'language' }); } catch {}
+        const locales = DeploymentLocalePreferences.locales().map(locale => {
+            let name = locale;
+            try { name = (displayNames && displayNames.of(locale)) || locale; } catch {}
+            return { locale, name };
+        }).sort((a, b) => {
+            if (a.locale === DeploymentLocalePreferences.FALLBACK_LOCALE) return -1;
+            if (b.locale === DeploymentLocalePreferences.FALLBACK_LOCALE) return 1;
+            return a.name.localeCompare(b.name);
+        });
+
+        for (const { locale, name } of locales) {
+            const label = document.createElement('label');
+            label.style.cssText = 'display:flex;align-items:center;gap:5px;min-width:0;padding:3px 2px;cursor:pointer;font-size:11px;color:var(--color-text);';
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.className = 'system-checkbox build-runtime-locale';
+            checkbox.value = locale;
+            checkbox.checked = selected.has(locale);
+            checkbox.style.cssText = 'width:14px;height:14px;min-width:14px;min-height:14px;max-width:14px;max-height:14px;flex:0 0 14px;margin:0;';
+            if (locale === DeploymentLocalePreferences.FALLBACK_LOCALE) {
+                checkbox.checked = true;
+                checkbox.disabled = true;
+            }
+            const text = document.createElement('span');
+            text.textContent = `${name} (${locale})`;
+            text.title = text.textContent;
+            text.style.cssText = 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+            label.append(checkbox, text);
+            list.appendChild(label);
+            checkbox.addEventListener('change', () => this.saveLocaleOptions());
+        }
+
+        toggle.checked = preference.mode === 'selected';
+        selection.hidden = !toggle.checked;
+        toggle.addEventListener('change', () => {
+            selection.hidden = !toggle.checked;
+            this.saveLocaleOptions();
+        });
+        document.getElementById('build-locales-all').addEventListener('click', () => {
+            list.querySelectorAll('input').forEach(checkbox => { checkbox.checked = true; });
+            this.saveLocaleOptions();
+        });
+        document.getElementById('build-locales-english').addEventListener('click', () => {
+            list.querySelectorAll('input').forEach(checkbox => {
+                checkbox.checked = checkbox.value === DeploymentLocalePreferences.FALLBACK_LOCALE;
+            });
+            this.saveLocaleOptions();
+        });
+    }
+
+    saveLocaleOptions() {
+        DeploymentLocalePreferences.save({
+            mode: document.getElementById('build-filter-locales').checked ? 'selected' : 'all',
+            locales: [...document.querySelectorAll('.build-runtime-locale:checked')].map(input => input.value),
+        });
+    }
+
+    selectedRuntimeLocales() {
+        if (!document.getElementById('build-filter-locales').checked) return null;
+        return DeploymentLocalePreferences.normalize(
+            [...document.querySelectorAll('.build-runtime-locale:checked')].map(input => input.value));
+    }
+
+    setupAssetOptimizationOptions() {
+        const preference = DeploymentAssetPreferences.load();
+        const png = document.getElementById('build-optimize-png');
+        const ogg = document.getElementById('build-optimize-ogg');
+        const quality = document.getElementById('build-ogg-quality');
+        png.checked = preference.png;
+        ogg.checked = preference.ogg;
+        quality.value = String(preference.oggQuality);
+        quality.disabled = !ogg.checked;
+        const save = () => {
+            quality.disabled = !ogg.checked;
+            DeploymentAssetPreferences.save(this.assetOptimizationSettings());
+        };
+        png.addEventListener('change', save);
+        ogg.addEventListener('change', save);
+        quality.addEventListener('change', save);
+    }
+
+    assetOptimizationSettings() {
+        return DeploymentAssetPreferences.normalize({
+            png: document.getElementById('build-optimize-png').checked,
+            ogg: document.getElementById('build-optimize-ogg').checked,
+            oggQuality: document.getElementById('build-ogg-quality').value,
+        });
     }
 
     setupEventListeners() {
@@ -136,11 +302,16 @@ class BuildManager {
         const startBtn = document.getElementById('build-start-btn');
         const cancelBtn = document.getElementById('build-cancel-btn');
         const selectOutputBtn = document.getElementById('build-select-output-btn');
+        const versionPolicy = document.getElementById('build-nw-version-policy');
 
         closeBtn.addEventListener('click', () => this.close());
         startBtn.addEventListener('click', () => this.startBuild());
         cancelBtn.addEventListener('click', () => this.cancelBuild());
         selectOutputBtn.addEventListener('click', () => this.selectOutputDirectory());
+        versionPolicy.addEventListener('change', () => {
+            this.versionPicker.setEnabled(versionPolicy.value === 'exact');
+        });
+        document.getElementById('build-platform-linux').addEventListener('change', () => this.updateAppImageAvailability());
 
         // Close on background click
         this.modal.addEventListener('click', (e) => {
@@ -177,11 +348,30 @@ class BuildManager {
         });
     }
 
+    updateAppImageAvailability() {
+        const checkbox = document.getElementById('build-create-linux-appimage');
+        const option = document.getElementById('build-appimage-option');
+        const note = document.getElementById('build-appimage-note');
+        const hostSupported = typeof process !== 'undefined' && process.platform === 'linux' && process.arch === 'x64';
+        const linuxSelected = document.getElementById('build-platform-linux').checked;
+        checkbox.disabled = !hostSupported || !linuxSelected;
+        if (checkbox.disabled) checkbox.checked = false;
+        option.style.opacity = checkbox.disabled ? '0.5' : '1';
+        option.style.cursor = checkbox.disabled ? 'not-allowed' : 'pointer';
+        note.textContent = !hostSupported
+            ? 'Creation requires RPG Reactor running on Linux x86_64.'
+            : linuxSelected
+                ? 'Portable x86_64 file emitted beside the Linux folder.'
+                : 'Select Linux to enable this additional artifact.';
+    }
+
     open() {
         this.modal.style.display = 'flex';
         this.clearLog();
         this.resetProgress();
+        this.updateAppImageAvailability();
         this.log('Ready to build. Select platforms and click "Start Build".', 'var(--color-text-muted)');
+        this.versionPicker.load().catch(() => {});
     }
 
     close() {
@@ -190,6 +380,7 @@ class BuildManager {
             if (!confirm) return;
             this.cancelBuild();
         }
+        this.versionPicker.close();
         this.modal.style.display = 'none';
     }
 
@@ -201,6 +392,7 @@ class BuildManager {
             if (input.files.length > 0) {
                 const outputPath = document.getElementById('build-output-path');
                 outputPath.value = input.files[0].path;
+                DeploymentPathPreferences.save('game', outputPath.value);
             }
         });
         input.click();
@@ -294,10 +486,30 @@ class BuildManager {
             ? outputPath
             : path.join(appRoot, outputPath);
 
-        // Detect NW.js version for downloading matching binaries
-        const nwVersion = process.versions.nw || process.versions['node-webkit'] || '0.92.0';
-        // Runtime source: 'bundled' (includes proprietary codecs) or 'download'
+        const editorNwVersion = process.versions.nw || process.versions['node-webkit'];
+        if (!editorNwVersion) {
+            alert('Could not determine the editor NW.js version.');
+            return;
+        }
+        const nwVersionPolicy = document.getElementById('build-nw-version-policy').value;
+        const exactNwVersion = document.getElementById('build-nw-version-exact').value.trim().replace(/^v/i, '');
+        if (nwVersionPolicy === 'exact') {
+            try { await this.versionPicker.load(); }
+            catch {
+                alert('NW.js versions are unavailable. Connect to the internet or choose Same as editor.');
+                return;
+            }
+            if (!this.versionPicker.hasVersion(exactNwVersion)) {
+                alert('Select an available NW.js version from the searchable list.');
+                return;
+            }
+        }
+        // Runtime source: local/cache first or official cache/download.
         const runtimeSource = document.querySelector('input[name="build-runtime-source"]:checked').value;
+        const includeProprietaryCodecs = document.getElementById('build-include-proprietary-codecs').checked;
+        const runtimeLocales = this.selectedRuntimeLocales();
+        const assetOptimization = this.assetOptimizationSettings();
+        const createLinuxAppImage = document.getElementById('build-create-linux-appimage').checked;
 
         this.isBuilding = true;
         document.getElementById('build-start-btn').style.display = 'none';
@@ -320,9 +532,16 @@ class BuildManager {
                     projectName: project.name,
                     platforms: platforms,
                     outputDir: outputDir,
-                    nwVersion: nwVersion,
+                    nwVersion: nwVersionPolicy === 'exact' ? exactNwVersion : editorNwVersion,
+                    nwVersionPolicy,
+                    editorNwVersion,
                     runtimeSource: runtimeSource,
+                    includeProprietaryCodecs,
+                    runtimeLocales,
+                    assetOptimization,
+                    createLinuxAppImage,
                     appRoot: appRoot,
+                    editorExecPath: process.execPath,
                 }
             });
 

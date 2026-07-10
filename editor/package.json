@@ -1,6 +1,6 @@
 {
   "name": "rpg-reactor",
-  "version": "0.94.1",
+  "version": "0.94.2",
   "description": "An open-source, cross-platform RPG game engine",
   "main": "index.html",
   "scripts": {
@@ -33,7 +33,9 @@
     "plugin": true
   },
   "dependencies": {
+    "@jsquash/oxipng": "2.3.0",
     "gif.js": "^0.2.0",
+    "gifuct-js": "^2.1.2",
     "pixi.js": "^8.0.0"
   },
   "keywords": [

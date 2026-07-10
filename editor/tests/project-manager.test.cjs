@@ -124,6 +124,40 @@ test('ProjectManager falls back to generated starter projects when Demo template
     }
 });
 
+test('ProjectManager refreshes template runtime files while preserving its plugin configuration', async () => {
+    const ProjectManager = loadBrowserClass(path.join(repoRoot, 'src', 'ProjectManager.js'), 'ProjectManager');
+    const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'rpg-reactor-template-runtime-test-'));
+    const templatePath = path.join(tempRoot, 'template');
+    const runtimePath = path.join(tempRoot, 'runtime');
+    const targetPath = path.join(tempRoot, 'Target');
+    fs.mkdirSync(path.join(templatePath, 'js'), { recursive: true });
+    fs.mkdirSync(path.join(templatePath, 'data'), { recursive: true });
+    fs.mkdirSync(runtimePath, { recursive: true });
+    fs.writeFileSync(path.join(templatePath, 'project.rpgreactor'), JSON.stringify({ name: 'Old' }));
+    fs.writeFileSync(path.join(templatePath, 'package.json'), JSON.stringify({ name: 'old', window: {} }));
+    fs.writeFileSync(path.join(templatePath, 'data', 'System.json'), JSON.stringify({ gameTitle: 'Old' }));
+    fs.writeFileSync(path.join(templatePath, 'js', 'reactor_core.js'), 'stale runtime');
+    fs.writeFileSync(path.join(templatePath, 'js', 'reactor_plugins.js'), 'var $plugins = [{ name: "DemoPlugin" }];');
+    fs.writeFileSync(path.join(runtimePath, 'reactor_main.js'), 'current main');
+    fs.writeFileSync(path.join(runtimePath, 'reactor_core.js'), 'current runtime');
+    fs.writeFileSync(path.join(runtimePath, 'reactor_plugins.js'), 'var $plugins = [];');
+
+    try {
+        const manager = new ProjectManager();
+        manager.getTemplateProjectPath = () => templatePath;
+        manager.getRuntimePath = () => runtimePath;
+        manager.getEngineVersion = () => '0.94.2';
+        assert.equal(await manager.createNewProject(targetPath, 'Synced Template'), true);
+        assert.equal(fs.readFileSync(path.join(targetPath, 'js', 'reactor_core.js'), 'utf8'), 'current runtime');
+        assert.equal(
+            fs.readFileSync(path.join(targetPath, 'js', 'reactor_plugins.js'), 'utf8'),
+            'var $plugins = [{ name: "DemoPlugin" }];'
+        );
+    } finally {
+        fs.rmSync(tempRoot, { recursive: true, force: true });
+    }
+});
+
 test('ProjectManager avoids rmmz-game for new project package identity', () => {
     const ProjectManager = loadBrowserClass(path.join(repoRoot, 'src', 'ProjectManager.js'), 'ProjectManager');
     const manager = new ProjectManager();

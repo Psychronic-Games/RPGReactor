@@ -62,9 +62,14 @@ console.log('========================================\n');
 // Paths/files to exclude when staging (relative to project root)
 const EXCLUDED = new Set([
     'Backup',
+    'BACKUP',
+    'backup',
     'Screenshots',
+    'save',
     'project.rpgreactor',
     'game.rmmzproject',
+    'Game.rpgproject',
+    'game.rpgproject',
     path.join('js', 'REACTOR_CORE_DUMP_MIDDEV'),
     path.join('js', 'RMMZ_Corescript'),
     path.join('data', 'nul'),
@@ -82,7 +87,7 @@ function copyDirFiltered(src, dest, relBase) {
     for (const entry of entries) {
         const relPath = path.join(relBase, entry.name);
 
-        if (EXCLUDED.has(relPath) || EXCLUDED.has(entry.name)) {
+        if (EXCLUDED.has(relPath)) {
             console.log(`  [skip] ${relPath}`);
             continue;
         }
@@ -96,6 +101,34 @@ function copyDirFiltered(src, dest, relBase) {
             fs.copyFileSync(srcPath, destPath);
         }
     }
+}
+
+function validateProjectRuntime(root) {
+    const required = [
+        'reactor_main.js', 'reactor_core.js', 'reactor_managers.js',
+        'reactor_objects.js', 'reactor_scenes.js', 'reactor_sprites.js',
+        'reactor_windows.js', 'reactor_mv_compat.js', 'reactor_plugins.js',
+        path.join('libs', 'pixi.js'), path.join('libs', 'pixi_compat.js'),
+        path.join('libs', 'pako.min.js'), path.join('libs', 'localforage.min.js'),
+        path.join('libs', 'effekseer.min.js'), path.join('libs', 'effekseer.wasm'),
+        path.join('libs', 'vorbisdecoder.js'),
+    ];
+    const jsRoot = path.join(root, 'js');
+    const metadataPath = path.join(root, 'project.rpgreactor');
+    let metadataRequiresReactor = false;
+    if (fs.existsSync(metadataPath)) {
+        try {
+            metadataRequiresReactor = JSON.parse(fs.readFileSync(metadataPath, 'utf8')).imported !== true;
+        } catch {
+            metadataRequiresReactor = true;
+        }
+    }
+    const reactorProject = metadataRequiresReactor
+        || required.some(file => file !== 'reactor_main.js' && fs.existsSync(path.join(jsRoot, file)));
+    if (!reactorProject) return false;
+    const missing = required.filter(file => !fs.existsSync(path.join(jsRoot, file)));
+    if (missing.length) throw new Error(`Project runtime is incomplete: ${missing.join(', ')}`);
+    return true;
 }
 
 function slugifyPackageName(value) {
@@ -126,6 +159,7 @@ console.log('Creating staging directory...');
 console.log(`  ${stagingDir}\n`);
 
 console.log('Staging game files (excluding dev/backup files)...');
+validateProjectRuntime(projectPath);
 copyDirFiltered(projectPath, stagingDir, '');
 normalizeStagedPackage(stagingDir, gameName);
 console.log('\nStaging complete.\n');

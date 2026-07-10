@@ -450,6 +450,12 @@ test('Hair Forge lower hair pattern sliders change front, side, and back lower s
     const scraggly = hairEngine.generateHair(Object.assign({}, baseConfig, {
         params: Object.assign({}, baseConfig.params, { lowerBanding: 0, lowerScraggle: 5 })
     }), body.template);
+    const minBand = hairEngine.generateHair(Object.assign({}, baseConfig, {
+        params: Object.assign({}, baseConfig.params, { lowerBanding: 0, lowerScraggle: 2 })
+    }), body.template);
+    const maxBand = hairEngine.generateHair(Object.assign({}, baseConfig, {
+        params: Object.assign({}, baseConfig.params, { lowerBanding: 5, lowerScraggle: 2 })
+    }), body.template);
 
     for (const directionIndex of [0, 1, 3]) {
         const anchors = outfitEngine.debugClassifyFrame({ style, tags: [style], zones: {} }, body.template.sheet[directionIndex][1], directionIndex, body.template.palette || {}, 1).anchors;
@@ -460,6 +466,10 @@ test('Hair Forge lower hair pattern sliders change front, side, and back lower s
             const b = scraggly.sheet[directionIndex][1][y] || '';
             for (let x = 0; x < Math.max(a.length, b.length); x++) if (a[x] !== b[x]) lowerDiffs++;
         }
-        assert.ok(lowerDiffs >= 80, `lower hair pattern sliders visibly change direction ${directionIndex} lower shading`);
+        const bandingDiffs = frameDiffCount(minBand.sheet[directionIndex][1], maxBand.sheet[directionIndex][1]);
+        assert.ok(lowerDiffs >= 120, `lower hair pattern sliders visibly change direction ${directionIndex} lower shading`);
+        // Side views have a narrower lower mass, so banding diffs are smaller than front/back.
+        const bandFloor = directionIndex === 0 || directionIndex === 3 ? 100 : 50;
+        assert.ok(bandingDiffs >= bandFloor, `lowerBanding 0 vs 5 visibly changes direction ${directionIndex} (${bandingDiffs})`);
     }
 });

@@ -63,6 +63,7 @@ class RPGReactor {
             newProject: () => this.projectController.newProject(),
             openProject: () => this.projectController.openProject(),
             closeProject: () => this.projectController.closeProject(),
+            exit: () => this.projectController.requestApplicationClose(),
             saveProject: () => this.projectController.saveProject(),
             saveAll: () => this.projectController.saveAll(),
             playtest: () => this.playtest(),
@@ -100,6 +101,17 @@ class RPGReactor {
             this.databaseManager,
             this.uiManager
         );
+
+        if (typeof nw !== 'undefined') {
+            const appWindow = nw.Window.get();
+            appWindow.on('close', () => {
+                if (this.projectController.allowApplicationClose) {
+                    appWindow.close(true);
+                    return;
+                }
+                this.projectController.requestApplicationClose();
+            });
+        }
 
         // Set up callback for when maps are loaded
         this.projectController.onMapLoaded = () => {
@@ -1053,23 +1065,6 @@ class RPGReactor {
             // land one title/menu-bar height away from the visible controls.
             try { win.menu = null; } catch (error) {}
             try { win.setShowInTaskbar(true); } catch (error) {}
-
-            const stabilizeClientArea = () => {
-                try {
-                    const width = win.width;
-                    const height = win.height;
-                    if (!width || !height) return;
-                    win.resizeTo(width, height + 1);
-                    setTimeout(() => {
-                        try { win.resizeTo(width, height); } catch (error) {}
-                    }, 50);
-                } catch (error) {
-                    // Wine compatibility fix is best-effort.
-                }
-            };
-
-            setTimeout(stabilizeClientArea, 50);
-            setTimeout(stabilizeClientArea, 500);
         } catch (error) {
             // Running under Wine should not prevent the app from loading.
         }
@@ -1080,7 +1075,7 @@ class RPGReactor {
 
         try {
             const params = new URLSearchParams(window.location.search);
-            if (params.get('rrWineFrame') === '0') return false;
+            if (params.get('rrFrameless') === '1' || params.get('rrWineFrame') === '0') return false;
 
             params.set('rrWineFrame', '0');
             params.set('rrFrameless', '1');
@@ -1155,7 +1150,9 @@ class RPGReactor {
                 // Avoid native maximize under Proton; it can reintroduce a host titlebar.
             }
         });
-        titlebar.querySelector('[data-window-action="close"]').addEventListener('click', () => win.close());
+        titlebar.querySelector('[data-window-action="close"]').addEventListener('click', () => {
+            this.projectController.requestApplicationClose();
+        });
     }
 }
 

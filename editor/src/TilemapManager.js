@@ -41,6 +41,7 @@ class TilemapManager {
 
         // Current state
         this.currentMap = null;
+        this.savedMapState = null;
         this.currentTileset = null;
         this.tilesetTextures = {};
         this.textureCache = {}; // PERFORMANCE: Cache sub-textures to avoid recreating them
@@ -145,6 +146,8 @@ class TilemapManager {
             return false;
         }
 
+        const previousMap = this.currentMap;
+        const previousSavedMapState = this.savedMapState;
         try {
             // Load map data
             const mapFile = `Map${String(mapId).padStart(3, '0')}.json`;
@@ -181,7 +184,7 @@ class TilemapManager {
                 console.warn(`Tileset ${mapData.tilesetId} not found for map ${mapId}; using first available tileset as fallback.`);
                 tileset = this.databaseManager.getTilesets()[0];
                 if (!tileset) {
-                    return false;
+                    throw new Error(`No tileset is available for map ${mapId}`);
                 }
             }
             this.currentTileset = tileset;
@@ -211,9 +214,12 @@ class TilemapManager {
             // Update canvas size and scrollbars
             this.updateCanvasWrapperSize();
             this.updateScrollbars();
+            this.captureSavedMapState();
 
             return true;
         } catch (error) {
+            this.currentMap = previousMap;
+            this.savedMapState = previousSavedMapState;
             console.error(`Error loading map ${mapId}:`, error);
             return false;
         }
@@ -2089,6 +2095,25 @@ class TilemapManager {
         };
     }
 
+    getPersistedMapData(map = this.currentMap) {
+        if (!map) return null;
+        const data = { ...map };
+        delete data.id;
+        delete data.name;
+        return data;
+    }
+
+    captureSavedMapState() {
+        const data = this.getPersistedMapData();
+        this.savedMapState = data ? JSON.stringify(data) : null;
+    }
+
+    isMapDirty() {
+        const data = this.getPersistedMapData();
+        if (!data || this.savedMapState === null) return false;
+        return JSON.stringify(data) !== this.savedMapState;
+    }
+
     // Save current map data to JSON file
     saveMap() {
         if (!this.fs || !this.path) {
@@ -2104,15 +2129,15 @@ class TilemapManager {
             const mapFile = `Map${String(mapId).padStart(3, '0')}.json`;
             const mapPath = this.path.join(this.projectPath, 'data', mapFile);
 
-            // Create a copy of the map data to save (excluding the id field which isn't stored in the file)
-            const mapDataToSave = { ...this.currentMap };
-            delete mapDataToSave.id;
+            const mapDataToSave = this.getPersistedMapData();
 
             // Write map data to file with formatting
             this.fs.writeFileSync(mapPath, JSON.stringify(mapDataToSave, null, 2), 'utf8');
+            this.captureSavedMapState();
 
             return true;
         } catch (error) {
+            console.error('Error saving map:', error);
             return false;
         }
     }
