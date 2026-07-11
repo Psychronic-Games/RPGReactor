@@ -3,6 +3,7 @@ class DistEditorManager {
         this.isBuilding = false;
         this.modal = null;
         this.worker = null;
+        this.downloadProgressRows = new Map();
         this.setupModal();
     }
 
@@ -43,6 +44,13 @@ class DistEditorManager {
                                             <div style="color: var(--color-text-muted); font-size: 11px;">Editor only — NW.js downloads automatically on first launch</div>
                                         </div>
                                     </label>
+                                    <label class="dist-option-label" style="display: flex; align-items: center; padding: 8px 10px; background: var(--color-bg-panel); border: 1px solid var(--color-border); border-radius: 4px; cursor: pointer; transition: all 0.2s;">
+                                        <input type="radio" name="dist-package-type" value="web" class="system-radio" style="margin-right: 10px;">
+                                        <div style="flex: 1;">
+                                            <div style="color: var(--color-text); font-weight: 600; font-size: 13px;">Web</div>
+                                            <div style="color: var(--color-text-muted); font-size: 11px;">Browser editor with bundled Reactor One project</div>
+                                        </div>
+                                    </label>
                                 </div>
                             </div>
 
@@ -56,6 +64,13 @@ class DistEditorManager {
                                             <div style="color: var(--color-text); font-weight: 600; font-size: 13px;">Linux (x64)</div>
                                             <div style="color: var(--color-text-muted); font-size: 11px;">ZIP archive for Linux 64-bit</div>
                                         </div>
+                                    </label>
+                                    <label id="dist-appimage-option" style="display: none; align-items: flex-start; gap: 8px; margin-left: 28px; padding: 7px 9px; background: var(--color-bg-surface); border: 1px solid var(--color-border-subtle); border-left: 2px solid var(--color-accent-border); border-radius: 4px; cursor: pointer;">
+                                        <input id="dist-create-linux-appimage" type="checkbox" class="system-checkbox" style="width: 16px; height: 16px; min-width: 16px; min-height: 16px; max-width: 16px; max-height: 16px; flex: 0 0 16px; margin: 1px 0 0;">
+                                        <span>
+                                            <span style="display: block; color: var(--color-text); font-weight: 600; font-size: 12px;">Also create Linux AppImage</span>
+                                            <span id="dist-appimage-note" style="display: block; color: var(--color-text-muted); font-size: 10px; line-height: 1.35; margin-top: 2px;">Portable x86_64 file emitted beside the Linux ZIP.</span>
+                                        </span>
                                     </label>
                                     <label class="dist-option-label" style="display: flex; align-items: center; padding: 8px 10px; background: var(--color-bg-panel); border: 1px solid var(--color-border); border-radius: 4px; cursor: pointer; transition: all 0.2s;">
                                         <input type="checkbox" id="dist-platform-win" value="win" class="system-checkbox" style="margin-right: 10px;">
@@ -71,18 +86,11 @@ class DistEditorManager {
                                             <div style="color: var(--color-text-muted); font-size: 11px;">ZIP archive for macOS 64-bit</div>
                                         </div>
                                     </label>
-                                    <label id="dist-appimage-option" style="display: flex; align-items: flex-start; gap: 8px; padding: 8px 10px; background: var(--color-bg-panel); border: 1px solid var(--color-border); border-radius: 4px; cursor: pointer;">
-                                        <input id="dist-create-linux-appimage" type="checkbox" class="system-checkbox" style="width: 16px; height: 16px; min-width: 16px; min-height: 16px; max-width: 16px; max-height: 16px; flex: 0 0 16px; margin: 1px 0 0;">
-                                        <span>
-                                            <span style="display: block; color: var(--color-text); font-weight: 600; font-size: 12px;">Also create Linux AppImage</span>
-                                            <span id="dist-appimage-note" style="display: block; color: var(--color-text-muted); font-size: 10px; line-height: 1.35; margin-top: 2px;">Portable x86_64 file emitted beside the Linux ZIP.</span>
-                                        </span>
-                                    </label>
                                 </div>
                             </div>
 
                             <!-- NW.js Edition -->
-                            <div>
+                            <div id="dist-nw-section">
                                 <h3 style="color: var(--color-text); margin-bottom: 10px; font-size: 15px;">NW.js Edition</h3>
                                 <div style="display: flex; flex-direction: column; gap: 6px;">
                                     <label class="dist-option-label" style="display: flex; align-items: center; padding: 8px 10px; background: var(--color-bg-panel); border: 1px solid var(--color-border); border-radius: 4px; cursor: pointer; transition: all 0.2s;">
@@ -232,10 +240,12 @@ class DistEditorManager {
     updatePlatformVisibility() {
         const type = this.modal.querySelector('input[name="dist-package-type"]:checked').value;
         const section = document.getElementById('dist-platform-section');
+        const web = type === 'web';
         section.style.display = type === 'platform' ? 'block' : 'none';
+        document.getElementById('dist-nw-section').style.display = web ? 'none' : 'block';
         const codec = document.getElementById('dist-include-proprietary-codecs');
         const codecOption = document.getElementById('dist-codec-option');
-        codec.disabled = type === 'minimal';
+        codec.disabled = type === 'minimal' || web;
         if (codec.disabled) codec.checked = false;
         codecOption.style.opacity = codec.disabled ? '0.5' : '1';
         codecOption.style.cursor = codec.disabled ? 'not-allowed' : 'pointer';
@@ -246,15 +256,12 @@ class DistEditorManager {
         const linuxSelected = document.getElementById('dist-platform-linux').checked;
         appImageCheckbox.disabled = !hostSupported || type !== 'platform' || !linuxSelected;
         if (appImageCheckbox.disabled) appImageCheckbox.checked = false;
+        appImageOption.style.display = type === 'platform' && linuxSelected ? 'flex' : 'none';
         appImageOption.style.opacity = appImageCheckbox.disabled ? '0.5' : '1';
         appImageOption.style.cursor = appImageCheckbox.disabled ? 'not-allowed' : 'pointer';
         appImageNote.textContent = !hostSupported
             ? 'Creation requires RPG Reactor running on Linux x86_64.'
-            : type !== 'platform'
-                ? 'Available for platform-specific Linux packages.'
-                : linuxSelected
-                    ? 'Portable x86_64 file emitted beside the Linux ZIP.'
-                    : 'Select Linux to enable this additional artifact.';
+            : 'Portable x86_64 file emitted beside the Linux ZIP.';
     }
 
     open() {
@@ -291,6 +298,7 @@ class DistEditorManager {
 
     clearLog() {
         document.getElementById('dist-log').innerHTML = '';
+        this.downloadProgressRows.clear();
     }
 
     log(message, color = 'var(--color-text)') {
@@ -299,6 +307,57 @@ class DistEditorManager {
         line.textContent = message;
         line.style.color = color;
         logDiv.appendChild(line);
+        logDiv.scrollTop = logDiv.scrollHeight;
+    }
+
+    updateDownloadProgress(message) {
+        const logDiv = document.getElementById('dist-log');
+        let entry = this.downloadProgressRows.get(message.id);
+        if (!entry) {
+            const row = document.createElement('div');
+            row.className = 'rr-download-progress';
+            const header = document.createElement('div');
+            header.className = 'rr-download-progress-header';
+            const label = document.createElement('span');
+            label.className = 'rr-download-progress-label';
+            const detail = document.createElement('span');
+            detail.className = 'rr-download-progress-detail';
+            header.append(label, detail);
+            const track = document.createElement('div');
+            track.className = 'rr-download-progress-track';
+            track.setAttribute('role', 'progressbar');
+            const fill = document.createElement('div');
+            fill.className = 'rr-download-progress-fill';
+            track.appendChild(fill);
+            row.append(header, track);
+            logDiv.appendChild(row);
+            entry = { label, detail, track, fill };
+            this.downloadProgressRows.set(message.id, entry);
+        }
+
+        const mib = bytes => `${(bytes / 1048576).toFixed(bytes >= 10485760 ? 1 : 2)} MiB`;
+        const hasTotal = message.total > 0;
+        const percent = hasTotal ? Math.min(100, (message.downloaded / message.total) * 100) : null;
+        entry.label.textContent = message.label;
+        entry.label.title = message.label;
+        entry.fill.classList.toggle('is-indeterminate', !hasTotal && !['complete', 'failed'].includes(message.state));
+        entry.fill.classList.toggle('is-failed', message.state === 'failed');
+        entry.fill.style.width = message.state === 'complete' ? '100%' : hasTotal ? `${percent}%` : '38%';
+        entry.track.setAttribute('aria-label', `Downloading ${message.label}`);
+        if (percent === null) entry.track.removeAttribute('aria-valuenow');
+        else entry.track.setAttribute('aria-valuenow', String(Math.round(percent)));
+
+        if (message.state === 'complete') {
+            entry.detail.textContent = `Complete - ${mib(message.downloaded)}`;
+        } else if (message.state === 'failed') {
+            entry.detail.textContent = `Failed after ${message.attempt} attempts`;
+        } else if (message.state === 'retrying') {
+            entry.detail.textContent = `Retrying ${message.attempt}/${message.maxAttempts} - ${mib(message.downloaded)}`;
+        } else if (hasTotal) {
+            entry.detail.textContent = `${Math.round(percent)}% - ${mib(message.downloaded)} / ${mib(message.total)}`;
+        } else {
+            entry.detail.textContent = `${mib(message.downloaded)} downloaded`;
+        }
         logDiv.scrollTop = logDiv.scrollHeight;
     }
 
@@ -370,13 +429,13 @@ class DistEditorManager {
             : pathModule.join(appRoot, outputPath);
 
         const editorNwVersion = process.versions.nw || process.versions['node-webkit'];
-        if (!editorNwVersion) {
+        if (packageType !== 'web' && !editorNwVersion) {
             alert('Could not determine the editor NW.js version.');
             return;
         }
         const nwVersionPolicy = document.getElementById('dist-nw-version-policy').value;
         const exactNwVersion = document.getElementById('dist-nw-version-exact').value.trim().replace(/^v/i, '');
-        if (nwVersionPolicy === 'exact') {
+        if (packageType !== 'web' && nwVersionPolicy === 'exact') {
             try { await this.versionPicker.load(); }
             catch {
                 alert('NW.js versions are unavailable. Connect to the internet or choose Same as editor.');
@@ -424,6 +483,8 @@ class DistEditorManager {
                     this.log(msg.message, msg.color || 'var(--color-text)');
                 } else if (msg.type === 'progress') {
                     this.updateProgress(msg.percent, msg.status);
+                } else if (msg.type === 'download-progress') {
+                    this.updateDownloadProgress(msg);
                 } else if (msg.type === 'done') {
                     if (msg.success) {
                         this.log('', 'var(--color-text)');

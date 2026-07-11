@@ -14,6 +14,7 @@ const nwRuntime = require('./nw-runtime-utils');
 const nwCodec = require('./nw-codec-utils');
 const assetOptimizer = require('./asset-optimizer');
 const appImage = require('./appimage-utils');
+const nativeDownload = require('./native-download');
 
 // ── Logging ──────────────────────────────────────────────────────────
 function log(msg, color)  { parentPort.postMessage({ type: 'log', message: msg, color: color || '#cccccc' }); }
@@ -26,6 +27,19 @@ function logBlue(msg)     { log(msg, '#007acc'); }
 
 function progress(percent, status) {
     parentPort.postMessage({ type: 'progress', percent, status });
+}
+
+function reportDownloadProgress(destPath, downloaded, total, state, attempt) {
+    parentPort.postMessage({
+        type: 'download-progress',
+        id: destPath,
+        label: path.basename(destPath),
+        downloaded,
+        total,
+        state,
+        attempt,
+        maxAttempts: DOWNLOAD_MAX_ATTEMPTS,
+    });
 }
 
 // ── Config from main thread ─────────────────────────────────────────
@@ -173,53 +187,122 @@ function normalizeStagedPackage(stagingDir, gameTitle) {
     fs.writeFileSync(stagedPackagePath, JSON.stringify(stagedPackage, null, 2));
 }
 
-// ── Download helper (follows one redirect) ──────────────────────────
+// ── Download helper ─────────────────────────────────────────────────
+const DOWNLOAD_IDLE_TIMEOUT_MS = 180000;
+const DOWNLOAD_MAX_ATTEMPTS = 3;
+
 function downloadFile(url, destPath, progressBase, progressSpan, reportProgress = true, requestOptions = {}) {
+    if (nativeDownload.isAvailable()) {
+        logDim('  Using native curl download transport.');
+        return nativeDownload.download({
+            url,
+            destPath,
+            headers: requestOptions.headers,
+            idleTimeoutMs: DOWNLOAD_IDLE_TIMEOUT_MS,
+            maxAttempts: DOWNLOAD_MAX_ATTEMPTS,
+            onTelemetry: update => reportDownloadProgress(
+                destPath, update.downloaded, update.total, update.state, update.attempt),
+            onRetry: (error, attempt, maxAttempts) => {
+                logWarn(`  Download interrupted (${error.message}). Retrying ${attempt}/${maxAttempts}...`);
+                progress(progressBase, `Download retry ${attempt}/${maxAttempts}...`);
+            },
+        });
+    }
     return new Promise((resolve, reject) => {
-        const doGet = (u) => {
-            const req = https.get(u, requestOptions, (res) => {
-                if ([301, 302, 303, 307, 308].includes(res.statusCode)) {
-                    doGet(new URL(res.headers.location, u).toString());
-                    res.resume();
-                    return;
-                }
-                if (res.statusCode !== 200) {
-                    reject(new Error(`HTTP ${res.statusCode} for ${u}`));
-                    res.resume();
-                    return;
-                }
-                const total = parseInt(res.headers['content-length'], 10) || 0;
-                let downloaded = 0;
-                let lastPct = -1;
-                res.on('data', (chunk) => {
-                    downloaded += chunk.length;
-                    if (reportProgress && total > 0) {
-                        const pct = Math.floor((downloaded / total) * 100);
-                        if (pct !== lastPct && pct % 5 === 0) {
-                            logDim(`  ${pct}% (${(downloaded / 1048576).toFixed(1)} MB)`);
-                            progress(
-                                Math.round(progressBase + (pct / 100) * progressSpan),
-                                `Downloading... ${pct}%`
-                            );
-                            lastPct = pct;
-                        }
-                    }
-                });
-                const partPath = `${destPath}.${process.pid}.${threadId}.${Date.now()}.part`;
-                const file = fs.createWriteStream(partPath);
-                res.pipe(file);
-                file.on('finish', () => file.close(() => {
-                    fs.renameSync(partPath, destPath);
-                    resolve();
-                }));
-                file.on('error', (error) => {
+        const attemptDownload = (attempt) => {
+            let settled = false;
+            let partPath = null;
+            let file = null;
+            let downloaded = 0;
+            let total = 0;
+            let lastReportAt = 0;
+            reportDownloadProgress(destPath, 0, 0, attempt === 1 ? 'starting' : 'retrying', attempt);
+
+            const fail = (error) => {
+                if (settled) return;
+                settled = true;
+                if (file) file.destroy();
+                if (partPath) {
                     try { fs.rmSync(partPath, { force: true }); } catch {}
+                }
+                if (attempt < DOWNLOAD_MAX_ATTEMPTS) {
+                    reportDownloadProgress(destPath, downloaded, total, 'retrying', attempt + 1);
+                    logWarn(`  Download interrupted (${error.message}). Retrying ${attempt + 1}/${DOWNLOAD_MAX_ATTEMPTS}...`);
+                    progress(progressBase, `Download retry ${attempt + 1}/${DOWNLOAD_MAX_ATTEMPTS}...`);
+                    setTimeout(() => attemptDownload(attempt + 1), attempt * 1000);
+                } else {
+                    reportDownloadProgress(destPath, downloaded, total, 'failed', attempt);
                     reject(error);
+                }
+            };
+
+            const doGet = (target, redirects = 0) => {
+                if (redirects > 10) {
+                    fail(new Error(`Too many redirects downloading ${url}`));
+                    return;
+                }
+                const req = https.get(target, requestOptions, (res) => {
+                    if ([301, 302, 303, 307, 308].includes(res.statusCode)) {
+                        const location = res.headers.location;
+                        res.resume();
+                        if (!location) {
+                            fail(new Error(`Redirect without a location downloading ${target}`));
+                            return;
+                        }
+                        doGet(new URL(location, target).toString(), redirects + 1);
+                        return;
+                    }
+                    if (res.statusCode !== 200) {
+                        res.resume();
+                        fail(new Error(`HTTP ${res.statusCode} for ${target}`));
+                        return;
+                    }
+                    total = parseInt(res.headers['content-length'], 10) || 0;
+                    let lastPct = -1;
+                    res.on('data', (chunk) => {
+                        downloaded += chunk.length;
+                        const now = Date.now();
+                        if (now - lastReportAt >= 100 || (total > 0 && downloaded >= total)) {
+                            reportDownloadProgress(destPath, downloaded, total, 'downloading', attempt);
+                            lastReportAt = now;
+                        }
+                        if (reportProgress && total > 0) {
+                            const pct = Math.floor((downloaded / total) * 100);
+                            if (pct !== lastPct && pct % 5 === 0) {
+                                logDim(`  ${pct}% (${(downloaded / 1048576).toFixed(1)} MB)`);
+                                progress(
+                                    Math.round(progressBase + (pct / 100) * progressSpan),
+                                    `Downloading... ${pct}%`
+                                );
+                                lastPct = pct;
+                            }
+                        }
+                    });
+                    partPath = `${destPath}.${process.pid}.${threadId}.${Date.now()}.part`;
+                    file = fs.createWriteStream(partPath);
+                    res.on('error', fail);
+                    res.pipe(file);
+                    file.on('finish', () => file.close(() => {
+                        if (settled) return;
+                        try {
+                            fs.renameSync(partPath, destPath);
+                            settled = true;
+                            reportDownloadProgress(destPath, downloaded, total || downloaded, 'complete', attempt);
+                            resolve();
+                        } catch (error) {
+                            fail(error);
+                        }
+                    }));
+                    file.on('error', fail);
                 });
-            }).on('error', reject);
-            req.setTimeout(30000, () => req.destroy(new Error(`Timed out downloading ${u}`)));
+                req.on('error', fail);
+                req.setTimeout(DOWNLOAD_IDLE_TIMEOUT_MS, () => {
+                    req.destroy(new Error(`Download stalled for ${DOWNLOAD_IDLE_TIMEOUT_MS / 1000} seconds: ${target}`));
+                });
+            };
+            doGet(url);
         };
-        doGet(url);
+        attemptDownload(1);
     });
 }
 

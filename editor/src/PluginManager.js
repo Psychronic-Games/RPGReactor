@@ -14,8 +14,14 @@ class PluginManager {
         this._clipboard = null;  // {plugins, plugin, isCut, sourceIndices} for copy/cut/paste
         this._dragState = null;  // drag-and-drop state
 
+        const host = typeof window !== 'undefined' ? window.RPGReactorHost : null;
+        if (host?.fs && host?.path) {
+            this.fs = host.fs;
+            this.path = host.path;
+        }
+
         // Node.js modules
-        if (typeof nw !== 'undefined') {
+        if (!this.fs && typeof nw !== 'undefined') {
             this.fs = require('fs');
             this.path = require('path');
         }

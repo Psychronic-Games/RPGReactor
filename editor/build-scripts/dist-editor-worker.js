@@ -1,6 +1,6 @@
 /**
  * Editor Distribution Worker — runs in a worker_threads Worker.
- * Packages the RPG Reactor editor for distribution (itch.io, GitHub Releases).
+ * Packages the RPG Reactor editor for distribution.
  * Follows the same pattern as build-worker.js (game builds).
  */
 const { workerData, parentPort, threadId } = require('worker_threads');
@@ -14,6 +14,7 @@ const iconHelpers = require('./icon-helpers');
 const nwRuntime = require('./nw-runtime-utils');
 const nwCodec = require('./nw-codec-utils');
 const appImage = require('./appimage-utils');
+const nativeDownload = require('./native-download');
 
 // ── Logging ──────────────────────────────────────────────────────────
 function log(msg, color)  { parentPort.postMessage({ type: 'log', message: msg, color: color || '#cccccc' }); }
@@ -26,6 +27,19 @@ function logBlue(msg)     { log(msg, '#007acc'); }
 
 function progress(percent, status) {
     parentPort.postMessage({ type: 'progress', percent, status });
+}
+
+function reportDownloadProgress(destPath, downloaded, total, state, attempt) {
+    parentPort.postMessage({
+        type: 'download-progress',
+        id: destPath,
+        label: path.basename(destPath),
+        downloaded,
+        total,
+        state,
+        attempt,
+        maxAttempts: DOWNLOAD_MAX_ATTEMPTS,
+    });
 }
 
 // ── Config from main thread ─────────────────────────────────────────
@@ -88,55 +102,122 @@ function dependencyPath(packageName) {
     return candidates.find(candidate => fs.existsSync(path.join(candidate, 'package.json'))) || null;
 }
 
-// ── Download helper (follows one redirect) ──────────────────────────
+// ── Download helper ─────────────────────────────────────────────────
+const DOWNLOAD_IDLE_TIMEOUT_MS = 180000;
+const DOWNLOAD_MAX_ATTEMPTS = 3;
+
 function downloadFile(url, destPath, progressBase, progressSpan, requestOptions = {}) {
+    if (nativeDownload.isAvailable()) {
+        logDim('  Using native curl download transport.');
+        return nativeDownload.download({
+            url,
+            destPath,
+            headers: requestOptions.headers,
+            idleTimeoutMs: DOWNLOAD_IDLE_TIMEOUT_MS,
+            maxAttempts: DOWNLOAD_MAX_ATTEMPTS,
+            onTelemetry: update => reportDownloadProgress(
+                destPath, update.downloaded, update.total, update.state, update.attempt),
+            onRetry: (error, attempt, maxAttempts) => {
+                logWarn(`  Download interrupted (${error.message}). Retrying ${attempt}/${maxAttempts}...`);
+                progress(progressBase, `Download retry ${attempt}/${maxAttempts}...`);
+            },
+        });
+    }
     return new Promise((resolve, reject) => {
-        const doGet = (u) => {
-            const req = https.get(u, requestOptions, (res) => {
-                if ([301, 302, 303, 307, 308].includes(res.statusCode)) {
-                    doGet(new URL(res.headers.location, u).toString());
-                    res.resume();
-                    return;
-                }
-                if (res.statusCode !== 200) {
-                    reject(new Error(`HTTP ${res.statusCode} for ${u}`));
-                    res.resume();
-                    return;
-                }
-                const total = parseInt(res.headers['content-length'], 10) || 0;
-                let downloaded = 0;
-                let lastPct = -1;
-                res.on('data', (chunk) => {
-                    downloaded += chunk.length;
-                    if (total > 0) {
-                        const pct = Math.floor((downloaded / total) * 100);
-                        if (pct !== lastPct && pct % 5 === 0) {
-                            logDim(`  ${pct}% (${(downloaded / 1048576).toFixed(1)} MB)`);
-                            progress(
-                                Math.round(progressBase + (pct / 100) * progressSpan),
-                                `Downloading... ${pct}%`
-                            );
-                            lastPct = pct;
-                        }
-                    }
-                });
-                const partPath = `${destPath}.${process.pid}.${threadId}.${Date.now()}.part`;
-                const file = fs.createWriteStream(partPath);
-                res.pipe(file);
-                file.on('finish', () => {
-                    file.close(() => {
-                        fs.renameSync(partPath, destPath);
-                        resolve();
-                    });
-                });
-                file.on('error', (error) => {
+        const attemptDownload = (attempt) => {
+            let settled = false;
+            let partPath = null;
+            let file = null;
+            let downloaded = 0;
+            let total = 0;
+            let lastReportAt = 0;
+            reportDownloadProgress(destPath, 0, 0, attempt === 1 ? 'starting' : 'retrying', attempt);
+
+            const fail = (error) => {
+                if (settled) return;
+                settled = true;
+                if (file) file.destroy();
+                if (partPath) {
                     try { fs.rmSync(partPath, { force: true }); } catch {}
+                }
+                if (attempt < DOWNLOAD_MAX_ATTEMPTS) {
+                    reportDownloadProgress(destPath, downloaded, total, 'retrying', attempt + 1);
+                    logWarn(`  Download interrupted (${error.message}). Retrying ${attempt + 1}/${DOWNLOAD_MAX_ATTEMPTS}...`);
+                    progress(progressBase, `Download retry ${attempt + 1}/${DOWNLOAD_MAX_ATTEMPTS}...`);
+                    setTimeout(() => attemptDownload(attempt + 1), attempt * 1000);
+                } else {
+                    reportDownloadProgress(destPath, downloaded, total, 'failed', attempt);
                     reject(error);
+                }
+            };
+
+            const doGet = (target, redirects = 0) => {
+                if (redirects > 10) {
+                    fail(new Error(`Too many redirects downloading ${url}`));
+                    return;
+                }
+                const req = https.get(target, requestOptions, (res) => {
+                    if ([301, 302, 303, 307, 308].includes(res.statusCode)) {
+                        const location = res.headers.location;
+                        res.resume();
+                        if (!location) {
+                            fail(new Error(`Redirect without a location downloading ${target}`));
+                            return;
+                        }
+                        doGet(new URL(location, target).toString(), redirects + 1);
+                        return;
+                    }
+                    if (res.statusCode !== 200) {
+                        res.resume();
+                        fail(new Error(`HTTP ${res.statusCode} for ${target}`));
+                        return;
+                    }
+                    total = parseInt(res.headers['content-length'], 10) || 0;
+                    let lastPct = -1;
+                    res.on('data', (chunk) => {
+                        downloaded += chunk.length;
+                        const now = Date.now();
+                        if (now - lastReportAt >= 100 || (total > 0 && downloaded >= total)) {
+                            reportDownloadProgress(destPath, downloaded, total, 'downloading', attempt);
+                            lastReportAt = now;
+                        }
+                        if (total > 0) {
+                            const pct = Math.floor((downloaded / total) * 100);
+                            if (pct !== lastPct && pct % 5 === 0) {
+                                logDim(`  ${pct}% (${(downloaded / 1048576).toFixed(1)} MB)`);
+                                progress(
+                                    Math.round(progressBase + (pct / 100) * progressSpan),
+                                    `Downloading... ${pct}%`
+                                );
+                                lastPct = pct;
+                            }
+                        }
+                    });
+                    partPath = `${destPath}.${process.pid}.${threadId}.${Date.now()}.part`;
+                    file = fs.createWriteStream(partPath);
+                    res.on('error', fail);
+                    res.pipe(file);
+                    file.on('finish', () => file.close(() => {
+                        if (settled) return;
+                        try {
+                            fs.renameSync(partPath, destPath);
+                            settled = true;
+                            reportDownloadProgress(destPath, downloaded, total || downloaded, 'complete', attempt);
+                            resolve();
+                        } catch (error) {
+                            fail(error);
+                        }
+                    }));
+                    file.on('error', fail);
                 });
-            }).on('error', reject);
-            req.setTimeout(30000, () => req.destroy(new Error(`Timed out downloading ${u}`)));
+                req.on('error', fail);
+                req.setTimeout(DOWNLOAD_IDLE_TIMEOUT_MS, () => {
+                    req.destroy(new Error(`Download stalled for ${DOWNLOAD_IDLE_TIMEOUT_MS / 1000} seconds: ${target}`));
+                });
+            };
+            doGet(url);
         };
-        doGet(url);
+        attemptDownload(1);
     });
 }
 
@@ -581,6 +662,134 @@ function generateChecksums() {
     logGood('SHA256SUMS.txt written.');
 }
 
+function copyWebProject(source, destination, relativePath = '') {
+    fs.mkdirSync(destination, { recursive: true });
+    for (const entry of fs.readdirSync(source, { withFileTypes: true })) {
+        const relative = relativePath ? `${relativePath}/${entry.name}` : entry.name;
+        const normalized = relative.replace(/\\/g, '/');
+        if (normalized === '.rpgreactor.lock' || normalized === 'data/nul' ||
+            normalized === 'save' || normalized.startsWith('save/') ||
+            normalized === 'js/BACKUP' || normalized.startsWith('js/BACKUP/') ||
+            normalized === 'Backup' || normalized.startsWith('Backup/')) {
+            continue;
+        }
+        const sourcePath = path.join(source, entry.name);
+        const destinationPath = path.join(destination, entry.name);
+        if (entry.isDirectory()) copyWebProject(sourcePath, destinationPath, normalized);
+        else if (entry.isSymbolicLink()) fs.symlinkSync(fs.readlinkSync(sourcePath), destinationPath);
+        else fs.copyFileSync(sourcePath, destinationPath);
+    }
+}
+
+function patchWebProject(projectRoot) {
+    const pluginPath = path.join(projectRoot, 'js', 'plugins', 'PSYCHRONIC_MegaSkillTreesMZ.js');
+    if (!fs.existsSync(pluginPath)) return;
+    const source = fs.readFileSync(pluginPath, 'utf8');
+    const marker = '    function loadSkillTreesData() {\n';
+    if (!source.includes(marker)) {
+        throw new Error('Could not apply the browser fallback for PSYCHRONIC_MegaSkillTreesMZ.');
+    }
+    fs.writeFileSync(pluginPath, source.replace(marker, [
+        marker.trimEnd(),
+        "        if (typeof require !== 'function') {",
+        '            skillTreesData = [];',
+        '            return;',
+        '        }',
+    ].join('\n') + '\n'));
+}
+
+function walkWebFiles(root) {
+    const files = [];
+    const visit = (directory, relative = '') => {
+        for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+            const entryRelative = relative ? `${relative}/${entry.name}` : entry.name;
+            const fullPath = path.join(directory, entry.name);
+            if (entry.isDirectory()) {
+                files.push({ path: entryRelative, type: 'directory', size: 0 });
+                visit(fullPath, entryRelative);
+            } else {
+                files.push({ path: entryRelative, type: 'file', size: fs.statSync(fullPath).size });
+            }
+        }
+    };
+    visit(root);
+    return files;
+}
+
+function buildWeb(stageRoot, stagingDir) {
+    const templateRoot = path.join(stageRoot, 'template', 'Demo');
+    if (!fs.existsSync(path.join(templateRoot, 'project.rpgreactor'))) {
+        throw new Error('Web build requires template/Demo (Reactor One), but it was not found.');
+    }
+    const projectMetadata = JSON.parse(fs.readFileSync(path.join(templateRoot, 'project.rpgreactor'), 'utf8'));
+    const systemData = JSON.parse(fs.readFileSync(path.join(templateRoot, 'data', 'System.json'), 'utf8'));
+    if (projectMetadata.name !== 'Reactor One' || systemData.gameTitle !== 'Reactor One') {
+        throw new Error('Web build template must be the Reactor One project.');
+    }
+
+    const webRoot = path.join(stagingDir, 'pkg-web');
+    fs.mkdirSync(webRoot, { recursive: true });
+    copyDirRecursive(path.join(stageRoot, 'css'), path.join(webRoot, 'css'));
+    copyDirRecursive(path.join(stageRoot, 'images'), path.join(webRoot, 'images'));
+    copyDirRecursive(path.join(stageRoot, 'libs'), path.join(webRoot, 'libs'));
+    fs.copyFileSync(path.join(stageRoot, 'runtime', 'libs', 'pixi.js'), path.join(webRoot, 'libs', 'pixi.js'));
+    copyWebProject(templateRoot, path.join(webRoot, 'project'));
+    patchWebProject(path.join(webRoot, 'project'));
+
+    const sourceHtml = fs.readFileSync(path.join(stageRoot, 'index.html'), 'utf8');
+    const scriptPattern = /<script\s+src="(src\/[^"]+)"\s*><\/script>/g;
+    const sourceScripts = [...sourceHtml.matchAll(scriptPattern)].map(match => match[1]);
+    const bundleScripts = sourceScripts.filter(source => source !== 'src/main.js' && !source.startsWith('src/web/'));
+    const bundle = bundleScripts.map(source => {
+        const contents = fs.readFileSync(path.join(stageRoot, source), 'utf8');
+        return `${contents}\n//# sourceURL=${source}\n`;
+    }).join('\n');
+    fs.mkdirSync(path.join(webRoot, 'web'), { recursive: true });
+    fs.writeFileSync(path.join(webRoot, 'web', 'editor.bundle.js'), bundle);
+    fs.copyFileSync(path.join(stageRoot, 'src', 'main.js'), path.join(webRoot, 'web', 'main.js'));
+    for (const file of ['WebHost.js', 'WebBootstrap.js']) {
+        fs.copyFileSync(path.join(stageRoot, 'src', 'web', file), path.join(webRoot, 'web', file));
+    }
+    fs.copyFileSync(path.join(stageRoot, 'src', 'web', 'service-worker.js'), path.join(webRoot, 'service-worker.js'));
+
+    let webHtml = sourceHtml.replace(scriptPattern, '');
+    webHtml = webHtml.replace('</head>', [
+        '    <script src="libs/pixi.js"></script>',
+        '    <script src="libs/gif.js"></script>',
+        '</head>',
+    ].join('\n'));
+    webHtml = webHtml.replace('<!-- Main orchestrator -->', [
+        '<!-- Browser host and ordered editor bundle -->',
+        '<script src="web/WebHost.js"></script>',
+        '<script src="web/editor.bundle.js"></script>',
+        '<script src="web/WebBootstrap.js"></script>',
+    ].join('\n    '));
+    fs.writeFileSync(path.join(webRoot, 'index.html'), webHtml);
+
+    const projectRoot = path.join(webRoot, 'project');
+    const projectFiles = walkWebFiles(projectRoot);
+    const mutable = {};
+    for (const entry of projectFiles) {
+        if (entry.type !== 'file') continue;
+        if (/^(?:data\/.*\.json|project\.rpgreactor|package\.json|js\/(?:reactor_plugins|plugins)\.js)$/.test(entry.path)) {
+            mutable[entry.path] = fs.readFileSync(path.join(projectRoot, entry.path), 'utf8');
+        }
+    }
+    fs.writeFileSync(path.join(webRoot, 'web', 'project-manifest.json'), JSON.stringify({
+        editorVersion: appVersion,
+        projectName: 'Reactor One',
+        files: projectFiles,
+        mutable,
+    }));
+
+    const outputFiles = walkWebFiles(webRoot).filter(entry => entry.type === 'file');
+    const archiveName = `RPGReactor-v${appVersion}-web.zip`;
+    const outputPath = path.join(outputDir, archiveName);
+    logInfo(`Creating web archive: ${archiveName}`);
+    createNwPackage(webRoot, outputPath);
+    logGood(`Created: ${archiveName} (${(fs.statSync(outputPath).size / 1048576).toFixed(1)} MB, ${outputFiles.length} files)`);
+}
+
 // ── Main build ──────────────────────────────────────────────────────
 (async () => {
     logBlue('========================================');
@@ -708,7 +917,13 @@ function generateChecksums() {
             (packageType !== 'platform' || !platforms.includes('linux') || !appImage.supportsHost())) {
             throw new Error('Linux AppImage requires a platform-specific Linux build on a Linux x86_64 host.');
         }
-        if (packageType === 'platform') {
+        if (packageType === 'web') {
+            logBlue('--- Building browser editor ---');
+            progress(30, 'Bundling browser editor...');
+            buildWeb(stageRoot, stagingDir);
+            progress(90, 'Web build complete');
+            logInfo('');
+        } else if (packageType === 'platform') {
             const share = 80 / platforms.length;
             for (let i = 0; i < platforms.length; i++) {
                 const plat = platforms[i];

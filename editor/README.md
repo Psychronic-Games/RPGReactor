@@ -1,6 +1,6 @@
 # RPG Reactor
 
-RPG Reactor 0.94.2 is an open-source, cross-platform RPG game editor and runtime for RPG Maker MV/MZ-compatible projects, built on NW.js and PixiJS v8. RPG Reactor provides its own modern PIXI 8 runtime while preserving compatibility with RPG Maker project data and targeting backwards compatibility with RPG Maker MZ and MV plugins. Create 2D RPG games with a complete development environment featuring map editing, event scripting, database management, and game testing capabilities.
+RPG Reactor 0.94.3 is an open-source, cross-platform RPG game editor and runtime for RPG Maker MV/MZ-compatible projects, built on NW.js and PixiJS v8. RPG Reactor provides its own modern PIXI 8 runtime while preserving compatibility with RPG Maker project data and targeting backwards compatibility with RPG Maker MZ and MV plugins. Create 2D RPG games with a complete development environment featuring map editing, event scripting, database management, and game testing capabilities.
 
 ## Features
 
@@ -93,21 +93,25 @@ Comprehensive editors for all game data with right-click context menu clipboard 
 - **Optional asset optimization**: Deploy Game can losslessly recompress staged PNG files with Oxipng and optionally re-encode staged OGG audio at an explicit Vorbis quality. Existing project files are never modified, larger or invalid results are discarded, and RPG Maker loop comments are preserved. Audio optimization automatically downloads a pinned, SHA-256-verified FFmpeg executable into a separate cache on first use; the corresponding GPL license and provenance manifest are retained beside it. Per-file progress appears in the existing build log and progress bar
 - **Persistent choices**: Game output directory, runtime locales, and optimization settings are restored independently on the next editor session
 - **Optional Linux AppImage**: On Linux x86_64 build hosts, Linux game deployment can also emit one portable `.AppImage` file beside the normal Linux folder. The existing folder remains unchanged, and the AppImage option is off by default
-- **Web export**: HTML5 builds for browser deployment (itch.io, web hosting)
+- **Web export**: HTML5 builds for browser deployment
 - Access from **Build → Create Deployment Package...**
 
 ### Editor Distribution Builder
-Package the RPG Reactor editor itself for distribution on itch.io, GitHub Releases, etc.
+Package the RPG Reactor editor itself for desktop or web distribution.
 
-- **3 package types**:
+- **4 package types**:
   - **Platform-Specific**: One ZIP (`.zip`) archive per OS with bundled NW.js runtime; Linux and macOS symlinks are preserved
   - **Universal**: Single ZIP (`.zip`) archive containing all 3 platform runtimes
   - **Minimal**: Editor-only package, bootstrap launchers auto-download NW.js on first run
+  - **Web**: Browser editor with Reactor One bundled and opened automatically; mutable project data is persisted in the browser and Playtest runs in-page
+- **Web hosting**: Extract the Web ZIP at the desired URL and serve it over HTTPS, or use `localhost` while developing. Opening `index.html` directly with `file://` cannot provide the service-worker scope used for saved Playtest data
+- **Browser storage**: Edits are stored per site origin in IndexedDB. The Web editor's Reset control discards those browser-saved edits and restores the bundled Reactor One project
 - **NW.js editions**: Normal or SDK (includes DevTools for development/debugging)
 - **3-tier runtime acquisition**: Checks bundled local and packaged-editor runtimes → every `.nw-cache/` location → downloads from `dl.nwjs.io`; official stable-version metadata is cached for offline reuse
+- **Responsive downloads**: Build workers prefer native `curl` when available to avoid NW.js worker-network stalls, retain a Node HTTPS fallback, write cache files atomically, retry temporary failures, and show transferred bytes in the deployment log
 - **Verified codec acquisition**: Exact NW.js release match only → `.nw-codec-cache/` reuse → GitHub release download, with archive digest and single-file content validation before installation
 - **Persistent output**: The editor distribution output directory is remembered separately from the game deployment directory
-- **Package scope**: Optional proprietary codecs are available only for full platform/universal packages; Minimal packages contain no bundled NW.js runtime to patch
+- **Package scope**: Optional proprietary codecs are available only for full platform/universal packages; Minimal and Web packages contain no bundled NW.js runtime to patch
 - **Optional editor AppImage**: A platform-specific Linux editor build can additionally emit an x86_64 `.AppImage` beside its ZIP when packaging on Linux x86_64. The ZIP remains available
 - **Verified AppImage tooling**: First use downloads separately cached, immutable GitHub assets for `appimagetool` and the Type 2 runtime, checks both against built-in SHA-256 hashes, and embeds portable desktop metadata, icons, and the runtime license
 - **SHA256 checksums**: Automatically generated for all output archives

@@ -28,6 +28,11 @@ class DatabaseTilesetEditor {
 
         this.fs = null;
         this.path = null;
+        const host = typeof window !== 'undefined' ? window.RPGReactorHost : null;
+        if (host?.fs && host?.path) {
+            this.fs = host.fs;
+            this.path = host.path;
+        }
         this.currentTileset = null;
         this.tilesetList = [];
         this.selectedImageIndex = null;
@@ -45,7 +50,7 @@ class DatabaseTilesetEditor {
         this.onTilesetSaved = null;
 
         // Initialize Node.js modules if running in NW.js
-        if (typeof nw !== 'undefined') {
+        if (!this.fs && typeof nw !== 'undefined') {
             this.fs = require('fs');
             this.path = require('path');
         }

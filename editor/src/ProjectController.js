@@ -157,6 +157,20 @@ class ProjectController {
     }
 
     async checkAutoLoadProject() {
+        const webHost = typeof window !== 'undefined' ? window.RPGReactorHost : null;
+        if (webHost?.mode === 'web') {
+            const loadedProject = await this.projectManager.loadProject(webHost.projectRoot);
+            if (!loadedProject) {
+                this.uiManager.updateStatus('Could not load bundled Reactor One project');
+                return;
+            }
+            this.currentProject = loadedProject;
+            await this.uiManager.showEditorUI();
+            this.uiManager.updateStatus('Opened project: ' + loadedProject.name);
+            await this.populateProjectUI();
+            webHost.applyBrowserUi();
+            return;
+        }
         const lastProjectPath = localStorage.getItem('lastProjectPath');
 
         if (!lastProjectPath) {

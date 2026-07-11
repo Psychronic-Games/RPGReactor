@@ -30,6 +30,20 @@ test('package-lock version matches package version', () => {
     assert.equal(packageLock.packages[''].version, packageJson.version);
 });
 
+test('application version matches package metadata in every startup surface', () => {
+    const version = readJson(path.join(repoRoot, 'package.json')).version;
+    const sources = [
+        ['src/I18nManager.js', /const RR_APP_VERSION = '([^']+)'/],
+        ['index.html', /RPG Reactor v([\d.]+)/],
+        ['src/web/WebHost.js', /version: '([^']+)'/],
+    ];
+
+    for (const [relativePath, pattern] of sources) {
+        const source = fs.readFileSync(path.join(repoRoot, relativePath), 'utf8');
+        assert.equal(source.match(pattern)?.[1], version, `${relativePath} uses the package version`);
+    }
+});
+
 test('runtime corescript files are present', () => {
     const runtimeRoot = path.join(workspaceRoot, 'runtime');
     const runtimeFiles = [
@@ -146,7 +160,7 @@ test('ProjectManager refreshes template runtime files while preserving its plugi
         const manager = new ProjectManager();
         manager.getTemplateProjectPath = () => templatePath;
         manager.getRuntimePath = () => runtimePath;
-        manager.getEngineVersion = () => '0.94.2';
+        manager.getEngineVersion = () => '0.94.3';
         assert.equal(await manager.createNewProject(targetPath, 'Synced Template'), true);
         assert.equal(fs.readFileSync(path.join(targetPath, 'js', 'reactor_core.js'), 'utf8'), 'current runtime');
         assert.equal(

@@ -1,6 +1,6 @@
 # RPG Reactor
 
-RPG Reactor 0.94.2 is an open-source, cross-platform RPG game editor and runtime for RPG Maker MV/MZ-compatible projects. RPG Reactor provides its own modern PIXI 8-based runtime while preserving compatibility with RPG Maker project data and targeting backwards compatibility with both RPG Maker MZ and MV plugins, including mixing plugins from both engines within a single project through complementary MZ and MV compatibility layers.
+RPG Reactor 0.94.3 is an open-source, cross-platform RPG game editor and runtime for RPG Maker MV/MZ-compatible projects. RPG Reactor provides its own modern PIXI 8-based runtime while preserving compatibility with RPG Maker project data and targeting backwards compatibility with both RPG Maker MZ and MV plugins, including mixing plugins from both engines within a single project through complementary MZ and MV compatibility layers.
 
 Use RPG Reactor to create, edit, playtest, and package 2D RPGs with familiar RPG Maker-style maps, events, database records, plugins, and deployment workflows, without depending on the original RPG Maker runtime or editor.
 
@@ -23,7 +23,7 @@ RPGReactor/
 
 - [Editor README](editor/README.md): detailed feature list, source launch steps, project structure, shortcuts, and technical notes.
 - [Changelog](CHANGELOG.md): GitHub-facing release progress and links to the detailed editor changelog.
-- [RPG Reactor 0.94.2 release overview](docs/devlogs/2026-07-10-rpg-reactor-0.94.2.md): public explanation of the release's save, deployment, compatibility, and workflow improvements.
+- [RPG Reactor 0.94.3 release overview](docs/devlogs/2026-07-10-rpg-reactor-0.94.3.md): public explanation of the Web editor and deployment-download improvements.
 - [Maintainer docs](docs/README.md): workflows that are useful for project maintenance but are not required for normal editor use.
 
 ## Feature Overview
@@ -39,21 +39,16 @@ RPGReactor/
 - **Build & deploy**: one-click isolated playtests; cross-platform game packaging for Windows, macOS, Linux, and Web; optional Linux AppImages for games and the editor; configurable NW.js releases and runtime locales; optional staged PNG/OGG optimization; and an editor distribution builder with SHA-256 checksums.
 - **18-language editor localization** and a theme system with multiple color palettes in light and dark modes.
 
-## What's New in 0.94.2
+## What's New in 0.94.3
 
-- **MV compatibility now ships in the public runtime**: `reactor_mv_compat.js` is included in every project and loads before plugins. It only fills missing APIs, so pure-MZ projects are unaffected. The compatibility batch developed during 0.94.1 was not present in that release's public runtime; 0.94.2 is the first release that ships it.
-- **Reliable project persistence**: Save writes the current map, database, project metadata, and map list through one checked path. Unsaved map and project transitions now offer save, discard, or cancel instead of silently losing changes.
-- **Reproducible project creation and releases**: clean source clones generate a runtime-valid starter with no inherited demo plugins, while CI verifies the runtime manifest, generated scaffold, save behavior, editor distribution contents, and web deployment output.
-- **Deployment control and reproducibility**: choose latest stable, editor-matched, or an exact searchable NW.js release; reuse packaged and cached runtimes; filter runtime locales; and retain separate output paths and optimization settings for game and editor builds.
-- **Safe optional media optimization**: deployment can losslessly recompress staged PNG files or re-encode staged OGG audio at a selected quality with loop metadata intact. Only smaller validated output is kept, source assets never change, and the pinned FFmpeg download is SHA-256 verified with its license and provenance retained.
-- **Packaging hardening**: editor distributions include the Animation Generator's GIF encoder/decoder dependencies, required runtime files are validated before packaging, game deployments omit development saves and backups, and Linux editor builds are symlink-preserving ZIP archives like Windows and macOS.
-- **Optional Linux AppImages**: Deploy Game and Deploy Editor can add a portable x86_64 AppImage without replacing their existing Linux outputs. Creation is opt-in on Linux x86_64 hosts and uses pinned, SHA-256-verified AppImage tooling with portable desktop metadata and icons.
-- **Playtest and editor workflow**: project-specific NW.js profiles keep deployed games from blocking playtests; `F5` offers a confirmed uncached reload; `F11` toggles fullscreen; and output directories persist across sessions.
-- **Runtime and event compatibility**: the Demo's PixiJS 8 title snapshot crash is fixed, and valid RPG Maker MZ Skip commands (`code 109`) display correctly in Common and Troop Events.
-- **Effekseer workflow polish**: the Layers workspace responds to window width, animated opacity works correctly, and layer/keyframe timing edits remain synchronized.
-- **Forge workflow polish**: Outfit Forge options remain visible, Character Generator scans current and legacy PNG-part paths, Forge tools follow the active project, and Hair Forge's lower-pattern controls produce clearer changes.
+- **Web editor deployment**: Deploy Editor can produce a provider-neutral browser package with Reactor One bundled and opened automatically.
+- **Persistent browser editing**: maps, database data, project metadata, and plugin configuration are stored in IndexedDB, survive reloads, and can be reset to the bundled project.
+- **In-page Playtest**: browser-saved edits are overlaid through a root-scoped service worker and used by Test and Battle Test without launching a native process.
+- **Reliable deployment downloads**: large archives have a longer idle window, bounded retries, atomic temporary output, and native curl transport when available.
+- **Visible download progress**: runtime and tool downloads report percentage or transferred MiB in one live row with retry and completion state.
+- **Cleaner Linux packaging controls**: optional AppImage output appears as a nested Linux sub-option only when it applies.
 
-Earlier releases: **0.94.1** added 21 true-3D Effekseer interface instruments, physical and energy recipe packs, runtime resource watchdogs, and map-layer dimming; **0.94** introduced native Effekseer generation. See the [Changelog](CHANGELOG.md) for the complete history.
+Earlier releases: **0.94.2** added safer project persistence, reproducible project creation, deployment controls, asset optimization, AppImages, and the public MV compatibility runtime; **0.94.1** expanded the Forge and runtime compatibility. See the [Changelog](CHANGELOG.md) for the complete history.
 
 ## Development Launchers
 

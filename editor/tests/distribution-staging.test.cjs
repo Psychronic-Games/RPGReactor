@@ -56,6 +56,7 @@ test('editor distribution staging includes runtime asset dependencies', async ()
             'node_modules/wasm-feature-detect/dist/umd/index.js',
             'build-scripts/appimage-utils.js',
             'build-scripts/appimage-runtime-LICENSE.txt',
+            'build-scripts/native-download.js',
             'runtime/reactor_main.js',
             'runtime/reactor_mv_compat.js',
             'runtime/libs/pixi.js',

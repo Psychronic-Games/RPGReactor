@@ -1930,7 +1930,10 @@ class EventManager {
         const path = require('path');
         // Add .png extension if not already present (RPG Maker stores names without extension)
         const filename = image.characterName.endsWith('.png') ? image.characterName : image.characterName + '.png';
-        const imgPath = 'file://' + path.join(currentProject.path, 'img', 'characters', filename).replace(/\\/g, '/');
+        const filePath = path.join(currentProject.path, 'img', 'characters', filename);
+        const imgPath = window.RPGReactorAssetUrl
+            ? window.RPGReactorAssetUrl(filePath)
+            : 'file://' + filePath.replace(/\\/g, '/');
 
         try {
             // Load as HTML Image element first, then convert to PIXI texture

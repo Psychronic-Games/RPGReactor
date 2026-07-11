@@ -15,6 +15,11 @@ class PlaytestManager {
 
         console.log('Starting playtest for project:', projectPath);
 
+        if (typeof window !== 'undefined' && window.RPGReactorHost?.mode === 'web') {
+            window.RPGReactorHost.openPlaytest('test');
+            return true;
+        }
+
         if (typeof nw !== 'undefined') {
             return this.launchPlaytestWindow(projectPath);
         } else {
@@ -29,6 +34,10 @@ class PlaytestManager {
             return false;
         }
         console.log('Starting battle test for project:', projectPath);
+        if (typeof window !== 'undefined' && window.RPGReactorHost?.mode === 'web') {
+            window.RPGReactorHost.openPlaytest('btest');
+            return true;
+        }
         if (typeof nw !== 'undefined') {
             return this.launchPlaytestWindow(projectPath, 'btest');
         } else {

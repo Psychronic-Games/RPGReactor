@@ -119,7 +119,17 @@ test('both deployment dialogs pass optional Linux AppImage settings to workers',
         assert.match(source, /Also create Linux AppImage/);
         assert.match(source, /createLinuxAppImage/);
         assert.match(source, /process\.platform === 'linux' && process\.arch === 'x64'/);
+        assert.match(source, /(?:option|appImageOption)\.style\.display = .*linuxSelected \? 'flex' : 'none'/,
+            'the AppImage sub-option is hidden until Linux is selected');
     }
+    assert.ok(
+        buildSource.indexOf('id="build-platform-linux"') < buildSource.indexOf('id="build-appimage-option"') &&
+        buildSource.indexOf('id="build-appimage-option"') < buildSource.indexOf('id="build-platform-web"'),
+        'Deploy Game nests AppImage directly below Linux');
+    assert.ok(
+        distSource.indexOf('id="dist-platform-linux"') < distSource.indexOf('id="dist-appimage-option"') &&
+        distSource.indexOf('id="dist-appimage-option"') < distSource.indexOf('id="dist-platform-win"'),
+        'Deploy Editor nests AppImage directly below Linux');
     assert.match(gameWorker, /safeFolderName}-linux-x64\.AppImage/);
     assert.match(distWorker, /RPGReactor-v\$\{appVersion\}-linux-x64\.AppImage/);
     assert.match(distWorker, /f\.endsWith\('\.AppImage'\)/);

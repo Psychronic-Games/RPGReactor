@@ -42,7 +42,7 @@ test('web deployment packages a generated project without development saves or b
     const projectPath = path.join(tempRoot, 'Web Smoke');
     const outputDir = path.join(tempRoot, 'output');
     fs.cpSync(path.join(workspaceRoot, 'runtime'), path.join(tempRoot, 'runtime'), { recursive: true });
-    fs.writeFileSync(path.join(tempRoot, 'package.json'), JSON.stringify({ version: '0.94.2' }));
+    fs.writeFileSync(path.join(tempRoot, 'package.json'), JSON.stringify({ version: '0.94.3' }));
 
     const previousCwd = process.cwd();
     try {

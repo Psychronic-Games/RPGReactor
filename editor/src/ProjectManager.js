@@ -6,14 +6,23 @@ class ProjectManager {
         this.fs = null;
         this.path = null;
 
+        const host = typeof window !== 'undefined' ? window.RPGReactorHost : null;
+        if (host?.fs && host?.path) {
+            this.fs = host.fs;
+            this.path = host.path;
+        }
+
         // Initialize Node.js modules if running in NW.js
-        if (typeof nw !== 'undefined') {
+        if (!this.fs && typeof nw !== 'undefined') {
             this.fs = require('fs');
             this.path = require('path');
         }
     }
 
     getEngineVersion() {
+        if (typeof window !== 'undefined' && window.RPGReactorHost?.version) {
+            return window.RPGReactorHost.version;
+        }
         if (!this.fs || !this.path || typeof process === 'undefined') {
             return '0.0.0';
         }

@@ -257,10 +257,15 @@ class RPGReactor {
         this.playtestManager = new PlaytestManager();
 
         // Initialize Build Manager
-        this.buildManager = new BuildManager();
+        const web = window.RPGReactorHost?.mode === 'web';
+        this.buildManager = web
+            ? { open: () => window.RPGReactorHost.unsupported('Game deployment') }
+            : new BuildManager();
 
         // Initialize Editor Distribution Manager
-        this.distEditorManager = new DistEditorManager();
+        this.distEditorManager = web
+            ? { open: () => window.RPGReactorHost.unsupported('Editor deployment') }
+            : new DistEditorManager();
 
         // Initialize Plugin Manager
         this.pluginManager = new PluginManager(this.projectController);

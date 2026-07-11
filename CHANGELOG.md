@@ -6,6 +6,25 @@ This root changelog summarizes public release progress for GitHub. The detailed 
 
 ## [Unreleased]
 
+## [0.94.3] - 2026-07-10
+
+Release overview: [RPG Reactor 0.94.3: Web Editor and Reliable Downloads](docs/devlogs/2026-07-10-rpg-reactor-0.94.3.md).
+
+### Added
+
+- Added a provider-neutral Web editor package with Reactor One bundled and opened automatically. Browser edits persist locally, can be reset to the bundled project, and are used by the in-page Playtest.
+
+### Changed
+
+- Bumped RPG Reactor to version 0.94.3.
+- AppImage output is now presented as a conditional sub-option directly beneath Linux in both deployment dialogs.
+
+### Fixed
+
+- Large NW.js SDK downloads now tolerate temporary `dl.nwjs.io` stalls, retry transient failures, and clean incomplete cache files instead of failing after 30 seconds.
+- Deployment logs now keep a live inline progress bar visible during runtime and tool downloads, including transferred MiB for servers that do not report a total size and retry/completion state in the same row.
+- Deployment downloads now prefer native curl when available, avoiding an NW.js worker-thread HTTPS stall where a valid runtime URL opened but delivered no bytes; the Node HTTPS path remains available as fallback.
+
 ## [0.94.2] - 2026-07-10
 
 Release overview: [RPG Reactor 0.94.2: Safer Saves and Better Deployments](docs/devlogs/2026-07-10-rpg-reactor-0.94.2.md).

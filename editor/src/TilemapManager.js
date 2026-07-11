@@ -14,8 +14,14 @@ class TilemapManager {
         this.fs = null;
         this.path = null;
 
+        const host = typeof window !== 'undefined' ? window.RPGReactorHost : null;
+        if (host?.fs && host?.path) {
+            this.fs = host.fs;
+            this.path = host.path;
+        }
+
         // Initialize Node.js modules if running in NW.js
-        if (typeof nw !== 'undefined') {
+        if (!this.fs && typeof nw !== 'undefined') {
             this.fs = require('fs');
             this.path = require('path');
         }
@@ -225,6 +231,12 @@ class TilemapManager {
         }
     }
 
+    assetUrl(filePath) {
+        return typeof window !== 'undefined' && window.RPGReactorAssetUrl
+            ? window.RPGReactorAssetUrl(filePath)
+            : 'file://' + filePath.replace(/\\/g, '/');
+    }
+
     async loadTilesetImages(tileset) {
         const imgPath = this.path.join(this.projectPath, 'img', 'tilesets');
         this._a2DecorKinds = null;   // re-analyze decorations for the new sheet
@@ -238,8 +250,7 @@ class TilemapManager {
 
             const filePath = this.path.join(imgPath, name + '.png');
 
-            // Convert to file:// URL for Pixi.js
-            const fileUrl = 'file://' + filePath.replace(/\\/g, '/');
+            const fileUrl = this.assetUrl(filePath);
 
             // PERFORMANCE: Skip existsSync — let PIXI.Assets.load handle missing files
             // via catch handler. This avoids blocking synchronous disk I/O per tileset image.
@@ -1424,7 +1435,7 @@ class TilemapManager {
         }
 
         // Convert to file:// URL for Pixi.js
-        const fileUrl = 'file://' + parallaxPath.replace(/\\/g, '/');
+        const fileUrl = this.assetUrl(parallaxPath);
 
         try {
             // Load texture using PIXI.Assets.load() to ensure it's loaded before rendering
@@ -2326,7 +2337,7 @@ class TilemapManager {
 
             // Load as Image for canvas rendering
             const img = new Image();
-            img.src = 'file://' + filePath.replace(/\\/g, '/');
+            img.src = this.assetUrl(filePath);
             await new Promise((resolve, reject) => {
                 img.onload = resolve;
                 img.onerror = (err) => {
@@ -2354,7 +2365,7 @@ class TilemapManager {
 
         // Load parallax image
         const img = new Image();
-        img.src = 'file://' + parallaxPath.replace(/\\/g, '/');
+        img.src = this.assetUrl(parallaxPath);
 
         await new Promise((resolve, reject) => {
             img.onload = resolve;
@@ -2562,7 +2573,7 @@ class TilemapManager {
                 const imagePath = this.path.join(this.projectPath, 'img', 'tilesets', imageName + '.png');
                 if (this.fs.existsSync(imagePath)) {
                     const img = new Image();
-                    img.src = 'file://' + imagePath.replace(/\\/g, '/');
+                    img.src = this.assetUrl(imagePath);
                     await new Promise((resolve, reject) => {
                         img.onload = resolve;
                         img.onerror = reject;

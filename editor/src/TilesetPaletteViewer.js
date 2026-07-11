@@ -15,8 +15,14 @@ class TilesetPaletteViewer {
         this.cachedLayerCanvas = null; // OPTIMIZATION: Cache rendered layer to avoid re-rendering on selection change
         this.enabled = true; // Whether the palette is enabled for interaction
 
+        const host = typeof window !== 'undefined' ? window.RPGReactorHost : null;
+        if (host?.fs && host?.path) {
+            this.fs = host.fs;
+            this.path = host.path;
+        }
+
         // Initialize Node.js modules if running in NW.js
-        if (typeof nw !== 'undefined') {
+        if (!this.fs && typeof nw !== 'undefined') {
             this.fs = require('fs');
             this.path = require('path');
         }
@@ -316,7 +322,9 @@ class TilesetPaletteViewer {
             if (this.fs.existsSync(imgPath)) {
                 // Load image using Image object
                 const img = new Image();
-                img.src = 'file://' + imgPath.replace(/\\/g, '/');
+                img.src = typeof window !== 'undefined' && window.RPGReactorHost?.assetUrl
+                    ? window.RPGReactorHost.assetUrl(imgPath)
+                    : 'file://' + imgPath.replace(/\\/g, '/');
 
                 await new Promise((resolve) => {
                     img.onload = () => {

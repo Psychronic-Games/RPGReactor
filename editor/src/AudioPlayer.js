@@ -144,6 +144,9 @@ class AudioPlayer {
 
     toAudioSource(filePath) {
         if (!filePath || /^(file|https?):\/\//i.test(filePath)) return filePath;
+        if (typeof window !== 'undefined' && window.RPGReactorAssetUrl) {
+            return window.RPGReactorAssetUrl(filePath);
+        }
 
         try {
             const { pathToFileURL } = require('url');

@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.94.3] - 2026-07-10
+
+### Added
+
+- Deploy Editor now offers a provider-neutral **Web** package. It bundles the browser editor and Reactor One into a root-level ZIP, opens Reactor One automatically, stores mutable project data in IndexedDB, supports resetting those edits, and runs Playtest in an in-page frame using the saved browser data.
+
+### Changed
+
+- Bumped current development version to RPG Reactor 0.94.3.
+- The optional AppImage control now appears as an indented Linux sub-option in both deployment dialogs only while Linux is selected, rather than occupying a permanent top-level platform row.
+
+### Fixed
+
+- Fixed large NW.js SDK downloads failing when `dl.nwjs.io` remained idle for 30 seconds. Game and editor deployment now allow a three-minute socket-idle window, retry transient archive failures up to three times, and remove incomplete cache files between attempts.
+- Game and editor deployment logs now show a live inline progress bar for every downloaded runtime, codec, FFmpeg, or AppImage tool asset. Known-size downloads display percentage and transferred/total MiB; chunked or unknown-size responses display transferred MiB with an animated activity bar, and the same row updates for retries and completion instead of flooding the log.
+- Fixed NW.js worker-thread HTTPS requests sometimes opening a valid `dl.nwjs.io` URL without receiving archive bytes. Build workers now prefer the host's native `curl` transport with atomic output, byte-level progress polling, stall detection, and bounded retries; the verified Node HTTPS downloader remains the automatic fallback when curl is unavailable.
+
 ## [0.94.2] - 2026-07-10
 
 ### Added

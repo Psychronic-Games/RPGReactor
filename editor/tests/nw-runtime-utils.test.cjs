@@ -108,6 +108,7 @@ test('deployment dialogs expose stable, editor, and exact NW.js versions', () =>
     const pickerSource = fs.readFileSync(path.join(editorRoot, 'src', 'NwVersionPicker.js'), 'utf8');
     const themeSource = fs.readFileSync(path.join(editorRoot, 'css', 'theme.css'), 'utf8');
     const workerSource = fs.readFileSync(path.join(editorRoot, 'build-scripts', 'build-worker.js'), 'utf8');
+    const nativeDownloadSource = fs.readFileSync(path.join(editorRoot, 'build-scripts', 'native-download.js'), 'utf8');
 
     for (const source of [buildSource, distSource]) {
         assert.match(source, /<option value="stable" selected>Latest stable<\/option>/);
@@ -150,6 +151,37 @@ test('deployment dialogs expose stable, editor, and exact NW.js versions', () =>
         'web builds must not require a writable NW.js cache during worker startup');
 
     const distWorkerSource = fs.readFileSync(path.join(editorRoot, 'build-scripts', 'dist-editor-worker.js'), 'utf8');
+    for (const source of [workerSource, distWorkerSource]) {
+        assert.match(source, /const DOWNLOAD_IDLE_TIMEOUT_MS = 180000/,
+            'large NW.js archives tolerate up to three minutes of socket inactivity');
+        assert.match(source, /const DOWNLOAD_MAX_ATTEMPTS = 3/,
+            'transient archive download failures receive bounded retries');
+        assert.match(source, /Download interrupted[\s\S]*?Retrying/);
+        assert.match(source, /if \(partPath\)[\s\S]*?fs\.rmSync\(partPath/,
+            'failed archive attempts remove partial cache files');
+        assert.match(source, /type: 'download-progress'/,
+            'workers report live byte progress independently of Content-Length');
+        assert.match(source, /now - lastReportAt >= 100/,
+            'download telemetry is throttled before crossing the worker boundary');
+        assert.match(source, /nativeDownload\.isAvailable\(\)/,
+            'build workers prefer the host download transport when available');
+    }
+    for (const source of [buildSource, distSource]) {
+        assert.match(source, /updateDownloadProgress\(message\)/);
+        assert.match(source, /msg\.type === 'download-progress'/);
+        assert.match(source, /is-indeterminate/,
+            'unknown-length downloads use an indeterminate inline progress bar');
+        assert.match(source, /mib\(message\.downloaded\)\}\sdownloaded/,
+            'unknown-length downloads still display transferred bytes');
+    }
+    assert.match(themeSource, /\.rr-download-progress-track[\s\S]*?\.rr-download-progress-fill\.is-indeterminate/);
+    assert.match(themeSource, /@keyframes rr-download-indeterminate/);
+    assert.match(nativeDownloadSource, /spawnProcess\(process\.platform === 'win32' \? 'curl\.exe' : 'curl'/,
+        'native downloads use argument arrays rather than a shell command');
+    assert.match(nativeDownloadSource, /'--speed-limit', '1'[\s\S]*?'--speed-time'/,
+        'native downloads detect stalled transfers');
+    assert.match(nativeDownloadSource, /setInterval\(report, 100\)/,
+        'native byte progress remains visible while curl runs');
     assert.match(distWorkerSource, /nwRuntime\.extractArchive\(cachedPath, extractDir\)/);
     assert.match(distWorkerSource, /nwRuntime\.packagedFlatRuntime\(editorExecPath, platform\)/,
         'editor deployment reuses packaged flat Windows and Linux runtimes');

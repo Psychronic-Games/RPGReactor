@@ -3,6 +3,7 @@ class BuildManager {
         this.isBuilding = false;
         this.modal = null;
         this.worker = null;
+        this.downloadProgressRows = new Map();
         this.setupModal();
     }
 
@@ -45,20 +46,20 @@ class BuildManager {
                                             <div style="color: var(--color-text-muted); font-size: 11px;">Build executable for Linux 64-bit</div>
                                         </div>
                                     </label>
-
-                                    <label class="build-option-label" style="display: flex; align-items: center; padding: 8px 10px; background: var(--color-bg-panel); border: 1px solid var(--color-border); border-radius: 4px; cursor: pointer; transition: all 0.2s;">
-                                        <input type="checkbox" id="build-platform-web" value="web" class="system-checkbox" style="margin-right: 10px;">
-                                        <div style="flex: 1;">
-                                            <div style="color: var(--color-text); font-weight: 600; font-size: 13px;">Web (HTML5)</div>
-                                            <div style="color: var(--color-text-muted); font-size: 11px;">Build for browser deployment (itch.io, web hosting)</div>
-                                        </div>
-                                    </label>
-                                    <label id="build-appimage-option" style="display: flex; align-items: flex-start; gap: 8px; padding: 8px 10px; background: var(--color-bg-panel); border: 1px solid var(--color-border); border-radius: 4px; cursor: pointer;">
+                                    <label id="build-appimage-option" style="display: none; align-items: flex-start; gap: 8px; margin-left: 28px; padding: 7px 9px; background: var(--color-bg-surface); border: 1px solid var(--color-border-subtle); border-left: 2px solid var(--color-accent-border); border-radius: 4px; cursor: pointer;">
                                         <input id="build-create-linux-appimage" type="checkbox" class="system-checkbox" style="width: 16px; height: 16px; min-width: 16px; min-height: 16px; max-width: 16px; max-height: 16px; flex: 0 0 16px; margin: 1px 0 0;">
                                         <span>
                                             <span style="display: block; color: var(--color-text); font-weight: 600; font-size: 12px;">Also create Linux AppImage</span>
                                             <span id="build-appimage-note" style="display: block; color: var(--color-text-muted); font-size: 10px; line-height: 1.35; margin-top: 2px;">Portable x86_64 file emitted beside the Linux folder.</span>
                                         </span>
+                                    </label>
+
+                                    <label class="build-option-label" style="display: flex; align-items: center; padding: 8px 10px; background: var(--color-bg-panel); border: 1px solid var(--color-border); border-radius: 4px; cursor: pointer; transition: all 0.2s;">
+                                        <input type="checkbox" id="build-platform-web" value="web" class="system-checkbox" style="margin-right: 10px;">
+                                        <div style="flex: 1;">
+                                            <div style="color: var(--color-text); font-weight: 600; font-size: 13px;">Web (HTML5)</div>
+                                            <div style="color: var(--color-text-muted); font-size: 11px;">Build for browser deployment</div>
+                                        </div>
                                     </label>
                                 </div>
                             </div>
@@ -356,13 +357,12 @@ class BuildManager {
         const linuxSelected = document.getElementById('build-platform-linux').checked;
         checkbox.disabled = !hostSupported || !linuxSelected;
         if (checkbox.disabled) checkbox.checked = false;
+        option.style.display = linuxSelected ? 'flex' : 'none';
         option.style.opacity = checkbox.disabled ? '0.5' : '1';
         option.style.cursor = checkbox.disabled ? 'not-allowed' : 'pointer';
         note.textContent = !hostSupported
             ? 'Creation requires RPG Reactor running on Linux x86_64.'
-            : linuxSelected
-                ? 'Portable x86_64 file emitted beside the Linux folder.'
-                : 'Select Linux to enable this additional artifact.';
+            : 'Portable x86_64 file emitted beside the Linux folder.';
     }
 
     open() {
@@ -401,6 +401,7 @@ class BuildManager {
     clearLog() {
         const logDiv = document.getElementById('build-log');
         logDiv.innerHTML = '';
+        this.downloadProgressRows.clear();
     }
 
     log(message, color = 'var(--color-text)') {
@@ -409,6 +410,57 @@ class BuildManager {
         line.textContent = message;
         line.style.color = color;
         logDiv.appendChild(line);
+        logDiv.scrollTop = logDiv.scrollHeight;
+    }
+
+    updateDownloadProgress(message) {
+        const logDiv = document.getElementById('build-log');
+        let entry = this.downloadProgressRows.get(message.id);
+        if (!entry) {
+            const row = document.createElement('div');
+            row.className = 'rr-download-progress';
+            const header = document.createElement('div');
+            header.className = 'rr-download-progress-header';
+            const label = document.createElement('span');
+            label.className = 'rr-download-progress-label';
+            const detail = document.createElement('span');
+            detail.className = 'rr-download-progress-detail';
+            header.append(label, detail);
+            const track = document.createElement('div');
+            track.className = 'rr-download-progress-track';
+            track.setAttribute('role', 'progressbar');
+            const fill = document.createElement('div');
+            fill.className = 'rr-download-progress-fill';
+            track.appendChild(fill);
+            row.append(header, track);
+            logDiv.appendChild(row);
+            entry = { label, detail, track, fill };
+            this.downloadProgressRows.set(message.id, entry);
+        }
+
+        const mib = bytes => `${(bytes / 1048576).toFixed(bytes >= 10485760 ? 1 : 2)} MiB`;
+        const hasTotal = message.total > 0;
+        const percent = hasTotal ? Math.min(100, (message.downloaded / message.total) * 100) : null;
+        entry.label.textContent = message.label;
+        entry.label.title = message.label;
+        entry.fill.classList.toggle('is-indeterminate', !hasTotal && !['complete', 'failed'].includes(message.state));
+        entry.fill.classList.toggle('is-failed', message.state === 'failed');
+        entry.fill.style.width = message.state === 'complete' ? '100%' : hasTotal ? `${percent}%` : '38%';
+        entry.track.setAttribute('aria-label', `Downloading ${message.label}`);
+        if (percent === null) entry.track.removeAttribute('aria-valuenow');
+        else entry.track.setAttribute('aria-valuenow', String(Math.round(percent)));
+
+        if (message.state === 'complete') {
+            entry.detail.textContent = `Complete - ${mib(message.downloaded)}`;
+        } else if (message.state === 'failed') {
+            entry.detail.textContent = `Failed after ${message.attempt} attempts`;
+        } else if (message.state === 'retrying') {
+            entry.detail.textContent = `Retrying ${message.attempt}/${message.maxAttempts} - ${mib(message.downloaded)}`;
+        } else if (hasTotal) {
+            entry.detail.textContent = `${Math.round(percent)}% - ${mib(message.downloaded)} / ${mib(message.total)}`;
+        } else {
+            entry.detail.textContent = `${mib(message.downloaded)} downloaded`;
+        }
         logDiv.scrollTop = logDiv.scrollHeight;
     }
 
@@ -551,6 +603,8 @@ class BuildManager {
                     this.log(msg.message, msg.color || 'var(--color-text)');
                 } else if (msg.type === 'progress') {
                     this.updateProgress(msg.percent, msg.status);
+                } else if (msg.type === 'download-progress') {
+                    this.updateDownloadProgress(msg);
                 } else if (msg.type === 'done') {
                     if (msg.success) {
                         this.log('', 'var(--color-text)');

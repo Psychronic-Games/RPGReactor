@@ -6,6 +6,11 @@ class DatabaseManager {
         this.fs = null;
         this.path = null;
         this.savedState = {};
+        const host = typeof window !== 'undefined' ? window.RPGReactorHost : null;
+        if (host?.fs && host?.path) {
+            this.fs = host.fs;
+            this.path = host.path;
+        }
         this.dataFiles = [
             ['actors', 'Actors.json'],
             ['classes', 'Classes.json'],
@@ -41,7 +46,7 @@ class DatabaseManager {
         };
 
         // Initialize Node.js modules if running in NW.js
-        if (typeof nw !== 'undefined') {
+        if (!this.fs && typeof nw !== 'undefined') {
             this.fs = require('fs');
             this.path = require('path');
         }

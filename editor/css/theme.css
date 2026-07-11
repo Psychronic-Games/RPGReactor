@@ -2132,3 +2132,53 @@ input.rr-color-swatch[type="color"]::-webkit-color-swatch {
     transform: translateX(-50%);
     left: 0;
 }
+
+.rr-download-progress {
+    margin: 7px 0;
+    padding: 7px 8px;
+    background: var(--color-bg-surface);
+    border: 1px solid var(--color-border-subtle);
+    border-radius: var(--radius-md);
+}
+.rr-download-progress-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 5px;
+    font-size: 11px;
+}
+.rr-download-progress-label {
+    color: var(--color-text-strong);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.rr-download-progress-detail {
+    color: var(--color-text-muted);
+    flex: 0 0 auto;
+}
+.rr-download-progress-track {
+    height: 8px;
+    overflow: hidden;
+    background: var(--color-bg-deep);
+    border: 1px solid var(--color-border-input);
+    border-radius: 999px;
+}
+.rr-download-progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--color-accent-deep), var(--color-accent-hover));
+    border-radius: inherit;
+    transition: width 120ms linear;
+}
+.rr-download-progress-fill.is-indeterminate {
+    animation: rr-download-indeterminate 1.1s ease-in-out infinite;
+}
+.rr-download-progress-fill.is-failed {
+    background: var(--color-danger-bright);
+    animation: none;
+}
+@keyframes rr-download-indeterminate {
+    from { transform: translateX(-115%); }
+    to { transform: translateX(265%); }
+}

@@ -43,7 +43,7 @@ describe('generated fallback project scaffold', () => {
         fs.cpSync(path.join(workspaceRoot, 'runtime'), path.join(tempRoot, 'runtime'), { recursive: true });
         fs.writeFileSync(
             path.join(tempRoot, 'package.json'),
-            JSON.stringify({ version: '0.94.2' }),
+            JSON.stringify({ version: '0.94.3' }),
             'utf8'
         );
 
