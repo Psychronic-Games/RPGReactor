@@ -20,6 +20,23 @@
         const y = Number(args[1] || 0);
         let defaultWidth = Graphics.boxWidth || Graphics.width || 0;
         let defaultHeight = Graphics.boxHeight || Graphics.height || 0;
+        // MV Window_Command.initialize builds the command list BEFORE
+        // measuring; MZ builds it in refresh() afterwards. Plugin
+        // windowWidth()/numVisibleRows() overrides routinely reference
+        // maxItems() (YEP_MainMenuManager: Math.ceil(maxItems()/maxCols()))
+        // — measured against an empty list the window collapses to
+        // fittingHeight(0) = 24px. Build it here; refresh() rebuilds later.
+        if (owner && typeof owner.makeCommandList === "function" &&
+                owner._list === undefined) {
+            try {
+                if (typeof owner.clearCommandList === "function") {
+                    owner.clearCommandList();
+                } else {
+                    owner._list = [];
+                }
+                owner.makeCommandList();
+            } catch (e) { /* measurement aid only */ }
+        }
         if (owner && typeof owner.windowWidth === "function") {
             try { defaultWidth = owner.windowWidth(); } catch (e) {}
         }
@@ -28,7 +45,25 @@
         }
         const width = Number(args[2] != null ? args[2] : defaultWidth);
         const height = Number(args[3] != null ? args[3] : defaultHeight);
-        return new Rectangle(x, y, width, height);
+        let finalX = x;
+        let finalY = y;
+        // MV battle windows position THEMSELVES inside initialize when
+        // constructed without coordinates (Window_BattleStatus bottom-
+        // right; Party/ActorCommand bottom). MZ deleted that logic — the
+        // scene passes a Rectangle instead — so MV-style zero-arg
+        // constructions (MOG_BattleHud wraps Window_BattleStatus.initialize
+        // and drops the scene's rect) landed at 0,0.
+        const noCoords = args[0] == null && args[1] == null;
+        if (noCoords && owner) {
+            if (global.Window_BattleStatus && owner instanceof Window_BattleStatus) {
+                finalX = Graphics.boxWidth - width;
+                finalY = Graphics.boxHeight - height;
+            } else if ((global.Window_PartyCommand && owner instanceof Window_PartyCommand) ||
+                       (global.Window_ActorCommand && owner instanceof Window_ActorCommand)) {
+                finalY = Graphics.boxHeight - height;
+            }
+        }
+        return new Rectangle(finalX, finalY, width, height);
     }
 
     function installJsonExCompatibility() {
@@ -72,13 +107,27 @@
             }
             return value;
         };
-        const cleanMetadata = function(value) {
-            if (!value || typeof value !== "object") return;
-            delete value["@"];
-            delete value["@c"];
-            delete value["@a"];
-            delete value["@r"];
-            for (const key of Object.keys(value)) cleanMetadata(value[key]);
+        const cleanMetadata = function(root) {
+            // Iterative with a visited set: the @r pass above deliberately
+            // restores circular references into the graph, so a naive
+            // recursive walk chases cycles until the stack overflows
+            // (RangeError on loading any MV save with shared refs).
+            if (!root || typeof root !== "object") return;
+            const visited = new Set();
+            const stack = [root];
+            while (stack.length > 0) {
+                const value = stack.pop();
+                if (!value || typeof value !== "object" || visited.has(value)) continue;
+                visited.add(value);
+                delete value["@"];
+                delete value["@c"];
+                delete value["@a"];
+                delete value["@r"];
+                for (const key of Object.keys(value)) {
+                    const child = value[key];
+                    if (child && typeof child === "object") stack.push(child);
+                }
+            }
         };
         const parseMvJson = function(json) {
             const circulars = [];
@@ -100,6 +149,96 @@
             return contents;
         };
         JsonEx.parse.__mvCompatWrapped = true;
+
+        // MV-format ENCODER (ported verbatim from MV rpg_core.js). Our
+        // parse above faithfully restores MV saves' CIRCULAR references
+        // (@r) into the live game objects — but MZ's stringify has no
+        // cycle support and dies at maxDepth ("Object too deep") the
+        // moment you re-save a game loaded from an MV save. MV's encoder
+        // tags visited objects (@c), replaces re-encountered refs with
+        // {@r: id} stubs, wraps arrays (@a), and repairs the live object
+        // graph afterwards. Output stays loadable by BOTH our parse and
+        // real RPG Maker MV.
+        if (!JsonEx.stringify.__mvCompatWrapped) {
+            const mvGetConstructorName = function(value) {
+                return value.constructor ? value.constructor.name : "Object";
+            };
+            const mvEncode = function(value, circulars, depth) {
+                depth = depth || 0;
+                if (++depth >= (JsonEx.maxDepth || 100)) {
+                    throw new Error("Object too deep");
+                }
+                const type = Object.prototype.toString.call(value);
+                if (type === "[object Object]" || type === "[object Array]") {
+                    value["@c"] = JsonEx.__mvCompatId++;
+                    const constructorName = mvGetConstructorName(value);
+                    if (constructorName !== "Object" && constructorName !== "Array") {
+                        value["@"] = constructorName;
+                    }
+                    for (const key in value) {
+                        if ((!value.hasOwnProperty || value.hasOwnProperty(key)) && !key.match(/^@./)) {
+                            if (value[key] && typeof value[key] === "object") {
+                                if (value[key]["@c"]) {
+                                    circulars.push([key, value, value[key]]);
+                                    value[key] = { "@r": value[key]["@c"] };
+                                } else {
+                                    value[key] = mvEncode(value[key], circulars, depth + 1);
+                                    if (value[key] instanceof Array) {
+                                        // wrap array so @c/@ metadata survives
+                                        circulars.push([key, value, value[key]]);
+                                        value[key] = {
+                                            "@c": value[key]["@c"],
+                                            "@a": value[key]
+                                        };
+                                    }
+                                }
+                            } else {
+                                value[key] = mvEncode(value[key], circulars, depth + 1);
+                            }
+                        }
+                    }
+                }
+                depth--;
+                return value;
+            };
+            const mvCleanAfterEncode = function(root) {
+                // Encode-side cleaner, MV semantics: delete only @ and @c,
+                // and KEEP traversing through @a wrappers so the arrays
+                // inside get their @c stripped too (the parse-side
+                // cleanMetadata deletes @a before traversal — using it here
+                // would leave @c tags on live arrays, so the NEXT save
+                // would see them as already-visited and emit @r stubs for
+                // everything: silent save corruption).
+                if (!root || typeof root !== "object") return;
+                const visited = new Set();
+                const stack = [root];
+                while (stack.length > 0) {
+                    const value = stack.pop();
+                    if (!value || typeof value !== "object" || visited.has(value)) continue;
+                    visited.add(value);
+                    delete value["@"];
+                    delete value["@c"];
+                    for (const key of Object.keys(value)) {
+                        const child = value[key];
+                        if (child && typeof child === "object") stack.push(child);
+                    }
+                }
+            };
+            JsonEx.stringify = function(object) {
+                const circulars = [];
+                JsonEx.__mvCompatId = 1;
+                const json = JSON.stringify(mvEncode(object, circulars, 0));
+                // repair the LIVE object graph: strip @ metadata (cycles
+                // are broken by the @r stubs at this point), then put the
+                // real objects back where stubs/wrappers were placed.
+                mvCleanAfterEncode(object);
+                for (const circular of circulars) {
+                    circular[1][circular[0]] = circular[2];
+                }
+                return json;
+            };
+            JsonEx.stringify.__mvCompatWrapped = true;
+        }
     }
 
     function ensureArrayClone() {
@@ -534,10 +673,90 @@
         };
         Window_Base.prototype.updateButtonsVisiblity = function() {};
 
+        // MV font routing: MZ's resetFontSettings reads $gameSystem.
+        // mainFontFace()/mainFontSize() directly, bypassing the
+        // standardFontFace()/standardFontSize() hooks where MV plugins
+        // apply the game's configured font (YEP_CoreEngine "Font Size" —
+        // this game sets 23; MZ's default 26 rendered everything
+        // oversized). MV verbatim; our standard* defaults below delegate
+        // to $gameSystem main* anyway, so without plugin overrides the
+        // behavior is unchanged.
+        Window_Base.prototype.resetFontSettings = function() {
+            this.contents.fontFace = this.standardFontFace();
+            this.contents.fontSize = this.standardFontSize();
+            this.resetTextColor();
+        };
+
+        // MV height semantics (deliberate overrides, like the color/padding
+        // family above): MV's fittingHeight is numLines * lineHeight() +
+        // padding*2 and MV's Window_Selectable.itemHeight === lineHeight().
+        // MZ changed fittingHeight to multiply by itemHeight() and padded
+        // itemHeight to lineHeight()+8. MV plugins overriding itemHeight
+        // (LeTBSWindows' Window_TBSPositioning: lineHeight*4) get
+        // catastrophically oversized windows under MZ semantics —
+        // fittingHeight(12) returned 1752px instead of ~504. The two
+        // overrides must ship together: MV fittingHeight alone would clip
+        // the last row of every list drawn at MZ's padded row height.
+        Window_Base.prototype.fittingHeight = function(numLines) {
+            return numLines * this.lineHeight() + this.standardPadding() * 2;
+        };
         if (global.Window_Selectable) {
-            Window_Selectable.prototype.spacing = function() { return 48; };
+            Window_Selectable.prototype.itemHeight = function() {
+                return this.lineHeight();
+            };
+        }
+
+        if (global.Window_Selectable) {
+            // MV's isOpenAndActive does NOT require visibility — MZ added
+            // `this.visible` to the check. MV plugins routinely HIDE a
+            // window while keeping it active as the input receiver
+            // (MOG_BattleCursor hides Window_BattleEnemy and drives target
+            // selection with its arrow sprite): under MZ the hidden window
+            // stops processing input entirely — Enter never confirms the
+            // target and the battle soft-locks. MV verbatim.
+            Window_Selectable.prototype.isOpenAndActive = function() {
+                return this.isOpen() && this.active;
+            };
+
+            // MZ draws a dark background box behind every selectable item
+            // (drawItemBackground/contentsBack). MV has no such thing — the
+            // boxes poke past decorative frame images MV plugins position
+            // around their windows (MOG_BattleHud's command layout). FOSSIL
+            // stubs this out for MV look as well. MV parity: no item boxes.
+            Window_Selectable.prototype.drawItemBackground = function(index) {};
+
+            // MV item geometry, verbatim (deliberate overrides, paired with
+            // the fittingHeight/itemHeight pair above). MZ's itemRect INSETS
+            // each cell by colSpacing/2 and rowSpacing/2 and shrinks it by
+            // the spacing — so selection highlights sat a few px off and
+            // undersized against what MV plugins draw (LeTBS positioning
+            // roster). MV's rect is flush and full-size, with spacing only
+            // BETWEEN columns. Base spacing is 12 in MV (48 is
+            // Window_ItemList/SkillList's own per-class override — it was
+            // wrongly applied to the base class here before, spreading
+            // Confirm/Cancel pairs absurdly far apart). Scroll offset uses
+            // MZ's scrollBaseX/Y so smooth-scrolled lists stay correct.
+            Window_Selectable.prototype.spacing = function() { return 12; };
+            Window_Selectable.prototype.itemWidth = function() {
+                return Math.floor((this.width - this.padding * 2 +
+                                   this.spacing()) / this.maxCols() - this.spacing());
+            };
+            Window_Selectable.prototype.itemRect = function(index) {
+                const rect = new Rectangle();
+                const maxCols = this.maxCols();
+                rect.width = this.itemWidth();
+                rect.height = this.itemHeight();
+                const sx = this.scrollBaseX ? this.scrollBaseX() : (this._scrollX || 0);
+                const sy = this.scrollBaseY ? this.scrollBaseY() : (this._scrollY || 0);
+                rect.x = index % maxCols * (rect.width + this.spacing()) - sx;
+                rect.y = Math.floor(index / maxCols) * rect.height - sy;
+                return rect;
+            };
             Window_Selectable.prototype.itemRectForText = function(index) {
-                return this.itemRectWithPadding ? this.itemRectWithPadding(index) : this.itemRect(index);
+                const rect = this.itemRect(index);
+                rect.x += this.textPadding();
+                rect.width -= this.textPadding() * 2;
+                return rect;
             };
             if (Window_Selectable.prototype.setHandler && !Window_Selectable.prototype.setHandler.__mvCompatWrapped) {
                 const originalSetHandler = Window_Selectable.prototype.setHandler;
@@ -557,13 +776,34 @@
             }
         }
         if (global.Window_Command) {
+            // MV's Window_Command.refresh RECREATES contents; MZ's does not
+            // (MZ windows are fixed-size from their rect). MV plugins resize
+            // a window then call refresh() expecting a fresh contents bitmap
+            // — YEP_SaveCore's confirm dialog set width to fit its text but
+            // kept drawing on the old 240px-wide contents, clipping the text
+            // ("Do you wish to load t…"). MV verbatim, deliberate override.
+            Window_Command.prototype.refresh = function() {
+                this.clearCommandList();
+                this.makeCommandList();
+                this.createContents();
+                Window_Selectable.prototype.refresh.call(this);
+            };
             Window_Command.prototype.windowWidth = Window_Command.prototype.windowWidth || function() { return 240; };
             Window_Command.prototype.windowHeight = Window_Command.prototype.windowHeight || function() {
                 return this.fittingHeight(this.numVisibleRows());
             };
-            Window_Command.prototype.numVisibleRows = Window_Command.prototype.numVisibleRows || function() {
-                return Math.ceil(this.maxItems() / Math.max(1, this.maxCols()));
-            };
+            // Own-property check, NOT `||`: MZ's Window_Selectable has an
+            // inherited numVisibleRows that derives rows FROM innerHeight
+            // (0 during construction) — the `||` saw it as present and MV's
+            // maxItems-based version (which window HEIGHT derives from)
+            // never installed. Result: every MV window sized via
+            // fittingHeight(numVisibleRows()) measured zero rows
+            // (LeTBS's "Begin Battle?" confirm lost its Confirm/Cancel row).
+            if (!Object.prototype.hasOwnProperty.call(Window_Command.prototype, "numVisibleRows")) {
+                Window_Command.prototype.numVisibleRows = function() {
+                    return Math.ceil(this.maxItems() / Math.max(1, this.maxCols()));
+                };
+            }
             if (Window_Command.prototype.maxItems && !Window_Command.prototype.maxItems.__mvCompatWrapped) {
                 const originalMaxItems = Window_Command.prototype.maxItems;
                 Window_Command.prototype.maxItems = function() {
@@ -582,9 +822,11 @@
             }
         }
         if (global.Window_HorzCommand) {
-            Window_HorzCommand.prototype.numVisibleRows = Window_HorzCommand.prototype.numVisibleRows || function() {
-                return 1;
-            };
+            if (!Object.prototype.hasOwnProperty.call(Window_HorzCommand.prototype, "numVisibleRows")) {
+                Window_HorzCommand.prototype.numVisibleRows = function() {
+                    return 1;
+                };
+            }
         }
         if (global.Window_Scrollable && Window_Scrollable.prototype.initialize &&
             !Window_Scrollable.prototype.initialize.__mvCompatScrollWrapped) {
@@ -614,7 +856,9 @@
         }
 
         if (global.Window_Message) {
-            Window_Message.prototype.numVisibleRows = Window_Message.prototype.numVisibleRows || function() { return 4; };
+            if (!Object.prototype.hasOwnProperty.call(Window_Message.prototype, "numVisibleRows")) {
+                Window_Message.prototype.numVisibleRows = function() { return 4; };
+            }
             Window_Message.prototype.windowWidth = Window_Message.prototype.windowWidth || function() {
                 return $gameSystem && $gameSystem.messageWidth ? $gameSystem.messageWidth() : Graphics.boxWidth;
             };
@@ -874,6 +1118,158 @@
                 return result;
             };
             Scene_Message.prototype.associateWindows.__mvCompatWrapped = true;
+        }
+    }
+
+    function installMapDataReloadCompatibility() {
+        // MV's Scene_Map.create ALWAYS reloads map data:
+        //   var mapId = this._transfer ? $gamePlayer.newMapId() : $gameMap.mapId();
+        //   DataManager.loadMapData(mapId);
+        // MZ only reloads on transfer or when $dataMap is null — safe in
+        // stock MZ (Scene_Title leaves $dataMap null) but WRONG when the
+        // title screen is itself a map (HIME_PreTitleEvents): loading a
+        // save then leaves $dataMap pointing at the TITLE map while
+        // $gameMap holds the saved map — every event refresh reads the
+        // wrong map's data (null lightData / null pages crashes, per-frame
+        // soft-locks). Restore MV semantics: reload whenever not covered
+        // by MZ's two branches.
+        if (!global.Scene_Map || !Scene_Map.prototype.create ||
+            Scene_Map.prototype.create.__mvCompatMapReload) return;
+        const originalCreate = Scene_Map.prototype.create;
+        Scene_Map.prototype.create = function() {
+            const result = originalCreate.apply(this, arguments);
+            if (!this._transfer && !this._lastMapWasNull &&
+                    global.$gameMap && $gameMap.mapId() > 0) {
+                DataManager.loadMapData($gameMap.mapId());
+            }
+            return result;
+        };
+        Scene_Map.prototype.create.__mvCompatMapReload = true;
+    }
+
+    function installStaleEventGuard() {
+        // A save made on an older version of a map can restore Game_Events
+        // whose $dataMap entries no longer exist (map edited since the
+        // save). Every plugin that touches event data during map start
+        // (MVNovaLighting lightData, CustomTranslationEngine pages) then
+        // crashes per frame — a soft-lock. The versionId check heals this
+        // on the Scene_Load path, but not mid-development workflows.
+        // Reconcile at onMapLoaded: null out events with missing data,
+        // warn, continue. Runs before createDisplayObjects/first update.
+        if (!global.Scene_Map || !Scene_Map.prototype.onMapLoaded ||
+            Scene_Map.prototype.onMapLoaded.__mvCompatStaleGuard) return;
+
+        const reconcileStaleEvents = function() {
+            if (!global.$gameMap || !global.$dataMap || !$gameMap._events) return 0;
+            const events = $gameMap._events;
+            let removed = 0;
+            for (let i = 0; i < events.length; i++) {
+                const ev = events[i];
+                if (ev && ev._eventId != null && !$dataMap.events[ev._eventId]) {
+                    events[i] = null;
+                    removed++;
+                }
+            }
+            if (removed > 0 && $gameMap.refreshTileEvents) {
+                $gameMap.refreshTileEvents();
+            }
+            return removed;
+        };
+
+        // Second line of defense at the exact crash point: Game_Map.refresh
+        // iterates events per frame when anything requests a refresh, and a
+        // stale event can appear AFTER map load (mid-scene $dataMap swaps).
+        if (global.Game_Map && Game_Map.prototype.refresh &&
+                !Game_Map.prototype.refresh.__mvCompatStaleGuard) {
+            const originalMapRefresh = Game_Map.prototype.refresh;
+            Game_Map.prototype.refresh = function() {
+                const removed = reconcileStaleEvents();
+                if (removed > 0) {
+                    console.warn("ReactorMVCompat: dropped " + removed +
+                        " stale event(s) at map refresh (map " + this.mapId() + ").");
+                }
+                return originalMapRefresh.apply(this, arguments);
+            };
+            Game_Map.prototype.refresh.__mvCompatStaleGuard = true;
+        }
+
+        const originalOnMapLoaded = Scene_Map.prototype.onMapLoaded;
+        Scene_Map.prototype.onMapLoaded = function() {
+            // BEFORE the original: the crash sites live inside its
+            // createDisplayObjects call. Skip transfers to a different
+            // map — performTransfer rebuilds _events from $dataMap anyway
+            // (and pre-transfer events would compare against the wrong
+            // map's data, producing false positives).
+            if (!this._transfer) {
+                const removed = reconcileStaleEvents();
+                if (removed > 0) {
+                    console.warn("ReactorMVCompat: dropped " + removed +
+                        " saved event(s) missing from the current map data " +
+                        "(map " + $gameMap.mapId() + " was edited since this " +
+                        "save was made). Re-save the game to clear this.");
+                }
+            }
+            return originalOnMapLoaded.apply(this, arguments);
+        };
+        Scene_Map.prototype.onMapLoaded.__mvCompatStaleGuard = true;
+    }
+
+    function installBoxSizeCompatibility() {
+        if (!global.Scene_Boot) return;
+        // MV plugins define the UI box through SceneManager._boxWidth /
+        // _boxHeight (YEP_CoreEngine assigns box and screen the SAME size,
+        // which puts the window layer at (0,0)). The MZ boot computes
+        // Graphics.boxWidth from $dataSystem.advanced — absent in MV data —
+        // so the fallback leaves an 8px difference and the window layer
+        // (and every window in it) renders shifted (4,4) relative to
+        // screen-anchored plugin art like MOG hud layouts.
+        var origAdjust = Scene_Boot.prototype.adjustBoxSize;
+        Scene_Boot.prototype.adjustBoxSize = function() {
+            origAdjust.apply(this, arguments);
+            if (typeof SceneManager._boxWidth === "number") {
+                Graphics.boxWidth = SceneManager._boxWidth;
+            }
+            if (typeof SceneManager._boxHeight === "number") {
+                Graphics.boxHeight = SceneManager._boxHeight;
+            }
+        };
+    }
+
+    function installSceneLayoutCompatibility() {
+        // MV scene geometry: the help window sits at the very top and the
+        // main area spans the rest of the screen — there is no reserved
+        // touch-button strip. MZ defaults to bottom help (isBottomHelpMode
+        // true), which breaks every MV plugin that positions windows from
+        // helpWindow.y + helpWindow.height: YEP_OptionsCore computed its
+        // options window at y = 616 + 96 = 712 — exactly off the bottom of
+        // the screen, its category window at height 0. Deliberate override,
+        // not a gap-fill: MV layout fidelity requires it. The touch cancel
+        // button keeps its top-right placement (buttonAreaTop stays 0 in
+        // top-button mode, so buttonY is unchanged).
+        if (global.Scene_Base) {
+            Scene_Base.prototype.isBottomHelpMode = function() {
+                return false;
+            };
+        }
+        if (global.Scene_MenuBase) {
+            Scene_MenuBase.prototype.helpAreaTop = function() {
+                return 0;
+            };
+            Scene_MenuBase.prototype.mainAreaHeight = function() {
+                return Graphics.boxHeight - this.helpAreaHeight();
+            };
+        }
+
+        // MV has no touch UI — MZ's cancel/menu Sprite_Buttons (the stray
+        // checkmark in the top-right corner of the map and every menu)
+        // never existed in MV games. Force the config off; the setter
+        // swallows config.rmmzsave restores too.
+        if (global.ConfigManager) {
+            Object.defineProperty(ConfigManager, "touchUI", {
+                get: function() { return false; },
+                set: function(value) { /* MV parity: never enable */ },
+                configurable: true
+            });
         }
     }
 
@@ -1141,6 +1537,67 @@
         }
     }
 
+    function installTextStateCompatibility() {
+        // MV plugins (YEP_CoreEngine among them) REPLACE Window_Base.drawTextEx
+        // with MV's implementation: a bare `{index, x, y, left}` textState and
+        // a processCharacter loop with no flush — MV drew each character
+        // immediately. MZ's processCharacter instead accumulates characters
+        // into textState.buffer and only draws in flushTextState(), which
+        // additionally requires textState.drawing === true. The combination
+        // means every drawTextEx call silently draws NOTHING (and MV-style
+        // textWidthEx measures 0, corrupting layouts). Upgrade MV-style
+        // textStates in place and flush at end-of-text, so any MV-style
+        // drawTextEx replacement on any window class works unmodified.
+        if (!global.Window_Base || !Window_Base.prototype.processCharacter ||
+            Window_Base.prototype.processCharacter.__mvCompatTextState) return;
+
+        const originalProcessCharacter = Window_Base.prototype.processCharacter;
+        Window_Base.prototype.processCharacter = function(textState) {
+            if (textState && textState.drawing === undefined &&
+                    !textState.__mvCompatTextState) {
+                // MZ createTextState always sets drawing (true, or false for
+                // textSizeEx measurement) — absent means an MV-style state.
+                textState.__mvCompatTextState = true;
+                textState.drawing = true;
+                if (textState.buffer === undefined) textState.buffer = "";
+                if (textState.rtl === undefined) textState.rtl = false;
+                if (textState.startX === undefined) {
+                    // MV processNewLine resets x to .left; MZ's to .startX
+                    textState.startX = textState.left !== undefined
+                        ? textState.left : textState.x;
+                }
+                if (textState.startY === undefined) textState.startY = textState.y;
+                if (textState.outputWidth === undefined) textState.outputWidth = 0;
+                if (textState.outputHeight === undefined) textState.outputHeight = 0;
+                if (textState.width === undefined && this.contents) {
+                    textState.width = this.contents.width - textState.x;
+                }
+            }
+            originalProcessCharacter.apply(this, arguments);
+            if (textState && textState.__mvCompatTextState &&
+                    textState.index >= textState.text.length) {
+                // MV loops end without flushing; draw the tail of the buffer.
+                this.flushTextState(textState);
+            }
+        };
+        Window_Base.prototype.processCharacter.__mvCompatTextState = true;
+
+        // MV's processNormalCharacter, as a capture target only: MZ never
+        // calls it and neither do we (deliberately — routing it FOSSIL-style
+        // would double-draw with plugins like VE_ControlText that overwrite
+        // it with immediate drawing; the buffered upgrade above already
+        // draws their text). But MV plugins alias/wrap it at load, and a
+        // wrapper capturing undefined crashes the moment it runs.
+        if (!Window_Base.prototype.processNormalCharacter) {
+            Window_Base.prototype.processNormalCharacter = function(textState) {
+                var c = textState.text[textState.index++];
+                var w = this.textWidth(c);
+                this.contents.drawText(c, textState.x, textState.y, w * 2, textState.height);
+                textState.x += w;
+            };
+        }
+    }
+
     function installAudioCacheCompatibility() {
         if (!global.WebAudio || !WebAudio.prototype || WebAudio.prototype.__mvCacheDestroyGuard) return;
         WebAudio.prototype.__mvCacheDestroyGuard = true;
@@ -1176,8 +1633,48 @@
     // clobber an existing implementation.
     function installMVApiGapFills() {
         var def = function(obj, name, fn) {
-            if (obj && !obj[name]) obj[name] = fn;
+            // Own-property check, NOT an inherited lookup: MV subclasses
+            // override metrics their base class also defines
+            // (Window_ActorCommand.windowWidth 192 vs Window_Command 240).
+            // An inherited-lookup guard sees the base method through the
+            // prototype chain and skips the subclass override entirely, so
+            // every battle window inherits the base metric.
+            if (obj && !Object.prototype.hasOwnProperty.call(obj, name)) {
+                obj[name] = fn;
+            }
         };
+
+        // ---- Game_Map.tileEvents (MV name) <-> _tileEvents (MZ rename).
+        // MV saves serialize the field as `tileEvents`; Reactor reads
+        // `_tileEvents` — every loaded MV save had it undefined, crashing
+        // the first vanilla passability check before a map transfer
+        // (tileEventsXy: reading 'filter' of undefined via moveStraight;
+        // usually masked by AltimitMovement, surfaced by event movement).
+        // A prototype accessor makes MV save deserialization WRITE THROUGH
+        // to the MZ field (JsonEx assigns properties after the prototype
+        // is restored, so the setter fires), and lets MV plugins that read
+        // $gameMap.tileEvents keep working. ----
+        if (global.Game_Map && !("tileEvents" in Game_Map.prototype)) {
+            Object.defineProperty(Game_Map.prototype, "tileEvents", {
+                get: function() { return this._tileEvents; },
+                set: function(value) { this._tileEvents = value; },
+                configurable: true
+            });
+        }
+        if (global.DataManager && DataManager.extractSaveContents &&
+                !DataManager.extractSaveContents.__mvCompatTileEvents) {
+            const originalExtractSaveContents = DataManager.extractSaveContents;
+            DataManager.extractSaveContents = function(contents) {
+                const result = originalExtractSaveContents.apply(this, arguments);
+                // safety net for saves carrying neither field
+                if (global.$gameMap && !$gameMap._tileEvents &&
+                        typeof $gameMap.refreshTileEvents === "function") {
+                    try { $gameMap.refreshTileEvents(); } catch (e) { /* map not ready */ }
+                }
+                return result;
+            };
+            DataManager.extractSaveContents.__mvCompatTileEvents = true;
+        }
 
         // ---- Game_Followers (referenced by 48 plugins) ----
         if (global.Game_Followers) {
@@ -1228,6 +1725,34 @@
                 if (global.FontManager && FontManager.load) FontManager.load(name, url);
             });
             def(Graphics, "_createFontLoader", function() {});
+        }
+
+        // ---- SceneManager MV frame-loop API (MZ moved rendering into the
+        // Graphics/PIXI ticker and deleted these). They must exist BEFORE
+        // plugins load: TweenJS_MVPatch drives the ENTIRE tween engine from
+        // a renderScene wrapper (captured undefined -> TWEEN.update() never
+        // ran -> every LeTBS projectile froze at its origin, soft-locking
+        // tactical battles), and YEP_FpsSynchOption's fps-synch-off path
+        // calls both renderScene() and requestUpdate() directly. The
+        // defaults are no-ops — the ticker already renders and schedules —
+        // they exist as alias-chain anchors. renderScene is then invoked
+        // once per frame from updateMain below so wrappers actually run. ----
+        if (global.SceneManager) {
+            def(SceneManager, "renderScene", function() {
+                // rendering happens in the Graphics ticker under MZ
+            });
+            def(SceneManager, "requestUpdate", function() {
+                // scheduling happens in the Graphics ticker under MZ
+            });
+            if (SceneManager.updateMain && !SceneManager.updateMain.__mvCompatRenderHook) {
+                const originalUpdateMain = SceneManager.updateMain;
+                SceneManager.updateMain = function() {
+                    const result = originalUpdateMain.apply(this, arguments);
+                    if (this.renderScene) this.renderScene();
+                    return result;
+                };
+                SceneManager.updateMain.__mvCompatRenderHook = true;
+            }
         }
 
         // ---- AudioManager.masterVolume (MV property; MZ dropped it) ----
@@ -1543,17 +2068,53 @@
             });
         }
 
+        // ---- MV battle window metrics (MV windows size themselves via
+        // windowWidth/windowHeight/numVisibleRows in initialize; MZ scenes
+        // pass a Rectangle instead and deleted the methods. Plugins that
+        // wrap initialize MV-style with NO arguments — MOG_BattleHud's
+        // Window_BattleStatus wrapper drops the scene's rect entirely —
+        // fall through to makeRect, which needs these to avoid a
+        // fullscreen default. All values are MV corescript verbatim;
+        // plugin overrides load later and win.) ----
+        if (global.Window_BattleStatus) {
+            def(Window_BattleStatus.prototype, "windowWidth", function() {
+                return Graphics.boxWidth - 192;
+            });
+            def(Window_BattleStatus.prototype, "windowHeight", function() {
+                return this.fittingHeight(this.numVisibleRows());
+            });
+            def(Window_BattleStatus.prototype, "numVisibleRows", function() {
+                return 4;
+            });
+        }
+        [global.Window_PartyCommand, global.Window_ActorCommand].forEach(function(cls) {
+            if (!cls) return;
+            def(cls.prototype, "windowWidth", function() { return 192; });
+            def(cls.prototype, "numVisibleRows", function() { return 4; });
+        });
+        if (global.Window_BattleEnemy) {
+            def(Window_BattleEnemy.prototype, "windowWidth", function() {
+                return Graphics.boxWidth - 192;
+            });
+            def(Window_BattleEnemy.prototype, "windowHeight", function() {
+                return this.fittingHeight(this.numVisibleRows());
+            });
+            def(Window_BattleEnemy.prototype, "numVisibleRows", function() {
+                return 4;
+            });
+        }
+
         // ---- Window_BattleStatus MV area layout ----
         if (global.Window_BattleStatus) {
             var WBS = Window_BattleStatus.prototype;
             def(WBS, "gaugeAreaWidth", function() { return 330; });
             def(WBS, "basicAreaRect", function(index) {
-                var rect = this.itemRectWithPadding ? this.itemRectWithPadding(index) : this.itemRect(index);
+                var rect = this.itemRectForText(index);
                 rect.width -= this.gaugeAreaWidth() + 15;
                 return rect;
             });
             def(WBS, "gaugeAreaRect", function(index) {
-                var rect = this.itemRectWithPadding ? this.itemRectWithPadding(index) : this.itemRect(index);
+                var rect = this.itemRectForText(index);
                 rect.x += rect.width - this.gaugeAreaWidth();
                 rect.width = this.gaugeAreaWidth();
                 return rect;
@@ -1609,6 +2170,61 @@
                 else this.hideButtons();
             });
         });
+        // ---- Window_Gold MV metrics (MV self-sizes in initialize(x, y);
+        // MZ deleted windowWidth/windowHeight so MV-style construction
+        // defaulted to a fullscreen-tall gold window — YEP_ShopMenuCore
+        // then computed its status window height as boxHeight minus the
+        // gold window's 712px = NEGATIVE, wrecking the shop layout). ----
+        if (global.Window_Gold) {
+            def(Window_Gold.prototype, "windowWidth", function() { return 240; });
+            def(Window_Gold.prototype, "windowHeight", function() {
+                return this.fittingHeight(1);
+            });
+        }
+
+        // ---- MV shop window constructor signatures. The generic MV-args
+        // rect adapter assumes (x, y, width, height); MV's Window_ShopBuy
+        // is (x, y, HEIGHT, shopGoods) and Window_ShopNumber is
+        // (x, y, HEIGHT) — arg 3 landed in rect.width and the goods array
+        // became rect.height (NaN): mis-sized windows covering the screen
+        // and "_shopGoods is not iterable" when YEP_ShopMenuCore builds
+        // the shop MV-style. ----
+        if (global.Window_ShopBuy && !Window_ShopBuy.prototype.initialize.__mvCompatShopSig) {
+            const originalShopBuyInit = Window_ShopBuy.prototype.initialize;
+            Window_ShopBuy.prototype.initialize = function(x, y, height, shopGoods) {
+                if (!isRectangle(x) && Array.isArray(shopGoods)) {
+                    const width = typeof this.windowWidth === "function"
+                        ? this.windowWidth() : 456;
+                    const rect = new Rectangle(Number(x) || 0, Number(y) || 0,
+                        width, Number(height) || 456);
+                    const result = originalShopBuyInit.call(this, rect);
+                    // MV tail, verbatim
+                    this._shopGoods = shopGoods;
+                    this._money = 0;
+                    this.refresh();
+                    this.select(0);
+                    return result;
+                }
+                return originalShopBuyInit.apply(this, arguments);
+            };
+            Window_ShopBuy.prototype.initialize.__mvCompatShopSig = true;
+            def(Window_ShopBuy.prototype, "windowWidth", function() { return 456; });
+        }
+        if (global.Window_ShopNumber && !Window_ShopNumber.prototype.initialize.__mvCompatShopSig) {
+            const originalShopNumberInit = Window_ShopNumber.prototype.initialize;
+            Window_ShopNumber.prototype.initialize = function(x, y, height) {
+                if (!isRectangle(x) && arguments.length === 3 && typeof height === "number") {
+                    const width = typeof this.windowWidth === "function"
+                        ? this.windowWidth() : 456;
+                    return originalShopNumberInit.call(this,
+                        new Rectangle(Number(x) || 0, Number(y) || 0, width, height));
+                }
+                return originalShopNumberInit.apply(this, arguments);
+            };
+            Window_ShopNumber.prototype.initialize.__mvCompatShopSig = true;
+            def(Window_ShopNumber.prototype, "windowWidth", function() { return 456; });
+        }
+
         if (global.Window_ShopNumber) {
             def(Window_ShopNumber.prototype, "itemY", function() {
                 return Math.round(this.contentsHeight() / 2 - this.lineHeight() * 1.5);
@@ -1616,6 +2232,76 @@
             def(Window_ShopNumber.prototype, "priceY", function() {
                 return Math.round(this.contentsHeight() / 2 + this.lineHeight() / 2);
             });
+        }
+
+        // ---- BattleManager status window (MV API; MZ moved refresh
+        // responsibility onto the windows themselves). VE_ActiveTimeBattle
+        // calls BattleManager.refreshStatus() from startActionInput. ----
+        if (global.BattleManager) {
+            def(BattleManager, "setStatusWindow", function(statusWindow) {
+                this._statusWindow = statusWindow;
+            });
+            def(BattleManager, "refreshStatus", function() {
+                if (this._statusWindow) this._statusWindow.refresh();
+            });
+
+            // MV actor-selection model: index-based (_actorIndex +
+            // changeActor); MZ is reference-based (_currentActor +
+            // changeCurrentActor). Bridge with an accessor so MV plugins
+            // that read (PSYCHRONIC_ClassItems) or write (YEP_PartySystem)
+            // _actorIndex directly stay in sync with MZ's _currentActor,
+            // which the Reactor corescript keeps using untouched.
+            if (!("_actorIndex" in BattleManager)) {
+                Object.defineProperty(BattleManager, "_actorIndex", {
+                    get: function() {
+                        if (!this._currentActor || !global.$gameParty) return -1;
+                        return $gameParty.members().indexOf(this._currentActor);
+                    },
+                    set: function(index) {
+                        this._currentActor = (index >= 0 && global.$gameParty
+                            ? $gameParty.members()[index]
+                            : null) || null;
+                    },
+                    configurable: true
+                });
+            }
+            // MV verbatim; _actorIndex accessor above keeps _currentActor
+            // in sync. VE_ActiveTimeBattle.startActionInput calls both.
+            def(BattleManager, "changeActor", function(newActorIndex, lastActorActionState) {
+                var lastActor = this.actor();
+                this._actorIndex = newActorIndex;
+                var newActor = this.actor();
+                if (lastActor) {
+                    lastActor.setActionState(lastActorActionState);
+                }
+                if (newActor) {
+                    newActor.setActionState("inputting");
+                }
+            });
+            def(BattleManager, "clearActor", function() {
+                this.changeActor(-1, "");
+            });
+            // MZ dropped _turnForced; undefined reads as MV's default false.
+            def(BattleManager, "isForcedTurn", function() {
+                return !!this._turnForced;
+            });
+            // Reactor's Scene_Battle.createDisplayObjects (MZ model) never
+            // calls setStatusWindow. setLogWindow IS called there, after
+            // createAllWindows, so the status window exists — and unlike
+            // createStatusWindow/createDisplayObjects it is not replaced
+            // wholesale by battle plugins (anchor lesson from the
+            // battleback fix).
+            if (BattleManager.setLogWindow && !BattleManager.setLogWindow.__mvCompatStatusHook) {
+                const originalSetLogWindow = BattleManager.setLogWindow;
+                BattleManager.setLogWindow = function(logWindow) {
+                    originalSetLogWindow.apply(this, arguments);
+                    const scene = global.SceneManager && SceneManager._scene;
+                    if (scene && scene._statusWindow) {
+                        this.setStatusWindow(scene._statusWindow);
+                    }
+                };
+                BattleManager.setLogWindow.__mvCompatStatusHook = true;
+            }
         }
 
         // ---- Scenes ----
@@ -1636,15 +2322,121 @@
             });
         }
 
-        // ---- Sprite_Damage MV digit metrics (harmless 0 when the MV
-        // damage sheet isn't in use) ----
+        // ---- Sprite_Damage: full MV restoration (deliberate override).
+        // MZ redrew damage popups as plain text; MV renders them from the
+        // img/system/Damage.png sheet — which this game customizes, so the
+        // MZ look was visibly wrong. MV plugins also depend on the MV
+        // internals: LeTBS_DamagePopupEX dereferences this._damageBitmap
+        // (crash: reading measureTextWidth of undefined) and calls the MV
+        // two-arg createDigits(baseRow, value) — MZ's one-arg version
+        // would render the baseRow as the number. VE_DamagePopup's
+        // Sprite_CustomDamage subclasses this prototype at load, so the
+        // MV shape must be in place before plugins. All MV verbatim. ----
         if (global.Sprite_Damage) {
-            def(Sprite_Damage.prototype, "digitWidth", function() {
+            Sprite_Damage.prototype.initialize = function() {
+                Sprite.prototype.initialize.call(this);
+                this._duration = 90;
+                this._flashColor = [0, 0, 0, 0];
+                this._flashDuration = 0;
+                this._damageBitmap = ImageManager.loadSystem("Damage");
+            };
+            Sprite_Damage.prototype.setup = function(target) {
+                var result = target.result();
+                if (result.missed || result.evaded) {
+                    this.createMiss();
+                } else if (result.hpAffected) {
+                    this.createDigits(0, result.hpDamage);
+                } else if (target.isAlive() && result.mpDamage !== 0) {
+                    this.createDigits(2, result.mpDamage);
+                }
+                if (result.critical) {
+                    this.setupCriticalEffect();
+                }
+            };
+            Sprite_Damage.prototype.setupCriticalEffect = function() {
+                this._flashColor = [255, 0, 0, 160];
+                this._flashDuration = 60;
+            };
+            Sprite_Damage.prototype.digitWidth = function() {
                 return this._damageBitmap ? this._damageBitmap.width / 10 : 0;
-            });
-            def(Sprite_Damage.prototype, "digitHeight", function() {
+            };
+            Sprite_Damage.prototype.digitHeight = function() {
                 return this._damageBitmap ? this._damageBitmap.height / 5 : 0;
-            });
+            };
+            Sprite_Damage.prototype.createMiss = function() {
+                var w = this.digitWidth();
+                var h = this.digitHeight();
+                var sprite = this.createChildSprite();
+                sprite.setFrame(0, 4 * h, 4 * w, h);
+                sprite.dy = 0;
+            };
+            Sprite_Damage.prototype.createDigits = function(baseRow, value) {
+                var string = Math.abs(value).toString();
+                var row = baseRow + (value < 0 ? 1 : 0);
+                var w = this.digitWidth();
+                var h = this.digitHeight();
+                for (var i = 0; i < string.length; i++) {
+                    var sprite = this.createChildSprite();
+                    var n = Number(string[i]);
+                    sprite.setFrame(n * w, row * h, w, h);
+                    sprite.x = (i - (string.length - 1) / 2) * w;
+                    sprite.dy = -i;
+                }
+            };
+            Sprite_Damage.prototype.createChildSprite = function() {
+                var sprite = new Sprite();
+                sprite.bitmap = this._damageBitmap;
+                sprite.anchor.x = 0.5;
+                sprite.anchor.y = 1;
+                sprite.y = -40;
+                sprite.ry = sprite.y;
+                this.addChild(sprite);
+                return sprite;
+            };
+            // MZ's destroy() destroys each child's bitmap — correct for MZ,
+            // where every popup draws its own bitmap, but fatal here: all MV
+            // digit sprites share the ONE cached system Damage bitmap. The
+            // first popup destroyed would kill the texture under every other
+            // live popup (v8 renders a destroyed source -> whole-stage render
+            // crash -> black screen). Destroy only the sprites.
+            Sprite_Damage.prototype.destroy = function(options) {
+                Sprite.prototype.destroy.call(this, options);
+            };
+            Sprite_Damage.prototype.update = function() {
+                Sprite.prototype.update.call(this);
+                if (this._duration > 0) {
+                    this._duration--;
+                    for (var i = 0; i < this.children.length; i++) {
+                        this.updateChild(this.children[i]);
+                    }
+                }
+                this.updateFlash();
+                this.updateOpacity();
+            };
+            Sprite_Damage.prototype.updateChild = function(sprite) {
+                sprite.dy += 0.5;
+                sprite.ry += sprite.dy;
+                if (sprite.ry >= 0) {
+                    sprite.ry = 0;
+                    sprite.dy *= -0.6;
+                }
+                sprite.y = Math.round(sprite.ry);
+                sprite.setBlendColor(this._flashColor);
+            };
+            Sprite_Damage.prototype.updateFlash = function() {
+                if (this._flashDuration > 0) {
+                    var d = this._flashDuration--;
+                    this._flashColor[3] *= (d - 1) / d;
+                }
+            };
+            Sprite_Damage.prototype.updateOpacity = function() {
+                if (this._duration < 10) {
+                    this.opacity = 255 * this._duration / 10;
+                }
+            };
+            Sprite_Damage.prototype.isPlaying = function() {
+                return this._duration > 0;
+            };
         }
     }
 
@@ -2329,10 +3121,100 @@
         installFinalSaveCompatibility();
         installFinalBitmapCompatibility();
         installFinalBattleLogCompatibility();
+        installFinalAnimationCompatibility();
+        installFinalLightingCompatibility();
+        installFinalBattleHudCompatibility();
         installGraphicsCompatibility();
         installJsonExCompatibility();
         installDataManagerCompatibility();
         installStorageManagerCompatibility();
+    }
+
+    function installFinalAnimationCompatibility() {
+        // MV plugins tune the cell-animation engine on Sprite_Animation;
+        // MZ renamed that class Sprite_AnimationMV (Sprite_Animation is
+        // now the Effekseer player), so those overrides never take effect
+        // on the sprites that actually play MV animations. Propagate the
+        // safe tuning methods to the MZ host class after plugins load:
+        // YEP_CoreEngine's setupRate ("Animation Rate" speed param) and
+        // MOG_BattleHud's updatePosition (screen-position centering).
+        // Never propagate the per-instance dispatchers installed by
+        // installAnimationSpriteCompatibility (__mvCompatDispatch).
+        if (!global.Sprite_Animation || !global.Sprite_AnimationMV) return;
+        ["setupRate", "setupDuration", "updatePosition"].forEach(function(name) {
+            const fn = Sprite_Animation.prototype[name];
+            if (typeof fn === "function" && !fn.__mvCompatDispatch &&
+                    Sprite_AnimationMV.prototype[name] !== fn) {
+                Sprite_AnimationMV.prototype[name] = fn;
+            }
+        });
+    }
+
+    function installFinalBattleHudCompatibility() {
+        // MOG_BattleHud replaces the battle status UI with HUD sprites and
+        // hides Window_BattleStatus in its initialize wrap (visible=false).
+        // MV's Scene_Battle only ever open()s the status window, so the
+        // hide held; Reactor's MZ scene flow calls show() (visible=true) in
+        // five places, resurrecting a half-styled MZ status window over
+        // MOG's HUD (clipped card at the screen edge in battles). Pin the
+        // MV behavior when MOG's HUD owns the status display.
+        if (!global.Imported || !Imported.MOG_BattleHud) return;
+        if (!global.Window_BattleStatus ||
+            Window_BattleStatus.prototype.show.__mvCompatMogHide) return;
+        Window_BattleStatus.prototype.show = function() {
+            // MOG_BattleHud owns the battle status display
+        };
+        Window_BattleStatus.prototype.show.__mvCompatMogHide = true;
+    }
+
+    function installFinalLightingCompatibility() {
+        // MVNovaLighting paints its light sprites into a shared
+        // RenderTexture from a custom Container.render() override — PIXI
+        // v8's scene graph never calls per-instance render(), so the light
+        // map stayed empty: the ambient-darkness filter worked (dark
+        // scenes) but no light ever appeared. The display-list update
+        // chain DOES reach LightMapContainer (direct child of the
+        // spriteset), so drive both the light-sprite updates and the
+        // texture paint from an update() method, using v8's
+        // render-to-texture API outside the render pass.
+        const Nova = global.Anisoft && global.Anisoft.Nova;
+        if (!Nova || !Nova.LightMapContainer) return;
+        const LMC = Nova.LightMapContainer;
+        if (LMC.prototype.update && LMC.prototype.update.__reactorV8Light) return;
+
+        const updateTree = function(node) {
+            for (const child of node.children) {
+                if (typeof child.update === "function") {
+                    child.update();
+                } else if (child.children && child.children.length > 0) {
+                    updateTree(child);
+                }
+            }
+        };
+        LMC.prototype.update = function() {
+            const renderContainer = this._lightMapRenderContainer;
+            if (!renderContainer || !Nova.LightMapRenderTexture || !global.$gameMap) return;
+            updateTree(renderContainer);
+            renderContainer.x = -$gameMap.displayX() * $gameMap.tileWidth();
+            renderContainer.y = -$gameMap.displayY() * $gameMap.tileHeight();
+            renderContainer.renderable = true;
+            const renderer = Graphics._app && Graphics._app.renderer;
+            if (renderer) {
+                if (global.PIXI && PIXI.TextureSource) {
+                    // v8 signature
+                    renderer.render({
+                        container: renderContainer,
+                        target: Nova.LightMapRenderTexture,
+                        clear: true
+                    });
+                } else {
+                    renderer.render(renderContainer, Nova.LightMapRenderTexture, true, null);
+                }
+            }
+            renderContainer.renderable = false;
+        };
+        LMC.prototype.update.__reactorV8Light = true;
+        console.log("ReactorMVCompat: MVNovaLighting v8 light-map renderer installed");
     }
 
     function installFinalSaveCompatibility() {
@@ -2433,11 +3315,49 @@
             Window_Message.prototype.updateShowFast.__mvCompatHardWaitWrapped = true;
         }
 
+        if (Window_Message.prototype.onEndOfText && !Window_Message.prototype.onEndOfText.__mvCompatFlushWrapped) {
+            const originalOnEndOfText = Window_Message.prototype.onEndOfText;
+            Window_Message.prototype.onEndOfText = function() {
+                // MV-style updateMessage loops call onEndOfText (which nulls
+                // _textState) in the same frame that processed the final
+                // character — the post-updateMessage flush below never sees
+                // it, so every message lost its last character(s). Flush
+                // before the textState dies.
+                const textState = this._textState;
+                if (textState && textState.drawing && textState.buffer &&
+                        this.flushTextState &&
+                        textState.buffer !== (this.createTextBuffer
+                            ? this.createTextBuffer(textState.rtl) : "")) {
+                    this.flushTextState(textState);
+                }
+                return originalOnEndOfText.apply(this, arguments);
+            };
+            Window_Message.prototype.onEndOfText.__mvCompatFlushWrapped = true;
+        }
+
         if (Window_Message.prototype.updateMessage && !Window_Message.prototype.updateMessage.__mvCompatHardWaitWrapped) {
             const originalUpdateMessage = Window_Message.prototype.updateMessage;
             Window_Message.prototype.updateMessage = function() {
                 if (this.__mvCompatHardWait > 0) return true;
-                return originalUpdateMessage.apply(this, arguments);
+                const result = originalUpdateMessage.apply(this, arguments);
+                // MV-style updateMessage replacements (YEP_X_MessageSpeedOpt
+                // is a wholesale MV port) break on waits (\. \|), on the
+                // per-character typing delay, and at end-of-text WITHOUT
+                // flushing MZ's buffered characters — MV drew each character
+                // immediately, so its loop has no flush anywhere. Buffered
+                // text only appeared at the next \n or escape code, and the
+                // final segment of every message (the whole message, if it
+                // has no control characters) never drew at all. Flush any
+                // leftover buffer once per frame; with per-character typing
+                // this reproduces MV's letter-by-letter appearance exactly.
+                const textState = this._textState;
+                if (textState && textState.drawing && textState.buffer &&
+                        this.flushTextState &&
+                        textState.buffer !== (this.createTextBuffer
+                            ? this.createTextBuffer(textState.rtl) : "")) {
+                    this.flushTextState(textState);
+                }
+                return result;
             };
             Window_Message.prototype.updateMessage.__mvCompatHardWaitWrapped = true;
         }
@@ -2481,6 +3401,81 @@
             if (this.addChildToBack) this.addChildToBack(this._backSprite);
             else this.addChildAt(this._backSprite, 0);
         };
+    }
+
+    function installBattleFieldOffsetCompatibility() {
+        // MZ positions the battle field 24px higher than MV
+        // (battleFieldOffsetY, to balance its bottom status window). MV
+        // plugins parent their UI to _battleField (VE_ActiveTimeBattle's
+        // ATB bar at configured y=35 rendered at y=11 with its frame top
+        // clipped off-screen) and battler/troop coordinates in MV-authored
+        // games assume MV's zero offset.
+        if (global.Spriteset_Battle && Spriteset_Battle.prototype.battleFieldOffsetY) {
+            Spriteset_Battle.prototype.battleFieldOffsetY = function() {
+                return 0;
+            };
+        }
+    }
+
+    function installBattleInputGateCompatibility() {
+        // MV's Scene_Battle.updateBattleProcess GATES the entire battle
+        // update on !isAnyInputWindowActive() — that gate IS how MV-era
+        // ATB systems implement "full wait": while the player is choosing
+        // a command no BattleManager.update (and no ATB tick wrapped onto
+        // it) ever runs. MZ removed the gate and updates every frame,
+        // passing a timeActive flag only MZ's own TPB reads — so under
+        // Reactor, VE_ActiveTimeBattle's ATB kept flowing during input:
+        // enemies acted mid-selection and the state collision soft-locked
+        // the battle on attack confirm. MV verbatim (Reactor already
+        // carries MV-correct isAnyInputWindowActive/changeInputWindow).
+        // Installed before plugins so VE's updateBattleProcess wrapper
+        // captures the gated version.
+        if (!global.Scene_Battle || !Scene_Battle.prototype.updateBattleProcess ||
+            Scene_Battle.prototype.updateBattleProcess.__mvCompatGate) return;
+        Scene_Battle.prototype.updateBattleProcess = function() {
+            if (!this.isAnyInputWindowActive() || BattleManager.isAborting() ||
+                    BattleManager.isBattleEnd()) {
+                BattleManager.update(this.isTimeActive ? this.isTimeActive() : true);
+                this.changeInputWindow();
+            }
+        };
+        Scene_Battle.prototype.updateBattleProcess.__mvCompatGate = true;
+    }
+
+    function installBattleTurnFlowCompatibility() {
+        // MZ's processTurn calls this.endAction() when a battler has NO
+        // current action (stunned, all actions spent) — a code path MV
+        // NEVER ran: MV's no-action branch does the onAllActionsEnd /
+        // display* sequence and never touches the battle log's action-end
+        // machinery. MV battle plugins (VE_BattleMotions) wrap
+        // performActionEnd assuming a startAction always preceded it;
+        // MZ's extra endAction hands them a null current action →
+        // "Cannot read properties of null (reading 'action')" every time
+        // any battler skips a turn. Restore MV's branch verbatim
+        // (refreshStatus is our gap-fill; the action branch is identical
+        // in MV and MZ). Installed before plugins load so their
+        // processTurn wrappers stack on top.
+        if (!global.BattleManager || !BattleManager.processTurn ||
+            BattleManager.processTurn.__mvCompatWrapped) return;
+        BattleManager.processTurn = function() {
+            const subject = this._subject;
+            const action = subject.currentAction();
+            if (action) {
+                action.prepare();
+                if (action.isValid()) {
+                    this.startAction();
+                }
+                subject.removeCurrentAction();
+            } else {
+                subject.onAllActionsEnd();
+                this.refreshStatus();
+                this._logWindow.displayAutoAffectedStatus(subject);
+                this._logWindow.displayCurrentState(subject);
+                this._logWindow.displayRegeneration(subject);
+                this._subject = this.getNextSubject();
+            }
+        };
+        BattleManager.processTurn.__mvCompatWrapped = true;
     }
 
     function installBattlebackCompatibility() {
@@ -2673,17 +3668,25 @@
     installInterpreterCompatibility();
     installWindowCompatibility();
     installSceneCompatibility();
+    installBoxSizeCompatibility();
+    installSceneLayoutCompatibility();
+    installMapDataReloadCompatibility();
+    installStaleEventGuard();
     installSpriteBaseCompatibility();
     installButtonCompatibility();
     installAnimationCompatibility();
     installAnimationSpriteCompatibility();
     installMVApiGapFills();
+    installTextStateCompatibility();
     installAudioCacheCompatibility();
     installMessageSubWindowsCompatibility();
     installImageCompatibility();
     installTilemapCompatibility();
     installAudioFontCompatibility();
     installPluginManagerCompatibility();
+    installBattleTurnFlowCompatibility();
+    installBattleFieldOffsetCompatibility();
+    installBattleInputGateCompatibility();
     installBattlebackCompatibility();
     installBattleFieldOrderCompatibility();
     installBattleStatusSlotCompatibility();

@@ -451,6 +451,18 @@ class DatabaseEditorUI {
                 idSpan.className = 'database-list-id';
                 idSpan.textContent = `#${entry.id || '?'}`;
 
+                if (this.listIconTypes.includes(type)) {
+                    const iconSpan = document.createElement('span');
+                    iconSpan.className = 'database-list-icon';
+                    this.applyListIcon(iconSpan, entry, type);
+                    item.appendChild(iconSpan);
+                    nameSpan.style.flex = '1';
+                    nameSpan.style.minWidth = '0';
+                    nameSpan.style.overflow = 'hidden';
+                    nameSpan.style.textOverflow = 'ellipsis';
+                    nameSpan.style.whiteSpace = 'nowrap';
+                }
+
                 item.appendChild(nameSpan);
                 item.appendChild(idSpan);
 
@@ -851,6 +863,87 @@ class DatabaseEditorUI {
         }
         this.wireLiveDatabaseNameSync(detailEl, entry);
         if (window.I18n) window.I18n.applyText(detailEl);
+    }
+
+    get listIconTypes() {
+        return ['skills', 'items', 'weapons', 'armors', 'states', 'actors', 'enemies'];
+    }
+
+    /**
+     * Paint an entry's mini icon into a .database-list-icon span:
+     * IconSet cell for icon-bearing entries, face crop for actors.
+     */
+    applyListIcon(span, entry, type) {
+        span.style.backgroundImage = 'none';
+        span.style.imageRendering = '';
+        span.classList.remove('has-icon');
+        if (typeof nw === 'undefined' || !this.currentProject) return;
+        const path = require('path');
+        const SIZE = 20;
+        if (type === 'actors') {
+            if (!entry.faceName) return;
+            const facePath = 'file://' + path.join(this.currentProject.path, 'img', 'faces', entry.faceName + '.png');
+            const idx = entry.faceIndex || 0;
+            span.style.backgroundImage = `url("${encodeURI(facePath)}")`;
+            span.style.backgroundSize = `${4 * SIZE}px ${2 * SIZE}px`;
+            span.style.backgroundPosition = `-${(idx % 4) * SIZE}px -${Math.floor(idx / 4) * SIZE}px`;
+            span.classList.add('has-icon');
+            return;
+        }
+        if (type === 'enemies') {
+            if (!entry.battlerName) return;
+            const fs = require('fs');
+            let battlerDir = null;
+            for (const dir of ['enemies', 'sv_enemies', 'characters']) {
+                if (fs.existsSync(path.join(this.currentProject.path, 'img', dir, entry.battlerName + '.png'))) {
+                    battlerDir = dir;
+                    break;
+                }
+            }
+            if (!battlerDir) return;
+            span.style.imageRendering = 'auto';
+            const url = `url("${encodeURI('file://' + path.join(this.currentProject.path, 'img', battlerDir, entry.battlerName + '.png'))}")`;
+            if (battlerDir === 'characters') {
+                // Charset-style battler: crop the front-facing idle frame
+                const isSingle = /^[!$]*\$/.test(entry.battlerName);
+                const img = new Image();
+                img.onload = () => {
+                    const cols = isSingle ? 3 : 12;
+                    const rows = isSingle ? 4 : 8;
+                    const fw = img.width / cols;
+                    const fh = img.height / rows;
+                    const scale = SIZE / Math.max(fw, fh);
+                    span.style.backgroundImage = url;
+                    span.style.backgroundSize = `${img.width * scale}px ${img.height * scale}px`;
+                    span.style.backgroundPosition =
+                        `${-(1 * fw * scale) + (SIZE - fw * scale) / 2}px ${(SIZE - fh * scale) / 2}px`;
+                    span.classList.add('has-icon');
+                };
+                img.src = 'file://' + path.join(this.currentProject.path, 'img', battlerDir, entry.battlerName + '.png');
+            } else {
+                // Singular battler image: shrink the whole thing into the cell
+                span.style.backgroundImage = url;
+                span.style.backgroundSize = 'contain';
+                span.style.backgroundPosition = 'center';
+                span.classList.add('has-icon');
+            }
+            return;
+        }
+        const idx = entry.iconIndex || 0;
+        if (idx <= 0) return;
+        const iconSetPath = 'file://' + path.join(this.currentProject.path, 'img', 'system', 'IconSet.png');
+        span.style.backgroundImage = `url("${encodeURI(iconSetPath)}")`;
+        span.style.backgroundSize = `${16 * SIZE}px auto`;
+        span.style.backgroundPosition = `-${(idx % 16) * SIZE}px -${Math.floor(idx / 16) * SIZE}px`;
+        span.classList.add('has-icon');
+    }
+
+    refreshListIcon(entry, type) {
+        const listEl = document.getElementById('database-list');
+        const item = Array.from(listEl?.querySelectorAll('.database-list-item') || [])
+            .find(el => el.dataset.entryId === String(entry.id || ''));
+        const iconSpan = item?.querySelector('.database-list-icon');
+        if (iconSpan) this.applyListIcon(iconSpan, entry, type);
     }
 
     wireLiveDatabaseNameSync(detailEl, entry) {
@@ -1609,8 +1702,9 @@ class DatabaseEditorUI {
                     break;
             }
 
-            // Refresh the detail view
+            // Refresh the detail view and the entry's mini icon in the list
             this.showDatabaseDetail(entry, type);
+            this.refreshListIcon(entry, type);
             this.updateStatus('Icon updated');
         }, iconSetPath);
     }

@@ -30,7 +30,7 @@ const RR_LANGUAGES = [
     { id: 'tr', name: 'Turkish', nativeName: 'Türkçe', flag: '🇹🇷' }
 ];
 
-const RR_APP_VERSION = '0.94.3';
+const RR_APP_VERSION = '0.94.4';
 
 const RR_DB_TYPE_KEYS = {
     actors: 'menu.actors', classes: 'menu.classes', skills: 'menu.skills', items: 'menu.items',

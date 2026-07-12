@@ -80,14 +80,20 @@
         const rect = triggerEl.getBoundingClientRect();
         const popup = document.createElement('div');
         popup.className = 'rr-shim-popup';
-        // Fixed positioning, anchored to the trigger.
+        // Fixed positioning, anchored to the trigger; open upward when the
+        // space below is tight, and clamp the height to the viewport.
+        const spaceBelow = window.innerHeight - rect.bottom - 10;
+        const spaceAbove = rect.top - 10;
+        const openUp = spaceBelow < 180 && spaceAbove > spaceBelow;
+        const maxH = Math.min(360, Math.max(140, openUp ? spaceAbove : spaceBelow));
         popup.style.cssText = `
             position: fixed;
             left: ${rect.left}px;
-            top: ${rect.bottom + 2}px;
+            ${openUp ? `bottom: ${window.innerHeight - rect.top + 2}px;` : `top: ${rect.bottom + 2}px;`}
             min-width: ${rect.width}px;
-            max-height: 280px;
-            overflow-y: auto;
+            max-height: ${maxH}px;
+            display: flex;
+            flex-direction: column;
             background: var(--color-bg-panel);
             border: 1px solid var(--color-accent-border-strong);
             border-radius: var(--radius-md);
@@ -95,6 +101,11 @@
             box-shadow: var(--shadow-popup);
             font-family: inherit;
         `;
+
+        // Scrollable list container (header/search stays pinned above it).
+        const list = document.createElement('div');
+        list.style.cssText = 'overflow-y: auto; flex: 1 1 auto; min-height: 0;';
+        list.addEventListener('wheel', (ev) => ev.stopPropagation());
 
         // Render one row per option group/option.
         const renderOption = (opt) => {
@@ -111,6 +122,7 @@
                 white-space: nowrap;
             `;
             item.textContent = opt.textContent;
+            item.dataset.optText = (opt.textContent || '').toLowerCase();
             if (!opt.disabled) {
                 item.addEventListener('mouseenter', () => {
                     if (!isActive) item.style.background = 'var(--color-accent-tint-15)';
@@ -130,6 +142,36 @@
             return item;
         };
 
+        // Type-to-filter search for long lists.
+        const optionCount = selectEl.querySelectorAll('option').length;
+        if (optionCount > 15) {
+            const search = document.createElement('input');
+            search.type = 'text';
+            search.placeholder = (window.I18n ? window.I18n.tText('Search...') : 'Search...');
+            search.style.cssText = `
+                margin: 6px;
+                padding: 5px 8px;
+                background: var(--color-bg-deep);
+                border: 1px solid var(--color-border-input);
+                border-radius: 3px;
+                color: var(--color-text-strong);
+                font-size: var(--font-size-base);
+                font-family: inherit;
+                outline: none;
+                flex: 0 0 auto;
+            `;
+            search.addEventListener('input', () => {
+                const term = search.value.toLowerCase();
+                Array.from(list.children).forEach(row => {
+                    row.style.display = !term || (row.dataset.optText || '').includes(term) ? '' : 'none';
+                });
+            });
+            // Keep focus interactions inside the popup from closing it.
+            search.addEventListener('mousedown', (ev) => ev.stopPropagation());
+            popup.appendChild(search);
+            setTimeout(() => search.focus(), 0);
+        }
+
         // Walk children: support <optgroup> too.
         Array.from(selectEl.children).forEach(child => {
             if (child.tagName === 'OPTGROUP') {
@@ -145,18 +187,19 @@
                     letter-spacing: 0.5px;
                 `;
                 header.textContent = child.label;
-                popup.appendChild(header);
-                Array.from(child.children).forEach(opt => popup.appendChild(renderOption(opt)));
+                list.appendChild(header);
+                Array.from(child.children).forEach(opt => list.appendChild(renderOption(opt)));
             } else if (child.tagName === 'OPTION') {
-                popup.appendChild(renderOption(child));
+                list.appendChild(renderOption(child));
             }
         });
 
+        popup.appendChild(list);
         document.body.appendChild(popup);
         openPopup = popup;
 
         // Auto-scroll to the currently-selected option so the user lands on it.
-        const activeItem = popup.querySelector('div[style*="accent-tint-25"]');
+        const activeItem = list.querySelector('div[style*="accent-tint-25"]');
         if (activeItem && activeItem.scrollIntoView) {
             activeItem.scrollIntoView({ block: 'nearest' });
         }
@@ -169,9 +212,13 @@
         const escClose = (ev) => {
             if (ev.key === 'Escape') closeOpenPopup();
         };
-        const scrollClose = () => {
+        const scrollClose = (ev) => {
             // Popup is fixed-positioned; if the page scrolls, the popup would
-            // detach from the trigger. Easier to just close.
+            // detach from the trigger. Easier to just close. But the popup's
+            // OWN list scrolling also fires scroll events (this listener is
+            // capture-phase on window) — closing on those made long lists
+            // impossible to scroll.
+            if (ev && ev.target && popup.contains(ev.target)) return;
             closeOpenPopup();
         };
         // Single source of truth for tearing down the document-level listeners.

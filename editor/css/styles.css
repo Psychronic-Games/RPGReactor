@@ -735,6 +735,21 @@
             font-size: 11px;
         }
 
+        .database-list-icon {
+            flex: 0 0 20px;
+            width: 20px;
+            height: 20px;
+            margin-right: 8px;
+            background-repeat: no-repeat;
+            image-rendering: pixelated;
+            border-radius: 2px;
+        }
+
+        .database-list-icon.has-icon {
+            box-shadow: 0 0 0 1px var(--color-accent-border);
+            background-color: var(--color-bg-deep);
+        }
+
         .database-detail {
             flex: 1;
             padding: 0;
@@ -818,17 +833,221 @@
             left: 3px;
         }
 
-        /* Grid layout for database sections */
+        /* Grid layout for database sections: two equal columns, sections
+         * keep their natural height (no stretching to match the tallest
+         * neighbor), single column on narrow windows. */
         .database-sections-grid {
             display: grid;
-            grid-template-columns: minmax(300px, 400px) 1fr;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
             gap: 16px;
             max-width: 100%;
             box-sizing: border-box;
         }
 
+        /* Paired sections stretch to equal heights; the section content
+         * fills the card so flexible fields (description/note textareas)
+         * can absorb the leftover space instead of leaving a void. */
+        .database-sections-grid > .database-section {
+            display: flex;
+            flex-direction: column;
+        }
+        .database-sections-grid > .database-section > .database-section-content {
+            flex: 1 1 auto;
+            display: flex;
+            flex-direction: column;
+        }
+        .database-sections-grid > .database-section > .database-section-content > textarea.database-field-value {
+            flex: 1 1 auto;
+            min-height: 60px;
+        }
+
+        @media (max-width: 1100px) {
+            .database-sections-grid {
+                grid-template-columns: minmax(0, 1fr);
+            }
+        }
+
         .database-section.full-width {
             grid-column: 1 / -1;
+        }
+
+        /* Aligned label/field rows for database forms. Fixed-width label
+         * columns keep every field's left edge on the same vertical line
+         * across all rows; paired rows split the remaining space 50/50 so
+         * fields stay symmetrical. */
+        .db-form {
+            display: grid;
+            grid-template-columns: 100px minmax(0, 1fr);
+            gap: 10px 12px;
+            align-items: center;
+        }
+        .db-form > label,
+        .db-form .db-row-pair > label {
+            color: var(--color-text-muted);
+            font-size: 13px;
+            font-weight: 600;
+            text-align: right;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .db-form > .db-row-pair {
+            grid-column: 1 / -1;
+            display: grid;
+            grid-template-columns: 100px minmax(0, 1fr) 100px minmax(0, 1fr);
+            gap: 10px 12px;
+            align-items: center;
+        }
+        .db-form > .db-full {
+            grid-column: 1 / -1;
+        }
+        /* General-section inner grid (icon column | form). Stretches so
+         * the form can fill the card height; icon column stays top. */
+        .database-section-content > .db-general-grid {
+            flex: 1 1 auto;
+            display: grid;
+            grid-template-columns: auto 1fr;
+            gap: 18px;
+            align-items: stretch;
+            min-height: 0;
+        }
+        .db-general-grid > :first-child {
+            align-self: start;
+        }
+
+        /* Form that fills its section card: the .db-row-grow row (its
+         * textarea) absorbs whatever height the card has left over. */
+        .db-form.db-fill {
+            flex: 1 1 auto;
+            display: flex;
+            flex-direction: column;
+            align-items: stretch;
+            gap: 10px;
+        }
+        .db-form.db-fill > .db-row-grow {
+            flex: 1 1 auto;
+            display: flex;
+        }
+        .db-form.db-fill > .db-row-grow > .db-col {
+            flex: 1;
+        }
+        .db-form.db-fill > .db-row-grow > .db-col textarea {
+            flex: 1 1 auto;
+            min-height: 48px;
+        }
+
+        /* Inline row: several short label+field groups sharing one line,
+         * wrapping gracefully when the panel narrows. */
+        .db-form > .db-row-inline {
+            grid-column: 1 / -1;
+            display: flex;
+            align-items: center;
+            gap: 10px 14px;
+            flex-wrap: wrap;
+        }
+        .db-form > .db-row-inline > label {
+            color: var(--color-text-muted);
+            font-size: 13px;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+        /* Lead row: label flush against the panel's left edge, field
+         * filling the rest of the line. For a panel's primary field. */
+        .db-form > .db-row-lead {
+            grid-column: 1 / -1;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .db-form > .db-row-lead > label {
+            color: var(--color-text-muted);
+            font-size: 13px;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+        .db-form > .db-row-lead > input,
+        .db-form > .db-row-lead > textarea {
+            flex: 1;
+            width: auto;
+            max-width: none;
+        }
+        .db-form > .db-row-lead.db-row-top {
+            align-items: flex-start;
+        }
+        .db-form > .db-row-lead.db-row-top > label {
+            margin-top: 6px;
+        }
+
+        /* Column row: equal-width cells, label stacked above its field.
+         * Symmetric layout for clusters of short fields on one line. */
+        .db-form > .db-row-cols {
+            grid-column: 1 / -1;
+            display: grid;
+            grid-auto-flow: column;
+            grid-auto-columns: minmax(0, 1fr);
+            gap: 10px 14px;
+            align-items: end;
+        }
+        .db-row-cols > .db-col {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            min-width: 0;
+        }
+        .db-row-cols > .db-col > label {
+            color: var(--color-text-muted);
+            font-size: 12px;
+            font-weight: 600;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .db-row-cols > .db-col select,
+        .db-row-cols > .db-col input[type="text"],
+        .db-row-cols > .db-col input[type="number"],
+        .db-row-cols > .db-col textarea,
+        .db-row-cols > .db-col .rr-shim-wrapper,
+        .db-row-cols > .db-col button.db-anim-picker {
+            width: 100%;
+            max-width: none;
+        }
+        .db-row-cols > .db-col input[type="checkbox"] {
+            margin: 7px 0;
+        }
+
+        /* Keep each label+field pair together when the row wraps. */
+        .db-row-inline .db-inline-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .db-row-inline .db-inline-group > label {
+            color: var(--color-text-muted);
+            font-size: 13px;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+        .db-form input[type="text"],
+        .db-form input[type="number"],
+        .db-form select,
+        .db-form textarea {
+            width: 100%;
+            box-sizing: border-box;
+            min-width: 0;
+        }
+        /* Content-appropriate widths: fields stay on the shared left edge
+         * but don't stretch beyond what their content needs. Text inputs
+         * and textareas keep filling (free-form content). */
+        .db-form select,
+        .db-form .rr-shim-wrapper,
+        .db-form button.db-anim-picker {
+            max-width: 240px;
+        }
+        .db-form input[type="number"] {
+            max-width: 110px;
+        }
+        .db-form input[type="checkbox"] {
+            justify-self: start;
         }
 
         .database-section {
@@ -925,6 +1144,19 @@
         .database-field-value:read-only {
             background-color: var(--color-bg-menubar);
             color: var(--color-text-muted);
+        }
+
+        /* Animation-picker triggers are <button>s styled as fields; buttons
+           also match :read-only, so restore the editable-field look. */
+        button.database-field-value.db-anim-picker {
+            background-color: var(--color-bg-panel);
+            color: var(--color-text-strong);
+            text-align: left;
+            cursor: pointer;
+            width: 100%;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
         }
 
         /* Textareas (description, note, profile) — constrain to vertical-only
@@ -1327,4 +1559,315 @@
         .map-props-btn.primary:hover {
             background-color: var(--color-accent-tint-15);
             border-color: var(--color-accent-bright);
+        }
+
+        /* Browser editor layout. Desktop NW.js keeps its deliberate 1280x720 minimum. */
+        html.rr-web,
+        html.rr-web body,
+        html.rr-web #app {
+            width: 100%;
+            height: 100dvh;
+            min-width: 0;
+            min-height: 0;
+        }
+
+        html.rr-web #html-menu-bar {
+            max-width: 100vw;
+            overflow-x: auto;
+            overflow-y: hidden;
+            scrollbar-width: thin;
+        }
+
+        html.rr-web #html-menu-bar > * {
+            flex-shrink: 0;
+        }
+
+        html.rr-web #toolbar {
+            max-width: 100vw;
+            overflow-x: auto;
+            overflow-y: hidden;
+            scrollbar-width: thin;
+        }
+
+        html.rr-web #welcome-screen {
+            overflow: auto;
+        }
+
+        html.rr-web #splash-screen {
+            padding: 16px;
+        }
+
+        html.rr-web #splash-screen img {
+            width: auto !important;
+            max-width: 100%;
+            max-height: calc(100dvh - 72px);
+            object-fit: contain;
+            margin-bottom: 12px !important;
+        }
+
+        html.rr-web #sidebar {
+            width: clamp(260px, 30vw, 380px);
+            min-width: 0;
+            flex: 0 1 clamp(260px, 30vw, 380px);
+        }
+
+        html.rr-web #map-info-left {
+            max-width: calc(100% - 230px) !important;
+        }
+
+        html.rr-web #map-info-right {
+            right: 8px !important;
+            gap: 8px !important;
+        }
+
+        html.rr-web #event-editor-modal,
+        html.rr-web #map-properties-modal,
+        html.rr-web #image-picker-modal,
+        html.rr-web #database-viewer,
+        html.rr-web .modal {
+            padding: 8px;
+            overflow: auto;
+        }
+
+        html.rr-web #event-editor-modal > div,
+        html.rr-web #map-properties-modal > div,
+        html.rr-web #image-picker-modal > div,
+        html.rr-web .database-window,
+        html.rr-web .modal-content {
+            width: min(100%, 1400px) !important;
+            min-width: 0 !important;
+            max-width: calc(100vw - 16px) !important;
+            height: min(100%, 1000px) !important;
+            max-height: calc(100dvh - 16px) !important;
+        }
+
+        html.rr-web .modal-body {
+            min-height: 0;
+            overflow: auto;
+        }
+
+        html.rr-web .rr-web-save-banner {
+            right: 8px !important;
+            bottom: 6px !important;
+            max-width: calc(100vw - 16px);
+        }
+
+        html.rr-web #web-playtest-modal {
+            padding: 8px !important;
+        }
+
+        html.rr-web #web-playtest-modal > div:first-child {
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+
+        @media (max-width: 1100px) {
+            html.rr-web #toolbar {
+                --toolbar-icon-size: 22px !important;
+                padding: 5px;
+                gap: 2px;
+            }
+
+            html.rr-web #toolbar .tool-button {
+                padding: 3px 4px;
+            }
+
+            html.rr-web #toolbar .toolbar-label {
+                display: none;
+            }
+
+            html.rr-web #toolbar .toolbar-separator {
+                margin: 0 2px;
+            }
+
+            html.rr-web #sidebar {
+                width: clamp(220px, 32vw, 320px);
+                flex-basis: clamp(220px, 32vw, 320px);
+            }
+
+            html.rr-web .database-navigation {
+                width: 150px;
+                flex: 0 0 150px;
+            }
+
+            html.rr-web #database-list-panel {
+                min-width: 180px;
+                max-width: 180px;
+            }
+
+            html.rr-web .database-sections-grid {
+                grid-template-columns: minmax(0, 1fr);
+            }
+        }
+
+        @media (max-width: 900px) {
+            html.rr-web .html-menu-item {
+                padding: 7px 10px !important;
+            }
+
+            html.rr-web #map-info-left {
+                left: 8px !important;
+                max-width: calc(100% - 150px) !important;
+                gap: 6px !important;
+            }
+
+            html.rr-web #map-info-right .map-info-item:not(:last-child) {
+                display: none;
+            }
+
+            html.rr-web .event-editor-content {
+                flex-direction: column !important;
+                overflow: auto !important;
+            }
+
+            html.rr-web .event-editor-content > * {
+                width: 100% !important;
+                min-width: 0 !important;
+                height: auto !important;
+                flex: 0 0 auto !important;
+                min-height: 300px;
+            }
+
+            html.rr-web #map-properties-modal > div > div:nth-child(2) > div {
+                grid-template-columns: minmax(0, 1fr) !important;
+            }
+
+            html.rr-web .database-content {
+                flex-direction: column;
+            }
+
+            html.rr-web .database-navigation {
+                width: 100%;
+                max-width: none;
+                max-height: 82px;
+                flex: 0 0 auto;
+                display: flex;
+                overflow-x: auto;
+                overflow-y: hidden;
+                border-right: none;
+                border-bottom: 1px solid var(--color-border);
+            }
+
+            html.rr-web .database-nav-item {
+                flex: 0 0 auto;
+                padding: 8px 10px;
+                border-right: 1px solid var(--color-bg-menubar);
+                border-bottom: none;
+                white-space: nowrap;
+            }
+
+            html.rr-web .database-nav-item.active {
+                border-left: none;
+                border-bottom: 3px solid var(--color-accent-border-strong);
+                padding-left: 10px;
+            }
+
+            html.rr-web #image-picker-modal > div > div:nth-child(2) {
+                flex-direction: column;
+            }
+
+            html.rr-web #image-picker-list {
+                width: 100% !important;
+                height: 34%;
+                flex: 0 0 34%;
+                border-right: none !important;
+                border-bottom: 1px solid var(--color-border);
+            }
+        }
+
+        @media (max-width: 600px) {
+            html.rr-web #editor-ui {
+                flex-direction: column;
+            }
+
+            html.rr-web #sidebar {
+                width: 100%;
+                max-width: none;
+                height: clamp(190px, 38dvh, 300px);
+                flex: 0 0 clamp(190px, 38dvh, 300px);
+                border-right: none;
+                border-bottom: 1px solid var(--color-border);
+            }
+
+            html.rr-web #sidebar .sidebar-section {
+                min-height: 54px !important;
+            }
+
+            html.rr-web #sidebar .sidebar-header {
+                padding: 5px 8px;
+                font-size: 10px;
+            }
+
+            html.rr-web #welcome-screen {
+                padding: 20px 12px;
+                align-items: flex-start;
+            }
+
+            html.rr-web #welcome-screen h1 {
+                font-size: 32px !important;
+            }
+
+            html.rr-web #welcome-screen > div > div[style*="display: flex"] {
+                flex-wrap: wrap;
+                gap: 10px !important;
+                margin-bottom: 24px !important;
+            }
+
+            html.rr-web #map-info-left {
+                max-width: calc(100% - 16px) !important;
+            }
+
+            html.rr-web #map-info-right {
+                display: none !important;
+            }
+
+            html.rr-web .database-entries-content {
+                flex-direction: column;
+            }
+
+            html.rr-web #database-list-panel {
+                width: 100%;
+                min-width: 0;
+                max-width: none;
+                flex: 0 0 32%;
+                border-right: none;
+                border-bottom: 1px solid var(--color-border);
+            }
+
+            html.rr-web .database-footer {
+                padding: 7px;
+                gap: 5px;
+            }
+
+            html.rr-web .database-footer-btn {
+                flex: 1;
+                padding: 6px 8px;
+            }
+
+            html.rr-web .rr-web-save-banner span {
+                flex: 1;
+                min-width: 0;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }
+        }
+
+        @media (max-height: 650px) {
+            html.rr-web #toolbar {
+                --toolbar-icon-size: 18px !important;
+                padding-block: 3px;
+            }
+
+            html.rr-web #sidebar .sidebar-section {
+                min-height: 48px !important;
+            }
+
+            html.rr-web .sidebar-header {
+                padding-block: 5px;
+            }
+
+            html.rr-web .database-window {
+                height: calc(100dvh - 16px) !important;
+            }
         }

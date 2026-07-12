@@ -38,59 +38,62 @@ class DatabaseSkillEditor {
         // Get elements from system data
         const elementNames = this.databaseManager.getSystem()?.elements || [];
 
-        // ── General Section ──
-        const generalWrapper = document.createElement('div');
-        generalWrapper.style.marginBottom = '16px';
+        // Weapon types for the required-weapon selects
+        const weaponTypeNames = this.databaseManager.getSystem()?.weaponTypes || [];
 
+        // Animation picker: -1 = Normal Attack, 0 = None; opens AnimationPickerModal
+        const animations = this.databaseManager.getAnimations ? this.databaseManager.getAnimations() : [];
+        const animationLabel = (current) => AnimationPickerModal.label(animations, current);
+
+        // ── General Section ──
         const generalSection = document.createElement('div');
         generalSection.className = 'database-section';
         generalSection.innerHTML = `
             <div class="database-section-header">General</div>
-            <div class="database-section-content" style="display: flex; gap: 16px;">
-                <div style="display: flex; flex-direction: column; align-items: center; min-width: 60px;">
-                    <label class="database-field-label" style="margin-bottom: 4px;">Icon:</label>
+            <div class="database-section-content"><div class="db-general-grid">
+                <div style="display: flex; flex-direction: column; align-items: center; gap: 6px;">
+                    <label style="font-size: 11px; color: var(--color-text-muted); font-weight: 600;">Icon</label>
                     <div id="skill-icon-container-${skill.id}"></div>
                 </div>
-                <div style="flex: 1;">
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label class="database-field-label">Name:</label>
+                <div class="db-form db-fill">
+                    <div class="db-row-cols">
+                        <span class="db-col">
+                            <label>Name</label>
                             <input type="text" class="database-field-value" value="${skill.name || ''}" data-field="name" data-skill-id="${skill.id}">
-                        </div>
+                        </span>
                     </div>
-                    <div class="form-row">
-                        <label class="database-field-label">Description:</label>
+
+                    <div class="db-row-cols db-row-grow">
+                        <span class="db-col">
+                            <label>Description</label>
+                            <textarea class="database-field-value" rows="2" data-field="description" data-skill-id="${skill.id}">${skill.description || ''}</textarea>
+                        </span>
                     </div>
-                    <div class="form-row">
-                        <textarea class="database-field-value" rows="2" style="width: 100%;" data-field="description" data-skill-id="${skill.id}">${skill.description || ''}</textarea>
-                    </div>
-                    <div class="form-row">
-                        <div class="form-group-fixed">
-                            <label class="database-field-label">Skill Type:</label>
-                            <select class="database-field-value" style="width: 150px;" data-field="stypeId" data-skill-id="${skill.id}">
+
+                    <div class="db-row-cols">
+                        <span class="db-col">
+                            <label>Skill Type</label>
+                            <select class="database-field-value" data-field="stypeId" data-skill-id="${skill.id}">
                                 ${skillTypeNames.map((name, idx) => idx > 0 && name ? `<option value="${idx}" ${skill.stypeId === idx ? 'selected' : ''}>${name}</option>` : '').join('')}
                             </select>
-                        </div>
-                        <div class="form-group-fixed">
-                            <label class="database-field-label">Scope:</label>
-                            <select class="database-field-value" style="width: 150px;" data-field="scope" data-skill-id="${skill.id}">
+                        </span>
+                        <span class="db-col">
+                            <label>Scope</label>
+                            <select class="database-field-value" data-field="scope" data-skill-id="${skill.id}">
                                 ${scopeNames.map((name, idx) => `<option value="${idx}" ${skill.scope === idx ? 'selected' : ''}>${name}</option>`).join('')}
                             </select>
-                        </div>
-                    </div>
-                    <div class="form-row">
-                        <div class="form-group-fixed">
-                            <label class="database-field-label">Occasion:</label>
-                            <select class="database-field-value" style="width: 120px;" data-field="occasion" data-skill-id="${skill.id}">
+                        </span>
+                        <span class="db-col">
+                            <label>Occasion</label>
+                            <select class="database-field-value" data-field="occasion" data-skill-id="${skill.id}">
                                 ${occasionNames.map((name, idx) => `<option value="${idx}" ${skill.occasion === idx ? 'selected' : ''}>${name}</option>`).join('')}
                             </select>
-                        </div>
+                        </span>
                     </div>
-                </div>
+                </div></div>
             </div>
         `;
-        generalWrapper.appendChild(generalSection);
-        wrapper.appendChild(generalWrapper);
+        // General flows into the two-column grid with the other sections
 
         // Add icon to the designated container after the DOM is ready
         setTimeout(() => {
@@ -100,9 +103,10 @@ class DatabaseSkillEditor {
             }
         }, 0);
 
-        // Grid wrapper for sections below general
+        // Grid wrapper for all sections
         const gridWrapper = document.createElement('div');
         gridWrapper.className = 'database-sections-grid';
+        gridWrapper.appendChild(generalSection);
 
         // ── Invocation Section ──
         const invocationSection = document.createElement('div');
@@ -110,47 +114,47 @@ class DatabaseSkillEditor {
         invocationSection.innerHTML = `
             <div class="database-section-header">Invocation</div>
             <div class="database-section-content">
-                <div class="form-row">
-                    <div class="form-group-fixed">
-                        <label class="database-field-label">MP Cost:</label>
-                        <input type="number" class="database-field-value database-field-value-small" value="${skill.mpCost || 0}" data-field="mpCost" data-skill-id="${skill.id}">
+                <div class="db-form">
+                    <div class="db-row-pair">
+                        <label>MP Cost</label>
+                        <input type="number" class="database-field-value" value="${skill.mpCost || 0}" data-field="mpCost" data-skill-id="${skill.id}">
+                        <label>TP Cost</label>
+                        <input type="number" class="database-field-value" value="${skill.tpCost || 0}" data-field="tpCost" data-skill-id="${skill.id}">
                     </div>
-                    <div class="form-group-fixed">
-                        <label class="database-field-label">TP Cost:</label>
-                        <input type="number" class="database-field-value database-field-value-small" value="${skill.tpCost || 0}" data-field="tpCost" data-skill-id="${skill.id}">
+                    <div class="db-row-pair">
+                        <label>TP Gain</label>
+                        <input type="number" class="database-field-value" value="${skill.tpGain || 0}" data-field="tpGain" data-skill-id="${skill.id}">
+                        <label>Speed</label>
+                        <input type="number" class="database-field-value" value="${skill.speed || 0}" data-field="speed" data-skill-id="${skill.id}">
                     </div>
-                </div>
-                <div class="form-row">
-                    <div class="form-group-fixed">
-                        <label class="database-field-label">TP Gain:</label>
-                        <input type="number" class="database-field-value database-field-value-small" value="${skill.tpGain || 0}" data-field="tpGain" data-skill-id="${skill.id}">
+                    <div class="db-row-pair">
+                        <label>Success %</label>
+                        <input type="number" class="database-field-value" value="${skill.successRate != null ? skill.successRate : 100}" data-field="successRate" data-skill-id="${skill.id}">
+                        <label>Repeats</label>
+                        <input type="number" class="database-field-value" value="${skill.repeats != null ? skill.repeats : 1}" data-field="repeats" data-skill-id="${skill.id}" min="1">
                     </div>
-                    <div class="form-group-fixed">
-                        <label class="database-field-label">Speed:</label>
-                        <input type="number" class="database-field-value database-field-value-small" value="${skill.speed || 0}" data-field="speed" data-skill-id="${skill.id}">
-                    </div>
-                </div>
-                <div class="form-row">
-                    <div class="form-group-fixed">
-                        <label class="database-field-label">Success Rate:</label>
-                        <input type="number" class="database-field-value database-field-value-small" value="${skill.successRate != null ? skill.successRate : 100}" data-field="successRate" data-skill-id="${skill.id}">
-                        <span style="color: var(--color-text-muted); margin-left: 4px;">%</span>
-                    </div>
-                    <div class="form-group-fixed">
-                        <label class="database-field-label">Repeats:</label>
-                        <input type="number" class="database-field-value database-field-value-small" value="${skill.repeats != null ? skill.repeats : 1}" data-field="repeats" data-skill-id="${skill.id}" min="1">
-                    </div>
-                </div>
-                <div class="form-row">
-                    <div class="form-group-fixed">
-                        <label class="database-field-label">Hit Type:</label>
-                        <select class="database-field-value" style="width: 120px;" data-field="hitType" data-skill-id="${skill.id}">
+                    <div class="db-row-pair">
+                        <label>Hit Type</label>
+                        <select class="database-field-value" data-field="hitType" data-skill-id="${skill.id}">
                             ${hitTypeNames.map((name, idx) => `<option value="${idx}" ${skill.hitType === idx ? 'selected' : ''}>${name}</option>`).join('')}
                         </select>
+                        <label>${tt('Animation')}</label>
+                        <span style="display: flex; min-width: 0;">
+                            <button type="button" class="database-field-value db-anim-picker" data-target-field="animationId" data-allow-normal-attack="1" data-rr-i18n-skip>${animationLabel(skill.animationId || 0)}</button>
+                            <input type="hidden" value="${skill.animationId || 0}" data-field="animationId" data-skill-id="${skill.id}">
+                        </span>
                     </div>
-                    <div class="form-group-fixed">
-                        <label class="database-field-label">Animation ID:</label>
-                        <input type="number" class="database-field-value database-field-value-small" value="${skill.animationId || 0}" data-field="animationId" data-skill-id="${skill.id}">
+                    <div class="db-row-pair">
+                        <label>${tt('Req. Weapon 1')}</label>
+                        <select class="database-field-value" data-field="requiredWtypeId1" data-skill-id="${skill.id}">
+                            <option value="0" ${!skill.requiredWtypeId1 ? 'selected' : ''}>${tt('None')}</option>
+                            ${weaponTypeNames.map((name, idx) => idx > 0 && name ? `<option value="${idx}" ${skill.requiredWtypeId1 === idx ? 'selected' : ''}>${name}</option>` : '').join('')}
+                        </select>
+                        <label>${tt('Req. Weapon 2')}</label>
+                        <select class="database-field-value" data-field="requiredWtypeId2" data-skill-id="${skill.id}">
+                            <option value="0" ${!skill.requiredWtypeId2 ? 'selected' : ''}>${tt('None')}</option>
+                            ${weaponTypeNames.map((name, idx) => idx > 0 && name ? `<option value="${idx}" ${skill.requiredWtypeId2 === idx ? 'selected' : ''}>${name}</option>` : '').join('')}
+                        </select>
                     </div>
                 </div>
             </div>
@@ -163,29 +167,15 @@ class DatabaseSkillEditor {
         messageSection.innerHTML = `
             <div class="database-section-header">Message</div>
             <div class="database-section-content">
-                <div class="form-row">
-                    <div class="form-group">
-                        <label class="database-field-label">Message 1:</label>
-                        <input type="text" class="database-field-value" value="${skill.message1 || ''}" data-field="message1" data-skill-id="${skill.id}">
-                    </div>
-                </div>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label class="database-field-label">Message 2:</label>
-                        <input type="text" class="database-field-value" value="${skill.message2 || ''}" data-field="message2" data-skill-id="${skill.id}">
-                    </div>
-                </div>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label class="database-field-label">Message 3:</label>
-                        <input type="text" class="database-field-value" value="${skill.message3 || ''}" data-field="message3" data-skill-id="${skill.id}">
-                    </div>
-                </div>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label class="database-field-label">Message 4:</label>
-                        <input type="text" class="database-field-value" value="${skill.message4 || ''}" data-field="message4" data-skill-id="${skill.id}">
-                    </div>
+                <div class="db-form">
+                    <label>Message 1</label>
+                    <input type="text" class="database-field-value" value="${skill.message1 || ''}" data-field="message1" data-skill-id="${skill.id}">
+                    <label>Message 2</label>
+                    <input type="text" class="database-field-value" value="${skill.message2 || ''}" data-field="message2" data-skill-id="${skill.id}">
+                    <label>Message 3</label>
+                    <input type="text" class="database-field-value" value="${skill.message3 || ''}" data-field="message3" data-skill-id="${skill.id}">
+                    <label>Message 4</label>
+                    <input type="text" class="database-field-value" value="${skill.message4 || ''}" data-field="message4" data-skill-id="${skill.id}">
                 </div>
             </div>
         `;
@@ -195,40 +185,38 @@ class DatabaseSkillEditor {
         const damage = skill.damage || { type: 0, elementId: -1, formula: '', variance: 20, critical: false };
         const damageSection = document.createElement('div');
         damageSection.className = 'database-section';
-        damageSection.style.gridColumn = '1 / -1';
         damageSection.innerHTML = `
             <div class="database-section-header">Damage</div>
             <div class="database-section-content">
-                <div class="form-row">
-                    <div class="form-group-fixed">
-                        <label class="database-field-label">Type:</label>
-                        <select class="database-field-value" style="width: 150px;" data-field="damage.type" data-skill-id="${skill.id}">
-                            ${damageTypeNames.map((name, idx) => `<option value="${idx}" ${damage.type === idx ? 'selected' : ''}>${name}</option>`).join('')}
-                        </select>
+                <div class="db-form">
+                    <div class="db-row-cols">
+                        <span class="db-col">
+                            <label>Formula</label>
+                            <input type="text" class="database-field-value" style="font-family: monospace;" value="${damage.formula || ''}" data-field="damage.formula" data-skill-id="${skill.id}">
+                        </span>
                     </div>
-                    <div class="form-group-fixed">
-                        <label class="database-field-label">Element:</label>
-                        <select class="database-field-value" style="width: 150px;" data-field="damage.elementId" data-skill-id="${skill.id}">
-                            <option value="-1" ${damage.elementId === -1 ? 'selected' : ''}>${tt('Normal Attack')}</option>
-                            ${elementNames.map((name, idx) => idx > 0 && name ? `<option value="${idx}" ${damage.elementId === idx ? 'selected' : ''}>${name}</option>` : '').join('')}
-                        </select>
-                    </div>
-                </div>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label class="database-field-label">Formula:</label>
-                        <input type="text" class="database-field-value" style="font-family: monospace;" value="${damage.formula || ''}" data-field="damage.formula" data-skill-id="${skill.id}">
-                    </div>
-                </div>
-                <div class="form-row">
-                    <div class="form-group-fixed">
-                        <label class="database-field-label">Variance:</label>
-                        <input type="number" class="database-field-value database-field-value-small" value="${damage.variance != null ? damage.variance : 20}" data-field="damage.variance" data-skill-id="${skill.id}">
-                        <span style="color: var(--color-text-muted); margin-left: 4px;">%</span>
-                    </div>
-                    <div class="form-group-fixed">
-                        <label class="database-field-label">Critical:</label>
-                        <input type="checkbox" ${damage.critical ? 'checked' : ''} data-field="damage.critical" data-skill-id="${skill.id}">
+                    <div class="db-row-cols">
+                        <span class="db-col">
+                            <label>Type</label>
+                            <select class="database-field-value" data-field="damage.type" data-skill-id="${skill.id}">
+                                ${damageTypeNames.map((name, idx) => `<option value="${idx}" ${damage.type === idx ? 'selected' : ''}>${name}</option>`).join('')}
+                            </select>
+                        </span>
+                        <span class="db-col">
+                            <label>Element</label>
+                            <select class="database-field-value" data-field="damage.elementId" data-skill-id="${skill.id}">
+                                <option value="-1" ${damage.elementId === -1 ? 'selected' : ''}>${tt('Normal Attack')}</option>
+                                ${elementNames.map((name, idx) => idx > 0 && name ? `<option value="${idx}" ${damage.elementId === idx ? 'selected' : ''}>${name}</option>` : '').join('')}
+                            </select>
+                        </span>
+                        <span class="db-col">
+                            <label>Variance %</label>
+                            <input type="number" class="database-field-value" value="${damage.variance != null ? damage.variance : 20}" data-field="damage.variance" data-skill-id="${skill.id}">
+                        </span>
+                        <span class="db-col">
+                            <label>Critical</label>
+                            <input type="checkbox" class="system-checkbox" ${damage.critical ? 'checked' : ''} data-field="damage.critical" data-skill-id="${skill.id}">
+                        </span>
                     </div>
                 </div>
             </div>
@@ -238,7 +226,6 @@ class DatabaseSkillEditor {
         // ── Effects Section ──
         const effectsSection = document.createElement('div');
         effectsSection.className = 'database-section';
-        effectsSection.style.gridColumn = '1 / -1';
         effectsSection.innerHTML = `
             <div class="database-section-header">Effects</div>
             <div class="database-section-content">
@@ -278,7 +265,6 @@ class DatabaseSkillEditor {
         // ── Note Section ──
         const noteSection = document.createElement('div');
         noteSection.className = 'database-section';
-        noteSection.style.gridColumn = '1 / -1';
         noteSection.innerHTML = `
             <div class="database-section-header">Note</div>
             <div class="database-section-content">
@@ -292,6 +278,7 @@ class DatabaseSkillEditor {
 
         // Add event listeners for all editable fields
         setTimeout(() => {
+            AnimationPickerModal.bindTriggers(container, this.databaseManager, this.projectManager);
             const editableFields = container.querySelectorAll('[data-skill-id]');
             editableFields.forEach(field => {
                 field.addEventListener('change', (e) => {
@@ -331,7 +318,8 @@ class DatabaseSkillEditor {
         }
         // Handle numeric fields
         else if (['stypeId', 'scope', 'occasion', 'mpCost', 'tpCost', 'tpGain',
-                   'speed', 'successRate', 'repeats', 'hitType', 'animationId'].includes(fieldName)) {
+                   'speed', 'successRate', 'repeats', 'hitType', 'animationId',
+                   'requiredWtypeId1', 'requiredWtypeId2'].includes(fieldName)) {
             skill[fieldName] = parseInt(value) || 0;
             console.log(`Updated skill ${skillId} field ${fieldName} to:`, skill[fieldName]);
         }

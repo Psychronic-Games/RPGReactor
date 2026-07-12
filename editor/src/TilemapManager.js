@@ -2145,11 +2145,28 @@ class TilemapManager {
             // Write map data to file with formatting
             this.fs.writeFileSync(mapPath, JSON.stringify(mapDataToSave, null, 2), 'utf8');
             this.captureSavedMapState();
+            this.bumpVersionId();
 
             return true;
         } catch (error) {
             console.error('Error saving map:', error);
             return false;
+        }
+    }
+
+    // RPG Maker regenerates $dataSystem.versionId on every editor save; the
+    // runtime's Scene_Load.reloadMapIfUpdated compares it against save files
+    // to force a fresh map setup when data changed. Without this, loading a
+    // save made on an older version of an edited map leaves stale
+    // Game_Events pointing at missing $dataMap entries (crash at map load).
+    bumpVersionId() {
+        try {
+            const systemPath = this.path.join(this.projectPath, 'data', 'System.json');
+            const system = JSON.parse(this.fs.readFileSync(systemPath, 'utf8'));
+            system.versionId = Math.floor(Math.random() * 100000000);
+            this.fs.writeFileSync(systemPath, JSON.stringify(system, null, 2));
+        } catch (error) {
+            console.error('Error bumping versionId:', error);
         }
     }
 

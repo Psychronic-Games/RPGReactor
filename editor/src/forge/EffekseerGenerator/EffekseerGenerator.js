@@ -2513,11 +2513,12 @@ class EffekseerGenerator {
 
     // ── Export ───────────────────────────────────────────────────────────
 
-    _export() {
+    async _export() {
         const recipe = this._recipe();
         const project = this.projectController && this.projectController.getCurrentProject();
+        const webHost = window.RPGReactorHost?.mode === 'web' ? window.RPGReactorHost : null;
         if (!recipe) return;
-        if (!project) {
+        if (!project && !webHost) {
             this._status(this._t('efk.noProject'), true);
             return;
         }
@@ -2527,17 +2528,16 @@ class EffekseerGenerator {
         if (!name) { this._status(this._t('efk.badName'), true); return; }
 
         try {
-            const fs = require('fs');
             const path = require('path');
-            const effectsDir = path.join(project.path, 'effects');
-            const textureDir = path.join(effectsDir, 'Texture');
-            fs.mkdirSync(textureDir, { recursive: true });
-
             // Built-in procedural textures are written on every export;
             // custom (uploaded) textures were already copied into
             // effects/Texture/ when picked; baked AG sprite sheets are
             // rendered fresh from each layer's current params.
             const bytes = this._buildBytes();   // per-keyframe tilt bakes in _composeStack (also refreshes the merge)
+            const files = new Map();
+            const addFile = (filePath, data, mimeType = 'application/octet-stream') => {
+                files.set(filePath, { path: filePath, data, mimeType });
+            };
             const textOwners = this._userTextMap();
             for (const entry of this._stack) {
                 const r = this._recipeOf(entry);
@@ -2547,31 +2547,46 @@ class EffekseerGenerator {
                     if (r.bake && /rr_bake_/.test(texPath)) {
                         const baked = this._bakedSheet(r, lp);
                         if (baked) {
-                            const b64 = baked.dataUrl.split(',')[1];
-                            fs.writeFileSync(path.join(effectsDir, texPath), Buffer.from(b64, 'base64'));
+                            addFile(texPath, baked.dataUrl, 'image/png');
                         }
                         continue;
                     }
                     if (textOwners.has(texPath)) {
                         const t = textOwners.get(texPath);
-                        fs.writeFileSync(path.join(effectsDir, texPath),
-                            Buffer.from(RR_EfkTextures.userTextPngBytes(t.text, t.mode)));
+                        addFile(texPath, RR_EfkTextures.userTextPngBytes(t.text, t.mode), 'image/png');
                         continue;
                     }
                     const builtin = /rr_([a-z0-9_]+)\.png$/i.exec(texPath);
                     if (!builtin) continue;
-                    fs.writeFileSync(path.join(effectsDir, texPath), Buffer.from(RR_EfkTextures.pngBytes(builtin[1])));
+                    addFile(texPath, RR_EfkTextures.pngBytes(builtin[1]), 'image/png');
                 }
             }
             const models = (this._lastComposed && this._lastComposed.models) || [];
-            if (models.length) {
-                fs.mkdirSync(path.join(effectsDir, 'Model'), { recursive: true });
-                for (const m of models) {
-                    fs.writeFileSync(path.join(effectsDir, m.path), Buffer.from(m.bytes));
-                }
+            for (const model of models) addFile(model.path, model.bytes);
+            addFile(`${name}.efkefc`, bytes);
+
+            if (webHost) {
+                const result = await webHost.saveFiles({
+                    files: [...files.values()],
+                    projectRoot: project ? path.join(project.path, 'effects') : null,
+                    suggestedDirectoryName: `${name}-effect`,
+                });
+                if (result) this._status(result.project
+                    ? `${this._t('efk.exported')} effects/${name}.efkefc`
+                    : `${this._t('efk.exported')} ${result.path}`);
+                return;
             }
-            const outPath = path.join(effectsDir, `${name}.efkefc`);
-            fs.writeFileSync(outPath, Buffer.from(bytes));
+
+            const fs = require('fs');
+            const effectsDir = path.join(project.path, 'effects');
+            for (const file of files.values()) {
+                const outPath = path.join(effectsDir, file.path);
+                fs.mkdirSync(path.dirname(outPath), { recursive: true });
+                const data = typeof file.data === 'string' && file.data.startsWith('data:')
+                    ? Buffer.from(file.data.split(',')[1], 'base64')
+                    : Buffer.from(file.data);
+                fs.writeFileSync(outPath, data);
+            }
             this._status(`${this._t('efk.exported')} effects/${name}.efkefc`);
         } catch (e) {
             console.error('EffekseerGenerator: export failed:', e);

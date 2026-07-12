@@ -83,7 +83,13 @@ class PlaytestManager {
         // Pass mode parameter ('test' for playtest, 'btest' for battle test)
         const appPathArg = process.platform === 'darwin' ? projectPath : '.';
         const launchArgs = [appPathArg, mode];
-        const userDataDir = this.resolvePlaytestUserDataDir(path, fs, projectPath);
+        // Windows NW.js keeps --user-data-dir in nw.App.argv[0]. RPG Maker
+        // checks only that first argument for test/btest, so preserve the mode
+        // as an ampersand-delimited option in the profile path. Argument arrays
+        // avoid shell interpretation, and ampersands are valid in Windows paths.
+        const userDataDir = this.resolvePlaytestUserDataDir(path, fs, projectPath, {
+            optionToken: process.platform === 'win32' ? mode : null
+        });
         if (userDataDir) {
             launchArgs.unshift(`--user-data-dir=${userDataDir}`);
             console.log('Playtest user data dir:', userDataDir);
@@ -129,14 +135,16 @@ class PlaytestManager {
         try { canonicalProjectPath = fs.realpathSync(projectPath); } catch {}
         if (platform === 'win32') canonicalProjectPath = canonicalProjectPath.toLowerCase();
         const projectId = crypto.createHash('sha256').update(canonicalProjectPath).digest('hex').slice(0, 16);
-        const userDataDir = path.join(baseDir, 'RPGReactor', 'PlaytestProfile', versionDir, projectId);
+        const optionToken = String(options.optionToken || '').replace(/[^A-Za-z0-9_-]/g, '');
+        const profileName = optionToken ? `${projectId}&${optionToken}` : projectId;
+        const userDataDir = path.join(baseDir, 'RPGReactor', 'PlaytestProfile', versionDir, profileName);
 
         try {
             fs.mkdirSync(userDataDir, { recursive: true });
             return userDataDir;
         } catch (error) {
             console.warn('Could not create isolated playtest profile directory:', error);
-            const fallbackDir = path.join(os.tmpdir(), 'rpg-reactor-playtest-profile', versionDir, projectId);
+            const fallbackDir = path.join(os.tmpdir(), 'rpg-reactor-playtest-profile', versionDir, profileName);
             try {
                 fs.mkdirSync(fallbackDir, { recursive: true });
                 return fallbackDir;

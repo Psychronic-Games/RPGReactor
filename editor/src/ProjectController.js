@@ -1982,10 +1982,30 @@ class ProjectController {
             delete dataToSave.id;
             delete dataToSave.name;
             fs.writeFileSync(mapPath, JSON.stringify(dataToSave, null, 2), 'utf8');
+            this.bumpVersionId();
             return true;
         } catch (error) {
             console.error('Error writing map file:', error);
             return false;
+        }
+    }
+
+    // RPG Maker regenerates $dataSystem.versionId on every editor save; the
+    // runtime's Scene_Load.reloadMapIfUpdated compares it against save files
+    // to force a fresh map setup when data changed. Without this, loading a
+    // save made on an older version of an edited map leaves stale
+    // Game_Events pointing at missing $dataMap entries (crash at map load).
+    bumpVersionId() {
+        if (typeof nw === 'undefined' || !this.currentProject?.path) return;
+        try {
+            const fs = require('fs');
+            const path = require('path');
+            const systemPath = path.join(this.currentProject.path, 'data', 'System.json');
+            const system = JSON.parse(fs.readFileSync(systemPath, 'utf8'));
+            system.versionId = Math.floor(Math.random() * 100000000);
+            fs.writeFileSync(systemPath, JSON.stringify(system, null, 2));
+        } catch (error) {
+            console.error('Error bumping versionId:', error);
         }
     }
 
@@ -2293,6 +2313,7 @@ class ProjectController {
 
             const mapPath = path.join(this.currentProject.path, 'data', `Map${String(newMapId).padStart(3, '0')}.json`);
             fs.writeFileSync(mapPath, JSON.stringify(newMapData));
+            this.bumpVersionId();
 
             if (!this.currentProject.maps) {
                 this.currentProject.maps = [];

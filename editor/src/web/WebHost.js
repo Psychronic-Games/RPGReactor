@@ -5,6 +5,7 @@
     const DB_VERSION = 1;
     const STORE_NAME = 'files';
     const PROJECT_ROOT = '/project';
+    document.documentElement.classList.add('rr-web');
 
     function normalizePath(value) {
         const absolute = String(value || '').replace(/\\/g, '/').startsWith('/');
@@ -243,6 +244,23 @@
         return modal;
     }
 
+    async function valueToBlob(data, mimeType) {
+        if (data instanceof Blob) return data.type || !mimeType ? data : data.slice(0, data.size, mimeType);
+        if (typeof data === 'string' && data.startsWith('data:')) return fetch(data).then(response => response.blob());
+        return new Blob([data], { type: mimeType || 'application/octet-stream' });
+    }
+
+    async function writeDirectoryFile(rootHandle, relativePath, blob) {
+        const parts = normalizePath(relativePath).split('/').filter(part => part && part !== '..');
+        const fileName = parts.pop();
+        let directory = rootHandle;
+        for (const part of parts) directory = await directory.getDirectoryHandle(part, { create: true });
+        const fileHandle = await directory.getFileHandle(fileName, { create: true });
+        const writable = await fileHandle.createWritable();
+        await writable.write(blob);
+        await writable.close();
+    }
+
     function installFileUrlBridge(host) {
         const rewrite = value => {
             if (typeof value !== 'string' || !value.startsWith('file://')) return value;
@@ -291,7 +309,7 @@
 
     window.RPGReactorWebHost = {
         mode: 'web',
-        version: '0.94.3',
+        version: '0.94.4',
         projectRoot: PROJECT_ROOT,
         fs: null,
         path: createPathApi(),
@@ -319,6 +337,18 @@
                 try {
                     await navigator.serviceWorker.register('service-worker.js', { scope: './' });
                     await navigator.serviceWorker.ready;
+                    if (!navigator.serviceWorker.controller) {
+                        await Promise.race([
+                            new Promise(resolve => navigator.serviceWorker.addEventListener('controllerchange', resolve, { once: true })),
+                            new Promise(resolve => setTimeout(resolve, 1000)),
+                        ]);
+                    }
+                    if (!navigator.serviceWorker.controller && !sessionStorage.getItem('rr-web-sw-reload')) {
+                        sessionStorage.setItem('rr-web-sw-reload', '1');
+                        location.reload();
+                        await new Promise(() => {});
+                    }
+                    if (navigator.serviceWorker.controller) sessionStorage.removeItem('rr-web-sw-reload');
                 } catch (error) {
                     console.warn(`Edited playtest overlay is unavailable: ${error.name || 'Error'}: ${error.message || error}`);
                 }
@@ -329,6 +359,66 @@
             return new URL(`project/${relativePath}`, document.baseURI).href;
         },
         async flush() { if (this.fs) await this.fs.flush(); },
+        async saveFile({ data, projectPath = null, suggestedName = 'download.bin', mimeType = 'application/octet-stream' }) {
+            const blob = await valueToBlob(data, mimeType);
+            if (projectPath) {
+                this.fs.writeFileSync(projectPath, new Uint8Array(await blob.arrayBuffer()));
+                await this.flush();
+                return { path: projectPath, project: true };
+            }
+
+            if (window.showSaveFilePicker) {
+                try {
+                    const handle = await window.showSaveFilePicker({ suggestedName });
+                    const writable = await handle.createWritable();
+                    await writable.write(blob);
+                    await writable.close();
+                    return { path: handle.name, project: false };
+                } catch (error) {
+                    if (error.name === 'AbortError') return null;
+                    if (error.name !== 'SecurityError' && error.name !== 'NotAllowedError') throw error;
+                }
+            }
+
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = suggestedName;
+            link.style.display = 'none';
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+            return { path: suggestedName, project: false, downloaded: true };
+        },
+        async saveFiles({ files, projectRoot = null, suggestedDirectoryName = 'RPG Reactor Export' }) {
+            if (projectRoot) {
+                for (const file of files) {
+                    const blob = await valueToBlob(file.data, file.mimeType);
+                    this.fs.writeFileSync(normalizePath(`${projectRoot}/${file.path}`), new Uint8Array(await blob.arrayBuffer()));
+                }
+                await this.flush();
+                return { path: projectRoot, project: true };
+            }
+            if (files.length === 1) {
+                const file = files[0];
+                return this.saveFile({ data: file.data, suggestedName: file.path, mimeType: file.mimeType });
+            }
+            if (!window.showDirectoryPicker) {
+                throw new Error('This export contains multiple files. Use a browser with directory picker support or open a project first.');
+            }
+            let directory;
+            try {
+                directory = await window.showDirectoryPicker({ id: suggestedDirectoryName, mode: 'readwrite' });
+            } catch (error) {
+                if (error.name === 'AbortError') return null;
+                throw error;
+            }
+            for (const file of files) {
+                await writeDirectoryFile(directory, file.path, await valueToBlob(file.data, file.mimeType));
+            }
+            return { path: directory.name, project: false };
+        },
         async openPlaytest(mode = 'test') {
             if (window.reactor?.projectController) await window.reactor.projectController.saveAll();
             await this.flush();
@@ -354,7 +444,10 @@
                 const item = document.querySelector(`[data-action="${action}"]`);
                 if (item) item.style.display = 'none';
             }
+            const buildMenu = document.querySelector('[data-menu="build"]');
+            if (buildMenu) buildMenu.style.display = 'none';
             const banner = document.createElement('div');
+            banner.className = 'rr-web-save-banner';
             banner.style.cssText = 'position:fixed;right:12px;bottom:10px;z-index:9000;display:flex;align-items:center;gap:8px;padding:6px 8px 6px 10px;border:1px solid var(--color-accent-border);border-radius:4px;background:var(--color-bg-panel);color:var(--color-text-muted);font-size:10px;box-shadow:var(--shadow-panel);';
             const message = document.createElement('span');
             message.textContent = 'Reactor One edits are saved in this browser';

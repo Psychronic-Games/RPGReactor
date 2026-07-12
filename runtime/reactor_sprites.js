@@ -1317,10 +1317,13 @@ Sprite_Animation.prototype.updateEffectGeometry = function() {
     // center, so a target at canvas pixel y < ch/2 (top half) needs
     // world.y < 0. Hence the formula (py - ch/2) without a leading minus.
     //   projection p = -1.2 → w after combined transform = 1 - 10*p = 13
-    //   ndc.x = world.x / 13, ndc.y = -world.y / 13
-    //   For canvas pixel (px, py):  world.x =  (px - cw/2) * 13/(cw/2)
+    //   projection x = ±(ch/cw) (aspect-corrected, see setProjectionMatrix)
+    //   ndc.x = world.x * (ch/cw) / 13, ndc.y = -world.y / 13
+    //   For canvas pixel (px, py):  world.x =  (px - cw/2) * 13/(ch/2)
     //                                world.y =  (py - ch/2) * 13/(ch/2)
-    //   When mirrored (projection x = -1), world.x sign also flips.
+    //   (both axes normalize by ch/2 — one world unit = same pixel count
+    //   in x and y, which is what keeps shapes undistorted)
+    //   When mirrored (projection x < 0), world.x sign also flips.
     const canvas = Graphics._effekseerCanvas;
     const renderer = Graphics._app && Graphics._app.renderer;
     let wx = 0, wy = 0;
@@ -1331,7 +1334,7 @@ Sprite_Animation.prototype.updateEffectGeometry = function() {
         const cw = canvas.width;
         const ch = canvas.height;
         const wFactor = 13; // = 1 - 10 * (-1.2)
-        wx = (px - cw / 2) * wFactor / (cw / 2);
+        wx = (px - cw / 2) * wFactor / (ch / 2);
         wy = (py - ch / 2) * wFactor / (ch / 2);
         if (this._mirror) wx = -wx;
     }
@@ -1543,9 +1546,16 @@ Sprite_Animation.prototype.setProjectionMatrix = function(renderer) {
     // full-canvas pixel diff). The smaller projection + full-canvas viewport
     // does work — we recover target positioning via handle.setLocation in
     // updateEffectGeometry instead.
-    const x = this._mirror ? -1 : 1;
-    const y = -1;
+    //
+    // The x-axis is scaled by height/width so one world unit spans the same
+    // number of PIXELS on both axes. MZ's square 4096x4096 viewport made the
+    // projection aspect-neutral for free; a full-canvas viewport on a
+    // widescreen canvas needs this correction or every effect is stretched
+    // horizontally by the aspect ratio (spheres render as ovals).
     const canvas = Graphics._effekseerCanvas || renderer.view;
+    const aspect = canvas.height / canvas.width;
+    const x = (this._mirror ? -1 : 1) * aspect;
+    const y = -1;
     const p = -1.2;
     Graphics.effekseer.setProjectionMatrix([
         x, 0, 0, 0,

@@ -430,7 +430,7 @@ class DatabaseAnimationEditor {
                     this.databaseManager.updateAnimation(animation.id, animation);
                 }
                 // Update the list item in the left panel
-                const selectedItem = document.querySelector('.database-list-item.selected span:first-child');
+                const selectedItem = document.querySelector('.database-list-item.selected .database-list-name');
                 if (selectedItem) {
                     selectedItem.textContent = animation.name || 'Unnamed';
                 }
@@ -3642,7 +3642,9 @@ class DatabaseAnimationEditor {
 
             // RPG Maker MZ style setup - balanced FOV
             const viewportSize = canvas.height * 1.2; // Balanced FOV to fill canvas without clipping
-            const x = 1; // mirror ? -1 : 1
+            // x is scaled by height/width so one world unit spans the same
+            // number of pixels on both axes (round spheres on a wide canvas)
+            const x = canvas.height / canvas.width; // * (mirror ? -1 : 1)
             const y = -1;
             const p = -(viewportSize / canvas.height);
 

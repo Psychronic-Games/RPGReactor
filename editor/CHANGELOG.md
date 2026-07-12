@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.94.4] - 2026-07-11
+
+### Added
+
+- Skills, Items, and Weapons now assign animations through a two-column picker modal: a searchable animation list beside a live playing preview. The preview renders MV sprite-sheet animations on a 2D canvas and Effekseer effects through the game's own WebGL runtime, looping short effects with a brief pause. Skills and Items include the Normal Attack entry; selections dispatch through the existing field handlers.
+- Database entry lists display a framed mini icon beside each name: IconSet icons for skills, items, weapons, armors, and states; face portraits for actors; and battler thumbnails for enemies (single battler images scale to fit, charset-style battlers show their front idle frame). Icons refresh immediately when changed through the icon picker, and icon-less entries keep a blank spacer so names stay aligned.
+
+### Changed
+
+- Bumped current development version to RPG Reactor 0.94.4.
+
+### Fixed
+
+- Fixed card-filling database forms (`db-fill`) collapsing every row to content width and centering it — Name and Description fields rendered tiny with large side gaps. Flex-column forms now stretch their rows to the card width.
+- Effekseer previews in the Animations tab and the animation picker are aspect-correct: the projection's x-axis is scaled by height/width so spheres render round on non-square canvases.
+- Buttons with dynamic labels (the animation picker trigger) are no longer reverted to cached text by the interface-translation observer, and field-styled buttons no longer inherit the read-only gray (CSS `:read-only` also matches `<button>` elements).
+- Added Web-only responsive layout rules for laptop, narrow, and short viewports. Menus and toolbars scroll instead of clipping; the sidebar becomes fluid and stacks above the workspace on very narrow screens; splash, welcome, map-information, save-banner, and Playtest overlays fit the viewport; and Database, Event Editor, Map Properties, Image Picker, and general modal layouts reflow and remain scrollable. Desktop NW.js sizing is unchanged.
+- Fixed Web Character Generator packaging by bundling the Outfit Engine, Hair Engine, and every built-in style-part script before the generator entry point. Browser execution uses those global engines while continuing to load project-specific parts from the virtual project.
+- Added browser-host file export support for blobs, typed binary data, text, and data URLs. Active-project writes flush to IndexedDB; projectless single files use the browser save picker or download fallback, while multi-file exports recreate their resource tree through the directory picker.
+- Fixed Web Forge output for procedural and Parts PNG character sheets, Animation Generator PNG/GIF exports, Sound Effect Generator WAV exports, generated Outfit/Hair library parts, and Effekseer effects with all baked, procedural, and user-text textures plus generated models.
+- Fixed browser Playtest sometimes starting before the project-overlay service worker controlled the page. Web startup now waits for service-worker control and performs one guarded reload when required, so persisted edits are available to Playtest immediately.
+- Removed the unsupported Build menu from the Web editor.
+- Fixed test-only plugins not detecting packaged Windows playtests when isolated Chromium profiles are enabled. Windows NW.js exposes the `--user-data-dir` switch as `nw.App.argv[0]`, ahead of the separate `test`/`btest` argument; RPG Maker only inspects that first argument. Windows profile paths now carry the mode as an ampersand-delimited option, preserving profile isolation while restoring Sang Hendrix hover docks and other test-gated tools.
+- Added regression coverage for Web responsive scoping, browser save destinations and fallbacks, Character Generator asset bundling, service-worker startup control, Forge project paths, and Windows mode-bearing playtest profiles.
+
 ## [0.94.3] - 2026-07-10
 
 ### Added

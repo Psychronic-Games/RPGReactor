@@ -87,6 +87,7 @@ class DatabaseActorEditor {
      * Create General Settings section
      */
     createGeneralSettingsSection(actor) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const generalSection = document.createElement('div');
         generalSection.className = 'database-section';
 
@@ -99,41 +100,39 @@ class DatabaseActorEditor {
         generalSection.innerHTML = `
             <div class="database-section-header">General Settings</div>
             <div class="database-section-content">
-                <div class="form-row">
-                    <div class="form-group">
-                        <label class="database-field-label">Name:</label>
-                        <input type="text" class="database-field-value" value="${actor.name || ''}" data-field="name" data-actor-id="${actor.id}">
+                <div class="db-form db-fill">
+                    <div class="db-row-cols">
+                        <span class="db-col">
+                            <label>Name</label>
+                            <input type="text" class="database-field-value" value="${actor.name || ''}" data-field="name" data-actor-id="${actor.id}">
+                        </span>
+                        <span class="db-col">
+                            <label>Nickname</label>
+                            <input type="text" class="database-field-value" value="${actor.nickname || ''}" data-field="nickname" data-actor-id="${actor.id}">
+                        </span>
                     </div>
-                </div>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label class="database-field-label">Nickname:</label>
-                        <input type="text" class="database-field-value" value="${actor.nickname || ''}" data-field="nickname" data-actor-id="${actor.id}">
+                    <div class="db-row-cols">
+                        <span class="db-col">
+                            <label>Class</label>
+                            <select class="database-field-value" data-field="classId" data-actor-id="${actor.id}">
+                                ${classOptions}
+                            </select>
+                        </span>
+                        <span class="db-col">
+                            <label>${tt('Initial Level')}</label>
+                            <input type="number" class="database-field-value" value="${actor.initialLevel || 1}" data-field="initialLevel" data-actor-id="${actor.id}">
+                        </span>
+                        <span class="db-col">
+                            <label>${tt('Max Level')}</label>
+                            <input type="number" class="database-field-value" value="${actor.maxLevel || 99}" data-field="maxLevel" data-actor-id="${actor.id}">
+                        </span>
                     </div>
-                </div>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label class="database-field-label">Class:</label>
-                        <select class="database-field-value" data-field="classId" data-actor-id="${actor.id}">
-                            ${classOptions}
-                        </select>
+                    <div class="db-row-cols db-row-grow">
+                        <span class="db-col">
+                            <label>Profile</label>
+                            <textarea class="database-field-value" rows="3" data-field="profile" data-actor-id="${actor.id}">${actor.profile || ''}</textarea>
+                        </span>
                     </div>
-                </div>
-                <div class="form-row">
-                    <div class="form-group-fixed">
-                        <label class="database-field-label">Initial Level:</label>
-                        <input type="number" class="database-field-value database-field-value-small" value="${actor.initialLevel || 1}" data-field="initialLevel" data-actor-id="${actor.id}">
-                    </div>
-                    <div class="form-group-fixed">
-                        <label class="database-field-label">Max Level:</label>
-                        <input type="number" class="database-field-value database-field-value-small" value="${actor.maxLevel || 99}" data-field="maxLevel" data-actor-id="${actor.id}">
-                    </div>
-                </div>
-                <div class="form-row">
-                    <label class="database-field-label">Profile:</label>
-                </div>
-                <div class="form-row">
-                    <textarea class="database-field-value" rows="3" style="width: 100%;" data-field="profile" data-actor-id="${actor.id}">${actor.profile || ''}</textarea>
                 </div>
             </div>
         `;

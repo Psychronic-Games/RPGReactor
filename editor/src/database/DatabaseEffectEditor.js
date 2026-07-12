@@ -35,6 +35,10 @@ class DatabaseEffectEditor {
             case 13:
                 return `+${effect.value1}`;
             case 21: case 22: {
+                // dataId 0 = the attacker's normal-attack state
+                if (effect.dataId === 0) {
+                    return `${tt('Normal Attack')} (${Math.round(effect.value1 * 100)}%)`;
+                }
                 const state = dbManager ? dbManager.getState(effect.dataId) : null;
                 const name = state ? state.name : `State #${effect.dataId}`;
                 return `${name} (${Math.round(effect.value1 * 100)}%)`;

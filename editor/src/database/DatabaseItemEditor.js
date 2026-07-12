@@ -35,56 +35,71 @@ class DatabaseItemEditor {
         const systemData = this.databaseManager.getSystem();
         const elements = systemData ? systemData.elements || [] : [];
 
-        // --- General Settings ---
-        const generalWrapper = document.createElement('div');
-        generalWrapper.style.marginBottom = '16px';
+        // Animation picker: -1 = Normal Attack, 0 = None; opens AnimationPickerModal
+        const animations = this.databaseManager.getAnimations ? this.databaseManager.getAnimations() : [];
+        const animationLabel = (current) => AnimationPickerModal.label(animations, current);
 
+        // --- General Settings ---
         const generalSection = document.createElement('div');
         generalSection.className = 'database-section';
         generalSection.innerHTML = `
             <div class="database-section-header">General</div>
-            <div class="database-section-content" style="display: grid; grid-template-columns: auto 1fr; gap: 18px; align-items: start;">
+            <div class="database-section-content"><div class="db-general-grid">
                 <div style="display: flex; flex-direction: column; align-items: center; gap: 6px;">
-                    <label class="rr-form-label" style="font-size: 11px;">Icon</label>
+                    <label style="font-size: 11px; color: var(--color-text-muted); font-weight: 600;">Icon</label>
                     <div id="item-icon-container-${item.id}"></div>
                 </div>
-                <div class="rr-form-grid">
-                    <label>Name</label>
-                    <input type="text" class="database-field-value" value="${item.name || ''}" data-field="name" data-item-id="${item.id}">
-
-                    <div class="rr-form-full">
-                        <label class="rr-form-label" style="display: block; text-align: left; margin-bottom: 4px;">Description</label>
-                        <textarea class="database-field-value" rows="2" style="width: 100%; box-sizing: border-box;" data-field="description" data-item-id="${item.id}">${item.description || ''}</textarea>
+                <div class="db-form db-fill">
+                    <div class="db-row-cols">
+                        <span class="db-col">
+                            <label>Name</label>
+                            <input type="text" class="database-field-value" value="${item.name || ''}" data-field="name" data-item-id="${item.id}">
+                        </span>
                     </div>
-
-                    <div class="rr-form-quad">
-                        <label>Item Type</label>
-                        <select class="database-field-value" data-field="itypeId" data-item-id="${item.id}">
-                            <option value="1" ${item.itypeId === 1 ? 'selected' : ''}>${tt('Regular Item')}</option>
-                            <option value="2" ${item.itypeId === 2 ? 'selected' : ''}>${tt('Key Item')}</option>
-                        </select>
-                        <label>Price</label>
-                        <input type="number" class="database-field-value" value="${item.price || 0}" data-field="price" data-item-id="${item.id}">
-                        <label>Scope</label>
-                        <select class="database-field-value" data-field="scope" data-item-id="${item.id}">
-                            ${scopeNames.map((name, idx) => `<option value="${idx}" ${item.scope === idx ? 'selected' : ''}>${name}</option>`).join('')}
-                        </select>
-                        <label>Occasion</label>
-                        <select class="database-field-value" data-field="occasion" data-item-id="${item.id}">
-                            ${occasionNames.map((name, idx) => `<option value="${idx}" ${item.occasion === idx ? 'selected' : ''}>${name}</option>`).join('')}
-                        </select>
+                    <div class="db-row-cols db-row-grow">
+                        <span class="db-col">
+                            <label>Description</label>
+                            <textarea class="database-field-value" rows="2" data-field="description" data-item-id="${item.id}">${item.description || ''}</textarea>
+                        </span>
                     </div>
-
-                    <label>Consumable</label>
-                    <div style="display: flex; align-items: center; gap: 8px;">
-                        <input type="checkbox" ${item.consumable ? 'checked' : ''} data-field="consumable" data-item-id="${item.id}">
-                        <span style="color: var(--color-text-muted); font-size: 11px;">${tt('Item is removed from inventory after use')}</span>
+                    <div class="db-row-cols">
+                        <span class="db-col">
+                            <label>${tt('Item Type')}</label>
+                            <select class="database-field-value" data-field="itypeId" data-item-id="${item.id}">
+                                <option value="1" ${item.itypeId === 1 ? 'selected' : ''}>${tt('Regular Item')}</option>
+                                <option value="2" ${item.itypeId === 2 ? 'selected' : ''}>${tt('Key Item')}</option>
+                            </select>
+                        </span>
+                        <span class="db-col">
+                            <label>Price</label>
+                            <input type="number" class="database-field-value" value="${item.price || 0}" data-field="price" data-item-id="${item.id}">
+                        </span>
+                        <span class="db-col">
+                            <label>Scope</label>
+                            <select class="database-field-value" data-field="scope" data-item-id="${item.id}">
+                                ${scopeNames.map((name, idx) => `<option value="${idx}" ${item.scope === idx ? 'selected' : ''}>${name}</option>`).join('')}
+                            </select>
+                        </span>
+                        <span class="db-col">
+                            <label>Occasion</label>
+                            <select class="database-field-value" data-field="occasion" data-item-id="${item.id}">
+                                ${occasionNames.map((name, idx) => `<option value="${idx}" ${item.occasion === idx ? 'selected' : ''}>${name}</option>`).join('')}
+                            </select>
+                        </span>
                     </div>
-                </div>
+                    <div class="db-row-cols">
+                        <span class="db-col">
+                            <label>Consumable</label>
+                            <span style="display: flex; align-items: center; gap: 8px;">
+                                <input type="checkbox" class="system-checkbox" ${item.consumable ? 'checked' : ''} data-field="consumable" data-item-id="${item.id}">
+                                <span style="color: var(--color-text-muted); font-size: 11px;">${tt('Item is removed from inventory after use')}</span>
+                            </span>
+                        </span>
+                    </div>
+                </div></div>
             </div>
         `;
-        generalWrapper.appendChild(generalSection);
-        wrapper.appendChild(generalWrapper);
+        // General flows into the two-column grid with the other sections
 
         // Add icon to the designated container after the DOM is ready
         setTimeout(() => {
@@ -94,9 +109,10 @@ class DatabaseItemEditor {
             }
         }, 0);
 
-        // Grid wrapper for sections below general
+        // Grid wrapper for all sections
         const gridWrapper = document.createElement('div');
         gridWrapper.className = 'database-sections-grid';
+        gridWrapper.appendChild(generalSection);
 
         // --- Invocation Section ---
         const invocationSection = document.createElement('div');
@@ -104,37 +120,29 @@ class DatabaseItemEditor {
         invocationSection.innerHTML = `
             <div class="database-section-header">Invocation</div>
             <div class="database-section-content">
-                <div class="form-row">
-                    <div class="form-group-fixed">
-                        <label class="database-field-label">Speed:</label>
-                        <input type="number" class="database-field-value database-field-value-small" value="${item.speed || 0}" data-field="speed" data-item-id="${item.id}">
+                <div class="db-form">
+                    <div class="db-row-pair">
+                        <label>Speed</label>
+                        <input type="number" class="database-field-value" value="${item.speed || 0}" data-field="speed" data-item-id="${item.id}">
+                        <label>Success %</label>
+                        <input type="number" class="database-field-value" value="${item.successRate != null ? item.successRate : 100}" data-field="successRate" data-item-id="${item.id}">
                     </div>
-                </div>
-                <div class="form-row">
-                    <div class="form-group-fixed">
-                        <label class="database-field-label">Success Rate:</label>
-                        <input type="number" class="database-field-value database-field-value-small" value="${item.successRate != null ? item.successRate : 100}" data-field="successRate" data-item-id="${item.id}">
-                        <span style="color: var(--color-text-muted); margin-left: 4px;">%</span>
+                    <div class="db-row-pair">
+                        <label>Repeats</label>
+                        <input type="number" class="database-field-value" value="${item.repeats || 1}" min="1" data-field="repeats" data-item-id="${item.id}">
+                        <label>TP Gain</label>
+                        <input type="number" class="database-field-value" value="${item.tpGain || 0}" data-field="tpGain" data-item-id="${item.id}">
                     </div>
-                </div>
-                <div class="form-row">
-                    <div class="form-group-fixed">
-                        <label class="database-field-label">Repeats:</label>
-                        <input type="number" class="database-field-value database-field-value-small" value="${item.repeats || 1}" min="1" data-field="repeats" data-item-id="${item.id}">
-                    </div>
-                </div>
-                <div class="form-row">
-                    <div class="form-group-fixed">
-                        <label class="database-field-label">Hit Type:</label>
-                        <select class="database-field-value" style="width: 150px;" data-field="hitType" data-item-id="${item.id}">
+                    <div class="db-row-pair">
+                        <label>Hit Type</label>
+                        <select class="database-field-value" data-field="hitType" data-item-id="${item.id}">
                             ${hitTypeNames.map((name, idx) => `<option value="${idx}" ${item.hitType === idx ? 'selected' : ''}>${name}</option>`).join('')}
                         </select>
-                    </div>
-                </div>
-                <div class="form-row">
-                    <div class="form-group-fixed">
-                        <label class="database-field-label">Animation ID:</label>
-                        <input type="number" class="database-field-value database-field-value-small" value="${item.animationId || 0}" data-field="animationId" data-item-id="${item.id}">
+                        <label>${tt('Animation')}</label>
+                        <span style="display: flex; min-width: 0;">
+                            <button type="button" class="database-field-value db-anim-picker" data-target-field="animationId" data-allow-normal-attack="1" data-rr-i18n-skip>${animationLabel(item.animationId || 0)}</button>
+                            <input type="hidden" value="${item.animationId || 0}" data-field="animationId" data-item-id="${item.id}">
+                        </span>
                     </div>
                 </div>
             </div>
@@ -148,36 +156,35 @@ class DatabaseItemEditor {
         damageSection.innerHTML = `
             <div class="database-section-header">Damage</div>
             <div class="database-section-content">
-                <div class="form-row">
-                    <div class="form-group-fixed">
-                        <label class="database-field-label">Type:</label>
-                        <select class="database-field-value" style="width: 150px;" data-field="damage.type" data-item-id="${item.id}">
-                            ${damageTypeNames.map((name, idx) => `<option value="${idx}" ${damage.type === idx ? 'selected' : ''}>${name}</option>`).join('')}
-                        </select>
+                <div class="db-form">
+                    <div class="db-row-cols">
+                        <span class="db-col">
+                            <label>Formula</label>
+                            <input type="text" class="database-field-value" style="font-family: monospace;" value="${damage.formula || '0'}" data-field="damage.formula" data-item-id="${item.id}">
+                        </span>
                     </div>
-                    <div class="form-group-fixed">
-                        <label class="database-field-label">Element:</label>
-                        <select class="database-field-value" style="width: 150px;" data-field="damage.elementId" data-item-id="${item.id}">
-                            <option value="-1" ${damage.elementId === -1 ? 'selected' : ''}>${tt('Normal Attack')}</option>
-                            ${elements.map((name, idx) => idx > 0 && name ? `<option value="${idx}" ${damage.elementId === idx ? 'selected' : ''}>${name}</option>` : '').join('')}
-                        </select>
-                    </div>
-                </div>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label class="database-field-label">Formula:</label>
-                        <input type="text" class="database-field-value" style="font-family: monospace;" value="${damage.formula || '0'}" data-field="damage.formula" data-item-id="${item.id}">
-                    </div>
-                </div>
-                <div class="form-row">
-                    <div class="form-group-fixed">
-                        <label class="database-field-label">Variance:</label>
-                        <input type="number" class="database-field-value database-field-value-small" value="${damage.variance != null ? damage.variance : 20}" data-field="damage.variance" data-item-id="${item.id}">
-                        <span style="color: var(--color-text-muted); margin-left: 4px;">%</span>
-                    </div>
-                    <div class="form-group-fixed">
-                        <label class="database-field-label">Critical:</label>
-                        <input type="checkbox" ${damage.critical ? 'checked' : ''} data-field="damage.critical" data-item-id="${item.id}">
+                    <div class="db-row-cols">
+                        <span class="db-col">
+                            <label>Type</label>
+                            <select class="database-field-value" data-field="damage.type" data-item-id="${item.id}">
+                                ${damageTypeNames.map((name, idx) => `<option value="${idx}" ${damage.type === idx ? 'selected' : ''}>${name}</option>`).join('')}
+                            </select>
+                        </span>
+                        <span class="db-col">
+                            <label>Element</label>
+                            <select class="database-field-value" data-field="damage.elementId" data-item-id="${item.id}">
+                                <option value="-1" ${damage.elementId === -1 ? 'selected' : ''}>${tt('Normal Attack')}</option>
+                                ${elements.map((name, idx) => idx > 0 && name ? `<option value="${idx}" ${damage.elementId === idx ? 'selected' : ''}>${name}</option>` : '').join('')}
+                            </select>
+                        </span>
+                        <span class="db-col">
+                            <label>Variance %</label>
+                            <input type="number" class="database-field-value" value="${damage.variance != null ? damage.variance : 20}" data-field="damage.variance" data-item-id="${item.id}">
+                        </span>
+                        <span class="db-col">
+                            <label>Critical</label>
+                            <input type="checkbox" class="system-checkbox" ${damage.critical ? 'checked' : ''} data-field="damage.critical" data-item-id="${item.id}">
+                        </span>
                     </div>
                 </div>
             </div>
@@ -187,7 +194,6 @@ class DatabaseItemEditor {
         // --- Effects Section ---
         const effectsSection = document.createElement('div');
         effectsSection.className = 'database-section';
-        effectsSection.style.gridColumn = '1 / -1';
         effectsSection.innerHTML = `
             <div class="database-section-header">Effects</div>
             <div class="database-section-content">
@@ -227,7 +233,6 @@ class DatabaseItemEditor {
         // --- Note Section ---
         const noteSection = document.createElement('div');
         noteSection.className = 'database-section';
-        noteSection.style.gridColumn = '1 / -1';
         noteSection.innerHTML = `
             <div class="database-section-header">Note</div>
             <div class="database-section-content">
@@ -241,6 +246,7 @@ class DatabaseItemEditor {
 
         // Add event listeners for all editable fields
         setTimeout(() => {
+            AnimationPickerModal.bindTriggers(container, this.databaseManager, this.projectManager);
             const editableFields = container.querySelectorAll('[data-item-id]');
             editableFields.forEach(field => {
                 field.addEventListener('change', (e) => {
@@ -283,7 +289,7 @@ class DatabaseItemEditor {
             console.log(`Updated item ${itemId} field ${fieldName} to:`, item[fieldName]);
         }
         // Handle numeric fields
-        else if (['itypeId', 'price', 'scope', 'occasion', 'speed', 'successRate', 'repeats', 'hitType', 'animationId'].includes(fieldName)) {
+        else if (['itypeId', 'price', 'scope', 'occasion', 'speed', 'successRate', 'repeats', 'hitType', 'animationId', 'tpGain'].includes(fieldName)) {
             item[fieldName] = parseInt(value) || 0;
             console.log(`Updated item ${itemId} field ${fieldName} to:`, item[fieldName]);
         }

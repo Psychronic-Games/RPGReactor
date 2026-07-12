@@ -62,6 +62,13 @@ DataManager._databaseFiles = [
 ];
 
 DataManager.loadGlobalInfo = function() {
+    // MV compatibility: MV's loadGlobalInfo returns the info array
+    // synchronously and MV plugins (YEP_X_Autosave.latestSavefileId among
+    // others) call it that way. Once loaded, return the cached array; the
+    // boot-time call still takes the async path below.
+    if (this._globalInfo) {
+        return this._globalInfo;
+    }
     StorageManager.loadObject("global")
         .then(globalInfo => {
             this._globalInfo = globalInfo;
@@ -83,7 +90,13 @@ DataManager.removeInvalidGlobalInfo = function() {
     }
 };
 
-DataManager.saveGlobalInfo = function() {
+DataManager.saveGlobalInfo = function(info) {
+    // MV compatibility: MV passes the global-info array as an argument
+    // and MV plugin wrappers (CustomTranslationEngine) iterate it. MZ
+    // callers pass nothing — keep using this._globalInfo then.
+    if (info !== undefined) {
+        this._globalInfo = info;
+    }
     StorageManager.saveObject("global", this._globalInfo);
 };
 
@@ -389,7 +402,8 @@ DataManager.saveGame = function(savefileId) {
     const saveName = this.makeSavename(savefileId);
     return StorageManager.saveObject(saveName, contents).then(() => {
         this._globalInfo[savefileId] = this.makeSavefileInfo();
-        this.saveGlobalInfo();
+        // pass the array: MV plugin wrappers of saveGlobalInfo expect it
+        this.saveGlobalInfo(this._globalInfo);
         return 0;
     });
 };

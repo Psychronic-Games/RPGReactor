@@ -229,7 +229,11 @@ Utils.isOptionValid = function(name) {
         return true;
     }
     if (this.isNwjs() && nw.App.argv.length > 0) {
-        return nw.App.argv[0].split("&").includes(name);
+        // Chromium switches (e.g. --user-data-dir) can occupy argv[0] with
+        // the game option following them, so scan every argument. Each entry
+        // may itself carry ampersand-delimited options (the Windows launcher
+        // folds the mode into the profile path that lands in argv[0]).
+        return nw.App.argv.some(arg => arg.split("&").includes(name));
     }
     return false;
 };
@@ -1226,8 +1230,13 @@ Graphics._createEffekseerContext = function() {
         // the editor's AnimationPicker (which is the proven-good reference):
         //   premultipliedAlpha: false  -- Effekseer's color output convention
         //   alpha: true                -- transparent so game canvas shows through
-        // setRestorationOfStatesFlag is FALSE because this is Effekseer's own
-        // context; nothing else shares it, so there's nothing to restore.
+        // setRestorationOfStatesFlag is TRUE even though nothing else shares
+        // this context: the browser can reset real GL state behind our back
+        // (window blur/focus GPU housekeeping), and with the flag off
+        // Effekseer trusts its internal state cache and never re-asserts
+        // depth/cull state -- translucent back-face "candy striping" on 3D
+        // effects after refocusing the window. With the flag on, Effekseer
+        // re-asserts its render state around every draw.
         const overlay = this._effekseerCanvas;
         if (!overlay) {
             console.error("Effekseer: overlay canvas missing; not initializing");
@@ -1244,7 +1253,7 @@ Graphics._createEffekseerContext = function() {
         this._effekseer = effekseer.createContext();
         if (this._effekseer) {
             this._effekseer.init(efxGL);
-            this._effekseer.setRestorationOfStatesFlag(false);
+            this._effekseer.setRestorationOfStatesFlag(true);
         }
     } catch (e) {
         console.error("Graphics._createEffekseerContext failed:", e);
@@ -2345,18 +2354,16 @@ Sprite.prototype.move = function(x, y) {
 Sprite.prototype.setFrame = function(x, y, width, height) {
     this._refreshFrame = false;
     const frame = this._frame;
-    if (
-        x !== frame.x ||
-        y !== frame.y ||
-        width !== frame.width ||
-        height !== frame.height
-    ) {
-        frame.x = x;
-        frame.y = y;
-        frame.width = width;
-        frame.height = height;
-        this._refresh();
-    }
+    frame.x = x;
+    frame.y = y;
+    frame.width = width;
+    frame.height = height;
+    // Always refresh, even when the frame values are unchanged: the bitmap's
+    // base texture can be swapped underneath the sprite (image processing
+    // plugins redraw shared bitmaps like the windowskin), leaving the sprite
+    // rendering a stale source with a stale frame. _refresh only rebuilds the
+    // texture when the source or frame actually differs, so this is cheap.
+    this._refresh();
 };
 
 /**
@@ -4538,6 +4545,12 @@ Window.prototype._refreshBack = function() {
     const w = Math.max(0, this._width - m * 2);
     const h = Math.max(0, this._height - m * 2);
     const sprite = this._backSprite;
+    // Plugins can replace the back sprite with a plain Sprite (MV-style
+    // window internals) that lacks the tiling child; render what exists
+    // instead of crashing the windowskin load listener.
+    if (!sprite) {
+        return;
+    }
     const tilingSprite = sprite.children[0];
     // [Note] We use 95 instead of 96 here to avoid blurring edges.
     sprite.bitmap = this._windowskin;
@@ -4545,12 +4558,16 @@ Window.prototype._refreshBack = function() {
     sprite.move(m, m);
     sprite.scale.x = w / 95;
     sprite.scale.y = h / 95;
-    tilingSprite.bitmap = this._windowskin;
-    tilingSprite.setFrame(0, 96, 96, 96);
-    tilingSprite.move(0, 0, w, h);
-    tilingSprite.scale.x = 1 / sprite.scale.x;
-    tilingSprite.scale.y = 1 / sprite.scale.y;
-    sprite.setColorTone(this._colorTone);
+    if (tilingSprite) {
+        tilingSprite.bitmap = this._windowskin;
+        tilingSprite.setFrame(0, 96, 96, 96);
+        tilingSprite.move(0, 0, w, h);
+        tilingSprite.scale.x = 1 / sprite.scale.x;
+        tilingSprite.scale.y = 1 / sprite.scale.y;
+    }
+    if (sprite.setColorTone) {
+        sprite.setColorTone(this._colorTone);
+    }
 };
 
 Window.prototype._refreshFrame = function() {
@@ -4563,8 +4580,25 @@ Window.prototype._refreshFrame = function() {
     this._setRectPartsGeometry(this._frameSprite, srect, drect, m);
 };
 
+// The cursor is clamped to the window's inner rect (MV behavior). Plugins
+// set cursor rects that extend past the window — e.g. VE_BattleCommandWindow
+// offsets the selected item's rect for its slide effect — and rely on the
+// window clipping the highlight instead of letting it bleed outside.
+Window.prototype._clampedCursorRect = function() {
+    const cr = this._cursorRect;
+    const innerW = Math.max(0, this._width - this._padding * 2);
+    const innerH = Math.max(0, this._height - this._padding * 2);
+    const x = Math.max(cr.x, 0);
+    const y = Math.max(cr.y, 0);
+    const w = Math.max(0, Math.min(cr.width - (x - cr.x), innerW - x));
+    const h = Math.max(0, Math.min(cr.height - (y - cr.y), innerH - y));
+    return new Rectangle(x, y, w, h);
+};
+
 Window.prototype._refreshCursor = function() {
-    const drect = this._cursorRect.clone();
+    const drect = this._clampedCursorRect();
+    this._cursorClampW = drect.width;
+    this._cursorClampH = drect.height;
     const srect = { x: 96, y: 96, width: 48, height: 48 };
     const m = 4;
     for (const child of this._cursorSprite.children) {
@@ -4678,10 +4712,16 @@ Window.prototype._updateContentsBack = function() {
 };
 
 Window.prototype._updateCursor = function() {
+    const rect = this._clampedCursorRect();
+    // A position-only cursor move can change the clamped size (the rect
+    // slides toward an edge), so re-slice the skin parts when it does.
+    if (rect.width !== this._cursorClampW || rect.height !== this._cursorClampH) {
+        this._refreshCursor();
+    }
     this._cursorSprite.alpha = this._makeCursorAlpha();
     this._cursorSprite.visible = this.isOpen() && this.cursorVisible;
-    this._cursorSprite.x = this._cursorRect.x;
-    this._cursorSprite.y = this._cursorRect.y;
+    this._cursorSprite.x = rect.x;
+    this._cursorSprite.y = rect.y;
 };
 
 Window.prototype._makeCursorAlpha = function() {

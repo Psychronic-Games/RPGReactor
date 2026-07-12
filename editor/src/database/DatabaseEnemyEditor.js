@@ -41,10 +41,12 @@ class DatabaseEnemyEditor {
         generalSection.innerHTML = `
             <div class="database-section-header">General</div>
             <div class="database-section-content">
-                <div class="form-row">
-                    <div class="form-group">
-                        <label class="database-field-label">Name:</label>
-                        <input type="text" class="database-field-value" value="${this.escapeHTML(enemy.name || '')}" data-field="name" data-enemy-id="${enemy.id}">
+                <div class="db-form" style="margin-bottom: 8px;">
+                    <div class="db-row-cols">
+                        <span class="db-col">
+                            <label>Name</label>
+                            <input type="text" class="database-field-value" value="${this.escapeHTML(enemy.name || '')}" data-field="name" data-enemy-id="${enemy.id}">
+                        </span>
                     </div>
                 </div>
                 <div class="form-row">
@@ -66,14 +68,16 @@ class DatabaseEnemyEditor {
                         </div>
                     </div>
                 </div>
-                <div class="form-row">
-                    <div class="form-group-fixed">
-                        <label class="database-field-label">EXP:</label>
-                        <input type="number" class="database-field-value database-field-value-small" value="${enemy.exp || 0}" min="0" data-field="exp" data-enemy-id="${enemy.id}">
-                    </div>
-                    <div class="form-group-fixed">
-                        <label class="database-field-label">Gold:</label>
-                        <input type="number" class="database-field-value database-field-value-small" value="${enemy.gold || 0}" min="0" data-field="gold" data-enemy-id="${enemy.id}">
+                <div class="db-form" style="margin-top: 8px;">
+                    <div class="db-row-cols">
+                        <span class="db-col">
+                            <label>EXP</label>
+                            <input type="number" class="database-field-value" value="${enemy.exp || 0}" min="0" data-field="exp" data-enemy-id="${enemy.id}">
+                        </span>
+                        <span class="db-col">
+                            <label>Gold</label>
+                            <input type="number" class="database-field-value" value="${enemy.gold || 0}" min="0" data-field="gold" data-enemy-id="${enemy.id}">
+                        </span>
                     </div>
                 </div>
             </div>

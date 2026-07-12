@@ -1647,8 +1647,9 @@ class SoundEffectGenerator {
     }
 
     async _saveSfx() {
-        const projectPath = this._requireProjectPath();
-        if (!projectPath) return;
+        const webHost = window.RPGReactorHost?.mode === 'web' ? window.RPGReactorHost : null;
+        const projectPath = this._syncProjectPath();
+        if (!projectPath && !webHost && !this._requireProjectPath()) return;
         const nameInput = this.root.querySelector('.rr-sfx-name');
         const rawName = (nameInput.value || '').trim().replace(/\.(wav|ogg)$/i, '');
         if (!rawName) { alert(this._t('Enter a name for the sound effect.')); return; }
@@ -1665,9 +1666,27 @@ class SoundEffectGenerator {
         }
         const wav = audioBufferToWav(buffer);
 
-        const fs = require('fs');
         const path = require('path');
-        const defaultDir = path.join(projectPath, 'audio', 'se');
+        const defaultDir = projectPath ? path.join(projectPath, 'audio', 'se') : null;
+        if (webHost) {
+            try {
+                const result = await webHost.saveFile({
+                    data: wav,
+                    projectPath: projectPath ? path.join(defaultDir, `${rawName}.wav`) : null,
+                    suggestedName: `${rawName}.wav`,
+                    mimeType: 'audio/wav',
+                });
+                if (result) this._showSaveStatus(result.project
+                    ? `${this._t('Saved:')} audio/se/${rawName}.wav`
+                    : `${this._t('Saved:')} ${result.path}`);
+            } catch (err) {
+                console.error('SoundEffectGenerator save:', err);
+                alert(`${this._t('Failed to save:')} ${err.message}`);
+            }
+            return;
+        }
+
+        const fs = require('fs');
         try { fs.mkdirSync(defaultDir, { recursive: true }); } catch (e) {}
 
         const picker = document.createElement('input');

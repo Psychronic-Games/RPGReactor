@@ -2303,18 +2303,35 @@ class PluginManager {
     }
 
     /**
-     * Parse plugin description from source
+     * Parse plugin description from source.
+     * @plugindesc is MULTILINE: it runs until the next @annotation. The
+     * continuation lines routinely carry self-identification tags
+     * (`<EST_GRAPHIC_SHIFT>`, `<PerformanceUpgrade>`, `<MVNovaLighting>`)
+     * that plugins use at load time to find their own parameters via
+     * $plugins.filter(p => p.description.contains(tag)). Truncating to
+     * the first line breaks every such plugin the moment the list is
+     * re-saved (boot-killing "reading 'parameters' of undefined").
      */
     parsePluginDescription(source) {
         const commentBlock = source.match(/\/\*:([\s\S]*?)\*\//);
         if (!commentBlock) return '';
         const lines = commentBlock[1].split('\n');
+        const collected = [];
+        let inDesc = false;
         for (const line of lines) {
             const normalized = this.normalizeAnnotationLine(line);
-            const match = normalized.match(/^@plugindesc\s+(.+)/);
-            if (match) return match[1];
+            if (!inDesc) {
+                const match = normalized.match(/^@plugindesc\s*(.*)/);
+                if (match) {
+                    inDesc = true;
+                    if (match[1]) collected.push(match[1]);
+                }
+            } else {
+                if (normalized.match(/^@\w/)) break;
+                collected.push(normalized);
+            }
         }
-        return '';
+        return collected.join('\n').trim();
     }
 
     /**

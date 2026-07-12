@@ -6,6 +6,31 @@ This root changelog summarizes public release progress for GitHub. The detailed 
 
 ## [Unreleased]
 
+## [0.94.4] - 2026-07-11
+
+Release overview: [RPG Reactor 0.94.4: Responsive Web Forge and Reliable Windows Playtests](docs/devlogs/2026-07-11-rpg-reactor-0.94.4.md).
+
+### Added
+
+- Skills, Items, and Weapons assign animations through a searchable picker modal with a live playing preview of both MV sprite-sheet animations and Effekseer effects.
+- Database entry lists show a framed mini icon beside each name: database icons for skills, items, weapons, armors, and states; face portraits for actors; battler thumbnails for enemies.
+
+### Changed
+
+- Bumped RPG Reactor to version 0.94.4.
+
+### Fixed
+
+- The Web editor now adapts its sidebar, workspace, toolbars, status bar, database, event editor, image picker, map properties, splash screen, save banner, and Playtest window across desktop, laptop, narrow, and short browser viewports without changing the desktop NW.js layout. Unsupported deployment controls are removed from the Web menu.
+- Web Forge tools now bundle their Character Generator engines and built-in style library, then save character sheets, animation sheets/GIFs, sound effects, complete Effekseer effects/resources, outfits, and hair into the active browser project. The files persist across reloads; projectless exports use browser file/directory pickers or a download fallback.
+- Browser Playtest now waits for the project-overlay service worker to control the page, using one guarded startup reload when required so edits saved during the first Web-editor session are immediately available.
+- Windows playtests now remain detectable as Test or Battle Test when isolated profiles are enabled. Windows NW.js retains `--user-data-dir` as its first application argument, which previously hid the later `test` token from RPG Maker and prevented test-only plugin overlays such as Sang Hendrix editor docks from being created.
+- Runtime: battle test launches are now detected when Chromium switches occupy the first application argument on Linux and macOS — `Utils.isOptionValid` scans every argument instead of only the first. Previously Battle Test booted to the title screen.
+- Runtime: MV-style damage popups no longer destroy the shared system Damage bitmap when a popup is removed, which crashed the PIXI v8 render pass and blacked out the battle. The renderer also skips live sprites whose texture source has been destroyed, logging the offending class instead of aborting the frame.
+- Runtime: window selection cursors are clamped to the window's inner rect (MV behavior), MV battle-window metrics such as `windowWidth` and `numVisibleRows` now gap-fill correctly on subclasses, and the UI box size honors `SceneManager._boxWidth`/`_boxHeight` set by MV plugins so the window layer aligns at the origin as in MV. Together these keep battle command highlights inside their windows and align all windows with screen-anchored HUD art.
+- Runtime: Effekseer effects render aspect-correct on widescreen canvases (the projection previously stretched effects horizontally, turning spheres into ovals), and the overlay GL context now re-asserts its render state around every draw so effects survive window blur/focus without back-face artifacts.
+- Runtime: `Sprite.setFrame` always refreshes its texture, healing sprites whose shared bitmap had its base texture replaced by image-processing plugins, and windowskin refreshes tolerate MV-style window part structures instead of crashing during bitmap load.
+
 ## [0.94.3] - 2026-07-10
 
 Release overview: [RPG Reactor 0.94.3: Web Editor and Reliable Downloads](docs/devlogs/2026-07-10-rpg-reactor-0.94.3.md).

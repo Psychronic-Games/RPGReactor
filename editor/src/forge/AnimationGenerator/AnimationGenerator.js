@@ -2161,7 +2161,7 @@ class AnimationGenerator {
         }
     }
 
-    _saveSheet() {
+    async _saveSheet() {
         const input = this.root.querySelector('.rr-ag-name');
         let name = (input.value || '').trim();
         if (!name) { alert('Enter a name for the animation sheet.'); return; }
@@ -2173,15 +2173,31 @@ class AnimationGenerator {
         const canvas = this.root.querySelector('.rr-ag-sheet');
         if (!canvas) return;
 
-        const projectPath = this._requireProjectPath();
-        if (!projectPath) return;
-
-        const fs = require('fs');
         const path = require('path');
-        const defaultDir = path.join(projectPath, 'img', 'animations');
-        try { fs.mkdirSync(defaultDir, { recursive: true }); } catch (e) {}
-
         const base64 = canvas.toDataURL('image/png').replace(/^data:image\/png;base64,/, '');
+        const webHost = window.RPGReactorHost?.mode === 'web' ? window.RPGReactorHost : null;
+        const projectPath = this._syncProjectPath();
+        if (webHost) {
+            try {
+                const result = await webHost.saveFile({
+                    data: `data:image/png;base64,${base64}`,
+                    projectPath: projectPath ? path.join(projectPath, 'img', 'animations', `${name}.png`) : null,
+                    suggestedName: `${name}.png`,
+                    mimeType: 'image/png',
+                });
+                if (result) alert(result.project ? `Saved ${name}.png to img/animations/` : `Saved → ${result.path}`);
+            } catch (err) {
+                console.error('AnimationGenerator save:', err);
+                alert('Failed to save: ' + err.message);
+            }
+            return;
+        }
+
+        const desktopProjectPath = projectPath || this._requireProjectPath();
+        if (!desktopProjectPath) return;
+        const fs = require('fs');
+        const defaultDir = path.join(desktopProjectPath, 'img', 'animations');
+        try { fs.mkdirSync(defaultDir, { recursive: true }); } catch (e) {}
         const pngBuf = Buffer.from(base64, 'base64');
 
         // NW.js native "Save As" dialog via the nwsaveas attribute on an
@@ -2223,16 +2239,21 @@ class AnimationGenerator {
             alert('GIF encoder (gif.js) is not loaded.');
             return;
         }
-        const projectPath = this._requireProjectPath();
-        if (!projectPath) return;
+        const webHost = window.RPGReactorHost?.mode === 'web' ? window.RPGReactorHost : null;
+        let projectPath = this._syncProjectPath();
+        if (!projectPath && !webHost) {
+            projectPath = this._requireProjectPath();
+            if (!projectPath) return;
+        }
         const input = this.root.querySelector('.rr-ag-name');
         let name = (input.value || '').trim() || 'animation';
         name = name.replace(/\.gif$/i, '');
 
-        const fs = require('fs');
         const path = require('path');
-        const defaultDir = path.join(projectPath, 'img', 'animations');
-        try { fs.mkdirSync(defaultDir, { recursive: true }); } catch (e) {}
+        const defaultDir = projectPath ? path.join(projectPath, 'img', 'animations') : null;
+        if (!webHost) {
+            try { require('fs').mkdirSync(defaultDir, { recursive: true }); } catch (e) {}
+        }
 
         // Locate gif.worker.js relative to the project root — NW.js
         // resolves URLs against the loaded HTML's directory.
@@ -2296,12 +2317,30 @@ class AnimationGenerator {
         gif.on('progress', (p) => {
             setLabel(`Encoding ${Math.round(p * 100)}%`);
         });
-        gif.on('finished', (blob) => {
+        gif.on('finished', async (blob) => {
             setLabel('Saving…');
+            if (webHost) {
+                try {
+                    const result = await webHost.saveFile({
+                        data: blob,
+                        projectPath: projectPath ? path.join(defaultDir, `${name}.gif`) : null,
+                        suggestedName: `${name}.gif`,
+                        mimeType: 'image/gif',
+                    });
+                    if (result) alert(result.project ? `Saved ${name}.gif to img/animations/` : `Saved → ${result.path}`);
+                } catch (err) {
+                    console.error('GIF save:', err);
+                    alert('Failed to save: ' + err.message);
+                } finally {
+                    if (btn) { btn.disabled = false; setLabel(originalText); }
+                }
+                return;
+            }
             // Convert blob → Buffer for fs writing.
             const reader = new FileReader();
             reader.onloadend = () => {
                 const gifBuf = Buffer.from(reader.result);
+                const fs = require('fs');
                 const picker = document.createElement('input');
                 picker.type = 'file';
                 picker.style.display = 'none';

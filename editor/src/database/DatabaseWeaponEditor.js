@@ -27,49 +27,55 @@ class DatabaseWeaponEditor {
         // Get weapon types from system data
         const weaponTypeNames = this.databaseManager.getSystem()?.weaponTypes || [];
 
-        // General Settings
-        const generalWrapper = document.createElement('div');
-        generalWrapper.style.marginBottom = '16px';
+        // Attack-animation picker: 0 = None; opens AnimationPickerModal
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
+        const animations = this.databaseManager.getAnimations ? this.databaseManager.getAnimations() : [];
+        const animationLabel = (current) => AnimationPickerModal.label(animations, current);
 
+        // General Settings
         const generalSection = document.createElement('div');
         generalSection.className = 'database-section';
         generalSection.innerHTML = `
             <div class="database-section-header">General</div>
-            <div class="database-section-content" style="display: flex; gap: 16px;">
-                <div style="display: flex; flex-direction: column; align-items: center; min-width: 60px;">
-                    <label class="database-field-label" style="margin-bottom: 4px;">Icon:</label>
+            <div class="database-section-content"><div class="db-general-grid">
+                <div style="display: flex; flex-direction: column; align-items: center; gap: 6px;">
+                    <label style="font-size: 11px; color: var(--color-text-muted); font-weight: 600;">Icon</label>
                     <div id="weapon-icon-container-${weapon.id}"></div>
                 </div>
-                <div style="flex: 1;">
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label class="database-field-label">Name:</label>
+                <div class="db-form db-fill">
+                    <div class="db-row-cols">
+                        <span class="db-col">
+                            <label>Name</label>
                             <input type="text" class="database-field-value" value="${weapon.name || ''}" data-field="name" data-weapon-id="${weapon.id}">
-                        </div>
+                        </span>
                     </div>
-                    <div class="form-row">
-                        <label class="database-field-label">Description:</label>
+                    <div class="db-row-cols db-row-grow">
+                        <span class="db-col">
+                            <label>Description</label>
+                            <textarea class="database-field-value" rows="2" data-field="description" data-weapon-id="${weapon.id}">${weapon.description || ''}</textarea>
+                        </span>
                     </div>
-                    <div class="form-row">
-                        <textarea class="database-field-value" rows="2" style="width: 100%;" data-field="description" data-weapon-id="${weapon.id}">${weapon.description || ''}</textarea>
-                    </div>
-                    <div class="form-row">
-                        <div class="form-group-fixed">
-                            <label class="database-field-label">Weapon Type:</label>
-                            <select class="database-field-value" style="width: 150px;" data-field="wtypeId" data-weapon-id="${weapon.id}">
+                    <div class="db-row-cols">
+                        <span class="db-col">
+                            <label>${tt('Weapon Type')}</label>
+                            <select class="database-field-value" data-field="wtypeId" data-weapon-id="${weapon.id}">
                                 ${weaponTypeNames.map((name, idx) => idx > 0 && name ? `<option value="${idx}" ${weapon.wtypeId === idx ? 'selected' : ''}>${name}</option>` : '').join('')}
                             </select>
-                        </div>
-                        <div class="form-group-fixed">
-                            <label class="database-field-label">Price:</label>
-                            <input type="number" class="database-field-value database-field-value-small" value="${weapon.price || 0}" data-field="price" data-weapon-id="${weapon.id}">
-                        </div>
+                        </span>
+                        <span class="db-col">
+                            <label>Price</label>
+                            <input type="number" class="database-field-value" value="${weapon.price || 0}" data-field="price" data-weapon-id="${weapon.id}">
+                        </span>
+                        <span class="db-col">
+                            <label>${tt('Animation')}</label>
+                            <button type="button" class="database-field-value db-anim-picker" data-target-field="animationId" data-rr-i18n-skip>${animationLabel(weapon.animationId || 0)}</button>
+                            <input type="hidden" value="${weapon.animationId || 0}" data-field="animationId" data-weapon-id="${weapon.id}">
+                        </span>
                     </div>
-                </div>
+                </div></div>
             </div>
         `;
-        generalWrapper.appendChild(generalSection);
-        wrapper.appendChild(generalWrapper);
+        // General flows into the two-column grid with the other sections
 
         // Add icon to the designated container after the DOM is ready
         setTimeout(() => {
@@ -79,9 +85,10 @@ class DatabaseWeaponEditor {
             }
         }, 0);
 
-        // Grid wrapper for sections below general
+        // Grid wrapper for all sections
         const gridWrapper = document.createElement('div');
         gridWrapper.className = 'database-sections-grid';
+        gridWrapper.appendChild(generalSection);
 
         // Parameters Section
         const params = weapon.params || [0,0,0,0,0,0,0,0];
@@ -185,6 +192,7 @@ class DatabaseWeaponEditor {
 
         // Add event listeners
         setTimeout(() => {
+            AnimationPickerModal.bindTriggers(container, this.databaseManager, this.projectManager);
             const editableFields = container.querySelectorAll('[data-weapon-id]');
             editableFields.forEach(field => {
                 field.addEventListener('change', (e) => {
@@ -209,7 +217,7 @@ class DatabaseWeaponEditor {
             console.log(`Updated weapon ${weaponId} param[${paramIndex}] to:`, value);
         }
         // Handle numeric fields
-        else if (fieldName === 'price' || fieldName === 'wtypeId') {
+        else if (fieldName === 'price' || fieldName === 'wtypeId' || fieldName === 'animationId') {
             weapon[fieldName] = parseInt(value) || 0;
             console.log(`Updated weapon ${weaponId} field ${fieldName} to:`, value);
         }

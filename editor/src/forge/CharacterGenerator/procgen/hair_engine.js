@@ -5,6 +5,7 @@
 'use strict';
 
 function loadOutfitEngine() {
+    if (typeof globalThis !== 'undefined' && globalThis.RR_OutfitEngine) return globalThis.RR_OutfitEngine;
     if (typeof require !== 'function') return null;
     try { return require('./outfit_engine.js'); }
     catch (_) { return null; }

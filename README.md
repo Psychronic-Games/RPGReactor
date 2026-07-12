@@ -1,6 +1,6 @@
 # RPG Reactor
 
-RPG Reactor 0.94.3 is an open-source, cross-platform RPG game editor and runtime for RPG Maker MV/MZ-compatible projects. RPG Reactor provides its own modern PIXI 8-based runtime while preserving compatibility with RPG Maker project data and targeting backwards compatibility with both RPG Maker MZ and MV plugins, including mixing plugins from both engines within a single project through complementary MZ and MV compatibility layers.
+RPG Reactor 0.94.4 is an open-source, cross-platform RPG game editor and runtime for RPG Maker MV/MZ-compatible projects. RPG Reactor provides its own modern PIXI 8-based runtime while preserving compatibility with RPG Maker project data and targeting backwards compatibility with both RPG Maker MZ and MV plugins, including mixing plugins from both engines within a single project through complementary MZ and MV compatibility layers.
 
 Use RPG Reactor to create, edit, playtest, and package 2D RPGs with familiar RPG Maker-style maps, events, database records, plugins, and deployment workflows, without depending on the original RPG Maker runtime or editor.
 
@@ -23,7 +23,7 @@ RPGReactor/
 
 - [Editor README](editor/README.md): detailed feature list, source launch steps, project structure, shortcuts, and technical notes.
 - [Changelog](CHANGELOG.md): GitHub-facing release progress and links to the detailed editor changelog.
-- [RPG Reactor 0.94.3 release overview](docs/devlogs/2026-07-10-rpg-reactor-0.94.3.md): public explanation of the Web editor and deployment-download improvements.
+- [RPG Reactor 0.94.4 release overview](docs/devlogs/2026-07-11-rpg-reactor-0.94.4.md): public explanation of responsive browser editing, persistent Web Forge exports, and restored Windows test tooling.
 - [Maintainer docs](docs/README.md): workflows that are useful for project maintenance but are not required for normal editor use.
 
 ## Feature Overview
@@ -39,16 +39,15 @@ RPGReactor/
 - **Build & deploy**: one-click isolated playtests; cross-platform game packaging for Windows, macOS, Linux, and Web; optional Linux AppImages for games and the editor; configurable NW.js releases and runtime locales; optional staged PNG/OGG optimization; and an editor distribution builder with SHA-256 checksums.
 - **18-language editor localization** and a theme system with multiple color palettes in light and dark modes.
 
-## What's New in 0.94.3
+## What's New in 0.94.4
 
-- **Web editor deployment**: Deploy Editor can produce a provider-neutral browser package with Reactor One bundled and opened automatically.
-- **Persistent browser editing**: maps, database data, project metadata, and plugin configuration are stored in IndexedDB, survive reloads, and can be reset to the bundled project.
-- **In-page Playtest**: browser-saved edits are overlaid through a root-scoped service worker and used by Test and Battle Test without launching a native process.
-- **Reliable deployment downloads**: large archives have a longer idle window, bounded retries, atomic temporary output, and native curl transport when available.
-- **Visible download progress**: runtime and tool downloads report percentage or transferred MiB in one live row with retry and completion state.
-- **Cleaner Linux packaging controls**: optional AppImage output appears as a nested Linux sub-option only when it applies.
+- **Responsive Web workspace**: browser-only layout rules keep the workspace, toolbars, sidebar, dialogs, splash screen, notices, and Playtest usable in laptop, narrow, and short viewports without changing desktop NW.js.
+- **Persistent Web Forge output**: character sheets, animation PNGs/GIFs, WAV sound effects, Effekseer effects and resources, outfits, and hair save into the active browser project and survive reloads.
+- **Complete browser Character Generator**: Web packages now include the Outfit and Hair engines plus all built-in style-part scripts.
+- **Reliable first-session Playtest**: service-worker startup waits for project-overlay control so freshly saved browser edits are immediately available in Playtest.
+- **Restored Windows test tooling**: RPG Maker and test-only plugins correctly detect Test and Battle Test while isolated Chromium profiles remain enabled.
 
-Earlier releases: **0.94.2** added safer project persistence, reproducible project creation, deployment controls, asset optimization, AppImages, and the public MV compatibility runtime; **0.94.1** expanded the Forge and runtime compatibility. See the [Changelog](CHANGELOG.md) for the complete history.
+Earlier releases: **0.94.3** added the browser-hosted editor and resilient deployment downloads; **0.94.2** added safer project persistence, reproducible project creation, deployment controls, asset optimization, AppImages, and the public MV compatibility runtime. See the [Changelog](CHANGELOG.md) for the complete history.
 
 ## Development Launchers
 

@@ -33,6 +33,7 @@ class DatabaseClassEditor {
         const rightColumn = document.createElement('div');
         rightColumn.style.cssText = 'display: flex; flex-direction: column; gap: 16px;';
         rightColumn.appendChild(this.createTraitsSection(classEntry));
+        rightColumn.appendChild(this.createNoteSection(classEntry));
 
         columnsWrapper.appendChild(leftColumn);
         columnsWrapper.appendChild(rightColumn);
@@ -48,10 +49,12 @@ class DatabaseClassEditor {
         section.innerHTML = `
             <div class="database-section-header">General Settings</div>
             <div class="database-section-content">
-                <div class="form-row">
-                    <div class="form-group">
-                        <label class="database-field-label">Name:</label>
-                        <input type="text" class="database-field-value" value="${classEntry.name || ''}" data-field="name" data-class-id="${classEntry.id}">
+                <div class="db-form" style="margin-bottom: 10px;">
+                    <div class="db-row-cols">
+                        <span class="db-col">
+                            <label>Name</label>
+                            <input type="text" class="database-field-value" value="${classEntry.name || ''}" data-field="name" data-class-id="${classEntry.id}">
+                        </span>
                     </div>
                 </div>
                 <div class="form-row">
@@ -83,6 +86,18 @@ class DatabaseClassEditor {
                              style="width: 100%; text-align: center; padding: 6px;">${classEntry.expParams ? classEntry.expParams[3] : 30}</div>
                     </div>
                 </div>
+            </div>
+        `;
+        return section;
+    }
+
+    createNoteSection(classEntry) {
+        const section = document.createElement('div');
+        section.className = 'database-section';
+        section.innerHTML = `
+            <div class="database-section-header">Note</div>
+            <div class="database-section-content">
+                <textarea class="database-field-value" rows="4" style="width: 100%; box-sizing: border-box;" data-field="note" data-class-id="${classEntry.id}">${classEntry.note || ''}</textarea>
             </div>
         `;
         return section;

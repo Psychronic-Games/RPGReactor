@@ -122,14 +122,37 @@ class DatabaseManager {
             const dataPath = this.path.join(projectPath, 'data');
             const filePath = this.path.join(dataPath, filename);
 
+            // RPG Maker regenerates $dataSystem.versionId on every editor
+            // save; the runtime's Scene_Load.reloadMapIfUpdated compares it
+            // against the save file to force a fresh map setup when data
+            // changed. Without the bump, loading a save made on an older
+            // version of an edited map leaves the save's Game_Events
+            // pointing at missing/renumbered $dataMap entries (per-frame
+            // TypeError at map load — soft-lock).
+            if (filename === 'System.json' && data) {
+                data.versionId = DatabaseManager.newVersionId();
+            }
+
             this.fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
             const entry = this.dataFiles.find(([, file]) => file === filename);
             if (entry) this.captureSavedState(entry[0]);
+
+            if (filename !== 'System.json' && this.data && this.data.system) {
+                this.data.system.versionId = DatabaseManager.newVersionId();
+                const systemPath = this.path.join(dataPath, 'System.json');
+                this.fs.writeFileSync(systemPath, JSON.stringify(this.data.system, null, 2));
+                const systemEntry = this.dataFiles.find(([, file]) => file === 'System.json');
+                if (systemEntry) this.captureSavedState(systemEntry[0]);
+            }
             return true;
         } catch (error) {
             console.error(`Error saving ${filename}:`, error);
             return false;
         }
+    }
+
+    static newVersionId() {
+        return Math.floor(Math.random() * 100000000);
     }
 
     // Helper methods to get specific data types

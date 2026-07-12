@@ -25,6 +25,15 @@ test('playtest profiles are isolated from deployed games on every desktop platfo
             assert.equal(fs.existsSync(first), true);
             assert.match(first, /RPGReactor[\\/]PlaytestProfile[\\/]nwjs-0\.113\.0[\\/][a-f0-9]{16}$/);
         }
+
+        const windowsTest = manager.resolvePlaytestUserDataDir(path, fs, firstProject, {
+            platform: 'win32',
+            baseDir: path.join(root, 'win32-mode'),
+            nwVersion: '0.107.0',
+            optionToken: 'test'
+        });
+        assert.match(windowsTest, /[a-f0-9]{16}&test$/);
+        assert.equal(fs.existsSync(windowsTest), true);
     } finally {
         fs.rmSync(root, { recursive: true, force: true });
     }
@@ -32,7 +41,7 @@ test('playtest profiles are isolated from deployed games on every desktop platfo
 
 test('playtest launches pass the source project to universal profile isolation', () => {
     const source = fs.readFileSync(path.join(editorRoot, 'src', 'PlaytestManager.js'), 'utf8');
-    assert.match(source, /resolvePlaytestUserDataDir\(path, fs, projectPath\)/);
+    assert.match(source, /optionToken: process\.platform === 'win32' \? mode : null/);
     assert.match(source, /platform === 'darwin'[\s\S]*?XDG_CONFIG_HOME/,
         'Linux and macOS receive explicit Reactor-owned profile roots');
     assert.match(source, /rpg-reactor-playtest-profile/,

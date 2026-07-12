@@ -144,10 +144,12 @@ class CharacterGenerator {
         // shipped parts unless the user removes them first.
         const path = require('path');
         const existingIds = new Set(RR_CHARACTER_REGISTRY.map(d => d.id));
-        this._loadPartsFromRoot(
-            path.join(process.cwd(), 'src', 'forge', 'CharacterGenerator', 'styles'),
-            existingIds
-        );
+        if (window.RPGReactorHost?.mode !== 'web') {
+            this._loadPartsFromRoot(
+                path.join(process.cwd(), 'src', 'forge', 'CharacterGenerator', 'styles'),
+                existingIds
+            );
+        }
         this._loadPartsFromRoot(
             path.join(this.projectPath, 'forge', 'character_generator', 'styles'),
             existingIds
@@ -344,6 +346,10 @@ class CharacterGenerator {
 
     _outfitEngine() {
         if (this._engineCache !== undefined) return this._engineCache;
+        if (typeof RR_OutfitEngine !== 'undefined') {
+            this._engineCache = RR_OutfitEngine;
+            return this._engineCache;
+        }
         try {
             const path = require('path');
             const abs = path.join(process.cwd(), 'src', 'forge', 'CharacterGenerator', 'procgen', 'outfit_engine.js');
@@ -1944,7 +1950,7 @@ class CharacterGenerator {
         if (drawThumbnails && !this._forgeWalking) this._drawForgePartThumbnails();
     }
 
-    _saveForgeOutfit() {
+    async _saveForgeOutfit() {
         const status = this.root && this.root.querySelector('.rr-forge-status');
         const setStatus = (msg, ok) => { if (status) { status.textContent = msg; status.style.color = ok ? 'var(--color-accent-bright)' : 'var(--color-text-muted)'; } };
         const eng = this._outfitEngine();
@@ -1976,9 +1982,21 @@ class CharacterGenerator {
 
         try {
             const fs = require('fs'), path = require('path');
-            const dir = path.join(process.cwd(), 'src', 'forge', 'CharacterGenerator', 'styles', styleId, 'parts', 'full outfits');
-            fs.mkdirSync(dir, { recursive: true });
-            fs.writeFileSync(path.join(dir, `${partId}.js`), js, 'utf8');
+            const webHost = window.RPGReactorHost?.mode === 'web' ? window.RPGReactorHost : null;
+            if (webHost) {
+                const projectPath = this._syncProjectPath();
+                const result = await webHost.saveFile({
+                    data: js,
+                    projectPath: projectPath ? path.join(projectPath, 'forge', 'character_generator', 'styles', styleId, 'parts', 'full outfits', `${partId}.js`) : null,
+                    suggestedName: `${partId}.js`,
+                    mimeType: 'text/javascript',
+                });
+                if (!result) return;
+            } else {
+                const dir = path.join(process.cwd(), 'src', 'forge', 'CharacterGenerator', 'styles', styleId, 'parts', 'full outfits');
+                fs.mkdirSync(dir, { recursive: true });
+                fs.writeFileSync(path.join(dir, `${partId}.js`), js, 'utf8');
+            }
         } catch (e) { setStatus('Could not write file: ' + e.message, false); return; }
 
         // Register/refresh in the live registry so it appears immediately.
@@ -2001,6 +2019,10 @@ class CharacterGenerator {
 
     _hairEngine() {
         if (this._hairEngineCache !== undefined) return this._hairEngineCache;
+        if (typeof RR_HAIR_ENGINE !== 'undefined') {
+            this._hairEngineCache = RR_HAIR_ENGINE;
+            return this._hairEngineCache;
+        }
         try {
             const path = require('path');
             const abs = path.join(process.cwd(), 'src', 'forge', 'CharacterGenerator', 'procgen', 'hair_engine.js');
@@ -2292,7 +2314,7 @@ class CharacterGenerator {
         });
     }
 
-    _saveHairPart() {
+    async _saveHairPart() {
         const status = this.root && this.root.querySelector('.rr-hair-status');
         const setStatus = (msg, ok) => { if (status) { status.textContent = msg; status.style.color = ok ? 'var(--color-accent-bright)' : 'var(--color-text-muted)'; } };
         const eng = this._hairEngine();
@@ -2318,9 +2340,21 @@ class CharacterGenerator {
 `RR_CHARACTER_REGISTRY.push({\n    id: ${JSON.stringify(partId)},\n    category: "hair",\n    name: ${JSON.stringify(cfg.name)},\n    tags: ${JSON.stringify(config.tags)},\n    params: [],\n    template: {\n        palette: {\n${palLines}\n        },\n        sheet: [\n${sheetLines}\n        ]\n    },\n    draw(buf, W, H, direction, frame, params) {\n        RR_CG_drawTemplatePart(buf, W, H, direction, frame, params, this);\n    }\n});\n`;
         try {
             const fs = require('fs'), path = require('path');
-            const dir = path.join(process.cwd(), 'src', 'forge', 'CharacterGenerator', 'styles', styleId, 'parts', 'hair');
-            fs.mkdirSync(dir, { recursive: true });
-            fs.writeFileSync(path.join(dir, `${partId}.js`), js, 'utf8');
+            const webHost = window.RPGReactorHost?.mode === 'web' ? window.RPGReactorHost : null;
+            if (webHost) {
+                const projectPath = this._syncProjectPath();
+                const result = await webHost.saveFile({
+                    data: js,
+                    projectPath: projectPath ? path.join(projectPath, 'forge', 'character_generator', 'styles', styleId, 'parts', 'hair', `${partId}.js`) : null,
+                    suggestedName: `${partId}.js`,
+                    mimeType: 'text/javascript',
+                });
+                if (!result) return;
+            } else {
+                const dir = path.join(process.cwd(), 'src', 'forge', 'CharacterGenerator', 'styles', styleId, 'parts', 'hair');
+                fs.mkdirSync(dir, { recursive: true });
+                fs.writeFileSync(path.join(dir, `${partId}.js`), js, 'utf8');
+            }
         } catch (e) { setStatus('Could not write file: ' + e.message, false); return; }
         for (let k = RR_CHARACTER_REGISTRY.length - 1; k >= 0; k--) {
             if (RR_CHARACTER_REGISTRY[k].id === partId) RR_CHARACTER_REGISTRY.splice(k, 1);
@@ -4528,9 +4562,10 @@ ${sheetJs}
         this._render();
     }
 
-    _saveProceduralSheet() {
-        const projectPath = this._requireProjectPath();
-        if (!projectPath) return;
+    async _saveProceduralSheet() {
+        const webHost = window.RPGReactorHost?.mode === 'web' ? window.RPGReactorHost : null;
+        const projectPath = this._syncProjectPath();
+        if (!projectPath && !webHost && !this._requireProjectPath()) return;
         const nameInput = this.root.querySelector('.rr-cgp-name');
         let name = (nameInput?.value || '').trim();
         if (!name) { alert('Enter a name for the character sheet.'); return; }
@@ -4561,8 +4596,19 @@ ${sheetJs}
         const outDir  = path.join(projectPath, 'img', 'characters');
         const outPath = path.join(outDir, `$${name}.png`);
         try {
+            const dataUrl = sheetCanvas.toDataURL('image/png');
+            if (webHost) {
+                const result = await webHost.saveFile({
+                    data: dataUrl,
+                    projectPath: projectPath ? outPath : null,
+                    suggestedName: `$${name}.png`,
+                    mimeType: 'image/png',
+                });
+                if (result) alert(result.project ? `Saved $${name}.png to img/characters/` : `Saved → ${result.path}`);
+                return;
+            }
             fs.mkdirSync(outDir, { recursive: true });
-            const base64 = sheetCanvas.toDataURL('image/png').replace(/^data:image\/png;base64,/, '');
+            const base64 = dataUrl.replace(/^data:image\/png;base64,/, '');
             fs.writeFileSync(outPath, Buffer.from(base64, 'base64'));
             alert(`Saved $${name}.png to img/characters/`);
         } catch (e) {
@@ -5018,9 +5064,10 @@ ${sheetJs}
         });
     }
 
-    _savePartsSheet() {
-        const projectPath = this._requireProjectPath();
-        if (!projectPath) return;
+    async _savePartsSheet() {
+        const webHost = window.RPGReactorHost?.mode === 'web' ? window.RPGReactorHost : null;
+        const projectPath = this._syncProjectPath();
+        if (!projectPath && !webHost && !this._requireProjectPath()) return;
         const input = this.root.querySelector('.rr-cg-name-input');
         let name = (input?.value || '').trim();
         if (!name) { alert('Enter a name for the character sheet.'); return; }
@@ -5031,8 +5078,19 @@ ${sheetJs}
         const outDir  = path.join(projectPath, 'img', 'characters');
         const outPath = path.join(outDir, `$${name}.png`);
         try {
+            const dataUrl = sheetCanvas.toDataURL('image/png');
+            if (webHost) {
+                const result = await webHost.saveFile({
+                    data: dataUrl,
+                    projectPath: projectPath ? outPath : null,
+                    suggestedName: `$${name}.png`,
+                    mimeType: 'image/png',
+                });
+                if (result) alert(result.project ? `Saved $${name}.png to img/characters/` : `Saved → ${result.path}`);
+                return;
+            }
             fs.mkdirSync(outDir, { recursive: true });
-            const b64 = sheetCanvas.toDataURL('image/png').replace(/^data:image\/png;base64,/, '');
+            const b64 = dataUrl.replace(/^data:image\/png;base64,/, '');
             fs.writeFileSync(outPath, Buffer.from(b64, 'base64'));
             alert(`Saved $${name}.png to img/characters/`);
         } catch (e) { console.error('CharacterGenerator parts save error:', e); alert('Save failed: ' + e.message); }

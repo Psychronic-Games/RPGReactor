@@ -173,6 +173,46 @@
                 });
             } catch (e) {}
         }
+        // Some legacy video/menu plugins call Texture.update() before the
+        // underlying video/canvas has valid dimensions. Pixi8 then tries to
+        // upload a 0x0/NaN/oversized TextureSource and poisons the current
+        // framebuffer, causing repeated GL_INVALID_FRAMEBUFFER_OPERATION spam.
+        if (renderer.texture && renderer.texture.onSourceUpdate &&
+            !renderer.texture.onSourceUpdate.__compatDimensionGuard) {
+            const originalOnSourceUpdate = renderer.texture.onSourceUpdate;
+            renderer.texture.onSourceUpdate = function(source) {
+                if (source) {
+                    const gl = renderer.gl || (renderer.context && renderer.context.gl);
+                    const max = gl && gl.getParameter ? gl.getParameter(gl.MAX_TEXTURE_SIZE) : 16384;
+                    const pw = Number(source.pixelWidth);
+                    const ph = Number(source.pixelHeight);
+                    const invalid = !isFinite(pw) || !isFinite(ph) || pw < 1 || ph < 1 || pw > max || ph > max;
+                    if (invalid) {
+                        const safeW = Math.max(1, Math.min(max, isFinite(pw) ? pw : 1));
+                        const safeH = Math.max(1, Math.min(max, isFinite(ph) ? ph : 1));
+                        try {
+                            if (typeof source.resize === "function") {
+                                source.resize(safeW, safeH, source._resolution || source.resolution || 1);
+                            } else {
+                                source.pixelWidth = safeW;
+                                source.pixelHeight = safeH;
+                                source.width = safeW;
+                                source.height = safeH;
+                            }
+                        } catch (e) {
+                            try {
+                                source.pixelWidth = 1;
+                                source.pixelHeight = 1;
+                                source.width = 1;
+                                source.height = 1;
+                            } catch (e2) {}
+                        }
+                    }
+                }
+                return originalOnSourceUpdate.apply(this, arguments);
+            };
+            renderer.texture.onSourceUpdate.__compatDimensionGuard = true;
+        }
     };
 
     // -------------------------------------------------------------------------
@@ -216,29 +256,30 @@
     //      with a plain value descriptor. Subsequent accesses then return the
     //      class directly with no warning fired.
     // -------------------------------------------------------------------------
-    if (PIXI.filters) {
-        const filterNames = [
-            "AlphaFilter", "BlurFilter", "BlurFilterPass",
-            "ColorMatrixFilter", "DisplacementFilter",
-            "FXAAFilter", "NoiseFilter"
-        ];
-        for (const name of filterNames) {
-            if (!PIXI[name]) {
-                // v5/v6 path: only filters namespace has it; copy to top-level.
-                if (PIXI.filters[name]) PIXI[name] = PIXI.filters[name];
-                continue;
-            }
-            // v7+ path: replace the deprecation getter with a plain value.
-            try {
-                Object.defineProperty(PIXI.filters, name, {
-                    value: PIXI[name],
-                    writable: true,
-                    configurable: true,
-                    enumerable: true
-                });
-            } catch (e) {
-                // Non-configurable descriptor; cannot silence. Very rare.
-            }
+    const filterNames = [
+        "AlphaFilter", "BlurFilter", "BlurFilterPass",
+        "ColorMatrixFilter", "DisplacementFilter",
+        "FXAAFilter", "NoiseFilter"
+    ];
+    if (!PIXI.filters) PIXI.filters = {};
+    for (const name of filterNames) {
+        if (!PIXI[name]) {
+            // v5/v6 path: only filters namespace has it; copy to top-level.
+            if (PIXI.filters[name]) PIXI[name] = PIXI.filters[name];
+            continue;
+        }
+        // v7+ path: replace the deprecation getter with a plain value. v8 may
+        // have no PIXI.filters namespace at all; create it so MV plugins using
+        // `PIXI.filters.BlurFilter` (Irina_PerformanceUpgrade) still work.
+        try {
+            Object.defineProperty(PIXI.filters, name, {
+                value: PIXI[name],
+                writable: true,
+                configurable: true,
+                enumerable: true
+            });
+        } catch (e) {
+            // Non-configurable descriptor; cannot silence. Very rare.
         }
     }
 
@@ -995,6 +1036,8 @@
                 source instanceof HTMLVideoElement) {
                 const videoSource = new PIXI.VideoSource({
                     resource: source,
+                    width: 1,
+                    height: 1,
                     autoLoad: true,
                     autoPlay: false,
                     updateFPS: 0
@@ -1117,7 +1160,19 @@
     // SpritePipe specifically needs `_gpuData` to be present; check both the
     // canonical flag and the field it actually dereferences.
     const _isDeadSprite = (sprite) => {
-        return !sprite || sprite.destroyed === true || sprite._gpuData == null;
+        if (!sprite || sprite.destroyed === true || sprite._gpuData == null) {
+            return true;
+        }
+        // A LIVE sprite whose texture source was destroyed (a shared bitmap
+        // destroyed while other sprites still reference it) crashes
+        // GlTextureSystem.bind reading the nulled style -> the whole render
+        // pass aborts -> black screen. Treat it as unrenderable and let the
+        // warning surface the offender.
+        const tex = sprite.texture;
+        if (tex && (!tex.source || tex.source.destroyed === true || !tex.source.style)) {
+            return true;
+        }
+        return false;
     };
     const _warnedDestroyKeys = Object.create(null);
     const _describeDisplay = (obj) => {
@@ -1177,6 +1232,33 @@
         PIXI.SpritePipe.prototype.__destroyedSpriteGuarded = true;
         console.log("pixi_compat: installed SpritePipe destroyed-sprite guard " +
             "(prevents render crash when destroyed sprite still in scene graph)");
+    }
+    // PIXI v8 core bug: BlendModePipe.popBlendMode indexes the blend stack
+    // with `this._activeBlendMode.length` — the LENGTH OF THE MODE STRING —
+    // instead of `this._blendModeStack.length`, and throws outright when
+    // _activeBlendMode is still undefined (a pipe instantiated mid-frame
+    // only gets its prerender initializer from the NEXT frame). The first
+    // blend-mode pop of a session (e.g. an enemy collapse effect's additive
+    // blend) crashed the render pass: "reading 'length' of undefined" ->
+    // aborted render -> permanent black screen.
+    if (PIXI.BlendModePipe && PIXI.BlendModePipe.prototype &&
+            !PIXI.BlendModePipe.prototype.__popBlendModeFixed) {
+        PIXI.BlendModePipe.prototype.popBlendMode = function(instructionSet) {
+            if (this._activeBlendMode === undefined) this._activeBlendMode = "normal";
+            this._blendModeStack.pop();
+            const blendMode =
+                this._blendModeStack[this._blendModeStack.length - 1] ?? "normal";
+            this.setBlendMode(null, blendMode, instructionSet);
+        };
+        const originalPushBlendMode = PIXI.BlendModePipe.prototype.pushBlendMode;
+        PIXI.BlendModePipe.prototype.pushBlendMode = function(renderable, blendMode, instructionSet) {
+            if (this._activeBlendMode === undefined) this._activeBlendMode = "normal";
+            return originalPushBlendMode.call(this, renderable, blendMode, instructionSet);
+        };
+        PIXI.BlendModePipe.prototype.__popBlendModeFixed = true;
+        console.log("pixi_compat: fixed BlendModePipe.popBlendMode stack indexing " +
+            "(v8 bug: read _activeBlendMode.length; first blend pop crashed the " +
+            "render pass -> black screen after enemy collapse)");
     }
     // FilterSystem._calculateFilterArea -> getFastGlobalBounds ->
     // Container._getGlobalBoundsRecursive crashes on destroyed children too

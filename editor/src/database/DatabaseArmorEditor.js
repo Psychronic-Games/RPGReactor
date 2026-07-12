@@ -24,59 +24,57 @@ class DatabaseArmorEditor {
         wrapper.style.padding = '16px';
         wrapper.style.position = 'relative';
 
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
+
         // Get armor types and equip types from system data
         const armorTypeNames = this.databaseManager.getSystem()?.armorTypes || [];
         const equipTypeNames = this.databaseManager.getSystem()?.equipTypes || [];
 
         // General Settings
-        const generalWrapper = document.createElement('div');
-        generalWrapper.style.marginBottom = '16px';
-
         const generalSection = document.createElement('div');
         generalSection.className = 'database-section';
         generalSection.innerHTML = `
             <div class="database-section-header">General</div>
-            <div class="database-section-content" style="display: flex; gap: 16px;">
-                <div style="display: flex; flex-direction: column; align-items: center; min-width: 60px;">
-                    <label class="database-field-label" style="margin-bottom: 4px;">Icon:</label>
+            <div class="database-section-content"><div class="db-general-grid">
+                <div style="display: flex; flex-direction: column; align-items: center; gap: 6px;">
+                    <label style="font-size: 11px; color: var(--color-text-muted); font-weight: 600;">Icon</label>
                     <div id="armor-icon-container-${armor.id}"></div>
                 </div>
-                <div style="flex: 1;">
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label class="database-field-label">Name:</label>
+                <div class="db-form db-fill">
+                    <div class="db-row-cols">
+                        <span class="db-col">
+                            <label>Name</label>
                             <input type="text" class="database-field-value" value="${armor.name || ''}" data-field="name" data-armor-id="${armor.id}">
-                        </div>
+                        </span>
                     </div>
-                    <div class="form-row">
-                        <label class="database-field-label">Description:</label>
+                    <div class="db-row-cols db-row-grow">
+                        <span class="db-col">
+                            <label>Description</label>
+                            <textarea class="database-field-value" rows="2" data-field="description" data-armor-id="${armor.id}">${armor.description || ''}</textarea>
+                        </span>
                     </div>
-                    <div class="form-row">
-                        <textarea class="database-field-value" rows="2" style="width: 100%;" data-field="description" data-armor-id="${armor.id}">${armor.description || ''}</textarea>
-                    </div>
-                    <div class="form-row">
-                        <div class="form-group-fixed">
-                            <label class="database-field-label">Armor Type:</label>
-                            <select class="database-field-value" style="width: 150px;" data-field="atypeId" data-armor-id="${armor.id}">
+                    <div class="db-row-cols">
+                        <span class="db-col">
+                            <label>${tt('Armor Type')}</label>
+                            <select class="database-field-value" data-field="atypeId" data-armor-id="${armor.id}">
                                 ${armorTypeNames.map((name, idx) => idx > 0 && name ? `<option value="${idx}" ${armor.atypeId === idx ? 'selected' : ''}>${name}</option>` : '').join('')}
                             </select>
-                        </div>
-                        <div class="form-group-fixed">
-                            <label class="database-field-label">Equip Type:</label>
-                            <select class="database-field-value" style="width: 150px;" data-field="etypeId" data-armor-id="${armor.id}">
+                        </span>
+                        <span class="db-col">
+                            <label>${tt('Equip Type')}</label>
+                            <select class="database-field-value" data-field="etypeId" data-armor-id="${armor.id}">
                                 ${equipTypeNames.map((name, idx) => idx > 0 && name ? `<option value="${idx}" ${armor.etypeId === idx ? 'selected' : ''}>${name}</option>` : '').join('')}
                             </select>
-                        </div>
-                        <div class="form-group-fixed">
-                            <label class="database-field-label">Price:</label>
-                            <input type="number" class="database-field-value database-field-value-small" value="${armor.price || 0}" data-field="price" data-armor-id="${armor.id}">
-                        </div>
+                        </span>
+                        <span class="db-col">
+                            <label>Price</label>
+                            <input type="number" class="database-field-value" value="${armor.price || 0}" data-field="price" data-armor-id="${armor.id}">
+                        </span>
                     </div>
-                </div>
+                </div></div>
             </div>
         `;
-        generalWrapper.appendChild(generalSection);
-        wrapper.appendChild(generalWrapper);
+        // General flows into the two-column grid with the other sections
 
         // Add icon to the designated container after the DOM is ready
         setTimeout(() => {
@@ -89,6 +87,7 @@ class DatabaseArmorEditor {
         // Grid wrapper for sections below general
         const gridWrapper = document.createElement('div');
         gridWrapper.className = 'database-sections-grid';
+        gridWrapper.appendChild(generalSection);
 
         // Parameters Section
         const params = armor.params || [0,0,0,0,0,0,0,0];

@@ -1,6 +1,6 @@
 # RPG Reactor
 
-RPG Reactor 0.94.3 is an open-source, cross-platform RPG game editor and runtime for RPG Maker MV/MZ-compatible projects, built on NW.js and PixiJS v8. RPG Reactor provides its own modern PIXI 8 runtime while preserving compatibility with RPG Maker project data and targeting backwards compatibility with RPG Maker MZ and MV plugins. Create 2D RPG games with a complete development environment featuring map editing, event scripting, database management, and game testing capabilities.
+RPG Reactor 0.94.4 is an open-source, cross-platform RPG game editor and runtime for RPG Maker MV/MZ-compatible projects, built on NW.js and PixiJS v8. RPG Reactor provides its own modern PIXI 8 runtime while preserving compatibility with RPG Maker project data and targeting backwards compatibility with both RPG Maker MZ and MV plugins. Create 2D RPG games with a complete development environment featuring map editing, event scripting, database management, and game testing capabilities.
 
 ## Features
 
@@ -36,15 +36,15 @@ RPG Reactor 0.94.3 is an open-source, cross-platform RPG game editor and runtime
 - **Find/search**: Locate events across your project
 
 ### Database Editors
-Comprehensive editors for all game data with right-click context menu clipboard operations (Copy, Cut, Paste, Duplicate), keyboard shortcuts (Ctrl+C/X/V/D, Delete, Ctrl+Z undo) on list entries, and shortcut isolation so database tools do not conflict with map or event editing:
+Comprehensive editors for all game data with right-click context menu clipboard operations (Copy, Cut, Paste, Duplicate), keyboard shortcuts (Ctrl+C/X/V/D, Delete, Ctrl+Z undo) on list entries, and shortcut isolation so database tools do not conflict with map or event editing. Entry lists show a framed mini icon beside each name — database icons for skills, items, weapons, armors, and states; face portraits for actors; battler thumbnails for enemies. Skills, Items, and Weapons assign animations through a searchable picker modal with a live playing preview of both sprite-sheet and Effekseer animations:
 
 | Editor | Purpose |
 |--------|---------|
 | **Actors** | Create player characters with stats, equipment, traits, and clickable character/face sheet cell selection |
 | **Classes** | Define jobs with parameter curves, learnable skills, and EXP formulas |
-| **Skills** | Design abilities with damage formulas, MP/TP costs, effects CRUD, and invocation settings |
-| **Items** | Create consumables with damage formulas, effects CRUD, and usage restrictions |
-| **Weapons** | Configure weapons with parameters, elements, and traits |
+| **Skills** | Design abilities with damage formulas, MP/TP costs, effects CRUD, required weapon types, and invocation settings including an animation picker |
+| **Items** | Create consumables with damage formulas, TP gain, effects CRUD, usage restrictions, and an animation picker |
+| **Weapons** | Configure weapons with parameters, elements, traits, and an attack animation picker |
 | **Armors** | Set up defensive equipment with parameters, resistances, and full trait editing |
 | **Enemies** | Build enemies with visual battler preview (charset-aware), hue slider with live preview, parameters, drop items, action patterns, and traits |
 | **Troops** | Compose enemy groups with visual replace picker, visibility toggles, and event page scripting |

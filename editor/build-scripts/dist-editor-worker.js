@@ -739,6 +739,18 @@ function buildWeb(stageRoot, stagingDir) {
     const sourceHtml = fs.readFileSync(path.join(stageRoot, 'index.html'), 'utf8');
     const scriptPattern = /<script\s+src="(src\/[^"]+)"\s*><\/script>/g;
     const sourceScripts = [...sourceHtml.matchAll(scriptPattern)].map(match => match[1]);
+    const characterGeneratorEntry = 'src/forge/CharacterGenerator/CharacterGenerator.js';
+    const characterGeneratorIndex = sourceScripts.indexOf(characterGeneratorEntry);
+    if (characterGeneratorIndex < 0) throw new Error('Character Generator entry point is missing from index.html.');
+    const characterStyleRoot = path.join(stageRoot, 'src', 'forge', 'CharacterGenerator', 'styles');
+    const characterStyleScripts = walkWebFiles(characterStyleRoot)
+        .filter(entry => entry.type === 'file' && entry.path.endsWith('.js'))
+        .map(entry => `src/forge/CharacterGenerator/styles/${entry.path}`)
+        .sort();
+    sourceScripts.splice(characterGeneratorIndex, 0,
+        'src/forge/CharacterGenerator/procgen/outfit_engine.js',
+        'src/forge/CharacterGenerator/procgen/hair_engine.js',
+        ...characterStyleScripts);
     const bundleScripts = sourceScripts.filter(source => source !== 'src/main.js' && !source.startsWith('src/web/'));
     const bundle = bundleScripts.map(source => {
         const contents = fs.readFileSync(path.join(stageRoot, source), 'utf8');

@@ -26,42 +26,52 @@ class DatabaseStateEditor {
         const removalNames = ['None', 'End of Action', 'End of Turn'].map(tt);
 
         // General Settings with icon
-        const generalWrapper = document.createElement('div');
-        generalWrapper.style.marginBottom = '16px';
-
         const generalSection = document.createElement('div');
         generalSection.className = 'database-section';
         generalSection.innerHTML = `
             <div class="database-section-header">General</div>
-            <div class="database-section-content" style="display: flex; gap: 16px;">
-                <div style="display: flex; flex-direction: column; align-items: center; min-width: 60px;">
-                    <label class="database-field-label" style="margin-bottom: 4px;">Icon:</label>
+            <div class="database-section-content"><div class="db-general-grid">
+                <div style="display: flex; flex-direction: column; align-items: center; gap: 6px;">
+                    <label style="font-size: 11px; color: var(--color-text-muted); font-weight: 600;">Icon</label>
                     <div id="state-icon-container-${state.id}" style="cursor: pointer;" title="Click to change icon"></div>
                 </div>
-                <div style="flex: 1;">
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label class="database-field-label">Name:</label>
+                <div class="db-form">
+                    <div class="db-row-cols">
+                        <span class="db-col">
+                            <label>Name</label>
                             <input type="text" class="database-field-value" value="${this.escapeHTML(state.name || '')}" data-field="name" data-state-id="${state.id}">
-                        </div>
+                        </span>
                     </div>
-                    <div class="form-row">
-                        <div class="form-group-fixed">
-                            <label class="database-field-label">Priority:</label>
-                            <input type="number" class="database-field-value database-field-value-small" value="${state.priority != null ? state.priority : 50}" min="0" max="100" data-field="priority" data-state-id="${state.id}">
-                        </div>
-                        <div class="form-group-fixed">
-                            <label class="database-field-label">Restriction:</label>
-                            <select class="database-field-value" style="width: 150px;" data-field="restriction" data-state-id="${state.id}">
+                    <div class="db-row-cols">
+                        <span class="db-col">
+                            <label>Priority</label>
+                            <input type="number" class="database-field-value" value="${state.priority != null ? state.priority : 50}" min="0" max="100" data-field="priority" data-state-id="${state.id}">
+                        </span>
+                        <span class="db-col">
+                            <label>Restriction</label>
+                            <select class="database-field-value" data-field="restriction" data-state-id="${state.id}">
                                 ${restrictionNames.map((name, idx) => `<option value="${idx}" ${state.restriction === idx ? 'selected' : ''}>${name}</option>`).join('')}
                             </select>
-                        </div>
+                        </span>
                     </div>
-                </div>
+                    <div class="db-row-cols">
+                        <span class="db-col">
+                            <label>${tt('[SV] Motion')}</label>
+                            <select class="database-field-value" data-field="motion" data-state-id="${state.id}">
+                                ${['Normal', 'Abnormal', 'Sleep', 'Dead'].map((name, idx) => `<option value="${idx}" ${(state.motion || 0) === idx ? 'selected' : ''}>${tt(name)}</option>`).join('')}
+                            </select>
+                        </span>
+                        <span class="db-col">
+                            <label>${tt('[SV] Overlay')}</label>
+                            <select class="database-field-value" data-field="overlay" data-state-id="${state.id}">
+                                ${['None', 'Poison', 'Blind', 'Silence', 'Rage', 'Confusion', 'Fascination', 'Sleep', 'Paralyze', 'Curse', 'Fear'].map((name, idx) => `<option value="${idx}" ${(state.overlay || 0) === idx ? 'selected' : ''}>${tt(name)}</option>`).join('')}
+                            </select>
+                        </span>
+                    </div>
+                </div></div>
             </div>
         `;
-        generalWrapper.appendChild(generalSection);
-        wrapper.appendChild(generalWrapper);
+        // General flows into the two-column grid with the other sections
 
         // Add icon to the designated container after DOM ready
         setTimeout(() => {
@@ -76,6 +86,7 @@ class DatabaseStateEditor {
 
         const gridWrapper = document.createElement('div');
         gridWrapper.className = 'database-sections-grid';
+        gridWrapper.appendChild(generalSection);
 
         // Duration Settings
         const durationSection = document.createElement('div');
@@ -178,7 +189,6 @@ class DatabaseStateEditor {
         // Traits Section
         const traitsSection = document.createElement('div');
         traitsSection.className = 'database-section';
-        traitsSection.style.gridColumn = '1 / -1';
         traitsSection.setAttribute('tabindex', '0');
         traitsSection.style.outline = 'none';
         traitsSection.innerHTML = `
@@ -192,7 +202,6 @@ class DatabaseStateEditor {
         // Note Section
         const noteSection = document.createElement('div');
         noteSection.className = 'database-section';
-        noteSection.style.gridColumn = '1 / -1';
         noteSection.innerHTML = `
             <div class="database-section-header">Note</div>
             <div class="database-section-content">
