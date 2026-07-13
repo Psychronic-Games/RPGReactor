@@ -1,6 +1,6 @@
 # RPG Reactor
 
-RPG Reactor 0.94.4 is an open-source, cross-platform RPG game editor and runtime for RPG Maker MV/MZ-compatible projects. RPG Reactor provides its own modern PIXI 8-based runtime while preserving compatibility with RPG Maker project data and targeting backwards compatibility with both RPG Maker MZ and MV plugins, including mixing plugins from both engines within a single project through complementary MZ and MV compatibility layers.
+RPG Reactor 0.94.5 is an open-source, cross-platform RPG game editor and runtime for RPG Maker MV/MZ-compatible projects. RPG Reactor provides its own modern PIXI 8-based runtime while preserving compatibility with RPG Maker project data and targeting backwards compatibility with both RPG Maker MZ and MV plugins, including mixing plugins from both engines within a single project through complementary MZ and MV compatibility layers.
 
 Use RPG Reactor to create, edit, playtest, and package 2D RPGs with familiar RPG Maker-style maps, events, database records, plugins, and deployment workflows, without depending on the original RPG Maker runtime or editor.
 
@@ -23,7 +23,7 @@ RPGReactor/
 
 - [Editor README](editor/README.md): detailed feature list, source launch steps, project structure, shortcuts, and technical notes.
 - [Changelog](CHANGELOG.md): GitHub-facing release progress and links to the detailed editor changelog.
-- [RPG Reactor 0.94.4 release overview](docs/devlogs/2026-07-11-rpg-reactor-0.94.4.md): public explanation of responsive browser editing, persistent Web Forge exports, and restored Windows test tooling.
+- [RPG Reactor 0.94.5 release overview](docs/devlogs/2026-07-12-rpg-reactor-0.94.5.md): public explanation of the performance release — full-speed large maps, the built-in F10 profiler, smooth tactical battles, and Ultra Mode 7 fixes.
 - [Maintainer docs](docs/README.md): workflows that are useful for project maintenance but are not required for normal editor use.
 
 ## Feature Overview
@@ -39,15 +39,15 @@ RPGReactor/
 - **Build & deploy**: one-click isolated playtests; cross-platform game packaging for Windows, macOS, Linux, and Web; optional Linux AppImages for games and the editor; configurable NW.js releases and runtime locales; optional staged PNG/OGG optimization; and an editor distribution builder with SHA-256 checksums.
 - **18-language editor localization** and a theme system with multiple color palettes in light and dark modes.
 
-## What's New in 0.94.4
+## What's New in 0.94.5
 
-- **Responsive Web workspace**: browser-only layout rules keep the workspace, toolbars, sidebar, dialogs, splash screen, notices, and Playtest usable in laptop, narrow, and short viewports without changing desktop NW.js.
-- **Persistent Web Forge output**: character sheets, animation PNGs/GIFs, WAV sound effects, Effekseer effects and resources, outfits, and hair save into the active browser project and survive reloads.
-- **Complete browser Character Generator**: Web packages now include the Outfit and Hair engines plus all built-in style-part scripts.
-- **Reliable first-session Playtest**: service-worker startup waits for project-overlay control so freshly saved browser edits are immediately available in Playtest.
-- **Restored Windows test tooling**: RPG Maker and test-only plugins correctly detect Test and Battle Test while isolated Chromium profiles remain enabled.
+- **Full-speed large maps**: detach-based offscreen culling and pooled tilemap repaints take object-heavy maps (hundreds of events with plugin overlay windows) from 30 FPS to 180, with scroll spikes and edge-tile artifacts eliminated.
+- **Built-in frame profiler**: press F10 in any Reactor game to record per-phase timings for every slow frame — map updates, sprites, windows, culling, repaints, render, GC, and off-loop stalls — written to `save/reactor-profile.json`. Companion console helpers diagnose live animation sprites. Zero cost until activated.
+- **Smooth tactical battles**: LeTBS enemy AI decisions no longer freeze the frame (AoE evaluation memoized, pathfinding rebuilt), and leaked battle animations no longer ghost over themselves.
+- **Ultra Mode 7, fixed and fast**: correct plugin-branch detection (`Utils.RPGMAKER_NAME` reports `"MZ"`), a compatibility bridge for pre-2.2.0 plugin releases, crash fixes, seam fixes, and GPU buffer caching (36.8ms → 4ms median frame).
+- **Deeper MV compatibility**: two-tier layer (MV plugin APIs for every game; MV game semantics only for MV-authored games), fixed interpreter wait contracts, seamless looping animations, instant battle victory, native-format-first saves, and MV-style tolerance of unhandled promise rejections.
 
-Earlier releases: **0.94.3** added the browser-hosted editor and resilient deployment downloads; **0.94.2** added safer project persistence, reproducible project creation, deployment controls, asset optimization, AppImages, and the public MV compatibility runtime. See the [Changelog](CHANGELOG.md) for the complete history.
+Earlier releases: **0.94.4** made the browser editor responsive with persistent Web Forge output and restored Windows test tooling; **0.94.3** added the browser-hosted editor and resilient deployment downloads; **0.94.2** added safer project persistence, reproducible project creation, deployment controls, asset optimization, AppImages, and the public MV compatibility runtime. See the [Changelog](CHANGELOG.md) for the complete history.
 
 ## Development Launchers
 
