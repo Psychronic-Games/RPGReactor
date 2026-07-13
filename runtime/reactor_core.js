@@ -505,6 +505,7 @@ Graphics.initialize = async function() {
     this._loadingSpinner = null;
     this._stretchEnabled = this._defaultStretchMode();
     this._app = null;
+    this._startRequested = false;
     this._effekseer = null;
     this._wasLoading = false;
 
@@ -583,6 +584,11 @@ Graphics.setTickHandler = function(handler) {
  * Starts the game loop.
  */
 Graphics.startGameLoop = function() {
+    // The PIXI application is created asynchronously. Plugins that alias
+    // SceneManager.run/initialize with non-async wrappers drop that promise,
+    // so this can be reached before the app exists. Always record the
+    // requested loop state; _createPixiApp honors it once the app is ready.
+    this._startRequested = true;
     if (this._app) {
         this._app.start();
     }
@@ -592,6 +598,7 @@ Graphics.startGameLoop = function() {
  * Stops the game loop.
  */
 Graphics.stopGameLoop = function() {
+    this._startRequested = false;
     if (this._app) {
         this._app.stop();
     }
@@ -1485,9 +1492,14 @@ Graphics._createPixiApp = async function() {
         // v5/v6/v7: sync constructor takes options directly.
         const isV8App =
             typeof PIXI.Application.prototype.init === "function";
+        // Keep the app local until it is fully initialized: on v8 the
+        // start/stop/ticker members only exist after init() resolves, and
+        // startGameLoop/stopGameLoop can run mid-init when a plugin's
+        // non-async SceneManager wrapper breaks the await chain.
+        let app;
         if (isV8App) {
-            this._app = new PIXI.Application();
-            await this._app.init({
+            app = new PIXI.Application();
+            await app.init({
                 canvas: this._canvas,
                 autoStart: false
                 // (Note) useBackBuffer was previously enabled here for the
@@ -1504,16 +1516,20 @@ Graphics._createPixiApp = async function() {
             // throw otherwise. Must run AFTER init so v8's own systems (like
             // .texture) have already registered first.
             if (typeof window.installLegacyRendererStubs === "function") {
-                window.installLegacyRendererStubs(this._app.renderer);
+                window.installLegacyRendererStubs(app.renderer);
             }
         } else {
-            this._app = new PIXI.Application({
+            app = new PIXI.Application({
                 view: this._canvas,
                 autoStart: false
             });
         }
-        this._app.ticker.remove(this._app.render, this._app);
-        this._app.ticker.add(this._onTick, this);
+        app.ticker.remove(app.render, app);
+        app.ticker.add(this._onTick, this);
+        this._app = app;
+        if (this._startRequested) {
+            this._app.start();
+        }
     } catch (e) {
         console.error("Graphics._createPixiApp failed:", e);
         this._app = null;

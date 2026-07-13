@@ -3059,29 +3059,50 @@
                 fragment = fragment.replace(/\bgl_FragColor\b/g, "finalColor");
                 return fragment;
             };
-            PIXI.Filter = class MVCompatFilter extends OriginalFilter {
-                constructor(vertexSrc, fragmentSrc, uniforms) {
-                    if (typeof vertexSrc === "string" || typeof fragmentSrc === "string") {
-                        fragmentSrc = translateFragment(fragmentSrc);
-                        const shaderSource = defaultFilterVertex + "\n" + (fragmentSrc || "");
-                        const filterUniforms = new PIXI.UniformGroup(buildUniformStructures(shaderSource, uniforms));
-                        super({
-                            glProgram: PIXI.GlProgram.from({
-                                vertex: defaultFilterVertex,
-                                fragment: fragmentSrc,
-                                name: "mv-compat-filter"
-                            }),
-                            resources: { filterUniforms: filterUniforms }
-                        });
-                        this.uniforms = filterUniforms.uniforms;
-                        this.__mvCompatUniformGroup = filterUniforms;
-                    } else {
-                        super(vertexSrc);
-                    }
+            const constructCompatFilter = function(vertexSrc, fragmentSrc, uniforms, newTarget) {
+                if (typeof vertexSrc === "string" || typeof fragmentSrc === "string") {
+                    fragmentSrc = translateFragment(fragmentSrc);
+                    const shaderSource = defaultFilterVertex + "\n" + (fragmentSrc || "");
+                    const filterUniforms = new PIXI.UniformGroup(buildUniformStructures(shaderSource, uniforms));
+                    const inst = Reflect.construct(OriginalFilter, [{
+                        glProgram: PIXI.GlProgram.from({
+                            vertex: defaultFilterVertex,
+                            fragment: fragmentSrc,
+                            name: "mv-compat-filter"
+                        }),
+                        resources: { filterUniforms: filterUniforms }
+                    }], newTarget);
+                    inst.uniforms = filterUniforms.uniforms;
+                    inst.__mvCompatUniformGroup = filterUniforms;
+                    return inst;
                 }
+                return Reflect.construct(OriginalFilter, [vertexSrc], newTarget);
             };
-            Object.setPrototypeOf(PIXI.Filter, OriginalFilter);
-            PIXI.Filter.prototype.constructor = PIXI.Filter;
+            // Function-style (not class) so ES5 subclasses can invoke it as
+            // `PIXI.Filter.call(this, vtx, frag, uniforms)` — a class
+            // constructor throws when called without `new`.
+            const MVCompatFilter = function(vertexSrc, fragmentSrc, uniforms) {
+                if (new.target) {
+                    // `new PIXI.Filter(...)` or `super(...)` from a subclass:
+                    // the returned object replaces `this`, carrying
+                    // new.target's prototype.
+                    return constructCompatFilter(vertexSrc, fragmentSrc, uniforms, new.target);
+                }
+                // ES5 pattern: the caller's `new MyFilter()` already created
+                // `this` with the right prototype chain; graft a real
+                // filter's own state onto it. (v8 keeps all filter state in
+                // own properties, methods on the prototype, so the graft is
+                // complete.)
+                const inst = constructCompatFilter(vertexSrc, fragmentSrc, uniforms, MVCompatFilter);
+                for (const key of Reflect.ownKeys(inst)) {
+                    Object.defineProperty(this, key, Object.getOwnPropertyDescriptor(inst, key));
+                }
+                return this;
+            };
+            MVCompatFilter.prototype = Object.create(OriginalFilter.prototype);
+            MVCompatFilter.prototype.constructor = MVCompatFilter;
+            Object.setPrototypeOf(MVCompatFilter, OriginalFilter);
+            PIXI.Filter = MVCompatFilter;
             PIXI.Filter.__mvCompatWrapped = true;
         }
         if (PIXI.Texture && PIXI.Texture.prototype &&

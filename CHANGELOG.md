@@ -12,6 +12,8 @@ This root changelog summarizes public release progress for GitHub; larger releas
 
 ### Fixed
 
+- Runtime: games no longer crash at startup with `this._app.start is not a function` or hang on a black screen when plugins alias `SceneManager.run`/`initialize` with non-async wrappers (VisuMZ Core Engine among them) — such wrappers drop the promise from PIXI v8's async graphics initialization, letting the game-loop start be reached mid-init; the loop start is now deferred until the renderer is ready, whatever the plugin wrapper timing.
+- Runtime: MV-era plugins that construct filters ES5-style (`PIXI.Filter.call(this, vertex, fragment, uniforms)`) work under PIXI v8 instead of throwing "class constructor cannot be invoked without new".
 - Web editor: database entry lists show their mini preview icons (skill/item/weapon/armor/state icons, actor face portraits, enemy battler thumbnails) in the browser edition — the renderer bailed without NW.js and painted via CSS `file://` backgrounds the browser host's URL bridge does not rewrite; icons now resolve through the host's project URLs. The character/face/SV-battler/icon picker dialogs also open in the browser edition instead of alerting that NW.js is required.
 
 ## [0.94.5] - 2026-07-12
