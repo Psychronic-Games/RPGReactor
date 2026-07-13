@@ -2,7 +2,7 @@
 
 All notable changes to RPG Reactor will be documented in this file.
 
-This root changelog summarizes public release progress for GitHub. The detailed editor changelog lives at [`editor/CHANGELOG.md`](editor/CHANGELOG.md).
+This root changelog summarizes public release progress for GitHub; larger releases group their fixes by theme. The detailed editor changelog lives at [`editor/CHANGELOG.md`](editor/CHANGELOG.md).
 
 ## [Unreleased]
 

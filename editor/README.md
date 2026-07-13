@@ -77,6 +77,7 @@ Comprehensive editors for all game data with right-click context menu clipboard 
 ### Playtest
 - **One-click testing**: Launch your game instantly from the editor
 - **Debug mode**: Test with development features enabled
+- **Built-in frame profiler**: Press F10 in any playtest (or deployed game) to record per-phase frame timings; a second press writes `save/reactor-profile.json` attributing every slow frame
 - **Process management**: Start and stop playtests easily
 - **Start-map validation**: Repairs invalid player and vehicle start-map references before launch when maps have been deleted
 - **Packaged editor support**: Final editor builds launch playtests through a clean NW.js runtime on Windows, macOS, and Linux so the editor package is not accidentally relaunched as the game

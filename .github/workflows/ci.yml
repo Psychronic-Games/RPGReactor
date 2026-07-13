@@ -1,3 +1,4 @@
+# RPG Reactor continuous integration
 name: CI
 
 on:

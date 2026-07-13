@@ -6,7 +6,7 @@ This folder contains project-maintenance workflows that are not required for nor
 
 Release progress for GitHub visitors is tracked in the root [`CHANGELOG.md`](../CHANGELOG.md). Detailed editor/runtime change history is tracked in [`editor/CHANGELOG.md`](../editor/CHANGELOG.md).
 
-Public release explanations:
+Public release explanations (one devlog per release):
 
 - [RPG Reactor 0.94.5: The Performance Release](devlogs/2026-07-12-rpg-reactor-0.94.5.md)
 - [RPG Reactor 0.94.4: Responsive Web Forge and Reliable Windows Playtests](devlogs/2026-07-11-rpg-reactor-0.94.4.md)

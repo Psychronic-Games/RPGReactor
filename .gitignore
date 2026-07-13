@@ -1,3 +1,4 @@
+# RPG Reactor repository ignore rules
 # Dependencies
 node_modules/
 editor/node_modules/
