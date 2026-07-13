@@ -12,6 +12,24 @@
 (function() {
     if (typeof PIXI === "undefined") return;
 
+    // Informational install banners boot silent so a playing game keeps a
+    // clean console. Enable them when debugging the compat layer with any of:
+    //   window.$reactorDebugLogs = true      (set before this file loads)
+    //   localStorage.setItem("reactorDebugLogs", "1")
+    //   ?debuglogs                           (in the page URL)
+    // Warnings about actual failures are NOT gated.
+    const compatLog = (function() {
+        try {
+            if (window.$reactorDebugLogs ||
+                (window.localStorage && localStorage.getItem("reactorDebugLogs")) ||
+                /[?&]debuglogs/.test(window.location.search)) {
+                return console.log.bind(console);
+            }
+        } catch (e) { /* default silent */ }
+        return function() {};
+    })();
+    window.$reactorCompatLog = compatLog;
+
     // -------------------------------------------------------------------------
     // v8 ships a `name` getter/setter on Container.prototype that delegates to
     // `label` (and emits a deprecation warning). MZ corescript later does
@@ -284,6 +302,37 @@
     }
 
     // -------------------------------------------------------------------------
+    // v8's BlurFilter still accepts the v5-style positional signature
+    // (strength, quality, resolution, kernelSize) but routes it through a
+    // legacy branch that prints a deprecation warning on every construction.
+    // Convert positional arguments to the options object before the v8
+    // constructor sees them, so plugins constructing filters positionally
+    // stay warning-free.
+    // -------------------------------------------------------------------------
+    if (PIXI.TextureSource && typeof PIXI.BlurFilter === "function") {
+        try {
+            const V8BlurFilter = PIXI.BlurFilter;
+            class BlurFilterCompat extends V8BlurFilter {
+                constructor(...args) {
+                    if (typeof args[0] === "number") {
+                        const options = { strength: args[0] };
+                        if (args[1] !== undefined) options.quality = args[1];
+                        if (args[2] !== undefined) options.resolution = args[2];
+                        if (args[3] !== undefined) options.kernelSize = args[3];
+                        super(options);
+                    } else {
+                        super(...args);
+                    }
+                }
+            }
+            PIXI.BlurFilter = BlurFilterCompat;
+            PIXI.filters.BlurFilter = BlurFilterCompat;
+        } catch (e) {
+            console.warn("pixi_compat: BlurFilter legacy-args shim failed", e);
+        }
+    }
+
+    // -------------------------------------------------------------------------
     // v6+ converted PIXI base classes (Container, Sprite, TilingSprite, Filter,
     // Point, Rectangle, ObjectRenderer, ...) from ES5 functions to ES6 classes.
     // ES6 classes cannot be invoked without `new`, which breaks the legacy
@@ -440,6 +489,84 @@
             FLOAT: 5126,
             HALF_FLOAT: 5131
         };
+    }
+
+    // -------------------------------------------------------------------------
+    // v8 removed PIXI.settings; its knobs moved onto per-class static defaults.
+    // Plugins (and bundled pixi-filters builds inside e.g. Hendrix_* plugins)
+    // read PIXI.settings.FILTER_RESOLUTION at load time and write
+    // PIXI.settings.SCALE_MODE, so a missing namespace is a startup crash.
+    // Bridge the settings that have v8 equivalents with live accessors:
+    //   FILTER_RESOLUTION <-> Filter.defaultOptions.resolution
+    //   RESOLUTION        <-> AbstractRenderer.defaultOptions.resolution
+    //   SCALE_MODE        <-> TextureSource.defaultOptions.scaleMode
+    //   WRAP_MODE         <-> TextureSource.defaultOptions.addressMode
+    //   MIPMAP_TEXTURES   <-> TextureSource.defaultOptions.autoGenerateMipmaps
+    //   TARGET_FPMS       <-> Ticker.targetFPMS
+    // SCALE_MODE/WRAP_MODE writes accept both v8 strings (via our shimmed
+    // enums) and legacy v5 numerics. The object stays extensible so writes to
+    // settings we don't bridge (SPRITE_MAX_TEXTURES, PREFER_ENV, ...) are
+    // stored instead of throwing. Only installed when missing, so v5-v7 keep
+    // the real namespace.
+    // -------------------------------------------------------------------------
+    if (!PIXI.settings) {
+        const legacyScaleModes = { 0: "nearest", 1: "linear" };
+        const legacyWrapModes = { 33071: "clamp-to-edge", 10497: "repeat", 33648: "mirror-repeat" };
+        const settings = {};
+        const bridge = (name, get, set) => {
+            Object.defineProperty(settings, name, {
+                get, set, configurable: true, enumerable: true
+            });
+        };
+        bridge("FILTER_RESOLUTION",
+            () => (PIXI.Filter && PIXI.Filter.defaultOptions ? PIXI.Filter.defaultOptions.resolution : 1),
+            (value) => { if (PIXI.Filter && PIXI.Filter.defaultOptions) PIXI.Filter.defaultOptions.resolution = value; });
+        bridge("RESOLUTION",
+            () => (PIXI.AbstractRenderer && PIXI.AbstractRenderer.defaultOptions
+                ? PIXI.AbstractRenderer.defaultOptions.resolution : 1),
+            (value) => {
+                if (PIXI.AbstractRenderer && PIXI.AbstractRenderer.defaultOptions) {
+                    PIXI.AbstractRenderer.defaultOptions.resolution = value;
+                }
+            });
+        // scaleMode/addressMode are not in TextureSource.defaultOptions until
+        // written; until then the effective default lives on TextureStyle.
+        bridge("SCALE_MODE",
+            () => (PIXI.TextureSource && PIXI.TextureSource.defaultOptions.scaleMode)
+                || (PIXI.TextureStyle && PIXI.TextureStyle.defaultOptions.scaleMode)
+                || "linear",
+            (value) => {
+                if (PIXI.TextureSource) {
+                    PIXI.TextureSource.defaultOptions.scaleMode = legacyScaleModes[value] || value;
+                }
+            });
+        bridge("WRAP_MODE",
+            () => (PIXI.TextureSource && PIXI.TextureSource.defaultOptions.addressMode)
+                || (PIXI.TextureStyle && PIXI.TextureStyle.defaultOptions.addressMode)
+                || "clamp-to-edge",
+            (value) => {
+                if (PIXI.TextureSource) {
+                    PIXI.TextureSource.defaultOptions.addressMode = legacyWrapModes[value] || value;
+                }
+            });
+        bridge("MIPMAP_TEXTURES",
+            () => (PIXI.TextureSource ? PIXI.TextureSource.defaultOptions.autoGenerateMipmaps : false),
+            (value) => {
+                if (PIXI.TextureSource) {
+                    PIXI.TextureSource.defaultOptions.autoGenerateMipmaps = !!value;
+                }
+            });
+        bridge("TARGET_FPMS",
+            () => (PIXI.Ticker ? PIXI.Ticker.targetFPMS : 0.06),
+            (value) => { if (PIXI.Ticker) PIXI.Ticker.targetFPMS = value; });
+        // RENDER_OPTIONS reads/writes flow through to the renderer defaults so
+        // plugin tweaks (antialias, backgroundAlpha, ...) still take effect.
+        bridge("RENDER_OPTIONS",
+            () => (PIXI.AbstractRenderer ? PIXI.AbstractRenderer.defaultOptions : {}),
+            () => {});
+        PIXI.settings = settings;
+        compatLog("pixi_compat: installed PIXI.settings bridge (v8 removed the namespace; " +
+            "maps FILTER_RESOLUTION/RESOLUTION/SCALE_MODE/WRAP_MODE/MIPMAP_TEXTURES/TARGET_FPMS to per-class defaults)");
     }
 
     // -------------------------------------------------------------------------
@@ -1118,7 +1245,7 @@
                 }
             });
             PIXI.Sprite.prototype.__videoCompatTexturePatched = true;
-            console.log("pixi_compat: installed Sprite texture-resize re-apply " +
+            compatLog("pixi_compat: installed Sprite texture-resize re-apply " +
                 "for dynamic textures (video metadata propagation)");
         }
     }
@@ -1230,7 +1357,7 @@
             return origValidate.call(this, sprite);
         };
         PIXI.SpritePipe.prototype.__destroyedSpriteGuarded = true;
-        console.log("pixi_compat: installed SpritePipe destroyed-sprite guard " +
+        compatLog("pixi_compat: installed SpritePipe destroyed-sprite guard " +
             "(prevents render crash when destroyed sprite still in scene graph)");
     }
     // PIXI v8 core bug: BlendModePipe.popBlendMode indexes the blend stack
@@ -1256,7 +1383,7 @@
             return originalPushBlendMode.call(this, renderable, blendMode, instructionSet);
         };
         PIXI.BlendModePipe.prototype.__popBlendModeFixed = true;
-        console.log("pixi_compat: fixed BlendModePipe.popBlendMode stack indexing " +
+        compatLog("pixi_compat: fixed BlendModePipe.popBlendMode stack indexing " +
             "(v8 bug: read _activeBlendMode.length; first blend pop crashed the " +
             "render pass -> black screen after enemy collapse)");
     }
@@ -1393,7 +1520,7 @@
                 get: function() { return true; },
                 set: function(_v) { /* swallow ctor's `false` assignment */ }
             });
-            console.log("pixi_compat: installed Sprite.allowChildren=true getter (suppresses addChild deprecation; v8 children-of-Sprite already render via Sprite.collectRenderablesSimple)");
+            compatLog("pixi_compat: installed Sprite.allowChildren=true getter (suppresses addChild deprecation; v8 children-of-Sprite already render via Sprite.collectRenderablesSimple)");
         } catch (e) {
             console.warn("pixi_compat: failed to install Sprite.allowChildren shim", e);
         }
@@ -1455,7 +1582,7 @@
                     }
                 }
             });
-            console.log("pixi_compat: installed Container._position guard (rescues from plugin clobbering, e.g. MOG_BattleCursor's `this._position = {}` pattern)");
+            compatLog("pixi_compat: installed Container._position guard (rescues from plugin clobbering, e.g. MOG_BattleCursor's `this._position = {}` pattern)");
         } catch (e) {
             console.warn("pixi_compat: failed to install Container._position guard", e);
         }
@@ -1517,18 +1644,28 @@
                 const rotation = this._rotation || 0;
                 const skewX = (this.skew && this.skew._x) || 0;
                 const skewY = (this.skew && this.skew._y) || 0;
-                const cx = Math.cos(rotation + skewY);
-                const sxComp = Math.sin(rotation + skewY);
-                const cy = -Math.sin(rotation - skewX);
-                const syComp = Math.cos(rotation - skewX);
-                lt.a = cx * sx;
-                lt.b = sxComp * sx;
-                lt.c = cy * sy;
-                lt.d = syComp * sy;
+                if (rotation === 0 && skewX === 0 && skewY === 0) {
+                    // Fast path for the overwhelmingly common unrotated case:
+                    // cos=1/sin=0 without four trig calls. On object-heavy
+                    // maps this runs for thousands of containers per frame.
+                    lt.a = sx;
+                    lt.b = 0;
+                    lt.c = 0;
+                    lt.d = sy;
+                } else {
+                    const cx = Math.cos(rotation + skewY);
+                    const sxComp = Math.sin(rotation + skewY);
+                    const cy = -Math.sin(rotation - skewX);
+                    const syComp = Math.cos(rotation - skewX);
+                    lt.a = cx * sx;
+                    lt.b = sxComp * sx;
+                    lt.c = cy * sy;
+                    lt.d = syComp * sy;
+                }
                 lt.tx = position._x - (px * lt.a + py * lt.c) + (ox * lt.a + oy * lt.c) - ox;
                 lt.ty = position._y - (px * lt.b + py * lt.d) + (ox * lt.b + oy * lt.d) - oy;
             };
-            console.log("pixi_compat: installed Container.updateLocalTransform patch (computes cos/sin fresh from rotation+skew instead of reading clobber-prone _cx/_sx/_cy/_sy cache fields -- rescues MOG_TreasurePopup which uses those names for popup screen coords and movement speed)");
+            compatLog("pixi_compat: installed Container.updateLocalTransform patch (computes cos/sin fresh from rotation+skew instead of reading clobber-prone _cx/_sx/_cy/_sy cache fields -- rescues MOG_TreasurePopup which uses those names for popup screen coords and movement speed)");
         } catch (e) {
             console.warn("pixi_compat: failed to install Container.updateLocalTransform patch", e);
         }
@@ -1633,7 +1770,7 @@
             // (where it can fail silently and the sprite just doesn't draw).
             try {
                 const probe = new klass();
-                console.log(
+                compatLog(
                     "pixi_compat: blend mode '" + name + "' instantiates OK",
                     "(resources:", Object.keys(probe.resources || {}).join(",") + ")"
                 );
@@ -1667,7 +1804,7 @@
             "vec3 oResult = mix(2.0 * back.rgb * front.rgb, 1.0 - 2.0 * (1.0 - back.rgb) * (1.0 - front.rgb), step(0.5, back.rgb));\nfinalColor = vec4(back.rgb * (1.0 - front.a) + oResult * front.a, blendedAlpha);",
             "let oResult: vec3<f32> = mix(2.0 * back.rgb * front.rgb, vec3<f32>(1.0) - 2.0 * (vec3<f32>(1.0) - back.rgb) * (vec3<f32>(1.0) - front.rgb), step(vec3<f32>(0.5), back.rgb));\nout = vec4<f32>(back.rgb * (1.0 - front.a) + oResult * front.a, blendedAlpha);"
         );
-        console.log("pixi_compat: registered advanced blend modes (multiply, screen, overlay)");
+        compatLog("pixi_compat: registered advanced blend modes (multiply, screen, overlay)");
     } else {
         console.warn(
             "pixi_compat: cannot register advanced blend modes -- missing PIXI APIs:",
@@ -1686,7 +1823,7 @@
         PIXI.Bounds.prototype.contains = function(x, y) {
             return this.rectangle.contains(x, y);
         };
-        console.log("pixi_compat: added Bounds.contains (v8 getBounds returns Bounds, not Rectangle)");
+        compatLog("pixi_compat: added Bounds.contains (v8 getBounds returns Bounds, not Rectangle)");
     }
 
     // -------------------------------------------------------------------------
@@ -1901,7 +2038,7 @@
             };
         }
 
-        console.log(
+        compatLog(
             "MZGlobalUpgrade: wrapped " + wrappedCount +
             " classes for v8 compatibility + onRender hooks installed"
         );
@@ -1948,6 +2085,8 @@
 
 (function() {
     if (typeof PIXI === "undefined" || !PIXI.TextureSource) return;
+
+    const compatLog = window.$reactorCompatLog || function() {};
 
     const ATLAS_SIZE = 2048;
     const HALF_ATLAS = 1024;
@@ -2002,7 +2141,7 @@
         createAtlases();
         clearChunk = new Uint8Array(HALF_ATLAS * HALF_ATLAS * 4);
         initialized = true;
-        console.log("UltraMode7V8: initialized (offscreen canvas " +
+        compatLog("UltraMode7V8: initialized (offscreen canvas " +
             canvas.width + "x" + canvas.height + ", WebGL1, shader compiled, " +
             MAX_TEXTURES + " atlases created)");
         return true;
@@ -2049,12 +2188,17 @@
     }
 
     function createAtlases() {
-        // Atlas filtering MUST be LINEAR for Mode7 perspective ground (matches
-        // UM7's default behavior when TILEMAP_PIXELATED=false). With NEAREST,
-        // aggressive perspective compression produces visible scanline ribbons
-        // at every source-pixel-row boundary. UM7 prevents tile-edge bleed via
-        // the fragment shader's clamp(texCoord, vFrame.xy, vFrame.zw) using
-        // the eps=0.5 padding baked into the vertex aFrame values.
+        // Atlas filtering follows the plugin's TILEMAP_PIXELATED parameter,
+        // exactly like UM7's own renderer. LINEAR (PIXELATED=false) avoids
+        // scanline ribbons under aggressive perspective compression but
+        // bleeds neighboring atlas texels at tile borders (visible seams) —
+        // UM7 counters that with the fragment shader's clamp(texCoord,
+        // vFrame.xy, vFrame.zw) using the eps=0.5 padding baked into the
+        // vertex aFrame values. NEAREST (PIXELATED=true) matches pixel-art
+        // games' intended look and cannot bleed.
+        const pixelated = typeof UltraMode7 !== "undefined" &&
+            !!UltraMode7.TILEMAP_PIXELATED;
+        const glFilter = pixelated ? gl.NEAREST : gl.LINEAR;
         atlases = [];
         atlasLayerTracker = [];
         for (let i = 0; i < MAX_TEXTURES; i++) {
@@ -2062,8 +2206,8 @@
             gl.bindTexture(gl.TEXTURE_2D, tex);
             gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, ATLAS_SIZE, ATLAS_SIZE, 0,
                 gl.RGBA, gl.UNSIGNED_BYTE, null);
-            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, glFilter);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, glFilter);
             gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
             gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
             atlases.push(tex);
@@ -2219,17 +2363,32 @@
                 layer._allIndexArrays[segIdx] = layer._indexArray;
             }
 
+            const seg = getSegmentGLData(layer, segIdx);
+
             // Vertex buffer rebuild if dirty
             if (layer._needsVertexUpdate) {
                 buildVertexArray(layer);
                 layer._allVertexArrays[segIdx] = layer._vertexArray;
+                seg.vertexDirty = true;
             }
 
-            const seg = getSegmentGLData(layer, segIdx);
+            // Upload only when the data changed. Mode7 geometry is static
+            // between repaints (scrolling is the projection matrix, tile
+            // animation is a shader uniform), and unconditional bufferData
+            // re-sent every segment every frame — on a 256x256 map that is
+            // ~47 segments x 16k quads x 176 bytes ≈ 135MB per frame, a
+            // measured ~29ms stall (20 FPS with jitter).
             gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, seg.ibo);
-            gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, layer._indexArray, gl.STATIC_DRAW);
+            if (seg.uploadedIndexArray !== layer._indexArray) {
+                gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, layer._indexArray, gl.STATIC_DRAW);
+                seg.uploadedIndexArray = layer._indexArray;
+            }
             gl.bindBuffer(gl.ARRAY_BUFFER, seg.vbo);
-            gl.bufferData(gl.ARRAY_BUFFER, layer._vertexArray, gl.STATIC_DRAW);
+            if (seg.vertexDirty || seg.uploadedVertexArray !== layer._vertexArray) {
+                gl.bufferData(gl.ARRAY_BUFFER, layer._vertexArray, gl.STATIC_DRAW);
+                seg.uploadedVertexArray = layer._vertexArray;
+                seg.vertexDirty = false;
+            }
 
             gl.enableVertexAttribArray(attribLocs.aTextureId);
             gl.vertexAttribPointer(attribLocs.aTextureId, 1, gl.FLOAT, false, stride, 0);
@@ -2383,7 +2542,7 @@
                 } catch (e) {}
                 return ret;
             };
-            console.log("pixi_compat: patched Tilemap.Layer.initialize to install per-instance onRender (Layer is sub-property of Tilemap; MZGlobalUpgrade window-scan missed it)");
+            compatLog("pixi_compat: patched Tilemap.Layer.initialize to install per-instance onRender (Layer is sub-property of Tilemap; MZGlobalUpgrade window-scan missed it)");
         }
 
         // Hook into the engine's per-frame tick so we flush AFTER v8 finishes
@@ -2399,6 +2558,53 @@
             Graphics._onTick.__um7V8Wrapped = true;
         }
 
-        console.log("pixi_compat: UltraMode7V8 render hook installed (Tilemap.Layer.render override)");
+        // Blizzard UM7 v2.2.0 ships its own Tilemap.CombinedLayer bridge
+        // ("compatibility for RMMZ Core v1.7.0 and later"). Older releases
+        // (v2.1.1 and earlier) predate CombinedLayer, and without the bridge
+        // two things break silently on a corescript that wraps layers in
+        // CombinedLayer: the stock CombinedLayer.addRect forwards only seven
+        // arguments, dropping UM7's two extra animation-coordinate args
+        // (ax, ay) — every Mode7 vertex gets NaN animation coords and the GL
+        // pass draws nothing; and UM7's `layer.animationFrame = n` writes a
+        // dead plain property on the CombinedLayer instead of reaching the
+        // child layers. Install the same bridges the newer plugin has.
+        if (Tilemap.CombinedLayer &&
+            !Tilemap.CombinedLayer.prototype.setAnimationFrame &&
+            !Object.getOwnPropertyDescriptor(
+                Tilemap.CombinedLayer.prototype, "animationFrame")) {
+            Tilemap.CombinedLayer.prototype.setAnimationFrame = function(value) {
+                for (const child of this.children) {
+                    child._animationFrame = value;
+                }
+            };
+            Object.defineProperty(Tilemap.CombinedLayer.prototype, "animationFrame", {
+                get: function() {
+                    const child = this.children[0];
+                    return child ? child._animationFrame : 0;
+                },
+                set: function(value) {
+                    this.setAnimationFrame(value);
+                },
+                configurable: true
+            });
+            const origCombinedAddRect = Tilemap.CombinedLayer.prototype.addRect;
+            Tilemap.CombinedLayer.prototype.addRect = function(
+                setNumber, sx, sy, dx, dy, w, h, ax, ay
+            ) {
+                if (arguments.length <= 7) {
+                    return origCombinedAddRect.call(
+                        this, setNumber, sx, sy, dx, dy, w, h);
+                }
+                for (const child of this.children) {
+                    if (child.size() < Tilemap.Layer.MAX_SIZE) {
+                        child.addRect(setNumber, sx, sy, dx, dy, w, h, ax, ay);
+                        break;
+                    }
+                }
+            };
+            compatLog("pixi_compat: UltraMode7 pre-2.2.0 CombinedLayer bridge installed (addRect ax/ay forwarding + animationFrame fan-out)");
+        }
+
+        compatLog("pixi_compat: UltraMode7V8 render hook installed (Tilemap.Layer.render override)");
     };
 })();

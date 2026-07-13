@@ -120,6 +120,167 @@ class ProjectManager {
         }
     }
 
+    writeZipArchive(zipPath, entries) {
+        const zlib = require('zlib');
+        const Buffer = require('buffer').Buffer;
+        const now = new Date();
+        const dosTime = ((now.getHours() << 11) | (now.getMinutes() << 5) | Math.floor(now.getSeconds() / 2)) & 0xffff;
+        const dosDate = ((Math.max(0, now.getFullYear() - 1980) << 9) | ((now.getMonth() + 1) << 5) | now.getDate()) & 0xffff;
+        const localParts = [];
+        const centralParts = [];
+        let offset = 0;
+        for (const entry of entries) {
+            const name = Buffer.from(entry.name.replace(/\\/g, '/'), 'utf8');
+            const data = entry.data;
+            const deflated = zlib.deflateRawSync(data);
+            const method = deflated.length < data.length ? 8 : 0;
+            const compressed = method === 8 ? deflated : data;
+            const crc = this.crc32(data);
+            const local = Buffer.alloc(30);
+            local.writeUInt32LE(0x04034b50, 0);
+            local.writeUInt16LE(20, 4);
+            local.writeUInt16LE(0x0800, 6); // UTF-8 file names
+            local.writeUInt16LE(method, 8);
+            local.writeUInt16LE(dosTime, 10);
+            local.writeUInt16LE(dosDate, 12);
+            local.writeUInt32LE(crc, 14);
+            local.writeUInt32LE(compressed.length, 18);
+            local.writeUInt32LE(data.length, 22);
+            local.writeUInt16LE(name.length, 26);
+            localParts.push(local, name, compressed);
+            const central = Buffer.alloc(46);
+            central.writeUInt32LE(0x02014b50, 0);
+            central.writeUInt16LE(20, 4);
+            central.writeUInt16LE(20, 6);
+            central.writeUInt16LE(0x0800, 8);
+            central.writeUInt16LE(method, 10);
+            central.writeUInt16LE(dosTime, 12);
+            central.writeUInt16LE(dosDate, 14);
+            central.writeUInt32LE(crc, 16);
+            central.writeUInt32LE(compressed.length, 20);
+            central.writeUInt32LE(data.length, 24);
+            central.writeUInt16LE(name.length, 28);
+            central.writeUInt32LE(offset, 42);
+            centralParts.push(central, name);
+            offset += 30 + name.length + compressed.length;
+        }
+        const centralSize = centralParts.reduce((sum, part) => sum + part.length, 0);
+        const eocd = Buffer.alloc(22);
+        eocd.writeUInt32LE(0x06054b50, 0);
+        eocd.writeUInt16LE(entries.length, 8);
+        eocd.writeUInt16LE(entries.length, 10);
+        eocd.writeUInt32LE(centralSize, 12);
+        eocd.writeUInt32LE(offset, 16);
+        this.fs.writeFileSync(zipPath, Buffer.concat([...localParts, ...centralParts, eocd]));
+    }
+
+    collectRpgMakerRuntimeFiles(projectPath) {
+        const jsPath = this.path.join(projectPath, 'js');
+        const files = [];
+        if (!this.fs.existsSync(jsPath)) return files;
+        for (const entry of this.fs.readdirSync(jsPath, { withFileTypes: true })) {
+            if (entry.isFile() && (entry.name === 'main.js' || /^(rmmz|rpg)_[\w.-]*\.js$/.test(entry.name))) {
+                files.push(this.path.join('js', entry.name));
+            }
+        }
+        // No corescript means nothing to quarantine: an already-converted
+        // project's js/libs belongs to the Reactor runtime and stays put.
+        if (!files.length) return files;
+        const addLibs = (dir, rel) => {
+            if (!this.fs.existsSync(dir)) return;
+            for (const entry of this.fs.readdirSync(dir, { withFileTypes: true })) {
+                const fullPath = this.path.join(dir, entry.name);
+                const relPath = this.path.join(rel, entry.name);
+                if (entry.isDirectory()) addLibs(fullPath, relPath);
+                else files.push(relPath);
+            }
+        };
+        addLibs(this.path.join(jsPath, 'libs'), this.path.join('js', 'libs'));
+        return files;
+    }
+
+    removeEmptyDirs(dir) {
+        if (!this.fs.existsSync(dir)) return;
+        for (const entry of this.fs.readdirSync(dir, { withFileTypes: true })) {
+            if (entry.isDirectory()) this.removeEmptyDirs(this.path.join(dir, entry.name));
+        }
+        if (!this.fs.readdirSync(dir).length) this.fs.rmdirSync(dir);
+    }
+
+    async installReactorRuntime(projectPath, projectName, options = {}) {
+        if (!this.fs || !this.path) {
+            return { ok: false, error: 'File system not available.' };
+        }
+        const runtimePath = this.getRuntimePath();
+        if (!runtimePath) {
+            return { ok: false, error: 'Runtime corescript directory not found. Expected runtime/ beside the editor.' };
+        }
+
+        try {
+            const jsPath = this.path.join(projectPath, 'js');
+            const indexPath = this.path.join(projectPath, 'index.html');
+            let indexUsesReactor = false;
+            if (this.fs.existsSync(indexPath)) {
+                indexUsesReactor = /js\/reactor_main\.js/.test(this.fs.readFileSync(indexPath, 'utf8'));
+            }
+
+            // Quarantine the RPG Maker corescript into a zip in the project
+            // root so the two runtimes never share js/. Deploy staging
+            // excludes the archive.
+            const oldRuntimeFiles = this.collectRpgMakerRuntimeFiles(projectPath);
+            let archivedTo = null;
+            if (oldRuntimeFiles.length) {
+                const archiveEntries = oldRuntimeFiles.map(relPath => ({
+                    name: relPath.split(this.path.sep).join('/'),
+                    data: this.fs.readFileSync(this.path.join(projectPath, relPath)),
+                }));
+                if (!indexUsesReactor && this.fs.existsSync(indexPath)) {
+                    archiveEntries.push({ name: 'index.html', data: this.fs.readFileSync(indexPath) });
+                }
+                let zipName = 'rpgmaker-runtime-backup.zip';
+                for (let counter = 2; this.fs.existsSync(this.path.join(projectPath, zipName)); counter++) {
+                    zipName = `rpgmaker-runtime-backup-${counter}.zip`;
+                }
+                this.writeZipArchive(this.path.join(projectPath, zipName), archiveEntries);
+                for (const relPath of oldRuntimeFiles) {
+                    this.fs.rmSync(this.path.join(projectPath, relPath), { force: true });
+                }
+                this.removeEmptyDirs(this.path.join(jsPath, 'libs'));
+                archivedTo = zipName;
+            }
+
+            await this.copyRuntimeIntoProject(runtimePath, jsPath, true);
+
+            // Seed the Reactor plugin manifest from the project's RPG Maker
+            // manifest so an imported plugin configuration keeps working.
+            const reactorManifest = this.path.join(jsPath, 'reactor_plugins.js');
+            const rpgMakerManifest = this.path.join(jsPath, 'plugins.js');
+            if (!this.fs.existsSync(reactorManifest) || options.regenerateManifest) {
+                if (this.fs.existsSync(rpgMakerManifest)) {
+                    this.fs.copyFileSync(rpgMakerManifest, reactorManifest);
+                } else if (!this.fs.existsSync(reactorManifest)) {
+                    this.writeText(reactorManifest, 'var $plugins = [];\n');
+                }
+            }
+
+            const displayName = projectName || this.path.basename(projectPath);
+            if (!indexUsesReactor) {
+                const isMvProject = this.fs.existsSync(this.path.join(projectPath, 'Game.rpgproject'))
+                    || this.fs.existsSync(this.path.join(projectPath, 'game.rpgproject'));
+                this.writeText(indexPath, this.getStarterIndexHtml(displayName, { mvCompat: isMvProject }));
+            }
+
+            if (!this.fs.existsSync(this.path.join(projectPath, 'package.json'))) {
+                this.writeJson(this.path.join(projectPath, 'package.json'),
+                    this.getStarterPackage(displayName, this.getEngineVersion()));
+            }
+            return { ok: true, archivedTo };
+        } catch (error) {
+            console.error('Error installing Reactor runtime:', error);
+            return { ok: false, error: error.message };
+        }
+    }
+
     getRuntimePath() {
         if (!this.fs || !this.path || typeof process === 'undefined') return null;
 
@@ -241,6 +402,17 @@ class ProjectManager {
         this.writeText(filePath, JSON.stringify(data, null, 2));
     }
 
+    crc32(buffer) {
+        let crc = 0xffffffff;
+        for (const byte of buffer) {
+            crc ^= byte;
+            for (let bit = 0; bit < 8; bit++) {
+                crc = (crc >>> 1) ^ ((crc & 1) ? 0xedb88320 : 0);
+            }
+        }
+        return (crc ^ 0xffffffff) >>> 0;
+    }
+
     writeSolidPng(filePath, width, height, rgba) {
         const zlib = require('zlib');
         const Buffer = require('buffer').Buffer;
@@ -258,16 +430,7 @@ class ProjectManager {
             }
         }
 
-        const crc32 = (buffer) => {
-            let crc = 0xffffffff;
-            for (const byte of buffer) {
-                crc ^= byte;
-                for (let bit = 0; bit < 8; bit++) {
-                    crc = (crc >>> 1) ^ ((crc & 1) ? 0xedb88320 : 0);
-                }
-            }
-            return (crc ^ 0xffffffff) >>> 0;
-        };
+        const crc32 = (buffer) => this.crc32(buffer);
         const chunk = (type, data) => {
             const name = Buffer.from(type, 'ascii');
             const length = Buffer.alloc(4);
@@ -290,7 +453,12 @@ class ProjectManager {
         ]));
     }
 
-    getStarterIndexHtml(projectName) {
+    getStarterIndexHtml(projectName, options = {}) {
+        // The MV compatibility layer reads this flag at boot; deployed games
+        // exclude the RPG Maker project markers, so the mode must ship here.
+        const mvCompatLine = typeof options.mvCompat === 'boolean'
+            ? `\n        <script>window.$reactorMvCompat = ${options.mvCompat};</script>`
+            : '';
         return `<!DOCTYPE html>
 <html>
     <head>
@@ -302,7 +470,7 @@ class ProjectManager {
         <link rel="apple-touch-icon" href="icon/icon.png">
         <title>${this.escapeHtml(projectName)}</title>
     </head>
-    <body style="background-color: black">
+    <body style="background-color: black">${mvCompatLine}
         <script type="text/javascript" src="js/reactor_main.js"></script>
     </body>
 </html>

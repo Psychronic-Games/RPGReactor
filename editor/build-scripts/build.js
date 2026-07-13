@@ -87,7 +87,7 @@ function copyDirFiltered(src, dest, relBase) {
     for (const entry of entries) {
         const relPath = path.join(relBase, entry.name);
 
-        if (EXCLUDED.has(relPath)) {
+        if (EXCLUDED.has(relPath) || /^rpgmaker-runtime-backup(-\d+)?\.zip$/.test(relPath)) {
             console.log(`  [skip] ${relPath}`);
             continue;
         }
@@ -114,20 +114,31 @@ function validateProjectRuntime(root) {
         path.join('libs', 'vorbisdecoder.js'),
     ];
     const jsRoot = path.join(root, 'js');
-    const metadataPath = path.join(root, 'project.rpgreactor');
-    let metadataRequiresReactor = false;
-    if (fs.existsSync(metadataPath)) {
-        try {
-            metadataRequiresReactor = JSON.parse(fs.readFileSync(metadataPath, 'utf8')).imported !== true;
-        } catch {
-            metadataRequiresReactor = true;
+    // What index.html boots is the ground truth: imported RPG Maker projects
+    // ship their own corescript and need none of the Reactor files.
+    let usesReactorRuntime = null;
+    try {
+        usesReactorRuntime = /js\/reactor_main\.js/.test(fs.readFileSync(path.join(root, 'index.html'), 'utf8'));
+    } catch {}
+    if (usesReactorRuntime === null) {
+        const metadataPath = path.join(root, 'project.rpgreactor');
+        let metadataRequiresReactor = false;
+        if (fs.existsSync(metadataPath)) {
+            try {
+                metadataRequiresReactor = JSON.parse(fs.readFileSync(metadataPath, 'utf8')).imported !== true;
+            } catch {
+                metadataRequiresReactor = true;
+            }
         }
+        usesReactorRuntime = metadataRequiresReactor
+            || required.some(file => file !== 'reactor_main.js' && fs.existsSync(path.join(jsRoot, file)));
     }
-    const reactorProject = metadataRequiresReactor
-        || required.some(file => file !== 'reactor_main.js' && fs.existsSync(path.join(jsRoot, file)));
-    if (!reactorProject) return false;
+    if (!usesReactorRuntime) return false;
     const missing = required.filter(file => !fs.existsSync(path.join(jsRoot, file)));
-    if (missing.length) throw new Error(`Project runtime is incomplete: ${missing.join(', ')}`);
+    if (missing.length) {
+        throw new Error(`Project runtime is incomplete: missing ${missing.map(file => path.join('js', file)).join(', ')}. `
+            + 'Use "Install Reactor Runtime" in the editor\'s Build menu to copy the engine runtime into the project.');
+    }
     return true;
 }
 

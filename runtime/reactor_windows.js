@@ -124,6 +124,9 @@ Window_Base.prototype.resetTextColor = function() {
 };
 
 Window_Base.prototype.update = function() {
+    // Set by Spriteset_Map.updateOffscreenCulling for plugin windows that
+    // ride the map (event mini labels): far offscreen ones skip updating.
+    if (this._rrCulled) return;
     Window.prototype.update.call(this);
     this.updateTone();
     this.updateOpen();

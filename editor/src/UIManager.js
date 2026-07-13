@@ -187,6 +187,11 @@ class UIManager {
             case 'about':
                 this.callbacks.showAbout();
                 break;
+            case 'install-runtime':
+                if (this.callbacks.installRuntime) {
+                    this.callbacks.installRuntime();
+                }
+                break;
             case 'build-deployment':
                 if (this.callbacks.openBuildManager) {
                     this.callbacks.openBuildManager();

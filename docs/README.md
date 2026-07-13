@@ -8,6 +8,7 @@ Release progress for GitHub visitors is tracked in the root [`CHANGELOG.md`](../
 
 Public release explanations:
 
+- [RPG Reactor 0.94.5: The Performance Release](devlogs/2026-07-12-rpg-reactor-0.94.5.md)
 - [RPG Reactor 0.94.4: Responsive Web Forge and Reliable Windows Playtests](devlogs/2026-07-11-rpg-reactor-0.94.4.md)
 - [RPG Reactor 0.94.3: Web Editor and Reliable Downloads](devlogs/2026-07-10-rpg-reactor-0.94.3.md)
 - [RPG Reactor 0.94.2: Safer Saves and Better Deployments](devlogs/2026-07-10-rpg-reactor-0.94.2.md)

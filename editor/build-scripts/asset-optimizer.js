@@ -95,22 +95,16 @@ async function acquireFfmpeg(options) {
     const directories = options.cacheDirectories || cacheDirectories(options.appRoot);
     const cached = verifiedCachedFfmpeg(directories, names);
     if (cached) return cached;
-    if (!options.fetchRelease || !options.download) {
+    if (!options.download) {
         throw new Error('FFmpeg is not cached and no download provider is available.');
     }
 
-    const release = await options.fetchRelease(`https://api.github.com/repos/${FFMPEG_REPOSITORY}/releases/tags/${FFMPEG_RELEASE}`);
-    const binaryAsset = (release.assets || []).find(asset => asset.name === names.binary);
-    const licenseAsset = (release.assets || []).find(asset => asset.name === names.license);
+    // Release and asset names are pinned, so the download URLs are fully
+    // determined and every artifact is verified against TRUSTED_FFMPEG after
+    // download. Skipping the GitHub API avoids its unauthenticated rate limit.
     const releasePrefix = `https://github.com/${FFMPEG_REPOSITORY}/releases/download/${FFMPEG_RELEASE}/`;
-    if (!binaryAsset || binaryAsset.digest !== `sha256:${names.trusted.archiveSha256}` ||
-        binaryAsset.browser_download_url !== `${releasePrefix}${names.binary}`) {
-        throw new Error(`Verified FFmpeg asset ${names.binary} is unavailable.`);
-    }
-    if (!licenseAsset || licenseAsset.digest !== `sha256:${names.trusted.licenseSha256}` ||
-        licenseAsset.browser_download_url !== `${releasePrefix}${names.license}`) {
-        throw new Error(`Verified FFmpeg license ${names.license} is unavailable.`);
-    }
+    const binaryUrl = `${releasePrefix}${names.binary}`;
+    const licenseUrl = `${releasePrefix}${names.license}`;
 
     const root = path.join(writableCacheDirectory(directories), FFMPEG_RELEASE);
     fs.mkdirSync(root, { recursive: true });
@@ -118,12 +112,12 @@ async function acquireFfmpeg(options) {
     const archive = path.join(root, `${names.binary}.${nonce}.part`);
     const licenseTemp = path.join(root, `${names.license}.${nonce}.part`);
     try {
-        await options.download(binaryAsset.browser_download_url, archive, { reportProgress: true });
+        await options.download(binaryUrl, archive, { reportProgress: true });
         const compressed = fs.readFileSync(archive);
         if (sha256(compressed) !== names.trusted.archiveSha256) {
             throw new Error('FFmpeg archive SHA-256 verification failed.');
         }
-        await options.download(licenseAsset.browser_download_url, licenseTemp, { reportProgress: false });
+        await options.download(licenseUrl, licenseTemp, { reportProgress: false });
         const license = fs.readFileSync(licenseTemp);
         if (sha256(license) !== names.trusted.licenseSha256) {
             throw new Error('FFmpeg license SHA-256 verification failed.');

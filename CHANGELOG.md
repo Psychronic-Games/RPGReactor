@@ -6,6 +6,48 @@ This root changelog summarizes public release progress for GitHub. The detailed 
 
 ## [Unreleased]
 
+## [0.94.5] - 2026-07-12
+
+Release overview: [RPG Reactor 0.94.5: The Performance Release](docs/devlogs/2026-07-12-rpg-reactor-0.94.5.md).
+
+### Added
+
+- Runtime: built-in frame profiler on F10 — records per-phase timings for every slow frame and writes `save/reactor-profile.json`; free until activated. Companion console helpers `$reactorAnimStats()` and `$reactorAnimWatch(id)` diagnose live animation sprites across all hosts.
+- Build menu: "Install Reactor Runtime..." converts imported RPG Maker projects to the Reactor engine — the old corescript, libs, and `index.html` are archived to `rpgmaker-runtime-backup.zip` in the project root, and the plugin manifest is seeded from `plugins.js`.
+
+### Changed
+
+- Game deployment downloads the FFmpeg optimizer and the NW.js proprietary codec from direct release URLs instead of the GitHub API, eliminating unauthenticated rate-limit (HTTP 403) build failures. Downloads remain verified (pinned SHA-256 hashes for FFmpeg, structural archive validation for the codec).
+- The shipped runtime plugin manifest is empty instead of containing development plugin entries.
+- Runtime: games boot with a clean console — the compat layers' informational install banners are gated behind a debug switch (`window.$reactorDebugLogs`, `localStorage reactorDebugLogs`, or `?debuglogs`), legacy positional `PIXI.BlurFilter(...)` construction no longer triggers a PixiJS deprecation warning, and the "Save data is too big." web-storage warning no longer fires on desktop.
+- Bumped RPG Reactor to version 0.94.5.
+
+### Fixed
+
+- Runtime: Effekseer battle animations stay round/undistorted at every screen position (off-center targets previously stretched effects radially), and "screen center" animations position correctly under PIXI v8.
+- Forge Effekseer Generator: the frame-count setting now caps exported effects (continuous-spin recipes included) so battle animations end when the Forge says they do; blank duration still exports endless ambience effects.
+- Deploying an imported RPG Maker MV/MZ project that still runs on its original corescript no longer fails with "Project runtime is incomplete"; the check now follows what `index.html` boots, and its error explains how to install the Reactor runtime.
+- Runtime: plugins that read `PIXI.settings` (removed in PIXI v8) no longer crash the game on startup — a compat bridge maps the common settings to their v8 equivalents.
+- Runtime: window skins no longer tile the whole skin sheet (including the text-color palette) behind window contents under PIXI v8; the background pattern quadrant renders correctly again.
+- Runtime: MV plugins customizing menu status drawing (gauges, hidden levels, class rows) apply again — MZ's `Window_StatusBase` intermediate class was shadowing their `Window_Base` patches.
+- Runtime: the MV compatibility layer is now two-tier. MV plugin API support (the mix-and-match machinery) installs for every game, so MZ projects can use MV plugins; MV game semantics (window geometry, scene layout, battle flow) activate only for games authored in RPG Maker MV. Previously the whole layer applied to MZ projects, squeezing command windows and washing out window backgrounds.
+- Runtime: object-heavy maps (hundreds of events plus plugin overlay windows) run at full speed again under PIXI v8 — far-offscreen character sprites and dormant plugin windows are detached from the display tree instead of merely hidden (measured 33ms → 7.7–12ms per frame). Set `window.$reactorDisableCulling = true` to disable for debugging.
+- Runtime: scrolling across the tilemap's repaint boundary no longer hitches (was a 77ms spike from rebuilding ~2,000 tile sprites) and no longer leaves bands of stale garbage tiles at the viewport edge — tile sprites are pooled detached between repaints, so only freshly painted tiles are ever in the display tree.
+- Runtime: "Set Movement Route" waits work again when an MV plugin overrides the route command (MV's interpreter watches `this._character`, MZ's `this._characterId`; the compat layer now honors both), fixing cutscene move routes that silently did nothing — e.g. YEP Move Route Core's `MOVE TO` marches.
+- Runtime: LeTBS battle animations no longer ghost — finished/orphaned animation sprites leaked on LeTBS's shared layer (frozen on their last frame, so looping state animations played exactly on top of their own ghost); the compat layer now sweeps the layer every battle tick.
+- Runtime: LeTBS AI move decisions no longer freeze the frame — pathfinding ran inside a sort comparator (~1,200 A* runs per decision); paths are now precomputed per candidate cell. Line-of-sight AoEs also cache across move cells.
+- Runtime: LeTBS enemy AI turns hitch far less — the compat layer memoizes the AI's AoE evaluation (identical scopes were rebuilt and per-entity `eval()`s re-run for every move-cell × action-cell combination; profiled at 80–146ms per skill).
+- Runtime: Ultra Mode 7 runs at full speed on large maps (GPU vertex buffers now upload only when geometry changes — was ~135MB re-uploaded per frame on a 256×256 map, 36.8ms → 4ms median) and honors the plugin's `TILEMAP_PIXELATED` setting, removing tile seams in pixel-art games.
+- Runtime: Ultra Mode 7 maps no longer crash the scene — the tilemap's direct `updateTransform` drive now tolerates plugin transform chains ending in the legacy PIXI call (expected to throw on v8), matching the onRender bridge's behavior; the MV project-marker probe also stops logging file-not-found noise in MZ projects.
+- Runtime: MZ games show their saves again when leftover MV-era `.rpgsave` files sit beside the real `.rmmzsave` saves — save-format resolution is now native-first per game type instead of always preferring `.rpgsave`.
+- Runtime: `Utils.RPGMAKER_NAME` reports `"MZ"` (Reactor's identity moved to `Utils.REACTOR_NAME`) — multi-engine plugins branch on that exact string, and "Reactor" sent them down MV/dead-fallback paths: Ultra Mode 7 rendered nothing, and the Cyclone suite, DK Video Player, and others took wrong branches.
+- Runtime: Ultra Mode 7 works with pre-2.2.0 plugin releases — `pixi_compat` supplies the `Tilemap.CombinedLayer` bridge (addRect animation-coordinate forwarding + animationFrame fan-out) that Blizzard added in v2.2.0.
+- Runtime: MV games no longer freeze when a plugin's promise rejects unhandled (failing `video.play()` was fatal under MZ semantics; MV ignored it — now logged and play continues).
+- Runtime: looping MV-format animations (waving flags retriggered every pass) no longer blink out for a frame at the loop point — finished animation sprites get MV's one-tick removal grace, and fresh sprites draw their first frame at creation when their sheets are cached.
+- Runtime: victory triggers immediately when the last enemy falls in MV games; MZ's eager `BattleManager.endAction` cleanup let ATB systems open an actor command window over the dead troop, stalling battle end until one more attack.
+- Runtime: MV window contents and main-menu window sizing are MV-verbatim under the MV compatibility layer, so layout plugins (YEP_MainMenuManager, YEP_PartySystem) measure the geometry they were written against; verified against the same game running its genuine MV corescript.
+- Runtime: the FPS counter (F2) renders with MZ's stock look in every project — its CSS previously only existed in RPG Maker's own `index.html`.
+
 ## [0.94.4] - 2026-07-11
 
 Release overview: [RPG Reactor 0.94.4: Responsive Web Forge and Reliable Windows Playtests](docs/devlogs/2026-07-11-rpg-reactor-0.94.4.md).

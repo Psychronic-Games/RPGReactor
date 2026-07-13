@@ -78,6 +78,7 @@ class RPGReactor {
             getEventManager: () => this.eventManager,
             toggleEventMode: () => this.toggleEventMode(),
             disableEventModeIfActive: () => this.disableEventModeIfActive(),
+            installRuntime: () => this.projectController.installReactorRuntime(),
             openBuildManager: () => this.buildManager.open(),
             openDistEditor: () => this.distEditorManager.open()
         });

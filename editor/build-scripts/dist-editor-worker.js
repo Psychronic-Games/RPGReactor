@@ -224,9 +224,11 @@ function downloadFile(url, destPath, progressBase, progressSpan, requestOptions 
 function fetchJson(url) {
     return new Promise((resolve, reject) => {
         const request = (target) => {
-            const req = https.get(target, {
-            headers: { 'User-Agent': 'RPG-Reactor', Accept: 'application/vnd.github+json, application/json' },
-        }, (res) => {
+            const headers = { 'User-Agent': 'RPG-Reactor', Accept: 'application/vnd.github+json, application/json' };
+            const isGithubApi = new URL(target).hostname === 'api.github.com';
+            const githubToken = process.env.GITHUB_TOKEN || process.env.GH_TOKEN;
+            if (isGithubApi && githubToken) headers.Authorization = `Bearer ${githubToken}`;
+            const req = https.get(target, { headers }, (res) => {
             if (res.statusCode === 301 || res.statusCode === 302) {
                 const redirect = new URL(res.headers.location, target).toString();
                 res.resume();
@@ -234,7 +236,9 @@ function fetchJson(url) {
                 return;
             }
             if (res.statusCode !== 200) {
-                reject(new Error(`HTTP ${res.statusCode} for ${target}`));
+                const rateLimited = isGithubApi && !githubToken && (res.statusCode === 403 || res.statusCode === 429);
+                reject(new Error(`HTTP ${res.statusCode} for ${target}${rateLimited
+                    ? ' (unauthenticated GitHub API rate limit — set GITHUB_TOKEN to raise it)' : ''}`));
                 res.resume();
                 return;
             }
@@ -274,7 +278,6 @@ async function installProprietaryCodec(platform, runtimeRoot, pBase, pSpan) {
         platform,
         arch: 'x64',
         cacheDirectories: codecCacheCandidates,
-        fetchRelease: fetchJson,
         download: (url, destination) => downloadFile(url, destination, pBase, pSpan),
         onWarning: logWarn,
     });

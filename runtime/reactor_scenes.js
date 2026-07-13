@@ -765,7 +765,9 @@ Scene_Map.prototype.isFastForward = function() {
 Scene_Map.prototype.stop = function() {
     Scene_Message.prototype.stop.call(this);
     $gamePlayer.straighten();
-    this._mapNameWindow.close();
+    // Plugins can replace createMapNameWindow/createAllWindows and drop the
+    // map name window entirely; closing must not assume it exists.
+    if (this._mapNameWindow) this._mapNameWindow.close();
     if (this.needsSlowFadeOut()) {
         this.startFadeOut(this.slowFadeSpeed(), false);
     } else if (SceneManager.isNextScene(Scene_Map)) {

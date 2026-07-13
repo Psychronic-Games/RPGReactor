@@ -71,10 +71,9 @@ test('OGG optimization passes explicit quality and preserves loop comments', asy
     }
 });
 
-test('FFmpeg acquisition rejects release metadata that differs from pinned hashes', async () => {
+test('FFmpeg acquisition downloads pinned release URLs directly and rejects tampered archives', async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'rpg-reactor-ffmpeg-cache-'));
-    const binaryName = 'ffmpeg-linux-x64.gz';
-    const licenseName = 'linux-x64.LICENSE';
+    const requested = [];
     try {
         assert.equal(optimizer.TRUSTED_FFMPEG['linux-x64'].archiveSha256,
             'bfe8a8fc511530457b528c48d77b5737527b504a3797a9bc4866aeca69c2dffa');
@@ -83,12 +82,16 @@ test('FFmpeg acquisition rejects release metadata that differs from pinned hashe
             platform: 'linux',
             arch: 'x64',
             cacheDirectories: [root],
-            fetchRelease: async () => ({ assets: [
-                { name: binaryName, digest: `sha256:${'0'.repeat(64)}`, browser_download_url: `https://github.com/eugeneware/ffmpeg-static/releases/download/b6.1.1/${binaryName}` },
-                { name: licenseName, digest: `sha256:${'0'.repeat(64)}`, browser_download_url: `https://github.com/eugeneware/ffmpeg-static/releases/download/b6.1.1/${licenseName}` },
-            ] }),
-            download: async () => { throw new Error('untrusted assets must not download'); },
-        }), /Verified FFmpeg asset/);
+            download: async (url, destination) => {
+                requested.push(url);
+                fs.writeFileSync(destination, 'not the pinned ffmpeg archive');
+            },
+        }), /SHA-256 verification failed/);
+        assert.deepEqual(requested,
+            ['https://github.com/eugeneware/ffmpeg-static/releases/download/b6.1.1/ffmpeg-linux-x64.gz'],
+            'assets download from the pinned release URL without touching the GitHub API');
+        assert.equal(fs.existsSync(path.join(root, 'b6.1.1', 'ffmpeg')), false,
+            'no executable is installed when verification fails');
     } finally {
         fs.rmSync(root, { recursive: true, force: true });
     }

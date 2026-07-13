@@ -1,13 +1,75 @@
 //=============================================================================
 // reactor_mv_compat.js
 //=============================================================================
-// Star Shift Rebellion local MV compatibility layer.
+// RPG Maker MV compatibility layer.
 // Load after Reactor core scripts and before project plugins.
+// Activates only for games authored in RPG Maker MV; dormant otherwise.
 
 (function() {
     "use strict";
 
     const global = typeof window !== "undefined" ? window : globalThis;
+
+    // This layer serves two distinct purposes, installed as two tiers:
+    //
+    // TIER 1 -- MV PLUGIN API SUPPORT (always installed). Gap-fills and
+    // format-detecting wrappers that are inert unless MV plugin code calls
+    // them: MV window/scene/manager APIs, MV-style constructor arguments,
+    // the MV pluginCommand bridge, MV save/data/asset format handling, MV
+    // textState upgrades. These are what let a project mix MV and MZ
+    // plugins freely -- an MZ project that adds an MV plugin gets the APIs
+    // that plugin expects, while pure-MZ code paths are untouched.
+    //
+    // TIER 2 -- MV GAME SEMANTICS (only for games authored in RPG Maker
+    // MV). Deliberate global overrides that make the whole game measure
+    // and behave like MV: MV window geometry (itemHeight/fittingHeight/
+    // itemRect), MV scene layout (top help, no touch UI), MV battle flow
+    // (input gate, turn flow, field offset), MV damage popups, MV save
+    // encoding. A window cannot use MV and MZ metrics at the same time, so
+    // these are mutually exclusive with MZ-authored UI -- applying them to
+    // an MZ project visibly breaks it (squeezed command windows, missing
+    // item backgrounds).
+    //
+    // Tier-2 detection: an explicit `window.$reactorMvCompat` boolean wins
+    // (the editor's "Install Reactor Runtime" stamps it into index.html,
+    // so deployed games -- which exclude the RPG Maker project marker
+    // files from staging -- keep the correct mode). Without the flag,
+    // probe for an MV project marker beside index.html, which covers
+    // playtests of projects converted before the flag existed.
+    function projectUsesMvCompat() {
+        if (typeof global.$reactorMvCompat === "boolean") return global.$reactorMvCompat;
+        // NW.js: probe via fs so a missing marker doesn't spam the console
+        // with net::ERR_FILE_NOT_FOUND resource errors.
+        try {
+            if (typeof require === "function" && typeof process !== "undefined" &&
+                process.mainModule && process.mainModule.filename) {
+                const fs = require("fs");
+                const path = require("path");
+                const base = path.dirname(process.mainModule.filename);
+                for (const marker of ["Game.rpgproject", "game.rpgproject"]) {
+                    const file = path.join(base, marker);
+                    if (fs.existsSync(file)) {
+                        return /^RPGMV/.test(String(fs.readFileSync(file, "utf8")));
+                    }
+                }
+                return false;
+            }
+        } catch (e) { /* fall through to the XHR probe */ }
+        for (const marker of ["Game.rpgproject", "game.rpgproject"]) {
+            try {
+                const xhr = new XMLHttpRequest();
+                xhr.open("GET", marker, false);
+                xhr.send();
+                if ((xhr.status === 200 || xhr.status === 0) &&
+                        /^RPGMV/.test(String(xhr.responseText || ""))) {
+                    return true;
+                }
+            } catch (e) { /* missing marker: fall through */ }
+        }
+        return false;
+    }
+
+    const mvGameSemantics = projectUsesMvCompat();
 
     function isRectangle(value) {
         return value && typeof value === "object" && "x" in value && "y" in value;
@@ -159,7 +221,9 @@
         // {@r: id} stubs, wraps arrays (@a), and repairs the live object
         // graph afterwards. Output stays loadable by BOTH our parse and
         // real RPG Maker MV.
-        if (!JsonEx.stringify.__mvCompatWrapped) {
+        // TIER 2 ONLY: this changes the on-disk save format, so MZ-format
+        // games keep MZ's encoder and stay byte-compatible with stock MZ.
+        if (mvGameSemantics && !JsonEx.stringify.__mvCompatWrapped) {
             const mvGetConstructorName = function(value) {
                 return value.constructor ? value.constructor.name : "Object";
             };
@@ -335,53 +399,19 @@
     function installGraphicsCompatibility() {
         if (!global.Graphics) return;
 
-        const styleFpsCounter = function() {
-            const counter = Graphics._fpsCounter && Graphics._fpsCounter._boxDiv;
-            if (!counter) return;
-            counter.style.position = "fixed";
-            counter.style.left = "4px";
-            counter.style.top = "4px";
-            counter.style.zIndex = "2147483647";
-            counter.style.pointerEvents = "none";
-            counter.style.background = "rgba(0, 0, 0, 0.65)";
-            counter.style.color = "white";
-            counter.style.fontFamily = "monospace";
-            counter.style.fontSize = "12px";
-            counter.style.lineHeight = "1.2";
-            counter.style.padding = "4px 6px";
-            counter.style.borderRadius = "3px";
-        };
-
-        if (Graphics._createFPSCounter && !Graphics._createFPSCounter.__mvCompatWrapped) {
-            const originalCreateFPSCounter = Graphics._createFPSCounter;
-            Graphics._createFPSCounter = function() {
-                const result = originalCreateFPSCounter.apply(this, arguments);
-                styleFpsCounter();
-                return result;
-            };
-            Graphics._createFPSCounter.__mvCompatWrapped = true;
-        }
-        if (Graphics._switchFPSCounter && !Graphics._switchFPSCounter.__mvCompatWrapped) {
-            const originalSwitchFPSCounter = Graphics._switchFPSCounter;
-            Graphics._switchFPSCounter = function() {
-                const result = originalSwitchFPSCounter.apply(this, arguments);
-                styleFpsCounter();
-                return result;
-            };
-            Graphics._switchFPSCounter.__mvCompatWrapped = true;
-        }
+        // The counter's positioning/stacking now ships inline in the
+        // engine's FPSCounter._createElements; only the MV API names need
+        // gap-filling here.
         Graphics.showFps = Graphics.showFps || function() {
             if (this._fpsCounter && this._fpsCounter._boxDiv) {
                 this._fpsCounter._boxDiv.style.display = "block";
                 this._fpsCounter._showFps = true;
                 this._fpsCounter._update();
-                styleFpsCounter();
             }
         };
         Graphics.hideFps = Graphics.hideFps || function() {
             if (this._fpsCounter && this._fpsCounter._boxDiv) this._fpsCounter._boxDiv.style.display = "none";
         };
-        styleFpsCounter();
     }
 
     function installDecrypterCompatibility() {
@@ -456,6 +486,13 @@
     function installStorageManagerCompatibility() {
         if (!global.StorageManager || !StorageManager.filePath || StorageManager.filePath.__mvCompatWrapped) return;
 
+        // Format preference is native-first per game type. An MV-authored
+        // game reads and writes .rpgsave; an MZ-authored game sticks to
+        // .rmmzsave and only falls back to a leftover .rpgsave when no
+        // native save exists for that slot (a project ported from MV can
+        // carry stale .rpgsave files beside its real saves — preferring
+        // them unconditionally made the save menu read an MV-era global
+        // index and show none of the actual saves).
         const originalFilePath = StorageManager.filePath;
         StorageManager.filePath = function(saveName) {
             const name = String(saveName);
@@ -467,10 +504,16 @@
             if (this.isLocalMode && this.isLocalMode()) {
                 try {
                     const fs = require("fs");
-                    if (fs.existsSync(rpgPath) || !fs.existsSync(rmmzPath)) {
+                    const hasRpg = fs.existsSync(rpgPath);
+                    const hasRmmz = fs.existsSync(rmmzPath);
+                    if (mvGameSemantics) {
+                        if (hasRpg || !hasRmmz) return rpgPath;
+                    } else if (hasRpg && !hasRmmz) {
                         return rpgPath;
                     }
                 } catch (e) {}
+            } else if (mvGameSemantics) {
+                return rpgPath;
             }
             return rmmzPath;
         };
@@ -574,6 +617,55 @@
                 return original.call(this, params || this._params || []);
             };
             Game_Interpreter.prototype[name].__mvCompatWrapped = true;
+        }
+
+        // MV's interpreter stores the character a route/animation/balloon
+        // wait watches on `this._character`; MZ replaced that contract with
+        // `this._characterId`. MV plugins that override command205 —
+        // follower-control plugins routinely do — set only `_character`, so
+        // MZ's updateWaitMode looked up characterId === undefined, which
+        // this.character() resolves to the RUNNING EVENT, and the "route"
+        // wait dissolved the same tick. Every move route after it then ran
+        // in that one tick, each force-replacing the previous one before it
+        // took a single step (SSR: the party never walked to the tribunal).
+        // Keep both contracts alive: the native commands mirror their
+        // target onto `_character`, and the wait check prefers `_character`
+        // since it is fresh on either path.
+        for (const name of ["command205", "command212", "command213"]) {
+            const original = Game_Interpreter.prototype[name];
+            if (typeof original !== "function" || original.__mvCharacterMirror) continue;
+            Game_Interpreter.prototype[name] = function(params) {
+                params = params || this._params || [];
+                this._character = this.character(params.length ? params[0] : 0);
+                return original.call(this, params);
+            };
+            Game_Interpreter.prototype[name].__mvCharacterMirror = true;
+        }
+
+        if (!Game_Interpreter.prototype.updateWaitMode.__mvCharacterMirror) {
+            const baseUpdateWaitMode = Game_Interpreter.prototype.updateWaitMode;
+            Game_Interpreter.prototype.updateWaitMode = function() {
+                const mvChar = this._character;
+                if (mvChar) {
+                    let waiting = null;
+                    if (this._waitMode === "route" &&
+                        typeof mvChar.isMoveRouteForcing === "function") {
+                        waiting = !!mvChar.isMoveRouteForcing();
+                    } else if (this._waitMode === "animation" &&
+                        typeof mvChar.isAnimationPlaying === "function") {
+                        waiting = !!mvChar.isAnimationPlaying();
+                    } else if (this._waitMode === "balloon" &&
+                        typeof mvChar.isBalloonPlaying === "function") {
+                        waiting = !!mvChar.isBalloonPlaying();
+                    }
+                    if (waiting !== null) {
+                        if (!waiting) this._waitMode = "";
+                        return waiting;
+                    }
+                }
+                return baseUpdateWaitMode.call(this);
+            };
+            Game_Interpreter.prototype.updateWaitMode.__mvCharacterMirror = true;
         }
     }
 
@@ -687,71 +779,12 @@
             this.resetTextColor();
         };
 
-        // MV height semantics (deliberate overrides, like the color/padding
-        // family above): MV's fittingHeight is numLines * lineHeight() +
-        // padding*2 and MV's Window_Selectable.itemHeight === lineHeight().
-        // MZ changed fittingHeight to multiply by itemHeight() and padded
-        // itemHeight to lineHeight()+8. MV plugins overriding itemHeight
-        // (LeTBSWindows' Window_TBSPositioning: lineHeight*4) get
-        // catastrophically oversized windows under MZ semantics —
-        // fittingHeight(12) returned 1752px instead of ~504. The two
-        // overrides must ship together: MV fittingHeight alone would clip
-        // the last row of every list drawn at MZ's padded row height.
-        Window_Base.prototype.fittingHeight = function(numLines) {
-            return numLines * this.lineHeight() + this.standardPadding() * 2;
-        };
         if (global.Window_Selectable) {
-            Window_Selectable.prototype.itemHeight = function() {
-                return this.lineHeight();
-            };
-        }
-
-        if (global.Window_Selectable) {
-            // MV's isOpenAndActive does NOT require visibility — MZ added
-            // `this.visible` to the check. MV plugins routinely HIDE a
-            // window while keeping it active as the input receiver
-            // (MOG_BattleCursor hides Window_BattleEnemy and drives target
-            // selection with its arrow sprite): under MZ the hidden window
-            // stops processing input entirely — Enter never confirms the
-            // target and the battle soft-locks. MV verbatim.
-            Window_Selectable.prototype.isOpenAndActive = function() {
-                return this.isOpen() && this.active;
-            };
-
-            // MZ draws a dark background box behind every selectable item
-            // (drawItemBackground/contentsBack). MV has no such thing — the
-            // boxes poke past decorative frame images MV plugins position
-            // around their windows (MOG_BattleHud's command layout). FOSSIL
-            // stubs this out for MV look as well. MV parity: no item boxes.
-            Window_Selectable.prototype.drawItemBackground = function(index) {};
-
-            // MV item geometry, verbatim (deliberate overrides, paired with
-            // the fittingHeight/itemHeight pair above). MZ's itemRect INSETS
-            // each cell by colSpacing/2 and rowSpacing/2 and shrinks it by
-            // the spacing — so selection highlights sat a few px off and
-            // undersized against what MV plugins draw (LeTBS positioning
-            // roster). MV's rect is flush and full-size, with spacing only
-            // BETWEEN columns. Base spacing is 12 in MV (48 is
-            // Window_ItemList/SkillList's own per-class override — it was
-            // wrongly applied to the base class here before, spreading
-            // Confirm/Cancel pairs absurdly far apart). Scroll offset uses
-            // MZ's scrollBaseX/Y so smooth-scrolled lists stay correct.
+            // MV plugins measure with spacing()/itemRectForText(), which MZ
+            // removed. Pure gap-fills: under MZ metrics itemRectForText
+            // resolves against MZ's itemRect, under MV metrics (tier 2)
+            // against MV's.
             Window_Selectable.prototype.spacing = function() { return 12; };
-            Window_Selectable.prototype.itemWidth = function() {
-                return Math.floor((this.width - this.padding * 2 +
-                                   this.spacing()) / this.maxCols() - this.spacing());
-            };
-            Window_Selectable.prototype.itemRect = function(index) {
-                const rect = new Rectangle();
-                const maxCols = this.maxCols();
-                rect.width = this.itemWidth();
-                rect.height = this.itemHeight();
-                const sx = this.scrollBaseX ? this.scrollBaseX() : (this._scrollX || 0);
-                const sy = this.scrollBaseY ? this.scrollBaseY() : (this._scrollY || 0);
-                rect.x = index % maxCols * (rect.width + this.spacing()) - sx;
-                rect.y = Math.floor(index / maxCols) * rect.height - sy;
-                return rect;
-            };
             Window_Selectable.prototype.itemRectForText = function(index) {
                 const rect = this.itemRect(index);
                 rect.x += this.textPadding();
@@ -963,6 +996,144 @@
             aliasSetter("setChoiceListWindow", "_choiceWindow");
             aliasSetter("setNumberInputWindow", "_numberWindow");
             aliasSetter("setEventItemWindow", "_itemWindow");
+        }
+    }
+
+    // TIER 2 ONLY: MZ moved the actor-drawing family (drawActorName/Level/
+    // Class/Icons/SimpleStatus/Face/...) from Window_Base onto a new
+    // Window_StatusBase intermediate. MV plugins patch these on Window_Base
+    // — the MZ copies sit CLOSER in the prototype chain and shadow every
+    // such patch: the menu status drew MZ's default layout (level shown,
+    // 128px sprite gauges) no matter what the game's plugins configured.
+    // Delete the shadowing copies so lookups fall through to Window_Base,
+    // where the MV-verbatim ports (installMVApiGapFills) and the plugins'
+    // own patches live. Guarded per-method: only delete when Window_Base
+    // actually provides the method.
+    function installStatusBaseFallthroughCompatibility() {
+        if (!global.Window_StatusBase || !global.Window_Base) return;
+        const statusBase = Window_StatusBase.prototype;
+        for (const name of Object.getOwnPropertyNames(statusBase)) {
+            if (!/^drawActor/.test(name)) continue;
+            if (typeof Window_Base.prototype[name] !== "function") continue;
+            delete statusBase[name];
+        }
+    }
+
+    // TIER 2 ONLY: MV-verbatim Scene_Menu window creation. MZ constructs
+    // its menu windows from precomputed Rectangles (statusWindowRect()),
+    // MV from (x, y) with the width coming from the window's own
+    // windowWidth() at construction. MV plugins that WRAP these creators
+    // (YEP_MainMenuManager wraps createStatusWindow and overrides
+    // Window_MenuStatus.windowWidth = boxWidth - constructed x) capture the
+    // MZ original under Reactor and their sizing never applies — the menu
+    // status window kept MZ's boxWidth-240 width, got repositioned to the
+    // plugin's x, and overflowed the screen. Installing the MV originals
+    // BEFORE plugins load lets plugin wrappers capture the shapes they
+    // were written against.
+    function installMenuSceneCompatibility() {
+        if (!global.Scene_Menu) return;
+        Scene_Menu.prototype.createCommandWindow = function() {
+            this._commandWindow = new Window_MenuCommand(0, 0);
+            this._commandWindow.setHandler("item", this.commandItem.bind(this));
+            this._commandWindow.setHandler("skill", this.commandPersonal.bind(this));
+            this._commandWindow.setHandler("equip", this.commandPersonal.bind(this));
+            this._commandWindow.setHandler("status", this.commandPersonal.bind(this));
+            this._commandWindow.setHandler("formation", this.commandFormation.bind(this));
+            this._commandWindow.setHandler("options", this.commandOptions.bind(this));
+            this._commandWindow.setHandler("save", this.commandSave.bind(this));
+            this._commandWindow.setHandler("gameEnd", this.commandGameEnd.bind(this));
+            this._commandWindow.setHandler("cancel", this.popScene.bind(this));
+            this.addWindow(this._commandWindow);
+        };
+        Scene_Menu.prototype.createGoldWindow = function() {
+            this._goldWindow = new Window_Gold(0, 0);
+            this._goldWindow.y = Graphics.boxHeight - this._goldWindow.height;
+            this.addWindow(this._goldWindow);
+        };
+        Scene_Menu.prototype.createStatusWindow = function() {
+            this._statusWindow = new Window_MenuStatus(this._commandWindow.width, 0);
+            this.addWindow(this._statusWindow);
+        };
+    }
+
+    // TIER 2 ONLY: MV window geometry and input semantics. These replace
+    // MZ behavior wholesale and are mutually exclusive with MZ-authored UI.
+    function installWindowMetricsCompatibility() {
+        if (!global.Window_Base) return;
+
+        // MV height semantics: MV's fittingHeight is numLines * lineHeight()
+        // + padding*2 and MV's Window_Selectable.itemHeight === lineHeight().
+        // MZ changed fittingHeight to multiply by itemHeight() and padded
+        // itemHeight to lineHeight()+8. MV plugins overriding itemHeight
+        // (LeTBSWindows' Window_TBSPositioning: lineHeight*4) get
+        // catastrophically oversized windows under MZ semantics —
+        // fittingHeight(12) returned 1752px instead of ~504. The two
+        // overrides must ship together: MV fittingHeight alone would clip
+        // the last row of every list drawn at MZ's padded row height.
+        Window_Base.prototype.fittingHeight = function(numLines) {
+            return numLines * this.lineHeight() + this.standardPadding() * 2;
+        };
+        if (global.Window_Selectable) {
+            Window_Selectable.prototype.itemHeight = function() {
+                return this.lineHeight();
+            };
+
+            // MV contents are exactly the visible area (height − padding*2,
+            // inherited from Window_Base); MZ adds a one-row smooth-scroll
+            // buffer (innerHeight + itemHeight). MV plugins size layouts
+            // FROM contents.height — YEP_PartySystem's Window_PartySelect
+            // itemRect uses this.contents.height as its cell height, so the
+            // MZ buffer pushed the crew-select sprites ~36px below their MV
+            // position. MV verbatim; the cost is a clipped partial row
+            // during animated scrolls, which MV never rendered anyway.
+            Window_Selectable.prototype.contentsHeight = function() {
+                return this.height - this.standardPadding() * 2;
+            };
+
+            // MV's isOpenAndActive does NOT require visibility — MZ added
+            // `this.visible` to the check. MV plugins routinely HIDE a
+            // window while keeping it active as the input receiver
+            // (MOG_BattleCursor hides Window_BattleEnemy and drives target
+            // selection with its arrow sprite): under MZ the hidden window
+            // stops processing input entirely — Enter never confirms the
+            // target and the battle soft-locks. MV verbatim.
+            Window_Selectable.prototype.isOpenAndActive = function() {
+                return this.isOpen() && this.active;
+            };
+
+            // MZ draws a dark background box behind every selectable item
+            // (drawItemBackground/contentsBack). MV has no such thing — the
+            // boxes poke past decorative frame images MV plugins position
+            // around their windows (MOG_BattleHud's command layout). FOSSIL
+            // stubs this out for MV look as well. MV parity: no item boxes.
+            Window_Selectable.prototype.drawItemBackground = function(index) {};
+
+            // MV item geometry, verbatim (paired with the fittingHeight/
+            // itemHeight pair above). MZ's itemRect INSETS each cell by
+            // colSpacing/2 and rowSpacing/2 and shrinks it by the spacing —
+            // so selection highlights sat a few px off and undersized
+            // against what MV plugins draw (LeTBS positioning roster). MV's
+            // rect is flush and full-size, with spacing only BETWEEN
+            // columns. Base spacing is 12 in MV (48 is Window_ItemList/
+            // SkillList's own per-class override — it was wrongly applied
+            // to the base class here before, spreading Confirm/Cancel pairs
+            // absurdly far apart). Scroll offset uses MZ's scrollBaseX/Y so
+            // smooth-scrolled lists stay correct.
+            Window_Selectable.prototype.itemWidth = function() {
+                return Math.floor((this.width - this.padding * 2 +
+                                   this.spacing()) / this.maxCols() - this.spacing());
+            };
+            Window_Selectable.prototype.itemRect = function(index) {
+                const rect = new Rectangle();
+                const maxCols = this.maxCols();
+                rect.width = this.itemWidth();
+                rect.height = this.itemHeight();
+                const sx = this.scrollBaseX ? this.scrollBaseX() : (this._scrollX || 0);
+                const sy = this.scrollBaseY ? this.scrollBaseY() : (this._scrollY || 0);
+                rect.x = index % maxCols * (rect.width + this.spacing()) - sx;
+                rect.y = Math.floor(index / maxCols) * rect.height - sy;
+                return rect;
+            };
         }
     }
 
@@ -2322,16 +2493,19 @@
             });
         }
 
-        // ---- Sprite_Damage: full MV restoration (deliberate override).
-        // MZ redrew damage popups as plain text; MV renders them from the
-        // img/system/Damage.png sheet — which this game customizes, so the
-        // MZ look was visibly wrong. MV plugins also depend on the MV
-        // internals: LeTBS_DamagePopupEX dereferences this._damageBitmap
-        // (crash: reading measureTextWidth of undefined) and calls the MV
-        // two-arg createDigits(baseRow, value) — MZ's one-arg version
-        // would render the baseRow as the number. VE_DamagePopup's
-        // Sprite_CustomDamage subclasses this prototype at load, so the
-        // MV shape must be in place before plugins. All MV verbatim. ----
+    }
+
+    // TIER 2 ONLY: full MV damage-popup restoration (deliberate override).
+    // MZ redraws damage popups as plain text; MV renders them from the
+    // img/system/Damage.png sheet — MV games often customize that sheet,
+    // so the MZ look is visibly wrong for them. MV plugins also depend on
+    // the MV internals: LeTBS_DamagePopupEX dereferences this._damageBitmap
+    // (crash: reading measureTextWidth of undefined) and calls the MV
+    // two-arg createDigits(baseRow, value) — MZ's one-arg version would
+    // render the baseRow as the number. VE_DamagePopup's Sprite_CustomDamage
+    // subclasses this prototype at load, so the MV shape must be in place
+    // before plugins. All MV verbatim.
+    function installDamagePopupCompatibility() {
         if (global.Sprite_Damage) {
             Sprite_Damage.prototype.initialize = function() {
                 Sprite.prototype.initialize.call(this);
@@ -2933,7 +3107,10 @@
                 const originalAddSystem = RendererClass.prototype._addSystem;
                 RendererClass.prototype._addSystem = function(ClassRef, name) {
                     if (typeof ClassRef !== "function") {
-                        console.warn("ReactorMVCompat: skipped invalid Pixi renderer system", name, ClassRef);
+                        // Benign: v8 system tables carry undefined slots for
+                        // systems this build doesn't ship.
+                        (window.$reactorCompatLog || function() {})(
+                            "ReactorMVCompat: skipped invalid Pixi renderer system", name, ClassRef);
                         return this;
                     }
                     return originalAddSystem.call(this, ClassRef, name);
@@ -3124,6 +3301,7 @@
         installFinalAnimationCompatibility();
         installFinalLightingCompatibility();
         installFinalBattleHudCompatibility();
+        installFinalLeTBSAiPerformance();
         installGraphicsCompatibility();
         installJsonExCompatibility();
         installDataManagerCompatibility();
@@ -3165,6 +3343,207 @@
             // MOG_BattleHud owns the battle status display
         };
         Window_BattleStatus.prototype.show.__mvCompatMogHide = true;
+    }
+
+    function installFinalLeTBSAiPerformance() {
+        // LeTBS's AI evaluates one skill by iterating every reachable move
+        // cell x every action cell, rebuilding the AoE scope and running a
+        // per-entity eval() for each combination — profiled at 80-146ms
+        // per skill (a visible hitch on every enemy turn). The combination
+        // space collapses: the AoE around a given action cell is identical
+        // from every move cell that approaches it from the same direction,
+        // and an entity's use-condition cannot change mid-evaluation.
+        // Re-implementation of getAoEPossibleMoves with three memoizations:
+        // scope/AoE data hoisted per call, AoE + filtered entities cached
+        // per (aoeCenter, dir[, move cell when the AoE is LoS-sensitive]),
+        // and the eval() verdict cached per entity. Guarded by a source
+        // fingerprint so an edited or future LeTBS keeps its own version.
+        if (!global.TBSAiManager || !TBSAiManager.prototype) return;
+        var orig = TBSAiManager.prototype.getAoEPossibleMoves;
+        if (!orig || orig.__mvCompatOptimized) return;
+        var src = String(orig);
+        if (src.indexOf("getEntitiesInScope(aoe)") < 0 ||
+            src.indexOf("nbrAllies") < 0 ||
+            src.indexOf("useCondition") < 0) {
+            return; // unknown LeTBS variant; leave it alone
+        }
+        TBSAiManager.prototype.getAoEPossibleMoves = function (entity, obj, center) {
+            var possibilities = [];
+            var scope = this.BM().makeMoveScope(entity, true).cells;
+            scope = scope.filter(function (cell) {
+                return cell._walkable;
+            });
+            var moveScope = [entity.getCell()].concat(scope);
+
+            var BM = this.BM();
+            var isAttack = obj.id === entity._battler.attackSkillId();
+            var data = isAttack ? entity.getAttackScopeData() : entity.getObjectScopeData(obj);
+            var aoeData = isAttack ? entity.getAttackAoEData() : entity.getObjectAoEData(obj);
+            var condition = obj.TagsLetbsAi.useCondition;
+            var aoeCache = {};
+            var evalCache = new Map();
+            var self = this;
+
+            while (moveScope.length > 0) {
+                var moveCell = moveScope.shift();
+                var currentCenter = moveCell.toCoords();
+                var oldCell = entity.getCell();
+                entity.setCell(moveCell);
+
+                var actionScope = BM.makeActionScope(entity, data, obj, true)
+                    .cells
+                    .filter(function (cell) {
+                        return !(!cell._selectable || (cell.isObstacleForLOS() && !cell.isThereEntity()));
+                    });
+                while (actionScope.length > 0) {
+                    var actionCell = actionScope.shift();
+                    var aoeCenter = actionCell.toCoords();
+                    var param = BM.makeObjAoEParam(obj, entity, aoeCenter);
+                    // Line-of-sight filtering is computed from the AoE
+                    // center (checkScopeVisibility(cells, center)), so it is
+                    // identical from every move cell. Only exclude_user,
+                    // cells_reachable and select read the caster's position.
+                    var posSensitive = !!(param.exclude_user ||
+                        param.cells_reachable || param.select);
+                    var key = aoeCenter.x + "," + aoeCenter.y + "," + param.dir +
+                        (posSensitive ? "," + currentCenter.x + "," + currentCenter.y : "");
+                    var hit = aoeCache[key];
+                    if (!hit) {
+                        var aoe = BM.getScopeFromData(aoeData, aoeCenter, param);
+                        var entities = BM.getEntitiesInScope(aoe).filter(function (ent) {
+                            var cached = evalCache.get(ent);
+                            if (cached !== undefined) return cached;
+                            var b = ent.battler();
+                            var e = ent;
+                            var result = !!eval(condition);
+                            evalCache.set(ent, result);
+                            return result;
+                        });
+                        hit = {
+                            targets: entities,
+                            nbrAllies: entities.filter(function (ent) {
+                                return self.isAlly(ent);
+                            }).length,
+                            nbrEnemies: entities.filter(function (ent) {
+                                return self.isEnemy(ent);
+                            }).length
+                        };
+                        aoeCache[key] = hit;
+                    }
+                    if (hit.nbrAllies > 0 || hit.nbrEnemies > 0) {
+                        possibilities.push({
+                            moveCell: moveCell,
+                            actionCell: actionCell,
+                            nbrAllies: hit.nbrAllies,
+                            nbrEnemies: hit.nbrEnemies,
+                            targets: hit.targets
+                        });
+                    }
+                }
+                entity.setCell(oldCell);
+            }
+            return possibilities;
+        };
+        TBSAiManager.prototype.getAoEPossibleMoves.__mvCompatOptimized = true;
+        (window.$reactorCompatLog || function () {})(
+            "ReactorMVCompat: LeTBS AI AoE memoization installed");
+
+        // closestWalkableCellTo / farthestWalkableCellTo ran TWO full A*
+        // pathfinds inside the sort comparator, and each pathfind rebuilds
+        // the entire walkability grid — sorting ~60 candidate cells cost
+        // ~1200 grid builds + pathfinds (a measured 127-139ms hitch on
+        // every AI move decision). The grid is a uniform 4-directional
+        // walkability map, so a single BFS flood from the target yields
+        // every cell's exact easystar path length in one O(map) pass. The
+        // comparator semantics are preserved (path length in steps,
+        // 999 for unreachable AND for the target cell itself, which the
+        // original maps through `path.length === 0 ? 999 : ...`).
+        var installPathSortFix = function (name, pick) {
+            var origFn = global.BattleManagerTBS && BattleManagerTBS[name];
+            if (typeof origFn !== "function" || origFn.__mvCompatOptimized) return;
+            if (String(origFn).indexOf("getPathFromAToB") < 0) return;
+            BattleManagerTBS[name] = function (cellTarget, scope) {
+                var grid = this.getWalkableGridForEasyStar([cellTarget]);
+                var height = grid.length;
+                var width = height ? grid[0].length : 0;
+                var INF = 999;
+                var dist = [];
+                for (var y = 0; y < height; y++) {
+                    dist.push(new Array(width).fill(INF));
+                }
+                if (cellTarget.y < height && cellTarget.x < width) {
+                    dist[cellTarget.y][cellTarget.x] = 0;
+                    var qx = [cellTarget.x];
+                    var qy = [cellTarget.y];
+                    var head = 0;
+                    while (head < qx.length) {
+                        var cx = qx[head];
+                        var cy = qy[head];
+                        head++;
+                        var nd = dist[cy][cx] + 1;
+                        if (nd >= INF) continue;
+                        if (cx + 1 < width && grid[cy][cx + 1] === 0 && dist[cy][cx + 1] > nd) { dist[cy][cx + 1] = nd; qx.push(cx + 1); qy.push(cy); }
+                        if (cx - 1 >= 0 && grid[cy][cx - 1] === 0 && dist[cy][cx - 1] > nd) { dist[cy][cx - 1] = nd; qx.push(cx - 1); qy.push(cy); }
+                        if (cy + 1 < height && grid[cy + 1][cx] === 0 && dist[cy + 1][cx] > nd) { dist[cy + 1][cx] = nd; qx.push(cx); qy.push(cy + 1); }
+                        if (cy - 1 >= 0 && grid[cy - 1][cx] === 0 && dist[cy - 1][cx] > nd) { dist[cy - 1][cx] = nd; qx.push(cx); qy.push(cy - 1); }
+                    }
+                }
+                var distOf = function (cell) {
+                    var v = (cell.y < height && cell.x < width) ? dist[cell.y][cell.x] : INF;
+                    return (v === INF || v === 0) ? 999 : v;
+                };
+                var sorted = scope.sort(function (a, b) {
+                    var da = distOf(a);
+                    var db = distOf(b);
+                    return (da > db) ? 1 : ((da < db) ? -1 : 0);
+                });
+                return pick(sorted);
+            };
+            BattleManagerTBS[name].__mvCompatOptimized = true;
+        };
+        installPathSortFix("closestWalkableCellTo", function (s) { return s[0]; });
+        installPathSortFix("farthestWalkableCellTo", function (s) { return s.pop(); });
+
+        // LeTBS parks entity animations (state loop_animation sprites and
+        // the like) on the shared "animations" layer, but only the OWNING
+        // entity sprite ever removes them (Sprite_Base.updateAnimationSprites
+        // iterates the host's _animationSprites). When the host sprite is
+        // destroyed or replaced mid-battle — a defeated boss part, an
+        // entity rebuild — the layer sprite is orphaned: it keeps rendering,
+        // freezes on its last drawn frame once its cycle ends, and the
+        // replacement entity's fresh loop then plays exactly on top of it
+        // (SSR: the Inhibitor Field arc doubling over itself mid-battle).
+        // Sweep the layer each battle tick and finish the job the dead host
+        // no longer can: destroy finished sprites and sprites whose target
+        // has left the scene. Live, still-playing animations are untouched.
+        if (global.BattleManagerTBS && BattleManagerTBS.update &&
+            !BattleManagerTBS.update.__mvCompatAnimSweep) {
+            var origTbsUpdate = BattleManagerTBS.update;
+            BattleManagerTBS.update = function () {
+                origTbsUpdate.apply(this, arguments);
+                try {
+                    var layer = this.getLayer && this.getLayer("animations");
+                    if (!layer || !layer.children) return;
+                    for (var i = layer.children.length - 1; i >= 0; i--) {
+                        var child = layer.children[i];
+                        if (!child || !child._animation || typeof child.isPlaying !== "function") continue;
+                        var finished = !child.isPlaying();
+                        var target = child._target;
+                        var targetGone = !!(target && target.destroyed);
+                        var orphanedLoop = !!(child._isLoopAnim && target &&
+                            (!target._animationSprites ||
+                             target._animationSprites.indexOf(child) < 0));
+                        if (finished || targetGone || orphanedLoop) {
+                            layer.removeChild(child);
+                            if (child.destroy && !child.destroyed) {
+                                child.destroy();
+                            }
+                        }
+                    }
+                } catch (e) { /* sweeping is best-effort */ }
+            };
+            BattleManagerTBS.update.__mvCompatAnimSweep = true;
+        }
     }
 
     function installFinalLightingCompatibility() {
@@ -3214,7 +3593,8 @@
             renderContainer.renderable = false;
         };
         LMC.prototype.update.__reactorV8Light = true;
-        console.log("ReactorMVCompat: MVNovaLighting v8 light-map renderer installed");
+        (window.$reactorCompatLog || function() {})(
+            "ReactorMVCompat: MVNovaLighting v8 light-map renderer installed");
     }
 
     function installFinalSaveCompatibility() {
@@ -3476,6 +3856,22 @@
             }
         };
         BattleManager.processTurn.__mvCompatWrapped = true;
+
+        // MV's endAction leaves _subject SET until processTurn's no-action
+        // branch advances it via getNextSubject; MZ nulls _subject as soon
+        // as the battler's actions run out. ATB systems key off that: VE's
+        // canUpdateAtb gates new actor inputs on `!this._subject && ...`.
+        // Under MZ semantics the subject vanished while the killing blow's
+        // collapse was still animating — BattleManager.isBusy() skips the
+        // update body that runs checkBattleEnd, but VE's appended updateAtb
+        // is NOT busy-gated — so the next ready actor's input window opened
+        // over an all-dead troop, and the input gate then blocked the
+        // battle-end check until the player attacked the empty field.
+        // MV verbatim: victory beats the next input every time.
+        BattleManager.endAction = function() {
+            this._logWindow.endAction(this._subject);
+            this._phase = "turn";
+        };
     }
 
     function installBattlebackCompatibility() {
@@ -3654,6 +4050,10 @@
         });
     }
 
+    // TIER 1 — MV plugin API support. Gap-fills, aliases, MV-argument
+    // adapters, and format-detecting wrappers. Inert unless MV plugin code
+    // (or MV-format data) exercises them, so they install for every game:
+    // this is what lets MZ projects adopt MV plugins.
     ensureArrayClone();
     installTypeScriptHelpers();
     installUtilsCompatibility();
@@ -3669,8 +4069,6 @@
     installWindowCompatibility();
     installSceneCompatibility();
     installBoxSizeCompatibility();
-    installSceneLayoutCompatibility();
-    installMapDataReloadCompatibility();
     installStaleEventGuard();
     installSpriteBaseCompatibility();
     installButtonCompatibility();
@@ -3684,16 +4082,48 @@
     installTilemapCompatibility();
     installAudioFontCompatibility();
     installPluginManagerCompatibility();
-    installBattleTurnFlowCompatibility();
-    installBattleFieldOffsetCompatibility();
-    installBattleInputGateCompatibility();
     installBattlebackCompatibility();
     installBattleFieldOrderCompatibility();
     installBattleStatusSlotCompatibility();
     installWindowInternalsCompatibility();
 
+    // MV never subscribed to unhandledrejection; MV-era plugin code is full
+    // of uncaught play()/decode() promises that were harmless there (e.g. a
+    // video parallax whose source fails to load). MZ's core treats them as
+    // fatal — printError + stop() froze the whole game on a rejected
+    // video.play(). Log and keep running, like MV did.
+    function installPromiseRejectionCompatibility() {
+        if (!global.SceneManager) return;
+        SceneManager.onReject = function(event) {
+            console.warn(
+                "Unhandled promise rejection (ignored per MV behavior):",
+                event.reason);
+        };
+    }
+
+    // TIER 2 — MV game semantics. Global overrides that make the whole
+    // game measure and behave like MV; mutually exclusive with MZ-authored
+    // UI, so only games authored in RPG Maker MV get them.
+    if (mvGameSemantics) {
+        installStatusBaseFallthroughCompatibility();
+        installMenuSceneCompatibility();
+        installWindowMetricsCompatibility();
+        installSceneLayoutCompatibility();
+        installMapDataReloadCompatibility();
+        installDamagePopupCompatibility();
+        installBattleTurnFlowCompatibility();
+        installBattleFieldOffsetCompatibility();
+        installBattleInputGateCompatibility();
+        installPromiseRejectionCompatibility();
+    }
+
+    (window.$reactorCompatLog || function() {})(mvGameSemantics
+        ? "reactor_mv_compat: MV game detected -- full MV compatibility active (plugin APIs + MV game semantics)"
+        : "reactor_mv_compat: MV plugin API support installed; MV game semantics dormant (MZ-format game)");
+
     global.ReactorMVCompat = {
-        version: "0.1.0",
-        active: true
+        version: "0.2.0",
+        active: mvGameSemantics,
+        pluginApiSupport: true
     };
 })();

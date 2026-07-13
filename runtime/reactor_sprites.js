@@ -236,6 +236,14 @@ Sprite_Character.prototype.checkCharacter = function(character) {
 };
 
 Sprite_Character.prototype.update = function() {
+    // Set per-frame by Spriteset_Map.updateOffscreenCulling: sprites far
+    // outside the viewport skip their entire update and don't render.
+    // updateVisibility recomputes `visible` on the first un-culled frame,
+    // so hiding here never sticks.
+    if (this._rrCulled) {
+        this.visible = false;
+        return;
+    }
     Sprite.prototype.update.call(this);
     this.updateBitmap();
     this.updateFrame();
@@ -1312,36 +1320,27 @@ Sprite_Animation.prototype.updateEffectGeometry = function() {
     const ry = this._animation.rotation.y * r;
     const rz = this._animation.rotation.z * r;
     if (!this._handle) return;
-    // Position via setLocation rather than viewport offset. With y-flip
-    // projection (y=-1) and camera z=-10, world.y > 0 ends up BELOW screen
-    // center, so a target at canvas pixel y < ch/2 (top half) needs
-    // world.y < 0. Hence the formula (py - ch/2) without a leading minus.
-    //   projection p = -1.2 → w after combined transform = 1 - 10*p = 13
-    //   projection x = ±(ch/cw) (aspect-corrected, see setProjectionMatrix)
-    //   ndc.x = world.x * (ch/cw) / 13, ndc.y = -world.y / 13
-    //   For canvas pixel (px, py):  world.x =  (px - cw/2) * 13/(ch/2)
-    //                                world.y =  (py - ch/2) * 13/(ch/2)
-    //   (both axes normalize by ch/2 — one world unit = same pixel count
-    //   in x and y, which is what keeps shapes undistorted)
-    //   When mirrored (projection x < 0), world.x sign also flips.
-    const canvas = Graphics._effekseerCanvas;
-    const renderer = Graphics._app && Graphics._app.renderer;
-    let wx = 0, wy = 0;
-    if (canvas && renderer) {
-        const pos = this.targetPosition(renderer);
-        const px = pos.x + (this._animation.offsetX || 0);
-        const py = pos.y + (this._animation.offsetY || 0);
-        const cw = canvas.width;
-        const ch = canvas.height;
-        const wFactor = 13; // = 1 - 10 * (-1.2)
-        wx = (px - cw / 2) * wFactor / (ch / 2);
-        wy = (py - ch / 2) * wFactor / (ch / 2);
-        if (this._mirror) wx = -wx;
-    }
-    this._handle.setLocation(wx, wy, 0);
+    // The effect stays at the world origin; positioning happens by centering
+    // a square viewport on the target (setViewport). Moving the effect off
+    // the camera axis via setLocation put it far off-axis in one shared
+    // wide-FOV frustum (eye ≈ 10.8 world units out), and off-axis perspective
+    // stretches shapes radially — a sphere at 300px from screen center
+    // rendered 50% wider than tall (measured 471×314). On-axis in its own
+    // viewport, it stays round at every screen position — this is MZ's own
+    // approach (4096² viewport at the target), adapted to the overlay recipe.
+    this._handle.setLocation(0, 0, 0);
     this._handle.setRotation(rx, ry, rz);
     this._handle.setScale(scale, scale, scale);
     this._handle.setSpeed(this._animation.speed / 100);
+};
+
+// Target position in overlay-canvas pixels (shared by setViewport).
+Sprite_Animation.prototype.effekseerScreenPosition = function(renderer) {
+    const pos = this.targetPosition(renderer);
+    return {
+        x: pos.x + (this._animation.offsetX || 0),
+        y: pos.y + (this._animation.offsetY || 0),
+    };
 };
 
 Sprite_Animation.prototype.updateMain = function() {
@@ -1537,25 +1536,29 @@ Sprite_Animation.prototype._doEffekseerDraw = function(renderer) {
     }
 };
 
+// Square per-effect viewport side. Distortion is zero at the viewport
+// center regardless of size; the side only bounds how far an effect can
+// extend from its target before clipping at the viewport edge (±ch here).
+Sprite_Animation.effekseerViewportSide = function() {
+    const canvas = Graphics._effekseerCanvas;
+    return canvas ? canvas.height * 2 : 1440;
+};
+
 Sprite_Animation.prototype.setProjectionMatrix = function(renderer) {
-    // AnimationPicker recipe (proven good): viewportSize = canvas.height * 1.2
-    // gives p = -1.2. The MZ original used viewportSize = 4096 / canvas.height
-    // (giving p = ~-5.69) combined with a 4096x4096 viewport positioned at the
-    // target sprite. That setup silently produced zero pixels through
-    // Effekseer's WebGL1 wrapper on the overlay context (confirmed via
-    // full-canvas pixel diff). The smaller projection + full-canvas viewport
-    // does work — we recover target positioning via handle.setLocation in
-    // updateEffectGeometry instead.
+    // AnimationPicker recipe (proven good): p = -1.2 with camera z = -10.
+    // (The MZ original's p ≈ -5.69 silently produced zero pixels through
+    // Effekseer's WebGL1 wrapper on the overlay context.)
     //
-    // The x-axis is scaled by height/width so one world unit spans the same
-    // number of PIXELS on both axes. MZ's square 4096x4096 viewport made the
-    // projection aspect-neutral for free; a full-canvas viewport on a
-    // widescreen canvas needs this correction or every effect is stretched
-    // horizontally by the aspect ratio (spheres render as ovals).
+    // The viewport is a SQUARE of side S centered on the target
+    // (setViewport), so the projection is aspect-neutral; the ch/S factor
+    // keeps one world unit = ch/26 pixels on both axes — the same on-screen
+    // effect scale as the editor previews. The effect itself sits at the
+    // world origin (camera axis), so shapes stay undistorted at every
+    // screen position; mirroring flips the x-axis around the target.
     const canvas = Graphics._effekseerCanvas || renderer.view;
-    const aspect = canvas.height / canvas.width;
-    const x = (this._mirror ? -1 : 1) * aspect;
-    const y = -1;
+    const q = canvas.height / Sprite_Animation.effekseerViewportSide();
+    const x = (this._mirror ? -1 : 1) * q;
+    const y = -q;
     const p = -1.2;
     Graphics.effekseer.setProjectionMatrix([
         x, 0, 0, 0,
@@ -1576,18 +1579,28 @@ Sprite_Animation.prototype.setCameraMatrix = function(/*renderer*/) {
 };
 
 Sprite_Animation.prototype.setViewport = function(renderer) {
-    // Full-canvas viewport (AnimationPicker recipe). Effect positioning
-    // happens via handle.setLocation in updateEffectGeometry.
+    // Square viewport centered on the target: the effect renders on the
+    // camera axis wherever the target is on screen (see updateEffectGeometry
+    // for why). GL viewport origin is bottom-left, canvas pixels are
+    // top-down, hence the ch - py flip. Rects extending past the canvas are
+    // legal; fragments outside the framebuffer are simply clipped.
     const efxGL = Graphics._effekseerGL || renderer.gl;
     const canvas = Graphics._effekseerCanvas || renderer.view;
-    efxGL.viewport(0, 0, canvas.width, canvas.height);
+    const side = Sprite_Animation.effekseerViewportSide();
+    const pos = this.effekseerScreenPosition(renderer);
+    const vx = Math.round(pos.x - side / 2);
+    const vy = Math.round((canvas.height - pos.y) - side / 2);
+    efxGL.viewport(vx, vy, side, side);
 };
 
 Sprite_Animation.prototype.targetPosition = function(renderer) {
     const pos = new Point();
     if (this._animation.displayType === 2) {
-        pos.x = renderer.view.width / 2;
-        pos.y = renderer.view.height / 2;
+        // Graphics dimensions, not renderer.view: on v8, renderer.view is a
+        // ViewSystem (no width/height) — screen-center animations computed
+        // NaN and the GL viewport call silently kept its previous rect.
+        pos.x = Graphics.width / 2;
+        pos.y = Graphics.height / 2;
     } else {
         for (const target of this._targets) {
             const tpos = this.targetSpritePosition(target);
@@ -1729,6 +1742,23 @@ Sprite_AnimationMV.prototype.setup = function(
 
 Sprite_AnimationMV.prototype.setupRate = function() {
     this._rate = 4;
+};
+
+// Draw the first frame the moment the sprite enters the tree (sheets are
+// already cached for anything that has played before), instead of leaving
+// it invisible until its first update one tick later. Looping animations
+// retriggered right at the end of the previous pass ("show, wait
+// duration-1, repeat" flags) hand off without a blank tick. Visuals only:
+// frame timings (SEs, flashes) still fire on the first real update.
+Sprite_AnimationMV.prototype._rrPrimeFirstFrame = function() {
+    if (this._delay > 0 || !this._animation) return;
+    const frames = this._animation.frames;
+    if (!frames || frames.length === 0) return;
+    if (!this.isReady()) return;
+    try {
+        this.updatePosition();
+        this.updateAllCellSprites(frames[0]);
+    } catch (e) { /* first update draws it instead */ }
 };
 
 Sprite_AnimationMV.prototype.setupDuration = function() {
@@ -3457,7 +3487,33 @@ Spriteset_Base.prototype.findTargetSprite = function(/*target*/) {
 Spriteset_Base.prototype.updateAnimations = function() {
     for (const sprite of this._animationSprites) {
         if (!sprite.isPlaying()) {
-            this.removeAnimation(sprite);
+            // MV-format animations get one grace tick before removal. MV
+            // removes finished animations on the tick AFTER their duration
+            // hits zero (the owner sprite checks isPlaying at the start of
+            // its next update), so a looping animation retriggered exactly
+            // at its duration hands off seamlessly: the old sprite still
+            // shows its last frame on the tick the fresh sprite hasn't
+            // drawn yet. Removing eagerly leaves that tick blank — flags
+            // animated via "show, wait duration-1, repeat" blink. The
+            // grace is stamped with the frame count, not a boolean:
+            // updateAnimations runs twice per tick on the map (once via
+            // Spriteset_Base.update, once from Spriteset_Map.update, as in
+            // stock MZ), and a boolean would be consumed within one tick.
+            // The sprite stops running updatePosition once finished, so
+            // keep it glued to its (possibly scrolling) target during the
+            // grace tick to avoid a one-frame position jump.
+            if (window.Sprite_AnimationMV &&
+                sprite instanceof Sprite_AnimationMV &&
+                sprite._rrEndGraceTick === undefined) {
+                sprite._rrEndGraceTick = Graphics.frameCount;
+                if (sprite.updatePosition) {
+                    try { sprite.updatePosition(); } catch (e) { /* keep last position */ }
+                }
+            } else if (sprite._rrEndGraceTick === Graphics.frameCount) {
+                // Same tick as the grace mark: keep for this render.
+            } else {
+                this.removeAnimation(sprite);
+            }
         }
     }
     this.processAnimationRequests();
@@ -3506,6 +3562,9 @@ Spriteset_Base.prototype.createAnimationSprite = function(
     sprite.setup(targetSprites, animation, mirror, delay, previous);
     this._effectsContainer.addChild(sprite);
     this._animationSprites.push(sprite);
+    if (mv && sprite._rrPrimeFirstFrame) {
+        sprite._rrPrimeFirstFrame();
+    }
 };
 
 Spriteset_Base.prototype.isMVAnimation = function(animation) {
@@ -3612,6 +3671,135 @@ Spriteset_Map.prototype.update = function() {
     this.updateWeather();
     this.updateAnimations();
     this.updateBalloons();
+    // Runs AFTER child updates: plugin windows (event mini labels) force
+    // visible=true inside their own update, so hiding must win afterwards
+    // — the render pass is what the hide targets. Character-sprite flags
+    // are consumed on the NEXT frame's update; the margin absorbs the lag.
+    this.updateOffscreenCulling();
+};
+
+// Viewport culling. Big maps can carry hundreds of events, each with a
+// character sprite and often a plugin overlay window (event mini labels),
+// yielding 10k+ display objects of which only a small fraction is on
+// screen. PIXI v8 spends real time on every object IN THE TREE each frame
+// — measured ~1.3µs/object even when invisible (visibility only gates
+// drawing, not tree processing) — so culled objects must be DETACHED from
+// the stage, not just hidden. Detached objects are parked in an off-stage
+// holder; culled windows keep their update() running (called manually) so
+// their own show/fade logic can bring them back, and character sprites
+// re-enter exactly where their game object says. The margin keeps
+// oversized sprites and fast scrolls safe. Set
+// `window.$reactorDisableCulling` to true to turn this off for debugging.
+Spriteset_Map.prototype.updateOffscreenCulling = function() {
+    const disabled = typeof window !== "undefined" && window.$reactorDisableCulling;
+    if (!this._rrCullHolder) {
+        // Deliberately NOT part of the display tree (that is the point).
+        // destroy() below folds it back in so teardown cascades normally.
+        this._rrCullHolder = new PIXI.Container();
+    }
+    const margin = 384;
+    const minX = -margin;
+    const maxX = Graphics.width + margin;
+    const minY = -margin;
+    const maxY = Graphics.height + margin;
+    let reattachedToTilemap = false;
+    for (const sprite of this._characterSprites) {
+        const character = sprite._character;
+        let culled = false;
+        if (!disabled && character && character !== $gamePlayer) {
+            const sx = character.screenX();
+            const sy = character.screenY();
+            // Cull on the drawn extent, not the anchor point: large event
+            // graphics (parallax-mapping roof pieces spanning many tiles)
+            // stay visible long after their anchor (bottom-center) leaves
+            // the margin. Width/height are 0 until the bitmap loads, which
+            // degrades to the old point test.
+            const halfW = (sprite.width || 0) / 2;
+            const spriteH = sprite.height || 0;
+            culled =
+                sx + halfW < minX || sx - halfW > maxX ||
+                sy < minY || sy - spriteH > maxY;
+        }
+        // Never park a sprite that hasn't completed a first update: its z
+        // is still undefined, and one undefined z NaN-poisons the tilemap's
+        // sort comparator — JavaScript sorts with inconsistent comparators
+        // produce ARBITRARY order (characters over roofs, layer flips).
+        // Let it update once; it can cull next frame.
+        if (culled && sprite.z === undefined) {
+            culled = false;
+        }
+        if (culled && !sprite._rrCulled) {
+            sprite._rrCullParent = sprite.parent;
+            this._rrCullHolder.addChild(sprite);
+        } else if (!culled && sprite._rrCulled) {
+            const parent = sprite._rrCullParent || this._tilemap;
+            parent.addChild(sprite);
+            if (parent === this._tilemap) reattachedToTilemap = true;
+            sprite._rrCullParent = null;
+        }
+        sprite._rrCulled = culled;
+    }
+    // Reattachment appends at the end of the tilemap's children — AFTER
+    // this frame's z-sort already ran. Without an immediate re-sort the
+    // render draws the appended sprites above the upper tile layer for a
+    // frame (and continuously while walking keeps sprites crossing the
+    // margin), which reads as characters standing on top of roofs.
+    if (reattachedToTilemap && this._tilemap && this._tilemap._sortChildren) {
+        this._tilemap._sortChildren();
+    }
+    // Plugin overlays attached directly to the spriteset (YEP event mini
+    // labels and the like). Only windows are considered — core containers
+    // (tilemap, parallax, weather, ...) are never touched. A window is
+    // parked when it contributes no pixels: hidden, positioned far
+    // offscreen, or fully transparent (opacity AND contentsOpacity 0 with
+    // no pause sign showing — e.g. hundreds of dormant textless mini
+    // labels). The pause sign is judged by the window's `pause` flag, not
+    // its sprite's `visible` (the sprite stays visible with alpha 0 on
+    // every open window).
+    for (let i = this.children.length - 1; i >= 0; i--) {
+        const child = this.children[i];
+        if (!(child instanceof Window_Base)) continue;
+        if (disabled) continue;
+        if (this._rrWindowDormant(child, minX, maxX, minY, maxY)) {
+            child._rrCulled = true;
+            this._rrCullHolder.addChild(child);
+        }
+    }
+    // Parked windows: keep their logic alive and bring them back the frame
+    // they have something to show.
+    for (let i = this._rrCullHolder.children.length - 1; i >= 0; i--) {
+        const child = this._rrCullHolder.children[i];
+        if (!(child instanceof Window_Base)) continue;
+        child._rrCulled = false;   // let update() run normally
+        if (child.update) child.update();
+        if (disabled || !this._rrWindowDormant(child, minX, maxX, minY, maxY)) {
+            this.addChild(child);
+        } else {
+            child._rrCulled = true;
+        }
+    }
+};
+
+Spriteset_Map.prototype._rrWindowDormant = function(child, minX, maxX, minY, maxY) {
+    if (!child.visible) return true;
+    if (child.x < minX || child.x > maxX || child.y < minY || child.y > maxY) {
+        return true;
+    }
+    return child.opacity === 0 && child.contentsOpacity === 0 && !child.pause;
+};
+
+// Culled objects live outside the display tree; fold them back in before
+// teardown so the normal destroy cascade reaches them (no leaked textures
+// on map transfer).
+Spriteset_Map.prototype.destroy = function(options) {
+    if (this._rrCullHolder) {
+        for (const child of this._rrCullHolder.children.slice()) {
+            this.addChild(child);
+        }
+        this._rrCullHolder.destroy();
+        this._rrCullHolder = null;
+    }
+    Spriteset_Base.prototype.destroy.call(this, options);
 };
 
 Spriteset_Map.prototype.hideCharacters = function() {

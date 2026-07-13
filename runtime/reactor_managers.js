@@ -640,7 +640,9 @@ StorageManager.jsonToZip = function(json) {
     return new Promise((resolve, reject) => {
         try {
             const zip = pako.deflate(json, { to: "string", level: 1 });
-            if (zip.length >= 50000) {
+            // The 50KB guideline only matters for browser web storage;
+            // desktop file saves have no such limit.
+            if (zip.length >= 50000 && !Utils.isNwjs()) {
                 console.warn("Save data is too big.");
             }
             resolve(zip);

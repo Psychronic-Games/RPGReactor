@@ -1068,6 +1068,44 @@ class ProjectController {
         return true;
     }
 
+    async installReactorRuntime() {
+        if (!this.projectLoaded || !this.currentProject) {
+            alert('Open a project before installing the Reactor runtime.');
+            return false;
+        }
+        const pm = this.projectManager;
+        const projectPath = this.currentProject.path;
+        const jsPath = pm.path.join(projectPath, 'js');
+        const hasReactorManifest = pm.fs.existsSync(pm.path.join(jsPath, 'reactor_plugins.js'));
+        const hasRpgMakerManifest = pm.fs.existsSync(pm.path.join(jsPath, 'plugins.js'));
+        const alreadyInstalled = pm.fs.existsSync(pm.path.join(jsPath, 'reactor_main.js'));
+
+        const summary = alreadyInstalled
+            ? "This updates the engine files (reactor_*.js and js/libs) to this editor's versions. Your plugin manifest and game data are untouched."
+            : 'This moves the RPG Maker corescript, js/libs, and index.html into rpgmaker-runtime-backup.zip in the project folder, then installs the Reactor engine files (reactor_*.js and js/libs) in their place.';
+        if (!confirm(`Install the Reactor runtime into:\n${jsPath}\n\n${summary}`)) return false;
+
+        let regenerateManifest = false;
+        if (hasReactorManifest && hasRpgMakerManifest) {
+            regenerateManifest = confirm(
+                "Rebuild reactor_plugins.js from the project's plugins.js?\n\n"
+                + 'OK: replace the Reactor plugin manifest with the RPG Maker one.\n'
+                + 'Cancel: keep the current reactor_plugins.js.');
+        }
+
+        const gameTitle = this.databaseManager.data.system?.gameTitle || this.currentProject.name;
+        const result = await pm.installReactorRuntime(projectPath, gameTitle, { regenerateManifest });
+        if (!result.ok) {
+            this.uiManager.updateStatus('Reactor runtime install failed');
+            alert(`Could not install the Reactor runtime:\n${result.error}`);
+            return false;
+        }
+        this.uiManager.updateStatus('Reactor runtime installed');
+        alert('Reactor runtime installed. Playtest and deployment now use the RPG Reactor engine.'
+            + (result.archivedTo ? `\n\nThe previous RPG Maker runtime was archived to ${result.archivedTo} in the project folder.` : ''));
+        return true;
+    }
+
     async loadMap(mapId, options = {}) {
         if (!this.tilemapManager) {
             return false;

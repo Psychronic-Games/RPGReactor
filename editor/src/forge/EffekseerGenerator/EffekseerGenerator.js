@@ -851,12 +851,24 @@ class EffekseerGenerator {
             nodes.push(...layerNodes);
         }
         // Master duration: the WHOLE effect ends at this frame — in the
-        // preview (loops there) and in the exported file.
-        // Finite BURST stacks get a hard master duration (the exported
-        // effect ends there). Continuous stacks stay endless in the sim —
-        // "N frames" then means the seamless display loop length.
-        if ((this._effectDuration || 0) > 0 && nodes.length && !this._stackMeta().continuous) {
-            for (const n of nodes) n.commonValues.removeWhenParentIsRemoved = 1;
+        // preview (loops there) and in the exported file. This applies to
+        // continuous stacks too: an explicit frame count means the exported
+        // effect must terminate (RPG Maker battle animations wait for the
+        // effect handle to die — an endless export stalls the battle, and
+        // the database preview spins forever). Blank duration (0 = ∞) keeps
+        // a continuous stack endless for ambience use.
+        if ((this._effectDuration || 0) > 0 && nodes.length) {
+            // The flag must reach EVERY descendant: Effekseer children
+            // survive their parent's destruction unless the node opts in
+            // (builder default is 0), so flagging only the top level lets
+            // nested long-lived nodes (continuous recipes use 36000-frame
+            // lives) outlive the master and the effect never ends.
+            (function flagDeep(list) {
+                for (const n of list) {
+                    n.commonValues.removeWhenParentIsRemoved = 1;
+                    flagDeep(n.children || []);
+                }
+            })(nodes);
             const master = RR_EfkBuilder.makeNode(RR_EfkFormat.NODE_TYPE.NONE, {
                 commonValues: { ...bindAlways, maxGeneration: 1, life: rf(this._effectDuration) },
                 children: nodes,
@@ -2220,8 +2232,11 @@ class EffekseerGenerator {
         const anyWindowed = this._stack.some(e =>
             (e.end || 0) > (e.start || 0) || (e.keyframes && e.keyframes.length > 1));
         if (anyWindowed) this._stackFlags.prewarm = 0;
-        if ((this._effectDuration || 0) > 0 && !this._stackFlags.continuous) {
-            this._loopFrames = this._effectDuration;   // bursts restart at the set length
+        if ((this._effectDuration || 0) > 0) {
+            // An explicit duration caps the exported effect (continuous
+            // stacks included), so the preview replays at the same frame —
+            // what the Forge shows is what the game gets.
+            this._loopFrames = this._effectDuration;
             this._stackFlags.prewarm = 0;
         } else {
             this._loopFrames = (this._stack.length === 1 && recipe.seamless && params.life) ? params.life : 0;

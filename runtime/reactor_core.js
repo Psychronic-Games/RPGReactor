@@ -179,12 +179,24 @@ function Utils() {
 }
 
 /**
- * The name of the RPG Reactor. "Reactor" in the current version.
+ * The engine name reported to plugins. The corescript implements the RPG
+ * Maker MZ API surface, and multi-engine plugins branch on this exact
+ * string (UltraMode7, Cyclone, DK tools, ...) to pick which internals to
+ * patch — reporting anything else sends them down the MV path or a dead
+ * fallback. Reactor's own identity lives in REACTOR_NAME/REACTOR_VERSION.
  *
  * @type string
  * @constant
  */
-Utils.RPGMAKER_NAME = "Reactor";
+Utils.RPGMAKER_NAME = "MZ";
+
+/**
+ * The name of this engine.
+ *
+ * @type string
+ * @constant
+ */
+Utils.REACTOR_NAME = "Reactor";
 
 /**
  * The version of the RPG Reactor.
@@ -810,6 +822,8 @@ Graphics._updateAllElements = function() {
 };
 
 Graphics._onTick = function(deltaTime) {
+    const prof = ReactorProfiler._active ? ReactorProfiler : null;
+    if (prof) prof.frameBegin();
     this._fpsCounter.startTick();
     // Resource watchdogs, driven from the runtime's own heartbeat so they
     // work no matter which manager/prototype methods plugins replace.
@@ -834,10 +848,14 @@ Graphics._onTick = function(deltaTime) {
                 : (deltaTime && typeof deltaTime.deltaTime === "number"
                     ? deltaTime.deltaTime
                     : 1);
+        const tUpdate = prof ? performance.now() : 0;
         this._tickHandler(dt);
+        if (prof) prof.phase("update", performance.now() - tUpdate);
     }
     if (this._canRender()) {
+        const tRender = prof ? performance.now() : 0;
         this._app.render();
+        if (prof) prof.phase("render", performance.now() - tRender);
         // v8: Sprite_Animation._render runs via the onRender bridge, which v8
         // invokes BEFORE the actual GPU draws happen. Effekseer's draws would
         // therefore be overwritten by v8's subsequent rendering. Instead, on
@@ -854,6 +872,378 @@ Graphics._onTick = function(deltaTime) {
         }
     }
     this._fpsCounter.endTick();
+    if (prof) prof.frameEnd();
+};
+
+//-----------------------------------------------------------------------------
+/**
+ * The in-game frame profiler (F10 to start/stop). While recording it times
+ * each frame's phases and keeps a detailed record of every frame over
+ * `frameThreshold` ms, plus between-frame stalls over `gapThreshold` ms
+ * (main-thread work outside the game loop: GC, plugin timers, decodes).
+ * Stopping writes `save/reactor-profile.json` and logs a console summary.
+ * Costs nothing until first activated.
+ *
+ * @namespace
+ */
+function ReactorProfiler() {
+    throw new Error("This is a static class");
+}
+
+ReactorProfiler._active = false;
+ReactorProfiler._installed = false;
+ReactorProfiler._spikes = [];
+ReactorProfiler.frameThreshold = 20;
+ReactorProfiler.gapThreshold = 30;
+
+ReactorProfiler.toggle = function() {
+    if (this._active) {
+        this.stop();
+    } else {
+        this.start();
+    }
+};
+
+ReactorProfiler.start = function() {
+    if (!this._installed) {
+        this._install();
+    }
+    this._t0 = performance.now();
+    this._lastFrameEnd = 0;
+    this._lastHeap = 0;
+    this._frames = 0;
+    this._sumMs = 0;
+    this._worst = 0;
+    this._spikes = [];
+    this._acc = {};
+    this._hits = {};
+    this._active = true;
+    console.info(
+        "[ReactorProfiler] Recording frame timings... " +
+            "press F10 again to stop and save the report."
+    );
+};
+
+ReactorProfiler.stop = function() {
+    this._active = false;
+    return this.dump();
+};
+
+ReactorProfiler.frameBegin = function() {
+    this._acc = {};
+    this._hits = {};
+    this._frameStart = performance.now();
+};
+
+ReactorProfiler.phase = function(name, ms) {
+    this._acc[name] = (this._acc[name] || 0) + ms;
+};
+
+ReactorProfiler.frameEnd = function() {
+    const now = performance.now();
+    const total = now - this._frameStart;
+    const gap = this._lastFrameEnd ? this._frameStart - this._lastFrameEnd : 0;
+    this._lastFrameEnd = now;
+    this._frames++;
+    this._sumMs += total;
+    if (total > this._worst) this._worst = total;
+    const heap = performance.memory ? performance.memory.usedJSHeapSize : 0;
+    const heapDelta = this._lastHeap ? heap - this._lastHeap : 0;
+    this._lastHeap = heap;
+    const isSpike = total > this.frameThreshold || gap > this.gapThreshold;
+    if (isSpike && this._spikes.length < 400) {
+        const phases = {};
+        for (const key in this._acc) {
+            phases[key] = Math.round(this._acc[key] * 10) / 10;
+        }
+        const record = {
+            at: Math.round(now - this._t0) / 1000,
+            totalMs: Math.round(total * 10) / 10,
+            gapMs: Math.round(gap * 10) / 10,
+            phases: phases,
+            counts: Object.assign({}, this._hits),
+            heapMB: Math.round(heap / 104857.6) / 10,
+            heapDeltaMB: Math.round(heapDelta / 104857.6) / 10
+        };
+        try {
+            const scene = SceneManager._scene;
+            record.scene = scene ? scene.constructor.name : "";
+            if (window.$gameMap && window.$gamePlayer && scene &&
+                window.Scene_Map && scene instanceof Scene_Map) {
+                record.mapId = $gameMap.mapId();
+                record.playerX = $gamePlayer.x;
+                record.playerY = $gamePlayer.y;
+            }
+            const sset = scene && scene._spriteset;
+            if (sset && sset._animationSprites) {
+                record.animSprites = sset._animationSprites.length;
+            }
+        } catch (e) { /* scene info is best-effort */ }
+        this._spikes.push(record);
+    }
+};
+
+// Wraps hot methods so their time accumulates into a named phase while the
+// profiler is active. Installed lazily on first F10, so plugin replacements
+// of these methods are what actually get timed.
+ReactorProfiler._wrap = function(proto, method, phaseName) {
+    if (!proto || typeof proto[method] !== "function") return;
+    const original = proto[method];
+    const profiler = this;
+    proto[method] = function() {
+        if (!profiler._active) {
+            return original.apply(this, arguments);
+        }
+        const t = performance.now();
+        try {
+            return original.apply(this, arguments);
+        } finally {
+            const ms = performance.now() - t;
+            profiler._acc[phaseName] = (profiler._acc[phaseName] || 0) + ms;
+            profiler._hits[phaseName] = (profiler._hits[phaseName] || 0) + 1;
+        }
+    };
+};
+
+ReactorProfiler._install = function() {
+    this._installed = true;
+    const targets = [
+        [window.Game_Map, "update", "gameMapUpdate"],
+        [window.Game_Map, "updateEvents", "mapEvents"],
+        [window.Game_Map, "updateInterpreter", "interpreter"],
+        [window.Game_Screen, "update", "screenEffects"],
+        [window.Spriteset_Map, "update", "spriteset"],
+        [window.Spriteset_Map, "updateOffscreenCulling", "culling"],
+        [window.Tilemap, "_addAllSpots", "tilePaint"],
+        [window.Tilemap, "_sortChildren", "tileSort"],
+        [window.Bitmap, "_onLoad", "imgDecode"],
+        [window.Window_Base, "update", "windows"],
+        [window.Sprite_Character, "update", "charSprites"]
+    ];
+    for (const [klass, method, phaseName] of targets) {
+        this._wrap(klass && klass.prototype, method, phaseName);
+    }
+    // Battle-side phases. BattleManager is a static class (wrap the object
+    // itself); LeTBS's tactical AI, when present, gets its own phases so
+    // enemy-turn spikes attribute to the responsible stage.
+    if (window.BattleManager) {
+        this._wrap(window.BattleManager, "update", "battleManager");
+    }
+    if (window.BattleManagerTBS) {
+        this._wrap(window.BattleManagerTBS, "update", "tbsUpdate");
+        for (const method of ["updatePhase", "updateTBSObjects",
+            "updateBattlers", "updateTBSEvents", "makeMoveScope",
+            "makeActionScope", "getScopeFromData", "getEntitiesInScope",
+            "updateSequences", "checkSubPhase", "executeAction",
+            "startTurn", "setCursorCell", "makePathScope",
+            "closestWalkableCellTo", "farthestWalkableCellTo"]) {
+            this._wrap(window.BattleManagerTBS, method, "tbs:" + method);
+        }
+    }
+    if (window.TBSAiManager && TBSAiManager.prototype) {
+        if (TBSAiManager.prototype.getAoEPossibleMoves) {
+            this._wrap(TBSAiManager.prototype, "getAoEPossibleMoves", "tbsAi:aoeMoves");
+        }
+        for (const method of ["update", "runCommand", "updateRunningCommand",
+            "getFocusedEntities"]) {
+            this._wrap(TBSAiManager.prototype, method, "tbsAi:" + method);
+        }
+    }
+    if (window.TBSAiManager && TBSAiManager.prototype) {
+        const aiMethods = [
+            "process", "makeOffenseData", "makeHealingData",
+            "makeSupportData", "makeMoveData", "makeSummonData",
+            "updateOffenseActionsBuilding", "updateHealingActionsBuilding",
+            "updateSupportActionsBuilding", "updateMoveActionsBuilding",
+            "updateSummonActionsBuilding", "makeActionData"
+        ];
+        for (const method of aiMethods) {
+            this._wrap(TBSAiManager.prototype, method, "tbsAi:" + method);
+        }
+    }
+};
+
+ReactorProfiler.dump = function() {
+    const elapsed = (performance.now() - this._t0) / 1000;
+    const report = {
+        recordedAt: new Date().toISOString(),
+        seconds: Math.round(elapsed * 10) / 10,
+        frames: this._frames,
+        avgFrameMs: this._frames
+            ? Math.round((this._sumMs / this._frames) * 100) / 100
+            : 0,
+        worstFrameMs: Math.round(this._worst * 10) / 10,
+        frameThresholdMs: this.frameThreshold,
+        gapThresholdMs: this.gapThreshold,
+        spikeCount: this._spikes.length,
+        spikes: this._spikes
+    };
+    console.info(
+        "[ReactorProfiler] " + report.frames + " frames over " +
+            report.seconds + "s, avg " + report.avgFrameMs + "ms, worst " +
+            report.worstFrameMs + "ms, " + report.spikeCount + " spike(s)."
+    );
+    const worst = this._spikes
+        .slice()
+        .sort((a, b) => b.totalMs - a.totalMs)
+        .slice(0, 10);
+    for (const spike of worst) {
+        console.info("[ReactorProfiler spike] " + JSON.stringify(spike));
+    }
+    let destination = "";
+    try {
+        const fs = require("fs");
+        let dir = "";
+        if (window.StorageManager) {
+            if (StorageManager.fileDirectoryPath) {
+                dir = StorageManager.fileDirectoryPath();
+            } else if (StorageManager.localFileDirectoryPath) {
+                dir = StorageManager.localFileDirectoryPath();
+            }
+        }
+        if (dir) {
+            if (!fs.existsSync(dir)) fs.mkdirSync(dir);
+            destination = dir + "reactor-profile.json";
+            fs.writeFileSync(destination, JSON.stringify(report, null, 2));
+        }
+    } catch (e) {
+        console.warn("[ReactorProfiler] could not write the report file", e);
+        destination = "";
+    }
+    if (destination) {
+        console.info("[ReactorProfiler] report written to " + destination);
+    } else {
+        console.info(
+            "[ReactorProfiler] full report:\n" + JSON.stringify(report)
+        );
+    }
+    return report;
+};
+
+window.$reactorProfiler = ReactorProfiler;
+
+// Console helper: dump the live animation sprites of the current scene —
+// count, animation id/name, rate, remaining duration, drawn cells, and a
+// sample of cell opacities. For diagnosing looping-animation stacking or
+// opacity drift the moment it is visible on screen.
+window.$reactorAnimStats = function() {
+    const scene = SceneManager._scene;
+    if (!scene) return "no scene";
+    const sset = scene._spriteset;
+    const rows = [];
+    const describe = function(sprite, source) {
+        rows.push({
+            source: source,
+            anim: sprite._animation
+                ? sprite._animation.id + ":" + (sprite._animation.name || "")
+                : "?",
+            rate: sprite._rate,
+            duration: sprite._duration,
+            loop: !!sprite._isLoopAnim,
+            drawnCells: (sprite._cellSprites || [])
+                .filter(c => c.visible && c.bitmap).length,
+            x: Math.round(sprite.x),
+            y: Math.round(sprite.y),
+            targets: sprite._targets ? sprite._targets.length : "-"
+        });
+    };
+    if (sset && sset._animationSprites) {
+        for (const sprite of sset._animationSprites) {
+            describe(sprite, "spriteset");
+        }
+    }
+    // Host-based animations (MV-style: character/battler/LeTBS entity
+    // sprites keep their own _animationSprites lists outside the spriteset).
+    const seen = new Set();
+    const scan = function(node) {
+        if (!node || seen.has(node)) return;
+        seen.add(node);
+        if (node._animationSprites && node !== sset &&
+            node._animationSprites.length) {
+            let label = node.constructor.name;
+            if (node._battler && node._battler.name) {
+                label += "(" + node._battler.name() + ")";
+            } else if (node._entity && node._entity.battler) {
+                try { label += "(" + node._entity.battler().name() + ")"; } catch (e) {}
+            } else if (node._character && node._character._eventId) {
+                label += "(ev" + node._character._eventId + ")";
+            }
+            for (const sprite of node._animationSprites) {
+                describe(sprite, label);
+            }
+        }
+        if (node.children) node.children.forEach(scan);
+    };
+    scan(scene);
+    if (console.table) console.table(rows);
+    else console.log(JSON.stringify(rows, null, 1));
+    return rows.length + " animation sprite(s)";
+};
+
+// Console helper: arm a watcher on one animation id that logs every change
+// in how many copies are alive (with host, remaining duration, position) —
+// for catching transient duplicates without reflex-timing a manual dump.
+// `$reactorAnimWatch(403)` arms it; `$reactorAnimWatch()` stops and dumps.
+window.$reactorAnimWatch = function(animId) {
+    if (window.__rrAnimWatch) {
+        const watch = window.__rrAnimWatch;
+        clearInterval(watch.timer);
+        window.__rrAnimWatch = null;
+        console.log("[AnimWatch] transition log:");
+        console.log(JSON.stringify(watch.log, null, 1));
+        return watch.log.length + " transition(s) logged";
+    }
+    if (!animId) return "usage: $reactorAnimWatch(animationId)";
+    const watch = { id: animId, last: -1, log: [] };
+    watch.timer = setInterval(function() {
+        try {
+            const scene = SceneManager._scene;
+            if (!scene) return;
+            const found = [];
+            const seen = new Set();
+            (function scan(node) {
+                if (!node || seen.has(node)) return;
+                seen.add(node);
+                if (node._animationSprites) {
+                    for (const sprite of node._animationSprites) {
+                        if (sprite._animation && sprite._animation.id === watch.id) {
+                            let label = node.constructor.name;
+                            try {
+                                if (node._battler && node._battler.name) {
+                                    label += "(" + node._battler.name() + ")";
+                                } else if (node._entity && node._entity.battler) {
+                                    label += "(" + node._entity.battler().name() + ")";
+                                }
+                            } catch (e) {}
+                            found.push({
+                                host: label,
+                                d: sprite._duration,
+                                x: Math.round(sprite.x),
+                                y: Math.round(sprite.y)
+                            });
+                        }
+                    }
+                }
+                if (node.children) node.children.forEach(scan);
+            })(scene);
+            if (found.length !== watch.last) {
+                const entry = {
+                    tick: Graphics.frameCount,
+                    count: found.length,
+                    sprites: found
+                };
+                watch.log.push(entry);
+                if (watch.log.length > 60) watch.log.shift();
+                console.log("[AnimWatch " + watch.id + "] " + watch.last +
+                    " -> " + found.length + " " + JSON.stringify(found));
+                watch.last = found.length;
+            }
+        } catch (e) { /* keep watching */ }
+    }, 16);
+    window.__rrAnimWatch = watch;
+    console.info("[AnimWatch] watching animation " + animId +
+        " — run $reactorAnimWatch() again to stop and dump the log.");
+    return "watching " + animId;
 };
 
 Graphics._canRender = function() {
@@ -1032,6 +1422,10 @@ Graphics._onKeyDown = function(event) {
             case 115: // F4
                 event.preventDefault();
                 this._switchFullScreen();
+                break;
+            case 121: // F10
+                event.preventDefault();
+                ReactorProfiler.toggle();
                 break;
         }
     }
@@ -1317,7 +1711,23 @@ Graphics.FPSCounter.prototype._createElements = function() {
     this._boxDiv.id = "fpsCounterBox";
     this._labelDiv.id = "fpsCounterLabel";
     this._numberDiv.id = "fpsCounterNumber";
-    this._boxDiv.style.display = "none";
+    // RPG Maker MZ ships the counter's CSS in its stock index.html <style>
+    // block; Reactor's generated index.html has no style block, so the
+    // styling must live here or the counter renders unpositioned behind the
+    // absolutely-positioned game canvas (z-index 1) and Effekseer overlay
+    // (z-index 2).
+    this._boxDiv.style.cssText =
+        "position:absolute; top:8px; left:8px; width:90px; height:40px;" +
+        "background:rgba(16,16,24,0.72); border-radius:8px;" +
+        "box-shadow:0 1px 4px rgba(0,0,0,0.4); z-index:2147483647;" +
+        "display:none; pointer-events:none;";
+    this._labelDiv.style.cssText =
+        "position:absolute; top:4px; left:8px; font-size:11px;" +
+        "letter-spacing:1px; color:rgba(255,255,255,0.7);" +
+        "font-family:rmmz-numberfont,monospace;";
+    this._numberDiv.style.cssText =
+        "position:absolute; bottom:4px; right:8px; font-size:22px;" +
+        "color:#fff; font-family:rmmz-numberfont,monospace;";
     this._boxDiv.appendChild(this._labelDiv);
     this._boxDiv.appendChild(this._numberDiv);
     document.body.appendChild(this._boxDiv);
@@ -2670,6 +3080,23 @@ Tilemap.prototype.update = function() {
             child.update();
         }
     }
+    // v8: repaint/sort/layer positioning live in updateTransform, normally
+    // bridged through v8's onRender callback — but v8's per-render-group
+    // onRender bookkeeping loses entries when subtrees are detached and
+    // reattached (offscreen culling does this constantly), silently
+    // freezing repaints (stale tiles at the scroll edges) and the z-sort
+    // (characters drawn above upper-layer tiles). Drive it from the MZ
+    // update path instead, which always runs. The repaint guards make a
+    // second onRender-driven invocation in the same frame nearly free.
+    // The try/catch matches the onRender bridge's semantics: plugin
+    // updateTransform chains that end in the legacy no-args
+    // PIXI.Container.updateTransform (UltraMode7 does) throw on v8 after
+    // their real work is done, and that throw is expected and non-fatal.
+    if (PIXI.TextureSource) {
+        try {
+            this.updateTransform();
+        } catch (e) { /* legacy PIXI tail; repaint work already done */ }
+    }
 };
 
 /**
@@ -2996,13 +3423,20 @@ Tilemap.prototype._sortChildren = function() {
 };
 
 Tilemap.prototype._compareChildOrder = function(a, b) {
-    if (a.z !== b.z) {
-        return a.z - b.z;
-    } else if (a.y !== b.y) {
-        return a.y - b.y;
-    } else {
-        return a.spriteId - b.spriteId;
+    // Coalesce undefined fields: a single NaN result makes the comparator
+    // inconsistent and Array.prototype.sort then returns ARBITRARY order
+    // for the whole array (layer flips, characters above upper tiles).
+    const az = a.z || 0;
+    const bz = b.z || 0;
+    if (az !== bz) {
+        return az - bz;
     }
+    const ay = a.y || 0;
+    const by = b.y || 0;
+    if (ay !== by) {
+        return ay - by;
+    }
+    return (a.spriteId || 0) - (b.spriteId || 0);
 };
 
 //:::::::::::::::::::::::::::::::::::::::::::::::::::::::::
@@ -3256,15 +3690,29 @@ Tilemap.Layer.prototype.destroy = function() {
 Tilemap.Layer.prototype.setBitmaps = function(bitmaps) {
     this._images = bitmaps.map(bitmap => bitmap.image || bitmap.canvas);
     this._needsTexturesUpdate = true;
+    // v8: tile textures are cached per (set, frame); a tileset change
+    // invalidates them.
+    this._v8TexCache = null;
 };
 
 Tilemap.Layer.prototype.clear = function() {
     this._elements.length = 0;
     this._needsVertexUpdate = true;
-    // v8: also remove the Sprite children we added for tile rendering since
-    // the WebGL renderer-plugin path is unavailable.
-    if (PIXI.TextureSource && this.children && this.children.length > 0) {
-        this.removeChildren();
+    // v8: park the tile Sprites in a DETACHED pool and reuse them on the
+    // next paint. Destroying and recreating ~2k sprites on every repaint
+    // (each scroll across the painted-region boundary) cost a 77ms frame
+    // spike; pooling makes repaints nearly allocation-free. Parking
+    // (instead of in-place cursor reuse) guarantees no stale tiles can
+    // ever remain visible: only sprites the current paint explicitly
+    // placed are in the tree.
+    if (PIXI.TextureSource) {
+        if (!this._v8SpritePool) this._v8SpritePool = [];
+        if (this.children.length > 0) {
+            for (const child of this.children) {
+                this._v8SpritePool.push(child);
+            }
+            this.removeChildren();
+        }
     }
 };
 
@@ -3309,11 +3757,26 @@ Tilemap.Layer.prototype._addV8Tile = function(setNumber, sx, sy, dx, dy, w, h) {
         }
     }
     try {
-        const texture = new PIXI.Texture({
-            source: image.__pixiTilemapSource,
-            frame: new PIXI.Rectangle(sx, sy, w, h)
-        });
-        const sprite = new PIXI.Sprite(texture);
+        // Texture cache: tiles repeat heavily, so after warmup repaints
+        // create no textures at all.
+        if (!this._v8TexCache) this._v8TexCache = new Map();
+        const key = setNumber + ":" + sx + ":" + sy + ":" + w + ":" + h;
+        let texture = this._v8TexCache.get(key);
+        if (!texture) {
+            texture = new PIXI.Texture({
+                source: image.__pixiTilemapSource,
+                frame: new PIXI.Rectangle(sx, sy, w, h)
+            });
+            this._v8TexCache.set(key, texture);
+        }
+        // Sprite reuse from the detached pool; only allocate when the
+        // viewport genuinely needs more tiles than any previous paint.
+        let sprite = this._v8SpritePool && this._v8SpritePool.pop();
+        if (sprite) {
+            if (sprite.texture !== texture) sprite.texture = texture;
+        } else {
+            sprite = new PIXI.Sprite(texture);
+        }
         sprite.position.set(dx, dy);
         this.addChild(sprite);
     } catch (e) { /* skip this tile */ }
@@ -3828,11 +4291,21 @@ TilingSprite.prototype._refresh = function() {
         frame.height = this._bitmap.height;
     }
     if (texture) {
-        // v8: prefer texture.source presence check over deprecated baseTexture.
-        const hasSource = PIXI.TextureSource
-            ? !!texture.source
-            : !!texture.baseTexture;
-        if (hasSource) {
+        if (PIXI.TextureSource && texture.source) {
+            // v8: REPLACE the texture like Sprite._refresh does. Assigning
+            // texture.frame swaps the Rectangle without updateUvs() and
+            // leaves `orig` on the old rectangle, so the tiling keeps
+            // spanning the whole source -- window skins then tile the entire
+            // sheet (cursor, arrows, text palette) instead of the pattern
+            // quadrant.
+            if (frame.width > 0 && frame.height > 0 &&
+                (texture.frame.x !== frame.x ||
+                    texture.frame.y !== frame.y ||
+                    texture.frame.width !== frame.width ||
+                    texture.frame.height !== frame.height)) {
+                this.texture = new PIXI.Texture({ source: texture.source, frame });
+            }
+        } else if (texture.baseTexture) {
             try {
                 texture.frame = frame;
             } catch (e) {

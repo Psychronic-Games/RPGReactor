@@ -107,7 +107,7 @@ function copyDirFiltered(src, dest, relBase) {
     const entries = fs.readdirSync(src, { withFileTypes: true });
     for (const entry of entries) {
         const relPath = path.join(relBase, entry.name);
-        if (EXCLUDED.has(relPath)) {
+        if (EXCLUDED.has(relPath) || /^rpgmaker-runtime-backup(-\d+)?\.zip$/.test(relPath)) {
             logDim(`  [skip] ${relPath}`);
             continue;
         }
@@ -148,20 +148,31 @@ function validateProjectRuntime(root) {
         path.join('libs', 'vorbisdecoder.js'),
     ];
     const jsRoot = path.join(root, 'js');
-    const metadataPath = path.join(root, 'project.rpgreactor');
-    let metadataRequiresReactor = false;
-    if (fs.existsSync(metadataPath)) {
-        try {
-            metadataRequiresReactor = JSON.parse(fs.readFileSync(metadataPath, 'utf8')).imported !== true;
-        } catch {
-            metadataRequiresReactor = true;
+    // What index.html boots is the ground truth: imported RPG Maker projects
+    // ship their own corescript and need none of the Reactor files.
+    let usesReactorRuntime = null;
+    try {
+        usesReactorRuntime = /js\/reactor_main\.js/.test(fs.readFileSync(path.join(root, 'index.html'), 'utf8'));
+    } catch {}
+    if (usesReactorRuntime === null) {
+        const metadataPath = path.join(root, 'project.rpgreactor');
+        let metadataRequiresReactor = false;
+        if (fs.existsSync(metadataPath)) {
+            try {
+                metadataRequiresReactor = JSON.parse(fs.readFileSync(metadataPath, 'utf8')).imported !== true;
+            } catch {
+                metadataRequiresReactor = true;
+            }
         }
+        usesReactorRuntime = metadataRequiresReactor
+            || required.some(file => file !== 'reactor_main.js' && fs.existsSync(path.join(jsRoot, file)));
     }
-    const reactorProject = metadataRequiresReactor
-        || required.some(file => file !== 'reactor_main.js' && fs.existsSync(path.join(jsRoot, file)));
-    if (!reactorProject) return false;
+    if (!usesReactorRuntime) return false;
     const missing = required.filter(file => !fs.existsSync(path.join(jsRoot, file)));
-    if (missing.length) throw new Error(`Project runtime is incomplete: ${missing.join(', ')}`);
+    if (missing.length) {
+        throw new Error(`Project runtime is incomplete: missing ${missing.map(file => path.join('js', file)).join(', ')}. `
+            + 'Use "Install Reactor Runtime" in the editor\'s Build menu to copy the engine runtime into the project.');
+    }
     return true;
 }
 
@@ -309,9 +320,11 @@ function downloadFile(url, destPath, progressBase, progressSpan, reportProgress 
 function fetchJson(url) {
     return new Promise((resolve, reject) => {
         const request = (target) => {
-            const req = https.get(target, {
-            headers: { 'User-Agent': 'RPG-Reactor', Accept: 'application/vnd.github+json, application/json' },
-        }, (res) => {
+            const headers = { 'User-Agent': 'RPG-Reactor', Accept: 'application/vnd.github+json, application/json' };
+            const isGithubApi = new URL(target).hostname === 'api.github.com';
+            const githubToken = process.env.GITHUB_TOKEN || process.env.GH_TOKEN;
+            if (isGithubApi && githubToken) headers.Authorization = `Bearer ${githubToken}`;
+            const req = https.get(target, { headers }, (res) => {
             if (res.statusCode === 301 || res.statusCode === 302) {
                 const redirect = new URL(res.headers.location, target).toString();
                 res.resume();
@@ -319,7 +332,9 @@ function fetchJson(url) {
                 return;
             }
             if (res.statusCode !== 200) {
-                reject(new Error(`HTTP ${res.statusCode} for ${target}`));
+                const rateLimited = isGithubApi && !githubToken && (res.statusCode === 403 || res.statusCode === 429);
+                reject(new Error(`HTTP ${res.statusCode} for ${target}${rateLimited
+                    ? ' (unauthenticated GitHub API rate limit — set GITHUB_TOKEN to raise it)' : ''}`));
                 res.resume();
                 return;
             }
@@ -358,7 +373,6 @@ async function installProprietaryCodec(platform, runtimeRoot, runtimeVersion, pr
         platform,
         arch: 'x64',
         cacheDirectories: codecCacheCandidates,
-        fetchRelease: fetchJson,
         download: (url, destination) => downloadFile(url, destination, progressBase, progressSpan),
         onWarning: logWarn,
     });
@@ -435,7 +449,6 @@ async function installProprietaryCodec(platform, runtimeRoot, runtimeVersion, pr
         progress(6, 'Optimizing staged assets...');
         const summary = await assetOptimizer.optimizeStagedAssets(stagingDir, assetOptimization, {
             appRoot,
-            fetchRelease: fetchJson,
             download: (url, destination, detail) => downloadFile(url, destination, 6, 2, detail.reportProgress),
             onWarning: logWarn,
             onStatus: logInfo,
