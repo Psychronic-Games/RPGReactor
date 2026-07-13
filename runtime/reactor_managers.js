@@ -2031,7 +2031,9 @@ SceneManager.initInput = function() {
 SceneManager.setupEventHandlers = function() {
     window.addEventListener("error", this.onError.bind(this));
     window.addEventListener("unhandledrejection", this.onReject.bind(this));
-    window.addEventListener("unload", this.onUnload.bind(this));
+    // "unload" is deprecated in Chromium; "pagehide" fires in the same
+    // teardown situations (including window close) without the deprecation.
+    window.addEventListener("pagehide", this.onUnload.bind(this));
     document.addEventListener("keydown", this.onKeyDown.bind(this));
 };
 

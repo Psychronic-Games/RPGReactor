@@ -670,8 +670,12 @@ class MapEditor {
                         const cls = this.classifyAutotile(baseTileId);
                         const { isA1Water, isA1Decoration, isA2Decoration } = cls;
 
-                        // Erase tiles based on what we're placing
-                        if (!isA1Water) {
+                        // Erase tiles based on what we're placing.
+                        // Manual layer mode writes ONLY to the selected
+                        // z-slot and must never clear the other layers.
+                        if (this.layerMode !== 'auto') {
+                            // no cross-layer erasing in manual mode
+                        } else if (!isA1Water) {
                             if (isA1Decoration || isA2Decoration) {
                                 // Decorations: only erase B-E tiles (1-1535) on layers 1-3
                                 for (let layer = 1; layer <= 3; layer++) {
@@ -881,7 +885,11 @@ class MapEditor {
                     // - A1 decorations: erase B-E tiles only on layers 1-3
                     // - A2 decorations: erase B-E tiles only on layers 1-3 (stack on A2 ground)
                     // - A2 ground / A3-A5: erase layers 1-3 only
-                    if (!isA1Water) {
+                    // Manual layer mode writes ONLY to the selected z-slot
+                    // and must never clear the other layers.
+                    if (this.layerMode !== 'auto') {
+                        // no cross-layer erasing in manual mode
+                    } else if (!isA1Water) {
                         if (isA1Decoration || isA2Decoration) {
                             // Decorations: only erase B-E tiles (1-1535) on layers 1-3
                             for (let layer = 1; layer <= 3; layer++) {
@@ -1271,13 +1279,22 @@ class MapEditor {
 
         const { width, height, data } = this.tilemapManager.currentMap;
         const currentLayer = this.tilesetPaletteViewer.currentLayer;
-        const layerIndex = this.getLayerIndex(currentLayer);
+        // Manual layer mode: match and write on the selected z-slot so the
+        // fill region is defined by the layer actually being edited.
+        const layerIndex = this.layerMode !== 'auto'
+            ? this.layerMode
+            : this.getLayerIndex(currentLayer);
 
         if (layerIndex === -1) return;
 
         const layerSize = width * height;
         const startIndex = layerIndex * layerSize + startY * width + startX;
-        const targetTileId = data[startIndex];
+        // Autotiles store their shape variant in the ID (base + 0..47), so
+        // adjacent cells of the same terrain have DIFFERENT ids (interior vs
+        // edge vs corner). Matching the exact id makes the fill stop at the
+        // first border variant, leaving rings of old tiles. Match by autotile
+        // kind instead; non-autotiles still match by exact id.
+        const targetTileKey = this.normalizeTileIdForFillMatch(data[startIndex]);
 
         // Get the tile to fill with
         const selectedTiles = this.tilesetPaletteViewer.selectedTiles;
@@ -1302,7 +1319,7 @@ class MapEditor {
             if (x < 0 || x >= width || y < 0 || y >= height) continue;
 
             const index = layerIndex * layerSize + y * width + x;
-            if (data[index] !== targetTileId) continue;
+            if (this.normalizeTileIdForFillMatch(data[index]) !== targetTileKey) continue;
 
             visited.add(key);
 
@@ -1329,14 +1346,18 @@ class MapEditor {
                     const actualPlacementLayer = this.getAutotilePlacementLayer(baseTileId, x, y);
 
                     // Erase layers 1-3 (decorations spare existing A-tiles
-                    // there, matching the paint paths)
-                    for (let layer = 1; layer <= 3; layer++) {
-                        const layerIdx = layer * layerSize + basePos;
-                        if (layer === actualPlacementLayer) continue;
-                        const t = data[layerIdx];
-                        if (t > 0 && (!cls.isDecoration || t < 1536)) {
-                            data[layerIdx] = 0;
-                            affectedTiles.add(`${x},${y},${layer}`);
+                    // there, matching the paint paths). Manual layer mode
+                    // writes ONLY to the selected z-slot and must never
+                    // clear the other layers.
+                    if (this.layerMode === 'auto') {
+                        for (let layer = 1; layer <= 3; layer++) {
+                            const layerIdx = layer * layerSize + basePos;
+                            if (layer === actualPlacementLayer) continue;
+                            const t = data[layerIdx];
+                            if (t > 0 && (!cls.isDecoration || t < 1536)) {
+                                data[layerIdx] = 0;
+                                affectedTiles.add(`${x},${y},${layer}`);
+                            }
                         }
                     }
 
@@ -1364,6 +1385,36 @@ class MapEditor {
             stack.push({ x, y: y - 1 });
         }
 
+        // Recalculate autotile shapes for the filled cells and their border:
+        // during the flood pass each cell's shape was computed while its
+        // yet-unfilled neighbors still held the old tile, so interiors come
+        // out as isolated/edge variants until every cell is in place.
+        const reshaped = new Set();
+        for (const pos of filledPositions) {
+            for (let dy = -1; dy <= 1; dy++) {
+                for (let dx = -1; dx <= 1; dx++) {
+                    const nx = pos.x + dx;
+                    const ny = pos.y + dy;
+                    if (nx < 0 || nx >= width || ny < 0 || ny >= height) continue;
+                    const key = `${nx},${ny}`;
+                    if (reshaped.has(key)) continue;
+                    reshaped.add(key);
+                    for (let layer = 0; layer <= 3; layer++) {
+                        const idx = layer * layerSize + ny * width + nx;
+                        const t = data[idx];
+                        if (t >= 2048 && t < 8192) {
+                            const base = Math.floor((t - 2048) / 48) * 48 + 2048;
+                            const result = this.calculateAutotileShape(base, nx, ny, null, layer);
+                            if (result.tileId !== t) {
+                                data[idx] = result.tileId;
+                                affectedTiles.add(`${nx},${ny},${layer}`);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         // PERFORMANCE: Use incremental update instead of full re-render (1000x faster!)
         const tilesToUpdate = [];
         for (const tileKey of affectedTiles) {
@@ -1371,8 +1422,6 @@ class MapEditor {
             tilesToUpdate.push({ x, y, layer });
         }
         this.tilemapManager.updateTiles(tilesToUpdate);
-
-        // Tiles already have correct shapes - no neighbor updates needed
     }
 
     // Show preview for rectangle/circle tools
@@ -2311,7 +2360,9 @@ class MapEditor {
             if (x < 0 || x >= width || y < 0 || y >= height) continue;
 
             const current = this.getEraseTargetAt(x, y, data, width, layerSize);
-            if (!current || current.layer !== target.layer || current.tileId !== target.tileId) {
+            if (!current || current.layer !== target.layer ||
+                this.normalizeTileIdForFillMatch(current.tileId) !==
+                this.normalizeTileIdForFillMatch(target.tileId)) {
                 continue;
             }
 
@@ -2537,6 +2588,16 @@ class MapEditor {
         }
     }
 
+    // Collapse an autotile's shape variant (base + 0..47) to its base id so
+    // flood-fill matching treats all variants of one terrain as the same
+    // tile. Non-autotiles (0, B-E, A5) pass through unchanged.
+    normalizeTileIdForFillMatch(tileId) {
+        if (tileId >= 2048 && tileId < 8192) {
+            return Math.floor((tileId - 2048) / 48) * 48 + 2048;
+        }
+        return tileId;
+    }
+
     // ── MZ A-layer stacking rules (shared by paint, fill, and preview) ──
     // A1 kinds 2-3 and odd kinds ≥5 are decorations/waterfalls; A2 kinds
     // drawn with transparency (paths, fences, the dish) are decorations.
@@ -2569,6 +2630,11 @@ class MapEditor {
     // placement AND preview, or the preview shows a different shape than
     // what painting produces.
     getAutotilePlacementLayer(baseTileId, x, y) {
+        // Manual layer selection pins ALL tile types to the chosen z-slot;
+        // the auto-stacking rules below only apply in auto mode.
+        if (this.layerMode !== 'auto') {
+            return this.layerMode;
+        }
         const { width, data } = this.tilemapManager.currentMap;
         const layer0Tile = data[y * width + x];
         const cls = this.classifyAutotile(baseTileId);

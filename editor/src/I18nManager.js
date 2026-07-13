@@ -528,6 +528,7 @@ const RR_I18N_STRINGS = {
 
         'status.noProjectLoaded': 'No project loaded',
         'status.playtestNotImplemented': 'Playtest mode not yet implemented',
+        'status.playtestSaveFailed': 'Playtest cancelled: project could not be saved',
         'status.loadMapFirst': 'Load a map first',
         'status.eventModeEnabled': 'Event mode enabled',
         'status.eventModeDisabled': 'Event mode disabled',

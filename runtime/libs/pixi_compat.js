@@ -1731,19 +1731,24 @@
     }
 
     // -------------------------------------------------------------------------
-    // v8 advanced blend modes ('multiply', 'screen', 'overlay', etc.) are NOT
-    // registered by the vanilla pixi8 bundle -- they live in the
-    // `pixi.js/advanced-blend-modes` sub-export. Without registration, code
-    // that sets `sprite.blendMode = 'multiply'` (e.g. PSYCHRONIC_RaveLighting's
-    // tone overlay) emits a console warn and silently falls back to 'normal',
-    // which makes the overlay sprite cover the underlying scene at full alpha
-    // instead of multiplying with it (resulting in a fully white screen with
-    // light holes cut out, instead of darkened areas with light sources).
+    // 'multiply' and 'screen' are handled natively by v8's WebGL blend-func
+    // table (mapWebGLBlendModesToPixi), alongside 'normal' and 'add' -- the
+    // four MZ numeric blend modes (0..3) therefore never need a filter.
+    // They must NOT be registered as BlendMode extensions: registration forces
+    // BlendModePipe down the BlendModeFilter path, and that filter requires
+    // `useBackBuffer: true` on the renderer -- which we keep OFF because the
+    // back-buffer copy discards Effekseer's post-render GL draws. With the
+    // back buffer off, PIXI skips the filter (per-frame "Blend filter requires
+    // backBuffer" warnings) and the sprite draws with 'normal' blending, so a
+    // multiply/screen overlay covers the scene as an opaque dark quad instead
+    // of blending (e.g. Hendrix parallax collision overlay blacking out the
+    // whole screen).
     //
-    // We register the MZ-common advanced blend modes ourselves via PIXI's
-    // BlendModeFilter base + ExtensionType.BlendMode. Same shader formulas as
-    // PIXI's official advanced-blend-modes package (Porter-Duff over-composite
-    // combined with the multiply / screen / overlay operators).
+    // 'overlay' has no native GL blend func, so it does still need the filter
+    // route. We register only that one, with the same shader formula as PIXI's
+    // official advanced-blend-modes package (Porter-Duff over-composite
+    // combined with the overlay operator). Note it can only take effect when
+    // the renderer runs with useBackBuffer enabled; otherwise PIXI skips it.
     // -------------------------------------------------------------------------
     if (
         PIXI.BlendModeFilter &&
@@ -1784,27 +1789,12 @@
                 );
             }
         };
-        // Exact formulas from PIXI v8's official advanced-blend-modes module
-        // (pixi.js/advanced-blend-modes -> MultiplyBlend/ScreenBlend/OverlayBlend).
-        // We replicate them here because the vanilla pixi.js bundle does not
-        // ship advanced blend modes; without registration these blend mode
-        // names silently fall through to 'normal'.
-        registerBlendMode(
-            "multiply",
-            "vec3 mResult = back.rgb * front.rgb;\nfinalColor = vec4(back.rgb * (1.0 - front.a) + mResult * front.a, blendedAlpha);",
-            "let mResult: vec3<f32> = back.rgb * front.rgb;\nout = vec4<f32>(back.rgb * (1.0 - front.a) + mResult * front.a, blendedAlpha);"
-        );
-        registerBlendMode(
-            "screen",
-            "vec3 sResult = back.rgb + front.rgb - back.rgb * front.rgb;\nfinalColor = vec4(back.rgb * (1.0 - front.a) + sResult * front.a, blendedAlpha);",
-            "let sResult: vec3<f32> = back.rgb + front.rgb - back.rgb * front.rgb;\nout = vec4<f32>(back.rgb * (1.0 - front.a) + sResult * front.a, blendedAlpha);"
-        );
         registerBlendMode(
             "overlay",
             "vec3 oResult = mix(2.0 * back.rgb * front.rgb, 1.0 - 2.0 * (1.0 - back.rgb) * (1.0 - front.rgb), step(0.5, back.rgb));\nfinalColor = vec4(back.rgb * (1.0 - front.a) + oResult * front.a, blendedAlpha);",
             "let oResult: vec3<f32> = mix(2.0 * back.rgb * front.rgb, vec3<f32>(1.0) - 2.0 * (vec3<f32>(1.0) - back.rgb) * (vec3<f32>(1.0) - front.rgb), step(vec3<f32>(0.5), back.rgb));\nout = vec4<f32>(back.rgb * (1.0 - front.a) + oResult * front.a, blendedAlpha);"
         );
-        compatLog("pixi_compat: registered advanced blend modes (multiply, screen, overlay)");
+        compatLog("pixi_compat: registered advanced blend mode (overlay); multiply/screen use the native GL blend funcs");
     } else {
         console.warn(
             "pixi_compat: cannot register advanced blend modes -- missing PIXI APIs:",
@@ -1998,6 +1988,10 @@
         const seen = new WeakSet();
         let wrappedCount = 0;
         for (const name of Object.getOwnPropertyNames(window)) {
+            // Reading window.sharedStorage trips Chromium's "Shared Storage
+            // API is deprecated" DevTools issue; it can never be a PIXI
+            // subclass, so don't touch it.
+            if (name === "sharedStorage") continue;
             let cls;
             try { cls = window[name]; } catch (e) { continue; }
             if (typeof cls !== "function" || !cls.prototype) continue;

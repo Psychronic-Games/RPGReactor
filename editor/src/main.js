@@ -336,6 +336,14 @@ class RPGReactor {
             await this.projectController.repairInvalidSystemMapReferences();
         }
 
+        // Save the project (current map + database + MapInfos) before
+        // launching, so the playtest process reads current data from disk.
+        const saved = await this.projectController.saveAll();
+        if (!saved) {
+            this.uiManager.updateStatus(window.I18n ? window.I18n.t('status.playtestSaveFailed') : 'Playtest cancelled: project could not be saved');
+            return;
+        }
+
         // Stop any audio playing in the editor before launching playtest
         if (this.audioPlayer) {
             this.audioPlayer.stopExternal();
