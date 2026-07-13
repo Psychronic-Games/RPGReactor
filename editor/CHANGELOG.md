@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.94.8] - Unreleased
+
+### Changed
+
+- Bumped current development version to RPG Reactor 0.94.8.
+
 ## [0.94.7] - 2026-07-13
 
 Release overview: [RPG Reactor 0.94.7: Map Editing You Can Trust](../docs/devlogs/2026-07-13-rpg-reactor-0.94.7.md). (0.94.6 was an internal development version and was never published; its changes ship here.)

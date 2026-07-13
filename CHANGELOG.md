@@ -4,6 +4,12 @@ All notable changes to RPG Reactor will be documented in this file.
 
 This root changelog summarizes public release progress for GitHub; larger releases group their fixes by theme. The detailed editor changelog lives at [`editor/CHANGELOG.md`](editor/CHANGELOG.md).
 
+## [0.94.8] - Unreleased
+
+### Changed
+
+- Bumped RPG Reactor to version 0.94.8.
+
 ## [0.94.7] - 2026-07-13
 
 Release overview: [RPG Reactor 0.94.7: Map Editing You Can Trust](docs/devlogs/2026-07-13-rpg-reactor-0.94.7.md). (0.94.6 was an internal development version and was never published; its changes ship here.)
