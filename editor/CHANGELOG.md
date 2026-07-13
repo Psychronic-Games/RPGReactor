@@ -13,6 +13,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Bumped current development version to RPG Reactor 0.94.8.
 
+### Fixed
+
+- Editor: large maps load ~4× faster and stay responsive afterwards. Two compounding problems on a 256×256 map (~131k populated cells, ~500k tile sprites): (1) the lazy off-viewport fill streamed sprites directly into the live stage, so every editor frame re-rendered the ever-growing uncached sprite tree — over 1s per frame near the end — starving the idle-callback batches and stretching a ~1s fill to ~10s; off-viewport tiles now stream into detached per-layer holder containers that attach (and cache) one per frame when their stream completes, keeping frames viewport-sized throughout. (2) A1 water/waterfall tiles animate by in-place texture swaps, which blocked the ground layer from ever being cached as a texture — a water map's ground container (261k sprites on Map 850) re-rendered live every frame forever; A1 tiles now render into small dedicated live overlay containers (one per z-slot, drawn directly above their slot, so stacking and shadow order are unchanged) and every static layer caches unconditionally. Measured on Star Shift Rebellion Map 850 through the real TilemapManager: full load 9.4s → 2.6s, steady frame 24ms → 13ms, worst load-time hitch 817ms → 452ms, identical 131,580 rendered cells and all 2,093 water tiles still animating. A generation counter also cancels an in-flight fill when another map loads (previously stale batches kept rendering the old map's tiles into the new map's containers), and paints that land while the fill streams are no longer overwritten by stale captured tile values.
+- Editor: repainting a shadow stacked a duplicate shadow container on top of the old one (each at 48% alpha, so quadrants darkened a little more with every paint) — shadow containers are now tracked like tile sprites and replaced on update.
+
 ## [0.94.7] - 2026-07-13
 
 Release overview: [RPG Reactor 0.94.7: Map Editing You Can Trust](../docs/devlogs/2026-07-13-rpg-reactor-0.94.7.md). (0.94.6 was an internal development version and was never published; its changes ship here.)

@@ -305,6 +305,16 @@ class TilemapManager {
         this.layers.upper1 = new PIXI.Container();
         this.layers.upper2 = new PIXI.Container();
         this.layers.upper3 = new PIXI.Container();
+        // A1 water/waterfall tiles animate by in-place texture swaps, which
+        // a cached layer would freeze. They render into these small live
+        // overlays (one per z-slot, drawn directly above their slot's
+        // static container) so the big static containers can ALWAYS be
+        // cached as textures — with water in the ground container, a large
+        // water map left ~200k live sprites re-rendering every frame.
+        this.layers.a1ground = new PIXI.Container();
+        this.layers.a1lower1 = new PIXI.Container();
+        this.layers.a1lower2 = new PIXI.Container();
+        this.layers.a1lower3 = new PIXI.Container();
         this.layers.shadow = new PIXI.Container();
         this.layers.layerHighlight = new PIXI.Container();
 
@@ -317,12 +327,16 @@ class TilemapManager {
         this.layers.upper1.cullable = true;
         this.layers.upper2.cullable = true;
         this.layers.upper3.cullable = true;
+        this.layers.a1ground.cullable = true;
+        this.layers.a1lower1.cullable = true;
+        this.layers.a1lower2.cullable = true;
+        this.layers.a1lower3.cullable = true;
         this.layers.shadow.cullable = true;
 
         // PERFORMANCE: Build layer-to-name map for fast sprite tracking lookups.
-        // Upper containers map to their z-slot's name: a cell holds ONE tile
-        // per z-slot, so tracking keys stay per-slot no matter which stack
-        // (lower/upper) the sprite rendered into.
+        // Upper and A1 containers map to their z-slot's name: a cell holds
+        // ONE tile per z-slot, so tracking keys stay per-slot no matter
+        // which stack (lower/upper/A1) the sprite rendered into.
         this._layerNameMap = new Map([
             [this.layers.ground, 'ground'],
             [this.layers.lower1, 'lower1'],
@@ -332,17 +346,38 @@ class TilemapManager {
             [this.layers.upper1, 'lower1'],
             [this.layers.upper2, 'lower2'],
             [this.layers.upper3, 'lower3'],
+            [this.layers.a1ground, 'ground'],
+            [this.layers.a1lower1, 'lower1'],
+            [this.layers.a1lower2, 'lower2'],
+            [this.layers.a1lower3, 'lower3'],
             [this.layers.shadow, 'shadow']
         ]);
 
-        // Add layers in correct rendering order (bottom to top)
+        // Layers that must stay live (never cached as textures): the A1
+        // overlays animate, and shadows are cheap and edited constantly.
+        this._liveLayers = new Set([
+            this.layers.a1ground,
+            this.layers.a1lower1,
+            this.layers.a1lower2,
+            this.layers.a1lower3,
+            this.layers.shadow
+        ]);
+
+        // Add layers in correct rendering order (bottom to top). Each A1
+        // overlay draws directly above its z-slot's static container, so
+        // stacking between z-slots is unchanged (an A-decoration at z1
+        // still covers water at z0; shadows still cover ground water).
         this.container.addChild(this.layers.checkerboard);
         this.container.addChild(this.layers.parallax);
         this.container.addChild(this.layers.ground);
+        this.container.addChild(this.layers.a1ground);
         this.container.addChild(this.layers.shadow);
         this.container.addChild(this.layers.lower1);
+        this.container.addChild(this.layers.a1lower1);
         this.container.addChild(this.layers.lower2);
+        this.container.addChild(this.layers.a1lower2);
         this.container.addChild(this.layers.lower3);
+        this.container.addChild(this.layers.a1lower3);
         this.container.addChild(this.layers.upper0);
         this.container.addChild(this.layers.upper1);
         this.container.addChild(this.layers.upper2);
@@ -375,13 +410,17 @@ class TilemapManager {
         };
         apply('ground', 0);
         apply('upper0', 0);
+        apply('a1ground', 0);
         apply('shadow', 0);
         apply('lower1', 1);
         apply('upper1', 1);
+        apply('a1lower1', 1);
         apply('lower2', 2);
         apply('upper2', 2);
+        apply('a1lower2', 2);
         apply('lower3', 3);
         apply('upper3', 3);
+        apply('a1lower3', 3);
     }
 
     setupPanning() {
@@ -784,6 +823,10 @@ class TilemapManager {
     renderMap() {
         if (!this.currentMap || !this.currentTileset) return;
 
+        // Invalidate any in-flight lazy fill from a previous render — its
+        // batches abort and its detached holders are discarded.
+        this._lazyLoadGeneration = (this._lazyLoadGeneration || 0) + 1;
+
         const { width, height, data } = this.currentMap;
 
         // RPG Maker MZ has 6 data layers (z=0 through z=5)
@@ -805,6 +848,10 @@ class TilemapManager {
         this.layers.upper1.removeChildren();
         this.layers.upper2.removeChildren();
         this.layers.upper3.removeChildren();
+        this.layers.a1ground.removeChildren();
+        this.layers.a1lower1.removeChildren();
+        this.layers.a1lower2.removeChildren();
+        this.layers.a1lower3.removeChildren();
         this.layers.shadow.removeChildren();
         this.layers.layerHighlight.removeChildren();
 
@@ -1004,9 +1051,20 @@ class TilemapManager {
         }
     }
 
-    // PERFORMANCE: Lazily load tiles outside the initial viewport in batches
+    // PERFORMANCE: Lazily load tiles outside the initial viewport in batches.
+    //
+    // Off-viewport sprites are streamed into DETACHED holder containers (one
+    // per target layer) and only attached to the stage when their layer's
+    // stream completes. Streaming into the live layers made every editor
+    // frame re-render the ever-growing uncached sprite tree (a full 256×256
+    // map is ~500k sprites — over 1s per frame near the end), which starved
+    // the idle-callback batches and stretched a ~1s fill into ~10s wall time.
+    // With holders the per-frame render stays viewport-sized throughout, and
+    // each layer pays its one-time cache render as it lands.
     lazyLoadRemainingTiles(width, height, viewportStartX, viewportStartY, viewportEndX, viewportEndY, data, layerSize) {
-        // Build list of all tile positions outside viewport that need rendering
+        // Build list of all tile positions outside viewport that need rendering.
+        // Values are re-read from map data at render time, so paints that land
+        // while the fill is streaming are never overwritten with stale tiles.
         const tilesToLoad = [];
 
         for (let layerIdx = 0; layerIdx < 5; layerIdx++) { // Layers 0-4 (layer 5 is regions, not rendered)
@@ -1018,28 +1076,79 @@ class TilemapManager {
                     }
 
                     const index = layerIdx * layerSize + y * width + x;
-                    const tileValue = data[index];
-
-                    if (layerIdx === 4) {
-                        // Shadow layer
-                        if (tileValue > 0) {
-                            tilesToLoad.push({ x, y, layerIdx, tileValue, isShadow: true });
-                        }
-                    } else {
-                        // Tile layers 0-3
-                        if (tileValue > 0) {
-                            tilesToLoad.push({ x, y, layerIdx, tileValue, isShadow: false });
-                        }
+                    if (data[index] > 0) {
+                        tilesToLoad.push({ x, y, layerIdx });
                     }
                 }
             }
         }
 
+        // Generation guard: a renderMap() for another map (or a reload of
+        // this one) invalidates this fill — without it, stale batches would
+        // keep rendering the old map's tiles into the new map's containers.
+        const generation = this._lazyLoadGeneration;
+
+        // Detached holder containers, keyed by the real target container.
+        // Holders register in _layerNameMap under the real layer's name so
+        // renderTile/clearTileSpritesAt track sprites under the same keys.
+        const holders = new Map();
+        const holderFor = (target) => {
+            let holder = holders.get(target);
+            if (!holder) {
+                holder = new PIXI.Container();
+                this._layerNameMap.set(holder, this._layerNameMap.get(target) || 'unknown');
+                holders.set(target, holder);
+            }
+            return holder;
+        };
+        const discardHolders = () => {
+            for (const [, holder] of holders) {
+                this._layerNameMap.delete(holder);
+                holder.destroy({ children: true });
+            }
+            holders.clear();
+        };
+
+        // Attach one completed holder per frame: reparenting ~500k sprites
+        // and building each layer's cache texture are the two remaining
+        // one-time costs, so spreading them per-layer avoids a single hitch.
+        const finalizeNextHolder = () => {
+            if (this.destroyed || generation !== this._lazyLoadGeneration) {
+                discardHolders();
+                return;
+            }
+            const next = holders.entries().next();
+            if (next.done) {
+                // Cache any layer the streams didn't touch as well
+                this.cacheStaticLayers();
+                return;
+            }
+            const [target, holder] = next.value;
+            holders.delete(target);
+            const children = holder.removeChildren();
+            for (const child of children) {
+                target.addChild(child);
+            }
+            // A1 animation entries created during the stream point at the
+            // holder; repoint them at the real container they now live in.
+            for (const t of this.a1TilePositions) {
+                if (t.pixiLayer === holder) t.pixiLayer = target;
+            }
+            this._layerNameMap.delete(holder);
+            holder.destroy();
+            this.cacheLayerIfStatic(target);
+            requestAnimationFrame(finalizeNextHolder);
+        };
+
         // Load tiles in batches using time budget instead of fixed count for smoother performance
         let currentIndex = 0;
         const loadNextBatch = () => {
-            // Abort if this TilemapManager has been destroyed (e.g., project switch)
-            if (this.destroyed) return;
+            // Abort if this TilemapManager has been destroyed (e.g., project
+            // switch) or another map render superseded this fill
+            if (this.destroyed || generation !== this._lazyLoadGeneration) {
+                discardHolders();
+                return;
+            }
 
             // Skip this batch if lazy-loading is paused (user is interacting)
             if (this.isLazyLoadingPaused) {
@@ -1052,31 +1161,41 @@ class TilemapManager {
             }
 
             const startTime = performance.now();
-            let tilesRendered = 0;
 
             // Render tiles until we hit the time budget or run out of tiles
             while (currentIndex < tilesToLoad.length) {
                 const tile = tilesToLoad[currentIndex];
-                if (tile.isShadow) {
-                    this.renderShadowTile(tile.tileValue, tile.x, tile.y);
-                } else {
-                    const layer = this.tileTargetLayer(tile.layerIdx, tile.tileValue);
-                    this.renderTile(tile.tileValue, tile.x, tile.y, layer);
+                currentIndex++;
 
-                    // Track A1 tiles for animation
-                    if (this.isTileA1(tile.tileValue)) {
-                        this.a1TilePositions.push({
-                            x: tile.x,
-                            y: tile.y,
-                            layerIndex: tile.layerIdx,
-                            tileId: tile.tileValue,
-                            pixiLayer: layer
-                        });
+                // Live value: the cell may have been painted (and rendered by
+                // updateTiles) since the list was built — tracked sprites for
+                // the z-slot mean it's already current, so skip it.
+                const tileValue = data[tile.layerIdx * layerSize + tile.y * width + tile.x];
+                if (tileValue <= 0) continue;
+
+                if (tile.layerIdx === 4) {
+                    if (!this.tileSprites[`shadow_${tile.x}_${tile.y}`]) {
+                        this.renderShadowTile(tileValue, tile.x, tile.y, holderFor(this.layers.shadow));
+                    }
+                } else {
+                    const target = this.tileTargetLayer(tile.layerIdx, tileValue);
+                    const layerName = this._layerNameMap.get(target) || 'unknown';
+                    if (!this.tileSprites[`${layerName}_${tile.x}_${tile.y}`]) {
+                        const holder = holderFor(target);
+                        this.renderTile(tileValue, tile.x, tile.y, holder);
+
+                        // Track A1 tiles for animation
+                        if (this.isTileA1(tileValue)) {
+                            this.a1TilePositions.push({
+                                x: tile.x,
+                                y: tile.y,
+                                layerIndex: tile.layerIdx,
+                                tileId: tileValue,
+                                pixiLayer: holder
+                            });
+                        }
                     }
                 }
-
-                currentIndex++;
-                tilesRendered++;
 
                 // Check if we've exceeded our time budget
                 const elapsed = performance.now() - startTime;
@@ -1094,8 +1213,8 @@ class TilemapManager {
                     setTimeout(loadNextBatch, 50); // Longer delay to reduce frequency
                 }
             } else {
-                // PERFORMANCE: Cache static layers as bitmaps after all tiles loaded
-                this.cacheStaticLayers();
+                // All streamed: attach holders (one per frame), then cache
+                finalizeNextHolder();
             }
         };
 
@@ -1107,24 +1226,30 @@ class TilemapManager {
         }
     }
 
+    // Cache one layer as a texture if it's eligible. The A1 overlays and
+    // the shadow layer stay live (_liveLayers); every static container —
+    // ground included, now that water lives outside it — can cache.
+    // Already-cached layers are left alone.
+    cacheLayerIfStatic(layer) {
+        if (!layer || layer.isCachedAsTexture) return;
+        if (this._liveLayers && this._liveLayers.has(layer)) return;
+        layer.cacheAsTexture(this.layerCacheOptions);
+    }
+
     // PERFORMANCE: Cache static layers as textures for faster rendering
     cacheStaticLayers() {
         // Cache non-animated layers as textures
         // This converts all sprites in a layer into a single texture, much faster to render
-        // Don't cache ground layer if it has A1 animations
-        if (this.a1TilePositions && this.a1TilePositions.length === 0) {
-            // No A1 tiles, safe to cache all layers
-            if (this.layers.ground) this.layers.ground.cacheAsTexture(this.layerCacheOptions);
-        }
-
-        // Always cache these layers (no animations)
-        if (this.layers.lower1) this.layers.lower1.cacheAsTexture(this.layerCacheOptions);
-        if (this.layers.lower2) this.layers.lower2.cacheAsTexture(this.layerCacheOptions);
-        if (this.layers.lower3) this.layers.lower3.cacheAsTexture(this.layerCacheOptions);
-        if (this.layers.upper0) this.layers.upper0.cacheAsTexture(this.layerCacheOptions);
-        if (this.layers.upper1) this.layers.upper1.cacheAsTexture(this.layerCacheOptions);
-        if (this.layers.upper2) this.layers.upper2.cacheAsTexture(this.layerCacheOptions);
-        if (this.layers.upper3) this.layers.upper3.cacheAsTexture(this.layerCacheOptions);
+        // cacheLayerIfStatic skips live layers (A1 overlays, shadows) and
+        // already-cached layers
+        this.cacheLayerIfStatic(this.layers.ground);
+        this.cacheLayerIfStatic(this.layers.lower1);
+        this.cacheLayerIfStatic(this.layers.lower2);
+        this.cacheLayerIfStatic(this.layers.lower3);
+        this.cacheLayerIfStatic(this.layers.upper0);
+        this.cacheLayerIfStatic(this.layers.upper1);
+        this.cacheLayerIfStatic(this.layers.upper2);
+        this.cacheLayerIfStatic(this.layers.upper3);
     }
 
     // Pause/resume lazy-loading during user interaction
@@ -1608,6 +1733,11 @@ class TilemapManager {
     // (mirrors rmmz_core Tilemap._addSpotTile routing).
     tileTargetLayer(layerIdx, tileId) {
         const L = this.layers;
+        // A1 water/waterfalls animate by texture swap and must stay out of
+        // the cached static containers — they get per-slot live overlays.
+        if (this.isTileA1(tileId)) {
+            return [L.a1ground, L.a1lower1, L.a1lower2, L.a1lower3][layerIdx];
+        }
         return this.isHigherTile(tileId)
             ? [L.upper0, L.upper1, L.upper2, L.upper3][layerIdx]
             : [L.ground, L.lower1, L.lower2, L.lower3][layerIdx];
@@ -1620,6 +1750,7 @@ class TilemapManager {
         return [
             [L.ground, L.lower1, L.lower2, L.lower3][layerIdx],
             [L.upper0, L.upper1, L.upper2, L.upper3][layerIdx],
+            [L.a1ground, L.a1lower1, L.a1lower2, L.a1lower3][layerIdx],
         ].filter(Boolean);
     }
 
@@ -1886,7 +2017,7 @@ class TilemapManager {
         return (shadowBits & 0x0f) !== 0;
     }
 
-    renderShadowTile(shadowBits, x, y) {
+    renderShadowTile(shadowBits, x, y, targetLayer = null) {
         // Render shadow using shadowBits bitmask (RPG Maker MZ approach)
         // shadowBits is a 4-bit value where each bit represents one quadrant:
         // Bit 0 (0x01) = bottom-left quadrant
@@ -1934,7 +2065,11 @@ class TilemapManager {
                 }
             }
 
-            this.layers.shadow.addChild(container);
+            (targetLayer || this.layers.shadow).addChild(container);
+            // Track for clearTileSpritesAt — without this, repainting a
+            // shadow stacked a duplicate container on the old one, visibly
+            // darkening the quadrants a little more on every paint.
+            this.tileSprites[`shadow_${x}_${y}`] = [container];
         }
     }
 

@@ -10,6 +10,11 @@ This root changelog summarizes public release progress for GitHub; larger releas
 
 - Bumped RPG Reactor to version 0.94.8.
 
+### Fixed
+
+- Editor: large maps load and edit much faster — a 256×256 map (Star Shift Rebellion Map 850) now fully loads in ~2.5s instead of ~10s, and the editor runs at full frame rate afterwards instead of stuttering on maps with water. Off-viewport tiles now stream into detached containers (the growing half-loaded map was re-rendered every frame while loading, which is where the time went), and animated water tiles moved to small dedicated overlay layers so the big static layers can always be cached as textures.
+- Editor: repainting shadows no longer stacks invisible duplicate shadow sprites that darkened the quadrants slightly with every paint.
+
 ## [0.94.7] - 2026-07-13
 
 Release overview: [RPG Reactor 0.94.7: Map Editing You Can Trust](docs/devlogs/2026-07-13-rpg-reactor-0.94.7.md). (0.94.6 was an internal development version and was never published; its changes ship here.)
