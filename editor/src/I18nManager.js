@@ -864,6 +864,7 @@ const RR_I18N_STRINGS = {
 
         'status.noProjectLoaded': 'プロジェクトが読み込まれていません',
         'status.playtestNotImplemented': 'プレイテストモードはまだ実装されていません',
+        'status.playtestSaveFailed': 'プレイテスト中止：プロジェクトを保存できませんでした',
         'status.loadMapFirst': '先にマップを読み込んでください',
         'status.eventModeEnabled': 'イベントモードを有効にしました',
         'status.eventModeDisabled': 'イベントモードを無効にしました',
@@ -1199,6 +1200,7 @@ const RR_I18N_STRINGS = {
 
         'status.noProjectLoaded': 'No hay proyecto cargado',
         'status.playtestNotImplemented': 'El modo de prueba aún no está implementado',
+        'status.playtestSaveFailed': 'Prueba cancelada: no se pudo guardar el proyecto',
         'status.loadMapFirst': 'Carga un mapa primero',
         'status.eventModeEnabled': 'Modo de eventos activado',
         'status.eventModeDisabled': 'Modo de eventos desactivado',
@@ -1246,7 +1248,7 @@ const RR_ADDITIONAL_LOCALES = {
         'forge.tools': '工具', 'forge.welcome': '資產產生工具組。請從側邊欄或下方選擇工具。', 'forge.openProject': '請開啟專案以使用鍛造坊工具。', 'forge.tab.procedural': '程序化', 'forge.tab.outfit': '服裝鍛造坊', 'forge.tab.hair': '髮型鍛造坊', 'forge.tab.parts': '部件 (PNG)', 'forge.style': '風格:', 'forge.frame': '影格:', 'forge.sheet': '圖表:', 'forge.saveAs': '另存為:', 'forge.saveSheet': '儲存圖表', 'forge.generateSave': '產生並儲存到素材庫',
         'db.system1': '系統 1', 'db.system2': '系統 2', 'db.search': '搜尋 {title}...', 'db.selectEntry': '從清單選擇項目', 'db.changeMaximum': '變更最大值', 'db.selectEntryToDelete': '選擇要刪除的項目', 'db.deleteConfirm': '刪除「{name}」？', 'db.unknownType': '未知資料庫類型: {type}', 'db.saved': '資料庫已儲存',
         'event.name': '事件名稱:', 'event.position': '位置:', 'event.note': '備註:', 'event.newPage': '新增事件頁', 'event.copyPage': '複製事件頁', 'event.pastePage': '貼上事件頁', 'event.deletePage': '刪除事件頁', 'event.clearPage': '清除事件頁', 'event.page': '頁面 {number}', 'event.contents': '內容', 'event.selectCommand': '選擇事件指令', 'event.conditions': '條件', 'event.image': '圖片', 'event.options': '選項', 'event.autonomousMovement': '自主移動', 'event.priority': '優先順序', 'event.trigger': '觸發',
-        'status.noProjectLoaded': '未載入專案', 'status.playtestNotImplemented': '尚未實作測試遊玩模式', 'status.loadMapFirst': '請先載入地圖', 'status.eventModeEnabled': '事件模式已啟用', 'status.eventModeDisabled': '事件模式已停用', 'alert.loadProjectFirst': '請先載入專案。'
+        'status.noProjectLoaded': '未載入專案', 'status.playtestNotImplemented': '尚未實作測試遊玩模式', 'status.playtestSaveFailed': '測試遊玩已取消：無法儲存專案', 'status.loadMapFirst': '請先載入地圖', 'status.eventModeEnabled': '事件模式已啟用', 'status.eventModeDisabled': '事件模式已停用', 'alert.loadProjectFirst': '請先載入專案。'
     },
     'zh-Hans': {
         // Menus & dialog chrome (event/plugin context menus, pickers)
@@ -1287,7 +1289,7 @@ const RR_ADDITIONAL_LOCALES = {
         'forge.tools': '工具', 'forge.welcome': '资源生成工具套件。请从侧边栏或下方选择工具。', 'forge.openProject': '请打开项目以使用锻造坊工具。', 'forge.tab.procedural': '程序化', 'forge.tab.outfit': '服装锻造坊', 'forge.tab.hair': '发型锻造坊', 'forge.tab.parts': '部件 (PNG)', 'forge.style': '风格:', 'forge.frame': '帧:', 'forge.sheet': '图表:', 'forge.saveAs': '另存为:', 'forge.saveSheet': '保存图表', 'forge.generateSave': '生成并保存到素材库',
         'db.system1': '系统 1', 'db.system2': '系统 2', 'db.search': '搜索 {title}...', 'db.selectEntry': '从列表选择项目', 'db.changeMaximum': '更改最大值', 'db.selectEntryToDelete': '选择要删除的项目', 'db.deleteConfirm': '删除“{name}”？', 'db.unknownType': '未知数据库类型: {type}', 'db.saved': '数据库已保存',
         'event.name': '事件名称:', 'event.position': '位置:', 'event.note': '备注:', 'event.newPage': '新建事件页', 'event.copyPage': '复制事件页', 'event.pastePage': '粘贴事件页', 'event.deletePage': '删除事件页', 'event.clearPage': '清除事件页', 'event.page': '页面 {number}', 'event.contents': '内容', 'event.selectCommand': '选择事件指令', 'event.conditions': '条件', 'event.image': '图片', 'event.options': '选项', 'event.autonomousMovement': '自主移动', 'event.priority': '优先级', 'event.trigger': '触发',
-        'status.noProjectLoaded': '未加载项目', 'status.playtestNotImplemented': '尚未实现测试游玩模式', 'status.loadMapFirst': '请先加载地图', 'status.eventModeEnabled': '事件模式已启用', 'status.eventModeDisabled': '事件模式已停用', 'alert.loadProjectFirst': '请先加载项目。'
+        'status.noProjectLoaded': '未加载项目', 'status.playtestNotImplemented': '尚未实现测试游玩模式', 'status.playtestSaveFailed': '测试游玩已取消：无法保存项目', 'status.loadMapFirst': '请先加载地图', 'status.eventModeEnabled': '事件模式已启用', 'status.eventModeDisabled': '事件模式已停用', 'alert.loadProjectFirst': '请先加载项目。'
     },
     ru: {
         // Menus & dialog chrome (event/plugin context menus, pickers)
@@ -1328,7 +1330,7 @@ const RR_ADDITIONAL_LOCALES = {
         'forge.tools': 'Инструменты', 'forge.welcome': 'Набор инструментов генерации ресурсов. Выберите инструмент на боковой панели или ниже.', 'forge.openProject': 'Откройте проект, чтобы использовать инструменты Кузницы.', 'forge.tab.procedural': 'Процедурно', 'forge.tab.outfit': 'Кузница Костюмов', 'forge.tab.hair': 'Кузница Волос', 'forge.tab.parts': 'Части (PNG)', 'forge.style': 'Стиль:', 'forge.frame': 'Кадр:', 'forge.sheet': 'Лист:', 'forge.saveAs': 'Сохранить как:', 'forge.saveSheet': 'Сохранить Лист', 'forge.generateSave': 'Создать И Сохранить В Библиотеку',
         'db.system1': 'Система 1', 'db.system2': 'Система 2', 'db.search': 'Поиск {title}...', 'db.selectEntry': 'Выберите запись из списка', 'db.changeMaximum': 'Изменить максимум', 'db.selectEntryToDelete': 'Выберите запись для удаления', 'db.deleteConfirm': 'Удалить «{name}»?', 'db.unknownType': 'Неизвестный тип базы данных: {type}', 'db.saved': 'База данных сохранена',
         'event.name': 'Имя События:', 'event.position': 'Позиция:', 'event.note': 'Заметка:', 'event.newPage': 'Новая Страница События', 'event.copyPage': 'Копировать Страницу', 'event.pastePage': 'Вставить Страницу', 'event.deletePage': 'Удалить Страницу', 'event.clearPage': 'Очистить Страницу', 'event.page': 'Страница {number}', 'event.contents': 'Содержимое', 'event.selectCommand': 'Выберите Команду События', 'event.conditions': 'Условия', 'event.image': 'Изображение', 'event.options': 'Опции', 'event.autonomousMovement': 'Автономное Движение', 'event.priority': 'Приоритет', 'event.trigger': 'Триггер',
-        'status.noProjectLoaded': 'Проект не загружен', 'status.playtestNotImplemented': 'Режим теста пока не реализован', 'status.loadMapFirst': 'Сначала загрузите карту', 'status.eventModeEnabled': 'Режим событий включён', 'status.eventModeDisabled': 'Режим событий отключён', 'alert.loadProjectFirst': 'Сначала загрузите проект.'
+        'status.noProjectLoaded': 'Проект не загружен', 'status.playtestNotImplemented': 'Режим теста пока не реализован', 'status.playtestSaveFailed': 'Тест отменён: не удалось сохранить проект', 'status.loadMapFirst': 'Сначала загрузите карту', 'status.eventModeEnabled': 'Режим событий включён', 'status.eventModeDisabled': 'Режим событий отключён', 'alert.loadProjectFirst': 'Сначала загрузите проект.'
     },
     pt: {
         // Menus & dialog chrome (event/plugin context menus, pickers)
@@ -1369,7 +1371,7 @@ const RR_ADDITIONAL_LOCALES = {
         'forge.tools': 'Ferramentas', 'forge.welcome': 'Suíte de ferramentas de geração de recursos. Escolha uma ferramenta na barra lateral ou abaixo.', 'forge.openProject': 'Abra um projeto para usar as ferramentas da Forja.', 'forge.tab.procedural': 'Procedural', 'forge.tab.outfit': 'Forja De Roupas', 'forge.tab.hair': 'Forja De Cabelo', 'forge.tab.parts': 'Partes (PNG)', 'forge.style': 'Estilo:', 'forge.frame': 'Quadro:', 'forge.sheet': 'Folha:', 'forge.saveAs': 'Salvar como:', 'forge.saveSheet': 'Salvar Folha', 'forge.generateSave': 'Gerar E Salvar Na Biblioteca',
         'db.system1': 'Sistema 1', 'db.system2': 'Sistema 2', 'db.search': 'Buscar {title}...', 'db.selectEntry': 'Selecione uma entrada da lista', 'db.changeMaximum': 'Alterar Máximo', 'db.selectEntryToDelete': 'Selecione uma entrada para excluir', 'db.deleteConfirm': 'Excluir "{name}"?', 'db.unknownType': 'Tipo de banco de dados desconhecido: {type}', 'db.saved': 'Banco de dados salvo',
         'event.name': 'Nome Do Evento:', 'event.position': 'Posição:', 'event.note': 'Nota:', 'event.newPage': 'Nova Página De Evento', 'event.copyPage': 'Copiar Página De Evento', 'event.pastePage': 'Colar Página De Evento', 'event.deletePage': 'Excluir Página De Evento', 'event.clearPage': 'Limpar Página De Evento', 'event.page': 'Página {number}', 'event.contents': 'Conteúdo', 'event.selectCommand': 'Selecionar Comando De Evento', 'event.conditions': 'Condições', 'event.image': 'Imagem', 'event.options': 'Opções', 'event.autonomousMovement': 'Movimento Autônomo', 'event.priority': 'Prioridade', 'event.trigger': 'Gatilho',
-        'status.noProjectLoaded': 'Nenhum projeto carregado', 'status.playtestNotImplemented': 'Modo de teste ainda não implementado', 'status.loadMapFirst': 'Carregue um mapa primeiro', 'status.eventModeEnabled': 'Modo de eventos ativado', 'status.eventModeDisabled': 'Modo de eventos desativado', 'alert.loadProjectFirst': 'Carregue um projeto primeiro.'
+        'status.noProjectLoaded': 'Nenhum projeto carregado', 'status.playtestNotImplemented': 'Modo de teste ainda não implementado', 'status.playtestSaveFailed': 'Teste cancelado: não foi possível salvar o projeto', 'status.loadMapFirst': 'Carregue um mapa primeiro', 'status.eventModeEnabled': 'Modo de eventos ativado', 'status.eventModeDisabled': 'Modo de eventos desativado', 'alert.loadProjectFirst': 'Carregue um projeto primeiro.'
     },
     de: {
         // Menus & dialog chrome (event/plugin context menus, pickers)
@@ -1410,7 +1412,7 @@ const RR_ADDITIONAL_LOCALES = {
         'forge.tools': 'Werkzeuge', 'forge.welcome': 'Werkzeugsuite zur Asset-Erzeugung. Wähle ein Werkzeug in der Seitenleiste oder unten.', 'forge.openProject': 'Öffne ein Projekt, um Schmiede-Werkzeuge zu verwenden.', 'forge.tab.procedural': 'Prozedural', 'forge.tab.outfit': 'Outfit-Schmiede', 'forge.tab.hair': 'Haar-Schmiede', 'forge.tab.parts': 'Teile (PNG)', 'forge.style': 'Stil:', 'forge.frame': 'Frame:', 'forge.sheet': 'Sheet:', 'forge.saveAs': 'Speichern als:', 'forge.saveSheet': 'Sheet speichern', 'forge.generateSave': 'Erzeugen und in Bibliothek speichern',
         'db.system1': 'System 1', 'db.system2': 'System 2', 'db.search': '{title} suchen...', 'db.selectEntry': 'Eintrag aus der Liste auswählen', 'db.changeMaximum': 'Maximum ändern', 'db.selectEntryToDelete': 'Eintrag zum Löschen auswählen', 'db.deleteConfirm': '„{name}“ löschen?', 'db.unknownType': 'Unbekannter Datenbanktyp: {type}', 'db.saved': 'Datenbank gespeichert',
         'event.name': 'Ereignisname:', 'event.position': 'Position:', 'event.note': 'Notiz:', 'event.newPage': 'Neue Ereignisseite', 'event.copyPage': 'Ereignisseite kopieren', 'event.pastePage': 'Ereignisseite einfügen', 'event.deletePage': 'Ereignisseite löschen', 'event.clearPage': 'Ereignisseite leeren', 'event.page': 'Seite {number}', 'event.contents': 'Inhalt', 'event.selectCommand': 'Ereignisbefehl auswählen', 'event.conditions': 'Bedingungen', 'event.image': 'Bild', 'event.options': 'Optionen', 'event.autonomousMovement': 'Autonome Bewegung', 'event.priority': 'Priorität', 'event.trigger': 'Auslöser',
-        'status.noProjectLoaded': 'Kein Projekt geladen', 'status.playtestNotImplemented': 'Testmodus noch nicht implementiert', 'status.loadMapFirst': 'Zuerst eine Karte laden', 'status.eventModeEnabled': 'Ereignismodus aktiviert', 'status.eventModeDisabled': 'Ereignismodus deaktiviert', 'alert.loadProjectFirst': 'Bitte zuerst ein Projekt laden.'
+        'status.noProjectLoaded': 'Kein Projekt geladen', 'status.playtestNotImplemented': 'Testmodus noch nicht implementiert', 'status.playtestSaveFailed': 'Test abgebrochen: Projekt konnte nicht gespeichert werden', 'status.loadMapFirst': 'Zuerst eine Karte laden', 'status.eventModeEnabled': 'Ereignismodus aktiviert', 'status.eventModeDisabled': 'Ereignismodus deaktiviert', 'alert.loadProjectFirst': 'Bitte zuerst ein Projekt laden.'
     },
     fr: {
         // Menus & dialog chrome (event/plugin context menus, pickers)
@@ -1451,7 +1453,7 @@ const RR_ADDITIONAL_LOCALES = {
         'forge.tools': 'Outils', 'forge.welcome': 'Suite d’outils de génération d’assets. Choisissez un outil dans la barre latérale ou ci-dessous.', 'forge.openProject': 'Ouvrez un projet pour utiliser les outils de la forge.', 'forge.tab.procedural': 'Procédural', 'forge.tab.outfit': 'Forge de tenues', 'forge.tab.hair': 'Forge de cheveux', 'forge.tab.parts': 'Pièces (PNG)', 'forge.style': 'Style:', 'forge.frame': 'Image:', 'forge.sheet': 'Feuille:', 'forge.saveAs': 'Enregistrer sous:', 'forge.saveSheet': 'Enregistrer la feuille', 'forge.generateSave': 'Générer et enregistrer dans la bibliothèque',
         'db.system1': 'Système 1', 'db.system2': 'Système 2', 'db.search': 'Rechercher {title}...', 'db.selectEntry': 'Sélectionnez une entrée dans la liste', 'db.changeMaximum': 'Modifier le maximum', 'db.selectEntryToDelete': 'Sélectionnez une entrée à supprimer', 'db.deleteConfirm': 'Supprimer « {name} » ?', 'db.unknownType': 'Type de base de données inconnu: {type}', 'db.saved': 'Base de données enregistrée',
         'event.name': 'Nom de l’événement:', 'event.position': 'Position:', 'event.note': 'Note:', 'event.newPage': 'Nouvelle page d’événement', 'event.copyPage': 'Copier la page d’événement', 'event.pastePage': 'Coller la page d’événement', 'event.deletePage': 'Supprimer la page d’événement', 'event.clearPage': 'Effacer la page d’événement', 'event.page': 'Page {number}', 'event.contents': 'Contenu', 'event.selectCommand': 'Sélectionner une commande d’événement', 'event.conditions': 'Conditions', 'event.image': 'Image', 'event.options': 'Options', 'event.autonomousMovement': 'Mouvement autonome', 'event.priority': 'Priorité', 'event.trigger': 'Déclencheur',
-        'status.noProjectLoaded': 'Aucun projet chargé', 'status.playtestNotImplemented': 'Mode test non encore implémenté', 'status.loadMapFirst': 'Chargez d’abord une carte', 'status.eventModeEnabled': 'Mode événements activé', 'status.eventModeDisabled': 'Mode événements désactivé', 'alert.loadProjectFirst': 'Veuillez d’abord charger un projet.'
+        'status.noProjectLoaded': 'Aucun projet chargé', 'status.playtestNotImplemented': 'Mode test non encore implémenté', 'status.playtestSaveFailed': 'Test annulé : enregistrement du projet impossible', 'status.loadMapFirst': 'Chargez d’abord une carte', 'status.eventModeEnabled': 'Mode événements activé', 'status.eventModeDisabled': 'Mode événements désactivé', 'alert.loadProjectFirst': 'Veuillez d’abord charger un projet.'
     },
     el: {
         // Menus & dialog chrome (event/plugin context menus, pickers)
@@ -1492,7 +1494,7 @@ const RR_ADDITIONAL_LOCALES = {
         'forge.tools': 'Εργαλεία', 'forge.welcome': 'Σουίτα εργαλείων παραγωγής assets. Επιλέξτε εργαλείο από την πλαϊνή μπάρα ή παρακάτω.', 'forge.openProject': 'Ανοίξτε ένα έργο για χρήση των εργαλείων σφυρηλατηρίου.', 'forge.tab.procedural': 'Διαδικαστικό', 'forge.tab.outfit': 'Σφυρηλατήριο ενδυμάτων', 'forge.tab.hair': 'Σφυρηλατήριο μαλλιών', 'forge.tab.parts': 'Μέρη (PNG)', 'forge.style': 'Στυλ:', 'forge.frame': 'Καρέ:', 'forge.sheet': 'Φύλλο:', 'forge.saveAs': 'Αποθήκευση ως:', 'forge.saveSheet': 'Αποθήκευση φύλλου', 'forge.generateSave': 'Δημιουργία και αποθήκευση στη βιβλιοθήκη',
         'db.system1': 'Σύστημα 1', 'db.system2': 'Σύστημα 2', 'db.search': 'Αναζήτηση {title}...', 'db.selectEntry': 'Επιλέξτε καταχώρηση από τη λίστα', 'db.changeMaximum': 'Αλλαγή μέγιστου', 'db.selectEntryToDelete': 'Επιλέξτε καταχώρηση για διαγραφή', 'db.deleteConfirm': 'Διαγραφή «{name}»;', 'db.unknownType': 'Άγνωστος τύπος βάσης δεδομένων: {type}', 'db.saved': 'Η βάση δεδομένων αποθηκεύτηκε',
         'event.name': 'Όνομα γεγονότος:', 'event.position': 'Θέση:', 'event.note': 'Σημείωση:', 'event.newPage': 'Νέα σελίδα γεγονότος', 'event.copyPage': 'Αντιγραφή σελίδας γεγονότος', 'event.pastePage': 'Επικόλληση σελίδας γεγονότος', 'event.deletePage': 'Διαγραφή σελίδας γεγονότος', 'event.clearPage': 'Καθαρισμός σελίδας γεγονότος', 'event.page': 'Σελίδα {number}', 'event.contents': 'Περιεχόμενα', 'event.selectCommand': 'Επιλογή εντολής γεγονότος', 'event.conditions': 'Συνθήκες', 'event.image': 'Εικόνα', 'event.options': 'Επιλογές', 'event.autonomousMovement': 'Αυτόνομη κίνηση', 'event.priority': 'Προτεραιότητα', 'event.trigger': 'Ενεργοποίηση',
-        'status.noProjectLoaded': 'Δεν έχει φορτωθεί έργο', 'status.playtestNotImplemented': 'Η λειτουργία δοκιμής δεν έχει υλοποιηθεί ακόμη', 'status.loadMapFirst': 'Φορτώστε πρώτα έναν χάρτη', 'status.eventModeEnabled': 'Η λειτουργία γεγονότων ενεργοποιήθηκε', 'status.eventModeDisabled': 'Η λειτουργία γεγονότων απενεργοποιήθηκε', 'alert.loadProjectFirst': 'Φορτώστε πρώτα ένα έργο.'
+        'status.noProjectLoaded': 'Δεν έχει φορτωθεί έργο', 'status.playtestNotImplemented': 'Η λειτουργία δοκιμής δεν έχει υλοποιηθεί ακόμη', 'status.playtestSaveFailed': 'Η δοκιμή ακυρώθηκε: δεν ήταν δυνατή η αποθήκευση του έργου', 'status.loadMapFirst': 'Φορτώστε πρώτα έναν χάρτη', 'status.eventModeEnabled': 'Η λειτουργία γεγονότων ενεργοποιήθηκε', 'status.eventModeDisabled': 'Η λειτουργία γεγονότων απενεργοποιήθηκε', 'alert.loadProjectFirst': 'Φορτώστε πρώτα ένα έργο.'
     }
 };
 
@@ -2940,7 +2942,7 @@ RR_I18N_STRINGS['ko'] = { ...RR_I18N_STRINGS.en,
     'event.higher': '높음', 'event.highest': '가장 높음', 'event.belowCharacters': '캐릭터 아래', 'event.sameAsCharacters': '캐릭터와 같음',
     'event.aboveCharacters': '캐릭터 위', 'event.actionButton': '결정 버튼', 'event.playerTouch': '플레이어 접촉', 'event.eventTouch': '이벤트 접촉',
     'event.autorun': '자동 실행', 'event.parallel': '병렬 처리', 'event.noneAvailable': '사용 가능한 항목 없음', 'status.noProjectLoaded': '불러온 프로젝트 없음',
-    'status.playtestNotImplemented': '테스트 플레이 모드는 아직 구현되지 않았습니다', 'status.loadMapFirst': '먼저 맵을 불러오세요', 'status.eventModeEnabled': '이벤트 모드 활성화됨', 'status.eventModeDisabled': '이벤트 모드 비활성화됨',
+    'status.playtestNotImplemented': '테스트 플레이 모드는 아직 구현되지 않았습니다', 'status.playtestSaveFailed': '테스트 플레이 취소됨: 프로젝트를 저장할 수 없습니다', 'status.loadMapFirst': '먼저 맵을 불러오세요', 'status.eventModeEnabled': '이벤트 모드 활성화됨', 'status.eventModeDisabled': '이벤트 모드 비활성화됨',
     'alert.loadProjectFirst': '먼저 프로젝트를 불러와 주세요.',
 };
 RR_TEXT_TRANSLATIONS['ko'] = {
@@ -3232,7 +3234,7 @@ RR_I18N_STRINGS['ar'] = { ...RR_I18N_STRINGS.en,
     'event.higher': 'أعلى', 'event.highest': 'الأعلى', 'event.belowCharacters': 'أسفل الشخصيات', 'event.sameAsCharacters': 'بمستوى الشخصيات',
     'event.aboveCharacters': 'فوق الشخصيات', 'event.actionButton': 'زر الإجراء', 'event.playerTouch': 'لمس اللاعب', 'event.eventTouch': 'لمس الحدث',
     'event.autorun': 'تشغيل تلقائي', 'event.parallel': 'متوازٍ', 'event.noneAvailable': 'لا يوجد متاح', 'status.noProjectLoaded': 'لم يتم تحميل مشروع',
-    'status.playtestNotImplemented': 'وضع اختبار اللعب غير متوفر بعد', 'status.loadMapFirst': 'حمّل خريطة أولًا', 'status.eventModeEnabled': 'تم تفعيل وضع الأحداث', 'status.eventModeDisabled': 'تم تعطيل وضع الأحداث',
+    'status.playtestNotImplemented': 'وضع اختبار اللعب غير متوفر بعد', 'status.playtestSaveFailed': 'تم إلغاء اختبار اللعب: تعذر حفظ المشروع', 'status.loadMapFirst': 'حمّل خريطة أولًا', 'status.eventModeEnabled': 'تم تفعيل وضع الأحداث', 'status.eventModeDisabled': 'تم تعطيل وضع الأحداث',
     'alert.loadProjectFirst': 'يرجى تحميل مشروع أولًا.',
 };
 RR_TEXT_TRANSLATIONS['ar'] = {
@@ -5331,7 +5333,7 @@ RR_I18N_STRINGS['it'] = { ...RR_I18N_STRINGS.en,
     'event.higher': 'Alta', 'event.highest': 'Massima', 'event.belowCharacters': 'Sotto i personaggi', 'event.sameAsCharacters': 'Come i personaggi',
     'event.aboveCharacters': 'Sopra i personaggi', 'event.actionButton': 'Tasto azione', 'event.playerTouch': 'Tocco del giocatore', 'event.eventTouch': 'Tocco dell\'evento',
     'event.autorun': 'Avvio automatico', 'event.parallel': 'Parallelo', 'event.noneAvailable': 'Nessuno disponibile', 'status.noProjectLoaded': 'Nessun progetto caricato',
-    'status.playtestNotImplemented': 'Modalità playtest non ancora implementata', 'status.loadMapFirst': 'Carica prima una mappa', 'status.eventModeEnabled': 'Modalità eventi attivata', 'status.eventModeDisabled': 'Modalità eventi disattivata',
+    'status.playtestNotImplemented': 'Modalità playtest non ancora implementata', 'status.playtestSaveFailed': 'Playtest annullato: impossibile salvare il progetto', 'status.loadMapFirst': 'Carica prima una mappa', 'status.eventModeEnabled': 'Modalità eventi attivata', 'status.eventModeDisabled': 'Modalità eventi disattivata',
     'alert.loadProjectFirst': 'Carica prima un progetto.',
 };
 RR_TEXT_TRANSLATIONS['it'] = {
@@ -5781,7 +5783,7 @@ RR_I18N_STRINGS['pl'] = { ...RR_I18N_STRINGS.en,
     'event.higher': 'Wyższy', 'event.highest': 'Najwyższy', 'event.belowCharacters': 'Pod postaciami', 'event.sameAsCharacters': 'Na poziomie postaci',
     'event.aboveCharacters': 'Nad postaciami', 'event.actionButton': 'Przycisk akcji', 'event.playerTouch': 'Dotknięcie przez gracza', 'event.eventTouch': 'Dotknięcie przez zdarzenie',
     'event.autorun': 'Autostart', 'event.parallel': 'Równoległy', 'event.noneAvailable': 'Brak dostępnych', 'status.noProjectLoaded': 'Nie wczytano projektu',
-    'status.playtestNotImplemented': 'Tryb testu gry nie został jeszcze zaimplementowany', 'status.loadMapFirst': 'Najpierw wczytaj mapę', 'status.eventModeEnabled': 'Tryb zdarzeń włączony', 'status.eventModeDisabled': 'Tryb zdarzeń wyłączony',
+    'status.playtestNotImplemented': 'Tryb testu gry nie został jeszcze zaimplementowany', 'status.playtestSaveFailed': 'Test gry anulowany: nie udało się zapisać projektu', 'status.loadMapFirst': 'Najpierw wczytaj mapę', 'status.eventModeEnabled': 'Tryb zdarzeń włączony', 'status.eventModeDisabled': 'Tryb zdarzeń wyłączony',
     'alert.loadProjectFirst': 'Najpierw wczytaj projekt.',
 };
 RR_TEXT_TRANSLATIONS['pl'] = {
@@ -6231,7 +6233,7 @@ RR_I18N_STRINGS['id'] = { ...RR_I18N_STRINGS.en,
     'event.higher': 'Lebih Tinggi', 'event.highest': 'Tertinggi', 'event.belowCharacters': 'Di Bawah Karakter', 'event.sameAsCharacters': 'Sama dengan Karakter',
     'event.aboveCharacters': 'Di Atas Karakter', 'event.actionButton': 'Tombol Aksi', 'event.playerTouch': 'Sentuhan Pemain', 'event.eventTouch': 'Sentuhan Event',
     'event.autorun': 'Jalan Otomatis', 'event.parallel': 'Paralel', 'event.noneAvailable': 'Tidak ada yang tersedia', 'status.noProjectLoaded': 'Tidak ada proyek yang dimuat',
-    'status.playtestNotImplemented': 'Mode uji main belum diimplementasikan', 'status.loadMapFirst': 'Muat peta terlebih dahulu', 'status.eventModeEnabled': 'Mode event diaktifkan', 'status.eventModeDisabled': 'Mode event dinonaktifkan',
+    'status.playtestNotImplemented': 'Mode uji main belum diimplementasikan', 'status.playtestSaveFailed': 'Uji main dibatalkan: proyek tidak dapat disimpan', 'status.loadMapFirst': 'Muat peta terlebih dahulu', 'status.eventModeEnabled': 'Mode event diaktifkan', 'status.eventModeDisabled': 'Mode event dinonaktifkan',
     'alert.loadProjectFirst': 'Silakan muat proyek terlebih dahulu.',
 };
 RR_TEXT_TRANSLATIONS['id'] = {
@@ -6681,7 +6683,7 @@ RR_I18N_STRINGS['vi'] = { ...RR_I18N_STRINGS.en,
     'event.higher': 'Cao', 'event.highest': 'Cao nhất', 'event.belowCharacters': 'Dưới nhân vật', 'event.sameAsCharacters': 'Ngang nhân vật',
     'event.aboveCharacters': 'Trên nhân vật', 'event.actionButton': 'Nút hành động', 'event.playerTouch': 'Người chơi chạm', 'event.eventTouch': 'Sự kiện chạm',
     'event.autorun': 'Tự chạy', 'event.parallel': 'Song song', 'event.noneAvailable': 'Không có sẵn', 'status.noProjectLoaded': 'Chưa tải dự án nào',
-    'status.playtestNotImplemented': 'Chế độ chơi thử chưa được triển khai', 'status.loadMapFirst': 'Hãy tải bản đồ trước', 'status.eventModeEnabled': 'Đã bật chế độ sự kiện', 'status.eventModeDisabled': 'Đã tắt chế độ sự kiện',
+    'status.playtestNotImplemented': 'Chế độ chơi thử chưa được triển khai', 'status.playtestSaveFailed': 'Đã hủy chơi thử: không thể lưu dự án', 'status.loadMapFirst': 'Hãy tải bản đồ trước', 'status.eventModeEnabled': 'Đã bật chế độ sự kiện', 'status.eventModeDisabled': 'Đã tắt chế độ sự kiện',
     'alert.loadProjectFirst': 'Vui lòng tải dự án trước.',
 };
 RR_TEXT_TRANSLATIONS['vi'] = {
@@ -7131,7 +7133,7 @@ RR_I18N_STRINGS['th'] = { ...RR_I18N_STRINGS.en,
     'event.higher': 'สูง', 'event.highest': 'สูงสุด', 'event.belowCharacters': 'ใต้ตัวละคร', 'event.sameAsCharacters': 'ระดับเดียวกับตัวละคร',
     'event.aboveCharacters': 'เหนือตัวละคร', 'event.actionButton': 'ปุ่มแอ็กชัน', 'event.playerTouch': 'ผู้เล่นแตะ', 'event.eventTouch': 'อีเวนต์แตะ',
     'event.autorun': 'ทำงานอัตโนมัติ', 'event.parallel': 'ขนาน', 'event.noneAvailable': 'ไม่มีให้เลือก', 'status.noProjectLoaded': 'ยังไม่ได้โหลดโปรเจกต์',
-    'status.playtestNotImplemented': 'โหมดทดสอบเล่นยังไม่พร้อมใช้งาน', 'status.loadMapFirst': 'โหลดแผนที่ก่อน', 'status.eventModeEnabled': 'เปิดโหมดอีเวนต์แล้ว', 'status.eventModeDisabled': 'ปิดโหมดอีเวนต์แล้ว',
+    'status.playtestNotImplemented': 'โหมดทดสอบเล่นยังไม่พร้อมใช้งาน', 'status.playtestSaveFailed': 'ยกเลิกการทดสอบเล่น: ไม่สามารถบันทึกโปรเจกต์ได้', 'status.loadMapFirst': 'โหลดแผนที่ก่อน', 'status.eventModeEnabled': 'เปิดโหมดอีเวนต์แล้ว', 'status.eventModeDisabled': 'ปิดโหมดอีเวนต์แล้ว',
     'alert.loadProjectFirst': 'กรุณาโหลดโปรเจกต์ก่อน',
 };
 RR_TEXT_TRANSLATIONS['th'] = {
@@ -7581,7 +7583,7 @@ RR_I18N_STRINGS['tr'] = { ...RR_I18N_STRINGS.en,
     'event.higher': 'Yüksek', 'event.highest': 'En yüksek', 'event.belowCharacters': 'Karakterlerin altında', 'event.sameAsCharacters': 'Karakterlerle aynı',
     'event.aboveCharacters': 'Karakterlerin üstünde', 'event.actionButton': 'Eylem düğmesi', 'event.playerTouch': 'Oyuncu teması', 'event.eventTouch': 'Olay teması',
     'event.autorun': 'Otomatik çalıştır', 'event.parallel': 'Paralel', 'event.noneAvailable': 'Kullanılabilir öğe yok', 'status.noProjectLoaded': 'Proje yüklenmedi',
-    'status.playtestNotImplemented': 'Oyun testi modu henüz uygulanmadı', 'status.loadMapFirst': 'Önce bir harita yükleyin', 'status.eventModeEnabled': 'Olay modu etkin', 'status.eventModeDisabled': 'Olay modu devre dışı',
+    'status.playtestNotImplemented': 'Oyun testi modu henüz uygulanmadı', 'status.playtestSaveFailed': 'Oyun testi iptal edildi: proje kaydedilemedi', 'status.loadMapFirst': 'Önce bir harita yükleyin', 'status.eventModeEnabled': 'Olay modu etkin', 'status.eventModeDisabled': 'Olay modu devre dışı',
     'alert.loadProjectFirst': 'Lütfen önce bir proje yükleyin.',
 };
 RR_TEXT_TRANSLATIONS['tr'] = {
