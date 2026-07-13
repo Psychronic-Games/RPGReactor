@@ -7,7 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.94.8] - Unreleased
+## [0.94.8] - 2026-07-13
+
+Release overview: [RPG Reactor 0.94.8: Big Maps Without the Wait](../docs/devlogs/2026-07-13-rpg-reactor-0.94.8.md).
 
 ### Changed
 

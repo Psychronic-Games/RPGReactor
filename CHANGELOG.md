@@ -4,7 +4,9 @@ All notable changes to RPG Reactor will be documented in this file.
 
 This root changelog summarizes public release progress for GitHub; larger releases group their fixes by theme. The detailed editor changelog lives at [`editor/CHANGELOG.md`](editor/CHANGELOG.md).
 
-## [0.94.8] - Unreleased
+## [0.94.8] - 2026-07-13
+
+Release overview: [RPG Reactor 0.94.8: Big Maps Without the Wait](docs/devlogs/2026-07-13-rpg-reactor-0.94.8.md).
 
 ### Changed
 

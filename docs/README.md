@@ -8,6 +8,7 @@ Release progress for GitHub visitors is tracked in the root [`CHANGELOG.md`](../
 
 Public release explanations (one devlog per release):
 
+- [RPG Reactor 0.94.8: Big Maps Without the Wait](devlogs/2026-07-13-rpg-reactor-0.94.8.md)
 - [RPG Reactor 0.94.7: Map Editing You Can Trust](devlogs/2026-07-13-rpg-reactor-0.94.7.md)
 - [RPG Reactor 0.94.5: The Performance Release](devlogs/2026-07-12-rpg-reactor-0.94.5.md)
 - [RPG Reactor 0.94.4: Responsive Web Forge and Reliable Windows Playtests](devlogs/2026-07-11-rpg-reactor-0.94.4.md)
