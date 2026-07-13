@@ -827,6 +827,17 @@ class TilemapManager {
         // batches abort and its detached holders are discarded.
         this._lazyLoadGeneration = (this._lazyLoadGeneration || 0) + 1;
 
+        // Drop layer texture caches before rebuilding children. A cached
+        // layer re-renders its cache texture on every structural change, so
+        // leaving caches on during the rebuild pays a full cache re-render
+        // for the rebuild frames and briefly holds two map-sized textures.
+        // The lazy fill re-caches each layer when its stream completes.
+        for (const layer of Object.values(this.layers)) {
+            if (layer && layer.isCachedAsTexture) {
+                layer.cacheAsTexture(false);
+            }
+        }
+
         const { width, height, data } = this.currentMap;
 
         // RPG Maker MZ has 6 data layers (z=0 through z=5)
