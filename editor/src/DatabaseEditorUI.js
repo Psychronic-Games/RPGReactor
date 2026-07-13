@@ -877,14 +877,22 @@ class DatabaseEditorUI {
         span.style.backgroundImage = 'none';
         span.style.imageRendering = '';
         span.classList.remove('has-icon');
-        if (typeof nw === 'undefined' || !this.currentProject) return;
+        // Works on desktop NW.js and in the browser editor: the browser
+        // host shims require('fs'/'path') over the virtual project. CSS
+        // background-image is NOT rewritten by the host's file:// bridge
+        // (only src/fetch/XHR are), so URLs are resolved explicitly here.
+        const isWeb = !!window.RPGReactorHost;
+        if ((typeof nw === 'undefined' && !isWeb) || !this.currentProject) return;
         const path = require('path');
+        const imageUrl = p => isWeb && window.RPGReactorAssetUrl
+            ? window.RPGReactorAssetUrl(p)
+            : encodeURI('file://' + p);
         const SIZE = 20;
         if (type === 'actors') {
             if (!entry.faceName) return;
-            const facePath = 'file://' + path.join(this.currentProject.path, 'img', 'faces', entry.faceName + '.png');
+            const facePath = path.join(this.currentProject.path, 'img', 'faces', entry.faceName + '.png');
             const idx = entry.faceIndex || 0;
-            span.style.backgroundImage = `url("${encodeURI(facePath)}")`;
+            span.style.backgroundImage = `url("${imageUrl(facePath)}")`;
             span.style.backgroundSize = `${4 * SIZE}px ${2 * SIZE}px`;
             span.style.backgroundPosition = `-${(idx % 4) * SIZE}px -${Math.floor(idx / 4) * SIZE}px`;
             span.classList.add('has-icon');
@@ -902,7 +910,8 @@ class DatabaseEditorUI {
             }
             if (!battlerDir) return;
             span.style.imageRendering = 'auto';
-            const url = `url("${encodeURI('file://' + path.join(this.currentProject.path, 'img', battlerDir, entry.battlerName + '.png'))}")`;
+            const battlerPath = path.join(this.currentProject.path, 'img', battlerDir, entry.battlerName + '.png');
+            const url = `url("${imageUrl(battlerPath)}")`;
             if (battlerDir === 'characters') {
                 // Charset-style battler: crop the front-facing idle frame
                 const isSingle = /^[!$]*\$/.test(entry.battlerName);
@@ -919,7 +928,7 @@ class DatabaseEditorUI {
                         `${-(1 * fw * scale) + (SIZE - fw * scale) / 2}px ${(SIZE - fh * scale) / 2}px`;
                     span.classList.add('has-icon');
                 };
-                img.src = 'file://' + path.join(this.currentProject.path, 'img', battlerDir, entry.battlerName + '.png');
+                img.src = imageUrl(battlerPath);
             } else {
                 // Singular battler image: shrink the whole thing into the cell
                 span.style.backgroundImage = url;
@@ -931,8 +940,8 @@ class DatabaseEditorUI {
         }
         const idx = entry.iconIndex || 0;
         if (idx <= 0) return;
-        const iconSetPath = 'file://' + path.join(this.currentProject.path, 'img', 'system', 'IconSet.png');
-        span.style.backgroundImage = `url("${encodeURI(iconSetPath)}")`;
+        const iconSetPath = path.join(this.currentProject.path, 'img', 'system', 'IconSet.png');
+        span.style.backgroundImage = `url("${imageUrl(iconSetPath)}")`;
         span.style.backgroundSize = `${16 * SIZE}px auto`;
         span.style.backgroundPosition = `-${(idx % 16) * SIZE}px -${Math.floor(idx / 16) * SIZE}px`;
         span.classList.add('has-icon');
@@ -1558,8 +1567,8 @@ class DatabaseEditorUI {
     }
 
     selectCharacterImage(actor) {
-        if (typeof nw === 'undefined') {
-            alert('Character selection requires NW.js');
+        if (typeof nw === 'undefined' && !window.RPGReactorHost) {
+            alert('Character selection requires the desktop editor or the browser project host');
             return;
         }
 
@@ -1598,8 +1607,8 @@ class DatabaseEditorUI {
     }
 
     selectFaceImage(actor) {
-        if (typeof nw === 'undefined') {
-            alert('Face selection requires NW.js');
+        if (typeof nw === 'undefined' && !window.RPGReactorHost) {
+            alert('Face selection requires the desktop editor or the browser project host');
             return;
         }
 
@@ -1637,8 +1646,8 @@ class DatabaseEditorUI {
     }
 
     selectSVBattlerImage(actor) {
-        if (typeof nw === 'undefined') {
-            alert('SV Battler selection requires NW.js');
+        if (typeof nw === 'undefined' && !window.RPGReactorHost) {
+            alert('SV Battler selection requires the desktop editor or the browser project host');
             return;
         }
 
@@ -1671,8 +1680,8 @@ class DatabaseEditorUI {
     }
 
     selectIcon(entry, type) {
-        if (typeof nw === 'undefined') {
-            alert('Icon selection requires NW.js');
+        if (typeof nw === 'undefined' && !window.RPGReactorHost) {
+            alert('Icon selection requires the desktop editor or the browser project host');
             return;
         }
 

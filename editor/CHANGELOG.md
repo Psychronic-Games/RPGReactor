@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [Unreleased]
+
+### Fixed
+
+- Web editor: database entry lists show their mini preview icons in the browser edition. `applyListIcon` bailed when `nw` was absent, and painted via CSS `background-image: url("file://...")` — the browser host's file:// bridge rewrites `src`/fetch/XHR but not CSS backgrounds, so even without the gate the images could not load. Icon URLs now resolve through `RPGReactorAssetUrl` on the web host (and unchanged `file://` on desktop), and the enemy battler folder probe uses the host's virtual `fs`.
+- Web editor: the character sprite, face, SV battler, and icon picker dialogs open in the browser edition — their guards required NW.js even though the browser host shims `fs.readdirSync` over the virtual project and the pickers' previews load through the bridged `img.src` path.
+
 ## [0.94.5] - 2026-07-12
 
 Release overview: [RPG Reactor 0.94.5: The Performance Release](../docs/devlogs/2026-07-12-rpg-reactor-0.94.5.md).
