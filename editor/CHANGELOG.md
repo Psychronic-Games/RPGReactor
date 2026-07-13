@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Editor: whole-map paint bucket fills apply in a fraction of a second instead of 30-40 seconds. `updateTiles` with a 131k-position batch (a full 256×256 fill) spent 39.6s: each position ran a maintenance `filter()` over the whole A1 water-animation tracking list (131k × 2,093 entries ≈ 275M iterations) plus per-cell sprite churn. Batches over 3,000 positions now route through the streaming full re-render — instant viewport, background fill, caches and region overlay handled — and the A1 tracking maintenance is batched into a single filter pass. Measured on Star Shift Rebellion Map 850: whole-map fill 39.8s → 0.27s of blocking time. `renderMap` gained a `preserveScroll` option so the fallback (and undo/redo, which previously snapped the view back to the map origin) keeps the current scroll position.
+
 ## [0.94.8] - 2026-07-13
 
 Release overview: [RPG Reactor 0.94.8: Big Maps Without the Wait](../docs/devlogs/2026-07-13-rpg-reactor-0.94.8.md).

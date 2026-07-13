@@ -281,8 +281,8 @@ class MapEditor {
         const previousData = this.undoStack.pop();
         this.tilemapManager.currentMap.data = previousData;
 
-        // Re-render the map
-        this.tilemapManager.renderMap();
+        // Re-render the map without yanking the view back to the origin
+        this.tilemapManager.renderMap({ preserveScroll: true });
 
         // Refresh region overlay if visible
         if (this.regionManager && this.regionManager.enabled) {
@@ -304,8 +304,8 @@ class MapEditor {
         const nextData = this.redoStack.pop();
         this.tilemapManager.currentMap.data = nextData;
 
-        // Re-render the map
-        this.tilemapManager.renderMap();
+        // Re-render the map without yanking the view back to the origin
+        this.tilemapManager.renderMap({ preserveScroll: true });
 
         // Refresh region overlay if visible
         if (this.regionManager && this.regionManager.enabled) {

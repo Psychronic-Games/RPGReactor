@@ -4,6 +4,12 @@ All notable changes to RPG Reactor will be documented in this file.
 
 This root changelog summarizes public release progress for GitHub; larger releases group their fixes by theme. The detailed editor changelog lives at [`editor/CHANGELOG.md`](editor/CHANGELOG.md).
 
+## [Unreleased]
+
+### Fixed
+
+- Editor: whole-map paint bucket fills apply in a fraction of a second instead of 30-40 seconds — huge tile-update batches now route through the streaming full re-render (which preserves the scroll position) instead of 100k+ incremental sprite updates, and the water-animation bookkeeping in batch updates is no longer quadratic. Undo and redo also keep the current scroll position instead of jumping back to the map origin.
+
 ## [0.94.8] - 2026-07-13
 
 Release overview: [RPG Reactor 0.94.8: Big Maps Without the Wait](docs/devlogs/2026-07-13-rpg-reactor-0.94.8.md).
