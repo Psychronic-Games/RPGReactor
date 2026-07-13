@@ -7,7 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [Unreleased]
+## [0.94.6] - Unreleased
+
+### Changed
+
+- Bumped current development version to RPG Reactor 0.94.6.
 
 ### Fixed
 
