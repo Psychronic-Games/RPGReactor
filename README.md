@@ -1,10 +1,10 @@
 # RPG Reactor
 
-RPG Reactor 0.94.5 is an open-source, cross-platform RPG game editor and runtime for RPG Maker MV/MZ-compatible projects. RPG Reactor provides its own modern PIXI 8-based runtime while preserving compatibility with RPG Maker project data and targeting backwards compatibility with both RPG Maker MZ and MV plugins, including mixing plugins from both engines within a single project through complementary MZ and MV compatibility layers.
+RPG Reactor 0.94.7 is an open-source, cross-platform RPG game editor and runtime for RPG Maker MV/MZ-compatible projects. RPG Reactor provides its own modern PIXI 8-based runtime while preserving compatibility with RPG Maker project data and targeting backwards compatibility with both RPG Maker MZ and MV plugins, including mixing plugins from both engines within a single project through complementary MZ and MV compatibility layers.
 
 Use RPG Reactor to create, edit, playtest, and package 2D RPGs with familiar RPG Maker-style maps, events, database records, plugins, and deployment workflows, without depending on the original RPG Maker runtime or editor.
 
-Pre-built download binaries are available at <https://psychronic.itch.io/rpg-reactor>. The latest source release is [0.94.5 — The Performance Release](https://github.com/Psychronic-Games/RPGReactor/releases/tag/v0.94.5).
+Pre-built download binaries are available at <https://psychronic.itch.io/rpg-reactor>. The latest source release is [0.94.7 — Map Editing You Can Trust](https://github.com/Psychronic-Games/RPGReactor/releases/tag/v0.94.7).
 
 ## Repository Layout
 
@@ -23,7 +23,7 @@ RPGReactor/
 
 - [Editor README](editor/README.md): detailed feature list, source launch steps, project structure, shortcuts, and technical notes.
 - [Changelog](CHANGELOG.md): GitHub-facing release progress and links to the detailed editor changelog.
-- [RPG Reactor 0.94.5 release overview](docs/devlogs/2026-07-12-rpg-reactor-0.94.5.md): public explanation of the performance release — full-speed large maps, the built-in F10 profiler, smooth tactical battles, and Ultra Mode 7 fixes.
+- [RPG Reactor 0.94.7 release overview](docs/devlogs/2026-07-13-rpg-reactor-0.94.7.md): public explanation of the fix release — a paint bucket that fills whole terrains, strict layer separation, working region area tools, playtest autosave, and the plugin blend-mode blackout fix.
 - [Maintainer docs](docs/README.md): workflows that are useful for project maintenance but are not required for normal editor use.
 
 ## Feature Overview
@@ -39,15 +39,17 @@ RPGReactor/
 - **Build & deploy**: one-click isolated playtests; cross-platform game packaging for Windows, macOS, Linux, and Web; optional Linux AppImages for games and the editor; configurable NW.js releases and runtime locales; optional staged PNG/OGG optimization; and an editor distribution builder with SHA-256 checksums.
 - **18-language editor localization** and a theme system with multiple color palettes in light and dark modes.
 
-## What's New in 0.94.5
+## What's New in 0.94.7
 
-- **Full-speed large maps**: detach-based offscreen culling and pooled tilemap repaints take object-heavy maps (hundreds of events with plugin overlay windows) from 30 FPS to 180, with scroll spikes and edge-tile artifacts eliminated.
-- **Built-in frame profiler**: press F10 in any Reactor game to record per-phase timings for every slow frame — map updates, sprites, windows, culling, repaints, render, GC, and off-loop stalls — written to `save/reactor-profile.json`. Companion console helpers diagnose live animation sprites. Zero cost until activated.
-- **Smooth tactical battles**: LeTBS enemy AI decisions no longer freeze the frame (AoE evaluation memoized, pathfinding rebuilt), and leaked battle animations no longer ghost over themselves.
-- **Ultra Mode 7, fixed and fast**: correct plugin-branch detection (`Utils.RPGMAKER_NAME` reports `"MZ"`), a compatibility bridge for pre-2.2.0 plugin releases, crash fixes, seam fixes, and GPU buffer caching (36.8ms → 4ms median frame).
-- **Deeper MV compatibility**: two-tier layer (MV plugin APIs for every game; MV game semantics only for MV-authored games), fixed interpreter wait contracts, seamless looping animations, instant battle victory, native-format-first saves, and MV-style tolerance of unhandled promise rejections.
+- **The paint bucket actually fills**: flood fill matches autotiles by terrain kind instead of exact shape variant, so it covers the whole connected region instead of leaving rings of old tiles, and recomputes autotile borders after the fill.
+- **Strict layer separation**: with a manual layer (L1–L4) selected, every paint tool writes only to that layer — ground autotiles no longer ignore the picker and silently clear decorations on other layers. Auto mode keeps MZ-style smart stacking.
+- **Region tools that paint regions**: the rectangle, circle, and paint bucket tools respect the Regions tab instead of painting tiles from the previously selected palette tab.
+- **Playtest autosave**: the Playtest button saves the project (current map, database, map list) before launching, so tests always run what the editor shows.
+- **No more plugin blend blackouts**: multiply/screen blending renders natively under PIXI v8 again — toggling plugin overlays such as Sang Hendrix's parallax collision editor no longer blacks out the screen or floods the console with backBuffer warnings.
+- **Boots through broken plugin wrappers**: non-async `SceneManager.run` wrappers (VisuMZ Core Engine among them) no longer crash or black-screen startup, and ES5-style `PIXI.Filter.call(...)` construction works under PIXI v8.
+- **Browser editor**: database lists show their mini preview icons, and the character/face/SV-battler/icon pickers open in the browser edition.
 
-Earlier releases: **0.94.4** made the browser editor responsive with persistent Web Forge output and restored Windows test tooling; **0.94.3** added the browser-hosted editor and resilient deployment downloads; **0.94.2** added safer project persistence, reproducible project creation, deployment controls, asset optimization, AppImages, and the public MV compatibility runtime. See the [Changelog](CHANGELOG.md) for the complete history.
+Earlier releases: **0.94.5** took object-heavy maps from 30 to 180 FPS, added the built-in F10 frame profiler, unfroze LeTBS tactical battles, and fixed and accelerated Ultra Mode 7; **0.94.4** made the browser editor responsive with persistent Web Forge output and restored Windows test tooling; **0.94.3** added the browser-hosted editor and resilient deployment downloads; **0.94.2** added safer project persistence, reproducible project creation, deployment controls, asset optimization, AppImages, and the public MV compatibility runtime. See the [Changelog](CHANGELOG.md) for the complete history.
 
 ## Development Launchers
 

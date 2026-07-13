@@ -971,6 +971,28 @@ class MapEditor {
         }
     }
 
+    // Paint the selected region over every cell in [minX..maxX]×[minY..maxY]
+    // that includeFn accepts (includeFn null = whole rectangle). Regions live
+    // on z5 and are selected in the RegionManager, not the tile palette.
+    paintRegionArea(minX, maxX, minY, maxY, includeFn) {
+        if (!this.regionManager || !this.regionManager.selectedTiles ||
+            this.regionManager.selectedTiles.length === 0) {
+            return;
+        }
+        const { width, height, data } = this.tilemapManager.currentMap;
+        const layerSize = width * height;
+        const region = this.regionManager.selectedRegion;
+        for (let y = Math.max(0, minY); y <= Math.min(height - 1, maxY); y++) {
+            for (let x = Math.max(0, minX); x <= Math.min(width - 1, maxX); x++) {
+                if (includeFn && !includeFn(x, y)) continue;
+                data[5 * layerSize + y * width + x] = region;
+            }
+        }
+        if (this.regionManager.enabled) {
+            this.regionManager.renderRegions();
+        }
+    }
+
     // Paint a rectangle of tiles
     paintRectangle(start, end) {
         if (!this.tilemapManager.currentMap) return;
@@ -988,6 +1010,13 @@ class MapEditor {
                 }
             }
             this.eraseTilesAtPositions(positions);
+            return;
+        }
+
+        // Region painting (z5): the tile-pattern path below would default the
+        // 'R' tab to layer 0 and paint tiles from a stale palette selection.
+        if (this.tilesetPaletteViewer.currentLayer === 'R') {
+            this.paintRegionArea(minX, maxX, minY, maxY, null);
             return;
         }
 
@@ -1142,6 +1171,14 @@ class MapEditor {
             return;
         }
 
+        // Region painting (z5): same routing as paintRectangle — the tile
+        // path below must never see the 'R' tab.
+        if (this.tilesetPaletteViewer.currentLayer === 'R') {
+            this.paintRegionArea(minX, maxX, minY, maxY, (x, y) =>
+                Math.sqrt(Math.pow(x - centerX, 2) + Math.pow(y - centerY, 2)) <= radius);
+            return;
+        }
+
         // Get selected tiles from palette
         const selectedTiles = this.tilesetPaletteViewer.selectedTiles;
         if (!selectedTiles || selectedTiles.length === 0) {
@@ -1279,6 +1316,36 @@ class MapEditor {
 
         const { width, height, data } = this.tilemapManager.currentMap;
         const currentLayer = this.tilesetPaletteViewer.currentLayer;
+
+        // Region fill (z5): flood by region value; the tile path below would
+        // default the 'R' tab to layer 0 and fill tiles instead.
+        if (currentLayer === 'R') {
+            if (!this.regionManager || !this.regionManager.selectedTiles ||
+                this.regionManager.selectedTiles.length === 0) {
+                return;
+            }
+            const layerSize = width * height;
+            const targetRegion = data[5 * layerSize + startY * width + startX];
+            const fillRegion = this.regionManager.selectedRegion;
+            if (targetRegion === fillRegion) return;
+            const stack = [{ x: startX, y: startY }];
+            while (stack.length > 0) {
+                const { x, y } = stack.pop();
+                if (x < 0 || x >= width || y < 0 || y >= height) continue;
+                const index = 5 * layerSize + y * width + x;
+                if (data[index] !== targetRegion) continue;
+                data[index] = fillRegion;
+                stack.push({ x: x + 1, y });
+                stack.push({ x: x - 1, y });
+                stack.push({ x, y: y + 1 });
+                stack.push({ x, y: y - 1 });
+            }
+            if (this.regionManager.enabled) {
+                this.regionManager.renderRegions();
+            }
+            return;
+        }
+
         // Manual layer mode: match and write on the selected z-slot so the
         // fill region is defined by the layer actually being edited.
         const layerIndex = this.layerMode !== 'auto'

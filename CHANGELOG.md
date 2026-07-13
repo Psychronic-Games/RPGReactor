@@ -4,13 +4,17 @@ All notable changes to RPG Reactor will be documented in this file.
 
 This root changelog summarizes public release progress for GitHub; larger releases group their fixes by theme. The detailed editor changelog lives at [`editor/CHANGELOG.md`](editor/CHANGELOG.md).
 
-## [0.94.6] - Unreleased
+## [0.94.7] - 2026-07-13
+
+Release overview: [RPG Reactor 0.94.7: Map Editing You Can Trust](docs/devlogs/2026-07-13-rpg-reactor-0.94.7.md). (0.94.6 was an internal development version and was never published; its changes ship here.)
 
 ### Changed
 
-- Bumped RPG Reactor to version 0.94.6.
+- Bumped RPG Reactor to version 0.94.7.
 
 ### Fixed
+
+- Editor: the rectangle, circle, and paint bucket tools paint regions when the Regions tab is selected — previously only the pencil handled the region layer, and the area tools painted tiles from the previous palette tab's selection instead.
 
 - Runtime: games no longer crash at startup with `this._app.start is not a function` or hang on a black screen when plugins alias `SceneManager.run`/`initialize` with non-async wrappers (VisuMZ Core Engine among them) — such wrappers drop the promise from PIXI v8's async graphics initialization, letting the game-loop start be reached mid-init; the loop start is now deferred until the renderer is ready, whatever the plugin wrapper timing.
 - Runtime: MV-era plugins that construct filters ES5-style (`PIXI.Filter.call(this, vertex, fragment, uniforms)`) work under PIXI v8 instead of throwing "class constructor cannot be invoked without new".

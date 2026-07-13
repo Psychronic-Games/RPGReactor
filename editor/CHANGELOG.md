@@ -7,13 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.94.6] - Unreleased
+## [0.94.7] - 2026-07-13
+
+Release overview: [RPG Reactor 0.94.7: Map Editing You Can Trust](../docs/devlogs/2026-07-13-rpg-reactor-0.94.7.md). (0.94.6 was an internal development version and was never published; its changes ship here.)
 
 ### Changed
 
-- Bumped current development version to RPG Reactor 0.94.6.
+- Bumped current development version to RPG Reactor 0.94.7.
 
 ### Fixed
+
+- Editor: the rectangle, circle, and paint bucket tools respect the Regions tab. `getLayerIndex('R')` fell through to layer 0, and the area tools' tile-pattern path read the stale tile selection from the previously active palette tab — so area-painting or bucket-filling with regions selected painted tiles onto the ground layer. The area tools now write the selected region ID to the region layer (z5) over their rectangle/circle footprint, and the bucket flood-fills connected cells matching the clicked cell's region value, refreshing the region overlay once per operation.
 
 - Runtime: game boot no longer races the PIXI v8 renderer initialization. `Graphics.initialize` is async under v8, and plugins that alias `SceneManager.run`/`initialize` with non-async wrappers (VisuMZ Core Engine and others) drop that promise, so `SceneManager.run` reached `Graphics.startGameLoop` mid-init — crashing with `this._app.start is not a function` when the pre-init `PIXI.Application` was visible (v8 installs `start`/`stop`/`ticker` on the instance only during `init()`), or sitting on a black screen forever when `Graphics._app` was still null and the start was silently skipped. The app is now published only after `init()` completes, and `startGameLoop`/`stopGameLoop` record the requested loop state so `_createPixiApp` starts the ticker as soon as the renderer is ready.
 - Runtime: MV-era plugins that subclass filters ES5-style — `PIXI.Filter.call(this, vertex, fragment, uniforms)` — work under PIXI v8. The compat `PIXI.Filter` wrapper was an ES6 class, which throws when invoked without `new`; it is now a function-based constructor that supports `.call()`/`.apply()` construction, direct `new`, and `class extends` subclassing alike.
