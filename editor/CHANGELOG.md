@@ -7,9 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.94.9] - Unreleased
+
+### Changed
+
+- Bumped current development version to RPG Reactor 0.94.9.
+
 ### Fixed
 
 - Editor: whole-map paint bucket fills apply in a fraction of a second instead of 30-40 seconds. `updateTiles` with a 131k-position batch (a full 256×256 fill) spent 39.6s: each position ran a maintenance `filter()` over the whole A1 water-animation tracking list (131k × 2,093 entries ≈ 275M iterations) plus per-cell sprite churn. Batches over 3,000 positions now route through the streaming full re-render — instant viewport, background fill, caches and region overlay handled — and the A1 tracking maintenance is batched into a single filter pass. Measured on Star Shift Rebellion Map 850: whole-map fill 39.8s → 0.27s of blocking time. `renderMap` gained a `preserveScroll` option so the fallback (and undo/redo, which previously snapped the view back to the map origin) keeps the current scroll position.
+- Editor: `renderMap` drops layer texture caches before rebuilding children, so full re-renders don't re-render map-sized cache textures for the rebuild frames. (Investigated with this change: the "paint bucket doesn't undo" reports reproduce on 0.94.5–0.94.7 as undo-during-streaming-fill — stale lazy-fill batches repainted pre-undo tiles over the restored map; the 0.94.8 generation guard already fixed it, and undo bookkeeping itself was always correct.)
 
 ## [0.94.8] - 2026-07-13
 

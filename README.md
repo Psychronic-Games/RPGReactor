@@ -1,10 +1,10 @@
 # RPG Reactor
 
-RPG Reactor 0.94.8 is an open-source, cross-platform RPG game editor and runtime for RPG Maker MV/MZ-compatible projects. RPG Reactor provides its own modern PIXI 8-based runtime while preserving compatibility with RPG Maker project data and targeting backwards compatibility with both RPG Maker MZ and MV plugins, including mixing plugins from both engines within a single project through complementary MZ and MV compatibility layers.
+RPG Reactor 0.94.9 is an open-source, cross-platform RPG game editor and runtime for RPG Maker MV/MZ-compatible projects. RPG Reactor provides its own modern PIXI 8-based runtime while preserving compatibility with RPG Maker project data and targeting backwards compatibility with both RPG Maker MZ and MV plugins, including mixing plugins from both engines within a single project through complementary MZ and MV compatibility layers.
 
 Use RPG Reactor to create, edit, playtest, and package 2D RPGs with familiar RPG Maker-style maps, events, database records, plugins, and deployment workflows, without depending on the original RPG Maker runtime or editor.
 
-Pre-built download binaries are available at <https://psychronic.itch.io/rpg-reactor>. The latest source release is [0.94.8 — Big Maps Without the Wait](https://github.com/Psychronic-Games/RPGReactor/releases/tag/v0.94.8).
+Pre-built download binaries are available at <https://psychronic.itch.io/rpg-reactor>. The latest source release is [0.94.9 — Instant Fills](https://github.com/Psychronic-Games/RPGReactor/releases/tag/v0.94.9).
 
 ## Repository Layout
 
@@ -23,7 +23,7 @@ RPGReactor/
 
 - [Editor README](editor/README.md): detailed feature list, source launch steps, project structure, shortcuts, and technical notes.
 - [Changelog](CHANGELOG.md): GitHub-facing release progress and links to the detailed editor changelog.
-- [RPG Reactor 0.94.8 release overview](docs/devlogs/2026-07-13-rpg-reactor-0.94.8.md): public explanation of the editor performance release — large maps loading in a quarter of the time, full frame rate on water maps, region painting without freezes, and stutter-free animation previews.
+- [RPG Reactor 0.94.9 release overview](docs/devlogs/2026-07-13-rpg-reactor-0.94.9.md): public explanation of the fix release — whole-map bucket fills in a quarter second, scroll-preserving undo/redo, and the undo-visuals root cause put to rest.
 - [Maintainer docs](docs/README.md): workflows that are useful for project maintenance but are not required for normal editor use.
 
 ## Feature Overview
@@ -39,16 +39,13 @@ RPGReactor/
 - **Build & deploy**: one-click isolated playtests; cross-platform game packaging for Windows, macOS, Linux, and Web; optional Linux AppImages for games and the editor; configurable NW.js releases and runtime locales; optional staged PNG/OGG optimization; and an editor distribution builder with SHA-256 checksums.
 - **18-language editor localization** and a theme system with multiple color palettes in light and dark modes.
 
-## What's New in 0.94.8
+## What's New in 0.94.9
 
-- **Large maps load in a quarter of the time**: a 256×256 map went from ~10s to ~2.5s — off-screen tiles now build in detached containers instead of forcing the growing map to re-render every frame while loading.
-- **Full frame rate on water maps**: animated water lives in small dedicated overlay layers, so every static layer caches as a texture — editor frame time on the heaviest test map dropped from 24ms to 13ms with all water still animating.
-- **Region painting without freezes**: bucket-filling a region across a large map no longer stalls the editor for seconds — region cells share one pre-rendered image per region ID and paints update only the touched cells.
-- **Region area previews**: the rectangle tool shows the region color over the dragged selection and the circle tool shows region-colored cells (it previously showed nothing).
-- **Stutter-free animation previews**: the Animations database player, animation picker, and event editor picker all step at the exact MV 15fps cadence against the display clock instead of a drifting timer.
-- **Small fixes**: repainted shadows no longer stack invisible darkening duplicates, switching maps mid-load can't leak stale tiles anymore, and the playtest save-failure message is localized in all 18 languages.
+- **Whole-map bucket fills in a quarter of a second**: filling a huge area on a 256×256 map froze the editor for 30–40 seconds; massive tile updates now take the same streaming path as map loading — instant viewport, background fill — with the water-animation bookkeeping batched instead of quadratic.
+- **Your scroll position stays put**: undo, redo, and giant fills no longer snap the view back to the map's top-left corner.
+- **Undo reports solved**: "paint bucket doesn't undo" traced to stale background-fill batches on 0.94.5–0.94.7 repainting pre-undo tiles over the restored map (data was always correct); 0.94.8's loading rework eliminated it, and full re-renders now rebuild layer caches from scratch as an extra safeguard.
 
-Earlier releases: **0.94.7** fixed the paint bucket, strict layer separation, region tools, playtest autosave, and a PIXI v8 blend-mode blackout under popular plugins; **0.94.5** took object-heavy maps from 30 to 180 FPS, added the built-in F10 frame profiler, unfroze LeTBS tactical battles, and fixed and accelerated Ultra Mode 7; **0.94.4** made the browser editor responsive with persistent Web Forge output and restored Windows test tooling; **0.94.3** added the browser-hosted editor and resilient deployment downloads; **0.94.2** added safer project persistence, reproducible project creation, deployment controls, asset optimization, AppImages, and the public MV compatibility runtime. See the [Changelog](CHANGELOG.md) for the complete history.
+Earlier releases: **0.94.8** made large maps load in a quarter of the time, ran water maps at full frame rate, fixed region-painting freezes and previews, and smoothed animation previews; **0.94.7** fixed the paint bucket, strict layer separation, region tools, playtest autosave, and a PIXI v8 blend-mode blackout under popular plugins; **0.94.5** took object-heavy maps from 30 to 180 FPS, added the built-in F10 frame profiler, unfroze LeTBS tactical battles, and fixed and accelerated Ultra Mode 7; **0.94.4** made the browser editor responsive with persistent Web Forge output and restored Windows test tooling; **0.94.3** added the browser-hosted editor and resilient deployment downloads; **0.94.2** added safer project persistence, reproducible project creation, deployment controls, asset optimization, AppImages, and the public MV compatibility runtime. See the [Changelog](CHANGELOG.md) for the complete history.
 
 ## Development Launchers
 
