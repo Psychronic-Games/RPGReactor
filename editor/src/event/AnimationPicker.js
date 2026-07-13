@@ -519,21 +519,35 @@ class AnimationPicker {
             stopBtn.disabled = false;
             stopBtn.style.opacity = '1';
 
-            this._spriteInterval = setInterval(() => {
+            // 15fps MV cadence paced by rAF (setInterval drifts and fires
+            // late under main-thread load, reading as juddery playback)
+            const STEP = 1000 / 15;
+            let last = performance.now();
+            let acc = 0;
+            const loop = () => {
                 if (gen !== this._loadGeneration) { stop(); return; }
-                renderFrame(currentFrame);
-                currentFrame++;
-                if (currentFrame >= animation.frames.length) {
-                    currentFrame = 0; // Loop
+                if (!isPlaying) return;
+                const now = performance.now();
+                acc += now - last;
+                last = now;
+                if (acc >= STEP) {
+                    const steps = Math.floor(acc / STEP);
+                    acc -= steps * STEP;
+                    renderFrame(currentFrame);
+                    currentFrame = (currentFrame + steps) % animation.frames.length;
                 }
-            }, 1000 / 15); // 15 FPS
+                this._spriteInterval = requestAnimationFrame(loop);
+            };
+            renderFrame(0);
+            currentFrame = 1 % animation.frames.length;
+            this._spriteInterval = requestAnimationFrame(loop);
         };
 
         const stop = () => {
             isPlaying = false;
             this._isPlaying = false;
             if (this._spriteInterval) {
-                clearInterval(this._spriteInterval);
+                cancelAnimationFrame(this._spriteInterval);
                 this._spriteInterval = null;
             }
             playBtn.disabled = false;
@@ -805,9 +819,9 @@ class AnimationPicker {
     }
 
     _stopPreview() {
-        // Stop sprite preview
+        // Stop sprite preview (rAF-paced)
         if (this._spriteInterval) {
-            clearInterval(this._spriteInterval);
+            cancelAnimationFrame(this._spriteInterval);
             this._spriteInterval = null;
         }
 

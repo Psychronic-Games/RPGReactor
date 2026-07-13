@@ -609,9 +609,9 @@ class MapEditor {
             const index = 5 * layerSize + y * width + x;
             data[index] = selectedRegion;
 
-            // Refresh the region overlay if it's visible
+            // Refresh only the painted cell in the overlay
             if (this.regionManager.enabled) {
-                this.regionManager.renderRegions();
+                this.regionManager.updateRegionCells([{ x, y }]);
             }
             return;
         }
@@ -982,14 +982,16 @@ class MapEditor {
         const { width, height, data } = this.tilemapManager.currentMap;
         const layerSize = width * height;
         const region = this.regionManager.selectedRegion;
+        const painted = [];
         for (let y = Math.max(0, minY); y <= Math.min(height - 1, maxY); y++) {
             for (let x = Math.max(0, minX); x <= Math.min(width - 1, maxX); x++) {
                 if (includeFn && !includeFn(x, y)) continue;
                 data[5 * layerSize + y * width + x] = region;
+                painted.push({ x, y });
             }
         }
         if (this.regionManager.enabled) {
-            this.regionManager.renderRegions();
+            this.regionManager.updateRegionCells(painted);
         }
     }
 
@@ -1329,19 +1331,21 @@ class MapEditor {
             const fillRegion = this.regionManager.selectedRegion;
             if (targetRegion === fillRegion) return;
             const stack = [{ x: startX, y: startY }];
+            const filled = [];
             while (stack.length > 0) {
                 const { x, y } = stack.pop();
                 if (x < 0 || x >= width || y < 0 || y >= height) continue;
                 const index = 5 * layerSize + y * width + x;
                 if (data[index] !== targetRegion) continue;
                 data[index] = fillRegion;
+                filled.push({ x, y });
                 stack.push({ x: x + 1, y });
                 stack.push({ x: x - 1, y });
                 stack.push({ x, y: y + 1 });
                 stack.push({ x, y: y - 1 });
             }
             if (this.regionManager.enabled) {
-                this.regionManager.renderRegions();
+                this.regionManager.updateRegionCells(filled);
             }
             return;
         }
@@ -1523,6 +1527,23 @@ class MapEditor {
                 return;
             }
 
+            // Region area preview: show the region color over the rectangle
+            // (the tile-preview path below has nothing to draw for regions)
+            if (this.tilesetPaletteViewer.currentLayer === 'R') {
+                if (this.regionManager && this.regionManager.selectedTiles &&
+                    this.regionManager.selectedTiles.length > 0) {
+                    const color = this.regionManager.regionColors[this.regionManager.selectedRegion];
+                    this.previewLayer.rect(
+                        minX * tileWidth,
+                        minY * tileHeight,
+                        (maxX - minX + 1) * tileWidth,
+                        (maxY - minY + 1) * tileHeight
+                    );
+                    this.previewLayer.fill({ color: color, alpha: 0.4 });
+                }
+                return;
+            }
+
             // Try to draw tile preview
             try {
                 const selectedTiles = this.tilesetPaletteViewer.selectedTiles;
@@ -1585,6 +1606,31 @@ class MapEditor {
                             this.previewLayer.addChild(borderGraphics);
                         }
                     }
+                }
+                return;
+            }
+
+            // Region area preview: colored cells inside the radius, with a
+            // white cell outline (there was NO preview at all for regions —
+            // the tile-preview path below has nothing to draw for them)
+            if (this.tilesetPaletteViewer.currentLayer === 'R') {
+                if (this.regionManager && this.regionManager.selectedTiles &&
+                    this.regionManager.selectedTiles.length > 0) {
+                    const color = this.regionManager.regionColors[this.regionManager.selectedRegion];
+                    const minX = Math.floor(centerX - radius);
+                    const maxX = Math.ceil(centerX + radius);
+                    const minY = Math.floor(centerY - radius);
+                    const maxY = Math.ceil(centerY + radius);
+                    for (let y = minY; y <= maxY; y++) {
+                        for (let x = minX; x <= maxX; x++) {
+                            const dist = Math.sqrt(Math.pow(x - centerX, 2) + Math.pow(y - centerY, 2));
+                            if (dist <= radius) {
+                                this.previewLayer.rect(x * tileWidth, y * tileHeight, tileWidth, tileHeight);
+                            }
+                        }
+                    }
+                    this.previewLayer.fill({ color: color, alpha: 0.4 });
+                    this.previewLayer.stroke({ width: 1, color: 0xffffff, alpha: 0.5 });
                 }
                 return;
             }

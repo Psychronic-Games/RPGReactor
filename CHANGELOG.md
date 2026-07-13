@@ -14,6 +14,9 @@ This root changelog summarizes public release progress for GitHub; larger releas
 
 - Editor: large maps load and edit much faster — a 256×256 map (Star Shift Rebellion Map 850) now fully loads in ~2.5s instead of ~10s, and the editor runs at full frame rate afterwards instead of stuttering on maps with water. Off-viewport tiles now stream into detached containers (the growing half-loaded map was re-rendered every frame while loading, which is where the time went), and animated water tiles moved to small dedicated overlay layers so the big static layers can always be cached as textures.
 - Editor: repainting shadows no longer stacks invisible duplicate shadow sprites that darkened the quadrants slightly with every paint.
+- Editor: animation previews (the Animations database page, the animation picker, and the event editor's picker) play smoothly — playback was paced by a timer that drifted and fired late whenever the editor was busy, reading as judder; it now steps at the exact MV 15fps cadence against the display clock.
+- Editor: region painting no longer freezes on large maps — bucket-filling a region across a 256×256 map stalled ~5 seconds because the whole overlay (a fresh number label per cell) was rebuilt after every paint; region cells now share one texture per region ID and paints update only the touched cells.
+- Editor: the rectangle and circle tools show a live region-color preview while dragging on the Regions tab (the circle tool previously showed no preview at all).
 
 ## [0.94.7] - 2026-07-13
 

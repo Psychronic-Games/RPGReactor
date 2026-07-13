@@ -3010,15 +3010,32 @@ class DatabaseAnimationEditor {
             if (animationInterval) return; // Already playing
 
             currentFrame = 0;
-            animationInterval = setInterval(() => {
-                renderFrame(currentFrame);
-                playSE(currentFrame);
-                currentFrame++;
-
-                if (currentFrame >= animation.frames.length) {
-                    currentFrame = 0; // Loop
+            // 15fps MV cadence paced by rAF (setInterval drifts and fires
+            // late under main-thread load, reading as juddery playback).
+            // Elapsed time advances the frame counter, and SE cues fire for
+            // every frame stepped over so audio stays in sync.
+            const STEP = 1000 / 15;
+            let last = performance.now();
+            let acc = 0;
+            const tick = () => {
+                const now = performance.now();
+                acc += now - last;
+                last = now;
+                if (acc >= STEP) {
+                    let steps = Math.floor(acc / STEP);
+                    acc -= steps * STEP;
+                    while (steps-- > 0) {
+                        renderFrame(currentFrame);
+                        playSE(currentFrame);
+                        currentFrame++;
+                        if (currentFrame >= animation.frames.length) {
+                            currentFrame = 0; // Loop
+                        }
+                    }
                 }
-            }, 1000 / 15); // 15 FPS (RPG Maker default)
+                animationInterval = requestAnimationFrame(tick);
+            };
+            animationInterval = requestAnimationFrame(tick);
 
             playBtn.disabled = true;
             playBtn.style.opacity = '0.5';
@@ -3029,7 +3046,7 @@ class DatabaseAnimationEditor {
         // Stop animation
         const stop = () => {
             if (animationInterval) {
-                clearInterval(animationInterval);
+                cancelAnimationFrame(animationInterval);
                 animationInterval = null;
             }
 
@@ -3251,7 +3268,7 @@ class DatabaseAnimationEditor {
                 frameItem.addEventListener('click', (e) => {
                     // Stop animation playback if running so the user can browse.
                     if (animationInterval) {
-                        clearInterval(animationInterval);
+                        cancelAnimationFrame(animationInterval);
                         animationInterval = null;
                         playBtn.disabled = false;
                         playBtn.style.opacity = '1';

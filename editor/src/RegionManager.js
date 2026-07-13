@@ -71,7 +71,56 @@ class RegionManager {
         this.tilemapManager.container.addChild(this.regionLayer);
     }
 
-    // Render regions on the map
+    // One shared texture per region id (colored fill + border + number),
+    // rendered once to a canvas. The old per-cell PIXI.Graphics + PIXI.Text
+    // pair rasterized a fresh glyph texture for EVERY cell — a fully
+    // regioned 256×256 map froze for ~5s on every overlay rebuild.
+    _regionTileTexture(regionId) {
+        if (!this._tileTextures) this._tileTextures = new Map();
+        let tex = this._tileTextures.get(regionId);
+        if (tex) return tex;
+
+        const TW = this.tilemapManager.TILE_WIDTH;
+        const TH = this.tilemapManager.TILE_HEIGHT;
+        const canvas = document.createElement('canvas');
+        canvas.width = TW;
+        canvas.height = TH;
+        const c = canvas.getContext('2d');
+        const color = '#' + this.regionColors[regionId].toString(16).padStart(6, '0');
+        c.globalAlpha = 0.4;
+        c.fillStyle = color;
+        c.fillRect(0, 0, TW, TH);
+        c.globalAlpha = 0.8;
+        c.strokeStyle = color;
+        c.lineWidth = 1;
+        c.strokeRect(0.5, 0.5, TW - 1, TH - 1);
+        c.globalAlpha = 1;
+        c.font = 'bold 18px Arial';
+        c.textAlign = 'center';
+        c.textBaseline = 'middle';
+        c.strokeStyle = '#000';
+        c.lineWidth = 4;
+        c.lineJoin = 'round';
+        c.miterLimit = 2;
+        c.strokeText(String(regionId), TW / 2, TH / 2);
+        c.fillStyle = '#fff';
+        c.fillText(String(regionId), TW / 2, TH / 2);
+
+        tex = PIXI.Texture.from(canvas);
+        this._tileTextures.set(regionId, tex);
+        return tex;
+    }
+
+    _addCellSprite(x, y, regionId) {
+        const sprite = new PIXI.Sprite(this._regionTileTexture(regionId));
+        sprite.x = x * this.tilemapManager.TILE_WIDTH;
+        sprite.y = y * this.tilemapManager.TILE_HEIGHT;
+        sprite.eventMode = 'none';
+        this.regionLayer.addChild(sprite);
+        this._cellSprites.set(y * this.tilemapManager.currentMap.width + x, sprite);
+    }
+
+    // Render regions on the map (full rebuild — map load / overlay toggle)
     renderRegions() {
         if (!this.regionLayer || !this.tilemapManager.currentMap) {
             return;
@@ -79,49 +128,45 @@ class RegionManager {
 
         // Clear existing region sprites
         this.regionLayer.removeChildren();
+        this._cellSprites = new Map();
 
         const { width, height, data } = this.tilemapManager.currentMap;
         const layerSize = width * height;
-        const TILE_WIDTH = this.tilemapManager.TILE_WIDTH;
-        const TILE_HEIGHT = this.tilemapManager.TILE_HEIGHT;
 
         // Layer 5 contains region data
         for (let y = 0; y < height; y++) {
             for (let x = 0; x < width; x++) {
-                const index = 5 * layerSize + y * width + x;
-                const regionId = data[index];
-
+                const regionId = data[5 * layerSize + y * width + x];
                 if (regionId > 0 && regionId <= 255) {
-                    // Create colored rectangle for region
-                    const regionGraphic = new PIXI.Graphics();
-                    const color = this.regionColors[regionId];
-
-                    // Draw filled rectangle
-                    regionGraphic.rect(x * TILE_WIDTH, y * TILE_HEIGHT, TILE_WIDTH, TILE_HEIGHT);
-                    regionGraphic.fill({ color: color, alpha: 0.4 });
-
-                    // Draw border
-                    regionGraphic.stroke({ color: color, width: 1, alpha: 0.8 });
-
-                    // Add region number text (bigger and fully opaque)
-                    const text = new PIXI.Text({
-                        text: regionId.toString(),
-                        style: {
-                            fontFamily: 'Arial',
-                            fontSize: 18,
-                            fontWeight: 'bold',
-                            fill: 0xFFFFFF,
-                            stroke: { color: 0x000000, width: 4, join: 'round' }
-                        }
-                    });
-                    text.anchor.set(0.5, 0.5);
-                    text.x = x * TILE_WIDTH + TILE_WIDTH / 2;
-                    text.y = y * TILE_HEIGHT + TILE_HEIGHT / 2;
-                    text.alpha = 1.0; // Fully opaque text
-
-                    this.regionLayer.addChild(regionGraphic);
-                    this.regionLayer.addChild(text);
+                    this._addCellSprite(x, y, regionId);
                 }
+            }
+        }
+    }
+
+    // Refresh only the given cells ({x, y}) from map data — the paint tools
+    // call this instead of rebuilding the whole overlay per stroke.
+    updateRegionCells(positions) {
+        if (!this.regionLayer || !this.tilemapManager.currentMap) return;
+        if (!this._cellSprites) {
+            this.renderRegions();
+            return;
+        }
+        const { width, height, data } = this.tilemapManager.currentMap;
+        const layerSize = width * height;
+        for (const pos of positions) {
+            const { x, y } = pos;
+            if (x < 0 || x >= width || y < 0 || y >= height) continue;
+            const key = y * width + x;
+            const old = this._cellSprites.get(key);
+            if (old) {
+                this.regionLayer.removeChild(old);
+                old.destroy();
+                this._cellSprites.delete(key);
+            }
+            const regionId = data[5 * layerSize + key];
+            if (regionId > 0 && regionId <= 255) {
+                this._addCellSprite(x, y, regionId);
             }
         }
     }
@@ -300,6 +345,13 @@ class RegionManager {
         if (this.regionLayer) {
             this.regionLayer.destroy({ children: true });
             this.regionLayer = null;
+        }
+        this._cellSprites = null;
+        if (this._tileTextures) {
+            for (const tex of this._tileTextures.values()) {
+                try { tex.destroy(true); } catch (e) {}
+            }
+            this._tileTextures = null;
         }
     }
 }

@@ -128,7 +128,7 @@ class AnimationPickerModal {
 
         // --- Playback ---
         const stopPlayback = () => {
-            if (playTimer) { clearInterval(playTimer); playTimer = null; }
+            if (playTimer) { cancelAnimationFrame(playTimer); playTimer = null; }
             if (fx.raf) { cancelAnimationFrame(fx.raf); fx.raf = null; }
             if (fx.handle) { try { fx.handle.stop(); } catch (e) {} fx.handle = null; }
             if (fx.gl) {
@@ -195,10 +195,30 @@ class AnimationPickerModal {
             const token = anim;
             Promise.all([load(anim.animation1Name, 1), load(anim.animation2Name, 2)]).then(() => {
                 if (playAnim !== token) return; // selection changed while loading
-                playTimer = setInterval(() => {
-                    renderPlayFrame();
-                    playFrame++;
-                }, 1000 / 15);
+                // 15fps MV cadence paced by rAF: a setInterval at 66.7ms
+                // drifts and fires late whenever the main thread is busy,
+                // which read as juddery playback. Elapsed time advances the
+                // frame counter, so a hiccup skips frames instead of slowing
+                // the whole animation down.
+                const STEP = 1000 / 15;
+                let last = performance.now();
+                let acc = 0;
+                const loop = () => {
+                    if (playAnim !== token) return;
+                    const now = performance.now();
+                    acc += now - last;
+                    last = now;
+                    if (acc >= STEP) {
+                        const steps = Math.floor(acc / STEP);
+                        acc -= steps * STEP;
+                        renderPlayFrame();
+                        playFrame += steps;
+                    }
+                    playTimer = requestAnimationFrame(loop);
+                };
+                renderPlayFrame();
+                playFrame = 1;
+                playTimer = requestAnimationFrame(loop);
             });
         };
 
