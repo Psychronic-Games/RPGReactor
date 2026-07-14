@@ -120,7 +120,7 @@ class DatabaseClassEditor {
                 <div class="param-curve-cell" data-param-idx="${idx}" style="display: flex; flex-direction: column; cursor: pointer; padding: 4px; border-radius: 4px; transition: background 0.15s;" title="Click to edit ${name} curve">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
                         <label class="database-field-label" style="font-size: 10px; color: ${color}; font-weight: bold;">${name}</label>
-                        <span style="font-size: 9px; color: var(--color-text-muted);">Lv1: ${values[0] || 0} → Lv99: ${values[98] || 0}</span>
+                        <span style="font-size: 9px; color: var(--color-text-muted);">Lv1: ${values[1] || 0} → Lv99: ${values[99] || 0}</span>
                     </div>
                     <canvas id="${canvasId}" width="200" height="50"
                             style="width: 100%; height: 50px; border: 1px solid var(--color-border); background: #0a0a0a; border-radius: 4px;"
@@ -175,8 +175,8 @@ class DatabaseClassEditor {
 
         // Param-specific sane bounds. HP/MP go high; other stats stay smaller.
         const maxAllowed = (paramIdx === 0) ? 9999 : (paramIdx === 1) ? 9999 : 999;
-        const initialLv1 = current[0] || 1;
-        const initialLv99 = current[98] || 1;
+        const initialLv1 = current[1] || 1;
+        const initialLv99 = current[99] || 1;
         // Best-fit exponent from existing curve so the slider starts where the curve already lives.
         const initialExponent = this._inferCurveExponent(current);
 
@@ -318,13 +318,17 @@ class DatabaseClassEditor {
      * Exponent < 1 = fast early growth, = 1 linear, > 1 slow early / fast late.
      */
     _generateParamCurve(lv1, lv99, exponent, count) {
+        // MZ params arrays are indexed BY LEVEL: [level] for level 1..99,
+        // with [0] an unread placeholder. The old 0-based mapping put the
+        // Lv1 value in the placeholder and read every level one step low.
         const out = new Array(count);
-        const last = count - 2; // Map level index 0..98 across 0..98/98 = 0..1
-        for (let i = 0; i < count; i++) {
-            const t = last > 0 ? Math.min(1, i / last) : 0;
+        const lastLevel = Math.max(2, count - 1); // 99 for the standard 100-entry array
+        for (let level = 1; level < count; level++) {
+            const t = Math.min(1, (level - 1) / (lastLevel - 1));
             const v = lv1 + (lv99 - lv1) * Math.pow(t, exponent);
-            out[i] = Math.max(1, Math.round(v));
+            out[level] = Math.max(1, Math.round(v));
         }
+        out[0] = out[1]; // placeholder mirrors Lv1, like MZ writes it
         return out;
     }
 
@@ -334,10 +338,10 @@ class DatabaseClassEditor {
      */
     _inferCurveExponent(values) {
         if (!values || values.length < 3) return 1;
-        const lv1 = values[0];
+        const lv1 = values[1];
         const lv99 = values[values.length - 1];
         if (lv99 === lv1) return 1;
-        const mid = values[Math.floor((values.length - 1) / 2)];
+        const mid = values[Math.floor(values.length / 2)];
         // mid = lv1 + (lv99 - lv1) * 0.5^exponent  =>  0.5^exponent = (mid-lv1)/(lv99-lv1)
         const ratio = (mid - lv1) / (lv99 - lv1);
         if (ratio <= 0 || ratio >= 1) return 1;

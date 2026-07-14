@@ -7,6 +7,19 @@ if (typeof PIXI !== 'undefined' && PIXI.TextureStyle) {
 }
 
 class TilemapManager {
+    // Atomic write for project data: write a temp sibling then rename over
+    // the destination, so a crash/kill/full-disk mid-write can never destroy
+    // the previous good file. Falls back to a plain write when the fs
+    // implementation has no renameSync (test mocks, web host shims).
+    _writeFileAtomic(fs, filePath, data, options) {
+        const atomic = (typeof window !== 'undefined' && window.RRWriteFileAtomicSync) || null;
+        if (atomic && fs && typeof fs.renameSync === 'function') {
+            atomic(fs, filePath, data, options);
+        } else {
+            fs.writeFileSync(filePath, data, options);
+        }
+    }
+
     constructor(app, projectPath, databaseManager) {
         this.app = app;
         this.projectPath = projectPath;
@@ -428,14 +441,18 @@ class TilemapManager {
         let dragStart = { x: 0, y: 0 };
         const canvasContainer = document.getElementById('canvas-container');
 
-        // Middle mouse button or Shift+drag for panning
+        // Middle mouse button or Shift+drag for panning. The view scrolls by
+        // moving the PIXI container (like the custom scrollbars do) —
+        // #canvas-container is overflow:hidden and the canvas is cropped to
+        // the viewport, so DOM scrollLeft/scrollTop are pinned at 0 and
+        // panning through them silently did nothing.
         this.container.on('pointerdown', (event) => {
             // Check for middle mouse button or shift key
             if (event.data.button === 1 || event.data.originalEvent.shiftKey) {
                 isDragging = true;
                 dragStart = {
-                    x: event.data.global.x + canvasContainer.scrollLeft,
-                    y: event.data.global.y + canvasContainer.scrollTop
+                    x: event.data.global.x - this.container.x,
+                    y: event.data.global.y - this.container.y
                 };
                 event.stopPropagation(); // Prevent tile painting while panning
             }
@@ -443,9 +460,17 @@ class TilemapManager {
 
         this.container.on('pointermove', (event) => {
             if (isDragging) {
-                // Scroll the container element instead of moving the Pixi container
-                canvasContainer.scrollLeft = dragStart.x - event.data.global.x;
-                canvasContainer.scrollTop = dragStart.y - event.data.global.y;
+                this.container.x = event.data.global.x - dragStart.x;
+                this.container.y = event.data.global.y - dragStart.y;
+                // updateScrollbars clamps the position to the map bounds and
+                // repositions the thumbs; throttle to one update per frame.
+                if (!this.scrollbarUpdateScheduled) {
+                    this.scrollbarUpdateScheduled = true;
+                    requestAnimationFrame(() => {
+                        this.updateScrollbars();
+                        this.scrollbarUpdateScheduled = false;
+                    });
+                }
             }
         });
 
@@ -466,9 +491,15 @@ class TilemapManager {
         // Initialize custom scrollbars
         this.initCustomScrollbars(canvasContainer);
 
-        // Mouse wheel zoom
+        // Mouse wheel zoom — REPLACE any previous handler: setupPanning runs
+        // on every map load against the persistent #canvas-container, and
+        // stacked handlers compounded the zoom step (5 map loads made one
+        // wheel notch zoom ~1.6x and resize the renderer five times).
         if (canvasContainer) {
-            canvasContainer.addEventListener('wheel', (event) => {
+            if (canvasContainer.__rrWheelZoomHandler) {
+                canvasContainer.removeEventListener('wheel', canvasContainer.__rrWheelZoomHandler);
+            }
+            canvasContainer.__rrWheelZoomHandler = (event) => {
                 event.preventDefault();
                 if (!this.currentMap) return;
 
@@ -548,11 +579,16 @@ class TilemapManager {
 
                     setTimeout(() => this.resumeLazyLoading(), 150);
                 }
-            }, { passive: false });
+            };
+            canvasContainer.addEventListener('wheel', canvasContainer.__rrWheelZoomHandler, { passive: false });
         }
 
         // Handle window resize - adjust zoom to maintain minimum constraints
-        window.addEventListener('resize', () => {
+        // (same dedupe: one live handler regardless of how many maps loaded)
+        if (window.__rrTilemapResizeHandler) {
+            window.removeEventListener('resize', window.__rrTilemapResizeHandler);
+        }
+        window.__rrTilemapResizeHandler = () => {
             if (!this.currentMap || !this.container) return;
             if (this.applyMinScaleClamp()) {
                 // Container scale changed; reset position so the map stays anchored.
@@ -563,7 +599,8 @@ class TilemapManager {
             // Run AFTER ProjectController's resize handler resets renderer to full
             // canvas-container size — defer with a microtask so our crop wins.
             Promise.resolve().then(() => this.applyViewportCrop());
-        });
+        };
+        window.addEventListener('resize', window.__rrTilemapResizeHandler);
     }
 
     /**
@@ -687,7 +724,16 @@ class TilemapManager {
             e.preventDefault();
         });
 
-        document.addEventListener('mousemove', (e) => {
+        // Replace the previous drag handlers for this direction — the thumbs
+        // are recreated on every map load and the old document-level
+        // listeners accumulated for the whole session otherwise.
+        const handlerKey = '__rrScrollDrag_' + direction;
+        if (document[handlerKey]) {
+            document.removeEventListener('mousemove', document[handlerKey].move);
+            document.removeEventListener('mouseup', document[handlerKey].up);
+        }
+
+        const onMove = (e) => {
             if (!isDragging) return;
 
             const currentPos = direction === 'horizontal' ? e.clientX : e.clientY;
@@ -720,11 +766,13 @@ class TilemapManager {
                     this.scrollbarUpdateScheduled = false;
                 });
             }
-        });
-
-        document.addEventListener('mouseup', () => {
+        };
+        const onUp = () => {
             isDragging = false;
-        });
+        };
+        document[handlerKey] = { move: onMove, up: onUp };
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('mouseup', onUp);
     }
 
     updateScrollbars() {
@@ -1543,13 +1591,18 @@ class TilemapManager {
         pattern.rect(0, tileSize, tileSize, tileSize).fill(darkColor);
         pattern.rect(tileSize, tileSize, tileSize, tileSize).fill(lightColor);
 
-        // Render the small pattern to a texture, then tile it
-        const renderTexture = PIXI.RenderTexture.create({ width: patternSize, height: patternSize });
-        this.app.renderer.render({ container: pattern, target: renderTexture });
+        // Render the small pattern to a texture ONCE and reuse it — render
+        // textures are exempt from PIXI's texture GC, so allocating a fresh
+        // one per full re-render (every undo/redo/large-fill fallback)
+        // leaked a GPU framebuffer each time.
+        if (!this._checkerboardTexture) {
+            this._checkerboardTexture = PIXI.RenderTexture.create({ width: patternSize, height: patternSize });
+            this.app.renderer.render({ container: pattern, target: this._checkerboardTexture });
+        }
         pattern.destroy();
 
         const checkerboard = new PIXI.TilingSprite({
-            texture: renderTexture,
+            texture: this._checkerboardTexture,
             width: pixelWidth,
             height: pixelHeight
         });
@@ -2314,7 +2367,7 @@ class TilemapManager {
             const mapDataToSave = this.getPersistedMapData();
 
             // Write map data to file with formatting
-            this.fs.writeFileSync(mapPath, JSON.stringify(mapDataToSave, null, 2), 'utf8');
+            this._writeFileAtomic(this.fs, mapPath, JSON.stringify(mapDataToSave, null, 2), 'utf8');
             this.captureSavedMapState();
             this.bumpVersionId();
 
@@ -2335,7 +2388,7 @@ class TilemapManager {
             const systemPath = this.path.join(this.projectPath, 'data', 'System.json');
             const system = JSON.parse(this.fs.readFileSync(systemPath, 'utf8'));
             system.versionId = Math.floor(Math.random() * 100000000);
-            this.fs.writeFileSync(systemPath, JSON.stringify(system, null, 2));
+            this._writeFileAtomic(this.fs, systemPath, JSON.stringify(system, null, 2));
         } catch (error) {
             console.error('Error bumping versionId:', error);
         }

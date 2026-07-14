@@ -796,8 +796,11 @@ class EventManager {
 
     // Start dragging an event
     startDragging(event, pointerEvent) {
-        // Save state for undo (before moving the event)
-        this.saveState();
+        // Undo state is captured lazily on the FIRST actual move — every
+        // left-click on an event lands here, and an unconditional saveState
+        // wiped the redo stack and pushed a full event-list snapshot even
+        // when the event never moved.
+        this._dragStateSaved = false;
 
         this.isDragging = true;
         this.draggedEvent = event;
@@ -839,6 +842,12 @@ class EventManager {
                 // Check if there's another event at the target position (but not the dragged one)
                 const existingEvent = this.getEventAt(newTileX, newTileY);
                 if (!existingEvent || existingEvent.id === this.draggedEvent.id) {
+                    // First real movement: capture the pre-drag state for
+                    // undo (the event still holds its original position here)
+                    if (!this._dragStateSaved) {
+                        this._dragStateSaved = true;
+                        this.saveState();
+                    }
                     // Update event position
                     this.draggedEvent.x = newTileX;
                     this.draggedEvent.y = newTileY;

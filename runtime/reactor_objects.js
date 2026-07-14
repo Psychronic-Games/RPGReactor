@@ -9177,7 +9177,7 @@ Game_Event.prototype.isCollidedWithCharacters = function(x, y) {
 
 Game_Event.prototype.isCollidedWithEvents = function(x, y) {
     const events = $gameMap.eventsXyNt(x, y);
-    return events.length > 0;
+    return events.some(event => event.isNormalPriority());
 };
 
 Game_Event.prototype.isCollidedWithPlayerCharacters = function(x, y) {

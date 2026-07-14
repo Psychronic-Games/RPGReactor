@@ -415,9 +415,13 @@ class ShowChoicesCommandEditor {
         // Create branches for each choice
         for (let i = 0; i < filteredChoices.length; i++) {
             // When [Choice N]
+            // Branch markers sit at the SAME indent as the 102 header (MZ
+            // format); the interpreter keys its branch state by indent, so a
+            // 402 at indent 1 checked _branch[1] (never set) and skipped the
+            // picked choice's body every time.
             commands.push({
                 code: 402,
-                indent: 1,
+                indent: 0,
                 parameters: [i]
             });
 
@@ -427,7 +431,7 @@ class ShowChoicesCommandEditor {
             if (i === filteredChoices.length - 1 && this.cancelType === -1) {
                 commands.push({
                     code: 403,
-                    indent: 1,
+                    indent: 0,
                     parameters: []
                 });
             }

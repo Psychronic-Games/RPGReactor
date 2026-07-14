@@ -145,6 +145,10 @@ class DatabaseEditorUI {
     }
 
     closeDatabaseViewer() {
+        // Whatever path closed the viewer, the Cancel baseline must not
+        // leak into the next session (the once-per-session guard in
+        // takeDatabaseSnapshot would keep a stale one alive).
+        this._dataSnapshot = null;
         const viewer = document.getElementById('database-viewer');
 
         if (this.animationEditor && this.animationEditor._currentEffekseerStop) {
@@ -182,6 +186,16 @@ class DatabaseEditorUI {
     }
 
     takeDatabaseSnapshot() {
+        // Baseline for Cancel: capture once per viewer session. This runs on
+        // every nav-category click, and retaking it there overwrote the
+        // baseline with the already-edited state — Cancel then kept every
+        // edit made before the last category switch, and the next save wrote
+        // those "cancelled" edits to disk. (Apply intentionally refreshes
+        // the baseline by assigning _dataSnapshot directly after saving;
+        // OK/close null it so the next open captures fresh.) It also
+        // deep-copies the ENTIRE database, so once per session is the only
+        // affordable cadence.
+        if (this._dataSnapshot) return;
         this._dataSnapshot = JSON.parse(JSON.stringify(this.databaseManager.data));
     }
 

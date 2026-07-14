@@ -325,8 +325,8 @@ class DatabaseTraitEditor {
                 <input type="radio" name="trait-type" value="31" ${trait.code === 31 ? 'checked' : ''}>
                 <span style="color: var(--color-text-strong); min-width: 110px;">Attack Element</span>
                 <select class="element-select" data-code="31" style="flex: 1; padding: 6px; background: var(--color-bg-button); border: 1px solid var(--color-bg-button-hover); color: var(--color-text-strong); border-radius: 4px;">
-                    ${(elements || []).filter((e, i) => i >= 0 && e).map((elem, idx) =>
-                        `<option value="${idx < 0 ? -1 : idx}" ${trait.code === 31 && trait.dataId === idx ? 'selected' : ''}>${elem}</option>`
+                    ${(elements || []).map((elem, idx) =>
+                        elem ? `<option value="${idx}" ${trait.code === 31 && trait.dataId === idx ? 'selected' : ''}>${elem}</option>` : ''
                     ).join('')}
                 </select>
             </div>

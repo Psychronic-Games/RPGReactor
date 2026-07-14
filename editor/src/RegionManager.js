@@ -120,9 +120,25 @@ class RegionManager {
         this._cellSprites.set(y * this.tilemapManager.currentMap.width + x, sprite);
     }
 
+    // The tilemap container is destroyed (with children) on every map load,
+    // which silently kills our layer while `enabled` stays true — sprites
+    // added to the destroyed husk render nowhere. Recreate on demand.
+    _ensureLiveLayer() {
+        if (this.regionLayer && !this.regionLayer.destroyed &&
+            this.regionLayer.parent === this.tilemapManager.container) {
+            return;
+        }
+        this.createRegionLayer();
+        this.regionLayer.visible = this.enabled;
+    }
+
     // Render regions on the map (full rebuild — map load / overlay toggle)
     renderRegions() {
-        if (!this.regionLayer || !this.tilemapManager.currentMap) {
+        if (!this.tilemapManager.currentMap) {
+            return;
+        }
+        this._ensureLiveLayer();
+        if (!this.regionLayer) {
             return;
         }
 
@@ -147,8 +163,10 @@ class RegionManager {
     // Refresh only the given cells ({x, y}) from map data — the paint tools
     // call this instead of rebuilding the whole overlay per stroke.
     updateRegionCells(positions) {
-        if (!this.regionLayer || !this.tilemapManager.currentMap) return;
-        if (!this._cellSprites) {
+        if (!this.tilemapManager.currentMap) return;
+        const hadLiveLayer = this.regionLayer && !this.regionLayer.destroyed &&
+            this.regionLayer.parent === this.tilemapManager.container;
+        if (!hadLiveLayer || !this._cellSprites) {
             this.renderRegions();
             return;
         }

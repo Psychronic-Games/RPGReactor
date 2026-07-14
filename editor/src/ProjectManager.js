@@ -2,6 +2,19 @@
 // Handles project creation, loading, and saving
 
 class ProjectManager {
+    // Atomic write for project data: write a temp sibling then rename over
+    // the destination, so a crash/kill/full-disk mid-write can never destroy
+    // the previous good file. Falls back to a plain write when the fs
+    // implementation has no renameSync (test mocks, web host shims).
+    _writeFileAtomic(fs, filePath, data, options) {
+        const atomic = (typeof window !== 'undefined' && window.RRWriteFileAtomicSync) || null;
+        if (atomic && fs && typeof fs.renameSync === 'function') {
+            atomic(fs, filePath, data, options);
+        } else {
+            fs.writeFileSync(filePath, data, options);
+        }
+    }
+
     constructor() {
         this.fs = null;
         this.path = null;
@@ -760,7 +773,7 @@ class ProjectManager {
             // Don't save the path in the file
             const { path, maps, ...dataToSave } = projectData;
 
-            this.fs.writeFileSync(projectFilePath, JSON.stringify(dataToSave, null, 2));
+            this._writeFileAtomic(this.fs, projectFilePath, JSON.stringify(dataToSave, null, 2));
 
             // Save MapInfos.json if maps data exists
             if (maps) {
@@ -785,7 +798,7 @@ class ProjectManager {
 
         try {
             const mapInfosPath = this.path.join(projectPath, 'data', 'MapInfos.json');
-            this.fs.writeFileSync(mapInfosPath, JSON.stringify(mapsData, null, 0)); // No formatting for RPG Maker compatibility
+            this._writeFileAtomic(this.fs, mapInfosPath, JSON.stringify(mapsData, null, 0)); // No formatting for RPG Maker compatibility
             console.log('MapInfos.json saved successfully!');
             return true;
         } catch (error) {

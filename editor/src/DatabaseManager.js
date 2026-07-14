@@ -2,6 +2,19 @@
 // Handles loading and managing all database JSON files
 
 class DatabaseManager {
+    // Atomic write for project data: write a temp sibling then rename over
+    // the destination, so a crash/kill/full-disk mid-write can never destroy
+    // the previous good file. Falls back to a plain write when the fs
+    // implementation has no renameSync (test mocks, web host shims).
+    _writeFileAtomic(fs, filePath, data, options) {
+        const atomic = (typeof window !== 'undefined' && window.RRWriteFileAtomicSync) || null;
+        if (atomic && fs && typeof fs.renameSync === 'function') {
+            atomic(fs, filePath, data, options);
+        } else {
+            fs.writeFileSync(filePath, data, options);
+        }
+    }
+
     constructor() {
         this.fs = null;
         this.path = null;
@@ -133,14 +146,14 @@ class DatabaseManager {
                 data.versionId = DatabaseManager.newVersionId();
             }
 
-            this.fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
+            this._writeFileAtomic(this.fs, filePath, JSON.stringify(data, null, 2));
             const entry = this.dataFiles.find(([, file]) => file === filename);
             if (entry) this.captureSavedState(entry[0]);
 
             if (filename !== 'System.json' && this.data && this.data.system) {
                 this.data.system.versionId = DatabaseManager.newVersionId();
                 const systemPath = this.path.join(dataPath, 'System.json');
-                this.fs.writeFileSync(systemPath, JSON.stringify(this.data.system, null, 2));
+                this._writeFileAtomic(this.fs, systemPath, JSON.stringify(this.data.system, null, 2));
                 const systemEntry = this.dataFiles.find(([, file]) => file === 'System.json');
                 if (systemEntry) this.captureSavedState(systemEntry[0]);
             }

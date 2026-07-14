@@ -2,6 +2,19 @@
 // Handles project lifecycle: creating, opening, saving, closing projects
 
 class ProjectController {
+    // Atomic write for project data: write a temp sibling then rename over
+    // the destination, so a crash/kill/full-disk mid-write can never destroy
+    // the previous good file. Falls back to a plain write when the fs
+    // implementation has no renameSync (test mocks, web host shims).
+    _writeFileAtomic(fs, filePath, data, options) {
+        const atomic = (typeof window !== 'undefined' && window.RRWriteFileAtomicSync) || null;
+        if (atomic && fs && typeof fs.renameSync === 'function') {
+            atomic(fs, filePath, data, options);
+        } else {
+            fs.writeFileSync(filePath, data, options);
+        }
+    }
+
     constructor(projectManager, databaseManager, uiManager) {
         this.projectManager = projectManager;
         this.databaseManager = databaseManager;
@@ -885,8 +898,11 @@ class ProjectController {
             return;
         }
 
-        // Set same parent as target
+        // Set same parent as target and slot just before it — the fractional
+        // order is unambiguous under the stable sibling sort and gets
+        // renumbered to integers immediately below.
         draggedMap.parentId = targetMap.parentId;
+        draggedMap.order = targetMap.order - 0.5;
 
         // Recalculate order for all siblings
         this.recalculateMapOrder(targetMap.parentId);
@@ -908,9 +924,10 @@ class ProjectController {
             return;
         }
 
-        // Set same parent as target
+        // Set same parent as target and slot just after it (fractional order
+        // avoids ties with the existing next sibling before renumbering)
         draggedMap.parentId = targetMap.parentId;
-        draggedMap.order = targetMap.order + 1;
+        draggedMap.order = targetMap.order + 0.5;
 
         // Recalculate order for all siblings
         this.recalculateMapOrder(targetMap.parentId);
@@ -2019,7 +2036,7 @@ class ProjectController {
             const dataToSave = { ...mapData };
             delete dataToSave.id;
             delete dataToSave.name;
-            fs.writeFileSync(mapPath, JSON.stringify(dataToSave, null, 2), 'utf8');
+            this._writeFileAtomic(fs, mapPath, JSON.stringify(dataToSave, null, 2), 'utf8');
             this.bumpVersionId();
             return true;
         } catch (error) {
@@ -2041,7 +2058,7 @@ class ProjectController {
             const systemPath = path.join(this.currentProject.path, 'data', 'System.json');
             const system = JSON.parse(fs.readFileSync(systemPath, 'utf8'));
             system.versionId = Math.floor(Math.random() * 100000000);
-            fs.writeFileSync(systemPath, JSON.stringify(system, null, 2));
+            this._writeFileAtomic(fs, systemPath, JSON.stringify(system, null, 2));
         } catch (error) {
             console.error('Error bumping versionId:', error);
         }
@@ -2350,7 +2367,7 @@ class ProjectController {
             }
 
             const mapPath = path.join(this.currentProject.path, 'data', `Map${String(newMapId).padStart(3, '0')}.json`);
-            fs.writeFileSync(mapPath, JSON.stringify(newMapData));
+            this._writeFileAtomic(fs, mapPath, JSON.stringify(newMapData));
             this.bumpVersionId();
 
             if (!this.currentProject.maps) {

@@ -1118,10 +1118,10 @@ class EventCommandList {
                 description = `${params[0]} = ${params[1] === 0 ? 'ON' : 'OFF'}`;
                 break;
             case 125: {
-                // Change Gold
+                // Change Gold: [operation, operandType, operand] (MZ order)
                 const operation = params[0] === 0 ? '+' : '-';
-                const operand = params[1] || 0;
-                const operandType = params[2] || 0;
+                const operandType = params[1] || 0;
+                const operand = params[2] || 0;
                 if (operandType === 1) {
                     // Variable
                     description = `${operation}${this._fmtVarBracket(operand)} gold`;
@@ -2131,6 +2131,24 @@ class EventCommandList {
     }
 
     /**
+     * Shift a freshly built (or pasted) command block so its first command
+     * sits at baseIndent, preserving the block's internal structure. MZ's
+     * interpreter routes branches by indent: a command inserted at indent 0
+     * inside an indent-1 branch body terminates skipBranch early and runs
+     * the rest of the branch even when the branch is inactive.
+     */
+    _rebaseInsertIndent(commands, baseIndent) {
+        if (!commands || commands.length === 0) return commands;
+        const delta = baseIndent - (commands[0].indent || 0);
+        if (delta !== 0) {
+            for (const cmd of commands) {
+                cmd.indent = Math.max(0, (cmd.indent || 0) + delta);
+            }
+        }
+        return commands;
+    }
+
+    /**
      * Command operations
      */
     newCommand(page, pageIndex) {
@@ -2150,6 +2168,19 @@ class EventCommandList {
             // Clamp so we never insert past the End command
             insertIndex = Math.min(insertIndex, page.list.length - 1);
 
+            // MZ indent rule: a new command adopts the indent of the row it
+            // is inserted after — one level deeper when that row opens a
+            // block (If/Loop/When/Else/battle-result branches).
+            let baseIndent = 0;
+            if (this.selectedIndices.length > 0) {
+                const anchor = page.list[Math.max(...this.selectedIndices)];
+                if (anchor && anchor.code !== 0) {
+                    const blockOpeners = [111, 112, 402, 403, 411, 601, 602, 603];
+                    baseIndent = (anchor.indent || 0) +
+                        (blockOpeners.includes(anchor.code) ? 1 : 0);
+                }
+            }
+
             const code = command.code;
 
             // For message commands, open the editor immediately
@@ -2157,6 +2188,7 @@ class EventCommandList {
                 this.messageEditor.show(null, (commands) => {
                     if (commands && commands.length > 0) {
                         // Insert all message commands (101 + 401s)
+                        this._rebaseInsertIndent(commands, baseIndent);
                         commands.forEach((cmd, i) => {
                             page.list.splice(insertIndex + i, 0, cmd);
                         });
@@ -2172,6 +2204,7 @@ class EventCommandList {
                 this.choicesEditor.show(null, (commands) => {
                     if (commands && commands.length > 0) {
                         // Insert all choice commands (102 + 402s + 403 + 404)
+                        this._rebaseInsertIndent(commands, baseIndent);
                         commands.forEach((cmd, i) => {
                             page.list.splice(insertIndex + i, 0, cmd);
                         });
@@ -2187,6 +2220,7 @@ class EventCommandList {
                 this.commentEditor.show(null, null, null, (commands) => {
                     if (commands && commands.length > 0) {
                         // Insert all comment commands (108 + 408s)
+                        this._rebaseInsertIndent(commands, baseIndent);
                         commands.forEach((cmd, i) => {
                             page.list.splice(insertIndex + i, 0, cmd);
                         });
@@ -2202,6 +2236,7 @@ class EventCommandList {
                 this.conditionalBranchEditor.show(null, (commands) => {
                     if (commands && commands.length > 0) {
                         // Insert all branch commands (111 + 411 + 412)
+                        this._rebaseInsertIndent(commands, baseIndent);
                         commands.forEach((cmd, i) => {
                             page.list.splice(insertIndex + i, 0, cmd);
                         });
@@ -2216,7 +2251,7 @@ class EventCommandList {
             if (code === 112 || code === 413) {
                 this.loopEditor.show(null, (command) => {
                     if (command) {
-                        page.list.splice(insertIndex, 0, command);
+                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
                         this.selectedIndices = [insertIndex];
                         this.refreshCommandList(page, pageIndex);
                     }
@@ -2228,7 +2263,7 @@ class EventCommandList {
             if (code === 113) {
                 this.breakLoopEditor.show(null, (command) => {
                     if (command) {
-                        page.list.splice(insertIndex, 0, command);
+                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
                         this.selectedIndices = [insertIndex];
                         this.refreshCommandList(page, pageIndex);
                     }
@@ -2240,7 +2275,7 @@ class EventCommandList {
             if (code === 230) {
                 this.waitEditor.show(null, (command) => {
                     if (command) {
-                        page.list.splice(insertIndex, 0, command);
+                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
                         this.selectedIndices = [insertIndex];
                         this.refreshCommandList(page, pageIndex);
                     }
@@ -2252,7 +2287,7 @@ class EventCommandList {
             if (code === 121) {
                 this.switchesEditor.show(null, (command) => {
                     if (command) {
-                        page.list.splice(insertIndex, 0, command);
+                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
                         this.selectedIndices = [insertIndex];
                         this.refreshCommandList(page, pageIndex);
                     }
@@ -2264,7 +2299,7 @@ class EventCommandList {
             if (code === 122) {
                 this.variablesEditor.show(null, (command) => {
                     if (command) {
-                        page.list.splice(insertIndex, 0, command);
+                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
                         this.selectedIndices = [insertIndex];
                         this.refreshCommandList(page, pageIndex);
                     }
@@ -2276,7 +2311,7 @@ class EventCommandList {
             if (code === 123) {
                 this.controlSelfSwitchEditor.show(null, (command) => {
                     if (command) {
-                        page.list.splice(insertIndex, 0, command);
+                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
                         this.selectedIndices = [insertIndex];
                         this.refreshCommandList(page, pageIndex);
                     }
@@ -2288,7 +2323,7 @@ class EventCommandList {
             if (code === 124) {
                 this.controlTimerEditor.show(null, (command) => {
                     if (command) {
-                        page.list.splice(insertIndex, 0, command);
+                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
                         this.selectedIndices = [insertIndex];
                         this.refreshCommandList(page, pageIndex);
                     }
@@ -2300,7 +2335,7 @@ class EventCommandList {
             if (code === 125) {
                 this.goldEditor.show(null, (command) => {
                     if (command) {
-                        page.list.splice(insertIndex, 0, command);
+                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
                         this.selectedIndices = [insertIndex];
                         this.refreshCommandList(page, pageIndex);
                     }
@@ -2312,7 +2347,7 @@ class EventCommandList {
             if (code === 126) {
                 this.changeItemsEditor.show(null, (command) => {
                     if (command) {
-                        page.list.splice(insertIndex, 0, command);
+                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
                         this.selectedIndices = [insertIndex];
                         this.refreshCommandList(page, pageIndex);
                     }
@@ -2324,7 +2359,7 @@ class EventCommandList {
             if (code === 129) {
                 this.changePartyMemberEditor.show(null, (command) => {
                     if (command) {
-                        page.list.splice(insertIndex, 0, command);
+                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
                         this.selectedIndices = [insertIndex];
                         this.refreshCommandList(page, pageIndex);
                     }
@@ -2336,7 +2371,7 @@ class EventCommandList {
             if (code === 127) {
                 this.changeWeaponsEditor.show(null, (command) => {
                     if (command) {
-                        page.list.splice(insertIndex, 0, command);
+                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
                         this.selectedIndices = [insertIndex];
                         this.refreshCommandList(page, pageIndex);
                     }
@@ -2348,7 +2383,7 @@ class EventCommandList {
             if (code === 128) {
                 this.changeArmorsEditor.show(null, (command) => {
                     if (command) {
-                        page.list.splice(insertIndex, 0, command);
+                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
                         this.selectedIndices = [insertIndex];
                         this.refreshCommandList(page, pageIndex);
                     }
@@ -2360,7 +2395,7 @@ class EventCommandList {
             if (code === 201) {
                 this.transferPlayerEditor.show(null, (command) => {
                     if (command) {
-                        page.list.splice(insertIndex, 0, command);
+                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
                         this.selectedIndices = [insertIndex];
                         this.refreshCommandList(page, pageIndex);
                     }
@@ -2372,7 +2407,7 @@ class EventCommandList {
             if (code === 203) {
                 this.setEventLocationEditor.show(null, (command) => {
                     if (command) {
-                        page.list.splice(insertIndex, 0, command);
+                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
                         this.selectedIndices = [insertIndex];
                         this.refreshCommandList(page, pageIndex);
                     }
@@ -2384,7 +2419,7 @@ class EventCommandList {
             if (code === 204) {
                 this.scrollMapEditor.show(null, (command) => {
                     if (command) {
-                        page.list.splice(insertIndex, 0, command);
+                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
                         this.selectedIndices = [insertIndex];
                         this.refreshCommandList(page, pageIndex);
                     }
@@ -2397,7 +2432,7 @@ class EventCommandList {
                 this.setMovementRouteEditor.show(null, (command) => {
                     if (command) {
                         // Insert the 205 header command
-                        page.list.splice(insertIndex, 0, command);
+                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
                         // Insert 505 continuation entries for each move step (skip end marker code 0)
                         const moveList = command.parameters[1].list;
                         let inserted = 0;
@@ -2421,7 +2456,7 @@ class EventCommandList {
             if (code === 211) {
                 this.changeTransparencyEditor.show(null, (command) => {
                     if (command) {
-                        page.list.splice(insertIndex, 0, command);
+                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
                         this.selectedIndices = [insertIndex];
                         this.refreshCommandList(page, pageIndex);
                     }
@@ -2433,7 +2468,7 @@ class EventCommandList {
             if (code === 212) {
                 this.showAnimationEditor.show(null, (command) => {
                     if (command) {
-                        page.list.splice(insertIndex, 0, command);
+                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
                         this.selectedIndices = [insertIndex];
                         this.refreshCommandList(page, pageIndex);
                     }
@@ -2446,7 +2481,7 @@ class EventCommandList {
                 const eventData = this.eventEditor ? this.eventEditor.event : null;
                 this.balloonIconEditor.show(null, (command) => {
                     if (command) {
-                        page.list.splice(insertIndex, 0, command);
+                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
                         this.selectedIndices = [insertIndex];
                         this.refreshCommandList(page, pageIndex);
                     }
@@ -2458,7 +2493,7 @@ class EventCommandList {
             if (code === 221 || code === 222) {
                 this.fadeScreenEditor.show(null, (command) => {
                     if (command) {
-                        page.list.splice(insertIndex, 0, command);
+                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
                         this.selectedIndices = [insertIndex];
                         this.refreshCommandList(page, pageIndex);
                     }
@@ -2470,7 +2505,7 @@ class EventCommandList {
             if (code === 231) {
                 this.showPictureEditor.show(null, (command) => {
                     if (command) {
-                        page.list.splice(insertIndex, 0, command);
+                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
                         this.selectedIndices = [insertIndex];
                         this.refreshCommandList(page, pageIndex);
                     }
@@ -2482,7 +2517,7 @@ class EventCommandList {
             if (code === 235) {
                 this.erasePictureEditor.show(null, (command) => {
                     if (command) {
-                        page.list.splice(insertIndex, 0, command);
+                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
                         this.selectedIndices = [insertIndex];
                         this.refreshCommandList(page, pageIndex);
                     }
@@ -2494,7 +2529,7 @@ class EventCommandList {
             if (code === 356 || code === 357) {
                 this.pluginCommandEditor.show(null, (command) => {
                     if (command) {
-                        page.list.splice(insertIndex, 0, command);
+                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
                         this.selectedIndices = [insertIndex];
                         // Expand plugin commands by default
                         this.expandedPluginCommands.add(insertIndex);
@@ -2509,6 +2544,7 @@ class EventCommandList {
                 this.scriptEditor.show(null, null, null, (commands) => {
                     if (commands && commands.length > 0) {
                         // Insert all script commands (355 + 655s)
+                        this._rebaseInsertIndent(commands, baseIndent);
                         commands.forEach((cmd, i) => {
                             page.list.splice(insertIndex + i, 0, cmd);
                         });
@@ -2535,7 +2571,7 @@ class EventCommandList {
             if (code === 103) {
                 this.inputNumberEditor.show(null, (command) => {
                     if (command) {
-                        page.list.splice(insertIndex, 0, command);
+                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
                         this.selectedIndices = [insertIndex];
                         this.refreshCommandList(page, pageIndex);
                     }
@@ -2547,7 +2583,7 @@ class EventCommandList {
             if (code === 104) {
                 this.selectItemEditor.show(null, (command) => {
                     if (command) {
-                        page.list.splice(insertIndex, 0, command);
+                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
                         this.selectedIndices = [insertIndex];
                         this.refreshCommandList(page, pageIndex);
                     }
@@ -2559,6 +2595,7 @@ class EventCommandList {
             if (code === 105) {
                 this.showScrollingTextEditor.show(null, (commands) => {
                     if (commands && commands.length > 0) {
+                        this._rebaseInsertIndent(commands, baseIndent);
                         commands.forEach((cmd, i) => {
                             page.list.splice(insertIndex + i, 0, cmd);
                         });
@@ -2571,7 +2608,7 @@ class EventCommandList {
 
             // Exit Event Processing (no params)
             if (code === 115) {
-                page.list.splice(insertIndex, 0, { code: 115, indent: 0, parameters: [] });
+                page.list.splice(insertIndex, 0, { code: 115, indent: baseIndent, parameters: [] });
                 this.selectedIndices = [insertIndex];
                 this.refreshCommandList(page, pageIndex);
                 return;
@@ -2581,7 +2618,7 @@ class EventCommandList {
             if (code === 117) {
                 this.commonEventEditor.show(null, (command) => {
                     if (command) {
-                        page.list.splice(insertIndex, 0, command);
+                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
                         this.selectedIndices = [insertIndex];
                         this.refreshCommandList(page, pageIndex);
                     }
@@ -2593,7 +2630,7 @@ class EventCommandList {
             if (code === 118) {
                 this.labelEditor.show(null, (command) => {
                     if (command) {
-                        page.list.splice(insertIndex, 0, command);
+                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
                         this.selectedIndices = [insertIndex];
                         this.refreshCommandList(page, pageIndex);
                     }
@@ -2605,7 +2642,7 @@ class EventCommandList {
             if (code === 119) {
                 this.jumpToLabelEditor.show(null, (command) => {
                     if (command) {
-                        page.list.splice(insertIndex, 0, command);
+                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
                         this.selectedIndices = [insertIndex];
                         this.refreshCommandList(page, pageIndex);
                     }
@@ -2617,7 +2654,7 @@ class EventCommandList {
             if (code === 132) {
                 this.changeBattleBGMEditor.show(null, (command) => {
                     if (command) {
-                        page.list.splice(insertIndex, 0, command);
+                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
                         this.selectedIndices = [insertIndex];
                         this.refreshCommandList(page, pageIndex);
                     }
@@ -2629,7 +2666,7 @@ class EventCommandList {
             if (code === 133) {
                 this.changeVictoryMEEditor.show(null, (command) => {
                     if (command) {
-                        page.list.splice(insertIndex, 0, command);
+                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
                         this.selectedIndices = [insertIndex];
                         this.refreshCommandList(page, pageIndex);
                     }
@@ -2641,7 +2678,7 @@ class EventCommandList {
             if (code === 134) {
                 this.toggleCommandEditor.show(null, (command) => {
                     if (command) {
-                        page.list.splice(insertIndex, 0, command);
+                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
                         this.selectedIndices = [insertIndex];
                         this.refreshCommandList(page, pageIndex);
                     }
@@ -2653,7 +2690,7 @@ class EventCommandList {
             if (code === 135) {
                 this.toggleCommandEditor.show(null, (command) => {
                     if (command) {
-                        page.list.splice(insertIndex, 0, command);
+                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
                         this.selectedIndices = [insertIndex];
                         this.refreshCommandList(page, pageIndex);
                     }
@@ -2665,7 +2702,7 @@ class EventCommandList {
             if (code === 136) {
                 this.toggleCommandEditor.show(null, (command) => {
                     if (command) {
-                        page.list.splice(insertIndex, 0, command);
+                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
                         this.selectedIndices = [insertIndex];
                         this.refreshCommandList(page, pageIndex);
                     }
@@ -2677,7 +2714,7 @@ class EventCommandList {
             if (code === 137) {
                 this.toggleCommandEditor.show(null, (command) => {
                     if (command) {
-                        page.list.splice(insertIndex, 0, command);
+                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
                         this.selectedIndices = [insertIndex];
                         this.refreshCommandList(page, pageIndex);
                     }
@@ -2689,7 +2726,7 @@ class EventCommandList {
             if (code === 138) {
                 this.changeWindowColorEditor.show(null, (command) => {
                     if (command) {
-                        page.list.splice(insertIndex, 0, command);
+                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
                         this.selectedIndices = [insertIndex];
                         this.refreshCommandList(page, pageIndex);
                     }
@@ -2701,7 +2738,7 @@ class EventCommandList {
             if (code === 139) {
                 this.changeDefeatMEEditor.show(null, (command) => {
                     if (command) {
-                        page.list.splice(insertIndex, 0, command);
+                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
                         this.selectedIndices = [insertIndex];
                         this.refreshCommandList(page, pageIndex);
                     }
@@ -2713,7 +2750,7 @@ class EventCommandList {
             if (code === 140) {
                 this.changeVehicleBGMEditor.show(null, (command) => {
                     if (command) {
-                        page.list.splice(insertIndex, 0, command);
+                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
                         this.selectedIndices = [insertIndex];
                         this.refreshCommandList(page, pageIndex);
                     }
@@ -2725,7 +2762,7 @@ class EventCommandList {
             if (code === 202) {
                 this.setVehicleLocationEditor.show(null, (command) => {
                     if (command) {
-                        page.list.splice(insertIndex, 0, command);
+                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
                         this.selectedIndices = [insertIndex];
                         this.refreshCommandList(page, pageIndex);
                     }
@@ -2735,7 +2772,7 @@ class EventCommandList {
 
             // Get on/off Vehicle (no params)
             if (code === 206) {
-                page.list.splice(insertIndex, 0, { code: 206, indent: 0, parameters: [] });
+                page.list.splice(insertIndex, 0, { code: 206, indent: baseIndent, parameters: [] });
                 this.selectedIndices = [insertIndex];
                 this.refreshCommandList(page, pageIndex);
                 return;
@@ -2743,7 +2780,7 @@ class EventCommandList {
 
             // Erase Event (no params)
             if (code === 214) {
-                page.list.splice(insertIndex, 0, { code: 214, indent: 0, parameters: [] });
+                page.list.splice(insertIndex, 0, { code: 214, indent: baseIndent, parameters: [] });
                 this.selectedIndices = [insertIndex];
                 this.refreshCommandList(page, pageIndex);
                 return;
@@ -2753,7 +2790,7 @@ class EventCommandList {
             if (code === 216) {
                 this.toggleCommandEditor.show(null, (command) => {
                     if (command) {
-                        page.list.splice(insertIndex, 0, command);
+                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
                         this.selectedIndices = [insertIndex];
                         this.refreshCommandList(page, pageIndex);
                     }
@@ -2763,7 +2800,7 @@ class EventCommandList {
 
             // Gather Followers (no params)
             if (code === 217) {
-                page.list.splice(insertIndex, 0, { code: 217, indent: 0, parameters: [] });
+                page.list.splice(insertIndex, 0, { code: 217, indent: baseIndent, parameters: [] });
                 this.selectedIndices = [insertIndex];
                 this.refreshCommandList(page, pageIndex);
                 return;
@@ -2773,7 +2810,7 @@ class EventCommandList {
             if (code === 223) {
                 this.tintScreenEditor.show(null, (command) => {
                     if (command) {
-                        page.list.splice(insertIndex, 0, command);
+                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
                         this.selectedIndices = [insertIndex];
                         this.refreshCommandList(page, pageIndex);
                     }
@@ -2785,7 +2822,7 @@ class EventCommandList {
             if (code === 224) {
                 this.flashScreenEditor.show(null, (command) => {
                     if (command) {
-                        page.list.splice(insertIndex, 0, command);
+                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
                         this.selectedIndices = [insertIndex];
                         this.refreshCommandList(page, pageIndex);
                     }
@@ -2797,7 +2834,7 @@ class EventCommandList {
             if (code === 225) {
                 this.shakeScreenEditor.show(null, (command) => {
                     if (command) {
-                        page.list.splice(insertIndex, 0, command);
+                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
                         this.selectedIndices = [insertIndex];
                         this.refreshCommandList(page, pageIndex);
                     }
@@ -2809,7 +2846,7 @@ class EventCommandList {
             if (code === 232) {
                 this.movePictureEditor.show(null, (command) => {
                     if (command) {
-                        page.list.splice(insertIndex, 0, command);
+                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
                         this.selectedIndices = [insertIndex];
                         this.refreshCommandList(page, pageIndex);
                     }
@@ -2821,7 +2858,7 @@ class EventCommandList {
             if (code === 233) {
                 this.rotatePictureEditor.show(null, (command) => {
                     if (command) {
-                        page.list.splice(insertIndex, 0, command);
+                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
                         this.selectedIndices = [insertIndex];
                         this.refreshCommandList(page, pageIndex);
                     }
@@ -2833,7 +2870,7 @@ class EventCommandList {
             if (code === 234) {
                 this.tintPictureEditor.show(null, (command) => {
                     if (command) {
-                        page.list.splice(insertIndex, 0, command);
+                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
                         this.selectedIndices = [insertIndex];
                         this.refreshCommandList(page, pageIndex);
                     }
@@ -2845,7 +2882,7 @@ class EventCommandList {
             if (code === 236) {
                 this.setWeatherEffectEditor.show(null, (command) => {
                     if (command) {
-                        page.list.splice(insertIndex, 0, command);
+                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
                         this.selectedIndices = [insertIndex];
                         this.refreshCommandList(page, pageIndex);
                     }
@@ -2855,7 +2892,7 @@ class EventCommandList {
 
             // Save BGM (no params)
             if (code === 243) {
-                page.list.splice(insertIndex, 0, { code: 243, indent: 0, parameters: [] });
+                page.list.splice(insertIndex, 0, { code: 243, indent: baseIndent, parameters: [] });
                 this.selectedIndices = [insertIndex];
                 this.refreshCommandList(page, pageIndex);
                 return;
@@ -2863,7 +2900,7 @@ class EventCommandList {
 
             // Replay BGM (no params)
             if (code === 244) {
-                page.list.splice(insertIndex, 0, { code: 244, indent: 0, parameters: [] });
+                page.list.splice(insertIndex, 0, { code: 244, indent: baseIndent, parameters: [] });
                 this.selectedIndices = [insertIndex];
                 this.refreshCommandList(page, pageIndex);
                 return;
@@ -2873,7 +2910,7 @@ class EventCommandList {
             if (code === 261) {
                 this.playMovieEditor.show(null, (command) => {
                     if (command) {
-                        page.list.splice(insertIndex, 0, command);
+                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
                         this.selectedIndices = [insertIndex];
                         this.refreshCommandList(page, pageIndex);
                     }
@@ -2885,7 +2922,7 @@ class EventCommandList {
             if (code === 281) {
                 this.toggleCommandEditor.show(null, (command) => {
                     if (command) {
-                        page.list.splice(insertIndex, 0, command);
+                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
                         this.selectedIndices = [insertIndex];
                         this.refreshCommandList(page, pageIndex);
                     }
@@ -2897,7 +2934,7 @@ class EventCommandList {
             if (code === 282) {
                 this.changeTilesetEditor.show(null, (command) => {
                     if (command) {
-                        page.list.splice(insertIndex, 0, command);
+                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
                         this.selectedIndices = [insertIndex];
                         this.refreshCommandList(page, pageIndex);
                     }
@@ -2909,7 +2946,7 @@ class EventCommandList {
             if (code === 283) {
                 this.changeBattleBackgroundEditor.show(null, (command) => {
                     if (command) {
-                        page.list.splice(insertIndex, 0, command);
+                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
                         this.selectedIndices = [insertIndex];
                         this.refreshCommandList(page, pageIndex);
                     }
@@ -2921,7 +2958,7 @@ class EventCommandList {
             if (code === 284) {
                 this.changeParallaxEditor.show(null, (command) => {
                     if (command) {
-                        page.list.splice(insertIndex, 0, command);
+                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
                         this.selectedIndices = [insertIndex];
                         this.refreshCommandList(page, pageIndex);
                     }
@@ -2933,7 +2970,7 @@ class EventCommandList {
             if (code === 285) {
                 this.getLocationInfoEditor.show(null, (command) => {
                     if (command) {
-                        page.list.splice(insertIndex, 0, command);
+                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
                         this.selectedIndices = [insertIndex];
                         this.refreshCommandList(page, pageIndex);
                     }
@@ -2945,7 +2982,7 @@ class EventCommandList {
             if (code === 301) {
                 this.battleProcessingEditor.show(null, (command) => {
                     if (command) {
-                        page.list.splice(insertIndex, 0, command);
+                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
                         this.selectedIndices = [insertIndex];
                         this.refreshCommandList(page, pageIndex);
                     }
@@ -2957,6 +2994,7 @@ class EventCommandList {
             if (code === 302) {
                 this.shopProcessingEditor.show(null, (commands) => {
                     if (commands && commands.length > 0) {
+                        this._rebaseInsertIndent(commands, baseIndent);
                         commands.forEach((cmd, i) => {
                             page.list.splice(insertIndex + i, 0, cmd);
                         });
@@ -2971,7 +3009,7 @@ class EventCommandList {
             if (code === 303) {
                 this.nameInputProcessingEditor.show(null, (command) => {
                     if (command) {
-                        page.list.splice(insertIndex, 0, command);
+                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
                         this.selectedIndices = [insertIndex];
                         this.refreshCommandList(page, pageIndex);
                     }
@@ -2983,7 +3021,7 @@ class EventCommandList {
             if (code === 311) {
                 this.changeHPEditor.show(null, (command) => {
                     if (command) {
-                        page.list.splice(insertIndex, 0, command);
+                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
                         this.selectedIndices = [insertIndex];
                         this.refreshCommandList(page, pageIndex);
                     }
@@ -2995,7 +3033,7 @@ class EventCommandList {
             if (code === 312) {
                 this.changeMPEditor.show(null, (command) => {
                     if (command) {
-                        page.list.splice(insertIndex, 0, command);
+                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
                         this.selectedIndices = [insertIndex];
                         this.refreshCommandList(page, pageIndex);
                     }
@@ -3007,7 +3045,7 @@ class EventCommandList {
             if (code === 313) {
                 this.changeStateEditor.show(null, (command) => {
                     if (command) {
-                        page.list.splice(insertIndex, 0, command);
+                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
                         this.selectedIndices = [insertIndex];
                         this.refreshCommandList(page, pageIndex);
                     }
@@ -3019,7 +3057,7 @@ class EventCommandList {
             if (code === 314) {
                 this.recoverAllEditor.show(null, (command) => {
                     if (command) {
-                        page.list.splice(insertIndex, 0, command);
+                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
                         this.selectedIndices = [insertIndex];
                         this.refreshCommandList(page, pageIndex);
                     }
@@ -3031,7 +3069,7 @@ class EventCommandList {
             if (code === 315) {
                 this.changeEXPEditor.show(null, (command) => {
                     if (command) {
-                        page.list.splice(insertIndex, 0, command);
+                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
                         this.selectedIndices = [insertIndex];
                         this.refreshCommandList(page, pageIndex);
                     }
@@ -3043,7 +3081,7 @@ class EventCommandList {
             if (code === 316) {
                 this.changeLevelEditor.show(null, (command) => {
                     if (command) {
-                        page.list.splice(insertIndex, 0, command);
+                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
                         this.selectedIndices = [insertIndex];
                         this.refreshCommandList(page, pageIndex);
                     }
@@ -3055,7 +3093,7 @@ class EventCommandList {
             if (code === 317) {
                 this.changeParameterEditor.show(null, (command) => {
                     if (command) {
-                        page.list.splice(insertIndex, 0, command);
+                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
                         this.selectedIndices = [insertIndex];
                         this.refreshCommandList(page, pageIndex);
                     }
@@ -3067,7 +3105,7 @@ class EventCommandList {
             if (code === 318) {
                 this.changeSkillEditor.show(null, (command) => {
                     if (command) {
-                        page.list.splice(insertIndex, 0, command);
+                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
                         this.selectedIndices = [insertIndex];
                         this.refreshCommandList(page, pageIndex);
                     }
@@ -3079,7 +3117,7 @@ class EventCommandList {
             if (code === 319) {
                 this.changeEquipmentEditor.show(null, (command) => {
                     if (command) {
-                        page.list.splice(insertIndex, 0, command);
+                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
                         this.selectedIndices = [insertIndex];
                         this.refreshCommandList(page, pageIndex);
                     }
@@ -3091,7 +3129,7 @@ class EventCommandList {
             if (code === 320) {
                 this.changeNameEditor.show(null, (command) => {
                     if (command) {
-                        page.list.splice(insertIndex, 0, command);
+                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
                         this.selectedIndices = [insertIndex];
                         this.refreshCommandList(page, pageIndex);
                     }
@@ -3103,7 +3141,7 @@ class EventCommandList {
             if (code === 321) {
                 this.changeClassEditor.show(null, (command) => {
                     if (command) {
-                        page.list.splice(insertIndex, 0, command);
+                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
                         this.selectedIndices = [insertIndex];
                         this.refreshCommandList(page, pageIndex);
                     }
@@ -3115,7 +3153,7 @@ class EventCommandList {
             if (code === 322) {
                 this.changeActorImagesEditor.show(null, (command) => {
                     if (command) {
-                        page.list.splice(insertIndex, 0, command);
+                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
                         this.selectedIndices = [insertIndex];
                         this.refreshCommandList(page, pageIndex);
                     }
@@ -3127,7 +3165,7 @@ class EventCommandList {
             if (code === 323) {
                 this.changeVehicleImageEditor.show(null, (command) => {
                     if (command) {
-                        page.list.splice(insertIndex, 0, command);
+                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
                         this.selectedIndices = [insertIndex];
                         this.refreshCommandList(page, pageIndex);
                     }
@@ -3139,7 +3177,7 @@ class EventCommandList {
             if (code === 324) {
                 this.changeNicknameEditor.show(null, (command) => {
                     if (command) {
-                        page.list.splice(insertIndex, 0, command);
+                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
                         this.selectedIndices = [insertIndex];
                         this.refreshCommandList(page, pageIndex);
                     }
@@ -3151,7 +3189,7 @@ class EventCommandList {
             if (code === 325) {
                 this.changeProfileEditor.show(null, (command) => {
                     if (command) {
-                        page.list.splice(insertIndex, 0, command);
+                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
                         this.selectedIndices = [insertIndex];
                         this.refreshCommandList(page, pageIndex);
                     }
@@ -3163,7 +3201,7 @@ class EventCommandList {
             if (code === 326) {
                 this.changeTPEditor.show(null, (command) => {
                     if (command) {
-                        page.list.splice(insertIndex, 0, command);
+                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
                         this.selectedIndices = [insertIndex];
                         this.refreshCommandList(page, pageIndex);
                     }
@@ -3175,7 +3213,7 @@ class EventCommandList {
             if (code === 331) {
                 this.changeEnemyHPEditor.show(null, (command) => {
                     if (command) {
-                        page.list.splice(insertIndex, 0, command);
+                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
                         this.selectedIndices = [insertIndex];
                         this.refreshCommandList(page, pageIndex);
                     }
@@ -3187,7 +3225,7 @@ class EventCommandList {
             if (code === 332) {
                 this.changeEnemyMPEditor.show(null, (command) => {
                     if (command) {
-                        page.list.splice(insertIndex, 0, command);
+                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
                         this.selectedIndices = [insertIndex];
                         this.refreshCommandList(page, pageIndex);
                     }
@@ -3199,7 +3237,7 @@ class EventCommandList {
             if (code === 333) {
                 this.changeEnemyStateEditor.show(null, (command) => {
                     if (command) {
-                        page.list.splice(insertIndex, 0, command);
+                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
                         this.selectedIndices = [insertIndex];
                         this.refreshCommandList(page, pageIndex);
                     }
@@ -3211,7 +3249,7 @@ class EventCommandList {
             if (code === 334) {
                 this.enemyRecoverAllEditor.show(null, (command) => {
                     if (command) {
-                        page.list.splice(insertIndex, 0, command);
+                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
                         this.selectedIndices = [insertIndex];
                         this.refreshCommandList(page, pageIndex);
                     }
@@ -3223,7 +3261,7 @@ class EventCommandList {
             if (code === 335) {
                 this.enemyAppearEditor.show(null, (command) => {
                     if (command) {
-                        page.list.splice(insertIndex, 0, command);
+                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
                         this.selectedIndices = [insertIndex];
                         this.refreshCommandList(page, pageIndex);
                     }
@@ -3235,7 +3273,7 @@ class EventCommandList {
             if (code === 336) {
                 this.enemyTransformEditor.show(null, (command) => {
                     if (command) {
-                        page.list.splice(insertIndex, 0, command);
+                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
                         this.selectedIndices = [insertIndex];
                         this.refreshCommandList(page, pageIndex);
                     }
@@ -3247,7 +3285,7 @@ class EventCommandList {
             if (code === 337) {
                 this.showBattleAnimationEditor.show(null, (command) => {
                     if (command) {
-                        page.list.splice(insertIndex, 0, command);
+                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
                         this.selectedIndices = [insertIndex];
                         this.refreshCommandList(page, pageIndex);
                     }
@@ -3259,7 +3297,7 @@ class EventCommandList {
             if (code === 339) {
                 this.forceActionEditor.show(null, (command) => {
                     if (command) {
-                        page.list.splice(insertIndex, 0, command);
+                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
                         this.selectedIndices = [insertIndex];
                         this.refreshCommandList(page, pageIndex);
                     }
@@ -3269,7 +3307,7 @@ class EventCommandList {
 
             // Abort Battle (no params)
             if (code === 340) {
-                page.list.splice(insertIndex, 0, { code: 340, indent: 0, parameters: [] });
+                page.list.splice(insertIndex, 0, { code: 340, indent: baseIndent, parameters: [] });
                 this.selectedIndices = [insertIndex];
                 this.refreshCommandList(page, pageIndex);
                 return;
@@ -3279,7 +3317,7 @@ class EventCommandList {
             if (code === 342) {
                 this.changeEnemyTPEditor.show(null, (command) => {
                     if (command) {
-                        page.list.splice(insertIndex, 0, command);
+                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
                         this.selectedIndices = [insertIndex];
                         this.refreshCommandList(page, pageIndex);
                     }
@@ -3289,7 +3327,7 @@ class EventCommandList {
 
             // Open Menu Screen (no params)
             if (code === 351) {
-                page.list.splice(insertIndex, 0, { code: 351, indent: 0, parameters: [] });
+                page.list.splice(insertIndex, 0, { code: 351, indent: baseIndent, parameters: [] });
                 this.selectedIndices = [insertIndex];
                 this.refreshCommandList(page, pageIndex);
                 return;
@@ -3297,7 +3335,7 @@ class EventCommandList {
 
             // Open Save Screen (no params)
             if (code === 352) {
-                page.list.splice(insertIndex, 0, { code: 352, indent: 0, parameters: [] });
+                page.list.splice(insertIndex, 0, { code: 352, indent: baseIndent, parameters: [] });
                 this.selectedIndices = [insertIndex];
                 this.refreshCommandList(page, pageIndex);
                 return;
@@ -3305,7 +3343,7 @@ class EventCommandList {
 
             // Game Over (no params)
             if (code === 353) {
-                page.list.splice(insertIndex, 0, { code: 353, indent: 0, parameters: [] });
+                page.list.splice(insertIndex, 0, { code: 353, indent: baseIndent, parameters: [] });
                 this.selectedIndices = [insertIndex];
                 this.refreshCommandList(page, pageIndex);
                 return;
@@ -3313,7 +3351,7 @@ class EventCommandList {
 
             // Return to Title Screen (no params)
             if (code === 354) {
-                page.list.splice(insertIndex, 0, { code: 354, indent: 0, parameters: [] });
+                page.list.splice(insertIndex, 0, { code: 354, indent: baseIndent, parameters: [] });
                 this.selectedIndices = [insertIndex];
                 this.refreshCommandList(page, pageIndex);
                 return;
@@ -4663,6 +4701,38 @@ class EventCommandList {
                     }
                 }
             }
+            // Block headers own their body markers: select the header's
+            // whole structure through its matching end marker at the same
+            // indent. An orphaned 413 ("Repeat Above") jumps execution
+            // backwards unconditionally; an orphaned 411 swallows its body.
+            else if ([111, 112].includes(code)) {
+                const endCode = code === 111 ? 412 : 413;
+                const headerIndent = command.indent || 0;
+                expanded.add(index);
+                for (let i = index + 1; i < page.list.length; i++) {
+                    expanded.add(i);
+                    if (page.list[i].code === endCode &&
+                        (page.list[i].indent || 0) === headerIndent) {
+                        break;
+                    }
+                }
+            }
+            else if (code === 301) {
+                expanded.add(index);
+                // Only a "branch results" battle carries 601-604 markers;
+                // a standalone 301 is a regular command.
+                const next = page.list[index + 1];
+                if (next && [601, 602, 603].includes(next.code)) {
+                    const headerIndent = command.indent || 0;
+                    for (let i = index + 1; i < page.list.length; i++) {
+                        expanded.add(i);
+                        if (page.list[i].code === 604 &&
+                            (page.list[i].indent || 0) === headerIndent) {
+                            break;
+                        }
+                    }
+                }
+            }
             // For branch markers inside choices, don't copy individually
             else if ([402, 403, 404].includes(code)) {
                 // Find the parent 102 command
@@ -4735,8 +4805,12 @@ class EventCommandList {
             insertIndex = page.list.length - 1;
         }
 
-        commands.forEach((cmd, i) => {
-            page.list.splice(insertIndex + i, 0, JSON.parse(JSON.stringify(cmd)));
+        const pasted = commands.map(cmd => JSON.parse(JSON.stringify(cmd)));
+        const pasteAnchor = page.list[insertIndex];
+        this._rebaseInsertIndent(pasted,
+            pasteAnchor && pasteAnchor.code !== 0 ? (pasteAnchor.indent || 0) : 0);
+        pasted.forEach((cmd, i) => {
+            page.list.splice(insertIndex + i, 0, cmd);
         });
 
         this.selectedIndices = [];

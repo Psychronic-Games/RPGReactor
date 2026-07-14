@@ -2017,14 +2017,21 @@ class DatabaseTilesetEditor {
         const tileOffset = tileY * tilesPerRow + tileX;
 
         switch(imageIndex) {
+            // A1-A4 palettes show one cell per autotile KIND, and each kind
+            // occupies 48 consecutive flag slots (one per shape). Indexing
+            // by the raw cell offset landed every edit on a shape slot of
+            // kind 0 — the runtime then read the untouched real slot, so
+            // passability/ladder/terrain edits on autotiles never took
+            // effect in game (and the editor overlay read back through the
+            // same wrong slot, hiding it).
             case 0: // A1
-                return 2048 + tileOffset;
+                return 2048 + tileOffset * 48;
             case 1: // A2
-                return 2816 + tileOffset;
+                return 2816 + tileOffset * 48;
             case 2: // A3
-                return 4352 + tileOffset;
+                return 4352 + tileOffset * 48;
             case 3: // A4
-                return 5888 + tileOffset;
+                return 5888 + tileOffset * 48;
             case 4: // A5
                 return 1536 + tileOffset;
             case 5: // B
@@ -2376,6 +2383,14 @@ class DatabaseTilesetEditor {
 
         if (currentFlag !== oldFlag) {
             this.currentTileset.flags[tileIndex] = currentFlag;
+            // Autotiles: mirror the flag to all 48 shape slots of the kind —
+            // the runtime looks flags up by the FULL tile id (base + shape),
+            // exactly as the MZ editor writes them.
+            if (tileIndex >= 2048 && tileIndex < 8192) {
+                for (let s = 1; s < 48; s++) {
+                    this.currentTileset.flags[tileIndex + s] = currentFlag;
+                }
+            }
             console.log(`Flag changed: ${oldFlag} (0x${oldFlag.toString(16)}) -> ${currentFlag} (0x${currentFlag.toString(16)})`);
 
             // Redraw the overlay on the clicked canvas

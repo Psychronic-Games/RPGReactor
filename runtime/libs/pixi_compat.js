@@ -720,7 +720,10 @@
     // The size+type -> format mapping is the v8 vertex-format string scheme
     // ("float32", "float32x2", "uint16x4", etc.).
     // -------------------------------------------------------------------------
-    if (PIXI.Geometry && PIXI.Geometry.prototype &&
+    // v8 only: on v5/v6/v7 the original addAttribute already speaks the
+    // positional form, and feeding it a v8-style options object would wrap
+    // the options in a Buffer and corrupt the vertex data.
+    if (PIXI.TextureSource && PIXI.Geometry && PIXI.Geometry.prototype &&
         !PIXI.Geometry.prototype.__compatPatched) {
         const proto = PIXI.Geometry.prototype;
         proto.__compatPatched = true;

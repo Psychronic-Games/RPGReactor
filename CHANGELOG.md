@@ -14,6 +14,29 @@ This root changelog summarizes public release progress for GitHub; larger releas
 
 - Editor: whole-map paint bucket fills apply in a fraction of a second instead of 30-40 seconds — huge tile-update batches now route through the streaming full re-render (which preserves the scroll position) instead of 100k+ incremental sprite updates, and the water-animation bookkeeping in batch updates is no longer quadratic. Undo and redo also keep the current scroll position instead of jumping back to the map origin.
 
+### Fixed — deep audit (editor)
+
+- Project files are written atomically (temp file + rename) — a crash, kill, or full disk mid-save can no longer destroy the previous good `project.rpgreactor`, `MapInfos.json`, map, database, or plugin-manifest file.
+- Deploying a game saves the project first, like playtest does — builds no longer silently ship whatever was last on disk.
+- Editing autotile passability/ladder/counter/terrain flags in the Tileset database works — edits landed on the wrong flag slots (shape slots of the first autotile), so they never took effect in game; they now index by kind and mirror across all 48 shapes like MZ.
+- Class parameter curves generate against the right levels (values were shifted one level low, with Lv1 written into an unread slot), enemy action HP/MP conditions survive editing (fractions were truncated to 0 on every OK), and Attack Element traits store the correct element (they were off by one).
+- Database Cancel actually reverts everything since the database was opened — switching categories used to re-baseline the snapshot, silently keeping (and later saving) "cancelled" edits.
+- Show Choices, If/Else, and inserted/pasted commands get correct MZ indents — branches authored in Reactor previously misrouted at runtime (choice bodies skipped, Else running alongside Then); deleting an If/Loop/Battle header now removes its whole block instead of leaving markers that could loop the interpreter.
+- Change Gold wrote its parameters in the wrong order (gaining a variable-amount of gold gave 0), and editing a variable-designated Transfer Player no longer rewrites it into a direct transfer to raw variable IDs.
+- Mouse-wheel zoom no longer compounds with every map loaded in the session, middle-mouse/Shift+drag panning works (it was dead code), the region overlay survives map switches, the eraser on the Regions tab erases regions instead of hidden map tiles, and drag-reordering a map "before" a sibling actually reorders it.
+- Animation Generator: saved keyframes are no longer wiped on every tool switch (the loader dropped them and the autosave made it permanent), Reset Layer resets the live keyframe instead of orphaning future edits, and a pending autosave can no longer write one project's layers into another.
+
+### Fixed — deep audit (runtime)
+
+- MZ battles show battlers again with the MV-plugin battle-field compatibility active — the early-created battle field rendered UNDER the battlebacks (verified by booting into a battle: field index 1 vs battlebacks 3-4; now above, matching MZ).
+- Two unbounded texture leaks fixed: every sprite frame change (walk cycles, blinking pause signs) and every map transfer's tile batch stranded PIXI v8 textures on session-lived texture sources forever; long play sessions now hold steady.
+- Balloon cleanup runs again on scene teardown (a duplicate destroy override dropped it), fixing a permanent event soft-lock when a scene change interrupts a balloon wait.
+- Event-vs-event collision uses the MZ rule (only normal-priority events block); MV games keep the MV rule via the compat layer.
+- Move-route/animation/balloon waits survive save/load in MZ games using MV plugins (a live character reference was being serialized into saves; the loaded clone froze the wait forever), and encrypted MV games detect their encryption again (the flags were captured before encryption info loaded).
+- The v8 geometry shim no longer corrupts vertex data on PIXI v5/v6/v7, destroyed audio buffers are no longer re-downloaded ~10s later by the load watchdog, and per-frame sprite refreshes stopped allocating on the unchanged path.
+
+Deferred audit findings are tracked in [docs/AUDIT-BACKLOG-2026-07-13.md](docs/AUDIT-BACKLOG-2026-07-13.md).
+
 ## [0.94.8] - 2026-07-13
 
 Release overview: [RPG Reactor 0.94.8: Big Maps Without the Wait](docs/devlogs/2026-07-13-rpg-reactor-0.94.8.md).

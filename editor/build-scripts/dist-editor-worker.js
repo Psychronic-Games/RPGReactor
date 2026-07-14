@@ -398,6 +398,10 @@ function createArchive(archiveName, sourceDir, innerDirName, preserveSymlinks) {
     const outPath = path.join(outputDir, archiveName);
     logInfo(`Creating archive: ${archiveName}`);
 
+    // zip UPDATES an existing archive in place, so a rebuild into a reused
+    // output directory would keep files deleted since the last build (and
+    // the checksum step would bless them). Always start from scratch.
+    if (fs.existsSync(outPath)) fs.rmSync(outPath, { force: true });
     if (archiveName.endsWith('.tar.gz')) {
         execSync(`tar czf "${outPath}" -C "${sourceDir}" "${innerDirName}"`, { stdio: 'pipe' });
     } else {

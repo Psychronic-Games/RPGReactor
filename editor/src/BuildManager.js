@@ -520,6 +520,15 @@ class BuildManager {
             return;
         }
 
+        // Save everything first — the build worker reads the project from
+        // disk, so an unsaved map or database edit would silently ship a
+        // stale build (playtest already saves for the same reason).
+        const saved = await window.reactor.projectController.saveAll();
+        if (!saved) {
+            alert('Build cancelled: the project could not be saved.');
+            return;
+        }
+
         const path = require('path');
         const fs = require('fs');
         const outputPath = document.getElementById('build-output-path').value;

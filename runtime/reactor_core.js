@@ -1947,6 +1947,11 @@ Bitmap._sweepStalledLoads = function() {
     const list = Bitmap._loadWatchList;
     if (!list || list.length === 0) return;
     const now = performance.now();
+    // Poll-driven sweeps (every isReady() while a scene gates on N loading
+    // bitmaps) made recovery O(N²) per frame; the 10s stall threshold
+    // doesn't need sub-quarter-second resolution.
+    if (Bitmap._lastSweepTime && now - Bitmap._lastSweepTime < 250) return;
+    Bitmap._lastSweepTime = now;
     for (let i = list.length - 1; i >= 0; i--) {
         const bitmap = list[i];
         if (bitmap._loadingState === "loaded" || bitmap._loadingState === "none" ||
@@ -2886,7 +2891,6 @@ Sprite.prototype._refresh = function() {
     const realY = frameY.clamp(0, baseTextureH);
     const realW = (frameW - realX + frameX).clamp(0, baseTextureW - realX);
     const realH = (frameH - realY + frameY).clamp(0, baseTextureH - realY);
-    const frame = new Rectangle(realX, realY, realW, realH);
     if (texture) {
         this.pivot.x = frameX - realX;
         this.pivot.y = frameY - realY;
@@ -2897,21 +2901,36 @@ Sprite.prototype._refresh = function() {
                 // (which were captured from the initial 1x1 empty stub) so
                 // the sprite keeps rendering at 1x1 despite the new source.
                 // Creating a fresh Texture resets all internal caches.
+                // The Rectangle is only built on actual change — setFrame
+                // refreshes unconditionally every frame, so the no-change
+                // path must stay allocation-free.
                 if (this.texture.source !== baseTexture.source ||
-                    this.texture.frame.x !== frame.x ||
-                    this.texture.frame.y !== frame.y ||
-                    this.texture.frame.width !== frame.width ||
-                    this.texture.frame.height !== frame.height) {
+                    this.texture.frame.x !== realX ||
+                    this.texture.frame.y !== realY ||
+                    this.texture.frame.width !== realW ||
+                    this.texture.frame.height !== realH) {
+                    // The replaced texture must be destroyed: the v8 Texture
+                    // constructor subscribes to the (session-lived) source's
+                    // resize event, so every orphaned texture is retained by
+                    // the source forever — walk cycles and blinking pause
+                    // signs leaked thousands of textures per minute. Only
+                    // destroy textures this path created itself (flagged);
+                    // the initial texture may be shared.
+                    const old = this.texture;
                     this.texture = new PIXI.Texture({
                         source: baseTexture.source,
-                        frame: frame
+                        frame: new Rectangle(realX, realY, realW, realH)
                     });
+                    this.texture.__rrSpriteOwned = true;
+                    if (old && old.__rrSpriteOwned && !old.destroyed) {
+                        old.destroy();
+                    }
                 }
             } else {
                 // v5/v6/v7 mutation path.
                 texture.baseTexture = baseTexture;
                 try {
-                    texture.frame = frame;
+                    texture.frame = new Rectangle(realX, realY, realW, realH);
                 } catch (e) {
                     texture.frame = new Rectangle();
                 }
@@ -3692,6 +3711,28 @@ Tilemap.Layer.MAX_GL_TEXTURES = 3;
 Tilemap.Layer.VERTEX_STRIDE = 9 * 4;
 Tilemap.Layer.MAX_SIZE = 16000;
 
+// v8 tile textures register on their (session-cached) source's resize
+// listener list, so dropping the cache without destroying them retains
+// every texture for the whole session — one leaked batch per map transfer.
+Tilemap.Layer.prototype._destroyV8TexCache = function() {
+    if (this._v8TexCache) {
+        for (const texture of this._v8TexCache.values()) {
+            if (texture && !texture.destroyed) {
+                texture.destroy();
+            }
+        }
+        this._v8TexCache = null;
+    }
+    if (this._v8SpritePool) {
+        for (const sprite of this._v8SpritePool) {
+            if (sprite && !sprite.destroyed) {
+                sprite.destroy();
+            }
+        }
+        this._v8SpritePool = null;
+    }
+};
+
 Tilemap.Layer.prototype.destroy = function() {
     if (this._vao) {
         this._vao.destroy();
@@ -3701,6 +3742,7 @@ Tilemap.Layer.prototype.destroy = function() {
     this._indexBuffer = null;
     this._vertexBuffer = null;
     this._vao = null;
+    this._destroyV8TexCache();
 };
 
 Tilemap.Layer.prototype.setBitmaps = function(bitmaps) {
@@ -3708,7 +3750,7 @@ Tilemap.Layer.prototype.setBitmaps = function(bitmaps) {
     this._needsTexturesUpdate = true;
     // v8: tile textures are cached per (set, frame); a tileset change
     // invalidates them.
-    this._v8TexCache = null;
+    this._destroyV8TexCache();
 };
 
 Tilemap.Layer.prototype.clear = function() {
@@ -4292,7 +4334,15 @@ TilingSprite.prototype._onBitmapLoad = function() {
     // rendering at 1x1. v5/v6/v7 can use the legacy mutation pattern.
     const bt = this._bitmap.baseTexture;
     if (PIXI.TextureSource && bt && bt.source) {
+        // Destroy the replaced texture (if this path created it) — the v8
+        // constructor subscribes it to the source's resize event, which
+        // otherwise retains every orphaned texture for the session.
+        const old = this.texture;
         this.texture = new PIXI.Texture({ source: bt.source });
+        this.texture.__rrSpriteOwned = true;
+        if (old && old.__rrSpriteOwned && !old.destroyed) {
+            old.destroy();
+        }
     } else {
         this.texture.baseTexture = bt;
     }
@@ -4320,6 +4370,10 @@ TilingSprite.prototype._refresh = function() {
                     texture.frame.width !== frame.width ||
                     texture.frame.height !== frame.height)) {
                 this.texture = new PIXI.Texture({ source: texture.source, frame });
+                this.texture.__rrSpriteOwned = true;
+                if (texture.__rrSpriteOwned && !texture.destroyed) {
+                    texture.destroy();
+                }
             }
         } else if (texture.baseTexture) {
             try {
@@ -6131,6 +6185,12 @@ WebAudio.prototype.isReady = function() {
 WebAudio._sweepStalledLoads = function() {
     const list = WebAudio._loadWatchList;
     if (!list || list.length === 0) return;
+    // Poll-driven sweeps (every isReady() call while a scene gates on N
+    // loading buffers) made recovery O(N²) per frame; the 10s stall
+    // threshold doesn't need sub-quarter-second resolution.
+    const now = Date.now();
+    if (WebAudio._lastSweepTime && now - WebAudio._lastSweepTime < 250) return;
+    WebAudio._lastSweepTime = now;
     for (let i = list.length - 1; i >= 0; i--) {
         const buffer = list[i];
         const done = buffer._degradedToSilence ||
@@ -6200,6 +6260,18 @@ WebAudio.prototype.stop = function() {
 WebAudio.prototype.destroy = function() {
     this._destroyDecoder();
     this.clear();
+    // Drop off the watchdog list: the tick-driven sweep would otherwise
+    // classify this destroyed buffer as a stalled load and re-download and
+    // re-decode it ~10s later. Only an explicit isReady() poll (a plugin
+    // cache still holding the buffer) may revive it — the invariant
+    // documented in isReady().
+    const list = WebAudio._loadWatchList;
+    if (list) {
+        const index = list.indexOf(this);
+        if (index >= 0) {
+            list.splice(index, 1);
+        }
+    }
 };
 
 /**

@@ -3,6 +3,19 @@
  * Reads/writes to reactor_plugins.js or RPG Maker-compatible plugins.js
  */
 class PluginManager {
+    // Atomic write for project data: write a temp sibling then rename over
+    // the destination, so a crash/kill/full-disk mid-write can never destroy
+    // the previous good file. Falls back to a plain write when the fs
+    // implementation has no renameSync (test mocks, web host shims).
+    _writeFileAtomic(fs, filePath, data, options) {
+        const atomic = (typeof window !== 'undefined' && window.RRWriteFileAtomicSync) || null;
+        if (atomic && fs && typeof fs.renameSync === 'function') {
+            atomic(fs, filePath, data, options);
+        } else {
+            fs.writeFileSync(filePath, data, options);
+        }
+    }
+
     constructor(projectController) {
         this.projectController = projectController;
         this.container = null;
@@ -3294,7 +3307,7 @@ var $plugins =
 ${JSON.stringify(pluginsToWrite, null, 4)};
 `;
 
-            this.fs.writeFileSync(pluginsPath, content, 'utf8');
+            this._writeFileAtomic(this.fs, pluginsPath, content, 'utf8');
             alert('Plugins saved successfully!');
         } catch (err) {
             console.error('Error saving plugins:', err);

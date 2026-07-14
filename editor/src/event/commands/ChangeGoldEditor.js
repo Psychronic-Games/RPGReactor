@@ -23,8 +23,8 @@ class ChangeGoldEditor {
         if (command && command.code === 125) {
             const params = command.parameters;
             this.operation = params[0] || 0;
-            this.operandType = params[2] || 0;
-            this.operand = params[1] || 0;
+            this.operandType = params[1] || 0;
+            this.operand = params[2] || 0;
         } else {
             this.operation = 0;
             this.operandType = 0;
@@ -337,10 +337,12 @@ class ChangeGoldEditor {
         return {
             code: 125,
             indent: 0,
+            // MZ command 125 contract: [operation, operandType, operand] —
+            // the runtime calls operateValue(params[0], params[1], params[2])
             parameters: [
                 this.operation,
-                this.operand,
-                this.operandType
+                this.operandType,
+                this.operand
             ]
         };
     }

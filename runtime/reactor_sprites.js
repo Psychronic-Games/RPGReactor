@@ -3641,10 +3641,8 @@ Spriteset_Map.prototype.initialize = function() {
     this._balloonSprites = [];
 };
 
-Spriteset_Map.prototype.destroy = function(options) {
-    this.removeAllBalloons();
-    Spriteset_Base.prototype.destroy.call(this, options);
-};
+// (Spriteset_Map.prototype.destroy is defined once below — it folds the
+// culled sprites back in AND removes balloons before the destroy cascade.)
 
 Spriteset_Map.prototype.loadSystemImages = function() {
     Spriteset_Base.prototype.loadSystemImages.call(this);
@@ -3790,8 +3788,12 @@ Spriteset_Map.prototype._rrWindowDormant = function(child, minX, maxX, minY, max
 
 // Culled objects live outside the display tree; fold them back in before
 // teardown so the normal destroy cascade reaches them (no leaked textures
-// on map transfer).
+// on map transfer). Balloons must end here too: a balloon-wait interpreter
+// polls the character's _balloonPlaying flag, and only removeAllBalloons
+// clears it — skipping it soft-locks the event after a mid-balloon scene
+// change.
 Spriteset_Map.prototype.destroy = function(options) {
+    this.removeAllBalloons();
     if (this._rrCullHolder) {
         for (const child of this._rrCullHolder.children.slice()) {
             this.addChild(child);

@@ -141,6 +141,10 @@ class AnimationGenerator {
     detach() {
         if (this._rafHandle) { cancelAnimationFrame(this._rafHandle); this._rafHandle = null; }
         if (this._playTimer) { clearInterval(this._playTimer); this._playTimer = null; }
+        // A pending debounced save resolves its destination at fire time —
+        // if the project switches before it fires, the old project's layers
+        // would overwrite the new project's config.
+        if (this._saveTimer) { clearTimeout(this._saveTimer); this._saveTimer = null; }
         this.playing = false;
     }
 
@@ -218,6 +222,15 @@ class AnimationGenerator {
                     id: l.id || this._newLayerId(),
                     categoryId: l.categoryId,
                     animationId: l.animationId === 'globe' ? 'sphere' : l.animationId,
+                    // v2 saves persist keyframes (params is stripped as a
+                    // live alias); dropping them here wiped every layer's
+                    // keyframes and tuning on each tool mount, and the next
+                    // debounced autosave overwrote the good config with the
+                    // defaults. Carry them through for _relinkLayerParams.
+                    keyframes: Array.isArray(l.keyframes)
+                        ? l.keyframes.map(kf => ({ ...kf }))
+                        : undefined,
+                    activeKeyframe: typeof l.activeKeyframe === 'number' ? l.activeKeyframe : undefined,
                     params: { ...(l.params || {}) },
                     blend: l.blend || 'source-over',
                     opacity: l.opacity !== undefined ? Math.max(0, Math.min(1, l.opacity)) : 1,
@@ -1051,9 +1064,23 @@ class AnimationGenerator {
             if (!target) return;
             const anim = this._findAnimation(target.categoryId, target.animationId);
             if (!anim) return;
-            const params = {};
-            for (const p of anim.params) params[p.key] = p.default;
-            target.params = params;
+            // `params` must stay an alias of keyframes[activeKeyframe]
+            // (composite rendering reads keyframes only) — write the
+            // defaults INTO the keyframe instead of replacing the object.
+            const kf = Array.isArray(target.keyframes)
+                ? target.keyframes[target.activeKeyframe]
+                : null;
+            if (kf) {
+                const preservedOpacity = kf._layerOpacity;
+                for (const key of Object.keys(kf)) delete kf[key];
+                for (const p of anim.params) kf[p.key] = p.default;
+                if (typeof preservedOpacity === 'number') kf._layerOpacity = preservedOpacity;
+                target.params = kf;
+            } else {
+                const params = {};
+                for (const p of anim.params) params[p.key] = p.default;
+                target.params = params;
+            }
             this._saveConfig();
             this._render();
         });

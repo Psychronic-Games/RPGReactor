@@ -420,8 +420,22 @@
         function Decrypter() {
             throw new Error("This is a static class");
         }
-        Decrypter.hasEncryptedImages = Utils.hasEncryptedImages ? Utils.hasEncryptedImages() : false;
-        Decrypter.hasEncryptedAudio = Utils.hasEncryptedAudio ? Utils.hasEncryptedAudio() : false;
+        // Live getters: this shim loads before Scene_Boot calls
+        // Utils.setEncryptionInfo, so a captured value would be permanently
+        // false for every encrypted game. Writable for plugins that assign.
+        for (const [prop, util] of [["hasEncryptedImages", "hasEncryptedImages"],
+                                    ["hasEncryptedAudio", "hasEncryptedAudio"]]) {
+            let override;
+            Object.defineProperty(Decrypter, prop, {
+                get: function() {
+                    if (override !== undefined) return override;
+                    return Utils[util] ? Utils[util]() : false;
+                },
+                set: function(value) { override = value; },
+                configurable: true,
+                enumerable: true
+            });
+        }
         Decrypter._requestImgFile = [];
         Decrypter._headerlength = 16;
         Decrypter._xhrOk = 400;
@@ -636,7 +650,18 @@
             if (typeof original !== "function" || original.__mvCharacterMirror) continue;
             Game_Interpreter.prototype[name] = function(params) {
                 params = params || this._params || [];
-                this._character = this.character(params.length ? params[0] : 0);
+                // Non-enumerable: interpreters are serialized into save
+                // files, and JsonEx has no shared-reference support — an
+                // enumerable live Game_Event here would be deep-cloned into
+                // the save, and after load the wait check would poll the
+                // detached clone forever (permanent soft-lock) while every
+                // save bloats with full character copies.
+                Object.defineProperty(this, "_character", {
+                    value: this.character(params.length ? params[0] : 0),
+                    writable: true,
+                    configurable: true,
+                    enumerable: false
+                });
                 return original.call(this, params);
             };
             Game_Interpreter.prototype[name].__mvCharacterMirror = true;
@@ -1290,6 +1315,18 @@
             };
             Scene_Message.prototype.associateWindows.__mvCompatWrapped = true;
         }
+    }
+
+    // MV events collide with ANY event on the target tile; MZ only with
+    // normal-priority ones. MV-authored games routed NPCs around
+    // below-priority events (floor markers), so keep MV's stricter rule
+    // for them — MZ games get the MZ rule from the corescript.
+    function installEventCollisionCompatibility() {
+        if (!global.Game_Event || !Game_Event.prototype) return;
+        Game_Event.prototype.isCollidedWithEvents = function(x, y) {
+            var events = $gameMap.eventsXyNt(x, y);
+            return events.length > 0;
+        };
     }
 
     function installMapDataReloadCompatibility() {
@@ -4023,6 +4060,20 @@
                 }
             };
         }
+        // The early field lands BEFORE the background/battlebacks in
+        // _baseSprite.children, which would draw the (opaque) battlebacks
+        // over every battler. Once the whole lower layer is built, restore
+        // MZ's sibling order by moving the field back to the top. addChild
+        // on an existing child only reorders it, and plugin-parented
+        // battlebacks (YEP puts them INSIDE the field) are unaffected.
+        var origLowerLayer = proto.createLowerLayer;
+        proto.createLowerLayer = function() {
+            origLowerLayer.apply(this, arguments);
+            if (this._battleField && this._baseSprite &&
+                this._battleField.parent === this._baseSprite) {
+                this._baseSprite.addChild(this._battleField);
+            }
+        };
         proto.createBattleback.__mvFieldOrderWrapped = true;
     }
 
@@ -4131,6 +4182,7 @@
         installWindowMetricsCompatibility();
         installSceneLayoutCompatibility();
         installMapDataReloadCompatibility();
+        installEventCollisionCompatibility();
         installDamagePopupCompatibility();
         installBattleTurnFlowCompatibility();
         installBattleFieldOffsetCompatibility();

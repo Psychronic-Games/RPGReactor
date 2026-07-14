@@ -762,10 +762,13 @@ class ConditionalBranchEditor {
             parameters: parameters
         });
 
-        // Else branch (optional placeholder)
+        // Else branch (optional placeholder). The 411 marker sits at the
+        // SAME indent as the 111 header (MZ format): at indent 1 the
+        // runtime's skipBranch never swallowed it, so the Else body ran
+        // even when the condition was true.
         commands.push({
             code: 411,
-            indent: 1,
+            indent: 0,
             parameters: []
         });
 

@@ -25,13 +25,19 @@ class TransferPlayerEditor {
         if (command && command.code === 201) {
             const params = command.parameters;
             // Standard format: [designation, mapId, x, y, direction, fadeType]
+            // designation 1 = "by variables": params[1..3] are VARIABLE IDs,
+            // which this dialog cannot edit — remember them so OK doesn't
+            // rewrite the command into a direct transfer to those raw ids.
             this.designation = params[0] || 0;
+            this.variableParams = this.designation !== 0 ? [params[1], params[2], params[3]] : null;
             this.mapId = params[1] || 1;
             this.x = params[2] !== undefined ? params[2] : 0;
             this.y = params[3] !== undefined ? params[3] : 0;
             this.direction = params[4] || 0;
             this.fadeType = params[5] || 0;
         } else {
+            this.designation = 0;
+            this.variableParams = null;
             this.mapId = 1;
             this.x = 0;
             this.y = 0;
@@ -978,6 +984,22 @@ class TransferPlayerEditor {
      * Build command from current data
      */
     buildCommand() {
+        // A variable-designated transfer keeps its designation and variable
+        // ids; only direction/fade are editable here for that mode.
+        if (this.designation !== 0 && this.variableParams) {
+            return {
+                code: 201,
+                indent: 0,
+                parameters: [
+                    this.designation,
+                    this.variableParams[0],
+                    this.variableParams[1],
+                    this.variableParams[2],
+                    this.direction,
+                    this.fadeType
+                ]
+            };
+        }
         return {
             code: 201,
             indent: 0,

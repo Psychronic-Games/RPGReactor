@@ -663,8 +663,10 @@ class DatabaseEnemyEditor {
         okBtn.addEventListener('click', () => {
             action.skillId = parseInt(document.getElementById('action-edit-skill').value) || 1;
             action.conditionType = parseInt(document.getElementById('action-edit-condType').value) || 0;
-            action.conditionParam1 = parseInt(document.getElementById('action-edit-param1').value) || 0;
-            action.conditionParam2 = parseInt(document.getElementById('action-edit-param2').value) || 0;
+            // HP/MP/state-chance condition params are fractional rates
+            // (0.3 = 30%); parseInt collapsed them to 0 on every OK click.
+            action.conditionParam1 = parseFloat(document.getElementById('action-edit-param1').value) || 0;
+            action.conditionParam2 = parseFloat(document.getElementById('action-edit-param2').value) || 0;
             action.rating = Math.max(1, Math.min(10, parseInt(document.getElementById('action-edit-rating').value) || 5));
 
             enemy.actions[actionIndex] = action;

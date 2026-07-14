@@ -200,8 +200,9 @@ class MapEditor {
     saveState() {
         if (!this.tilemapManager.currentMap) return;
 
-        // Save a deep copy of the current map data
-        const mapData = JSON.parse(JSON.stringify(this.tilemapManager.currentMap.data));
+        // Save a copy of the current map data (flat numeric array — slice is
+        // a full snapshot at a fraction of the JSON round-trip cost)
+        const mapData = this.tilemapManager.currentMap.data.slice();
         this.undoStack.push(mapData);
 
         // Clear redo stack on new action
@@ -219,11 +220,22 @@ class MapEditor {
     beginEditState() {
         if (!this.tilemapManager.currentMap || this.activeEditState) return;
 
-        const beforeData = JSON.parse(JSON.stringify(this.tilemapManager.currentMap.data));
+        // Flat numeric array: slice + element compare replaces three
+        // whole-map JSON serializations per stroke (tens of ms of jank at
+        // pointer-down and pointer-up on a 256×256 map).
         this.activeEditState = {
-            beforeData,
-            beforeDataJson: JSON.stringify(beforeData)
+            beforeData: this.tilemapManager.currentMap.data.slice()
         };
+    }
+
+    _editStateChanged() {
+        const before = this.activeEditState.beforeData;
+        const now = this.tilemapManager.currentMap.data;
+        if (before.length !== now.length) return true;
+        for (let i = 0; i < now.length; i++) {
+            if (before[i] !== now[i]) return true;
+        }
+        return false;
     }
 
     commitEditState() {
@@ -232,8 +244,7 @@ class MapEditor {
             return;
         }
 
-        const currentDataJson = JSON.stringify(this.tilemapManager.currentMap.data);
-        if (currentDataJson !== this.activeEditState.beforeDataJson) {
+        if (this._editStateChanged()) {
             this.undoStack.push(this.activeEditState.beforeData);
             this.redoStack = [];
 
@@ -274,8 +285,7 @@ class MapEditor {
         if (this.undoStack.length === 0) return;
 
         // Save current state to redo stack
-        const currentData = JSON.parse(JSON.stringify(this.tilemapManager.currentMap.data));
-        this.redoStack.push(currentData);
+        this.redoStack.push(this.tilemapManager.currentMap.data.slice());
 
         // Restore previous state
         const previousData = this.undoStack.pop();
@@ -297,8 +307,7 @@ class MapEditor {
         if (this.redoStack.length === 0) return;
 
         // Save current state to undo stack
-        const currentData = JSON.parse(JSON.stringify(this.tilemapManager.currentMap.data));
-        this.undoStack.push(currentData);
+        this.undoStack.push(this.tilemapManager.currentMap.data.slice());
 
         // Restore next state
         const nextData = this.redoStack.pop();
@@ -348,20 +357,28 @@ class MapEditor {
 
         const container = this.tilemapManager.container;
 
-        // Remove any existing listeners to prevent duplicates
-        container.off('pointerdown');
-        container.off('pointermove');
-        container.off('pointerup');
-        container.off('pointerupoutside');
-        container.off('pointercancel');
-        container.off('pointerleave');
+        // Remove only OUR previous listeners. A blanket off('pointerdown')
+        // strips EVERY listener for the event — including TilemapManager's
+        // pan handlers registered on the same container, which left
+        // middle-mouse/Shift+drag panning dead on arrival.
+        if (this._mapPointerHandlers && this._mapPointerHandlersContainer === container) {
+            for (const [ev, fn] of Object.entries(this._mapPointerHandlers)) {
+                container.off(ev, fn);
+            }
+        }
+        this._mapPointerHandlers = {};
+        this._mapPointerHandlersContainer = container;
+        const _rrOn = (ev, fn) => {
+            this._mapPointerHandlers[ev] = fn;
+            container.on(ev, fn);
+        };
 
         // Make container interactive
         container.interactive = true;
         container.cursor = 'crosshair';
 
         // Mouse down - start drawing
-        container.on('pointerdown', (event) => {
+        _rrOn('pointerdown', (event) => {
             // Don't process if map editor is disabled (event mode is active)
             if (!this.enabled) return;
 
@@ -415,7 +432,7 @@ class MapEditor {
         });
 
         // Mouse move - continue drawing or show preview
-        container.on('pointermove', (event) => {
+        _rrOn('pointermove', (event) => {
             // Don't process if map editor is disabled (event mode is active)
             if (!this.enabled) return;
 
@@ -453,7 +470,7 @@ class MapEditor {
         });
 
         // Mouse up - finish drawing
-        container.on('pointerup', (event) => {
+        _rrOn('pointerup', (event) => {
             if (!this.isDrawing) return;
 
             const pos = event.data.getLocalPosition(container);
@@ -469,18 +486,18 @@ class MapEditor {
             this.resetDrawingState(true);
         });
 
-        container.on('pointerupoutside', () => {
+        _rrOn('pointerupoutside', () => {
             if (!this.isDrawing) return;
             this.resetDrawingState(true);
         });
 
-        container.on('pointercancel', () => {
+        _rrOn('pointercancel', () => {
             if (!this.isDrawing) return;
             this.resetDrawingState(true);
         });
 
         // Mouse leave - hide tile preview and clear coordinates
-        container.on('pointerleave', () => {
+        _rrOn('pointerleave', () => {
             this.hideTilePreview();
 
             // Clear coordinate display when mouse leaves map
@@ -593,8 +610,18 @@ class MapEditor {
         this.lastPaintedTile.y = y;
         this.lastPaintedTile.quadrant = -1;
 
-        // If eraser mode, erase tiles layer-aware (no tile selection needed)
+        // If eraser mode, erase layer-aware (no tile selection needed).
+        // On the Regions tab the eraser clears the REGION at the cell —
+        // it used to silently delete map tiles hidden under the overlay.
         if (this.eraserMode) {
+            if (currentLayer === 'R') {
+                const index = 5 * layerSize + y * width + x;
+                data[index] = 0;
+                if (this.regionManager && this.regionManager.enabled) {
+                    this.regionManager.updateRegionCells([{ x, y }]);
+                }
+                return;
+            }
             this.eraseTilesAtPositions([{ x, y }]);
             return;
         }
@@ -974,14 +1001,16 @@ class MapEditor {
     // Paint the selected region over every cell in [minX..maxX]×[minY..maxY]
     // that includeFn accepts (includeFn null = whole rectangle). Regions live
     // on z5 and are selected in the RegionManager, not the tile palette.
-    paintRegionArea(minX, maxX, minY, maxY, includeFn) {
-        if (!this.regionManager || !this.regionManager.selectedTiles ||
-            this.regionManager.selectedTiles.length === 0) {
+    paintRegionArea(minX, maxX, minY, maxY, includeFn, regionOverride = null) {
+        if (!this.regionManager) return;
+        if (regionOverride === null &&
+            (!this.regionManager.selectedTiles ||
+             this.regionManager.selectedTiles.length === 0)) {
             return;
         }
         const { width, height, data } = this.tilemapManager.currentMap;
         const layerSize = width * height;
-        const region = this.regionManager.selectedRegion;
+        const region = regionOverride !== null ? regionOverride : this.regionManager.selectedRegion;
         const painted = [];
         for (let y = Math.max(0, minY); y <= Math.min(height - 1, maxY); y++) {
             for (let x = Math.max(0, minX); x <= Math.min(width - 1, maxX); x++) {
@@ -1005,6 +1034,10 @@ class MapEditor {
         const maxY = Math.max(start.y, end.y);
 
         if (this.eraserMode) {
+            if (this.tilesetPaletteViewer.currentLayer === 'R') {
+                this.paintRegionArea(minX, maxX, minY, maxY, null, 0);
+                return;
+            }
             const positions = [];
             for (let y = minY; y <= maxY; y++) {
                 for (let x = minX; x <= maxX; x++) {
@@ -1160,6 +1193,11 @@ class MapEditor {
         const maxY = Math.ceil(centerY + radius);
 
         if (this.eraserMode) {
+            if (this.tilesetPaletteViewer.currentLayer === 'R') {
+                this.paintRegionArea(minX, maxX, minY, maxY, (x, y) =>
+                    Math.sqrt(Math.pow(x - centerX, 2) + Math.pow(y - centerY, 2)) <= radius, 0);
+                return;
+            }
             const positions = [];
             for (let y = minY; y <= maxY; y++) {
                 for (let x = minX; x <= maxX; x++) {
@@ -1432,11 +1470,13 @@ class MapEditor {
                         }
                     }
 
-                    // Place base first so neighbor checks see it, then shape
+                    // Write the base id only: the post-fill reshape pass
+                    // recomputes every filled cell (and its border) against
+                    // the FINAL fill state, so a shape computed mid-flood
+                    // against half-filled neighbors was pure throwaway work
+                    // (~8 neighbor scans per cell on a large fill).
                     const targetIdx = actualPlacementLayer * layerSize + basePos;
                     data[targetIdx] = baseTileId;
-                    const result = this.calculateAutotileShape(baseTileId, x, y, null, actualPlacementLayer);
-                    data[targetIdx] = result.tileId;
                     affectedTiles.add(`${x},${y},${actualPlacementLayer}`);
                     if (actualPlacementLayer === 1) affectedTiles.add(`${x},${y},0`);
                 } else {
@@ -1500,6 +1540,20 @@ class MapEditor {
         if (!this.previewLayer) {
             return;
         }
+
+        // Rebuilding the preview is expensive (per-cell sprites/textures on
+        // big drags) and pointermove fires per pixel — skip when the drag is
+        // still over the same tile pair.
+        if (this._lastShapePreview &&
+            this._lastShapePreview.tool === this.currentTool &&
+            this._lastShapePreview.sx === start.x && this._lastShapePreview.sy === start.y &&
+            this._lastShapePreview.cx === current.x && this._lastShapePreview.cy === current.y) {
+            return;
+        }
+        this._lastShapePreview = {
+            tool: this.currentTool,
+            sx: start.x, sy: start.y, cx: current.x, cy: current.y
+        };
 
         // Clear previous preview
         this.previewLayer.clear();
@@ -1705,6 +1759,7 @@ class MapEditor {
     }
 
     clearPreview() {
+        this._lastShapePreview = null;
         if (this.previewLayer) {
             this.previewLayer.clear();
             this.previewLayer.removeChildren();
