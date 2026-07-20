@@ -123,6 +123,7 @@ class RotatePictureEditor {
      * Render modal content
      */
     renderContent() {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const container = this.modal.querySelector('.rotate-picture-container');
         container.innerHTML = '';
 
@@ -139,7 +140,7 @@ class RotatePictureEditor {
             border-top-right-radius: 6px;
         `;
         header.innerHTML = `
-            <h3 style="margin: 0; color: var(--color-text-strong); font-size: 16px;">Rotate Picture</h3>
+            <h3 style="margin: 0; color: var(--color-text-strong); font-size: 16px;">${tt('Rotate Picture')}</h3>
             <button class="close-btn" style="background: none; border: none; color: var(--color-text-strong); font-size: 20px; cursor: pointer; padding: 0; width: 24px; height: 24px;">\u00d7</button>
         `;
         container.appendChild(header);
@@ -162,7 +163,7 @@ class RotatePictureEditor {
         pictureRow.style.cssText = 'display: flex; align-items: center; gap: 8px;';
 
         const pictureLabel = document.createElement('span');
-        pictureLabel.textContent = 'Picture #:';
+        pictureLabel.textContent = tt('Picture #:');
         pictureLabel.style.cssText = 'color: var(--color-text); font-size: 13px; min-width: 80px;';
 
         const pictureInput = document.createElement('input');
@@ -192,7 +193,7 @@ class RotatePictureEditor {
         speedRow.style.cssText = 'display: flex; align-items: center; gap: 8px;';
 
         const speedLabel = document.createElement('span');
-        speedLabel.textContent = 'Speed:';
+        speedLabel.textContent = tt('Speed:');
         speedLabel.style.cssText = 'color: var(--color-text); font-size: 13px; min-width: 80px;';
 
         const speedInput = document.createElement('input');
@@ -231,12 +232,12 @@ class RotatePictureEditor {
         `;
 
         const cancelBtn = document.createElement('button');
-        cancelBtn.textContent = 'Cancel';
+        cancelBtn.textContent = tt('Cancel');
         cancelBtn.className = 'rr-btn-secondary';
         cancelBtn.addEventListener('click', () => this.close());
 
         const okBtn = document.createElement('button');
-        okBtn.textContent = 'OK';
+        okBtn.textContent = tt('OK');
         okBtn.style.cssText = `
             padding: 6px 20px;
             background-color: var(--color-accent);

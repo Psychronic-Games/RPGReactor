@@ -31,7 +31,13 @@ function contentType(pathname) {
         html: 'text/html; charset=utf-8',
         css: 'text/css; charset=utf-8',
         png: 'image/png',
+        jpg: 'image/jpeg',
+        jpeg: 'image/jpeg',
+        webp: 'image/webp',
         ogg: 'audio/ogg',
+        m4a: 'audio/mp4',
+        mp3: 'audio/mpeg',
+        wav: 'audio/wav',
         wasm: 'application/wasm',
     }[extension] || 'application/octet-stream';
 }

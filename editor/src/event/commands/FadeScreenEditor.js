@@ -78,6 +78,7 @@ class FadeScreenEditor {
      * Render modal content
      */
     renderContent() {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const container = this.modal.querySelector('.fade-screen-container');
         container.innerHTML = '';
 
@@ -94,7 +95,7 @@ class FadeScreenEditor {
             border-top-right-radius: 6px;
         `;
         header.innerHTML = `
-            <h3 style="margin: 0; color: var(--color-text-strong); font-size: 16px;">Fade Screen</h3>
+            <h3 style="margin: 0; color: var(--color-text-strong); font-size: 16px;">${tt('Fade Screen')}</h3>
             <button class="close-btn" style="background: none; border: none; color: var(--color-text-strong); font-size: 20px; cursor: pointer; padding: 0; width: 24px; height: 24px;">×</button>
         `;
         container.appendChild(header);
@@ -125,7 +126,7 @@ class FadeScreenEditor {
 
         const fadeoutLabel = document.createElement('label');
         fadeoutLabel.htmlFor = 'fadeout';
-        fadeoutLabel.textContent = 'Fadeout';
+        fadeoutLabel.textContent = tt('Fadeout');
         fadeoutLabel.style.cssText = 'color: var(--color-text); cursor: pointer;';
 
         const fadeinRadio = document.createElement('input');
@@ -139,7 +140,7 @@ class FadeScreenEditor {
 
         const fadeinLabel = document.createElement('label');
         fadeinLabel.htmlFor = 'fadein';
-        fadeinLabel.textContent = 'Fadein';
+        fadeinLabel.textContent = tt('Fadein');
         fadeinLabel.style.cssText = 'color: var(--color-text); cursor: pointer;';
 
         fadeSection.appendChild(fadeoutRadio);
@@ -150,7 +151,7 @@ class FadeScreenEditor {
 
         // Info text
         const info = document.createElement('div');
-        info.textContent = 'Duration is automatically set to the default fade speed.';
+        info.textContent = tt('Duration is automatically set to the default fade speed.');
         info.style.cssText = 'color: var(--color-text-muted); font-size: 11px; padding: 8px; background-color: var(--color-bg-list-item); border-radius: 3px;';
         content.appendChild(info);
 
@@ -168,12 +169,12 @@ class FadeScreenEditor {
         `;
 
         const cancelBtn = document.createElement('button');
-        cancelBtn.textContent = 'Cancel';
+        cancelBtn.textContent = tt('Cancel');
         cancelBtn.className = 'rr-btn-secondary';
         cancelBtn.addEventListener('click', () => this.close());
 
         const okBtn = document.createElement('button');
-        okBtn.textContent = 'OK';
+        okBtn.textContent = tt('OK');
         okBtn.style.cssText = `
             padding: 6px 20px;
             background-color: var(--color-accent);

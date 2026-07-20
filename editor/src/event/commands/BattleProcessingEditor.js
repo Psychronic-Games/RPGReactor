@@ -82,6 +82,7 @@ class BattleProcessingEditor {
      * Render modal content
      */
     renderContent() {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const container = this.modal.querySelector('.battle-processing-container');
         container.innerHTML = '';
 
@@ -89,7 +90,7 @@ class BattleProcessingEditor {
         const header = document.createElement('div');
         header.style.cssText = 'padding: 12px 16px; background-color: var(--color-bg-panel); border-bottom: 1px solid var(--color-border); display: flex; justify-content: space-between; align-items: center; border-top-left-radius: 6px; border-top-right-radius: 6px;';
         header.innerHTML = `
-            <h3 style="margin: 0; color: var(--color-text-strong); font-size: 16px;">Battle Processing</h3>
+            <h3 style="margin: 0; color: var(--color-text-strong); font-size: 16px;">${tt('Battle Processing')}</h3>
             <button class="close-btn" style="background: none; border: none; color: var(--color-text-strong); font-size: 20px; cursor: pointer; padding: 0; width: 24px; height: 24px;">\u00d7</button>
         `;
         container.appendChild(header);
@@ -105,7 +106,7 @@ class BattleProcessingEditor {
         designSection.style.cssText = 'display: flex; flex-direction: column; gap: 8px;';
 
         const designLabel = document.createElement('span');
-        designLabel.textContent = 'Troop Designation:';
+        designLabel.textContent = tt('Troop Designation:');
         designLabel.style.cssText = 'color: var(--color-text); font-size: 13px; font-weight: bold;';
         designSection.appendChild(designLabel);
 
@@ -124,7 +125,7 @@ class BattleProcessingEditor {
         });
 
         const directLabel = document.createElement('label');
-        directLabel.textContent = 'Direct';
+        directLabel.textContent = tt('Direct');
         directLabel.style.cssText = 'color: var(--color-text); font-size: 13px; cursor: pointer;';
         directLabel.addEventListener('click', () => { directRadio.checked = true; directRadio.dispatchEvent(new Event('change')); });
 
@@ -140,7 +141,7 @@ class BattleProcessingEditor {
         });
 
         const varLabel = document.createElement('label');
-        varLabel.textContent = 'Variable';
+        varLabel.textContent = tt('Variable');
         varLabel.style.cssText = 'color: var(--color-text); font-size: 13px; cursor: pointer;';
         varLabel.addEventListener('click', () => { varRadio.checked = true; varRadio.dispatchEvent(new Event('change')); });
 
@@ -156,7 +157,7 @@ class BattleProcessingEditor {
         });
 
         const randomLabel = document.createElement('label');
-        randomLabel.textContent = 'Random Encounter';
+        randomLabel.textContent = tt('Random Encounter');
         randomLabel.style.cssText = 'color: var(--color-text); font-size: 13px; cursor: pointer;';
         randomLabel.addEventListener('click', () => { randomRadio.checked = true; randomRadio.dispatchEvent(new Event('change')); });
 
@@ -176,7 +177,7 @@ class BattleProcessingEditor {
             troopRow.style.cssText = 'display: flex; align-items: center; gap: 8px;';
 
             const troopLabel = document.createElement('span');
-            troopLabel.textContent = 'Troop:';
+            troopLabel.textContent = tt('Troop:');
             troopLabel.style.cssText = 'color: var(--color-text); font-size: 13px; min-width: 120px;';
 
             const troopSelect = document.createElement('select');
@@ -189,7 +190,7 @@ class BattleProcessingEditor {
                     if (troop) {
                         const option = document.createElement('option');
                         option.value = i;
-                        option.textContent = `${i.toString().padStart(4, '0')}: ${troop.name || 'Unnamed'}`;
+                        option.textContent = `${i.toString().padStart(4, '0')}: ${troop.name || tt('Unnamed')}`;
                         if (i === this.troopId) {
                             option.selected = true;
                         }
@@ -211,7 +212,7 @@ class BattleProcessingEditor {
             varRow.style.cssText = 'display: flex; align-items: center; gap: 8px;';
 
             const varRowLabel = document.createElement('span');
-            varRowLabel.textContent = 'Variable:';
+            varRowLabel.textContent = tt('Variable:');
             varRowLabel.style.cssText = 'color: var(--color-text); font-size: 13px; min-width: 120px;';
 
             const varInput = document.createElement('input');
@@ -253,7 +254,7 @@ class BattleProcessingEditor {
 
         const escapeLabel = document.createElement('label');
         escapeLabel.htmlFor = 'battle-can-escape';
-        escapeLabel.textContent = 'Can Escape';
+        escapeLabel.textContent = tt('Can Escape');
         escapeLabel.style.cssText = 'color: var(--color-text); font-size: 13px; cursor: pointer;';
 
         escapeRow.appendChild(escapeCheckbox);
@@ -274,7 +275,7 @@ class BattleProcessingEditor {
 
         const loseLabel = document.createElement('label');
         loseLabel.htmlFor = 'battle-can-lose';
-        loseLabel.textContent = 'Can Lose';
+        loseLabel.textContent = tt('Can Lose');
         loseLabel.style.cssText = 'color: var(--color-text); font-size: 13px; cursor: pointer;';
 
         loseRow.appendChild(loseCheckbox);
@@ -289,12 +290,12 @@ class BattleProcessingEditor {
         footer.style.cssText = 'padding: 12px 16px; border-top: 1px solid var(--color-border); background-color: var(--color-bg-panel); display: flex; justify-content: flex-end; gap: 8px;';
 
         const cancelBtn = document.createElement('button');
-        cancelBtn.textContent = 'Cancel';
+        cancelBtn.textContent = tt('Cancel');
         cancelBtn.className = 'rr-btn-secondary';
         cancelBtn.addEventListener('click', () => this.close());
 
         const okBtn = document.createElement('button');
-        okBtn.textContent = 'OK';
+        okBtn.textContent = tt('OK');
         okBtn.style.cssText = 'padding: 6px 20px; background-color: var(--color-accent); color: var(--color-bg-deep); border: none; border-radius: 3px; cursor: pointer; font-size: 12px; font-weight: bold;';
         okBtn.addEventListener('click', () => this.save());
 

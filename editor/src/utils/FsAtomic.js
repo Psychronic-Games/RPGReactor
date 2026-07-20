@@ -11,15 +11,62 @@
     'use strict';
 
     function writeFileAtomicSync(fs, filePath, data, options) {
-        const tmpPath = filePath + '.tmp-rr-' + process.pid;
-        fs.writeFileSync(tmpPath, data, options);
+        const crypto = require('crypto');
+        const path = require('path');
+        const constants = fs.constants || {};
+        let mode = typeof options === 'object' && options?.mode !== undefined ? options.mode : 0o666;
         try {
+            if (fs.lstatSync) mode = fs.lstatSync(filePath).mode & 0o777;
+        } catch (error) {
+            if (error?.code !== 'ENOENT') throw error;
+        }
+
+        let tmpPath;
+        let fd = null;
+        for (let attempt = 0; attempt < 10; attempt++) {
+            tmpPath = `${filePath}.tmp-rr-${process.pid}-${crypto.randomBytes(12).toString('hex')}`;
+            try {
+                const flags = constants.O_WRONLY !== undefined
+                    ? constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | (constants.O_NOFOLLOW || 0)
+                    : 'wx';
+                fd = fs.openSync(tmpPath, flags, mode);
+                break;
+            } catch (error) {
+                if (error?.code !== 'EEXIST' || attempt === 9) throw error;
+            }
+        }
+
+        try {
+            fs.writeFileSync(fd, data, options);
+            if (fs.fsyncSync) fs.fsyncSync(fd);
+            fs.closeSync(fd);
+            fd = null;
             fs.renameSync(tmpPath, filePath);
-        } catch (e) {
-            // Clean the temp file up on failure so retries don't collide,
-            // then surface the original error to the caller's handler.
+            fsyncDirectory(fs, path.dirname(filePath), constants);
+        } catch (error) {
+            if (fd !== null) {
+                try { fs.closeSync(fd); } catch (closeError) { /* ignore */ }
+            }
             try { fs.unlinkSync(tmpPath); } catch (cleanupError) { /* ignore */ }
-            throw e;
+            throw error;
+        }
+    }
+
+    function fsyncDirectory(fs, directoryPath, constants) {
+        if (!fs.fsyncSync || !fs.openSync) return;
+        let fd = null;
+        try {
+            const flags = constants.O_RDONLY !== undefined
+                ? constants.O_RDONLY | (constants.O_DIRECTORY || 0) | (constants.O_NOFOLLOW || 0)
+                : 'r';
+            fd = fs.openSync(directoryPath, flags);
+            fs.fsyncSync(fd);
+        } catch (error) {
+            // Some supported platforms/filesystems do not permit syncing a directory.
+        } finally {
+            if (fd !== null) {
+                try { fs.closeSync(fd); } catch (closeError) { /* ignore */ }
+            }
         }
     }
 

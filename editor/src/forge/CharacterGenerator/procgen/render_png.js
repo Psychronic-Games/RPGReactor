@@ -2,13 +2,12 @@
 // Render the REAL composite (body + generated outfit) to a PNG, exactly the
 // way the editor's CharacterRenderer does, upscaled, as a 2×2 direction grid.
 //
-// This is the tool that lets me SEE what the user sees — the letter-grid
-// viewer (view_part.js) shows the outfit's letters in isolation, which hides
-// how it actually renders in colour, at scale, composited over the body.
+// This renders the same color composite the editor displays rather than an
+// isolated letter-grid representation of the generated outfit.
 //
 //   node render_png.js [out.png] [gender] [frame] [style]
 //
-// Defaults: /tmp/outfit_preview.png, male, frame 1, looseleaf.
+// Defaults: /tmp/outfit_preview.png, male, frame 1, psychronic.
 
 const fs = require('fs');
 const path = require('path');
@@ -68,7 +67,7 @@ function main() {
     const outPath = process.argv[2] || '/tmp/outfit_preview.png';
     const gender = process.argv[3] || 'male';
     const frame = process.argv[4] !== undefined ? parseInt(process.argv[4], 10) : 1;
-    const style = process.argv[5] || 'looseleaf';
+    const style = process.argv[5] || 'psychronic';
     const SCALE = 4, CELL = 144, PAD = 8;
 
     const bodyDir = path.join(CG, 'styles', style, 'parts', 'body', gender);

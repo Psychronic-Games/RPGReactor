@@ -236,17 +236,16 @@ function loadAGRegistry() {
     return new Function(code)(sandbox.window, sandbox.document, sandbox.Image);
 }
 
-// Every baked recipe (Interface panels, Portal) must resolve to a real AG
-// animation and render its frames without throwing when driven with the
+// Every baked recipe must resolve to a real Animation Generator animation
+// and render its frames without throwing when driven with the
 // recipe's mapped parameters — this exercises the exact bake pipeline the
 // editor runs.
 test('baked recipes render through the real AG animations', () => {
     const registry = loadAGRegistry();
+    assert.equal(registry.length, 75, 'release Animation Generator recipe count');
+    assert.equal(registry.some(animation => animation.id === 'portal'), false);
     const g = loadRecipes();
-    // Interface recipes went native-3D (2026-07-05); Portal is the
-    // remaining baked recipe (its surface is the AG water-ripple sim).
     const baked = g.R.filter((r) => r.bake);
-    assert.ok(baked.length >= 1, `expected ≥1 baked recipe, got ${baked.length}`);
     for (const recipe of baked) {
         const anim = registry.find((a) => a.id === recipe.bake.animationId);
         assert.ok(anim, `${recipe.id}: AG animation '${recipe.bake.animationId}' not found`);

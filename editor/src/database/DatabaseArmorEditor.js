@@ -34,41 +34,41 @@ class DatabaseArmorEditor {
         const generalSection = document.createElement('div');
         generalSection.className = 'database-section';
         generalSection.innerHTML = `
-            <div class="database-section-header">General</div>
+            <div class="database-section-header">${tt('General')}</div>
             <div class="database-section-content"><div class="db-general-grid">
                 <div style="display: flex; flex-direction: column; align-items: center; gap: 6px;">
-                    <label style="font-size: 11px; color: var(--color-text-muted); font-weight: 600;">Icon</label>
+                    <label style="font-size: 11px; color: var(--color-text-muted); font-weight: 600;">${tt('Icon')}</label>
                     <div id="armor-icon-container-${armor.id}"></div>
                 </div>
                 <div class="db-form db-fill">
                     <div class="db-row-cols">
                         <span class="db-col">
-                            <label>Name</label>
-                            <input type="text" class="database-field-value" value="${armor.name || ''}" data-field="name" data-armor-id="${armor.id}">
+                            <label>${tt('Name')}</label>
+                            <input type="text" class="database-field-value" value="${rrEscapeHtml(armor.name)}" data-field="name" data-armor-id="${armor.id}">
                         </span>
                     </div>
                     <div class="db-row-cols db-row-grow">
                         <span class="db-col">
-                            <label>Description</label>
-                            <textarea class="database-field-value" rows="2" data-field="description" data-armor-id="${armor.id}">${armor.description || ''}</textarea>
+                            <label>${tt('Description')}</label>
+                            <textarea class="database-field-value" rows="2" data-field="description" data-armor-id="${armor.id}">${rrEscapeHtml(armor.description)}</textarea>
                         </span>
                     </div>
                     <div class="db-row-cols">
                         <span class="db-col">
                             <label>${tt('Armor Type')}</label>
                             <select class="database-field-value" data-field="atypeId" data-armor-id="${armor.id}">
-                                ${armorTypeNames.map((name, idx) => idx > 0 && name ? `<option value="${idx}" ${armor.atypeId === idx ? 'selected' : ''}>${name}</option>` : '').join('')}
+                                ${armorTypeNames.map((name, idx) => idx > 0 && name ? `<option value="${idx}" ${armor.atypeId === idx ? 'selected' : ''}>${rrEscapeHtml(name)}</option>` : '').join('')}
                             </select>
                         </span>
                         <span class="db-col">
                             <label>${tt('Equip Type')}</label>
                             <select class="database-field-value" data-field="etypeId" data-armor-id="${armor.id}">
-                                ${equipTypeNames.map((name, idx) => idx > 0 && name ? `<option value="${idx}" ${armor.etypeId === idx ? 'selected' : ''}>${name}</option>` : '').join('')}
+                                ${equipTypeNames.map((name, idx) => idx > 0 && name ? `<option value="${idx}" ${armor.etypeId === idx ? 'selected' : ''}>${rrEscapeHtml(name)}</option>` : '').join('')}
                             </select>
                         </span>
                         <span class="db-col">
-                            <label>Price</label>
-                            <input type="number" class="database-field-value" value="${armor.price || 0}" data-field="price" data-armor-id="${armor.id}">
+                            <label>${tt('Price')}</label>
+                            <input type="number" class="database-field-value" value="${rrEscapeHtml(armor.price || 0)}" data-field="price" data-armor-id="${armor.id}">
                         </span>
                     </div>
                 </div></div>
@@ -95,13 +95,13 @@ class DatabaseArmorEditor {
         const paramsSection = document.createElement('div');
         paramsSection.className = 'database-section';
         paramsSection.innerHTML = `
-            <div class="database-section-header">Parameters</div>
+            <div class="database-section-header">${tt('Parameters')}</div>
             <div class="database-section-content">
                 <table class="traits-table">
                     <thead>
                         <tr>
-                            <th>Parameter</th>
-                            <th>Value</th>
+                            <th>${tt('Parameter')}</th>
+                            <th>${tt('Value')}</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -111,7 +111,7 @@ class DatabaseArmorEditor {
                                 <td>
                                     <input type="number"
                                            class="database-field-value database-field-value-small"
-                                           value="${params[idx] || 0}"
+                                           value="${rrEscapeHtml(params[idx] || 0)}"
                                            data-field="params"
                                            data-param-index="${idx}"
                                            data-armor-id="${armor.id}"
@@ -131,14 +131,14 @@ class DatabaseArmorEditor {
         traitsSection.setAttribute('tabindex', '0');
         traitsSection.style.outline = 'none';
         traitsSection.innerHTML = `
-            <div class="database-section-header">Traits</div>
+            <div class="database-section-header">${tt('Traits')}</div>
             <div class="database-section-content">
                 <table class="traits-table" id="armor-traits-table-${armor.id}">
                     <thead>
                         <tr>
                             <th style="width: 3px; padding: 0; border: none; background: transparent;"></th>
-                            <th>Type</th>
-                            <th>Content</th>
+                            <th>${tt('Type')}</th>
+                            <th>${tt('Content')}</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -146,19 +146,19 @@ class DatabaseArmorEditor {
                             armor.traits.map((trait, index) => `
                                 <tr class="trait-row" data-trait-index="${index}">
                                     <td class="trait-indicator" style="width: 3px; padding: 0; border: none; background: transparent;"></td>
-                                    <td>${this.commonUI.getTraitName(trait.code)}</td>
-                                    <td>${this.commonUI.getTraitValue(trait)}</td>
+                                    <td>${rrEscapeHtml(this.commonUI.getTraitName(trait.code))}</td>
+                                    <td>${rrEscapeHtml(this.commonUI.getTraitValue(trait))}</td>
                                 </tr>
                             `).join('') :
-                            '<tr><td style="width: 3px; padding: 0; border: none; background: transparent;"></td><td colspan="2" style="text-align: center; color: var(--color-text-muted); font-style: italic; padding: 12px;">No traits</td></tr>'}
+                            `<tr><td style="width: 3px; padding: 0; border: none; background: transparent;"></td><td colspan="2" style="text-align: center; color: var(--color-text-muted); font-style: italic; padding: 12px;">${tt('No traits')}</td></tr>`}
                     </tbody>
                 </table>
                 <div class="trait-action-buttons" style="display: flex; gap: 6px; margin-top: 8px;">
-                    <button class="trait-btn-add" style="padding: 4px 12px; background: var(--color-border-subtle); border: 1px solid var(--color-border-input); color: var(--color-text-strong); border-radius: 4px; cursor: pointer; font-size: 12px;">Add</button>
-                    <button class="trait-btn-edit" style="padding: 4px 12px; background: var(--color-border-subtle); border: 1px solid var(--color-border-input); color: var(--color-text-dim); border-radius: 4px; cursor: default; font-size: 12px;" disabled>Edit</button>
-                    <button class="trait-btn-copy" style="padding: 4px 12px; background: var(--color-border-subtle); border: 1px solid var(--color-border-input); color: var(--color-text-dim); border-radius: 4px; cursor: default; font-size: 12px;" disabled>Copy</button>
-                    <button class="trait-btn-paste" style="padding: 4px 12px; background: var(--color-border-subtle); border: 1px solid var(--color-border-input); color: var(--color-text-dim); border-radius: 4px; cursor: default; font-size: 12px;" disabled>Paste</button>
-                    <button class="trait-btn-delete" style="padding: 4px 12px; background: var(--color-border-subtle); border: 1px solid var(--color-border-input); color: var(--color-text-dim); border-radius: 4px; cursor: default; font-size: 12px;" disabled>Delete</button>
+                    <button class="trait-btn-add" style="padding: 4px 12px; background: var(--color-border-subtle); border: 1px solid var(--color-border-input); color: var(--color-text-strong); border-radius: 4px; cursor: pointer; font-size: 12px;">${tt('Add')}</button>
+                    <button class="trait-btn-edit" style="padding: 4px 12px; background: var(--color-border-subtle); border: 1px solid var(--color-border-input); color: var(--color-text-dim); border-radius: 4px; cursor: default; font-size: 12px;" disabled>${tt('Edit')}</button>
+                    <button class="trait-btn-copy" style="padding: 4px 12px; background: var(--color-border-subtle); border: 1px solid var(--color-border-input); color: var(--color-text-dim); border-radius: 4px; cursor: default; font-size: 12px;" disabled>${tt('Copy')}</button>
+                    <button class="trait-btn-paste" style="padding: 4px 12px; background: var(--color-border-subtle); border: 1px solid var(--color-border-input); color: var(--color-text-strong); border-radius: 4px; cursor: pointer; font-size: 12px;">${tt('Paste')}</button>
+                    <button class="trait-btn-delete" style="padding: 4px 12px; background: var(--color-border-subtle); border: 1px solid var(--color-border-input); color: var(--color-text-dim); border-radius: 4px; cursor: default; font-size: 12px;" disabled>${tt('Delete')}</button>
                 </div>
             </div>
         `;
@@ -179,9 +179,9 @@ class DatabaseArmorEditor {
         const noteSection = document.createElement('div');
         noteSection.className = 'database-section';
         noteSection.innerHTML = `
-            <div class="database-section-header">Note</div>
+            <div class="database-section-header">${tt('Note')}</div>
             <div class="database-section-content">
-                <textarea class="database-field-value" rows="4" style="width: 100%;" data-field="note" data-armor-id="${armor.id}">${armor.note || ''}</textarea>
+                <textarea class="database-field-value" rows="4" style="width: 100%;" data-field="note" data-armor-id="${armor.id}">${rrEscapeHtml(armor.note)}</textarea>
             </div>
         `;
         gridWrapper.appendChild(noteSection);
@@ -330,7 +330,6 @@ class DatabaseArmorEditor {
         if (!section) return;
         const table = section.querySelector('.traits-table');
         const hasSelection = table && table.querySelector('.trait-row.selected');
-        const hasClipboard = !!this.traitsClipboard;
 
         const setBtn = (btn, enabled) => {
             if (!btn) return;
@@ -341,7 +340,7 @@ class DatabaseArmorEditor {
 
         setBtn(section.querySelector('.trait-btn-edit'), hasSelection);
         setBtn(section.querySelector('.trait-btn-copy'), hasSelection);
-        setBtn(section.querySelector('.trait-btn-paste'), hasClipboard);
+        setBtn(section.querySelector('.trait-btn-paste'), true);
         setBtn(section.querySelector('.trait-btn-delete'), hasSelection);
     }
 
@@ -374,7 +373,7 @@ class DatabaseArmorEditor {
                 e.preventDefault();
                 e.stopPropagation();
                 this.cutTrait(entry, idx);
-            } else if (e.key === 'v' && this.traitsClipboard) {
+            } else if (e.key === 'v') {
                 e.preventDefault();
                 e.stopPropagation();
                 this.pasteTrait(entry);
@@ -385,6 +384,7 @@ class DatabaseArmorEditor {
     setupTraitsContextMenu(table, armor) {
         table.addEventListener('contextmenu', (e) => {
             e.preventDefault();
+            const tt = text => window.I18n ? window.I18n.tText(text) : text;
 
             const row = e.target.closest('.trait-row');
             const traitIndex = row ? parseInt(row.dataset.traitIndex) : null;
@@ -412,14 +412,14 @@ class DatabaseArmorEditor {
                 { label: 'Edit', action: () => this.editTrait(armor, traitIndex), enabled: traitIndex !== null },
                 { label: 'Cut', action: () => this.cutTrait(armor, traitIndex), enabled: traitIndex !== null },
                 { label: 'Copy', action: () => this.copyTrait(armor, traitIndex), enabled: traitIndex !== null },
-                { label: 'Paste', action: () => this.pasteTrait(armor), enabled: this.traitsClipboard !== null },
+                { label: 'Paste', action: () => this.pasteTrait(armor), enabled: true },
                 { label: 'Delete', action: () => this.deleteTrait(armor, traitIndex), enabled: traitIndex !== null },
                 { label: 'Select All', action: () => this.selectAllTraits(armor), enabled: true }
             ];
 
             menuItems.forEach(item => {
                 const menuItem = document.createElement('div');
-                menuItem.textContent = item.label;
+                menuItem.textContent = tt(item.label);
                 menuItem.style.cssText = `
                     padding: 8px 16px;
                     cursor: ${item.enabled ? 'pointer' : 'not-allowed'};
@@ -484,9 +484,13 @@ class DatabaseArmorEditor {
         });
     }
 
-    cutTrait(armor, traitIndex) {
+    async cutTrait(armor, traitIndex) {
         if (traitIndex === null || !armor.traits) return;
-        this.traitsClipboard = { ...armor.traits[traitIndex] };
+        const target = DatabaseRowClipboard.capturePasteTarget(this.parentEditor, this.projectManager, this.databaseManager, armor.traits, traitIndex);
+        const payload = this.copyTrait(armor, traitIndex);
+        if (!await DatabaseRowClipboard.confirmCut(payload)) return;
+        if (this.currentArmor !== armor
+            || !DatabaseRowClipboard.isPasteTargetCurrent(target, this.parentEditor, this.projectManager, this.databaseManager, armor.traits)) return;
         armor.traits.splice(traitIndex, 1);
         this.databaseManager.updateArmor(armor.id, armor);
         this.refreshArmorDetail(armor);
@@ -494,13 +498,21 @@ class DatabaseArmorEditor {
 
     copyTrait(armor, traitIndex) {
         if (traitIndex === null || !armor.traits) return;
-        this.traitsClipboard = { ...armor.traits[traitIndex] };
+        this.traitsClipboard = DatabaseRowClipboard.write('trait', armor.traits[traitIndex], this.databaseManager);
+        return this.traitsClipboard;
     }
 
-    pasteTrait(armor) {
-        if (!this.traitsClipboard) return;
+    async pasteTrait(armor) {
+        const target = DatabaseRowClipboard.capturePasteTarget(this.parentEditor, this.projectManager, this.databaseManager, armor.traits);
+        const result = await DatabaseRowClipboard.read('trait', this.databaseManager, this.traitsClipboard);
+        if (this.currentArmor !== armor
+            || !DatabaseRowClipboard.isPasteTargetCurrent(target, this.parentEditor, this.projectManager, this.databaseManager, armor.traits)) return;
+        if (result.error) {
+            DatabaseRowClipboard.showError(result);
+            return;
+        }
         if (!armor.traits) armor.traits = [];
-        armor.traits.push({ ...this.traitsClipboard });
+        armor.traits.push(result.row);
         this.databaseManager.updateArmor(armor.id, armor);
         this.refreshArmorDetail(armor);
     }

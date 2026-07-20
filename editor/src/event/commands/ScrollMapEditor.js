@@ -76,6 +76,7 @@ class ScrollMapEditor {
     }
 
     renderContent() {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const container = this.modal.querySelector('.scroll-map-container');
         container.innerHTML = '';
 
@@ -92,7 +93,7 @@ class ScrollMapEditor {
             border-top-right-radius: 6px;
         `;
         header.innerHTML = `
-            <h3 style="margin: 0; color: var(--color-text-strong); font-size: 16px;">Scroll Map</h3>
+            <h3 style="margin: 0; color: var(--color-text-strong); font-size: 16px;">${tt('Scroll Map')}</h3>
             <button class="close-btn" style="background: none; border: none; color: var(--color-text-strong); font-size: 20px; cursor: pointer; padding: 0; width: 24px; height: 24px;">×</button>
         `;
         container.appendChild(header);
@@ -113,7 +114,7 @@ class ScrollMapEditor {
         directionSection.style.cssText = 'display: flex; flex-direction: column; gap: 8px;';
 
         const dirLabel = document.createElement('div');
-        dirLabel.textContent = 'Direction:';
+        dirLabel.textContent = tt('Direction:');
         dirLabel.style.cssText = 'color: var(--color-text); font-size: 13px; font-weight: bold;';
         directionSection.appendChild(dirLabel);
 
@@ -183,7 +184,7 @@ class ScrollMapEditor {
         distanceRow.style.cssText = 'display: flex; align-items: center; gap: 8px;';
 
         const distLabel = document.createElement('span');
-        distLabel.textContent = 'Distance:';
+        distLabel.textContent = tt('Distance:');
         distLabel.style.cssText = 'color: var(--color-text); font-size: 13px; min-width: 80px;';
 
         const distInput = document.createElement('input');
@@ -205,7 +206,7 @@ class ScrollMapEditor {
         });
 
         const distUnit = document.createElement('span');
-        distUnit.textContent = 'tiles';
+        distUnit.textContent = tt('tiles');
         distUnit.style.cssText = 'color: var(--color-text-muted); font-size: 12px;';
 
         distanceRow.appendChild(distLabel);
@@ -218,7 +219,7 @@ class ScrollMapEditor {
         speedRow.style.cssText = 'display: flex; align-items: center; gap: 8px;';
 
         const speedLabel = document.createElement('span');
-        speedLabel.textContent = 'Speed:';
+        speedLabel.textContent = tt('Speed:');
         speedLabel.style.cssText = 'color: var(--color-text); font-size: 13px; min-width: 80px;';
 
         const speedSelect = document.createElement('select');
@@ -262,12 +263,12 @@ class ScrollMapEditor {
         `;
 
         const cancelBtn = document.createElement('button');
-        cancelBtn.textContent = 'Cancel';
+        cancelBtn.textContent = tt('Cancel');
         cancelBtn.className = 'rr-btn-secondary';
         cancelBtn.addEventListener('click', () => this.close());
 
         const okBtn = document.createElement('button');
-        okBtn.textContent = 'OK';
+        okBtn.textContent = tt('OK');
         okBtn.style.cssText = `
             padding: 6px 20px;
             background-color: var(--color-accent);

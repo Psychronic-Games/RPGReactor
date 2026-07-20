@@ -48,4 +48,23 @@ test('playtest launches pass the source project to universal profile isolation',
         'profile isolation has a writable temporary fallback');
     assert.match(source, /if \(this\.playtestProcess === child\) this\.playtestProcess = null/g,
         'stale child callbacks must not clear a newer playtest process');
+    assert.match(source, /ensureProjectPackageMetadata\(projectPath\)/,
+        'desktop playtest validates package metadata before spawning NW.js');
+    const mainSource = fs.readFileSync(path.join(editorRoot, 'src', 'main.js'), 'utf8');
+    assert.match(mainSource, /new PlaytestManager\(this\.projectManager\)/,
+        'the application supplies the package validator to playtest and battle test');
+
+    const expectedError = 'Cannot use /project/package.json: invalid JSON';
+    const manager = new PlaytestManager({
+        ensureProjectPackageMetadata: () => ({ ok: false, error: expectedError })
+    });
+    manager.resolveNwExecutable = () => { throw new Error('spawn path must not be reached'); };
+    const originalError = console.error;
+    try {
+        console.error = () => {};
+        assert.equal(manager.launchPlaytestWindow('/project'), false);
+    } finally {
+        console.error = originalError;
+    }
+    assert.equal(manager.lastLaunchError, expectedError);
 });

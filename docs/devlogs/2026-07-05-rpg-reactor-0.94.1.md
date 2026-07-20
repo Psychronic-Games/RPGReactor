@@ -20,7 +20,7 @@ Everything supports layers, keyframes, custom textures, randomize, and presets. 
 
 The same idea runs through the whole Forge: generate assets, preview them live, save them into your project.
 
-- Animation Generator: 80+ procedural 2D animations with layered composition and keyframe timelines, exported as bake-ready sprite sheets.
+- Animation Generator: procedural 2D animations with layered composition and keyframe timelines, exported as bake-ready sprite sheets.
 - Character Generator: procedural Outfit Forge and Hair Forge tools that produce RPG Maker-style walking-sheet parts with live 4-direction previews.
 
 More generators and more recipes are on the way. If there's an asset type you keep buying or hand-drawing that you'd rather generate, tell us in the comments.

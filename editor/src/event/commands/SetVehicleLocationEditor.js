@@ -85,6 +85,7 @@ class SetVehicleLocationEditor {
      * Render modal content
      */
     renderContent() {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const container = this.modal.querySelector('.set-vehicle-location-container');
         container.innerHTML = '';
 
@@ -92,7 +93,7 @@ class SetVehicleLocationEditor {
         const header = document.createElement('div');
         header.style.cssText = 'padding: 12px 16px; background-color: var(--color-bg-panel); border-bottom: 1px solid var(--color-border); display: flex; justify-content: space-between; align-items: center; border-top-left-radius: 6px; border-top-right-radius: 6px;';
         header.innerHTML = `
-            <h3 style="margin: 0; color: var(--color-text-strong); font-size: 16px;">Set Vehicle Location</h3>
+            <h3 style="margin: 0; color: var(--color-text-strong); font-size: 16px;">${tt('Set Vehicle Location')}</h3>
             <button class="close-btn" style="background: none; border: none; color: var(--color-text-strong); font-size: 20px; cursor: pointer; padding: 0; width: 24px; height: 24px;">\u00d7</button>
         `;
         container.appendChild(header);
@@ -108,7 +109,7 @@ class SetVehicleLocationEditor {
         vehicleRow.style.cssText = 'display: flex; align-items: center; gap: 8px;';
 
         const vehicleLabel = document.createElement('span');
-        vehicleLabel.textContent = 'Vehicle:';
+        vehicleLabel.textContent = tt('Vehicle:');
         vehicleLabel.style.cssText = 'color: var(--color-text); font-size: 13px; min-width: 120px;';
 
         const vehicleSelect = document.createElement('select');
@@ -131,7 +132,7 @@ class SetVehicleLocationEditor {
         designRow.style.cssText = 'display: flex; align-items: center; gap: 16px;';
 
         const designLabel = document.createElement('span');
-        designLabel.textContent = 'Designation:';
+        designLabel.textContent = tt('Designation:');
         designLabel.style.cssText = 'color: var(--color-text); font-size: 13px; min-width: 120px;';
         designRow.appendChild(designLabel);
 
@@ -146,7 +147,7 @@ class SetVehicleLocationEditor {
         });
 
         const directLabel = document.createElement('label');
-        directLabel.textContent = 'Direct';
+        directLabel.textContent = tt('Direct');
         directLabel.style.cssText = 'color: var(--color-text); font-size: 13px; cursor: pointer;';
         directLabel.addEventListener('click', () => { directRadio.checked = true; directRadio.dispatchEvent(new Event('change')); });
 
@@ -161,7 +162,7 @@ class SetVehicleLocationEditor {
         });
 
         const varLabel = document.createElement('label');
-        varLabel.textContent = 'Variable';
+        varLabel.textContent = tt('Variable');
         varLabel.style.cssText = 'color: var(--color-text); font-size: 13px; cursor: pointer;';
         varLabel.addEventListener('click', () => { varRadio.checked = true; varRadio.dispatchEvent(new Event('change')); });
 
@@ -177,7 +178,7 @@ class SetVehicleLocationEditor {
             mapRow.style.cssText = 'display: flex; align-items: center; gap: 8px;';
 
             const mapLabel = document.createElement('span');
-            mapLabel.textContent = 'Map ID:';
+            mapLabel.textContent = tt('Map ID:');
             mapLabel.style.cssText = 'color: var(--color-text); font-size: 13px; min-width: 120px;';
 
             const mapInput = document.createElement('input');
@@ -198,7 +199,7 @@ class SetVehicleLocationEditor {
             xRow.style.cssText = 'display: flex; align-items: center; gap: 8px;';
 
             const xLabel = document.createElement('span');
-            xLabel.textContent = 'X:';
+            xLabel.textContent = tt('X:');
             xLabel.style.cssText = 'color: var(--color-text); font-size: 13px; min-width: 120px;';
 
             const xInput = document.createElement('input');
@@ -219,7 +220,7 @@ class SetVehicleLocationEditor {
             yRow.style.cssText = 'display: flex; align-items: center; gap: 8px;';
 
             const yLabel = document.createElement('span');
-            yLabel.textContent = 'Y:';
+            yLabel.textContent = tt('Y:');
             yLabel.style.cssText = 'color: var(--color-text); font-size: 13px; min-width: 120px;';
 
             const yInput = document.createElement('input');
@@ -241,7 +242,7 @@ class SetVehicleLocationEditor {
             mapVarRow.style.cssText = 'display: flex; align-items: center; gap: 8px;';
 
             const mapVarLabel = document.createElement('span');
-            mapVarLabel.textContent = 'Map ID Var:';
+            mapVarLabel.textContent = tt('Map ID Var:');
             mapVarLabel.style.cssText = 'color: var(--color-text); font-size: 13px; min-width: 120px;';
 
             const mapVarInput = document.createElement('input');
@@ -267,7 +268,7 @@ class SetVehicleLocationEditor {
             xVarRow.style.cssText = 'display: flex; align-items: center; gap: 8px;';
 
             const xVarLabel = document.createElement('span');
-            xVarLabel.textContent = 'X Var:';
+            xVarLabel.textContent = tt('X Var:');
             xVarLabel.style.cssText = 'color: var(--color-text); font-size: 13px; min-width: 120px;';
 
             const xVarInput = document.createElement('input');
@@ -293,7 +294,7 @@ class SetVehicleLocationEditor {
             yVarRow.style.cssText = 'display: flex; align-items: center; gap: 8px;';
 
             const yVarLabel = document.createElement('span');
-            yVarLabel.textContent = 'Y Var:';
+            yVarLabel.textContent = tt('Y Var:');
             yVarLabel.style.cssText = 'color: var(--color-text); font-size: 13px; min-width: 120px;';
 
             const yVarInput = document.createElement('input');
@@ -323,12 +324,12 @@ class SetVehicleLocationEditor {
         footer.style.cssText = 'padding: 12px 16px; border-top: 1px solid var(--color-border); background-color: var(--color-bg-panel); display: flex; justify-content: flex-end; gap: 8px;';
 
         const cancelBtn = document.createElement('button');
-        cancelBtn.textContent = 'Cancel';
+        cancelBtn.textContent = tt('Cancel');
         cancelBtn.className = 'rr-btn-secondary';
         cancelBtn.addEventListener('click', () => this.close());
 
         const okBtn = document.createElement('button');
-        okBtn.textContent = 'OK';
+        okBtn.textContent = tt('OK');
         okBtn.style.cssText = 'padding: 6px 20px; background-color: var(--color-accent); color: var(--color-bg-deep); border: none; border-radius: 3px; cursor: pointer; font-size: 12px; font-weight: bold;';
         okBtn.addEventListener('click', () => this.save());
 

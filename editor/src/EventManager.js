@@ -26,6 +26,12 @@ class EventManager {
         this.contextMenuCloseHandler = null; // Context menu close handler reference
         this.tilesetPaletteViewer = null; // Reference to tileset palette viewer for tile selection
         this.sidebarResizer = null; // Reference to sidebar resizer for updating handle visibility
+        this._eventInteractionContainer = null;
+        this._eventContextMenuCanvas = null;
+        this._eventContextMenuHandler = null;
+        this._lastMapClickTime = 0;
+        this._lastMapClickX = null;
+        this._lastMapClickY = null;
 
         // Undo/Redo system
         this.undoStack = [];
@@ -276,6 +282,14 @@ class EventManager {
         }
 
         const container = this.tilemapManager.container;
+        if (this._eventInteractionContainer === container) return;
+        if (this._eventInteractionContainer) this.removeEventInteraction();
+        this._eventInteractionContainer = container;
+        this._eventPointerHandlers = {};
+        const on = (eventName, handler) => {
+            this._eventPointerHandlers[eventName] = handler;
+            container.on(eventName, handler);
+        };
 
         // Make container interactive
         container.interactive = true;
@@ -283,25 +297,31 @@ class EventManager {
 
         // Disable browser context menu on the canvas
         const canvasElement = container.view || document.querySelector('canvas');
-        if (canvasElement) {
-            canvasElement.addEventListener('contextmenu', (e) => {
+        if (canvasElement && this._eventContextMenuCanvas !== canvasElement) {
+            if (this._eventContextMenuCanvas && this._eventContextMenuHandler) {
+                this._eventContextMenuCanvas.removeEventListener('contextmenu', this._eventContextMenuHandler);
+            }
+            this._eventContextMenuHandler = (e) => {
                 e.preventDefault();
                 return false;
-            });
+            };
+            this._eventContextMenuCanvas = canvasElement;
+            canvasElement.addEventListener('contextmenu', this._eventContextMenuHandler);
         }
 
         // Mouse move handler - not needed in event mode, selection stays on clicked tile
         // (hover highlighting is only for tileset mode)
 
         // Mouse leave handler
-        container.on('pointerleave', () => {
+        on('pointerleave', () => {
             // Selection highlight stays visible even when mouse leaves
         });
 
         // Right-click handler
-        container.on('rightdown', (event) => {
+        on('rightdown', (event) => {
             event.stopPropagation();
             event.data.originalEvent.preventDefault();
+            this.resetMapClickTracking();
 
             // Suppress the native browser/NW.js context menu that follows this pointerdown
             const suppressContextMenu = (e) => { e.preventDefault(); e.stopPropagation(); };
@@ -334,91 +354,25 @@ class EventManager {
             this.showContextMenu(mouseX, mouseY, tileX, tileY, eventAtPos);
         });
 
-        // Left-click handler for selecting tiles and events
-        // Track click timing for double-click detection
-        let lastClickTime = 0;
-        let lastClickX = null;
-        let lastClickY = null;
-        const DOUBLE_CLICK_THRESHOLD = 300; // milliseconds
-
-        container.on('pointerdown', (event) => {
-            if (event.data.button === 0 && !event.data.originalEvent.shiftKey) {
-                const pos = event.data.getLocalPosition(container);
-                const tileX = Math.floor(pos.x / this.tilemapManager.TILE_WIDTH);
-                const tileY = Math.floor(pos.y / this.tilemapManager.TILE_HEIGHT);
-
-                // Check for double-click
-                const currentTime = Date.now();
-                const isDoubleClick = (currentTime - lastClickTime < DOUBLE_CLICK_THRESHOLD) &&
-                                     (lastClickX === tileX && lastClickY === tileY);
-
-                if (isDoubleClick) {
-                    // Double-click detected - edit event if one exists at this position
-                    const eventAtPos = this.getEventAt(tileX, tileY);
-                    if (eventAtPos) {
-                        this.editEvent(eventAtPos);
-                        // Reset click tracking
-                        lastClickTime = 0;
-                        lastClickX = null;
-                        lastClickY = null;
-                        return;
-                    }
-                }
-
-                // Update click tracking for double-click detection
-                lastClickTime = currentTime;
-                lastClickX = tileX;
-                lastClickY = tileY;
-
-                // Update selection to this tile
-                this.selectTile(tileX, tileY);
-
-                const eventAtPos = this.getEventAt(tileX, tileY);
-
-                // If no event at position and tiles are selected from palette, create a tileset event
-                if (!eventAtPos && this.tilesetPaletteViewer) {
-                    const selectedTiles = this.tilesetPaletteViewer.getSelectedTiles();
-                    // console.log('Selected tiles from palette:', selectedTiles);
-                    if (selectedTiles && selectedTiles.length > 0) {
-                        // Get the first selected tile (single tile selection for now)
-                        const tile = selectedTiles[0];
-                        console.log('First selected tile:', tile);
-                        // Convert to RPG Maker tileId format
-                        const tileId = this.convertToTileId(tile.layer, tile.x, tile.y);
-                        console.log('Converted tileId:', tileId);
-                        if (tileId > 0) {
-                            this.createNewEventWithTileset(tileX, tileY, tileId);
-                            // Clear selection after creating event to prevent creating multiple
-                            this.tilesetPaletteViewer.clearSelection();
-                            return; // Don't proceed with normal event selection
-                        }
-                    }
-                }
-
-                this.selectEvent(eventAtPos);
-
-                // Start dragging if there's an event at this position
-                if (eventAtPos) {
-                    this.startDragging(eventAtPos, event);
-                }
-            }
+        on('pointerdown', (event) => {
+            this.handleMapPointerDown(event, container);
         });
 
         // Mouse move handler for dragging
-        container.on('pointermove', (event) => {
+        on('pointermove', (event) => {
             if (this.isDragging && this.draggedEvent) {
                 this.updateDrag(event);
             }
         });
 
         // Mouse up handler for finishing drag
-        container.on('pointerup', (event) => {
+        on('pointerup', (event) => {
             if (this.isDragging) {
                 this.finishDragging(event);
             }
         });
 
-        container.on('pointerupoutside', (event) => {
+        on('pointerupoutside', (event) => {
             if (this.isDragging) {
                 this.finishDragging(event);
             }
@@ -427,15 +381,21 @@ class EventManager {
 
     // Remove event interaction
     removeEventInteraction() {
-        if (!this.tilemapManager || !this.tilemapManager.container) return;
+        const container = this._eventInteractionContainer;
+        if (container) {
+            for (const [eventName, handler] of Object.entries(this._eventPointerHandlers || {})) {
+                container.off(eventName, handler);
+            }
+        }
+        this._eventPointerHandlers = null;
+        this._eventInteractionContainer = null;
+        this.resetMapClickTracking();
 
-        const container = this.tilemapManager.container;
-        container.off('pointerdown');
-        container.off('rightdown');
-        container.off('pointerleave');
-        container.off('pointermove');
-        container.off('pointerup');
-        container.off('pointerupoutside');
+        if (this._eventContextMenuCanvas && this._eventContextMenuHandler) {
+            this._eventContextMenuCanvas.removeEventListener('contextmenu', this._eventContextMenuHandler);
+            this._eventContextMenuCanvas = null;
+            this._eventContextMenuHandler = null;
+        }
 
         // Hide selection highlight when leaving event mode
         if (this.selectionHighlight) {
@@ -449,6 +409,62 @@ class EventManager {
         // Cancel any ongoing drag
         this.isDragging = false;
         this.draggedEvent = null;
+    }
+
+    resetMapClickTracking() {
+        this._lastMapClickTime = 0;
+        this._lastMapClickX = null;
+        this._lastMapClickY = null;
+    }
+
+    handleMapPointerDown(event, container = this.tilemapManager?.container) {
+        if (!this.eventMode || !this.currentMap || !container ||
+            event.data.button !== 0 || event.data.originalEvent?.shiftKey) {
+            this.resetMapClickTracking();
+            return;
+        }
+
+        const pos = event.data.getLocalPosition(container);
+        const tileX = Math.floor(pos.x / this.tilemapManager.TILE_WIDTH);
+        const tileY = Math.floor(pos.y / this.tilemapManager.TILE_HEIGHT);
+        if (tileX < 0 || tileX >= this.currentMap.width || tileY < 0 || tileY >= this.currentMap.height) {
+            this.resetMapClickTracking();
+            return;
+        }
+
+        const currentTime = Date.now();
+        const isDoubleClick = currentTime - this._lastMapClickTime < 300 &&
+            this._lastMapClickX === tileX && this._lastMapClickY === tileY;
+
+        if (isDoubleClick) {
+            this.resetMapClickTracking();
+            const eventAtPos = this.getEventAt(tileX, tileY);
+            if (eventAtPos) this.editEvent(eventAtPos);
+            else this.createNewEvent(tileX, tileY);
+            return;
+        }
+
+        this._lastMapClickTime = currentTime;
+        this._lastMapClickX = tileX;
+        this._lastMapClickY = tileY;
+        this.selectTile(tileX, tileY);
+
+        const eventAtPos = this.getEventAt(tileX, tileY);
+        if (!eventAtPos && this.tilesetPaletteViewer) {
+            const selectedTiles = this.tilesetPaletteViewer.getSelectedTiles();
+            if (selectedTiles && selectedTiles.length > 0) {
+                const tile = selectedTiles[0];
+                const tileId = this.convertToTileId(tile.layer, tile.x, tile.y);
+                if (tileId > 0) {
+                    this.createNewEventWithTileset(tileX, tileY, tileId);
+                    this.tilesetPaletteViewer.clearSelection();
+                    return;
+                }
+            }
+        }
+
+        this.selectEvent(eventAtPos);
+        if (eventAtPos) this.startDragging(eventAtPos, event);
     }
 
     // Select a tile (shows persistent highlight)
@@ -846,6 +862,7 @@ class EventManager {
                     // undo (the event still holds its original position here)
                     if (!this._dragStateSaved) {
                         this._dragStateSaved = true;
+                        this.resetMapClickTracking();
                         this.saveState();
                     }
                     // Update event position
@@ -855,8 +872,18 @@ class EventManager {
                     // Update selection to follow the dragged event
                     this.selectTile(newTileX, newTileY);
 
-                    // Re-render events
-                    this.renderEvents();
+                    // Move just the dragged sprite. A full renderEvents()
+                    // per tile step rebuilt every event sprite and the
+                    // sidebar list (resetting its scroll); the final
+                    // renderEvents() happens once in finishDragging.
+                    const sprite = this.eventSprites.get(this.draggedEvent.id);
+                    if (sprite) {
+                        sprite.x = newTileX * this.tilemapManager.TILE_WIDTH;
+                        sprite.y = newTileY * this.tilemapManager.TILE_HEIGHT;
+                        this.updateSelectionHighlight();
+                    } else {
+                        this.renderEvents();
+                    }
                 }
             }
         }
@@ -932,29 +959,28 @@ class EventManager {
     }
 
     // Create new event with tileset graphic
+    getNextEventId() {
+        const events = Array.isArray(this.currentMap?.events) ? this.currentMap.events : [];
+        const occupiedIds = new Set(events.filter(Boolean).map(event => Number(event.id)));
+        let nextId = 1;
+        while (occupiedIds.has(nextId) || events[nextId]) nextId++;
+        return nextId;
+    }
+
     createNewEventWithTileset(x, y, tileId) {
         console.log(`createNewEventWithTileset called: position (${x}, ${y}), tileId: ${tileId}`);
 
         if (!this.currentMap) {
             console.warn('No map loaded');
-            return;
+            return null;
+        }
+        if (x < 0 || x >= this.currentMap.width || y < 0 || y >= this.currentMap.height || this.getEventAt(x, y)) {
+            return null;
         }
 
-        // Save state for undo
-        this.saveState();
-
-        // Find next available event ID
-        const events = this.currentMap.events || [];
-        let nextId = 1;
-        for (let i = 1; i < events.length; i++) {
-            if (!events[i]) {
-                nextId = i;
-                break;
-            }
-        }
-        if (nextId === 1 && events.length > 1) {
-            nextId = events.length;
-        }
+        // Imported maps are not always indexed by event ID, so require both
+        // the ID and its target storage slot to be free.
+        const nextId = this.getNextEventId();
 
         // Create new event with tileset graphic
         const newEvent = {
@@ -1005,46 +1031,26 @@ class EventManager {
             y: y
         };
 
-        // Add event to map
-        if (!this.currentMap.events) {
-            this.currentMap.events = [];
-        }
-        this.currentMap.events[nextId] = newEvent;
-
         console.log('Created event with image data:', JSON.stringify(newEvent.pages[0].image, null, 2));
-
-        // Select and render
-        this.selectedEvent = newEvent;
-        this.renderEvents();
 
         console.log(`Created new tileset event ${newEvent.name} at (${x}, ${y}) with tileId ${tileId}`);
 
         // Show edit dialog
-        this.editEvent(newEvent);
+        this.editEvent(newEvent, { isNew: true, map: this.currentMap });
+        return newEvent;
     }
 
     // Create new event
     createNewEvent(x, y) {
         if (!this.currentMap) {
             console.warn('No map loaded');
-            return;
+            return null;
+        }
+        if (x < 0 || x >= this.currentMap.width || y < 0 || y >= this.currentMap.height || this.getEventAt(x, y)) {
+            return null;
         }
 
-        // Save state for undo
-        this.saveState();
-
-        // Find next available event ID
-        const events = this.currentMap.events || [];
-        let nextId = 1;
-        for (let i = 1; i < events.length; i++) {
-            if (!events[i]) {
-                nextId = i;
-                break;
-            }
-        }
-        if (nextId === 1 && events.length > 1) {
-            nextId = events.length;
-        }
+        const nextId = this.getNextEventId();
 
         // Create new event with default structure
         const newEvent = {
@@ -1095,20 +1101,11 @@ class EventManager {
             y: y
         };
 
-        // Add event to map
-        if (!this.currentMap.events) {
-            this.currentMap.events = [];
-        }
-        this.currentMap.events[nextId] = newEvent;
-
-        // Select and render
-        this.selectedEvent = newEvent;
-        this.renderEvents();
-
         console.log(`Created new event ${newEvent.name} at (${x}, ${y})`);
 
         // Show edit dialog
-        this.editEvent(newEvent);
+        this.editEvent(newEvent, { isNew: true, map: this.currentMap });
+        return newEvent;
     }
 
     // Setup event editor modal
@@ -1118,9 +1115,8 @@ class EventManager {
 
         if (closeBtn) {
             closeBtn.addEventListener('click', () => {
-                if (modal) {
-                    modal.style.display = 'none';
-                }
+                if (this.eventEditor) this.eventEditor.cancelChanges();
+                else if (modal) modal.style.display = 'none';
             });
         }
 
@@ -1128,14 +1124,15 @@ class EventManager {
         if (modal) {
             modal.addEventListener('click', (e) => {
                 if (e.target === modal) {
-                    modal.style.display = 'none';
+                    if (this.eventEditor) this.eventEditor.cancelChanges();
+                    else modal.style.display = 'none';
                 }
             });
         }
     }
 
     // Edit event
-    editEvent(event) {
+    editEvent(event, session = {}) {
         if (!event) {
             console.warn('No event to edit');
             return;
@@ -1163,12 +1160,45 @@ class EventManager {
         content.innerHTML = '';
 
         // Show the event editor
-        this.eventEditor.showEventEditor(content, event);
+        const targetMap = session.map || this.currentMap;
+        let isNew = session.isNew === true;
+        this.eventEditor.showEventEditor(content, event, {
+            onCommit: (sourceEvent, committedEvent) => {
+                if (this.currentMap !== targetMap) return false;
+                const events = targetMap.events || (targetMap.events = []);
+
+                if (isNew) {
+                    if (events[sourceEvent.id] || events.some(entry => entry && entry.id === sourceEvent.id)) {
+                        return false;
+                    }
+                    this.saveState();
+                    this._replaceEventData(sourceEvent, committedEvent);
+                    events[sourceEvent.id] = sourceEvent;
+                    isNew = false;
+                } else {
+                    if (JSON.stringify(sourceEvent) === JSON.stringify(committedEvent)) return true;
+                    this.saveState();
+                    this._replaceEventData(sourceEvent, committedEvent);
+                }
+
+                this.selectedEvent = sourceEvent;
+                this.renderEvents();
+                return true;
+            },
+            onCancel: sourceEvent => {
+                if (isNew && this.selectedEvent === sourceEvent) this.selectedEvent = null;
+            }
+        });
 
         // Display the modal
         modal.style.display = 'flex';
 
         console.log('Event editor opened for:', event.name);
+    }
+
+    _replaceEventData(target, source) {
+        for (const key of Object.keys(target)) delete target[key];
+        Object.assign(target, JSON.parse(JSON.stringify(source)));
     }
 
     // Cut event
@@ -1198,40 +1228,34 @@ class EventManager {
 
     // Paste event
     async pasteEvent(x, y) {
+        const tt = (text) => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
         if (!this.currentMap) return;
+        const targetMap = this.currentMap;
 
-        let eventData = this.clipboard;
-        if (!eventData && typeof ReactorClipboard !== 'undefined') {
+        let eventData = null;
+        if (typeof ReactorClipboard !== 'undefined') {
             const clipboardData = await ReactorClipboard.read('event');
             eventData = clipboardData?.payload?.event || null;
+        } else {
+            eventData = this.clipboard;
         }
+        if (this.currentMap !== targetMap) return;
 
         if (!eventData) {
-            alert('No event in clipboard to paste.');
+            alert(tt('No event in clipboard to paste.'));
             return;
         }
 
         // Check if there's already an event at this position
         if (this.getEventAt(x, y)) {
-            alert('There is already an event at this position.');
+            alert(tt('There is already an event at this position.'));
             return;
         }
 
         // Save state for undo
         this.saveState();
 
-        // Find next available event ID
-        const events = this.currentMap.events || [];
-        let nextId = 1;
-        for (let i = 1; i < events.length; i++) {
-            if (!events[i]) {
-                nextId = i;
-                break;
-            }
-        }
-        if (nextId === 1 && events.length > 1) {
-            nextId = events.length;
-        }
+        const nextId = this.getNextEventId();
 
         // Create new event from clipboard
         const newEvent = JSON.parse(JSON.stringify(eventData));
@@ -1262,8 +1286,13 @@ class EventManager {
             // Save state for undo
             this.saveState();
 
-            // Remove from events array
-            this.currentMap.events[event.id] = null;
+            // Imported maps may contain compacted or otherwise mismatched
+            // event arrays. Remove the actual object slot rather than assuming
+            // its database ID is also the array index.
+            const events = this.currentMap.events || [];
+            let eventIndex = events.indexOf(event);
+            if (eventIndex < 0) eventIndex = events.findIndex(entry => entry && entry.id === event.id);
+            if (eventIndex >= 0) events[eventIndex] = null;
 
             if (this.selectedEvent === event) {
                 this.selectedEvent = null;
@@ -1384,7 +1413,8 @@ class EventManager {
             this.centerOnEvent(this.currentSearchResults[0]);
             console.log(`Found ${this.currentSearchResults.length} events matching "${query}"`);
         } else {
-            alert(`No events found matching "${query}"`);
+            const tt = (text) => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
+            alert(`${tt('No events found matching')} "${query}"`);
         }
     }
 
@@ -1431,6 +1461,7 @@ class EventManager {
 
     // Set starting position
     async setStartingPosition(x, y, type) {
+        const tt = (text) => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
         const currentProject = this.projectController.getCurrentProject();
         if (!currentProject) {
             console.warn('No project loaded');
@@ -1454,7 +1485,7 @@ class EventManager {
                 systemData.startX = x;
                 systemData.startY = y;
                 console.log(`Player starting position set to (${x}, ${y}) on map ${mapId}`);
-                alert(`Player starting position set to (${x}, ${y}) on Map ${mapId}`);
+                alert(`${tt('Player')} ${tt('starting position set to')} (${x}, ${y}) ${tt('on Map')} ${mapId}`);
                 break;
             case 'boat':
                 if (!systemData.boat) {
@@ -1471,7 +1502,7 @@ class EventManager {
                 systemData.boat.startX = x;
                 systemData.boat.startY = y;
                 console.log(`Boat starting position set to (${x}, ${y}) on map ${mapId}`);
-                alert(`Boat starting position set to (${x}, ${y}) on Map ${mapId}`);
+                alert(`${tt('Boat')} ${tt('starting position set to')} (${x}, ${y}) ${tt('on Map')} ${mapId}`);
                 break;
             case 'ship':
                 if (!systemData.ship) {
@@ -1488,7 +1519,7 @@ class EventManager {
                 systemData.ship.startX = x;
                 systemData.ship.startY = y;
                 console.log(`Ship starting position set to (${x}, ${y}) on map ${mapId}`);
-                alert(`Ship starting position set to (${x}, ${y}) on Map ${mapId}`);
+                alert(`${tt('Ship')} ${tt('starting position set to')} (${x}, ${y}) ${tt('on Map')} ${mapId}`);
                 break;
             case 'airship':
                 if (!systemData.airship) {
@@ -1505,7 +1536,7 @@ class EventManager {
                 systemData.airship.startX = x;
                 systemData.airship.startY = y;
                 console.log(`Airship starting position set to (${x}, ${y}) on map ${mapId}`);
-                alert(`Airship starting position set to (${x}, ${y}) on Map ${mapId}`);
+                alert(`${tt('Airship')} ${tt('starting position set to')} (${x}, ${y}) ${tt('on Map')} ${mapId}`);
                 break;
         }
 
@@ -1516,7 +1547,7 @@ class EventManager {
             console.log('System.json saved with new starting position');
         } catch (error) {
             console.error('Error saving System.json:', error);
-            alert('Error saving starting position. Check console for details.');
+            alert(tt('Error saving starting position. Check console for details.'));
         }
 
         // Re-render starting position markers for the current map
@@ -1528,30 +1559,43 @@ class EventManager {
     renderEvents() {
         if (!this.eventContainer || !this.currentMap) return;
 
-        // Clear existing event sprites
-        this.eventContainer.removeChildren();
+        // Clear existing event sprites. Destroy them — removeChildren()
+        // alone detaches, and each name label is a PIXI.Text that owns a
+        // canvas texture which would leak per rebuild. Textures of plain
+        // sprites are left alone (character sheets are shared).
+        const removed = this.eventContainer.removeChildren();
+        for (const child of removed) {
+            child.destroy({ children: true });
+        }
         this.eventSprites.clear();
+
+        // Keep the data list available even if one malformed graphic fails to
+        // construct a PIXI sprite.
+        this.updateEventsList();
 
         // Render each event
         if (this.currentMap.events) {
             this.currentMap.events.forEach(event => {
                 if (!event) return;
 
-                const sprite = this.createEventSprite(event);
-                this.eventContainer.addChild(sprite);
-                this.eventSprites.set(event.id, sprite);
+                try {
+                    const sprite = this.createEventSprite(event);
+                    this.eventContainer.addChild(sprite);
+                    this.eventSprites.set(event.id, sprite);
+                } catch (error) {
+                    console.error(`Could not render event ${event.id}:`, error);
+                }
             });
         }
 
         // Update selection highlight in case event status changed
         this.updateSelectionHighlight();
 
-        // Update events list in sidebar
-        this.updateEventsList();
     }
 
     // Update the events list in the sidebar
     updateEventsList() {
+        const tt = (text) => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
         const eventsListEl = document.getElementById('events-list');
         const eventsSectionEl = document.getElementById('events-section');
 
@@ -1565,23 +1609,25 @@ class EventManager {
         const sidebar = document.getElementById('sidebar');
         if (sidebar) sidebar.scrollTop = 0;
 
-        // Clear existing list
+        // Clear existing list, keeping the list's own scroll position so a
+        // re-render doesn't jump back to the top of a long event list.
+        const prevListScroll = eventsListEl.scrollTop;
         eventsListEl.innerHTML = '';
 
-        if (!this.currentMap || !this.currentMap.events || this.currentMap.events.length <= 1) {
-            // No events (index 0 is null in MZ)
-            eventsListEl.innerHTML = '<div class="tree-item" style="color: var(--color-text-muted); padding: 6px 8px;">No events on this map</div>';
+        const events = Array.isArray(this.currentMap?.events)
+            ? this.currentMap.events.filter(Boolean)
+            : [];
+        if (events.length === 0) {
+            eventsListEl.innerHTML = `<div class="tree-item" style="color: var(--color-text-muted); padding: 6px 8px;">${tt('No events on this map')}</div>`;
             return;
         }
 
         // Add each event to the list
-        this.currentMap.events.forEach((event, index) => {
-            if (!event || index === 0) return; // Skip null and index 0
-
+        events.forEach(event => {
             const item = document.createElement('div');
             item.className = 'tree-item event-list-item';
             item.dataset.eventId = event.id;
-            item.textContent = `${String(event.id).padStart(3, '0')}: ${event.name || 'Unnamed Event'}`;
+            item.textContent = `${String(event.id).padStart(3, '0')}: ${event.name || tt('Unnamed Event')}`;
             item.style.padding = '6px 8px';
             item.style.cursor = 'pointer';
             item.style.fontSize = '14px';
@@ -1614,6 +1660,8 @@ class EventManager {
 
         // Update selection highlight after populating list
         this.updateEventListSelection();
+
+        eventsListEl.scrollTop = prevListScroll;
 
         // Update resize handles visibility
         if (this.sidebarResizer) {
@@ -1648,6 +1696,7 @@ class EventManager {
 
     // Render starting position markers
     renderStartingPositions() {
+        const tt = (text) => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
         if (!this.startingPositionContainer || !this.currentMap) return;
 
         // Clear existing markers
@@ -1663,22 +1712,22 @@ class EventManager {
         // Render player starting position
         if (systemData.startMapId === mapId) {
             console.log(`Rendering player starting position marker at (${systemData.startX}, ${systemData.startY})`);
-            this.createStartingPositionMarker(systemData.startX, systemData.startY, 'Player', 0x00ff00);
+            this.createStartingPositionMarker(systemData.startX, systemData.startY, tt('Player'), 0x00ff00);
         }
 
         // Render boat starting position
         if (systemData.boat && systemData.boat.startMapId === mapId) {
-            this.createStartingPositionMarker(systemData.boat.startX, systemData.boat.startY, 'Boat', 0x0088ff);
+            this.createStartingPositionMarker(systemData.boat.startX, systemData.boat.startY, tt('Boat'), 0x0088ff);
         }
 
         // Render ship starting position
         if (systemData.ship && systemData.ship.startMapId === mapId) {
-            this.createStartingPositionMarker(systemData.ship.startX, systemData.ship.startY, 'Ship', 0xff8800);
+            this.createStartingPositionMarker(systemData.ship.startX, systemData.ship.startY, tt('Ship'), 0xff8800);
         }
 
         // Render airship starting position
         if (systemData.airship && systemData.airship.startMapId === mapId) {
-            this.createStartingPositionMarker(systemData.airship.startX, systemData.airship.startY, 'Airship', 0xff00ff);
+            this.createStartingPositionMarker(systemData.airship.startX, systemData.airship.startY, tt('Airship'), 0xff00ff);
         }
 
         // Make container visible
@@ -1867,10 +1916,12 @@ class EventManager {
                 }
             }
 
-            // Create sprite from texture
-            const texture = PIXI.Texture.from(img.src);
+            // Create sprite from texture (from the loaded image element —
+            // Texture.from(url) would kick off a second async load and
+            // render blank until it finished)
+            const texture = PIXI.Texture.from(img);
             const rect = new PIXI.Rectangle(srcX, srcY, TILE_SIZE, TILE_SIZE);
-            const croppedTexture = new PIXI.Texture(texture.baseTexture, rect);
+            const croppedTexture = new PIXI.Texture({ source: texture.source, frame: rect });
             return new PIXI.Sprite(croppedTexture);
 
         } else if (tileId >= 1536) {
@@ -1967,7 +2018,7 @@ class EventManager {
 
             const img = baseTexture.source;
 
-            const isBigCharacter = image.characterName.includes('$');
+            const isBigCharacter = RRAssetFiles.isBigCharacter(image.characterName);
 
             let characterWidth, characterHeight, baseX, baseY;
 
@@ -2027,6 +2078,7 @@ class EventManager {
 
     // Clean up
     destroy() {
+        this.removeEventInteraction();
         this.hideContextMenu();
         if (this.findDialog) {
             this.findDialog.remove();

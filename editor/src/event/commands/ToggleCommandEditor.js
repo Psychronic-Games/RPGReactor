@@ -83,6 +83,7 @@ class ToggleCommandEditor {
      * Render modal content
      */
     renderContent() {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const container = this.modal.querySelector('.toggle-command-container');
         container.innerHTML = '';
 
@@ -99,7 +100,7 @@ class ToggleCommandEditor {
             border-top-right-radius: 6px;
         `;
         header.innerHTML = `
-            <h3 style="margin: 0; color: var(--color-text-strong); font-size: 16px;">${this.config.title}</h3>
+            <h3 style="margin: 0; color: var(--color-text-strong); font-size: 16px;">${tt(this.config.title)}</h3>
             <button class="close-btn" style="background: none; border: none; color: var(--color-text-strong); font-size: 20px; cursor: pointer; padding: 0; width: 24px; height: 24px;">\u00d7</button>
         `;
         container.appendChild(header);
@@ -132,7 +133,7 @@ class ToggleCommandEditor {
 
         const option0Label = document.createElement('label');
         option0Label.htmlFor = `${radioName}-option0`;
-        option0Label.textContent = this.config.option0;
+        option0Label.textContent = tt(this.config.option0);
         option0Label.style.cssText = 'color: var(--color-text); cursor: pointer;';
 
         const option1Radio = document.createElement('input');
@@ -146,7 +147,7 @@ class ToggleCommandEditor {
 
         const option1Label = document.createElement('label');
         option1Label.htmlFor = `${radioName}-option1`;
-        option1Label.textContent = this.config.option1;
+        option1Label.textContent = tt(this.config.option1);
         option1Label.style.cssText = 'color: var(--color-text); cursor: pointer;';
 
         toggleSection.appendChild(option0Radio);
@@ -169,12 +170,12 @@ class ToggleCommandEditor {
         `;
 
         const cancelBtn = document.createElement('button');
-        cancelBtn.textContent = 'Cancel';
+        cancelBtn.textContent = tt('Cancel');
         cancelBtn.className = 'rr-btn-secondary';
         cancelBtn.addEventListener('click', () => this.close());
 
         const okBtn = document.createElement('button');
-        okBtn.textContent = 'OK';
+        okBtn.textContent = tt('OK');
         okBtn.style.cssText = `
             padding: 6px 20px;
             background-color: var(--color-accent);

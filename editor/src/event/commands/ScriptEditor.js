@@ -84,6 +84,7 @@ class ScriptEditor {
     }
 
     renderContent() {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const container = this.modal.querySelector('.script-container');
         container.innerHTML = '';
 
@@ -100,7 +101,7 @@ class ScriptEditor {
             border-top-right-radius: 6px;
         `;
         header.innerHTML = `
-            <h3 style="margin: 0; color: var(--color-text-strong); font-size: 16px;">Script</h3>
+            <h3 style="margin: 0; color: var(--color-text-strong); font-size: 16px;">${tt('Script')}</h3>
             <button class="close-btn" style="background: none; border: none; color: var(--color-text-strong); font-size: 20px; cursor: pointer; padding: 0; width: 24px; height: 24px;">×</button>
         `;
         container.appendChild(header);
@@ -129,9 +130,9 @@ class ScriptEditor {
             border-left: 3px solid var(--color-link);
         `;
         infoDiv.innerHTML = `
-            <strong style="color: var(--color-text);">JavaScript Code</strong><br>
-            Enter JavaScript code to execute during the event. This runs in the game engine context.<br>
-            Example: <code style="color: var(--color-syntax-string);">$gameVariables.setValue(1, 100);</code>
+            <strong style="color: var(--color-text);">${tt('JavaScript Code')}</strong><br>
+            ${tt('Enter JavaScript code to execute during the event. This runs in the game engine context.')}<br>
+            ${tt('Example:')} <code style="color: var(--color-syntax-string);">$gameVariables.setValue(1, 100);</code>
         `;
         content.appendChild(infoDiv);
 
@@ -182,7 +183,7 @@ class ScriptEditor {
         // Syntax highlighting hint
         const syntaxHint = document.createElement('div');
         syntaxHint.style.cssText = 'color: var(--color-text-dim); font-size: 10px; font-style: italic;';
-        syntaxHint.textContent = 'Tip: Use proper JavaScript syntax. Common objects: $gameVariables, $gameSwitches, $gameParty, $gameActors';
+        syntaxHint.textContent = tt('Tip: Use proper JavaScript syntax. Common objects: $gameVariables, $gameSwitches, $gameParty, $gameActors');
         content.appendChild(syntaxHint);
 
         container.appendChild(content);
@@ -203,7 +204,7 @@ class ScriptEditor {
         const lineCount = document.createElement('div');
         lineCount.style.cssText = 'color: var(--color-text-muted); font-size: 11px;';
         const lines = this.scriptText.split('\n').length;
-        lineCount.textContent = `${lines} line${lines !== 1 ? 's' : ''}`;
+        lineCount.textContent = `${lines} ${lines !== 1 ? tt('lines') : tt('line')}`;
         footer.appendChild(lineCount);
 
         // Buttons
@@ -211,12 +212,12 @@ class ScriptEditor {
         buttonGroup.style.cssText = 'display: flex; gap: 8px;';
 
         const cancelBtn = document.createElement('button');
-        cancelBtn.textContent = 'Cancel';
+        cancelBtn.textContent = tt('Cancel');
         cancelBtn.className = 'rr-btn-secondary';
         cancelBtn.addEventListener('click', () => this.close());
 
         const okBtn = document.createElement('button');
-        okBtn.textContent = 'OK';
+        okBtn.textContent = tt('OK');
         okBtn.style.cssText = `
             padding: 6px 20px;
             background-color: var(--color-accent);

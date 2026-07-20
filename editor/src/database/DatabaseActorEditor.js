@@ -9,6 +9,7 @@ class DatabaseActorEditor {
         this.commonUI = commonUI;
         this.parentEditor = parentEditor; // Reference to main editor for addDatabasePreview, etc.
         this.currentProject = projectManager.getCurrentProject();
+        this.currentActor = null;
         this.traitEditor = new DatabaseTraitEditor(databaseManager, commonUI);
         this.traitsClipboard = null;
     }
@@ -17,6 +18,7 @@ class DatabaseActorEditor {
      * Show actor detail view
      */
     showActorDetail(container, actor) {
+        this.currentActor = actor;
         // Create a wrapper for better layout
         const wrapper = document.createElement('div');
         wrapper.style.cssText = 'display: flex; flex-direction: column; height: 100%; padding: 16px; overflow-y: auto;';
@@ -65,6 +67,7 @@ class DatabaseActorEditor {
      * Create Images section
      */
     createImagesSection(actor) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const imagesSection = document.createElement('div');
         imagesSection.className = 'database-section';
         imagesSection.style.display = 'flex';
@@ -74,7 +77,7 @@ class DatabaseActorEditor {
         imagesContent.className = 'database-section-content';
         imagesContent.style.flex = '1';
 
-        imagesSection.innerHTML = '<div class="database-section-header">Images</div>';
+        imagesSection.innerHTML = `<div class="database-section-header">${tt('Images')}</div>`;
         imagesSection.appendChild(imagesContent);
 
         // Add previews (delegates to parent editor)
@@ -94,43 +97,43 @@ class DatabaseActorEditor {
         // Get all classes for dropdown
         const allClasses = this.databaseManager.getClasses();
         const classOptions = allClasses.map(cls =>
-            `<option value="${cls.id}" ${cls.id === actor.classId ? 'selected' : ''}>#${cls.id} ${cls.name}</option>`
+            `<option value="${cls.id}" ${cls.id === actor.classId ? 'selected' : ''}>#${cls.id} ${rrEscapeHtml(cls.name)}</option>`
         ).join('');
 
         generalSection.innerHTML = `
-            <div class="database-section-header">General Settings</div>
+            <div class="database-section-header">${tt('General Settings')}</div>
             <div class="database-section-content">
                 <div class="db-form db-fill">
                     <div class="db-row-cols">
                         <span class="db-col">
-                            <label>Name</label>
-                            <input type="text" class="database-field-value" value="${actor.name || ''}" data-field="name" data-actor-id="${actor.id}">
+                            <label>${tt('Name')}</label>
+                            <input type="text" class="database-field-value" value="${rrEscapeHtml(actor.name)}" data-field="name" data-actor-id="${actor.id}">
                         </span>
                         <span class="db-col">
-                            <label>Nickname</label>
-                            <input type="text" class="database-field-value" value="${actor.nickname || ''}" data-field="nickname" data-actor-id="${actor.id}">
+                            <label>${tt('Nickname')}</label>
+                            <input type="text" class="database-field-value" value="${rrEscapeHtml(actor.nickname)}" data-field="nickname" data-actor-id="${actor.id}">
                         </span>
                     </div>
                     <div class="db-row-cols">
                         <span class="db-col">
-                            <label>Class</label>
+                            <label>${tt('Class')}</label>
                             <select class="database-field-value" data-field="classId" data-actor-id="${actor.id}">
                                 ${classOptions}
                             </select>
                         </span>
                         <span class="db-col">
                             <label>${tt('Initial Level')}</label>
-                            <input type="number" class="database-field-value" value="${actor.initialLevel || 1}" data-field="initialLevel" data-actor-id="${actor.id}">
+                            <input type="number" class="database-field-value" value="${rrEscapeHtml(actor.initialLevel || 1)}" min="1" max="${globalThis.RR_LIMITS?.ACTOR_LEVEL || 999}" data-field="initialLevel" data-actor-id="${actor.id}">
                         </span>
                         <span class="db-col">
                             <label>${tt('Max Level')}</label>
-                            <input type="number" class="database-field-value" value="${actor.maxLevel || 99}" data-field="maxLevel" data-actor-id="${actor.id}">
+                            <input type="number" class="database-field-value" value="${rrEscapeHtml(actor.maxLevel || 99)}" min="1" max="${globalThis.RR_LIMITS?.ACTOR_LEVEL || 999}" data-field="maxLevel" data-actor-id="${actor.id}">
                         </span>
                     </div>
                     <div class="db-row-cols db-row-grow">
                         <span class="db-col">
-                            <label>Profile</label>
-                            <textarea class="database-field-value" rows="3" data-field="profile" data-actor-id="${actor.id}">${actor.profile || ''}</textarea>
+                            <label>${tt('Profile')}</label>
+                            <textarea class="database-field-value" rows="3" data-field="profile" data-actor-id="${actor.id}">${rrEscapeHtml(actor.profile)}</textarea>
                         </span>
                     </div>
                 </div>
@@ -142,12 +145,14 @@ class DatabaseActorEditor {
     /**
      * Create Equipment section.
      *
-     * Slots are derived from the actor's class + actor traits — slots sealed
-     * by TRAIT_EQUIP_SEAL (code 54) are hidden, and each dropdown is filtered
-     * to only items the actor's class+actor TRAIT_EQUIP_WTYPE/ATYPE allow. A
-     * slot with no compatible items shows a "(no compatible items)" note.
+     * Explicit class slot metadata is authoritative; otherwise use engine slots.
+     * Slots sealed by TRAIT_EQUIP_SEAL (code 54) are hidden, and each dropdown
+     * is filtered to items the actor's class+actor WTYPE/ATYPE traits allow.
+     * Empty unsupported slots stay hidden unless they contain stale equipment
+     * that the user needs to see and clear.
      */
     createEquipmentSection(actor) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const equipmentSection = document.createElement('div');
         equipmentSection.className = 'database-section';
 
@@ -159,8 +164,7 @@ class DatabaseActorEditor {
         const allowedWtypes = this.getActorAllowedWtypeIds(actor);
         const allowedAtypes = this.getActorAllowedAtypeIds(actor);
         const sealedEtypes = this.getActorSealedEtypeIds(actor);
-        const equipSlots = this.getActorEquipSlots(actor)
-            .map((etypeId, idx) => ({ etypeId, slotIndex: idx }))
+        const equipSlots = this.getActorEquipSlotBindings(actor)
             // Hide slots whose equipType has no name (unnamed/placeholder rows in System.equipTypes).
             .filter(s => typeof equipTypes[s.etypeId] === 'string' && equipTypes[s.etypeId].trim() !== '')
             .filter(s => !sealedEtypes.has(s.etypeId));
@@ -172,15 +176,15 @@ class DatabaseActorEditor {
 
         const actorClass = this.databaseManager.getClass(actor.classId);
         const sourceLabel = actorClass
-            ? `Filtered by class: <span style="color: var(--color-accent-bright); font-weight: 600;">${actorClass.name}</span>`
-            : 'Filtered by actor traits';
+            ? `${tt('Filtered by class:')} <span style="color: var(--color-accent-bright); font-weight: 600;">${rrEscapeHtml(actorClass.name)}</span>`
+            : tt('Filtered by actor traits');
 
         let equipmentHTML = '';
         equipSlots.forEach(({ etypeId, slotIndex }) => {
             const equipId = actor.equips[slotIndex] || 0;
-            const slotName = equipTypes[etypeId] || `Slot ${slotIndex}`;
+            const slotName = equipTypes[etypeId] || `${tt('Slot')} ${slotIndex}`;
 
-            let options = '<option value="0">(None)</option>';
+            let options = `<option value="0">${tt('(None)')}</option>`;
             let compatibleCount = 0;
 
             if (etypeId === 1) {
@@ -188,9 +192,9 @@ class DatabaseActorEditor {
                 weapons.forEach(weapon => {
                     if (!weapon || !allowedWtypes.has(weapon.wtypeId)) return;
                     compatibleCount++;
-                    const weaponType = weaponTypes[weapon.wtypeId] || 'Weapon';
+                    const weaponType = weaponTypes[weapon.wtypeId] || tt('Weapon');
                     const selected = weapon.id === equipId ? 'selected' : '';
-                    options += `<option value="${weapon.id}" ${selected}>${weapon.name} (${weaponType})</option>`;
+                    options += `<option value="${weapon.id}" ${selected}>${rrEscapeHtml(weapon.name)} (${rrEscapeHtml(weaponType)})</option>`;
                 });
             } else {
                 const armors = this.databaseManager.getArmors();
@@ -198,9 +202,9 @@ class DatabaseActorEditor {
                     if (!armor || armor.etypeId !== etypeId) return;
                     if (!allowedAtypes.has(armor.atypeId)) return;
                     compatibleCount++;
-                    const armorType = armorTypes[armor.atypeId] || 'Armor';
+                    const armorType = armorTypes[armor.atypeId] || tt('Armor');
                     const selected = armor.id === equipId ? 'selected' : '';
-                    options += `<option value="${armor.id}" ${selected}>${armor.name} (${armorType})</option>`;
+                    options += `<option value="${armor.id}" ${selected}>${rrEscapeHtml(armor.name)} (${rrEscapeHtml(armorType)})</option>`;
                 });
             }
 
@@ -210,18 +214,17 @@ class DatabaseActorEditor {
                 const stale = etypeId === 1
                     ? this.databaseManager.getWeapons().find(w => w && w.id === equipId)
                     : this.databaseManager.getArmors().find(a => a && a.id === equipId);
-                if (stale) {
-                    options += `<option value="${equipId}" selected style="color: var(--color-warning);">${stale.name} (incompatible)</option>`;
-                }
+                const staleLabel = stale
+                    ? `${rrEscapeHtml(stale.name)} ${tt('(incompatible)')}`
+                    : `#${equipId} ${tt('(missing)')}`;
+                options += `<option value="${equipId}" selected style="color: var(--color-warning);">${staleLabel}</option>`;
             }
 
-            const emptyHint = compatibleCount === 0
-                ? `<div style="font-size: 10px; color: var(--color-text-muted); margin-top: 3px;">(no compatible items)</div>`
-                : '';
+            if (compatibleCount === 0 && equipId === 0) return;
 
             equipmentHTML += `
                 <tr>
-                    <td style="width: 120px;">${slotName}</td>
+                    <td style="width: 120px;">${rrEscapeHtml(slotName)}</td>
                     <td>
                         <select class="database-field-value equipment-select"
                                 data-actor-id="${actor.id}"
@@ -229,25 +232,24 @@ class DatabaseActorEditor {
                                 style="width: 100%;">
                             ${options}
                         </select>
-                        ${emptyHint}
                     </td>
                 </tr>
             `;
         });
 
         equipmentSection.innerHTML = `
-            <div class="database-section-header">Equipment</div>
+            <div class="database-section-header">${tt('Equipment')}</div>
             <div class="database-section-content">
                 <div style="font-size: 10px; color: var(--color-text-muted); padding: 4px 8px 8px;">${sourceLabel}</div>
                 <table class="traits-table">
                     <thead>
                         <tr>
-                            <th>Slot</th>
-                            <th>Item</th>
+                            <th>${tt('Slot')}</th>
+                            <th>${tt('Item')}</th>
                         </tr>
                     </thead>
                     <tbody>
-                        ${equipmentHTML || '<tr><td colspan="2" style="text-align: center; color: var(--color-text-muted);">No equipment slots available</td></tr>'}
+                        ${equipmentHTML || `<tr><td colspan="2" style="text-align: center; color: var(--color-text-muted);">${tt('No equipment slots available')}</td></tr>`}
                     </tbody>
                 </table>
             </div>
@@ -297,6 +299,7 @@ class DatabaseActorEditor {
      * Create Traits section with interactive table and context menu
      */
     createTraitsSection(actor) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const section = document.createElement('div');
         section.className = 'database-section';
         section.setAttribute('data-actor-id', actor.id);
@@ -308,21 +311,21 @@ class DatabaseActorEditor {
                 <tr class="trait-row" data-trait-index="${index}" data-actor-id="${actor.id}"
                     style="cursor: pointer; transition: all 0.15s ease;">
                     <td class="trait-indicator" style="width: 3px; padding: 0; border: none; background: transparent;"></td>
-                    <td>${this.commonUI.getTraitName(trait.code)}</td>
-                    <td>${this.commonUI.getTraitValue(trait)}</td>
+                    <td>${rrEscapeHtml(this.commonUI.getTraitName(trait.code))}</td>
+                    <td>${rrEscapeHtml(this.commonUI.getTraitValue(trait))}</td>
                 </tr>
             `).join('') :
-            '<tr><td style="width: 3px; padding: 0; border: none; background: transparent;"></td><td colspan="2" style="text-align: center; color: var(--color-text-muted); font-style: italic; padding: 12px;">No traits</td></tr>';
+            `<tr><td style="width: 3px; padding: 0; border: none; background: transparent;"></td><td colspan="2" style="text-align: center; color: var(--color-text-muted); font-style: italic; padding: 12px;">${tt('No traits')}</td></tr>`;
 
         section.innerHTML = `
-            <div class="database-section-header">Traits</div>
+            <div class="database-section-header">${tt('Traits')}</div>
             <div class="database-section-content">
                 <table class="traits-table" id="actor-traits-table-${actor.id}">
                     <thead>
                         <tr>
                             <th style="width: 3px; padding: 0; border: none; background: transparent;"></th>
-                            <th>Type</th>
-                            <th>Content</th>
+                            <th>${tt('Type')}</th>
+                            <th>${tt('Content')}</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -330,11 +333,11 @@ class DatabaseActorEditor {
                     </tbody>
                 </table>
                 <div class="trait-action-buttons" style="display: flex; gap: 6px; margin-top: 8px;">
-                    <button class="trait-btn-add" style="padding: 4px 12px; background: var(--color-border-subtle); border: 1px solid var(--color-border-input); color: var(--color-text-strong); border-radius: 4px; cursor: pointer; font-size: 12px;">Add</button>
-                    <button class="trait-btn-edit" style="padding: 4px 12px; background: var(--color-border-subtle); border: 1px solid var(--color-border-input); color: var(--color-text-dim); border-radius: 4px; cursor: default; font-size: 12px;" disabled>Edit</button>
-                    <button class="trait-btn-copy" style="padding: 4px 12px; background: var(--color-border-subtle); border: 1px solid var(--color-border-input); color: var(--color-text-dim); border-radius: 4px; cursor: default; font-size: 12px;" disabled>Copy</button>
-                    <button class="trait-btn-paste" style="padding: 4px 12px; background: var(--color-border-subtle); border: 1px solid var(--color-border-input); color: ${this.traitsClipboard ? 'var(--color-text-strong)' : 'var(--color-text-dim)'}; border-radius: 4px; cursor: ${this.traitsClipboard ? 'pointer' : 'default'}; font-size: 12px;" ${this.traitsClipboard ? '' : 'disabled'}>Paste</button>
-                    <button class="trait-btn-delete" style="padding: 4px 12px; background: var(--color-border-subtle); border: 1px solid var(--color-border-input); color: var(--color-text-dim); border-radius: 4px; cursor: default; font-size: 12px;" disabled>Delete</button>
+                    <button class="trait-btn-add" style="padding: 4px 12px; background: var(--color-border-subtle); border: 1px solid var(--color-border-input); color: var(--color-text-strong); border-radius: 4px; cursor: pointer; font-size: 12px;">${tt('Add')}</button>
+                    <button class="trait-btn-edit" style="padding: 4px 12px; background: var(--color-border-subtle); border: 1px solid var(--color-border-input); color: var(--color-text-dim); border-radius: 4px; cursor: default; font-size: 12px;" disabled>${tt('Edit')}</button>
+                    <button class="trait-btn-copy" style="padding: 4px 12px; background: var(--color-border-subtle); border: 1px solid var(--color-border-input); color: var(--color-text-dim); border-radius: 4px; cursor: default; font-size: 12px;" disabled>${tt('Copy')}</button>
+                    <button class="trait-btn-paste" style="padding: 4px 12px; background: var(--color-border-subtle); border: 1px solid var(--color-border-input); color: var(--color-text-strong); border-radius: 4px; cursor: pointer; font-size: 12px;">${tt('Paste')}</button>
+                    <button class="trait-btn-delete" style="padding: 4px 12px; background: var(--color-border-subtle); border: 1px solid var(--color-border-input); color: var(--color-text-dim); border-radius: 4px; cursor: default; font-size: 12px;" disabled>${tt('Delete')}</button>
                 </div>
             </div>
         `;
@@ -487,7 +490,6 @@ class DatabaseActorEditor {
         if (!section) return;
         const table = section.querySelector('.traits-table');
         const hasSelection = table && table.querySelector('.trait-row.trait-selected');
-        const hasClipboard = !!this.traitsClipboard;
 
         const setBtn = (btn, enabled) => {
             if (!btn) return;
@@ -498,7 +500,7 @@ class DatabaseActorEditor {
 
         setBtn(section.querySelector('.trait-btn-edit'), hasSelection);
         setBtn(section.querySelector('.trait-btn-copy'), hasSelection);
-        setBtn(section.querySelector('.trait-btn-paste'), hasClipboard);
+        setBtn(section.querySelector('.trait-btn-paste'), true);
         setBtn(section.querySelector('.trait-btn-delete'), hasSelection);
     }
 
@@ -538,7 +540,7 @@ class DatabaseActorEditor {
                 e.preventDefault();
                 e.stopPropagation();
                 this.cutTrait(actor, idx);
-            } else if (e.key === 'v' && this.traitsClipboard) {
+            } else if (e.key === 'v') {
                 e.preventDefault();
                 e.stopPropagation();
                 this.pasteTrait(actor, idx);
@@ -550,6 +552,7 @@ class DatabaseActorEditor {
      * Setup right-click context menu for traits table
      */
     setupTraitsContextMenu(table, actor) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const tbody = table.querySelector('tbody');
         if (!tbody) return;
 
@@ -583,7 +586,7 @@ class DatabaseActorEditor {
                 { label: 'Edit', action: () => this.editTrait(actor, traitIndex), disabled: traitIndex === null },
                 { label: 'Cut', action: () => this.cutTrait(actor, traitIndex), disabled: traitIndex === null },
                 { label: 'Copy', action: () => this.copyTrait(actor, traitIndex), disabled: traitIndex === null },
-                { label: 'Paste', action: () => this.pasteTrait(actor, traitIndex), disabled: !this.traitsClipboard },
+                { label: 'Paste', action: () => this.pasteTrait(actor, traitIndex), disabled: false },
                 { label: 'Delete', action: () => this.deleteTrait(actor, traitIndex), disabled: traitIndex === null },
                 { divider: true },
                 { label: 'Select All', action: () => this.selectAllTraits(actor) }
@@ -605,7 +608,7 @@ class DatabaseActorEditor {
                     font-size: 13px;
                     transition: background 0.15s;
                 `;
-                menuItem.textContent = item.label;
+                menuItem.textContent = tt(item.label);
 
                 if (!item.disabled) {
                     menuItem.addEventListener('mouseenter', () => {
@@ -662,8 +665,13 @@ class DatabaseActorEditor {
     /**
      * Cut a trait (copy + delete)
      */
-    cutTrait(actor, traitIndex) {
-        this.copyTrait(actor, traitIndex);
+    async cutTrait(actor, traitIndex) {
+        if (traitIndex === null || !actor.traits?.[traitIndex]) return;
+        const target = DatabaseRowClipboard.capturePasteTarget(this.parentEditor, this.projectManager, this.databaseManager, actor.traits, traitIndex);
+        const payload = this.copyTrait(actor, traitIndex);
+        if (!await DatabaseRowClipboard.confirmCut(payload)) return;
+        if (this.currentActor !== actor
+            || !DatabaseRowClipboard.isPasteTargetCurrent(target, this.parentEditor, this.projectManager, this.databaseManager, actor.traits)) return;
         this.deleteTrait(actor, traitIndex);
     }
 
@@ -675,16 +683,24 @@ class DatabaseActorEditor {
         const trait = actor.traits[traitIndex];
         if (!trait) return;
 
-        this.traitsClipboard = JSON.parse(JSON.stringify(trait));
+        this.traitsClipboard = DatabaseRowClipboard.write('trait', trait, this.databaseManager);
+        return this.traitsClipboard;
     }
 
     /**
      * Paste a trait from clipboard
      */
-    pasteTrait(actor, traitIndex) {
-        if (!this.traitsClipboard) return;
+    async pasteTrait(actor, traitIndex) {
+        const target = DatabaseRowClipboard.capturePasteTarget(this.parentEditor, this.projectManager, this.databaseManager, actor.traits, traitIndex);
+        const result = await DatabaseRowClipboard.read('trait', this.databaseManager, this.traitsClipboard);
+        if (this.currentActor !== actor
+            || !DatabaseRowClipboard.isPasteTargetCurrent(target, this.parentEditor, this.projectManager, this.databaseManager, actor.traits)) return;
+        if (result.error) {
+            DatabaseRowClipboard.showError(result);
+            return;
+        }
 
-        const newTrait = JSON.parse(JSON.stringify(this.traitsClipboard));
+        const newTrait = result.row;
 
         if (traitIndex !== null) {
             actor.traits.splice(traitIndex + 1, 0, newTrait);
@@ -729,12 +745,13 @@ class DatabaseActorEditor {
      * Create Note section
      */
     createNoteSection(actor) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const noteSection = document.createElement('div');
         noteSection.className = 'database-section';
         noteSection.innerHTML = `
-            <div class="database-section-header">Note</div>
+            <div class="database-section-header">${tt('Note')}</div>
             <div class="database-section-content">
-                <textarea class="database-field-value" rows="5" style="width: 100%;" data-field="note" data-actor-id="${actor.id}">${actor.note || ''}</textarea>
+                <textarea class="database-field-value" rows="5" style="width: 100%;" data-field="note" data-actor-id="${actor.id}">${rrEscapeHtml(actor.note)}</textarea>
             </div>
         `;
         return noteSection;
@@ -763,7 +780,12 @@ class DatabaseActorEditor {
                     const fieldName = e.target.dataset.field;
                     const actorId = parseInt(e.target.dataset.actorId || actor.id);
                     const value = e.target.value;
-                    this.updateActorField(actorId, fieldName, value);
+                    const normalized = this.updateActorField(actorId, fieldName, value);
+                    if (normalized !== undefined && e.target.type === 'number') e.target.value = String(normalized);
+                    if (fieldName === 'maxLevel') {
+                        const initialLevel = container.querySelector('[data-field="initialLevel"]');
+                        if (initialLevel) initialLevel.value = String(actor.initialLevel);
+                    }
                 });
             });
         }, 0);
@@ -773,22 +795,21 @@ class DatabaseActorEditor {
      * Get equipment slots for an actor
      */
     getActorEquipSlots(actor) {
-        const system = this.databaseManager.getSystem();
-        if (!system || !system.equipTypes) {
-            return [1, 2, 3, 4, 5];
-        }
+        return RREquipSlots.resolve(
+            this.databaseManager,
+            this.projectManager?.getCurrentProject?.() || this.currentProject,
+            actor,
+            this.isDualWield(actor)
+        );
+    }
 
-        const slots = [];
-        for (let i = 1; i < system.equipTypes.length; i++) {
-            slots.push(i);
-        }
-
-        // Check for dual-wield trait
-        if (slots.length >= 2 && this.isDualWield(actor)) {
-            slots[1] = 1; // Change second slot to Weapon
-        }
-
-        return slots;
+    getActorEquipSlotBindings(actor) {
+        return RREquipSlots.resolveInitialBindings(
+            this.databaseManager,
+            this.projectManager?.getCurrentProject?.() || this.currentProject,
+            actor,
+            this.isDualWield(actor)
+        );
     }
 
     /**
@@ -826,7 +847,8 @@ class DatabaseActorEditor {
         this.databaseManager.updateActor(actorId, actor);
         console.log(`Changed actor ${actorId} slot ${slotIndex} to equipment ${equipId}`);
 
-        this.commonUI.updateStatus('Equipment changed');
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
+        this.commonUI.updateStatus(tt('Equipment changed'));
     }
 
     /**
@@ -838,7 +860,21 @@ class DatabaseActorEditor {
 
         // Handle different field types
         if (fieldName === 'initialLevel' || fieldName === 'maxLevel' || fieldName === 'classId') {
-            actor[fieldName] = parseInt(value);
+            // A cleared input parses to NaN, which JSON-serializes to null
+            // and breaks the runtime — fall back to the field's default.
+            const parsed = parseInt(value, 10);
+            const fallback = fieldName === 'maxLevel' ? 99 : 1;
+            actor[fieldName] = Number.isFinite(parsed) ? parsed : fallback;
+            if (fieldName === 'initialLevel' || fieldName === 'maxLevel') {
+                const levelLimit = globalThis.RR_LIMITS?.ACTOR_LEVEL || 999;
+                const maximum = fieldName === 'initialLevel'
+                    ? Math.max(1, Math.min(levelLimit, Number(actor.maxLevel) || levelLimit))
+                    : levelLimit;
+                actor[fieldName] = Math.max(1, Math.min(maximum, actor[fieldName]));
+                if (fieldName === 'maxLevel' && actor.initialLevel > actor.maxLevel) {
+                    actor.initialLevel = actor.maxLevel;
+                }
+            }
         } else {
             actor[fieldName] = value;
         }
@@ -846,6 +882,8 @@ class DatabaseActorEditor {
         this.databaseManager.updateActor(actorId, actor);
         console.log(`Updated actor ${actorId} field ${fieldName} to ${value}`);
 
-        this.commonUI.updateStatus(`${fieldName} updated`);
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
+        this.commonUI.updateStatus(`${fieldName} ${tt('updated')}`);
+        return actor[fieldName];
     }
 }

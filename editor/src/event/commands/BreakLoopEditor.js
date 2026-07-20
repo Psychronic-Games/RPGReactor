@@ -72,6 +72,7 @@ class BreakLoopEditor {
      * Render modal content
      */
     renderContent() {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const container = this.modal.querySelector('.break-loop-container');
         container.innerHTML = '';
 
@@ -88,7 +89,7 @@ class BreakLoopEditor {
             border-top-right-radius: 6px;
         `;
         header.innerHTML = `
-            <h3 style="margin: 0; color: var(--color-text-strong); font-size: 16px;">Break Loop</h3>
+            <h3 style="margin: 0; color: var(--color-text-strong); font-size: 16px;">${tt('Break Loop')}</h3>
             <button class="close-btn" style="background: none; border: none; color: var(--color-text-strong); font-size: 20px; cursor: pointer; padding: 0; width: 24px; height: 24px;">×</button>
         `;
         container.appendChild(header);
@@ -113,12 +114,12 @@ class BreakLoopEditor {
             border-radius: 3px;
         `;
         infoSection.innerHTML = `
-            <div style="color: var(--color-text); font-size: 12px; margin-bottom: 6px; font-weight: bold;">Break Loop Command:</div>
+            <div style="color: var(--color-text); font-size: 12px; margin-bottom: 6px; font-weight: bold;">${tt('Break Loop Command:')}</div>
             <div style="color: var(--color-text-muted); font-size: 11px; line-height: 1.6;">
-                Immediately exits the current loop, jumping to the command after the "Repeat Above" command.<br><br>
-                • Must be used inside a Loop...Repeat Above block<br>
-                • Useful for conditional loop exits<br>
-                • Can be nested inside multiple loops (exits innermost loop)
+                ${tt('Immediately exits the current loop, jumping to the command after the "Repeat Above" command.')}<br><br>
+                • ${tt('Must be used inside a Loop...Repeat Above block')}<br>
+                • ${tt('Useful for conditional loop exits')}<br>
+                • ${tt('Can be nested inside multiple loops (exits innermost loop)')}
             </div>
         `;
         content.appendChild(infoSection);
@@ -137,12 +138,12 @@ class BreakLoopEditor {
         `;
 
         const cancelBtn = document.createElement('button');
-        cancelBtn.textContent = 'Cancel';
+        cancelBtn.textContent = tt('Cancel');
         cancelBtn.className = 'rr-btn-secondary';
         cancelBtn.addEventListener('click', () => this.close());
 
         const okBtn = document.createElement('button');
-        okBtn.textContent = 'OK';
+        okBtn.textContent = tt('OK');
         okBtn.style.cssText = `
             padding: 6px 20px;
             background-color: var(--color-accent);

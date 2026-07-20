@@ -6,6 +6,7 @@ const scriptUrls = [
     "js/libs/pixi.js",
     "js/libs/pixi_compat.js",
     "js/libs/pako.min.js",
+    "js/libs/lz-string.js",
     "js/libs/localforage.min.js",
     "js/libs/effekseer.min.js",
     "js/libs/vorbisdecoder.js",
@@ -14,6 +15,7 @@ const scriptUrls = [
     "js/reactor_objects.js",
     "js/reactor_scenes.js",
     "js/reactor_sprites.js",
+    "js/reactor_picture_extensions.js",
     "js/reactor_windows.js",
     "js/reactor_mv_compat.js",
     "js/reactor_plugins.js"

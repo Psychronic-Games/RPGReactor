@@ -93,7 +93,8 @@ class NwVersionPicker {
                 this.input.focus();
                 this.input.select();
             }).catch(error => {
-                this.input.placeholder = 'Versions unavailable';
+                const tt = text => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
+                this.input.placeholder = tt('Versions unavailable');
                 console.warn('Could not load NW.js versions:', error);
             });
         }
@@ -136,9 +137,10 @@ class NwVersionPicker {
             return row;
         });
         if (!rows.length) {
+            const tt = text => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
             const empty = document.createElement('div');
             empty.className = 'nw-version-message';
-            empty.textContent = 'No matching NW.js releases';
+            empty.textContent = tt('No matching NW.js releases');
             rows.push(empty);
         }
         this.menu.replaceChildren(...rows);

@@ -86,6 +86,7 @@ class ShowScrollingTextEditor {
      * Render modal content
      */
     renderContent() {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const container = this.modal.querySelector('.show-scrolling-text-container');
         container.innerHTML = '';
 
@@ -102,7 +103,7 @@ class ShowScrollingTextEditor {
             border-top-right-radius: 6px;
         `;
         header.innerHTML = `
-            <h3 style="margin: 0; color: var(--color-text-strong); font-size: 16px;">Show Scrolling Text</h3>
+            <h3 style="margin: 0; color: var(--color-text-strong); font-size: 16px;">${tt('Show Scrolling Text')}</h3>
             <button class="close-btn" style="background: none; border: none; color: var(--color-text-strong); font-size: 20px; cursor: pointer; padding: 0; width: 24px; height: 24px;">\u00d7</button>
         `;
         container.appendChild(header);
@@ -123,7 +124,7 @@ class ShowScrollingTextEditor {
         speedRow.style.cssText = 'display: flex; align-items: center; gap: 8px;';
 
         const speedLabel = document.createElement('span');
-        speedLabel.textContent = 'Speed:';
+        speedLabel.textContent = tt('Speed:');
         speedLabel.style.cssText = 'color: var(--color-text); font-size: 13px; min-width: 80px;';
 
         const speedInput = document.createElement('input');
@@ -162,7 +163,7 @@ class ShowScrollingTextEditor {
 
         const noFastLabel = document.createElement('label');
         noFastLabel.htmlFor = 'no-fast-forward';
-        noFastLabel.textContent = 'No Fast Forward';
+        noFastLabel.textContent = tt('No Fast Forward');
         noFastLabel.style.cssText = 'color: var(--color-text); font-size: 13px; cursor: pointer;';
 
         noFastRow.appendChild(noFastCheckbox);
@@ -171,7 +172,7 @@ class ShowScrollingTextEditor {
 
         // Text area
         const textLabel = document.createElement('span');
-        textLabel.textContent = 'Text:';
+        textLabel.textContent = tt('Text:');
         textLabel.style.cssText = 'color: var(--color-text); font-size: 13px;';
         content.appendChild(textLabel);
 
@@ -208,12 +209,12 @@ class ShowScrollingTextEditor {
         `;
 
         const cancelBtn = document.createElement('button');
-        cancelBtn.textContent = 'Cancel';
+        cancelBtn.textContent = tt('Cancel');
         cancelBtn.className = 'rr-btn-secondary';
         cancelBtn.addEventListener('click', () => this.close());
 
         const okBtn = document.createElement('button');
-        okBtn.textContent = 'OK';
+        okBtn.textContent = tt('OK');
         okBtn.style.cssText = `
             padding: 6px 20px;
             background-color: var(--color-accent);

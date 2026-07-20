@@ -82,6 +82,7 @@ class ControlTimerEditor {
      * Render modal content
      */
     renderContent() {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const container = this.modal.querySelector('.control-timer-container');
         container.innerHTML = '';
 
@@ -98,7 +99,7 @@ class ControlTimerEditor {
             border-top-right-radius: 6px;
         `;
         header.innerHTML = `
-            <h3 style="margin: 0; color: var(--color-text-strong); font-size: 16px;">Control Timer</h3>
+            <h3 style="margin: 0; color: var(--color-text-strong); font-size: 16px;">${tt('Control Timer')}</h3>
             <button class="close-btn" style="background: none; border: none; color: var(--color-text-strong); font-size: 20px; cursor: pointer; padding: 0; width: 24px; height: 24px;">×</button>
         `;
         container.appendChild(header);
@@ -130,7 +131,7 @@ class ControlTimerEditor {
 
         const startLabel = document.createElement('label');
         startLabel.htmlFor = 'start-timer';
-        startLabel.textContent = 'Start';
+        startLabel.textContent = tt('Start');
         startLabel.style.cssText = 'color: var(--color-text); cursor: pointer;';
 
         const stopRadio = document.createElement('input');
@@ -145,7 +146,7 @@ class ControlTimerEditor {
 
         const stopLabel = document.createElement('label');
         stopLabel.htmlFor = 'stop-timer';
-        stopLabel.textContent = 'Stop';
+        stopLabel.textContent = tt('Stop');
         stopLabel.style.cssText = 'color: var(--color-text); cursor: pointer;';
 
         operationSection.appendChild(startRadio);
@@ -160,7 +161,7 @@ class ControlTimerEditor {
             durationSection.style.cssText = 'display: flex; flex-direction: column; gap: 8px; padding-top: 8px; border-top: 1px solid var(--color-border);';
 
             const label = document.createElement('span');
-            label.textContent = 'Duration:';
+            label.textContent = tt('Duration:');
             label.style.cssText = 'color: var(--color-text); font-size: 13px; font-weight: bold;';
             durationSection.appendChild(label);
 
@@ -186,7 +187,7 @@ class ControlTimerEditor {
             });
 
             const secondsLabel = document.createElement('span');
-            secondsLabel.textContent = 'seconds';
+            secondsLabel.textContent = tt('seconds');
             secondsLabel.style.cssText = 'color: var(--color-text-muted); font-size: 12px;';
 
             // Time preview
@@ -218,12 +219,12 @@ class ControlTimerEditor {
         `;
 
         const cancelBtn = document.createElement('button');
-        cancelBtn.textContent = 'Cancel';
+        cancelBtn.textContent = tt('Cancel');
         cancelBtn.className = 'rr-btn-secondary';
         cancelBtn.addEventListener('click', () => this.close());
 
         const okBtn = document.createElement('button');
-        okBtn.textContent = 'OK';
+        okBtn.textContent = tt('OK');
         okBtn.style.cssText = `
             padding: 6px 20px;
             background-color: var(--color-accent);

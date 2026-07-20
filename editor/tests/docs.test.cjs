@@ -9,9 +9,8 @@ const workspaceRoot = path.resolve(repoRoot, '..');
 const DOC_DIRS = [
     workspaceRoot,
     path.join(workspaceRoot, 'docs'),
+    path.join(workspaceRoot, 'docs', 'devlogs'),
     path.join(repoRoot),
-    path.join(repoRoot, 'src', 'forge', 'CharacterGenerator', 'procgen'),
-    path.join(repoRoot, 'src', 'forge', 'CharacterGenerator', 'procgen', 'analysis'),
     path.join(repoRoot, 'src', 'forge', 'CharacterGenerator', 'styles', 'psychronic')
 ];
 

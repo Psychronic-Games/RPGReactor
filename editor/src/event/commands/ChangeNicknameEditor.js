@@ -73,6 +73,7 @@ class ChangeNicknameEditor {
     }
 
     renderContent() {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const container = this.modal.querySelector('.change-nickname-container');
         container.innerHTML = '';
 
@@ -89,7 +90,7 @@ class ChangeNicknameEditor {
             border-top-right-radius: 6px;
         `;
         header.innerHTML = `
-            <h3 style="margin: 0; color: var(--color-text-strong); font-size: 16px;">Change Nickname</h3>
+            <h3 style="margin: 0; color: var(--color-text-strong); font-size: 16px;">${tt('Change Nickname')}</h3>
             <button class="close-btn" style="background: none; border: none; color: var(--color-text-strong); font-size: 20px; cursor: pointer; padding: 0; width: 24px; height: 24px;">×</button>
         `;
         container.appendChild(header);
@@ -110,7 +111,7 @@ class ChangeNicknameEditor {
         actorRow.style.cssText = 'display: flex; align-items: center; gap: 8px;';
 
         const actorLabel = document.createElement('span');
-        actorLabel.textContent = 'Actor:';
+        actorLabel.textContent = tt('Actor:');
         actorLabel.style.cssText = 'color: var(--color-text); font-size: 13px; min-width: 100px;';
 
         const actorSelect = document.createElement('select');
@@ -121,7 +122,7 @@ class ChangeNicknameEditor {
             if (!actors[i]) continue;
             const option = document.createElement('option');
             option.value = i;
-            option.textContent = `${i.toString().padStart(4, '0')}: ${actors[i].name || 'Unnamed'}`;
+            option.textContent = `${i.toString().padStart(4, '0')}: ${actors[i].name || tt('Unnamed')}`;
             option.selected = (this.actorId === i);
             actorSelect.appendChild(option);
         }
@@ -136,7 +137,7 @@ class ChangeNicknameEditor {
         nicknameRow.style.cssText = 'display: flex; align-items: center; gap: 8px; padding-top: 8px; border-top: 1px solid var(--color-border);';
 
         const nicknameLabel = document.createElement('span');
-        nicknameLabel.textContent = 'Nickname:';
+        nicknameLabel.textContent = tt('Nickname:');
         nicknameLabel.style.cssText = 'color: var(--color-text); font-size: 13px; min-width: 100px;';
 
         const nicknameInput = document.createElement('input');
@@ -163,12 +164,12 @@ class ChangeNicknameEditor {
         `;
 
         const cancelBtn = document.createElement('button');
-        cancelBtn.textContent = 'Cancel';
+        cancelBtn.textContent = tt('Cancel');
         cancelBtn.className = 'rr-btn-secondary';
         cancelBtn.addEventListener('click', () => this.close());
 
         const okBtn = document.createElement('button');
-        okBtn.textContent = 'OK';
+        okBtn.textContent = tt('OK');
         okBtn.style.cssText = `
             padding: 6px 20px;
             background-color: var(--color-accent);

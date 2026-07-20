@@ -114,6 +114,7 @@ class ChangeVehicleBGMEditor {
      * Render modal content
      */
     renderContent() {
+        const t = text => window.I18n ? window.I18n.tText(text) : text;
         const container = this.modal.querySelector('.change-vehicle-bgm-container');
         container.innerHTML = '';
 
@@ -121,7 +122,7 @@ class ChangeVehicleBGMEditor {
         const header = document.createElement('div');
         header.style.cssText = 'padding: 12px 16px; background-color: var(--color-bg-panel); border-bottom: 1px solid var(--color-border); display: flex; justify-content: space-between; align-items: center; border-top-left-radius: 6px; border-top-right-radius: 6px;';
         header.innerHTML = `
-            <h3 style="margin: 0; color: var(--color-text-strong); font-size: 16px;">Change Vehicle BGM</h3>
+            <h3 style="margin: 0; color: var(--color-text-strong); font-size: 16px;">${t('Change Vehicle BGM')}</h3>
             <button class="close-btn" style="background: none; border: none; color: var(--color-text-strong); font-size: 20px; cursor: pointer; padding: 0; width: 24px; height: 24px;">\u00d7</button>
         `;
         container.appendChild(header);
@@ -137,12 +138,11 @@ class ChangeVehicleBGMEditor {
         vehicleRow.style.cssText = 'display: flex; align-items: center; gap: 8px;';
 
         const vehicleLabel = document.createElement('span');
-        vehicleLabel.textContent = 'Vehicle:';
+        vehicleLabel.textContent = t('Vehicle:');
         vehicleLabel.style.cssText = 'color: var(--color-text); font-size: 13px; min-width: 80px;';
 
         const vehicleSelect = document.createElement('select');
         vehicleSelect.style.cssText = 'padding: 6px 10px; background-color: var(--color-bg-input); color: var(--color-text); border: 1px solid var(--color-border-input); border-radius: 3px; font-size: 12px; flex: 1;';
-        const t = text => window.I18n ? window.I18n.tText(text) : text;
         vehicleSelect.innerHTML = `
             <option value="0" ${this.vehicleType === 0 ? 'selected' : ''}>${t('Boat')}</option>
             <option value="1" ${this.vehicleType === 1 ? 'selected' : ''}>${t('Ship')}</option>
@@ -161,7 +161,7 @@ class ChangeVehicleBGMEditor {
         nameRow.style.cssText = 'display: flex; align-items: center; gap: 8px;';
 
         const nameLabel = document.createElement('span');
-        nameLabel.textContent = 'Name:';
+        nameLabel.textContent = t('Name:');
         nameLabel.style.cssText = 'color: var(--color-text); font-size: 13px; min-width: 80px;';
 
         const nameInput = document.createElement('input');
@@ -177,13 +177,13 @@ class ChangeVehicleBGMEditor {
         content.appendChild(nameRow);
 
         // Volume slider
-        content.appendChild(this.createSliderInput('Volume:', this.volume, 0, 100, (val) => { this.volume = val; }));
+        content.appendChild(this.createSliderInput(t('Volume:'), this.volume, 0, 100, (val) => { this.volume = val; }));
 
         // Pitch slider
-        content.appendChild(this.createSliderInput('Pitch:', this.pitch, 50, 150, (val) => { this.pitch = val; }));
+        content.appendChild(this.createSliderInput(t('Pitch:'), this.pitch, 50, 150, (val) => { this.pitch = val; }));
 
         // Pan slider
-        content.appendChild(this.createSliderInput('Pan:', this.pan, -100, 100, (val) => { this.pan = val; }));
+        content.appendChild(this.createSliderInput(t('Pan:'), this.pan, -100, 100, (val) => { this.pan = val; }));
 
         container.appendChild(content);
 
@@ -192,12 +192,12 @@ class ChangeVehicleBGMEditor {
         footer.style.cssText = 'padding: 12px 16px; border-top: 1px solid var(--color-border); background-color: var(--color-bg-panel); display: flex; justify-content: flex-end; gap: 8px;';
 
         const cancelBtn = document.createElement('button');
-        cancelBtn.textContent = 'Cancel';
+        cancelBtn.textContent = t('Cancel');
         cancelBtn.className = 'rr-btn-secondary';
         cancelBtn.addEventListener('click', () => this.close());
 
         const okBtn = document.createElement('button');
-        okBtn.textContent = 'OK';
+        okBtn.textContent = t('OK');
         okBtn.style.cssText = 'padding: 6px 20px; background-color: var(--color-accent); color: var(--color-bg-deep); border: none; border-radius: 3px; cursor: pointer; font-size: 12px; font-weight: bold;';
         okBtn.addEventListener('click', () => this.save());
 

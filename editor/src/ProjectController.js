@@ -23,9 +23,12 @@ class ProjectController {
         this.projectLoaded = false;
         this.lastLoadedProjectPath = null; // Track which project components are loaded for
         this.projectLockPath = null;
+        this.projectLockToken = null;
         this.savedProjectState = null;
         this.savedMapInfosState = null;
         this.allowApplicationClose = false;
+        this.applicationCloseRequest = null;
+        this._mapLoadRequest = 0;
 
         // References to be set by main app
         this.app = null;
@@ -109,54 +112,127 @@ class ProjectController {
         if (typeof nw === 'undefined') return true;
 
         const fs = require('fs');
+        const crypto = require('crypto');
         const lockPath = this.getProjectLockPath(projectPath);
+        if (this.projectLockPath === lockPath && this.projectLockToken) {
+            try {
+                if (this._readProjectLock(fs, lockPath).token === this.projectLockToken) return true;
+            } catch (error) {
+                return this._rejectProjectLock(projectPath, error);
+            }
+        }
 
-        try {
-            if (fs.existsSync(lockPath)) {
-                const lock = JSON.parse(fs.readFileSync(lockPath, 'utf8'));
-                if (lock.pid && lock.pid !== process.pid && this.isProcessRunning(lock.pid)) {
-                    alert(`This project is already open in another RPG Reactor instance.\n\n${projectPath}`);
-                    this.uiManager.updateStatus('Project already open in another instance');
-                    return false;
+        const token = crypto.randomBytes(32).toString('hex');
+        const lockData = JSON.stringify({
+            app: 'RPG Reactor',
+            pid: process.pid,
+            token,
+            openedAt: new Date().toISOString()
+        }, null, 2);
+
+        for (let attempt = 0; attempt < 2; attempt++) {
+            let fd = null;
+            try {
+                const constants = fs.constants || {};
+                const flags = constants.O_WRONLY !== undefined
+                    ? constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | (constants.O_NOFOLLOW || 0)
+                    : 'wx';
+                fd = fs.openSync(lockPath, flags, 0o600);
+                fs.writeFileSync(fd, lockData, 'utf8');
+                if (fs.fsyncSync) fs.fsyncSync(fd);
+                fs.closeSync(fd);
+                fd = null;
+
+                const previousLockPath = this.projectLockPath;
+                const previousLockToken = this.projectLockToken;
+                this.projectLockPath = lockPath;
+                this.projectLockToken = token;
+                if (previousLockPath && previousLockPath !== lockPath) {
+                    this.releaseProjectLock(previousLockPath, previousLockToken);
+                }
+                return true;
+            } catch (error) {
+                if (fd !== null) {
+                    try { fs.closeSync(fd); } catch (closeError) { /* ignore */ }
+                    try { fs.unlinkSync(lockPath); } catch (cleanupError) { /* ignore */ }
+                }
+                if (error?.code !== 'EEXIST') return this._rejectProjectLock(projectPath, error);
+
+                let lock;
+                try {
+                    lock = this._readProjectLock(fs, lockPath);
+                } catch (readError) {
+                    return this._rejectProjectLock(projectPath, readError);
+                }
+                if (this.isProcessRunning(lock.pid)) {
+                    return this._rejectProjectLock(projectPath, null, true);
+                }
+                try {
+                    if (!this._unlinkProjectLockIfToken(fs, lockPath, lock.token)) {
+                        return this._rejectProjectLock(projectPath, new Error('Project lock changed during stale-lock recovery.'));
+                    }
+                } catch (recoveryError) {
+                    return this._rejectProjectLock(projectPath, recoveryError);
                 }
             }
+        }
+        return this._rejectProjectLock(projectPath, new Error('Could not acquire project lock.'));
+    }
 
-            const previousLockPath = this.projectLockPath;
-            fs.writeFileSync(lockPath, JSON.stringify({
-                app: 'RPG Reactor',
-                pid: process.pid,
-                openedAt: new Date().toISOString()
-            }, null, 2));
-            this.projectLockPath = lockPath;
-
-            if (previousLockPath && previousLockPath !== lockPath) {
-                this.releaseProjectLock(previousLockPath);
+    _readProjectLock(fs, lockPath) {
+        const constants = fs.constants || {};
+        const flags = constants.O_RDONLY !== undefined
+            ? constants.O_RDONLY | (constants.O_NOFOLLOW || 0)
+            : 'r';
+        let fd = null;
+        try {
+            fd = fs.openSync(lockPath, flags);
+            const stat = fs.fstatSync(fd);
+            if (!stat.isFile()) throw new Error('Project lock is not a regular file.');
+            const lock = JSON.parse(fs.readFileSync(fd, 'utf8'));
+            if (!lock || lock.app !== 'RPG Reactor' || !Number.isInteger(lock.pid) || lock.pid <= 0 ||
+                typeof lock.token !== 'string' || !/^[a-f0-9]{64}$/.test(lock.token) ||
+                typeof lock.openedAt !== 'string' || !Number.isFinite(Date.parse(lock.openedAt))) {
+                throw new Error('Project lock is malformed.');
             }
-
-            return true;
-        } catch (error) {
-            console.warn('Could not acquire project lock:', error);
-            return true;
+            return lock;
+        } finally {
+            if (fd !== null) fs.closeSync(fd);
         }
     }
 
-    releaseProjectLock(lockPath = this.projectLockPath) {
+    _unlinkProjectLockIfToken(fs, lockPath, token) {
+        const current = this._readProjectLock(fs, lockPath);
+        if (current.token !== token) return false;
+        fs.unlinkSync(lockPath);
+        return true;
+    }
+
+    _rejectProjectLock(projectPath, error, live = false) {
+        if (error) console.warn('Could not acquire project lock:', error);
+        const message = live
+            ? this._tt('This project is already open in another RPG Reactor instance.')
+            : 'The project lock could not be verified. The project was not opened.';
+        if (typeof alert === 'function') alert(message + `\n\n${projectPath}`);
+        this.uiManager?.updateStatus(live
+            ? 'Project already open in another instance'
+            : 'Could not verify project lock');
+        return false;
+    }
+
+    releaseProjectLock(lockPath = this.projectLockPath, token = this.projectLockToken) {
         if (!lockPath || typeof nw === 'undefined') return;
 
         try {
             const fs = require('fs');
-            if (fs.existsSync(lockPath)) {
-                const lock = JSON.parse(fs.readFileSync(lockPath, 'utf8'));
-                if (!lock.pid || lock.pid === process.pid) {
-                    fs.unlinkSync(lockPath);
-                }
-            }
+            if (token) this._unlinkProjectLockIfToken(fs, lockPath, token);
         } catch (error) {
-            console.warn('Could not release project lock:', error);
+            if (error?.code !== 'ENOENT') console.warn('Could not release project lock:', error);
         }
 
         if (lockPath === this.projectLockPath) {
             this.projectLockPath = null;
+            this.projectLockToken = null;
         }
     }
 
@@ -252,23 +328,34 @@ class ProjectController {
     hasUnsavedChanges(scope = 'project') {
         const mapDirty = !!this.tilemapManager?.isMapDirty?.();
         if (scope === 'map') return mapDirty;
+        if (!this.currentProject) return false;
         return mapDirty || this.isProjectDirty() || !!this.databaseManager?.isDirty?.();
     }
 
     async confirmUnsavedChanges(scope = 'project') {
         if (!this.hasUnsavedChanges(scope)) return true;
 
-        const subject = scope === 'map' ? 'this map' : 'the project';
-        if (confirm(`There are unsaved changes in ${subject}. Save them now?`)) {
+        const subject = scope === 'map' ? this._tt('this map') : this._tt('the project');
+        let decision;
+        if (this.uiManager?.promptUnsavedChanges) {
+            decision = await this.uiManager.promptUnsavedChanges(subject);
+        } else if (confirm(`${this._tt('There are unsaved changes in')} ${subject}. ${this._tt('Save them now?')}`)) {
+            decision = 'save';
+        } else {
+            decision = confirm(`${this._tt('Discard the unsaved changes in')} ${subject}?`)
+                ? 'discard'
+                : 'cancel';
+        }
+
+        if (decision === 'save') {
             if (scope === 'map') {
                 const saved = this.tilemapManager?.saveMap?.() === true;
-                if (!saved) alert('The map could not be saved. The current view will remain open.');
+                if (!saved) alert(this._tt('The map could not be saved. The current view will remain open.'));
                 return saved;
             }
             return await this.saveAll();
         }
-
-        return confirm(`Discard the unsaved changes in ${subject}?`);
+        return decision === 'discard';
     }
 
     async closeProject() {
@@ -293,12 +380,20 @@ class ProjectController {
         this.updateWindowTitle();
     }
 
-    async requestApplicationClose() {
-        if (!await this.confirmUnsavedChanges()) return false;
-        this.allowApplicationClose = true;
-        this.releaseProjectLock();
-        if (typeof nw !== 'undefined') nw.Window.get().close(true);
-        return true;
+    requestApplicationClose() {
+        if (this.applicationCloseRequest) return this.applicationCloseRequest;
+        this.applicationCloseRequest = (async () => {
+            if (!await this.confirmUnsavedChanges()) return false;
+            if (typeof nw === 'undefined') return false;
+            this.allowApplicationClose = true;
+            this.releaseProjectLock();
+            nw.Window.get().close(true);
+            return true;
+        })();
+        this.applicationCloseRequest.then(result => {
+            if (!result) this.applicationCloseRequest = null;
+        });
+        return this.applicationCloseRequest;
     }
 
     /** Drop stale Forge tool project paths when the open project changes. */
@@ -315,8 +410,13 @@ class ProjectController {
         if (!await this.confirmUnsavedChanges()) return;
         if (typeof nw !== 'undefined') {
             // First, ask for project name
-            const projectName = prompt('Enter project name:', 'Reactor One');
+            const projectName = prompt(this._tt('Enter project name:'), 'Reactor One');
             if (!projectName) return;
+            if (!this.projectManager.isSafeProjectName(projectName)) {
+                alert('Project name must be a safe single folder name.');
+                this.uiManager.updateStatus('Invalid project name');
+                return;
+            }
 
             // Use NW.js chooser for directory selection
             const chooser = document.createElement('input');
@@ -349,11 +449,14 @@ class ProjectController {
                             this.uiManager.updateStatus('New project created: ' + projectName);
                             await this.populateProjectUI();
                         } else {
-                            alert('Failed to load the newly created project');
+                            alert(this._tt('Failed to load the newly created project'));
                             this.uiManager.updateStatus('Error creating project');
                         }
                     } else {
-                        alert('Failed to create project. Check console for details.');
+                        const details = this.projectManager.lastCreateError
+                            ? `\n\n${this.projectManager.lastCreateError}`
+                            : '';
+                        alert(this._tt('Failed to create project. Check console for details.') + details);
                         this.uiManager.updateStatus('Error creating project');
                     }
                 }
@@ -377,7 +480,7 @@ class ProjectController {
             input.setAttribute('nwdirectory', '');
             input.setAttribute('nwworkingdir', require('os').homedir());
             input.addEventListener('change', async (e) => {
-                const projectPath = input.value || e.target.value;
+                const projectPath = input.files?.[0]?.path || input.value || e.target.value;
                 if (projectPath) {
                     try {
                         this.logProjectOpen('manual-open:start', { projectPath });
@@ -392,24 +495,31 @@ class ProjectController {
                             mapCount: loadedProject?.maps?.filter(Boolean).length || 0
                         });
 
-                        if (loadedProject && this.acquireProjectLock(loadedProject.path)) {
-                            this.currentProject = loadedProject;
-                            this.lastLoadedProjectPath = null;
-                            // Save last opened project path
-                            localStorage.setItem('lastProjectPath', projectPath);
-
-                            await this.uiManager.showEditorUI();
-                            this.uiManager.updateStatus('Opened project: ' + this.currentProject.name);
-                            await this.populateProjectUI();
-                        } else {
-                            this.logProjectOpen('manual-open:failed', { projectPath });
-                            alert(`Failed to load project. Make sure it's a valid RPG Reactor or RPG Maker project.\n\n${projectPath}`);
+                        if (!loadedProject) {
+                            const loadError = this.projectManager.lastLoadError || null;
+                            this.logProjectOpen('manual-open:failed', { projectPath, loadError });
+                            const details = loadError?.message ? `\n\n${loadError.message}` : '';
+                            alert(this._tt("Failed to load project. Make sure it's a valid RPG Reactor or RPG Maker project.") + `\n\n${projectPath}${details}`);
                             this.uiManager.updateStatus('Error loading project');
+                            return;
                         }
+
+                        // acquireProjectLock already explains a live lock conflict.
+                        if (!this.acquireProjectLock(loadedProject.path)) {
+                            this.logProjectOpen('manual-open:lock-rejected', { projectPath });
+                            return;
+                        }
+
+                        this.currentProject = loadedProject;
+                        this.lastLoadedProjectPath = null;
+                        await this.uiManager.showEditorUI();
+                        this.uiManager.updateStatus('Opened project: ' + this.currentProject.name);
+                        await this.populateProjectUI();
+                        if (this.currentProject) localStorage.setItem('lastProjectPath', projectPath);
                     } catch (error) {
                         console.error(`Error opening project at ${projectPath}:`, error);
                         this.logProjectOpen('manual-open:error', { projectPath, error: error.message || String(error) });
-                        alert(`Error opening project:\n${projectPath}\n\n${error.message || error}`);
+                        alert(`${this._tt('Error opening project:')}\n${projectPath}\n\n${error.message || error}`);
                         this.uiManager.updateStatus('Error loading project');
                     }
                 }
@@ -444,7 +554,7 @@ class ProjectController {
             this._notifyForgeProjectChanged();
             await this.uiManager.showWelcomeScreen();
             this.updateWindowTitle();
-            alert('The project database could not be loaded. Check the JSON files for parse errors.');
+            alert(this._tt('The project database could not be loaded. Check the JSON files for parse errors.'));
             return;
         }
 
@@ -591,7 +701,7 @@ class ProjectController {
         const searchInput = document.createElement('input');
         searchInput.id = 'map-search-input';
         searchInput.type = 'text';
-        searchInput.placeholder = 'Search maps...';
+        searchInput.placeholder = this._tt('Search maps...');
         searchInput.style.cssText = `
             width: 100%;
             padding: 6px 8px;
@@ -677,13 +787,24 @@ class ProjectController {
             mapsList.innerHTML = '';
             let selectedElement = null;
 
+            // One pass: parentId → sorted children. Spread-copying and
+            // filtering the whole maps array once per tree node made large
+            // projects quadratic per render.
+            const childrenByParent = new Map();
+            this.currentProject.maps.forEach((map, index) => {
+                if (!map || !map.id) return;
+                if (!childrenByParent.has(map.parentId)) {
+                    childrenByParent.set(map.parentId, []);
+                }
+                childrenByParent.get(map.parentId).push({ ...map, index });
+            });
+            for (const list of childrenByParent.values()) {
+                list.sort((a, b) => (a.order || 0) - (b.order || 0));
+            }
+
             // Build hierarchical tree starting from root (parentId = 0)
             const buildTree = (parentId, depth = 0) => {
-                // Get all maps with this parentId, sorted by order
-                const children = this.currentProject.maps
-                    .map((map, index) => ({ ...map, index }))
-                    .filter(map => map && map.id && map.parentId === parentId)
-                    .sort((a, b) => (a.order || 0) - (b.order || 0));
+                const children = childrenByParent.get(parentId) || [];
 
                 children.forEach(map => {
                     const mapItem = document.createElement('div');
@@ -693,7 +814,7 @@ class ProjectController {
                     mapItem.style.paddingLeft = `${8 + depth * 16}px`;
 
                     // Check if this map has children
-                    const hasChildren = this.currentProject.maps.some(m => m && m.parentId === map.id);
+                    const hasChildren = childrenByParent.has(map.id);
 
                     // Add expand/collapse icon if has children
                     if (hasChildren) {
@@ -715,7 +836,7 @@ class ProjectController {
 
                     // Add map name
                     const nameSpan = document.createElement('span');
-                    nameSpan.textContent = map.name || 'Unnamed Map';
+                    nameSpan.textContent = map.name || this._tt('Unnamed Map');
                     mapItem.appendChild(nameSpan);
 
                     // Highlight if this is the currently loaded map
@@ -765,7 +886,7 @@ class ProjectController {
                 mapsList.scrollTop = scrollTop;
             }
         } else {
-            mapsList.innerHTML = '<div class="tree-item">No maps yet</div>';
+            mapsList.innerHTML = `<div class="tree-item">${this._tt('No maps yet')}</div>`;
         }
     }
 
@@ -1008,7 +1129,7 @@ class ProjectController {
                     const mapItem = document.createElement('div');
                     mapItem.className = 'tree-item';
                     mapItem.setAttribute('data-map-id', map.id);
-                    mapItem.textContent = map.name || 'Unnamed Map';
+                    mapItem.textContent = map.name || this._tt('Unnamed Map');
 
                     // Highlight if this is the currently loaded map
                     if (currentMapId && map.id === currentMapId) {
@@ -1029,10 +1150,10 @@ class ProjectController {
                     quickAccessList.appendChild(mapItem);
                 });
             } else {
-                quickAccessList.innerHTML = '<div class="tree-item">No quick access maps yet</div>';
+                quickAccessList.innerHTML = `<div class="tree-item">${this._tt('No quick access maps yet')}</div>`;
             }
         } else {
-            quickAccessList.innerHTML = '<div class="tree-item">No quick access maps yet</div>';
+            quickAccessList.innerHTML = `<div class="tree-item">${this._tt('No quick access maps yet')}</div>`;
         }
     }
 
@@ -1040,7 +1161,7 @@ class ProjectController {
         // Fallback for demo mode
         const mapsList = document.getElementById('maps-list');
         mapsList.innerHTML = `
-            <div class="tree-item" data-map="MAP001">MAP001: Untitled Map</div>
+            <div class="tree-item" data-map="MAP001">MAP001: ${this._tt('Untitled Map')}</div>
         `;
     }
 
@@ -1057,26 +1178,26 @@ class ProjectController {
 
         if (this.tilemapManager?.currentMap && this.tilemapManager.saveMap() !== true) {
             this.uiManager.updateStatus('Error saving current map');
-            alert('The current map could not be saved.');
+            alert(this._tt('The current map could not be saved.'));
             return false;
         }
 
         if (!await this.databaseManager.saveAllData(this.currentProject.path)) {
             this.uiManager.updateStatus('Error saving database');
-            alert('One or more database files could not be saved.');
+            alert(this._tt('One or more database files could not be saved.'));
             return false;
         }
 
         if (!await this.projectManager.saveProject(this.currentProject)) {
             this.uiManager.updateStatus('Error saving project');
-            alert('The project metadata or map list could not be saved.');
+            alert(this._tt('The project metadata or map list could not be saved.'));
             return false;
         }
 
         const databaseEditor = typeof window !== 'undefined' ? window.reactor?.databaseEditorUI : null;
         const databaseViewer = typeof document !== 'undefined' ? document.getElementById('database-viewer') : null;
         if (databaseEditor && databaseViewer?.classList.contains('active')) {
-            databaseEditor.takeDatabaseSnapshot();
+            databaseEditor.takeDatabaseSnapshot(true);
         }
 
         this.captureProjectSavedState();
@@ -1087,7 +1208,7 @@ class ProjectController {
 
     async installReactorRuntime() {
         if (!this.projectLoaded || !this.currentProject) {
-            alert('Open a project before installing the Reactor runtime.');
+            alert(this._tt('Open a project before installing the Reactor runtime.'));
             return false;
         }
         const pm = this.projectManager;
@@ -1098,42 +1219,47 @@ class ProjectController {
         const alreadyInstalled = pm.fs.existsSync(pm.path.join(jsPath, 'reactor_main.js'));
 
         const summary = alreadyInstalled
-            ? "This updates the engine files (reactor_*.js and js/libs) to this editor's versions. Your plugin manifest and game data are untouched."
-            : 'This moves the RPG Maker corescript, js/libs, and index.html into rpgmaker-runtime-backup.zip in the project folder, then installs the Reactor engine files (reactor_*.js and js/libs) in their place.';
-        if (!confirm(`Install the Reactor runtime into:\n${jsPath}\n\n${summary}`)) return false;
+            ? this._tt("This updates the engine files (reactor_*.js and js/libs) to this editor's versions. Your plugin manifest and game data are untouched.")
+            : this._tt('This moves the RPG Maker corescript, js/libs, and index.html into rpgmaker-runtime-backup.zip in the project folder, then installs the Reactor engine files (reactor_*.js and js/libs) in their place.');
+        if (!confirm(`${this._tt('Install the Reactor runtime into:')}\n${jsPath}\n\n${summary}`)) return false;
 
         let regenerateManifest = false;
         if (hasReactorManifest && hasRpgMakerManifest) {
             regenerateManifest = confirm(
-                "Rebuild reactor_plugins.js from the project's plugins.js?\n\n"
-                + 'OK: replace the Reactor plugin manifest with the RPG Maker one.\n'
-                + 'Cancel: keep the current reactor_plugins.js.');
+                this._tt("Rebuild reactor_plugins.js from the project's plugins.js?") + '\n\n'
+                + this._tt('OK: replace the Reactor plugin manifest with the RPG Maker one.') + '\n'
+                + this._tt('Cancel: keep the current reactor_plugins.js.'));
         }
 
         const gameTitle = this.databaseManager.data.system?.gameTitle || this.currentProject.name;
         const result = await pm.installReactorRuntime(projectPath, gameTitle, { regenerateManifest });
         if (!result.ok) {
             this.uiManager.updateStatus('Reactor runtime install failed');
-            alert(`Could not install the Reactor runtime:\n${result.error}`);
+            alert(`${this._tt('Could not install the Reactor runtime:')}\n${result.error}`);
             return false;
         }
         this.uiManager.updateStatus('Reactor runtime installed');
-        alert('Reactor runtime installed. Playtest and deployment now use the RPG Reactor engine.'
-            + (result.archivedTo ? `\n\nThe previous RPG Maker runtime was archived to ${result.archivedTo} in the project folder.` : ''));
+        alert(this._tt('Reactor runtime installed. Playtest and deployment now use the RPG Reactor engine.')
+            + (result.archivedTo ? `\n\n${this._tt('The previous RPG Maker runtime was archived to')} ${result.archivedTo} ${this._tt('in the project folder.')}` : ''));
         return true;
     }
 
     async loadMap(mapId, options = {}) {
-        if (!this.tilemapManager) {
+        const request = ++this._mapLoadRequest;
+        const tilemapManager = this.tilemapManager;
+        if (!tilemapManager) {
             return false;
         }
+        tilemapManager.cancelPendingMapLoad?.();
 
-        if (this.tilemapManager.currentMap?.id === mapId && !options.forceReload) return true;
+        if (tilemapManager.currentMap?.id === mapId && !options.forceReload) return true;
         if (!options.skipDirtyCheck && !await this.confirmUnsavedChanges('map')) return false;
+        if (request !== this._mapLoadRequest || tilemapManager !== this.tilemapManager) return false;
 
         this.uiManager.updateStatus(`Loading map ${mapId}...`);
 
-        const success = await this.tilemapManager.loadMap(mapId);
+        const success = await tilemapManager.loadMap(mapId);
+        if (request !== this._mapLoadRequest || tilemapManager !== this.tilemapManager) return false;
 
         if (success) {
             this.uiManager.updateStatus(`Map ${mapId} loaded`);
@@ -1213,6 +1339,10 @@ class ProjectController {
 
     _t(key, params) {
         return window.I18n ? window.I18n.t(key, params) : key;
+    }
+
+    _tt(text) {
+        return (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
     }
 
     // Show context menu for map
@@ -1372,8 +1502,14 @@ class ProjectController {
                 const mapPath = path.join(this.currentProject.path, 'data', mapFile);
 
                 if (fs.existsSync(mapPath)) {
-                    map = JSON.parse(fs.readFileSync(mapPath, 'utf8'));
-                    map.id = mapId;
+                    try {
+                        map = JSON.parse(fs.readFileSync(mapPath, 'utf8'));
+                        map.id = mapId;
+                    } catch (e) {
+                        console.error(`Could not read ${mapFile}:`, e);
+                        alert(`${this._tt('Could not open map properties:')} ${mapFile} ${this._tt('is unreadable or corrupt.')}`);
+                        return;
+                    }
                 }
             }
         }
@@ -1396,9 +1532,14 @@ class ProjectController {
 
     // Create new map
     createNewMap() {
+        const newMapId = this.getNextAvailableMapId();
+        if (!newMapId) {
+            alert(`${this._tt('Map')} ${this._tt('Max:')} ${globalThis.RR_LIMITS?.MAP_COUNT || 2000}`);
+            return;
+        }
         // Create a default map object
         const newMap = {
-            id: this.getNextMapId(),
+            id: newMapId,
             name: 'New Map',
             displayName: '',
             tilesetId: 1,
@@ -1430,13 +1571,7 @@ class ProjectController {
     }
 
     getNextMapId() {
-        let maxId = 0;
-        this.currentProject.maps.forEach(map => {
-            if (map && map.id > maxId) {
-                maxId = map.id;
-            }
-        });
-        return maxId + 1;
+        return this.getNextAvailableMapId();
     }
 
     // Open map properties modal
@@ -1493,7 +1628,7 @@ class ProjectController {
         if (bgmName && bgmSelect.value !== bgmName) {
             const option = document.createElement('option');
             option.value = bgmName;
-            option.textContent = `${bgmName} (missing)`;
+            option.textContent = `${bgmName} ${this._tt('(missing)')}`;
             option.style.color = '#ff6666';
             bgmSelect.appendChild(option);
             bgmSelect.value = bgmName;
@@ -1518,7 +1653,7 @@ class ProjectController {
         if (bgsName && bgsSelect.value !== bgsName) {
             const option = document.createElement('option');
             option.value = bgsName;
-            option.textContent = `${bgsName} (missing)`;
+            option.textContent = `${bgsName} ${this._tt('(missing)')}`;
             option.style.color = '#ff6666';
             bgsSelect.appendChild(option);
             bgsSelect.value = bgsName;
@@ -1548,7 +1683,7 @@ class ProjectController {
         if (parallaxValue && parallaxSelect.value !== parallaxValue) {
             const option = document.createElement('option');
             option.value = parallaxValue;
-            option.textContent = `${parallaxValue} (missing)`;
+            option.textContent = `${parallaxValue} ${this._tt('(missing)')}`;
             option.style.color = '#ff6666';
             parallaxSelect.appendChild(option);
             parallaxSelect.value = parallaxValue;
@@ -1569,7 +1704,7 @@ class ProjectController {
 
     populateTilesetDropdown() {
         const select = document.getElementById('map-tileset-select');
-        select.innerHTML = '<option value="1">Tileset 1</option>'; // Default option
+        select.innerHTML = `<option value="1">${this._tt('Tileset 1')}</option>`; // Default option
 
         if (this.databaseManager && this.databaseManager.data.tilesets) {
             const tilesets = this.databaseManager.data.tilesets;
@@ -1578,7 +1713,7 @@ class ProjectController {
                 if (tileset && index > 0) { // Skip index 0 (null)
                     const option = document.createElement('option');
                     option.value = tileset.id || index;
-                    option.textContent = tileset.name || `Tileset ${tileset.id || index}`;
+                    option.textContent = tileset.name || `${this._tt('Tileset')} ${tileset.id || index}`;
                     select.appendChild(option);
                 }
             });
@@ -1589,7 +1724,7 @@ class ProjectController {
         const select = document.getElementById(selectId);
         select.innerHTML = `<option value="">${this._t('common.none')}</option>`;
 
-        if (!this.currentProject || !this.currentProject.path || typeof nw === 'undefined') {
+        if (!this.currentProject || !this.currentProject.path || (typeof nw === 'undefined' && !window.RPGReactorHost)) {
             return;
         }
 
@@ -1602,38 +1737,26 @@ class ProjectController {
             return;
         }
 
-        // Read audio files
-        const files = fs.readdirSync(audioFolder).filter(file => {
-            return file.endsWith('.ogg') || file.endsWith('.m4a') || file.endsWith('.mp3') || file.endsWith('.wav');
-        });
+        const files = RRAssetFiles.listNames(audioFolder, ['.ogg']);
 
-        // Add files to dropdown (without extensions)
+        // RPG Maker stores extensionless relative names with forward slashes.
         files.forEach(file => {
-            const displayName = file.replace(/\.(ogg|m4a|mp3|wav)$/i, '');
             const option = document.createElement('option');
-            option.value = displayName;
-            option.textContent = displayName;
+            option.value = file;
+            option.textContent = file;
             select.appendChild(option);
         });
     }
 
     getMapAudioPreviewPath(type) {
         const name = document.getElementById(`map-${type}-select`)?.value || '';
-        if (!name || !this.currentProject?.path || typeof nw === 'undefined') return null;
+        if (!name || !this.currentProject?.path || (typeof nw === 'undefined' && !window.RPGReactorHost)) return null;
 
         const fs = require('fs');
         const path = require('path');
         const audioFolder = path.join(this.currentProject.path, 'audio', type);
-        const extensions = ['.ogg', '.m4a', '.mp3', '.wav'];
-
-        for (const ext of extensions) {
-            const filePath = path.join(audioFolder, name + ext);
-            if (fs.existsSync(filePath)) {
-                return 'file://' + filePath.replace(/\\/g, '/');
-            }
-        }
-
-        return null;
+        const file = RRAssetFiles.find(audioFolder, name, ['.ogg']);
+        return file ? RRAssetFiles.toUrl(file.absolutePath) : null;
     }
 
     getMapAudioPreviewParams(type) {
@@ -1763,7 +1886,7 @@ class ProjectController {
         select1.innerHTML = `<option value="">${this._t('common.none')}</option>`;
         select2.innerHTML = `<option value="">${this._t('common.none')}</option>`;
 
-        if (!this.currentProject || !this.currentProject.path || typeof nw === 'undefined') {
+        if (!this.currentProject || !this.currentProject.path || (typeof nw === 'undefined' && !window.RPGReactorHost)) {
             return;
         }
 
@@ -1774,28 +1897,24 @@ class ProjectController {
 
         // Load battleback1 images
         if (fs.existsSync(bb1Folder)) {
-            const files = fs.readdirSync(bb1Folder).filter(file => {
-                return file.endsWith('.png') || file.endsWith('.jpg') || file.endsWith('.jpeg');
-            });
+            const files = RRAssetFiles.listNames(bb1Folder, ['.png']);
 
             files.forEach(file => {
                 const option = document.createElement('option');
-                option.value = file.replace(/\.(png|jpg|jpeg)$/, '');
-                option.textContent = file.replace(/\.(png|jpg|jpeg)$/, '');
+                option.value = file;
+                option.textContent = file;
                 select1.appendChild(option);
             });
         }
 
         // Load battleback2 images
         if (fs.existsSync(bb2Folder)) {
-            const files = fs.readdirSync(bb2Folder).filter(file => {
-                return file.endsWith('.png') || file.endsWith('.jpg') || file.endsWith('.jpeg');
-            });
+            const files = RRAssetFiles.listNames(bb2Folder, ['.png']);
 
             files.forEach(file => {
                 const option = document.createElement('option');
-                option.value = file.replace(/\.(png|jpg|jpeg)$/, '');
-                option.textContent = file.replace(/\.(png|jpg|jpeg)$/, '');
+                option.value = file;
+                option.textContent = file;
                 select2.appendChild(option);
             });
         }
@@ -1805,7 +1924,7 @@ class ProjectController {
         const select = document.getElementById('map-parallax-image-select');
         select.innerHTML = `<option value="">${this._t('common.none')}</option>`;
 
-        if (!this.currentProject || !this.currentProject.path || typeof nw === 'undefined') {
+        if (!this.currentProject || !this.currentProject.path || (typeof nw === 'undefined' && !window.RPGReactorHost)) {
             return;
         }
 
@@ -1818,17 +1937,12 @@ class ProjectController {
             return;
         }
 
-        // Read parallax images
-        const files = fs.readdirSync(parallaxFolder).filter(file => {
-            return file.endsWith('.png') || file.endsWith('.jpg') || file.endsWith('.jpeg');
-        });
+        const files = RRAssetFiles.listNames(parallaxFolder, ['.png']);
 
-        // Add files to dropdown (without extensions)
         files.forEach(file => {
-            const displayName = file.replace(/\.(png|jpg|jpeg)$/, '');
             const option = document.createElement('option');
-            option.value = displayName;
-            option.textContent = displayName;
+            option.value = file;
+            option.textContent = file;
             select.appendChild(option);
         });
     }
@@ -1850,7 +1964,7 @@ class ProjectController {
         // Troop dropdown
         const troopSelect = document.createElement('select');
         troopSelect.style.cssText = 'padding: 3px 4px; background-color: var(--color-bg-input-alt); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 3px; font-size: 11px; width: 100%; box-sizing: border-box;';
-        troopSelect.innerHTML = '<option value="0">(None)</option>';
+        troopSelect.innerHTML = `<option value="0">${this._t('common.none')}</option>`;
 
         if (this.databaseManager && this.databaseManager.data.troops) {
             const troops = this.databaseManager.data.troops;
@@ -1858,7 +1972,7 @@ class ProjectController {
                 if (troop && i > 0) {
                     const option = document.createElement('option');
                     option.value = i;
-                    option.textContent = troop.name || `Troop ${i}`;
+                    option.textContent = troop.name || `${this._tt('Troop')} ${i}`;
                     troopSelect.appendChild(option);
                 }
             });
@@ -1894,7 +2008,7 @@ class ProjectController {
         wholeMapRadio.name = radioId;
         wholeMapRadio.value = 'whole';
         wholeMapLabel.appendChild(wholeMapRadio);
-        wholeMapLabel.appendChild(document.createTextNode('Whole Map'));
+        wholeMapLabel.appendChild(document.createTextNode(this._tt('Whole Map')));
 
         // Regions radio
         const regionsLabel = document.createElement('label');
@@ -1904,7 +2018,7 @@ class ProjectController {
         regionsRadio.name = radioId;
         regionsRadio.value = 'regions';
         regionsLabel.appendChild(regionsRadio);
-        regionsLabel.appendChild(document.createTextNode('Regions'));
+        regionsLabel.appendChild(document.createTextNode(this._tt('Regions')));
 
         radioContainer.appendChild(wholeMapLabel);
         radioContainer.appendChild(regionsLabel);
@@ -2159,11 +2273,11 @@ class ProjectController {
             // Save map file
             if (typeof nw !== 'undefined') {
                 if (!this.writeMapDataFile(mapData)) {
-                    alert('The new map file could not be saved.');
+                    alert(this._tt('The new map file could not be saved.'));
                     return false;
                 }
                 if (!this.projectManager.saveMapInfos(this.currentProject.path, this.currentProject.maps)) {
-                    alert('The map list could not be saved.');
+                    alert(this._tt('The map list could not be saved.'));
                     return false;
                 }
                 this.savedMapInfosState = JSON.stringify(this.currentProject.maps || []);
@@ -2195,12 +2309,12 @@ class ProjectController {
             }
 
             if (!this.writeMapDataFile(mapData)) {
-                alert('The map could not be saved.');
+                alert(this._tt('The map could not be saved.'));
                 return false;
             }
             if (this.projectManager && this.projectManager.saveMapInfos) {
                 if (!this.projectManager.saveMapInfos(this.currentProject.path, this.currentProject.maps)) {
-                    alert('The map list could not be saved.');
+                    alert(this._tt('The map list could not be saved.'));
                     return false;
                 }
             }
@@ -2287,11 +2401,11 @@ class ProjectController {
 
     // Placeholder methods for other context menu items
     loadSampleMap() {
-        alert('Load Sample Map - Coming soon!');
+        alert(this._tt('Load Sample Map - Coming soon!'));
     }
 
     addToQuickAccess(mapId) {
-        alert('Add To Quick Access - Coming soon!');
+        alert(this._tt('Add To Quick Access - Coming soon!'));
     }
 
     async copyMap(mapId) {
@@ -2307,7 +2421,7 @@ class ProjectController {
             } else {
                 const mapPath = path.join(this.currentProject.path, 'data', `Map${String(mapId).padStart(3, '0')}.json`);
                 if (!fs.existsSync(mapPath)) {
-                    alert('Map file not found.');
+                    alert(this._tt('Map file not found.'));
                     return;
                 }
                 mapData = JSON.parse(fs.readFileSync(mapPath, 'utf8'));
@@ -2331,24 +2445,29 @@ class ProjectController {
             this.uiManager.updateStatus(`Copied map ${mapId} to clipboard`);
         } catch (error) {
             console.error('Error copying map:', error);
-            alert('Failed to copy map. Check console for details.');
+            alert(this._tt('Failed to copy map. Check console for details.'));
         }
     }
 
     async pasteMap() {
         if (!this.currentProject || typeof nw === 'undefined') return;
+        const selectedMapId = this.tilemapManager?.currentMap?.id ?? null;
 
         try {
             const clipboardData = typeof ReactorClipboard !== 'undefined' ? await ReactorClipboard.read('map') : null;
             const payload = clipboardData?.payload || null;
             if (!payload || !payload.mapData) {
-                alert('No map in clipboard to paste.');
+                alert(this._tt('No map in clipboard to paste.'));
                 return;
             }
 
             const fs = require('fs');
             const path = require('path');
             const newMapId = this.getNextAvailableMapId();
+            if (!newMapId) {
+                alert(`${this._tt('Map')} ${this._tt('Max:')} ${globalThis.RR_LIMITS?.MAP_COUNT || 2000}`);
+                return;
+            }
             const sourceName = payload.mapInfo?.name || payload.mapData.displayName || `Map ${payload.mapId || ''}`.trim();
             const mapName = this.getUniqueMapName(`${sourceName} Copy`);
 
@@ -2375,15 +2494,17 @@ class ProjectController {
             }
 
             const sourceInfo = payload.mapInfo || {};
+            const placement = this.getMapPastePlacement(selectedMapId);
             this.currentProject.maps[newMapId] = {
                 id: newMapId,
                 expanded: sourceInfo.expanded !== undefined ? sourceInfo.expanded : true,
                 name: mapName,
-                order: this.currentProject.maps.length,
-                parentId: 0,
+                order: placement.order,
+                parentId: placement.parentId,
                 scrollX: 0,
                 scrollY: 0
             };
+            this.recalculateMapOrder(placement.parentId);
 
             if (this.projectManager && this.projectManager.saveMapInfos) {
                 this.projectManager.saveMapInfos(this.currentProject.path, this.currentProject.maps);
@@ -2393,8 +2514,24 @@ class ProjectController {
             this.uiManager.updateStatus(`Pasted map as ${String(newMapId).padStart(3, '0')}: ${mapName}`);
         } catch (error) {
             console.error('Error pasting map:', error);
-            alert('Failed to paste map. Check console for details.');
+            alert(this._tt('Failed to paste map. Check console for details.'));
         }
+    }
+
+    getMapPastePlacement(selectedMapId) {
+        const maps = this.currentProject?.maps || [];
+        const selectedMap = selectedMapId ? maps[selectedMapId] : null;
+        const parentId = selectedMap?.parentId ?? 0;
+        this.recalculateMapOrder(parentId);
+
+        if (selectedMap) {
+            return { parentId, order: selectedMap.order + 0.5 };
+        }
+
+        const siblingCount = maps.reduce((count, map) => {
+            return count + (map && (map.parentId ?? 0) === parentId ? 1 : 0);
+        }, 0);
+        return { parentId, order: siblingCount };
     }
 
     async importCopiedTileset(sourceTileset) {
@@ -2432,10 +2569,13 @@ class ProjectController {
 
     getNextAvailableMapId() {
         const maps = this.currentProject?.maps || [];
-        for (let i = 1; i < maps.length; i++) {
+        const maximumCount = globalThis.RR_LIMITS?.MAP_COUNT || 2000;
+        const maximumId = globalThis.RR_LIMITS?.MAP_ID || 9999;
+        if (maps.reduce((count, map) => count + (map ? 1 : 0), 0) >= maximumCount) return 0;
+        for (let i = 1; i <= maximumId; i++) {
             if (!maps[i]) return i;
         }
-        return Math.max(1, maps.length);
+        return 0;
     }
 
     getUniqueMapName(baseName) {
@@ -2461,14 +2601,14 @@ class ProjectController {
             .filter(mapInfo => mapInfo && !mapIdsToDelete.includes(mapInfo.id));
 
         if (remainingMaps.length === 0) {
-            alert('Cannot delete the last map in the project.');
+            alert(this._tt('Cannot delete the last map in the project.'));
             return;
         }
 
         const childCount = mapIdsToDelete.length - 1;
         const message = childCount > 0
-            ? `Delete "${map.name || 'Unnamed Map'}" and ${childCount} child map${childCount === 1 ? '' : 's'}?\n\nThis removes their Map###.json files and MapInfos entries.`
-            : `Delete "${map.name || 'Unnamed Map'}"?\n\nThis removes its Map${String(mapId).padStart(3, '0')}.json file and MapInfos entry.`;
+            ? `${this._tt('Delete')} "${map.name || this._tt('Unnamed Map')}" ${this._tt('and')} ${childCount} ${childCount === 1 ? this._tt('child map') : this._tt('child maps')}?\n\n${this._tt('This removes their Map###.json files and MapInfos entries.')}`
+            : `${this._tt('Delete')} "${map.name || this._tt('Unnamed Map')}"?\n\n${this._tt('This removes its')} Map${String(mapId).padStart(3, '0')}.json ${this._tt('file and MapInfos entry.')}`;
 
         if (!confirm(message)) return;
 
@@ -2483,11 +2623,11 @@ class ProjectController {
             const deletingCurrentMap = mapIdsToDelete.includes(currentMapId);
             const nextMapId = deletingCurrentMap ? remainingMaps[0].id : currentMapId;
 
+            // Persist MapInfos BEFORE unlinking any map file — deleting the
+            // files first meant a failed MapInfos save left phantom entries
+            // pointing at maps that no longer exist on disk.
+            const priorMaps = JSON.parse(JSON.stringify(this.currentProject.maps || []));
             for (const deleteId of mapIdsToDelete) {
-                const mapPath = path.join(dataDir, `Map${String(deleteId).padStart(3, '0')}.json`);
-                if (fs.existsSync(mapPath)) {
-                    fs.unlinkSync(mapPath);
-                }
                 this.currentProject.maps[deleteId] = null;
             }
 
@@ -2501,9 +2641,18 @@ class ProjectController {
 
             if (this.projectManager && this.projectManager.saveMapInfos) {
                 if (!this.projectManager.saveMapInfos(this.currentProject.path, this.currentProject.maps)) {
+                    this.currentProject.maps = priorMaps;
                     throw new Error('MapInfos.json could not be saved after deleting the map');
                 }
                 this.savedMapInfosState = JSON.stringify(this.currentProject.maps || []);
+            }
+
+            // MapInfos is safely on disk — now drop the orphaned map files.
+            for (const deleteId of mapIdsToDelete) {
+                const mapPath = path.join(dataDir, `Map${String(deleteId).padStart(3, '0')}.json`);
+                if (fs.existsSync(mapPath)) {
+                    fs.unlinkSync(mapPath);
+                }
             }
             if (this.databaseManager?.data) {
                 this.databaseManager.data.mapInfos = this.currentProject.maps;
@@ -2524,7 +2673,7 @@ class ProjectController {
             this.uiManager.updateStatus(`Deleted map: ${map.name || String(mapId).padStart(3, '0')}`);
         } catch (error) {
             console.error('Error deleting map:', error);
-            alert('Failed to delete map. Check console for details.');
+            alert(this._tt('Failed to delete map. Check console for details.'));
         }
     }
 
@@ -2610,11 +2759,11 @@ class ProjectController {
     }
 
     shiftMap(mapId) {
-        alert('Shift - Coming soon!');
+        alert(this._tt('Shift - Coming soon!'));
     }
 
     generateDungeon(mapId) {
-        alert('Generate Dungeon - Coming soon!');
+        alert(this._tt('Generate Dungeon - Coming soon!'));
     }
 
     async saveMapAsImage(mapId) {
@@ -2633,7 +2782,7 @@ class ProjectController {
 
             const mapPath = path.join(this.currentProject.path, 'data', `Map${String(mapId).padStart(3, '0')}.json`);
             if (!fs.existsSync(mapPath)) {
-                alert('Map file not found.');
+                alert(this._tt('Map file not found.'));
                 return;
             }
 
@@ -2642,7 +2791,7 @@ class ProjectController {
             const pixelHeight = (mapData.height || 0) * 48;
             const maxCanvasSize = 32767;
             if (!pixelWidth || !pixelHeight || pixelWidth > maxCanvasSize || pixelHeight > maxCanvasSize) {
-                alert(`Map image is too large to export (${pixelWidth}x${pixelHeight}).`);
+                alert(`${this._tt('Map image is too large to export')} (${pixelWidth}x${pixelHeight}).`);
                 return;
             }
 
@@ -2673,7 +2822,7 @@ class ProjectController {
                 });
 
                 if (!success) {
-                    alert('Failed to render map image.');
+                    alert(this._tt('Failed to render map image.'));
                     this.uiManager.updateStatus('Map image export failed');
                     return;
                 }
@@ -2686,7 +2835,7 @@ class ProjectController {
             input.click();
         } catch (error) {
             console.error('Error saving map image:', error);
-            alert('Failed to save map image. Check console for details.');
+            alert(this._tt('Failed to save map image. Check console for details.'));
             this.uiManager.updateStatus('Map image export failed');
         }
     }

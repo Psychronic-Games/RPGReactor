@@ -1066,15 +1066,19 @@
         PIXI.Texture.prototype
     ) {
         try {
+            // One shim per TextureSource (WeakMap): building a fresh proxy
+            // object on every `.baseTexture` access allocated garbage on
+            // per-frame legacy paths. Every property that can change reads
+            // through a getter, so the memoized shim always reflects the
+            // source's CURRENT state (including a rebuilt src.resource).
+            const baseTextureShims = new WeakMap();
             Object.defineProperty(PIXI.Texture.prototype, "baseTexture", {
                 configurable: true,
                 get: function() {
                     const src = this.source;
                     if (!src) return null;
-                    // Re-create the shim every access so we always reflect the
-                    // current state of src.resource (a previously-memoized shim
-                    // could capture a stale canvas if the source was rebuilt).
-                    //
+                    const memoized = baseTextureShims.get(src);
+                    if (memoized) return memoized;
                     // Setters forward assignments back to the v8 TextureSource
                     // so legacy MZ plugins that do
                     //   videoTexture.baseTexture.scaleMode = PIXI.SCALE_MODES.NEAREST
@@ -1082,9 +1086,11 @@
                     // actually take effect. Without these setters the writes
                     // land on the disposable proxy and are lost; on v5/v6/v7
                     // those plugin lines did mutate the real BaseTexture.
-                    return {
+                    const shim = {
                         source: src,
-                        resource: { source: src.resource || src },
+                        resource: {
+                            get source() { return src.resource || src; }
+                        },
                         get scaleMode() { return src.scaleMode; },
                         set scaleMode(v) {
                             try { src.scaleMode = v; } catch (e) {}
@@ -1116,6 +1122,8 @@
                             }
                         }
                     };
+                    baseTextureShims.set(src, shim);
+                    return shim;
                 }
             });
         } catch (e) {
@@ -1178,6 +1186,9 @@
                 // is still 1x1) and never react when video metadata arrives.
                 const tex = new PIXI.Texture({ source: videoSource, dynamic: true });
                 videoSource.on("error", (e) => {
+                    const directSource = source.getAttribute && source.getAttribute("src");
+                    const childSource = source.querySelector && source.querySelector('source[src]:not([src=""])');
+                    if ((directSource === null || directSource === "") && !childSource) return;
                     console.error("pixi_compat: VideoSource error", e, source.error);
                 });
                 return tex;
@@ -1526,6 +1537,18 @@
             compatLog("pixi_compat: installed Sprite.allowChildren=true getter (suppresses addChild deprecation; v8 children-of-Sprite already render via Sprite.collectRenderablesSimple)");
         } catch (e) {
             console.warn("pixi_compat: failed to install Sprite.allowChildren shim", e);
+        }
+    }
+    if (PIXI.TilingSprite && PIXI.TilingSprite.prototype && PIXI.TextureSource) {
+        try {
+            Object.defineProperty(PIXI.TilingSprite.prototype, "allowChildren", {
+                configurable: true,
+                get: function() { return true; },
+                set: function(_v) { /* legacy parallax plugins use tiling sprites as parents */ }
+            });
+            compatLog("pixi_compat: installed TilingSprite.allowChildren=true getter (legacy video parallax children remain supported without v8 deprecation warnings)");
+        } catch (e) {
+            console.warn("pixi_compat: failed to install TilingSprite.allowChildren shim", e);
         }
     }
 
@@ -2297,6 +2320,24 @@
         }
     }
 
+    // Scratch uniform buffers, allocated once — renderLayer runs per layer
+    // per frame, and building fresh typed arrays for every uniform upload
+    // was steady per-frame garbage.
+    const scratchSamplerIndices = new Int32Array(MAX_TEXTURES);
+    const scratchSamplerSizes = new Float32Array(MAX_TEXTURES * 2);
+    for (let i = 0; i < MAX_TEXTURES; i++) {
+        scratchSamplerIndices[i] = i;
+        scratchSamplerSizes[i * 2] = 1 / ATLAS_SIZE;
+        scratchSamplerSizes[i * 2 + 1] = 1 / ATLAS_SIZE;
+    }
+    const scratchProjection = new Float32Array(16);
+    const scratchModelview = new Float32Array(16);
+    const scratchAnimationFrame = new Float32Array(2);
+    const scratchShadowColor = new Float32Array([0, 0, 0, 0.5]);
+    const scratchFadeColor = new Float32Array(3);
+    const EMPTY_SEGMENT_ARRAY = new Float32Array(0);
+    const ANIMATION_X_PATTERN = [0, 1, 2, 1];
+
     function renderLayer(layer) {
         if (!layer._allElements || layer._allElements.length === 0) return;
         if (!layer._allElements[0] || layer._allElements[0].length === 0) return;
@@ -2315,33 +2356,26 @@
             gl.activeTexture(gl.TEXTURE0 + i);
             gl.bindTexture(gl.TEXTURE_2D, atlases[i]);
         }
-        const samplerIndices = new Int32Array(MAX_TEXTURES);
-        const samplerSizes = new Float32Array(MAX_TEXTURES * 2);
-        for (let i = 0; i < MAX_TEXTURES; i++) {
-            samplerIndices[i] = i;
-            samplerSizes[i * 2] = 1 / ATLAS_SIZE;
-            samplerSizes[i * 2 + 1] = 1 / ATLAS_SIZE;
-        }
-        gl.uniform1iv(uniformLocs.uSamplers, samplerIndices);
-        gl.uniform2fv(uniformLocs.uSamplerSize, samplerSizes);
+        gl.uniform1iv(uniformLocs.uSamplers, scratchSamplerIndices);
+        gl.uniform2fv(uniformLocs.uSamplerSize, scratchSamplerSizes);
 
         // Per-frame perspective / fade uniforms
-        // Wrap in Float32Array -- UM7's Matrix4 uses plain JS Arrays which
-        // WebGL1 *should* accept per the spec, but some implementations are
-        // strict about typed arrays for matrix uniforms.
-        gl.uniformMatrix4fv(uniformLocs.uMode7ProjectionMatrix, false,
-            new Float32Array($gameMap.ultraMode7ProjectionMatrix.data));
-        gl.uniformMatrix4fv(uniformLocs.uMode7ModelviewMatrix, false,
-            new Float32Array($gameMap.ultraMode7ModelviewMatrix.data));
+        // Copy into typed scratch buffers -- UM7's Matrix4 uses plain JS
+        // Arrays which WebGL1 *should* accept per the spec, but some
+        // implementations are strict about typed arrays for matrix uniforms.
+        scratchProjection.set($gameMap.ultraMode7ProjectionMatrix.data);
+        gl.uniformMatrix4fv(uniformLocs.uMode7ProjectionMatrix, false, scratchProjection);
+        scratchModelview.set($gameMap.ultraMode7ModelviewMatrix.data);
+        gl.uniformMatrix4fv(uniformLocs.uMode7ModelviewMatrix, false, scratchModelview);
         gl.uniform1f(uniformLocs.uFadeBegin, $gameMap.ultraMode7FadeBegin);
         gl.uniform1f(uniformLocs.uFadeRange,
             $gameMap.ultraMode7FadeEnd - $gameMap.ultraMode7FadeBegin);
-        gl.uniform2fv(uniformLocs.animationFrame, new Float32Array([
-            [0, 1, 2, 1][layer._animationFrame % 4], layer._animationFrame % 3
-        ]));
-        gl.uniform4fv(uniformLocs.shadowColor, new Float32Array([0, 0, 0, 0.5]));
-        gl.uniform3fv(uniformLocs.uFadeColor,
-            new Float32Array($gameMap.ultraMode7FadeColor));
+        scratchAnimationFrame[0] = ANIMATION_X_PATTERN[layer._animationFrame % 4];
+        scratchAnimationFrame[1] = layer._animationFrame % 3;
+        gl.uniform2fv(uniformLocs.animationFrame, scratchAnimationFrame);
+        gl.uniform4fv(uniformLocs.shadowColor, scratchShadowColor);
+        scratchFadeColor.set($gameMap.ultraMode7FadeColor);
+        gl.uniform3fv(uniformLocs.uFadeColor, scratchFadeColor);
 
         const stride = Tilemap.Layer.ULTRA_MODE_7_VERTEX_STRIDE;
         for (let segIdx = 0; segIdx < layer._allElements.length; segIdx++) {
@@ -2351,8 +2385,8 @@
 
             // Mirror UM7's "switch _elements/_vertexArray/_indexArray per segment" pattern
             layer._elements = elements;
-            layer._vertexArray = layer._allVertexArrays[segIdx] || new Float32Array(0);
-            layer._indexArray = layer._allIndexArrays[segIdx] || new Float32Array(0);
+            layer._vertexArray = layer._allVertexArrays[segIdx] || EMPTY_SEGMENT_ARRAY;
+            layer._indexArray = layer._allIndexArrays[segIdx] || EMPTY_SEGMENT_ARRAY;
 
             // Index buffer (always recompute if growth needed)
             if (layer._indexArray.length < numElements * 6 * 2) {

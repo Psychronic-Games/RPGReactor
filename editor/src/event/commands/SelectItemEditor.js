@@ -82,6 +82,7 @@ class SelectItemEditor {
      * Render modal content
      */
     renderContent() {
+        const t = text => window.I18n ? window.I18n.tText(text) : text;
         const container = this.modal.querySelector('.select-item-container');
         container.innerHTML = '';
 
@@ -98,7 +99,7 @@ class SelectItemEditor {
             border-top-right-radius: 6px;
         `;
         header.innerHTML = `
-            <h3 style="margin: 0; color: var(--color-text-strong); font-size: 16px;">Select Item</h3>
+            <h3 style="margin: 0; color: var(--color-text-strong); font-size: 16px;">${t('Select Item')}</h3>
             <button class="close-btn" style="background: none; border: none; color: var(--color-text-strong); font-size: 20px; cursor: pointer; padding: 0; width: 24px; height: 24px;">\u00d7</button>
         `;
         container.appendChild(header);
@@ -119,7 +120,7 @@ class SelectItemEditor {
         variableRow.style.cssText = 'display: flex; align-items: center; gap: 8px;';
 
         const variableLabel = document.createElement('span');
-        variableLabel.textContent = 'Variable:';
+        variableLabel.textContent = t('Variable:');
         variableLabel.style.cssText = 'color: var(--color-text); font-size: 13px; min-width: 80px;';
 
         const variableInput = document.createElement('input');
@@ -155,7 +156,7 @@ class SelectItemEditor {
         itemTypeRow.style.cssText = 'display: flex; align-items: center; gap: 8px;';
 
         const itemTypeLabel = document.createElement('span');
-        itemTypeLabel.textContent = 'Item Type:';
+        itemTypeLabel.textContent = t('Item Type:');
         itemTypeLabel.style.cssText = 'color: var(--color-text); font-size: 13px; min-width: 80px;';
 
         const itemTypeSelect = document.createElement('select');
@@ -168,7 +169,6 @@ class SelectItemEditor {
             font-size: 12px;
             width: 180px;
         `;
-        const t = text => window.I18n ? window.I18n.tText(text) : text;
         itemTypeSelect.innerHTML = `
             <option value="1">${t('Regular Item')}</option>
             <option value="2">${t('Key Item')}</option>
@@ -198,12 +198,12 @@ class SelectItemEditor {
         `;
 
         const cancelBtn = document.createElement('button');
-        cancelBtn.textContent = 'Cancel';
+        cancelBtn.textContent = t('Cancel');
         cancelBtn.className = 'rr-btn-secondary';
         cancelBtn.addEventListener('click', () => this.close());
 
         const okBtn = document.createElement('button');
-        okBtn.textContent = 'OK';
+        okBtn.textContent = t('OK');
         okBtn.style.cssText = `
             padding: 6px 20px;
             background-color: var(--color-accent);

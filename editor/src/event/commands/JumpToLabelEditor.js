@@ -79,6 +79,7 @@ class JumpToLabelEditor {
      * Render modal content
      */
     renderContent() {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const container = this.modal.querySelector('.jump-to-label-container');
         container.innerHTML = '';
 
@@ -95,7 +96,7 @@ class JumpToLabelEditor {
             border-top-right-radius: 6px;
         `;
         header.innerHTML = `
-            <h3 style="margin: 0; color: var(--color-text-strong); font-size: 16px;">Jump to Label</h3>
+            <h3 style="margin: 0; color: var(--color-text-strong); font-size: 16px;">${tt('Jump to Label')}</h3>
             <button class="close-btn" style="background: none; border: none; color: var(--color-text-strong); font-size: 20px; cursor: pointer; padding: 0; width: 24px; height: 24px;">\u00d7</button>
         `;
         container.appendChild(header);
@@ -116,7 +117,7 @@ class JumpToLabelEditor {
         nameRow.style.cssText = 'display: flex; align-items: center; gap: 8px;';
 
         const nameLabel = document.createElement('span');
-        nameLabel.textContent = 'Label:';
+        nameLabel.textContent = tt('Label:');
         nameLabel.style.cssText = 'color: var(--color-text); font-size: 13px; min-width: 50px;';
 
         const nameInput = document.createElement('input');
@@ -153,12 +154,12 @@ class JumpToLabelEditor {
         `;
 
         const cancelBtn = document.createElement('button');
-        cancelBtn.textContent = 'Cancel';
+        cancelBtn.textContent = tt('Cancel');
         cancelBtn.className = 'rr-btn-secondary';
         cancelBtn.addEventListener('click', () => this.close());
 
         const okBtn = document.createElement('button');
-        okBtn.textContent = 'OK';
+        okBtn.textContent = tt('OK');
         okBtn.style.cssText = `
             padding: 6px 20px;
             background-color: var(--color-accent);

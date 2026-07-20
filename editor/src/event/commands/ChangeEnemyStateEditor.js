@@ -76,6 +76,7 @@ class ChangeEnemyStateEditor {
     }
 
     renderContent() {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const container = this.modal.querySelector('.change-enemy-state-container');
         container.innerHTML = '';
 
@@ -92,7 +93,7 @@ class ChangeEnemyStateEditor {
             border-top-right-radius: 6px;
         `;
         header.innerHTML = `
-            <h3 style="margin: 0; color: var(--color-text-strong); font-size: 16px;">Change Enemy State</h3>
+            <h3 style="margin: 0; color: var(--color-text-strong); font-size: 16px;">${tt('Change Enemy State')}</h3>
             <button class="close-btn" style="background: none; border: none; color: var(--color-text-strong); font-size: 20px; cursor: pointer; padding: 0; width: 24px; height: 24px;">\u00d7</button>
         `;
         container.appendChild(header);
@@ -131,12 +132,12 @@ class ChangeEnemyStateEditor {
         `;
 
         const cancelBtn = document.createElement('button');
-        cancelBtn.textContent = 'Cancel';
+        cancelBtn.textContent = tt('Cancel');
         cancelBtn.className = 'rr-btn-secondary';
         cancelBtn.addEventListener('click', () => this.close());
 
         const okBtn = document.createElement('button');
-        okBtn.textContent = 'OK';
+        okBtn.textContent = tt('OK');
         okBtn.style.cssText = `
             padding: 6px 20px;
             background-color: var(--color-accent);
@@ -155,10 +156,11 @@ class ChangeEnemyStateEditor {
     }
 
     createEnemyIndexSelector() {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const section = document.createElement('div');
         section.style.cssText = 'display: flex; align-items: center; gap: 8px;';
         const label = document.createElement('span');
-        label.textContent = 'Enemy:';
+        label.textContent = tt('Enemy:');
         label.style.cssText = 'color: var(--color-text); font-size: 13px; min-width: 100px;';
         const select = document.createElement('select');
         select.style.cssText = 'padding:6px 10px; background-color:var(--color-bg-input); color:var(--color-text); border:1px solid var(--color-border-input); border-radius:3px; font-size:12px; flex:1;';
@@ -176,6 +178,7 @@ class ChangeEnemyStateEditor {
     }
 
     createOperationSection() {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const section = document.createElement('div');
         section.style.cssText = 'display: flex; gap: 12px;';
 
@@ -188,7 +191,7 @@ class ChangeEnemyStateEditor {
 
         const addLabel = document.createElement('label');
         addLabel.htmlFor = 'add-333';
-        addLabel.textContent = 'Add';
+        addLabel.textContent = tt('Add');
         addLabel.style.cssText = 'color: var(--color-text); cursor: pointer;';
 
         const removeRadio = document.createElement('input');
@@ -200,7 +203,7 @@ class ChangeEnemyStateEditor {
 
         const removeLabel = document.createElement('label');
         removeLabel.htmlFor = 'remove-333';
-        removeLabel.textContent = 'Remove';
+        removeLabel.textContent = tt('Remove');
         removeLabel.style.cssText = 'color: var(--color-text); cursor: pointer;';
 
         section.appendChild(addRadio);
@@ -211,11 +214,12 @@ class ChangeEnemyStateEditor {
     }
 
     createStateSelector() {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const section = document.createElement('div');
         section.style.cssText = 'display: flex; align-items: center; gap: 8px; padding-top: 8px; border-top: 1px solid var(--color-border);';
 
         const label = document.createElement('span');
-        label.textContent = 'State:';
+        label.textContent = tt('State:');
         label.style.cssText = 'color: var(--color-text); font-size: 13px; min-width: 100px;';
 
         const select = document.createElement('select');
@@ -226,7 +230,7 @@ class ChangeEnemyStateEditor {
             if (!states[i]) continue;
             const option = document.createElement('option');
             option.value = i;
-            option.textContent = `${i.toString().padStart(4, '0')}: ${states[i].name || 'Unnamed'}`;
+            option.textContent = `${i.toString().padStart(4, '0')}: ${states[i].name || tt('Unnamed')}`;
             option.selected = (this.stateId === i);
             select.appendChild(option);
         }

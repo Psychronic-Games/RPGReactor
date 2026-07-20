@@ -103,12 +103,17 @@ class AnimationGenerator {
         return window.I18n && window.I18n.tText ? window.I18n.tText(label) : label;
     }
 
+    _escapeHtml(value) {
+        if (typeof globalThis.rrEscapeHtml === 'function') return globalThis.rrEscapeHtml(value);
+        return require('../../utils/HtmlEscape.js')(value);
+    }
+
     renderInto(containerEl, projectController) {
         this.projectController = projectController;
         this.root = containerEl;
 
         if (!this._syncProjectPath()) {
-            this.root.innerHTML = '<div style="padding: 40px; text-align: center; color: var(--color-text-muted); font-size: 12px;">Open a project to use Forge tools.</div>';
+            this.root.innerHTML = `<div style="padding: 40px; text-align: center; color: var(--color-text-muted); font-size: 12px;">${this._tx('Open a project to use Forge tools.')}</div>`;
             return;
         }
         this._ensureFolders();
@@ -132,7 +137,7 @@ class AnimationGenerator {
     _requireProjectPath() {
         const p = this._syncProjectPath();
         if (!p) {
-            alert('Open a project to use Forge tools.');
+            alert(this._tx('Open a project to use Forge tools.'));
             return null;
         }
         return p;
@@ -425,14 +430,14 @@ class AnimationGenerator {
             let previewStatus;
             if (this.previewMode === 'single' && this.previewSingle) {
                 const a = this._findAnimation(this.previewSingle.categoryId, this.previewSingle.animationId);
-                previewStatus = `Previewing: <strong>${a ? a.name : '?'}</strong> (not added)`;
+                previewStatus = `${this._tx('Previewing:')} <strong>${a ? this._escapeHtml(this._tx(a.name)) : '?'}</strong> ${this._tx('(not added)')}`;
             } else if (this.layers.length > 0) {
                 const visible = this.layers.filter(l => l.visible).length;
-                previewStatus = `Compositing: <strong>${visible}</strong> visible layer${visible === 1 ? '' : 's'}`;
+                previewStatus = `${this._tx('Compositing:')} <strong>${visible}</strong> ${visible === 1 ? this._tx('visible layer') : this._tx('visible layers')}`;
             } else {
-                previewStatus = '<span style="color: var(--color-text-dim);">No animation</span>';
+                previewStatus = `<span style="color: var(--color-text-dim);">${this._tx('No animation')}</span>`;
             }
-            statusEl.innerHTML = `${previewStatus} · frame <span class="rr-ag-frame-readout">${this.previewFrame + 1}</span> of ${this.frameCount}`;
+            statusEl.innerHTML = `${previewStatus} · ${this._tx('frame')} <span class="rr-ag-frame-readout">${this.previewFrame + 1}</span> ${this._tx('of')} ${this.frameCount}`;
         }
 
         // Rebuild only the right-pane params panel and rewire its events.
@@ -623,12 +628,12 @@ class AnimationGenerator {
         let previewStatus;
         if (this.previewMode === 'single' && this.previewSingle) {
             const a = this._findAnimation(this.previewSingle.categoryId, this.previewSingle.animationId);
-            previewStatus = `Previewing: <strong>${a ? a.name : '?'}</strong> (not added)`;
+            previewStatus = `${this._tx('Previewing:')} <strong>${a ? this._tx(a.name) : '?'}</strong> ${this._tx('(not added)')}`;
         } else if (this.layers.length > 0) {
             const visible = this.layers.filter(l => l.visible).length;
-            previewStatus = `Compositing: <strong>${visible}</strong> visible layer${visible === 1 ? '' : 's'}`;
+            previewStatus = `${this._tx('Compositing:')} <strong>${visible}</strong> ${visible === 1 ? this._tx('visible layer') : this._tx('visible layers')}`;
         } else {
-            previewStatus = '<span style="color: var(--color-text-dim);">No animation</span>';
+            previewStatus = `<span style="color: var(--color-text-dim);">${this._tx('No animation')}</span>`;
         }
 
         const sheetCols = SHEET_COLUMNS;
@@ -642,25 +647,25 @@ class AnimationGenerator {
                 <!-- Toolbar -->
                 <div style="padding: 10px 16px; background: var(--color-bg-panel); border-bottom: 1px solid var(--color-border-subtle); display: flex; align-items: center; gap: 14px; flex-shrink: 0; flex-wrap: wrap;">
                     <div style="display: flex; align-items: center; gap: 6px;">
-                        <label style="font-size: 11px; color: var(--color-text-muted);">Frame:</label>
+                        <label style="font-size: 11px; color: var(--color-text-muted);">${this._tx('Frame:')}</label>
                         <input type="number" class="rr-ag-fw rr-input" value="${this.frameWidth}" min="16" max="512" style="width: 64px; padding: 3px 6px; font-size: 11px;">
                         <span style="font-size: 11px; color: var(--color-text-muted);">×</span>
                         <input type="number" class="rr-ag-fh rr-input" value="${this.frameHeight}" min="16" max="512" style="width: 64px; padding: 3px 6px; font-size: 11px;">
                     </div>
                     <div style="display: flex; align-items: center; gap: 6px;">
-                        <label style="font-size: 11px; color: var(--color-text-muted);">Frames:</label>
+                        <label style="font-size: 11px; color: var(--color-text-muted);">${this._tx('Frames:')}</label>
                         <input type="number" class="rr-ag-fc rr-input" value="${this.frameCount}" min="1" max="${MAX_FRAMES}" style="width: 60px; padding: 3px 6px; font-size: 11px;">
-                        <span style="font-size: 10px; color: var(--color-text-dim);">/ ${MAX_FRAMES} max</span>
+                        <span style="font-size: 10px; color: var(--color-text-dim);">/ ${MAX_FRAMES} ${this._tx('max')}</span>
                     </div>
                     <div style="display: flex; align-items: center; gap: 6px;">
-                        <label style="font-size: 11px; color: var(--color-text-muted);">Interpolation:</label>
+                        <label style="font-size: 11px; color: var(--color-text-muted);">${this._tx('Interpolation:')}</label>
                         <select class="rr-ag-interp rr-select" style="padding: 3px 6px; font-size: 11px;">
-                            <option value="linear"  ${this.interpolation === 'linear'  ? 'selected' : ''}>Linear (smooth)</option>
-                            <option value="nearest" ${this.interpolation === 'nearest' ? 'selected' : ''}>Nearest (sharp)</option>
+                            <option value="linear"  ${this.interpolation === 'linear'  ? 'selected' : ''}>${this._tx('Linear (smooth)')}</option>
+                            <option value="nearest" ${this.interpolation === 'nearest' ? 'selected' : ''}>${this._tx('Nearest (sharp)')}</option>
                         </select>
                     </div>
                     <div style="font-size: 10px; color: var(--color-text-dim); margin-left: auto;">
-                        Sheet: ${sheetW}×${sheetH} (${sheetCols}×${sheetRows})
+                        ${this._tx('Sheet:')} ${sheetW}×${sheetH} (${sheetCols}×${sheetRows})
                     </div>
                 </div>
 
@@ -678,15 +683,15 @@ class AnimationGenerator {
                             <!-- LEFT sub-column: preview canvas + layer stack stacked vertically -->
                             <div style="display: flex; flex-direction: column; gap: 10px; align-items: stretch; min-width: ${previewDisp + 24}px;">
                                 <div style="display: flex; flex-direction: column; gap: 6px; align-items: center;">
-                                    <div class="rr-ag-preview-status" style="font-size: 10px; color: var(--color-text-muted);">${previewStatus} · frame <span class="rr-ag-frame-readout">${this.previewFrame + 1}</span> of ${this.frameCount}</div>
+                                    <div class="rr-ag-preview-status" style="font-size: 10px; color: var(--color-text-muted);">${previewStatus} · ${this._tx('frame')} <span class="rr-ag-frame-readout">${this.previewFrame + 1}</span> ${this._tx('of')} ${this.frameCount}</div>
                                     <div style="background: var(--color-bg-deep); border: 1px solid var(--color-border-input); border-radius: 4px; padding: 10px;">
                                         <canvas class="rr-ag-preview" width="${this.frameWidth}" height="${this.frameHeight}" style="width: ${previewDisp}px; height: ${previewDisp * this.frameHeight / this.frameWidth}px; image-rendering: ${this.interpolation === 'nearest' ? 'pixelated' : 'auto'}; display: block;"></canvas>
                                     </div>
                                     <div style="display: flex; gap: 6px; margin-top: 2px;">
                                     <button class="rr-ag-play rr-btn-chip" style="padding: 4px 12px; display: inline-flex; align-items: center; gap: 5px;">${this.playing
-                                        ? '<svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" stroke="none" aria-hidden="true"><rect x="6" y="4" width="4" height="16" rx="0.5"/><rect x="14" y="4" width="4" height="16" rx="0.5"/></svg> Pause'
-                                        : '<svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" stroke="none" aria-hidden="true"><polygon points="6,4 20,12 6,20"/></svg> Play'}</button>
-                                    <button class="rr-ag-step rr-btn-chip" style="padding: 4px 12px; display: inline-flex; align-items: center; gap: 5px;"><svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" stroke="none" aria-hidden="true"><polygon points="4,4 16,12 4,20"/><rect x="17" y="4" width="3" height="16" rx="0.3"/></svg> Step</button>
+                                        ? `<svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" stroke="none" aria-hidden="true"><rect x="6" y="4" width="4" height="16" rx="0.5"/><rect x="14" y="4" width="4" height="16" rx="0.5"/></svg> ${this._tx('Pause')}`
+                                        : `<svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" stroke="none" aria-hidden="true"><polygon points="6,4 20,12 6,20"/></svg> ${this._tx('Play')}`}</button>
+                                    <button class="rr-ag-step rr-btn-chip" style="padding: 4px 12px; display: inline-flex; align-items: center; gap: 5px;"><svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" stroke="none" aria-hidden="true"><polygon points="4,4 16,12 4,20"/><rect x="17" y="4" width="3" height="16" rx="0.3"/></svg> ${this._tx('Step')}</button>
                                     </div>
                                 </div>
 
@@ -699,28 +704,28 @@ class AnimationGenerator {
                             <!-- MIDDLE sub-column: 3D rotation gizmo (only relevant when the
                                  editing animation has tilt params — checked via CSS display:none below). -->
                             <div class="rr-ag-gizmo-col" style="display: flex; flex-direction: column; gap: 6px; align-items: center;">
-                                <div style="font-size: 10px; color: var(--color-text-muted);">3D Rotation</div>
+                                <div style="font-size: 10px; color: var(--color-text-muted);">${this._tx('3D Rotation')}</div>
                                 <div style="background: var(--color-bg-deep); border: 1px solid var(--color-border-input); border-radius: 4px; padding: 6px;">
                                     <canvas class="rr-ag-gizmo" width="148" height="148" style="cursor: grab; display: block; touch-action: none;"></canvas>
                                 </div>
-                                <button class="rr-ag-gizmo-reset rr-btn-chip" style="padding: 3px 10px; font-size: 10px;" title="Reset orientation to head-on (all tilts to 0)">Reset</button>
+                                <button class="rr-ag-gizmo-reset rr-btn-chip" style="padding: 3px 10px; font-size: 10px;" title="${this._tx('Reset orientation to head-on (all tilts to 0)')}">${this._tx('Reset')}</button>
                                 <div style="font-size: 9px; color: var(--color-text-dim); text-align: center; max-width: 150px; line-height: 1.3;">
-                                    Drag to rotate. Shift+drag to roll.
+                                    ${this._tx('Drag to rotate. Shift+drag to roll.')}
                                 </div>
                             </div>
 
                             <!-- RIGHT sub-column: sheet preview + bake button -->
                             <div style="display: flex; flex-direction: column; gap: 6px; align-items: center; flex: 1; min-width: 0;">
-                                <div style="font-size: 10px; color: var(--color-text-muted);">Sheet Preview (${sheetW}×${sheetH})</div>
+                                <div style="font-size: 10px; color: var(--color-text-muted);">${this._tx('Sheet Preview')} (${sheetW}×${sheetH})</div>
                                 <div style="background: var(--color-bg-deep); border: 1px solid var(--color-border-input); border-radius: 4px; padding: 10px; max-width: 100%; overflow: auto;">
                                     <canvas class="rr-ag-sheet" width="${sheetW}" height="${sheetH}" style="max-width: 100%; image-rendering: ${this.interpolation === 'nearest' ? 'pixelated' : 'auto'}; display: block;"></canvas>
                                 </div>
-                                <button class="rr-ag-bake rr-btn-chip" style="padding: 5px 14px;">↻ Bake Sheet Preview</button>
+                                <button class="rr-ag-bake rr-btn-chip" style="padding: 5px 14px;">↻ ${this._tx('Bake Sheet Preview')}</button>
                             </div>
                         </div>
 
                         <div style="font-size: 10px; color: var(--color-text-dim);">
-                            Click an animation on the left to preview it standalone. Use the <strong>+</strong> button (or <strong>Add as Layer</strong> in the params pane) to commit it to the layer stack. Stacked layers render back-to-front with their own blend mode + opacity.
+                            ${this._tx('Click an animation on the left to preview it standalone. Use the')} <strong>+</strong> ${this._tx('button (or')} <strong>${this._tx('Add as Layer')}</strong> ${this._tx('in the params pane) to commit it to the layer stack. Stacked layers render back-to-front with their own blend mode + opacity.')}
                         </div>
                     </div>
 
@@ -732,14 +737,14 @@ class AnimationGenerator {
 
                 <!-- Footer: save -->
                 <div style="padding: 12px 18px; border-top: 1px solid var(--color-border-subtle); background: var(--color-bg-panel); display: flex; align-items: center; gap: 10px; flex-shrink: 0;">
-                    <label style="font-size: 12px; color: var(--color-text-muted);">Save as:</label>
-                    <input type="text" class="rr-ag-name rr-input" placeholder="MyAnimation" style="width: 220px; padding: 4px 8px; font-size: 12px;">
+                    <label style="font-size: 12px; color: var(--color-text-muted);">${this._tx('Save as:')}</label>
+                    <input type="text" class="rr-ag-name rr-input" placeholder="${this._tx('MyAnimation')}" style="width: 220px; padding: 4px 8px; font-size: 12px;">
                     <div style="font-size: 10px; color: var(--color-text-dim);">→ img/animations/&lt;name&gt;.png</div>
                     <div style="margin-left: auto; display: flex; gap: 8px;">
-                        <button class="rr-ag-randomize rr-btn-chip" style="padding: 6px 14px;" title="Randomize all sliders and colors for the current animation (textures untouched)">⟳ Randomize</button>
-                        <button class="rr-ag-reset rr-btn-chip" style="padding: 6px 14px;" title="Reset the active layer's parameters to defaults">Reset Layer</button>
-                        <button class="rr-ag-save rr-btn-chip" style="padding: 6px 18px; color: var(--color-accent-bright);">Bake & Save</button>
-                        <button class="rr-ag-save-gif rr-btn-chip" style="padding: 6px 18px; color: var(--color-accent-bright);" title="Export the live animation preview as an animated GIF (handy tool, not for in-game use)">Save GIF</button>
+                        <button class="rr-ag-randomize rr-btn-chip" style="padding: 6px 14px;" title="${this._tx('Randomize all sliders and colors for the current animation (textures untouched)')}">⟳ ${this._tx('Randomize')}</button>
+                        <button class="rr-ag-reset rr-btn-chip" style="padding: 6px 14px;" title="${this._tx("Reset the active layer's parameters to defaults")}">${this._tx('Reset Layer')}</button>
+                        <button class="rr-ag-save rr-btn-chip" style="padding: 6px 18px; color: var(--color-accent-bright);">${this._tx('Bake & Save')}</button>
+                        <button class="rr-ag-save-gif rr-btn-chip" style="padding: 6px 18px; color: var(--color-accent-bright);" title="${this._tx('Export the live animation preview as an animated GIF (handy tool, not for in-game use)')}">${this._tx('Save GIF')}</button>
                     </div>
                 </div>
             </div>
@@ -766,7 +771,7 @@ class AnimationGenerator {
         if (!target || !anim) {
             return `
                 <div style="font-size: 11px; color: var(--color-text-muted); text-align: center; padding: 16px;">
-                    Click an animation on the left to preview it.
+                    ${this._tx('Click an animation on the left to preview it.')}
                 </div>
             `;
         }
@@ -774,32 +779,32 @@ class AnimationGenerator {
         const isSingle = (this.previewMode === 'single');
         const banner = isSingle
             ? `<div style="background: var(--color-bg-input-alt); border: 1px solid var(--color-border-subtle); border-radius: 4px; padding: 8px 10px; display: flex; flex-direction: column; gap: 6px;">
-                    <div style="font-size: 10px; color: var(--color-text-dim); text-transform: uppercase; letter-spacing: 0.3px;">Single Preview</div>
+                    <div style="font-size: 10px; color: var(--color-text-dim); text-transform: uppercase; letter-spacing: 0.3px;">${this._tx('Single Preview')}</div>
                     <div style="font-size: 13px; color: var(--color-text); font-weight: 600;">${this._tx(anim.name)}</div>
-                    <div style="font-size: 10px; color: var(--color-text-muted);">${cat ? cat.name : ''} — not added to the stack yet. Tune the params below, then commit:</div>
-                    <button class="rr-ag-commit-single rr-btn-chip" style="padding: 6px 10px; font-size: 11px; color: var(--color-accent-bright); margin-top: 2px;">+ Add as Layer</button>
+                    <div style="font-size: 10px; color: var(--color-text-muted);">${cat ? this._tx(cat.name) : ''} ${this._tx('— not added to the stack yet. Tune the params below, then commit:')}</div>
+                    <button class="rr-ag-commit-single rr-btn-chip" style="padding: 6px 10px; font-size: 11px; color: var(--color-accent-bright); margin-top: 2px;">+ ${this._tx('Add as Layer')}</button>
                 </div>`
             : (() => {
                 const N = (target.keyframes && target.keyframes.length) || 1;
                 const kfIdx = target.activeKeyframe || 0;
                 const kfBadge = N > 1
-                    ? ` · <span style="color: var(--color-accent-bright); font-weight: 600;">Keyframe ${kfIdx + 1} / ${N}</span>`
+                    ? ` · <span style="color: var(--color-accent-bright); font-weight: 600;">${this._tx('Keyframe')} ${kfIdx + 1} / ${N}</span>`
                     : '';
                 const kfHint = N > 1
-                    ? ` Values lerp linearly between keyframes — pick a different KF chip in the layer card to edit a different pose.`
+                    ? ` ${this._tx('Values lerp linearly between keyframes — pick a different KF chip in the layer card to edit a different pose.')}`
                     : '';
                 return `<div style="background: var(--color-bg-input-alt); border: 1px solid var(--color-border-subtle); border-radius: 4px; padding: 8px 10px; display: flex; flex-direction: column; gap: 6px;">
-                    <div style="font-size: 10px; color: var(--color-text-dim); text-transform: uppercase; letter-spacing: 0.3px;">Editing Layer${kfBadge}</div>
+                    <div style="font-size: 10px; color: var(--color-text-dim); text-transform: uppercase; letter-spacing: 0.3px;">${this._tx('Editing Layer')}${kfBadge}</div>
                     <div style="font-size: 13px; color: var(--color-text); font-weight: 600;">${this._tx(anim.name)}</div>
-                    <div style="font-size: 10px; color: var(--color-text-muted);">${cat ? cat.name : ''} · changes apply directly to this layer.${kfHint}</div>
-                    <button class="rr-ag-dup-layer rr-btn-chip" data-cat="${target.categoryId}" data-anim="${target.animationId}" style="padding: 6px 10px; font-size: 11px; color: var(--color-accent-bright); margin-top: 2px;" title="Add another instance of this animation as a new top layer">+ Add Another Copy</button>
-                    <div style="font-size: 9px; color: var(--color-text-dim); line-height: 1.3;">Adds a fresh copy of <strong>${this._tx(anim.name)}</strong> on top of the stack. The new copy starts with default params — tweak it independently.</div>
+                    <div style="font-size: 10px; color: var(--color-text-muted);">${cat ? this._tx(cat.name) : ''} ${this._tx('· changes apply directly to this layer.')}${kfHint}</div>
+                    <button class="rr-ag-dup-layer rr-btn-chip" data-cat="${target.categoryId}" data-anim="${target.animationId}" style="padding: 6px 10px; font-size: 11px; color: var(--color-accent-bright); margin-top: 2px;" title="${this._tx('Add another instance of this animation as a new top layer')}">+ ${this._tx('Add Another Copy')}</button>
+                    <div style="font-size: 9px; color: var(--color-text-dim); line-height: 1.3;">${this._tx('Adds a fresh copy of')} <strong>${this._tx(anim.name)}</strong> ${this._tx('on top of the stack. The new copy starts with default params — tweak it independently.')}</div>
                 </div>`;
             })();
         return `
             <div>
                 ${banner}
-                <div style="font-size: 11px; font-weight: 700; color: var(--color-accent-bright); text-transform: uppercase; letter-spacing: 0.3px; margin-top: 12px; margin-bottom: 8px;">Parameters</div>
+                <div style="font-size: 11px; font-weight: 700; color: var(--color-accent-bright); text-transform: uppercase; letter-spacing: 0.3px; margin-top: 12px; margin-bottom: 8px;">${this._tx('Parameters')}</div>
             </div>
         `;
     }
@@ -808,9 +813,9 @@ class AnimationGenerator {
         if (this.layers.length === 0) {
             return `
                 <div>
-                    <div style="font-size: 11px; font-weight: 700; color: var(--color-accent-bright); text-transform: uppercase; letter-spacing: 0.3px; margin-bottom: 8px;">Layers</div>
+                    <div style="font-size: 11px; font-weight: 700; color: var(--color-accent-bright); text-transform: uppercase; letter-spacing: 0.3px; margin-bottom: 8px;">${this._tx('Layers')}</div>
                     <div style="font-size: 11px; color: var(--color-text-muted); text-align: center; padding: 12px; border: 1px dashed var(--color-border-subtle); border-radius: 4px;">
-                        Click an animation on the left to add a layer.
+                        ${this._tx('Click an animation on the left to add a layer.')}
                     </div>
                 </div>
             `;
@@ -842,7 +847,7 @@ class AnimationGenerator {
                 ? ` <span style="color: var(--color-accent-bright);">#${dupIndex.get(layer.id)}</span>`
                 : '';
             const blendHtml = BLEND_MODES.map(b =>
-                `<option value="${b.value}" ${b.value === layer.blend ? 'selected' : ''}>${b.label}</option>`
+                `<option value="${b.value}" ${b.value === layer.blend ? 'selected' : ''}>${this._tx(b.label)}</option>`
             ).join('');
             return `
                 <div class="rr-ag-layer-row" data-id="${layer.id}" style="
@@ -857,39 +862,39 @@ class AnimationGenerator {
                     opacity: ${layer.visible ? 1 : 0.55};
                 ">
                     <div style="display: flex; align-items: center; gap: 4px;">
-                        <button class="rr-ag-layer-vis rr-btn-chip" data-id="${layer.id}" title="${layer.visible ? 'Hide' : 'Show'} layer" style="padding: 2px 4px; min-width: 22px; line-height: 1; display: inline-flex; align-items: center; justify-content: center;">${layer.visible
+                        <button class="rr-ag-layer-vis rr-btn-chip" data-id="${layer.id}" title="${layer.visible ? this._tx('Hide') : this._tx('Show')} ${this._tx('layer')}" style="padding: 2px 4px; min-width: 22px; line-height: 1; display: inline-flex; align-items: center; justify-content: center;">${layer.visible
                             ? '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>'
                             : '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7c2 0 3.7.6 5.2 1.5"/><path d="M22 12s-3.5 7-10 7c-2 0-3.7-.6-5.2-1.5"/><path d="M4 4l16 16"/></svg>'}</button>
                         <div style="flex: 1; min-width: 0; font-size: 11px; color: var(--color-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-                            ${anim ? anim.name : '<span style="color:var(--color-text-dim);">(missing)</span>'}${dupBadge}
-                            <span style="font-size: 9px; color: var(--color-text-dim);"> · ${cat ? cat.name : '?'}</span>
+                            ${anim ? this._tx(anim.name) : `<span style="color:var(--color-text-dim);">${this._tx('(missing)')}</span>`}${dupBadge}
+                            <span style="font-size: 9px; color: var(--color-text-dim);"> · ${cat ? this._tx(cat.name) : '?'}</span>
                         </div>
-                        <button class="rr-ag-layer-up rr-btn-chip" data-id="${layer.id}" title="Move toward front" style="padding: 1px 5px; font-size: 10px; min-width: 20px;">▲</button>
-                        <button class="rr-ag-layer-down rr-btn-chip" data-id="${layer.id}" title="Move toward back" style="padding: 1px 5px; font-size: 10px; min-width: 20px;">▼</button>
-                        <button class="rr-ag-layer-dup rr-btn-chip" data-id="${layer.id}" title="Duplicate layer (copies all keyframes + tuning)" style="padding: 1px 5px; font-size: 10px; min-width: 20px;">⎘</button>
-                        <button class="rr-ag-layer-del rr-btn-chip" data-id="${layer.id}" title="Delete layer" style="padding: 1px 5px; font-size: 10px; min-width: 20px;">✕</button>
+                        <button class="rr-ag-layer-up rr-btn-chip" data-id="${layer.id}" title="${this._tx('Move toward front')}" style="padding: 1px 5px; font-size: 10px; min-width: 20px;">▲</button>
+                        <button class="rr-ag-layer-down rr-btn-chip" data-id="${layer.id}" title="${this._tx('Move toward back')}" style="padding: 1px 5px; font-size: 10px; min-width: 20px;">▼</button>
+                        <button class="rr-ag-layer-dup rr-btn-chip" data-id="${layer.id}" title="${this._tx('Duplicate layer (copies all keyframes + tuning)')}" style="padding: 1px 5px; font-size: 10px; min-width: 20px;">⎘</button>
+                        <button class="rr-ag-layer-del rr-btn-chip" data-id="${layer.id}" title="${this._tx('Delete layer')}" style="padding: 1px 5px; font-size: 10px; min-width: 20px;">✕</button>
                     </div>
                     <div style="display: flex; align-items: center; gap: 6px;">
-                        <select class="rr-ag-layer-blend rr-select" data-id="${layer.id}" title="Blend mode" style="padding: 1px 4px; font-size: 10px; flex: 0 0 84px;">${blendHtml}</select>
+                        <select class="rr-ag-layer-blend rr-select" data-id="${layer.id}" title="${this._tx('Blend mode')}" style="padding: 1px 4px; font-size: 10px; flex: 0 0 84px;">${blendHtml}</select>
                         <span style="font-size: 9px; color: var(--color-text-dim);">α</span>
-                        <input type="range" class="rr-ag-layer-opacity rr-range" data-id="${layer.id}" min="0" max="1" step="0.01" value="${this._currentKfOpacity(layer)}" title="Opacity at this keyframe — drag to change just the active KF's opacity; values lerp between keyframes." style="flex: 1; min-width: 0;">
+                        <input type="range" class="rr-ag-layer-opacity rr-range" data-id="${layer.id}" min="0" max="1" step="0.01" value="${this._currentKfOpacity(layer)}" title="${this._tx("Opacity at this keyframe — drag to change just the active KF's opacity; values lerp between keyframes.")}" style="flex: 1; min-width: 0;">
                         <span class="rr-ag-layer-opacity-val" data-id="${layer.id}" style="font-size: 10px; color: var(--color-text-muted); min-width: 32px; text-align: right;">${Math.round(this._currentKfOpacity(layer) * 100)}%</span>
                     </div>
-                    <div style="display: flex; align-items: center; gap: 3px; flex-wrap: wrap;" title="Keyframes: click a numbered button to edit that point in time. Param values lerp linearly between adjacent keyframes for every frame in between.">
-                        <span style="font-size: 9px; color: var(--color-text-dim); margin-right: 2px;">KF</span>
+                    <div style="display: flex; align-items: center; gap: 3px; flex-wrap: wrap;" title="${this._tx('Keyframes: click a numbered button to edit that point in time. Param values lerp linearly between adjacent keyframes for every frame in between.')}">
+                        <span style="font-size: 9px; color: var(--color-text-dim); margin-right: 2px;">${this._tx('KF')}</span>
                         ${(layer.keyframes || [{}]).map((_, kfi) => `
                             <button class="rr-ag-kf-sel rr-btn-chip" data-id="${layer.id}" data-kf="${kfi}"
-                                title="Edit keyframe ${kfi + 1}${kfi === 0 ? ' (start)' : kfi === (layer.keyframes.length - 1) ? ' (end)' : ''}"
+                                title="${this._tx('Edit keyframe')} ${kfi + 1}${kfi === 0 ? ' ' + this._tx('(start)') : kfi === (layer.keyframes.length - 1) ? ' ' + this._tx('(end)') : ''}"
                                 style="padding: 1px 6px; font-size: 10px; min-width: 18px;
                                        background: ${kfi === layer.activeKeyframe ? 'var(--color-accent-bright)' : 'var(--color-bg-input)'};
                                        color: ${kfi === layer.activeKeyframe ? 'var(--color-bg-deep)' : 'var(--color-text)'};">${kfi + 1}</button>
                         `).join('')}
                         <button class="rr-ag-kf-add rr-btn-chip" data-id="${layer.id}"
-                            title="Add a new keyframe (duplicates the active one)"
+                            title="${this._tx('Add a new keyframe (duplicates the active one)')}"
                             style="padding: 1px 6px; font-size: 10px; min-width: 18px;">+</button>
                         ${(layer.keyframes && layer.keyframes.length > 1) ? `
                             <button class="rr-ag-kf-del rr-btn-chip" data-id="${layer.id}"
-                                title="Remove the active keyframe"
+                                title="${this._tx('Remove the active keyframe')}"
                                 style="padding: 1px 6px; font-size: 10px; min-width: 18px;">−</button>
                         ` : ''}
                     </div>
@@ -899,8 +904,8 @@ class AnimationGenerator {
         return `
             <div>
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                    <div style="font-size: 11px; font-weight: 700; color: var(--color-accent-bright); text-transform: uppercase; letter-spacing: 0.3px;">Layers</div>
-                    <div style="font-size: 10px; color: var(--color-text-dim);">${this.layers.length} layer${this.layers.length === 1 ? '' : 's'}</div>
+                    <div style="font-size: 11px; font-weight: 700; color: var(--color-accent-bright); text-transform: uppercase; letter-spacing: 0.3px;">${this._tx('Layers')}</div>
+                    <div style="font-size: 10px; color: var(--color-text-dim);">${this.layers.length} ${this.layers.length === 1 ? this._tx('layer') : this._tx('layers')}</div>
                 </div>
                 <div style="display: flex; flex-direction: column; gap: 4px;">
                     ${rowsHtml}
@@ -916,12 +921,12 @@ class AnimationGenerator {
         // Filter header — sticky filter UI at the top of the left pane.
         let html = `
             <div style="padding: 10px 10px 8px; display: flex; flex-direction: column; gap: 6px; border-bottom: 1px solid var(--color-border-subtle); position: sticky; top: 0; background: var(--color-bg-panel); z-index: 1;">
-                <input type="text" class="rr-ag-search rr-input" placeholder="Search animations…" value="${search.replace(/"/g, '&quot;')}" style="padding: 4px 8px; font-size: 11px;">
+                <input type="text" class="rr-ag-search rr-input" placeholder="${this._tx('Search animations…')}" value="${this._escapeHtml(search)}" style="padding: 4px 8px; font-size: 11px;">
                 <select class="rr-ag-cat-filter rr-select" style="padding: 4px 6px; font-size: 11px;">
-                    <option value="all" ${catFilter === 'all' ? 'selected' : ''}>All Categories</option>
+                    <option value="all" ${catFilter === 'all' ? 'selected' : ''}>${this._tx('All Categories')}</option>
                     ${ANIMATION_CATEGORIES.map(c => `<option value="${c.id}" ${catFilter === c.id ? 'selected' : ''}>${this._tx(c.name)}</option>`).join('')}
                 </select>
-                <div style="font-size: 9px; color: var(--color-text-dim); line-height: 1.4;">Click a row to preview standalone. Click <strong style="color: var(--color-accent-bright);">+</strong> to add it as a layer.</div>
+                <div style="font-size: 9px; color: var(--color-text-dim); line-height: 1.4;">${this._tx('Click a row to preview standalone. Click')} <strong style="color: var(--color-accent-bright);">+</strong> ${this._tx('to add it as a layer.')}</div>
             </div>
         `;
 
@@ -948,15 +953,15 @@ class AnimationGenerator {
             for (const anim of animations) {
                 const active = isPreviewing(cat.id, anim.id);
                 html += `
-                    <div class="rr-ag-anim-item" data-cat="${cat.id}" data-anim="${anim.id}" title="${(anim.description || '').replace(/"/g, '&quot;')}" style="padding: 6px 4px 6px 12px; cursor: pointer; font-size: 12px; color: var(--color-text); border-bottom: 1px solid var(--color-border-subtle); display: flex; justify-content: space-between; align-items: center; background: ${active ? 'var(--color-bg-hover)' : 'transparent'}; border-left: 3px solid ${active ? 'var(--color-accent-bright)' : 'transparent'};">
+                    <div class="rr-ag-anim-item" data-cat="${cat.id}" data-anim="${anim.id}" title="${this._tx(anim.description || '').replace(/"/g, '&quot;')}" style="padding: 6px 4px 6px 12px; cursor: pointer; font-size: 12px; color: var(--color-text); border-bottom: 1px solid var(--color-border-subtle); display: flex; justify-content: space-between; align-items: center; background: ${active ? 'var(--color-bg-hover)' : 'transparent'}; border-left: 3px solid ${active ? 'var(--color-accent-bright)' : 'transparent'};">
                         <span style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis;">${this._tx(anim.name)}</span>
-                        <button class="rr-ag-anim-add rr-btn-chip" data-cat="${cat.id}" data-anim="${anim.id}" title="Add as new layer" style="padding: 2px 8px; margin-left: 6px; font-size: 12px; color: var(--color-accent-bright); font-weight: 700;">+</button>
+                        <button class="rr-ag-anim-add rr-btn-chip" data-cat="${cat.id}" data-anim="${anim.id}" title="${this._tx('Add as new layer')}" style="padding: 2px 8px; margin-left: 6px; font-size: 12px; color: var(--color-accent-bright); font-weight: 700;">+</button>
                     </div>
                 `;
             }
         }
         if (matchCount === 0) {
-            html += `<div style="padding: 20px 12px; font-size: 11px; color: var(--color-text-muted); text-align: center;">No animations match this filter.</div>`;
+            html += `<div style="padding: 20px 12px; font-size: 11px; color: var(--color-text-muted); text-align: center;">${this._tx('No animations match this filter.')}</div>`;
         }
         return html;
     }
@@ -969,7 +974,7 @@ class AnimationGenerator {
                 html += `
                     <div style="margin-bottom: 10px; display: grid; grid-template-columns: 90px 1fr; gap: 8px; align-items: center;">
                         <label style="font-size: 11px; color: var(--color-text-muted);">${this._tx(p.label)}</label>
-                        <button type="button" class="rr-color-swatch-btn" data-key="${p.key}" title="Click to choose color" style="background: ${val}; justify-self: start;"></button>
+                        <button type="button" class="rr-color-swatch-btn" data-key="${p.key}" title="${this._tx('Click to choose color')}" style="background: ${val}; justify-self: start;"></button>
                     </div>
                 `;
             } else if (p.type === 'slider') {
@@ -977,9 +982,9 @@ class AnimationGenerator {
                 // the right pane compact so users don't need to scroll past
                 // paragraph text to reach each slider.
                 html += `
-                    <div style="margin-bottom: 6px;" title="${p.description ? p.description.replace(/"/g, '&quot;') : ''}">
+                    <div style="margin-bottom: 6px;" title="${p.description ? this._tx(p.description).replace(/"/g, '&quot;') : ''}">
                         <div style="display: flex; justify-content: space-between; font-size: 10px; color: var(--color-text-muted); margin-bottom: 2px;">
-                            <span><strong style="color: var(--color-text);">${p.label}</strong></span>
+                            <span><strong style="color: var(--color-text);">${this._tx(p.label)}</strong></span>
                             <span class="rr-ag-param-val" data-key="${p.key}">${(+val).toFixed(2)}</span>
                         </div>
                         <input type="range" class="rr-ag-param rr-range" data-key="${p.key}" min="${p.min}" max="${p.max}" step="${p.step}" value="${val}" style="width: 100%;">
@@ -991,13 +996,13 @@ class AnimationGenerator {
                 const fileName = (val || '').replace(/\\/g, '/').split('/').pop();
                 html += `
                     <div style="margin-bottom: 10px;">
-                        <div style="font-size: 11px; color: var(--color-text-muted); margin-bottom: 3px;">${p.label}</div>
+                        <div style="font-size: 11px; color: var(--color-text-muted); margin-bottom: 3px;">${this._tx(p.label)}</div>
                         <div style="display: flex; gap: 4px; align-items: center;">
-                            <div class="rr-ag-tex-name" data-key="${p.key}" style="flex: 1; padding: 4px 8px; background: var(--color-bg-input-alt); border: 1px solid var(--color-border-input); border-radius: 3px; font-size: 11px; color: var(--color-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${fileName || '(none)'}</div>
-                            <button class="rr-ag-tex-pick rr-btn-chip" data-key="${p.key}" title="Pick texture file" style="padding: 4px 10px; font-size: 11px;">…</button>
-                            <button class="rr-ag-tex-clear rr-btn-chip" data-key="${p.key}" title="Clear texture (wireframe mode)" style="padding: 4px 8px; font-size: 11px;">✕</button>
+                            <div class="rr-ag-tex-name" data-key="${p.key}" style="flex: 1; padding: 4px 8px; background: var(--color-bg-input-alt); border: 1px solid var(--color-border-input); border-radius: 3px; font-size: 11px; color: var(--color-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${this._escapeHtml(fileName || this._tx('(none)'))}</div>
+                            <button class="rr-ag-tex-pick rr-btn-chip" data-key="${p.key}" title="${this._tx('Pick texture file')}" style="padding: 4px 10px; font-size: 11px;">…</button>
+                            <button class="rr-ag-tex-clear rr-btn-chip" data-key="${p.key}" title="${this._tx('Clear texture (wireframe mode)')}" style="padding: 4px 8px; font-size: 11px;">✕</button>
                         </div>
-                        <div style="font-size: 11px; line-height: 1.35; color: var(--color-text-dim); margin-top: 4px;">Select an image, animated GIF, WebP, or video as a texture.</div>
+                        <div style="font-size: 11px; line-height: 1.35; color: var(--color-text-dim); margin-top: 4px;">${this._tx('Select an image, animated GIF, WebP, or video as a texture.')}</div>
                     </div>
                 `;
             }
@@ -1765,7 +1770,7 @@ class AnimationGenerator {
                 this._render();
             } catch (err) {
                 console.error('Texture pick failed:', err);
-                alert('Failed to import texture: ' + err.message);
+                alert(this._tx('Failed to import texture:') + ' ' + err.message);
             }
         });
         input.click();
@@ -2191,7 +2196,7 @@ class AnimationGenerator {
     async _saveSheet() {
         const input = this.root.querySelector('.rr-ag-name');
         let name = (input.value || '').trim();
-        if (!name) { alert('Enter a name for the animation sheet.'); return; }
+        if (!name) { alert(this._tx('Enter a name for the animation sheet.')); return; }
         name = name.replace(/\.png$/i, '');
 
         // Re-bake the sheet synchronously so toDataURL() sees the full image.
@@ -2212,10 +2217,12 @@ class AnimationGenerator {
                     suggestedName: `${name}.png`,
                     mimeType: 'image/png',
                 });
-                if (result) alert(result.project ? `Saved ${name}.png to img/animations/` : `Saved → ${result.path}`);
+                if (result) alert(result.project
+                    ? this._tx('Saved {file} to {path}').replace('{file}', `${name}.png`).replace('{path}', 'img/animations/')
+                    : this._tx('Saved → {path}').replace('{path}', result.path));
             } catch (err) {
                 console.error('AnimationGenerator save:', err);
-                alert('Failed to save: ' + err.message);
+                alert(this._tx('Failed to save:') + ' ' + err.message);
             }
             return;
         }
@@ -2238,17 +2245,20 @@ class AnimationGenerator {
         picker.accept = '.png';
         picker.addEventListener('change', (e) => {
             const file = e.target.files && e.target.files[0];
-            if (!file || !file.path) return; // user cancelled
+            if (!file || !file.path) { picker.remove(); return; } // user cancelled
             try {
                 fs.writeFileSync(file.path, pngBuf);
-                alert(`Saved → ${file.path}`);
+                alert(this._tx('Saved → {path}').replace('{path}', file.path));
             } catch (err) {
                 console.error('AnimationGenerator save:', err);
-                alert('Failed to save: ' + err.message);
+                alert(this._tx('Failed to save:') + ' ' + err.message);
             } finally {
                 picker.remove();
             }
         });
+        // Dismissing the dialog fires `cancel`, not `change` — without this
+        // the hidden input stays orphaned in the DOM.
+        picker.addEventListener('cancel', () => picker.remove());
         document.body.appendChild(picker);
         picker.click();
     }
@@ -2263,7 +2273,7 @@ class AnimationGenerator {
      */
     _saveAnimatedGif(btn) {
         if (typeof GIF !== 'function') {
-            alert('GIF encoder (gif.js) is not loaded.');
+            alert(this._tx('GIF encoder (gif.js) is not loaded.'));
             return;
         }
         const webHost = window.RPGReactorHost?.mode === 'web' ? window.RPGReactorHost : null;
@@ -2311,10 +2321,10 @@ class AnimationGenerator {
         });
 
         // Disable the button + show progress while encoding.
-        const originalText = btn ? btn.textContent : 'Save GIF';
+        const originalText = btn ? btn.textContent : this._tx('Save GIF');
         const setLabel = (s) => { if (btn) btn.textContent = s; };
         if (btn) btn.disabled = true;
-        setLabel('Rendering 0%');
+        setLabel(`${this._tx('Rendering')} 0%`);
 
         // Render every frame into the existing offscreen renderer.
         const tmp = document.createElement('canvas');
@@ -2342,10 +2352,10 @@ class AnimationGenerator {
         }
 
         gif.on('progress', (p) => {
-            setLabel(`Encoding ${Math.round(p * 100)}%`);
+            setLabel(`${this._tx('Encoding')} ${Math.round(p * 100)}%`);
         });
         gif.on('finished', async (blob) => {
-            setLabel('Saving…');
+            setLabel(this._tx('Saving…'));
             if (webHost) {
                 try {
                     const result = await webHost.saveFile({
@@ -2354,10 +2364,12 @@ class AnimationGenerator {
                         suggestedName: `${name}.gif`,
                         mimeType: 'image/gif',
                     });
-                    if (result) alert(result.project ? `Saved ${name}.gif to img/animations/` : `Saved → ${result.path}`);
+                    if (result) alert(result.project
+                        ? this._tx('Saved {file} to {path}').replace('{file}', `${name}.gif`).replace('{path}', 'img/animations/')
+                        : this._tx('Saved → {path}').replace('{path}', result.path));
                 } catch (err) {
                     console.error('GIF save:', err);
-                    alert('Failed to save: ' + err.message);
+                    alert(this._tx('Failed to save:') + ' ' + err.message);
                 } finally {
                     if (btn) { btn.disabled = false; setLabel(originalText); }
                 }
@@ -2377,19 +2389,27 @@ class AnimationGenerator {
                 picker.addEventListener('change', (e) => {
                     const file = e.target.files && e.target.files[0];
                     if (!file || !file.path) {
+                        picker.remove();
                         if (btn) { btn.disabled = false; setLabel(originalText); }
                         return;
                     }
                     try {
                         fs.writeFileSync(file.path, gifBuf);
-                        alert(`Saved → ${file.path}`);
+                        alert(this._tx('Saved → {path}').replace('{path}', file.path));
                     } catch (err) {
                         console.error('GIF save:', err);
-                        alert('Failed to save: ' + err.message);
+                        alert(this._tx('Failed to save:') + ' ' + err.message);
                     } finally {
                         picker.remove();
                         if (btn) { btn.disabled = false; setLabel(originalText); }
                     }
+                });
+                // Dismissing the dialog fires `cancel`, not `change` — the
+                // button was left stuck on "Saving…" and the hidden input
+                // orphaned in the DOM.
+                picker.addEventListener('cancel', () => {
+                    picker.remove();
+                    if (btn) { btn.disabled = false; setLabel(originalText); }
                 });
                 document.body.appendChild(picker);
                 picker.click();

@@ -57,15 +57,25 @@ test('editor distribution staging includes runtime asset dependencies', async ()
             'build-scripts/appimage-utils.js',
             'build-scripts/appimage-runtime-LICENSE.txt',
             'build-scripts/native-download.js',
+            'build-scripts/release-hashes.json',
+            'THIRD_PARTY_NOTICES.md',
+            'THIRD_PARTY_LICENSES/pako-MIT.txt',
+            'THIRD_PARTY_LICENSES/stb-MIT-or-Unlicense.txt',
             'runtime/reactor_main.js',
+            'runtime/reactor_picture_extensions.js',
             'runtime/reactor_mv_compat.js',
             'runtime/libs/pixi.js',
             'runtime/libs/pixi_compat.js',
             'runtime/libs/pako.min.js',
+            'runtime/libs/lz-string.js',
             'runtime/libs/localforage.min.js',
             'runtime/libs/effekseer.min.js',
             'runtime/libs/effekseer.wasm',
-            'runtime/libs/vorbisdecoder.js'
+            'runtime/libs/vorbisdecoder.js',
+            'template/Demo/project.rpgreactor',
+            'template/Demo/data/System.json',
+            'template/Demo/js/reactor_main.js',
+            'template/Demo/js/reactor_plugins.js'
         ];
         for (const relativePath of required) {
             assert.equal(fs.existsSync(path.join(stageRoot, relativePath)), true, `${relativePath} is staged`);
@@ -78,6 +88,23 @@ test('editor distribution staging includes runtime asset dependencies', async ()
         assert.equal(packageJson.dependencies['gif.js'], '^0.2.0');
         assert.equal(packageJson.dependencies['gifuct-js'], '^2.1.2');
         assert.equal(packageJson.dependencies['@jsquash/oxipng'], '2.3.0');
+
+        const starterRoot = path.join(stageRoot, 'template', 'Demo');
+        const starterMetadata = JSON.parse(fs.readFileSync(path.join(starterRoot, 'project.rpgreactor'), 'utf8'));
+        assert.equal(starterMetadata.starter, 'generated-clean');
+        assert.equal(starterMetadata.created, '1980-01-01T00:00:00.000Z');
+        assert.deepEqual(JSON.parse(fs.readFileSync(path.join(starterRoot, 'data', 'Actors.json'), 'utf8')), [null]);
+        assert.deepEqual(fs.readdirSync(path.join(starterRoot, 'js', 'plugins')), []);
+        assert.equal(fs.readFileSync(path.join(starterRoot, 'js', 'reactor_plugins.js'), 'utf8'), 'var $plugins = [];\n');
+        for (const entry of fs.readdirSync(path.join(stageRoot, 'runtime'), { withFileTypes: true })) {
+            if (entry.isFile() && entry.name !== 'reactor_plugins.js') {
+                assert.deepEqual(
+                    fs.readFileSync(path.join(starterRoot, 'js', entry.name)),
+                    fs.readFileSync(path.join(stageRoot, 'runtime', entry.name)),
+                    `${entry.name} is refreshed from staged runtime`
+                );
+            }
+        }
 
         secondStageRoot = await stageEditor(stageRoot, outputDir);
         assert.equal(fs.existsSync(path.join(secondStageRoot, 'libs', 'gif.js')), true);

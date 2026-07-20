@@ -18,6 +18,8 @@ class ProjectManager {
     constructor() {
         this.fs = null;
         this.path = null;
+        this.lastLoadError = null;
+        this.lastCreateError = null;
 
         const host = typeof window !== 'undefined' ? window.RPGReactorHost : null;
         if (host?.fs && host?.path) {
@@ -30,6 +32,26 @@ class ProjectManager {
             this.fs = require('fs');
             this.path = require('path');
         }
+    }
+
+    async _readJsonWithRetry(filePath, attempts = 3) {
+        let lastError = null;
+        for (let attempt = 0; attempt < attempts; attempt++) {
+            try {
+                const content = this.fs.readFileSync(filePath, 'utf8').replace(/^\uFEFF/, '');
+                return JSON.parse(content);
+            } catch (error) {
+                lastError = error;
+                if (attempt + 1 < attempts && typeof setTimeout === 'function') {
+                    await new Promise(resolve => setTimeout(resolve, 25 * (attempt + 1)));
+                }
+            }
+        }
+
+        const error = new Error(`Could not read ${this.path.basename(filePath)}: ${lastError?.message || lastError}`);
+        error.code = lastError?.code;
+        error.filePath = filePath;
+        throw error;
     }
 
     getEngineVersion() {
@@ -51,22 +73,37 @@ class ProjectManager {
     }
 
     async createNewProject(targetPath, projectName) {
+        this.lastCreateError = null;
         if (!this.fs || !this.path) {
             console.error('File system not available');
+            this.lastCreateError = 'File system not available';
             return false;
         }
 
         try {
+            if (!this.isSafeProjectName(projectName)) {
+                throw new Error('Project name must be a safe single folder name.');
+            }
+            const resolvedTarget = this.path.resolve(targetPath);
+
             console.log(`Creating new project: ${projectName} at ${targetPath}`);
 
             const engineVersion = this.getEngineVersion();
             const templatePath = this.getTemplateProjectPath();
             const runtimePath = this.getRuntimePath();
 
-            // Create target directory if it doesn't exist
-            if (!this.fs.existsSync(targetPath)) {
-                this.fs.mkdirSync(targetPath, { recursive: true });
+            if (this.fs.existsSync(resolvedTarget)) {
+                const stat = this.fs.lstatSync ? this.fs.lstatSync(resolvedTarget) : this.fs.statSync(resolvedTarget);
+                if (!stat.isDirectory() || stat.isSymbolicLink?.()) {
+                    throw new Error('Project target must be an ordinary directory.');
+                }
+                if (this.fs.readdirSync(resolvedTarget).length > 0) {
+                    throw new Error('Project target already exists and is not empty.');
+                }
+            } else {
+                this.fs.mkdirSync(resolvedTarget);
             }
+            targetPath = resolvedTarget;
 
             if (templatePath) {
                 await this.copyDirectory(templatePath, targetPath);
@@ -89,8 +126,16 @@ class ProjectManager {
             return true;
         } catch (error) {
             console.error('Error creating project:', error);
+            this.lastCreateError = error.message || String(error);
             return false;
         }
+    }
+
+    isSafeProjectName(projectName) {
+        if (typeof projectName !== 'string' || !projectName || projectName !== projectName.trim()) return false;
+        if (projectName === '.' || projectName === '..' || /[\\/\0-\x1f]/.test(projectName)) return false;
+        if (/[. ]$/.test(projectName)) return false;
+        return !/^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\..*)?$/i.test(projectName);
     }
 
     async copyDirectory(source, target) {
@@ -221,15 +266,20 @@ class ProjectManager {
     }
 
     async installReactorRuntime(projectPath, projectName, options = {}) {
+        const tt = text => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
         if (!this.fs || !this.path) {
-            return { ok: false, error: 'File system not available.' };
+            return { ok: false, error: tt('File system not available.') };
         }
         const runtimePath = this.getRuntimePath();
         if (!runtimePath) {
-            return { ok: false, error: 'Runtime corescript directory not found. Expected runtime/ beside the editor.' };
+            return { ok: false, error: tt('Runtime corescript directory not found. Expected runtime/ beside the editor.') };
         }
 
         try {
+            const displayName = projectName || this.path.basename(projectPath);
+            const packageResult = this.ensureProjectPackageMetadata(projectPath, displayName);
+            if (!packageResult.ok) return packageResult;
+
             const jsPath = this.path.join(projectPath, 'js');
             const indexPath = this.path.join(projectPath, 'index.html');
             let indexUsesReactor = false;
@@ -276,18 +326,13 @@ class ProjectManager {
                 }
             }
 
-            const displayName = projectName || this.path.basename(projectPath);
             if (!indexUsesReactor) {
                 const isMvProject = this.fs.existsSync(this.path.join(projectPath, 'Game.rpgproject'))
                     || this.fs.existsSync(this.path.join(projectPath, 'game.rpgproject'));
                 this.writeText(indexPath, this.getStarterIndexHtml(displayName, { mvCompat: isMvProject }));
             }
 
-            if (!this.fs.existsSync(this.path.join(projectPath, 'package.json'))) {
-                this.writeJson(this.path.join(projectPath, 'package.json'),
-                    this.getStarterPackage(displayName, this.getEngineVersion()));
-            }
-            return { ok: true, archivedTo };
+            return { ok: true, archivedTo, package: packageResult };
         } catch (error) {
             console.error('Error installing Reactor runtime:', error);
             return { ok: false, error: error.message };
@@ -700,6 +745,61 @@ class ProjectManager {
         return name === 'rmmz-game' ? 'rpg-reactor-game' : name;
     }
 
+    ensureProjectPackageMetadata(projectPath, displayName = null) {
+        if (!this.fs || !this.path) {
+            return { ok: false, error: 'File system not available.' };
+        }
+
+        const packagePath = this.path.join(projectPath, 'package.json');
+        const projectName = displayName || this.path.basename(projectPath) || 'RPG Reactor Game';
+        let packageData;
+        let created = false;
+        const repaired = [];
+
+        try {
+            if (this.fs.existsSync(packagePath)) {
+                const source = this.fs.readFileSync(packagePath, 'utf8').replace(/^\uFEFF/, '');
+                packageData = JSON.parse(source);
+                if (!packageData || typeof packageData !== 'object' || Array.isArray(packageData)) {
+                    return {
+                        ok: false,
+                        path: packagePath,
+                        error: `Cannot use ${packagePath}: expected package.json to contain a JSON object.`
+                    };
+                }
+            } else {
+                packageData = this.getStarterPackage(projectName, this.getEngineVersion());
+                created = true;
+            }
+
+            if (typeof packageData.name !== 'string' || !packageData.name.trim()) {
+                packageData.name = this.getProjectPackageName(projectName);
+                repaired.push('name');
+            }
+            if (typeof packageData.main !== 'string' || !packageData.main.trim()) {
+                packageData.main = 'index.html';
+                repaired.push('main');
+            }
+
+            if (created || repaired.length > 0) {
+                this._writeFileAtomic(this.fs, packagePath, JSON.stringify(packageData, null, 2), 'utf8');
+            }
+            return {
+                ok: true,
+                path: packagePath,
+                created,
+                repaired,
+                packageName: packageData.name
+            };
+        } catch (error) {
+            return {
+                ok: false,
+                path: packagePath,
+                error: `Cannot use ${packagePath}: ${error.message || error}`
+            };
+        }
+    }
+
     escapeHtml(value) {
         return String(value)
             .replace(/&/g, '&amp;')
@@ -710,8 +810,10 @@ class ProjectManager {
     }
 
     async loadProject(projectPath) {
+        this.lastLoadError = null;
         if (!this.fs || !this.path) {
             console.error('File system not available');
+            this.lastLoadError = { message: 'File system not available', filePath: projectPath };
             return null;
         }
 
@@ -722,7 +824,12 @@ class ProjectManager {
             let projectData;
             if (this.fs.existsSync(projectFilePath)) {
                 // Load RPG Reactor project
-                projectData = JSON.parse(this.fs.readFileSync(projectFilePath, 'utf8'));
+                projectData = await this._readJsonWithRetry(projectFilePath);
+                if (!projectData || typeof projectData !== 'object' || Array.isArray(projectData)) {
+                    const error = new Error('project.rpgreactor must contain a JSON object');
+                    error.filePath = projectFilePath;
+                    throw error;
+                }
                 projectData.path = projectPath;
             } else {
                 // Check if it's an RPG Maker project
@@ -743,6 +850,10 @@ class ProjectManager {
                     };
                 } else {
                     console.error('No valid project file found');
+                    this.lastLoadError = {
+                        message: 'No project.rpgreactor, game.rmmzproject, or Game.rpgproject file was found.',
+                        filePath: projectPath
+                    };
                     return null;
                 }
             }
@@ -750,12 +861,24 @@ class ProjectManager {
             // Load map list
             const mapInfosPath = this.path.join(projectPath, 'data', 'MapInfos.json');
             if (this.fs.existsSync(mapInfosPath)) {
-                projectData.maps = JSON.parse(this.fs.readFileSync(mapInfosPath, 'utf8'));
+                projectData.maps = await this._readJsonWithRetry(mapInfosPath);
+                if (!Array.isArray(projectData.maps)) {
+                    const error = new Error('MapInfos.json must contain a JSON array');
+                    error.filePath = mapInfosPath;
+                    throw error;
+                }
+            } else {
+                projectData.maps = [];
             }
 
             return projectData;
         } catch (error) {
             console.error('Error loading project:', error);
+            this.lastLoadError = {
+                message: error.message || String(error),
+                code: error.code || null,
+                filePath: error.filePath || null
+            };
             return null;
         }
     }

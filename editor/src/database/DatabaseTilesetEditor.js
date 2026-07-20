@@ -7,8 +7,8 @@ class DatabaseTilesetEditor {
         // Support both old signature (app, projectPath, databaseManager)
         // and new signature (databaseManager, projectManager, commonUI, parentEditor)
 
-        // Detect if called with old signature (first arg is app object)
-        if (app && typeof app === 'object' && projectPath && typeof projectPath === 'string') {
+        // The renderer app is optional, so the string project path identifies the old signature.
+        if (typeof projectPath === 'string') {
             // Old signature: (app, projectPath, databaseManager)
             this.app = app;
             this.projectPath = projectPath;
@@ -68,15 +68,34 @@ class DatabaseTilesetEditor {
         return null;
     }
 
+    assetUrl(filePath) {
+        if (!filePath || /^(file|https?):\/\//i.test(filePath)) return filePath;
+        if (typeof window !== 'undefined' && window.RPGReactorAssetUrl) {
+            return window.RPGReactorAssetUrl(filePath);
+        }
+
+        try {
+            const { pathToFileURL } = require('url');
+            if (pathToFileURL) return pathToFileURL(filePath).href;
+        } catch (error) {
+            // Fall through for restricted hosts without Node's URL module.
+        }
+
+        let normalized = String(filePath).replace(/\\/g, '/');
+        if (/^[A-Za-z]:\//.test(normalized)) normalized = '/' + normalized;
+        return 'file://' + encodeURI(normalized).replace(/#/g, '%23');
+    }
+
     // Initialize the tileset editor UI
     initializeUI(container) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         container.innerHTML = `
             <div id="tileset-editor-container" style="display: flex; height: 100%; overflow: hidden;">
                 <!-- Tileset List Sidebar -->
                 <div id="tileset-list-panel" style="width: 250px; background-color: var(--color-bg-list-item); border-right: 1px solid var(--color-border); overflow-y: auto;">
                     <div style="padding: 12px; border-bottom: 1px solid var(--color-border); display: flex; justify-content: space-between; align-items: center;">
-                        <span style="font-weight: 600; font-size: 13px;">Tilesets</span>
-                        <button id="add-tileset-btn" class="tool-button" style="padding: 4px 8px; font-size: 11px;">New</button>
+                        <span style="font-weight: 600; font-size: 13px;">${tt('Tilesets')}</span>
+                        <button id="add-tileset-btn" class="tool-button" style="padding: 4px 8px; font-size: 11px;">${tt('New')}</button>
                     </div>
                     <div id="tileset-list" style="padding: 8px;">
                         <!-- Tileset list will be populated here -->
@@ -88,51 +107,51 @@ class DatabaseTilesetEditor {
                     <!-- Editor Toolbar -->
                     <div id="tileset-toolbar" style="padding: 12px; border-bottom: 1px solid var(--color-border); background-color: var(--color-bg-menubar);">
                         <div style="display: flex; gap: 8px; align-items: center;">
-                            <button id="close-tileset-editor-btn" class="tool-button">← Back to Database</button>
-                            <label style="font-size: 12px; color: var(--color-text-muted);">Name:</label>
-                            <input type="text" id="tileset-name-input" style="flex: 1; max-width: 300px; padding: 4px 8px; background-color: var(--color-bg-input-alt); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 3px; font-size: 12px;" placeholder="Tileset name" />
-                            <button id="save-tileset-btn" class="tool-button" style="margin-left: auto;">Save</button>
-                            <button id="delete-tileset-btn" class="tool-button" style="background-color: var(--color-danger);">Delete</button>
+                            <button id="close-tileset-editor-btn" class="tool-button">← ${tt('Back to Database')}</button>
+                            <label style="font-size: 12px; color: var(--color-text-muted);">${tt('Name:')}</label>
+                            <input type="text" id="tileset-name-input" style="flex: 1; max-width: 300px; padding: 4px 8px; background-color: var(--color-bg-input-alt); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 3px; font-size: 12px;" placeholder="${tt('Tileset name')}" />
+                            <button id="save-tileset-btn" class="tool-button" style="margin-left: auto;">${tt('Save')}</button>
+                            <button id="delete-tileset-btn" class="tool-button" style="background-color: var(--color-danger);">${tt('Delete')}</button>
                         </div>
                     </div>
 
                     <!-- Editor Content -->
                     <div id="tileset-editor-content" style="flex: 1; overflow-y: auto; padding: 16px;">
                         <div style="max-width: 100%;">
-                            <h3 style="margin-bottom: 12px; font-size: 13px; font-weight: 600; color: var(--color-text);">Tileset Images</h3>
+                            <h3 style="margin-bottom: 12px; font-size: 13px; font-weight: 600; color: var(--color-text);">${tt('Tileset Images')}</h3>
 
                             <!-- Autotile Images (A1-A5) -->
                             <div style="margin-bottom: 16px;">
-                                <h4 style="margin-bottom: 8px; font-size: 11px; color: var(--color-text-muted); text-transform: uppercase;">Autotiles</h4>
+                                <h4 style="margin-bottom: 8px; font-size: 11px; color: var(--color-text-muted); text-transform: uppercase;">${tt('Autotiles')}</h4>
                                 <div style="display: flex; flex-direction: column; gap: 8px;">
-                                    ${this.createTilesetImageSlot('A1', 0, 'Animated Water')}
-                                    ${this.createTilesetImageSlot('A2', 1, 'Ground Autotiles')}
-                                    ${this.createTilesetImageSlot('A3', 2, 'Building Autotiles')}
-                                    ${this.createTilesetImageSlot('A4', 3, 'Wall Autotiles')}
-                                    ${this.createTilesetImageSlot('A5', 4, 'Normal Tiles')}
+                                    ${this.createTilesetImageSlot('A1', 0, tt('Animated Water'))}
+                                    ${this.createTilesetImageSlot('A2', 1, tt('Ground Autotiles'))}
+                                    ${this.createTilesetImageSlot('A3', 2, tt('Building Autotiles'))}
+                                    ${this.createTilesetImageSlot('A4', 3, tt('Wall Autotiles'))}
+                                    ${this.createTilesetImageSlot('A5', 4, tt('Normal Tiles'))}
                                 </div>
                             </div>
 
                             <!-- Normal Tileset Images (B-E) -->
                             <div style="margin-bottom: 16px;">
-                                <h4 style="margin-bottom: 8px; font-size: 11px; color: var(--color-text-muted); text-transform: uppercase;">Normal Tilesets</h4>
+                                <h4 style="margin-bottom: 8px; font-size: 11px; color: var(--color-text-muted); text-transform: uppercase;">${tt('Normal Tilesets')}</h4>
                                 <div style="display: flex; flex-direction: column; gap: 8px;">
-                                    ${this.createTilesetImageSlot('B', 5, 'Tileset B')}
-                                    ${this.createTilesetImageSlot('C', 6, 'Tileset C')}
-                                    ${this.createTilesetImageSlot('D', 7, 'Tileset D')}
-                                    ${this.createTilesetImageSlot('E', 8, 'Tileset E')}
+                                    ${this.createTilesetImageSlot('B', 5, tt('Tileset B'))}
+                                    ${this.createTilesetImageSlot('C', 6, tt('Tileset C'))}
+                                    ${this.createTilesetImageSlot('D', 7, tt('Tileset D'))}
+                                    ${this.createTilesetImageSlot('E', 8, tt('Tileset E'))}
                                 </div>
                             </div>
 
                             <!-- Mode Selection -->
                             <div style="margin-bottom: 16px;">
-                                <h4 style="margin-bottom: 8px; font-size: 11px; color: var(--color-text-muted); text-transform: uppercase;">Passage Settings</h4>
+                                <h4 style="margin-bottom: 8px; font-size: 11px; color: var(--color-text-muted); text-transform: uppercase;">${tt('Passage Settings')}</h4>
                                 <div style="display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px;">
-                                    <button class="tool-button passage-mode-btn" id="mode-o" title="Passable" style="width: 100%;">O (Pass)</button>
-                                    <button class="tool-button passage-mode-btn" id="mode-x" title="Impassable" style="width: 100%;">X (Block)</button>
-                                    <button class="tool-button passage-mode-btn" id="mode-star" title="Above Character" style="width: 100%;">★ (Above)</button>
+                                    <button class="tool-button passage-mode-btn" id="mode-o" title="${tt('Passable')}" style="width: 100%;">${tt('O (Pass)')}</button>
+                                    <button class="tool-button passage-mode-btn" id="mode-x" title="${tt('Impassable')}" style="width: 100%;">${tt('X (Block)')}</button>
+                                    <button class="tool-button passage-mode-btn" id="mode-star" title="${tt('Above Character')}" style="width: 100%;">${tt('★ (Above)')}</button>
                                 </div>
-                                <p style="font-size: 10px; color: var(--color-text-muted);">Click an image above, then click tiles to edit</p>
+                                <p style="font-size: 10px; color: var(--color-text-muted);">${tt('Click an image above, then click tiles to edit')}</p>
                             </div>
                         </div>
                     </div>
@@ -141,12 +160,12 @@ class DatabaseTilesetEditor {
                 <!-- Tileset Viewer Panel (Right Column - Takes remaining space) -->
                 <div id="tileset-viewer-panel" style="flex: 1; background-color: var(--color-bg-surface); border-left: 1px solid var(--color-border); overflow: auto; display: flex; flex-direction: column;">
                     <div style="padding: 12px; border-bottom: 1px solid var(--color-border); background-color: var(--color-bg-menubar);">
-                        <h4 style="font-size: 12px; font-weight: 600; color: var(--color-text);">Tile Flags Editor</h4>
-                        <p style="font-size: 11px; color: var(--color-text-muted); margin-top: 4px;">Click a tileset image to view and edit flags</p>
+                        <h4 style="font-size: 12px; font-weight: 600; color: var(--color-text);">${tt('Tile Flags Editor')}</h4>
+                        <p style="font-size: 11px; color: var(--color-text-muted); margin-top: 4px;">${tt('Click a tileset image to view and edit flags')}</p>
                     </div>
                     <div id="tileset-canvas-container" style="flex: 1; overflow: auto; padding: 16px;">
                         <canvas id="tileset-canvas" style="display: none; image-rendering: pixelated; cursor: crosshair;"></canvas>
-                        <p id="tileset-no-selection" style="color: var(--color-text-dim); text-align: center; margin-top: 100px;">Select a tileset image to edit passage settings</p>
+                        <p id="tileset-no-selection" style="color: var(--color-text-dim); text-align: center; margin-top: 100px;">${tt('Select a tileset image to edit passage settings')}</p>
                     </div>
                 </div>
             </div>
@@ -160,6 +179,7 @@ class DatabaseTilesetEditor {
     }
 
     createTilesetImageSlot(label, index, description) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         return `
             <div class="tileset-image-slot" data-index="${index}" style="background-color: var(--color-bg-menubar); border: 1px solid var(--color-border-input); border-radius: 4px; padding: 8px; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; gap: 8px;">
                 <div class="image-preview" data-index="${index}" style="width: 60px; height: 60px; flex-shrink: 0; background-color: var(--color-bg-surface); border: 1px solid var(--color-bg-button-hover); border-radius: 3px; display: flex; align-items: center; justify-content: center; background-size: contain; background-repeat: no-repeat; background-position: center;">
@@ -168,7 +188,7 @@ class DatabaseTilesetEditor {
                 <div style="flex: 1; min-width: 0;">
                     <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 4px;">
                         <span style="font-weight: 600; font-size: 12px;">${label}</span>
-                        <button class="clear-image-btn" data-index="${index}" style="background: var(--color-danger); border: none; color: var(--color-text); padding: 2px 6px; border-radius: 3px; font-size: 9px; cursor: pointer; display: none;">Clear</button>
+                        <button class="clear-image-btn" data-index="${index}" style="background: var(--color-danger); border: none; color: var(--color-text); padding: 2px 6px; border-radius: 3px; font-size: 9px; cursor: pointer; display: none;">${tt('Clear')}</button>
                     </div>
                     <div style="font-size: 10px; color: var(--color-text-muted);">${description}</div>
                     <div class="image-filename" data-index="${index}" style="font-size: 9px; color: var(--color-text-muted); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: none;"></div>
@@ -292,6 +312,7 @@ class DatabaseTilesetEditor {
     }
 
     renderTilesetList() {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const listContainer = document.getElementById('tileset-list');
         if (!listContainer) {
             // Compact UI doesn't have this element, skip
@@ -306,7 +327,7 @@ class DatabaseTilesetEditor {
 
             const item = document.createElement('div');
             item.className = 'tree-item';
-            item.textContent = `${String(i).padStart(3, '0')}: ${tileset.name || 'Unnamed'}`;
+            item.textContent = `${String(i).padStart(3, '0')}: ${tileset.name || tt('Unnamed')}`;
             item.dataset.id = i;
             item.addEventListener('click', () => this.selectTileset(i));
             listContainer.appendChild(item);
@@ -340,6 +361,7 @@ class DatabaseTilesetEditor {
 
     loadTilesetPreviews() {
         if (!this.currentTileset) return;
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
 
         const tilesetNames = this.currentTileset.tilesetNames;
 
@@ -353,7 +375,7 @@ class DatabaseTilesetEditor {
                 // Try to load and display the image
                 const imgPath = this.path.join(this.getProjectPath(), 'img', 'tilesets', name + '.png');
                 if (this.fs.existsSync(imgPath)) {
-                    const fileUrl = 'file://' + imgPath.replace(/\\/g, '/');
+                    const fileUrl = this.assetUrl(imgPath);
                     preview.style.backgroundImage = `url('${fileUrl}')`;
                     preview.innerHTML = '';
                     filename.textContent = name + '.png';
@@ -361,14 +383,14 @@ class DatabaseTilesetEditor {
                     clearBtn.style.display = 'inline-block';
                 } else {
                     preview.style.backgroundImage = 'none';
-                    preview.innerHTML = '<span style="font-size: 11px; color: var(--color-text-muted);">File not found</span>';
-                    filename.textContent = name + '.png (missing)';
+                    preview.innerHTML = `<span style="font-size: 11px; color: var(--color-text-muted);">${tt('File not found')}</span>`;
+                    filename.textContent = name + '.png ' + tt('(missing)');
                     filename.style.display = 'block';
                     clearBtn.style.display = 'inline-block';
                 }
             } else {
                 preview.style.backgroundImage = 'none';
-                preview.innerHTML = '<span style="font-size: 11px; color: var(--color-text-dim);">Click to select</span>';
+                preview.innerHTML = `<span style="font-size: 11px; color: var(--color-text-dim);">${tt('Click to select')}</span>`;
                 filename.style.display = 'none';
                 clearBtn.style.display = 'none';
             }
@@ -376,8 +398,9 @@ class DatabaseTilesetEditor {
     }
 
     selectTilesetImage(index) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         if (!this.currentTileset) {
-            alert('Please select or create a tileset first');
+            alert(tt('Please select or create a tileset first'));
             return;
         }
 
@@ -410,7 +433,7 @@ class DatabaseTilesetEditor {
                     console.log(`Added tileset image: ${filename}`);
                 } catch (error) {
                     console.error('Error copying tileset image:', error);
-                    alert('Error copying file: ' + error.message);
+                    alert(`${tt('Error copying file:')} ${error.message}`);
                 }
             }
         };
@@ -420,14 +443,16 @@ class DatabaseTilesetEditor {
     clearTilesetImage(index) {
         if (!this.currentTileset) return;
 
-        if (confirm('Remove this tileset image?')) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
+        if (confirm(tt('Remove this tileset image?'))) {
             this.currentTileset.tilesetNames[index] = '';
             this.loadTilesetPreviews();
         }
     }
 
     createNewTileset() {
-        const name = prompt('Enter tileset name:', 'New Tileset');
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
+        const name = prompt(tt('Enter tileset name:'), 'New Tileset');
         if (!name) return;
 
         const newTileset = {
@@ -445,8 +470,9 @@ class DatabaseTilesetEditor {
     }
 
     saveTileset() {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         if (!this.currentTileset) {
-            alert('No tileset selected');
+            alert(tt('No tileset selected'));
             return;
         }
 
@@ -455,6 +481,15 @@ class DatabaseTilesetEditor {
                          document.getElementById('tileset-name-input');
         if (nameInput) {
             this.currentTileset.name = nameInput.value;
+        }
+
+        // Inside the Database modal, Save updates the transactional in-memory
+        // database. The modal's OK/Save action owns persistence and Cancel can
+        // still restore its snapshot.
+        if (this.parentEditor?._activeDatabaseList?.type === 'tilesets') {
+            this.notifyTilesetSaved();
+            this.updateStatus(`${this.currentTileset.name} ${tt('updated')}`);
+            return;
         }
 
         // Ensure the tilesetList is initialized and contains the current tileset
@@ -481,11 +516,12 @@ class DatabaseTilesetEditor {
         this.notifyTilesetSaved();
 
         // Update status
-        this.updateStatus(`Tileset saved: ${this.currentTileset.name}`);
+        this.updateStatus(`${tt('Tileset saved:')} ${this.currentTileset.name}`);
         console.log('Tileset saved:', this.currentTileset.name);
     }
 
     saveAfterLoad() {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         console.log('saveAfterLoad - tilesetList length:', this.tilesetList.length);
 
         // Update the current tileset in the list
@@ -501,7 +537,7 @@ class DatabaseTilesetEditor {
         this.notifyTilesetSaved();
 
         // Update status
-        this.updateStatus(`Tileset saved: ${this.currentTileset.name}`);
+        this.updateStatus(`${tt('Tileset saved:')} ${this.currentTileset.name}`);
         console.log('Tileset saved:', this.currentTileset.name);
     }
 
@@ -512,12 +548,13 @@ class DatabaseTilesetEditor {
     }
 
     deleteTileset() {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         if (!this.currentTileset) {
-            alert('No tileset selected');
+            alert(tt('No tileset selected'));
             return;
         }
 
-        if (confirm(`Delete tileset "${this.currentTileset.name}"?`)) {
+        if (confirm(`${tt('Delete tileset')} "${this.currentTileset.name}"?`)) {
             const id = this.currentTileset.id;
             this.tilesetList[id] = null;
             this.currentTileset = null;
@@ -529,12 +566,13 @@ class DatabaseTilesetEditor {
             document.getElementById('tileset-name-input').value = '';
             document.querySelectorAll('.image-preview').forEach(preview => {
                 preview.style.backgroundImage = 'none';
-                preview.innerHTML = '<span style="font-size: 11px; color: var(--color-text-dim);">Click to select</span>';
+                preview.innerHTML = `<span style="font-size: 11px; color: var(--color-text-dim);">${tt('Click to select')}</span>`;
             });
         }
     }
 
     saveTilesetsFile() {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         if (!this.fs) {
             console.error('Cannot save: fs not available');
             return;
@@ -543,7 +581,7 @@ class DatabaseTilesetEditor {
         const projectPath = this.getProjectPath();
         if (!projectPath) {
             console.error('Cannot save: projectPath is null');
-            alert('Error: Project path not available. Cannot save tilesets.');
+            alert(tt('Error: Project path not available. Cannot save tilesets.'));
             return;
         }
 
@@ -572,7 +610,7 @@ class DatabaseTilesetEditor {
             console.log('Tilesets.json saved successfully');
         } catch (error) {
             console.error('Error saving Tilesets.json:', error);
-            alert('Error saving tilesets: ' + error.message);
+            alert(`${tt('Error saving tilesets:')} ${error.message}`);
         }
     }
 
@@ -603,7 +641,7 @@ class DatabaseTilesetEditor {
         // Load the image - add .png extension if not present
         const img = new Image();
         const imageFileName = fileName.endsWith('.png') ? fileName : fileName + '.png';
-        const imgPath = 'file://' + this.path.join(this.getProjectPath(), 'img', 'tilesets', imageFileName);
+        const imgPath = this.assetUrl(this.path.join(this.getProjectPath(), 'img', 'tilesets', imageFileName));
 
         img.onload = () => {
             // Calculate canvas size based on image
@@ -618,9 +656,10 @@ class DatabaseTilesetEditor {
         };
 
         img.onerror = () => {
+            const tt = text => window.I18n ? window.I18n.tText(text) : text;
             noSelection.style.display = 'block';
             canvas.style.display = 'none';
-            alert('Error loading tileset image: ' + fileName);
+            alert(`${tt('Error loading tileset image:')} ${fileName}`);
         };
 
         img.src = imgPath;
@@ -870,6 +909,7 @@ class DatabaseTilesetEditor {
 
     // Initialize a compact UI for display within the database modal
     initializeCompactUI(container, tileset) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         // Load the full tilesets list from file
         this.loadTilesets();
 
@@ -888,11 +928,11 @@ class DatabaseTilesetEditor {
                 <!-- Header with tileset name and save button -->
                 <div style="padding: 8px 12px; border-bottom: 1px solid var(--color-border); background-color: var(--color-bg-menubar); flex-shrink: 0;">
                     <div style="display: flex; gap: 8px; align-items: center;">
-                        <label style="font-size: 11px; color: var(--color-text-muted);">Name:</label>
-                        <input type="text" id="compact-tileset-name-input" value="${tileset.name || ''}"
+                        <label style="font-size: 11px; color: var(--color-text-muted);">${tt('Name:')}</label>
+                        <input type="text" id="compact-tileset-name-input" value="${rrEscapeHtml(tileset.name)}"
                                style="flex: 1; max-width: 250px; padding: 4px 8px; background-color: var(--color-bg-input-alt); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 3px; font-size: 11px;"
-                               placeholder="Tileset name" />
-                        <button id="compact-save-tileset-btn" class="tool-button" style="font-size: 11px; padding: 4px 12px;">Save</button>
+                               placeholder="${tt('Tileset name')}" />
+                        <button id="compact-save-tileset-btn" class="tool-button" style="font-size: 11px; padding: 4px 12px;">${tt('Save')}</button>
                     </div>
                 </div>
 
@@ -903,11 +943,11 @@ class DatabaseTilesetEditor {
                         <!-- Top: Layer list -->
                         <div style="flex: 1; display: flex; flex-direction: column; border-bottom: 1px solid var(--color-border); overflow: hidden;">
                             <div style="padding: 8px; border-bottom: 1px solid var(--color-border); background-color: var(--color-bg-panel);">
-                                <h3 style="margin: 0; font-size: 11px; font-weight: 600; color: var(--color-text);">Tileset Layers</h3>
+                                <h3 style="margin: 0; font-size: 11px; font-weight: 600; color: var(--color-text);">${tt('Tileset Layers')}</h3>
                             </div>
                             <div style="flex: 1; overflow-y: auto; padding: 8px;">
                                 <div style="margin-bottom: 12px;">
-                                    <h4 style="margin: 0 0 6px 0; font-size: 9px; color: var(--color-text-muted); text-transform: uppercase; letter-spacing: 0.5px;">Autotiles (A)</h4>
+                                    <h4 style="margin: 0 0 6px 0; font-size: 9px; color: var(--color-text-muted); text-transform: uppercase; letter-spacing: 0.5px;">${tt('Autotiles (A)')}</h4>
                                     ${this.createCompactLayerItem('A1', 0)}
                                     ${this.createCompactLayerItem('A2', 1)}
                                     ${this.createCompactLayerItem('A3', 2)}
@@ -915,7 +955,7 @@ class DatabaseTilesetEditor {
                                     ${this.createCompactLayerItem('A5', 4)}
                                 </div>
                                 <div>
-                                    <h4 style="margin: 0 0 6px 0; font-size: 9px; color: var(--color-text-muted); text-transform: uppercase; letter-spacing: 0.5px;">Normal (B-E)</h4>
+                                    <h4 style="margin: 0 0 6px 0; font-size: 9px; color: var(--color-text-muted); text-transform: uppercase; letter-spacing: 0.5px;">${tt('Normal (B-E)')}</h4>
                                     ${this.createCompactLayerItem('B', 5)}
                                     ${this.createCompactLayerItem('C', 6)}
                                     ${this.createCompactLayerItem('D', 7)}
@@ -927,41 +967,41 @@ class DatabaseTilesetEditor {
                         <!-- Bottom: Flag editor -->
                         <div style="flex: 1; display: flex; flex-direction: column; overflow: hidden;">
                             <div style="padding: 8px; border-bottom: 1px solid var(--color-border); background-color: var(--color-bg-panel);">
-                                <h4 style="margin: 0; font-size: 11px; font-weight: 600; color: var(--color-text);">Flags</h4>
+                                <h4 style="margin: 0; font-size: 11px; font-weight: 600; color: var(--color-text);">${tt('Flags')}</h4>
                             </div>
                             <div style="flex: 1; overflow-y: auto; padding: 8px;">
                                 <!-- Flag buttons as single column list -->
                                 <button class="compact-flag-btn" id="flag-passability" data-mode="passability"
                                         style="width: 100%; margin-bottom: 6px; font-size: 12px; padding: 10px; background-color: var(--color-bg-panel); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 6px; cursor: pointer; text-align: left;">
-                                    Passability (O/X/★)
+                                    ${tt('Passability (O/X/★)')}
                                 </button>
                                 <button class="compact-flag-btn" id="flag-4dir" data-mode="4dir"
                                         style="width: 100%; margin-bottom: 6px; font-size: 12px; padding: 10px; background-color: var(--color-bg-panel); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 6px; cursor: pointer; text-align: left;">
-                                    ↕↔ - Passage (4 Dir)
+                                    ↕↔ - ${tt('Passage (4 Dir)')}
                                 </button>
                                 <button class="compact-flag-btn" id="flag-ladder" data-mode="ladder"
                                         style="width: 100%; margin-bottom: 6px; font-size: 12px; padding: 10px; background-color: var(--color-bg-panel); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 6px; cursor: pointer; text-align: left;">
-                                    Ladder
+                                    ${tt('Ladder')}
                                 </button>
                                 <button class="compact-flag-btn" id="flag-bush" data-mode="bush"
                                         style="width: 100%; margin-bottom: 6px; font-size: 12px; padding: 10px; background-color: var(--color-bg-panel); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 6px; cursor: pointer; text-align: left;">
-                                    Bush
+                                    ${tt('Bush')}
                                 </button>
                                 <button class="compact-flag-btn" id="flag-counter" data-mode="counter"
                                         style="width: 100%; margin-bottom: 6px; font-size: 12px; padding: 10px; background-color: var(--color-bg-panel); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 6px; cursor: pointer; text-align: left;">
-                                    Counter
+                                    ${tt('Counter')}
                                 </button>
                                 <button class="compact-flag-btn" id="flag-damage" data-mode="damage"
                                         style="width: 100%; margin-bottom: 6px; font-size: 12px; padding: 10px; background-color: var(--color-bg-panel); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 6px; cursor: pointer; text-align: left;">
-                                    ⚠ - Damage Floor
+                                    ⚠ - ${tt('Damage Floor')}
                                 </button>
                                 <button class="compact-flag-btn" id="flag-terrain" data-mode="terrain"
                                         style="width: 100%; margin-bottom: 6px; font-size: 12px; padding: 10px; background-color: var(--color-bg-panel); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 6px; cursor: pointer; text-align: left;">
-                                    Terrain Tag (0-7)
+                                    ${tt('Terrain Tag (0-7)')}
                                 </button>
 
                                 <p style="font-size: 8px; color: var(--color-text-dim); margin: 8px 0 0 0; line-height: 1.3;">
-                                    Select flag, click layer, then click tiles
+                                    ${tt('Select flag, click layer, then click tiles')}
                                 </p>
                             </div>
                         </div>
@@ -971,7 +1011,7 @@ class DatabaseTilesetEditor {
                     <div style="flex: 1; display: flex; flex-direction: column; overflow: hidden; background-color: var(--color-bg-base);">
                         <!-- Tab buttons -->
                         <div style="padding: 8px; border-bottom: 1px solid var(--color-border); background-color: var(--color-bg-list-item-alt); display: flex; gap: 6px;">
-                            <button class="compact-layer-tab" data-tab="A" style="flex: 1; padding: 8px; font-size: 11px; background-color: var(--color-bg-hover); border: 1px solid var(--color-accent-bright); color: var(--color-text-strong); border-radius: 3px; cursor: pointer; font-weight: 600;">A (Autotiles)</button>
+                            <button class="compact-layer-tab" data-tab="A" style="flex: 1; padding: 8px; font-size: 11px; background-color: var(--color-bg-hover); border: 1px solid var(--color-accent-bright); color: var(--color-text-strong); border-radius: 3px; cursor: pointer; font-weight: 600;">${tt('A (Autotiles)')}</button>
                             <button class="compact-layer-tab" data-tab="B" style="flex: 1; padding: 8px; font-size: 11px; background-color: var(--color-bg-panel); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 3px; cursor: pointer;">B</button>
                             <button class="compact-layer-tab" data-tab="C" style="flex: 1; padding: 8px; font-size: 11px; background-color: var(--color-bg-panel); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 3px; cursor: pointer;">C</button>
                             <button class="compact-layer-tab" data-tab="D" style="flex: 1; padding: 8px; font-size: 11px; background-color: var(--color-bg-panel); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 3px; cursor: pointer;">D</button>
@@ -981,7 +1021,7 @@ class DatabaseTilesetEditor {
                         <!-- Preview area with canvas -->
                         <div style="flex: 1; overflow: auto; padding: 16px; display: flex; align-items: flex-start; justify-content: center;">
                             <div id="compact-tileset-canvas-container" style="max-width: 100%;">
-                                <p style="color: var(--color-text-muted); font-size: 10px;">Click a layer on the left to view</p>
+                                <p style="color: var(--color-text-muted); font-size: 10px;">${tt('Click a layer on the left to view')}</p>
                             </div>
                         </div>
                     </div>
@@ -1007,6 +1047,7 @@ class DatabaseTilesetEditor {
 
     // Create a compact layer item for the left sidebar
     createCompactLayerItem(label, index) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const fileName = this.currentTileset.tilesetNames[index] || '';
         return `
             <div class="compact-layer-item" data-index="${index}"
@@ -1018,7 +1059,7 @@ class DatabaseTilesetEditor {
                     <div style="flex: 1; min-width: 0;">
                         <div style="font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
                             <span style="font-weight: 600; color: var(--color-accent-bright);">${label}</span>
-                            <span style="color: ${fileName ? 'var(--color-text-muted)' : 'var(--color-text-dim)'}; font-weight: normal; font-size: 9px;"> - ${fileName || '(None)'}</span>
+                            <span style="color: ${fileName ? 'var(--color-text-muted)' : 'var(--color-text-dim)'}; font-weight: normal; font-size: 9px;"> - ${rrEscapeHtml(fileName || tt('(None)'))}</span>
                         </div>
                     </div>
                 </div>
@@ -1028,6 +1069,7 @@ class DatabaseTilesetEditor {
 
     // Load thumbnails for layer items in left sidebar
     loadLayerListThumbnails() {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         document.querySelectorAll('.compact-layer-item').forEach(item => {
             const index = parseInt(item.dataset.index);
             const fileName = this.currentTileset.tilesetNames[index];
@@ -1035,7 +1077,7 @@ class DatabaseTilesetEditor {
             // Update the filename text
             const fileNameSpan = item.querySelector('span:last-child');
             if (fileNameSpan) {
-                fileNameSpan.textContent = ` - ${fileName || '(None)'}`;
+                fileNameSpan.textContent = ` - ${fileName || tt('(None)')}`;
                 fileNameSpan.style.color = fileName ? 'var(--color-text-muted)' : 'var(--color-text-dim)';
             }
 
@@ -1047,7 +1089,7 @@ class DatabaseTilesetEditor {
 
                 if (this.fs && this.fs.existsSync(imagePath)) {
                     const img = document.createElement('img');
-                    img.src = 'file://' + imagePath;
+                    img.src = this.assetUrl(imagePath);
                     img.style.cssText = 'width: 100%; height: 100%; object-fit: cover; image-rendering: pixelated;';
                     thumbContainer.innerHTML = '';
                     thumbContainer.appendChild(img);
@@ -1096,8 +1138,9 @@ class DatabaseTilesetEditor {
                 if (fileName) {
                     this.renderCompactTilesetCanvas(fileName, index);
                 } else {
+                    const tt = text => window.I18n ? window.I18n.tText(text) : text;
                     const container = document.getElementById('compact-tileset-canvas-container');
-                    container.innerHTML = '<p style="color: var(--color-text-muted); font-size: 10px; text-align: center;">No image assigned to this layer</p>';
+                    container.innerHTML = `<p style="color: var(--color-text-muted); font-size: 10px; text-align: center;">${tt('No image assigned to this layer')}</p>`;
                 }
             });
 
@@ -1119,6 +1162,7 @@ class DatabaseTilesetEditor {
 
     // Show custom tileset image picker modal with file list and preview
     showTilesetImagePicker(layerIndex, layerName) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         // Create modal overlay
         const modal = document.createElement('div');
         modal.style.cssText = `
@@ -1140,8 +1184,8 @@ class DatabaseTilesetEditor {
         header.style.cssText = 'padding: 16px; border-bottom: 1px solid var(--color-border); background: var(--color-bg-surface);';
         header.innerHTML = `
             <div style="display: flex; justify-content: space-between; align-items: center;">
-                <h3 style="margin: 0; color: var(--color-accent-bright); font-size: 16px;">Select Tileset for ${layerName}</h3>
-                <button id="close-picker" style="background: var(--color-danger-pressed); color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer;">Close</button>
+                <h3 style="margin: 0; color: var(--color-accent-bright); font-size: 16px;">${tt('Select Tileset for')} ${layerName}</h3>
+                <button id="close-picker" style="background: var(--color-danger-pressed); color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer;">${tt('Close')}</button>
             </div>
         `;
 
@@ -1163,7 +1207,7 @@ class DatabaseTilesetEditor {
             align-items: center; justify-content: center;
             overflow: auto; padding: 16px;
         `;
-        previewContainer.innerHTML = '<p style="color: var(--color-text-dim); font-size: 14px;">Select a tileset to preview</p>';
+        previewContainer.innerHTML = `<p style="color: var(--color-text-dim); font-size: 14px;">${tt('Select a tileset to preview')}</p>`;
 
         mainContent.appendChild(fileListContainer);
         mainContent.appendChild(previewContainer);
@@ -1176,15 +1220,14 @@ class DatabaseTilesetEditor {
         const tilesetsDir = this.path.join(this.getProjectPath(), 'img', 'tilesets');
 
         if (this.fs.existsSync(tilesetsDir)) {
-            const files = this.fs.readdirSync(tilesetsDir);
-            const pngFiles = files.filter(f => f.endsWith('.png')).sort();
+            const pngFiles = RRAssetFiles.listUnique(tilesetsDir, ['.png']);
 
             if (pngFiles.length === 0) {
-                fileListContainer.innerHTML = '<p style="color: var(--color-text-muted); padding: 16px; font-size: 12px;">No tileset images found in img/tilesets</p>';
+                fileListContainer.innerHTML = `<p style="color: var(--color-text-muted); padding: 16px; font-size: 12px;">${tt('No tileset images found in img/tilesets')}</p>`;
             } else {
-                pngFiles.forEach(fileName => {
-                    const filePath = this.path.join(tilesetsDir, fileName);
-                    const baseName = this.path.basename(fileName, '.png');
+                pngFiles.forEach(file => {
+                    const filePath = file.absolutePath;
+                    const baseName = file.name;
 
                     // Create list item
                     const listItem = document.createElement('div');
@@ -1223,14 +1266,14 @@ class DatabaseTilesetEditor {
                         // Show large preview with select button
                         previewContainer.innerHTML = `
                             <div style="display: flex; flex-direction: column; align-items: center; gap: 16px; max-width: 100%; max-height: 100%;">
-                                <img src="file://${filePath}"
+                                <img src="${rrEscapeHtml(this.assetUrl(filePath))}"
                                      style="max-width: 100%; max-height: calc(100% - 60px); image-rendering: pixelated; display: block;">
                                 <button id="select-tileset-btn" style="
                                     background: var(--color-accent-bright); color: var(--color-bg-deep); border: none;
                                     padding: 12px 32px; border-radius: 4px; cursor: pointer;
                                     font-size: 14px; font-weight: bold;
                                     transition: background 0.2s;
-                                ">Select This Tileset</button>
+                                ">${tt('Select This Tileset')}</button>
                             </div>
                         `;
 
@@ -1258,7 +1301,7 @@ class DatabaseTilesetEditor {
                 });
             }
         } else {
-            fileListContainer.innerHTML = '<p style="color: var(--color-text-muted); padding: 16px; font-size: 12px;">Tilesets directory not found</p>';
+            fileListContainer.innerHTML = `<p style="color: var(--color-text-muted); padding: 16px; font-size: 12px;">${tt('Tilesets directory not found')}</p>`;
         }
 
         // Close button handler
@@ -1278,6 +1321,7 @@ class DatabaseTilesetEditor {
 
     // Browse for external tileset file (copies to project)
     browseExternalTilesetFile(layerIndex, layerName) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const input = document.createElement('input');
         input.type = 'file';
         input.accept = 'image/png';
@@ -1298,10 +1342,10 @@ class DatabaseTilesetEditor {
 
                     this.fs.copyFileSync(file.path, destPath);
                     this.assignTilesetToLayer(layerIndex, baseName, layerName);
-                    this.updateStatus(`Imported and assigned: ${fileName} to ${layerName}`);
+                    this.updateStatus(`${tt('Imported and assigned:')} ${fileName} ${tt('to')} ${layerName}`);
                 } catch (error) {
                     console.error('Failed to copy file:', error);
-                    this.updateStatus(`Error: Failed to import file`);
+                    this.updateStatus(tt('Error: Failed to import file'));
                 }
             }
         });
@@ -1376,10 +1420,11 @@ class DatabaseTilesetEditor {
 
     // Render preview for a specific tab (shows all layers in that tab stacked)
     renderTabPreview(tab) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const container = document.getElementById('compact-tileset-canvas-container');
         const layerIndices = this.getLayerIndicesForTab(tab);
 
-        container.innerHTML = '<p style="color: var(--color-text-muted); font-size: 10px;">Loading layers...</p>';
+        container.innerHTML = `<p style="color: var(--color-text-muted); font-size: 10px;">${tt('Loading layers...')}</p>`;
 
         // Collect images for this tab
         const images = [];
@@ -1395,7 +1440,7 @@ class DatabaseTilesetEditor {
         }
 
         if (images.length === 0) {
-            container.innerHTML = '<p style="color: var(--color-text-muted); font-size: 10px; text-align: center;">No images assigned to this tab</p>';
+            container.innerHTML = `<p style="color: var(--color-text-muted); font-size: 10px; text-align: center;">${tt('No images assigned to this tab')}</p>`;
             return;
         }
 
@@ -1509,7 +1554,7 @@ class DatabaseTilesetEditor {
                 }
             };
 
-            img.src = 'file://' + imagePath;
+            img.src = this.assetUrl(imagePath);
         });
     }
 
@@ -1537,21 +1582,22 @@ class DatabaseTilesetEditor {
 
     // Create a layer list item for the left sidebar
     createLayerListItem(label, index, description) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const fileName = this.currentTileset.tilesetNames[index] || '';
         const displayName = fileName || '';
 
         return `
-            <div class="compact-tileset-image-slot" data-index="${index}" data-filename="${fileName}"
+            <div class="compact-tileset-image-slot" data-index="${index}" data-filename="${rrEscapeHtml(fileName)}"
                  style="display: flex; align-items: center; gap: 8px; padding: 6px; margin-bottom: 4px; background-color: var(--color-bg-menubar); border: 1px solid var(--color-border); border-radius: 3px; cursor: pointer; transition: all 0.15s;">
                 <div class="layer-thumbnail-container" style="width: 60px; height: 60px; background: var(--color-bg-surface); border: 1px solid var(--color-border-input); display: flex; align-items: center; justify-content: center; font-size: 9px; color: var(--color-text-dim); overflow: hidden;">
                     ${fileName ? '' : '-'}
                 </div>
                 <div style="flex: 1; min-width: 0;">
                     <div style="font-weight: 600; color: #4fc3f7; font-size: 10px; margin-bottom: 2px;">${label}</div>
-                    <div class="layer-filename" style="font-size: 8px; color: ${fileName ? 'var(--color-text)' : 'var(--color-text-dim)'}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${displayName || 'No image assigned'}">
-                        ${displayName || '(None)'}
+                    <div class="layer-filename" style="font-size: 8px; color: ${fileName ? 'var(--color-text)' : 'var(--color-text-dim)'}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${rrEscapeHtml(displayName || tt('No image assigned'))}">
+                        ${rrEscapeHtml(displayName || tt('(None)'))}
                     </div>
-                    <button class="change-image-btn" data-index="${index}" style="margin-top: 4px; padding: 2px 6px; font-size: 8px; background: var(--color-link); border: none; color: white; border-radius: 2px; cursor: pointer;">Change</button>
+                    <button class="change-image-btn" data-index="${index}" style="margin-top: 4px; padding: 2px 6px; font-size: 8px; background: var(--color-link); border: none; color: white; border-radius: 2px; cursor: pointer;">${tt('Change')}</button>
                 </div>
             </div>
         `;
@@ -1625,7 +1671,7 @@ class DatabaseTilesetEditor {
 
                 if (this.fs && this.fs.existsSync(imagePath)) {
                     const img = document.createElement('img');
-                    img.src = 'file://' + imagePath;
+                    img.src = this.assetUrl(imagePath);
                     img.style.cssText = 'width: 100%; height: 100%; object-fit: cover; image-rendering: pixelated;';
                     img.onerror = () => {
                         console.error(`Failed to load thumbnail image: ${imagePath}`);
@@ -1649,7 +1695,8 @@ class DatabaseTilesetEditor {
     // Open file picker to change a tileset image
     openImagePicker(index) {
         if (typeof nw === 'undefined') {
-            alert('File picker requires NW.js');
+            const tt = text => window.I18n ? window.I18n.tText(text) : text;
+            alert(tt('File picker requires NW.js'));
             return;
         }
 
@@ -1676,7 +1723,7 @@ class DatabaseTilesetEditor {
                     // Load the thumbnail
                     const thumbnailContainer = slot.querySelector('.layer-thumbnail-container');
                     const img = document.createElement('img');
-                    img.src = 'file://' + file.path;
+                    img.src = this.assetUrl(file.path);
                     img.style.cssText = 'width: 100%; height: 100%; object-fit: cover; image-rendering: pixelated;';
                     thumbnailContainer.innerHTML = '';
                     thumbnailContainer.appendChild(img);
@@ -1694,10 +1741,11 @@ class DatabaseTilesetEditor {
 
     // Render tileset canvas for the compact UI
     renderCompactTilesetCanvas(fileName, imageIndex) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const container = document.getElementById('compact-tileset-canvas-container');
         if (!container) return;
 
-        container.innerHTML = '<p style="color: var(--color-text-muted); font-size: 11px;">Loading tileset image...</p>';
+        container.innerHTML = `<p style="color: var(--color-text-muted); font-size: 11px;">${tt('Loading tileset image...')}</p>`;
 
         // Add .png extension if not already present
         const fileNameWithExt = fileName.endsWith('.png') ? fileName : fileName + '.png';
@@ -1705,7 +1753,7 @@ class DatabaseTilesetEditor {
 
         // Check if file exists
         if (!this.fs.existsSync(imagePath)) {
-            container.innerHTML = `<p style="color: #f44; font-size: 11px;">Image file not found: ${fileName}</p>`;
+            container.innerHTML = `<p style="color: #f44; font-size: 11px;">${tt('Image file not found:')} ${rrEscapeHtml(fileName)}</p>`;
             return;
         }
 
@@ -1809,11 +1857,10 @@ class DatabaseTilesetEditor {
         };
 
         img.onerror = () => {
-            container.innerHTML = `<p style="color: #f44; font-size: 11px;">Failed to load image: ${fileName}</p>`;
+            container.innerHTML = `<p style="color: #f44; font-size: 11px;">${tt('Failed to load image:')} ${rrEscapeHtml(fileName)}</p>`;
         };
 
-        // Use file:// protocol for NW.js
-        img.src = 'file://' + imagePath;
+        img.src = this.assetUrl(imagePath);
     }
 
     // Redraw just the overlay without recreating the canvas (prevents flicker)
@@ -2414,7 +2461,8 @@ class DatabaseTilesetEditor {
             return;
         }
 
-        container.innerHTML = '<p style="color: var(--color-text-muted); font-size: 10px;">Loading tileset preview...</p>';
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
+        container.innerHTML = `<p style="color: var(--color-text-muted); font-size: 10px;">${tt('Loading tileset preview...')}</p>`;
 
         // Collect all tileset images that exist, in order
         const tilesetImages = [];
@@ -2435,7 +2483,7 @@ class DatabaseTilesetEditor {
         }
 
         if (tilesetImages.length === 0) {
-            container.innerHTML = '<p style="color: var(--color-text-muted); font-size: 10px;">No tileset images assigned. Click a layer on the left to assign images.</p>';
+            container.innerHTML = `<p style="color: var(--color-text-muted); font-size: 10px;">${tt('No tileset images assigned. Click a layer on the left to assign images.')}</p>`;
             return;
         }
 
@@ -2481,7 +2529,7 @@ class DatabaseTilesetEditor {
                         } else {
                             // A5, B-E: Display as-is using img element
                             const imgEl = document.createElement('img');
-                            imgEl.src = 'file://' + this.path.join(this.getProjectPath(), 'img', 'tilesets', fileName);
+                            imgEl.src = this.assetUrl(this.path.join(this.getProjectPath(), 'img', 'tilesets', fileName));
                             imgEl.style.cssText = 'display: block; width: 100%; height: auto; image-rendering: pixelated; border-bottom: 1px solid var(--color-bg-button-hover);';
                             imgEl.style.borderBottom = (index === 8) ? 'none' : '1px solid var(--color-bg-button-hover)';
                             previewWrapper.appendChild(imgEl);
@@ -2500,7 +2548,7 @@ class DatabaseTilesetEditor {
 
                 if (loadedCount === totalImages) {
                     if (imagesToLoad.length === 0) {
-                        container.innerHTML = '<p style="color: #f44; font-size: 10px;">Failed to load tileset images</p>';
+                        container.innerHTML = `<p style="color: #f44; font-size: 10px;">${tt('Failed to load tileset images')}</p>`;
                     } else {
                         // Show what we could load
                         imagesToLoad.sort((a, b) => a.index - b.index);
@@ -2520,7 +2568,7 @@ class DatabaseTilesetEditor {
                             } else {
                                 // A5, B-E: Display as-is
                                 const imgEl = document.createElement('img');
-                                imgEl.src = 'file://' + this.path.join(this.getProjectPath(), 'img', 'tilesets', fileName);
+                                imgEl.src = this.assetUrl(this.path.join(this.getProjectPath(), 'img', 'tilesets', fileName));
                                 imgEl.style.cssText = 'display: block; width: 100%; height: auto; image-rendering: pixelated; border-bottom: 1px solid var(--color-bg-button-hover);';
                                 previewWrapper.appendChild(imgEl);
                             }
@@ -2531,7 +2579,7 @@ class DatabaseTilesetEditor {
                 }
             };
 
-            img.src = 'file://' + imagePath;
+            img.src = this.assetUrl(imagePath);
         });
     }
 
@@ -2559,6 +2607,7 @@ class DatabaseTilesetEditor {
      * Show tileset detail view (for database modal)
      */
     showTilesetDetail(container, tileset) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const wrapper = document.createElement('div');
         wrapper.style.display = 'flex';
         wrapper.style.flexDirection = 'column';
@@ -2574,20 +2623,20 @@ class DatabaseTilesetEditor {
         const generalSection = document.createElement('div');
         generalSection.className = 'database-section';
         generalSection.innerHTML = `
-            <div class="database-section-header">General</div>
+            <div class="database-section-header">${tt('General')}</div>
             <div class="database-section-content">
                 <div class="form-row">
                     <div class="form-group">
-                        <label class="database-field-label">Name:</label>
-                        <input type="text" class="database-field-value" value="${tileset.name || ''}" data-field="name" data-tileset-id="${tileset.id}">
+                        <label class="database-field-label">${tt('Name:')}</label>
+                        <input type="text" class="database-field-value" value="${rrEscapeHtml(tileset.name)}" data-field="name" data-tileset-id="${tileset.id}">
                     </div>
                 </div>
                 <div class="form-row">
                     <div class="form-group-fixed">
-                        <label class="database-field-label">Mode:</label>
+                        <label class="database-field-label">${tt('Mode:')}</label>
                         <select class="database-field-value" style="width: 120px;" readonly disabled>
-                            <option value="0" ${tileset.mode === 0 ? 'selected' : ''}>Field</option>
-                            <option value="1" ${tileset.mode === 1 ? 'selected' : ''}>Area</option>
+                            <option value="0" ${tileset.mode === 0 ? 'selected' : ''}>${tt('Field')}</option>
+                            <option value="1" ${tileset.mode === 1 ? 'selected' : ''}>${tt('Area')}</option>
                         </select>
                     </div>
                 </div>
@@ -2599,29 +2648,29 @@ class DatabaseTilesetEditor {
         const imagesSection = document.createElement('div');
         imagesSection.className = 'database-section';
         const tilesetNames = tileset.tilesetNames || [];
-        const imageLabels = ['A1 (Animations)', 'A2 (Ground)', 'A3 (Buildings)', 'A4 (Walls)', 'A5 (Normal)', 'B', 'C', 'D', 'E'];
+        const imageLabels = [tt('A1 (Animations)'), tt('A2 (Ground)'), tt('A3 (Buildings)'), tt('A4 (Walls)'), tt('A5 (Normal)'), 'B', 'C', 'D', 'E'];
 
         imagesSection.innerHTML = `
-            <div class="database-section-header">Tileset Images</div>
+            <div class="database-section-header">${tt('Tileset Images')}</div>
             <div class="database-section-content">
                 <table class="traits-table">
                     <thead>
                         <tr>
-                            <th>Type</th>
-                            <th>Filename</th>
+                            <th>${tt('Type')}</th>
+                            <th>${tt('Filename')}</th>
                         </tr>
                     </thead>
                     <tbody>
                         ${imageLabels.map((label, idx) => `
                             <tr>
                                 <td style="width: 150px;">${label}</td>
-                                <td style="font-family: monospace; font-size: 11px;">${tilesetNames[idx] || '<i style="color: var(--color-text-dim);">not set</i>'}</td>
+                                <td style="font-family: monospace; font-size: 11px;">${tilesetNames[idx] ? rrEscapeHtml(tilesetNames[idx]) : `<i style="color: var(--color-text-dim);">${tt('not set')}</i>`}</td>
                             </tr>
                         `).join('')}
                     </tbody>
                 </table>
                 <p style="color: var(--color-text-muted); font-size: 11px; margin-top: 12px;">
-                    Tileset image editing requires the advanced tileset editor
+                    ${tt('Tileset image editing requires the advanced tileset editor')}
                 </p>
             </div>
         `;
@@ -2631,9 +2680,9 @@ class DatabaseTilesetEditor {
         const noteSection = document.createElement('div');
         noteSection.className = 'database-section';
         noteSection.innerHTML = `
-            <div class="database-section-header">Note</div>
+            <div class="database-section-header">${tt('Note')}</div>
             <div class="database-section-content">
-                <textarea class="database-field-value" rows="4" style="width: 100%;" data-field="note" data-tileset-id="${tileset.id}">${tileset.note || ''}</textarea>
+                <textarea class="database-field-value" rows="4" style="width: 100%;" data-field="note" data-tileset-id="${tileset.id}">${rrEscapeHtml(tileset.note)}</textarea>
             </div>
         `;
         gridWrapper.appendChild(noteSection);
@@ -2665,13 +2714,15 @@ class DatabaseTilesetEditor {
         tileset[fieldName] = value;
         this.databaseManager.updateTileset(tilesetId, tileset);
         console.log(`Updated tileset ${tilesetId} field ${fieldName} to:`, value);
-        this.updateStatus(`${fieldName} updated`);
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
+        this.updateStatus(`${fieldName} ${tt('updated')}`);
     }
 
     /**
      * Show tileset editor within the database modal
      */
     showTilesetEditor() {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const viewer = document.getElementById('database-viewer');
         const titleEl = document.getElementById('database-viewer-title');
         const listEl = document.getElementById('database-list');
@@ -2682,11 +2733,14 @@ class DatabaseTilesetEditor {
             return;
         }
 
-        this.parentEditor?.prepareDatabaseSection?.('tilesets', 'Tilesets');
+        this.parentEditor?.prepareDatabaseSection?.('tilesets', tt('Tilesets'));
 
         // Get tilesets data
         let tilesets = this.databaseManager.getTilesets();
         let selectedTilesetId = null;
+        const batchSize = 250;
+        let filteredTilesets = tilesets;
+        let renderedCount = 0;
 
         // Remove old search/button bar from previous tab
         const existingSearch = listEl.parentNode.querySelector('.database-search-container');
@@ -2695,6 +2749,8 @@ class DatabaseTilesetEditor {
         if (existingButtons) existingButtons.remove();
         const existingMaxBtn = listEl.parentNode.querySelector('.database-change-max-btn');
         if (existingMaxBtn) existingMaxBtn.remove();
+        const existingPager = listEl.parentNode.querySelector('.database-list-pager');
+        if (existingPager) existingPager.remove();
 
         // Add tileset search bar
         const searchContainer = document.createElement('div');
@@ -2703,27 +2759,31 @@ class DatabaseTilesetEditor {
 
         const searchInput = document.createElement('input');
         searchInput.type = 'text';
-        searchInput.placeholder = 'Search tilesets...';
+        searchInput.placeholder = tt('Search tilesets...');
         searchInput.style.cssText = 'width: 100%; padding: 4px 8px; background-color: var(--color-bg-surface); color: var(--color-text); border: 1px solid var(--color-border); border-radius: 3px; font-size: 12px; box-sizing: border-box;';
         searchContainer.appendChild(searchInput);
         listEl.parentNode.insertBefore(searchContainer, listEl);
 
-        // Populate tileset list (with optional filter)
-        const populateTilesetList = (filter) => {
-            listEl.innerHTML = '';
-            const filterLower = (filter || '').toLowerCase();
-            tilesets.forEach((tileset) => {
-                if (filterLower && !(tileset.name || '').toLowerCase().includes(filterLower) &&
-                    !(tileset.id && String(tileset.id).includes(filterLower))) {
-                    return;
-                }
+        // Keep one continuous list and append more rows near the bottom.
+        const populateTilesetList = (filter, append = false) => {
+            if (!append) {
+                listEl.innerHTML = '';
+                renderedCount = 0;
+                const filterLower = (filter || '').toLowerCase();
+                filteredTilesets = filterLower ? tilesets.filter(tileset =>
+                    (tileset.name || '').toLowerCase().includes(filterLower) ||
+                    (tileset.id && String(tileset.id).includes(filterLower))
+                ) : tilesets;
+            }
+            const end = Math.min(renderedCount + batchSize, filteredTilesets.length);
 
+            filteredTilesets.slice(renderedCount, end).forEach((tileset) => {
                 const item = document.createElement('div');
                 item.className = 'database-list-item';
                 item.dataset.tilesetId = tileset.id;
 
                 const nameSpan = document.createElement('span');
-                nameSpan.textContent = tileset.name || 'Unnamed';
+                nameSpan.textContent = tileset.name || tt('Unnamed');
 
                 const idSpan = document.createElement('span');
                 idSpan.className = 'database-list-id';
@@ -2741,6 +2801,14 @@ class DatabaseTilesetEditor {
 
                 listEl.appendChild(item);
             });
+            renderedCount = end;
+        };
+
+        listEl.onscroll = () => {
+            const nearBottom = listEl.scrollTop + listEl.clientHeight >= listEl.scrollHeight - 160;
+            if (nearBottom && renderedCount < filteredTilesets.length) {
+                populateTilesetList(searchInput.value, true);
+            }
         };
 
         const getSelectedTilesetId = () => {
@@ -2769,28 +2837,46 @@ class DatabaseTilesetEditor {
             const tilesetId = getSelectedTilesetId();
             const tileset = this.databaseManager.data.tilesets?.[tilesetId];
             if (!tileset) {
-                alert('Select a tileset to copy.');
+                alert(tt('Select a tileset to copy.'));
                 return;
             }
 
             const copied = JSON.parse(JSON.stringify(tileset));
             delete copied.id;
             this.tilesetClipboard = copied;
-            this.updateStatus('Tileset copied to clipboard');
+            if (this.parentEditor?.writeDatabaseEntryClipboard) {
+                this.parentEditor.writeDatabaseEntryClipboard('tilesets', copied);
+            } else if (typeof ReactorClipboard !== 'undefined') {
+                ReactorClipboard.write('databaseEntry', { databaseType: 'tilesets', entry: copied });
+            }
+            this.updateStatus(tt('Tileset copied to clipboard'));
         };
 
-        const pasteSelectedTileset = () => {
+        const pasteSelectedTileset = async () => {
             const tilesetId = getSelectedTilesetId();
             if (!tilesetId) {
-                alert('Select a tileset slot to paste into.');
+                alert(tt('Select a tileset slot to paste into.'));
                 return;
             }
-            if (!this.tilesetClipboard) {
-                alert('No tileset in clipboard to paste.');
+            let clipboard = null;
+            if (this.parentEditor?.readDatabaseEntryClipboard) {
+                clipboard = await this.parentEditor.readDatabaseEntryClipboard('tilesets');
+            } else if (typeof ReactorClipboard !== 'undefined') {
+                const clipboardData = await ReactorClipboard.read('databaseEntry');
+                if (clipboardData?.payload?.databaseType === 'tilesets') {
+                    clipboard = { entry: clipboardData.payload.entry };
+                }
+            } else if (this.tilesetClipboard) {
+                clipboard = { entry: this.tilesetClipboard };
+            }
+            if (!clipboard?.entry) {
+                alert(tt('No tileset in clipboard to paste.'));
                 return;
             }
 
-            const pasted = JSON.parse(JSON.stringify(this.tilesetClipboard));
+            const pasted = JSON.parse(JSON.stringify(clipboard.entry));
+            delete pasted.id;
+            this.tilesetClipboard = JSON.parse(JSON.stringify(pasted));
             pasted.id = tilesetId;
             this.databaseManager.data.tilesets[tilesetId] = pasted;
             tilesets = this.databaseManager.getTilesets();
@@ -2798,11 +2884,12 @@ class DatabaseTilesetEditor {
             selectedTilesetId = tilesetId;
             selectTilesetListItem(tilesetId);
             this.showTilesetEditorDetail(detailEl, pasted);
-            this.updateStatus('Tileset pasted');
+            this.updateStatus(tt('Tileset pasted'));
         };
 
         searchInput.addEventListener('input', (e) => {
             populateTilesetList(e.target.value);
+            listEl.scrollTop = 0;
         });
 
         this.cleanupListKeyHandler();
@@ -2827,7 +2914,8 @@ class DatabaseTilesetEditor {
 
         const changeMaxBtn = document.createElement('button');
         changeMaxBtn.className = 'database-change-max-btn';
-        changeMaxBtn.textContent = 'Change Maximum';
+        changeMaxBtn.textContent = tt('Change Maximum');
+        changeMaxBtn.title = `${tt('Max:')} ${this.databaseManager.getMaximumEntries('tilesets')}`;
         changeMaxBtn.style.cssText = 'width: 100%; padding: 6px 8px; background-color: var(--color-bg-panel); color: var(--color-text); border: 1px solid var(--color-border-input); border-top: none; cursor: pointer; font-size: 11px; transition: background-color 0.2s; flex-shrink: 0;';
         changeMaxBtn.onmouseenter = () => { changeMaxBtn.style.backgroundColor = 'var(--color-accent-tint-25)'; };
         changeMaxBtn.onmouseleave = () => { changeMaxBtn.style.backgroundColor = 'var(--color-bg-panel)'; };
@@ -2836,12 +2924,12 @@ class DatabaseTilesetEditor {
             const template = this.parentEditor?.getDefaultTemplates?.().tilesets;
             if (!template || !this.parentEditor?.showChangeMaximumModal) return;
 
-            this.parentEditor.showChangeMaximumModal('Tilesets', 'tilesets', currentMax, (newMax) => {
+            this.parentEditor.showChangeMaximumModal(tt('Tilesets'), 'tilesets', currentMax, (newMax) => {
                 this.databaseManager.changeMaximum('tilesets', newMax, template);
                 tilesets = this.databaseManager.getTilesets();
                 populateTilesetList(searchInput.value);
-                detailEl.innerHTML = '<p style="color: var(--color-text-muted); text-align: center; margin-top: 100px;">Select a tileset from the list</p>';
-                this.updateStatus(`Tilesets maximum changed to ${newMax}`);
+                detailEl.innerHTML = `<p style="color: var(--color-text-muted); text-align: center; margin-top: 100px;">${tt('Select a tileset from the list')}</p>`;
+                this.updateStatus(`${tt('Tilesets maximum changed to')} ${newMax}`);
             });
         };
         listEl.parentNode.appendChild(changeMaxBtn);
@@ -2849,7 +2937,7 @@ class DatabaseTilesetEditor {
         populateTilesetList();
 
         // Show initial message
-        detailEl.innerHTML = '<p style="color: var(--color-text-muted); text-align: center; margin-top: 100px;">Select a tileset from the list</p>';
+        detailEl.innerHTML = `<p style="color: var(--color-text-muted); text-align: center; margin-top: 100px;">${tt('Select a tileset from the list')}</p>`;
 
         // Show viewer
         viewer.classList.add('active');
@@ -2895,12 +2983,13 @@ class DatabaseTilesetEditor {
 
         // Initialize tileset editor if not already done
         const currentProject = this.projectManager ? this.projectManager.getCurrentProject() : null;
-        if (!this.tilesetEditor && this.parentEditor && this.parentEditor.callbacks && this.parentEditor.callbacks.getRendererApp && currentProject) {
+        if (!this.tilesetEditor && currentProject) {
             console.log('Creating new DatabaseTilesetEditor with project path:', currentProject.path);
             this.tilesetEditor = new DatabaseTilesetEditor(
-                this.parentEditor.callbacks.getRendererApp(),
-                currentProject.path,
-                this.databaseManager
+                this.databaseManager,
+                this.projectManager,
+                this.commonUI,
+                this.parentEditor
             );
         } else {
             if (this.tilesetEditor) {
@@ -2909,14 +2998,18 @@ class DatabaseTilesetEditor {
         }
 
         if (!this.tilesetEditor) {
-            container.innerHTML = '<p style="color: #f44; text-align: center; margin-top: 100px;">Failed to initialize tileset editor</p>';
+            const tt = text => window.I18n ? window.I18n.tText(text) : text;
+            container.innerHTML = `<p style="color: #f44; text-align: center; margin-top: 100px;">${tt('Failed to initialize tileset editor')}</p>`;
             return;
         }
 
         this.tilesetEditor.onTilesetSaved = (savedTileset) => {
             if (!savedTileset) return;
             this.databaseManager.updateTileset(savedTileset.id, savedTileset);
-            if (typeof this._refreshTilesetDatabaseList === 'function') {
+            if (this.parentEditor?._activeDatabaseList?.type === 'tilesets') {
+                this.parentEditor._activeDatabaseList.mutationGeneration++;
+                this.parentEditor._activeDatabaseList.refresh();
+            } else if (typeof this._refreshTilesetDatabaseList === 'function') {
                 this._refreshTilesetDatabaseList(savedTileset.id);
             }
         };
@@ -2928,5 +3021,5 @@ class DatabaseTilesetEditor {
 
 // Export for use in other modules
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = TilesetEditor;
+    module.exports = DatabaseTilesetEditor;
 }

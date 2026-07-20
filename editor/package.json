@@ -1,6 +1,7 @@
 {
   "name": "rpg-reactor",
-  "version": "0.94.9",
+  "version": "0.95.0",
+  "private": true,
   "description": "An open-source, cross-platform RPG game engine",
   "main": "index.html",
   "scripts": {
@@ -47,8 +48,19 @@
   ],
   "author": "Psychronic",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Psychronic-Games/RPGReactor.git"
+  },
+  "homepage": "https://github.com/Psychronic-Games/RPGReactor#readme",
+  "bugs": {
+    "url": "https://github.com/Psychronic-Games/RPGReactor/issues"
+  },
+  "engines": {
+    "node": ">=22"
+  },
   "devDependencies": {
-    "nw-builder": "^4.16.0",
+    "nw-builder": "^4.17.13",
     "png-to-ico": "^3.0.1"
   }
 }

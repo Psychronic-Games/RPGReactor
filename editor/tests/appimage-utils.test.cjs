@@ -132,6 +132,7 @@ test('both deployment dialogs pass optional Linux AppImage settings to workers',
         'Deploy Editor nests AppImage directly below Linux');
     assert.match(gameWorker, /safeFolderName}-linux-x64\.AppImage/);
     assert.match(distWorker, /RPGReactor-v\$\{appVersion\}-linux-x64\.AppImage/);
-    assert.match(distWorker, /f\.endsWith\('\.AppImage'\)/);
+    assert.match(distWorker, /createdArtifacts\.add\(result\.outputPath\)/);
+    assert.match(distWorker, /const files = \[\.\.\.createdArtifacts\]/);
     assert.match(distWorker, /crypto\.createHash\('sha256'\)/);
 });

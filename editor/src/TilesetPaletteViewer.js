@@ -61,6 +61,7 @@ class TilesetPaletteViewer {
 
     // Initialize the palette viewer UI in the sidebar
     initializeUI(container) {
+        const tt = (text) => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
         container.innerHTML = `
             <div id="tileset-palette-container" style="display: flex; flex-direction: column; flex: 1; min-height: 0;">
                 <!-- Layer Tabs -->
@@ -77,7 +78,7 @@ class TilesetPaletteViewer {
                 <div id="tileset-preview-container" style="flex: 1; overflow: auto; background-color: transparent; position: relative; min-height: 0;">
                     <canvas id="tileset-preview-canvas" style="display: block; image-rendering: pixelated; cursor: crosshair; min-width: 100%; min-height: 100%;"></canvas>
                     <div id="tileset-empty-message" style="display: none; padding: 20px; text-align: center; color: var(--color-text-dim); font-size: 11px;">
-                        No tileset image assigned<br/>for this layer
+                        ${tt('No tileset image assigned')}<br/>${tt('for this layer')}
                     </div>
                 </div>
 
@@ -86,7 +87,7 @@ class TilesetPaletteViewer {
 
                 <!-- Selection Info -->
                 <div id="selection-info" style="padding: 8px; background-color: var(--color-bg-list-item); border-top: 1px solid var(--color-border); font-size: 10px; color: var(--color-text-muted); flex-shrink: 0;">
-                    <div>No tiles selected</div>
+                    <div>${tt('No tiles selected')}</div>
                 </div>
             </div>
         `;
@@ -132,6 +133,7 @@ class TilesetPaletteViewer {
             let selectionStart = null;
 
             canvas.addEventListener('mousedown', (e) => {
+                if (e.button !== 0) return;
                 isSelecting = true;
                 const rect = canvas.getBoundingClientRect();
 
@@ -187,12 +189,27 @@ class TilesetPaletteViewer {
                     let y = Math.floor(canvasY / 48);
                     let actualLayer = this.currentLayer;
 
-                    // Handle merged 'A' layer - determine which sub-layer was clicked
+                    // Merged 'A' layer: the selection rectangle lives in ONE
+                    // sub-layer's coordinate frame (the one the drag started
+                    // in). Clamp the drag to that sub-layer's rows — crossing
+                    // into a neighboring sheet would otherwise build tile
+                    // coordinates (and later tile IDs) out of range.
                     if (this.currentLayer === 'A' && this.mergedALayerOffsets) {
-                        const clickResult = this.getSubLayerFromY(canvasY);
-                        if (clickResult) {
-                            actualLayer = clickResult.layer;
-                            y = Math.floor((canvasY - clickResult.startY) / 48);
+                        const startInfo = selectionStart && selectionStart.layer
+                            ? this.mergedALayerOffsets.find(info => info.layer === selectionStart.layer)
+                            : null;
+                        if (startInfo) {
+                            actualLayer = selectionStart.layer;
+                            const clampedY = Math.min(
+                                Math.max(canvasY, startInfo.startY),
+                                startInfo.startY + startInfo.height - 1);
+                            y = Math.floor((clampedY - startInfo.startY) / 48);
+                        } else {
+                            const clickResult = this.getSubLayerFromY(canvasY);
+                            if (clickResult) {
+                                actualLayer = clickResult.layer;
+                                y = Math.floor((canvasY - clickResult.startY) / 48);
+                            }
                         }
                     }
 
@@ -666,6 +683,7 @@ class TilesetPaletteViewer {
     updateTileSelection(start, end) {
         const canvas = document.getElementById('tileset-preview-canvas');
         if (!canvas) return;
+        if (this.mapEditor?.mapStamp) this.mapEditor.clearMapStamp();
 
         // Calculate selection rectangle
         const minX = Math.min(start.x, end.x);
@@ -692,10 +710,11 @@ class TilesetPaletteViewer {
         this.drawSelectionOverlay(minX, minY, width, height, actualLayer);
 
         // Update selection info
+        const tt = (text) => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
         const info = document.getElementById('selection-info');
         if (info) {
             const displayLayer = this.currentLayer === 'A' ? actualLayer : this.currentLayer;
-            info.innerHTML = `<div>Selected: ${width}x${height} tiles (${this.selectedTiles.length} tiles) on layer ${displayLayer}</div>`;
+            info.innerHTML = `<div>${tt('Selected:')} ${width}x${height} ${tt('tiles')} (${this.selectedTiles.length} ${tt('tiles')}) ${tt('on layer')} ${displayLayer}</div>`;
         }
 
         // Auto-toggle erase mode based on tile transparency
@@ -742,43 +761,35 @@ class TilesetPaletteViewer {
             return false;
         }
 
-        // Use the palette canvas which has the processed tiles rendered
-        const canvas = document.getElementById('tileset-preview-canvas');
-        if (!canvas) return false;
-
-        const ctx = canvas.getContext('2d');
+        // Sample the SOURCE tileset sheet, not the palette canvas — the
+        // palette composites the checkerboard behind every tile, so its
+        // alpha channel reads 255 everywhere and this check never fired.
+        // Only layers whose palette grid maps 1:1 onto the sheet qualify
+        // (B–E and A5); autotile grids (A1–A4) are rendered previews whose
+        // grid cells don't correspond to sheet cells, and a wrong
+        // "transparent" verdict would arm the eraser on a real tile.
         const tileSize = 48;
+        if (!this._transparencyScratch) {
+            this._transparencyScratch = document.createElement('canvas');
+            this._transparencyScratch.width = tileSize;
+            this._transparencyScratch.height = tileSize;
+        }
+        const sctx = this._transparencyScratch.getContext('2d', { willReadFrequently: true });
 
-        // Check each selected tile
         for (const tile of this.selectedTiles) {
-            let checkX = tile.x * tileSize;
-            let checkY = tile.y * tileSize;
-
-            // For split layers (B-E), adjust coordinates if x >= 8
             const layer = tile.layer || this.currentLayer;
-            const isSplitLayer = ['B', 'C', 'D', 'E'].includes(layer);
+            if (!['B', 'C', 'D', 'E', 'A5'].includes(layer)) return false;
 
-            if (isSplitLayer && tile.x >= 8) {
-                const img = this.tilesetTextures[layer];
-                const halfHeight = img ? (img.height / 48) : 16;
-                checkX = (tile.x - 8) * tileSize;
-                checkY = (tile.y + halfHeight) * tileSize;
-            }
+            const img = this.tilesetTextures[layer];
+            if (!img || !img.width) return false;
 
-            // Handle merged 'A' layer offsets
-            if (this.currentLayer === 'A' && tile.layer && this.mergedALayerOffsets) {
-                const sublayerInfo = this.mergedALayerOffsets.find(info => info.layer === tile.layer);
-                if (sublayerInfo) {
-                    checkY = tile.y * tileSize + sublayerInfo.startY;
-                }
-            }
-
-            // Sample the center area of the tile
             try {
-                const imageData = ctx.getImageData(checkX + 12, checkY + 12, 24, 24);
-                const data = imageData.data;
-
-                // Check if any pixel has non-zero alpha
+                sctx.clearRect(0, 0, tileSize, tileSize);
+                sctx.drawImage(img,
+                    tile.x * tileSize, tile.y * tileSize, tileSize, tileSize,
+                    0, 0, tileSize, tileSize);
+                // Sample the center area of the tile
+                const data = sctx.getImageData(12, 12, 24, 24).data;
                 for (let i = 3; i < data.length; i += 4) {
                     if (data[i] > 0) {
                         // Found a non-transparent pixel
@@ -859,11 +870,12 @@ class TilesetPaletteViewer {
 
     // Clear selection
     clearSelection() {
+        const tt = (text) => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
         this.selectedTiles = [];
         this.renderCurrentLayer();
         const info = document.getElementById('selection-info');
         if (info) {
-            info.innerHTML = '<div>No tiles selected</div>';
+            info.innerHTML = `<div>${tt('No tiles selected')}</div>`;
         }
     }
 
@@ -879,10 +891,11 @@ class TilesetPaletteViewer {
         return null;
     }
 
-    // Draw a checkerboard pattern to represent transparency
+    // Draw a checkerboard pattern to represent transparency. Canvas 2D
+    // cannot parse var(--…) — resolve to concrete colors.
     drawCheckerboard(ctx, width, height, squareSize = 8) {
-        const color1 = 'var(--color-syntax-comment)'; // Gray
-        const color2 = 'var(--color-text-muted)'; // Light gray
+        const color1 = ThemeColors.resolve('--color-syntax-comment', '#6a6a6a');
+        const color2 = ThemeColors.resolve('--color-text-muted', '#999999');
 
         for (let y = 0; y < height; y += squareSize) {
             for (let x = 0; x < width; x += squareSize) {

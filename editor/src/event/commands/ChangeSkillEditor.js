@@ -79,6 +79,7 @@ class ChangeSkillEditor {
     }
 
     renderContent() {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const container = this.modal.querySelector('.change-skill-container');
         container.innerHTML = '';
 
@@ -95,7 +96,7 @@ class ChangeSkillEditor {
             border-top-right-radius: 6px;
         `;
         header.innerHTML = `
-            <h3 style="margin: 0; color: var(--color-text-strong); font-size: 16px;">Change Skill</h3>
+            <h3 style="margin: 0; color: var(--color-text-strong); font-size: 16px;">${tt('Change Skill')}</h3>
             <button class="close-btn" style="background: none; border: none; color: var(--color-text-strong); font-size: 20px; cursor: pointer; padding: 0; width: 24px; height: 24px;">×</button>
         `;
         container.appendChild(header);
@@ -127,7 +128,7 @@ class ChangeSkillEditor {
 
         const learnLabel = document.createElement('label');
         learnLabel.htmlFor = 'learn-318';
-        learnLabel.textContent = 'Learn';
+        learnLabel.textContent = tt('Learn');
         learnLabel.style.cssText = 'color: var(--color-text); cursor: pointer;';
 
         const forgetRadio = document.createElement('input');
@@ -139,7 +140,7 @@ class ChangeSkillEditor {
 
         const forgetLabel = document.createElement('label');
         forgetLabel.htmlFor = 'forget-318';
-        forgetLabel.textContent = 'Forget';
+        forgetLabel.textContent = tt('Forget');
         forgetLabel.style.cssText = 'color: var(--color-text); cursor: pointer;';
 
         operationRow.appendChild(learnRadio);
@@ -153,7 +154,7 @@ class ChangeSkillEditor {
         skillRow.style.cssText = 'display: flex; align-items: center; gap: 8px; padding-top: 8px; border-top: 1px solid var(--color-border);';
 
         const skillLabel = document.createElement('span');
-        skillLabel.textContent = 'Skill:';
+        skillLabel.textContent = tt('Skill:');
         skillLabel.style.cssText = 'color: var(--color-text); font-size: 13px; min-width: 100px;';
 
         const skillSelect = document.createElement('select');
@@ -164,7 +165,7 @@ class ChangeSkillEditor {
             if (!skills[i]) continue;
             const option = document.createElement('option');
             option.value = i;
-            option.textContent = `${i.toString().padStart(4, '0')}: ${skills[i].name || 'Unnamed'}`;
+            option.textContent = `${i.toString().padStart(4, '0')}: ${skills[i].name || tt('Unnamed')}`;
             option.selected = (this.skillId === i);
             skillSelect.appendChild(option);
         }
@@ -188,12 +189,12 @@ class ChangeSkillEditor {
         `;
 
         const cancelBtn = document.createElement('button');
-        cancelBtn.textContent = 'Cancel';
+        cancelBtn.textContent = tt('Cancel');
         cancelBtn.className = 'rr-btn-secondary';
         cancelBtn.addEventListener('click', () => this.close());
 
         const okBtn = document.createElement('button');
-        okBtn.textContent = 'OK';
+        okBtn.textContent = tt('OK');
         okBtn.style.cssText = `
             padding: 6px 20px;
             background-color: var(--color-accent);
@@ -212,6 +213,7 @@ class ChangeSkillEditor {
     }
 
     createActorSelector() {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const section = document.createElement('div');
         section.style.cssText = 'display: flex; flex-direction: column; gap: 8px; padding-bottom: 8px; border-bottom: 1px solid var(--color-border);';
 
@@ -223,7 +225,7 @@ class ChangeSkillEditor {
         fixedRadio.checked = (this.actorSelect === 0);
         fixedRadio.addEventListener('change', () => { this.actorSelect = 0; this.renderContent(); });
         const fixedLabel = document.createElement('label');
-        fixedLabel.htmlFor = 'actor-fixed-318'; fixedLabel.textContent = 'Fixed';
+        fixedLabel.htmlFor = 'actor-fixed-318'; fixedLabel.textContent = tt('Fixed');
         fixedLabel.style.cssText = 'color: var(--color-text); cursor: pointer; min-width: 60px;';
         fixedRow.appendChild(fixedRadio); fixedRow.appendChild(fixedLabel);
 
@@ -234,7 +236,7 @@ class ChangeSkillEditor {
             for (let i = 1; i < actors.length; i++) {
                 if (!actors[i]) continue;
                 const option = document.createElement('option');
-                option.value = i; option.textContent = `${i.toString().padStart(4, '0')}: ${actors[i].name || 'Unnamed'}`;
+                option.value = i; option.textContent = `${i.toString().padStart(4, '0')}: ${actors[i].name || tt('Unnamed')}`;
                 option.selected = (this.actorId === i);
                 select.appendChild(option);
             }
@@ -251,7 +253,7 @@ class ChangeSkillEditor {
         varRadio.checked = (this.actorSelect === 1);
         varRadio.addEventListener('change', () => { this.actorSelect = 1; this.renderContent(); });
         const varLabel = document.createElement('label');
-        varLabel.htmlFor = 'actor-variable-318'; varLabel.textContent = 'Variable';
+        varLabel.htmlFor = 'actor-variable-318'; varLabel.textContent = tt('Variable');
         varLabel.style.cssText = 'color: var(--color-text); cursor: pointer; min-width: 60px;';
         varRow.appendChild(varRadio); varRow.appendChild(varLabel);
 

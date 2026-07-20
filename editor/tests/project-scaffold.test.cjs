@@ -114,7 +114,7 @@ describe('generated fallback project scaffold', () => {
     });
 
     test('starter System advanced settings contain required MZ runtime values', () => {
-        const { advanced, attackMotions } = readJson(path.join(projectPath, 'data', 'System.json'));
+        const { advanced, attackMotions, magicSkills, skillTypes } = readJson(path.join(projectPath, 'data', 'System.json'));
 
         assert.deepEqual(advanced, {
             fallbackFonts: 'Verdana, sans-serif',
@@ -131,6 +131,8 @@ describe('generated fallback project scaffold', () => {
         });
         assert.equal(attackMotions.length, 13);
         assert.deepEqual(attackMotions[1], { type: 1, weaponImageId: 1 });
+        assert.deepEqual(magicSkills, [1]);
+        assert.equal(magicSkills.every(id => Number.isInteger(id) && id > 0 && id < skillTypes.length), true);
     });
 
     test('starter plugin configuration is empty', () => {

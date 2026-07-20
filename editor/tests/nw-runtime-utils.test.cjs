@@ -2,6 +2,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const { execFileSync } = require('node:child_process');
 const test = require('node:test');
 
 const editorRoot = path.resolve(__dirname, '..');
@@ -29,6 +30,74 @@ test('every NW.js cache root is searched before downloading', () => {
         fs.writeFileSync(path.join(second, archive), 'cached');
 
         assert.equal(nwRuntime.findCachedFile([first, second], archive), path.join(second, archive));
+    } finally {
+        fs.rmSync(root, { recursive: true, force: true });
+    }
+});
+
+test('release archives require pinned hashes and cached bytes are verified', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'rpg-reactor-nw-trusted-'));
+    try {
+        const first = path.join(root, 'first');
+        const second = path.join(root, 'second');
+        fs.mkdirSync(first);
+        fs.mkdirSync(second);
+        const name = 'nwjs-v0.113.0-linux-x64.tar.gz';
+        fs.writeFileSync(path.join(first, name), 'wrong');
+        fs.writeFileSync(path.join(second, name), 'trusted runtime archive');
+        const expected = nwRuntime.sha256(path.join(second, name));
+        const warnings = [];
+
+        assert.equal(
+            nwRuntime.findVerifiedCachedFile([first, second], name, expected, warning => warnings.push(warning)),
+            path.join(second, name)
+        );
+        assert.equal(fs.existsSync(path.join(first, name)), false);
+        assert.ok(warnings.some(warning => /unverified cached archive/.test(warning)));
+        assert.throws(
+            () => nwRuntime.trustedArchiveHash({ nwjs: {}, codecs: {} }, 'nwjs', name),
+            /no trusted SHA-256/
+        );
+    } finally {
+        fs.rmSync(root, { recursive: true, force: true });
+    }
+});
+
+test('runtime executable architecture is detected before writing x64 markers', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'rpg-reactor-nw-arch-'));
+    try {
+        const x64 = Buffer.alloc(64);
+        x64.set([0x7f, 0x45, 0x4c, 0x46, 2, 1, 1]);
+        x64.writeUInt16LE(62, 18);
+        fs.writeFileSync(path.join(root, 'nw'), x64);
+        assert.equal(nwRuntime.detectRuntimeArchitecture(root, 'linux'), 'x64');
+        nwRuntime.writeRuntimeMarker(root, {
+            version: '0.113.0', edition: 'normal', platform: 'linux', arch: 'x64'
+        });
+
+        const arm64 = Buffer.from(x64);
+        arm64.writeUInt16LE(183, 18);
+        fs.writeFileSync(path.join(root, 'nw'), arm64);
+        assert.equal(nwRuntime.detectRuntimeArchitecture(root, 'linux'), 'arm64');
+        assert.throws(() => nwRuntime.writeRuntimeMarker(root, {
+            version: '0.113.0', edition: 'normal', platform: 'linux', arch: 'x64'
+        }), /expected x64, detected arm64/);
+    } finally {
+        fs.rmSync(root, { recursive: true, force: true });
+    }
+});
+
+test('system archive extraction rejects entries outside the destination', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'rpg-reactor-nw-containment-'));
+    try {
+        const source = path.join(root, 'source');
+        const archive = path.join(root, 'unsafe.zip');
+        fs.mkdirSync(source);
+        fs.writeFileSync(path.join(root, 'escape.txt'), 'escape');
+        execFileSync('zip', ['-q', archive, '../escape.txt'], { cwd: source });
+        assert.match(nwRuntime.listArchiveEntries(archive)[0], /^\.\.\//);
+        assert.throws(() => nwRuntime.extractArchive(archive, path.join(root, 'output')), /unsafe path/);
+        assert.equal(fs.existsSync(path.join(root, 'output', 'escape.txt')), false);
     } finally {
         fs.rmSync(root, { recursive: true, force: true });
     }
@@ -111,13 +180,13 @@ test('deployment dialogs expose stable, editor, and exact NW.js versions', () =>
     const nativeDownloadSource = fs.readFileSync(path.join(editorRoot, 'build-scripts', 'native-download.js'), 'utf8');
 
     for (const source of [buildSource, distSource]) {
-        assert.match(source, /<option value="stable" selected>Latest stable<\/option>/);
-        assert.match(source, /<option value="editor">Same as editor<\/option>/);
-        assert.match(source, /<option value="exact">Specific version<\/option>/);
+        assert.match(source, /<option value="stable" selected>\$\{tt\('Latest stable'\)\}<\/option>/);
+        assert.match(source, /<option value="editor">\$\{tt\('Same as editor'\)\}<\/option>/);
+        assert.match(source, /<option value="exact">\$\{tt\('Specific version'\)\}<\/option>/);
         assert.match(source, /nwVersionPolicy/);
         assert.match(source, /includeProprietaryCodecs/);
         assert.match(source, /Include third-party H\.264\/AAC codec/);
-        assert.match(source, /type="text" placeholder="Search versions\.\.\."/,
+        assert.match(source, /type="text" placeholder="\$\{tt\('Search versions\.\.\.'\)\}"/,
             'the picker avoids Chromium search-field controls that bypass Reactor themes');
         assert.match(source, /class="nw-version-menu" role="listbox" hidden/);
         assert.doesNotMatch(source, /<datalist|\slist="(?:build|dist)-nw-version-list"/,
@@ -171,7 +240,7 @@ test('deployment dialogs expose stable, editor, and exact NW.js versions', () =>
         assert.match(source, /msg\.type === 'download-progress'/);
         assert.match(source, /is-indeterminate/,
             'unknown-length downloads use an indeterminate inline progress bar');
-        assert.match(source, /mib\(message\.downloaded\)\}\sdownloaded/,
+        assert.match(source, /mib\(message\.downloaded\)\}\s\$\{tt\('downloaded'\)\}/,
             'unknown-length downloads still display transferred bytes');
     }
     assert.match(themeSource, /\.rr-download-progress-track[\s\S]*?\.rr-download-progress-fill\.is-indeterminate/);

@@ -25,7 +25,7 @@
  *
  * Variety:
  *   - Classic black hole: bright orange disk, deep void center, slow rotation
- *   - Void portal: purple halo, no accretion disk, lots of inward spirals
+ *   - Void well: purple halo, no accretion disk, lots of inward spirals
  *   - Gravity pulse: many waves, big reach, small event horizon
  *   - Singularity rift: tiny horizon, massive ring glow, high distortion
  *   - Tear in space: high wave distortion, low accretion brightness

@@ -27,6 +27,10 @@ class SetMovementRouteEditor {
         this.inlineDialog = null;
     }
 
+    _t(text) {
+        return window.I18n ? window.I18n.tText(text) : text;
+    }
+
     // ----------------------------------------------------------------
     //  Lifecycle
     // ----------------------------------------------------------------
@@ -150,7 +154,7 @@ class SetMovementRouteEditor {
             border-radius: 6px 6px 0 0;
         `;
         header.innerHTML = `
-            <h3 style="margin: 0; color: var(--color-text-strong); font-size: 16px;">Set Movement Route</h3>
+            <h3 style="margin: 0; color: var(--color-text-strong); font-size: 16px;">${this._t('Set Movement Route')}</h3>
             <button class="close-btn" style="background: none; border: none; color: var(--color-text-strong); font-size: 20px; cursor: pointer; padding: 0; width: 24px; height: 24px;">&#215;</button>
         `;
         header.querySelector('.close-btn').addEventListener('click', () => this.close());
@@ -222,7 +226,7 @@ class SetMovementRouteEditor {
         row.style.cssText = 'display: flex; align-items: center; gap: 8px;';
 
         const label = document.createElement('span');
-        label.textContent = 'Character:';
+        label.textContent = this._t('Character:');
         label.style.cssText = 'color: var(--color-text); font-size: 13px; min-width: 72px;';
 
         const select = document.createElement('select');
@@ -260,7 +264,7 @@ class SetMovementRouteEditor {
 
     renderCommandListSection(parent) {
         const title = document.createElement('div');
-        title.textContent = 'Movement Commands:';
+        title.textContent = this._t('Movement Commands:');
         title.style.cssText = 'color: var(--color-text); font-size: 13px; font-weight: bold;';
         parent.appendChild(title);
 
@@ -288,7 +292,7 @@ class SetMovementRouteEditor {
         if (commandCount === 0) {
             const empty = document.createElement('div');
             empty.style.cssText = 'color: var(--color-text-dim); text-align: center; padding: 20px; font-size: 12px;';
-            empty.textContent = 'No commands added yet';
+            empty.textContent = this._t('No commands added yet');
             this.commandListEl.appendChild(empty);
             return;
         }
@@ -415,7 +419,7 @@ class SetMovementRouteEditor {
         `;
 
         const title = document.createElement('div');
-        title.textContent = 'Options:';
+        title.textContent = this._t('Options:');
         title.style.cssText = 'color: var(--color-text); font-size: 12px; font-weight: bold; margin-bottom: 2px;';
         section.appendChild(title);
 
@@ -444,7 +448,7 @@ class SetMovementRouteEditor {
         `;
 
         const title = document.createElement('div');
-        title.textContent = 'Movement Commands';
+        title.textContent = this._t('Movement Commands');
         title.style.cssText = 'color: var(--color-text); font-size: 13px; font-weight: bold; margin-bottom: 8px;';
         panel.appendChild(title);
 
@@ -466,7 +470,7 @@ class SetMovementRouteEditor {
 
         buttons.forEach(btn => {
             const el = document.createElement('button');
-            el.textContent = btn.label;
+            el.textContent = this._t(btn.label);
             el.style.cssText = `
                 padding: 5px 4px;
                 background-color: var(--color-bg-input);
@@ -613,10 +617,22 @@ class SetMovementRouteEditor {
         this.clipboard = sorted.map(i =>
             JSON.parse(JSON.stringify(this.moveRoute.list[i]))
         );
+        if (typeof ReactorClipboard !== 'undefined') {
+            ReactorClipboard.write('movementRouteCommands', { commands: this.clipboard });
+        }
     }
 
-    pasteClipboard() {
-        if (this.clipboard.length === 0) return;
+    async pasteClipboard() {
+        const targetRoute = this.moveRoute;
+        let commands = null;
+        if (typeof ReactorClipboard !== 'undefined') {
+            const clipboardData = await ReactorClipboard.read('movementRouteCommands');
+            commands = clipboardData?.payload?.commands || null;
+        } else {
+            commands = this.clipboard;
+        }
+        if (this.moveRoute !== targetRoute) return;
+        if (!commands?.length) return;
 
         // Insert after highest selected, or at end
         let insertAt;
@@ -626,7 +642,7 @@ class SetMovementRouteEditor {
             insertAt = this.moveRoute.list.length - 1;
         }
 
-        const copies = this.clipboard.map(c => JSON.parse(JSON.stringify(c)));
+        const copies = commands.map(c => JSON.parse(JSON.stringify(c)));
         this.moveRoute.list.splice(insertAt, 0, ...copies);
 
         // Select the pasted commands
@@ -700,7 +716,7 @@ class SetMovementRouteEditor {
             padding: 10px 14px; background-color: var(--color-bg-panel);
             border-bottom: 1px solid var(--color-border); border-radius: 6px 6px 0 0;
         `;
-        titleBar.innerHTML = `<span style="color: var(--color-text-strong); font-size: 14px;">${title}</span>`;
+        titleBar.innerHTML = `<span style="color: var(--color-text-strong); font-size: 14px;">${this._t(title)}</span>`;
         dialog.appendChild(titleBar);
 
         // Content
@@ -826,7 +842,7 @@ class SetMovementRouteEditor {
 
         const hint = document.createElement('div');
         hint.style.cssText = 'color: var(--color-text-muted); font-size: 11px;';
-        hint.textContent = 'Range: 0 (transparent) to 255 (opaque)';
+        hint.textContent = this._t('Range: 0 (transparent) to 255 (opaque)');
         content.appendChild(hint);
 
         okBtn.addEventListener('click', () => {
@@ -862,7 +878,7 @@ class SetMovementRouteEditor {
         const code = existing ? existing[0] : '';
 
         const label = document.createElement('span');
-        label.textContent = 'Script:';
+        label.textContent = this._t('Script:');
         label.style.cssText = 'color: var(--color-text); font-size: 12px;';
         content.appendChild(label);
 
@@ -926,10 +942,7 @@ class SetMovementRouteEditor {
             if (project && project.path) {
                 const sePath = pathMod.join(project.path, 'audio', 'se');
                 if (fs.existsSync(sePath)) {
-                    seFiles = fs.readdirSync(sePath)
-                        .filter(f => /\.(ogg|m4a|wav|mp3)$/i.test(f))
-                        .map(f => f.replace(/\.(ogg|m4a|wav|mp3)$/i, ''))
-                        .sort();
+                    seFiles = RRAssetFiles.listNames(sePath, ['.ogg']);
                 }
             }
         } catch (e) { /* no project or folder */ }
@@ -988,13 +1001,13 @@ class SetMovementRouteEditor {
             43: 'Change Blend Mode', 44: 'Play SE', 45: 'Script',
         };
 
-        const name = NAMES[cmd.code] || `Unknown (${cmd.code})`;
+        const name = NAMES[cmd.code] ? this._t(NAMES[cmd.code]) : `${this._t('Unknown')} (${cmd.code})`;
         const p = cmd.parameters;
         if (!p) return name;
 
         switch (cmd.code) {
             case 14: return `${name}: ${p[0]}, ${p[1]}`;
-            case 15: return `${name}: ${p[0]} frames`;
+            case 15: return `${name}: ${p[0]} ${this._t('frames')}`;
             case 27:
             case 28: {
                 const sn = this._switchName(p[0]);
@@ -1003,21 +1016,21 @@ class SetMovementRouteEditor {
             case 29: {
                 const s = { 1: 'x8 Slower', 2: 'x4 Slower', 3: 'x2 Slower',
                              4: 'Normal', 5: 'x2 Faster', 6: 'x4 Faster' };
-                return `${name}: ${s[p[0]] || p[0]}`;
+                return `${name}: ${s[p[0]] ? this._t(s[p[0]]) : p[0]}`;
             }
             case 30: {
                 const f = { 1: 'Lowest', 2: 'Lower', 3: 'Normal', 4: 'Higher', 5: 'Highest' };
-                return `${name}: ${f[p[0]] || p[0]}`;
+                return `${name}: ${f[p[0]] ? this._t(f[p[0]]) : p[0]}`;
             }
-            case 41: return `${name}: ${p[0] || '(none)'} [${p[1]}]`;
+            case 41: return `${name}: ${p[0] || this._t('(none)')} [${p[1]}]`;
             case 42: return `${name}: ${p[0]}`;
             case 43: {
                 const b = { 0: 'Normal', 1: 'Additive', 2: 'Multiply', 3: 'Screen' };
-                return `${name}: ${b[p[0]] || p[0]}`;
+                return `${name}: ${b[p[0]] ? this._t(b[p[0]]) : p[0]}`;
             }
             case 44: {
                 const se = p[0];
-                return (se && se.name) ? `${name}: ${se.name}` : `${name}: (none)`;
+                return (se && se.name) ? `${name}: ${se.name}` : `${name}: ${this._t('(none)')}`;
             }
             case 45: {
                 const src = String(p[0] || '');
@@ -1099,14 +1112,14 @@ class SetMovementRouteEditor {
                     .filter(e => e && e.id)
                     .map(e => ({
                         id: e.id,
-                        name: e.name || `Event ${String(e.id).padStart(3, '0')}`,
+                        name: e.name || `${this._t('Event')} ${String(e.id).padStart(3, '0')}`,
                     }));
             }
         } catch (e) { /* no map data */ }
         // Fallback
         const opts = [];
         for (let i = 1; i <= 20; i++) {
-            opts.push({ id: i, name: `Event ${String(i).padStart(3, '0')}` });
+            opts.push({ id: i, name: `${this._t('Event')} ${String(i).padStart(3, '0')}` });
         }
         return opts;
     }
@@ -1125,7 +1138,7 @@ class SetMovementRouteEditor {
     /** Create a styled button */
     _btn(text, bg, fg, border) {
         const b = document.createElement('button');
-        b.textContent = text;
+        b.textContent = this._t(text);
         b.style.cssText = `
             padding: 6px 16px;
             background-color: ${bg};
@@ -1142,7 +1155,7 @@ class SetMovementRouteEditor {
     _option(value, text, selected, translate = false) {
         const o = document.createElement('option');
         o.value = value;
-        o.textContent = translate && window.I18n ? window.I18n.tText(text) : text;
+        o.textContent = translate ? this._t(text) : text;
         if (selected) o.selected = true;
         return o;
     }
@@ -1156,7 +1169,7 @@ class SetMovementRouteEditor {
         cb.checked = checked;
         cb.addEventListener('change', () => onChange(cb.checked));
         row.appendChild(cb);
-        row.appendChild(document.createTextNode(window.I18n ? window.I18n.tText(label) : label));
+        row.appendChild(document.createTextNode(this._t(label)));
         return row;
     }
 
@@ -1166,7 +1179,7 @@ class SetMovementRouteEditor {
         row.style.cssText = 'display: flex; align-items: center; gap: 8px;';
 
         const lbl = document.createElement('span');
-        lbl.textContent = window.I18n ? window.I18n.tText(label) : label;
+        lbl.textContent = this._t(label);
         lbl.style.cssText = 'color: var(--color-text); font-size: 12px; min-width: 70px;';
 
         const input = document.createElement('input');
@@ -1192,7 +1205,7 @@ class SetMovementRouteEditor {
         row.style.cssText = 'display: flex; align-items: center; gap: 8px;';
 
         const lbl = document.createElement('span');
-        lbl.textContent = window.I18n ? window.I18n.tText(label) : label;
+        lbl.textContent = this._t(label);
         lbl.style.cssText = 'color: var(--color-text); font-size: 12px; min-width: 70px;';
 
         const sel = document.createElement('select');
@@ -1204,7 +1217,7 @@ class SetMovementRouteEditor {
         options.forEach(opt => {
             const o = document.createElement('option');
             o.value = (opt.value != null) ? opt.value : opt.text;
-            o.textContent = opt.i18n === false || !window.I18n ? opt.text : window.I18n.tText(opt.text);
+            o.textContent = opt.i18n === false ? opt.text : this._t(opt.text);
             if (String(opt.value) === String(selectedValue)) o.selected = true;
             sel.appendChild(o);
         });
@@ -1220,7 +1233,7 @@ class SetMovementRouteEditor {
         row.style.cssText = 'display: flex; align-items: center; gap: 8px;';
 
         const lbl = document.createElement('span');
-        lbl.textContent = window.I18n ? window.I18n.tText(label) : label;
+        lbl.textContent = this._t(label);
         lbl.style.cssText = 'color: var(--color-text); font-size: 12px; min-width: 70px;';
 
         const slider = document.createElement('input');

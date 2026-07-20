@@ -1,13 +1,16 @@
-# RPG Reactor continuous integration
 name: CI
 
 on:
   push:
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
-  test:
+  clean-checkout:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -15,14 +18,21 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: editor/package-lock.json
-      - name: Install editor dependencies
+      - name: Install exact dependencies without lifecycle scripts
         working-directory: editor
         run: npm ci --ignore-scripts
-      - name: Syntax-check tracked JavaScript
-        run: git ls-files -z -- '*.js' '*.cjs' | xargs -0 -r -n 1 node --check
-      - name: Run editor tests
+      - name: Check every tracked JavaScript file
+        run: node .github/scripts/check-syntax.cjs
+      - name: Run full test suite
         working-directory: editor
         run: npm test
-      - name: Audit production dependencies
+      - name: Run full dependency audit
         working-directory: editor
-        run: npm audit --omit=dev
+        run: npm audit
+      - name: Verify patch hygiene
+        run: git diff --check
+      - name: Reject generated changes and untracked test output
+        shell: bash
+        run: |
+          git diff --exit-code
+          test -z "$(git status --porcelain=v1 --untracked-files=all)"

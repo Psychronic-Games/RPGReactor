@@ -189,7 +189,7 @@ class AnimationPickerModal {
                     const img = new Image();
                     img.onload = () => { sheets[slot] = img; resolve(); };
                     img.onerror = () => resolve();
-                    img.src = 'file://' + path.join(project.path, 'img', 'animations', name + '.png');
+                    img.src = RRAssetFiles.urlFor(path.join(project.path, 'img', 'animations'), name, ['.png']);
                 });
             };
             const token = anim;
@@ -303,7 +303,12 @@ class AnimationPickerModal {
             const cached = fx.effects.get(anim.effectName);
             if (cached && cached.isLoaded) { begin(cached); return; }
             const path = require('path');
-            const effectPath = path.join(project.path, 'effects', anim.effectName + '.efkefc');
+            const effectFile = RRAssetFiles.find(path.join(project.path, 'effects'), anim.effectName, ['.efkefc']);
+            if (!effectFile) {
+                caption.textContent = tt('No preview available');
+                return;
+            }
+            const effectPath = effectFile.absolutePath;
             try {
                 const effect = RR_loadEffekseerEffectFromFile(fx.ctx, effectPath, 1.0,
                     () => { fx.effects.set(anim.effectName, effect); begin(effect); },
@@ -376,6 +381,24 @@ class AnimationPickerModal {
         // --- Close paths ---
         const cleanup = () => {
             stopPlayback();
+            // WebGL contexts survive DOM removal until GC and Chromium caps
+            // live contexts (~16), evicting the oldest — release the
+            // effekseer context and force-lose the GL context now so
+            // reopening the picker can never starve the rest of the editor.
+            if (fx.ready) {
+                for (const effect of fx.effects.values()) {
+                    try { fx.ctx.releaseEffect(effect); } catch (e) {}
+                }
+                fx.effects.clear();
+                try { effekseer.releaseContext(fx.ctx); } catch (e) {}
+                fx.ctx = null;
+                fx.ready = false;
+            }
+            if (fx.gl) {
+                const lose = fx.gl.getExtension('WEBGL_lose_context');
+                if (lose) { try { lose.loseContext(); } catch (e) {} }
+                fx.gl = null;
+            }
             document.removeEventListener('keydown', onKey, true);
             overlay.remove();
         };

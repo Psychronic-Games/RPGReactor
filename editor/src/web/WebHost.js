@@ -7,6 +7,15 @@
     const PROJECT_ROOT = '/project';
     document.documentElement.classList.add('rr-web');
 
+    function tt(text, replacements = {}) {
+        const translated = window.I18n && typeof window.I18n.tText === 'function'
+            ? window.I18n.tText(text)
+            : text;
+        return Object.entries(replacements).reduce((result, [key, value]) => (
+            result.split(`{${key}}`).join(String(value))
+        ), translated);
+    }
+
     function normalizePath(value) {
         const absolute = String(value || '').replace(/\\/g, '/').startsWith('/');
         const parts = [];
@@ -56,7 +65,7 @@
         const normalized = normalizePath(filePath);
         if (normalized === PROJECT_ROOT) return '';
         if (!normalized.startsWith(`${PROJECT_ROOT}/`)) {
-            throw new Error(`Path is outside the Reactor One web project: ${filePath}`);
+            throw new Error(tt('Path is outside the Reactor One web project: {filePath}', { filePath }));
         }
         return normalized.slice(PROJECT_ROOT.length + 1);
     }
@@ -121,7 +130,7 @@
             readFileSync(filePath, encoding) {
                 const relativePath = projectRelative(filePath);
                 if (!contents.has(relativePath)) {
-                    throw new Error(`Web project file is not preloaded for synchronous access: ${relativePath}`);
+                    throw new Error(tt('Web project file is not preloaded for synchronous access: {relativePath}', { relativePath }));
                 }
                 const data = contents.get(relativePath);
                 if (encoding || typeof data === 'string') return typeof data === 'string' ? data : new TextDecoder().decode(data);
@@ -170,7 +179,7 @@
             statSync(filePath) {
                 const relativePath = projectRelative(filePath);
                 const entry = entries.get(relativePath);
-                if (!entry) throw new Error(`File not found: ${filePath}`);
+                if (!entry) throw new Error(tt('File not found: {filePath}', { filePath }));
                 return {
                     size: entry.size || 0,
                     mtimeMs: entry.updatedAt || 0,
@@ -226,9 +235,11 @@
         modal.style.cssText = 'position:fixed;inset:0;z-index:12000;background:rgba(0,0,0,.92);display:none;flex-direction:column;padding:14px;';
         const toolbar = document.createElement('div');
         toolbar.style.cssText = 'display:flex;justify-content:space-between;align-items:center;color:#fff;padding:0 0 10px;font:600 13px sans-serif;';
-        toolbar.innerHTML = '<span>Reactor One - Browser Playtest</span>';
+        const title = document.createElement('span');
+        title.textContent = tt('Reactor One - Browser Playtest');
+        toolbar.appendChild(title);
         const close = document.createElement('button');
-        close.textContent = 'Close Playtest';
+        close.textContent = tt('Close Playtest');
         close.className = 'graphic-selector-button';
         close.onclick = () => {
             modal.style.display = 'none';
@@ -309,7 +320,7 @@
 
     window.RPGReactorWebHost = {
         mode: 'web',
-        version: '0.94.9',
+        version: '0.95.0',
         projectRoot: PROJECT_ROOT,
         fs: null,
         path: createPathApi(),
@@ -317,7 +328,7 @@
         manifest: null,
         async initialize() {
             const response = await fetch('web/project-manifest.json');
-            if (!response.ok) throw new Error(`Could not load Reactor One manifest (${response.status})`);
+            if (!response.ok) throw new Error(tt('Could not load Reactor One manifest ({status})', { status: response.status }));
             this.manifest = await response.json();
             this.version = this.manifest.editorVersion || this.version;
             this.db = await openDatabase();
@@ -330,7 +341,7 @@
                 if (moduleName === 'fs') return this.fs;
                 if (moduleName === 'path') return this.path;
                 if (moduleName === 'url') return { pathToFileURL: filePath => ({ href: this.assetUrl(filePath) }) };
-                throw new Error(`Node module "${moduleName}" is unavailable in RPG Reactor Web.`);
+                throw new Error(tt('Node module "{moduleName}" is unavailable in RPG Reactor Web.', { moduleName }));
             };
             if (navigator.storage?.persist) navigator.storage.persist().catch(() => {});
             if ('serviceWorker' in navigator) {
@@ -405,7 +416,7 @@
                 return this.saveFile({ data: file.data, suggestedName: file.path, mimeType: file.mimeType });
             }
             if (!window.showDirectoryPicker) {
-                throw new Error('This export contains multiple files. Use a browser with directory picker support or open a project first.');
+                throw new Error(tt('This export contains multiple files. Use a browser with directory picker support or open a project first.'));
             }
             let directory;
             try {
@@ -437,7 +448,9 @@
             location.reload();
         },
         unsupported(feature) {
-            alert(`${feature} is available in the desktop edition of RPG Reactor. Browser edits are saved in this browser.`);
+            alert(tt('{feature} is available in the desktop edition of RPG Reactor. Browser edits are saved in this browser.', {
+                feature: tt(feature),
+            }));
         },
         applyBrowserUi() {
             for (const action of ['build-deployment', 'dist-editor', 'exit', 'new-project', 'open-project', 'close-project']) {
@@ -450,14 +463,14 @@
             banner.className = 'rr-web-save-banner';
             banner.style.cssText = 'position:fixed;right:12px;bottom:10px;z-index:9000;display:flex;align-items:center;gap:8px;padding:6px 8px 6px 10px;border:1px solid var(--color-accent-border);border-radius:4px;background:var(--color-bg-panel);color:var(--color-text-muted);font-size:10px;box-shadow:var(--shadow-panel);';
             const message = document.createElement('span');
-            message.textContent = 'Reactor One edits are saved in this browser';
+            message.textContent = tt('Reactor One edits are saved in this browser');
             const reset = document.createElement('button');
             reset.type = 'button';
             reset.className = 'graphic-selector-button';
-            reset.textContent = 'Reset';
+            reset.textContent = tt('Reset');
             reset.style.cssText = 'padding:2px 6px;font-size:10px;';
             reset.onclick = () => {
-                if (confirm('Reset Reactor One and discard all browser-saved edits?')) this.resetProject();
+                if (confirm(tt('Reset Reactor One and discard all browser-saved edits?'))) this.resetProject();
             };
             banner.append(message, reset);
             document.body.appendChild(banner);

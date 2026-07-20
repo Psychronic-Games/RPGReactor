@@ -21,6 +21,9 @@ class MapEditor {
         this.layerMode = 'auto'; // auto, or layer number (0-3)
         this.enabled = true; // Whether map editor is enabled (disabled during event mode)
         this.pendingAutotileUpdates = []; // Accumulate autotile updates during drag, process on mouseup
+        this.mapStamp = null; // Six-layer map rectangle sampled with right-drag
+        this.mapSampleDrag = null;
+        this._mapStampPreviewTexture = null;
 
         // Undo/Redo system
         this.undoStack = [];
@@ -38,6 +41,195 @@ class MapEditor {
 
     setRegionManager(regionManager) {
         this.regionManager = regionManager;
+        if (regionManager) regionManager.mapEditor = this;
+    }
+
+    captureMapStamp(map, start, end) {
+        if (!map || !Array.isArray(map.data) || !map.width || !map.height) return null;
+        const minX = Math.max(0, Math.min(map.width - 1, Math.min(start.x, end.x)));
+        const maxX = Math.max(0, Math.min(map.width - 1, Math.max(start.x, end.x)));
+        const minY = Math.max(0, Math.min(map.height - 1, Math.min(start.y, end.y)));
+        const maxY = Math.max(0, Math.min(map.height - 1, Math.max(start.y, end.y)));
+        const width = maxX - minX + 1;
+        const height = maxY - minY + 1;
+        const sourceLayerSize = map.width * map.height;
+        const stampLayerSize = width * height;
+        const data = new Array(stampLayerSize * 6).fill(0);
+
+        for (let layer = 0; layer < 6; layer++) {
+            for (let y = 0; y < height; y++) {
+                for (let x = 0; x < width; x++) {
+                    const sourceIndex = layer * sourceLayerSize + (minY + y) * map.width + minX + x;
+                    data[layer * stampLayerSize + y * width + x] = Number(map.data[sourceIndex]) || 0;
+                }
+            }
+        }
+
+        return { width, height, data, tilesetId: map.tilesetId };
+    }
+
+    applyMapStamp(map, stamp, anchor) {
+        const visualUpdates = [];
+        const regionUpdates = [];
+        if (!map || !stamp || !Array.isArray(map.data) || !Array.isArray(stamp.data)) {
+            return { changed: false, visualUpdates, regionUpdates };
+        }
+
+        const mapLayerSize = map.width * map.height;
+        const stampLayerSize = stamp.width * stamp.height;
+        let changed = false;
+        for (let y = 0; y < stamp.height; y++) {
+            for (let x = 0; x < stamp.width; x++) {
+                const targetX = anchor.x + x;
+                const targetY = anchor.y + y;
+                if (targetX < 0 || targetY < 0 || targetX >= map.width || targetY >= map.height) continue;
+
+                for (let layer = 0; layer < 6; layer++) {
+                    const sourceIndex = layer * stampLayerSize + y * stamp.width + x;
+                    const targetIndex = layer * mapLayerSize + targetY * map.width + targetX;
+                    const value = stamp.data[sourceIndex] || 0;
+                    if (map.data[targetIndex] === value) continue;
+                    map.data[targetIndex] = value;
+                    changed = true;
+                    if (layer <= 4) visualUpdates.push({ x: targetX, y: targetY, layer });
+                    else regionUpdates.push({ x: targetX, y: targetY });
+                }
+            }
+        }
+        return { changed, visualUpdates, regionUpdates };
+    }
+
+    clearMapStamp() {
+        this.mapStamp = null;
+        this.mapSampleDrag = null;
+        if (this._mapStampPreviewTexture) {
+            try { this._mapStampPreviewTexture.destroy(true); } catch (error) {}
+            this._mapStampPreviewTexture = null;
+        }
+        this.hideTilePreview();
+        this.clearPreview();
+    }
+
+    activateMapStamp(stamp) {
+        if (!stamp) return;
+        this.clearMapStamp();
+        if (this.tilesetPaletteViewer) this.tilesetPaletteViewer.clearSelection();
+        if (this.shadowPenMode) this.setShadowPenMode(false);
+        if (this.eraserMode) this.setEraserMode(false);
+        this.mapStamp = stamp;
+        this._mapStampPreviewTexture = this.createMapStampPreviewTexture(stamp);
+        this.setTool('pencil', { preserveMapStamp: true });
+
+        if (typeof document !== 'undefined') {
+            document.querySelectorAll('.tool-draw-mode').forEach(button => {
+                button.classList.toggle('active', button.dataset.tool === 'pencil');
+            });
+        }
+    }
+
+    createMapStampPreviewTexture(stamp) {
+        if (typeof document === 'undefined' || typeof PIXI === 'undefined' || !stamp) return null;
+        const tileSize = this.tilemapManager.TILE_WIDTH || 48;
+        const canvasWidth = stamp.width * tileSize;
+        const canvasHeight = stamp.height * tileSize;
+        if (canvasWidth > 4096 || canvasHeight > 4096 || canvasWidth * canvasHeight > 16777216) return null;
+
+        const canvas = document.createElement('canvas');
+        canvas.width = canvasWidth;
+        canvas.height = canvasHeight;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return null;
+        ctx.imageSmoothingEnabled = false;
+        const keys = ['A1', 'A2', 'A3', 'A4', 'A5', 'B', 'C', 'D', 'E'];
+        const images = keys.map(key => this.tilesetPaletteViewer?.tilesetTextures?.[key] || null);
+        const layerSize = stamp.width * stamp.height;
+
+        for (const higherPass of [false, true]) {
+            for (let layer = 0; layer < 4; layer++) {
+                for (let y = 0; y < stamp.height; y++) {
+                    for (let x = 0; x < stamp.width; x++) {
+                        const tileId = stamp.data[layer * layerSize + y * stamp.width + x] || 0;
+                        if (!tileId || this.tilemapManager.isHigherTile(tileId) !== higherPass) continue;
+                        this.tilemapManager.drawTileToCanvas(ctx, tileId, x, y, images, tileSize);
+                    }
+                }
+            }
+        }
+
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.48)';
+        for (let y = 0; y < stamp.height; y++) {
+            for (let x = 0; x < stamp.width; x++) {
+                const shadow = stamp.data[4 * layerSize + y * stamp.width + x] || 0;
+                for (let quadrant = 0; quadrant < 4; quadrant++) {
+                    if (!(shadow & (1 << quadrant))) continue;
+                    ctx.fillRect(
+                        x * tileSize + (quadrant % 2) * tileSize / 2,
+                        y * tileSize + Math.floor(quadrant / 2) * tileSize / 2,
+                        tileSize / 2,
+                        tileSize / 2
+                    );
+                }
+            }
+        }
+
+        if (this.regionManager?.enabled) {
+            for (let y = 0; y < stamp.height; y++) {
+                for (let x = 0; x < stamp.width; x++) {
+                    const region = stamp.data[5 * layerSize + y * stamp.width + x] || 0;
+                    if (!region) continue;
+                    const color = this.regionManager.regionColors[region] || 0;
+                    ctx.fillStyle = `rgba(${color >> 16}, ${(color >> 8) & 255}, ${color & 255}, 0.35)`;
+                    ctx.fillRect(x * tileSize, y * tileSize, tileSize, tileSize);
+                }
+            }
+        }
+
+        const texture = PIXI.Texture.from(canvas);
+        if (texture.source?.style) texture.source.style.scaleMode = 'nearest';
+        return texture;
+    }
+
+    showMapSampleSelection(start, current) {
+        if (!this.previewLayer || !this.tilemapManager.currentMap) return;
+        const map = this.tilemapManager.currentMap;
+        const minX = Math.max(0, Math.min(map.width - 1, Math.min(start.x, current.x)));
+        const maxX = Math.max(0, Math.min(map.width - 1, Math.max(start.x, current.x)));
+        const minY = Math.max(0, Math.min(map.height - 1, Math.min(start.y, current.y)));
+        const maxY = Math.max(0, Math.min(map.height - 1, Math.max(start.y, current.y)));
+        this.previewLayer.clear();
+        this.previewLayer.removeChildren();
+        this.previewLayer.rect(
+            minX * this.tilemapManager.TILE_WIDTH,
+            minY * this.tilemapManager.TILE_HEIGHT,
+            (maxX - minX + 1) * this.tilemapManager.TILE_WIDTH,
+            (maxY - minY + 1) * this.tilemapManager.TILE_HEIGHT
+        );
+        this.previewLayer.fill({ color: 0x5bc0de, alpha: 0.18 });
+        this.previewLayer.stroke({ width: 2, color: 0xffffff, alpha: 0.95 });
+    }
+
+    finishMapSampling() {
+        if (!this.mapSampleDrag || !this.tilemapManager.currentMap) return;
+        const stamp = this.captureMapStamp(
+            this.tilemapManager.currentMap,
+            this.mapSampleDrag.start,
+            this.mapSampleDrag.current
+        );
+        this.mapSampleDrag = null;
+        this.clearPreview();
+        this.activateMapStamp(stamp);
+    }
+
+    paintMapStamp(x, y) {
+        const map = this.tilemapManager.currentMap;
+        if (!map || !this.mapStamp) return;
+        const result = this.applyMapStamp(map, this.mapStamp, { x, y });
+        if (!result.changed) return;
+        if (result.visualUpdates.length) this.tilemapManager.updateTiles(result.visualUpdates);
+        if (result.regionUpdates.length && this.regionManager?.enabled) {
+            if (result.regionUpdates.length > 1000) this.regionManager.renderRegions();
+            else this.regionManager.updateRegionCells(result.regionUpdates);
+        }
     }
 
     createPreviewLayer() {
@@ -74,7 +266,8 @@ class MapEditor {
         this.tilemapManager.container.sortableChildren = true;
     }
 
-    setTool(tool) {
+    setTool(tool, options = {}) {
+        if (!options.preserveMapStamp && this.mapStamp) this.clearMapStamp();
         // Save current tool as previous before switching
         if (this.currentTool) {
             this.previousTool = this.currentTool;
@@ -83,6 +276,7 @@ class MapEditor {
     }
 
     setEraserMode(enabled) {
+        if (enabled && this.mapStamp) this.clearMapStamp();
         this.eraserMode = enabled;
         this.hideTilePreview();
 
@@ -103,6 +297,7 @@ class MapEditor {
     }
 
     setShadowPenMode(enabled) {
+        if (enabled && this.mapStamp) this.clearMapStamp();
         this.shadowPenMode = enabled;
 
         // CRITICAL: Clear tileset rendering state when enabling shadow mode
@@ -187,6 +382,7 @@ class MapEditor {
 
         // Hide preview when disabled
         if (!enabled) {
+            if (this.mapStamp || this.mapSampleDrag) this.clearMapStamp();
             if (this.isDrawing || this.activeEditState) {
                 this.resetDrawingState(true);
             } else {
@@ -337,6 +533,7 @@ class MapEditor {
         this.undoStack = [];
         this.redoStack = [];
         this.cancelEditState();
+        this.clearMapStamp();
         this.notifyUndoStateChange();
     }
 
@@ -373,9 +570,37 @@ class MapEditor {
             container.on(ev, fn);
         };
 
+        const mapTileFromEvent = (event, clamp = false) => {
+            const pos = event.data.getLocalPosition(container);
+            let x = Math.floor(pos.x / this.tilemapManager.TILE_WIDTH);
+            let y = Math.floor(pos.y / this.tilemapManager.TILE_HEIGHT);
+            const map = this.tilemapManager.currentMap;
+            if (clamp && map) {
+                x = Math.max(0, Math.min(map.width - 1, x));
+                y = Math.max(0, Math.min(map.height - 1, y));
+            }
+            return { x, y, pos };
+        };
+
         // Make container interactive
         container.interactive = true;
         container.cursor = 'crosshair';
+
+        _rrOn('rightdown', (event) => {
+            if (!this.enabled || !this.tilemapManager.currentMap) return;
+            const tile = mapTileFromEvent(event);
+            const map = this.tilemapManager.currentMap;
+            if (tile.x < 0 || tile.y < 0 || tile.x >= map.width || tile.y >= map.height) return;
+
+            event.data.originalEvent?.preventDefault?.();
+            event.stopPropagation();
+            this.hideTilePreview();
+            this.mapSampleDrag = {
+                start: { x: tile.x, y: tile.y },
+                current: { x: tile.x, y: tile.y }
+            };
+            this.showMapSampleSelection(this.mapSampleDrag.start, this.mapSampleDrag.current);
+        });
 
         // Mouse down - start drawing
         _rrOn('pointerdown', (event) => {
@@ -441,6 +666,13 @@ class MapEditor {
             const tileX = Math.floor(pos.x / this.tilemapManager.TILE_WIDTH);
             const tileY = Math.floor(pos.y / this.tilemapManager.TILE_HEIGHT);
 
+            if (this.mapSampleDrag) {
+                const tile = mapTileFromEvent(event, true);
+                this.mapSampleDrag.current = { x: tile.x, y: tile.y };
+                this.showMapSampleSelection(this.mapSampleDrag.start, this.mapSampleDrag.current);
+                return;
+            }
+
             // Update coordinate display in tileset mode
             if (this.enabled && this.onCoordinatesChange && this.tilemapManager.currentMap) {
                 if (tileX >= 0 && tileY >= 0 &&
@@ -471,6 +703,13 @@ class MapEditor {
 
         // Mouse up - finish drawing
         _rrOn('pointerup', (event) => {
+            if (this.mapSampleDrag) {
+                const tile = mapTileFromEvent(event, true);
+                this.mapSampleDrag.current = { x: tile.x, y: tile.y };
+                this.finishMapSampling();
+                this.updateTilePreview(tile.x, tile.y);
+                return;
+            }
             if (!this.isDrawing) return;
 
             const pos = event.data.getLocalPosition(container);
@@ -487,18 +726,27 @@ class MapEditor {
         });
 
         _rrOn('pointerupoutside', () => {
+            if (this.mapSampleDrag) {
+                this.finishMapSampling();
+                return;
+            }
             if (!this.isDrawing) return;
             this.resetDrawingState(true);
         });
 
         _rrOn('pointercancel', () => {
+            if (this.mapSampleDrag) {
+                this.mapSampleDrag = null;
+                this.clearPreview();
+                return;
+            }
             if (!this.isDrawing) return;
             this.resetDrawingState(true);
         });
 
         // Mouse leave - hide tile preview and clear coordinates
         _rrOn('pointerleave', () => {
-            this.hideTilePreview();
+            if (!this.mapSampleDrag) this.hideTilePreview();
 
             // Clear coordinate display when mouse leaves map
             if (this.enabled && this.onCoordinatesChange) {
@@ -511,7 +759,10 @@ class MapEditor {
                 window.removeEventListener('blur', this._windowBlurHandler);
             }
             this._windowBlurHandler = () => {
-                if (this.isDrawing) {
+                if (this.mapSampleDrag) {
+                    this.mapSampleDrag = null;
+                    this.clearPreview();
+                } else if (this.isDrawing) {
                     this.resetDrawingState(true);
                 } else {
                     this.hideTilePreview();
@@ -575,6 +826,13 @@ class MapEditor {
         if (x < 0 || x >= width || y < 0 || y >= height) return;
 
         const layerSize = width * height;
+
+        if (this.mapStamp) {
+            if (this.lastPaintedTile.x === x && this.lastPaintedTile.y === y) return;
+            this.lastPaintedTile = { x, y, quadrant: -1 };
+            this.paintMapStamp(x, y);
+            return;
+        }
 
         // Get the current layer from palette
         const currentLayer = this.tilesetPaletteViewer.currentLayer;
@@ -1837,16 +2095,10 @@ class MapEditor {
                 bx = 6; by = 0;
             } else if (kind === 3) {
                 bx = 6; by = 3;
-            } else if (kind === 4) {
-                bx = 0; by = 6;
-            } else if (kind === 5) {
-                bx = 6; by = 6;
-            } else if (kind === 6) {
-                bx = 0; by = 9;
-            } else if (kind === 7) {
-                bx = 6; by = 9;
             } else {
-                // Kinds 8-15
+                // Kinds 4-15: only 0-3 sit at fixed positions; everything
+                // else follows the block formula, with odd kinds drawing
+                // from the waterfall table.
                 bx = Math.floor(tx / 4) * 8;
                 by = ty * 6 + (Math.floor(tx / 2) % 2) * 3;
                 if (kind % 2 === 1) {
@@ -2012,9 +2264,61 @@ class MapEditor {
         }
     }
 
+    updateMapStampPreview(tileX, tileY) {
+        if (!this.tilePreviewContainer || !this.mapStamp || !this.tilemapManager.currentMap) return;
+        if (this.lastPreviewTile.x === tileX && this.lastPreviewTile.y === tileY) return;
+        this.lastPreviewTile = { x: tileX, y: tileY, quadrant: -1 };
+        this.tilePreviewContainer.removeChildren();
+
+        const map = this.tilemapManager.currentMap;
+        if (tileX < 0 || tileY < 0 || tileX >= map.width || tileY >= map.height) {
+            this.tilePreviewContainer.visible = false;
+            return;
+        }
+
+        const tileWidth = this.tilemapManager.TILE_WIDTH;
+        const tileHeight = this.tilemapManager.TILE_HEIGHT;
+        const visibleWidth = Math.min(this.mapStamp.width, map.width - tileX);
+        const visibleHeight = Math.min(this.mapStamp.height, map.height - tileY);
+        const footprint = new PIXI.Graphics();
+        footprint.rect(
+            tileX * tileWidth,
+            tileY * tileHeight,
+            visibleWidth * tileWidth,
+            visibleHeight * tileHeight
+        );
+        footprint.fill({ color: 0xffffff, alpha: 0.16 });
+        this.tilePreviewContainer.addChild(footprint);
+
+        if (this._mapStampPreviewTexture) {
+            const sprite = new PIXI.Sprite(this._mapStampPreviewTexture);
+            sprite.x = tileX * tileWidth;
+            sprite.y = tileY * tileHeight;
+            sprite.alpha = 0.72;
+            sprite.eventMode = 'none';
+            this.tilePreviewContainer.addChild(sprite);
+        }
+
+        const outline = new PIXI.Graphics();
+        outline.rect(
+            tileX * tileWidth,
+            tileY * tileHeight,
+            visibleWidth * tileWidth,
+            visibleHeight * tileHeight
+        );
+        outline.stroke({ width: 2, color: 0xffffff, alpha: 0.95 });
+        this.tilePreviewContainer.addChild(outline);
+        this.tilePreviewContainer.visible = true;
+    }
+
     // Update tile preview at mouse position
     updateTilePreview(tileX, tileY) {
         if (!this.tilePreviewContainer || !this.tilemapManager) {
+            return;
+        }
+
+        if (this.mapStamp) {
+            this.updateMapStampPreview(tileX, tileY);
             return;
         }
 
@@ -3439,6 +3743,14 @@ class MapEditor {
 
     // Clean up
     destroy() {
+        this.clearMapStamp();
+        if (this._mapPointerHandlers && this._mapPointerHandlersContainer) {
+            for (const [eventName, handler] of Object.entries(this._mapPointerHandlers)) {
+                this._mapPointerHandlersContainer.off(eventName, handler);
+            }
+            this._mapPointerHandlers = null;
+            this._mapPointerHandlersContainer = null;
+        }
         if (this.previewLayer) {
             this.previewLayer.destroy();
             this.previewLayer = null;
@@ -3452,4 +3764,8 @@ class MapEditor {
             this._windowBlurHandler = null;
         }
     }
+}
+
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = MapEditor;
 }

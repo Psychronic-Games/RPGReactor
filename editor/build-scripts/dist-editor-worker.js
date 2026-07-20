@@ -9,12 +9,14 @@ const crypto = require('crypto');
 const path = require('path');
 const os = require('os');
 const https = require('https');
-const { execSync } = require('child_process');
+const vm = require('vm');
+const { execFileSync } = require('child_process');
 const iconHelpers = require('./icon-helpers');
 const nwRuntime = require('./nw-runtime-utils');
 const nwCodec = require('./nw-codec-utils');
 const appImage = require('./appimage-utils');
 const nativeDownload = require('./native-download');
+const nativeRelease = require('./native-release.cjs');
 
 // ── Logging ──────────────────────────────────────────────────────────
 function log(msg, color)  { parentPort.postMessage({ type: 'log', message: msg, color: color || '#cccccc' }); }
@@ -54,17 +56,32 @@ const {
     editorExecPath,
     outputDir,       // where to write archives
     stageOnly = false,
-    includeTemplate = true,
     includeProprietaryCodecs = false,
     createLinuxAppImage = false,
     appImageToolPath,
     appImageRuntimePath,
+    releaseBuild = false,
+    releaseHashManifestPath,
+    nativeSigning = { mode: 'unsigned' },
+    allowBundledRuntime = true,
 } = workerData;
 let nwVersion = requestedNwVersion;
 let nwVersionResolved = false;
 
 const cacheCandidates = nwRuntime.cacheDirectories(appRoot);
 const codecCacheCandidates = nwCodec.cacheDirectories(appRoot);
+const createdArtifacts = new Set();
+let releaseHashManifest = null;
+
+function getReleaseHashManifest() {
+    if (!releaseBuild) return null;
+    if (!releaseHashManifest) {
+        const manifestPath = releaseHashManifestPath || process.env.RPG_REACTOR_RELEASE_HASH_MANIFEST ||
+            path.join(appRoot, 'build-scripts', 'release-hashes.json');
+        releaseHashManifest = nwRuntime.loadReleaseHashManifest(manifestPath);
+    }
+    return releaseHashManifest;
+}
 
 // ── Editor version from package.json ────────────────────────────────
 const editorPkg = JSON.parse(fs.readFileSync(path.join(appRoot, 'package.json'), 'utf8'));
@@ -72,15 +89,17 @@ const appVersion = editorPkg.version || '0.0.0';
 
 // ── Files/dirs to include (whitelist) ───────────────────────────────
 const INCLUDE_DIRS = ['src', 'css', 'images', 'libs', 'build-scripts'];
+const INCLUDE_REPOSITORY_DIRS = ['THIRD_PARTY_LICENSES'];
 const INCLUDE_FILES = [
     'index.html', 'package.json', 'package-lock.json',
-    'CHANGELOG.md', 'README.md', 'LICENSE',
+    'CHANGELOG.md', 'README.md', 'LICENSE', 'THIRD_PARTY_NOTICES.md',
 ];
 
 // ── File copying helpers ────────────────────────────────────────────
 function copyDirRecursive(src, dest) {
     fs.mkdirSync(dest, { recursive: true });
-    const entries = fs.readdirSync(src, { withFileTypes: true });
+    const entries = fs.readdirSync(src, { withFileTypes: true })
+        .sort((a, b) => a.name.localeCompare(b.name));
     for (const entry of entries) {
         const s = path.join(src, entry.name);
         const d = path.join(dest, entry.name);
@@ -280,6 +299,8 @@ async function installProprietaryCodec(platform, runtimeRoot, pBase, pSpan) {
         cacheDirectories: codecCacheCandidates,
         download: (url, destination) => downloadFile(url, destination, pBase, pSpan),
         onWarning: logWarn,
+        releaseBuild,
+        hashManifest: getReleaseHashManifest(),
     });
     const temp = path.join(os.tmpdir(), `rpgreactor-codec-${process.pid}-${threadId}-${Date.now()}`);
     try {
@@ -325,6 +346,9 @@ async function acquireRuntime(platform, targetDir, pBase, pSpan, flat) {
         fs.existsSync(path.join(bundledDir, 'chromedriver')) ||
         fs.existsSync(path.join(bundledDir, 'chromedriver.exe'))
     );
+    const bundledArchitecture = bundledDir
+        ? nwRuntime.detectRuntimeArchitecture(bundledDir, platform)
+        : null;
     let bundledMarker = null;
     if (bundledDir) {
         try {
@@ -336,11 +360,13 @@ async function acquireRuntime(platform, targetDir, pBase, pSpan, flat) {
     const markerMatches = bundledMarker &&
         bundledMarker.version === nwVersion &&
         bundledMarker.platform === platform && bundledMarker.arch === 'x64' &&
-        bundledMarker.edition === edition;
+        bundledMarker.edition === edition &&
+        (bundledArchitecture === 'x64' || bundledArchitecture === 'universal');
     const unmarkedHostMatches = !bundledMarker && platform === hostPlatform &&
         nwVersion === nwRuntime.normalizeVersion(editorNwVersion) &&
-        bundledIsSdk === (edition === 'sdk');
-    const bundledMatches = bundledDir && fs.existsSync(bundledDir) &&
+        bundledIsSdk === (edition === 'sdk') &&
+        (bundledArchitecture === 'x64' || bundledArchitecture === 'universal');
+    const bundledMatches = allowBundledRuntime && bundledDir && fs.existsSync(bundledDir) &&
         (markerMatches || unmarkedHostMatches);
 
     // Tier 1: matching bundled local runtime
@@ -352,12 +378,21 @@ async function acquireRuntime(platform, targetDir, pBase, pSpan, flat) {
         return destDir;
     }
     if (bundledDir && fs.existsSync(bundledDir)) {
-        logDim(`  Ignoring bundled ${dirName}/ because its editor version or edition does not match.`);
+        logDim(`  Ignoring bundled ${dirName}/ because its version, edition, or executable architecture does not match ` +
+            `(detected ${bundledArchitecture || 'unknown'}).`);
     }
 
     // Tier 2: cached archive
     const archiveName = nwjsArchiveName(platform);
-    let cachedPath = nwRuntime.findCachedFile(cacheCandidates, archiveName);
+    const trustedHash = releaseBuild
+        ? nwRuntime.trustedArchiveHash(getReleaseHashManifest(), 'nwjs', archiveName)
+        : null;
+    let cachedPath = trustedHash
+        ? nwRuntime.findVerifiedCachedFile(cacheCandidates, archiveName, trustedHash, logWarn)
+        : nwRuntime.findCachedFile(cacheCandidates, archiveName);
+    if (!releaseBuild) {
+        logWarn(`  Developer build: ${archiveName} is not authenticated by a trusted hash manifest.`);
+    }
 
     if (!cachedPath) {
         const downloadCacheDir = nwRuntime.writableCacheDirectory(cacheCandidates);
@@ -367,6 +402,14 @@ async function acquireRuntime(platform, targetDir, pBase, pSpan, flat) {
         logInfo(`  Downloading NW.js for ${platform}...`);
         logDim(`  ${url}`);
         await downloadFile(url, cachedPath, pBase, pSpan * 0.7);
+        if (trustedHash) {
+            try {
+                nwRuntime.verifyArchiveHash(cachedPath, trustedHash, `NW.js runtime ${archiveName}`);
+            } catch (error) {
+                fs.rmSync(cachedPath, { force: true });
+                throw error;
+            }
+        }
         logGood('  Download complete.');
     } else {
         logInfo(`  Using cached runtime: ${cachedPath}`);
@@ -384,6 +427,7 @@ async function acquireRuntime(platform, targetDir, pBase, pSpan, flat) {
         const innerDir = path.join(extractDir, nwjsInnerDir(platform));
         const source = fs.existsSync(innerDir) ? innerDir
             : path.join(extractDir, fs.readdirSync(extractDir)[0]);
+        nwRuntime.assertRuntimeArchitecture(source, platform, 'x64');
         copyDirRecursive(source, destDir);
         nwRuntime.writeRuntimeMarker(destDir, { version: nwVersion, edition, platform, arch: 'x64' });
         logGood(`  Installed runtime: ${flat ? '(flat)' : dirName + '/'}`);
@@ -394,6 +438,19 @@ async function acquireRuntime(platform, targetDir, pBase, pSpan, flat) {
 }
 
 // ── Archive creation ────────────────────────────────────────────────
+function normalizeArchiveTimestamps(root) {
+    const timestamp = new Date('2000-01-01T00:00:00.000Z');
+    const visit = target => {
+        const stats = fs.lstatSync(target);
+        if (stats.isDirectory()) {
+            for (const entry of fs.readdirSync(target).sort()) visit(path.join(target, entry));
+        }
+        if (stats.isSymbolicLink() && fs.lutimesSync) fs.lutimesSync(target, timestamp, timestamp);
+        else if (!stats.isSymbolicLink()) fs.utimesSync(target, timestamp, timestamp);
+    };
+    visit(root);
+}
+
 function createArchive(archiveName, sourceDir, innerDirName, preserveSymlinks) {
     const outPath = path.join(outputDir, archiveName);
     logInfo(`Creating archive: ${archiveName}`);
@@ -402,21 +459,40 @@ function createArchive(archiveName, sourceDir, innerDirName, preserveSymlinks) {
     // output directory would keep files deleted since the last build (and
     // the checksum step would bless them). Always start from scratch.
     if (fs.existsSync(outPath)) fs.rmSync(outPath, { force: true });
+    normalizeArchiveTimestamps(path.join(sourceDir, innerDirName));
     if (archiveName.endsWith('.tar.gz')) {
-        execSync(`tar czf "${outPath}" -C "${sourceDir}" "${innerDirName}"`, { stdio: 'pipe' });
+        execFileSync('tar', ['czf', outPath, '-C', sourceDir, innerDirName], {
+            env: { ...process.env, TZ: 'UTC' }, stdio: 'pipe'
+        });
+    } else if (process.platform === 'win32') {
+        execFileSync('tar', ['-a', '-c', '-f', outPath, '-C', sourceDir, innerDirName], {
+            env: { ...process.env, TZ: 'UTC' }, stdio: 'pipe'
+        });
     } else {
-        const flags = preserveSymlinks ? '-qry' : '-qr';
-        execSync(`cd "${sourceDir}" && zip ${flags} "${outPath}" "${innerDirName}"`, { stdio: 'pipe' });
+        const flags = preserveSymlinks ? '-qryX' : '-qrX';
+        execFileSync('zip', [flags, outPath, innerDirName], {
+            cwd: sourceDir, env: { ...process.env, TZ: 'UTC' }, stdio: 'pipe'
+        });
     }
 
     const stats = fs.statSync(outPath);
     const sizeMB = (stats.size / 1048576).toFixed(1);
+    createdArtifacts.add(outPath);
     logGood(`Created: ${archiveName} (${sizeMB} MB)`);
 }
 
 function createNwPackage(sourceDir, destPath) {
     if (fs.existsSync(destPath)) fs.rmSync(destPath, { force: true });
-    execSync(`cd "${sourceDir}" && zip -qr "${destPath}" .`, { stdio: 'pipe' });
+    normalizeArchiveTimestamps(sourceDir);
+    if (process.platform === 'win32') {
+        execFileSync('tar', ['-a', '-c', '-f', destPath, '-C', sourceDir, '.'], {
+            env: { ...process.env, TZ: 'UTC' }, stdio: 'pipe'
+        });
+    } else {
+        execFileSync('zip', ['-qrX', destPath, '.'], {
+            cwd: sourceDir, env: { ...process.env, TZ: 'UTC' }, stdio: 'pipe'
+        });
+    }
 }
 
 function appendPackageToExecutable(exePath, packagePath) {
@@ -433,12 +509,8 @@ function prepareMacAppBundleForEditor(appBundle, appSourceDir) {
     if (fs.existsSync(appNwPath)) fs.rmSync(appNwPath, { recursive: true, force: true });
     copyDirRecursive(appSourceDir, appNwPath);
 
-    if (fs.existsSync(plistPath)) {
-        let plist = fs.readFileSync(plistPath, 'utf8');
-        plist = plist.replace(/<key>CFBundleName<\/key>\s*<string>[^<]+<\/string>/, '<key>CFBundleName</key>\n\t<string>RPG Reactor</string>');
-        plist = plist.replace(/<key>CFBundleDisplayName<\/key>\s*<string>[^<]+<\/string>/, '<key>CFBundleDisplayName</key>\n\t<string>RPG Reactor</string>');
-        fs.writeFileSync(plistPath, plist);
-    }
+    if (!fs.existsSync(plistPath)) throw new Error('NW.js macOS bundle has no Info.plist.');
+    nativeRelease.updateMacMetadata(appBundle, appVersion);
 }
 
 function copyMacRuntimeResourcesForPlaytest(src, dest, relBase) {
@@ -493,10 +565,12 @@ function installMacPlaytestRuntime(appBundle) {
 
     const plistPath = path.join(playtestContents, 'Info.plist');
     if (fs.existsSync(plistPath)) {
-        let plist = fs.readFileSync(plistPath, 'utf8');
-        plist = plist.replace(/<key>CFBundleName<\/key>\s*<string>[^<]+<\/string>/, '<key>CFBundleName</key>\n\t<string>RPG Reactor Playtest</string>');
-        plist = plist.replace(/<key>CFBundleDisplayName<\/key>\s*<string>[^<]+<\/string>/, '<key>CFBundleDisplayName</key>\n\t<string>RPG Reactor Playtest</string>');
-        fs.writeFileSync(plistPath, plist);
+        nativeRelease.updateMacMetadata(
+            playtestApp,
+            appVersion,
+            `${nativeRelease.MACOS_BUNDLE_ID}.playtest`,
+            'RPG Reactor Playtest'
+        );
     }
 }
 
@@ -533,6 +607,16 @@ function writeWindowsFramelessPackageConfig(stageRoot) {
 function writeBootstrapLaunchers(dest) {
     logInfo('Writing bootstrap launchers (download-on-demand)...');
     const prefix = edition === 'sdk' ? 'nwjs-sdk' : 'nwjs';
+    const hashFor = platform => {
+        const name = nwRuntime.archiveName(nwVersion, platform, edition);
+        return releaseBuild
+            ? nwRuntime.trustedArchiveHash(getReleaseHashManifest(), 'nwjs', name)
+            : '';
+    };
+    const linuxHash = hashFor('linux');
+    const winHash = hashFor('win');
+    const macHash = hashFor('osx');
+    if (!releaseBuild) logWarn('  Developer minimal package: bootstrap downloads are not authenticated.');
 
     // Linux
     const linuxLauncher = `#!/bin/bash
@@ -544,6 +628,7 @@ NW_VERSION="${nwVersion}"
 NW_ARCHIVE="${prefix}-v\${NW_VERSION}-linux-x64.tar.gz"
 NW_URL="https://dl.nwjs.io/v\${NW_VERSION}/\${NW_ARCHIVE}"
 NW_DIR="nwjs-linux"
+NW_SHA256="${linuxHash}"
 
 if [ ! -f "$NW_DIR/nw" ]; then
     echo "First run — downloading NW.js runtime v\${NW_VERSION}..."
@@ -557,6 +642,17 @@ if [ ! -f "$NW_DIR/nw" ]; then
         echo "ERROR: curl or wget required. Install one and try again."
         exit 1
     fi
+    if [ -n "$NW_SHA256" ]; then
+        ACTUAL_SHA256="$(sha256sum "$NW_ARCHIVE" 2>/dev/null | cut -d' ' -f1)"
+        [ "$ACTUAL_SHA256" = "$NW_SHA256" ] || { echo "ERROR: NW.js SHA-256 verification failed."; rm -f "$NW_ARCHIVE"; exit 1; }
+    else
+        echo "WARNING: Developer package has no trusted NW.js hash."
+    fi
+    tar -tzf "$NW_ARCHIVE" > "$NW_ARCHIVE.list" || exit 1
+    while IFS= read -r ENTRY; do
+        case "$ENTRY" in /*|[A-Za-z]:/*|../*|*/../*|*/..) echo "ERROR: Unsafe archive path: $ENTRY"; rm -f "$NW_ARCHIVE.list"; exit 1;; esac
+    done < "$NW_ARCHIVE.list"
+    rm -f "$NW_ARCHIVE.list"
     echo "Extracting..."
     tar -xzf "$NW_ARCHIVE"
     INNER_DIR="$(tar -tzf "$NW_ARCHIVE" | head -1 | cut -d/ -f1)"
@@ -612,7 +708,29 @@ if not exist "%NW_DIR%\\nw.exe" (\r
 )\r
 "%NW_DIR%\\nw.exe" .\r
 `;
-    fs.writeFileSync(path.join(dest, 'RPGReactor.bat'), winLauncher);
+    const windowsPreflight = winHash ? [
+        `    powershell -NoProfile -Command "if ((Get-FileHash -Algorithm SHA256 '%NW_ARCHIVE%').Hash.ToLower() -ne '${winHash}') { exit 1 }"`,
+        '    if errorlevel 1 (',
+        '        echo ERROR: NW.js SHA-256 verification failed.',
+        '        del /q "%NW_ARCHIVE%"',
+        '        exit /b 1',
+        '    )',
+    ] : [
+        '    echo WARNING: Developer package has no trusted NW.js hash.',
+    ];
+    windowsPreflight.push(
+        '    powershell -NoProfile -Command "$root=[IO.Path]::GetFullPath(\'.\'); Add-Type -AssemblyName System.IO.Compression.FileSystem; $z=[IO.Compression.ZipFile]::OpenRead(\'%NW_ARCHIVE%\'); try { foreach($e in $z.Entries) { $p=[IO.Path]::GetFullPath((Join-Path $root $e.FullName)); if(-not $p.StartsWith($root+[IO.Path]::DirectorySeparatorChar)) { throw (\'Unsafe archive path: \'+$e.FullName) } } } finally { $z.Dispose() }"',
+        '    if errorlevel 1 exit /b 1'
+    );
+    const winNewline = winLauncher.includes('\r\n') ? '\r\n' : '\n';
+    const extractionMarker = `    echo Extracting...${winNewline}`;
+    const verifiedWinLauncher = winLauncher.replace(
+        extractionMarker,
+        `${windowsPreflight.join(winNewline)}${winNewline}${extractionMarker}`);
+    if (verifiedWinLauncher === winLauncher) {
+        throw new Error('Could not install the Windows bootstrap archive verification preflight.');
+    }
+    fs.writeFileSync(path.join(dest, 'RPGReactor.bat'), verifiedWinLauncher);
 
     // macOS
     const macLauncher = `#!/bin/bash
@@ -624,6 +742,7 @@ NW_VERSION="${nwVersion}"
 NW_ARCHIVE="${prefix}-v\${NW_VERSION}-osx-x64.zip"
 NW_URL="https://dl.nwjs.io/v\${NW_VERSION}/\${NW_ARCHIVE}"
 NW_DIR="nwjs-mac"
+NW_SHA256="${macHash}"
 
 if [ ! -d "$NW_DIR/nwjs.app" ]; then
     echo "First run — downloading NW.js runtime v\${NW_VERSION}..."
@@ -634,6 +753,17 @@ if [ ! -d "$NW_DIR/nwjs.app" ]; then
         echo "ERROR: Download failed."
         exit 1
     fi
+    if [ -n "$NW_SHA256" ]; then
+        ACTUAL_SHA256="$(shasum -a 256 "$NW_ARCHIVE" | cut -d' ' -f1)"
+        [ "$ACTUAL_SHA256" = "$NW_SHA256" ] || { echo "ERROR: NW.js SHA-256 verification failed."; rm -f "$NW_ARCHIVE"; exit 1; }
+    else
+        echo "WARNING: Developer package has no trusted NW.js hash."
+    fi
+    unzip -Z1 "$NW_ARCHIVE" > "$NW_ARCHIVE.list" || exit 1
+    while IFS= read -r ENTRY; do
+        case "$ENTRY" in /*|[A-Za-z]:/*|../*|*/../*|*/..) echo "ERROR: Unsafe archive path: $ENTRY"; rm -f "$NW_ARCHIVE.list"; exit 1;; esac
+    done < "$NW_ARCHIVE.list"
+    rm -f "$NW_ARCHIVE.list"
     echo "Extracting..."
     unzip -q "$NW_ARCHIVE"
     INNER_DIR="$(unzip -l "$NW_ARCHIVE" | awk '/\\/$/ {print $NF; exit}' | cut -d/ -f1)"
@@ -654,16 +784,16 @@ fi
 // ── SHA256 checksums ────────────────────────────────────────────────
 function generateChecksums() {
     logInfo('Generating checksums...');
-    const files = fs.readdirSync(outputDir)
-        .filter(f => f.endsWith('.tar.gz') || f.endsWith('.zip') || f.endsWith('.AppImage'))
-        .sort();
+    const files = [...createdArtifacts]
+        .filter(file => fs.existsSync(file))
+        .sort((a, b) => path.basename(a).localeCompare(path.basename(b)));
     if (files.length === 0) return;
 
     const lines = [];
     for (const file of files) {
         const hash = crypto.createHash('sha256')
-            .update(fs.readFileSync(path.join(outputDir, file))).digest('hex');
-        lines.push(`${hash}  ${file}`);
+            .update(fs.readFileSync(file)).digest('hex');
+        lines.push(`${hash}  ${path.basename(file)}`);
     }
     fs.writeFileSync(path.join(outputDir, 'SHA256SUMS.txt'), lines.join('\n') + '\n');
     logGood('SHA256SUMS.txt written.');
@@ -671,7 +801,8 @@ function generateChecksums() {
 
 function copyWebProject(source, destination, relativePath = '') {
     fs.mkdirSync(destination, { recursive: true });
-    for (const entry of fs.readdirSync(source, { withFileTypes: true })) {
+    for (const entry of fs.readdirSync(source, { withFileTypes: true })
+        .sort((a, b) => a.name.localeCompare(b.name))) {
         const relative = relativePath ? `${relativePath}/${entry.name}` : entry.name;
         const normalized = relative.replace(/\\/g, '/');
         if (normalized === '.rpgreactor.lock' || normalized === 'data/nul' ||
@@ -686,6 +817,58 @@ function copyWebProject(source, destination, relativePath = '') {
         else if (entry.isSymbolicLink()) fs.symlinkSync(fs.readlinkSync(sourcePath), destinationPath);
         else fs.copyFileSync(sourcePath, destinationPath);
     }
+}
+
+function refreshStarterRuntime(runtimeRoot, projectRoot) {
+    const jsRoot = path.join(projectRoot, 'js');
+    const pluginConfigPath = path.join(jsRoot, 'reactor_plugins.js');
+    const pluginConfig = fs.existsSync(pluginConfigPath)
+        ? fs.readFileSync(pluginConfigPath)
+        : Buffer.from('var $plugins = [];\n');
+
+    for (const entry of fs.readdirSync(jsRoot, { withFileTypes: true })) {
+        if ((entry.isFile() && /^reactor_.*\.js$/.test(entry.name)) || entry.name === 'libs') {
+            fs.rmSync(path.join(jsRoot, entry.name), { recursive: true, force: true });
+        }
+    }
+    copyDirRecursive(runtimeRoot, jsRoot);
+    fs.writeFileSync(pluginConfigPath, pluginConfig);
+}
+
+async function generateCleanStarter(stageRoot) {
+    const projectManagerPath = path.join(stageRoot, 'src', 'ProjectManager.js');
+    const source = fs.readFileSync(projectManagerPath, 'utf8');
+    const ProjectManager = vm.runInNewContext(`${source}\nProjectManager;`, {
+        console,
+        process,
+        require,
+        nw: {},
+    }, { filename: projectManagerPath });
+    const destination = path.join(stageRoot, 'template', 'Demo');
+    const runtimeRoot = path.join(stageRoot, 'runtime');
+    fs.rmSync(destination, { recursive: true, force: true });
+    fs.mkdirSync(destination, { recursive: true });
+
+    const manager = new ProjectManager();
+    manager.fs = fs;
+    manager.path = path;
+    manager.copyEditorIcon = targetPath => {
+        fs.copyFileSync(path.join(stageRoot, 'images', 'icon.png'), path.join(targetPath, 'icon', 'icon.png'));
+    };
+    await manager.createStarterProject(destination, 'Reactor One', appVersion, runtimeRoot);
+    manager.writeProjectMetadata(destination, 'Reactor One', appVersion);
+
+    const metadataPath = path.join(destination, 'project.rpgreactor');
+    const metadata = JSON.parse(fs.readFileSync(metadataPath, 'utf8'));
+    metadata.created = '1980-01-01T00:00:00.000Z';
+    metadata.modified = metadata.created;
+    metadata.starter = 'generated-clean';
+    fs.writeFileSync(metadataPath, JSON.stringify(metadata, null, 2));
+
+    // The staged runtime is authoritative. Preserve only the generated
+    // project's plugin configuration while replacing every engine file.
+    refreshStarterRuntime(runtimeRoot, destination);
+    return destination;
 }
 
 function patchWebProject(projectRoot) {
@@ -708,7 +891,8 @@ function patchWebProject(projectRoot) {
 function walkWebFiles(root) {
     const files = [];
     const visit = (directory, relative = '') => {
-        for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+        for (const entry of fs.readdirSync(directory, { withFileTypes: true })
+            .sort((a, b) => a.name.localeCompare(b.name))) {
             const entryRelative = relative ? `${relative}/${entry.name}` : entry.name;
             const fullPath = path.join(directory, entry.name);
             if (entry.isDirectory()) {
@@ -726,12 +910,13 @@ function walkWebFiles(root) {
 function buildWeb(stageRoot, stagingDir) {
     const templateRoot = path.join(stageRoot, 'template', 'Demo');
     if (!fs.existsSync(path.join(templateRoot, 'project.rpgreactor'))) {
-        throw new Error('Web build requires template/Demo (Reactor One), but it was not found.');
+        throw new Error('Web build requires the generated clean starter, but it was not staged.');
     }
     const projectMetadata = JSON.parse(fs.readFileSync(path.join(templateRoot, 'project.rpgreactor'), 'utf8'));
     const systemData = JSON.parse(fs.readFileSync(path.join(templateRoot, 'data', 'System.json'), 'utf8'));
-    if (projectMetadata.name !== 'Reactor One' || systemData.gameTitle !== 'Reactor One') {
-        throw new Error('Web build template must be the Reactor One project.');
+    if (projectMetadata.name !== 'Reactor One' || projectMetadata.starter !== 'generated-clean' ||
+        systemData.gameTitle !== 'Reactor One') {
+        throw new Error('Web build starter was not generated by this distribution run.');
     }
 
     const webRoot = path.join(stagingDir, 'pkg-web');
@@ -739,8 +924,12 @@ function buildWeb(stageRoot, stagingDir) {
     copyDirRecursive(path.join(stageRoot, 'css'), path.join(webRoot, 'css'));
     copyDirRecursive(path.join(stageRoot, 'images'), path.join(webRoot, 'images'));
     copyDirRecursive(path.join(stageRoot, 'libs'), path.join(webRoot, 'libs'));
+    copyDirRecursive(path.join(stageRoot, 'THIRD_PARTY_LICENSES'), path.join(webRoot, 'THIRD_PARTY_LICENSES'));
+    fs.copyFileSync(path.join(stageRoot, 'THIRD_PARTY_NOTICES.md'), path.join(webRoot, 'THIRD_PARTY_NOTICES.md'));
+    fs.copyFileSync(path.join(stageRoot, 'LICENSE'), path.join(webRoot, 'LICENSE'));
     fs.copyFileSync(path.join(stageRoot, 'runtime', 'libs', 'pixi.js'), path.join(webRoot, 'libs', 'pixi.js'));
     copyWebProject(templateRoot, path.join(webRoot, 'project'));
+    refreshStarterRuntime(path.join(stageRoot, 'runtime'), path.join(webRoot, 'project'));
     patchWebProject(path.join(webRoot, 'project'));
 
     const sourceHtml = fs.readFileSync(path.join(stageRoot, 'index.html'), 'utf8');
@@ -806,6 +995,7 @@ function buildWeb(stageRoot, stagingDir) {
     const outputPath = path.join(outputDir, archiveName);
     logInfo(`Creating web archive: ${archiveName}`);
     createNwPackage(webRoot, outputPath);
+    createdArtifacts.add(outputPath);
     logGood(`Created: ${archiveName} (${(fs.statSync(outputPath).size / 1048576).toFixed(1)} MB, ${outputFiles.length} files)`);
 }
 
@@ -827,6 +1017,9 @@ function buildWeb(stageRoot, stagingDir) {
     logInfo('');
 
     fs.mkdirSync(outputDir, { recursive: true });
+    // A checksum file is a statement about this run only. Never retain one
+    // from a reused output directory while a new build is in progress.
+    fs.rmSync(path.join(outputDir, 'SHA256SUMS.txt'), { force: true });
 
     // ── Stage editor files ──────────────────────────────────────────
     const stagingNonce = `${process.pid}-${threadId}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -841,6 +1034,15 @@ function buildWeb(stageRoot, stagingDir) {
         if (fs.existsSync(src)) {
             copyDirRecursive(src, path.join(stageRoot, dir));
         }
+    }
+
+    // License texts live at repository scope and must accompany every editor
+    // package, including the generated Web archive.
+    for (const dir of INCLUDE_REPOSITORY_DIRS) {
+        const candidates = [path.join(appRoot, dir), path.join(appRoot, '..', dir)];
+        const src = candidates.find(candidate => fs.existsSync(candidate));
+        if (!src) throw new Error(`${dir}/ is required for distribution staging.`);
+        copyDirRecursive(src, path.join(stageRoot, dir));
     }
 
     // Copy whitelisted top-level files
@@ -881,10 +1083,10 @@ function buildWeb(stageRoot, stagingDir) {
     if (runtimeSrc) {
         const requiredRuntimeFiles = [
             'reactor_main.js', 'reactor_core.js', 'reactor_managers.js',
-            'reactor_objects.js', 'reactor_scenes.js', 'reactor_sprites.js',
+            'reactor_objects.js', 'reactor_scenes.js', 'reactor_sprites.js', 'reactor_picture_extensions.js',
             'reactor_windows.js', 'reactor_mv_compat.js', 'reactor_plugins.js',
             path.join('libs', 'pixi.js'), path.join('libs', 'pixi_compat.js'),
-            path.join('libs', 'pako.min.js'), path.join('libs', 'localforage.min.js'),
+            path.join('libs', 'pako.min.js'), path.join('libs', 'lz-string.js'), path.join('libs', 'localforage.min.js'),
             path.join('libs', 'effekseer.min.js'), path.join('libs', 'effekseer.wasm'),
             path.join('libs', 'vorbisdecoder.js'),
         ];
@@ -895,19 +1097,9 @@ function buildWeb(stageRoot, stagingDir) {
         throw new Error('runtime/ not found; editor packages must include the project runtime');
     }
 
-    // Copy the optional default project template used by new project creation.
-    if (includeTemplate) {
-        const templateCandidates = [
-            path.join(appRoot, 'template', 'Demo'),
-            path.join(appRoot, '..', 'template', 'Demo'),
-        ];
-        const templateSrc = templateCandidates.find(candidate => fs.existsSync(path.join(candidate, 'project.rpgreactor')));
-        if (templateSrc) {
-            copyDirRecursive(templateSrc, path.join(stageRoot, 'template', 'Demo'));
-        } else {
-            logWarn('  template/Demo not found — generated starter projects will be used instead');
-        }
-    }
+    // Public packages never inherit a developer's ignored template/Demo.
+    // Generate the default from the staged, tracked ProjectManager and runtime.
+    await generateCleanStarter(stageRoot);
 
     // Count staged files
     let fileCount = 0;
@@ -989,6 +1181,14 @@ function buildWeb(stageRoot, stagingDir) {
                     copyDirRecursive(stageRoot, path.join(appDir, 'package.nw'));
                 }
 
+                // Keep legal notices readable without extracting the payload
+                // appended to the branded executable.
+                copyDirRecursive(
+                    path.join(stageRoot, 'THIRD_PARTY_LICENSES'),
+                    path.join(appDir, 'THIRD_PARTY_LICENSES'));
+                fs.copyFileSync(path.join(stageRoot, 'THIRD_PARTY_NOTICES.md'), path.join(appDir, 'THIRD_PARTY_NOTICES.md'));
+                fs.copyFileSync(path.join(stageRoot, 'LICENSE'), path.join(appDir, 'LICENSE'));
+
                 // Rename executable
                 logInfo('Renaming executable...');
                 progress(Math.round(pBase + share * 0.85), 'Finalizing...');
@@ -1017,6 +1217,11 @@ function buildWeb(stageRoot, stagingDir) {
                     const newExe = path.join(appDir, 'RPG Reactor.exe');
                     if (fs.existsSync(oldExe)) {
                         fs.copyFileSync(oldExe, newExe);
+                        const reseditPath = dependencyPath('resedit');
+                        if (!reseditPath) throw new Error('resedit is required to set Windows release metadata.');
+                        if (releaseBuild) {
+                            await nativeRelease.updateWindowsMetadata(newExe, appVersion, reseditPath);
+                        }
                         appendPackageToExecutable(newExe, executablePackage);
                         logInfo('  Executable: RPG Reactor.exe');
                         logInfo('  Playtest runtime: nw.exe');
@@ -1062,6 +1267,26 @@ function buildWeb(stageRoot, stagingDir) {
                     logDim('  No images/icon.png found — using default NW.js icon');
                 }
 
+                if (plat === 'win') {
+                    const exePath = path.join(appDir, 'RPG Reactor.exe');
+                    if (nativeSigning.mode === 'signed') {
+                        logInfo('Signing and verifying Windows executable...');
+                        nativeRelease.signAndVerifyWindows(exePath);
+                        logGood('  Authenticode signature verified.');
+                    } else {
+                        logWarn('  Release candidate is explicitly unsigned (Windows).');
+                    }
+                } else if (plat === 'osx') {
+                    const appBundle = path.join(appDir, 'RPG Reactor.app');
+                    if (nativeSigning.mode === 'signed') {
+                        logInfo('Signing, notarizing, stapling, and verifying macOS app...');
+                        nativeRelease.signNotarizeAndVerifyMac(appBundle);
+                        logGood('  macOS signature and notarization ticket verified.');
+                    } else {
+                        logWarn('  Release candidate is explicitly unsigned (macOS).');
+                    }
+                }
+
                 // Archive
                 const archLabel = plat === 'win' ? 'win-x64' : plat === 'osx' ? 'osx-x64' : 'linux-x64';
                 createArchive(`RPGReactor-v${appVersion}-${archLabel}.zip`, pkgDir, 'RPGReactor', plat !== 'win');
@@ -1092,6 +1317,7 @@ function buildWeb(stageRoot, stagingDir) {
                         toolPath: appImageToolPath,
                         runtimePath: appImageRuntimePath,
                     });
+                    createdArtifacts.add(result.outputPath);
                     logGood(`Created: ${path.basename(result.outputPath)}`);
                     logDim(`  SHA-256: ${result.sha256}`);
                 }

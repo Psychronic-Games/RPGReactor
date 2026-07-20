@@ -72,6 +72,7 @@ class ChangeParallaxEditor {
      * Render modal content
      */
     renderContent() {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const container = this.modal.querySelector('.change-parallax-container');
         container.innerHTML = '';
 
@@ -79,7 +80,7 @@ class ChangeParallaxEditor {
         const header = document.createElement('div');
         header.style.cssText = 'padding: 12px 16px; background-color: var(--color-bg-panel); border-bottom: 1px solid var(--color-border); display: flex; justify-content: space-between; align-items: center; border-top-left-radius: 6px; border-top-right-radius: 6px;';
         header.innerHTML = `
-            <h3 style="margin: 0; color: var(--color-text-strong); font-size: 16px;">Change Parallax</h3>
+            <h3 style="margin: 0; color: var(--color-text-strong); font-size: 16px;">${tt('Change Parallax')}</h3>
             <button class="close-btn" style="background: none; border: none; color: var(--color-text-strong); font-size: 20px; cursor: pointer; padding: 0; width: 24px; height: 24px;">\u00d7</button>
         `;
         container.appendChild(header);
@@ -95,7 +96,7 @@ class ChangeParallaxEditor {
         filenameRow.style.cssText = 'display: flex; align-items: center; gap: 8px;';
 
         const filenameLabel = document.createElement('span');
-        filenameLabel.textContent = 'Filename:';
+        filenameLabel.textContent = tt('Filename:');
         filenameLabel.style.cssText = 'color: var(--color-text); font-size: 13px; min-width: 120px;';
 
         const filenameInput = document.createElement('input');
@@ -125,7 +126,7 @@ class ChangeParallaxEditor {
 
         const loopXLabel = document.createElement('label');
         loopXLabel.htmlFor = 'parallax-loop-x';
-        loopXLabel.textContent = 'Loop X';
+        loopXLabel.textContent = tt('Loop X');
         loopXLabel.style.cssText = 'color: var(--color-text); font-size: 13px; cursor: pointer;';
 
         loopXRow.appendChild(loopXCheckbox);
@@ -138,7 +139,7 @@ class ChangeParallaxEditor {
             scrollXRow.style.cssText = 'display: flex; align-items: center; gap: 8px; padding-left: 24px;';
 
             const scrollXLabel = document.createElement('span');
-            scrollXLabel.textContent = 'Scroll X:';
+            scrollXLabel.textContent = tt('Scroll X:');
             scrollXLabel.style.cssText = 'color: var(--color-text); font-size: 13px; min-width: 96px;';
 
             const scrollXInput = document.createElement('input');
@@ -169,7 +170,7 @@ class ChangeParallaxEditor {
 
         const loopYLabel = document.createElement('label');
         loopYLabel.htmlFor = 'parallax-loop-y';
-        loopYLabel.textContent = 'Loop Y';
+        loopYLabel.textContent = tt('Loop Y');
         loopYLabel.style.cssText = 'color: var(--color-text); font-size: 13px; cursor: pointer;';
 
         loopYRow.appendChild(loopYCheckbox);
@@ -182,7 +183,7 @@ class ChangeParallaxEditor {
             scrollYRow.style.cssText = 'display: flex; align-items: center; gap: 8px; padding-left: 24px;';
 
             const scrollYLabel = document.createElement('span');
-            scrollYLabel.textContent = 'Scroll Y:';
+            scrollYLabel.textContent = tt('Scroll Y:');
             scrollYLabel.style.cssText = 'color: var(--color-text); font-size: 13px; min-width: 96px;';
 
             const scrollYInput = document.createElement('input');
@@ -205,12 +206,12 @@ class ChangeParallaxEditor {
         footer.style.cssText = 'padding: 12px 16px; border-top: 1px solid var(--color-border); background-color: var(--color-bg-panel); display: flex; justify-content: flex-end; gap: 8px;';
 
         const cancelBtn = document.createElement('button');
-        cancelBtn.textContent = 'Cancel';
+        cancelBtn.textContent = tt('Cancel');
         cancelBtn.className = 'rr-btn-secondary';
         cancelBtn.addEventListener('click', () => this.close());
 
         const okBtn = document.createElement('button');
-        okBtn.textContent = 'OK';
+        okBtn.textContent = tt('OK');
         okBtn.style.cssText = 'padding: 6px 20px; background-color: var(--color-accent); color: var(--color-bg-deep); border: none; border-radius: 3px; cursor: pointer; font-size: 12px; font-weight: bold;';
         okBtn.addEventListener('click', () => this.save());
 

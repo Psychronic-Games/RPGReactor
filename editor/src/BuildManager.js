@@ -8,12 +8,13 @@ class BuildManager {
     }
 
     setupModal() {
+        const tt = text => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
         // Create build modal HTML
         const modalHTML = `
             <div id="build-modal" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.8); display: none; justify-content: center; align-items: center; z-index: 10001;">
                 <div style="background-color: var(--color-bg-surface); border: 1px solid var(--color-border); border-radius: 8px; width: 90%; max-width: 1100px; height: 80vh; max-height: 700px; display: flex; flex-direction: column; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);">
                     <div style="background-color: var(--color-bg-panel); padding: 12px 16px; border-bottom: 1px solid var(--color-border); display: flex; justify-content: space-between; align-items: center; border-radius: 8px 8px 0 0;">
-                        <div style="font-size: 16px; font-weight: 600; color: var(--color-text);">Deploy Game</div>
+                        <div style="font-size: 16px; font-weight: 600; color: var(--color-text);">${tt('Deploy Game')}</div>
                         <button id="build-modal-close-btn" style="background: none; border: none; color: var(--color-text-muted); font-size: 24px; cursor: pointer; padding: 0; width: 30px; height: 30px; line-height: 1;">×</button>
                     </div>
 
@@ -21,124 +22,124 @@ class BuildManager {
                         <!-- Left Column: Build Options -->
                         <div style="flex: 0 0 380px; overflow-y: auto;">
                             <div style="margin-bottom: 20px;">
-                                <h3 style="color: var(--color-text); margin-bottom: 10px; font-size: 15px;">Select Platform(s)</h3>
+                                <h3 style="color: var(--color-text); margin-bottom: 10px; font-size: 15px;">${tt('Select Platform(s)')}</h3>
                                 <div style="display: flex; flex-direction: column; gap: 6px;">
                                     <label class="build-option-label" style="display: flex; align-items: center; padding: 8px 10px; background: var(--color-bg-panel); border: 1px solid var(--color-border); border-radius: 4px; cursor: pointer; transition: all 0.2s;">
                                         <input type="checkbox" id="build-platform-win" value="win" class="system-checkbox" style="margin-right: 10px;">
                                         <div style="flex: 1;">
-                                            <div style="color: var(--color-text); font-weight: 600; font-size: 13px;">Windows (x64)</div>
-                                            <div style="color: var(--color-text-muted); font-size: 11px;">Build .exe for Windows 64-bit</div>
+                                            <div style="color: var(--color-text); font-weight: 600; font-size: 13px;">${tt('Windows (x64)')}</div>
+                                            <div style="color: var(--color-text-muted); font-size: 11px;">${tt('Build .exe for Windows 64-bit')}</div>
                                         </div>
                                     </label>
 
                                     <label class="build-option-label" style="display: flex; align-items: center; padding: 8px 10px; background: var(--color-bg-panel); border: 1px solid var(--color-border); border-radius: 4px; cursor: pointer; transition: all 0.2s;">
                                         <input type="checkbox" id="build-platform-mac" value="mac" class="system-checkbox" style="margin-right: 10px;">
                                         <div style="flex: 1;">
-                                            <div style="color: var(--color-text); font-weight: 600; font-size: 13px;">macOS (x64)</div>
-                                            <div style="color: var(--color-text-muted); font-size: 11px;">Build .app for macOS 64-bit</div>
+                                            <div style="color: var(--color-text); font-weight: 600; font-size: 13px;">${tt('macOS (x64)')}</div>
+                                            <div style="color: var(--color-text-muted); font-size: 11px;">${tt('Build .app for macOS 64-bit')}</div>
                                         </div>
                                     </label>
 
                                     <label class="build-option-label" style="display: flex; align-items: center; padding: 8px 10px; background: var(--color-bg-panel); border: 1px solid var(--color-border); border-radius: 4px; cursor: pointer; transition: all 0.2s;">
                                         <input type="checkbox" id="build-platform-linux" value="linux" class="system-checkbox" style="margin-right: 10px;">
                                         <div style="flex: 1;">
-                                            <div style="color: var(--color-text); font-weight: 600; font-size: 13px;">Linux (x64)</div>
-                                            <div style="color: var(--color-text-muted); font-size: 11px;">Build executable for Linux 64-bit</div>
+                                            <div style="color: var(--color-text); font-weight: 600; font-size: 13px;">${tt('Linux (x64)')}</div>
+                                            <div style="color: var(--color-text-muted); font-size: 11px;">${tt('Build executable for Linux 64-bit')}</div>
                                         </div>
                                     </label>
                                     <label id="build-appimage-option" style="display: none; align-items: flex-start; gap: 8px; margin-left: 28px; padding: 7px 9px; background: var(--color-bg-surface); border: 1px solid var(--color-border-subtle); border-left: 2px solid var(--color-accent-border); border-radius: 4px; cursor: pointer;">
                                         <input id="build-create-linux-appimage" type="checkbox" class="system-checkbox" style="width: 16px; height: 16px; min-width: 16px; min-height: 16px; max-width: 16px; max-height: 16px; flex: 0 0 16px; margin: 1px 0 0;">
                                         <span>
-                                            <span style="display: block; color: var(--color-text); font-weight: 600; font-size: 12px;">Also create Linux AppImage</span>
-                                            <span id="build-appimage-note" style="display: block; color: var(--color-text-muted); font-size: 10px; line-height: 1.35; margin-top: 2px;">Portable x86_64 file emitted beside the Linux folder.</span>
+                                            <span style="display: block; color: var(--color-text); font-weight: 600; font-size: 12px;">${tt('Also create Linux AppImage')}</span>
+                                            <span id="build-appimage-note" style="display: block; color: var(--color-text-muted); font-size: 10px; line-height: 1.35; margin-top: 2px;">${tt('Portable x86_64 file emitted beside the Linux folder.')}</span>
                                         </span>
                                     </label>
 
                                     <label class="build-option-label" style="display: flex; align-items: center; padding: 8px 10px; background: var(--color-bg-panel); border: 1px solid var(--color-border); border-radius: 4px; cursor: pointer; transition: all 0.2s;">
                                         <input type="checkbox" id="build-platform-web" value="web" class="system-checkbox" style="margin-right: 10px;">
                                         <div style="flex: 1;">
-                                            <div style="color: var(--color-text); font-weight: 600; font-size: 13px;">Web (HTML5)</div>
-                                            <div style="color: var(--color-text-muted); font-size: 11px;">Build for browser deployment</div>
+                                            <div style="color: var(--color-text); font-weight: 600; font-size: 13px;">${tt('Web (HTML5)')}</div>
+                                            <div style="color: var(--color-text-muted); font-size: 11px;">${tt('Build for browser deployment')}</div>
                                         </div>
                                     </label>
                                 </div>
                             </div>
 
                             <div>
-                                <h3 style="color: var(--color-text); margin-bottom: 10px; font-size: 15px;">NW.js Runtime</h3>
+                                <h3 style="color: var(--color-text); margin-bottom: 10px; font-size: 15px;">${tt('NW.js Runtime')}</h3>
                                 <div style="display: flex; flex-direction: column; gap: 6px;">
                                     <label class="build-option-label" style="display: flex; align-items: center; padding: 8px 10px; background: var(--color-bg-panel); border: 1px solid var(--color-border); border-radius: 4px; cursor: pointer; transition: all 0.2s;">
                                         <input type="radio" name="build-runtime-source" value="bundled" checked class="system-radio" style="margin-right: 10px;">
                                         <div style="flex: 1;">
-                                            <div style="color: var(--color-text); font-weight: 600; font-size: 13px;">Automatic: Bundled / Cache First</div>
-                                            <div style="color: var(--color-text-muted); font-size: 11px;">Reuses RPG Reactor's runtime or a matching cached archive before downloading</div>
+                                            <div style="color: var(--color-text); font-weight: 600; font-size: 13px;">${tt('Automatic: Bundled / Cache First')}</div>
+                                            <div style="color: var(--color-text-muted); font-size: 11px;">${tt("Reuses RPG Reactor's runtime or a matching cached archive before downloading")}</div>
                                         </div>
                                     </label>
 
                                     <label class="build-option-label" style="display: flex; align-items: center; padding: 8px 10px; background: var(--color-bg-panel); border: 1px solid var(--color-border); border-radius: 4px; cursor: pointer; transition: all 0.2s;">
                                         <input type="radio" name="build-runtime-source" value="download" class="system-radio" style="margin-right: 10px;">
                                         <div style="flex: 1;">
-                                            <div style="color: var(--color-text); font-weight: 600; font-size: 13px;">Official Download / Cache</div>
-                                            <div style="color: var(--color-text-muted); font-size: 11px;">Uses a matching official cache, otherwise downloads from dl.nwjs.io</div>
+                                            <div style="color: var(--color-text); font-weight: 600; font-size: 13px;">${tt('Official Download / Cache')}</div>
+                                            <div style="color: var(--color-text-muted); font-size: 11px;">${tt('Uses a matching official cache, otherwise downloads from dl.nwjs.io')}</div>
                                         </div>
                                     </label>
                                 </div>
-                                <div style="color: var(--color-text-muted); font-size: 11px; margin-top: 4px;">Only applies to desktop platforms (Windows, macOS, Linux)</div>
+                                <div style="color: var(--color-text-muted); font-size: 11px; margin-top: 4px;">${tt('Only applies to desktop platforms (Windows, macOS, Linux)')}</div>
                                 <div style="margin-top: 10px; display: grid; grid-template-columns: 130px minmax(0, 1fr); gap: 8px; align-items: center;">
-                                    <label for="build-nw-version-policy" style="color: var(--color-text-muted); font-size: 11px;">Fallback version</label>
+                                    <label for="build-nw-version-policy" style="color: var(--color-text-muted); font-size: 11px;">${tt('Fallback version')}</label>
                                     <select id="build-nw-version-policy" class="rr-select" style="font-size: 12px; padding: 5px 7px;">
-                                        <option value="stable" selected>Latest stable</option>
-                                        <option value="editor">Same as editor</option>
-                                        <option value="exact">Specific version</option>
+                                        <option value="stable" selected>${tt('Latest stable')}</option>
+                                        <option value="editor">${tt('Same as editor')}</option>
+                                        <option value="exact">${tt('Specific version')}</option>
                                     </select>
-                                    <label for="build-nw-version-exact" style="color: var(--color-text-muted); font-size: 11px;">Specific version</label>
-                                    <input id="build-nw-version-exact" class="rr-input" type="text" placeholder="Search versions..." autocomplete="off" spellcheck="false" disabled style="font-size: 12px; padding: 5px 7px;">
+                                    <label for="build-nw-version-exact" style="color: var(--color-text-muted); font-size: 11px;">${tt('Specific version')}</label>
+                                    <input id="build-nw-version-exact" class="rr-input" type="text" placeholder="${tt('Search versions...')}" autocomplete="off" spellcheck="false" disabled style="font-size: 12px; padding: 5px 7px;">
                                     <div id="build-nw-version-list" class="nw-version-menu" role="listbox" hidden></div>
                                 </div>
-                                <div style="color: var(--color-text-muted); font-size: 10px; margin-top: 5px; line-height: 1.35;">Bundled and cached runtimes are checked before an official download.</div>
+                                <div style="color: var(--color-text-muted); font-size: 10px; margin-top: 5px; line-height: 1.35;">${tt('Bundled and cached runtimes are checked before an official download.')}</div>
                                 <label style="display: flex; align-items: center; gap: 8px; margin-top: 10px; padding: 8px 10px; background: var(--color-bg-panel); border: 1px solid var(--color-border); border-radius: 4px; cursor: pointer;">
                                     <input id="build-include-proprietary-codecs" type="checkbox" class="system-checkbox" style="width: 16px; height: 16px; min-width: 16px; min-height: 16px; max-width: 16px; max-height: 16px; flex: 0 0 16px; margin: 0;">
-                                    <span style="color: var(--color-text); font-weight: 600; font-size: 12px;">Include third-party H.264/AAC codec</span>
+                                    <span style="color: var(--color-text); font-weight: 600; font-size: 12px;">${tt('Include third-party H.264/AAC codec')}</span>
                                 </label>
                             </div>
 
                             <div style="margin-top: 10px;">
                                 <label style="display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: var(--color-bg-panel); border: 1px solid var(--color-border); border-radius: 4px; cursor: pointer;">
                                     <input id="build-filter-locales" type="checkbox" class="system-checkbox" style="width: 16px; height: 16px; min-width: 16px; min-height: 16px; max-width: 16px; max-height: 16px; flex: 0 0 16px; margin: 0;">
-                                    <span style="color: var(--color-text); font-weight: 600; font-size: 12px;">Include selected locales only</span>
+                                    <span style="color: var(--color-text); font-weight: 600; font-size: 12px;">${tt('Include selected locales only')}</span>
                                 </label>
                                 <div id="build-locale-selection" hidden style="margin-top: 8px; padding: 8px; background: var(--color-bg-panel); border: 1px solid var(--color-border); border-radius: 4px;">
                                     <div style="display: flex; gap: 6px; margin-bottom: 6px;">
-                                        <button id="build-locales-all" type="button" class="graphic-selector-button" style="padding: 4px 8px; font-size: 10px;">Select All</button>
-                                        <button id="build-locales-english" type="button" class="graphic-selector-button" style="padding: 4px 8px; font-size: 10px;">English Only</button>
+                                        <button id="build-locales-all" type="button" class="graphic-selector-button" style="padding: 4px 8px; font-size: 10px;">${tt('Select All')}</button>
+                                        <button id="build-locales-english" type="button" class="graphic-selector-button" style="padding: 4px 8px; font-size: 10px;">${tt('English Only')}</button>
                                     </div>
                                     <div id="build-locale-list" style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 3px 8px; max-height: 170px; overflow-y: auto; padding-right: 4px;"></div>
-                                    <div style="color: var(--color-text-muted); font-size: 10px; line-height: 1.35; margin-top: 6px;">English (US) is always included as fallback. Desktop builds only.</div>
+                                    <div style="color: var(--color-text-muted); font-size: 10px; line-height: 1.35; margin-top: 6px;">${tt('English (US) is always included as fallback. Desktop builds only.')}</div>
                                 </div>
                             </div>
 
                             <div style="margin-top: 20px;">
-                                <h3 style="color: var(--color-text); margin-bottom: 10px; font-size: 15px;">Asset Optimization</h3>
+                                <h3 style="color: var(--color-text); margin-bottom: 10px; font-size: 15px;">${tt('Asset Optimization')}</h3>
                                 <div style="display: flex; flex-direction: column; gap: 6px;">
                                     <label style="display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: var(--color-bg-panel); border: 1px solid var(--color-border); border-radius: 4px; cursor: pointer;">
                                         <input id="build-optimize-png" type="checkbox" class="system-checkbox" style="width: 16px; height: 16px; min-width: 16px; min-height: 16px; max-width: 16px; max-height: 16px; flex: 0 0 16px; margin: 0;">
-                                        <span style="color: var(--color-text); font-weight: 600; font-size: 12px;">Losslessly optimize PNG files (Oxipng)</span>
+                                        <span style="color: var(--color-text); font-weight: 600; font-size: 12px;">${tt('Losslessly optimize PNG files (Oxipng)')}</span>
                                     </label>
                                     <label style="display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: var(--color-bg-panel); border: 1px solid var(--color-border); border-radius: 4px; cursor: pointer;">
                                         <input id="build-optimize-ogg" type="checkbox" class="system-checkbox" style="width: 16px; height: 16px; min-width: 16px; min-height: 16px; max-width: 16px; max-height: 16px; flex: 0 0 16px; margin: 0;">
-                                        <span style="color: var(--color-text); font-weight: 600; font-size: 12px;">Re-encode OGG audio (lossy)</span>
+                                        <span style="color: var(--color-text); font-weight: 600; font-size: 12px;">${tt('Re-encode OGG audio (lossy)')}</span>
                                     </label>
                                 </div>
                                 <div style="margin-top: 8px; display: grid; grid-template-columns: 130px minmax(0, 1fr); gap: 8px; align-items: center;">
-                                    <label for="build-ogg-quality" style="color: var(--color-text-muted); font-size: 11px;">OGG quality</label>
+                                    <label for="build-ogg-quality" style="color: var(--color-text-muted); font-size: 11px;">${tt('OGG quality')}</label>
                                     <select id="build-ogg-quality" class="rr-select" style="font-size: 12px; padding: 5px 7px;">
-                                        <option value="3">3 - Standard / Smaller</option>
-                                        <option value="5" selected>5 - High</option>
-                                        <option value="7">7 - Very High</option>
-                                        <option value="10">10 - Maximum</option>
+                                        <option value="3">${tt('3 - Standard / Smaller')}</option>
+                                        <option value="5" selected>${tt('5 - High')}</option>
+                                        <option value="7">${tt('7 - Very High')}</option>
+                                        <option value="10">${tt('10 - Maximum')}</option>
                                     </select>
                                 </div>
-                                <div style="color: var(--color-text-muted); font-size: 10px; line-height: 1.35; margin-top: 6px;">Only smaller validated results replace staged assets.</div>
+                                <div style="color: var(--color-text-muted); font-size: 10px; line-height: 1.35; margin-top: 6px;">${tt('Only smaller validated results replace staged assets.')}</div>
                             </div>
                         </div>
 
@@ -146,17 +147,17 @@ class BuildManager {
                         <div style="flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0;">
                             <!-- Output Directory -->
                             <div style="margin-bottom: 16px;">
-                                <h3 style="color: var(--color-text); margin-bottom: 10px; font-size: 15px;">Output Directory</h3>
+                                <h3 style="color: var(--color-text); margin-bottom: 10px; font-size: 15px;">${tt('Output Directory')}</h3>
                                 <div style="display: flex; gap: 8px; align-items: center;">
                                     <input type="text" id="build-output-path" value="dist" readonly style="flex: 1; padding: 6px 10px; background-color: var(--color-bg-surface); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 2px; font-size: 13px; font-family: inherit; min-width: 0;">
-                                    <button id="build-select-output-btn" class="graphic-selector-button" style="padding: 6px 14px; font-size: 12px; flex-shrink: 0;">Choose...</button>
+                                    <button id="build-select-output-btn" class="graphic-selector-button" style="padding: 6px 14px; font-size: 12px; flex-shrink: 0;">${tt('Choose...')}</button>
                                 </div>
                             </div>
 
                             <!-- Progress -->
                             <div id="build-progress-container" style="margin-bottom: 12px; display: none;">
                                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                                    <span id="build-progress-status" style="color: var(--color-text); font-size: 13px;">Building...</span>
+                                    <span id="build-progress-status" style="color: var(--color-text); font-size: 13px;">${tt('Building...')}</span>
                                     <span id="build-progress-percent" style="color: var(--color-text-muted); font-size: 12px;">0%</span>
                                 </div>
                                 <div style="background: var(--color-bg-panel); border: 1px solid var(--color-border); border-radius: 4px; height: 20px; overflow: hidden;">
@@ -166,19 +167,19 @@ class BuildManager {
 
                             <!-- Build Log -->
                             <div style="flex: 1; display: flex; flex-direction: column; min-height: 0; margin-bottom: 16px;">
-                                <h3 style="color: var(--color-text); margin-bottom: 10px; font-size: 15px;">Build Log</h3>
+                                <h3 style="color: var(--color-text); margin-bottom: 10px; font-size: 15px;">${tt('Build Log')}</h3>
                                 <div id="build-log" style="flex: 1; background: var(--color-bg-panel); border: 1px solid var(--color-border); border-radius: 4px; padding: 12px; overflow-y: auto; font-family: 'Consolas', 'Monaco', monospace; font-size: 12px; color: var(--color-text); white-space: pre-wrap; word-wrap: break-word;">
-                                    <div style="color: var(--color-text-muted);">Ready to build. Select platforms and click "Start Build".</div>
+                                    <div style="color: var(--color-text-muted);">${tt('Ready to build. Select platforms and click "Start Build".')}</div>
                                 </div>
                             </div>
 
                             <!-- Buttons -->
                             <div style="display: flex; gap: 12px; justify-content: flex-end; flex-shrink: 0;">
                                 <button id="build-start-btn" style="padding: 8px 20px; background: var(--color-bg-deep); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 4px; font-size: 13px; cursor: pointer; font-weight: 500; transition: all 0.2s; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">
-                                    Start Build
+                                    ${tt('Start Build')}
                                 </button>
                                 <button id="build-cancel-btn" style="padding: 8px 20px; background: var(--color-bg-deep); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 4px; font-size: 13px; cursor: pointer; font-weight: 500; transition: all 0.2s; box-shadow: 0 2px 4px rgba(0,0,0,0.2); display: none;">
-                                    Cancel Build
+                                    ${tt('Cancel Build')}
                                 </button>
                             </div>
                         </div>
@@ -350,6 +351,7 @@ class BuildManager {
     }
 
     updateAppImageAvailability() {
+        const tt = text => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
         const checkbox = document.getElementById('build-create-linux-appimage');
         const option = document.getElementById('build-appimage-option');
         const note = document.getElementById('build-appimage-note');
@@ -361,22 +363,24 @@ class BuildManager {
         option.style.opacity = checkbox.disabled ? '0.5' : '1';
         option.style.cursor = checkbox.disabled ? 'not-allowed' : 'pointer';
         note.textContent = !hostSupported
-            ? 'Creation requires RPG Reactor running on Linux x86_64.'
-            : 'Portable x86_64 file emitted beside the Linux folder.';
+            ? tt('Creation requires RPG Reactor running on Linux x86_64.')
+            : tt('Portable x86_64 file emitted beside the Linux folder.');
     }
 
     open() {
+        const tt = text => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
         this.modal.style.display = 'flex';
         this.clearLog();
         this.resetProgress();
         this.updateAppImageAvailability();
-        this.log('Ready to build. Select platforms and click "Start Build".', 'var(--color-text-muted)');
+        this.log(tt('Ready to build. Select platforms and click "Start Build".'), 'var(--color-text-muted)');
         this.versionPicker.load().catch(() => {});
     }
 
     close() {
         if (this.isBuilding) {
-            const confirm = window.confirm('A build is in progress. Are you sure you want to close?');
+            const tt = text => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
+            const confirm = window.confirm(tt('A build is in progress. Are you sure you want to close?'));
             if (!confirm) return;
             this.cancelBuild();
         }
@@ -414,6 +418,7 @@ class BuildManager {
     }
 
     updateDownloadProgress(message) {
+        const tt = text => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
         const logDiv = document.getElementById('build-log');
         let entry = this.downloadProgressRows.get(message.id);
         if (!entry) {
@@ -446,20 +451,20 @@ class BuildManager {
         entry.fill.classList.toggle('is-indeterminate', !hasTotal && !['complete', 'failed'].includes(message.state));
         entry.fill.classList.toggle('is-failed', message.state === 'failed');
         entry.fill.style.width = message.state === 'complete' ? '100%' : hasTotal ? `${percent}%` : '38%';
-        entry.track.setAttribute('aria-label', `Downloading ${message.label}`);
+        entry.track.setAttribute('aria-label', `${tt('Downloading')} ${message.label}`);
         if (percent === null) entry.track.removeAttribute('aria-valuenow');
         else entry.track.setAttribute('aria-valuenow', String(Math.round(percent)));
 
         if (message.state === 'complete') {
-            entry.detail.textContent = `Complete - ${mib(message.downloaded)}`;
+            entry.detail.textContent = `${tt('Complete -')} ${mib(message.downloaded)}`;
         } else if (message.state === 'failed') {
-            entry.detail.textContent = `Failed after ${message.attempt} attempts`;
+            entry.detail.textContent = `${tt('Failed after')} ${message.attempt} ${tt('attempts')}`;
         } else if (message.state === 'retrying') {
-            entry.detail.textContent = `Retrying ${message.attempt}/${message.maxAttempts} - ${mib(message.downloaded)}`;
+            entry.detail.textContent = `${tt('Retrying')} ${message.attempt}/${message.maxAttempts} - ${mib(message.downloaded)}`;
         } else if (hasTotal) {
             entry.detail.textContent = `${Math.round(percent)}% - ${mib(message.downloaded)} / ${mib(message.total)}`;
         } else {
-            entry.detail.textContent = `${mib(message.downloaded)} downloaded`;
+            entry.detail.textContent = `${mib(message.downloaded)} ${tt('downloaded')}`;
         }
         logDiv.scrollTop = logDiv.scrollHeight;
     }
@@ -493,7 +498,8 @@ class BuildManager {
         bar.style.width = '0%';
         bar.style.background = 'linear-gradient(90deg, var(--color-accent-deep), var(--color-accent-hover))';
         pctLabel.textContent = '0%';
-        statusLabel.textContent = 'Building...';
+        const tt = text => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
+        statusLabel.textContent = tt('Building...');
     }
 
     getSelectedPlatforms() {
@@ -506,17 +512,18 @@ class BuildManager {
     }
 
     async startBuild() {
+        const tt = text => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
         const platforms = this.getSelectedPlatforms();
 
         if (platforms.length === 0) {
-            alert('Please select at least one platform to build.');
+            alert(tt('Please select at least one platform to build.'));
             return;
         }
 
         // Validate that a project is loaded
         const project = window.reactor.projectController.getCurrentProject();
         if (!project || !project.path) {
-            alert('No project is currently loaded. Please open a project before building.');
+            alert(tt('No project is currently loaded. Please open a project before building.'));
             return;
         }
 
@@ -525,7 +532,7 @@ class BuildManager {
         // stale build (playtest already saves for the same reason).
         const saved = await window.reactor.projectController.saveAll();
         if (!saved) {
-            alert('Build cancelled: the project could not be saved.');
+            alert(tt('Build cancelled: the project could not be saved.'));
             return;
         }
 
@@ -549,7 +556,7 @@ class BuildManager {
 
         const editorNwVersion = process.versions.nw || process.versions['node-webkit'];
         if (!editorNwVersion) {
-            alert('Could not determine the editor NW.js version.');
+            alert(tt('Could not determine the editor NW.js version.'));
             return;
         }
         const nwVersionPolicy = document.getElementById('build-nw-version-policy').value;
@@ -557,11 +564,11 @@ class BuildManager {
         if (nwVersionPolicy === 'exact') {
             try { await this.versionPicker.load(); }
             catch {
-                alert('NW.js versions are unavailable. Connect to the internet or choose Same as editor.');
+                alert(tt('NW.js versions are unavailable. Connect to the internet or choose Same as editor.'));
                 return;
             }
             if (!this.versionPicker.hasVersion(exactNwVersion)) {
-                alert('Select an available NW.js version from the searchable list.');
+                alert(tt('Select an available NW.js version from the searchable list.'));
                 return;
             }
         }
@@ -577,15 +584,15 @@ class BuildManager {
         document.getElementById('build-cancel-btn').style.display = 'block';
 
         this.clearLog();
-        this.log('Launching build worker...', 'var(--color-link)');
-        this.log(`App root: ${appRoot}`, 'var(--color-text-muted)');
+        this.log(tt('Launching build worker...'), 'var(--color-link)');
+        this.log(`${tt('App root:')} ${appRoot}`, 'var(--color-text-muted)');
 
         try {
             const { Worker } = require('worker_threads');
 
             const workerPath = path.join(appRoot, 'build-scripts', 'build-worker.js');
             if (!fs.existsSync(workerPath)) {
-                throw new Error(`Build worker not found at: ${workerPath}`);
+                throw new Error(`${tt('Build worker not found at:')} ${workerPath}`);
             }
             this.worker = new Worker(workerPath, {
                 workerData: {
@@ -617,8 +624,8 @@ class BuildManager {
                 } else if (msg.type === 'done') {
                     if (msg.success) {
                         this.log('', 'var(--color-text)');
-                        this.log(`Output directory: ${outputDir}`, 'var(--color-text)');
-                        this.updateProgress(100, 'Build complete!');
+                        this.log(`${tt('Output directory:')} ${outputDir}`, 'var(--color-text)');
+                        this.updateProgress(100, tt('Build complete!'));
                     }
                 }
             });
@@ -627,7 +634,7 @@ class BuildManager {
             this.worker.on('error', (err) => {
                 this.log('', 'var(--color-text)');
                 this.log('========================================', 'var(--color-danger-bright)');
-                this.log('Build worker error:', 'var(--color-danger-bright)');
+                this.log(tt('Build worker error:'), 'var(--color-danger-bright)');
                 this.log(err.message || String(err), 'var(--color-danger-bright)');
                 this.log('========================================', 'var(--color-danger-bright)');
                 this.buildFinished();
@@ -636,7 +643,7 @@ class BuildManager {
             // Worker exited
             this.worker.on('exit', (code) => {
                 if (code !== 0 && this.isBuilding) {
-                    this.log(`Build worker exited with code ${code}`, 'var(--color-danger-bright)');
+                    this.log(`${tt('Build worker exited with code')} ${code}`, 'var(--color-danger-bright)');
                 }
                 this.buildFinished();
             });
@@ -644,7 +651,7 @@ class BuildManager {
         } catch (error) {
             this.log('', 'var(--color-text)');
             this.log('========================================', 'var(--color-danger-bright)');
-            this.log('Error starting build:', 'var(--color-danger-bright)');
+            this.log(tt('Error starting build:'), 'var(--color-danger-bright)');
             this.log(error.message, 'var(--color-danger-bright)');
             if (error.stack) {
                 this.log(error.stack, 'var(--color-danger-bright)');
@@ -663,9 +670,10 @@ class BuildManager {
 
     cancelBuild() {
         if (this.worker) {
+            const tt = text => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
             this.worker.terminate();
             this.log('', 'var(--color-text)');
-            this.log('Build cancelled by user.', '#ffaa00');
+            this.log(tt('Build cancelled by user.'), '#ffaa00');
             this.buildFinished();
         }
     }

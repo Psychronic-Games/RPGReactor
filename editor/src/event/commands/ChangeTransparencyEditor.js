@@ -79,6 +79,7 @@ class ChangeTransparencyEditor {
      * Render modal content
      */
     renderContent() {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const container = this.modal.querySelector('.change-transparency-container');
         container.innerHTML = '';
 
@@ -95,7 +96,7 @@ class ChangeTransparencyEditor {
             border-top-right-radius: 6px;
         `;
         header.innerHTML = `
-            <h3 style="margin: 0; color: var(--color-text-strong); font-size: 16px;">Change Transparency</h3>
+            <h3 style="margin: 0; color: var(--color-text-strong); font-size: 16px;">${tt('Change Transparency')}</h3>
             <button class="close-btn" style="background: none; border: none; color: var(--color-text-strong); font-size: 20px; cursor: pointer; padding: 0; width: 24px; height: 24px;">×</button>
         `;
         container.appendChild(header);
@@ -126,7 +127,7 @@ class ChangeTransparencyEditor {
 
         const onLabel = document.createElement('label');
         onLabel.htmlFor = 'transparency-on';
-        onLabel.textContent = 'Transparent ON';
+        onLabel.textContent = tt('Transparent ON');
         onLabel.style.cssText = 'color: var(--color-text); cursor: pointer;';
 
         const offRadio = document.createElement('input');
@@ -140,7 +141,7 @@ class ChangeTransparencyEditor {
 
         const offLabel = document.createElement('label');
         offLabel.htmlFor = 'transparency-off';
-        offLabel.textContent = 'Transparent OFF';
+        offLabel.textContent = tt('Transparent OFF');
         offLabel.style.cssText = 'color: var(--color-text); cursor: pointer;';
 
         toggleSection.appendChild(onRadio);
@@ -163,12 +164,12 @@ class ChangeTransparencyEditor {
         `;
 
         const cancelBtn = document.createElement('button');
-        cancelBtn.textContent = 'Cancel';
+        cancelBtn.textContent = tt('Cancel');
         cancelBtn.className = 'rr-btn-secondary';
         cancelBtn.addEventListener('click', () => this.close());
 
         const okBtn = document.createElement('button');
-        okBtn.textContent = 'OK';
+        okBtn.textContent = tt('OK');
         okBtn.style.cssText = `
             padding: 6px 20px;
             background-color: var(--color-accent);

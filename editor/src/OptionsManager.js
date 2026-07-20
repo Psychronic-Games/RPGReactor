@@ -52,7 +52,7 @@ class OptionsManager {
 
     /** Defaults; merged over whatever's saved. */
     _defaultSettings() {
-        return { theme: 'dark', language: 'en' };
+        return { theme: 'dark', language: 'en', animateAutotiles: true };
     }
 
     _loadSettings() {
@@ -91,6 +91,19 @@ class OptionsManager {
         this.settings.language = next;
         this._saveSettings();
         if (window.I18n) window.I18n.setLanguage(next);
+    }
+
+    getAnimateAutotiles() {
+        return this.settings.animateAutotiles !== false;
+    }
+
+    setAnimateAutotiles(enabled) {
+        const next = enabled !== false;
+        this.settings.animateAutotiles = next;
+        this._saveSettings();
+        window.dispatchEvent(new CustomEvent('rr-autotile-animation-changed', {
+            detail: { enabled: next }
+        }));
     }
 
     _languageFlagHtml(languageId) {
@@ -146,6 +159,7 @@ class OptionsManager {
 
     _renderContent() {
         const { palette: currentPalette, mode: currentMode } = this._parseTheme(this.settings.theme);
+        const animateAutotiles = this.getAnimateAutotiles();
         const t = (key) => window.I18n ? window.I18n.t(key) : key;
 
         const swatchesHtml = (palette) => palette.colors.map(color =>
@@ -222,6 +236,14 @@ class OptionsManager {
                     </div>
 
                     <div style="font-size: 10px; color: var(--color-text-muted); margin-top: 14px; padding: 8px 4px 0; border-top: 1px solid var(--color-border-subtle);">${t('options.themeNote')}</div>
+
+                    <div style="font-size: 11px; font-weight: 700; color: var(--color-accent-bright); text-transform: uppercase; letter-spacing: 0.5px; margin: 18px 0 12px; padding-bottom: 4px; border-bottom: 1px solid var(--color-accent-border-mid);">${t('options.editor')}</div>
+
+                    <div style="display: grid; grid-template-columns: 120px 1fr; gap: 8px 16px; align-items: center; padding: 6px 4px;">
+                        <label for="rr-opt-animate-autotiles" style="font-size: 12px; color: var(--color-text-muted);">${t('options.animateAutotiles')}</label>
+                        <input id="rr-opt-animate-autotiles" class="rr-opt-animate-autotiles" type="checkbox" ${animateAutotiles ? 'checked' : ''} style="justify-self: start; width: 16px; height: 16px; accent-color: var(--color-accent-bright);">
+                        <div style="grid-column: 2; font-size: 11px; color: var(--color-text-muted); margin-top: -2px;">${t('options.animateAutotilesNote')}</div>
+                    </div>
                 </div>
 
                 <div class="rr-modal-footer" style="padding: 12px 18px; border-top: 1px solid var(--color-border-subtle); background: var(--color-bg-panel); display: flex; justify-content: flex-end;">
@@ -244,6 +266,7 @@ class OptionsManager {
         const languageTriggerContent = this.modal.querySelector('.rr-opt-language-trigger-content');
         const modeButtons = this.modal.querySelectorAll('.rr-opt-mode-btn');
         const paletteDesc = this.modal.querySelector('.rr-opt-palette-desc');
+        const animateAutotilesInput = this.modal.querySelector('.rr-opt-animate-autotiles');
 
         const applyCurrentSelection = () => {
             const palette = paletteSelect.value;
@@ -310,6 +333,10 @@ class OptionsManager {
                 });
                 applyCurrentSelection();
             });
+        });
+
+        animateAutotilesInput.addEventListener('change', () => {
+            this.setAnimateAutotiles(animateAutotilesInput.checked);
         });
     }
 }

@@ -95,6 +95,7 @@ class CommentEditor {
      * Render modal content
      */
     renderContent() {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const container = this.modal.querySelector('.comment-container');
         container.innerHTML = '';
 
@@ -111,7 +112,7 @@ class CommentEditor {
             border-top-right-radius: 6px;
         `;
         header.innerHTML = `
-            <h3 style="margin: 0; color: var(--color-text-strong); font-size: 16px;">Comment</h3>
+            <h3 style="margin: 0; color: var(--color-text-strong); font-size: 16px;">${tt('Comment')}</h3>
             <button class="close-btn" style="background: none; border: none; color: var(--color-text-strong); font-size: 20px; cursor: pointer; padding: 0; width: 24px; height: 24px;">×</button>
         `;
         container.appendChild(header);
@@ -128,7 +129,7 @@ class CommentEditor {
         `;
 
         const label = document.createElement('div');
-        label.textContent = 'Comment Text:';
+        label.textContent = tt('Comment Text:');
         label.style.cssText = 'color: var(--color-text); font-size: 13px;';
         content.appendChild(label);
 
@@ -153,7 +154,7 @@ class CommentEditor {
         content.appendChild(textarea);
 
         const hint = document.createElement('div');
-        hint.textContent = 'Comments are only visible in the event editor and are not shown during gameplay.';
+        hint.textContent = tt('Comments are only visible in the event editor and are not shown during gameplay.');
         hint.style.cssText = 'color: var(--color-text-muted); font-size: 11px; font-style: italic;';
         content.appendChild(hint);
 
@@ -171,12 +172,12 @@ class CommentEditor {
         `;
 
         const cancelBtn = document.createElement('button');
-        cancelBtn.textContent = 'Cancel';
+        cancelBtn.textContent = tt('Cancel');
         cancelBtn.className = 'rr-btn-secondary';
         cancelBtn.addEventListener('click', () => this.close());
 
         const okBtn = document.createElement('button');
-        okBtn.textContent = 'OK';
+        okBtn.textContent = tt('OK');
         okBtn.style.cssText = `
             padding: 6px 20px;
             background-color: var(--color-accent);

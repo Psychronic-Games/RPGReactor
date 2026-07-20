@@ -8,11 +8,12 @@ class DistEditorManager {
     }
 
     setupModal() {
+        const tt = text => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
         const modalHTML = `
             <div id="dist-editor-modal" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.8); display: none; justify-content: center; align-items: center; z-index: 10001;">
                 <div style="background-color: var(--color-bg-surface); border: 1px solid var(--color-border); border-radius: 8px; width: 90%; max-width: 1100px; height: 80vh; max-height: 700px; display: flex; flex-direction: column; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);">
                     <div style="background-color: var(--color-bg-panel); padding: 12px 16px; border-bottom: 1px solid var(--color-border); display: flex; justify-content: space-between; align-items: center; border-radius: 8px 8px 0 0;">
-                        <div style="font-size: 16px; font-weight: 600; color: var(--color-text);">Deploy Editor</div>
+                        <div style="font-size: 16px; font-weight: 600; color: var(--color-text);">${tt('Deploy Editor')}</div>
                         <button id="dist-editor-close-btn" style="background: none; border: none; color: var(--color-text-muted); font-size: 24px; cursor: pointer; padding: 0; width: 30px; height: 30px; line-height: 1;">×</button>
                     </div>
 
@@ -21,34 +22,34 @@ class DistEditorManager {
                         <div style="flex: 0 0 392px; overflow-y: auto; padding-right: 12px; scrollbar-gutter: stable;">
                             <!-- Package Type -->
                             <div style="margin-bottom: 20px;">
-                                <h3 style="color: var(--color-text); margin-bottom: 10px; font-size: 15px;">Package Type</h3>
+                                <h3 style="color: var(--color-text); margin-bottom: 10px; font-size: 15px;">${tt('Package Type')}</h3>
                                 <div style="display: flex; flex-direction: column; gap: 6px;">
                                     <label class="dist-option-label" style="display: flex; align-items: center; padding: 8px 10px; background: var(--color-bg-panel); border: 1px solid var(--color-border); border-radius: 4px; cursor: pointer; transition: all 0.2s;">
                                         <input type="radio" name="dist-package-type" value="platform" checked class="system-radio" style="margin-right: 10px;">
                                         <div style="flex: 1;">
-                                            <div style="color: var(--color-text); font-weight: 600; font-size: 13px;">Platform-Specific</div>
-                                            <div style="color: var(--color-text-muted); font-size: 11px;">One archive per platform with bundled NW.js runtime</div>
+                                            <div style="color: var(--color-text); font-weight: 600; font-size: 13px;">${tt('Platform-Specific')}</div>
+                                            <div style="color: var(--color-text-muted); font-size: 11px;">${tt('One archive per platform with bundled NW.js runtime')}</div>
                                         </div>
                                     </label>
                                     <label class="dist-option-label" style="display: flex; align-items: center; padding: 8px 10px; background: var(--color-bg-panel); border: 1px solid var(--color-border); border-radius: 4px; cursor: pointer; transition: all 0.2s;">
                                         <input type="radio" name="dist-package-type" value="universal" class="system-radio" style="margin-right: 10px;">
                                         <div style="flex: 1;">
-                                            <div style="color: var(--color-text); font-weight: 600; font-size: 13px;">Universal</div>
-                                            <div style="color: var(--color-text-muted); font-size: 11px;">Single archive with all 3 platform runtimes included</div>
+                                            <div style="color: var(--color-text); font-weight: 600; font-size: 13px;">${tt('Universal')}</div>
+                                            <div style="color: var(--color-text-muted); font-size: 11px;">${tt('Single archive with all 3 platform runtimes included')}</div>
                                         </div>
                                     </label>
                                     <label class="dist-option-label" style="display: flex; align-items: center; padding: 8px 10px; background: var(--color-bg-panel); border: 1px solid var(--color-border); border-radius: 4px; cursor: pointer; transition: all 0.2s;">
                                         <input type="radio" name="dist-package-type" value="minimal" class="system-radio" style="margin-right: 10px;">
                                         <div style="flex: 1;">
-                                            <div style="color: var(--color-text); font-weight: 600; font-size: 13px;">Minimal</div>
-                                            <div style="color: var(--color-text-muted); font-size: 11px;">Editor only — NW.js downloads automatically on first launch</div>
+                                            <div style="color: var(--color-text); font-weight: 600; font-size: 13px;">${tt('Minimal')}</div>
+                                            <div style="color: var(--color-text-muted); font-size: 11px;">${tt('Editor only — NW.js downloads automatically on first launch')}</div>
                                         </div>
                                     </label>
                                     <label class="dist-option-label" style="display: flex; align-items: center; padding: 8px 10px; background: var(--color-bg-panel); border: 1px solid var(--color-border); border-radius: 4px; cursor: pointer; transition: all 0.2s;">
                                         <input type="radio" name="dist-package-type" value="web" class="system-radio" style="margin-right: 10px;">
                                         <div style="flex: 1;">
-                                            <div style="color: var(--color-text); font-weight: 600; font-size: 13px;">Web</div>
-                                            <div style="color: var(--color-text-muted); font-size: 11px;">Browser editor with bundled Reactor One project</div>
+                                            <div style="color: var(--color-text); font-weight: 600; font-size: 13px;">${tt('Web')}</div>
+                                            <div style="color: var(--color-text-muted); font-size: 11px;">${tt('Browser editor with bundled Reactor One project')}</div>
                                         </div>
                                     </label>
                                 </div>
@@ -56,34 +57,34 @@ class DistEditorManager {
 
                             <!-- Platform Selection (for platform type) -->
                             <div id="dist-platform-section" style="margin-bottom: 20px;">
-                                <h3 style="color: var(--color-text); margin-bottom: 10px; font-size: 15px;">Select Platform(s)</h3>
+                                <h3 style="color: var(--color-text); margin-bottom: 10px; font-size: 15px;">${tt('Select Platform(s)')}</h3>
                                 <div style="display: flex; flex-direction: column; gap: 6px;">
                                     <label class="dist-option-label" style="display: flex; align-items: center; padding: 8px 10px; background: var(--color-bg-panel); border: 1px solid var(--color-border); border-radius: 4px; cursor: pointer; transition: all 0.2s;">
                                         <input type="checkbox" id="dist-platform-linux" value="linux" checked class="system-checkbox" style="margin-right: 10px;">
                                         <div style="flex: 1;">
-                                            <div style="color: var(--color-text); font-weight: 600; font-size: 13px;">Linux (x64)</div>
-                                            <div style="color: var(--color-text-muted); font-size: 11px;">ZIP archive for Linux 64-bit</div>
+                                            <div style="color: var(--color-text); font-weight: 600; font-size: 13px;">${tt('Linux (x64)')}</div>
+                                            <div style="color: var(--color-text-muted); font-size: 11px;">${tt('ZIP archive for Linux 64-bit')}</div>
                                         </div>
                                     </label>
                                     <label id="dist-appimage-option" style="display: none; align-items: flex-start; gap: 8px; margin-left: 28px; padding: 7px 9px; background: var(--color-bg-surface); border: 1px solid var(--color-border-subtle); border-left: 2px solid var(--color-accent-border); border-radius: 4px; cursor: pointer;">
                                         <input id="dist-create-linux-appimage" type="checkbox" class="system-checkbox" style="width: 16px; height: 16px; min-width: 16px; min-height: 16px; max-width: 16px; max-height: 16px; flex: 0 0 16px; margin: 1px 0 0;">
                                         <span>
-                                            <span style="display: block; color: var(--color-text); font-weight: 600; font-size: 12px;">Also create Linux AppImage</span>
-                                            <span id="dist-appimage-note" style="display: block; color: var(--color-text-muted); font-size: 10px; line-height: 1.35; margin-top: 2px;">Portable x86_64 file emitted beside the Linux ZIP.</span>
+                                            <span style="display: block; color: var(--color-text); font-weight: 600; font-size: 12px;">${tt('Also create Linux AppImage')}</span>
+                                            <span id="dist-appimage-note" style="display: block; color: var(--color-text-muted); font-size: 10px; line-height: 1.35; margin-top: 2px;">${tt('Portable x86_64 file emitted beside the Linux ZIP.')}</span>
                                         </span>
                                     </label>
                                     <label class="dist-option-label" style="display: flex; align-items: center; padding: 8px 10px; background: var(--color-bg-panel); border: 1px solid var(--color-border); border-radius: 4px; cursor: pointer; transition: all 0.2s;">
                                         <input type="checkbox" id="dist-platform-win" value="win" class="system-checkbox" style="margin-right: 10px;">
                                         <div style="flex: 1;">
-                                            <div style="color: var(--color-text); font-weight: 600; font-size: 13px;">Windows (x64)</div>
-                                            <div style="color: var(--color-text-muted); font-size: 11px;">ZIP archive for Windows 64-bit</div>
+                                            <div style="color: var(--color-text); font-weight: 600; font-size: 13px;">${tt('Windows (x64)')}</div>
+                                            <div style="color: var(--color-text-muted); font-size: 11px;">${tt('ZIP archive for Windows 64-bit')}</div>
                                         </div>
                                     </label>
                                     <label class="dist-option-label" style="display: flex; align-items: center; padding: 8px 10px; background: var(--color-bg-panel); border: 1px solid var(--color-border); border-radius: 4px; cursor: pointer; transition: all 0.2s;">
                                         <input type="checkbox" id="dist-platform-osx" value="osx" class="system-checkbox" style="margin-right: 10px;">
                                         <div style="flex: 1;">
-                                            <div style="color: var(--color-text); font-weight: 600; font-size: 13px;">macOS (x64)</div>
-                                            <div style="color: var(--color-text-muted); font-size: 11px;">ZIP archive for macOS 64-bit</div>
+                                            <div style="color: var(--color-text); font-weight: 600; font-size: 13px;">${tt('macOS (x64)')}</div>
+                                            <div style="color: var(--color-text-muted); font-size: 11px;">${tt('ZIP archive for macOS 64-bit')}</div>
                                         </div>
                                     </label>
                                 </div>
@@ -91,38 +92,38 @@ class DistEditorManager {
 
                             <!-- NW.js Edition -->
                             <div id="dist-nw-section">
-                                <h3 style="color: var(--color-text); margin-bottom: 10px; font-size: 15px;">NW.js Edition</h3>
+                                <h3 style="color: var(--color-text); margin-bottom: 10px; font-size: 15px;">${tt('NW.js Edition')}</h3>
                                 <div style="display: flex; flex-direction: column; gap: 6px;">
                                     <label class="dist-option-label" style="display: flex; align-items: center; padding: 8px 10px; background: var(--color-bg-panel); border: 1px solid var(--color-border); border-radius: 4px; cursor: pointer; transition: all 0.2s;">
                                         <input type="radio" name="dist-edition" value="normal" checked class="system-radio" style="margin-right: 10px;">
                                         <div style="flex: 1;">
-                                            <div style="color: var(--color-text); font-weight: 600; font-size: 13px;">Normal (Recommended)</div>
-                                            <div style="color: var(--color-text-muted); font-size: 11px;">Standard NW.js runtime</div>
+                                            <div style="color: var(--color-text); font-weight: 600; font-size: 13px;">${tt('Normal (Recommended)')}</div>
+                                            <div style="color: var(--color-text-muted); font-size: 11px;">${tt('Standard NW.js runtime')}</div>
                                         </div>
                                     </label>
                                     <label class="dist-option-label" style="display: flex; align-items: center; padding: 8px 10px; background: var(--color-bg-panel); border: 1px solid var(--color-border); border-radius: 4px; cursor: pointer; transition: all 0.2s;">
                                         <input type="radio" name="dist-edition" value="sdk" class="system-radio" style="margin-right: 10px;">
                                         <div style="flex: 1;">
-                                            <div style="color: var(--color-text); font-weight: 600; font-size: 13px;">SDK</div>
-                                            <div style="color: var(--color-text-muted); font-size: 11px;">Includes DevTools — for development/debugging</div>
+                                            <div style="color: var(--color-text); font-weight: 600; font-size: 13px;">${tt('SDK')}</div>
+                                            <div style="color: var(--color-text-muted); font-size: 11px;">${tt('Includes DevTools — for development/debugging')}</div>
                                         </div>
                                     </label>
                                 </div>
                                 <div style="margin-top: 10px; display: grid; grid-template-columns: 130px minmax(0, 1fr); gap: 8px; align-items: center;">
-                                    <label for="dist-nw-version-policy" style="color: var(--color-text-muted); font-size: 11px;">NW.js version</label>
+                                    <label for="dist-nw-version-policy" style="color: var(--color-text-muted); font-size: 11px;">${tt('NW.js version')}</label>
                                     <select id="dist-nw-version-policy" class="rr-select" style="font-size: 12px; padding: 5px 7px;">
-                                        <option value="stable" selected>Latest stable</option>
-                                        <option value="editor">Same as editor</option>
-                                        <option value="exact">Specific version</option>
+                                        <option value="stable" selected>${tt('Latest stable')}</option>
+                                        <option value="editor">${tt('Same as editor')}</option>
+                                        <option value="exact">${tt('Specific version')}</option>
                                     </select>
-                                    <label for="dist-nw-version-exact" style="color: var(--color-text-muted); font-size: 11px;">Specific version</label>
-                                    <input id="dist-nw-version-exact" class="rr-input" type="text" placeholder="Search versions..." autocomplete="off" spellcheck="false" disabled style="font-size: 12px; padding: 5px 7px;">
+                                    <label for="dist-nw-version-exact" style="color: var(--color-text-muted); font-size: 11px;">${tt('Specific version')}</label>
+                                    <input id="dist-nw-version-exact" class="rr-input" type="text" placeholder="${tt('Search versions...')}" autocomplete="off" spellcheck="false" disabled style="font-size: 12px; padding: 5px 7px;">
                                     <div id="dist-nw-version-list" class="nw-version-menu" role="listbox" hidden></div>
                                 </div>
-                                <div style="color: var(--color-text-muted); font-size: 10px; margin-top: 5px; line-height: 1.35;">Matching local bundles and every NW.js cache are checked before downloading.</div>
+                                <div style="color: var(--color-text-muted); font-size: 10px; margin-top: 5px; line-height: 1.35;">${tt('Matching local bundles and every NW.js cache are checked before downloading.')}</div>
                                 <label id="dist-codec-option" style="display: flex; align-items: center; gap: 8px; margin-top: 10px; padding: 8px 10px; background: var(--color-bg-panel); border: 1px solid var(--color-border); border-radius: 4px; cursor: pointer;">
                                     <input id="dist-include-proprietary-codecs" type="checkbox" class="system-checkbox" style="width: 16px; height: 16px; min-width: 16px; min-height: 16px; max-width: 16px; max-height: 16px; flex: 0 0 16px; margin: 0;">
-                                    <span style="color: var(--color-text); font-weight: 600; font-size: 12px;">Include third-party H.264/AAC codec</span>
+                                    <span style="color: var(--color-text); font-weight: 600; font-size: 12px;">${tt('Include third-party H.264/AAC codec')}</span>
                                 </label>
                             </div>
                         </div>
@@ -131,17 +132,17 @@ class DistEditorManager {
                         <div style="flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0;">
                             <!-- Output Directory -->
                             <div style="margin-bottom: 16px;">
-                                <h3 style="color: var(--color-text); margin-bottom: 10px; font-size: 15px;">Output Directory</h3>
+                                <h3 style="color: var(--color-text); margin-bottom: 10px; font-size: 15px;">${tt('Output Directory')}</h3>
                                 <div style="display: flex; gap: 8px; align-items: center;">
                                     <input type="text" id="dist-output-path" value="dist-editor" readonly style="flex: 1; padding: 6px 10px; background-color: var(--color-bg-surface); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 2px; font-size: 13px; font-family: inherit; min-width: 0;">
-                                    <button id="dist-select-output-btn" class="graphic-selector-button" style="padding: 6px 14px; font-size: 12px; flex-shrink: 0;">Choose...</button>
+                                    <button id="dist-select-output-btn" class="graphic-selector-button" style="padding: 6px 14px; font-size: 12px; flex-shrink: 0;">${tt('Choose...')}</button>
                                 </div>
                             </div>
 
                             <!-- Progress -->
                             <div id="dist-progress-container" style="margin-bottom: 12px; display: none;">
                                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                                    <span id="dist-progress-status" style="color: var(--color-text); font-size: 13px;">Building...</span>
+                                    <span id="dist-progress-status" style="color: var(--color-text); font-size: 13px;">${tt('Building...')}</span>
                                     <span id="dist-progress-percent" style="color: var(--color-text-muted); font-size: 12px;">0%</span>
                                 </div>
                                 <div style="background: var(--color-bg-panel); border: 1px solid var(--color-border); border-radius: 4px; height: 20px; overflow: hidden;">
@@ -151,19 +152,19 @@ class DistEditorManager {
 
                             <!-- Build Log -->
                             <div style="flex: 1; display: flex; flex-direction: column; min-height: 0; margin-bottom: 16px;">
-                                <h3 style="color: var(--color-text); margin-bottom: 10px; font-size: 15px;">Build Log</h3>
+                                <h3 style="color: var(--color-text); margin-bottom: 10px; font-size: 15px;">${tt('Build Log')}</h3>
                                 <div id="dist-log" style="flex: 1; background: var(--color-bg-panel); border: 1px solid var(--color-border); border-radius: 4px; padding: 12px; overflow-y: auto; font-family: 'Consolas', 'Monaco', monospace; font-size: 12px; color: var(--color-text); white-space: pre-wrap; word-wrap: break-word;">
-                                    <div style="color: var(--color-text-muted);">Ready. Select options and click "Start Build".</div>
+                                    <div style="color: var(--color-text-muted);">${tt('Ready. Select options and click "Start Build".')}</div>
                                 </div>
                             </div>
 
                             <!-- Buttons -->
                             <div style="display: flex; gap: 12px; justify-content: flex-end; flex-shrink: 0;">
                                 <button id="dist-start-btn" style="padding: 8px 20px; background: var(--color-bg-deep); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 4px; font-size: 13px; cursor: pointer; font-weight: 500; transition: all 0.2s; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">
-                                    Start Build
+                                    ${tt('Start Build')}
                                 </button>
                                 <button id="dist-cancel-btn" style="padding: 8px 20px; background: var(--color-bg-deep); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 4px; font-size: 13px; cursor: pointer; font-weight: 500; transition: all 0.2s; box-shadow: 0 2px 4px rgba(0,0,0,0.2); display: none;">
-                                    Cancel Build
+                                    ${tt('Cancel Build')}
                                 </button>
                             </div>
                         </div>
@@ -238,6 +239,7 @@ class DistEditorManager {
     }
 
     updatePlatformVisibility() {
+        const tt = text => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
         const type = this.modal.querySelector('input[name="dist-package-type"]:checked').value;
         const section = document.getElementById('dist-platform-section');
         const web = type === 'web';
@@ -260,22 +262,24 @@ class DistEditorManager {
         appImageOption.style.opacity = appImageCheckbox.disabled ? '0.5' : '1';
         appImageOption.style.cursor = appImageCheckbox.disabled ? 'not-allowed' : 'pointer';
         appImageNote.textContent = !hostSupported
-            ? 'Creation requires RPG Reactor running on Linux x86_64.'
-            : 'Portable x86_64 file emitted beside the Linux ZIP.';
+            ? tt('Creation requires RPG Reactor running on Linux x86_64.')
+            : tt('Portable x86_64 file emitted beside the Linux ZIP.');
     }
 
     open() {
+        const tt = text => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
         this.modal.style.display = 'flex';
         this.clearLog();
         this.resetProgress();
         this.updatePlatformVisibility();
-        this.log('Ready. Select options and click "Start Build".', 'var(--color-text-muted)');
+        this.log(tt('Ready. Select options and click "Start Build".'), 'var(--color-text-muted)');
         this.versionPicker.load().catch(() => {});
     }
 
     close() {
         if (this.isBuilding) {
-            if (!window.confirm('A build is in progress. Close anyway?')) return;
+            const tt = text => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
+            if (!window.confirm(tt('A build is in progress. Close anyway?'))) return;
             this.cancelBuild();
         }
         this.versionPicker.close();
@@ -311,6 +315,7 @@ class DistEditorManager {
     }
 
     updateDownloadProgress(message) {
+        const tt = text => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
         const logDiv = document.getElementById('dist-log');
         let entry = this.downloadProgressRows.get(message.id);
         if (!entry) {
@@ -343,20 +348,20 @@ class DistEditorManager {
         entry.fill.classList.toggle('is-indeterminate', !hasTotal && !['complete', 'failed'].includes(message.state));
         entry.fill.classList.toggle('is-failed', message.state === 'failed');
         entry.fill.style.width = message.state === 'complete' ? '100%' : hasTotal ? `${percent}%` : '38%';
-        entry.track.setAttribute('aria-label', `Downloading ${message.label}`);
+        entry.track.setAttribute('aria-label', `${tt('Downloading')} ${message.label}`);
         if (percent === null) entry.track.removeAttribute('aria-valuenow');
         else entry.track.setAttribute('aria-valuenow', String(Math.round(percent)));
 
         if (message.state === 'complete') {
-            entry.detail.textContent = `Complete - ${mib(message.downloaded)}`;
+            entry.detail.textContent = `${tt('Complete -')} ${mib(message.downloaded)}`;
         } else if (message.state === 'failed') {
-            entry.detail.textContent = `Failed after ${message.attempt} attempts`;
+            entry.detail.textContent = `${tt('Failed after')} ${message.attempt} ${tt('attempts')}`;
         } else if (message.state === 'retrying') {
-            entry.detail.textContent = `Retrying ${message.attempt}/${message.maxAttempts} - ${mib(message.downloaded)}`;
+            entry.detail.textContent = `${tt('Retrying')} ${message.attempt}/${message.maxAttempts} - ${mib(message.downloaded)}`;
         } else if (hasTotal) {
             entry.detail.textContent = `${Math.round(percent)}% - ${mib(message.downloaded)} / ${mib(message.total)}`;
         } else {
-            entry.detail.textContent = `${mib(message.downloaded)} downloaded`;
+            entry.detail.textContent = `${mib(message.downloaded)} ${tt('downloaded')}`;
         }
         logDiv.scrollTop = logDiv.scrollHeight;
     }
@@ -386,10 +391,12 @@ class DistEditorManager {
         bar.style.width = '0%';
         bar.style.background = 'linear-gradient(90deg, var(--color-accent-deep), var(--color-accent-hover))';
         document.getElementById('dist-progress-percent').textContent = '0%';
-        document.getElementById('dist-progress-status').textContent = 'Building...';
+        const tt = text => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
+        document.getElementById('dist-progress-status').textContent = tt('Building...');
     }
 
     async startBuild() {
+        const tt = text => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
         const packageType = this.modal.querySelector('input[name="dist-package-type"]:checked').value;
         const edition = this.modal.querySelector('input[name="dist-edition"]:checked').value;
         const includeProprietaryCodecs = document.getElementById('dist-include-proprietary-codecs').checked;
@@ -403,7 +410,7 @@ class DistEditorManager {
             if (document.getElementById('dist-platform-win').checked) platforms.push('win');
             if (document.getElementById('dist-platform-osx').checked) platforms.push('osx');
             if (platforms.length === 0) {
-                alert('Please select at least one platform.');
+                alert(tt('Please select at least one platform.'));
                 return;
             }
         } else {
@@ -430,7 +437,7 @@ class DistEditorManager {
 
         const editorNwVersion = process.versions.nw || process.versions['node-webkit'];
         if (packageType !== 'web' && !editorNwVersion) {
-            alert('Could not determine the editor NW.js version.');
+            alert(tt('Could not determine the editor NW.js version.'));
             return;
         }
         const nwVersionPolicy = document.getElementById('dist-nw-version-policy').value;
@@ -438,11 +445,11 @@ class DistEditorManager {
         if (packageType !== 'web' && nwVersionPolicy === 'exact') {
             try { await this.versionPicker.load(); }
             catch {
-                alert('NW.js versions are unavailable. Connect to the internet or choose Same as editor.');
+                alert(tt('NW.js versions are unavailable. Connect to the internet or choose Same as editor.'));
                 return;
             }
             if (!this.versionPicker.hasVersion(exactNwVersion)) {
-                alert('Select an available NW.js version from the searchable list.');
+                alert(tt('Select an available NW.js version from the searchable list.'));
                 return;
             }
         }
@@ -452,14 +459,14 @@ class DistEditorManager {
         document.getElementById('dist-cancel-btn').style.display = 'block';
 
         this.clearLog();
-        this.log('Launching distribution worker...', 'var(--color-link)');
-        this.log(`App root: ${appRoot}`, 'var(--color-text-muted)');
+        this.log(tt('Launching distribution worker...'), 'var(--color-link)');
+        this.log(`${tt('App root:')} ${appRoot}`, 'var(--color-text-muted)');
 
         try {
             const { Worker } = require('worker_threads');
             const workerPath = pathModule.join(appRoot, 'build-scripts', 'dist-editor-worker.js');
             if (!fs.existsSync(workerPath)) {
-                throw new Error(`Worker not found at: ${workerPath}`);
+                throw new Error(`${tt('Worker not found at:')} ${workerPath}`);
             }
 
             this.worker = new Worker(workerPath, {
@@ -474,6 +481,9 @@ class DistEditorManager {
                     editorExecPath: process.execPath,
                     includeProprietaryCodecs,
                     createLinuxAppImage,
+                    releaseBuild: false,
+                    releaseHashManifestPath: process.env.RPG_REACTOR_RELEASE_HASH_MANIFEST ||
+                        pathModule.join(appRoot, 'build-scripts', 'release-hashes.json'),
                     outputDir,
                 }
             });
@@ -488,8 +498,8 @@ class DistEditorManager {
                 } else if (msg.type === 'done') {
                     if (msg.success) {
                         this.log('', 'var(--color-text)');
-                        this.log(`Output directory: ${outputDir}`, 'var(--color-text)');
-                        this.updateProgress(100, 'Build complete!');
+                        this.log(`${tt('Output directory:')} ${outputDir}`, 'var(--color-text)');
+                        this.updateProgress(100, tt('Build complete!'));
                     }
                 }
             });
@@ -497,7 +507,7 @@ class DistEditorManager {
             this.worker.on('error', (err) => {
                 this.log('', 'var(--color-text)');
                 this.log('========================================', 'var(--color-danger-bright)');
-                this.log('Worker error:', 'var(--color-danger-bright)');
+                this.log(tt('Worker error:'), 'var(--color-danger-bright)');
                 this.log(err.message || String(err), 'var(--color-danger-bright)');
                 this.log('========================================', 'var(--color-danger-bright)');
                 this.buildFinished();
@@ -505,7 +515,7 @@ class DistEditorManager {
 
             this.worker.on('exit', (code) => {
                 if (code !== 0 && this.isBuilding) {
-                    this.log(`Worker exited with code ${code}`, 'var(--color-danger-bright)');
+                    this.log(`${tt('Worker exited with code')} ${code}`, 'var(--color-danger-bright)');
                 }
                 this.buildFinished();
             });
@@ -513,7 +523,7 @@ class DistEditorManager {
         } catch (error) {
             this.log('', 'var(--color-text)');
             this.log('========================================', 'var(--color-danger-bright)');
-            this.log('Error starting build:', 'var(--color-danger-bright)');
+            this.log(tt('Error starting build:'), 'var(--color-danger-bright)');
             this.log(error.message, 'var(--color-danger-bright)');
             if (error.stack) this.log(error.stack, 'var(--color-danger-bright)');
             this.log('========================================', 'var(--color-danger-bright)');
@@ -530,9 +540,10 @@ class DistEditorManager {
 
     cancelBuild() {
         if (this.worker) {
+            const tt = text => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
             this.worker.terminate();
             this.log('', 'var(--color-text)');
-            this.log('Build cancelled by user.', '#ffaa00');
+            this.log(tt('Build cancelled by user.'), '#ffaa00');
             this.buildFinished();
         }
     }

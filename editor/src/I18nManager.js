@@ -30,7 +30,7 @@ const RR_LANGUAGES = [
     { id: 'tr', name: 'Turkish', nativeName: 'Türkçe', flag: '🇹🇷' }
 ];
 
-const RR_APP_VERSION = '0.94.9';
+const RR_APP_VERSION = '0.95.0';
 
 const RR_DB_TYPE_KEYS = {
     actors: 'menu.actors', classes: 'menu.classes', skills: 'menu.skills', items: 'menu.items',
@@ -199,6 +199,7 @@ Object.assign(RR_EVENT_SECTION_NAMES, {
 
 const RR_I18N_STRINGS = {
     en: {
+        'mapTools.speedPlaceholder': 'Speed',
         // Menus & dialog chrome (event/plugin context menus, pickers)
         'common.none': '(None)', 'eventCtx.newEvent': 'New Event', 'eventCtx.editEvent': 'Edit Event', 'eventCtx.cutEvent': 'Cut Event',
         'eventCtx.copyEvent': 'Copy Event', 'eventCtx.pasteEvent': 'Paste Event', 'eventCtx.deleteEvent': 'Delete Event', 'eventCtx.findEvent': 'Find Event...',
@@ -286,6 +287,7 @@ const RR_I18N_STRINGS = {
         'toolbar.title.layer2': 'Layer 2',
         'toolbar.title.layer3': 'Layer 3',
         'toolbar.title.layer4': 'Layer 4',
+        'toolbar.title.animateAutotiles': 'Toggle A1 Autotile Animation',
         'toolbar.title.eventManager': 'Event Manager',
         'toolbar.title.database': 'Database',
         'toolbar.title.plugins': 'Plugins',
@@ -348,6 +350,9 @@ const RR_I18N_STRINGS = {
         'options.light': 'Light',
         'options.themeNote': 'Theme applies immediately. Re-open any open editor tabs to refresh canvas-drawn elements.',
         'options.languageNote': 'Language applies immediately to localized editor interface text. Some deep editor forms will be localized incrementally.',
+        'options.editor': 'Editor',
+        'options.animateAutotiles': 'Animate A1 Autotiles',
+        'options.animateAutotilesNote': 'Preview A1 water and waterfall animation in the map editor.',
 
         'about.title': 'About RPG Reactor',
         'about.version': `RPG Reactor v${RR_APP_VERSION}`,
@@ -461,6 +466,10 @@ const RR_I18N_STRINGS = {
         'db.entryCut': 'Entry cut to clipboard',
         'db.entryPasted': 'Entry pasted',
         'db.entryDuplicated': 'Entry duplicated',
+        'db.noCompatibleClipboard': 'No compatible database entry in the clipboard.',
+        'db.noCompatibleRowClipboard': 'No compatible trait or effect in the clipboard.',
+        'db.unresolvedClipboardReference': 'Cannot paste because "{name}" is missing or duplicated in the target project.',
+        'db.clipboardWriteFailed': 'Could not write database data to the clipboard.',
 
         'event.name': 'Event Name:',
         'event.position': 'Position:',
@@ -535,6 +544,7 @@ const RR_I18N_STRINGS = {
         'alert.loadProjectFirst': 'Please load a project first.'
     },
     ja: {
+        'mapTools.speedPlaceholder': '速度',
         // Menus & dialog chrome (event/plugin context menus, pickers)
         'common.none': '（なし）', 'eventCtx.newEvent': 'イベントの新規作成', 'eventCtx.editEvent': 'イベントの編集', 'eventCtx.cutEvent': 'イベントの切り取り',
         'eventCtx.copyEvent': 'イベントのコピー', 'eventCtx.pasteEvent': 'イベントの貼り付け', 'eventCtx.deleteEvent': 'イベントの削除', 'eventCtx.findEvent': 'イベントの検索...',
@@ -871,6 +881,7 @@ const RR_I18N_STRINGS = {
         'alert.loadProjectFirst': '先にプロジェクトを読み込んでください。'
     },
     es: {
+        'mapTools.speedPlaceholder': 'Velocidad',
         // Menus & dialog chrome (event/plugin context menus, pickers)
         'common.none': '(Ninguno)', 'eventCtx.newEvent': 'Nuevo evento', 'eventCtx.editEvent': 'Editar evento', 'eventCtx.cutEvent': 'Cortar evento',
         'eventCtx.copyEvent': 'Copiar evento', 'eventCtx.pasteEvent': 'Pegar evento', 'eventCtx.deleteEvent': 'Eliminar evento', 'eventCtx.findEvent': 'Buscar evento...',
@@ -1210,6 +1221,7 @@ const RR_I18N_STRINGS = {
 
 const RR_ADDITIONAL_LOCALES = {
     'zh-Hant': {
+        'mapTools.speedPlaceholder': '速度',
         // Menus & dialog chrome (event/plugin context menus, pickers)
         'common.none': '（無）', 'eventCtx.newEvent': '新增事件', 'eventCtx.editEvent': '編輯事件', 'eventCtx.cutEvent': '剪下事件',
         'eventCtx.copyEvent': '複製事件', 'eventCtx.pasteEvent': '貼上事件', 'eventCtx.deleteEvent': '刪除事件', 'eventCtx.findEvent': '尋找事件...',
@@ -1245,12 +1257,13 @@ const RR_ADDITIONAL_LOCALES = {
         'common.done': '完成', 'common.ok': '確定', 'common.cancel': '取消', 'common.apply': '套用', 'common.new': '新增', 'common.delete': '刪除', 'common.copy': '複製', 'common.cut': '剪下', 'common.paste': '貼上', 'common.duplicate': '建立副本', 'common.unnamed': '未命名',
         'options.title': '選項', 'options.appearance': '外觀', 'options.language': '語言', 'options.palette': '配色', 'options.mode': '模式', 'options.dark': '深色', 'options.light': '淺色', 'options.themeNote': '主題會立即套用。請重新開啟已開啟的編輯器分頁以刷新 Canvas 繪製元素。', 'options.languageNote': '語言會立即套用到已本地化的編輯器介面文字。部分深層表單會逐步本地化。',
         'about.title': '關於 RPG Reactor', 'about.description': '使用 NW.js 與 PixiJS v8 打造的開源跨平台 RPG 遊戲引擎', 'about.compatibility': '使用可在 Windows、Mac 與 Linux 上執行的專業編輯器製作精彩 RPG 遊戲。多數情況下相容 RPG Maker MZ 與 MV 專案；執行階段相容性主要取決於專案的核心腳本與外掛。', 'about.linksTitle': 'Psychronic 連結', 'about.itch': 'Itch.io - 外掛與工具', 'about.steam': 'Steam - Psychronic 遊戲', 'about.github': 'GitHub - 其他專案', 'about.youtube': 'YouTube - Psychronic Games', 'about.rarelyTypicalPlayers': 'YouTube - Rarely Typical Players Podcast', 'about.discord': 'Discord - 加入社群', 'about.license': '授權: MIT',
-        'forge.tools': '工具', 'forge.welcome': '資產產生工具組。請從側邊欄或下方選擇工具。', 'forge.openProject': '請開啟專案以使用鍛造坊工具。', 'forge.tab.procedural': '程序化', 'forge.tab.outfit': '服裝鍛造坊', 'forge.tab.hair': '髮型鍛造坊', 'forge.tab.parts': '部件 (PNG)', 'forge.style': '風格:', 'forge.frame': '影格:', 'forge.sheet': '圖表:', 'forge.saveAs': '另存為:', 'forge.saveSheet': '儲存圖表', 'forge.generateSave': '產生並儲存到素材庫',
+        'forge.tools': '工具', 'forge.welcome': '資產產生工具組。請從側邊欄或下方選擇工具。', 'forge.openProject': '請開啟專案以使用鍛造坊工具。', 'forge.tab.procedural': '程序化', 'forge.tab.outfit': '服裝鍛造坊', 'forge.tab.hair': '髮型鍛造坊', 'forge.tab.parts': '部件 (PNG)', 'forge.style': '風格:', 'forge.frame': '影格:', 'forge.sheet': '圖表:', 'forge.saveAs': '另存為:', 'forge.saveSheet': '儲存圖表', 'forge.generateSave': '產生並儲存到素材庫', 'forge.characterGenerator.description': '從分層部件建立角色精靈表。', 'forge.animationGenerator.description': '產生程序式動畫精靈表（幾何、粒子等）。', 'forge.soundEffectGenerator.description': '程序式 SFX 合成器 - sfxr 風格原型 + Web Audio。', 'forge.effekseerGenerator.description': '從配方產生 Effekseer 粒子效果（.efkefc），不需要 Effekseer 編輯器。',
         'db.system1': '系統 1', 'db.system2': '系統 2', 'db.search': '搜尋 {title}...', 'db.selectEntry': '從清單選擇項目', 'db.changeMaximum': '變更最大值', 'db.selectEntryToDelete': '選擇要刪除的項目', 'db.deleteConfirm': '刪除「{name}」？', 'db.unknownType': '未知資料庫類型: {type}', 'db.saved': '資料庫已儲存',
         'event.name': '事件名稱:', 'event.position': '位置:', 'event.note': '備註:', 'event.newPage': '新增事件頁', 'event.copyPage': '複製事件頁', 'event.pastePage': '貼上事件頁', 'event.deletePage': '刪除事件頁', 'event.clearPage': '清除事件頁', 'event.page': '頁面 {number}', 'event.contents': '內容', 'event.selectCommand': '選擇事件指令', 'event.conditions': '條件', 'event.image': '圖片', 'event.options': '選項', 'event.autonomousMovement': '自主移動', 'event.priority': '優先順序', 'event.trigger': '觸發',
         'status.noProjectLoaded': '未載入專案', 'status.playtestNotImplemented': '尚未實作測試遊玩模式', 'status.playtestSaveFailed': '測試遊玩已取消：無法儲存專案', 'status.loadMapFirst': '請先載入地圖', 'status.eventModeEnabled': '事件模式已啟用', 'status.eventModeDisabled': '事件模式已停用', 'alert.loadProjectFirst': '請先載入專案。'
     },
     'zh-Hans': {
+        'mapTools.speedPlaceholder': '速度',
         // Menus & dialog chrome (event/plugin context menus, pickers)
         'common.none': '（无）', 'eventCtx.newEvent': '新建事件', 'eventCtx.editEvent': '编辑事件', 'eventCtx.cutEvent': '剪切事件',
         'eventCtx.copyEvent': '复制事件', 'eventCtx.pasteEvent': '粘贴事件', 'eventCtx.deleteEvent': '删除事件', 'eventCtx.findEvent': '查找事件...',
@@ -1286,12 +1299,13 @@ const RR_ADDITIONAL_LOCALES = {
         'common.done': '完成', 'common.ok': '确定', 'common.cancel': '取消', 'common.apply': '应用', 'common.new': '新建', 'common.delete': '删除', 'common.copy': '复制', 'common.cut': '剪切', 'common.paste': '粘贴', 'common.duplicate': '复制副本', 'common.unnamed': '未命名',
         'options.title': '选项', 'options.appearance': '外观', 'options.language': '语言', 'options.palette': '配色', 'options.mode': '模式', 'options.dark': '深色', 'options.light': '浅色', 'options.themeNote': '主题会立即应用。请重新打开已打开的编辑器标签以刷新 Canvas 绘制元素。', 'options.languageNote': '语言会立即应用到已本地化的编辑器界面文字。部分深层表单会逐步本地化。',
         'about.title': '关于 RPG Reactor', 'about.description': '使用 NW.js 和 PixiJS v8 构建的开源跨平台 RPG 游戏引擎', 'about.compatibility': '使用可在 Windows、Mac 和 Linux 上运行的专业编辑器制作精彩 RPG 游戏。多数情况下兼容 RPG Maker MZ 和 MV 项目；运行时兼容性主要取决于项目的核心脚本和插件。', 'about.linksTitle': 'Psychronic 链接', 'about.itch': 'Itch.io - 插件和工具', 'about.steam': 'Steam - Psychronic 游戏', 'about.github': 'GitHub - 其他项目', 'about.youtube': 'YouTube - Psychronic Games', 'about.rarelyTypicalPlayers': 'YouTube - Rarely Typical Players Podcast', 'about.discord': 'Discord - 加入社区', 'about.license': '许可证: MIT',
-        'forge.tools': '工具', 'forge.welcome': '资源生成工具套件。请从侧边栏或下方选择工具。', 'forge.openProject': '请打开项目以使用锻造坊工具。', 'forge.tab.procedural': '程序化', 'forge.tab.outfit': '服装锻造坊', 'forge.tab.hair': '发型锻造坊', 'forge.tab.parts': '部件 (PNG)', 'forge.style': '风格:', 'forge.frame': '帧:', 'forge.sheet': '图表:', 'forge.saveAs': '另存为:', 'forge.saveSheet': '保存图表', 'forge.generateSave': '生成并保存到素材库',
+        'forge.tools': '工具', 'forge.welcome': '资源生成工具套件。请从侧边栏或下方选择工具。', 'forge.openProject': '请打开项目以使用锻造坊工具。', 'forge.tab.procedural': '程序化', 'forge.tab.outfit': '服装锻造坊', 'forge.tab.hair': '发型锻造坊', 'forge.tab.parts': '部件 (PNG)', 'forge.style': '风格:', 'forge.frame': '帧:', 'forge.sheet': '图表:', 'forge.saveAs': '另存为:', 'forge.saveSheet': '保存图表', 'forge.generateSave': '生成并保存到素材库', 'forge.characterGenerator.description': '从分层部件创建角色精灵表。', 'forge.animationGenerator.description': '生成程序化动画精灵表（几何、粒子等）。', 'forge.soundEffectGenerator.description': '程序化 SFX 合成器 - sfxr 风格原型 + Web Audio。', 'forge.effekseerGenerator.description': '从配方生成 Effekseer 粒子效果（.efkefc），无需 Effekseer 编辑器。',
         'db.system1': '系统 1', 'db.system2': '系统 2', 'db.search': '搜索 {title}...', 'db.selectEntry': '从列表选择项目', 'db.changeMaximum': '更改最大值', 'db.selectEntryToDelete': '选择要删除的项目', 'db.deleteConfirm': '删除“{name}”？', 'db.unknownType': '未知数据库类型: {type}', 'db.saved': '数据库已保存',
         'event.name': '事件名称:', 'event.position': '位置:', 'event.note': '备注:', 'event.newPage': '新建事件页', 'event.copyPage': '复制事件页', 'event.pastePage': '粘贴事件页', 'event.deletePage': '删除事件页', 'event.clearPage': '清除事件页', 'event.page': '页面 {number}', 'event.contents': '内容', 'event.selectCommand': '选择事件指令', 'event.conditions': '条件', 'event.image': '图片', 'event.options': '选项', 'event.autonomousMovement': '自主移动', 'event.priority': '优先级', 'event.trigger': '触发',
         'status.noProjectLoaded': '未加载项目', 'status.playtestNotImplemented': '尚未实现测试游玩模式', 'status.playtestSaveFailed': '测试游玩已取消：无法保存项目', 'status.loadMapFirst': '请先加载地图', 'status.eventModeEnabled': '事件模式已启用', 'status.eventModeDisabled': '事件模式已停用', 'alert.loadProjectFirst': '请先加载项目。'
     },
     ru: {
+        'mapTools.speedPlaceholder': 'Скорость',
         // Menus & dialog chrome (event/plugin context menus, pickers)
         'common.none': '(Нет)', 'eventCtx.newEvent': 'Новое Событие', 'eventCtx.editEvent': 'Редактировать Событие', 'eventCtx.cutEvent': 'Вырезать Событие',
         'eventCtx.copyEvent': 'Копировать Событие', 'eventCtx.pasteEvent': 'Вставить Событие', 'eventCtx.deleteEvent': 'Удалить Событие', 'eventCtx.findEvent': 'Найти Событие...',
@@ -1327,12 +1341,13 @@ const RR_ADDITIONAL_LOCALES = {
         'common.done': 'Готово', 'common.ok': 'OK', 'common.cancel': 'Отмена', 'common.apply': 'Применить', 'common.new': 'Новый', 'common.delete': 'Удалить', 'common.copy': 'Копировать', 'common.cut': 'Вырезать', 'common.paste': 'Вставить', 'common.duplicate': 'Дублировать', 'common.unnamed': 'Без имени',
         'options.title': 'Параметры', 'options.appearance': 'Внешний Вид', 'options.language': 'Язык', 'options.palette': 'Палитра', 'options.mode': 'Режим', 'options.dark': 'Тёмный', 'options.light': 'Светлый', 'options.themeNote': 'Тема применяется сразу. Переоткройте вкладки редактора, чтобы обновить элементы Canvas.', 'options.languageNote': 'Язык сразу применяется к локализованному тексту интерфейса. Некоторые глубокие формы будут локализованы постепенно.',
         'about.title': 'О RPG Reactor', 'about.description': 'Открытый кроссплатформенный RPG-движок на NW.js и PixiJS v8', 'about.compatibility': 'Создавайте потрясающие RPG в профессиональном редакторе для Windows, Mac и Linux. В большинстве случаев совместим с проектами RPG Maker MZ и MV; совместимость во время выполнения в основном зависит от corescripts и плагинов проекта.', 'about.linksTitle': 'Ссылки Psychronic', 'about.itch': 'Itch.io - Плагины И Инструменты', 'about.steam': 'Steam - Игры Psychronic', 'about.github': 'GitHub - Другие Проекты', 'about.youtube': 'YouTube - Psychronic Games', 'about.rarelyTypicalPlayers': 'YouTube - Rarely Typical Players Podcast', 'about.discord': 'Discord - Присоединиться К Сообществу', 'about.license': 'Лицензия: MIT',
-        'forge.tools': 'Инструменты', 'forge.welcome': 'Набор инструментов генерации ресурсов. Выберите инструмент на боковой панели или ниже.', 'forge.openProject': 'Откройте проект, чтобы использовать инструменты Кузницы.', 'forge.tab.procedural': 'Процедурно', 'forge.tab.outfit': 'Кузница Костюмов', 'forge.tab.hair': 'Кузница Волос', 'forge.tab.parts': 'Части (PNG)', 'forge.style': 'Стиль:', 'forge.frame': 'Кадр:', 'forge.sheet': 'Лист:', 'forge.saveAs': 'Сохранить как:', 'forge.saveSheet': 'Сохранить Лист', 'forge.generateSave': 'Создать И Сохранить В Библиотеку',
+        'forge.tools': 'Инструменты', 'forge.welcome': 'Набор инструментов генерации ресурсов. Выберите инструмент на боковой панели или ниже.', 'forge.openProject': 'Откройте проект, чтобы использовать инструменты Кузницы.', 'forge.tab.procedural': 'Процедурно', 'forge.tab.outfit': 'Кузница Костюмов', 'forge.tab.hair': 'Кузница Волос', 'forge.tab.parts': 'Части (PNG)', 'forge.style': 'Стиль:', 'forge.frame': 'Кадр:', 'forge.sheet': 'Лист:', 'forge.saveAs': 'Сохранить как:', 'forge.saveSheet': 'Сохранить Лист', 'forge.generateSave': 'Создать И Сохранить В Библиотеку', 'forge.characterGenerator.description': 'Создавайте листы спрайтов персонажей из многослойных частей.', 'forge.animationGenerator.description': 'Создавайте листы процедурной анимации (геометрия, частицы и т. д.).', 'forge.soundEffectGenerator.description': 'Процедурный синтезатор SFX: архетипы в стиле sfxr и Web Audio.', 'forge.effekseerGenerator.description': 'Создавайте эффекты частиц Effekseer (.efkefc) по рецептам без редактора Effekseer.',
         'db.system1': 'Система 1', 'db.system2': 'Система 2', 'db.search': 'Поиск {title}...', 'db.selectEntry': 'Выберите запись из списка', 'db.changeMaximum': 'Изменить максимум', 'db.selectEntryToDelete': 'Выберите запись для удаления', 'db.deleteConfirm': 'Удалить «{name}»?', 'db.unknownType': 'Неизвестный тип базы данных: {type}', 'db.saved': 'База данных сохранена',
         'event.name': 'Имя События:', 'event.position': 'Позиция:', 'event.note': 'Заметка:', 'event.newPage': 'Новая Страница События', 'event.copyPage': 'Копировать Страницу', 'event.pastePage': 'Вставить Страницу', 'event.deletePage': 'Удалить Страницу', 'event.clearPage': 'Очистить Страницу', 'event.page': 'Страница {number}', 'event.contents': 'Содержимое', 'event.selectCommand': 'Выберите Команду События', 'event.conditions': 'Условия', 'event.image': 'Изображение', 'event.options': 'Опции', 'event.autonomousMovement': 'Автономное Движение', 'event.priority': 'Приоритет', 'event.trigger': 'Триггер',
         'status.noProjectLoaded': 'Проект не загружен', 'status.playtestNotImplemented': 'Режим теста пока не реализован', 'status.playtestSaveFailed': 'Тест отменён: не удалось сохранить проект', 'status.loadMapFirst': 'Сначала загрузите карту', 'status.eventModeEnabled': 'Режим событий включён', 'status.eventModeDisabled': 'Режим событий отключён', 'alert.loadProjectFirst': 'Сначала загрузите проект.'
     },
     pt: {
+        'mapTools.speedPlaceholder': 'Velocidade',
         // Menus & dialog chrome (event/plugin context menus, pickers)
         'common.none': '(Nenhum)', 'eventCtx.newEvent': 'Novo Evento', 'eventCtx.editEvent': 'Editar Evento', 'eventCtx.cutEvent': 'Recortar Evento',
         'eventCtx.copyEvent': 'Copiar Evento', 'eventCtx.pasteEvent': 'Colar Evento', 'eventCtx.deleteEvent': 'Excluir Evento', 'eventCtx.findEvent': 'Localizar Evento...',
@@ -1368,12 +1383,13 @@ const RR_ADDITIONAL_LOCALES = {
         'common.done': 'Concluído', 'common.ok': 'OK', 'common.cancel': 'Cancelar', 'common.apply': 'Aplicar', 'common.new': 'Novo', 'common.delete': 'Excluir', 'common.copy': 'Copiar', 'common.cut': 'Recortar', 'common.paste': 'Colar', 'common.duplicate': 'Duplicar', 'common.unnamed': 'Sem Nome',
         'options.title': 'Opções', 'options.appearance': 'Aparência', 'options.language': 'Idioma', 'options.palette': 'Paleta', 'options.mode': 'Modo', 'options.dark': 'Escuro', 'options.light': 'Claro', 'options.themeNote': 'O tema é aplicado imediatamente. Reabra abas do editor para atualizar elementos desenhados em Canvas.', 'options.languageNote': 'O idioma é aplicado imediatamente ao texto localizado da interface. Alguns formulários profundos serão localizados gradualmente.',
         'about.title': 'Sobre O RPG Reactor', 'about.description': 'Um motor RPG aberto e multiplataforma criado com NW.js e PixiJS v8', 'about.compatibility': 'Crie jogos RPG incríveis com um editor profissional que roda no Windows, Mac e Linux. Compatível com projetos RPG Maker MZ e MV na maioria dos casos; a compatibilidade em tempo de execução depende principalmente dos corescripts e plugins do projeto.', 'about.linksTitle': 'Links Da Psychronic', 'about.itch': 'Itch.io - Plugins E Ferramentas', 'about.steam': 'Steam - Jogos Da Psychronic', 'about.github': 'GitHub - Outros Projetos', 'about.youtube': 'YouTube - Psychronic Games', 'about.rarelyTypicalPlayers': 'YouTube - Rarely Typical Players Podcast', 'about.discord': 'Discord - Entrar Na Comunidade', 'about.license': 'Licença: MIT',
-        'forge.tools': 'Ferramentas', 'forge.welcome': 'Suíte de ferramentas de geração de recursos. Escolha uma ferramenta na barra lateral ou abaixo.', 'forge.openProject': 'Abra um projeto para usar as ferramentas da Forja.', 'forge.tab.procedural': 'Procedural', 'forge.tab.outfit': 'Forja De Roupas', 'forge.tab.hair': 'Forja De Cabelo', 'forge.tab.parts': 'Partes (PNG)', 'forge.style': 'Estilo:', 'forge.frame': 'Quadro:', 'forge.sheet': 'Folha:', 'forge.saveAs': 'Salvar como:', 'forge.saveSheet': 'Salvar Folha', 'forge.generateSave': 'Gerar E Salvar Na Biblioteca',
+        'forge.tools': 'Ferramentas', 'forge.welcome': 'Suíte de ferramentas de geração de recursos. Escolha uma ferramenta na barra lateral ou abaixo.', 'forge.openProject': 'Abra um projeto para usar as ferramentas da Forja.', 'forge.tab.procedural': 'Procedural', 'forge.tab.outfit': 'Forja De Roupas', 'forge.tab.hair': 'Forja De Cabelo', 'forge.tab.parts': 'Partes (PNG)', 'forge.style': 'Estilo:', 'forge.frame': 'Quadro:', 'forge.sheet': 'Folha:', 'forge.saveAs': 'Salvar como:', 'forge.saveSheet': 'Salvar Folha', 'forge.generateSave': 'Gerar E Salvar Na Biblioteca', 'forge.characterGenerator.description': 'Crie folhas de sprites de personagens a partir de partes em camadas.', 'forge.animationGenerator.description': 'Gere folhas de sprites de animação procedural (geométrica, partículas etc.).', 'forge.soundEffectGenerator.description': 'Sintetizador procedural de SFX: arquétipos no estilo sfxr + Web Audio.', 'forge.effekseerGenerator.description': 'Gere efeitos de partículas Effekseer (.efkefc) a partir de receitas, sem precisar do editor Effekseer.',
         'db.system1': 'Sistema 1', 'db.system2': 'Sistema 2', 'db.search': 'Buscar {title}...', 'db.selectEntry': 'Selecione uma entrada da lista', 'db.changeMaximum': 'Alterar Máximo', 'db.selectEntryToDelete': 'Selecione uma entrada para excluir', 'db.deleteConfirm': 'Excluir "{name}"?', 'db.unknownType': 'Tipo de banco de dados desconhecido: {type}', 'db.saved': 'Banco de dados salvo',
         'event.name': 'Nome Do Evento:', 'event.position': 'Posição:', 'event.note': 'Nota:', 'event.newPage': 'Nova Página De Evento', 'event.copyPage': 'Copiar Página De Evento', 'event.pastePage': 'Colar Página De Evento', 'event.deletePage': 'Excluir Página De Evento', 'event.clearPage': 'Limpar Página De Evento', 'event.page': 'Página {number}', 'event.contents': 'Conteúdo', 'event.selectCommand': 'Selecionar Comando De Evento', 'event.conditions': 'Condições', 'event.image': 'Imagem', 'event.options': 'Opções', 'event.autonomousMovement': 'Movimento Autônomo', 'event.priority': 'Prioridade', 'event.trigger': 'Gatilho',
         'status.noProjectLoaded': 'Nenhum projeto carregado', 'status.playtestNotImplemented': 'Modo de teste ainda não implementado', 'status.playtestSaveFailed': 'Teste cancelado: não foi possível salvar o projeto', 'status.loadMapFirst': 'Carregue um mapa primeiro', 'status.eventModeEnabled': 'Modo de eventos ativado', 'status.eventModeDisabled': 'Modo de eventos desativado', 'alert.loadProjectFirst': 'Carregue um projeto primeiro.'
     },
     de: {
+        'mapTools.speedPlaceholder': 'Geschwindigkeit',
         // Menus & dialog chrome (event/plugin context menus, pickers)
         'common.none': '(Keine)', 'eventCtx.newEvent': 'Neues Ereignis', 'eventCtx.editEvent': 'Ereignis bearbeiten', 'eventCtx.cutEvent': 'Ereignis ausschneiden',
         'eventCtx.copyEvent': 'Ereignis kopieren', 'eventCtx.pasteEvent': 'Ereignis einfügen', 'eventCtx.deleteEvent': 'Ereignis löschen', 'eventCtx.findEvent': 'Ereignis suchen...',
@@ -1409,12 +1425,13 @@ const RR_ADDITIONAL_LOCALES = {
         'common.done': 'Fertig', 'common.ok': 'OK', 'common.cancel': 'Abbrechen', 'common.apply': 'Anwenden', 'common.new': 'Neu', 'common.delete': 'Löschen', 'common.copy': 'Kopieren', 'common.cut': 'Ausschneiden', 'common.paste': 'Einfügen', 'common.duplicate': 'Duplizieren', 'common.unnamed': 'Unbenannt',
         'options.title': 'Optionen', 'options.appearance': 'Darstellung', 'options.language': 'Sprache', 'options.palette': 'Palette', 'options.mode': 'Modus', 'options.dark': 'Dunkel', 'options.light': 'Hell', 'options.themeNote': 'Das Design wird sofort angewendet. Öffne aktive Editor-Tabs erneut, um Canvas-Elemente zu aktualisieren.', 'options.languageNote': 'Die Sprache wird sofort auf lokalisierte Editor-Texte angewendet. Einige tiefe Editorformulare werden schrittweise lokalisiert.',
         'about.title': 'Über RPG Reactor', 'about.description': 'Eine quelloffene, plattformübergreifende RPG-Engine mit NW.js und PixiJS v8', 'about.compatibility': 'Erstelle großartige RPGs mit einem professionellen Editor für Windows, Mac und Linux. In den meisten Fällen kompatibel mit RPG Maker MZ- und MV-Projekten; Laufzeitkompatibilität hängt hauptsächlich von Corescripts und Plugins des Projekts ab.', 'about.linksTitle': 'Psychronic-Links', 'about.itch': 'Itch.io - Plugins und Werkzeuge', 'about.steam': 'Steam - Psychronic Games', 'about.github': 'GitHub - Weitere Projekte', 'about.youtube': 'YouTube - Psychronic Games', 'about.rarelyTypicalPlayers': 'YouTube - Rarely Typical Players Podcast', 'about.discord': 'Discord - Community beitreten', 'about.license': 'Lizenz: MIT',
-        'forge.tools': 'Werkzeuge', 'forge.welcome': 'Werkzeugsuite zur Asset-Erzeugung. Wähle ein Werkzeug in der Seitenleiste oder unten.', 'forge.openProject': 'Öffne ein Projekt, um Schmiede-Werkzeuge zu verwenden.', 'forge.tab.procedural': 'Prozedural', 'forge.tab.outfit': 'Outfit-Schmiede', 'forge.tab.hair': 'Haar-Schmiede', 'forge.tab.parts': 'Teile (PNG)', 'forge.style': 'Stil:', 'forge.frame': 'Frame:', 'forge.sheet': 'Sheet:', 'forge.saveAs': 'Speichern als:', 'forge.saveSheet': 'Sheet speichern', 'forge.generateSave': 'Erzeugen und in Bibliothek speichern',
+        'forge.tools': 'Werkzeuge', 'forge.welcome': 'Werkzeugsuite zur Asset-Erzeugung. Wähle ein Werkzeug in der Seitenleiste oder unten.', 'forge.openProject': 'Öffne ein Projekt, um Schmiede-Werkzeuge zu verwenden.', 'forge.tab.procedural': 'Prozedural', 'forge.tab.outfit': 'Outfit-Schmiede', 'forge.tab.hair': 'Haar-Schmiede', 'forge.tab.parts': 'Teile (PNG)', 'forge.style': 'Stil:', 'forge.frame': 'Frame:', 'forge.sheet': 'Sheet:', 'forge.saveAs': 'Speichern als:', 'forge.saveSheet': 'Sheet speichern', 'forge.generateSave': 'Erzeugen und in Bibliothek speichern', 'forge.characterGenerator.description': 'Erstelle Charakter-Sprite-Sheets aus geschichteten Teilen.', 'forge.animationGenerator.description': 'Erzeuge prozedurale Animations-Sprite-Sheets (Geometrie, Partikel usw.).', 'forge.soundEffectGenerator.description': 'Prozeduraler SFX-Synthesizer: Archetypen im sfxr-Stil + Web Audio.', 'forge.effekseerGenerator.description': 'Erzeuge Effekseer-Partikeleffekte (.efkefc) aus Rezepten, ohne den Effekseer-Editor zu benötigen.',
         'db.system1': 'System 1', 'db.system2': 'System 2', 'db.search': '{title} suchen...', 'db.selectEntry': 'Eintrag aus der Liste auswählen', 'db.changeMaximum': 'Maximum ändern', 'db.selectEntryToDelete': 'Eintrag zum Löschen auswählen', 'db.deleteConfirm': '„{name}“ löschen?', 'db.unknownType': 'Unbekannter Datenbanktyp: {type}', 'db.saved': 'Datenbank gespeichert',
         'event.name': 'Ereignisname:', 'event.position': 'Position:', 'event.note': 'Notiz:', 'event.newPage': 'Neue Ereignisseite', 'event.copyPage': 'Ereignisseite kopieren', 'event.pastePage': 'Ereignisseite einfügen', 'event.deletePage': 'Ereignisseite löschen', 'event.clearPage': 'Ereignisseite leeren', 'event.page': 'Seite {number}', 'event.contents': 'Inhalt', 'event.selectCommand': 'Ereignisbefehl auswählen', 'event.conditions': 'Bedingungen', 'event.image': 'Bild', 'event.options': 'Optionen', 'event.autonomousMovement': 'Autonome Bewegung', 'event.priority': 'Priorität', 'event.trigger': 'Auslöser',
         'status.noProjectLoaded': 'Kein Projekt geladen', 'status.playtestNotImplemented': 'Testmodus noch nicht implementiert', 'status.playtestSaveFailed': 'Test abgebrochen: Projekt konnte nicht gespeichert werden', 'status.loadMapFirst': 'Zuerst eine Karte laden', 'status.eventModeEnabled': 'Ereignismodus aktiviert', 'status.eventModeDisabled': 'Ereignismodus deaktiviert', 'alert.loadProjectFirst': 'Bitte zuerst ein Projekt laden.'
     },
     fr: {
+        'mapTools.speedPlaceholder': 'Vitesse',
         // Menus & dialog chrome (event/plugin context menus, pickers)
         'common.none': '(Aucun)', 'eventCtx.newEvent': 'Nouvel événement', 'eventCtx.editEvent': 'Modifier l\'événement', 'eventCtx.cutEvent': 'Couper l\'événement',
         'eventCtx.copyEvent': 'Copier l\'événement', 'eventCtx.pasteEvent': 'Coller l\'événement', 'eventCtx.deleteEvent': 'Supprimer l\'événement', 'eventCtx.findEvent': 'Rechercher un événement...',
@@ -1450,12 +1467,13 @@ const RR_ADDITIONAL_LOCALES = {
         'common.done': 'Terminé', 'common.ok': 'OK', 'common.cancel': 'Annuler', 'common.apply': 'Appliquer', 'common.new': 'Nouveau', 'common.delete': 'Supprimer', 'common.copy': 'Copier', 'common.cut': 'Couper', 'common.paste': 'Coller', 'common.duplicate': 'Dupliquer', 'common.unnamed': 'Sans nom',
         'options.title': 'Options', 'options.appearance': 'Apparence', 'options.language': 'Langue', 'options.palette': 'Palette', 'options.mode': 'Mode', 'options.dark': 'Sombre', 'options.light': 'Clair', 'options.themeNote': 'Le thème s’applique immédiatement. Rouvrez les onglets d’éditeur ouverts pour rafraîchir les éléments Canvas.', 'options.languageNote': 'La langue s’applique immédiatement au texte localisé de l’interface. Certains formulaires profonds seront localisés progressivement.',
         'about.title': 'À propos de RPG Reactor', 'about.description': 'Un moteur RPG open source multiplateforme construit avec NW.js et PixiJS v8', 'about.compatibility': 'Créez des RPG incroyables avec un éditeur professionnel pour Windows, Mac et Linux. Compatible avec les projets RPG Maker MZ et MV dans la plupart des cas; la compatibilité à l’exécution dépend surtout des corescripts et plugins du projet.', 'about.linksTitle': 'Liens Psychronic', 'about.itch': 'Itch.io - Plugins et outils', 'about.steam': 'Steam - Jeux Psychronic', 'about.github': 'GitHub - Autres projets', 'about.youtube': 'YouTube - Psychronic Games', 'about.rarelyTypicalPlayers': 'YouTube - Rarely Typical Players Podcast', 'about.discord': 'Discord - Rejoindre la communauté', 'about.license': 'Licence: MIT',
-        'forge.tools': 'Outils', 'forge.welcome': 'Suite d’outils de génération d’assets. Choisissez un outil dans la barre latérale ou ci-dessous.', 'forge.openProject': 'Ouvrez un projet pour utiliser les outils de la forge.', 'forge.tab.procedural': 'Procédural', 'forge.tab.outfit': 'Forge de tenues', 'forge.tab.hair': 'Forge de cheveux', 'forge.tab.parts': 'Pièces (PNG)', 'forge.style': 'Style:', 'forge.frame': 'Image:', 'forge.sheet': 'Feuille:', 'forge.saveAs': 'Enregistrer sous:', 'forge.saveSheet': 'Enregistrer la feuille', 'forge.generateSave': 'Générer et enregistrer dans la bibliothèque',
+        'forge.tools': 'Outils', 'forge.welcome': 'Suite d’outils de génération d’assets. Choisissez un outil dans la barre latérale ou ci-dessous.', 'forge.openProject': 'Ouvrez un projet pour utiliser les outils de la forge.', 'forge.tab.procedural': 'Procédural', 'forge.tab.outfit': 'Forge de tenues', 'forge.tab.hair': 'Forge de cheveux', 'forge.tab.parts': 'Pièces (PNG)', 'forge.style': 'Style:', 'forge.frame': 'Image:', 'forge.sheet': 'Feuille:', 'forge.saveAs': 'Enregistrer sous:', 'forge.saveSheet': 'Enregistrer la feuille', 'forge.generateSave': 'Générer et enregistrer dans la bibliothèque', 'forge.characterGenerator.description': 'Créez des feuilles de sprites de personnages à partir de pièces superposées.', 'forge.animationGenerator.description': 'Générez des feuilles de sprites d’animation procédurale (géométrie, particules, etc.).', 'forge.soundEffectGenerator.description': 'Synthétiseur SFX procédural : archétypes de style sfxr + Web Audio.', 'forge.effekseerGenerator.description': 'Générez des effets de particules Effekseer (.efkefc) à partir de recettes, sans éditeur Effekseer.',
         'db.system1': 'Système 1', 'db.system2': 'Système 2', 'db.search': 'Rechercher {title}...', 'db.selectEntry': 'Sélectionnez une entrée dans la liste', 'db.changeMaximum': 'Modifier le maximum', 'db.selectEntryToDelete': 'Sélectionnez une entrée à supprimer', 'db.deleteConfirm': 'Supprimer « {name} » ?', 'db.unknownType': 'Type de base de données inconnu: {type}', 'db.saved': 'Base de données enregistrée',
         'event.name': 'Nom de l’événement:', 'event.position': 'Position:', 'event.note': 'Note:', 'event.newPage': 'Nouvelle page d’événement', 'event.copyPage': 'Copier la page d’événement', 'event.pastePage': 'Coller la page d’événement', 'event.deletePage': 'Supprimer la page d’événement', 'event.clearPage': 'Effacer la page d’événement', 'event.page': 'Page {number}', 'event.contents': 'Contenu', 'event.selectCommand': 'Sélectionner une commande d’événement', 'event.conditions': 'Conditions', 'event.image': 'Image', 'event.options': 'Options', 'event.autonomousMovement': 'Mouvement autonome', 'event.priority': 'Priorité', 'event.trigger': 'Déclencheur',
         'status.noProjectLoaded': 'Aucun projet chargé', 'status.playtestNotImplemented': 'Mode test non encore implémenté', 'status.playtestSaveFailed': 'Test annulé : enregistrement du projet impossible', 'status.loadMapFirst': 'Chargez d’abord une carte', 'status.eventModeEnabled': 'Mode événements activé', 'status.eventModeDisabled': 'Mode événements désactivé', 'alert.loadProjectFirst': 'Veuillez d’abord charger un projet.'
     },
     el: {
+        'mapTools.speedPlaceholder': 'Ταχύτητα',
         // Menus & dialog chrome (event/plugin context menus, pickers)
         'common.none': '(Κανένα)', 'eventCtx.newEvent': 'Νέο συμβάν', 'eventCtx.editEvent': 'Επεξεργασία συμβάντος', 'eventCtx.cutEvent': 'Αποκοπή συμβάντος',
         'eventCtx.copyEvent': 'Αντιγραφή συμβάντος', 'eventCtx.pasteEvent': 'Επικόλληση συμβάντος', 'eventCtx.deleteEvent': 'Διαγραφή συμβάντος', 'eventCtx.findEvent': 'Εύρεση συμβάντος...',
@@ -1491,7 +1509,7 @@ const RR_ADDITIONAL_LOCALES = {
         'common.done': 'Τέλος', 'common.ok': 'OK', 'common.cancel': 'Άκυρο', 'common.apply': 'Εφαρμογή', 'common.new': 'Νέο', 'common.delete': 'Διαγραφή', 'common.copy': 'Αντιγραφή', 'common.cut': 'Αποκοπή', 'common.paste': 'Επικόλληση', 'common.duplicate': 'Διπλότυπο', 'common.unnamed': 'Χωρίς όνομα',
         'options.title': 'Επιλογές', 'options.appearance': 'Εμφάνιση', 'options.language': 'Γλώσσα', 'options.palette': 'Παλέτα', 'options.mode': 'Λειτουργία', 'options.dark': 'Σκούρο', 'options.light': 'Ανοιχτό', 'options.themeNote': 'Το θέμα εφαρμόζεται αμέσως. Ανοίξτε ξανά τα ανοιχτά tabs editor για ανανέωση στοιχείων Canvas.', 'options.languageNote': 'Η γλώσσα εφαρμόζεται αμέσως στο μεταφρασμένο κείμενο του editor. Ορισμένες βαθιές φόρμες θα μεταφραστούν σταδιακά.',
         'about.title': 'Σχετικά με το RPG Reactor', 'about.description': 'Μια ανοιχτή, πολυπλατφορμική RPG μηχανή με NW.js και PixiJS v8', 'about.compatibility': 'Δημιουργήστε εντυπωσιακά RPG με επαγγελματικό editor για Windows, Mac και Linux. Συμβατό με έργα RPG Maker MZ και MV στις περισσότερες περιπτώσεις· η συμβατότητα εκτέλεσης εξαρτάται κυρίως από τα corescripts και plugins του έργου.', 'about.linksTitle': 'Σύνδεσμοι Psychronic', 'about.itch': 'Itch.io - Plugins και εργαλεία', 'about.steam': 'Steam - Παιχνίδια Psychronic', 'about.github': 'GitHub - Άλλα έργα', 'about.youtube': 'YouTube - Psychronic Games', 'about.rarelyTypicalPlayers': 'YouTube - Rarely Typical Players Podcast', 'about.discord': 'Discord - Συμμετοχή στην κοινότητα', 'about.license': 'Άδεια: MIT',
-        'forge.tools': 'Εργαλεία', 'forge.welcome': 'Σουίτα εργαλείων παραγωγής assets. Επιλέξτε εργαλείο από την πλαϊνή μπάρα ή παρακάτω.', 'forge.openProject': 'Ανοίξτε ένα έργο για χρήση των εργαλείων σφυρηλατηρίου.', 'forge.tab.procedural': 'Διαδικαστικό', 'forge.tab.outfit': 'Σφυρηλατήριο ενδυμάτων', 'forge.tab.hair': 'Σφυρηλατήριο μαλλιών', 'forge.tab.parts': 'Μέρη (PNG)', 'forge.style': 'Στυλ:', 'forge.frame': 'Καρέ:', 'forge.sheet': 'Φύλλο:', 'forge.saveAs': 'Αποθήκευση ως:', 'forge.saveSheet': 'Αποθήκευση φύλλου', 'forge.generateSave': 'Δημιουργία και αποθήκευση στη βιβλιοθήκη',
+        'forge.tools': 'Εργαλεία', 'forge.welcome': 'Σουίτα εργαλείων παραγωγής assets. Επιλέξτε εργαλείο από την πλαϊνή μπάρα ή παρακάτω.', 'forge.openProject': 'Ανοίξτε ένα έργο για χρήση των εργαλείων σφυρηλατηρίου.', 'forge.tab.procedural': 'Διαδικαστικό', 'forge.tab.outfit': 'Σφυρηλατήριο ενδυμάτων', 'forge.tab.hair': 'Σφυρηλατήριο μαλλιών', 'forge.tab.parts': 'Μέρη (PNG)', 'forge.style': 'Στυλ:', 'forge.frame': 'Καρέ:', 'forge.sheet': 'Φύλλο:', 'forge.saveAs': 'Αποθήκευση ως:', 'forge.saveSheet': 'Αποθήκευση φύλλου', 'forge.generateSave': 'Δημιουργία και αποθήκευση στη βιβλιοθήκη', 'forge.characterGenerator.description': 'Δημιουργήστε φύλλα sprite χαρακτήρων από πολυεπίπεδα μέρη.', 'forge.animationGenerator.description': 'Δημιουργήστε διαδικαστικά φύλλα sprite κίνησης (γεωμετρία, σωματίδια κ.λπ.).', 'forge.soundEffectGenerator.description': 'Διαδικαστικός συνθέτης SFX: αρχέτυπα τύπου sfxr + Web Audio.', 'forge.effekseerGenerator.description': 'Δημιουργήστε εφέ σωματιδίων Effekseer (.efkefc) από συνταγές, χωρίς τον επεξεργαστή Effekseer.',
         'db.system1': 'Σύστημα 1', 'db.system2': 'Σύστημα 2', 'db.search': 'Αναζήτηση {title}...', 'db.selectEntry': 'Επιλέξτε καταχώρηση από τη λίστα', 'db.changeMaximum': 'Αλλαγή μέγιστου', 'db.selectEntryToDelete': 'Επιλέξτε καταχώρηση για διαγραφή', 'db.deleteConfirm': 'Διαγραφή «{name}»;', 'db.unknownType': 'Άγνωστος τύπος βάσης δεδομένων: {type}', 'db.saved': 'Η βάση δεδομένων αποθηκεύτηκε',
         'event.name': 'Όνομα γεγονότος:', 'event.position': 'Θέση:', 'event.note': 'Σημείωση:', 'event.newPage': 'Νέα σελίδα γεγονότος', 'event.copyPage': 'Αντιγραφή σελίδας γεγονότος', 'event.pastePage': 'Επικόλληση σελίδας γεγονότος', 'event.deletePage': 'Διαγραφή σελίδας γεγονότος', 'event.clearPage': 'Καθαρισμός σελίδας γεγονότος', 'event.page': 'Σελίδα {number}', 'event.contents': 'Περιεχόμενα', 'event.selectCommand': 'Επιλογή εντολής γεγονότος', 'event.conditions': 'Συνθήκες', 'event.image': 'Εικόνα', 'event.options': 'Επιλογές', 'event.autonomousMovement': 'Αυτόνομη κίνηση', 'event.priority': 'Προτεραιότητα', 'event.trigger': 'Ενεργοποίηση',
         'status.noProjectLoaded': 'Δεν έχει φορτωθεί έργο', 'status.playtestNotImplemented': 'Η λειτουργία δοκιμής δεν έχει υλοποιηθεί ακόμη', 'status.playtestSaveFailed': 'Η δοκιμή ακυρώθηκε: δεν ήταν δυνατή η αποθήκευση του έργου', 'status.loadMapFirst': 'Φορτώστε πρώτα έναν χάρτη', 'status.eventModeEnabled': 'Η λειτουργία γεγονότων ενεργοποιήθηκε', 'status.eventModeDisabled': 'Η λειτουργία γεγονότων απενεργοποιήθηκε', 'alert.loadProjectFirst': 'Φορτώστε πρώτα ένα έργο.'
@@ -1711,6 +1729,44 @@ Object.assign(RR_EVENT_COMMAND_NAMES.es, { 'Script': 'Código' });
 Object.assign(RR_EVENT_COMMAND_NAMES.pt, { 'Script': 'Código' });
 Object.assign(RR_EVENT_COMMAND_NAMES.fr, { 'Script': 'Commande script' });
 Object.assign(RR_EVENT_COMMAND_NAMES.el, { 'Script': 'Σενάριο' });
+
+// Continuation-row labels (402/403/405/411/413/505/605/657...) — these seven
+// locales predate the labels' addition to the table.
+Object.assign(RR_EVENT_COMMAND_NAMES.ru, {
+    'Text': 'Текст', 'When': 'Когда', 'When Cancel': 'При отмене', 'Scrolling Text': 'Прокручиваемый текст',
+    'Else': 'Иначе', 'Repeat Above': 'Повторять выше', 'Move Route': 'Маршрут движения', 'If Win': 'При победе',
+    'If Escape': 'При побеге', 'If Lose': 'При поражении', 'Shop Good': 'Товар магазина', 'Plugin Args': 'Аргументы плагина'
+});
+Object.assign(RR_EVENT_COMMAND_NAMES['zh-Hant'], {
+    'Text': '文字', 'When': '選項', 'When Cancel': '取消時', 'Scrolling Text': '捲動文字',
+    'Else': '否則', 'Repeat Above': '重複以上', 'Move Route': '移動路線', 'If Win': '勝利時',
+    'If Escape': '逃跑時', 'If Lose': '戰敗時', 'Shop Good': '商店商品', 'Plugin Args': '外掛參數'
+});
+Object.assign(RR_EVENT_COMMAND_NAMES['zh-Hans'], {
+    'Text': '文本', 'When': '选项', 'When Cancel': '取消时', 'Scrolling Text': '滚动文本',
+    'Else': '否则', 'Repeat Above': '重复以上', 'Move Route': '移动路线', 'If Win': '胜利时',
+    'If Escape': '逃跑时', 'If Lose': '战败时', 'Shop Good': '商店商品', 'Plugin Args': '插件参数'
+});
+Object.assign(RR_EVENT_COMMAND_NAMES.pt, {
+    'Text': 'Texto', 'When': 'Quando', 'When Cancel': 'Ao Cancelar', 'Scrolling Text': 'Texto Rolante',
+    'Else': 'Senão', 'Repeat Above': 'Repetir Acima', 'Move Route': 'Rota De Movimento', 'If Win': 'Se Vencer',
+    'If Escape': 'Se Fugir', 'If Lose': 'Se Perder', 'Shop Good': 'Produto Da Loja', 'Plugin Args': 'Argumentos Do Plugin'
+});
+Object.assign(RR_EVENT_COMMAND_NAMES.de, {
+    'Text': 'Text', 'When': 'Wenn', 'When Cancel': 'Bei Abbruch', 'Scrolling Text': 'Lauftext',
+    'Else': 'Sonst', 'Repeat Above': 'Obiges wiederholen', 'Move Route': 'Bewegungsroute', 'If Win': 'Bei Sieg',
+    'If Escape': 'Bei Flucht', 'If Lose': 'Bei Niederlage', 'Shop Good': 'Ladenware', 'Plugin Args': 'Plugin-Argumente'
+});
+Object.assign(RR_EVENT_COMMAND_NAMES.fr, {
+    'Text': 'Texte', 'When': 'Si choix', 'When Cancel': 'Si annulation', 'Scrolling Text': 'Texte défilant',
+    'Else': 'Sinon', 'Repeat Above': 'Répéter ci-dessus', 'Move Route': 'Itinéraire', 'If Win': 'Si victoire',
+    'If Escape': 'Si fuite', 'If Lose': 'Si défaite', 'Shop Good': 'Article de boutique', 'Plugin Args': 'Arguments du plugin'
+});
+Object.assign(RR_EVENT_COMMAND_NAMES.el, {
+    'Text': 'Κείμενο', 'When': 'Όταν', 'When Cancel': 'Σε ακύρωση', 'Scrolling Text': 'Κυλιόμενο κείμενο',
+    'Else': 'Αλλιώς', 'Repeat Above': 'Επανάληψη παραπάνω', 'Move Route': 'Διαδρομή κίνησης', 'If Win': 'Σε νίκη',
+    'If Escape': 'Σε απόδραση', 'If Lose': 'Σε ήττα', 'Shop Good': 'Προϊόν καταστήματος', 'Plugin Args': 'Ορίσματα προσθέτου'
+});
 Object.assign(RR_TEXT_TRANSLATIONS.es, { 'Script': 'Código' });
 Object.assign(RR_TEXT_TRANSLATIONS.pt, { 'Script': 'Código' });
 
@@ -2848,6 +2904,7 @@ Object.assign(RR_TEXT_TRANSLATIONS.pt, { 'Browse...': 'Procurar...', 'Operation:
 
 // ── Korean & Arabic locales (full tables, machine-assisted, MZ terminology) ──
 RR_I18N_STRINGS['ko'] = { ...RR_I18N_STRINGS.en,
+    'mapTools.speedPlaceholder': '속도',
     'common.none': '(없음)', 'eventCtx.newEvent': '새 이벤트', 'eventCtx.editEvent': '이벤트 편집', 'eventCtx.cutEvent': '이벤트 잘라내기',
     'eventCtx.copyEvent': '이벤트 복사', 'eventCtx.pasteEvent': '이벤트 붙여넣기', 'eventCtx.deleteEvent': '이벤트 삭제', 'eventCtx.findEvent': '이벤트 찾기...',
     'eventCtx.findNext': '다음 이벤트 찾기', 'eventCtx.findPrev': '이전 이벤트 찾기', 'eventCtx.setStart': '시작 위치 설정', 'eventCtx.player': '플레이어',
@@ -3140,6 +3197,7 @@ RR_EVENT_SECTION_NAMES['ko'] = {
     'Map': '맵', 'Battle': '전투', 'Advanced': '고급',
 };
 RR_I18N_STRINGS['ar'] = { ...RR_I18N_STRINGS.en,
+    'mapTools.speedPlaceholder': 'السرعة',
     'common.none': '(بلا)', 'eventCtx.newEvent': 'حدث جديد', 'eventCtx.editEvent': 'تحرير الحدث', 'eventCtx.cutEvent': 'قص الحدث',
     'eventCtx.copyEvent': 'نسخ الحدث', 'eventCtx.pasteEvent': 'لصق الحدث', 'eventCtx.deleteEvent': 'حذف الحدث', 'eventCtx.findEvent': 'بحث عن حدث...',
     'eventCtx.findNext': 'البحث عن الحدث التالي', 'eventCtx.findPrev': 'البحث عن الحدث السابق', 'eventCtx.setStart': 'تعيين موضع البداية', 'eventCtx.player': 'اللاعب',
@@ -3542,7 +3600,7 @@ Object.assign(RR_TEXT_TRANSLATIONS.ja, {
     'Particle Direction': 'パーティクルの方向', 'Particle Size': 'パーティクルサイズ', 'Particle Speed': 'パーティクル速度', 'Particle Trail': 'パーティクルトレイル',
     'Particles': 'パーティクル', 'Peace Symbol': 'ピースマーク', 'Peak Flash Fraction': 'ピークフラッシュ割合', 'Pentachoron': '五胞体',
     'Pentagram': '五芒星', 'Physical': '物理', 'Pitch': 'ピッチ', 'Pitch Cycles': 'ピッチサイクル',
-    'Playback Speed': '再生速度', 'Poison Miasma': '毒の瘴気', 'Portal': 'ポータル', 'Power Levels': 'パワーレベル',
+    'Playback Speed': '再生速度', 'Poison Miasma': '毒の瘴気', 'Power Levels': 'パワーレベル',
     'Primary Color': 'プライマリカラー', 'Primary Data': 'プライマリデータ', 'Progress / OK': '進行/OK', 'Progress Mode': '進行モード',
     'Puffs': 'パフ', 'Pulse': 'パルス', 'Pulse Color': 'パルスの色', 'Pulse Cycles': 'パルスサイクル',
     'Pulse Rate': 'パルスレート', 'Pulse Speed': 'パルス速度', 'Pulse Strength': 'パルスの強さ', 'Pulse To (0 = off)': 'パルス目標（0 = オフ）',
@@ -3703,7 +3761,7 @@ Object.assign(RR_TEXT_TRANSLATIONS.es, {
     'Particle Direction': 'Dirección de partículas', 'Particle Size': 'Tamaño de partículas', 'Particle Speed': 'Velocidad de partículas', 'Particle Trail': 'Estela de partículas',
     'Particles': 'Partículas', 'Peace Symbol': 'Símbolo de la paz', 'Peak Flash Fraction': 'Fracción de destello máximo', 'Pentachoron': 'Pentácoron',
     'Pentagram': 'Pentagrama', 'Physical': 'Físico', 'Pitch': 'Cabeceo', 'Pitch Cycles': 'Ciclos de cabeceo',
-    'Playback Speed': 'Velocidad de reproducción', 'Poison Miasma': 'Miasma venenoso', 'Portal': 'Portal', 'Power Levels': 'Niveles de energía',
+    'Playback Speed': 'Velocidad de reproducción', 'Poison Miasma': 'Miasma venenoso', 'Power Levels': 'Niveles de energía',
     'Primary Color': 'Color primario', 'Primary Data': 'Datos primarios', 'Progress / OK': 'Progreso / OK', 'Progress Mode': 'Modo de progreso',
     'Puffs': 'Bocanadas', 'Pulse': 'Pulso', 'Pulse Color': 'Color de pulso', 'Pulse Cycles': 'Ciclos de pulso',
     'Pulse Rate': 'Frecuencia de pulso', 'Pulse Speed': 'Velocidad de pulso', 'Pulse Strength': 'Intensidad de pulso', 'Pulse To (0 = off)': 'Pulsar hasta (0 = desactivado)',
@@ -3864,7 +3922,7 @@ Object.assign(RR_TEXT_TRANSLATIONS['zh-Hant'], {
     'Particle Direction': '粒子方向', 'Particle Size': '粒子大小', 'Particle Speed': '粒子速度', 'Particle Trail': '粒子軌跡',
     'Particles': '粒子', 'Peace Symbol': '和平符號', 'Peak Flash Fraction': '峰值閃光比例', 'Pentachoron': '五胞體',
     'Pentagram': '五芒星', 'Physical': '物理', 'Pitch': '俯仰', 'Pitch Cycles': '俯仰週期',
-    'Playback Speed': '播放速度', 'Poison Miasma': '毒霧瘴氣', 'Portal': '傳送門', 'Power Levels': '能量等級',
+    'Playback Speed': '播放速度', 'Poison Miasma': '毒霧瘴氣', 'Power Levels': '能量等級',
     'Primary Color': '主要顏色', 'Primary Data': '主要資料', 'Progress / OK': '進度 / OK', 'Progress Mode': '進度模式',
     'Puffs': '煙團', 'Pulse': '脈衝', 'Pulse Color': '脈衝顏色', 'Pulse Cycles': '脈衝週期',
     'Pulse Rate': '脈衝頻率', 'Pulse Speed': '脈衝速度', 'Pulse Strength': '脈衝強度', 'Pulse To (0 = off)': '脈衝至（0 = 關閉）',
@@ -4025,7 +4083,7 @@ Object.assign(RR_TEXT_TRANSLATIONS['zh-Hans'], {
     'Particle Direction': '粒子方向', 'Particle Size': '粒子大小', 'Particle Speed': '粒子速度', 'Particle Trail': '粒子拖尾',
     'Particles': '粒子', 'Peace Symbol': '和平符号', 'Peak Flash Fraction': '峰值闪光占比', 'Pentachoron': '五胞体',
     'Pentagram': '五芒星', 'Physical': '物理', 'Pitch': '俯仰', 'Pitch Cycles': '俯仰周期',
-    'Playback Speed': '播放速度', 'Poison Miasma': '毒瘴', 'Portal': '传送门', 'Power Levels': '功率等级',
+    'Playback Speed': '播放速度', 'Poison Miasma': '毒瘴', 'Power Levels': '功率等级',
     'Primary Color': '主色', 'Primary Data': '主要数据', 'Progress / OK': '进度/OK', 'Progress Mode': '进度模式',
     'Puffs': '烟团', 'Pulse': '脉冲', 'Pulse Color': '脉冲颜色', 'Pulse Cycles': '脉冲周期',
     'Pulse Rate': '脉冲频率', 'Pulse Speed': '脉冲速度', 'Pulse Strength': '脉冲强度', 'Pulse To (0 = off)': '脉冲至 (0 = 关闭)',
@@ -4186,7 +4244,7 @@ Object.assign(RR_TEXT_TRANSLATIONS.ru, {
     'Particle Direction': 'Направление Частиц', 'Particle Size': 'Размер Частиц', 'Particle Speed': 'Скорость Частиц', 'Particle Trail': 'След Частиц',
     'Particles': 'Частицы', 'Peace Symbol': 'Символ Мира', 'Peak Flash Fraction': 'Доля Пиковой Вспышки', 'Pentachoron': 'Пентахор',
     'Pentagram': 'Пентаграмма', 'Physical': 'Физика', 'Pitch': 'Тангаж', 'Pitch Cycles': 'Циклы Тангажа',
-    'Playback Speed': 'Скорость Воспроизведения', 'Poison Miasma': 'Ядовитые Миазмы', 'Portal': 'Портал', 'Power Levels': 'Уровни Мощности',
+    'Playback Speed': 'Скорость Воспроизведения', 'Poison Miasma': 'Ядовитые Миазмы', 'Power Levels': 'Уровни Мощности',
     'Primary Color': 'Основной Цвет', 'Primary Data': 'Основные Данные', 'Progress / OK': 'Прогресс / OK', 'Progress Mode': 'Режим Прогресса',
     'Puffs': 'Клубы', 'Pulse': 'Пульс', 'Pulse Color': 'Цвет Пульса', 'Pulse Cycles': 'Циклы Пульса',
     'Pulse Rate': 'Частота Пульса', 'Pulse Speed': 'Скорость Пульса', 'Pulse Strength': 'Сила Пульса', 'Pulse To (0 = off)': 'Пульс До (0 = выкл)',
@@ -4347,7 +4405,7 @@ Object.assign(RR_TEXT_TRANSLATIONS.pt, {
     'Particle Direction': 'Direção das Partículas', 'Particle Size': 'Tamanho das Partículas', 'Particle Speed': 'Velocidade das Partículas', 'Particle Trail': 'Rastro de Partículas',
     'Particles': 'Partículas', 'Peace Symbol': 'Símbolo da Paz', 'Peak Flash Fraction': 'Fração do Pico do Clarão', 'Pentachoron': 'Pentácoro',
     'Pentagram': 'Pentagrama', 'Physical': 'Físico', 'Pitch': 'Arfagem', 'Pitch Cycles': 'Ciclos de Arfagem',
-    'Playback Speed': 'Velocidade de Reprodução', 'Poison Miasma': 'Miasma Venenoso', 'Portal': 'Portal', 'Power Levels': 'Níveis de Energia',
+    'Playback Speed': 'Velocidade de Reprodução', 'Poison Miasma': 'Miasma Venenoso', 'Power Levels': 'Níveis de Energia',
     'Primary Color': 'Cor Primária', 'Primary Data': 'Dados Primários', 'Progress / OK': 'Progresso / OK', 'Progress Mode': 'Modo de Progresso',
     'Puffs': 'Baforadas', 'Pulse': 'Pulso', 'Pulse Color': 'Cor do Pulso', 'Pulse Cycles': 'Ciclos de Pulso',
     'Pulse Rate': 'Taxa de Pulso', 'Pulse Speed': 'Velocidade do Pulso', 'Pulse Strength': 'Força do Pulso', 'Pulse To (0 = off)': 'Pulsar Até (0 = desativado)',
@@ -4508,7 +4566,7 @@ Object.assign(RR_TEXT_TRANSLATIONS.de, {
     'Particle Direction': 'Partikelrichtung', 'Particle Size': 'Partikelgröße', 'Particle Speed': 'Partikelgeschwindigkeit', 'Particle Trail': 'Partikelspur',
     'Particles': 'Partikel', 'Peace Symbol': 'Friedenszeichen', 'Peak Flash Fraction': 'Spitzenblitz-Anteil', 'Pentachoron': 'Pentachoron',
     'Pentagram': 'Pentagramm', 'Physical': 'Physisch', 'Pitch': 'Nicken', 'Pitch Cycles': 'Nickzyklen',
-    'Playback Speed': 'Wiedergabetempo', 'Poison Miasma': 'Giftmiasma', 'Portal': 'Portal', 'Power Levels': 'Energiestufen',
+    'Playback Speed': 'Wiedergabetempo', 'Poison Miasma': 'Giftmiasma', 'Power Levels': 'Energiestufen',
     'Primary Color': 'Primärfarbe', 'Primary Data': 'Primärdaten', 'Progress / OK': 'Fortschritt / OK', 'Progress Mode': 'Fortschrittsmodus',
     'Puffs': 'Wölkchen', 'Pulse': 'Puls', 'Pulse Color': 'Pulsfarbe', 'Pulse Cycles': 'Pulszyklen',
     'Pulse Rate': 'Pulsrate', 'Pulse Speed': 'Pulsgeschwindigkeit', 'Pulse Strength': 'Pulsstärke', 'Pulse To (0 = off)': 'Pulsieren bis (0 = aus)',
@@ -4669,7 +4727,7 @@ Object.assign(RR_TEXT_TRANSLATIONS.fr, {
     'Particle Direction': 'Direction des particules', 'Particle Size': 'Taille des particules', 'Particle Speed': 'Vitesse des particules', 'Particle Trail': 'Traînée de particules',
     'Particles': 'Particules', 'Peace Symbol': 'Symbole de paix', 'Peak Flash Fraction': 'Fraction du flash maximal', 'Pentachoron': 'Pentachore',
     'Pentagram': 'Pentagramme', 'Physical': 'Physique', 'Pitch': 'Tangage', 'Pitch Cycles': 'Cycles de tangage',
-    'Playback Speed': 'Vitesse de lecture', 'Poison Miasma': 'Miasme empoisonné', 'Portal': 'Portail', 'Power Levels': 'Niveaux d\'énergie',
+    'Playback Speed': 'Vitesse de lecture', 'Poison Miasma': 'Miasme empoisonné', 'Power Levels': 'Niveaux d\'énergie',
     'Primary Color': 'Couleur primaire', 'Primary Data': 'Données primaires', 'Progress / OK': 'Progression / OK', 'Progress Mode': 'Mode progression',
     'Puffs': 'Bouffées', 'Pulse': 'Pulsation', 'Pulse Color': 'Couleur de pulsation', 'Pulse Cycles': 'Cycles de pulsation',
     'Pulse Rate': 'Rythme de pulsation', 'Pulse Speed': 'Vitesse de pulsation', 'Pulse Strength': 'Force de pulsation', 'Pulse To (0 = off)': 'Pulsation vers (0 = désactivé)',
@@ -4830,7 +4888,7 @@ Object.assign(RR_TEXT_TRANSLATIONS.el, {
     'Particle Direction': 'Κατεύθυνση σωματιδίων', 'Particle Size': 'Μέγεθος σωματιδίων', 'Particle Speed': 'Ταχύτητα σωματιδίων', 'Particle Trail': 'Ίχνος σωματιδίων',
     'Particles': 'Σωματίδια', 'Peace Symbol': 'Σύμβολο ειρήνης', 'Peak Flash Fraction': 'Ποσοστό μέγιστης αναλαμπής', 'Pentachoron': 'Πεντάχωρο',
     'Pentagram': 'Πεντάλφα', 'Physical': 'Φυσικό', 'Pitch': 'Πρόνευση', 'Pitch Cycles': 'Κύκλοι πρόνευσης',
-    'Playback Speed': 'Ταχύτητα αναπαραγωγής', 'Poison Miasma': 'Δηλητηριώδες μίασμα', 'Portal': 'Πύλη', 'Power Levels': 'Επίπεδα ισχύος',
+    'Playback Speed': 'Ταχύτητα αναπαραγωγής', 'Poison Miasma': 'Δηλητηριώδες μίασμα', 'Power Levels': 'Επίπεδα ισχύος',
     'Primary Color': 'Πρωτεύον χρώμα', 'Primary Data': 'Πρωτεύοντα δεδομένα', 'Progress / OK': 'Πρόοδος / OK', 'Progress Mode': 'Λειτουργία προόδου',
     'Puffs': 'Συννεφάκια', 'Pulse': 'Παλμός', 'Pulse Color': 'Χρώμα παλμού', 'Pulse Cycles': 'Κύκλοι παλμού',
     'Pulse Rate': 'Ρυθμός παλμού', 'Pulse Speed': 'Ταχύτητα παλμού', 'Pulse Strength': 'Ένταση παλμού', 'Pulse To (0 = off)': 'Παλμός έως (0 = ανενεργό)',
@@ -4991,7 +5049,7 @@ Object.assign(RR_TEXT_TRANSLATIONS.ko, {
     'Particle Direction': '파티클 방향', 'Particle Size': '파티클 크기', 'Particle Speed': '파티클 속도', 'Particle Trail': '파티클 트레일',
     'Particles': '파티클', 'Peace Symbol': '평화 기호', 'Peak Flash Fraction': '피크 플래시 비율', 'Pentachoron': '정오포체',
     'Pentagram': '펜타그램', 'Physical': '물리', 'Pitch': '피치', 'Pitch Cycles': '피치 사이클',
-    'Playback Speed': '재생 속도', 'Poison Miasma': '포이즌 미아즈마', 'Portal': '포털', 'Power Levels': '전력 레벨',
+    'Playback Speed': '재생 속도', 'Poison Miasma': '포이즌 미아즈마', 'Power Levels': '전력 레벨',
     'Primary Color': '주 색상', 'Primary Data': '주 데이터', 'Progress / OK': '진행 / OK', 'Progress Mode': '진행 모드',
     'Puffs': '퍼프', 'Pulse': '펄스', 'Pulse Color': '펄스 색상', 'Pulse Cycles': '펄스 사이클',
     'Pulse Rate': '펄스 빈도', 'Pulse Speed': '펄스 속도', 'Pulse Strength': '펄스 강도', 'Pulse To (0 = off)': '펄스 목표 (0 = 끔)',
@@ -5152,7 +5210,7 @@ Object.assign(RR_TEXT_TRANSLATIONS.ar, {
     'Particle Direction': 'اتجاه الجسيمات', 'Particle Size': 'حجم الجسيمات', 'Particle Speed': 'سرعة الجسيمات', 'Particle Trail': 'أثر الجسيمات',
     'Particles': 'جسيمات', 'Peace Symbol': 'رمز السلام', 'Peak Flash Fraction': 'نسبة الومضة القصوى', 'Pentachoron': 'خماسي الخلايا',
     'Pentagram': 'نجمة خماسية', 'Physical': 'مادي', 'Pitch': 'الميل', 'Pitch Cycles': 'دورات الميل',
-    'Playback Speed': 'سرعة التشغيل', 'Poison Miasma': 'ضباب سام', 'Portal': 'بوابة', 'Power Levels': 'مستويات الطاقة',
+    'Playback Speed': 'سرعة التشغيل', 'Poison Miasma': 'ضباب سام', 'Power Levels': 'مستويات الطاقة',
     'Primary Color': 'اللون الرئيسي', 'Primary Data': 'البيانات الرئيسية', 'Progress / OK': 'التقدم / OK', 'Progress Mode': 'وضع التقدم',
     'Puffs': 'نفثات', 'Pulse': 'النبض', 'Pulse Color': 'لون النبض', 'Pulse Cycles': 'دورات النبض',
     'Pulse Rate': 'معدل النبض', 'Pulse Speed': 'سرعة النبض', 'Pulse Strength': 'قوة النبض', 'Pulse To (0 = off)': 'النبض إلى (0 = إيقاف)',
@@ -5239,6 +5297,7 @@ Object.assign(RR_TEXT_TRANSLATIONS.ar, { 'Soft Glow': 'توهج ناعم', 'Hard
 
 // ── Korean & Arabic locales (full tables, machine-assisted, MZ terminology) ──
 RR_I18N_STRINGS['it'] = { ...RR_I18N_STRINGS.en,
+    'mapTools.speedPlaceholder': 'Velocità',
     'common.none': '(Nessuno)', 'eventCtx.newEvent': 'Nuovo evento', 'eventCtx.editEvent': 'Modifica evento', 'eventCtx.cutEvent': 'Taglia evento',
     'eventCtx.copyEvent': 'Copia evento', 'eventCtx.pasteEvent': 'Incolla evento', 'eventCtx.deleteEvent': 'Elimina evento', 'eventCtx.findEvent': 'Trova evento...',
     'eventCtx.findNext': 'Trova evento successivo', 'eventCtx.findPrev': 'Trova evento precedente', 'eventCtx.setStart': 'Imposta posizione iniziale', 'eventCtx.player': 'Giocatore',
@@ -5528,7 +5587,7 @@ RR_TEXT_TRANSLATIONS['it'] = {
     'Pitch Cycles': 'Cicli intonazione', 'Pitch Decay': 'Decadimento intonazione', 'Pitch Peak': 'Picco intonazione', 'Pitch Slide': 'Slide intonazione',
     'Pitch:': 'Intonazione:', 'Play': 'Riproduci', 'Play SE...': 'Riproduci SE...', 'Playback Speed': 'Velocità di riproduzione',
     'Player': 'Giocatore', 'Please enter a valid number between 1 and 5000.': 'Inserisci un numero valido tra 1 e 5000.', 'Please select a character frame': 'Seleziona un fotogramma del personaggio', 'Please select a trait type before saving.': 'Seleziona un tipo di caratteristica prima di salvare.',
-    'Please select an effect type before saving.': 'Seleziona un tipo di effetto prima di salvare.', 'Plugin Command': 'Comando plugin', 'Poison Miasma': 'Miasma velenoso', 'Portal': 'Portale',
+    'Please select an effect type before saving.': 'Seleziona un tipo di effetto prima di salvare.', 'Plugin Command': 'Comando plugin', 'Poison Miasma': 'Miasma velenoso',
     'Position:': 'Posizione:', 'Power Levels': 'Livelli di potenza', 'Power:': 'Potenza:', 'Preserve TP': 'Conserva TP',
     'Preview': 'Anteprima', 'Price': 'Prezzo', 'Price:': 'Prezzo:', 'Primary Color': 'Colore primario',
     'Primary Data': 'Dati primari', 'Priority:': 'Priorità:', 'Profile:': 'Profilo:', 'Progress / OK': 'Avanzamento / OK',
@@ -5689,6 +5748,7 @@ RR_EVENT_SECTION_NAMES['it'] = {
     'Map': 'Mappa', 'Battle': 'Battaglia', 'Advanced': 'Avanzate',
 };
 RR_I18N_STRINGS['pl'] = { ...RR_I18N_STRINGS.en,
+    'mapTools.speedPlaceholder': 'Prędkość',
     'common.none': '(Brak)', 'eventCtx.newEvent': 'Nowe zdarzenie', 'eventCtx.editEvent': 'Edytuj zdarzenie', 'eventCtx.cutEvent': 'Wytnij zdarzenie',
     'eventCtx.copyEvent': 'Kopiuj zdarzenie', 'eventCtx.pasteEvent': 'Wklej zdarzenie', 'eventCtx.deleteEvent': 'Usuń zdarzenie', 'eventCtx.findEvent': 'Znajdź zdarzenie...',
     'eventCtx.findNext': 'Znajdź następne zdarzenie', 'eventCtx.findPrev': 'Znajdź poprzednie zdarzenie', 'eventCtx.setStart': 'Ustaw pozycję startową', 'eventCtx.player': 'Gracz',
@@ -5978,7 +6038,7 @@ RR_TEXT_TRANSLATIONS['pl'] = {
     'Pitch Cycles': 'Cykle wysokości', 'Pitch Decay': 'Opadanie wysokości', 'Pitch Peak': 'Szczyt wysokości', 'Pitch Slide': 'Ślizg wysokości',
     'Pitch:': 'Wysokość:', 'Play': 'Odtwórz', 'Play SE...': 'Odtwórz SE...', 'Playback Speed': 'Szybkość odtwarzania',
     'Player': 'Gracz', 'Please enter a valid number between 1 and 5000.': 'Wprowadź prawidłową liczbę od 1 do 5000.', 'Please select a character frame': 'Wybierz klatkę postaci', 'Please select a trait type before saving.': 'Przed zapisaniem wybierz typ cechy.',
-    'Please select an effect type before saving.': 'Przed zapisaniem wybierz typ efektu.', 'Plugin Command': 'Komenda wtyczki', 'Poison Miasma': 'Trująca miazma', 'Portal': 'Portal',
+    'Please select an effect type before saving.': 'Przed zapisaniem wybierz typ efektu.', 'Plugin Command': 'Komenda wtyczki', 'Poison Miasma': 'Trująca miazma',
     'Position:': 'Pozycja:', 'Power Levels': 'Poziomy mocy', 'Power:': 'Moc:', 'Preserve TP': 'Zachowaj TP',
     'Preview': 'Podgląd', 'Price': 'Cena', 'Price:': 'Cena:', 'Primary Color': 'Kolor podstawowy',
     'Primary Data': 'Dane podstawowe', 'Priority:': 'Priorytet:', 'Profile:': 'Profil:', 'Progress / OK': 'Postęp / OK',
@@ -6139,6 +6199,7 @@ RR_EVENT_SECTION_NAMES['pl'] = {
     'Map': 'Mapa', 'Battle': 'Walka', 'Advanced': 'Zaawansowane',
 };
 RR_I18N_STRINGS['id'] = { ...RR_I18N_STRINGS.en,
+    'mapTools.speedPlaceholder': 'Kecepatan',
     'common.none': '(Tidak Ada)', 'eventCtx.newEvent': 'Event Baru', 'eventCtx.editEvent': 'Edit Event', 'eventCtx.cutEvent': 'Potong Event',
     'eventCtx.copyEvent': 'Salin Event', 'eventCtx.pasteEvent': 'Tempel Event', 'eventCtx.deleteEvent': 'Hapus Event', 'eventCtx.findEvent': 'Cari Event...',
     'eventCtx.findNext': 'Cari Event Berikutnya', 'eventCtx.findPrev': 'Cari Event Sebelumnya', 'eventCtx.setStart': 'Atur Posisi Awal', 'eventCtx.player': 'Pemain',
@@ -6428,7 +6489,7 @@ RR_TEXT_TRANSLATIONS['id'] = {
     'Pitch Cycles': 'Siklus Pitch', 'Pitch Decay': 'Decay Pitch', 'Pitch Peak': 'Puncak Pitch', 'Pitch Slide': 'Slide Pitch',
     'Pitch:': 'Pitch:', 'Play': 'Putar', 'Play SE...': 'Putar SE...', 'Playback Speed': 'Kecepatan Pemutaran',
     'Player': 'Pemain', 'Please enter a valid number between 1 and 5000.': 'Masukkan angka yang valid antara 1 dan 5000.', 'Please select a character frame': 'Silakan pilih frame karakter', 'Please select a trait type before saving.': 'Silakan pilih tipe sifat sebelum menyimpan.',
-    'Please select an effect type before saving.': 'Silakan pilih tipe efek sebelum menyimpan.', 'Plugin Command': 'Perintah Plugin', 'Poison Miasma': 'Miasma Racun', 'Portal': 'Portal',
+    'Please select an effect type before saving.': 'Silakan pilih tipe efek sebelum menyimpan.', 'Plugin Command': 'Perintah Plugin', 'Poison Miasma': 'Miasma Racun',
     'Position:': 'Posisi:', 'Power Levels': 'Tingkat Daya', 'Power:': 'Kekuatan:', 'Preserve TP': 'Pertahankan TP',
     'Preview': 'Pratinjau', 'Price': 'Harga', 'Price:': 'Harga:', 'Primary Color': 'Warna Utama',
     'Primary Data': 'Data Utama', 'Priority:': 'Prioritas:', 'Profile:': 'Profil:', 'Progress / OK': 'Progres / OK',
@@ -6589,6 +6650,7 @@ RR_EVENT_SECTION_NAMES['id'] = {
     'Map': 'Peta', 'Battle': 'Pertempuran', 'Advanced': 'Lanjutan',
 };
 RR_I18N_STRINGS['vi'] = { ...RR_I18N_STRINGS.en,
+    'mapTools.speedPlaceholder': 'Tốc độ',
     'common.none': '(Không có)', 'eventCtx.newEvent': 'Sự kiện mới', 'eventCtx.editEvent': 'Chỉnh sửa sự kiện', 'eventCtx.cutEvent': 'Cắt sự kiện',
     'eventCtx.copyEvent': 'Sao chép sự kiện', 'eventCtx.pasteEvent': 'Dán sự kiện', 'eventCtx.deleteEvent': 'Xóa sự kiện', 'eventCtx.findEvent': 'Tìm sự kiện...',
     'eventCtx.findNext': 'Tìm sự kiện tiếp theo', 'eventCtx.findPrev': 'Tìm sự kiện trước', 'eventCtx.setStart': 'Đặt vị trí bắt đầu', 'eventCtx.player': 'Người chơi',
@@ -6878,7 +6940,7 @@ RR_TEXT_TRANSLATIONS['vi'] = {
     'Pitch Cycles': 'Chu kỳ cao độ', 'Pitch Decay': 'Suy giảm cao độ', 'Pitch Peak': 'Đỉnh cao độ', 'Pitch Slide': 'Trượt cao độ',
     'Pitch:': 'Cao độ:', 'Play': 'Phát', 'Play SE...': 'Phát SE...', 'Playback Speed': 'Tốc độ phát',
     'Player': 'Người chơi', 'Please enter a valid number between 1 and 5000.': 'Vui lòng nhập số hợp lệ từ 1 đến 5000.', 'Please select a character frame': 'Vui lòng chọn một khung hình nhân vật', 'Please select a trait type before saving.': 'Vui lòng chọn loại đặc tính trước khi lưu.',
-    'Please select an effect type before saving.': 'Vui lòng chọn loại hiệu ứng trước khi lưu.', 'Plugin Command': 'Lệnh plugin', 'Poison Miasma': 'Chướng khí độc', 'Portal': 'Cổng dịch chuyển',
+    'Please select an effect type before saving.': 'Vui lòng chọn loại hiệu ứng trước khi lưu.', 'Plugin Command': 'Lệnh plugin', 'Poison Miasma': 'Chướng khí độc',
     'Position:': 'Vị trí:', 'Power Levels': 'Mức năng lượng', 'Power:': 'Sức mạnh:', 'Preserve TP': 'Giữ TP',
     'Preview': 'Xem trước', 'Price': 'Giá', 'Price:': 'Giá:', 'Primary Color': 'Màu chính',
     'Primary Data': 'Dữ liệu chính', 'Priority:': 'Độ ưu tiên:', 'Profile:': 'Tiểu sử:', 'Progress / OK': 'Tiến trình / OK',
@@ -7039,6 +7101,7 @@ RR_EVENT_SECTION_NAMES['vi'] = {
     'Map': 'Bản đồ', 'Battle': 'Trận đấu', 'Advanced': 'Nâng cao',
 };
 RR_I18N_STRINGS['th'] = { ...RR_I18N_STRINGS.en,
+    'mapTools.speedPlaceholder': 'ความเร็ว',
     'common.none': '(ไม่มี)', 'eventCtx.newEvent': 'อีเวนต์ใหม่', 'eventCtx.editEvent': 'แก้ไขอีเวนต์', 'eventCtx.cutEvent': 'ตัดอีเวนต์',
     'eventCtx.copyEvent': 'คัดลอกอีเวนต์', 'eventCtx.pasteEvent': 'วางอีเวนต์', 'eventCtx.deleteEvent': 'ลบอีเวนต์', 'eventCtx.findEvent': 'ค้นหาอีเวนต์...',
     'eventCtx.findNext': 'ค้นหาอีเวนต์ถัดไป', 'eventCtx.findPrev': 'ค้นหาอีเวนต์ก่อนหน้า', 'eventCtx.setStart': 'กำหนดตำแหน่งเริ่มต้น', 'eventCtx.player': 'ผู้เล่น',
@@ -7328,7 +7391,7 @@ RR_TEXT_TRANSLATIONS['th'] = {
     'Pitch Cycles': 'รอบพิตช์', 'Pitch Decay': 'พิตช์ดีเคย์', 'Pitch Peak': 'จุดสูงสุดพิตช์', 'Pitch Slide': 'การไถลพิตช์',
     'Pitch:': 'พิตช์:', 'Play': 'เล่น', 'Play SE...': 'เล่น SE...', 'Playback Speed': 'ความเร็วการเล่น',
     'Player': 'ผู้เล่น', 'Please enter a valid number between 1 and 5000.': 'กรุณาป้อนตัวเลขที่ถูกต้องระหว่าง 1 ถึง 5000', 'Please select a character frame': 'กรุณาเลือกเฟรมคาแรคเตอร์', 'Please select a trait type before saving.': 'กรุณาเลือกประเภทคุณลักษณะก่อนบันทึก',
-    'Please select an effect type before saving.': 'กรุณาเลือกประเภทเอฟเฟกต์ก่อนบันทึก', 'Plugin Command': 'คำสั่งปลั๊กอิน', 'Poison Miasma': 'ไอพิษ', 'Portal': 'พอร์ทัล',
+    'Please select an effect type before saving.': 'กรุณาเลือกประเภทเอฟเฟกต์ก่อนบันทึก', 'Plugin Command': 'คำสั่งปลั๊กอิน', 'Poison Miasma': 'ไอพิษ',
     'Position:': 'ตำแหน่ง:', 'Power Levels': 'ระดับพลัง', 'Power:': 'พลัง:', 'Preserve TP': 'คงค่า TP',
     'Preview': 'ดูตัวอย่าง', 'Price': 'ราคา', 'Price:': 'ราคา:', 'Primary Color': 'สีหลัก',
     'Primary Data': 'ข้อมูลหลัก', 'Priority:': 'ลำดับการแสดงผล:', 'Profile:': 'ประวัติ:', 'Progress / OK': 'ความคืบหน้า / OK',
@@ -7489,6 +7552,7 @@ RR_EVENT_SECTION_NAMES['th'] = {
     'Map': 'แผนที่', 'Battle': 'การต่อสู้', 'Advanced': 'ขั้นสูง',
 };
 RR_I18N_STRINGS['tr'] = { ...RR_I18N_STRINGS.en,
+    'mapTools.speedPlaceholder': 'Hız',
     'common.none': '(Yok)', 'eventCtx.newEvent': 'Yeni olay', 'eventCtx.editEvent': 'Olayı düzenle', 'eventCtx.cutEvent': 'Olayı kes',
     'eventCtx.copyEvent': 'Olayı kopyala', 'eventCtx.pasteEvent': 'Olayı yapıştır', 'eventCtx.deleteEvent': 'Olayı sil', 'eventCtx.findEvent': 'Olay bul...',
     'eventCtx.findNext': 'Sonraki olayı bul', 'eventCtx.findPrev': 'Önceki olayı bul', 'eventCtx.setStart': 'Başlangıç konumunu ayarla', 'eventCtx.player': 'Oyuncu',
@@ -7778,7 +7842,7 @@ RR_TEXT_TRANSLATIONS['tr'] = {
     'Pitch Cycles': 'Perde döngüleri', 'Pitch Decay': 'Perde azalması', 'Pitch Peak': 'Perde tepesi', 'Pitch Slide': 'Perde kayması',
     'Pitch:': 'Perde:', 'Play': 'Çal', 'Play SE...': 'SE çal...', 'Playback Speed': 'Oynatma hızı',
     'Player': 'Oyuncu', 'Please enter a valid number between 1 and 5000.': 'Lütfen 1 ile 5000 arasında geçerli bir sayı girin.', 'Please select a character frame': 'Lütfen bir karakter karesi seçin', 'Please select a trait type before saving.': 'Kaydetmeden önce lütfen bir özellik türü seçin.',
-    'Please select an effect type before saving.': 'Kaydetmeden önce lütfen bir efekt türü seçin.', 'Plugin Command': 'Eklenti komutu', 'Poison Miasma': 'Zehir buğusu', 'Portal': 'Portal',
+    'Please select an effect type before saving.': 'Kaydetmeden önce lütfen bir efekt türü seçin.', 'Plugin Command': 'Eklenti komutu', 'Poison Miasma': 'Zehir buğusu',
     'Position:': 'Konum:', 'Power Levels': 'Güç seviyeleri', 'Power:': 'Güç:', 'Preserve TP': 'TP\'yi koru',
     'Preview': 'Önizleme', 'Price': 'Fiyat', 'Price:': 'Fiyat:', 'Primary Color': 'Birincil renk',
     'Primary Data': 'Birincil veri', 'Priority:': 'Öncelik:', 'Profile:': 'Profil:', 'Progress / OK': 'İlerleme / OK',
@@ -7938,6 +8002,216 @@ RR_EVENT_SECTION_NAMES['tr'] = {
     'Screen': 'Ekran', 'Audio & Video': 'Ses ve video', 'Scene Control': 'Sahne kontrolü', 'System Settings': 'Sistem ayarları',
     'Map': 'Harita', 'Battle': 'Savaş', 'Advanced': 'Gelişmiş',
 };
+
+const RR_EDITOR_PREFERENCE_TRANSLATIONS = {
+    ja: {
+        'toolbar.title.animateAutotiles': 'A1オートタイルアニメーションを切り替え',
+        'options.editor': 'エディター', 'options.animateAutotiles': 'A1オートタイルをアニメーション',
+        'options.animateAutotilesNote': 'マップエディターでA1の水面と滝のアニメーションをプレビューします。'
+    },
+    es: {
+        'toolbar.title.animateAutotiles': 'Alternar animación de autotiles A1',
+        'options.editor': 'Editor', 'options.animateAutotiles': 'Animar autotiles A1',
+        'options.animateAutotilesNote': 'Muestra la animación de agua y cascadas A1 en el editor de mapas.'
+    },
+    'zh-Hant': {
+        'toolbar.title.animateAutotiles': '切換 A1 自動圖塊動畫',
+        'options.editor': '編輯器', 'options.animateAutotiles': '播放 A1 自動圖塊動畫',
+        'options.animateAutotilesNote': '在地圖編輯器中預覽 A1 水面與瀑布動畫。',
+        'theme.gold.name': '預設', 'theme.gold.description': '經典黑底金色的高級編輯器',
+        'theme.bubblegum.name': '泡泡糖', 'theme.bubblegum.description': '可愛的亮粉紅配色',
+        'theme.ocean.name': '海洋', 'theme.ocean.description': '清爽的天藍色配色',
+        'theme.cascadia.name': '卡斯卡迪亞', 'theme.cascadia.description': '太平洋西北部常綠森林綠配色',
+        'theme.underworld.name': '冥界', 'theme.underworld.description': '血紅色的深紅配色',
+        'theme.creamsicle.name': '香橙奶油', 'theme.creamsicle.description': '溫暖奶油色搭配橘子橙',
+        'theme.royalty.name': '皇室', 'theme.royalty.description': '皇家紫主色搭配金色飾邊'
+    },
+    'zh-Hans': {
+        'toolbar.title.animateAutotiles': '切换 A1 自动图块动画',
+        'options.editor': '编辑器', 'options.animateAutotiles': '播放 A1 自动图块动画',
+        'options.animateAutotilesNote': '在地图编辑器中预览 A1 水面和瀑布动画。',
+        'theme.gold.name': '默认', 'theme.gold.description': '经典黑底金色的高级编辑器',
+        'theme.bubblegum.name': '泡泡糖', 'theme.bubblegum.description': '可爱的亮粉红配色',
+        'theme.ocean.name': '海洋', 'theme.ocean.description': '清爽的天蓝色配色',
+        'theme.cascadia.name': '卡斯卡迪亚', 'theme.cascadia.description': '太平洋西北部常绿森林绿配色',
+        'theme.underworld.name': '冥界', 'theme.underworld.description': '血红色的深红配色',
+        'theme.creamsicle.name': '香橙奶油', 'theme.creamsicle.description': '温暖奶油色搭配橘子橙',
+        'theme.royalty.name': '皇室', 'theme.royalty.description': '皇家紫主色搭配金色饰边'
+    },
+    ru: {
+        'toolbar.title.animateAutotiles': 'Переключить анимацию автотайлов A1',
+        'options.editor': 'Редактор', 'options.animateAutotiles': 'Анимировать автотайлы A1',
+        'options.animateAutotilesNote': 'Показывать анимацию воды и водопадов A1 в редакторе карт.',
+        'theme.gold.name': 'По умолчанию', 'theme.gold.description': 'Классический премиальный редактор: золото на чёрном',
+        'theme.bubblegum.name': 'Жевательная резинка', 'theme.bubblegum.description': 'Милая ярко-розовая палитра',
+        'theme.ocean.name': 'Океан', 'theme.ocean.description': 'Прохладная небесно-голубая палитра',
+        'theme.cascadia.name': 'Каскадия', 'theme.cascadia.description': 'Зелёная палитра вечнозелёных лесов северо-запада Тихоокеанского побережья',
+        'theme.underworld.name': 'Преисподняя', 'theme.underworld.description': 'Кроваво-красная багровая палитра',
+        'theme.creamsicle.name': 'Апельсиновый крем', 'theme.creamsicle.description': 'Мандариново-оранжевый на тёплом кремовом фоне',
+        'theme.royalty.name': 'Королевская', 'theme.royalty.description': 'Королевский пурпурный с золотой отделкой'
+    },
+    pt: {
+        'toolbar.title.animateAutotiles': 'Alternar animação de autotiles A1',
+        'options.editor': 'Editor', 'options.animateAutotiles': 'Animar autotiles A1',
+        'options.animateAutotilesNote': 'Pré-visualiza a animação de água e cascatas A1 no editor de mapas.',
+        'theme.gold.name': 'Padrão', 'theme.gold.description': 'Editor premium clássico em dourado sobre preto',
+        'theme.bubblegum.name': 'Chiclete', 'theme.bubblegum.description': 'Paleta rosa-choque divertida',
+        'theme.ocean.name': 'Oceano', 'theme.ocean.description': 'Paleta azul-celeste refrescante',
+        'theme.cascadia.name': 'Cascádia', 'theme.cascadia.description': 'Paleta verde das florestas perenes do noroeste do Pacífico',
+        'theme.underworld.name': 'Submundo', 'theme.underworld.description': 'Paleta carmesim vermelho-sangue',
+        'theme.creamsicle.name': 'Creme de laranja', 'theme.creamsicle.description': 'Laranja-tangerina sobre creme quente',
+        'theme.royalty.name': 'Realeza', 'theme.royalty.description': 'Roxo real com acabamento dourado'
+    },
+    de: {
+        'toolbar.title.animateAutotiles': 'A1-Autotile-Animation umschalten',
+        'options.editor': 'Editor', 'options.animateAutotiles': 'A1-Autotiles animieren',
+        'options.animateAutotilesNote': 'Zeigt die A1-Wasser- und Wasserfallanimation im Karteneditor an.',
+        'theme.gold.name': 'Standard', 'theme.gold.description': 'Klassischer Premium-Editor in Gold auf Schwarz',
+        'theme.bubblegum.name': 'Kaugummi', 'theme.bubblegum.description': 'Niedliche knallrosa Farbpalette',
+        'theme.ocean.name': 'Ozean', 'theme.ocean.description': 'Kühle himmelblaue Farbpalette',
+        'theme.cascadia.name': 'Kaskadien', 'theme.cascadia.description': 'Immergrüne Waldpalette des pazifischen Nordwestens',
+        'theme.underworld.name': 'Unterwelt', 'theme.underworld.description': 'Blutrote karmesinrote Farbpalette',
+        'theme.creamsicle.name': 'Orangencreme', 'theme.creamsicle.description': 'Mandarinenorange auf warmem Creme',
+        'theme.royalty.name': 'Königlich', 'theme.royalty.description': 'Königliches Violett mit goldenem Besatz'
+    },
+    fr: {
+        'toolbar.title.animateAutotiles': 'Activer ou désactiver l’animation des autotiles A1',
+        'options.editor': 'Éditeur', 'options.animateAutotiles': 'Animer les autotiles A1',
+        'options.animateAutotilesNote': 'Prévisualise l’animation de l’eau et des cascades A1 dans l’éditeur de cartes.',
+        'theme.gold.name': 'Par défaut', 'theme.gold.description': 'Éditeur premium classique doré sur noir',
+        'theme.bubblegum.name': 'Chewing-gum', 'theme.bubblegum.description': 'Jolie palette rose vif',
+        'theme.ocean.name': 'Océan', 'theme.ocean.description': 'Palette bleu ciel rafraîchissante',
+        'theme.cascadia.name': 'Cascadie', 'theme.cascadia.description': 'Palette vert forêt persistante du nord-ouest Pacifique',
+        'theme.underworld.name': 'Monde souterrain', 'theme.underworld.description': 'Palette cramoisie rouge sang',
+        'theme.creamsicle.name': 'Crème à l’orange', 'theme.creamsicle.description': 'Orange mandarine sur crème chaude',
+        'theme.royalty.name': 'Royauté', 'theme.royalty.description': 'Violet royal avec garniture dorée'
+    },
+    el: {
+        'toolbar.title.animateAutotiles': 'Εναλλαγή κίνησης αυτόματων πλακιδίων A1',
+        'options.editor': 'Επεξεργαστής', 'options.animateAutotiles': 'Κίνηση αυτόματων πλακιδίων A1',
+        'options.animateAutotilesNote': 'Προεπισκόπηση της κίνησης νερού και καταρρακτών A1 στον επεξεργαστή χαρτών.',
+        'theme.gold.name': 'Προεπιλογή', 'theme.gold.description': 'Κλασικός premium επεξεργαστής με χρυσό σε μαύρο',
+        'theme.bubblegum.name': 'Τσιχλόφουσκα', 'theme.bubblegum.description': 'Χαριτωμένη έντονη ροζ παλέτα',
+        'theme.ocean.name': 'Ωκεανός', 'theme.ocean.description': 'Δροσερή γαλάζια παλέτα',
+        'theme.cascadia.name': 'Κασκάντια', 'theme.cascadia.description': 'Πράσινη παλέτα αειθαλούς δάσους του βορειοδυτικού Ειρηνικού',
+        'theme.underworld.name': 'Κάτω κόσμος', 'theme.underworld.description': 'Βαθυκόκκινη παλέτα στο χρώμα του αίματος',
+        'theme.creamsicle.name': 'Κρέμα πορτοκαλιού', 'theme.creamsicle.description': 'Πορτοκαλί μανταρινιού πάνω σε ζεστή κρέμα',
+        'theme.royalty.name': 'Βασιλική', 'theme.royalty.description': 'Βασιλικό μωβ με χρυσό τελείωμα'
+    },
+    ko: {
+        'toolbar.title.animateAutotiles': 'A1 오토타일 애니메이션 전환',
+        'options.editor': '에디터', 'options.animateAutotiles': 'A1 오토타일 애니메이션',
+        'options.animateAutotilesNote': '맵 에디터에서 A1 물과 폭포 애니메이션을 미리 봅니다.'
+    },
+    ar: {
+        'toolbar.title.animateAutotiles': 'تبديل حركة البلاطات التلقائية A1',
+        'options.editor': 'المحرر', 'options.animateAutotiles': 'تحريك البلاطات التلقائية A1',
+        'options.animateAutotilesNote': 'معاينة حركة مياه وشلالات A1 في محرر الخرائط.'
+    },
+    it: {
+        'toolbar.title.animateAutotiles': 'Attiva o disattiva l’animazione autotile A1',
+        'options.editor': 'Editor', 'options.animateAutotiles': 'Anima autotile A1',
+        'options.animateAutotilesNote': 'Mostra l’anteprima dell’acqua e delle cascate A1 nell’editor delle mappe.'
+    },
+    pl: {
+        'toolbar.title.animateAutotiles': 'Przełącz animację autotile A1',
+        'options.editor': 'Edytor', 'options.animateAutotiles': 'Animuj autotile A1',
+        'options.animateAutotilesNote': 'Wyświetla animację wody i wodospadów A1 w edytorze map.'
+    },
+    id: {
+        'toolbar.title.animateAutotiles': 'Aktifkan animasi autotile A1',
+        'options.editor': 'Editor', 'options.animateAutotiles': 'Animasikan autotile A1',
+        'options.animateAutotilesNote': 'Pratinjau animasi air dan air terjun A1 di editor peta.'
+    },
+    vi: {
+        'toolbar.title.animateAutotiles': 'Bật hoặc tắt hoạt ảnh autotile A1',
+        'options.editor': 'Trình biên tập', 'options.animateAutotiles': 'Tạo hoạt ảnh autotile A1',
+        'options.animateAutotilesNote': 'Xem trước hoạt ảnh nước và thác nước A1 trong trình biên tập bản đồ.'
+    },
+    th: {
+        'toolbar.title.animateAutotiles': 'สลับแอนิเมชันออโต้ไทล์ A1',
+        'options.editor': 'ตัวแก้ไข', 'options.animateAutotiles': 'แสดงแอนิเมชันออโต้ไทล์ A1',
+        'options.animateAutotilesNote': 'ดูตัวอย่างแอนิเมชันน้ำและน้ำตก A1 ในตัวแก้ไขแผนที่'
+    },
+    tr: {
+        'toolbar.title.animateAutotiles': 'A1 otomatik karo animasyonunu aç/kapat',
+        'options.editor': 'Düzenleyici', 'options.animateAutotiles': 'A1 otomatik karolarını canlandır',
+        'options.animateAutotilesNote': 'Harita düzenleyicisinde A1 su ve şelale animasyonlarını önizler.'
+    }
+};
+for (const [locale, translations] of Object.entries(RR_EDITOR_PREFERENCE_TRANSLATIONS)) {
+    Object.assign(RR_I18N_STRINGS[locale], translations);
+}
+
+const RR_DATABASE_CLIPBOARD_TRANSLATIONS = {
+    ja: 'クリップボードに互換性のあるデータベース項目がありません。',
+    es: 'No hay una entrada de base de datos compatible en el portapapeles.',
+    'zh-Hant': '剪貼簿中沒有相容的資料庫項目。',
+    'zh-Hans': '剪贴板中没有兼容的数据库条目。',
+    ru: 'В буфере обмена нет совместимой записи базы данных.',
+    pt: 'Não há uma entrada de banco de dados compatível na área de transferência.',
+    de: 'Die Zwischenablage enthält keinen kompatiblen Datenbankeintrag.',
+    fr: 'Le presse-papiers ne contient aucune entrée de base de données compatible.',
+    el: 'Δεν υπάρχει συμβατή καταχώρηση βάσης δεδομένων στο πρόχειρο.',
+    ko: '클립보드에 호환되는 데이터베이스 항목이 없습니다.',
+    ar: 'لا يوجد إدخال قاعدة بيانات متوافق في الحافظة.',
+    it: 'Negli appunti non è presente una voce di database compatibile.',
+    pl: 'W schowku nie ma zgodnego wpisu bazy danych.',
+    id: 'Tidak ada entri basis data yang kompatibel di papan klip.',
+    vi: 'Không có mục cơ sở dữ liệu tương thích trong bảng nhớ tạm.',
+    th: 'ไม่มีรายการฐานข้อมูลที่เข้ากันได้ในคลิปบอร์ด',
+    tr: 'Panoda uyumlu bir veritabanı girdisi yok.'
+};
+for (const [locale, translation] of Object.entries(RR_DATABASE_CLIPBOARD_TRANSLATIONS)) {
+    RR_I18N_STRINGS[locale]['db.noCompatibleClipboard'] = translation;
+}
+
+const RR_DATABASE_ROW_CLIPBOARD_TRANSLATIONS = {
+    ja: ['クリップボードに互換性のある特徴または使用効果がありません。', '貼り付けできません。対象プロジェクトに「{name}」が存在しないか、重複しています。'],
+    es: ['No hay un rasgo o efecto compatible en el portapapeles.', 'No se puede pegar porque «{name}» no existe o está duplicado en el proyecto de destino.'],
+    'zh-Hant': ['剪貼簿中沒有相容的特性或效果。', '無法貼上，因為目標專案中缺少「{name}」或有重複項目。'],
+    'zh-Hans': ['剪贴板中没有兼容的特性或效果。', '无法粘贴，因为目标项目中缺少“{name}”或存在重复项。'],
+    ru: ['В буфере обмена нет совместимой особенности или эффекта.', 'Невозможно вставить: «{name}» отсутствует или повторяется в целевом проекте.'],
+    pt: ['Não há uma característica ou efeito compatível na área de transferência.', 'Não é possível colar porque "{name}" está ausente ou duplicado no projeto de destino.'],
+    de: ['Die Zwischenablage enthält kein kompatibles Merkmal oder keinen kompatiblen Effekt.', 'Einfügen nicht möglich, da „{name}“ im Zielprojekt fehlt oder mehrfach vorhanden ist.'],
+    fr: ['Le presse-papiers ne contient aucun trait ou effet compatible.', 'Impossible de coller, car « {name} » est absent ou dupliqué dans le projet cible.'],
+    el: ['Δεν υπάρχει συμβατό γνώρισμα ή εφέ στο πρόχειρο.', 'Δεν είναι δυνατή η επικόλληση επειδή το «{name}» λείπει ή υπάρχει διπλότυπο στο έργο προορισμού.'],
+    ko: ['클립보드에 호환되는 특성 또는 효과가 없습니다.', '대상 프로젝트에 "{name}" 항목이 없거나 중복되어 붙여넣을 수 없습니다.'],
+    ar: ['لا توجد سمة أو تأثير متوافق في الحافظة.', 'لا يمكن اللصق لأن "{name}" مفقود أو مكرر في المشروع الهدف.'],
+    it: ['Negli appunti non è presente un tratto o effetto compatibile.', 'Impossibile incollare perché "{name}" manca o è duplicato nel progetto di destinazione.'],
+    pl: ['W schowku nie ma zgodnej cechy ani efektu.', 'Nie można wkleić, ponieważ „{name}” nie istnieje lub jest zduplikowane w projekcie docelowym.'],
+    id: ['Tidak ada ciri atau efek yang kompatibel di papan klip.', 'Tidak dapat menempel karena "{name}" tidak ada atau duplikat di proyek target.'],
+    vi: ['Không có đặc tính hoặc hiệu ứng tương thích trong bảng nhớ tạm.', 'Không thể dán vì "{name}" bị thiếu hoặc trùng lặp trong dự án đích.'],
+    th: ['ไม่มีคุณลักษณะหรือเอฟเฟกต์ที่เข้ากันได้ในคลิปบอร์ด', 'ไม่สามารถวางได้เนื่องจากไม่มี "{name}" หรือมีชื่อซ้ำในโปรเจกต์เป้าหมาย'],
+    tr: ['Panoda uyumlu bir özellik veya efekt yok.', 'Hedef projede "{name}" eksik veya yinelenmiş olduğundan yapıştırılamıyor.']
+};
+for (const [locale, translations] of Object.entries(RR_DATABASE_ROW_CLIPBOARD_TRANSLATIONS)) {
+    RR_I18N_STRINGS[locale]['db.noCompatibleRowClipboard'] = translations[0];
+    RR_I18N_STRINGS[locale]['db.unresolvedClipboardReference'] = translations[1];
+}
+
+const RR_DATABASE_ROW_CLIPBOARD_WRITE_TRANSLATIONS = {
+    ja: 'データベースデータをクリップボードに書き込めませんでした。',
+    es: 'No se pudieron escribir los datos de la base de datos en el portapapeles.',
+    'zh-Hant': '無法將資料庫資料寫入剪貼簿。',
+    'zh-Hans': '无法将数据库数据写入剪贴板。',
+    ru: 'Не удалось записать данные базы данных в буфер обмена.',
+    pt: 'Não foi possível gravar os dados do banco de dados na área de transferência.',
+    de: 'Die Datenbankdaten konnten nicht in die Zwischenablage geschrieben werden.',
+    fr: 'Impossible d’écrire les données de la base dans le presse-papiers.',
+    el: 'Δεν ήταν δυνατή η εγγραφή των δεδομένων βάσης στο πρόχειρο.',
+    ko: '데이터베이스 데이터를 클립보드에 쓸 수 없습니다.',
+    ar: 'تعذرت كتابة بيانات قاعدة البيانات إلى الحافظة.',
+    it: 'Impossibile scrivere i dati del database negli appunti.',
+    pl: 'Nie udało się zapisać danych bazy w schowku.',
+    id: 'Tidak dapat menulis data basis data ke papan klip.',
+    vi: 'Không thể ghi dữ liệu cơ sở dữ liệu vào bảng nhớ tạm.',
+    th: 'ไม่สามารถเขียนข้อมูลฐานข้อมูลไปยังคลิปบอร์ดได้',
+    tr: 'Veritabanı verileri panoya yazılamadı.'
+};
+for (const [locale, translation] of Object.entries(RR_DATABASE_ROW_CLIPBOARD_WRITE_TRANSLATIONS)) {
+    RR_I18N_STRINGS[locale]['db.clipboardWriteFailed'] = translation;
+}
 
 Object.assign(RR_I18N_STRINGS.it, { 'menu.build': 'Compilazione' });
 Object.assign(RR_I18N_STRINGS.id, { 'menu.build': 'Kompilasi' });
@@ -8290,6 +8564,113 @@ Object.assign(RR_TEXT_TRANSLATIONS.vi, { 'Holo Construct': 'Cấu trúc hologram
 Object.assign(RR_TEXT_TRANSLATIONS.th, { 'Holo Construct': 'โครงสร้างโฮโลแกรม', 'Construct Color': 'สีโครงสร้าง', 'Base Rings': 'วงแหวนฐาน', 'Data Rain': 'ฝนข้อมูล', 'Glitch Bursts': 'สัญญาณกลิตช์', 'Projector Beam': 'ลำแสงโปรเจกเตอร์', 'Scan Sweep': 'เส้นสแกน', 'Hologram Panel': 'แผงโฮโลแกรม' });
 Object.assign(RR_TEXT_TRANSLATIONS.tr, { 'Holo Construct': 'Holo yapı', 'Construct Color': 'Yapı rengi', 'Base Rings': 'Taban halkaları', 'Data Rain': 'Veri yağmuru', 'Glitch Bursts': 'Glitch patlamaları', 'Projector Beam': 'Projektör ışını', 'Scan Sweep': 'Tarama çizgisi', 'Hologram Panel': 'Hologram paneli' });
 
+const RR_QUICK_SETTING_TRANSLATIONS = {
+    ja: 'クイック設定', es: 'Ajuste rápido', 'zh-Hant': '快速設定', 'zh-Hans': '快速设置',
+    ru: 'Быстрая настройка', pt: 'Configuração rápida', de: 'Schnelleinstellung', fr: 'Réglage rapide',
+    el: 'Γρήγορη ρύθμιση', ko: '빠른 설정', ar: 'إعداد سريع', it: 'Impostazione rapida',
+    pl: 'Szybkie ustawienie', id: 'Pengaturan cepat', vi: 'Cài đặt nhanh', th: 'การตั้งค่าด่วน', tr: 'Hızlı Ayar'
+};
+for (const [locale, translation] of Object.entries(RR_QUICK_SETTING_TRANSLATIONS)) {
+    RR_TEXT_TRANSLATIONS[locale]['Quick Setting'] = translation;
+}
+
+const RR_LAST_ACTION_DATA_PHRASES = [
+    'Last Action Data',
+    'Last Used Skill ID',
+    'Last Used Item ID',
+    'Last Actor ID to Act',
+    'Last Enemy Index to Act',
+    'Last Target Actor ID',
+    'Last Target Enemy Index'
+];
+const RR_LAST_ACTION_DATA_TRANSLATIONS = {
+    ja: ['最後の行動データ', '最後に使用したスキルID', '最後に使用したアイテムID', '最後に行動したアクターID', '最後に行動した敵キャラのインデックス', '最後の対象アクターID', '最後の対象敵キャラのインデックス'],
+    es: ['Datos de la última acción', 'ID de la última habilidad usada', 'ID del último objeto usado', 'ID del último actor que actuó', 'Índice del último enemigo que actuó', 'ID del último actor objetivo', 'Índice del último enemigo objetivo'],
+    'zh-Hant': ['上次行動資料', '上次使用的技能 ID', '上次使用的物品 ID', '上次行動的角色 ID', '上次行動的敵人索引', '上次目標角色 ID', '上次目標敵人索引'],
+    'zh-Hans': ['上次行动数据', '上次使用的技能 ID', '上次使用的物品 ID', '上次行动的角色 ID', '上次行动的敌人索引', '上次目标角色 ID', '上次目标敌人索引'],
+    ru: ['Данные последнего действия', 'ID последнего использованного навыка', 'ID последнего использованного предмета', 'ID последнего действовавшего персонажа', 'Индекс последнего действовавшего врага', 'ID последнего выбранного персонажа', 'Индекс последнего выбранного врага'],
+    pt: ['Dados da última ação', 'ID da última habilidade usada', 'ID do último item usado', 'ID do último ator a agir', 'Índice do último inimigo a agir', 'ID do último ator alvo', 'Índice do último inimigo alvo'],
+    de: ['Daten der letzten Aktion', 'ID der zuletzt verwendeten Fertigkeit', 'ID des zuletzt verwendeten Gegenstands', 'ID des zuletzt handelnden Akteurs', 'Index des zuletzt handelnden Gegners', 'ID des letzten Zielakteurs', 'Index des letzten Zielgegners'],
+    fr: ['Données de la dernière action', 'ID de la dernière compétence utilisée', 'ID du dernier objet utilisé', 'ID du dernier acteur à agir', 'Index du dernier ennemi à agir', 'ID du dernier acteur ciblé', 'Index du dernier ennemi ciblé'],
+    el: ['Δεδομένα τελευταίας ενέργειας', 'ID τελευταίας χρησιμοποιημένης ικανότητας', 'ID τελευταίου χρησιμοποιημένου αντικειμένου', 'ID τελευταίου χαρακτήρα που ενήργησε', 'Δείκτης τελευταίου εχθρού που ενήργησε', 'ID τελευταίου στοχευμένου χαρακτήρα', 'Δείκτης τελευταίου στοχευμένου εχθρού'],
+    ko: ['마지막 행동 데이터', '마지막으로 사용한 스킬 ID', '마지막으로 사용한 아이템 ID', '마지막으로 행동한 액터 ID', '마지막으로 행동한 적 인덱스', '마지막 대상 액터 ID', '마지막 대상 적 인덱스'],
+    ar: ['بيانات الإجراء الأخير', 'معرّف آخر مهارة مستخدمة', 'معرّف آخر عنصر مستخدم', 'معرّف آخر شخصية تصرفت', 'فهرس آخر عدو تصرف', 'معرّف آخر شخصية مستهدفة', 'فهرس آخر عدو مستهدف'],
+    it: ['Dati dell’ultima azione', 'ID dell’ultima abilità usata', 'ID dell’ultimo oggetto usato', 'ID dell’ultimo attore ad agire', 'Indice dell’ultimo nemico ad agire', 'ID dell’ultimo attore bersaglio', 'Indice dell’ultimo nemico bersaglio'],
+    pl: ['Dane ostatniej akcji', 'ID ostatnio użytej umiejętności', 'ID ostatnio użytego przedmiotu', 'ID ostatniego aktora wykonującego akcję', 'Indeks ostatniego wroga wykonującego akcję', 'ID ostatniego aktora będącego celem', 'Indeks ostatniego wroga będącego celem'],
+    id: ['Data Tindakan Terakhir', 'ID Skill Terakhir yang Digunakan', 'ID Item Terakhir yang Digunakan', 'ID Aktor Terakhir yang Bertindak', 'Indeks Musuh Terakhir yang Bertindak', 'ID Aktor Target Terakhir', 'Indeks Musuh Target Terakhir'],
+    vi: ['Dữ liệu hành động gần nhất', 'ID kỹ năng dùng gần nhất', 'ID vật phẩm dùng gần nhất', 'ID diễn viên hành động gần nhất', 'Chỉ số kẻ địch hành động gần nhất', 'ID diễn viên mục tiêu gần nhất', 'Chỉ số kẻ địch mục tiêu gần nhất'],
+    th: ['ข้อมูลการกระทำล่าสุด', 'ID สกิลที่ใช้ล่าสุด', 'ID ไอเท็มที่ใช้ล่าสุด', 'ID ตัวละครที่กระทำล่าสุด', 'ดัชนีศัตรูที่กระทำล่าสุด', 'ID ตัวละครเป้าหมายล่าสุด', 'ดัชนีศัตรูเป้าหมายล่าสุด'],
+    tr: ['Son Eylem Verileri', 'Son Kullanılan Yetenek Kimliği', 'Son Kullanılan Eşya Kimliği', 'Son Eylem Yapan Aktör Kimliği', 'Son Eylem Yapan Düşman Dizini', 'Son Hedef Aktör Kimliği', 'Son Hedef Düşman Dizini']
+};
+for (const [locale, translations] of Object.entries(RR_LAST_ACTION_DATA_TRANSLATIONS)) {
+    for (let i = 0; i < RR_LAST_ACTION_DATA_PHRASES.length; i++) {
+        RR_TEXT_TRANSLATIONS[locale][RR_LAST_ACTION_DATA_PHRASES[i]] = translations[i];
+    }
+}
+
+const RR_TROOP_BATTLEBACK_LAYER_TRANSLATIONS = {
+    ja: ['下層:', '上層:'],
+    es: ['Capa inferior:', 'Capa superior:'],
+    'zh-Hant': ['下層：', '上層：'],
+    'zh-Hans': ['下层：', '上层：'],
+    ru: ['Нижний слой:', 'Верхний слой:'],
+    pt: ['Camada inferior:', 'Camada superior:'],
+    de: ['Untere Ebene:', 'Obere Ebene:'],
+    fr: ['Couche inférieure :', 'Couche supérieure :'],
+    el: ['Κατώτερο επίπεδο:', 'Ανώτερο επίπεδο:'],
+    ko: ['아래 레이어:', '위 레이어:'],
+    ar: ['الطبقة السفلية:', 'الطبقة العلوية:'],
+    it: ['Livello inferiore:', 'Livello superiore:'],
+    pl: ['Dolna warstwa:', 'Górna warstwa:'],
+    id: ['Lapisan Bawah:', 'Lapisan Atas:'],
+    vi: ['Lớp dưới:', 'Lớp trên:'],
+    th: ['เลเยอร์ล่าง:', 'เลเยอร์บน:'],
+    tr: ['Alt Katman:', 'Üst Katman:']
+};
+for (const [locale, translations] of Object.entries(RR_TROOP_BATTLEBACK_LAYER_TRANSLATIONS)) {
+    RR_TEXT_TRANSLATIONS[locale]['Lower Layer:'] = translations[0];
+    RR_TEXT_TRANSLATIONS[locale]['Upper Layer:'] = translations[1];
+}
+
+const RR_PROJECT_CODE_TRUST_TRANSLATIONS = {
+    ja: ['プロジェクトのJavaScriptキャラクターパーツは信頼されており、エディター権限で実行される可能性があります。', 'プロジェクトのJavaScriptキャラクターパーツは無効です。コードを確認したプロジェクトのみ信頼してください。', 'プロジェクトJSの信頼を取り消す', 'プロジェクトJSを信頼して読み込む', 'プロジェクトのJavaScriptは、エディターとファイルシステムへの完全なアクセス権で実行されます。信頼して読み込みますか？'],
+    es: ['Las piezas de personaje JavaScript del proyecto son de confianza y pueden ejecutarse con privilegios del editor.', 'Las piezas de personaje JavaScript del proyecto están desactivadas. Confía solo en proyectos cuyo código hayas revisado.', 'Revocar confianza en el JS del proyecto', 'Confiar y cargar JS del proyecto', 'El JavaScript del proyecto se ejecuta con acceso completo al editor y al sistema de archivos. ¿Confiar y cargarlo?'],
+    'zh-Hant': ['專案的 JavaScript 角色零件已受信任，可能會以編輯器權限執行。', '專案的 JavaScript 角色零件已停用。請只信任您已審查其程式碼的專案。', '撤銷專案 JS 信任', '信任並載入專案 JS', '專案 JavaScript 會以完整的編輯器與檔案系統存取權限執行。要信任並載入嗎？'],
+    'zh-Hans': ['项目的 JavaScript 角色部件已受信任，可能会以编辑器权限运行。', '项目的 JavaScript 角色部件已禁用。请只信任您已审查其代码的项目。', '撤销项目 JS 信任', '信任并加载项目 JS', '项目 JavaScript 会以完整的编辑器和文件系统访问权限运行。要信任并加载吗？'],
+    ru: ['JavaScript-компоненты персонажей проекта считаются доверенными и могут выполняться с правами редактора.', 'JavaScript-компоненты персонажей проекта отключены. Доверяйте только проектам, код которых вы проверили.', 'Отозвать доверие к JS проекта', 'Доверять и загрузить JS проекта', 'JavaScript проекта выполняется с полным доступом к редактору и файловой системе. Доверять и загрузить его?'],
+    pt: ['As partes de personagem em JavaScript do projeto são confiáveis e podem ser executadas com privilégios do editor.', 'As partes de personagem em JavaScript do projeto estão desativadas. Confie apenas em projetos cujo código você revisou.', 'Revogar confiança no JS do projeto', 'Confiar e carregar JS do projeto', 'O JavaScript do projeto é executado com acesso total ao editor e ao sistema de arquivos. Confiar e carregá-lo?'],
+    de: ['Die JavaScript-Charakterteile des Projekts sind vertrauenswürdig und können mit Editorrechten ausgeführt werden.', 'Die JavaScript-Charakterteile des Projekts sind deaktiviert. Vertraue nur Projekten, deren Code du geprüft hast.', 'Vertrauen in Projekt-JS widerrufen', 'Projekt-JS vertrauen und laden', 'Projekt-JavaScript wird mit vollständigem Zugriff auf den Editor und das Dateisystem ausgeführt. Vertrauen und laden?'],
+    fr: ['Les éléments de personnage JavaScript du projet sont approuvés et peuvent s’exécuter avec les privilèges de l’éditeur.', 'Les éléments de personnage JavaScript du projet sont désactivés. N’approuvez que les projets dont vous avez examiné le code.', 'Révoquer l’approbation du JS du projet', 'Approuver et charger le JS du projet', 'Le JavaScript du projet s’exécute avec un accès complet à l’éditeur et au système de fichiers. L’approuver et le charger ?'],
+    el: ['Τα μέρη χαρακτήρων JavaScript του έργου είναι αξιόπιστα και ενδέχεται να εκτελεστούν με δικαιώματα επεξεργαστή.', 'Τα μέρη χαρακτήρων JavaScript του έργου είναι απενεργοποιημένα. Εμπιστευτείτε μόνο έργα των οποίων έχετε ελέγξει τον κώδικα.', 'Ανάκληση εμπιστοσύνης στο JS του έργου', 'Εμπιστοσύνη και φόρτωση JS έργου', 'Η JavaScript του έργου εκτελείται με πλήρη πρόσβαση στον επεξεργαστή και στο σύστημα αρχείων. Να θεωρηθεί αξιόπιστη και να φορτωθεί;'],
+    ko: ['프로젝트 JavaScript 캐릭터 파츠를 신뢰하며 에디터 권한으로 실행할 수 있습니다.', '프로젝트 JavaScript 캐릭터 파츠가 비활성화되어 있습니다. 코드를 검토한 프로젝트만 신뢰하세요.', '프로젝트 JS 신뢰 취소', '프로젝트 JS 신뢰 및 불러오기', '프로젝트 JavaScript는 에디터와 파일 시스템에 대한 전체 접근 권한으로 실행됩니다. 신뢰하고 불러오시겠습니까?'],
+    ar: ['أجزاء الشخصيات المكتوبة بـ JavaScript في المشروع موثوقة وقد تعمل بصلاحيات المحرر.', 'أجزاء الشخصيات المكتوبة بـ JavaScript في المشروع معطلة. لا تثق إلا بالمشاريع التي راجعت شيفرتها.', 'إلغاء الثقة في JavaScript المشروع', 'الوثوق بـ JavaScript المشروع وتحميله', 'يعمل JavaScript المشروع بصلاحية وصول كاملة إلى المحرر ونظام الملفات. هل تريد الوثوق به وتحميله؟'],
+    it: ['Le parti del personaggio JavaScript del progetto sono attendibili e possono essere eseguite con i privilegi dell’editor.', 'Le parti del personaggio JavaScript del progetto sono disattivate. Considera attendibili solo i progetti di cui hai esaminato il codice.', 'Revoca attendibilità JS del progetto', 'Considera attendibile e carica JS del progetto', 'Il JavaScript del progetto viene eseguito con accesso completo all’editor e al file system. Considerarlo attendibile e caricarlo?'],
+    pl: ['Części postaci JavaScript projektu są zaufane i mogą działać z uprawnieniami edytora.', 'Części postaci JavaScript projektu są wyłączone. Ufaj tylko projektom, których kod został przez Ciebie sprawdzony.', 'Cofnij zaufanie do JS projektu', 'Zaufaj i wczytaj JS projektu', 'JavaScript projektu działa z pełnym dostępem do edytora i systemu plików. Zaufać mu i go wczytać?'],
+    id: ['Bagian karakter JavaScript proyek dipercaya dan dapat dijalankan dengan hak istimewa editor.', 'Bagian karakter JavaScript proyek dinonaktifkan. Percayai hanya proyek yang kodenya telah Anda tinjau.', 'Cabut Kepercayaan JS Proyek', 'Percayai dan Muat JS Proyek', 'JavaScript proyek berjalan dengan akses penuh ke editor dan sistem berkas. Percayai dan muat?'],
+    vi: ['Các bộ phận nhân vật JavaScript của dự án được tin cậy và có thể chạy với đặc quyền của trình biên tập.', 'Các bộ phận nhân vật JavaScript của dự án đã bị tắt. Chỉ tin cậy những dự án có mã mà bạn đã xem xét.', 'Thu hồi tin cậy JS dự án', 'Tin cậy và tải JS dự án', 'JavaScript của dự án chạy với toàn quyền truy cập trình biên tập và hệ thống tệp. Tin cậy và tải mã này?'],
+    th: ['ชิ้นส่วนตัวละคร JavaScript ของโปรเจกต์ได้รับความเชื่อถือและอาจทำงานด้วยสิทธิ์ของตัวแก้ไข', 'ชิ้นส่วนตัวละคร JavaScript ของโปรเจกต์ถูกปิดใช้งาน โปรดเชื่อถือเฉพาะโปรเจกต์ที่คุณตรวจสอบโค้ดแล้ว', 'เพิกถอนความเชื่อถือ JS ของโปรเจกต์', 'เชื่อถือและโหลด JS ของโปรเจกต์', 'JavaScript ของโปรเจกต์จะทำงานด้วยสิทธิ์เข้าถึงตัวแก้ไขและระบบไฟล์อย่างเต็มรูปแบบ ต้องการเชื่อถือและโหลดหรือไม่'],
+    tr: ['Projenin JavaScript karakter parçaları güvenilir ve düzenleyici ayrıcalıklarıyla çalışabilir.', 'Projenin JavaScript karakter parçaları devre dışı. Yalnızca kodunu incelediğiniz projelere güvenin.', 'Proje JS Güvenini Kaldır', 'Proje JS Koduna Güven ve Yükle', 'Proje JavaScript kodu düzenleyiciye ve dosya sistemine tam erişimle çalışır. Güvenip yüklemek istiyor musunuz?']
+};
+const RR_PROJECT_CODE_TRUST_PHRASES = [
+    'Project JavaScript character parts are trusted and may execute with editor privileges.',
+    'Project JavaScript character parts are disabled. Only trust projects whose code you have reviewed.',
+    'Revoke Project JS Trust',
+    'Trust and Load Project JS',
+    'Project JavaScript runs with full editor and filesystem access. Trust and load it?'
+];
+for (const [locale, translations] of Object.entries(RR_PROJECT_CODE_TRUST_TRANSLATIONS)) {
+    for (let i = 0; i < RR_PROJECT_CODE_TRUST_PHRASES.length; i++) {
+        RR_TEXT_TRANSLATIONS[locale][RR_PROJECT_CODE_TRUST_PHRASES[i]] = translations[i];
+    }
+}
+
+// The broad database/event/Forge pass is generated separately so this manager
+// remains reviewable. It is loaded synchronously before I18nManager.js.
+const RR_DEEP_TRANSLATIONS = globalThis.RR_DEEP_TEXT_TRANSLATIONS || {};
+for (const [locale, translations] of Object.entries(RR_DEEP_TRANSLATIONS)) {
+    if (RR_TEXT_TRANSLATIONS[locale]) Object.assign(RR_TEXT_TRANSLATIONS[locale], translations);
+}
+
 class I18nManager {
     constructor() {
         for (const table of Object.values(RR_I18N_STRINGS)) {
@@ -8353,6 +8734,7 @@ class I18nManager {
     apply(root = document) {
         if (!root || !root.querySelectorAll) return;
         document.documentElement.lang = this.language;
+        document.documentElement.dir = this.language === 'ar' ? 'rtl' : 'ltr';
         this.applyApplicationTitle();
 
         root.querySelectorAll('[data-i18n]').forEach(el => {
@@ -8455,6 +8837,7 @@ window.I18n = new I18nManager();
 (function () {
     try {
         document.documentElement.lang = window.I18n.currentLanguage();
+        document.documentElement.dir = window.I18n.currentLanguage() === 'ar' ? 'rtl' : 'ltr';
         if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', () => {
                 window.I18n.apply(document);

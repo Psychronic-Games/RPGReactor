@@ -128,7 +128,11 @@ class CharacterGraphicPicker {
         document.body.appendChild(modal);
 
         // Load character files
-        this.loadCharacterFiles(fileList, previewArea, currentCharacterName);
+        this.loadCharacterFiles(fileList, previewArea, currentCharacterName, {
+            characterIndex: currentCharacterIndex,
+            pattern: currentPattern,
+            direction: currentDirection
+        });
 
         // Setup event listeners
         this.setupPickerEvents(modal, currentCharacterName, currentCharacterIndex, currentPattern, currentDirection);
@@ -138,7 +142,7 @@ class CharacterGraphicPicker {
     /**
      * Load character files from project
      */
-    async loadCharacterFiles(fileList, previewArea, currentCharacterName) {
+    async loadCharacterFiles(fileList, previewArea, currentCharacterName, currentSelection = null) {
         const projectPath = this.currentProject?.path;
         console.log('Loading character files from project:', projectPath);
 
@@ -163,17 +167,17 @@ class CharacterGraphicPicker {
 
             console.log('Characters folder exists, reading files...');
 
-            const files = fs.readdirSync(charactersPath)
-                .filter(file => file.match(/\.(png|jpg|jpeg|gif)$/i))
+            const files = RRAssetFiles.listUnique(charactersPath, ['.png'])
                 .map(file => ({
-                    fullName: file,  // Keep full filename with extension for loading
-                    baseName: file.replace(/\.(png|jpg|jpeg|gif)$/i, '')  // Strip extension for display/storage
-                }))
-                .sort((a, b) => a.baseName.localeCompare(b.baseName));
+                    fullName: file.relativePath,
+                    baseName: file.name
+                }));
 
             console.log('Found character files:', files);
 
             fileList.innerHTML = '';
+            fileList.style.overflow = 'hidden';
+            fileList.style.padding = '0';
 
             if (files.length === 0) {
                 fileList.innerHTML = `<div style="color: var(--color-text-muted); padding: 12px;">${this._t('No character images found in img/characters folder')}</div>`;
@@ -181,59 +185,26 @@ class CharacterGraphicPicker {
                 return;
             }
 
-            files.forEach(file => {
-                const item = document.createElement('div');
-                item.className = 'char-file-item';
-                item.textContent = file.baseName;  // Display without extension
-                item.dataset.filename = file.baseName;  // Store without extension for saving to database
-                item.dataset.fullFilename = file.fullName;  // Store with extension for loading image
-                item.style.cssText = `
-                    padding: 8px 12px;
-                    cursor: pointer;
-                    border-bottom: 1px solid var(--color-border);
-                    font-size: 13px;
-                    color: var(--color-text);
-                `;
-
-                if (file.baseName === currentCharacterName) {
-                    item.style.backgroundColor = 'var(--color-selection-mid)';
-                    item.style.color = 'var(--color-link)';
+            const fileByName = new Map(files.map(file => [file.baseName, file]));
+            const browser = RRPickerIndex.createBrowser({
+                files: files.map(file => file.baseName),
+                selectedName: currentCharacterName,
+                itemClass: 'char-file-item',
+                searchPlaceholder: this._t('Search files...'),
+                onSelect: name => {
+                    const file = fileByName.get(name);
+                    if (!file) return;
+                    const selection = name === currentCharacterName ? currentSelection : null;
+                    this.showSpritePreview(previewArea, file.fullName, file.baseName, selection);
                 }
-
-                item.addEventListener('mouseenter', () => {
-                    if (file.baseName !== currentCharacterName) {
-                        item.style.backgroundColor = 'var(--color-bg-list-item)';
-                    }
-                });
-
-                item.addEventListener('mouseleave', () => {
-                    if (file.baseName !== currentCharacterName) {
-                        item.style.backgroundColor = '';
-                    }
-                });
-
-                item.addEventListener('click', () => {
-                    // Clear selection from all items
-                    fileList.querySelectorAll('.char-file-item').forEach(i => {
-                        i.style.backgroundColor = '';
-                        i.style.color = 'var(--color-text)';
-                    });
-
-                    // Highlight selected
-                    item.style.backgroundColor = 'var(--color-selection-mid)';
-                    item.style.color = 'var(--color-link)';
-
-                    // Show preview - pass the full filename for loading the image
-                    this.showSpritePreview(previewArea, file.fullName, file.baseName);
-                });
-
-                fileList.appendChild(item);
             });
+            fileList.appendChild(browser.element);
 
             // Auto-select current character if it exists
             const currentFile = files.find(f => f.baseName === currentCharacterName);
             if (currentFile) {
-                this.showSpritePreview(previewArea, currentFile.fullName, currentFile.baseName);
+                this.showSpritePreview(previewArea, currentFile.fullName, currentFile.baseName, currentSelection);
+                browser.scrollTo(currentCharacterName);
             } else {
                 previewArea.innerHTML = `<div style="color: var(--color-text-muted);">${this._t('Select a character file from the list')}</div>`;
             }
@@ -250,7 +221,7 @@ class CharacterGraphicPicker {
      * @param {string} fullFilename - Full filename with extension (for loading image)
      * @param {string} baseName - Base filename without extension (for display and storage)
      */
-    showSpritePreview(previewArea, fullFilename, baseName = null) {
+    showSpritePreview(previewArea, fullFilename, baseName = null, currentSelection = null) {
         // If baseName not provided, strip extension from fullFilename
         if (!baseName) {
             baseName = fullFilename.replace(/\.(png|jpg|jpeg|gif)$/i, '');
@@ -260,19 +231,21 @@ class CharacterGraphicPicker {
 
         // Use file:// protocol for NW.js
         const path = require('path');
-        const imagePath = 'file://' + path.join(projectPath, 'img', 'characters', fullFilename).replace(/\\/g, '/');
+        const imagePath = RRAssetFiles.toUrl(path.join(projectPath, 'img', 'characters', fullFilename));
 
         console.log('Loading character sprite:', imagePath);
 
         previewArea.innerHTML = '';
         previewArea.dataset.selectedFile = baseName;  // Store base name without extension
+        const previewGeneration = (this._previewGeneration || 0) + 1;
+        this._previewGeneration = previewGeneration;
 
-        // Check if single character sprite (!$ or $)
-        const isSingleCharacter = baseName.includes('!$') || (baseName.includes('$') && !baseName.includes('!$'));
+        const isSingleCharacter = RRAssetFiles.isBigCharacter(baseName);
 
         // Create image element to get dimensions
         const img = new Image();
         img.onload = () => {
+            if (this._previewGeneration !== previewGeneration || previewArea.dataset.selectedFile !== baseName) return;
             console.log('Character sprite loaded successfully:', fullFilename);
             const spriteWidth = img.width;
             const spriteHeight = img.height;
@@ -327,17 +300,29 @@ class CharacterGraphicPicker {
             }
 
             previewArea.appendChild(selectionContainer);
+
+            if (currentSelection) {
+                const selected = Array.from(selectionContainer.querySelectorAll('canvas')).find(canvas =>
+                    Number(canvas.dataset.characterIndex) === Number(currentSelection.characterIndex || 0)
+                    && Number(canvas.dataset.pattern) === Number(currentSelection.pattern || 0)
+                    && Number(canvas.dataset.direction) === Number(currentSelection.direction || 2)
+                );
+                selected?.click();
+            }
         };
 
         img.onerror = () => {
+            if (this._previewGeneration !== previewGeneration || previewArea.dataset.selectedFile !== baseName) return;
             console.error('Failed to load character sprite:', imagePath);
-            previewArea.innerHTML = `
-                <div style="color: #f88; padding: 20px; text-align: center;">
-                    ${this._t('Failed to load image:')}<br>
-                    ${fullFilename}<br><br>
-                    <small>${this._t('Check console for details')}</small>
-                </div>
-            `;
+            previewArea.replaceChildren();
+            const error = document.createElement('div');
+            error.style.cssText = 'color: #f88; padding: 20px; text-align: center;';
+            error.append(this._t('Failed to load image:'), document.createElement('br'), fullFilename,
+                document.createElement('br'), document.createElement('br'));
+            const detail = document.createElement('small');
+            detail.textContent = this._t('Check console for details');
+            error.appendChild(detail);
+            previewArea.appendChild(error);
         };
 
         img.src = imagePath;

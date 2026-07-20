@@ -85,6 +85,7 @@ class GetLocationInfoEditor {
      * Render modal content
      */
     renderContent() {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const container = this.modal.querySelector('.get-location-info-container');
         container.innerHTML = '';
 
@@ -92,7 +93,7 @@ class GetLocationInfoEditor {
         const header = document.createElement('div');
         header.style.cssText = 'padding: 12px 16px; background-color: var(--color-bg-panel); border-bottom: 1px solid var(--color-border); display: flex; justify-content: space-between; align-items: center; border-top-left-radius: 6px; border-top-right-radius: 6px;';
         header.innerHTML = `
-            <h3 style="margin: 0; color: var(--color-text-strong); font-size: 16px;">Get Location Info</h3>
+            <h3 style="margin: 0; color: var(--color-text-strong); font-size: 16px;">${tt('Get Location Info')}</h3>
             <button class="close-btn" style="background: none; border: none; color: var(--color-text-strong); font-size: 20px; cursor: pointer; padding: 0; width: 24px; height: 24px;">\u00d7</button>
         `;
         container.appendChild(header);
@@ -108,7 +109,7 @@ class GetLocationInfoEditor {
         varRow.style.cssText = 'display: flex; align-items: center; gap: 8px;';
 
         const varLabel = document.createElement('span');
-        varLabel.textContent = 'Variable:';
+        varLabel.textContent = tt('Variable:');
         varLabel.style.cssText = 'color: var(--color-text); font-size: 13px; min-width: 120px;';
 
         const varInput = document.createElement('input');
@@ -135,7 +136,7 @@ class GetLocationInfoEditor {
         infoRow.style.cssText = 'display: flex; align-items: center; gap: 8px;';
 
         const infoLabel = document.createElement('span');
-        infoLabel.textContent = 'Info Type:';
+        infoLabel.textContent = tt('Info Type:');
         infoLabel.style.cssText = 'color: var(--color-text); font-size: 13px; min-width: 120px;';
 
         const infoSelect = document.createElement('select');
@@ -162,7 +163,7 @@ class GetLocationInfoEditor {
         designRow.style.cssText = 'display: flex; align-items: center; gap: 16px;';
 
         const designLabel = document.createElement('span');
-        designLabel.textContent = 'Designation:';
+        designLabel.textContent = tt('Designation:');
         designLabel.style.cssText = 'color: var(--color-text); font-size: 13px; min-width: 120px;';
         designRow.appendChild(designLabel);
 
@@ -177,7 +178,7 @@ class GetLocationInfoEditor {
         });
 
         const directLabel = document.createElement('label');
-        directLabel.textContent = 'Direct';
+        directLabel.textContent = tt('Direct');
         directLabel.style.cssText = 'color: var(--color-text); font-size: 13px; cursor: pointer;';
         directLabel.addEventListener('click', () => { directRadio.checked = true; directRadio.dispatchEvent(new Event('change')); });
 
@@ -192,7 +193,7 @@ class GetLocationInfoEditor {
         });
 
         const varRadioLabel = document.createElement('label');
-        varRadioLabel.textContent = 'Variable';
+        varRadioLabel.textContent = tt('Variable');
         varRadioLabel.style.cssText = 'color: var(--color-text); font-size: 13px; cursor: pointer;';
         varRadioLabel.addEventListener('click', () => { varRadio.checked = true; varRadio.dispatchEvent(new Event('change')); });
 
@@ -208,7 +209,7 @@ class GetLocationInfoEditor {
             xRow.style.cssText = 'display: flex; align-items: center; gap: 8px;';
 
             const xLabel = document.createElement('span');
-            xLabel.textContent = 'X:';
+            xLabel.textContent = tt('X:');
             xLabel.style.cssText = 'color: var(--color-text); font-size: 13px; min-width: 120px;';
 
             const xInput = document.createElement('input');
@@ -229,7 +230,7 @@ class GetLocationInfoEditor {
             yRow.style.cssText = 'display: flex; align-items: center; gap: 8px;';
 
             const yLabel = document.createElement('span');
-            yLabel.textContent = 'Y:';
+            yLabel.textContent = tt('Y:');
             yLabel.style.cssText = 'color: var(--color-text); font-size: 13px; min-width: 120px;';
 
             const yInput = document.createElement('input');
@@ -251,7 +252,7 @@ class GetLocationInfoEditor {
             xVarRow.style.cssText = 'display: flex; align-items: center; gap: 8px;';
 
             const xVarLabel = document.createElement('span');
-            xVarLabel.textContent = 'X Var:';
+            xVarLabel.textContent = tt('X Var:');
             xVarLabel.style.cssText = 'color: var(--color-text); font-size: 13px; min-width: 120px;';
 
             const xVarInput = document.createElement('input');
@@ -277,7 +278,7 @@ class GetLocationInfoEditor {
             yVarRow.style.cssText = 'display: flex; align-items: center; gap: 8px;';
 
             const yVarLabel = document.createElement('span');
-            yVarLabel.textContent = 'Y Var:';
+            yVarLabel.textContent = tt('Y Var:');
             yVarLabel.style.cssText = 'color: var(--color-text); font-size: 13px; min-width: 120px;';
 
             const yVarInput = document.createElement('input');
@@ -307,12 +308,12 @@ class GetLocationInfoEditor {
         footer.style.cssText = 'padding: 12px 16px; border-top: 1px solid var(--color-border); background-color: var(--color-bg-panel); display: flex; justify-content: flex-end; gap: 8px;';
 
         const cancelBtn = document.createElement('button');
-        cancelBtn.textContent = 'Cancel';
+        cancelBtn.textContent = tt('Cancel');
         cancelBtn.className = 'rr-btn-secondary';
         cancelBtn.addEventListener('click', () => this.close());
 
         const okBtn = document.createElement('button');
-        okBtn.textContent = 'OK';
+        okBtn.textContent = tt('OK');
         okBtn.style.cssText = 'padding: 6px 20px; background-color: var(--color-accent); color: var(--color-bg-deep); border: none; border-radius: 3px; cursor: pointer; font-size: 12px; font-weight: bold;';
         okBtn.addEventListener('click', () => this.save());
 

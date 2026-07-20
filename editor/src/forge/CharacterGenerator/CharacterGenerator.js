@@ -19,7 +19,8 @@ class CharacterGenerator {
         this.projectController = null;
         this.projectPath       = null;
         this.activeTab         = 'procedural';
-        this.characterStyle    = 'looseleaf';
+        this.characterStyle    = 'psychronic';
+        this._knownCharacterStyles = new Set(['psychronic']);
 
         // ── Procedural state ──────────────────────────────────────────────────
         this.gender    = 'male';
@@ -76,6 +77,7 @@ class CharacterGenerator {
         this._hairPreviewCache   = new Map();
         this._hairPreviewCacheOwner = null;
         this._hairPreviewCacheDescriptor = null;
+        this._projectPartDescriptors = new Set();
 
         if (typeof window !== 'undefined') {
             window.addEventListener('rr-language-changed', () => {
@@ -92,6 +94,11 @@ class CharacterGenerator {
 
     _t(key, params = {}) {
         return typeof window !== 'undefined' && window.I18n ? window.I18n.t(key, params) : key;
+    }
+
+    _escapeHtml(value) {
+        if (typeof globalThis.rrEscapeHtml === 'function') return globalThis.rrEscapeHtml(value);
+        return require('../../utils/HtmlEscape.js')(value);
     }
 
     get sheetWidth()  { return this.frameWidth  * 3; }
@@ -118,6 +125,7 @@ class CharacterGenerator {
             return null;
         }
         if (next !== this.projectPath) {
+            this._removeProjectParts();
             this.projectPath = next;
             if (this.imageCache && typeof this.imageCache.clear === 'function') this.imageCache.clear();
             this.categories = [];
@@ -147,31 +155,109 @@ class CharacterGenerator {
         if (window.RPGReactorHost?.mode !== 'web') {
             this._loadPartsFromRoot(
                 path.join(process.cwd(), 'src', 'forge', 'CharacterGenerator', 'styles'),
-                existingIds
+                existingIds,
+                false
             );
         }
-        this._loadPartsFromRoot(
-            path.join(this.projectPath, 'forge', 'character_generator', 'styles'),
-            existingIds
-        );
+        if (this._isProjectCodeTrusted()) this._loadProjectProceduralParts(existingIds);
     }
 
-    _loadPartsFromRoot(root, existingIds) {
+    _loadProjectProceduralParts(existingIds = new Set(RR_CHARACTER_REGISTRY.map(d => d.id))) {
+        if (!this.projectPath || !this._isProjectCodeTrusted()) return false;
+        const path = require('path');
+        this._loadPartsFromRoot(
+            path.join(this.projectPath, 'forge', 'character_generator', 'styles'),
+            existingIds,
+            true
+        );
+        return true;
+    }
+
+    _projectCodeTrustKey() {
+        if (!this.projectPath) return null;
+        let canonical = this.projectPath;
+        try { canonical = require('fs').realpathSync(this.projectPath); } catch (_) {}
+        if (process.platform === 'win32') canonical = canonical.toLowerCase();
+        return `rpg-reactor.trusted-project-code:${canonical}`;
+    }
+
+    _isProjectCodeTrusted(storage = globalThis.localStorage) {
+        const key = this._projectCodeTrustKey();
+        if (!key || !storage) return false;
+        try { return storage.getItem(key) === 'true'; } catch (_) { return false; }
+    }
+
+    _setProjectCodeTrusted(trusted, storage = globalThis.localStorage) {
+        const key = this._projectCodeTrustKey();
+        if (!key || !storage) return false;
+        try {
+            if (trusted) storage.setItem(key, 'true');
+            else storage.removeItem(key);
+            return true;
+        } catch (_) {
+            return false;
+        }
+    }
+
+    _removeProjectParts() {
+        if (!this._projectPartDescriptors?.size || typeof RR_CHARACTER_REGISTRY === 'undefined') return;
+        for (let i = RR_CHARACTER_REGISTRY.length - 1; i >= 0; i--) {
+            if (this._projectPartDescriptors.has(RR_CHARACTER_REGISTRY[i])) RR_CHARACTER_REGISTRY.splice(i, 1);
+        }
+        this._projectPartDescriptors.clear();
+        this.activePartIds = new Set([...this.activePartIds].filter(id => RR_CHARACTER_REGISTRY.some(d => d.id === id)));
+        this.activeLayerOrder = this.activeLayerOrder.filter(id => RR_CHARACTER_REGISTRY.some(d => d.id === id));
+    }
+
+    _projectCodeTrustControlsHTML() {
+        if (typeof window === 'undefined' || window.RPGReactorHost?.mode === 'web') return '';
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
+        const trusted = this._isProjectCodeTrusted();
+        const message = trusted
+            ? tt('Project JavaScript character parts are trusted and may execute with editor privileges.')
+            : tt('Project JavaScript character parts are disabled. Only trust projects whose code you have reviewed.');
+        const action = trusted ? tt('Revoke Project JS Trust') : tt('Trust and Load Project JS');
+        return `<div class="rr-cg-project-code-trust" style="display:flex;align-items:center;gap:10px;padding:7px 16px;background:${trusted ? 'var(--color-bg-panel)' : 'var(--color-warning-bg, #3a2d12)'};border-bottom:1px solid var(--color-border);font-size:10px;color:var(--color-text-muted);">
+            <span style="flex:1;">${this._escapeHtml(message)}</span>
+            <button type="button" class="rr-cg-project-code-trust-action rr-btn-chip" style="padding:3px 9px;font-size:10px;">${this._escapeHtml(action)}</button>
+        </div>`;
+    }
+
+    _wireProjectCodeTrustControls() {
+        const button = this.root?.querySelector('.rr-cg-project-code-trust-action');
+        if (!button) return;
+        button.addEventListener('click', () => {
+            const tt = text => window.I18n ? window.I18n.tText(text) : text;
+            if (this._isProjectCodeTrusted()) {
+                this._setProjectCodeTrusted(false);
+                this._removeProjectParts();
+                this._render();
+                return;
+            }
+            const warning = tt('Project JavaScript runs with full editor and filesystem access. Trust and load it?');
+            if (!window.confirm(warning) || !this._setProjectCodeTrusted(true)) return;
+            this._loadProjectProceduralParts();
+            this._render();
+        });
+    }
+
+    _loadPartsFromRoot(root, existingIds, projectLocal = false) {
         const fs = require('fs');
         const path = require('path');
         if (!fs.existsSync(root)) return;
         const styles = fs.readdirSync(root, { withFileTypes: true }).filter(d => d.isDirectory()).map(d => d.name);
         for (const style of styles) {
+            this._knownCharacterStyles.add(style.toLowerCase());
             const partsRoot = path.join(root, style, 'parts');
             if (!fs.existsSync(partsRoot)) continue;
             const categories = fs.readdirSync(partsRoot, { withFileTypes: true }).filter(d => d.isDirectory()).map(d => d.name);
             for (const cat of categories) {
-                this._loadCategoryDir(path.join(partsRoot, cat), [style.toLowerCase()], existingIds);
+                this._loadCategoryDir(path.join(partsRoot, cat), [style.toLowerCase()], existingIds, projectLocal);
             }
         }
     }
 
-    _loadCategoryDir(dir, autoTags, existingIds) {
+    _loadCategoryDir(dir, autoTags, existingIds, projectLocal = false) {
         // Walk a category directory recursively. Subdirectory names are added
         // as auto-tags on every descriptor loaded under them (e.g. a file in
         // parts/body/female/foo.js gets a 'female' tag), which lets the picker
@@ -185,7 +271,7 @@ class CharacterGenerator {
         for (const e of entries) {
             const full = path.join(dir, e.name);
             if (e.isDirectory()) {
-                this._loadCategoryDir(full, [...autoTags, e.name.toLowerCase()], existingIds);
+                this._loadCategoryDir(full, [...autoTags, e.name.toLowerCase()], existingIds, projectLocal);
                 continue;
             }
             if (!e.name.endsWith('.js')) continue;
@@ -207,6 +293,7 @@ class CharacterGenerator {
                         a.tags = Array.from(cur);
                     }
                     existingIds.add(a.id);
+                    if (projectLocal) this._projectPartDescriptors.add(a);
                 }
             } catch (err) {
                 console.warn('Failed to load part file', full, err);
@@ -229,6 +316,7 @@ class CharacterGenerator {
     // ── Shared layout ─────────────────────────────────────────────────────────
 
     _render() {
+        const tt = (text) => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
         // Capture scroll positions of every panel before we blow away the DOM,
         // then restore them once the new DOM is in place. Applied here so every
         // button that calls _render() gets scroll preservation for free.
@@ -239,6 +327,7 @@ class CharacterGenerator {
         });
         this.root.innerHTML = `
             <div style="display:flex;flex-direction:column;height:100%;min-height:0;">
+                ${this._projectCodeTrustControlsHTML()}
                 <div style="display:flex;align-items:flex-end;gap:2px;padding:0 16px;background:var(--color-bg-panel);border-bottom:1px solid var(--color-border);flex-shrink:0;">
                     ${this._tabBtn('procedural', this._t('forge.tab.procedural'))}
                     ${this._tabBtn('forge',       this._t('forge.tab.outfit'))}
@@ -247,7 +336,7 @@ class CharacterGenerator {
                     <div style="margin-left:auto;display:flex;align-items:center;gap:6px;padding:6px 0 5px;">
                         <label style="font-size:10px;color:var(--color-text-muted);">${this._t('forge.style')}</label>
                         <select class="rr-cg-style-select rr-input" style="padding:3px 8px;font-size:11px;min-width:120px;">
-                            ${this._characterStyles().map(s => `<option value="${s.id}" ${this.characterStyle === s.id ? 'selected' : ''}>${s.name}</option>`).join('')}
+                            ${this._characterStyles().map(s => `<option value="${this._escapeHtml(s.id)}" ${this.characterStyle === s.id ? 'selected' : ''}>${this._escapeHtml(tt(s.name))}</option>`).join('')}
                         </select>
                     </div>
                 </div>
@@ -258,6 +347,7 @@ class CharacterGenerator {
                         : this._partsHTML()}
                 </div>
             </div>`;
+        this._wireProjectCodeTrustControls();
         this.root.querySelectorAll('.rr-cg-tab').forEach(btn => {
             btn.addEventListener('click', () => {
                 if (this._procAnimTimer) {
@@ -313,10 +403,23 @@ class CharacterGenerator {
     }
 
     _characterStyles() {
-        return [
-            { id: 'looseleaf', name: 'Looseleaf' },
-            { id: 'psychronic', name: 'Psychronic' }
-        ];
+        const ids = new Set(this._knownCharacterStyles || ['psychronic']);
+        if (this.projectPath && typeof require === 'function') {
+            try {
+                const fs = require('fs');
+                const path = require('path');
+                const root = path.join(this.projectPath, 'forge', 'character_generator', 'styles');
+                for (const entry of fs.readdirSync(root, { withFileTypes: true })) {
+                    if (entry.isDirectory()) ids.add(entry.name.toLowerCase());
+                }
+            } catch (_) {}
+        }
+        return [...ids]
+            .sort((a, b) => a === 'psychronic' ? -1 : b === 'psychronic' ? 1 : a.localeCompare(b))
+            .map(id => ({
+                id,
+                name: id === 'psychronic' ? 'Psychronic' : id.replace(/(^|[-_])([a-z])/g, (_m, sep, ch) => `${sep ? ' ' : ''}${ch.toUpperCase()}`)
+            }));
     }
 
     _styleDisplayName(styleId = this.characterStyle) {
@@ -364,16 +467,16 @@ class CharacterGenerator {
     _forgeSchema() {
         const eng = this._outfitEngine();
         if (!eng) return null;
-        const styleId = this.characterStyle || 'looseleaf';
+        const styleId = this.characterStyle || 'psychronic';
         return Object.assign({}, eng.UI_SCHEMA, {
-            partSets: (eng.UI_SCHEMA.partSets || []).filter(set => (set.style || 'looseleaf') === styleId)
+            partSets: (eng.UI_SCHEMA.partSets || []).filter(set => (set.style || 'psychronic') === styleId)
         });
     }
 
     _forgeDefaultConfigForStyle() {
         const eng = this._outfitEngine();
         const schema = this._forgeSchema();
-        const styleId = this.characterStyle || 'looseleaf';
+        const styleId = this.characterStyle || 'psychronic';
         if (!eng || !schema) return { name: 'New Outfit', category: 'full outfits', tags: [], zones: {}, extensions: [] };
         if (typeof eng.defaultConfig === 'function') return eng.defaultConfig(styleId);
 
@@ -449,7 +552,7 @@ class CharacterGenerator {
     // Lazy-init the working config in a UI-friendly shape (extensions keyed by
     // type with an `enabled` flag so toggles don't reshuffle the DOM).
     _forgeConfig() {
-        const styleId = this.characterStyle || 'looseleaf';
+        const styleId = this.characterStyle || 'psychronic';
         if (this._forgeCfgByStyle && this._forgeCfgByStyle[styleId]) return this._migrateForgeLayerDefaults(this._forgeCfgByStyle[styleId]);
         const eng = this._outfitEngine();
         const schema = this._forgeSchema();
@@ -555,8 +658,15 @@ class CharacterGenerator {
         if (!eng || !body || !layerId || !spec) return null;
         const previewSpec = JSON.parse(JSON.stringify(spec));
         previewSpec.enabled = true;
+        // Memoize by spec: a control change re-renders every part thumbnail
+        // (~20), but only one layer's spec actually changed — and each miss
+        // is a full 12-frame engine run.
+        const memoKey = `${this.characterStyle || 'psychronic'}|${layerId}|${JSON.stringify(previewSpec)}`;
+        if (!this._forgeThumbMemo) this._forgeThumbMemo = new Map();
+        const memoized = this._forgeThumbMemo.get(memoKey);
+        if (memoized) return memoized;
         const config = { name: 'Part Preview', category: 'full outfits', tags: [], zones: {}, extensions: [] };
-        config.style = this.characterStyle || 'looseleaf';
+        config.style = this.characterStyle || 'psychronic';
         if (layerId.startsWith('zone:')) {
             config.zones[layerId.slice(5)] = previewSpec;
         } else if (layerId.startsWith('ext:')) {
@@ -569,7 +679,10 @@ class CharacterGenerator {
         let result;
         try { result = eng.generateOutfit(config, body); }
         catch (e) { console.warn('Outfit Forge: thumbnail generation failed', e); return null; }
-        return { template: { palette: result.palette, sheet: result.sheet } };
+        const descriptor = { template: { palette: result.palette, sheet: result.sheet } };
+        if (this._forgeThumbMemo.size > 200) this._forgeThumbMemo.clear();
+        this._forgeThumbMemo.set(memoKey, descriptor);
+        return descriptor;
     }
 
     _drawForgeTemplateThumbnail(canvas, descriptor) {
@@ -685,13 +798,14 @@ class CharacterGenerator {
     }
 
     _forgeHTML() {
+        const tt = (text) => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
         const eng = this._outfitEngine();
         const body = this._forgeBodyTemplate();
         if (!eng || !body) {
             return `<div style="padding:24px;color:var(--color-text-muted);font-size:12px;">
-                Outfit Forge needs the outfit engine and a body part loaded.
-                ${!eng ? '<br>Engine failed to load (see console).' : ''}
-                ${!body ? '<br>No body part found in the registry.' : ''}
+                ${tt('Outfit Forge needs the outfit engine and a body part loaded.')}
+                ${!eng ? '<br>' + tt('Engine failed to load (see console).') : ''}
+                ${!body ? '<br>' + tt('No body part found in the registry.') : ''}
             </div>`;
         }
         const cfg = this._forgeConfig();
@@ -710,7 +824,7 @@ class CharacterGenerator {
                 style="width:${width};display:flex;align-items:center;gap:6px;justify-content:space-between;font-size:12px;padding:4px 6px;text-align:left;cursor:pointer;">
                     <span style="min-width:0;display:flex;align-items:center;gap:6px;overflow:hidden;">
                         <span style="width:12px;height:12px;flex:0 0 auto;border-radius:2px;border:1px solid var(--color-border-input);background:${meta.swatch || 'transparent'};"></span>
-                        <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${meta.label}</span>
+                        <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${tt(meta.label)}</span>
                     </span>
                     <span style="font-size:9px;color:var(--color-text-dim);">▾</span>
                 </button>`;
@@ -750,17 +864,17 @@ class CharacterGenerator {
         const themePicker = `<details class="rr-forge-theme-dropdown" style="margin-bottom:10px;border:1px solid var(--color-border-subtle);border-radius:6px;background:var(--color-bg-panel);">
             <summary style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:8px;font-size:12px;color:var(--color-text-strong);font-weight:800;">
                 ${themeMini(cfg.paletteTheme === 'custom' ? customColors : (activeTheme && activeTheme.colors))}
-                <span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${activeThemeLabel}</span>
+                <span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${tt(activeThemeLabel)}</span>
             </summary>
             <div style="padding:0 8px 8px;">
-                <input class="rr-forge-theme-search rr-input" placeholder="Search palettes..." style="width:100%;font-size:12px;padding:5px 7px;margin-bottom:7px;">
+                <input class="rr-forge-theme-search rr-input" placeholder="${tt('Search palettes...')}" style="width:100%;font-size:12px;padding:5px 7px;margin-bottom:7px;">
                 <div class="rr-forge-theme-options">
                     ${themeOptions.map(theme => {
                         const active = (cfg.paletteTheme || 'nova-sentinel') === theme.key;
                         return `<button type="button" class="rr-forge-palette-theme" data-forge-palette-theme="${theme.key}" data-forge-theme-label="${theme.label.toLowerCase()}"
                             style="width:100%;display:flex;align-items:center;gap:8px;margin-bottom:6px;padding:7px;border:1px solid ${active ? 'var(--color-accent-bright)' : 'var(--color-border-subtle)'};border-radius:5px;background:${active ? 'var(--color-bg-button-active)' : 'var(--color-bg-base)'};color:var(--color-text);font-size:12px;text-align:left;cursor:pointer;">
                             ${themeMini(theme.colors)}
-                            <span style="font-weight:700;line-height:1.15;">${theme.label}</span>
+                            <span style="font-weight:700;line-height:1.15;">${tt(theme.label)}</span>
                         </button>`;
                     }).join('')}
                 </div>
@@ -777,36 +891,36 @@ class CharacterGenerator {
             const pill = selected ? `<div style="display:flex;align-items:center;gap:8px;max-width:100%;padding:6px;border-radius:6px;background:var(--color-bg-button-active);border:1px solid var(--color-border-input);color:var(--color-text-strong);font-size:11px;">
                 ${partThumb(selected, 'active', 42)}
                 <span style="min-width:0;display:flex;flex-direction:column;line-height:1.2;flex:1;">
-                    <span style="font-weight:800;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${selected.setLabel}</span>
-                    <span style="font-size:11px;color:var(--color-text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${selected.label}</span>
+                    <span style="font-weight:800;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${tt(selected.setLabel)}</span>
+                    <span style="font-size:11px;color:var(--color-text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${tt(selected.label)}</span>
                 </span>
-                <button type="button" data-forge-remove-layer="${slot.id}" title="Remove ${slot.label}" style="border:0;background:transparent;color:var(--color-text-muted);cursor:pointer;padding:0 4px;font-size:15px;line-height:1;">×</button>
-            </div>` : `<span style="font-size:11px;color:var(--color-text-muted);">No ${slot.label.toLowerCase()} selected</span>`;
-            const familyOpts = families.map(f => `<option value="${f.name}" ${f.name === familyVal ? 'selected' : ''}>${f.label || f.name}</option>`).join('');
-            const accentOpts = [`<option value="" ${!accentVal ? 'selected' : ''}>None</option>`]
-                .concat(accents.map(a => `<option value="${a.name}" ${a.name === accentVal ? 'selected' : ''}>${a.label || a.name}</option>`)).join('');
+                <button type="button" data-forge-remove-layer="${slot.id}" title="${tt('Remove {part}').replace('{part}', tt(slot.label))}" style="border:0;background:transparent;color:var(--color-text-muted);cursor:pointer;padding:0 4px;font-size:15px;line-height:1;">×</button>
+            </div>` : `<span style="font-size:11px;color:var(--color-text-muted);">${tt('No {part} selected').replace('{part}', tt(slot.label).toLowerCase())}</span>`;
+            const familyOpts = families.map(f => `<option value="${f.name}" ${f.name === familyVal ? 'selected' : ''}>${tt(f.label || f.name)}</option>`).join('');
+            const accentOpts = [`<option value="" ${!accentVal ? 'selected' : ''}>${tt('None')}</option>`]
+                .concat(accents.map(a => `<option value="${a.name}" ${a.name === accentVal ? 'selected' : ''}>${tt(a.label || a.name)}</option>`)).join('');
             const presetSelect = `<label style="display:grid;grid-template-columns:58px 1fr;gap:5px 6px;align-items:center;margin-bottom:7px;">
-                <span style="font-size:11px;color:var(--color-text-muted);">Part</span>
+                <span style="font-size:11px;color:var(--color-text-muted);">${tt('Part')}</span>
                 <select class="rr-forge-preset-select rr-input" data-forge-slot-select="${slot.id}" style="width:100%;font-size:12px;padding:4px 6px;">
-                    <option value="">(None)</option>
+                    <option value="">${tt('(None)')}</option>
                     ${presets.map(part => {
                         const val = `${part.setKey}::${part.id}`;
                         const sel = selected && selected.setKey === part.setKey && selected.id === part.id ? 'selected' : '';
-                        return `<option value="${val}" ${sel}>${part.setLabel} — ${part.label}</option>`;
+                        return `<option value="${val}" ${sel}>${tt(part.setLabel)} — ${tt(part.label)}</option>`;
                     }).join('')}
                 </select>
             </label>`;
             const paletteControls = `<div style="display:grid;grid-template-columns:58px 1fr;gap:5px 6px;align-items:center;margin-bottom:8px;padding:6px;border:1px solid var(--color-border-subtle);border-radius:4px;background:var(--color-bg-base);">
-                <span style="font-size:11px;color:var(--color-text-muted);">Material</span>
+                <span style="font-size:11px;color:var(--color-text-muted);">${tt('Material')}</span>
                 <select class="rr-forge-palette-select rr-input" data-forge-slot-palette="${slot.id}" data-forge-palette-field="family" style="width:100%;font-size:12px;padding:4px 6px;">${familyOpts}</select>
-                <span style="font-size:11px;color:var(--color-text-muted);">Accent</span>
+                <span style="font-size:11px;color:var(--color-text-muted);">${tt('Accent')}</span>
                 <select class="rr-forge-palette-select rr-input" data-forge-slot-palette="${slot.id}" data-forge-palette-field="accent" style="width:100%;font-size:12px;padding:4px 6px;">${accentOpts}</select>
             </div>`;
             return `<details class="rr-forge-slot" data-forge-slot="${slot.id}" open style="margin-bottom:8px;border:1px solid var(--color-border-subtle);border-radius:5px;background:var(--color-bg-panel);">
-                <summary style="cursor:pointer;padding:8px 9px;font-size:12px;font-weight:800;color:var(--color-text-strong);text-transform:uppercase;letter-spacing:0.45px;">${slot.label}</summary>
+                <summary style="cursor:pointer;padding:8px 9px;font-size:12px;font-weight:800;color:var(--color-text-strong);text-transform:uppercase;letter-spacing:0.45px;">${tt(slot.label)}</summary>
                 <div style="padding:0 9px 9px;">
                     ${presetSelect}
-                    <input class="rr-forge-part-search rr-input" data-forge-slot-search="${slot.id}" placeholder="Search style or part..." style="width:100%;font-size:12px;padding:5px 7px;margin-bottom:7px;">
+                    <input class="rr-forge-part-search rr-input" data-forge-slot-search="${slot.id}" placeholder="${tt('Search style or part...')}" style="width:100%;font-size:12px;padding:5px 7px;margin-bottom:7px;">
                     <div data-forge-slot-options="${slot.id}" style="display:block;max-height:190px;overflow-y:auto;padding:5px;margin:0 0 8px;border:1px solid var(--color-border-subtle);border-radius:5px;background:var(--color-bg-base);">
                         ${presets.map(part => {
                             const active = selected && selected.setKey === part.setKey && selected.id === part.id;
@@ -814,12 +928,12 @@ class CharacterGenerator {
                             style="width:100%;display:flex;align-items:center;gap:8px;margin-bottom:6px;padding:7px;border:1px solid ${active ? 'var(--color-accent-bright)' : 'var(--color-border-subtle)'};border-radius:4px;background:${active ? 'var(--color-bg-button-active)' : 'var(--color-bg-base)'};color:var(--color-text);font-size:12px;text-align:left;cursor:pointer;">
                             ${partThumb(part, 'preset', 34)}
                             <span style="min-width:0;display:flex;flex-direction:column;line-height:1.2;">
-                                <span style="font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${part.setLabel}</span>
-                                <span style="font-size:11px;color:var(--color-text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${part.label}</span>
+                                <span style="font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${tt(part.setLabel)}</span>
+                                <span style="font-size:11px;color:var(--color-text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${tt(part.label)}</span>
                             </span>
                         </button>`;
-                        }).join('') || `<div style="font-size:11px;color:var(--color-text-muted);padding:4px 0;">No presets yet.</div>`}
-                        <div data-forge-slot-empty="${slot.id}" style="display:none;font-size:11px;color:var(--color-text-muted);padding:4px 0;">No matching style parts.</div>
+                        }).join('') || `<div style="font-size:11px;color:var(--color-text-muted);padding:4px 0;">${tt('No presets yet.')}</div>`}
+                        <div data-forge-slot-empty="${slot.id}" style="display:none;font-size:11px;color:var(--color-text-muted);padding:4px 0;">${tt('No matching style parts.')}</div>
                     </div>
                     <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:7px;">${pill}</div>
                     ${paletteControls}
@@ -836,34 +950,34 @@ class CharacterGenerator {
                 if (p.type === 'bool') return `
                     <label style="display:flex;align-items:center;gap:6px;font-size:10px;color:var(--color-text);margin-top:4px;">
                         <input type="checkbox" class="rr-forge-input" data-forge-zone="${z.key}" data-forge-param="${p.key}" ${zc.params && zc.params[p.key] ? 'checked' : ''}>
-                        ${p.label}
+                        ${tt(p.label)}
                     </label>`;
                 if (p.type === 'choice') {
                     const val = zc.params && zc.params[p.key] != null ? zc.params[p.key] : p.default;
-                    const opts = (p.options || []).map(o => `<option value="${o.value}" ${o.value === val ? 'selected' : ''}>${o.label}</option>`).join('');
+                    const opts = (p.options || []).map(o => `<option value="${o.value}" ${o.value === val ? 'selected' : ''}>${tt(o.label)}</option>`).join('');
                     return `
                         <label style="display:flex;align-items:center;justify-content:space-between;gap:6px;font-size:10px;color:var(--color-text);margin-top:4px;">
-                            ${p.label}
+                            ${tt(p.label)}
                             <select class="rr-forge-input rr-input" data-forge-zone="${z.key}" data-forge-param="${p.key}" style="width:132px;font-size:10px;padding:2px 4px;">${opts}</select>
                         </label>`;
                 }
                 return `
                     <label style="display:flex;align-items:center;justify-content:space-between;gap:6px;font-size:10px;color:var(--color-text);margin-top:4px;">
-                        ${p.label}
+                        ${tt(p.label)}
                         ${numberControl(`data-forge-zone="${z.key}" data-forge-param="${p.key}"`, zc.params && zc.params[p.key] != null ? zc.params[p.key] : p.default, p.min, p.max, p.step || (p.type === 'float' ? 0.1 : 1))}
                     </label>`;
             }).join('');
             return `<div draggable="true" data-forge-layer-card="zone:${z.key}" style="border:1px solid var(--color-border-subtle);border-radius:5px;padding:8px 10px;margin-bottom:8px;background:var(--color-bg-panel);opacity:${zc.enabled !== false ? 1 : 0.55};cursor:grab;">
                 <label style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:700;color:var(--color-text-strong);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:6px;">
                     <input type="checkbox" class="rr-forge-input" data-forge-zone="${z.key}" data-forge-zone-enabled="1" ${zc.enabled !== false ? 'checked' : ''}>
-                    <span style="flex:1;">${z.label}</span>
-                    <span title="Drag to change layer order" style="font-size:10px;color:var(--color-text-muted);letter-spacing:1px;">drag</span>
-                    <button type="button" data-forge-remove-layer="zone:${z.key}" title="Remove ${z.label}" style="border:1px solid var(--color-border-input);border-radius:3px;background:var(--color-bg-button);color:var(--color-text-muted);cursor:pointer;padding:0 5px;font-size:11px;line-height:16px;">×</button>
+                    <span style="flex:1;">${tt(z.label)}</span>
+                    <span title="${tt('Drag to change layer order')}" style="font-size:10px;color:var(--color-text-muted);letter-spacing:1px;">${tt('drag')}</span>
+                    <button type="button" data-forge-remove-layer="zone:${z.key}" title="${tt('Remove {part}').replace('{part}', tt(z.label))}" style="border:1px solid var(--color-border-input);border-radius:3px;background:var(--color-bg-button);color:var(--color-text-muted);cursor:pointer;padding:0 5px;font-size:11px;line-height:16px;">×</button>
                 </label>
                 <div style="display:grid;grid-template-columns:auto 1fr;gap:6px 8px;align-items:center;">
-                    <span style="font-size:10px;color:var(--color-text-muted);">Material</span>
+                    <span style="font-size:10px;color:var(--color-text-muted);">${tt('Material')}</span>
                     ${choiceButton('family', zc.family, `data-forge-zone="${z.key}" data-forge-field="family"`)}
-                    <span style="font-size:10px;color:var(--color-text-muted);">Accent</span>
+                    <span style="font-size:10px;color:var(--color-text-muted);">${tt('Accent')}</span>
                     ${choiceButton('accent', zc.accent, `data-forge-zone="${z.key}" data-forge-field="accent"`)}
                 </div>
                 <div data-forge-zone-summary="${z.key}" style="margin-top:2px;">${swatch(famSwatch)}${accSwatch ? swatch(accSwatch) : ''}<span style="font-size:9px;color:var(--color-text-muted);">${zc.family}${zc.accent ? ' + ' + zc.accent : ''}</span></div>
@@ -877,25 +991,25 @@ class CharacterGenerator {
                 if (p.type === 'bool') return `
                     <label style="display:flex;align-items:center;gap:6px;font-size:10px;color:var(--color-text);margin-top:4px;">
                         <input type="checkbox" class="rr-forge-input" data-forge-ext="${ex.type}" data-forge-param="${p.key}" ${ec.params[p.key] ? 'checked' : ''}>
-                        ${p.label}
+                        ${tt(p.label)}
                     </label>`;
                 return `
                     <label style="display:flex;align-items:center;justify-content:space-between;gap:6px;font-size:10px;color:var(--color-text);margin-top:4px;">
-                        ${p.label}
+                        ${tt(p.label)}
                         ${numberControl(`data-forge-ext="${ex.type}" data-forge-param="${p.key}"`, ec.params[p.key], p.min, p.max, p.type === 'float' ? 0.1 : 1)}
                     </label>`;
             }).join('');
             return `<div draggable="true" data-forge-layer-card="ext:${ex.type}" style="border:1px solid var(--color-border-subtle);border-radius:5px;padding:8px 10px;margin-bottom:8px;background:var(--color-bg-panel);opacity:${ec.enabled ? 1 : 0.55};cursor:grab;">
                 <label style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:700;color:var(--color-text-strong);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:6px;">
                     <input type="checkbox" class="rr-forge-input" data-forge-ext="${ex.type}" data-forge-ext-enabled="1" ${ec.enabled ? 'checked' : ''}>
-                    <span style="flex:1;">${ex.label}</span>
-                    <span title="Drag to change layer order" style="font-size:10px;color:var(--color-text-muted);letter-spacing:1px;">drag</span>
-                    <button type="button" data-forge-remove-layer="ext:${ex.type}" title="Remove ${ex.label}" style="border:1px solid var(--color-border-input);border-radius:3px;background:var(--color-bg-button);color:var(--color-text-muted);cursor:pointer;padding:0 5px;font-size:11px;line-height:16px;">×</button>
+                    <span style="flex:1;">${tt(ex.label)}</span>
+                    <span title="${tt('Drag to change layer order')}" style="font-size:10px;color:var(--color-text-muted);letter-spacing:1px;">${tt('drag')}</span>
+                    <button type="button" data-forge-remove-layer="ext:${ex.type}" title="${tt('Remove {part}').replace('{part}', tt(ex.label))}" style="border:1px solid var(--color-border-input);border-radius:3px;background:var(--color-bg-button);color:var(--color-text-muted);cursor:pointer;padding:0 5px;font-size:11px;line-height:16px;">×</button>
                 </label>
                 <div style="display:grid;grid-template-columns:auto 1fr;gap:6px 8px;align-items:center;margin-top:6px;">
-                    <span style="font-size:10px;color:var(--color-text-muted);">Material</span>
+                    <span style="font-size:10px;color:var(--color-text-muted);">${tt('Material')}</span>
                     ${choiceButton('family', ec.family, `data-forge-ext="${ex.type}" data-forge-field="family"`)}
-                    <span style="font-size:10px;color:var(--color-text-muted);">Accent</span>
+                    <span style="font-size:10px;color:var(--color-text-muted);">${tt('Accent')}</span>
                     ${choiceButton('accent', ec.accent, `data-forge-ext="${ex.type}" data-forge-field="accent"`)}
                 </div>
                 <div data-forge-ext-summary="${ex.type}" style="margin-top:2px;">${swatch((schema.families.find(f => f.name === ec.family) || {}).swatch)}${ec.accent ? swatch((schema.accents.find(a => a.name === ec.accent) || {}).swatch) : ''}<span style="font-size:9px;color:var(--color-text-muted);">${ec.family}${ec.accent ? ' + ' + ec.accent : ''}</span></div>
@@ -921,35 +1035,35 @@ class CharacterGenerator {
         const debugZoneOptions = [{ key: 'all', label: 'All zones' }].concat(debugZones.map(z => ({ key: z.key, label: z.label })));
         const debugZoneColors = { head: '#50a0ff', torso: '#50ff8c', arms: '#ff5050', belt: '#ffdc46', legs: '#be5aff', boots: '#46e6ff', armGauntlet: '#ff8a3d', shoulders: '#ff7acc', hands: '#ffb36b', spikes: '#d6ff46' };
         const debugLegend = `<div class="rr-forge-debug-legend" style="display:${this._forgeDebugZones ? 'flex' : 'none'};flex-wrap:wrap;gap:6px 10px;align-items:center;justify-content:center;max-width:520px;font-size:10px;color:var(--color-text-muted);line-height:1.2;">
-            ${debugZones.map(z => `<span style="display:inline-flex;align-items:center;gap:4px;"><span style="width:10px;height:10px;border-radius:2px;border:1px solid var(--color-border-input);background:${debugZoneColors[z.key] || '#ffffff'};"></span>${z.label}</span>`).join('')}
+            ${debugZones.map(z => `<span style="display:inline-flex;align-items:center;gap:4px;"><span style="width:10px;height:10px;border-radius:2px;border:1px solid var(--color-border-input);background:${debugZoneColors[z.key] || '#ffffff'};"></span>${tt(z.label)}</span>`).join('')}
         </div>`;
-        const editZoneOptions = debugZones.map(z => `<option value="${z.key}" ${this._forgeZoneEditZone === z.key ? 'selected' : ''}>${z.label}</option>`).join('');
+        const editZoneOptions = debugZones.map(z => `<option value="${z.key}" ${this._forgeZoneEditZone === z.key ? 'selected' : ''}>${tt(z.label)}</option>`).join('');
         const zoneEditControls = `<div class="rr-forge-zone-edit-controls" style="display:${this._forgeDebugZones ? 'flex' : 'none'};flex-wrap:wrap;gap:8px;align-items:center;justify-content:center;max-width:720px;padding:7px 9px;border:1px solid var(--color-border-subtle);border-radius:6px;background:var(--color-bg-panel);">
             <label style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--color-text-muted);">
                 <input type="checkbox" class="rr-forge-zone-edit-toggle" ${this._forgeZoneEditMode ? 'checked' : ''}>
-                Edit Mask
+                ${tt('Edit Mask')}
             </label>
             <select class="rr-forge-zone-edit-zone rr-input" style="font-size:11px;padding:3px 7px;" ${this._forgeZoneEditMode ? '' : 'disabled'}>${editZoneOptions}</select>
-            <select class="rr-forge-zone-edit-frame rr-input" title="Walk frame to edit" style="font-size:11px;padding:3px 7px;" ${this._forgeZoneEditMode ? '' : 'disabled'}>
-                ${[0,1,2].map(v => `<option value="${v}" ${currentForgeFrame === v ? 'selected' : ''}>Frame ${v}</option>`).join('')}
+            <select class="rr-forge-zone-edit-frame rr-input" title="${tt('Walk frame to edit')}" style="font-size:11px;padding:3px 7px;" ${this._forgeZoneEditMode ? '' : 'disabled'}>
+                ${[0,1,2].map(v => `<option value="${v}" ${currentForgeFrame === v ? 'selected' : ''}>${tt('Frame {number}').replace('{number}', v)}</option>`).join('')}
             </select>
             <select class="rr-forge-zone-edit-action rr-input" style="font-size:11px;padding:3px 7px;" ${this._forgeZoneEditMode ? '' : 'disabled'}>
-                <option value="paint" ${this._forgeZoneEditAction === 'paint' ? 'selected' : ''}>Paint Brush</option>
-                <option value="erase" ${this._forgeZoneEditAction === 'erase' ? 'selected' : ''}>Eraser</option>
+                <option value="paint" ${this._forgeZoneEditAction === 'paint' ? 'selected' : ''}>${tt('Paint Brush')}</option>
+                <option value="erase" ${this._forgeZoneEditAction === 'erase' ? 'selected' : ''}>${tt('Eraser')}</option>
             </select>
             <select class="rr-forge-zone-edit-brush rr-input" style="font-size:11px;padding:3px 7px;" ${this._forgeZoneEditMode ? '' : 'disabled'}>
                 ${[1,3,5].map(v => `<option value="${v}" ${this._forgeZoneEditBrush === v ? 'selected' : ''}>${v}px</option>`).join('')}
             </select>
-            <button type="button" class="rr-forge-zone-edit-clear rr-btn-chip" style="padding:4px 9px;font-size:11px;color:var(--color-text-muted);">Clear Edits</button>
-            <button type="button" class="rr-forge-zone-edit-copy rr-btn-chip" style="padding:4px 9px;font-size:11px;color:var(--color-accent-bright);">Copy Zone JSON</button>
-            <button type="button" class="rr-forge-zone-edit-copy-all rr-btn-chip" style="padding:4px 9px;font-size:11px;color:var(--color-text-muted);">Copy All Zones JSON</button>
-            <span style="font-size:10px;color:var(--color-text-dim);">Edit mode loads the current zone mask, then paint or erase exact pixels.</span>
+            <button type="button" class="rr-forge-zone-edit-clear rr-btn-chip" style="padding:4px 9px;font-size:11px;color:var(--color-text-muted);">${tt('Clear Edits')}</button>
+            <button type="button" class="rr-forge-zone-edit-copy rr-btn-chip" style="padding:4px 9px;font-size:11px;color:var(--color-accent-bright);">${tt('Copy Zone JSON')}</button>
+            <button type="button" class="rr-forge-zone-edit-copy-all rr-btn-chip" style="padding:4px 9px;font-size:11px;color:var(--color-text-muted);">${tt('Copy All Zones JSON')}</button>
+            <span style="font-size:10px;color:var(--color-text-dim);">${tt('Edit mode loads the current zone mask, then paint or erase exact pixels.')}</span>
         </div>`;
         const canvases = DIRS.map((label, d) => `
             <div style="text-align:center;">
                 <canvas class="rr-forge-canvas" data-dir="${d}" width="${this.frameWidth || 144}" height="${this.frameHeight || 144}"
                     style="width:${cw}px;height:${ch}px;image-rendering:pixelated;background:var(--color-checker,#1a1a2e);border:1px solid var(--color-border-input);border-radius:4px;"></canvas>
-                <div style="font-size:9px;color:var(--color-text-muted);margin-top:2px;">${label}</div>
+                <div style="font-size:9px;color:var(--color-text-muted);margin-top:2px;">${tt(label)}</div>
             </div>`).join('');
 
         return `<style>
@@ -958,35 +1072,35 @@ class CharacterGenerator {
         </style>
         <div style="display:flex;height:100%;min-height:0;">
             <div class="rr-forge-library-scroll" style="width:265px;flex-shrink:0;overflow-y:auto;padding:13px;border-right:1px solid var(--color-border);background:var(--color-bg-base);">
-                <div style="font-size:12px;font-weight:800;color:var(--color-text-dim);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">Palette Theme</div>
+                <div style="font-size:12px;font-weight:800;color:var(--color-text-dim);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">${tt('Palette Theme')}</div>
                 ${themePicker}
-                <div style="font-size:12px;font-weight:800;color:var(--color-text-dim);text-transform:uppercase;letter-spacing:0.5px;margin:14px 0 8px;">Style Parts</div>
-                <div style="font-size:12px;color:var(--color-text-muted);line-height:1.35;margin-bottom:10px;">Search each outfit slot by style or part, then pick a layer preset.</div>
+                <div style="font-size:12px;font-weight:800;color:var(--color-text-dim);text-transform:uppercase;letter-spacing:0.5px;margin:14px 0 8px;">${tt('Style Parts')}</div>
+                <div style="font-size:12px;color:var(--color-text-muted);line-height:1.35;margin-bottom:10px;">${tt('Search each outfit slot by style or part, then pick a layer preset.')}</div>
                 ${partLibrary}
             </div>
             <div class="rr-forge-controls-scroll" style="width:330px;flex-shrink:0;overflow-y:auto;padding:12px;border-right:1px solid var(--color-border);">
                 <div style="margin-bottom:10px;">
-                    <label style="font-size:10px;color:var(--color-text-muted);display:block;margin-bottom:3px;">Outfit name</label>
-                    <input type="text" class="rr-forge-name rr-input" value="${cfg.name.replace(/"/g, '&quot;')}" style="width:100%;font-size:12px;padding:4px 8px;">
+                    <label style="font-size:10px;color:var(--color-text-muted);display:block;margin-bottom:3px;">${tt('Outfit name')}</label>
+                    <input type="text" class="rr-forge-name rr-input" value="${this._escapeHtml(cfg.name)}" style="width:100%;font-size:12px;padding:4px 8px;">
                 </div>
-                <div style="font-size:10px;font-weight:700;color:var(--color-text-dim);text-transform:uppercase;letter-spacing:0.5px;margin:8px 0 6px;">Layers</div>
+                <div style="font-size:10px;font-weight:700;color:var(--color-text-dim);text-transform:uppercase;letter-spacing:0.5px;margin:8px 0 6px;">${tt('Layers')}</div>
                 <div class="rr-forge-layers-list">${layerCards}</div>
             </div>
             <div style="flex:1;min-width:0;overflow-y:auto;padding:16px;display:flex;flex-direction:column;align-items:center;gap:12px;">
                 <div style="display:flex;align-items:center;gap:12px;">
-                    <button class="rr-forge-walk" style="padding:5px 12px;font-size:11px;cursor:pointer;border-radius:3px;border:1px solid var(--color-border-input);background:${this._forgeWalking ? 'var(--color-bg-button-active)' : 'var(--color-bg-button)'};color:var(--color-text-strong);">${this._forgeWalking ? 'Stop Walk' : 'Play Walk'}</button>
+                    <button class="rr-forge-walk" style="padding:5px 12px;font-size:11px;cursor:pointer;border-radius:3px;border:1px solid var(--color-border-input);background:${this._forgeWalking ? 'var(--color-bg-button-active)' : 'var(--color-bg-button)'};color:var(--color-text-strong);">${this._forgeWalking ? tt('Stop Walk') : tt('Play Walk')}</button>
                     <label style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--color-text-muted);">
-                        Zoom
+                        ${tt('Zoom')}
                         <select class="rr-forge-preview-zoom rr-input" style="font-size:11px;padding:3px 7px;">
                             ${[2,3,4,5,6,8].map(v => `<option value="${v}" ${zoom === v ? 'selected' : ''}>${v}x</option>`).join('')}
                         </select>
                     </label>
                     <label style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--color-text-muted);">
                         <input type="checkbox" class="rr-forge-debug-zones" ${this._forgeDebugZones ? 'checked' : ''}>
-                        Debug Zones
+                        ${tt('Debug Zones')}
                     </label>
                     <select class="rr-forge-debug-zone rr-input" style="font-size:11px;padding:3px 7px;min-width:112px;" ${this._forgeDebugZones ? '' : 'disabled'}>
-                        ${debugZoneOptions.map(z => `<option value="${z.key}" ${this._forgeDebugZone === z.key ? 'selected' : ''}>${z.label}</option>`).join('')}
+                        ${debugZoneOptions.map(z => `<option value="${z.key}" ${this._forgeDebugZone === z.key ? 'selected' : ''}>${tt(z.label)}</option>`).join('')}
                     </select>
                     <button class="rr-forge-save rr-btn" style="font-size:11px;padding:5px 14px;cursor:pointer;background:var(--color-accent-bright);color:var(--color-bg-base);border-radius:4px;font-weight:700;">${this._t('forge.generateSave')}</button>
                 </div>
@@ -999,6 +1113,7 @@ class CharacterGenerator {
     }
 
     _wireForgeEvents() {
+        const tt = (text) => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
         const rootEl = this.root;
         if (!rootEl) return;
         const cfg = this._forgeConfig();
@@ -1018,7 +1133,7 @@ class CharacterGenerator {
             const fam = (schema.families.find(f => f.name === item.family) || {}).swatch;
             const acc = (schema.accents.find(a => a.name === (item.accent || '')) || {}).swatch;
             const el = rootEl.querySelector(`[data-forge-${kind}-summary="${key}"]`);
-            if (el) el.innerHTML = `${miniSwatch(fam)}${acc ? miniSwatch(acc) : ''}<span style="font-size:9px;color:var(--color-text-muted);">${item.family}${item.accent ? ' + ' + item.accent : ''}</span>`;
+            if (el) el.innerHTML = `${miniSwatch(fam)}${acc ? miniSwatch(acc) : ''}<span style="font-size:9px;color:var(--color-text-muted);">${this._escapeHtml(item.family)}${item.accent ? ' + ' + this._escapeHtml(item.accent) : ''}</span>`;
         };
         const removeLayer = (layerId) => {
             cfg.layerOrder = (cfg.layerOrder || []).filter(id => id !== layerId);
@@ -1211,7 +1326,7 @@ class CharacterGenerator {
             const type = btn.getAttribute('data-forge-choice-type');
             const value = btn.getAttribute('data-forge-choice-value') || '';
             const options = type === 'family'
-                ? (schema.families || []).map(f => ({ value: f.name, label: f.name, swatch: f.swatch }))
+                ? (schema.families || []).map(f => ({ value: f.name, label: f.label || f.name, swatch: f.swatch }))
                 : (schema.accents || []).map(a => ({ value: a.name, label: a.label, swatch: a.swatch }));
             const rect = btn.getBoundingClientRect();
             const vw = window.innerWidth || document.documentElement.clientWidth || 900;
@@ -1230,7 +1345,7 @@ class CharacterGenerator {
                 const row = document.createElement('button');
                 row.type = 'button';
                 row.style.cssText = `width:100%;display:flex;align-items:center;gap:7px;margin-bottom:4px;padding:6px 7px;border:1px solid ${opt.value === value ? 'var(--color-accent-bright)' : 'var(--color-border-subtle)'};border-radius:4px;background:${opt.value === value ? 'var(--color-bg-button-active)' : 'var(--color-bg-panel)'};color:var(--color-text);font-size:12px;text-align:left;cursor:pointer;`;
-                row.innerHTML = `<span style="width:14px;height:14px;flex:0 0 auto;border-radius:2px;border:1px solid var(--color-border-input);background:${opt.swatch || 'transparent'};"></span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${opt.label}</span>`;
+                row.innerHTML = `<span style="width:14px;height:14px;flex:0 0 auto;border-radius:2px;border:1px solid var(--color-border-input);background:${opt.swatch || 'transparent'};"></span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${tt(opt.label)}</span>`;
                 row.addEventListener('click', e => {
                     e.preventDefault();
                     e.stopPropagation();
@@ -1455,7 +1570,7 @@ class CharacterGenerator {
                 this._forgeWalking = false;
                 const walkBtn = rootEl.querySelector('.rr-forge-walk');
                 if (walkBtn) {
-                    walkBtn.textContent = 'Play Walk';
+                    walkBtn.textContent = tt('Play Walk');
                     walkBtn.style.background = 'var(--color-bg-button)';
                 }
             }
@@ -1465,7 +1580,7 @@ class CharacterGenerator {
         if (zoneEditAction) zoneEditAction.addEventListener('change', () => { this._forgeZoneEditAction = zoneEditAction.value || 'paint'; });
         if (zoneEditBrush) zoneEditBrush.addEventListener('change', () => { this._forgeZoneEditBrush = parseInt(zoneEditBrush.value, 10) || 1; });
         if (zoneEditClear) zoneEditClear.addEventListener('click', () => {
-            const ok = window.confirm('Clear all painted zone edits for this style? This cannot be undone.');
+            const ok = window.confirm(tt('Clear all painted zone edits for this style? This cannot be undone.'));
             if (!ok) return;
             const scope = this._forgeZoneEditScopeKey();
             if (this._forgeZoneEdits) this._forgeZoneEdits[scope] = {};
@@ -1479,7 +1594,7 @@ class CharacterGenerator {
                 if (status) status.textContent = successMsg;
             } catch (e) {
                 console.warn('Could not copy zone edit JSON', e);
-                if (status) status.textContent = 'Could not copy JSON; see console.';
+                if (status) status.textContent = tt('Could not copy JSON; see console.');
                 console.log(text);
             }
         };
@@ -1487,12 +1602,12 @@ class CharacterGenerator {
             const zone = this._forgeZoneEditZone || 'head';
             this._ensureForgeZoneEditPayloadSeeded(zone);
             const text = JSON.stringify(this._forgeZoneEditPayload(zone), null, 2);
-            await copyZoneEditText(text, `Copied ${zone} zone JSON.`);
+            await copyZoneEditText(text, tt('Copied {zone} zone JSON.').replace('{zone}', zone));
         });
         if (zoneEditCopyAll) zoneEditCopyAll.addEventListener('click', async () => {
             this._ensureForgeZoneEditPayloadSeeded();
             const text = JSON.stringify(this._forgeZoneEditPayload(), null, 2);
-            await copyZoneEditText(text, 'Copied all zone edit JSON.');
+            await copyZoneEditText(text, tt('Copied all zone edit JSON.'));
         });
         let paintingZoneEdit = false;
         let lastZoneEditPaintKey = null;
@@ -1536,9 +1651,10 @@ class CharacterGenerator {
     }
 
     _setPreviewWalkButton(spec) {
+        const tt = (text) => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
         const btn = this.root && this.root.querySelector(spec.buttonSelector);
         if (!btn) return;
-        btn.textContent = this[spec.walkingKey] ? 'Stop Walk' : 'Play Walk';
+        btn.textContent = this[spec.walkingKey] ? tt('Stop Walk') : tt('Play Walk');
         btn.style.background = this[spec.walkingKey] ? 'var(--color-bg-button-active)' : 'var(--color-bg-button)';
     }
 
@@ -1571,7 +1687,7 @@ class CharacterGenerator {
     _toggleForgeWalk() { this._togglePreviewWalk('forge'); }
 
     _forgeTags(cfg = this._forgeConfig()) {
-        const styleId = this.characterStyle || 'looseleaf';
+        const styleId = this.characterStyle || 'psychronic';
         const tags = new Set(Array.isArray(cfg && cfg.tags) ? cfg.tags : []);
         for (const style of this._characterStyles()) tags.delete(style.id);
         tags.delete('male');
@@ -1583,7 +1699,7 @@ class CharacterGenerator {
 
     _forgeEngineConfig(cfg = this._forgeConfig()) {
         return {
-            style: this.characterStyle || 'looseleaf',
+            style: this.characterStyle || 'psychronic',
             name: cfg.name,
             category: cfg.category,
             tags: this._forgeTags(cfg),
@@ -1692,7 +1808,7 @@ class CharacterGenerator {
     }
 
     _forgeZoneEditScopeKey() {
-        const style = this.characterStyle || 'looseleaf';
+        const style = this.characterStyle || 'psychronic';
         const gender = this.gender || 'male';
         const bodyId = this._activeBodyId ? (this._activeBodyId() || '') : '';
         return `${style}:${gender}:${bodyId}`;
@@ -1854,7 +1970,7 @@ class CharacterGenerator {
     }
 
     _forgeZoneEditPayload(onlyZone = null) {
-        const style = this.characterStyle || 'looseleaf';
+        const style = this.characterStyle || 'psychronic';
         const scope = this._forgeZoneEditScopeKey();
         const edits = (this._forgeZoneEdits && this._forgeZoneEdits[scope]) || {};
         const frames = {};
@@ -1920,7 +2036,7 @@ class CharacterGenerator {
         const frame = (this._forgeFrame === undefined) ? 1 : this._forgeFrame;
         const W = this.frameWidth || 144, H = this.frameHeight || 144;
         const drawDebugOverlays = this._forgeDebugZones && !this._forgeWalking;
-        const cacheOwner = `${this.characterStyle || 'looseleaf'}|${this.gender || 'male'}|${this._activeBodyId()}|${W}x${H}`;
+        const cacheOwner = `${this.characterStyle || 'psychronic'}|${this.gender || 'male'}|${this._activeBodyId()}|${W}x${H}`;
         if (this._forgePreviewCacheOwner !== cacheOwner || this._forgePreviewCacheDescriptor !== outfit) {
             this._forgePreviewCacheOwner = cacheOwner;
             this._forgePreviewCacheDescriptor = outfit;
@@ -1951,23 +2067,24 @@ class CharacterGenerator {
     }
 
     async _saveForgeOutfit() {
+        const tt = (text) => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
         const status = this.root && this.root.querySelector('.rr-forge-status');
         const setStatus = (msg, ok) => { if (status) { status.textContent = msg; status.style.color = ok ? 'var(--color-accent-bright)' : 'var(--color-text-muted)'; } };
         const eng = this._outfitEngine();
         const body = this._forgeBodyTemplate();
-        if (!eng || !body) { setStatus('Engine or body unavailable.', false); return; }
+        if (!eng || !body) { setStatus(tt('Engine or body unavailable.'), false); return; }
         const cfg = this._forgeConfig();
         this._forgeSyncZoneLayers();
         const slug = (cfg.name || 'outfit').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'outfit';
-        const styleId = this.characterStyle || 'looseleaf';
+        const styleId = this.characterStyle || 'psychronic';
         const tags = this._forgeTags(cfg);
         const partId = `full-outfits-${styleId}-${slug}`;
         const config = Object.assign(this._forgeEngineConfig(cfg), { style: styleId, category: 'full outfits', tags });
         let result;
         try { result = eng.generateOutfit(config, body); }
-        catch (e) { setStatus('Generation failed: ' + e.message, false); return; }
+        catch (e) { setStatus(tt('Generation failed: {error}').replace('{error}', e.message), false); return; }
 
-        // Emit the part .js (same shape gen_outfit.js writes) and save it under
+        // Emit a registry-compatible part and save it under
         // the style's "full outfits" category so it loads on next launch too.
         const palLines = Object.entries(result.palette)
             .map(([letter, slot]) => `        ${JSON.stringify(letter)}: { hex: ${JSON.stringify(slot.hex)}, material: ${JSON.stringify(slot.material || '')} }`).join(',\n');
@@ -1993,11 +2110,25 @@ class CharacterGenerator {
                 });
                 if (!result) return;
             } else {
-                const dir = path.join(process.cwd(), 'src', 'forge', 'CharacterGenerator', 'styles', styleId, 'parts', 'full outfits');
+                // Save into the PROJECT's forge library (the loader already
+                // scans it). Writing into process.cwd()/src/... targeted the
+                // editor install tree: lost on packaged installs, stranded
+                // whenever cwd differs.
+                const projectPath = this._syncProjectPath();
+                if (!projectPath) {
+                    setStatus(tt("Open a project first — outfits save into the project's forge library."), false);
+                    return;
+                }
+                const dir = path.join(projectPath, 'forge', 'character_generator', 'styles', styleId, 'parts', 'full outfits');
                 fs.mkdirSync(dir, { recursive: true });
-                fs.writeFileSync(path.join(dir, `${partId}.js`), js, 'utf8');
+                const filePath = path.join(dir, `${partId}.js`);
+                if (fs.existsSync(filePath) &&
+                    !confirm(tt("{file} already exists in this project's outfit library. Overwrite it?").replace('{file}', `${partId}.js`))) {
+                    return;
+                }
+                fs.writeFileSync(filePath, js, 'utf8');
             }
-        } catch (e) { setStatus('Could not write file: ' + e.message, false); return; }
+        } catch (e) { setStatus(tt('Could not write file: {error}').replace('{error}', e.message), false); return; }
 
         // Register/refresh in the live registry so it appears immediately.
         for (let k = RR_CHARACTER_REGISTRY.length - 1; k >= 0; k--) {
@@ -2009,7 +2140,7 @@ class CharacterGenerator {
             draw(buf, W, H, direction, frame, params) { RR_CG_drawTemplatePart(buf, W, H, direction, frame, params, this); }
         };
         RR_CHARACTER_REGISTRY.push(descriptor);
-        setStatus(`Saved “${cfg.name}” → ${partId}.js (available in Procedural parts).`, true);
+        setStatus(tt('Saved “{name}” → {file} (available in Procedural parts).').replace('{name}', cfg.name).replace('{file}', `${partId}.js`), true);
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -2037,7 +2168,7 @@ class CharacterGenerator {
     _hairBodyTemplate() { return this._forgeBodyTemplate(); }
 
     _hairConfig() {
-        const styleId = this.characterStyle || 'looseleaf';
+        const styleId = this.characterStyle || 'psychronic';
         const eng = this._hairEngine();
         const defaults = eng && typeof eng.defaultConfig === 'function' ? eng.defaultConfig(styleId) : {
             params: { bangs: true, sideLocks: true, backVolume: true, outline: true, eyeZoneX: 1, eyeZoneY: 7, eyeZoneWidth: 3, eyeZoneHeight: 5, lowerBanding: 3, lowerScraggle: 2 }
@@ -2059,7 +2190,7 @@ class CharacterGenerator {
     }
 
     _hairEngineConfig(cfg = this._hairConfig()) {
-        const styleId = this.characterStyle || 'looseleaf';
+        const styleId = this.characterStyle || 'psychronic';
         return Object.assign({}, cfg, {
             style: styleId,
             category: 'hair',
@@ -2086,13 +2217,14 @@ class CharacterGenerator {
     }
 
     _hairHTML() {
+        const tt = (text) => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
         const eng = this._hairEngine();
         const body = this._hairBodyTemplate();
         if (!eng || !body) {
             return `<div style="padding:24px;color:var(--color-text-muted);font-size:12px;">
-                Hair Forge needs the hair engine and a body part loaded.
-                ${!eng ? '<br>Engine failed to load (see console).' : ''}
-                ${!body ? '<br>No body part found in the registry.' : ''}
+                ${tt('Hair Forge needs the hair engine and a body part loaded.')}
+                ${!eng ? '<br>' + tt('Engine failed to load (see console).') : ''}
+                ${!body ? '<br>' + tt('No body part found in the registry.') : ''}
             </div>`;
         }
         const cfg = this._hairConfig();
@@ -2103,37 +2235,37 @@ class CharacterGenerator {
         const esc = (s) => String(s ?? '').replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
         const opt = (items, value, valueKey = 'value') => (items || []).map(item => {
             const v = item[valueKey];
-            return `<option value="${v}" ${v === value ? 'selected' : ''}>${item.label}</option>`;
+            return `<option value="${v}" ${v === value ? 'selected' : ''}>${tt(item.label)}</option>`;
         }).join('');
         const activeColor = (schema.colors || []).find(color => color.key === cfg.color) || (schema.colors || [])[0] || { key: cfg.color || '', label: cfg.color || 'Color', swatch: 'transparent' };
         const canvases = ['Front', 'Left', 'Right', 'Back'].map((label, d) => `
             <div style="text-align:center;">
                 <canvas class="rr-hair-canvas" data-dir="${d}" width="${this.frameWidth || 144}" height="${this.frameHeight || 144}"
                     style="width:${cw}px;height:${ch}px;image-rendering:pixelated;background:var(--color-checker,#1a1a2e);border:1px solid var(--color-border-input);border-radius:4px;"></canvas>
-                <div style="font-size:9px;color:var(--color-text-muted);margin-top:2px;">${label}</div>
+                <div style="font-size:9px;color:var(--color-text-muted);margin-top:2px;">${tt(label)}</div>
             </div>`).join('');
         return `<div style="display:flex;height:100%;min-height:0;">
             <div class="rr-hair-controls-scroll" style="width:300px;flex-shrink:0;overflow-y:auto;padding:14px;border-right:1px solid var(--color-border);background:var(--color-bg-base);">
-                <div style="font-size:12px;font-weight:800;color:var(--color-text-dim);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px;">Hair Forge</div>
-                <div style="font-size:12px;color:var(--color-text-muted);line-height:1.35;margin-bottom:12px;">Procedural hair aligned to the active body head and eye-line anchors, with frame-aware walk bobbing.</div>
-                <label style="font-size:10px;color:var(--color-text-muted);display:block;margin-bottom:3px;">Hair name</label>
-                <input type="text" class="rr-hair-name rr-input" value="${String(cfg.name || '').replace(/"/g, '&quot;')}" style="width:100%;font-size:12px;padding:5px 8px;margin-bottom:10px;">
-                <label style="font-size:10px;color:var(--color-text-muted);display:block;margin-bottom:3px;">Style</label>
+                <div style="font-size:12px;font-weight:800;color:var(--color-text-dim);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px;">${tt('Hair Forge')}</div>
+                <div style="font-size:12px;color:var(--color-text-muted);line-height:1.35;margin-bottom:12px;">${tt('Procedural hair aligned to the active body head and eye-line anchors, with frame-aware walk bobbing.')}</div>
+                <label style="font-size:10px;color:var(--color-text-muted);display:block;margin-bottom:3px;">${tt('Hair name')}</label>
+                <input type="text" class="rr-hair-name rr-input" value="${this._escapeHtml(cfg.name || '')}" style="width:100%;font-size:12px;padding:5px 8px;margin-bottom:10px;">
+                <label style="font-size:10px;color:var(--color-text-muted);display:block;margin-bottom:3px;">${tt('Style')}</label>
                 <select class="rr-hair-input rr-input" data-hair-field="hairStyle" style="width:100%;font-size:12px;padding:5px 8px;margin-bottom:10px;">${opt(schema.styles, cfg.hairStyle)}</select>
-                <label style="font-size:10px;color:var(--color-text-muted);display:block;margin-bottom:3px;">Length</label>
+                <label style="font-size:10px;color:var(--color-text-muted);display:block;margin-bottom:3px;">${tt('Length')}</label>
                 <select class="rr-hair-input rr-input" data-hair-field="length" style="width:100%;font-size:12px;padding:5px 8px;margin-bottom:10px;">${opt(schema.lengths, cfg.length)}</select>
-                <label style="font-size:10px;color:var(--color-text-muted);display:block;margin-bottom:3px;">Color</label>
+                <label style="font-size:10px;color:var(--color-text-muted);display:block;margin-bottom:3px;">${tt('Color')}</label>
                 <button type="button" class="rr-hair-color-choice rr-input" data-hair-color-value="${esc(activeColor.key)}" style="width:100%;display:flex;align-items:center;gap:8px;font-size:12px;padding:5px 8px;margin-bottom:12px;text-align:left;cursor:pointer;">
                     <span style="width:14px;height:14px;flex:0 0 auto;border-radius:3px;border:1px solid var(--color-border-input);background:${activeColor.swatch || 'transparent'};"></span>
-                    <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(activeColor.label)}</span>
+                    <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(tt(activeColor.label))}</span>
                 </button>
                 ${['bangs:Front Bangs', 'sideLocks:Side Locks', 'outline:Pixel Outline'].map(row => {
                     const [key, label] = row.split(':');
-                    return `<label style="display:flex;align-items:center;gap:7px;font-size:12px;color:var(--color-text);margin-bottom:8px;"><input type="checkbox" class="rr-hair-input" data-hair-param="${key}" ${cfg.params && cfg.params[key] !== false ? 'checked' : ''}>${label}</label>`;
+                    return `<label style="display:flex;align-items:center;gap:7px;font-size:12px;color:var(--color-text);margin-bottom:8px;"><input type="checkbox" class="rr-hair-input" data-hair-param="${key}" ${cfg.params && cfg.params[key] !== false ? 'checked' : ''}>${tt(label)}</label>`;
                 }).join('')}
                 <div style="margin:12px 0 10px;padding:10px;border:1px solid var(--color-border-subtle);border-radius:6px;background:var(--color-bg-panel);">
-                    <div style="font-size:10px;font-weight:800;color:var(--color-text-dim);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px;">Eye Zone</div>
-                    <div style="font-size:10px;color:var(--color-text-muted);line-height:1.3;margin-bottom:8px;">Front view only. Adjusts the protected eye window so bangs do not cover eyes.</div>
+                    <div style="font-size:10px;font-weight:800;color:var(--color-text-dim);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px;">${tt('Eye Zone')}</div>
+                    <div style="font-size:10px;color:var(--color-text-muted);line-height:1.3;margin-bottom:8px;">${tt('Front view only. Adjusts the protected eye window so bangs do not cover eyes.')}</div>
                     ${[
                         ['eyeZoneX', 'X Offset', -6, 6, 1],
                         ['eyeZoneY', 'Y Offset', -2, 10, 1],
@@ -2141,20 +2273,20 @@ class CharacterGenerator {
                         ['eyeZoneHeight', 'Height', 1, 8, 1]
                     ].map(([key, label, min, max, step]) => `
                         <label style="display:grid;grid-template-columns:78px 1fr 36px;gap:6px;align-items:center;font-size:11px;color:var(--color-text);margin-bottom:6px;">
-                            <span>${label}</span>
+                            <span>${tt(label)}</span>
                             <input type="range" class="rr-hair-input" data-hair-param="${key}" min="${min}" max="${max}" step="${step}" value="${cfg.params && cfg.params[key] != null ? cfg.params[key] : 0}">
                             <input type="number" class="rr-hair-input rr-input" data-hair-param="${key}" min="${min}" max="${max}" step="${step}" value="${cfg.params && cfg.params[key] != null ? cfg.params[key] : 0}" style="font-size:10px;padding:2px 4px;width:36px;">
                         </label>`).join('')}
                 </div>
                 <div style="margin:12px 0 10px;padding:10px;border:1px solid var(--color-border-subtle);border-radius:6px;background:var(--color-bg-panel);">
-                    <div style="font-size:10px;font-weight:800;color:var(--color-text-dim);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px;">Hair Pattern</div>
-                    <div style="font-size:10px;color:var(--color-text-muted);line-height:1.3;margin-bottom:8px;">Lower-hair banding density and edge scraggle. Higher values are much more visible on side/back frames.</div>
+                    <div style="font-size:10px;font-weight:800;color:var(--color-text-dim);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px;">${tt('Hair Pattern')}</div>
+                    <div style="font-size:10px;color:var(--color-text-muted);line-height:1.3;margin-bottom:8px;">${tt('Lower-hair banding density and edge scraggle. Higher values are much more visible on side/back frames.')}</div>
                     ${[
                         ['lowerBanding', 'Lower Banding', 0, 5, 1],
                         ['lowerScraggle', 'Scraggle', 0, 5, 1]
                     ].map(([key, label, min, max, step]) => `
                         <label style="display:grid;grid-template-columns:92px 1fr 36px;gap:6px;align-items:center;font-size:11px;color:var(--color-text);margin-bottom:6px;">
-                            <span>${label}</span>
+                            <span>${tt(label)}</span>
                             <input type="range" class="rr-hair-input" data-hair-param="${key}" min="${min}" max="${max}" step="${step}" value="${cfg.params && cfg.params[key] != null ? cfg.params[key] : 0}">
                             <input type="number" class="rr-hair-input rr-input" data-hair-param="${key}" min="${min}" max="${max}" step="${step}" value="${cfg.params && cfg.params[key] != null ? cfg.params[key] : 0}" style="font-size:10px;padding:2px 4px;width:36px;">
                         </label>`).join('')}
@@ -2164,11 +2296,11 @@ class CharacterGenerator {
             </div>
             <div style="flex:1;min-width:0;overflow-y:auto;padding:16px;display:flex;flex-direction:column;align-items:center;gap:12px;">
                 <div style="display:flex;align-items:center;gap:12px;">
-                    <button class="rr-hair-walk" style="padding:5px 12px;font-size:11px;cursor:pointer;border-radius:3px;border:1px solid var(--color-border-input);background:${this._hairWalking ? 'var(--color-bg-button-active)' : 'var(--color-bg-button)'};color:var(--color-text-strong);">${this._hairWalking ? 'Stop Walk' : 'Play Walk'}</button>
-                    <label style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--color-text-muted);">Frame
+                    <button class="rr-hair-walk" style="padding:5px 12px;font-size:11px;cursor:pointer;border-radius:3px;border:1px solid var(--color-border-input);background:${this._hairWalking ? 'var(--color-bg-button-active)' : 'var(--color-bg-button)'};color:var(--color-text-strong);">${this._hairWalking ? tt('Stop Walk') : tt('Play Walk')}</button>
+                    <label style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--color-text-muted);">${tt('Frame')}
                         <select class="rr-hair-frame rr-input" style="font-size:11px;padding:3px 7px;">${[0,1,2].map(v => `<option value="${v}" ${frame === v ? 'selected' : ''}>${v}</option>`).join('')}</select>
                     </label>
-                    <label style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--color-text-muted);">Zoom
+                    <label style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--color-text-muted);">${tt('Zoom')}
                         <select class="rr-hair-preview-zoom rr-input" style="font-size:11px;padding:3px 7px;">${[2,3,4,5,6,8].map(v => `<option value="${v}" ${zoom === v ? 'selected' : ''}>${v}x</option>`).join('')}</select>
                     </label>
                 </div>
@@ -2178,6 +2310,7 @@ class CharacterGenerator {
     }
 
     _wireHairEvents() {
+        const tt = (text) => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
         const rootEl = this.root;
         if (!rootEl) return;
         const cfg = this._hairConfig();
@@ -2241,7 +2374,7 @@ class CharacterGenerator {
                 swatch.style.cssText = `width:14px;height:14px;flex:0 0 auto;border-radius:3px;border:1px solid var(--color-border-input);background:${opt.swatch || 'transparent'};`;
                 const label = document.createElement('span');
                 label.style.cssText = 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
-                label.textContent = opt.label || opt.key;
+                label.textContent = tt(opt.label || opt.key);
                 row.appendChild(swatch);
                 row.appendChild(label);
                 row.addEventListener('click', ev => {
@@ -2290,7 +2423,7 @@ class CharacterGenerator {
         const hair = this._hairDescCache;
         const frame = this._hairFrame === undefined ? 1 : this._hairFrame;
         const W = this.frameWidth || 144, H = this.frameHeight || 144;
-        const cacheOwner = `${this.characterStyle || 'looseleaf'}|${this.gender || 'male'}|${this._activeBodyId()}|${W}x${H}`;
+        const cacheOwner = `${this.characterStyle || 'psychronic'}|${this.gender || 'male'}|${this._activeBodyId()}|${W}x${H}`;
         if (this._hairPreviewCacheOwner !== cacheOwner || this._hairPreviewCacheDescriptor !== hair) {
             this._hairPreviewCacheOwner = cacheOwner;
             this._hairPreviewCacheDescriptor = hair;
@@ -2315,19 +2448,20 @@ class CharacterGenerator {
     }
 
     async _saveHairPart() {
+        const tt = (text) => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
         const status = this.root && this.root.querySelector('.rr-hair-status');
         const setStatus = (msg, ok) => { if (status) { status.textContent = msg; status.style.color = ok ? 'var(--color-accent-bright)' : 'var(--color-text-muted)'; } };
         const eng = this._hairEngine();
         const body = this._hairBodyTemplate();
-        if (!eng || !body) { setStatus('Engine or body unavailable.', false); return; }
+        if (!eng || !body) { setStatus(tt('Engine or body unavailable.'), false); return; }
         const cfg = this._hairConfig();
-        const styleId = this.characterStyle || 'looseleaf';
+        const styleId = this.characterStyle || 'psychronic';
         const slug = (cfg.name || 'hair').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'hair';
         const partId = `hair-${styleId}-${slug}`;
         const config = this._hairEngineConfig(cfg);
         let result;
         try { result = eng.generateHair(config, body); }
-        catch (e) { setStatus('Generation failed: ' + e.message, false); return; }
+        catch (e) { setStatus(tt('Generation failed: {error}').replace('{error}', e.message), false); return; }
         const palLines = Object.entries(result.palette)
             .map(([letter, slot]) => `        ${JSON.stringify(letter)}: { hex: ${JSON.stringify(slot.hex)}, material: ${JSON.stringify(slot.material || '')} }`).join(',\n');
         const dirNames = ['Front', 'Left', 'Right', 'Back'];
@@ -2351,11 +2485,23 @@ class CharacterGenerator {
                 });
                 if (!result) return;
             } else {
-                const dir = path.join(process.cwd(), 'src', 'forge', 'CharacterGenerator', 'styles', styleId, 'parts', 'hair');
+                // Project forge library, not the editor install tree (see
+                // the Outfit Forge save above).
+                const projectPath = this._syncProjectPath();
+                if (!projectPath) {
+                    setStatus(tt("Open a project first — hair parts save into the project's forge library."), false);
+                    return;
+                }
+                const dir = path.join(projectPath, 'forge', 'character_generator', 'styles', styleId, 'parts', 'hair');
                 fs.mkdirSync(dir, { recursive: true });
-                fs.writeFileSync(path.join(dir, `${partId}.js`), js, 'utf8');
+                const filePath = path.join(dir, `${partId}.js`);
+                if (fs.existsSync(filePath) &&
+                    !confirm(tt("{file} already exists in this project's hair library. Overwrite it?").replace('{file}', `${partId}.js`))) {
+                    return;
+                }
+                fs.writeFileSync(filePath, js, 'utf8');
             }
-        } catch (e) { setStatus('Could not write file: ' + e.message, false); return; }
+        } catch (e) { setStatus(tt('Could not write file: {error}').replace('{error}', e.message), false); return; }
         for (let k = RR_CHARACTER_REGISTRY.length - 1; k >= 0; k--) {
             if (RR_CHARACTER_REGISTRY[k].id === partId) RR_CHARACTER_REGISTRY.splice(k, 1);
         }
@@ -2364,7 +2510,7 @@ class CharacterGenerator {
             template: { palette: result.palette, sheet: result.sheet },
             draw(buf, W, H, direction, frame, params) { RR_CG_drawTemplatePart(buf, W, H, direction, frame, params, this); }
         });
-        setStatus(`Saved “${cfg.name}” → ${partId}.js (available in Procedural parts).`, true);
+        setStatus(tt('Saved “{name}” → {file} (available in Procedural parts).').replace('{name}', cfg.name).replace('{file}', `${partId}.js`), true);
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -2372,6 +2518,7 @@ class CharacterGenerator {
     // ═══════════════════════════════════════════════════════════════════════════
 
     _proceduralHTML() {
+        const tt = (text) => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
         const DIRS = ['Front', 'Left', 'Right', 'Back'];
         const partId = this._activeBodyId();
         const selectedPartId = this._activeProceduralPartId();
@@ -2391,16 +2538,16 @@ class CharacterGenerator {
             if (p.type === 'color') {
                 const val = currentParams[p.key] ?? p.default;
                 return `<div style="display:grid;grid-template-columns:90px 1fr;gap:8px;align-items:center;margin-bottom:10px;">
-                    <label style="font-size:11px;color:var(--color-text-muted);">${p.label}</label>
+                    <label style="font-size:11px;color:var(--color-text-muted);">${tt(p.label)}</label>
                     <button type="button" class="rr-color-swatch-btn rr-cgp-color-swatch" data-key="${p.key}"
-                        style="background:${val};" title="Click to choose colour"></button>
+                        style="background:${val};" title="${tt('Click to choose colour')}"></button>
                 </div>`;
             }
             if (p.type === 'slider') {
                 const val = currentParams[p.key] ?? p.default;
                 return `<div style="padding:6px 0;border-bottom:1px solid var(--color-border-subtle);">
                     <div style="display:flex;justify-content:space-between;margin-bottom:3px;">
-                        <label style="font-size:11px;color:var(--color-text);">${p.label}</label>
+                        <label style="font-size:11px;color:var(--color-text);">${tt(p.label)}</label>
                         <span class="rr-cgp-val-${p.key}" style="font-size:10px;color:var(--color-text-muted);">${val}</span>
                     </div>
                     <input type="range" class="rr-cgp-param" data-key="${p.key}" min="${p.min}" max="${p.max}" step="${p.step}" value="${val}" style="width:100%;">
@@ -2418,13 +2565,13 @@ class CharacterGenerator {
                 const material = (typeof entry === 'object' ? entry.material : '') || '';
                 const val = paletteOverrides[letter] || baseHex;
                 const label = material
-                    ? `${material[0].toUpperCase()}${material.slice(1)}`
-                    : `Color ${idx + 1}`;
+                    ? tt(material[0].toUpperCase() + material.slice(1))
+                    : tt('Color {number}').replace('{number}', idx + 1);
                 return `<div style="display:grid;grid-template-columns:auto 1fr auto;gap:6px;align-items:center;margin-bottom:6px;">
                     <span style="font:700 10px monospace;width:18px;text-align:center;color:var(--color-text-dim);">${letter}</span>
                     <label style="font-size:11px;color:var(--color-text-muted);">${label}</label>
                     <button type="button" class="rr-color-swatch-btn rr-cgp-color-swatch" data-key="palette:${letter}"
-                        style="background:${val};width:28px;height:18px;" title="${letter}: click to choose colour"></button>
+                        style="background:${val};width:28px;height:18px;" title="${tt('{letter}: click to choose colour').replace('{letter}', letter)}"></button>
                 </div>`;
             }).join('')
             : '';
@@ -2432,18 +2579,18 @@ class CharacterGenerator {
         const tintRow = templatePalette
             ? `<div style="display:grid;grid-template-columns:auto 1fr auto auto;gap:6px;align-items:center;margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid var(--color-border-subtle);">
                 <span style="font:700 10px monospace;width:18px;text-align:center;color:var(--color-text-dim);">•</span>
-                <label style="font-size:11px;color:var(--color-accent-bright);font-weight:600;">Tint All</label>
-                <button type="button" class="rr-cgp-tint-reset" title="Reset tint (use original palette colours)" style="padding:1px 6px;font-size:10px;cursor:pointer;border-radius:3px;border:1px solid var(--color-border-input);background:var(--color-bg-button);color:var(--color-text-strong);">↺</button>
+                 <label style="font-size:11px;color:var(--color-accent-bright);font-weight:600;">${tt('Tint All')}</label>
+                <button type="button" class="rr-cgp-tint-reset" title="${tt('Reset tint (use original palette colours)')}" style="padding:1px 6px;font-size:10px;cursor:pointer;border-radius:3px;border:1px solid var(--color-border-input);background:var(--color-bg-button);color:var(--color-text-strong);">↺</button>
                 <button type="button" class="rr-color-swatch-btn rr-cgp-color-swatch" data-key="tintAll"
-                    style="background:${tintHex};width:28px;height:18px;" title="Shift every palette colour toward this hue/saturation/lightness."></button>
+                    style="background:${tintHex};width:28px;height:18px;" title="${tt('Shift every palette colour toward this hue/saturation/lightness.')}"></button>
             </div>`
             : '';
         const paletteSection = paletteRows
             ? `<div>
                 <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
-                    <span style="font-size:9px;font-weight:700;color:var(--color-accent-bright);text-transform:uppercase;letter-spacing:0.4px;">Template Palette</span>
-                    <button type="button" class="rr-cgp-palette-reset rr-btn-chip" title="Discard every per-letter override and tint on this layer, restoring the imported palette."
-                        style="padding:2px 8px;font-size:10px;color:var(--color-accent-bright);">Reset</button>
+                    <span style="font-size:9px;font-weight:700;color:var(--color-accent-bright);text-transform:uppercase;letter-spacing:0.4px;">${tt('Template Palette')}</span>
+                    <button type="button" class="rr-cgp-palette-reset rr-btn-chip" title="${tt('Discard every per-letter override and tint on this layer, restoring the imported palette.')}"
+                        style="padding:2px 8px;font-size:10px;color:var(--color-accent-bright);">${tt('Reset')}</button>
                 </div>
                 ${tintRow}
                 ${paletteRows}
@@ -2454,9 +2601,9 @@ class CharacterGenerator {
         const nudgeSection = selectedPartId
             ? `<div style="margin-top:14px;padding-top:10px;border-top:1px solid var(--color-border-subtle);">
                 <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
-                    <span style="font-size:9px;font-weight:700;color:var(--color-accent-bright);text-transform:uppercase;letter-spacing:0.4px;">Nudge Layer</span>
-                    <button type="button" class="rr-cgp-nudge-reset rr-btn-chip" title="Clear this layer's nudge offset."
-                        style="padding:2px 8px;font-size:10px;color:var(--color-accent-bright);">Reset</button>
+                    <span style="font-size:9px;font-weight:700;color:var(--color-accent-bright);text-transform:uppercase;letter-spacing:0.4px;">${tt('Nudge Layer')}</span>
+                    <button type="button" class="rr-cgp-nudge-reset rr-btn-chip" title="${tt("Clear this layer's nudge offset.")}"
+                        style="padding:2px 8px;font-size:10px;color:var(--color-accent-bright);">${tt('Reset')}</button>
                 </div>
                 <div style="display:grid;grid-template-columns:auto 1fr auto;gap:6px;align-items:center;font-size:11px;color:var(--color-text-muted);">
                     <span>X</span>
@@ -2466,7 +2613,7 @@ class CharacterGenerator {
                     <input type="number" class="rr-cgp-nudge-y rr-input" value="${offY}" step="1" style="padding:2px 6px;font-size:11px;width:100%;box-sizing:border-box;">
                     <span style="font-size:10px;color:var(--color-text-dim);">px</span>
                 </div>
-                <div style="margin-top:6px;font-size:9px;color:var(--color-text-dim);line-height:1.35;">Manual offset for this layer only — useful when auto-align can't fully fix a misframed part.</div>
+                <div style="margin-top:6px;font-size:9px;color:var(--color-text-dim);line-height:1.35;">${tt("Manual offset for this layer only — useful when auto-align can't fully fix a misframed part.")}</div>
               </div>`
             : '';
 
@@ -2477,21 +2624,21 @@ class CharacterGenerator {
             <div style="background:var(--color-bg-panel);border-right:1px solid var(--color-border);display:flex;flex-direction:column;min-height:0;">
                 <div style="padding:8px 10px;border-bottom:1px solid var(--color-border-subtle);flex-shrink:0;">
                     <div style="display:flex;gap:4px;margin-bottom:6px;">
-                        <button class="rr-cgp-gender" data-gender="male" style="flex:1;padding:4px;font-size:11px;cursor:pointer;border-radius:3px;border:1px solid var(--color-border-input);background:${this.gender === 'male' ? 'var(--color-bg-button-active)' : 'var(--color-bg-button)'};color:var(--color-text-strong);">Male</button>
-                        <button class="rr-cgp-gender" data-gender="female" style="flex:1;padding:4px;font-size:11px;cursor:pointer;border-radius:3px;border:1px solid var(--color-border-input);background:${this.gender === 'female' ? 'var(--color-bg-button-active)' : 'var(--color-bg-button)'};color:var(--color-text-strong);">Female</button>
+                        <button class="rr-cgp-gender" data-gender="male" style="flex:1;padding:4px;font-size:11px;cursor:pointer;border-radius:3px;border:1px solid var(--color-border-input);background:${this.gender === 'male' ? 'var(--color-bg-button-active)' : 'var(--color-bg-button)'};color:var(--color-text-strong);">${tt('Male')}</button>
+                        <button class="rr-cgp-gender" data-gender="female" style="flex:1;padding:4px;font-size:11px;cursor:pointer;border-radius:3px;border:1px solid var(--color-border-input);background:${this.gender === 'female' ? 'var(--color-bg-button-active)' : 'var(--color-bg-button)'};color:var(--color-text-strong);">${tt('Female')}</button>
                     </div>
-                    <input type="text" class="rr-cgp-search rr-input" placeholder="Search parts…" value="${this.proceduralSearchQuery || ''}"
+                    <input type="text" class="rr-cgp-search rr-input" placeholder="${tt('Search parts…')}" value="${this._escapeHtml(this.proceduralSearchQuery || '')}"
                         style="width:100%;padding:4px 8px;font-size:11px;box-sizing:border-box;">
                 </div>
                 <div class="rr-cgp-library-scroll" style="flex:1;min-height:0;overflow-y:auto;">
-                    <div style="padding:6px 10px;font-size:9px;font-weight:700;color:var(--color-accent-bright);text-transform:uppercase;letter-spacing:0.5px;">Library</div>
+                    <div style="padding:6px 10px;font-size:9px;font-weight:700;color:var(--color-accent-bright);text-transform:uppercase;letter-spacing:0.5px;">${tt('Library')}</div>
                     ${this._renderPartsLibrary(selectedPartId)}
                 </div>
             </div>
 
             <!-- Layers column -->
             <div style="background:var(--color-bg-deep);border-right:1px solid var(--color-border);display:flex;flex-direction:column;min-height:0;">
-                <div style="padding:8px 10px;border-bottom:1px solid var(--color-border-subtle);flex-shrink:0;font-size:9px;font-weight:700;color:var(--color-accent-bright);text-transform:uppercase;letter-spacing:0.5px;">Layers (top→bottom)</div>
+                <div style="padding:8px 10px;border-bottom:1px solid var(--color-border-subtle);flex-shrink:0;font-size:9px;font-weight:700;color:var(--color-accent-bright);text-transform:uppercase;letter-spacing:0.5px;">${tt('Layers (top→bottom)')}</div>
                 <div class="rr-cgp-layers-scroll" style="flex:1;min-height:0;overflow-y:auto;">
                     ${this._renderActiveLayers(selectedPartId)}
                 </div>
@@ -2506,18 +2653,18 @@ class CharacterGenerator {
                     <span style="font-size:10px;color:var(--color-text-muted);">×</span>
                     <input type="number" class="rr-cgp-fh rr-input" value="${this.frameHeight}" min="8" max="512" style="width:58px;padding:3px 6px;font-size:11px;">
                     <span style="width:1px;height:18px;background:var(--color-border-subtle);margin:0 4px;"></span>
-                    <span style="font-size:10px;color:var(--color-text-muted);">Direction:</span>
-                    ${DIRS.map((d, i) => `<button class="rr-cgp-dir" data-dir="${i}" style="padding:4px 10px;font-size:11px;cursor:pointer;border-radius:3px;border:1px solid var(--color-border-input);background:${this.direction === i ? 'var(--color-bg-button-active)' : 'var(--color-bg-button)'};color:var(--color-text-strong);">${d}</button>`).join('')}
-                    <button class="rr-cgp-anim" style="padding:4px 10px;font-size:11px;cursor:pointer;border-radius:3px;border:1px solid var(--color-border-input);background:${this.proceduralAnimating ? 'var(--color-bg-button-active)' : 'var(--color-bg-button)'};color:var(--color-text-strong);">${this.proceduralAnimating ? 'Stop Walk' : 'Play Walk'}</button>
+                    <span style="font-size:10px;color:var(--color-text-muted);">${tt('Direction:')}</span>
+                    ${DIRS.map((d, i) => `<button class="rr-cgp-dir" data-dir="${i}" style="padding:4px 10px;font-size:11px;cursor:pointer;border-radius:3px;border:1px solid var(--color-border-input);background:${this.direction === i ? 'var(--color-bg-button-active)' : 'var(--color-bg-button)'};color:var(--color-text-strong);">${tt(d)}</button>`).join('')}
+                    <button class="rr-cgp-anim" style="padding:4px 10px;font-size:11px;cursor:pointer;border-radius:3px;border:1px solid var(--color-border-input);background:${this.proceduralAnimating ? 'var(--color-bg-button-active)' : 'var(--color-bg-button)'};color:var(--color-text-strong);">${this.proceduralAnimating ? tt('Stop Walk') : tt('Play Walk')}</button>
                 </div>
 
                 <!-- Zoom controls -->
                 <div style="display:flex;gap:6px;align-items:center;font-size:10px;color:var(--color-text-muted);">
-                    <span>Zoom:</span>
+                    <span>${tt('Zoom:')}</span>
                     <button class="rr-cgp-zoom-out" style="padding:3px 8px;font-size:11px;cursor:pointer;border-radius:3px;border:1px solid var(--color-border-input);background:var(--color-bg-button);color:var(--color-text-strong);">−</button>
                     <span style="min-width:32px;text-align:center;">${zoom}×</span>
                     <button class="rr-cgp-zoom-in" style="padding:3px 8px;font-size:11px;cursor:pointer;border-radius:3px;border:1px solid var(--color-border-input);background:var(--color-bg-button);color:var(--color-text-strong);">+</button>
-                    <button class="rr-cgp-zoom-fit" style="padding:3px 8px;font-size:10px;cursor:pointer;border-radius:3px;border:1px solid var(--color-border-input);background:var(--color-bg-button);color:var(--color-text-strong);">Fit</button>
+                    <button class="rr-cgp-zoom-fit" style="padding:3px 8px;font-size:10px;cursor:pointer;border-radius:3px;border:1px solid var(--color-border-input);background:var(--color-bg-button);color:var(--color-text-strong);">${tt('Fit')}</button>
                 </div>
 
                 <!-- Sheet thumbnail + Main canvas, side by side -->
@@ -2530,7 +2677,7 @@ class CharacterGenerator {
                         </div>
                     </div>
                     <div style="display:flex;flex-direction:column;align-items:center;gap:4px;">
-                        <div style="font-size:9px;color:var(--color-text-dim);text-transform:uppercase;">Preview</div>
+                        <div style="font-size:9px;color:var(--color-text-dim);text-transform:uppercase;">${tt('Preview')}</div>
                         <div style="background:var(--color-checker,#1a1a2e);border:1px solid var(--color-border-input);border-radius:4px;padding:8px;overflow:auto;max-width:560px;max-height:560px;">
                             <canvas class="rr-cgp-canvas" width="${this.frameWidth}" height="${this.frameHeight}"
                                 style="width:${prevW}px;height:${prevH}px;image-rendering:pixelated;display:block;"></canvas>
@@ -2544,24 +2691,24 @@ class CharacterGenerator {
                 </div>
 
                 <div style="display:flex;gap:12px;align-items:center;justify-content:center;flex-wrap:wrap;font-size:10px;color:var(--color-text-muted);">
-                    <span>Align X:</span>
-                    ${['left', 'center', 'right'].map(v => `<button class="rr-cgp-align-x" data-align="${v}" style="${alignBtnStyle(this.templateAlignX === v)}">${v[0].toUpperCase() + v.slice(1)}</button>`).join('')}
+                    <span>${tt('Align X:')}</span>
+                    ${['left', 'center', 'right'].map(v => `<button class="rr-cgp-align-x" data-align="${v}" style="${alignBtnStyle(this.templateAlignX === v)}">${tt(v[0].toUpperCase() + v.slice(1))}</button>`).join('')}
                     <span style="width:1px;height:18px;background:var(--color-border-subtle);"></span>
-                    <span>Align Y:</span>
-                    ${['top', 'middle', 'bottom'].map(v => `<button class="rr-cgp-align-y" data-align="${v}" style="${alignBtnStyle(this.templateAlignY === v)}">${v[0].toUpperCase() + v.slice(1)}</button>`).join('')}
+                    <span>${tt('Align Y:')}</span>
+                    ${['top', 'middle', 'bottom'].map(v => `<button class="rr-cgp-align-y" data-align="${v}" style="${alignBtnStyle(this.templateAlignY === v)}">${tt(v[0].toUpperCase() + v.slice(1))}</button>`).join('')}
                 </div>
 
                 <div style="font-size:10px;color:var(--color-text-dim);text-align:center;">
-                    Native ${this.frameWidth}×${this.frameHeight} · displayed at ${zoom}× · 3×4 walking sheet ${this.sheetWidth}×${this.sheetHeight}
+                    ${tt('Native {nativeSize} · displayed at {zoom}× · 3×4 walking sheet {sheetSize}').replace('{nativeSize}', `${this.frameWidth}×${this.frameHeight}`).replace('{zoom}', zoom).replace('{sheetSize}', `${this.sheetWidth}×${this.sheetHeight}`)}
                 </div>
             </div>
 
             <!-- Right: params -->
             <div style="background:var(--color-bg-panel);border-left:1px solid var(--color-border);overflow-y:auto;padding:12px;">
-                <div style="font-size:10px;font-weight:700;color:var(--color-accent-bright);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:10px;">${descriptor?.name ?? 'No Part'}</div>
+                <div style="font-size:10px;font-weight:700;color:var(--color-accent-bright);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:10px;">${descriptor ? tt(descriptor.name) : tt('No Part')}</div>
                 ${paletteSection
                     ? paletteSection
-                    : (paramRows || '<div style="font-size:10px;color:var(--color-text-muted);">No parameters.</div>')}
+                    : (paramRows || `<div style="font-size:10px;color:var(--color-text-muted);">${tt('No parameters.')}</div>`)}
                 ${nudgeSection}
             </div>
         </div>
@@ -2569,9 +2716,9 @@ class CharacterGenerator {
         <!-- Footer -->
         <div style="padding:10px 18px;border-top:1px solid var(--color-border-subtle);background:var(--color-bg-panel);display:flex;align-items:center;gap:10px;flex-shrink:0;">
             <label style="font-size:12px;color:var(--color-text-muted);">${this._t('forge.saveAs')}</label>
-            <input type="text" class="rr-cgp-name rr-input" placeholder="Hero" style="width:160px;padding:4px 8px;font-size:12px;">
+            <input type="text" class="rr-cgp-name rr-input" placeholder="${tt('Hero')}" style="width:160px;padding:4px 8px;font-size:12px;">
             <span style="font-size:10px;color:var(--color-text-dim);">→ img/characters/$&lt;name&gt;.png (${this.sheetWidth}×${this.sheetHeight})</span>
-            <button class="rr-cgp-bulk-import rr-btn-chip" style="padding:6px 12px;margin-left:auto;color:var(--color-accent-bright);">Import Parts...</button>
+            <button class="rr-cgp-bulk-import rr-btn-chip" style="padding:6px 12px;margin-left:auto;color:var(--color-accent-bright);">${tt('Import Parts...')}</button>
             <span class="rr-cgp-template-status" style="font-size:10px;color:var(--color-text-dim);min-width:120px;"></span>
             <div>
                 <button class="rr-cgp-save rr-btn-chip" style="padding:6px 18px;color:var(--color-accent-bright);">${this._t('forge.saveSheet')}</button>
@@ -2586,7 +2733,7 @@ class CharacterGenerator {
         // fall back to whatever body is present so the UI always has SOMETHING
         // to show even if the user removed one gender.
         const bodies = RR_CHARACTER_REGISTRY.filter(d => d.category === 'body');
-        const styleId = this.characterStyle || 'looseleaf';
+        const styleId = this.characterStyle || 'psychronic';
         const hasStyle = (d) => Array.isArray(d.tags) && d.tags.map(t => String(t).toLowerCase()).includes(styleId);
         const styleBodies = bodies.filter(hasStyle);
         const pool = styleBodies.length ? styleBodies : bodies;
@@ -2607,6 +2754,7 @@ class CharacterGenerator {
 
 
     _renderPartsLibrary(selectedPartId) {
+        const tt = (text) => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
         const query = (this.proceduralSearchQuery || '').toLowerCase();
         const all = this._proceduralPartDescriptors().filter(d => {
             if (!query) return true;
@@ -2622,14 +2770,14 @@ class CharacterGenerator {
         }
         const cats = Object.keys(byCategory).sort();
         if (!cats.length) {
-            return '<div style="padding:10px;font-size:10px;color:var(--color-text-muted);">No parts match.</div>';
+            return '<div style="padding:10px;font-size:10px;color:var(--color-text-muted);">' + tt('No parts match.') + '</div>';
         }
         return cats.map(cat => {
             const collapsed = this.collapsedCategories.has(cat);
             const items = byCategory[cat];
             const header = `<div class="rr-cgp-cat-header" data-cat="${cat}" style="display:flex;align-items:center;gap:4px;padding:4px 10px;font-size:10px;font-weight:700;color:var(--color-text-dim);text-transform:uppercase;letter-spacing:0.4px;cursor:pointer;background:var(--color-bg-panel);border-top:1px solid var(--color-border-subtle);">
                 <span style="font-size:9px;">${collapsed ? '▶' : '▼'}</span>
-                <span>${cat}</span>
+                <span>${tt(cat)}</span>
                 <span style="margin-left:auto;font-size:9px;color:var(--color-text-muted);">${items.length}</span>
             </div>`;
             if (collapsed) return header;
@@ -2641,8 +2789,8 @@ class CharacterGenerator {
                     <span style="flex:0 0 auto;width:28px;height:28px;background:var(--color-checker,#1a1a2e);border:1px solid var(--color-border-input);border-radius:3px;display:flex;align-items:center;justify-content:center;overflow:hidden;">
                         ${thumb ? `<img src="${thumb}" style="width:28px;height:28px;image-rendering:pixelated;display:block;">` : ''}
                     </span>
-                    <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${d.name}</span>
-                    <button class="rr-cgp-toggle-part" data-part-id="${d.id}" title="${isActive ? 'Remove from scene' : 'Add to scene'}"
+                    <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${tt(d.name)}</span>
+                    <button class="rr-cgp-toggle-part" data-part-id="${d.id}" title="${isActive ? tt('Remove from scene') : tt('Add to scene')}"
                         style="flex:0 0 auto;padding:1px 6px;font-size:11px;cursor:pointer;border-radius:3px;border:1px solid var(--color-border-input);background:${isActive ? 'var(--color-accent-bright)' : 'var(--color-bg-button)'};color:${isActive ? 'var(--color-bg-base)' : 'var(--color-text-strong)'};">${isActive ? '✓' : '+'}</button>
                 </div>`;
             }).join('');
@@ -2651,8 +2799,9 @@ class CharacterGenerator {
     }
 
     _renderActiveLayers(selectedPartId) {
+        const tt = (text) => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
         if (!this.activeLayerOrder.length) {
-            return '<div style="padding:8px 10px;font-size:10px;color:var(--color-text-muted);">No active layers.</div>';
+            return '<div style="padding:8px 10px;font-size:10px;color:var(--color-text-muted);">' + tt('No active layers.') + '</div>';
         }
         // Top of list = topmost layer (drawn last). Iterate the underlying
         // array in reverse so the visual order matches the stack metaphor most
@@ -2683,16 +2832,16 @@ class CharacterGenerator {
                     ${thumb ? `<img src="${thumb}" style="width:36px;height:36px;image-rendering:pixelated;display:block;">` : ''}
                 </span>
                 <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:4px;">
-                    <div style="font-size:11px;line-height:1.2;color:var(--color-text);overflow:hidden;text-overflow:ellipsis;${isHidden ? 'text-decoration:line-through;' : ''}" title="${d.name}${isBody ? ' (base)' : ''}">${d.name}${isBody ? ' (base)' : ''}</div>
+                    <div style="font-size:11px;line-height:1.2;color:var(--color-text);overflow:hidden;text-overflow:ellipsis;${isHidden ? 'text-decoration:line-through;' : ''}" title="${tt(d.name)}${isBody ? ' ' + tt('(base)') : ''}">${tt(d.name)}${isBody ? ' ' + tt('(base)') : ''}</div>
                     <div style="display:flex;gap:3px;align-items:center;">
                         <button class="rr-cgp-layer-eye" data-part-id="${id}"
-                            title="${isHidden ? 'Show layer' : 'Hide layer'}" style="flex:0 0 auto;padding:1px 5px;cursor:pointer;border-radius:2px;border:1px solid var(--color-border-input);background:var(--color-bg-button);color:var(--color-text-strong);display:flex;align-items:center;">${eyeSvg}</button>
+                            title="${isHidden ? tt('Show layer') : tt('Hide layer')}" style="flex:0 0 auto;padding:1px 5px;cursor:pointer;border-radius:2px;border:1px solid var(--color-border-input);background:var(--color-bg-button);color:var(--color-text-strong);display:flex;align-items:center;">${eyeSvg}</button>
                         <button class="rr-cgp-layer-up" data-layer-index="${i}" ${upDisabled ? 'disabled' : ''}
-                            title="Move up (drawn later, closer to top)" style="flex:0 0 auto;padding:1px 6px;font-size:10px;cursor:${upDisabled ? 'default' : 'pointer'};border-radius:2px;border:1px solid var(--color-border-input);background:var(--color-bg-button);color:var(--color-text-strong);opacity:${upDisabled ? '0.3' : '1'};">▲</button>
+                            title="${tt('Move up (drawn later, closer to top)')}" style="flex:0 0 auto;padding:1px 6px;font-size:10px;cursor:${upDisabled ? 'default' : 'pointer'};border-radius:2px;border:1px solid var(--color-border-input);background:var(--color-bg-button);color:var(--color-text-strong);opacity:${upDisabled ? '0.3' : '1'};">▲</button>
                         <button class="rr-cgp-layer-down" data-layer-index="${i}" ${downDisabled ? 'disabled' : ''}
-                            title="Move down (drawn earlier, behind)" style="flex:0 0 auto;padding:1px 6px;font-size:10px;cursor:${downDisabled ? 'default' : 'pointer'};border-radius:2px;border:1px solid var(--color-border-input);background:var(--color-bg-button);color:var(--color-text-strong);opacity:${downDisabled ? '0.3' : '1'};">▼</button>
+                            title="${tt('Move down (drawn earlier, behind)')}" style="flex:0 0 auto;padding:1px 6px;font-size:10px;cursor:${downDisabled ? 'default' : 'pointer'};border-radius:2px;border:1px solid var(--color-border-input);background:var(--color-bg-button);color:var(--color-text-strong);opacity:${downDisabled ? '0.3' : '1'};">▼</button>
                         <button class="rr-cgp-layer-remove" data-part-id="${id}" ${removeDisabled ? 'disabled' : ''}
-                            title="Remove from scene" style="flex:0 0 auto;padding:1px 6px;font-size:10px;cursor:${removeDisabled ? 'default' : 'pointer'};border-radius:2px;border:1px solid var(--color-border-input);background:var(--color-bg-button);color:var(--color-text-strong);opacity:${removeDisabled ? '0.3' : '1'};">×</button>
+                            title="${tt('Remove from scene')}" style="flex:0 0 auto;padding:1px 6px;font-size:10px;cursor:${removeDisabled ? 'default' : 'pointer'};border-radius:2px;border:1px solid var(--color-border-input);background:var(--color-bg-button);color:var(--color-text-strong);opacity:${removeDisabled ? '0.3' : '1'};">×</button>
                     </div>
                 </div>
             </div>`;
@@ -2826,38 +2975,58 @@ class CharacterGenerator {
     _drawProceduralPreview() {
         if (!this.root) return;
         const activeParts = this._buildActiveParts();
+        const FW = this.frameWidth, FH = this.frameHeight;
+
+        // Compose all 12 cells ONCE per part spec into an offscreen sheet.
+        // Walk ticks (170ms) and direction/frame switches only move within
+        // the sheet — previously every tick re-rendered all 12 cells plus
+        // the main preview.
+        const cacheKey = JSON.stringify([FW, FH,
+            activeParts.map(p => [p.descriptor.id, p.params])]);
+        if (this._procSheetCacheKey !== cacheKey) {
+            const sheet = this._procSheetCache || (this._procSheetCache = document.createElement('canvas'));
+            sheet.width = FW * 3;
+            sheet.height = FH * 4;
+            const cacheCtx = sheet.getContext('2d');
+            const cell = this._procCellScratch || (this._procCellScratch = document.createElement('canvas'));
+            cell.width = FW;
+            cell.height = FH;
+            const cellCtx = cell.getContext('2d');
+            for (let dir = 0; dir < 4; dir++) {
+                for (let f = 0; f < 3; f++) {
+                    const cellImg = CharacterRenderer.render(FW, FH, dir, f, activeParts);
+                    cellCtx.putImageData(cellImg, 0, 0);
+                    cacheCtx.drawImage(cell, f * FW, dir * FH);
+                }
+            }
+            this._procSheetCacheKey = cacheKey;
+        }
 
         const canvas = this.root.querySelector('.rr-cgp-canvas');
         if (canvas) {
-            if (canvas.width !== this.frameWidth) canvas.width = this.frameWidth;
-            if (canvas.height !== this.frameHeight) canvas.height = this.frameHeight;
+            if (canvas.width !== FW) canvas.width = FW;
+            if (canvas.height !== FH) canvas.height = FH;
             const ctx = canvas.getContext('2d');
-            ctx.clearRect(0, 0, this.frameWidth, this.frameHeight);
-            const imageData = CharacterRenderer.render(this.frameWidth, this.frameHeight, this.direction, this.walkFrame, activeParts);
-            ctx.putImageData(imageData, 0, 0);
+            ctx.imageSmoothingEnabled = false;
+            ctx.clearRect(0, 0, FW, FH);
+            ctx.drawImage(this._procSheetCache,
+                this.walkFrame * FW, this.direction * FH, FW, FH,
+                0, 0, FW, FH);
         }
 
         const sheetCanvas = this.root.querySelector('.rr-cgp-sheet');
         if (sheetCanvas) {
-            const sw = this.frameWidth * 3, sh = this.frameHeight * 4;
+            const sw = FW * 3, sh = FH * 4;
             if (sheetCanvas.width !== sw) sheetCanvas.width = sw;
             if (sheetCanvas.height !== sh) sheetCanvas.height = sh;
             const sctx = sheetCanvas.getContext('2d');
             sctx.clearRect(0, 0, sw, sh);
-            for (let dir = 0; dir < 4; dir++) {
-                for (let f = 0; f < 3; f++) {
-                    const cellImg = CharacterRenderer.render(this.frameWidth, this.frameHeight, dir, f, activeParts);
-                    const tmp = document.createElement('canvas');
-                    tmp.width = this.frameWidth; tmp.height = this.frameHeight;
-                    tmp.getContext('2d').putImageData(cellImg, 0, 0);
-                    sctx.drawImage(tmp, f * this.frameWidth, dir * this.frameHeight);
-                }
-            }
+            sctx.drawImage(this._procSheetCache, 0, 0);
             // Active cell highlight
             sctx.strokeStyle = '#ffd54a';
-            sctx.lineWidth = Math.max(1, Math.floor(Math.min(this.frameWidth, this.frameHeight) / 24));
-            sctx.strokeRect(this.walkFrame * this.frameWidth + 0.5, this.direction * this.frameHeight + 0.5,
-                this.frameWidth - 1, this.frameHeight - 1);
+            sctx.lineWidth = Math.max(1, Math.floor(Math.min(FW, FH) / 24));
+            sctx.strokeRect(this.walkFrame * FW + 0.5, this.direction * FH + 0.5,
+                FW - 1, FH - 1);
         }
     }
 
@@ -3224,6 +3393,7 @@ class CharacterGenerator {
     }
 
     _normalizeAllTemplates() {
+        const tt = (text) => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
         // Collect every sheet plus its category so we can anchor non-body parts
         // to the body's content landmarks AFTER padding (so padding can't shift
         // them back out of alignment).
@@ -3252,7 +3422,7 @@ class CharacterGenerator {
             if (c.w > w) w = c.w;
             if (c.h > h) h = c.h;
         }
-        if (!w || !h) { this._setTemplateStatus('No templates to normalize.'); return; }
+        if (!w || !h) { this._setTemplateStatus(tt('No templates to normalize.')); return; }
 
         // Pad each sheet to (w, h). Cross-part alignment is handled at RENDER
         // time by CharacterRenderer's shared body reference, which lets the
@@ -3260,7 +3430,10 @@ class CharacterGenerator {
         // the sheets here.
         for (const meta of sheetMeta) this._padSheetInPlace(meta.sheet, w, h, this.templateAlignX, this.templateAlignY);
 
-        this._setTemplateStatus(`Normalized ${sheetMeta.length} sheet(s) to ${w}×${h} (align ${this.templateAlignX}/${this.templateAlignY}).`);
+        this._setTemplateStatus(tt('Normalized {count} sheet(s) to {size} (align {alignment}).')
+            .replace('{count}', sheetMeta.length)
+            .replace('{size}', `${w}×${h}`)
+            .replace('{alignment}', `${this.templateAlignX}/${this.templateAlignY}`));
         this._render();
     }
 
@@ -3316,8 +3489,9 @@ class CharacterGenerator {
     }
 
     _openBulkImportChooser() {
-        const category = (window.prompt('Category for these parts (e.g. hair, clothing, accessory):', 'hair') || '').trim().toLowerCase();
-        if (!category) { this._setTemplateStatus('Bulk import cancelled.'); return; }
+        const tt = (text) => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
+        const category = (window.prompt(tt('Category for these parts (e.g. {examples}):').replace('{examples}', 'hair, clothing, accessory'), 'hair') || '').trim().toLowerCase();
+        if (!category) { this._setTemplateStatus(tt('Bulk import cancelled.')); return; }
         const input = document.createElement('input');
         input.type = 'file';
         input.multiple = true;
@@ -3326,7 +3500,7 @@ class CharacterGenerator {
         const cleanup = () => setTimeout(() => input.remove(), 0);
         input.addEventListener('change', async () => {
             const files = Array.from(input.files || []);
-            if (!files.length) { this._setTemplateStatus('No files selected.'); cleanup(); return; }
+            if (!files.length) { this._setTemplateStatus(tt('No files selected.')); cleanup(); return; }
             await this._bulkImportFiles(files, category);
             cleanup();
         }, { once: true });
@@ -3335,19 +3509,21 @@ class CharacterGenerator {
     }
 
     async _bulkImportFiles(files, category) {
+        const tt = (text) => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
         const projectPath = this._requireProjectPath();
         if (!projectPath) return;
         const fs = require('fs');
         const path = require('path');
         const outDir = path.join(projectPath, 'forge', 'character_generator', 'styles', this.characterStyle, 'parts', category);
         try { fs.mkdirSync(outDir, { recursive: true }); }
-        catch (e) { alert('Could not create folder: ' + e.message); return; }
+        catch (e) { alert(tt('Could not create folder: {error}').replace('{error}', e.message)); return; }
 
         let ok = 0, fail = 0;
         const summary = [];
         for (let i = 0; i < files.length; i++) {
             const file = files[i];
-            this._setTemplateStatus(`Bulk: ${i + 1}/${files.length} · ${file.name}`);
+            this._setTemplateStatus(tt('Bulk: {current}/{total} · {file}')
+                .replace('{current}', i + 1).replace('{total}', files.length).replace('{file}', file.name));
             try {
                 const result = await this._imageFileToAsciiTemplate(file);
                 const baseName = file.name.replace(/\.(png|webp|jpe?g)$/i, '');
@@ -3374,12 +3550,16 @@ class CharacterGenerator {
         }
         // Auto-align after import so users don't have to press Fix Alignment.
         if (ok > 0) this._normalizeAllTemplates();
-        this._setTemplateStatus(`Bulk: ${ok} imported, ${fail} failed.`, fail > 0);
+        this._setTemplateStatus(tt('Bulk: {imported} imported, {failed} failed.')
+            .replace('{imported}', ok).replace('{failed}', fail), fail > 0);
         this._render();
         console.log('[CharacterGenerator] Bulk import wrote files to:', outDir);
         for (const s of summary) console.log('  ', s.ok ? `OK  ${s.partId}` : `FAIL ${s.name}: ${s.error}`);
-        const lines = summary.map(s => s.ok ? `✓ ${s.name} → ${s.partId}${s.paletteSize > 90 ? ` (${s.paletteSize} Unicode symbols)` : ''}` : `✗ ${s.name}: ${s.error}`);
-        alert(`Bulk import complete: ${ok} succeeded, ${fail} failed\n\nFiles written to:\n${outDir}\n\n${lines.join('\n')}`);
+        const lines = summary.map(s => s.ok
+            ? `✓ ${s.name} → ${s.partId}${s.paletteSize > 90 ? ` (${tt('{count} Unicode symbols').replace('{count}', s.paletteSize)})` : ''}`
+            : `✗ ${s.name}: ${s.error}`);
+        alert(tt('Bulk import complete: {succeeded} succeeded, {failed} failed\n\nFiles written to:\n{directory}\n\n{details}')
+            .replace('{succeeded}', ok).replace('{failed}', fail).replace('{directory}', outDir).replace('{details}', lines.join('\n')));
     }
 
     _slugifyForId(s) {
@@ -3439,6 +3619,7 @@ ${sheetJs}
     }
 
     _openTemplateImageChooser() {
+        const tt = (text) => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
         const input = document.createElement('input');
         input.type = 'file';
         input.accept = 'image/png,image/webp,image/jpeg,image/jpg';
@@ -3450,7 +3631,7 @@ ${sheetJs}
         };
         const onFocus = () => {
             setTimeout(() => {
-                if (!settled && !input.files?.length) this._setTemplateStatus('No image selected.');
+                if (!settled && !input.files?.length) this._setTemplateStatus(tt('No image selected.'));
                 cleanup();
             }, 600);
         };
@@ -3458,11 +3639,11 @@ ${sheetJs}
             settled = true;
             const file = input.files?.[0];
             if (!file) {
-                this._setTemplateStatus('No image selected.');
+                this._setTemplateStatus(tt('No image selected.'));
                 cleanup();
                 return;
             }
-            this._setTemplateStatus(`Analyzing ${file.name}...`);
+            this._setTemplateStatus(tt('Analyzing {file}...').replace('{file}', file.name));
             this._analyzeTemplateImage(file).finally(cleanup);
         }, { once: true });
         window.addEventListener('focus', onFocus);
@@ -3471,18 +3652,20 @@ ${sheetJs}
     }
 
     async _analyzeTemplateImage(file) {
+        const tt = (text) => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
         try {
             const result = await this._imageFileToAsciiTemplate(file);
-            this._setTemplateStatus(`Analyzed ${result.targetSize.w}x${result.targetSize.h}.`);
+            this._setTemplateStatus(tt('Analyzed {size}.').replace('{size}', `${result.targetSize.w}x${result.targetSize.h}`));
             this._showAsciiTemplateModal(result);
         } catch (e) {
             console.error('Character template analysis failed:', e);
-            this._setTemplateStatus('Analysis failed.', true);
-            alert('Template analysis failed: ' + e.message);
+            this._setTemplateStatus(tt('Analysis failed.'), true);
+            alert(tt('Template analysis failed: {error}').replace('{error}', e.message));
         }
     }
 
     _imageFileToAsciiTemplate(file) {
+        const tt = (text) => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
         return new Promise((resolve, reject) => {
             const reader = new FileReader();
             const img = new Image();
@@ -3580,10 +3763,10 @@ ${sheetJs}
                 }
             };
             img.onerror = () => {
-                reject(new Error('Could not load image.'));
+                reject(new Error(tt('Could not load image.')));
             };
             reader.onload = () => { img.src = reader.result; };
-            reader.onerror = () => reject(new Error('Could not read selected file.'));
+            reader.onerror = () => reject(new Error(tt('Could not read selected file.')));
             reader.readAsDataURL(file);
         });
     }
@@ -4081,7 +4264,7 @@ ${sheetJs}
 
     _formatAsciiSheetTemplate(sheetRows, styleId = this.characterStyle, variant = this.gender, palette = null) {
         const names = ['Front', 'Left', 'Right', 'Back'];
-        const styleKey = JSON.stringify(styleId || 'looseleaf');
+        const styleKey = JSON.stringify(styleId || 'psychronic');
         const variantKey = JSON.stringify(variant || 'male');
         const lines = [
             'window.RR_CG_BODY_TEMPLATE_SHEETS = window.RR_CG_BODY_TEMPLATE_SHEETS || {};',
@@ -4189,6 +4372,7 @@ ${sheetJs}
     }
 
     _showAsciiTemplateModal(result) {
+        const tt = (text) => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
         const modal = document.createElement('div');
         modal.style.cssText = 'position:fixed;inset:0;z-index:11000;background:rgba(0,0,0,0.72);display:flex;align-items:center;justify-content:center;padding:24px;';
 
@@ -4198,7 +4382,7 @@ ${sheetJs}
 
         const header = document.createElement('div');
         header.style.cssText = 'padding:10px 14px;border-bottom:1px solid var(--color-border-subtle);background:var(--color-bg-toolbar);color:var(--color-text-strong);font-size:13px;font-weight:700;display:flex;align-items:center;gap:10px;';
-        header.textContent = 'ASCII Template Analysis';
+        header.textContent = tt('ASCII Template Analysis');
         panel.appendChild(header);
 
         const body = document.createElement('div');
@@ -4207,14 +4391,26 @@ ${sheetJs}
 
         const meta = document.createElement('div');
         meta.style.cssText = 'font-size:11px;color:var(--color-text-muted);line-height:1.45;';
-        meta.textContent = `${result.fileName} · ${result.imageWidth}x${result.imageHeight} · crop ${result.crop.w}x${result.crop.h} (${result.crop.mode}) · output ${result.targetSize.w}x${result.targetSize.h} (${result.targetSize.mode}) · ${result.opaque} sampled pixels`;
+        const translateMode = (mode) => {
+            const fit = /^fit to (.+) frame$/.exec(mode || '');
+            return fit ? tt('fit to {size} frame').replace('{size}', fit[1]) : tt(mode);
+        };
+        meta.textContent = tt('{file} · {imageSize} · crop {cropSize} ({cropMode}) · output {outputSize} ({outputMode}) · {pixels} sampled pixels')
+            .replace('{file}', result.fileName)
+            .replace('{imageSize}', `${result.imageWidth}x${result.imageHeight}`)
+            .replace('{cropSize}', `${result.crop.w}x${result.crop.h}`)
+            .replace('{cropMode}', translateMode(result.crop.mode))
+            .replace('{outputSize}', `${result.targetSize.w}x${result.targetSize.h}`)
+            .replace('{outputMode}', translateMode(result.targetSize.mode))
+            .replace('{pixels}', result.opaque);
         body.appendChild(meta);
 
         const help = document.createElement('div');
         help.style.cssText = 'font-size:11px;color:var(--color-text-dim);line-height:1.45;';
         help.textContent = result.sheetRows
-            ? `Full 3x4 sheet detected. Paste this into a style body file such as src/forge/CharacterGenerator/styles/${this.characterStyle}/parts/body/${this.characterStyle}_${this.gender}.js. The renderer uses A-Z material letters; hand-clean any pixels where color-only quantizing picked the wrong material.`
-            : 'Single sprite detected. Paste these rows into a registered body sheet frame, then hand-clean any pixels where color-only quantizing picked the wrong material.';
+            ? tt('Full 3x4 sheet detected. Paste this into a style body file such as {path}. The renderer uses A-Z material letters; hand-clean any pixels where color-only quantizing picked the wrong material.')
+                .replace('{path}', `src/forge/CharacterGenerator/styles/${this.characterStyle}/parts/body/${this.characterStyle}_${this.gender}.js`)
+            : tt('Single sprite detected. Paste these rows into a registered body sheet frame, then hand-clean any pixels where color-only quantizing picked the wrong material.');
         body.appendChild(help);
 
         const editor = document.createElement('div');
@@ -4233,13 +4429,13 @@ ${sheetJs}
         const dirSelect = document.createElement('select');
         dirSelect.className = 'rr-input';
         dirSelect.style.cssText = 'padding:3px 8px;font-size:11px;';
-        dirSelect.innerHTML = dirNames.map((name, i) => `<option value="${i}">${name}</option>`).join('');
+        dirSelect.innerHTML = dirNames.map((name, i) => `<option value="${i}">${tt(name)}</option>`).join('');
         const frameSelect = document.createElement('select');
         frameSelect.className = 'rr-input';
         frameSelect.style.cssText = 'padding:3px 8px;font-size:11px;';
-        frameSelect.innerHTML = [0, 1, 2].map(i => `<option value="${i}">Frame ${i}</option>`).join('');
+        frameSelect.innerHTML = [0, 1, 2].map(i => `<option value="${i}">${tt('Frame {number}').replace('{number}', i)}</option>`).join('');
         if (result.sheetRows) {
-            gridToolbar.appendChild(document.createTextNode('Cell:'));
+            gridToolbar.appendChild(document.createTextNode(tt('Cell:')));
             gridToolbar.appendChild(dirSelect);
             gridToolbar.appendChild(frameSelect);
         }
@@ -4262,12 +4458,12 @@ ${sheetJs}
 
         const paletteTitle = document.createElement('div');
         paletteTitle.style.cssText = 'font-size:10px;font-weight:700;color:var(--color-accent-bright);text-transform:uppercase;letter-spacing:0.4px;';
-        paletteTitle.textContent = 'Paint Material';
+        paletteTitle.textContent = tt('Paint Material');
         palettePanel.appendChild(paletteTitle);
 
         const paletteHint = document.createElement('div');
         paletteHint.style.cssText = 'font-size:10px;color:var(--color-text-dim);line-height:1.35;';
-        paletteHint.textContent = 'Click a material, then click or drag pixels in the grid. The ASCII output updates live.';
+        paletteHint.textContent = tt('Click a material, then click or drag pixels in the grid. The ASCII output updates live.');
         palettePanel.appendChild(paletteHint);
 
         const paletteGrid = document.createElement('div');
@@ -4277,7 +4473,7 @@ ${sheetJs}
         const addColorBtn = document.createElement('button');
         addColorBtn.type = 'button';
         addColorBtn.className = 'rr-btn-chip';
-        addColorBtn.textContent = '+ Add Color Slot';
+        addColorBtn.textContent = '+ ' + tt('Add Color Slot');
         addColorBtn.style.cssText = 'padding:5px 10px;font-size:11px;color:var(--color-accent-bright);align-self:flex-start;';
         palettePanel.appendChild(addColorBtn);
 
@@ -4358,7 +4554,7 @@ ${sheetJs}
                     }
                 }
             }
-            activeLabel.textContent = `${selectedMaterial.ch === ' ' ? 'Blank' : selectedMaterial.ch} · ${selectedMaterial.name}`;
+            activeLabel.textContent = `${selectedMaterial.ch === ' ' ? tt('Blank') : selectedMaterial.ch} · ${tt(selectedMaterial.name)}`;
         };
         const paintFromEvent = (e) => {
             const rect = canvas.getBoundingClientRect();
@@ -4381,7 +4577,7 @@ ${sheetJs}
         if (hasDynamicPalette && !document.getElementById('rr-cg-tag-suggestions')) {
             const dl = document.createElement('datalist');
             dl.id = 'rr-cg-tag-suggestions';
-            dl.innerHTML = tagOptions.map(t => `<option value="${t}">`).join('');
+            dl.innerHTML = tagOptions.map(t => `<option value="${this._escapeHtml(t)}">`).join('');
             modal.appendChild(dl);
         }
         if (hasDynamicPalette) {
@@ -4428,7 +4624,7 @@ ${sheetJs}
                 const tagInput = document.createElement('input');
                 tagInput.type = 'text';
                 tagInput.className = 'rr-input';
-                tagInput.placeholder = 'tag (e.g. skin, hair, sash, scarf)';
+                tagInput.placeholder = tt('tag (e.g. {examples})').replace('{examples}', 'skin, hair, sash, scarf');
                 tagInput.value = material.material || '';
                 tagInput.setAttribute('list', 'rr-cg-tag-suggestions');
                 tagInput.style.cssText = 'flex:1;min-width:0;padding:1px 4px;font-size:10px;';
@@ -4451,7 +4647,7 @@ ${sheetJs}
             } else {
                 const nameEl = document.createElement('span');
                 nameEl.style.cssText = 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10px;';
-                nameEl.textContent = material.name;
+                nameEl.textContent = tt(material.name);
                 row.appendChild(nameEl);
             }
 
@@ -4478,7 +4674,7 @@ ${sheetJs}
         };
         addColorBtn.addEventListener('click', () => {
             const ch = nextUnusedLetter();
-            if (!ch) { addColorBtn.textContent = 'No letters left'; addColorBtn.disabled = true; return; }
+            if (!ch) { addColorBtn.textContent = tt('No letters left'); addColorBtn.disabled = true; return; }
             const hex = '#888888';
             const newMaterial = { ch, name: ch, color: hex, material: '' };
             materials.push(newMaterial);
@@ -4507,24 +4703,24 @@ ${sheetJs}
 
         const copy = document.createElement('button');
         copy.className = 'rr-btn-chip';
-        copy.textContent = result.sheetRows ? 'Copy Sheet JS' : 'Copy Rows';
+        copy.textContent = result.sheetRows ? tt('Copy Sheet JS') : tt('Copy Rows');
         copy.style.cssText = 'padding:6px 14px;color:var(--color-accent-bright);';
         copy.addEventListener('click', async () => {
             try {
                 await navigator.clipboard.writeText(text.value);
-                copy.textContent = 'Copied';
+                copy.textContent = tt('Copied');
             } catch (_) {
                 text.focus();
                 text.select();
                 document.execCommand('copy');
-                copy.textContent = 'Copied';
+                copy.textContent = tt('Copied');
             }
         });
         footer.appendChild(copy);
 
         const close = document.createElement('button');
         close.className = 'rr-btn-chip';
-        close.textContent = 'Close';
+        close.textContent = tt('Close');
         close.style.cssText = 'padding:6px 14px;';
         const closeModal = () => {
             document.removeEventListener('keydown', escClose);
@@ -4563,12 +4759,13 @@ ${sheetJs}
     }
 
     async _saveProceduralSheet() {
+        const tt = (text) => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
         const webHost = window.RPGReactorHost?.mode === 'web' ? window.RPGReactorHost : null;
         const projectPath = this._syncProjectPath();
         if (!projectPath && !webHost && !this._requireProjectPath()) return;
         const nameInput = this.root.querySelector('.rr-cgp-name');
         let name = (nameInput?.value || '').trim();
-        if (!name) { alert('Enter a name for the character sheet.'); return; }
+        if (!name) { alert(tt('Enter a name for the character sheet.')); return; }
         name = name.replace(/^[\$!]+/, '');
 
         // Render all 12 cells: 4 directions × 3 walk frames
@@ -4593,27 +4790,33 @@ ${sheetJs}
 
         const fs   = require('fs');
         const path = require('path');
-        const outDir  = path.join(projectPath, 'img', 'characters');
-        const outPath = path.join(outDir, `$${name}.png`);
+        // projectPath can be null in the browser edition — building the
+        // output path unconditionally threw before the web download
+        // fallback could run.
+        const outDir  = projectPath ? path.join(projectPath, 'img', 'characters') : null;
+        const outPath = outDir ? path.join(outDir, `$${name}.png`) : null;
         try {
             const dataUrl = sheetCanvas.toDataURL('image/png');
             if (webHost) {
                 const result = await webHost.saveFile({
                     data: dataUrl,
-                    projectPath: projectPath ? outPath : null,
+                    projectPath: outPath,
                     suggestedName: `$${name}.png`,
                     mimeType: 'image/png',
                 });
-                if (result) alert(result.project ? `Saved $${name}.png to img/characters/` : `Saved → ${result.path}`);
+                if (result) alert(result.project
+                    ? tt('Saved {file} to {path}').replace('{file}', `$${name}.png`).replace('{path}', 'img/characters/')
+                    : tt('Saved → {path}').replace('{path}', result.path));
                 return;
             }
+            if (!outDir) { alert(tt('Open a project first.')); return; }
             fs.mkdirSync(outDir, { recursive: true });
             const base64 = dataUrl.replace(/^data:image\/png;base64,/, '');
             fs.writeFileSync(outPath, Buffer.from(base64, 'base64'));
-            alert(`Saved $${name}.png to img/characters/`);
+            alert(tt('Saved {file} to {path}').replace('{file}', `$${name}.png`).replace('{path}', 'img/characters/'));
         } catch (e) {
             console.error('CharacterGenerator save error:', e);
-            alert('Save failed: ' + e.message);
+            alert(tt('Save failed: {error}').replace('{error}', e.message));
         }
     }
 
@@ -4622,6 +4825,7 @@ ${sheetJs}
     // ═══════════════════════════════════════════════════════════════════════════
 
     _partsHTML() {
+        const tt = (text) => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
         const sheetW = this.sheetWidth, sheetH = this.sheetHeight;
         const zoom = Math.max(1, Math.min(4, Math.floor(192 / this.frameWidth)));
         const prevW = this.frameWidth  * zoom;
@@ -4649,24 +4853,24 @@ ${sheetJs}
                 <!-- Preview -->
                 <div style="display:flex;flex-direction:column;padding:18px;gap:14px;background:var(--color-bg-base);overflow-y:auto;">
                     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-                        <span style="font-size:11px;color:var(--color-text-muted);">Direction:</span>
-                        ${['Down','Left','Right','Up'].map((d, i) => `<button class="rr-cg-dir-btn" data-dir="${i}" style="padding:4px 10px;font-size:11px;cursor:pointer;border-radius:3px;border:1px solid var(--color-border-input);background:${this.previewDirection === i ? 'var(--color-bg-button-active)' : 'var(--color-bg-button)'};color:var(--color-text-strong);">${d}</button>`).join('')}
-                        <button class="rr-cg-anim-btn" style="padding:4px 10px;font-size:11px;cursor:pointer;border-radius:3px;border:1px solid var(--color-border-input);background:${this.previewAnimating ? 'var(--color-bg-button-active)' : 'var(--color-bg-button)'};color:var(--color-text-strong);">${this.previewAnimating ? '⏸ Stop' : '▶ Walk'}</button>
+                        <span style="font-size:11px;color:var(--color-text-muted);">${tt('Direction:')}</span>
+                        ${['Down','Left','Right','Up'].map((d, i) => `<button class="rr-cg-dir-btn" data-dir="${i}" style="padding:4px 10px;font-size:11px;cursor:pointer;border-radius:3px;border:1px solid var(--color-border-input);background:${this.previewDirection === i ? 'var(--color-bg-button-active)' : 'var(--color-bg-button)'};color:var(--color-text-strong);">${tt(d)}</button>`).join('')}
+                        <button class="rr-cg-anim-btn" style="padding:4px 10px;font-size:11px;cursor:pointer;border-radius:3px;border:1px solid var(--color-border-input);background:${this.previewAnimating ? 'var(--color-bg-button-active)' : 'var(--color-bg-button)'};color:var(--color-text-strong);">${this.previewAnimating ? '⏸ ' + tt('Stop') : '▶ ' + tt('Walk')}</button>
                         <label style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--color-text);cursor:pointer;margin-left:auto;">
-                            <input type="checkbox" class="rr-cg-grid-toggle" ${this.gridEnabled ? 'checked' : ''}> Grid
+                            <input type="checkbox" class="rr-cg-grid-toggle" ${this.gridEnabled ? 'checked' : ''}> ${tt('Grid')}
                         </label>
                         <input type="number" class="rr-cg-grid-step rr-input" value="${this.gridStep}" min="1" max="512" style="width:52px;padding:3px 6px;font-size:11px;" ${this.gridEnabled ? '' : 'disabled'}>
                         <span style="font-size:10px;color:var(--color-text-dim);">px</span>
                     </div>
                     <div style="display:flex;gap:16px;align-items:flex-start;">
                         <div style="display:flex;flex-direction:column;align-items:center;gap:6px;">
-                            <div style="font-size:10px;color:var(--color-text-muted);">Preview</div>
+                            <div style="font-size:10px;color:var(--color-text-muted);">${tt('Preview')}</div>
                             <div style="background:var(--color-bg-deep);border:1px solid var(--color-border-input);border-radius:4px;padding:8px;">
                                 <canvas class="rr-cg-preview-canvas" width="${this.frameWidth}" height="${this.frameHeight}" style="width:${prevW}px;height:${prevH}px;image-rendering:pixelated;display:block;"></canvas>
                             </div>
                         </div>
                         <div style="display:flex;flex-direction:column;align-items:center;gap:6px;flex:1;">
-                            <div style="font-size:10px;color:var(--color-text-muted);">Full Sheet (${sheetW}×${sheetH})</div>
+                            <div style="font-size:10px;color:var(--color-text-muted);">${tt('Full Sheet')} (${sheetW}×${sheetH})</div>
                             <div style="background:var(--color-bg-deep);border:1px solid var(--color-border-input);border-radius:4px;padding:8px;">
                                 <div style="position:relative;width:${shDispW}px;height:${shDispH}px;">
                                     <canvas class="rr-cg-sheet-canvas" width="${sheetW}" height="${sheetH}" style="width:100%;height:100%;image-rendering:pixelated;display:block;"></canvas>
@@ -4676,11 +4880,11 @@ ${sheetJs}
                         </div>
                     </div>
                     <div style="font-size:10px;color:var(--color-text-dim);padding:4px 0;border-top:1px solid var(--color-border-subtle);display:flex;flex-wrap:wrap;align-items:center;gap:8px;">
-                        <span>Parts folders:
+                        <span>${tt('Parts folders:')}
                             <code style="background:var(--color-bg-input-alt);padding:1px 5px;border-radius:2px;">styles/${this.characterStyle}/parts/</code>
-                            + legacy <code style="background:var(--color-bg-input-alt);padding:1px 5px;border-radius:2px;">parts/</code>
+                            + ${tt('legacy')} <code style="background:var(--color-bg-input-alt);padding:1px 5px;border-radius:2px;">parts/</code>
                         </span>
-                        <button type="button" class="rr-cg-open-parts rr-btn-chip" style="padding:2px 8px;font-size:10px;">Open Folder</button>
+                        <button type="button" class="rr-cg-open-parts rr-btn-chip" style="padding:2px 8px;font-size:10px;">${tt('Open Folder')}</button>
                     </div>
                 </div>
 
@@ -4692,10 +4896,10 @@ ${sheetJs}
 
             <div class="rr-modal-footer" style="padding:10px 18px;border-top:1px solid var(--color-border-subtle);background:var(--color-bg-panel);display:flex;align-items:center;gap:10px;flex-shrink:0;">
                 <label style="font-size:12px;color:var(--color-text-muted);">${this._t('forge.saveAs')}</label>
-                <input type="text" class="rr-cg-name-input rr-input" placeholder="MyHero" style="width:180px;padding:4px 8px;font-size:12px;">
+                <input type="text" class="rr-cg-name-input rr-input" placeholder="${tt('MyHero')}" style="width:180px;padding:4px 8px;font-size:12px;">
                 <span style="font-size:10px;color:var(--color-text-dim);">→ img/characters/$&lt;name&gt;.png</span>
                 <div style="margin-left:auto;display:flex;gap:8px;">
-                    <button class="rr-cg-refresh rr-btn-chip" style="padding:6px 14px;">↻ Reload Parts</button>
+                    <button class="rr-cg-refresh rr-btn-chip" style="padding:6px 14px;">↻ ${tt('Reload Parts')}</button>
                     <button class="rr-cg-save rr-btn-chip" style="padding:6px 18px;color:var(--color-accent-bright);">${this._t('forge.saveSheet')}</button>
                 </div>
             </div>
@@ -4850,12 +5054,13 @@ ${sheetJs}
     // ── Parts: rendering ──────────────────────────────────────────────────────
 
     _renderCategoryList() {
-        if (!this.categories.length) return `<div style="padding:20px;font-size:11px;color:var(--color-text-muted);text-align:center;line-height:1.45;">No PNG part categories found.<br>Add PNG folders under either:<br><span style="font-family:monospace;font-size:10px;color:var(--color-text-dim);">forge/character_generator/styles/${this.characterStyle}/parts/</span><br>or the legacy path<br><span style="font-family:monospace;font-size:10px;color:var(--color-text-dim);">forge/character_generator/parts/</span><br>then reload.<br><br><span style="color:var(--color-text-dim);">Procedural / Outfit / Hair Forge parts are JS templates and appear on the Procedural tab, not here.</span></div>`;
-        const hdr = `<div style="padding:6px 10px 8px;font-size:9px;font-weight:700;color:var(--color-accent-bright);text-transform:uppercase;letter-spacing:0.5px;border-bottom:1px solid var(--color-border-subtle);display:flex;justify-content:space-between;"><span>Layers</span><span style="font-size:8px;color:var(--color-text-dim);font-weight:400;text-transform:none;">top = front</span></div>`;
+        const tt = (text) => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
+        if (!this.categories.length) return `<div style="padding:20px;font-size:11px;color:var(--color-text-muted);text-align:center;line-height:1.45;">${tt('No PNG part categories found.')}<br>${tt('Add PNG folders under either:')}<br><span style="font-family:monospace;font-size:10px;color:var(--color-text-dim);">forge/character_generator/styles/${this.characterStyle}/parts/</span><br>${tt('or the legacy path')}<br><span style="font-family:monospace;font-size:10px;color:var(--color-text-dim);">forge/character_generator/parts/</span><br>${tt('then reload.')}<br><br><span style="color:var(--color-text-dim);">${tt('Procedural / Outfit / Hair Forge parts are JS templates and appear on the Procedural tab, not here.')}</span></div>`;
+        const hdr = `<div style="padding:6px 10px 8px;font-size:9px;font-weight:700;color:var(--color-accent-bright);text-transform:uppercase;letter-spacing:0.5px;border-bottom:1px solid var(--color-border-subtle);display:flex;justify-content:space-between;"><span>${tt('Layers')}</span><span style="font-size:8px;color:var(--color-text-dim);font-weight:400;text-transform:none;">${tt('top = front')}</span></div>`;
         return hdr + this.categories.map((cat, idx) => `
-            <div class="rr-cg-cat-row" data-cat-idx="${idx}" draggable="true" title="Drag to reorder layers" style="display:grid;grid-template-columns:1fr auto;align-items:center;background:${idx === this.activeCategoryIndex ? 'var(--color-bg-hover)' : 'transparent'};border-left:3px solid ${idx === this.activeCategoryIndex ? 'var(--color-accent-bright)' : 'transparent'};">
+            <div class="rr-cg-cat-row" data-cat-idx="${idx}" draggable="true" title="${tt('Drag to reorder layers')}" style="display:grid;grid-template-columns:1fr auto;align-items:center;background:${idx === this.activeCategoryIndex ? 'var(--color-bg-hover)' : 'transparent'};border-left:3px solid ${idx === this.activeCategoryIndex ? 'var(--color-accent-bright)' : 'transparent'};">
                 <div class="rr-cg-cat-item" style="padding:7px 10px;cursor:pointer;font-size:12px;color:var(--color-text);display:flex;justify-content:space-between;align-items:center;min-width:0;">
-                    <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"><span style="color:var(--color-text-dim);padding-right:5px;cursor:grab;">☰</span>${cat.displayName}</span>
+                    <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"><span style="color:var(--color-text-dim);padding-right:5px;cursor:grab;">☰</span>${this._escapeHtml(tt(cat.displayName))}</span>
                     <span style="font-size:9px;color:var(--color-text-muted);flex-shrink:0;padding-left:6px;">${cat.selected != null ? '●' : '○'} ${cat.variations.length}</span>
                 </div>
                 <div style="display:flex;flex-direction:column;gap:1px;padding:2px 6px;">
@@ -4866,19 +5071,20 @@ ${sheetJs}
     }
 
     _renderVariationList() {
+        const tt = (text) => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
         const cat = this.categories[this.activeCategoryIndex];
-        if (!cat) return '<div style="padding:16px;font-size:11px;color:var(--color-text-muted);">Select a category.</div>';
+        if (!cat) return '<div style="padding:16px;font-size:11px;color:var(--color-text-muted);">' + tt('Select a category.') + '</div>';
         const noneSelected = cat.selected == null;
         return `
-            <div style="font-size:11px;font-weight:700;color:var(--color-accent-bright);text-transform:uppercase;letter-spacing:0.3px;margin-bottom:8px;">${cat.displayName}</div>
-            <div class="rr-cg-var-item" data-var-idx="none" style="padding:8px 10px;cursor:pointer;font-size:11px;color:var(--color-text);background:${noneSelected ? 'var(--color-accent-tint-25)' : 'var(--color-bg-list-item)'};border:1px solid ${noneSelected ? 'var(--color-accent-border-strong)' : 'var(--color-border-subtle)'};border-radius:3px;margin-bottom:6px;">(None)</div>
+            <div style="font-size:11px;font-weight:700;color:var(--color-accent-bright);text-transform:uppercase;letter-spacing:0.3px;margin-bottom:8px;">${this._escapeHtml(tt(cat.displayName))}</div>
+            <div class="rr-cg-var-item" data-var-idx="none" style="padding:8px 10px;cursor:pointer;font-size:11px;color:var(--color-text);background:${noneSelected ? 'var(--color-accent-tint-25)' : 'var(--color-bg-list-item)'};border:1px solid ${noneSelected ? 'var(--color-accent-border-strong)' : 'var(--color-border-subtle)'};border-radius:3px;margin-bottom:6px;">${tt('(None)')}</div>
             ${cat.variations.map((v, i) => {
                 const sel = cat.selected === i;
                 return `<div class="rr-cg-var-item" data-var-idx="${i}" style="padding:8px 10px;cursor:pointer;font-size:11px;color:var(--color-text);background:${sel ? 'var(--color-accent-tint-25)' : 'var(--color-bg-list-item)'};border:1px solid ${sel ? 'var(--color-accent-border-strong)' : 'var(--color-border-subtle)'};border-radius:3px;margin-bottom:4px;display:flex;gap:8px;align-items:center;">
-                    <div style="width:32px;height:32px;background:var(--color-bg-deep);border-radius:2px;flex-shrink:0;background-image:url('file://${v.path.replace(/\\/g, '/').replace(/'/g, "%27")}');background-size:${this.sheetWidth}px ${this.sheetHeight}px;background-position:-${this.frameWidth}px 0;image-rendering:pixelated;"></div>
-                    <div style="flex:1;word-break:break-word;">${v.name}</div>
+                    <div class="rr-cg-var-thumb" data-var-thumb="${i}" style="width:32px;height:32px;background:var(--color-bg-deep);border-radius:2px;flex-shrink:0;background-size:${this.sheetWidth}px ${this.sheetHeight}px;background-position:-${this.frameWidth}px 0;image-rendering:pixelated;"></div>
+                    <div style="flex:1;word-break:break-word;">${this._escapeHtml(tt(v.name))}</div>
                 </div>`;
-            }).join('') || '<div style="font-size:10px;color:var(--color-text-muted);padding:8px 4px;">No variations. Drop PNGs into the folder and reload.</div>'}`;
+            }).join('') || `<div style="font-size:10px;color:var(--color-text-muted);padding:8px 4px;">${tt('No variations. Drop PNGs into the folder and reload.')}</div>`}`;
     }
 
     _getImage(filePath) {
@@ -4991,11 +5197,9 @@ ${sheetJs}
                 if (typeof nw !== 'undefined' && nw.Shell && typeof nw.Shell.openItem === 'function') {
                     nw.Shell.openItem(root);
                 } else if (typeof require === 'function') {
-                    require('child_process').exec(
-                        process.platform === 'win32' ? `explorer "${root}"`
-                            : process.platform === 'darwin' ? `open "${root}"`
-                            : `xdg-open "${root}"`
-                    );
+                    const command = process.platform === 'win32' ? 'explorer'
+                        : process.platform === 'darwin' ? 'open' : 'xdg-open';
+                    require('child_process').execFile(command, [root]);
                 }
             } catch (e) { console.warn('Open parts folder failed', e); }
         });
@@ -5052,6 +5256,11 @@ ${sheetJs}
     }
 
     _wirePartsVariationEvents() {
+        const category = this.categories[this.activeCategoryIndex];
+        this.root.querySelectorAll('.rr-cg-var-thumb').forEach(el => {
+            const variation = category?.variations[parseInt(el.dataset.varThumb)];
+            if (variation) el.style.backgroundImage = `url("file://${variation.path.replace(/\\/g, '/')}")`;
+        });
         this.root.querySelectorAll('.rr-cg-var-item').forEach(el => {
             el.addEventListener('click', () => {
                 const cat = this.categories[this.activeCategoryIndex];
@@ -5065,12 +5274,13 @@ ${sheetJs}
     }
 
     async _savePartsSheet() {
+        const tt = (text) => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
         const webHost = window.RPGReactorHost?.mode === 'web' ? window.RPGReactorHost : null;
         const projectPath = this._syncProjectPath();
         if (!projectPath && !webHost && !this._requireProjectPath()) return;
         const input = this.root.querySelector('.rr-cg-name-input');
         let name = (input?.value || '').trim();
-        if (!name) { alert('Enter a name for the character sheet.'); return; }
+        if (!name) { alert(tt('Enter a name for the character sheet.')); return; }
         name = name.replace(/^[\$!]+/, '');
         const sheetCanvas = this.root.querySelector('.rr-cg-sheet-canvas');
         if (!sheetCanvas) return;
@@ -5086,14 +5296,16 @@ ${sheetJs}
                     suggestedName: `$${name}.png`,
                     mimeType: 'image/png',
                 });
-                if (result) alert(result.project ? `Saved $${name}.png to img/characters/` : `Saved → ${result.path}`);
+                if (result) alert(result.project
+                    ? tt('Saved {file} to {path}').replace('{file}', `$${name}.png`).replace('{path}', 'img/characters/')
+                    : tt('Saved → {path}').replace('{path}', result.path));
                 return;
             }
             fs.mkdirSync(outDir, { recursive: true });
             const b64 = dataUrl.replace(/^data:image\/png;base64,/, '');
             fs.writeFileSync(outPath, Buffer.from(b64, 'base64'));
-            alert(`Saved $${name}.png to img/characters/`);
-        } catch (e) { console.error('CharacterGenerator parts save error:', e); alert('Save failed: ' + e.message); }
+            alert(tt('Saved {file} to {path}').replace('{file}', `$${name}.png`).replace('{path}', 'img/characters/'));
+        } catch (e) { console.error('CharacterGenerator parts save error:', e); alert(tt('Save failed: {error}').replace('{error}', e.message)); }
     }
 
     // ── Themed colour picker (ported from AnimationGenerator) ─────────────────

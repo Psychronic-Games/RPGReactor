@@ -9,6 +9,9 @@ class DatabaseEditorUI {
         this.databaseManager = databaseManager;
         this.currentProject = project;
         this.callbacks = callbacks;
+        this._detailGeneration = 0;
+        this._listGeneration = 0;
+        this._activeDatabaseList = null;
 
         // Animation preview state
         this.animationPreviews = {};
@@ -19,7 +22,7 @@ class DatabaseEditorUI {
         // Initialize modular editors
         this.commonUI = new DatabaseCommonUI(databaseManager, { getCurrentProject: () => this.currentProject });
         this.actorEditor = new DatabaseActorEditor(databaseManager, { getCurrentProject: () => this.currentProject }, this.commonUI, this);
-        this.classEditor = new DatabaseClassEditor(databaseManager, { getCurrentProject: () => this.currentProject }, this.commonUI);
+        this.classEditor = new DatabaseClassEditor(databaseManager, { getCurrentProject: () => this.currentProject }, this.commonUI, this);
         this.skillEditor = new DatabaseSkillEditor(databaseManager, { getCurrentProject: () => this.currentProject }, this.commonUI, this);
         this.itemEditor = new DatabaseItemEditor(databaseManager, { getCurrentProject: () => this.currentProject }, this.commonUI, this);
         this.weaponEditor = new DatabaseWeaponEditor(databaseManager, { getCurrentProject: () => this.currentProject }, this.commonUI, this);
@@ -27,16 +30,35 @@ class DatabaseEditorUI {
         this.enemyEditor = new DatabaseEnemyEditor(databaseManager, { getCurrentProject: () => this.currentProject }, this.commonUI, this);
         this.stateEditor = new DatabaseStateEditor(databaseManager, { getCurrentProject: () => this.currentProject }, this.commonUI, this);
         this.animationEditor = new DatabaseAnimationEditor(databaseManager, { getCurrentProject: () => this.currentProject }, this.commonUI, this);
-        this.troopEditor = new DatabaseTroopEditor(databaseManager, { getCurrentProject: () => this.currentProject }, this.commonUI, this);
+        const eventProjectManager = {
+            getCurrentProject: () => this.currentProject,
+            getTilemapManager: () => callbacks.getTilemapManager ? callbacks.getTilemapManager() : null,
+            get tilemapManager() {
+                return callbacks.getTilemapManager ? callbacks.getTilemapManager() : null;
+            }
+        };
+        this.troopEditor = new DatabaseTroopEditor(databaseManager, eventProjectManager, this.commonUI, this);
         this.tilesetEditor = new DatabaseTilesetEditor(databaseManager, { getCurrentProject: () => this.currentProject }, this.commonUI, this);
-        this.system1Editor = new DatabaseSystem1Editor(databaseManager, { getCurrentProject: () => this.currentProject }, this.commonUI, this);
+        const system1ProjectManager = {
+            getCurrentProject: () => this.currentProject,
+            get tilemapManager() {
+                return callbacks.getTilemapManager ? callbacks.getTilemapManager() : null;
+            }
+        };
+        this.system1Editor = new DatabaseSystem1Editor(databaseManager, system1ProjectManager, this.commonUI, this);
         this.system2Editor = new DatabaseSystem2Editor(databaseManager, { getCurrentProject: () => this.currentProject }, this.commonUI, this);
-        this.commonEventEditor = new DatabaseCommonEventEditor(databaseManager, { getCurrentProject: () => this.currentProject }, this.commonUI, this);
+        this.commonEventEditor = new DatabaseCommonEventEditor(databaseManager, eventProjectManager, this.commonUI, this);
 
         if (typeof window !== 'undefined') {
             window.addEventListener('rr-language-changed', () => {
+                this.closeDatabaseActionMenu();
+                const activeType = document.querySelector('.database-nav-item.active')?.dataset.type;
                 this.setupDatabaseNavigation();
                 this.refreshDatabaseChrome();
+                if (document.getElementById('database-viewer')?.classList.contains('active')) {
+                    if (activeType === 'types') this.showTypesEditor();
+                    if (activeType === 'terms') this.showTermsEditor();
+                }
             });
         }
     }
@@ -75,6 +97,9 @@ class DatabaseEditorUI {
      */
     setCurrentProject(project) {
         this.currentProject = project;
+        this._detailGeneration++;
+        this._listGeneration++;
+        this._activeDatabaseList = null;
     }
 
     /**
@@ -86,12 +111,17 @@ class DatabaseEditorUI {
         }
     }
 
+    _markDatabaseMutation() {
+        if (!this.databaseManager) return;
+        this.databaseManager.mutationGeneration = (this.databaseManager.mutationGeneration || 0) + 1;
+    }
+
     cleanupDatabaseListChrome() {
         const listEl = document.getElementById('database-list');
         const parent = listEl?.parentNode;
         if (!parent) return;
 
-        parent.querySelectorAll('.database-search-container, .database-button-bar, .database-change-max-btn').forEach(el => el.remove());
+        parent.querySelectorAll('.database-search-container, .database-button-bar, .database-list-pager, .database-change-max-btn').forEach(el => el.remove());
 
         if (this._listKeyHandler) {
             document.removeEventListener('keydown', this._listKeyHandler);
@@ -149,6 +179,9 @@ class DatabaseEditorUI {
         // leak into the next session (the once-per-session guard in
         // takeDatabaseSnapshot would keep a stale one alive).
         this._dataSnapshot = null;
+        this._listGeneration++;
+        this._activeDatabaseList = null;
+        this.closeDatabaseActionMenu();
         const viewer = document.getElementById('database-viewer');
 
         if (this.animationEditor && this.animationEditor._currentEffekseerStop) {
@@ -177,7 +210,7 @@ class DatabaseEditorUI {
 
     revertDatabaseSnapshot() {
         if (this._dataSnapshot) {
-            Object.assign(this.databaseManager.data, this._dataSnapshot);
+            Object.assign(this.databaseManager.data, JSON.parse(this._dataSnapshot));
             if (this.currentProject?.maps) {
                 this.databaseManager.data.mapInfos = this.currentProject.maps;
             }
@@ -185,7 +218,7 @@ class DatabaseEditorUI {
         }
     }
 
-    takeDatabaseSnapshot() {
+    takeDatabaseSnapshot(force = false) {
         // Baseline for Cancel: capture once per viewer session. This runs on
         // every nav-category click, and retaking it there overwrote the
         // baseline with the already-edited state — Cancel then kept every
@@ -193,13 +226,14 @@ class DatabaseEditorUI {
         // those "cancelled" edits to disk. (Apply intentionally refreshes
         // the baseline by assigning _dataSnapshot directly after saving;
         // OK/close null it so the next open captures fresh.) It also
-        // deep-copies the ENTIRE database, so once per session is the only
-        // affordable cadence.
-        if (this._dataSnapshot) return;
-        this._dataSnapshot = JSON.parse(JSON.stringify(this.databaseManager.data));
+        // Store compact JSON rather than a second live object graph. This is
+        // especially important for Tilesets, where every entry has 8,192 flags.
+        if (this._dataSnapshot && !force) return;
+        this._dataSnapshot = JSON.stringify(this.databaseManager.data);
     }
 
     setupDatabaseControls() {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const closeBtn = document.getElementById('database-close-btn');
         const okBtn = document.getElementById('database-ok-btn');
         const cancelBtn = document.getElementById('database-cancel-btn');
@@ -219,7 +253,7 @@ class DatabaseEditorUI {
                 if (projectPath) {
                     const saved = await this.databaseManager.saveAllData(projectPath);
                     if (!saved) {
-                        alert('One or more database files could not be saved.');
+                        alert(tt('One or more database files could not be saved.'));
                         return;
                     }
                     this.updateStatus(this._t('db.saved'));
@@ -235,11 +269,11 @@ class DatabaseEditorUI {
                 if (projectPath) {
                     const saved = await this.databaseManager.saveAllData(projectPath);
                     if (!saved) {
-                        alert('One or more database files could not be saved.');
+                        alert(tt('One or more database files could not be saved.'));
                         return;
                     }
                     this.updateStatus(this._t('db.saved'));
-                    this._dataSnapshot = JSON.parse(JSON.stringify(this.databaseManager.data));
+                    this._dataSnapshot = JSON.stringify(this.databaseManager.data);
                     applyBtn.style.backgroundColor = 'var(--color-accent)';
                     applyBtn.style.color = 'var(--color-bg-deep)';
                     setTimeout(() => {
@@ -259,6 +293,9 @@ class DatabaseEditorUI {
             alert(this._t('alert.loadProjectFirst'));
             return;
         }
+        this._detailGeneration++;
+        this._listGeneration++;
+        this._activeDatabaseList = null;
 
         // Stop any playing animations when switching sections
         if (this.animationEditor && this.animationEditor._currentEffekseerStop) {
@@ -313,9 +350,9 @@ class DatabaseEditorUI {
                 title = this._dbTitle(type, 'Animations');
                 break;
             case 'tilesets':
-                // Tilesets use custom editor within modal
-                this.tilesetEditor.showTilesetEditor();
-                return;
+                data = this.databaseManager.getTilesets();
+                title = this._dbTitle(type, 'Tilesets');
+                break;
             case 'commonEvents':
                 data = this.databaseManager.getCommonEvents();
                 title = this._dbTitle(type, 'Common Events');
@@ -338,7 +375,7 @@ class DatabaseEditorUI {
                 return;
             }
             case 'types': {
-                this.prepareDatabaseSection('types', this._dbTitle('types', 'Types'));
+                this.prepareDatabaseSection('types', this._dbTitle('types', 'Types'), { showListPanel: false });
                 // Types editor uses System.json - delegate to callback
                 if (this.callbacks.showTypesEditor) {
                     this.callbacks.showTypesEditor();
@@ -346,7 +383,7 @@ class DatabaseEditorUI {
                 return;
             }
             case 'terms': {
-                this.prepareDatabaseSection('terms', this._dbTitle('terms', 'Terms'));
+                this.prepareDatabaseSection('terms', this._dbTitle('terms', 'Terms'), { showListPanel: false });
                 // Terms editor uses System.json - delegate to callback
                 if (this.callbacks.showTermsEditor) {
                     this.callbacks.showTermsEditor();
@@ -366,321 +403,368 @@ class DatabaseEditorUI {
      * Show the main database viewer with list and detail panels
      */
     showDatabaseViewer(title, data, type) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const viewer = document.getElementById('database-viewer');
         const navEl = document.getElementById('database-navigation');
         const titleEl = document.getElementById('database-viewer-title');
         const listEl = document.getElementById('database-list');
         const detailEl = document.getElementById('database-detail');
-
-        // Set up navigation if not already done
-        if (navEl && navEl.children.length === 0) {
-            this.setupDatabaseNavigation();
-        }
-
-        // Update active nav item
-        if (navEl) {
-            document.querySelectorAll('.database-nav-item').forEach(item => {
-                item.classList.remove('active');
-                if (item.dataset.type === type) {
-                    item.classList.add('active');
-                }
-            });
-        }
-
         const listPanelEl = document.getElementById('database-list-panel');
+        const batchSize = 250;
+        let filteredData = data;
+        let renderedCount = 0;
+        const selectedIds = new Set();
+        let selectionAnchorId = null;
+        let focusedId = null;
+
+        if (navEl && navEl.children.length === 0) this.setupDatabaseNavigation();
+        navEl?.querySelectorAll('.database-nav-item').forEach(item => {
+            item.classList.toggle('active', item.dataset.type === type);
+        });
 
         titleEl.textContent = title;
         listEl.innerHTML = '';
-        detailEl.style.flex = ''; // Reset detail flex
-        if (listPanelEl) {
-            listPanelEl.style.display = ''; // Reset list panel display
-        }
+        listEl.tabIndex = 0;
+        listEl.setAttribute('role', 'listbox');
+        listEl.setAttribute('aria-multiselectable', 'true');
+        detailEl.style.flex = '';
+        detailEl.style.display = '';
+        detailEl.style.flexDirection = '';
+        detailEl.style.overflow = '';
+        detailEl.style.overflowY = 'auto';
+        if (listPanelEl) listPanelEl.style.display = '';
         detailEl.innerHTML = this._selectEntryMarkup();
 
-        // Remove any existing button bar and search container first
-        const existingButtonBar = listEl.parentNode.querySelector('.database-button-bar');
-        if (existingButtonBar) {
-            existingButtonBar.remove();
-        }
-        const existingSearch = listEl.parentNode.querySelector('.database-search-container');
-        if (existingSearch) {
-            existingSearch.remove();
-        }
+        listEl.parentNode.querySelector('.database-button-bar')?.remove();
+        listEl.parentNode.querySelector('.database-search-container')?.remove();
+        listEl.parentNode.querySelector('.database-list-pager')?.remove();
+        listEl.parentNode.querySelector('.database-change-max-btn')?.remove();
 
-        // Add search bar before populating list
         const searchContainer = document.createElement('div');
         searchContainer.className = 'database-search-container';
         searchContainer.style.cssText = 'padding: 8px; background-color: var(--color-bg-menubar); border-bottom: 1px solid var(--color-border); flex-shrink: 0;';
-
         const searchInput = document.createElement('input');
         searchInput.type = 'text';
         searchInput.placeholder = this._t('db.search', { title });
-        searchInput.style.cssText = `
-            width: 100%;
-            padding: 6px 10px;
-            background-color: var(--color-bg-panel);
-            border: 1px solid var(--color-border-input);
-            border-radius: 3px;
-            color: var(--color-text);
-            font-size: 12px;
-            box-sizing: border-box;
-        `;
-
-        // Add focus/blur listeners for yellow-gold border
+        searchInput.style.cssText = 'width:100%;padding:6px 10px;background-color:var(--color-bg-panel);border:1px solid var(--color-border-input);border-radius:3px;color:var(--color-text);font-size:12px;box-sizing:border-box;';
         searchInput.addEventListener('focus', () => {
             searchInput.style.borderColor = 'var(--color-accent-border-strong)';
             searchInput.style.outline = 'none';
         });
-        searchInput.addEventListener('blur', () => {
-            searchInput.style.borderColor = 'var(--color-border-input)';
-        });
-
+        searchInput.addEventListener('blur', () => { searchInput.style.borderColor = 'var(--color-border-input)'; });
         searchContainer.appendChild(searchInput);
-
-        // Insert search bar before the list
         listEl.parentNode.insertBefore(searchContainer, listEl);
 
-        // Function to populate list with optional filter
-        const populateList = (filterText = '') => {
-            listEl.innerHTML = '';
-            const filteredData = filterText
-                ? data.filter(entry => {
-                    const name = (entry.name || this._t('common.unnamed')).toLowerCase();
-                    const id = String(entry.id || '');
-                    return name.includes(filterText.toLowerCase()) || id.includes(filterText);
-                })
-                : data;
+        const applySelection = () => {
+            listEl.querySelectorAll('.database-list-item').forEach(item => {
+                const selected = selectedIds.has(Number(item.dataset.entryId));
+                item.classList.toggle('selected', selected);
+                item.setAttribute('aria-selected', String(selected));
+            });
+        };
+        const getSelectedEntries = () => filteredData
+            .filter(entry => selectedIds.has(entry.id))
+            .map(entry => this.databaseManager.data[type]?.[entry.id] || entry);
+        const selectIds = (ids, focusId = null, showDetail = true) => {
+            selectedIds.clear();
+            ids.forEach(id => selectedIds.add(id));
+            focusedId = focusId ?? ids[0] ?? null;
+            selectionAnchorId = focusedId;
+            applySelection();
+            if (!showDetail) return;
+            const focusedEntry = data.find(entry => entry?.id === focusedId);
+            if (focusedEntry) this.showDatabaseDetail(focusedEntry, type);
+            else detailEl.innerHTML = this._selectEntryMarkup();
+        };
+        const selectRange = (toId) => {
+            const anchorIndex = filteredData.findIndex(entry => entry.id === selectionAnchorId);
+            const targetIndex = filteredData.findIndex(entry => entry.id === toId);
+            if (anchorIndex < 0 || targetIndex < 0) return;
+            selectedIds.clear();
+            const start = Math.min(anchorIndex, targetIndex);
+            const end = Math.max(anchorIndex, targetIndex);
+            filteredData.slice(start, end + 1).forEach(entry => selectedIds.add(entry.id));
+        };
 
-            filteredData.forEach((entry) => {
+        // Keep one continuous list, appending in batches for large databases.
+        const populateList = (filterText = '', append = false, options = {}) => {
+            const previousScrollTop = listEl.scrollTop;
+            const previousRenderedCount = renderedCount;
+            if (!append) {
+                listEl.innerHTML = '';
+                renderedCount = 0;
+                const query = filterText.toLowerCase();
+                filteredData = query ? data.filter(entry => {
+                    const name = (entry.name || this._t('common.unnamed')).toLowerCase();
+                    return name.includes(query) || String(entry.id || '').includes(query);
+                }) : data;
+                if (options.resetSelection) {
+                    selectedIds.clear();
+                    selectionAnchorId = null;
+                    focusedId = null;
+                }
+            }
+            let requiredIndex = focusedId === null ? -1 : filteredData.findIndex(entry => entry.id === focusedId);
+            const targetCount = !append && options.preserveScroll
+                ? Math.max(batchSize, previousRenderedCount, requiredIndex + 1)
+                : renderedCount + batchSize;
+            const end = Math.min(targetCount, filteredData.length);
+            const visibleData = filteredData.slice(renderedCount, end);
+
+            visibleData.forEach(entry => {
                 const item = document.createElement('div');
                 item.className = 'database-list-item';
-                item.dataset.entryId = String(entry.id || '');
+                item.dataset.entryId = String(entry.id);
                 item.dataset.entryName = entry.name || this._t('common.unnamed');
+                item.setAttribute('role', 'option');
+                item.setAttribute('aria-selected', String(selectedIds.has(entry.id)));
+                if (selectedIds.has(entry.id)) item.classList.add('selected');
 
                 const nameSpan = document.createElement('span');
                 nameSpan.className = 'database-list-name';
                 nameSpan.textContent = entry.name || this._t('common.unnamed');
-
                 const idSpan = document.createElement('span');
                 idSpan.className = 'database-list-id';
-                idSpan.textContent = `#${entry.id || '?'}`;
-
+                idSpan.textContent = `#${entry.id}`;
                 if (this.listIconTypes.includes(type)) {
                     const iconSpan = document.createElement('span');
                     iconSpan.className = 'database-list-icon';
                     this.applyListIcon(iconSpan, entry, type);
                     item.appendChild(iconSpan);
-                    nameSpan.style.flex = '1';
-                    nameSpan.style.minWidth = '0';
-                    nameSpan.style.overflow = 'hidden';
-                    nameSpan.style.textOverflow = 'ellipsis';
-                    nameSpan.style.whiteSpace = 'nowrap';
+                    nameSpan.style.cssText = 'flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
                 }
-
                 item.appendChild(nameSpan);
                 item.appendChild(idSpan);
 
-                item.addEventListener('click', () => {
-                    // Remove selection from all items
-                    document.querySelectorAll('.database-list-item').forEach(i => i.classList.remove('selected'));
-                    item.classList.add('selected');
-
-                    // Show detail
-                    this.showDatabaseDetail(entry, type);
+                item.addEventListener('click', event => {
+                    listEl.focus();
+                    if (event.shiftKey && selectionAnchorId !== null) {
+                        selectRange(entry.id);
+                    } else if (event.ctrlKey || event.metaKey) {
+                        if (selectedIds.has(entry.id)) selectedIds.delete(entry.id);
+                        else selectedIds.add(entry.id);
+                        selectionAnchorId = entry.id;
+                    } else {
+                        selectedIds.clear();
+                        selectedIds.add(entry.id);
+                        selectionAnchorId = entry.id;
+                    }
+                    focusedId = selectedIds.has(entry.id)
+                        ? entry.id
+                        : (getSelectedEntries().at(-1)?.id ?? null);
+                    applySelection();
+                    const focusedEntry = this.databaseManager.data[type]?.[focusedId];
+                    if (focusedEntry) this.showDatabaseDetail(focusedEntry, type);
+                    else detailEl.innerHTML = this._selectEntryMarkup();
                 });
-
-                // Right-click context menu
-                item.addEventListener('contextmenu', (e) => {
-                    e.preventDefault();
-                    // Select this item
-                    document.querySelectorAll('.database-list-item').forEach(i => i.classList.remove('selected'));
-                    item.classList.add('selected');
-                    this.showDatabaseDetail(entry, type);
-
-                    this.showListContextMenu(e.clientX, e.clientY, entry, data, type, populateList, searchInput, detailEl);
+                item.addEventListener('contextmenu', event => {
+                    event.preventDefault();
+                    listEl.focus();
+                    if (!selectedIds.has(entry.id)) {
+                        selectedIds.clear();
+                        selectedIds.add(entry.id);
+                        selectionAnchorId = entry.id;
+                    }
+                    focusedId = entry.id;
+                    applySelection();
+                    this.showDatabaseDetail(this.databaseManager.data[type]?.[entry.id] || entry, type);
+                    this.showListContextMenu(event.clientX, event.clientY, entry, data, type, populateList, searchInput, detailEl);
                 });
-
                 listEl.appendChild(item);
             });
+            renderedCount = end;
+            if (!append && options.preserveScroll) listEl.scrollTop = previousScrollTop;
         };
 
-        // Add/Delete button bar
+        const refreshData = () => {
+            data.length = 0;
+            this.databaseManager.data[type]?.forEach(entry => { if (entry) data.push(entry); });
+        };
+        const refreshList = () => populateList(searchInput.value, false, { preserveScroll: true });
+        const listSession = {
+            generation: this._listGeneration,
+            type,
+            data,
+            selectedIds,
+            mutationGeneration: 0,
+            get focusedId() { return focusedId; },
+            getSelectedEntries,
+            selectIds,
+            selectAll: () => selectIds(filteredData.map(entry => entry.id), focusedId, false),
+            refresh: () => { refreshData(); refreshList(); }
+        };
+        this._activeDatabaseList = listSession;
+
+        listEl.onscroll = () => {
+            const nearBottom = listEl.scrollTop + listEl.clientHeight >= listEl.scrollHeight - 160;
+            if (nearBottom && renderedCount < filteredData.length) populateList(searchInput.value, true);
+        };
+
+        const undoStack = [];
+        const snapshotForUndo = () => undoStack.push(JSON.parse(JSON.stringify(this.databaseManager.data[type])));
+        const performUndo = () => {
+            if (undoStack.length === 0) return;
+            listSession.mutationGeneration++;
+            this.databaseManager.data[type] = undoStack.pop();
+            this._markDatabaseMutation();
+            refreshData();
+            selectedIds.clear();
+            focusedId = null;
+            selectionAnchorId = null;
+            refreshList();
+            detailEl.innerHTML = this._selectEntryMarkup();
+            this.updateStatus(tt('Undo'));
+        };
+        this._snapshotForUndo = snapshotForUndo;
+
         const buttonBar = document.createElement('div');
         buttonBar.className = 'database-button-bar';
-        buttonBar.style.cssText = 'display: flex; gap: 4px; padding: 6px 8px; background-color: var(--color-bg-menubar); border-bottom: 1px solid var(--color-border); flex-shrink: 0;';
-
+        buttonBar.style.cssText = 'display:flex;gap:4px;padding:6px 8px;background-color:var(--color-bg-menubar);border-bottom:1px solid var(--color-border);flex-shrink:0;';
         const addBtn = document.createElement('button');
         addBtn.className = 'database-add-btn';
         addBtn.textContent = this._t('common.new');
-        addBtn.style.cssText = 'flex: 1; padding: 4px 8px; background-color: var(--color-bg-panel); color: var(--color-text); border: 1px solid var(--color-border-input); border-radius: 3px; cursor: pointer; font-size: 11px; transition: background-color 0.2s;';
-        addBtn.onmouseenter = () => { addBtn.style.backgroundColor = 'var(--color-accent-tint-25)'; };
-        addBtn.onmouseleave = () => { addBtn.style.backgroundColor = 'var(--color-bg-panel)'; };
+        addBtn.style.cssText = 'flex:1;padding:4px 8px;background-color:var(--color-bg-panel);color:var(--color-text);border:1px solid var(--color-border-input);border-radius:3px;cursor:pointer;font-size:11px;';
         addBtn.onclick = () => {
+            if (this.databaseManager.getMaxEntries(type) >= this.getDatabaseMaximum(type)) return;
             snapshotForUndo();
+            listSession.mutationGeneration++;
             const newEntry = this.addDatabaseEntry(type);
-            if (newEntry) {
-                data.push(newEntry);
-                populateList(searchInput.value);
-            }
+            if (!newEntry) return;
+            data.push(newEntry);
+            selectedIds.clear();
+            selectedIds.add(newEntry.id);
+            focusedId = newEntry.id;
+            selectionAnchorId = newEntry.id;
+            refreshList();
         };
-
         const deleteBtn = document.createElement('button');
         deleteBtn.className = 'database-delete-btn';
         deleteBtn.textContent = this._t('common.delete');
-        deleteBtn.style.cssText = 'flex: 1; padding: 4px 8px; background-color: var(--color-bg-panel); color: var(--color-text); border: 1px solid var(--color-border-input); border-radius: 3px; cursor: pointer; font-size: 11px; transition: background-color 0.2s;';
-        deleteBtn.onmouseenter = () => { deleteBtn.style.backgroundColor = 'rgba(255, 80, 80, 0.25)'; };
-        deleteBtn.onmouseleave = () => { deleteBtn.style.backgroundColor = 'var(--color-bg-panel)'; };
+        deleteBtn.style.cssText = addBtn.style.cssText;
         deleteBtn.onclick = () => {
-            const selectedItem = listEl.querySelector('.database-list-item.selected');
-            if (!selectedItem) { alert(this._t('db.selectEntryToDelete')); return; }
-            const entryName = selectedItem.dataset.entryName || 'this entry';
-            if (!confirm(this._t('db.deleteConfirm', { name: entryName }))) return;
-
-            const idText = selectedItem.querySelector('.database-list-id')?.textContent;
-            const entryId = idText ? parseInt(idText.replace('#', '')) : null;
-            if (entryId !== null) {
-                snapshotForUndo();
-                this.deleteDatabaseEntry(type, entryId);
-                const idx = data.findIndex(d => d && d.id === entryId);
-                if (idx >= 0) data.splice(idx, 1);
-                populateList(searchInput.value);
-                detailEl.innerHTML = this._selectEntryMarkup();
-            }
+            const entries = getSelectedEntries();
+            if (entries.length === 0) { alert(this._t('db.selectEntryToDelete')); return; }
+            const suffix = entries.length > 1 ? ` (+${entries.length - 1})` : '';
+            if (!confirm(this._t('db.deleteConfirm', { name: `${entries[0].name || tt('this entry')}${suffix}` }))) return;
+            snapshotForUndo();
+            listSession.mutationGeneration++;
+            entries.forEach(entry => this.deleteDatabaseEntry(type, entry.id));
+            refreshData();
+            selectedIds.clear();
+            focusedId = null;
+            selectionAnchorId = null;
+            refreshList();
+            detailEl.innerHTML = this._selectEntryMarkup();
         };
-
         buttonBar.appendChild(addBtn);
         buttonBar.appendChild(deleteBtn);
         listEl.parentNode.insertBefore(buttonBar, searchContainer);
 
-        // "Change Maximum" button at bottom of list panel
         const changeMaxBtn = document.createElement('button');
+        changeMaxBtn.className = 'database-change-max-btn';
         changeMaxBtn.textContent = this._t('db.changeMaximum');
-        changeMaxBtn.style.cssText = 'width: 100%; padding: 6px 8px; background-color: var(--color-bg-panel); color: var(--color-text); border: 1px solid var(--color-border-input); border-top: none; cursor: pointer; font-size: 11px; transition: background-color 0.2s; flex-shrink: 0;';
-        changeMaxBtn.onmouseenter = () => { changeMaxBtn.style.backgroundColor = 'var(--color-accent-tint-25)'; };
-        changeMaxBtn.onmouseleave = () => { changeMaxBtn.style.backgroundColor = 'var(--color-bg-panel)'; };
+        changeMaxBtn.title = `${tt('Max:')} ${this.getDatabaseMaximum(type)}`;
+        changeMaxBtn.style.cssText = 'width:100%;padding:6px 8px;background-color:var(--color-bg-panel);color:var(--color-text);border:1px solid var(--color-border-input);border-top:none;cursor:pointer;font-size:11px;flex-shrink:0;';
         changeMaxBtn.onclick = () => {
-            const currentMax = this.databaseManager.getMaxEntries(type);
-            this.showChangeMaximumModal(title, type, currentMax, (newMax) => {
-                const templates = this.getDefaultTemplates();
-                const template = templates[type];
+            this.showChangeMaximumModal(title, type, this.databaseManager.getMaxEntries(type), newMax => {
+                const template = this.getDefaultTemplates()[type];
                 if (!template) return;
-
+                listSession.mutationGeneration++;
                 this.databaseManager.changeMaximum(type, newMax, template);
-
-                // Refresh the list
-                const freshData = this.databaseManager.data[type].filter(e => e !== null);
-                data.length = 0;
-                freshData.forEach(e => data.push(e));
-                populateList(searchInput.value);
+                refreshData();
+                selectedIds.clear();
+                refreshList();
                 detailEl.innerHTML = this._selectEntryMarkup();
                 this.updateStatus(this._t('db.maximumChanged', { title, max: newMax }));
             });
         };
-
-        // Remove any existing change max button
-        const existingMaxBtn = listEl.parentNode.querySelector('.database-change-max-btn');
-        if (existingMaxBtn) existingMaxBtn.remove();
-        changeMaxBtn.className = 'database-change-max-btn';
         listEl.parentNode.appendChild(changeMaxBtn);
 
-        // Populate initial list
-        populateList();
-
-        // Add search input listener
-        searchInput.addEventListener('input', (e) => {
-            populateList(e.target.value);
+        searchInput.addEventListener('input', event => {
+            populateList(event.target.value, false, { resetSelection: true });
+            listEl.scrollTop = 0;
+            detailEl.innerHTML = this._selectEntryMarkup();
         });
 
-        // Undo stack for this viewer session
-        const undoStack = [];
-        const snapshotForUndo = () => {
-            undoStack.push(JSON.parse(JSON.stringify(this.databaseManager.data[type])));
-        };
-        const performUndo = () => {
-            if (undoStack.length === 0) return;
-            this.databaseManager.data[type] = undoStack.pop();
-            data.length = 0;
-            this.databaseManager.data[type].forEach(e => { if (e) data.push(e); });
-            populateList(searchInput.value);
-            detailEl.innerHTML = this._selectEntryMarkup();
-            this.updateStatus('Undo');
-        };
-        // Store snapshot function so operation methods can call it
-        this._snapshotForUndo = snapshotForUndo;
-
-        // Remove previous keyboard handler if navigating between categories
-        if (this._listKeyHandler) {
-            document.removeEventListener('keydown', this._listKeyHandler);
-        }
-
-        // Keyboard shortcuts for list operations
-        const getSelectedEntry = () => {
-            const selectedItem = listEl.querySelector('.database-list-item.selected');
-            if (!selectedItem) return null;
-            const idText = selectedItem.querySelector('.database-list-id')?.textContent;
-            const entryId = idText ? parseInt(idText.replace('#', '')) : null;
-            return entryId !== null ? data.find(d => d && d.id === entryId) : null;
-        };
-
-        const listKeyHandler = (e) => {
-            // Only when database viewer is active and not typing in an input
-            if (!viewer.classList.contains('active')) return;
+        if (this._listKeyHandler) document.removeEventListener('keydown', this._listKeyHandler);
+        const getSelectedEntry = () => data.find(entry => entry?.id === focusedId) || getSelectedEntries()[0] || null;
+        const listKeyHandler = event => {
+            if (!viewer.classList.contains('active') || this._activeDatabaseList !== listSession) return;
             const tag = document.activeElement?.tagName;
-            if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
-
-            // Delete key (no modifier needed)
-            if (e.key === 'Delete') {
-                const entry = getSelectedEntry();
-                if (!entry) return;
-                e.preventDefault();
+            if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || document.activeElement?.isContentEditable) return;
+            const key = event.key.toLowerCase();
+            if (key === 'arrowup' || key === 'arrowdown') {
+                if (filteredData.length === 0) return;
+                event.preventDefault();
+                const currentIndex = filteredData.findIndex(entry => entry.id === focusedId);
+                const delta = key === 'arrowup' ? -1 : 1;
+                const nextIndex = currentIndex < 0
+                    ? (delta > 0 ? 0 : filteredData.length - 1)
+                    : Math.max(0, Math.min(filteredData.length - 1, currentIndex + delta));
+                const next = filteredData[nextIndex];
+                if (event.shiftKey && selectionAnchorId !== null) {
+                    selectRange(next.id);
+                    focusedId = next.id;
+                    applySelection();
+                    this.showDatabaseDetail(next, type);
+                } else {
+                    selectIds([next.id], next.id);
+                }
+                listEl.querySelector(`[data-entry-id="${next.id}"]`)?.scrollIntoView({ block: 'nearest' });
+                return;
+            }
+            if (event.key === 'Delete') {
+                const entries = getSelectedEntries();
+                if (entries.length === 0) return;
+                event.preventDefault();
                 snapshotForUndo();
+                listSession.mutationGeneration++;
                 const template = this.getDefaultTemplates()[type];
-                if (template) {
+                entries.forEach(entry => {
                     const blank = { ...JSON.parse(JSON.stringify(template)), id: entry.id, name: '' };
                     this.databaseManager.data[type][entry.id] = blank;
-                    const idx = data.findIndex(d => d && d.id === entry.id);
-                    if (idx >= 0) data[idx] = blank;
-                }
-                populateList(searchInput.value);
+                });
+                this._markDatabaseMutation();
+                refreshData();
+                refreshList();
                 detailEl.innerHTML = this._selectEntryMarkup();
                 this.updateStatus(this._t('db.entryCleared'));
                 return;
             }
-
-            if (!e.ctrlKey && !e.metaKey) return;
-
-            if (e.key === 'z') {
-                e.preventDefault();
+            if (!event.ctrlKey && !event.metaKey) return;
+            if (key === 'z') {
+                event.preventDefault();
                 performUndo();
-            } else if (e.key === 'c') {
+            } else if (key === 'a') {
+                event.preventDefault();
+                listSession.selectAll();
+            } else if (key === 'c') {
+                const entries = getSelectedEntries();
+                if (entries.length === 0) return;
+                event.preventDefault();
+                this.copyListEntries(entries, type);
+            } else if (key === 'x') {
+                const entries = getSelectedEntries();
+                if (entries.length === 0) return;
+                event.preventDefault();
+                this.cutListEntries(entries, data, type, populateList, searchInput, detailEl);
+            } else if (key === 'v') {
                 const entry = getSelectedEntry();
                 if (!entry) return;
-                e.preventDefault();
-                this.copyListEntry(entry, type);
-            } else if (e.key === 'x') {
+                event.preventDefault();
+                this.pasteListEntries(entry, data, type, populateList, searchInput, detailEl);
+            } else if (key === 'd') {
                 const entry = getSelectedEntry();
                 if (!entry) return;
-                e.preventDefault();
-                this.cutListEntry(entry, data, type, populateList, searchInput, detailEl);
-            } else if (e.key === 'v') {
-                const entry = getSelectedEntry();
-                if (!entry || !this.listClipboard || this.listClipboard.type !== type) return;
-                e.preventDefault();
-                this.pasteListEntry(entry, data, type, populateList, searchInput, detailEl);
-            } else if (e.key === 'd') {
-                const entry = getSelectedEntry();
-                if (!entry) return;
-                e.preventDefault();
+                event.preventDefault();
                 this.duplicateListEntry(entry, data, type, populateList, searchInput);
             }
         };
         this._listKeyHandler = listKeyHandler;
         document.addEventListener('keydown', listKeyHandler);
 
-        // Show viewer
+        populateList();
         viewer.classList.add('active');
-
-        // Take snapshot of database data for Cancel/revert
         this.takeDatabaseSnapshot();
         this.setupDatabaseControls();
     }
@@ -700,13 +784,18 @@ class DatabaseEditorUI {
             min-width: 160px; box-shadow: 0 2px 8px rgba(0,0,0,0.5);
         `;
 
-        const canPaste = this.listClipboard && this.listClipboard.type === type;
-
+        const selectedEntries = this._activeDatabaseList?.type === type
+            ? this._activeDatabaseList.getSelectedEntries()
+            : [entry];
         const items = [
-            { label: this._t('common.copy'), action: () => this.copyListEntry(entry, type), enabled: true },
-            { label: this._t('common.cut'), action: () => this.cutListEntry(entry, data, type, populateList, searchInput, detailEl), enabled: true },
-            { label: this._t('common.paste'), action: () => this.pasteListEntry(entry, data, type, populateList, searchInput, detailEl), enabled: canPaste },
+            { label: this._t('common.copy'), action: () => this.copyListEntries(selectedEntries, type), enabled: true },
+            { label: this._t('common.cut'), action: () => this.cutListEntries(selectedEntries, data, type, populateList, searchInput, detailEl), enabled: true },
+            { label: this._t('common.paste'), action: () => this.pasteListEntries(entry, data, type, populateList, searchInput, detailEl), enabled: true },
             { label: this._t('common.duplicate'), action: () => this.duplicateListEntry(entry, data, type, populateList, searchInput), enabled: true },
+            { label: window.I18n ? window.I18n.tText('Select All') : 'Select All', action: () => {
+                const session = this._activeDatabaseList;
+                if (session?.type === type) session.selectAll();
+            }, enabled: true },
         ];
 
         items.forEach(item => {
@@ -734,64 +823,283 @@ class DatabaseEditorUI {
         setTimeout(() => document.addEventListener('mousedown', closeMenu), 50);
     }
 
+    showDatabaseActionMenu(x, y, items) {
+        this.closeDatabaseActionMenu();
+        const menu = document.createElement('div');
+        menu.className = 'rr-database-action-menu';
+        menu.style.left = `${x}px`;
+        menu.style.top = `${y}px`;
+
+        items.forEach(item => {
+            if (item.separator) {
+                const separator = document.createElement('div');
+                separator.className = 'rr-database-action-separator';
+                menu.appendChild(separator);
+                return;
+            }
+
+            const enabled = item.enabled !== false;
+            const row = document.createElement('button');
+            row.type = 'button';
+            row.className = 'rr-database-action-item';
+            row.disabled = !enabled;
+            row.innerHTML = `<span>${rrEscapeHtml(item.label)}</span><kbd>${rrEscapeHtml(item.shortcut || '')}</kbd>`;
+            if (enabled) {
+                row.addEventListener('click', () => {
+                    this.closeDatabaseActionMenu();
+                    item.action?.();
+                });
+            }
+            menu.appendChild(row);
+        });
+
+        document.body.appendChild(menu);
+        const rect = menu.getBoundingClientRect();
+        if (rect.right > window.innerWidth) menu.style.left = `${Math.max(4, window.innerWidth - rect.width - 4)}px`;
+        if (rect.bottom > window.innerHeight) menu.style.top = `${Math.max(4, window.innerHeight - rect.height - 4)}px`;
+
+        const close = event => {
+            if (!menu.contains(event.target)) {
+                this.closeDatabaseActionMenu();
+            }
+        };
+        const closeOnEscape = event => {
+            if (event.key === 'Escape') this.closeDatabaseActionMenu();
+        };
+        this._databaseActionMenu = menu;
+        this._databaseActionMenuClose = close;
+        this._databaseActionMenuEscape = closeOnEscape;
+        document.addEventListener('pointerdown', close, true);
+        document.addEventListener('keydown', closeOnEscape, true);
+    }
+
+    closeDatabaseActionMenu() {
+        this._databaseActionMenu?.remove();
+        if (this._databaseActionMenuClose) document.removeEventListener('pointerdown', this._databaseActionMenuClose, true);
+        if (this._databaseActionMenuEscape) document.removeEventListener('keydown', this._databaseActionMenuEscape, true);
+        this._databaseActionMenu = null;
+        this._databaseActionMenuClose = null;
+        this._databaseActionMenuEscape = null;
+    }
+
+    attachTextFieldContextMenu(input) {
+        if (!input || input.dataset.rrContextMenu === 'true') return;
+        input.dataset.rrContextMenu = 'true';
+        input.addEventListener('contextmenu', event => {
+            const tt = text => window.I18n ? window.I18n.tText(text) : text;
+            event.preventDefault();
+            event.stopPropagation();
+            input.focus();
+            const selectionStart = input.selectionStart ?? 0;
+            const selectionEnd = input.selectionEnd ?? selectionStart;
+            const originalValue = input.value;
+            const hasSelection = selectionEnd > selectionStart;
+            const replaceSelection = text => {
+                if (input.value !== originalValue || input.selectionStart !== selectionStart || input.selectionEnd !== selectionEnd) return;
+                input.setRangeText(text, selectionStart, selectionEnd, 'end');
+                input.dispatchEvent(new Event('input', { bubbles: true }));
+            };
+            this.showDatabaseActionMenu(event.clientX, event.clientY, [
+                { label: this._t('common.cut'), shortcut: 'Ctrl+X', enabled: hasSelection, action: () => {
+                    this.writePlainClipboardText(input.value.slice(selectionStart, selectionEnd));
+                    input.setRangeText('', selectionStart, selectionEnd, 'end');
+                    input.dispatchEvent(new Event('input', { bubbles: true }));
+                }},
+                { label: this._t('common.copy'), shortcut: 'Ctrl+C', enabled: hasSelection, action: () => this.writePlainClipboardText(input.value.slice(selectionStart, selectionEnd)) },
+                { label: this._t('common.paste'), shortcut: 'Ctrl+V', action: async () => {
+                    const workspace = input.closest('.rr-types-workspace, .rr-terms-workspace');
+                    const text = await this.readPlainClipboardText();
+                    const viewer = document.getElementById('database-viewer');
+                    const detail = document.getElementById('database-detail');
+                    if (input.isConnected && viewer?.classList.contains('active') && workspace && detail?.contains(workspace)) {
+                        replaceSelection(text);
+                    }
+                }},
+                { separator: true },
+                { label: tt('Select All'), shortcut: 'Ctrl+A', enabled: input.value.length > 0, action: () => input.select() }
+            ]);
+        });
+    }
+
+    writeDatabaseEntryClipboard(type, entries) {
+        const sourceEntries = Array.isArray(entries) ? entries : [entries];
+        const copiedEntries = sourceEntries.map(entry => {
+            const copied = JSON.parse(JSON.stringify(entry));
+            delete copied.id;
+            return copied;
+        });
+        this.listClipboard = { type, entries: copiedEntries, entry: copiedEntries[0] || null };
+        let writePromise = Promise.resolve(true);
+        if (typeof ReactorClipboard !== 'undefined') {
+            writePromise = Promise.resolve(ReactorClipboard.write('databaseEntry', {
+                version: 2,
+                databaseType: type,
+                entries: copiedEntries,
+                entry: copiedEntries[0] || null,
+                sourceProjectName: this.currentProject?.name || null,
+                sourceProjectPath: this.currentProject?.path || null
+            }));
+        }
+        Object.defineProperty(this.listClipboard, '_writePromise', { value: writePromise });
+        return sourceEntries.length === 1 ? copiedEntries[0] : copiedEntries;
+    }
+
+    async readDatabaseEntryClipboard(type) {
+        if (typeof ReactorClipboard !== 'undefined') {
+            const clipboardData = await ReactorClipboard.read('databaseEntry');
+            const payload = clipboardData?.payload;
+            const payloadEntries = Array.isArray(payload?.entries) ? payload.entries : payload?.entry ? [payload.entry] : [];
+            if (!payload || payload.databaseType !== type || payloadEntries.length === 0) return null;
+            const entries = payloadEntries.map(sourceEntry => {
+                const entry = JSON.parse(JSON.stringify(sourceEntry));
+                delete entry.id;
+                return entry;
+            });
+            this.listClipboard = { type, entries, entry: entries[0] };
+            return this.listClipboard;
+        }
+
+        return this.listClipboard?.type === type ? this.listClipboard : null;
+    }
+
     copyListEntry(entry, type) {
-        const copied = JSON.parse(JSON.stringify(entry));
-        delete copied.id;
-        this.listClipboard = { type, entry: copied };
+        this.copyListEntries([entry], type);
+    }
+
+    copyListEntries(entries, type) {
+        if (!entries?.length) return;
+        this.writeDatabaseEntryClipboard(type, entries);
         this.updateStatus(this._t('db.entryCopied'));
     }
 
     cutListEntry(entry, data, type, populateList, searchInput, detailEl) {
+        return this.cutListEntries([entry], data, type, populateList, searchInput, detailEl);
+    }
+
+    async cutListEntries(entries, data, type, populateList, searchInput, detailEl) {
+        if (!entries?.length) return;
+        const session = this._activeDatabaseList;
+        const mutationGeneration = session?.mutationGeneration;
+        const selectedIds = session ? [...session.selectedIds] : null;
+        const focusedId = session?.focusedId;
+        const listGeneration = this._listGeneration;
+        const project = this.currentProject;
+        const databaseGeneration = this.databaseManager.dataGeneration;
+        const databaseMutationGeneration = this.databaseManager.mutationGeneration;
+        const targetArray = this.databaseManager.data[type];
+        const slots = entries.map(entry => ({
+            id: entry.id,
+            value: targetArray?.[entry.id],
+            snapshot: JSON.stringify(targetArray?.[entry.id])
+        }));
+        this.writeDatabaseEntryClipboard(type, entries);
+        if (!await (this.listClipboard?._writePromise || true)) {
+            alert(this._t('db.clipboardWriteFailed'));
+            return;
+        }
+        if (this._listGeneration !== listGeneration || this.currentProject !== project
+            || this.databaseManager.dataGeneration !== databaseGeneration
+            || this.databaseManager.mutationGeneration !== databaseMutationGeneration
+            || this.databaseManager.data[type] !== targetArray
+            || (session && this._activeDatabaseList !== session)
+            || (session && session.mutationGeneration !== mutationGeneration)
+            || (session && (selectedIds.length !== session.selectedIds.size
+                || selectedIds.some(id => !session.selectedIds.has(id))))
+            || (session && session.focusedId !== focusedId)
+            || slots.some(slot => targetArray?.[slot.id] !== slot.value
+                || JSON.stringify(slot.value) !== slot.snapshot)) return;
+
         if (this._snapshotForUndo) this._snapshotForUndo();
-
-        // Copy data to clipboard (without name change)
-        const copied = JSON.parse(JSON.stringify(entry));
-        delete copied.id;
-        this.listClipboard = { type, entry: copied };
-
-        // Replace source slot with blank template, keeping the ID
+        if (session) session.mutationGeneration++;
         const template = this.getDefaultTemplates()[type];
         if (template) {
-            const blank = { ...JSON.parse(JSON.stringify(template)), id: entry.id, name: '' };
-            this.databaseManager.data[type][entry.id] = blank;
-
-            const idx = data.findIndex(d => d && d.id === entry.id);
-            if (idx >= 0) data[idx] = blank;
+            entries.forEach(entry => {
+                const blank = { ...JSON.parse(JSON.stringify(template)), id: entry.id, name: '' };
+                this.databaseManager.data[type][entry.id] = blank;
+                const idx = data.findIndex(candidate => candidate?.id === entry.id);
+                if (idx >= 0) data[idx] = blank;
+            });
+            this._markDatabaseMutation();
         }
-
-        populateList(searchInput.value);
+        if (session?.type === type) session.selectIds(entries.map(entry => entry.id), entries[0].id, false);
+        populateList(searchInput.value, false, { preserveScroll: true });
         detailEl.innerHTML = this._selectEntryMarkup();
         this.updateStatus(this._t('db.entryCut'));
     }
 
-    pasteListEntry(targetEntry, data, type, populateList, searchInput, detailEl) {
-        if (!this.listClipboard || this.listClipboard.type !== type) return;
+    async pasteListEntry(targetEntry, data, type, populateList, searchInput, detailEl) {
+        return this.pasteListEntries(targetEntry, data, type, populateList, searchInput, detailEl);
+    }
+
+    async pasteListEntries(targetEntry, data, type, populateList, searchInput, detailEl) {
         if (!targetEntry) return;
+        const targetId = targetEntry.id;
+        const session = this._activeDatabaseList;
+        const mutationGeneration = session?.mutationGeneration;
+        const selectedIds = session ? [...session.selectedIds] : null;
+        const focusedId = session?.focusedId;
+        const listGeneration = this._listGeneration;
+        const project = this.currentProject;
+        const databaseGeneration = this.databaseManager.dataGeneration;
+        const databaseMutationGeneration = this.databaseManager.mutationGeneration;
+        const targetArray = this.databaseManager.data[type];
+        const targetSlot = targetArray?.[targetId];
+        const targetSnapshot = JSON.stringify(targetSlot);
+        const clipboard = await this.readDatabaseEntryClipboard(type);
+        const stale = this._listGeneration !== listGeneration || this.currentProject !== project
+            || this.databaseManager.dataGeneration !== databaseGeneration
+            || this.databaseManager.mutationGeneration !== databaseMutationGeneration
+            || this.databaseManager.data[type] !== targetArray
+            || targetArray[targetId] !== targetSlot
+            || JSON.stringify(targetSlot) !== targetSnapshot
+            || (session && this._activeDatabaseList !== session)
+            || (session && session.mutationGeneration !== mutationGeneration)
+            || (session && (selectedIds.length !== session.selectedIds.size
+                || selectedIds.some(id => !session.selectedIds.has(id)))
+            || (session && session.focusedId !== focusedId));
+        if (stale) return;
+        if (!clipboard) {
+            alert(this._t('db.noCompatibleClipboard'));
+            return;
+        }
+        const copiedEntries = clipboard.entries || (clipboard.entry ? [clipboard.entry] : []);
+        const lastId = targetId + copiedEntries.length - 1;
+        if (lastId >= targetArray.length) {
+            alert(this._t('db.noCompatibleClipboard'));
+            return;
+        }
         if (this._snapshotForUndo) this._snapshotForUndo();
+        if (session) session.mutationGeneration++;
 
-        // Overwrite target slot with clipboard data, keeping the target's ID
-        const pasted = JSON.parse(JSON.stringify(this.listClipboard.entry));
-        pasted.id = targetEntry.id;
-
-        this.databaseManager.data[type][targetEntry.id] = pasted;
-
-        const idx = data.findIndex(d => d && d.id === targetEntry.id);
-        if (idx >= 0) data[idx] = pasted;
-
-        populateList(searchInput.value);
-        this.showDatabaseDetail(pasted, type);
+        const pastedEntries = copiedEntries.map((sourceEntry, index) => {
+            const pasted = JSON.parse(JSON.stringify(sourceEntry));
+            pasted.id = targetId + index;
+            targetArray[pasted.id] = pasted;
+            return pasted;
+        });
+        this._markDatabaseMutation();
+        data.length = 0;
+        targetArray.forEach(entry => { if (entry) data.push(entry); });
+        if (session?.type === type) session.selectIds(pastedEntries.map(entry => entry.id), pastedEntries[0].id, false);
+        populateList(searchInput.value, false, { preserveScroll: true });
+        this.showDatabaseDetail(pastedEntries[0], type);
         this.updateStatus(this._t('db.entryPasted'));
+        return pastedEntries;
     }
 
     duplicateListEntry(entry, data, type, populateList, searchInput) {
         if (this._snapshotForUndo) this._snapshotForUndo();
+        if (this._activeDatabaseList?.type === type) this._activeDatabaseList.mutationGeneration++;
         const cloned = JSON.parse(JSON.stringify(entry));
         delete cloned.id;
         cloned.name = (cloned.name || this._t('common.unnamed')) + ` (${this._t('common.copy')})`;
         const newEntry = this.databaseManager.addEntry(type, cloned);
         if (newEntry) {
             data.push(newEntry);
-            populateList(searchInput.value);
+            if (this._activeDatabaseList?.type === type) {
+                this._activeDatabaseList.selectIds([newEntry.id], newEntry.id, false);
+            }
+            populateList(searchInput.value, false, { preserveScroll: true });
             this.updateStatus(this._t('db.entryDuplicated'));
         }
     }
@@ -803,6 +1111,7 @@ class DatabaseEditorUI {
         const navEl = document.getElementById('database-navigation');
         if (!navEl) return;
 
+        const activeType = navEl.querySelector('.database-nav-item.active')?.dataset.type;
         navEl.innerHTML = '';
 
         const categories = [
@@ -827,6 +1136,7 @@ class DatabaseEditorUI {
         categories.forEach(category => {
             const item = document.createElement('div');
             item.className = 'database-nav-item';
+            if (category.type === activeType) item.classList.add('active');
             item.textContent = this._dbTitle(category.type, category.name);
             item.dataset.type = category.type;
             item.dataset.fallbackName = category.name;
@@ -843,6 +1153,7 @@ class DatabaseEditorUI {
      * Show detail view for a specific database entry
      */
     showDatabaseDetail(entry, type) {
+        this._detailGeneration++;
         const detailEl = document.getElementById('database-detail');
         detailEl.innerHTML = '';
 
@@ -866,7 +1177,7 @@ class DatabaseEditorUI {
         } else if (type === 'states') {
             this.stateEditor.showStateDetail(detailEl, entry);
         } else if (type === 'tilesets') {
-            this.tilesetEditor.showTilesetDetail(detailEl, entry);
+            this.tilesetEditor.showTilesetEditorDetail(detailEl, entry);
         } else if (type === 'animations') {
             this.animationEditor.showAnimationDetail(detailEl, entry);
         } else if (type === 'commonEvents') {
@@ -928,7 +1239,7 @@ class DatabaseEditorUI {
             const url = `url("${imageUrl(battlerPath)}")`;
             if (battlerDir === 'characters') {
                 // Charset-style battler: crop the front-facing idle frame
-                const isSingle = /^[!$]*\$/.test(entry.battlerName);
+                const isSingle = RRAssetFiles.isBigCharacter(entry.battlerName);
                 const img = new Image();
                 img.onload = () => {
                     const cols = isSingle ? 3 : 12;
@@ -995,7 +1306,7 @@ class DatabaseEditorUI {
     getDefaultTemplates() {
         return {
             actors: { name: 'New Actor', nickname: '', classId: 1, initialLevel: 1, maxLevel: 99, profile: '', characterName: '', characterIndex: 0, faceName: '', faceIndex: 0, battlerName: '', equips: [0,0,0,0,0], traits: [], note: '' },
-            classes: { name: 'New Class', expParams: [30,20,30,30], params: [[1],[1],[1],[1],[1],[1],[1],[1]], learnings: [], traits: [], note: '' },
+            classes: { name: 'New Class', expParams: [30,20,30,30], params: Array.from({ length: 8 }, () => [1, 1]), learnings: [], traits: [], note: '' },
             skills: { name: 'New Skill', iconIndex: 0, description: '', stypeId: 1, scope: 1, occasion: 1, mpCost: 0, tpCost: 0, tpGain: 0, hitType: 0, animationId: 0, speed: 0, successRate: 100, repeats: 1, message1: '', message2: '', message3: '', message4: '', damage: { type: 0, elementId: -1, formula: '0', variance: 20, critical: false }, effects: [], note: '' },
             items: { name: 'New Item', iconIndex: 0, description: '', itypeId: 1, price: 0, consumable: true, scope: 0, occasion: 0, speed: 0, successRate: 100, repeats: 1, hitType: 0, animationId: 0, damage: { type: 0, elementId: -1, formula: '0', variance: 20, critical: false }, effects: [], note: '' },
             weapons: { name: 'New Weapon', iconIndex: 0, description: '', wtypeId: 1, price: 0, params: [0,0,0,0,0,0,0,0], traits: [], animationId: 0, note: '' },
@@ -1007,6 +1318,18 @@ class DatabaseEditorUI {
             tilesets: { name: 'New Tileset', mode: 0, tilesetNames: ['', '', '', '', '', '', '', '', ''], flags: new Array(8192).fill(0), note: '' },
             commonEvents: { name: 'New Common Event', trigger: 0, switchId: 1, list: [{code:0,indent:0,parameters:[]}] }
         };
+    }
+
+    getDatabaseMaximum(type) {
+        const managerMaximum = this.databaseManager?.getMaximumEntries?.(type);
+        if (managerMaximum) return managerMaximum;
+        return globalThis.RR_LIMITS?.DATABASE_ENTRIES?.[type] || {
+            actors: 9999, classes: 9999, skills: 9999, items: 9999,
+            weapons: 9999, armors: 9999, enemies: 9999, troops: 9999,
+            states: 9999, animations: 1000, tilesets: 1000, commonEvents: 9999,
+            elements: 512, skillTypes: 128, weaponTypes: 256,
+            armorTypes: 256, equipTypes: 128
+        }[type] || 0;
     }
 
     /**
@@ -1029,13 +1352,16 @@ class DatabaseEditorUI {
      * Show generic detail for database types without specialized editors
      */
     showGenericDetail(container, entry, type) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const wrapper = document.createElement('div');
         wrapper.style.padding = '16px';
 
-        wrapper.innerHTML = `
-            <h3>${entry.name || 'Entry #' + entry.id}</h3>
-            <pre style="background: var(--color-bg-surface); padding: 16px; border-radius: 4px; overflow: auto; max-height: 600px;">${JSON.stringify(entry, null, 2)}</pre>
-        `;
+        const heading = document.createElement('h3');
+        heading.textContent = entry.name || tt('Entry') + ' #' + entry.id;
+        const data = document.createElement('pre');
+        data.style.cssText = 'background: var(--color-bg-surface); padding: 16px; border-radius: 4px; overflow: auto; max-height: 600px;';
+        data.textContent = JSON.stringify(entry, null, 2);
+        wrapper.append(heading, data);
 
         container.appendChild(wrapper);
     }
@@ -1194,6 +1520,7 @@ class DatabaseEditorUI {
     // Note: The animation detail methods are very long - I'll include the key parts
     // Continue in next part due to length...
     addDatabasePreview(container, entry, type) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const preview = document.createElement('div');
         preview.className = 'database-preview';
 
@@ -1207,7 +1534,7 @@ class DatabaseEditorUI {
             characterBox.className = 'graphic-preview-box';
 
             const charLabel = document.createElement('div');
-            charLabel.textContent = 'Character Sprite';
+            charLabel.textContent = tt('Character Sprite');
             charLabel.className = 'graphic-preview-label';
             characterBox.appendChild(charLabel);
 
@@ -1236,7 +1563,7 @@ class DatabaseEditorUI {
 
                 img.onload = () => {
                 // Check if this is a big character ($ or !$ prefix)
-                const isBigCharacter = entry.characterName.startsWith('$') || entry.characterName.startsWith('!$');
+                const isBigCharacter = RRAssetFiles.isBigCharacter(entry.characterName);
 
                 let characterWidth, characterHeight, col, row;
 
@@ -1304,7 +1631,16 @@ class DatabaseEditorUI {
                     currentFrame = (currentFrame + 1) % cachedFrames.length;
                 };
 
-                setInterval(animate, 125);
+                // Self-stop when the detail view is rebuilt — the untracked
+                // interval otherwise ticks forever, pinning the cached frame
+                // canvases for every actor ever viewed.
+                const walkInterval = setInterval(() => {
+                    if (!canvas.isConnected) {
+                        clearInterval(walkInterval);
+                        return;
+                    }
+                    animate();
+                }, 125);
                 animate();
             };
             img.onerror = (e) => {
@@ -1313,7 +1649,7 @@ class DatabaseEditorUI {
                 const errorMsg = document.createElement('span');
                 errorMsg.style.color = 'var(--color-text-muted)';
                 errorMsg.style.fontSize = '11px';
-                errorMsg.textContent = 'Image not found';
+                errorMsg.textContent = tt('Image not found');
                 charCanvasContainer.appendChild(errorMsg);
             };
             img.src = imgPath;
@@ -1321,7 +1657,7 @@ class DatabaseEditorUI {
                 const noImageMsg = document.createElement('span');
                 noImageMsg.style.color = 'var(--color-text-muted)';
                 noImageMsg.style.fontSize = '11px';
-                noImageMsg.textContent = 'No image set';
+                noImageMsg.textContent = tt('No image set');
                 charCanvasContainer.appendChild(noImageMsg);
             }
 
@@ -1329,7 +1665,7 @@ class DatabaseEditorUI {
 
             // Add change character button
             const charButton = document.createElement('button');
-            charButton.textContent = 'Change Sprite';
+            charButton.textContent = tt('Change Sprite');
             charButton.className = 'graphic-selector-button';
             charButton.onclick = () => this.selectCharacterImage(entry);
             characterBox.appendChild(charButton);
@@ -1341,7 +1677,7 @@ class DatabaseEditorUI {
             faceBox.className = 'graphic-preview-box';
 
             const faceLabel = document.createElement('div');
-            faceLabel.textContent = 'Face Graphic';
+            faceLabel.textContent = tt('Face Graphic');
             faceLabel.className = 'graphic-preview-label';
             faceBox.appendChild(faceLabel);
 
@@ -1388,7 +1724,7 @@ class DatabaseEditorUI {
                     const errorMsg = document.createElement('span');
                     errorMsg.style.color = 'var(--color-text-muted)';
                     errorMsg.style.fontSize = '11px';
-                    errorMsg.textContent = 'Image not found';
+                    errorMsg.textContent = tt('Image not found');
                     faceCanvasContainer.appendChild(errorMsg);
                 };
                 faceImg.src = faceImgPath;
@@ -1396,7 +1732,7 @@ class DatabaseEditorUI {
                 const noFaceMsg = document.createElement('span');
                 noFaceMsg.style.color = 'var(--color-text-muted)';
                 noFaceMsg.style.fontSize = '11px';
-                noFaceMsg.textContent = 'No image set';
+                noFaceMsg.textContent = tt('No image set');
                 faceCanvasContainer.appendChild(noFaceMsg);
             }
 
@@ -1404,7 +1740,7 @@ class DatabaseEditorUI {
 
             // Add change face button
             const faceButton = document.createElement('button');
-            faceButton.textContent = 'Change Face';
+            faceButton.textContent = tt('Change Face');
             faceButton.className = 'graphic-selector-button';
             faceButton.onclick = () => this.selectFaceImage(entry);
             faceBox.appendChild(faceButton);
@@ -1416,7 +1752,7 @@ class DatabaseEditorUI {
             svBox.className = 'graphic-preview-box';
 
             const svLabel = document.createElement('div');
-            svLabel.textContent = 'SV Battler';
+            svLabel.textContent = tt('SV Battler');
             svLabel.className = 'graphic-preview-label';
             svBox.appendChild(svLabel);
 
@@ -1460,7 +1796,7 @@ class DatabaseEditorUI {
                     const errorMsg = document.createElement('span');
                     errorMsg.style.color = 'var(--color-text-muted)';
                     errorMsg.style.fontSize = '11px';
-                    errorMsg.textContent = 'Image not found';
+                    errorMsg.textContent = tt('Image not found');
                     svCanvasContainer.appendChild(errorMsg);
                 };
                 svImg.src = svImgPath;
@@ -1468,7 +1804,7 @@ class DatabaseEditorUI {
                 const noSvMsg = document.createElement('span');
                 noSvMsg.style.color = 'var(--color-text-muted)';
                 noSvMsg.style.fontSize = '11px';
-                noSvMsg.textContent = 'No image set';
+                noSvMsg.textContent = tt('No image set');
                 svCanvasContainer.appendChild(noSvMsg);
             }
 
@@ -1476,7 +1812,7 @@ class DatabaseEditorUI {
 
             // Add change SV battler button
             const svButton = document.createElement('button');
-            svButton.textContent = 'Change Battler';
+            svButton.textContent = tt('Change Battler');
             svButton.className = 'graphic-selector-button';
             svButton.onclick = () => this.selectSVBattlerImage(entry);
             svBox.appendChild(svButton);
@@ -1495,7 +1831,7 @@ class DatabaseEditorUI {
                 transition: background-color 0.2s;
                 position: relative;
             `;
-            iconWrapper.title = 'Click to change icon';
+            iconWrapper.title = tt('Click to change icon');
 
             const canvas = document.createElement('canvas');
             canvas.width = 32;
@@ -1569,20 +1905,21 @@ class DatabaseEditorUI {
             };
             img.onerror = (e) => {
                 console.error('Failed to load icon:', imgPath, e);
-                preview.innerHTML = '<span style="color: var(--color-text-muted);">Icon not found</span>';
+                preview.innerHTML = `<span style="color: var(--color-text-muted);">${tt('Icon not found')}</span>`;
             };
             img.src = imgPath;
 
         } else {
-            preview.innerHTML = '<span style="color: var(--color-text-muted);">No preview available</span>';
+            preview.innerHTML = `<span style="color: var(--color-text-muted);">${tt('No preview available')}</span>`;
         }
 
         container.appendChild(preview);
     }
 
     selectCharacterImage(actor) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         if (typeof nw === 'undefined' && !window.RPGReactorHost) {
-            alert('Character selection requires the desktop editor or the browser project host');
+            alert(tt('Character selection requires the desktop editor or the browser project host'));
             return;
         }
 
@@ -1591,38 +1928,37 @@ class DatabaseEditorUI {
         const charactersPath = path.join(this.currentProject.path, 'img', 'characters');
 
         try {
-            const files = fs.readdirSync(charactersPath)
-                .filter(f => f.endsWith('.png'))
-                .map(f => f.replace('.png', ''));
+            const files = RRAssetFiles.listNames(charactersPath, ['.png']);
 
             if (files.length === 0) {
-                alert('No character images found in img/characters folder');
+                alert(tt('No character images found in img/characters folder'));
                 return;
             }
 
-            this.showImagePicker('Select Character Sprite', files, (selectedFile, selectedIndex) => {
+            this.showImagePicker(tt('Select Character Sprite'), files, (selectedFile, selectedIndex) => {
                 actor.characterName = selectedFile;
                 actor.characterIndex = selectedIndex;
 
                 this.showDatabaseDetail(actor, 'actors');
-                this.updateStatus('Character sprite updated');
+                this.updateStatus(tt('Character sprite updated'));
             }, (fileName) => {
                 // Preview callback - show full sprite sheet
-                return 'file://' + path.join(this.currentProject.path, 'img', 'characters', fileName + '.png');
+                return RRAssetFiles.urlFor(charactersPath, fileName, ['.png']);
             }, actor.characterName, {
                 sheetType: 'character',
                 currentIndex: actor.characterIndex || 0,
-                selectButtonLabel: 'Select Sprite'
+                selectButtonLabel: tt('Select Sprite')
             });
         } catch (error) {
             console.error('Error reading characters folder:', error);
-            alert('Error reading characters folder');
+            alert(tt('Error reading characters folder'));
         }
     }
 
     selectFaceImage(actor) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         if (typeof nw === 'undefined' && !window.RPGReactorHost) {
-            alert('Face selection requires the desktop editor or the browser project host');
+            alert(tt('Face selection requires the desktop editor or the browser project host'));
             return;
         }
 
@@ -1631,37 +1967,36 @@ class DatabaseEditorUI {
         const facesPath = path.join(this.currentProject.path, 'img', 'faces');
 
         try {
-            const files = fs.readdirSync(facesPath)
-                .filter(f => f.endsWith('.png'))
-                .map(f => f.replace('.png', ''));
+            const files = RRAssetFiles.listNames(facesPath, ['.png']);
 
             if (files.length === 0) {
-                alert('No face images found in img/faces folder');
+                alert(tt('No face images found in img/faces folder'));
                 return;
             }
 
-            this.showImagePicker('Select Face Graphic', files, (selectedFile, selectedIndex) => {
+            this.showImagePicker(tt('Select Face Graphic'), files, (selectedFile, selectedIndex) => {
                 actor.faceName = selectedFile;
                 actor.faceIndex = selectedIndex;
 
                 this.showDatabaseDetail(actor, 'actors');
-                this.updateStatus('Face graphic updated');
+                this.updateStatus(tt('Face graphic updated'));
             }, (fileName) => {
-                return 'file://' + path.join(this.currentProject.path, 'img', 'faces', fileName + '.png');
+                return RRAssetFiles.urlFor(facesPath, fileName, ['.png']);
             }, actor.faceName, {
                 sheetType: 'face',
                 currentIndex: actor.faceIndex || 0,
-                selectButtonLabel: 'Select Face'
+                selectButtonLabel: tt('Select Face')
             });
         } catch (error) {
             console.error('Error reading faces folder:', error);
-            alert('Error reading faces folder');
+            alert(tt('Error reading faces folder'));
         }
     }
 
     selectSVBattlerImage(actor) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         if (typeof nw === 'undefined' && !window.RPGReactorHost) {
-            alert('SV Battler selection requires the desktop editor or the browser project host');
+            alert(tt('SV Battler selection requires the desktop editor or the browser project host'));
             return;
         }
 
@@ -1670,32 +2005,31 @@ class DatabaseEditorUI {
         const svActorsPath = path.join(this.currentProject.path, 'img', 'sv_actors');
 
         try {
-            const files = fs.readdirSync(svActorsPath)
-                .filter(f => f.endsWith('.png'))
-                .map(f => f.replace('.png', ''));
+            const files = RRAssetFiles.listNames(svActorsPath, ['.png']);
 
             if (files.length === 0) {
-                alert('No SV battler images found in img/sv_actors folder');
+                alert(tt('No SV battler images found in img/sv_actors folder'));
                 return;
             }
 
-            this.showImagePicker('Select SV Battler', files, (selectedFile) => {
+            this.showImagePicker(tt('Select SV Battler'), files, (selectedFile) => {
                 actor.battlerName = selectedFile;
 
                 this.showDatabaseDetail(actor, 'actors');
-                this.updateStatus('SV battler updated');
+                this.updateStatus(tt('SV battler updated'));
             }, (fileName) => {
-                return 'file://' + path.join(this.currentProject.path, 'img', 'sv_actors', fileName + '.png');
+                return RRAssetFiles.urlFor(svActorsPath, fileName, ['.png']);
             });
         } catch (error) {
             console.error('Error reading sv_actors folder:', error);
-            alert('Error reading sv_actors folder');
+            alert(tt('Error reading sv_actors folder'));
         }
     }
 
     selectIcon(entry, type) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         if (typeof nw === 'undefined' && !window.RPGReactorHost) {
-            alert('Icon selection requires the desktop editor or the browser project host');
+            alert(tt('Icon selection requires the desktop editor or the browser project host'));
             return;
         }
 
@@ -1728,11 +2062,12 @@ class DatabaseEditorUI {
             // Refresh the detail view and the entry's mini icon in the list
             this.showDatabaseDetail(entry, type);
             this.refreshListIcon(entry, type);
-            this.updateStatus('Icon updated');
+            this.updateStatus(tt('Icon updated'));
         }, iconSetPath);
     }
 
     showIconPicker(currentIconIndex, onSelectCallback, iconSetPath) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         // Create modal overlay
         const modal = document.createElement('div');
         modal.style.cssText = `
@@ -1762,7 +2097,7 @@ class DatabaseEditorUI {
 
         // Title
         const title = document.createElement('h2');
-        title.textContent = 'Select Icon';
+        title.textContent = tt('Select Icon');
         title.style.cssText = 'margin: 0; padding: 20px 20px 16px 20px; color: var(--color-text-strong); font-size: 16px;';
         container.appendChild(title);
 
@@ -1798,7 +2133,7 @@ class DatabaseEditorUI {
         // Selected icon display
         const selectedInfo = document.createElement('div');
         selectedInfo.style.cssText = 'margin: 0 0 16px 0; color: var(--color-text-strong); font-size: 13px;';
-        selectedInfo.textContent = `Selected Icon: ${currentIconIndex}`;
+        selectedInfo.textContent = `${tt('Selected Icon:')} ${currentIconIndex}`;
         bottomSection.appendChild(selectedInfo);
 
         // Buttons
@@ -1806,12 +2141,12 @@ class DatabaseEditorUI {
         buttonContainer.style.cssText = 'display: flex; gap: 8px; justify-content: flex-end;';
 
         const cancelBtn = document.createElement('button');
-        cancelBtn.textContent = 'Cancel';
+        cancelBtn.textContent = tt('Cancel');
         cancelBtn.className = 'rr-btn-secondary';
         cancelBtn.onclick = () => document.body.removeChild(modal);
 
         const okBtn = document.createElement('button');
-        okBtn.textContent = 'OK';
+        okBtn.textContent = tt('OK');
         okBtn.style.cssText = 'padding: 8px 16px; background-color: var(--color-accent); color: var(--color-bg-deep); border: 1px solid var(--color-accent); border-radius: 4px; cursor: pointer; font-weight: bold; transition: background-color 0.2s;';
         okBtn.onmouseenter = () => {
             okBtn.style.backgroundColor = 'var(--color-accent-muted)';
@@ -1900,7 +2235,7 @@ class DatabaseEditorUI {
                 const row = Math.floor(y / (iconSize * scale));
                 selectedIconIndex = row * iconsPerRow + col;
 
-                selectedInfo.textContent = `Selected Icon: ${selectedIconIndex}`;
+                selectedInfo.textContent = `${tt('Selected Icon:')} ${selectedIconIndex}`;
                 drawSelection(selectedIconIndex);
             };
         };
@@ -1919,6 +2254,9 @@ class DatabaseEditorUI {
      * Show a styled modal for changing the maximum number of database entries
      */
     showChangeMaximumModal(title, type, currentMax, onConfirm) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
+        const configuredMaximum = this.getDatabaseMaximum(type);
+        const maximum = Math.max(currentMax, configuredMaximum);
         // Overlay
         const overlay = document.createElement('div');
         overlay.style.cssText = `
@@ -1945,7 +2283,7 @@ class DatabaseEditorUI {
             border-radius: 6px 6px 0 0;
         `;
         header.innerHTML = `
-            <h2 style="margin: 0; color: var(--color-text); font-size: 18px;">Change Maximum</h2>
+            <h2 style="margin: 0; color: var(--color-text); font-size: 18px;">${tt('Change Maximum')}</h2>
             <span class="modal-close" style="color: var(--color-text); font-size: 28px; font-weight: bold; cursor: pointer; line-height: 1;">&times;</span>
         `;
         modal.appendChild(header);
@@ -1956,12 +2294,14 @@ class DatabaseEditorUI {
 
         const label = document.createElement('div');
         label.style.cssText = 'color: var(--color-text); font-size: 13px; margin-bottom: 12px;';
-        label.textContent = `Set the maximum number of ${title}:`;
+        label.textContent = `${tt('Set the maximum number of')} ${title} (${tt('Max:')} ${maximum}):`;
         body.appendChild(label);
 
         const input = document.createElement('input');
         input.type = 'number';
         input.min = '1';
+        input.max = String(maximum);
+        input.step = '1';
         input.value = currentMax;
         input.style.cssText = `
             width: 100%; padding: 8px 10px; box-sizing: border-box;
@@ -1976,9 +2316,13 @@ class DatabaseEditorUI {
         body.appendChild(warning);
 
         input.addEventListener('input', () => {
-            const val = parseInt(input.value);
+            let val = Number(input.value);
+            if (Number.isFinite(val) && val > maximum) {
+                val = maximum;
+                input.value = String(maximum);
+            }
             if (!isNaN(val) && val < currentMax) {
-                warning.textContent = `Warning: This will remove entries ${val + 1} through ${currentMax}.`;
+                warning.textContent = `${tt('Warning: This will remove entries')} ${val + 1} ${tt('through')} ${currentMax}.`;
                 warning.style.display = 'block';
             } else {
                 warning.style.display = 'none';
@@ -1992,11 +2336,11 @@ class DatabaseEditorUI {
         footer.style.cssText = 'padding: 12px 20px; display: flex; justify-content: flex-end; gap: 8px; border-top: 1px solid var(--color-border); background-color: var(--color-bg-panel);';
 
         const cancelBtn = document.createElement('button');
-        cancelBtn.textContent = 'Cancel';
+        cancelBtn.textContent = tt('Cancel');
         cancelBtn.className = 'rr-btn-secondary';
 
         const okBtn = document.createElement('button');
-        okBtn.textContent = 'OK';
+        okBtn.textContent = tt('OK');
         okBtn.style.cssText = 'padding: 8px 16px; background: var(--color-accent); color: var(--color-bg-deep); border: 1px solid var(--color-accent); border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: bold;';
         okBtn.onmouseenter = () => { okBtn.style.backgroundColor = 'var(--color-accent-muted)'; };
         okBtn.onmouseleave = () => { okBtn.style.backgroundColor = 'var(--color-accent)'; };
@@ -2008,8 +2352,8 @@ class DatabaseEditorUI {
         overlay.onclick = (e) => { if (e.target === overlay) close(); };
 
         okBtn.onclick = () => {
-            const newMax = parseInt(input.value);
-            if (isNaN(newMax) || newMax < 1) {
+            const newMax = Number(input.value);
+            if (!Number.isInteger(newMax) || newMax < 1 || newMax > maximum) {
                 input.style.borderColor = 'var(--color-danger-pressed)';
                 return;
             }
@@ -2036,6 +2380,7 @@ class DatabaseEditorUI {
     }
 
     showImagePicker(title, files, onSelectCallback, getImagePathCallback, currentFile, options = {}) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const modal = document.getElementById('image-picker-modal');
         const titleEl = document.getElementById('image-picker-title');
         const listEl = document.getElementById('image-picker-list');
@@ -2044,39 +2389,15 @@ class DatabaseEditorUI {
 
         titleEl.textContent = title;
         listEl.innerHTML = '';
-        previewEl.innerHTML = '<p style="color: var(--color-text-muted); text-align: center;">Select an image to preview</p>';
+        listEl.style.overflow = 'hidden';
+        previewEl.innerHTML = `<p style="color: var(--color-text-muted); text-align: center;">${tt('Select an image to preview')}</p>`;
 
-        // Populate file list
-        files.forEach((file) => {
-            const item = document.createElement('div');
-            item.style.cssText = 'padding: 10px 16px; cursor: pointer; border-bottom: 1px solid var(--color-bg-menubar); font-size: 13px;';
-            item.textContent = file;
-
-            item.addEventListener('mouseenter', () => {
-                item.style.backgroundColor = 'var(--color-bg-button)';
-            });
-
-            item.addEventListener('mouseleave', () => {
-                if (!item.classList.contains('selected')) {
-                    item.style.backgroundColor = '';
-                }
-            });
-
-            item.addEventListener('click', () => {
-                // Remove selection from all items
-                Array.from(listEl.children).forEach(i => {
-                    i.classList.remove('selected');
-                    i.style.backgroundColor = '';
-                });
-                item.classList.add('selected');
-                item.style.backgroundColor = 'var(--color-selection-deep)';
-
-                // Show preview
+        const showPreview = file => {
                 const imagePath = getImagePathCallback(file);
                 const isCharacterSheet = options.sheetType === 'character';
                 const isFaceSheet = options.sheetType === 'face';
                 const hasSheetSelection = isCharacterSheet || isFaceSheet;
-                const isBigCharacter = isCharacterSheet && (file.startsWith('$') || file.startsWith('!$'));
+                const isBigCharacter = isCharacterSheet && RRAssetFiles.isBigCharacter(file);
                 const sheetColumns = isFaceSheet ? 4 : (isBigCharacter ? 1 : 4);
                 const sheetRows = isFaceSheet ? 2 : (isBigCharacter ? 1 : 2);
                 const maxIndex = sheetColumns * sheetRows - 1;
@@ -2097,8 +2418,8 @@ class DatabaseEditorUI {
                     const instructions = document.createElement('div');
                     instructions.style.cssText = 'font-size: 12px; color: var(--color-text-muted); text-align: center;';
                     instructions.textContent = isBigCharacter
-                        ? 'This is a single-character sheet.'
-                        : 'Click a square on the image to choose the index.';
+                        ? tt('This is a single-character sheet.')
+                        : tt('Click a square on the image to choose the index.');
                     wrapper.appendChild(instructions);
                 }
 
@@ -2125,7 +2446,7 @@ class DatabaseEditorUI {
                     });
 
                     if (selectedInfo) {
-                        selectedInfo.textContent = `${isFaceSheet ? 'Face' : 'Character'} index: ${selectedIndex}`;
+                        selectedInfo.textContent = `${tt(isFaceSheet ? 'Face' : 'Character')} ${tt('index:')} ${selectedIndex}`;
                     }
                 };
 
@@ -2150,7 +2471,7 @@ class DatabaseEditorUI {
                             pointer-events: auto;
                             transition: border-color 0.12s, background-color 0.12s, box-shadow 0.12s;
                         `;
-                        cell.title = `Index ${index}`;
+                        cell.title = `${tt('Index')} ${index}`;
                         cell.addEventListener('mouseenter', () => {
                             if (index !== selectedIndex) cell.style.borderColor = 'rgba(212, 175, 55, 0.85)';
                         });
@@ -2179,14 +2500,14 @@ class DatabaseEditorUI {
 
                 const selectBtn = document.createElement('button');
                 selectBtn.id = 'image-picker-select-btn';
-                selectBtn.textContent = options.selectButtonLabel || 'Select This Image';
+                selectBtn.textContent = options.selectButtonLabel || tt('Select This Image');
                 selectBtn.style.cssText = 'background: var(--color-accent); border: 1px solid var(--color-accent); color: var(--color-bg-deep); padding: 10px 24px; border-radius: 4px; cursor: pointer; font-size: 14px; font-weight: bold;';
                 buttonRow.appendChild(selectBtn);
 
                 const openFolderBtn = document.createElement('button');
                 openFolderBtn.id = 'image-picker-open-folder-btn';
-                openFolderBtn.textContent = 'Open in Folder';
-                openFolderBtn.title = 'Open containing folder in file manager';
+                openFolderBtn.textContent = tt('Open in Folder');
+                openFolderBtn.title = tt('Open containing folder in file manager');
                 openFolderBtn.style.cssText = 'background: var(--color-border-subtle); border: 1px solid var(--color-border-input); color: var(--color-text-strong); padding: 10px 16px; border-radius: 4px; cursor: pointer; font-size: 13px;';
                 buttonRow.appendChild(openFolderBtn);
 
@@ -2212,22 +2533,23 @@ class DatabaseEditorUI {
                         nw.Shell.showItemInFolder(filePath);
                     }
                 });
-            });
+        };
 
-            listEl.appendChild(item);
+        const browser = RRPickerIndex.createBrowser({
+            files,
+            selectedName: currentFile,
+            searchPlaceholder: tt('Search files...'),
+            onSelect: showPreview
         });
+        listEl.appendChild(browser.element);
 
         // Show modal
         modal.style.display = 'flex';
 
         // Auto-select current file if provided
         if (currentFile) {
-            const items = Array.from(listEl.children);
-            const match = items.find(item => item.textContent === currentFile);
-            if (match) {
-                match.click();
-                match.scrollIntoView({ block: 'center' });
-            }
+            showPreview(currentFile);
+            browser.scrollTo(currentFile);
         }
 
         // Close button handler
@@ -2240,167 +2562,619 @@ class DatabaseEditorUI {
      * Show Types editor (Elements, Skill Types, Weapon Types, etc.)
      */
     showTypesEditor() {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const system = this.databaseManager.getSystem();
         if (!system) {
-            alert('System data not loaded');
+            alert(tt('System data not loaded'));
             return;
         }
 
-        const { listEl, detailEl } = this.prepareDatabaseSection('types', 'Types');
+        const { detailEl } = this.prepareDatabaseSection('types', this._dbTitle('types', 'Types'), { showListPanel: false });
+        const categories = [
+            { key: 'elements', title: tt('Elements'), description: tt('Damage element types referenced by skills, items, weapons, and enemy resist/weakness traits.') },
+            { key: 'skillTypes', title: tt('Skill Types'), description: tt('Skill categories used by the Skills menu and the battle command list.') },
+            { key: 'weaponTypes', title: tt('Weapon Types'), description: tt('Weapon categories referenced by equipment trait restrictions and animations.') },
+            { key: 'armorTypes', title: tt('Armor Types'), description: tt('Armor categories referenced by equipment trait restrictions.') },
+            { key: 'equipTypes', title: tt('Equipment Types'), description: tt('Equipment slot labels (Weapon, Shield, Head, Body, Accessory, ...).') }
+        ];
+        const categoryByKey = new Map(categories.map(category => [category.key, category]));
+        const selections = new Map();
+        const anchors = new Map();
+        let activeCategory = categories[0].key;
+        let mutationGeneration = 0;
+        let pasteGeneration = 0;
 
-        listEl.innerHTML = `
-            <div class="database-list-item" data-type="elements">Elements</div>
-            <div class="database-list-item" data-type="skillTypes">Skill Types</div>
-            <div class="database-list-item" data-type="weaponTypes">Weapon Types</div>
-            <div class="database-list-item" data-type="armorTypes">Armor Types</div>
-            <div class="database-list-item" data-type="equipTypes">Equipment Types</div>
+        for (const category of categories) {
+            if (!Array.isArray(system[category.key]) || system[category.key].length === 0) system[category.key] = [''];
+            else system[category.key][0] = '';
+            const initial = system[category.key].length > 1 ? [1] : [];
+            selections.set(category.key, new Set(initial));
+            anchors.set(category.key, initial[0] || null);
+        }
+
+        detailEl.innerHTML = `
+            <div class="rr-types-workspace">
+                <div class="rr-types-toolbar">
+                    <div class="rr-types-toolbar-copy">
+                        <strong>${tt('Type Lists')}</strong>
+                        <span>${tt('Click a row to edit. Ctrl/Cmd-click or Shift-click to select multiple rows.')}</span>
+                    </div>
+                <div class="rr-types-toolbar-actions">
+                        <span class="rr-types-active-category"></span>
+                        <button class="rr-btn-chip rr-types-cut">${tt('Cut')}</button>
+                        <button class="rr-btn-chip rr-types-copy">${tt('Copy')}</button>
+                        <button class="rr-btn-chip rr-types-paste">${tt('Paste')}</button>
+                        <button class="rr-btn-chip-danger rr-types-clear">${tt('Clear Selected')}</button>
+                    </div>
+                </div>
+                <div class="rr-types-grid">
+                    ${categories.map(category => `
+                        <section class="rr-types-panel" data-category="${category.key}" title="${rrEscapeHtml(category.description)}">
+                            <div class="rr-types-panel-body"></div>
+                        </section>
+                    `).join('')}
+                </div>
+            </div>
         `;
 
-        detailEl.innerHTML = '<p style="color: var(--color-text-muted); text-align: center; margin-top: 100px;">Select a type category from the list</p>';
+        const panelFor = category => detailEl.querySelector(`.rr-types-panel[data-category="${category}"]`);
+        const selectedFor = category => selections.get(category) || new Set();
+        const sortedSelection = category => [...selectedFor(category)].sort((a, b) => a - b);
 
-        // Add click handlers
-        listEl.querySelectorAll('.database-list-item').forEach(item => {
-            item.addEventListener('click', () => {
-                listEl.querySelectorAll('.database-list-item').forEach(i => i.classList.remove('selected'));
-                item.classList.add('selected');
-
-                const typeCategory = item.dataset.type;
-                this.showTypeDetail(system, typeCategory);
+        const setActiveCategory = category => {
+            activeCategory = category;
+            detailEl.querySelectorAll('.rr-types-panel').forEach(panel => {
+                panel.classList.toggle('active', panel.dataset.category === category);
             });
-        });
-    }
-
-    /**
-     * Show detail for a specific type category.
-     * Pretty title, count badge, add/remove controls, live persistence to
-     * system data on every keystroke. Index 0 is reserved as "(None)" per
-     * the MZ convention for type arrays — shown as a disabled placeholder
-     * and skipped from removal so external IDs stay stable.
-     */
-    showTypeDetail(system, category) {
-        const detailEl = document.getElementById('database-detail');
-        if (!system[category]) system[category] = [''];
-        const data = system[category];
-
-        const categoryTitles = {
-            elements:    { title: 'Elements',         description: 'Damage element types referenced by skills, items, weapons, and enemy resist/weakness traits.' },
-            skillTypes:  { title: 'Skill Types',      description: 'Skill categories used by the Skills menu and the battle command list.' },
-            weaponTypes: { title: 'Weapon Types',     description: 'Weapon categories referenced by equipment trait restrictions and animations.' },
-            armorTypes:  { title: 'Armor Types',      description: 'Armor categories referenced by equipment trait restrictions.' },
-            equipTypes:  { title: 'Equipment Slots',  description: 'Equipment slot labels (Weapon, Shield, Head, Body, Accessory, ...).' }
+            const activeLabel = detailEl.querySelector('.rr-types-active-category');
+            if (activeLabel) activeLabel.textContent = categoryByKey.get(category)?.title || category;
         };
-        const meta = categoryTitles[category] || { title: category, description: '' };
 
-        const render = () => {
-            const totalCount = data.length;
-            const realCount = data.length - 1; // exclude reserved index 0
-
-            let rowsHtml = '';
-            // Skip index 0 visually -- it's the MZ "(None)" placeholder that
-            // shouldn't be exposed as an editable row. It still occupies the
-            // slot internally so 1-based references stay stable.
-            data.forEach((value, index) => {
-                if (index === 0) return;
-                rowsHtml += `
-                    <div class="rr-types-row" data-index="${index}" style="display: grid; grid-template-columns: 48px 1fr 84px; gap: 12px; align-items: center; padding: 8px 12px; background: var(--color-bg-list-item); border: 1px solid var(--color-border); border-radius: 3px; margin-bottom: 6px;">
-                        <div style="text-align: center; font-size: 11px; color: var(--color-text-muted); font-family: var(--font-mono); padding: 4px 0; background: var(--color-bg-deep); border-radius: 3px; border: 1px solid var(--color-border-subtle);">${String(index).padStart(3, '0')}</div>
-                        <input type="text" class="rr-types-input database-field-value" data-index="${index}" value="${(value || '').replace(/"/g, '&quot;')}" placeholder="Type ${index} name…">
-                        <button class="rr-btn-chip-danger rr-types-remove" data-index="${index}">Remove</button>
-                    </div>
-                `;
+        const updateSelectionUI = category => {
+            const panel = panelFor(category);
+            if (!panel) return;
+            const selected = selectedFor(category);
+            panel.querySelectorAll('.rr-types-row').forEach(row => {
+                const isSelected = selected.has(Number(row.dataset.index));
+                row.classList.toggle('selected', isSelected);
+                row.setAttribute('aria-selected', String(isSelected));
             });
 
-            detailEl.innerHTML = `
-                <div style="display: flex; flex-direction: column; height: 100%; padding: 16px; overflow-y: auto;">
-                    <!-- Header banner -->
-                    <div style="background: var(--color-bg-deep); padding: 14px 18px; border-bottom: 2px solid var(--color-accent-border-mid); margin-bottom: 16px; border-radius: 4px 4px 0 0;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; gap: 12px;">
-                            <div>
-                                <div style="font-size: 18px; font-weight: 600; color: var(--color-text-strong);">${meta.title}</div>
-                                <div style="font-size: 11px; color: var(--color-text-muted); margin-top: 2px;">${meta.description}</div>
-                            </div>
-                            <div style="display: flex; align-items: center; gap: 10px;">
-                                <span style="font-size: 11px; color: var(--color-text-muted);">Total:</span>
-                                <span style="font-size: 13px; color: var(--color-accent-bright); font-weight: 600; font-family: var(--font-mono); padding: 4px 10px; background: var(--color-accent-tint-15); border: 1px solid var(--color-accent-border); border-radius: 3px;" id="rr-types-count">${realCount}</span>
-                                <button class="rr-btn-chip" id="rr-types-add" style="padding: 6px 14px;">+ Add</button>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Rows -->
-                    <div class="rr-types-rows">${rowsHtml}</div>
-                </div>
-            `;
-
-            // Wire input persistence
-            detailEl.querySelectorAll('.rr-types-input').forEach(input => {
-                input.addEventListener('input', (e) => {
-                    const idx = parseInt(e.target.dataset.index);
-                    data[idx] = e.target.value;
-                });
-            });
-
-            // Wire remove buttons (skip reserved index 0)
-            detailEl.querySelectorAll('.rr-types-remove').forEach(btn => {
-                btn.addEventListener('click', () => {
-                    const idx = parseInt(btn.dataset.index);
-                    if (idx === 0) return;
-                    if (data.length <= 2 && data[idx] === '') {
-                        // Allow remove even on empty
-                    }
-                    data.splice(idx, 1);
-                    render();
-                });
-            });
-
-            // Add button
-            const addBtn = detailEl.querySelector('#rr-types-add');
-            if (addBtn) {
-                addBtn.addEventListener('click', () => {
-                    data.push('');
-                    render();
-                    // Focus the new input
-                    setTimeout(() => {
-                        const inputs = detailEl.querySelectorAll('.rr-types-input');
-                        const last = inputs[inputs.length - 1];
-                        if (last) { last.focus(); last.select(); }
-                    }, 0);
-                });
+            const editor = panel.querySelector('.rr-types-name-editor');
+            if (!editor) return;
+            const indices = sortedSelection(category);
+            if (indices.length === 1) {
+                editor.disabled = false;
+                editor.value = system[category][indices[0]] || '';
+                editor.placeholder = tt('Type name');
+            } else {
+                editor.disabled = true;
+                editor.value = '';
+                editor.placeholder = indices.length
+                    ? tt('{count} rows selected').replace('{count}', indices.length)
+                    : tt('Select a row');
             }
         };
-        render();
+
+        const selectRow = (category, index, event = {}) => {
+            setActiveCategory(category);
+            const selected = selectedFor(category);
+            const anchor = anchors.get(category);
+            if (event.shiftKey && anchor !== null) {
+                if (!event.ctrlKey && !event.metaKey) selected.clear();
+                const start = Math.min(anchor, index);
+                const end = Math.max(anchor, index);
+                for (let current = start; current <= end; current++) selected.add(current);
+            } else if (event.ctrlKey || event.metaKey) {
+                if (selected.has(index)) selected.delete(index);
+                else selected.add(index);
+                anchors.set(category, index);
+            } else {
+                selected.clear();
+                selected.add(index);
+                anchors.set(category, index);
+            }
+            updateSelectionUI(category);
+        };
+
+        const selectAll = category => {
+            const last = system[category].length - 1;
+            selections.set(category, new Set(Array.from({ length: last }, (_, index) => index + 1)));
+            if (last > 0 && anchors.get(category) === null) anchors.set(category, 1);
+            updateSelectionUI(category);
+        };
+
+        const renderPanel = category => {
+            const panel = panelFor(category.key);
+            if (!panel) return;
+            const oldScroll = panel.querySelector('.rr-types-list')?.scrollTop || 0;
+            const data = system[category.key];
+            const rows = data.slice(1).map((value, offset) => {
+                const index = offset + 1;
+                return `
+                    <div class="rr-types-row" role="option" aria-selected="false" data-index="${index}">
+                        <span class="rr-types-id">${String(index).padStart(2, '0')}</span>
+                        <span class="rr-types-name">${rrEscapeHtml(value || '')}</span>
+                    </div>
+                `;
+            }).join('');
+
+            panel.querySelector('.rr-types-panel-body').innerHTML = `
+                <header class="rr-types-panel-header">
+                    <span>${category.title}</span>
+                    <span class="rr-types-count">${data.length - 1}</span>
+                </header>
+                <div class="rr-types-list" role="listbox" aria-multiselectable="true" tabindex="0">${rows}</div>
+                <input class="rr-types-name-editor database-field-value" type="text" placeholder="${tt('Select a row')}" disabled>
+                <footer class="rr-types-panel-footer">
+                    <button class="rr-btn-chip rr-types-add">+ ${tt('Add')}</button>
+                    <button class="rr-btn-chip rr-types-change-max" title="${tt('Max:')} ${this.getDatabaseMaximum(category.key)}">${tt('Change Maximum')}</button>
+                </footer>
+            `;
+
+            const list = panel.querySelector('.rr-types-list');
+            list.scrollTop = oldScroll;
+            panel.onpointerdown = () => setActiveCategory(category.key);
+            list.addEventListener('click', event => {
+                const row = event.target.closest('.rr-types-row');
+                if (!row) return;
+                list.focus();
+                selectRow(category.key, Number(row.dataset.index), event);
+            });
+            list.addEventListener('contextmenu', event => {
+                event.preventDefault();
+                event.stopPropagation();
+                const row = event.target.closest('.rr-types-row');
+                if (row && !selectedFor(category.key).has(Number(row.dataset.index))) {
+                    selectRow(category.key, Number(row.dataset.index));
+                } else {
+                    setActiveCategory(category.key);
+                }
+                const hasSelection = selectedFor(category.key).size > 0;
+                this.showDatabaseActionMenu(event.clientX, event.clientY, [
+                    { label: tt('Cut'), shortcut: 'Ctrl+X', enabled: hasSelection, action: cutSelected },
+                    { label: tt('Copy'), shortcut: 'Ctrl+C', enabled: hasSelection, action: copySelected },
+                    { label: tt('Paste'), shortcut: 'Ctrl+V', action: pasteSelected },
+                    { separator: true },
+                    { label: tt('Clear Selected'), shortcut: 'Delete', enabled: hasSelection, action: clearSelected },
+                    { label: tt('Select All'), shortcut: 'Ctrl+A', enabled: system[category.key].length > 1, action: () => selectAll(category.key) },
+                    { separator: true },
+                    { label: tt('Edit'), shortcut: 'F2', enabled: selectedFor(category.key).size === 1, action: () => {
+                        const field = panel.querySelector('.rr-types-name-editor');
+                        field.focus();
+                        field.select();
+                    }}
+                ]);
+            });
+            list.addEventListener('dblclick', event => {
+                if (!event.target.closest('.rr-types-row')) return;
+                const editor = panel.querySelector('.rr-types-name-editor');
+                if (!editor.disabled) {
+                    editor.focus();
+                    editor.select();
+                }
+            });
+            list.addEventListener('keydown', event => {
+                const current = anchors.get(category.key) || sortedSelection(category.key)[0] || 1;
+                const last = system[category.key].length - 1;
+                if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'a') {
+                    event.preventDefault();
+                    selectAll(category.key);
+                } else if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'x') {
+                    event.preventDefault();
+                    cutSelected();
+                } else if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'c') {
+                    event.preventDefault();
+                    copySelected();
+                } else if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'v') {
+                    event.preventDefault();
+                    pasteSelected();
+                } else if (event.key === 'Delete' || event.key === 'Backspace') {
+                    event.preventDefault();
+                    clearSelected();
+                } else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+                    event.preventDefault();
+                    if (last < 1) return;
+                    const next = Math.max(1, Math.min(last, current + (event.key === 'ArrowDown' ? 1 : -1)));
+                    selectRow(category.key, next, { shiftKey: event.shiftKey });
+                    panel.querySelector(`.rr-types-row[data-index="${next}"]`)?.scrollIntoView({ block: 'nearest' });
+                } else if (event.key === 'Enter' || event.key === 'F2') {
+                    event.preventDefault();
+                    const editor = panel.querySelector('.rr-types-name-editor');
+                    if (!editor.disabled) {
+                        editor.focus();
+                        editor.select();
+                    }
+                }
+            });
+
+            const editor = panel.querySelector('.rr-types-name-editor');
+            editor.addEventListener('input', () => {
+                const index = sortedSelection(category.key)[0];
+                if (!index) return;
+                data[index] = editor.value;
+                mutationGeneration++;
+                const name = panel.querySelector(`.rr-types-row[data-index="${index}"] .rr-types-name`);
+                if (name) name.textContent = editor.value;
+            });
+            editor.addEventListener('keydown', event => {
+                if (event.key !== 'Enter') return;
+                const index = sortedSelection(category.key)[0];
+                const next = Math.min(data.length - 1, index + 1);
+                if (next !== index) selectRow(category.key, next);
+                editor.focus();
+                editor.select();
+            });
+            this.attachTextFieldContextMenu(editor);
+
+            panel.querySelector('.rr-types-add').addEventListener('click', () => {
+                const newIndex = data.length;
+                if (!this.resizeTypeArray(system, category.key, newIndex)) return;
+                mutationGeneration++;
+                selections.set(category.key, new Set([newIndex]));
+                anchors.set(category.key, newIndex);
+                renderPanel(category);
+                const newEditor = panel.querySelector('.rr-types-name-editor');
+                newEditor.focus();
+                newEditor.select();
+                panel.querySelector(`.rr-types-row[data-index="${newIndex}"]`)?.scrollIntoView({ block: 'nearest' });
+            });
+            panel.querySelector('.rr-types-change-max').addEventListener('click', () => {
+                const currentMax = data.length - 1;
+                this.showChangeMaximumModal(category.title, category.key, currentMax, newMax => {
+                    if (newMax < currentMax && !confirm(
+                        `${tt('Reducing this maximum will remove type IDs')} ${newMax + 1} ${tt('through')} ${currentMax}. ${tt('Existing references to those IDs may become invalid. Continue?')}`
+                    )) return;
+                    if (!this.resizeTypeArray(system, category.key, newMax)) return;
+                    mutationGeneration++;
+                    const remaining = sortedSelection(category.key).filter(index => index <= newMax);
+                    selections.set(category.key, new Set(remaining.length ? remaining : [newMax]));
+                    anchors.set(category.key, remaining[0] || newMax);
+                    renderPanel(category);
+                    this.updateStatus?.(`${category.title} ${tt('maximum changed to')} ${newMax}`);
+                });
+            });
+
+            updateSelectionUI(category.key);
+        };
+
+        const copySelected = async () => {
+            const indices = sortedSelection(activeCategory);
+            if (!indices.length) return;
+            const names = indices.map(index => system[activeCategory][index] || '');
+            await this.writeTypeClipboard(names);
+            this.updateStatus?.(tt('Copied {count} type names').replace('{count}', names.length));
+        };
+
+        const cutSelected = async () => {
+            const category = activeCategory;
+            const indices = sortedSelection(category);
+            if (!indices.length) return;
+            const names = indices.map(index => system[category][index] || '');
+            const expectedMutation = mutationGeneration;
+            if (!await this.writeTypeClipboard(names)) {
+                alert(this._t('db.clipboardWriteFailed'));
+                return;
+            }
+            if (activeCategory !== category || mutationGeneration !== expectedMutation
+                || indices.some((index, i) => (system[category][index] || '') !== names[i])) return;
+            this.clearTypeNames(system, category, indices);
+            mutationGeneration++;
+            renderPanel(categoryByKey.get(category));
+            this.updateStatus?.(tt('Cut {count} type names').replace('{count}', names.length));
+        };
+
+        const pasteSelected = async () => {
+            const workspace = detailEl.querySelector('.rr-types-workspace');
+            const targetCategory = activeCategory;
+            const start = sortedSelection(targetCategory)[0] || 1;
+            const expectedMutation = mutationGeneration;
+            const requestGeneration = ++pasteGeneration;
+            const names = await this.readTypeClipboard();
+            const viewer = document.getElementById('database-viewer');
+            if (!workspace || !detailEl.contains(workspace) || !viewer?.classList.contains('active')) return;
+            if (requestGeneration !== pasteGeneration || mutationGeneration !== expectedMutation) return;
+            if (sortedSelection(targetCategory)[0] !== start || system[targetCategory].length - 1 < start) return;
+            if (!names.length) {
+                alert(tt('No type names in the clipboard.'));
+                return;
+            }
+            const category = categoryByKey.get(targetCategory);
+            if (!this.pasteTypeNames(system, targetCategory, start, names)) {
+                alert(`${tt('Max:')} ${this.getDatabaseMaximum(targetCategory)}`);
+                return;
+            }
+            mutationGeneration++;
+            selections.set(targetCategory, new Set(names.map((_, offset) => start + offset)));
+            anchors.set(targetCategory, start);
+            renderPanel(category);
+            panelFor(targetCategory)?.querySelector(`.rr-types-row[data-index="${start}"]`)?.scrollIntoView({ block: 'nearest' });
+            this.updateStatus?.(tt('Pasted {count} type names').replace('{count}', names.length));
+        };
+
+        const clearSelected = () => {
+            const indices = sortedSelection(activeCategory);
+            if (!indices.length) return;
+            if (!confirm(tt('Clear {count} selected type names? Numeric IDs will remain in place.').replace('{count}', indices.length))) return;
+            this.clearTypeNames(system, activeCategory, indices);
+            mutationGeneration++;
+            renderPanel(categoryByKey.get(activeCategory));
+            this.updateStatus?.(tt('Cleared {count} type names').replace('{count}', indices.length));
+        };
+
+        detailEl.querySelector('.rr-types-cut').addEventListener('click', cutSelected);
+        detailEl.querySelector('.rr-types-copy').addEventListener('click', copySelected);
+        detailEl.querySelector('.rr-types-paste').addEventListener('click', pasteSelected);
+        detailEl.querySelector('.rr-types-clear').addEventListener('click', clearSelected);
+        categories.forEach(renderPanel);
+        setActiveCategory(activeCategory);
+    }
+
+    /** Resize a System type array while preserving its reserved zero slot. */
+    resizeTypeArray(system, category, newMax) {
+        if (!system || !Array.isArray(system[category]) || !Number.isInteger(newMax) || newMax < 1) return false;
+
+        const data = system[category];
+        const currentMax = data.length - 1;
+        const maximum = this.getDatabaseMaximum(category);
+        if (!maximum || (newMax > maximum && newMax > currentMax)) return false;
+        const oldLength = data.length;
+        data.length = newMax + 1;
+        data[0] = '';
+        for (let index = oldLength; index < data.length; index++) {
+            data[index] = '';
+        }
+        return true;
+    }
+
+    pasteTypeNames(system, category, startIndex, names) {
+        if (!system || !Array.isArray(system[category]) || !Number.isInteger(startIndex) || startIndex < 1 || !Array.isArray(names) || !names.length) return false;
+        const requiredMax = startIndex + names.length - 1;
+        if (requiredMax > system[category].length - 1 && !this.resizeTypeArray(system, category, requiredMax)) return false;
+        names.forEach((name, offset) => {
+            system[category][startIndex + offset] = String(name ?? '');
+        });
+        return true;
+    }
+
+    clearTypeNames(system, category, indices) {
+        if (!system || !Array.isArray(system[category]) || !Array.isArray(indices)) return false;
+        indices.forEach(index => {
+            if (Number.isInteger(index) && index > 0 && index < system[category].length) system[category][index] = '';
+        });
+        return true;
+    }
+
+    normalizeTypeClipboardText(text) {
+        if (typeof text !== 'string') return [];
+        if (text === '') return [];
+        const names = text.replace(/\r/g, '').split('\n');
+        if (names.length > 1 && names[names.length - 1] === '') names.pop();
+        return names;
+    }
+
+    async writePlainClipboardText(value) {
+        const text = String(value ?? '');
+        this.plainTextClipboard = text;
+        if (text !== this.typeClipboardText) this.typeClipboardUseInternal = false;
+        const generation = (this.plainClipboardGeneration || 0) + 1;
+        this.plainClipboardGeneration = generation;
+        this.plainClipboardWritePending = true;
+        const write = async () => {
+            let wrote = false;
+            try {
+                if (typeof nw !== 'undefined' && nw.Clipboard) {
+                    nw.Clipboard.get().set(text, 'text');
+                    wrote = true;
+                }
+            } catch (error) {
+                console.warn('NW.js clipboard write failed:', error);
+            }
+            try {
+                if (!wrote && typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+                    await navigator.clipboard.writeText(text);
+                    wrote = true;
+                }
+            } catch (error) {
+                console.warn('Browser clipboard write failed:', error);
+            }
+            return wrote;
+        };
+        const queued = (this._clipboardWriteQueue || Promise.resolve()).catch(() => false).then(write);
+        const result = queued.then(wrote => {
+            if (generation === this.plainClipboardGeneration) this.plainClipboardWritePending = false;
+            return wrote;
+        });
+        this._clipboardWriteQueue = result;
+        return result;
+    }
+
+    async readPlainClipboardText() {
+        if (this.plainClipboardWritePending) return this.plainTextClipboard || '';
+        try {
+            if (typeof nw !== 'undefined' && nw.Clipboard) return nw.Clipboard.get().get('text') || '';
+        } catch (error) {
+            console.warn('NW.js clipboard read failed:', error);
+        }
+        try {
+            if (typeof navigator !== 'undefined' && navigator.clipboard?.readText) return await navigator.clipboard.readText();
+        } catch (error) {
+            console.warn('Browser clipboard read failed:', error);
+        }
+        return this.plainTextClipboard || '';
+    }
+
+    async writeTypeClipboard(names) {
+        this.typeClipboard = names.map(name => String(name ?? ''));
+        const text = this.typeClipboard.join('\n');
+        this.typeClipboardText = text;
+        this.typeClipboardUseInternal = true;
+        const generation = (this.typeClipboardGeneration || 0) + 1;
+        this.typeClipboardGeneration = generation;
+        const wrote = await this.writePlainClipboardText(text);
+        if (generation === this.typeClipboardGeneration) this.typeClipboardUseInternal = !wrote;
+        return wrote;
+    }
+
+    async readTypeClipboard() {
+        if (this.plainClipboardWritePending) {
+            if (this.plainTextClipboard === this.typeClipboardText && Array.isArray(this.typeClipboard)) return this.typeClipboard.slice();
+            return this.normalizeTypeClipboardText(this.plainTextClipboard || '');
+        }
+        if (this.typeClipboardUseInternal && this.plainTextClipboard === this.typeClipboardText && Array.isArray(this.typeClipboard)) {
+            this.typeClipboardUseInternal = false;
+            return this.typeClipboard.slice();
+        }
+        let text = null;
+        let readSystemClipboard = false;
+        try {
+            if (typeof nw !== 'undefined' && nw.Clipboard) {
+                text = nw.Clipboard.get().get('text');
+                readSystemClipboard = true;
+            }
+        } catch (error) {
+            console.warn('NW.js type clipboard read failed:', error);
+        }
+        try {
+            if (!readSystemClipboard && typeof navigator !== 'undefined' && navigator.clipboard?.readText) {
+                text = await navigator.clipboard.readText();
+                readSystemClipboard = true;
+            }
+        } catch (error) {
+            console.warn('Browser type clipboard read failed:', error);
+        }
+        if (readSystemClipboard) {
+            if (text === this.typeClipboardText && Array.isArray(this.typeClipboard)) return this.typeClipboard.slice();
+            return this.normalizeTypeClipboardText(text || '');
+        }
+        if (this.plainTextClipboard === this.typeClipboardText && Array.isArray(this.typeClipboard)) return this.typeClipboard.slice();
+        return this.normalizeTypeClipboardText(this.plainTextClipboard || '');
     }
 
     /**
      * Show Terms editor (Basic, Commands, Parameters)
      */
     showTermsEditor() {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const system = this.databaseManager.getSystem();
         if (!system || !system.terms) {
-            alert('Terms data not loaded');
+            alert(tt('Terms data not loaded'));
             return;
         }
 
-        const { listEl, detailEl } = this.prepareDatabaseSection('terms', 'Terms');
+        const { detailEl } = this.prepareDatabaseSection('terms', this._dbTitle('terms', 'Terms'), { showListPanel: false });
+        const terms = system.terms;
+        const arrays = {
+            basic: [
+                'Level', 'Level (Abbreviation)', 'HP', 'HP (Abbreviation)',
+                'MP', 'MP (Abbreviation)', 'TP', 'TP (Abbreviation)',
+                'EXP', 'EXP (Abbreviation)'
+            ],
+            params: [
+                'Max HP', 'Max MP', 'Attack', 'Defense', 'Magic Attack',
+                'Magic Defense', 'Agility', 'Luck', 'Hit', 'Evasion'
+            ],
+            commands: [
+                'Fight', 'Escape', 'Attack', 'Guard', 'Item', 'Skill', 'Equip',
+                'Status', 'Formation', 'Save', 'Game End', 'Options', 'Weapon',
+                'Armor', 'Key Item', 'Equip', 'Optimize', 'Clear', 'New Game',
+                'Continue', '(Reserved)', 'To Title', 'Cancel', '(Reserved)', 'Buy', 'Sell'
+            ]
+        };
+        const messageGroups = [
+            { label: 'Options Menu', fields: [
+                ['alwaysDash', 'Always Dash'], ['commandRemember', 'Command Remember'], ['touchUI', 'Touch UI']
+            ]},
+            { label: 'Audio Volume', fields: [
+                ['bgmVolume', 'BGM Volume'], ['bgsVolume', 'BGS Volume'], ['meVolume', 'ME Volume'], ['seVolume', 'SE Volume']
+            ]},
+            { label: 'Menu & Save / Load', fields: [
+                ['possession', 'Possession'], ['expTotal', 'EXP Total'], ['expNext', 'EXP To Next'],
+                ['saveMessage', 'Save Message'], ['loadMessage', 'Load Message'], ['file', 'File'],
+                ['autosave', 'Autosave'], ['partyName', 'Party Name']
+            ]},
+            { label: 'Battle Flow', fields: [
+                ['emerge', 'Enemy Emerge'], ['preemptive', 'Preemptive Attack'], ['surprise', 'Surprise Attack'],
+                ['escapeStart', 'Escape Start'], ['escapeFailure', 'Escape Failure'], ['victory', 'Victory'],
+                ['defeat', 'Defeat'], ['obtainExp', 'Obtain EXP'], ['obtainGold', 'Obtain Gold'],
+                ['obtainItem', 'Obtain Item'], ['levelUp', 'Level Up'], ['obtainSkill', 'Obtain Skill'],
+                ['useItem', 'Use Item']
+            ]},
+            { label: 'Battle Damage', fields: [
+                ['criticalToEnemy', 'Critical To Enemy'], ['criticalToActor', 'Critical To Actor'],
+                ['actorDamage', 'Actor Damage'], ['actorRecovery', 'Actor Recovery'], ['actorGain', 'Actor Gain'],
+                ['actorLoss', 'Actor Loss'], ['actorDrain', 'Actor Drain'], ['actorNoDamage', 'Actor No Damage'],
+                ['actorNoHit', 'Actor No Hit'], ['enemyDamage', 'Enemy Damage'], ['enemyRecovery', 'Enemy Recovery'],
+                ['enemyGain', 'Enemy Gain'], ['enemyLoss', 'Enemy Loss'], ['enemyDrain', 'Enemy Drain'],
+                ['enemyNoDamage', 'Enemy No Damage'], ['enemyNoHit', 'Enemy No Hit']
+            ]},
+            { label: 'Battle Effects', fields: [
+                ['evasion', 'Evasion'], ['magicEvasion', 'Magic Evasion'], ['magicReflection', 'Magic Reflection'],
+                ['counterAttack', 'Counter Attack'], ['substitute', 'Substitute'], ['buffAdd', 'Buff Add'],
+                ['debuffAdd', 'Debuff Add'], ['buffRemove', 'Buff Remove'], ['actionFailure', 'Action Failure']
+            ]}
+        ];
 
-        listEl.innerHTML = `
-            <div class="database-list-item" data-category="basic">Basic</div>
-            <div class="database-list-item" data-category="commands">Commands</div>
-            <div class="database-list-item" data-category="params">Parameters</div>
-            <div class="database-list-item" data-category="messages">Messages</div>
+        Object.entries(arrays).forEach(([key, labels]) => {
+            if (!Array.isArray(terms[key])) terms[key] = [];
+            while (terms[key].length < labels.length) terms[key].push('');
+        });
+        if (!terms.messages || typeof terms.messages !== 'object') terms.messages = {};
+
+        const renderArrayFields = (category, labels, className = '') => labels.map((label, index) => `
+            <label class="rr-term-field ${className}" title="${rrEscapeHtml(tt(label))}">
+                <span>${tt(label)}</span>
+                <input type="text" class="database-field-value rr-term-input" data-category="${category}" data-index="${index}" value="${rrEscapeHtml(terms[category][index] || '')}" placeholder="${tt('(default)')}">
+            </label>
+        `).join('');
+
+        const messagesHtml = messageGroups.map(group => `
+            <div class="rr-terms-message-group">${tt(group.label)}</div>
+            ${group.fields.map(([key, label]) => `
+                <label class="rr-terms-message-row" title="${rrEscapeHtml(tt(label))}">
+                    <span>${tt(label)}</span>
+                    <input type="text" class="rr-term-message-input" data-key="${key}" value="${rrEscapeHtml(terms.messages[key] || '')}" placeholder="${tt('(default)')}">
+                </label>
+            `).join('')}
+        `).join('');
+
+        detailEl.innerHTML = `
+            <div class="rr-terms-workspace">
+                <div class="rr-terms-left">
+                    <div class="rr-terms-top-grid">
+                        <section class="rr-terms-panel">
+                            <header>${tt('Basic Statuses')}</header>
+                            <div class="rr-terms-fields rr-terms-fields-two">${renderArrayFields('basic', arrays.basic)}</div>
+                        </section>
+                        <section class="rr-terms-panel">
+                            <header>${tt('Parameters')}</header>
+                            <div class="rr-terms-fields rr-terms-fields-two">${renderArrayFields('params', arrays.params)}</div>
+                        </section>
+                    </div>
+                    <section class="rr-terms-panel rr-terms-commands-panel">
+                        <header>${tt('Commands')}</header>
+                        <div class="rr-terms-fields rr-terms-fields-four">${renderArrayFields('commands', arrays.commands)}</div>
+                    </section>
+                </div>
+                <section class="rr-terms-panel rr-terms-messages-panel">
+                    <header>${tt('Messages')}</header>
+                    <div class="rr-terms-message-columns"><span>${tt('Type')}</span><span>${tt('Text')}</span></div>
+                    <div class="rr-terms-message-list">${messagesHtml}</div>
+                </section>
+            </div>
         `;
 
-        detailEl.innerHTML = '<p style="color: var(--color-text-muted); text-align: center; margin-top: 100px;">Select a terms category from the list</p>';
-
-        // Add click handlers
-        listEl.querySelectorAll('.database-list-item').forEach(item => {
-            item.addEventListener('click', () => {
-                listEl.querySelectorAll('.database-list-item').forEach(i => i.classList.remove('selected'));
-                item.classList.add('selected');
-
-                const category = item.dataset.category;
-                this.showTermDetail(system.terms, category);
+        detailEl.querySelectorAll('.rr-term-input').forEach(input => {
+            input.addEventListener('input', () => {
+                terms[input.dataset.category][Number(input.dataset.index)] = input.value;
             });
+            this.attachTextFieldContextMenu(input);
+        });
+        detailEl.querySelectorAll('.rr-term-message-input').forEach(input => {
+            input.addEventListener('input', () => {
+                terms.messages[input.dataset.key] = input.value;
+            });
+            this.attachTextFieldContextMenu(input);
         });
     }
 
@@ -2411,42 +3185,48 @@ class DatabaseEditorUI {
      * mutation of the system.terms object on every keystroke.
      */
     showTermDetail(terms, category) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const detailEl = document.getElementById('database-detail');
 
         const arrayCategoryMeta = {
             basic: {
-                title: 'Basic Terms',
-                description: 'Labels shown on status panels, level-up screens, and the bestiary.',
-                labels: ['Level', 'Level (Abbreviation)', 'HP', 'HP (Abbreviation)', 'MP', 'MP (Abbreviation)', 'TP', 'TP (Abbreviation)']
+                title: tt('Basic Terms'),
+                description: tt('Labels shown on status panels, level-up screens, and the bestiary.'),
+                labels: [
+                    'Level', 'Level (Abbreviation)', 'HP', 'HP (Abbreviation)',
+                    'MP', 'MP (Abbreviation)', 'TP', 'TP (Abbreviation)',
+                    'EXP', 'EXP (Abbreviation)'
+                ].map(tt)
             },
             commands: {
-                title: 'Command Terms',
-                description: 'Battle command and menu labels.',
+                title: tt('Command Terms'),
+                description: tt('Battle command and menu labels.'),
                 labels: [
                     'Fight',         'Escape',        'Attack',        'Guard',
                     'Item',          'Skill',         'Equip',         'Status',
                     'Formation',     'Save',          'Game End',      'Options',
                     'Weapon',        'Armor',         'Key Item',      'Equip',
                     'Optimize',      'Clear',         'New Game',      'Continue',
-                    '(Reserved)',    'To Title',      'Cancel'
-                ]
+                    '(Reserved)',    'To Title',      'Cancel',        '(Reserved)',
+                    'Buy',           'Sell'
+                ].map(tt)
             },
             params: {
-                title: 'Parameters',
-                description: 'Stat names used in the status menu, equipment screen, and damage formulas.',
+                title: tt('Parameters'),
+                description: tt('Stat names used in the status menu, equipment screen, and damage formulas.'),
                 labels: [
                     'Max HP', 'Max MP', 'Attack', 'Defense',
                     'Magic Attack', 'Magic Defense', 'Agility', 'Luck',
                     'Hit',           'Evasion'
-                ]
+                ].map(tt)
             }
         };
 
         // Object-keyed Messages schema. Groups are presentation-only.
         // hint shows what %1 / %2 / %3 will be replaced with at runtime.
         const messagesSchema = {
-            title: 'Messages',
-            description: 'Game messages and option labels. %1, %2, %3 are placeholders the engine fills in at runtime (e.g. "%1 took %2 damage!" → "Harold took 25 damage!"). The hint under each field shows what each placeholder becomes.',
+            title: tt('Messages'),
+            description: tt('Game messages and option labels. %1, %2, %3 are placeholders the engine fills in at runtime (e.g. "%1 took %2 damage!" → "Harold took 25 damage!"). The hint under each field shows what each placeholder becomes.'),
             groups: [
                 { label: 'Options Menu', fields: [
                     { key: 'alwaysDash',      label: 'Always Dash' },
@@ -2524,17 +3304,17 @@ class DatabaseEditorUI {
             let bodyHtml = '';
             meta.groups.forEach(group => {
                 bodyHtml += `
-                    <div style="font-size: 12px; font-weight: 700; color: var(--color-accent-bright); text-transform: uppercase; letter-spacing: 0.5px; margin: 18px 0 8px; padding-bottom: 4px; border-bottom: 1px solid var(--color-accent-border-mid);">${group.label}</div>
+                    <div style="font-size: 12px; font-weight: 700; color: var(--color-accent-bright); text-transform: uppercase; letter-spacing: 0.5px; margin: 18px 0 8px; padding-bottom: 4px; border-bottom: 1px solid var(--color-accent-border-mid);">${tt(group.label)}</div>
                 `;
                 group.fields.forEach(field => {
                     const value = data[field.key] != null ? String(data[field.key]) : '';
                     const hintHtml = field.hint
-                        ? `<div style="grid-column: 2; font-size: 11px; color: var(--color-text-muted); margin-top: 3px;">${field.hint}</div>`
+                        ? `<div style="grid-column: 2; font-size: 11px; color: var(--color-text-muted); margin-top: 3px;">${tt(field.hint)}</div>`
                         : '';
                     bodyHtml += `
                         <div style="display: grid; grid-template-columns: 200px 1fr; gap: 12px 12px; align-items: center; padding: 6px 12px; background: var(--color-bg-list-item); border: 1px solid var(--color-border); border-radius: 3px; margin-bottom: 4px;">
-                            <div style="font-size: 12px; color: var(--color-text-muted); font-weight: 600;">${field.label}</div>
-                            <input type="text" class="rr-terms-msg-input database-field-value" data-key="${field.key}" value="${value.replace(/"/g, '&quot;')}" placeholder="(default)">
+                            <div style="font-size: 12px; color: var(--color-text-muted); font-weight: 600;">${tt(field.label)}</div>
+                            <input type="text" class="rr-terms-msg-input database-field-value" data-key="${field.key}" value="${rrEscapeHtml(value)}" placeholder="${tt('(default)')}">
                             ${hintHtml}
                         </div>
                     `;
@@ -2569,12 +3349,12 @@ class DatabaseEditorUI {
 
         let rowsHtml = '';
         data.forEach((value, index) => {
-            const label = meta.labels[index] || `Slot ${index}`;
+            const label = meta.labels[index] ? tt(meta.labels[index]) : `${tt('Slot')} ${index}`;
             rowsHtml += `
                 <div style="display: grid; grid-template-columns: 48px 180px 1fr; gap: 12px; align-items: center; padding: 8px 12px; background: var(--color-bg-list-item); border: 1px solid var(--color-border); border-radius: 3px; margin-bottom: 6px;">
                     <div style="text-align: center; font-size: 11px; color: var(--color-text-muted); font-family: var(--font-mono); padding: 4px 0; background: var(--color-bg-deep); border-radius: 3px; border: 1px solid var(--color-border-subtle);">${String(index).padStart(3, '0')}</div>
                     <div style="font-size: 12px; color: var(--color-text-muted); font-weight: 600;">${label}</div>
-                    <input type="text" class="rr-terms-input database-field-value" data-index="${index}" value="${(value || '').replace(/"/g, '&quot;')}" placeholder="(default)">
+                    <input type="text" class="rr-terms-input database-field-value" data-index="${index}" value="${rrEscapeHtml(value)}" placeholder="${tt('(default)')}">
                 </div>
             `;
         });

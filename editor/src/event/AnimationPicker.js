@@ -24,7 +24,7 @@ class AnimationPicker {
     }
 
     _t(text) {
-        return window.I18n ? window.I18n.tText(text) : text;
+        return (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
     }
 
     /**
@@ -360,7 +360,7 @@ class AnimationPicker {
 
         // Animation name
         const nameLabel = document.createElement('div');
-        nameLabel.textContent = animation.name || 'Unnamed';
+        nameLabel.textContent = animation.name || this._t('Unnamed');
         nameLabel.style.cssText = 'color: var(--color-text-strong); font-size: 14px; font-weight: 600; margin-bottom: 12px;';
         panel.appendChild(nameLabel);
 
@@ -448,7 +448,7 @@ class AnimationPicker {
                 const p1 = new Promise((resolve) => {
                     img1.onload = () => { spriteSheet1 = img1; resolve(); };
                     img1.onerror = () => { console.warn('Failed to load:', imgPath); resolve(); };
-                    img1.src = 'file://' + imgPath;
+                    img1.src = RRAssetFiles.toUrl(imgPath);
                 });
                 promises.push(p1);
             }
@@ -459,7 +459,7 @@ class AnimationPicker {
                 const p2 = new Promise((resolve) => {
                     img2.onload = () => { spriteSheet2 = img2; resolve(); };
                     img2.onerror = () => { console.warn('Failed to load:', imgPath); resolve(); };
-                    img2.src = 'file://' + imgPath;
+                    img2.src = RRAssetFiles.toUrl(imgPath);
                 });
                 promises.push(p2);
             }
@@ -662,7 +662,14 @@ class AnimationPicker {
         }
 
         const path = require('path');
-        const effectPath = path.join(currentProject.path, 'effects', animation.effectName + '.efkefc');
+        const effectFile = RRAssetFiles.find(path.join(currentProject.path, 'effects'), animation.effectName, ['.efkefc']);
+        const effectPath = effectFile?.absolutePath;
+        if (!effectPath) {
+            frameLabel.textContent = this._t('Failed to load effect');
+            playBtn.disabled = true;
+            playBtn.style.opacity = '0.5';
+            return;
+        }
 
         // onLoad can fire synchronously inside loadEffect when the core
         // already caches every resource — `effect` is not assigned yet in
@@ -848,6 +855,12 @@ class AnimationPicker {
             this._effekseerContext = null;
         }
 
+        // Force-lose the GL context instead of waiting for GC — live WebGL
+        // contexts are capped per page (~16 in Chromium).
+        if (this._gl) {
+            const lose = this._gl.getExtension && this._gl.getExtension('WEBGL_lose_context');
+            if (lose) { try { lose.loseContext(); } catch (e) {} }
+        }
         this._gl = null;
         this._spriteSheet1 = null;
         this._spriteSheet2 = null;

@@ -1,12 +1,11 @@
 // ─────────────────────────────────────────────────────────────────────────
 // Outfit engine — the procedural part generator core.
 //
-// Runs in BOTH Node (CLI: gen_outfit.js) and the browser (editor live
-// preview). No Node-only APIs in this file; the CLI passes the body template
-// in, the editor passes it in too.
+// Runs in both Node tooling and the browser editor. No Node-only APIs are used;
+// callers pass the body template in.
 //
-// Design is grounded in procgen/analysis/PATTERN_LANGUAGE.md, synthesized from
-// reading every artist part. The headline rule that fixes the "one blob" look:
+// Each independently rendered zone receives its own palette family. The
+// contrast between materials keeps adjacent armor pieces visually distinct:
 //
 //   EACH ZONE GETS ITS OWN PALETTE FAMILY. The CONTRAST between a steel
 //   breastplate, a leather+gold belt, navy pants and gunmetal boots is what
@@ -37,7 +36,6 @@ function loadProcgenModule(relPath) {
 }
 
 const STYLE_MODULES = {
-    looseleaf: loadProcgenModule('./styles/looseleaf.js'),
     psychronic: loadProcgenModule('./styles/psychronic.js')
 };
 const NOVA_SENTINEL_RECIPE = loadProcgenModule('./outfits/nova_sentinel.js');
@@ -710,7 +708,7 @@ function psychronicZoneMaskOuterStrokePixels(zone, direction, frame, letter, mas
 }
 
 function builtInZoneEditPayload(config = {}, onlyZone = null) {
-    const style = config && config.style || 'looseleaf';
+    const style = config && config.style || 'psychronic';
     const payload = {
         style,
         cell: { width: 144, height: 144 },
@@ -853,8 +851,8 @@ function cleanSidePantsShade(p, sideT, t, backEdge = 0, phase = 0) {
     return rampShade(p, -0.46 + crown * 1.08 + beltTuck + lowerTaper + backEdge);
 }
 
-// Mini-skirt shade shared by the Looseleaf and Psychronic leg painters and by
-// the post-paint flare pass (applyMiniSkirtFlare). The skirt is ONE cloth that
+// Mini-skirt shade shared by the leg painter and post-paint flare pass
+// (applyMiniSkirtFlare). The skirt is one cloth that
 // spans both hips (no inseam split) and stops at a tunable hem fraction.
 // Below the hem the painter returns null so the skirt cloth is transparent and
 // the underlying body legs show through; optional knee pads are stamped by a
@@ -876,12 +874,7 @@ function cleanSidePantsShade(p, sideT, t, backEdge = 0, phase = 0) {
 // pixels beyond the body silhouette — there, positions outside the half-width
 // produce crown=0 (edge shading), which is what gives the A-line bell its
 // darker outer edges.
-// Wider hem span for the mini-skirt than the legs-zone alone gives. The legs
-// zone is short on some bodies (Looseleaf: beltBottom 0.72 → bootTop 0.78 =
-// only ~4 rows), so a hem fraction of the legs zone produces a barely-below-
-// the-belt band that is mostly waistband + hem line with no room for pleats.
-// Mapping hem to beltBottom→ankleY instead (~0.23 of bodyH on Looseleaf,
-// ~0.32 on Psychronic) gives the user a meaningful mid-thigh→long-dress
+// The belt-bottom-to-ankle span gives the hem control a useful anatomy-relative
 // range and leaves enough cloth rows for the pleat pattern to show.
 function skirtSpan(anchors) {
     const legs = anchors && anchors.legs;
@@ -1209,7 +1202,7 @@ const PAINTERS = {
             const dxc = Math.abs(x - face.cx);
             const headTop = head.minY;
             // Futuristic visor: dark angular shell with a brighter inset glow,
-            // adapted from the Looseleaf futuristic visor parts.
+            // angular shell with a brighter inset glow.
             const hasVisor = params.visor && !params.openFace && p.glow && direction !== 3;
 
             const facingFwd = direction === 1 ? (x < face.cx) : (x > face.cx);
@@ -1353,7 +1346,7 @@ const PAINTERS = {
             const edgeDist = Math.min(dL, dR);
 
             // Back spine: nested mechanical channel with alternating lames and
-            // side ribs, loosely inspired by the busy Looseleaf breastplates.
+            // side ribs keep broad torso plates from reading as a flat fill.
             if (direction === 3 && t > 0.12 && t < 0.88) {
                 const localY = y - torso.minY;
                 const seg = Math.floor(localY / 3);
@@ -1866,8 +1859,7 @@ const EXTENSIONS = {
     }
 };
 
-// Psychronic uses the same Forge data model as Looseleaf, but its armour reads
-// more like hard neon exo-panels than the rounded Looseleaf pixel plates.
+// Psychronic armor uses hard neon exo-panels and authored anatomy masks.
 const PSYCHRONIC_PAINTERS = {
     head: {
         helmet(ctx, params, p) {
@@ -2268,7 +2260,7 @@ const PSYCHRONIC_EXTENSIONS = {
 };
 
 function styleAdapter(style) {
-    const key = style === 'psychronic' ? 'psychronic' : 'looseleaf';
+    const key = style === 'psychronic' ? 'psychronic' : null;
     const factory = STYLE_MODULES[key];
     if (typeof factory === 'function') {
         return factory({
@@ -2279,6 +2271,8 @@ function styleAdapter(style) {
         });
     }
     if (key === 'psychronic') return { painters: PSYCHRONIC_PAINTERS, extensions: PSYCHRONIC_EXTENSIONS, analyze: analyzeFramePsychronic, classify: classifyPixelPsychronic, face: psychronicFaceBand };
+    // Project styles retain the generic adapter seam without introducing
+    // additional bundled style content.
     return { painters: PAINTERS, extensions: EXTENSIONS, analyze: analyzeFrame, classify: classifyPixel, face: faceBand };
 }
 
@@ -2831,17 +2825,6 @@ const UI_SCHEMA = {
           } }
     ],
     partSets: [
-        { key: 'nova-sentinel', label: 'Nova Sentinel', style: 'looseleaf', parts: [
-            { id: 'nova-head', label: 'Helmet', kind: 'zone', key: 'head', spec: { enabled: true, layer: 60, style: 'helmet', family: 'steel', accent: 'cyan', params: { visor: true, openFace: false, crest: true, earModule: 'compact' } } },
-            { id: 'nova-torso', label: 'Torso Armor', kind: 'zone', key: 'torso', spec: { enabled: true, layer: 40, style: 'plated', family: 'steel', accent: 'cyan', params: { reactor: true } } },
-            { id: 'nova-arms', label: 'Arm Suit', kind: 'zone', key: 'arms', spec: { enabled: true, layer: 50, style: 'gauntlet', family: 'gunmetal', accent: 'cyan', params: { powerStrip: true, wristBand: true, glove: true } } },
-            { id: 'nova-belt', label: 'Utility Belt', kind: 'zone', key: 'belt', spec: { enabled: true, layer: 45, style: 'utility', family: 'gold', accent: 'gold', params: { buckle: true, studs: true, height: 0.7 } } },
-            { id: 'nova-legs', label: 'Leg Armor', kind: 'zone', key: 'legs', spec: { enabled: true, layer: 20, style: 'segmented', family: 'navy', accent: 'cyan', params: { kneeAccent: true } } },
-            { id: 'nova-miniskirt', label: 'Mini Skirt', kind: 'zone', key: 'legs', spec: { enabled: true, layer: 20, style: 'miniSkirt', family: 'navy', accent: 'cyan', params: { kneeAccent: true, hem: 0.35, waistband: true, pleats: true } } },
-            { id: 'nova-boots', label: 'Heavy Boots', kind: 'zone', key: 'boots', spec: { enabled: true, layer: 30, style: 'heavy', family: 'iron', accent: '', params: {} } },
-            { id: 'nova-pauldrons', label: 'Pauldrons', kind: 'ext', key: 'pauldron', spec: { enabled: true, layer: 55, family: 'steel', accent: 'cyan', params: { size: 1.0, layered: true, accentRim: false } } },
-            { id: 'nova-gauntlets', label: 'Gauntlets', kind: 'ext', key: 'armGauntlet', spec: { enabled: true, layer: 55, family: 'gunmetal', accent: 'cyan', params: { powerStrip: true, wristBand: true, bulge: 2, banded: true } } }
-        ] },
         { key: 'nova-sentinel-psychronic', label: 'Nova Sentinel', style: 'psychronic', parts: [
             { id: 'psychronic-nova-head', label: 'Helmet', kind: 'zone', key: 'head', spec: { enabled: true, layer: 60, style: 'helmet', family: 'steel', accent: 'cyan', params: { visor: true, openFace: false, crest: true, earModule: 'compact' } } },
             { id: 'psychronic-nova-torso', label: 'Torso Armor', kind: 'zone', key: 'torso', spec: { enabled: true, layer: 40, style: 'plated', family: 'steel', accent: 'cyan', params: { reactor: true } } },
@@ -2898,34 +2881,15 @@ if (NOVA_SENTINEL_RECIPE && Array.isArray(NOVA_SENTINEL_RECIPE.partSets)) {
 }
 
 // A sensible starting config the Forge opens with.
-function defaultConfig(style = 'looseleaf') {
+function defaultConfig(style = 'psychronic') {
     if (NOVA_SENTINEL_RECIPE && typeof NOVA_SENTINEL_RECIPE.defaultConfig === 'function') {
         return NOVA_SENTINEL_RECIPE.defaultConfig(style);
     }
-    if (style === 'psychronic') return {
+    return {
         style: 'psychronic',
         name: 'Nova Sentinel',
         category: 'full outfits',
         tags: ['psychronic', 'male', 'procgen'],
-        paletteTheme: 'nova-sentinel',
-        zones: {
-            head:  { enabled: true, layer: 60, style: 'helmet',    family: 'steel',    accent: 'cyan', params: { visor: true, openFace: false, crest: true, earModule: 'compact' } },
-            torso: { enabled: true, layer: 40, style: 'plated',    family: 'steel',    accent: 'cyan', params: { reactor: true } },
-            arms:  { enabled: true, layer: 50, style: 'gauntlet',  family: 'gunmetal', accent: 'cyan', params: { powerStrip: true, wristBand: true, glove: true } },
-            belt:  { enabled: true, layer: 45, style: 'utility',   family: 'gold',     accent: 'gold', params: { buckle: true, studs: true, height: 0.7 } },
-            legs:  { enabled: true, layer: 20, style: 'segmented', family: 'navy',     accent: 'cyan', params: { kneeAccent: true } },
-            boots: { enabled: true, layer: 30, style: 'heavy',     family: 'iron',     accent: '',     params: {} }
-        },
-        extensions: [
-            { type: 'pauldron',    layer: 55, family: 'steel',    accent: 'cyan', params: { size: 1.0, layered: true, accentRim: false } },
-            { type: 'armGauntlet', layer: 55, family: 'gunmetal', accent: 'cyan', params: { powerStrip: true, wristBand: true, bulge: 2, banded: true } }
-        ]
-    };
-    return {
-        style: 'looseleaf',
-        name: 'Nova Sentinel',
-        category: 'full outfits',
-        tags: ['looseleaf', 'male', 'procgen'],
         paletteTheme: 'nova-sentinel',
         zones: {
             head:  { enabled: true, layer: 60, style: 'helmet',    family: 'steel',    accent: 'cyan', params: { visor: true, openFace: false, crest: true, earModule: 'compact' } },

@@ -81,6 +81,7 @@ class ShopProcessingEditor {
      * Get items list for a given item type
      */
     getItemsForType(itemType) {
+        const t = text => window.I18n ? window.I18n.tText(text) : text;
         const items = [];
         let data = null;
 
@@ -95,7 +96,7 @@ class ShopProcessingEditor {
         if (data) {
             for (let i = 1; i < data.length; i++) {
                 if (data[i]) {
-                    items.push({ id: i, name: data[i].name || 'Unnamed' });
+                    items.push({ id: i, name: data[i].name || t('Unnamed') });
                 }
             }
         }
@@ -107,6 +108,7 @@ class ShopProcessingEditor {
      * Render modal content
      */
     renderContent() {
+        const t = text => window.I18n ? window.I18n.tText(text) : text;
         const container = this.modal.querySelector('.shop-processing-container');
         container.innerHTML = '';
 
@@ -114,7 +116,7 @@ class ShopProcessingEditor {
         const header = document.createElement('div');
         header.style.cssText = 'padding: 12px 16px; background-color: var(--color-bg-panel); border-bottom: 1px solid var(--color-border); display: flex; justify-content: space-between; align-items: center; border-top-left-radius: 6px; border-top-right-radius: 6px;';
         header.innerHTML = `
-            <h3 style="margin: 0; color: var(--color-text-strong); font-size: 16px;">Shop Processing</h3>
+            <h3 style="margin: 0; color: var(--color-text-strong); font-size: 16px;">${t('Shop Processing')}</h3>
             <button class="close-btn" style="background: none; border: none; color: var(--color-text-strong); font-size: 20px; cursor: pointer; padding: 0; width: 24px; height: 24px;">\u00d7</button>
         `;
         container.appendChild(header);
@@ -127,7 +129,7 @@ class ShopProcessingEditor {
 
         // Goods list
         const goodsLabel = document.createElement('span');
-        goodsLabel.textContent = 'Goods:';
+        goodsLabel.textContent = t('Goods:');
         goodsLabel.style.cssText = 'color: var(--color-text); font-size: 13px; font-weight: bold;';
         content.appendChild(goodsLabel);
 
@@ -142,7 +144,6 @@ class ShopProcessingEditor {
             // Item type dropdown
             const typeSelect = document.createElement('select');
             typeSelect.style.cssText = 'padding: 6px 10px; background-color: var(--color-bg-input); color: var(--color-text); border: 1px solid var(--color-border-input); border-radius: 3px; font-size: 12px; width: 100px;';
-            const t = text => window.I18n ? window.I18n.tText(text) : text;
             typeSelect.innerHTML = `
                 <option value="0" ${good.itemType === 0 ? 'selected' : ''}>${t('Item')}</option>
                 <option value="1" ${good.itemType === 1 ? 'selected' : ''}>${t('Weapon')}</option>
@@ -194,7 +195,7 @@ class ShopProcessingEditor {
             bottomRow.style.cssText = 'display: flex; align-items: center; gap: 8px;';
 
             const priceLabel = document.createElement('span');
-            priceLabel.textContent = 'Price:';
+            priceLabel.textContent = t('Price:');
             priceLabel.style.cssText = 'color: var(--color-text); font-size: 12px; min-width: 40px;';
 
             // Standard radio
@@ -209,7 +210,7 @@ class ShopProcessingEditor {
             });
 
             const stdLabel = document.createElement('label');
-            stdLabel.textContent = 'Standard';
+            stdLabel.textContent = t('Standard');
             stdLabel.style.cssText = 'color: var(--color-text); font-size: 12px; cursor: pointer;';
             stdLabel.addEventListener('click', () => { stdRadio.checked = true; stdRadio.dispatchEvent(new Event('change')); });
 
@@ -225,7 +226,7 @@ class ShopProcessingEditor {
             });
 
             const customLabel = document.createElement('label');
-            customLabel.textContent = 'Custom';
+            customLabel.textContent = t('Custom');
             customLabel.style.cssText = 'color: var(--color-text); font-size: 12px; cursor: pointer;';
             customLabel.addEventListener('click', () => { customRadio.checked = true; customRadio.dispatchEvent(new Event('change')); });
 
@@ -254,7 +255,7 @@ class ShopProcessingEditor {
 
         // Add good button
         const addBtn = document.createElement('button');
-        addBtn.textContent = '+ Add Good';
+        addBtn.textContent = t('+ Add Good');
         addBtn.style.cssText = 'padding: 6px 16px; background-color: var(--color-bg-panel); color: var(--color-text); border: 1px solid var(--color-border-input); border-radius: 3px; cursor: pointer; font-size: 12px; align-self: flex-start;';
         addBtn.addEventListener('click', () => {
             this.goods.push({itemType: 0, itemId: 1, priceMode: 0, price: 0});
@@ -276,7 +277,7 @@ class ShopProcessingEditor {
 
         const purchaseLabel = document.createElement('label');
         purchaseLabel.htmlFor = 'shop-purchase-only';
-        purchaseLabel.textContent = 'Purchase Only';
+        purchaseLabel.textContent = t('Purchase Only');
         purchaseLabel.style.cssText = 'color: var(--color-text); font-size: 13px; cursor: pointer;';
 
         purchaseRow.appendChild(purchaseCheckbox);
@@ -290,12 +291,12 @@ class ShopProcessingEditor {
         footer.style.cssText = 'padding: 12px 16px; border-top: 1px solid var(--color-border); background-color: var(--color-bg-panel); display: flex; justify-content: flex-end; gap: 8px;';
 
         const cancelBtn = document.createElement('button');
-        cancelBtn.textContent = 'Cancel';
+        cancelBtn.textContent = t('Cancel');
         cancelBtn.className = 'rr-btn-secondary';
         cancelBtn.addEventListener('click', () => this.close());
 
         const okBtn = document.createElement('button');
-        okBtn.textContent = 'OK';
+        okBtn.textContent = t('OK');
         okBtn.style.cssText = 'padding: 6px 20px; background-color: var(--color-accent); color: var(--color-bg-deep); border: none; border-radius: 3px; cursor: pointer; font-size: 12px; font-weight: bold;';
         okBtn.addEventListener('click', () => this.save());
 

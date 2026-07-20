@@ -41,6 +41,10 @@ npm-debug.log*
 *.bak
 *~
 
+# Local release-signing certificates
+*.pfx
+*.p12
+
 # Temporary files
 tmp/
 temp/
@@ -56,3 +60,6 @@ editor/dist/
 dist-editor/
 editor/dist-editor/
 INSPIRATION/
+
+# Local maintainer handoffs
+/docs/STATUS-*.md

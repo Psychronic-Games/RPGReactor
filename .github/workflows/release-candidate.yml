@@ -1,0 +1,161 @@
+name: Release Candidate
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Exact editor/package.json version
+        required: true
+        type: string
+      publishable:
+        description: Sign/notarize native artifacts for later publication
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+env:
+  RELEASE_VERSION: ${{ inputs.version }}
+  RELEASE_MODE: ${{ inputs.publishable && 'publish' || 'candidate' }}
+
+concurrency:
+  group: release-candidate-${{ github.ref }}-${{ inputs.version }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: editor/package-lock.json
+      - working-directory: editor
+        run: npm ci --ignore-scripts
+      - run: node .github/scripts/check-syntax.cjs
+      - working-directory: editor
+        run: npm test
+      - working-directory: editor
+        run: npm audit
+      - run: git diff --check
+      - shell: bash
+        run: |
+          git diff --exit-code
+          test -z "$(git status --porcelain=v1 --untracked-files=all)"
+
+  linux-x64:
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: editor/package-lock.json
+      - working-directory: editor
+        run: npm ci --ignore-scripts
+      - run: node editor/build-scripts/release-editor.cjs --target linux --mode "$RELEASE_MODE" --version "$RELEASE_VERSION" --output-root "$RUNNER_TEMP/rpg-release"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rpg-reactor-v${{ inputs.version }}-linux-x64
+          path: ${{ runner.temp }}/rpg-release/v${{ inputs.version }}/linux/
+          if-no-files-found: error
+
+  windows-x64:
+    needs: validate
+    runs-on: windows-latest
+    timeout-minutes: 90
+    env:
+      WINDOWS_CERTIFICATE_PATH: ${{ runner.temp }}\rpg-reactor-signing.pfx
+      WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+      WINDOWS_CERTIFICATE_BASE64: ${{ secrets.WINDOWS_CERTIFICATE_BASE64 }}
+      WINDOWS_TIMESTAMP_URL: ${{ vars.WINDOWS_TIMESTAMP_URL }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: editor/package-lock.json
+      - working-directory: editor
+        run: npm ci --ignore-scripts
+      - name: Materialize Authenticode certificate
+        if: inputs.publishable
+        shell: pwsh
+        run: '[IO.File]::WriteAllBytes($env:WINDOWS_CERTIFICATE_PATH, [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE_BASE64))'
+      - shell: pwsh
+        run: node editor/build-scripts/release-editor.cjs --target windows --mode "$env:RELEASE_MODE" --version "$env:RELEASE_VERSION" --output-root "$env:RUNNER_TEMP\rpg-release"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rpg-reactor-v${{ inputs.version }}-windows-x64
+          path: ${{ runner.temp }}\rpg-release\v${{ inputs.version }}\windows\
+          if-no-files-found: error
+
+  macos-x64:
+    needs: validate
+    runs-on: macos-15-intel
+    timeout-minutes: 120
+    env:
+      MACOS_SIGNING_IDENTITY: ${{ secrets.MACOS_SIGNING_IDENTITY }}
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: editor/package-lock.json
+      - working-directory: editor
+        run: npm ci --ignore-scripts
+      - name: Import Developer ID certificate
+        if: inputs.publishable
+        env:
+          MACOS_CERTIFICATE_BASE64: ${{ secrets.MACOS_CERTIFICATE_BASE64 }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          MACOS_KEYCHAIN_PASSWORD: ${{ secrets.MACOS_KEYCHAIN_PASSWORD }}
+        shell: bash
+        run: |
+          CERTIFICATE_PATH="$RUNNER_TEMP/rpg-reactor-signing.p12"
+          KEYCHAIN_PATH="$RUNNER_TEMP/rpg-reactor-signing.keychain-db"
+          printf '%s' "$MACOS_CERTIFICATE_BASE64" | base64 --decode > "$CERTIFICATE_PATH"
+          security create-keychain -p "$MACOS_KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$MACOS_KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import "$CERTIFICATE_PATH" -P "$MACOS_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security list-keychain -d user -s "$KEYCHAIN_PATH"
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$MACOS_KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+      - run: node editor/build-scripts/release-editor.cjs --target macos --mode "$RELEASE_MODE" --version "$RELEASE_VERSION" --output-root "$RUNNER_TEMP/rpg-release"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rpg-reactor-v${{ inputs.version }}-macos-x64
+          path: ${{ runner.temp }}/rpg-release/v${{ inputs.version }}/macos/
+          if-no-files-found: error
+
+  web:
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: editor/package-lock.json
+      - working-directory: editor
+        run: npm ci --ignore-scripts
+      - run: node editor/build-scripts/release-editor.cjs --target web --mode "$RELEASE_MODE" --version "$RELEASE_VERSION" --output-root "$RUNNER_TEMP/rpg-release"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rpg-reactor-v${{ inputs.version }}-web
+          path: ${{ runner.temp }}/rpg-release/v${{ inputs.version }}/web/
+          if-no-files-found: error

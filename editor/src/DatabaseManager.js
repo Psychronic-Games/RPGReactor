@@ -2,6 +2,29 @@
 // Handles loading and managing all database JSON files
 
 class DatabaseManager {
+    static maximumEntries(dataKey) {
+        const limits = globalThis.RR_LIMITS?.DATABASE_ENTRIES || {
+            actors: 9999,
+            classes: 9999,
+            skills: 9999,
+            items: 9999,
+            weapons: 9999,
+            armors: 9999,
+            enemies: 9999,
+            troops: 9999,
+            states: 9999,
+            animations: 1000,
+            tilesets: 1000,
+            commonEvents: 9999,
+            elements: 512,
+            skillTypes: 128,
+            weaponTypes: 256,
+            armorTypes: 256,
+            equipTypes: 128
+        };
+        return limits[dataKey] || 0;
+    }
+
     // Atomic write for project data: write a temp sibling then rename over
     // the destination, so a crash/kill/full-disk mid-write can never destroy
     // the previous good file. Falls back to a plain write when the fs
@@ -18,6 +41,9 @@ class DatabaseManager {
     constructor() {
         this.fs = null;
         this.path = null;
+        this.projectPath = null;
+        this.dataGeneration = 0;
+        this.mutationGeneration = 0;
         this.savedState = {};
         const host = typeof window !== 'undefined' ? window.RPGReactorHost : null;
         if (host?.fs && host?.path) {
@@ -65,6 +91,22 @@ class DatabaseManager {
         }
     }
 
+    async _readJsonWithRetry(filePath, attempts = 3) {
+        let lastError = null;
+        for (let attempt = 0; attempt < attempts; attempt++) {
+            try {
+                const content = this.fs.readFileSync(filePath, 'utf8').replace(/^\uFEFF/, '');
+                return JSON.parse(content);
+            } catch (error) {
+                lastError = error;
+                if (attempt + 1 < attempts && typeof setTimeout === 'function') {
+                    await new Promise(resolve => setTimeout(resolve, 25 * (attempt + 1)));
+                }
+            }
+        }
+        throw lastError;
+    }
+
     async loadAllData(projectPath) {
         if (!this.fs || !this.path) {
             return false;
@@ -76,8 +118,10 @@ class DatabaseManager {
             for (const [key, filename] of this.dataFiles) {
                 loaded[key] = await this.loadJSON(dataPath, filename);
             }
-            loaded.mapInfos = await this.loadJSON(dataPath, 'MapInfos.json');
             Object.assign(this.data, loaded);
+            this.projectPath = projectPath;
+            this.dataGeneration++;
+            this.mutationGeneration++;
             this.captureSavedState();
 
             return true;
@@ -95,8 +139,7 @@ class DatabaseManager {
         }
 
         try {
-            const content = this.fs.readFileSync(filePath, 'utf8');
-            return JSON.parse(content);
+            return await this._readJsonWithRetry(filePath);
         } catch (error) {
             console.error(`Error loading ${filename}:`, error);
             throw new Error(`Could not parse ${filename}: ${error.message}`);
@@ -126,7 +169,7 @@ class DatabaseManager {
         return this.getDirtyKeys().length > 0;
     }
 
-    async saveJSON(projectPath, filename, data) {
+    async saveJSON(projectPath, filename, data, options = {}) {
         if (!this.fs || !this.path) {
             return false;
         }
@@ -150,7 +193,7 @@ class DatabaseManager {
             const entry = this.dataFiles.find(([, file]) => file === filename);
             if (entry) this.captureSavedState(entry[0]);
 
-            if (filename !== 'System.json' && this.data && this.data.system) {
+            if (filename !== 'System.json' && !options.skipVersionBump && this.data && this.data.system) {
                 this.data.system.versionId = DatabaseManager.newVersionId();
                 const systemPath = this.path.join(dataPath, 'System.json');
                 this._writeFileAtomic(this.fs, systemPath, JSON.stringify(this.data.system, null, 2));
@@ -276,62 +319,78 @@ class DatabaseManager {
     // Update methods
     updateActor(id, data) {
         this.data.actors[id] = data;
+        this.mutationGeneration++;
     }
 
     updateClass(id, data) {
         this.data.classes[id] = data;
+        this.mutationGeneration++;
     }
 
     updateSkill(id, data) {
         this.data.skills[id] = data;
+        this.mutationGeneration++;
     }
 
     updateItem(id, data) {
         this.data.items[id] = data;
+        this.mutationGeneration++;
     }
 
     updateWeapon(id, data) {
         this.data.weapons[id] = data;
+        this.mutationGeneration++;
     }
 
     updateArmor(id, data) {
         this.data.armors[id] = data;
+        this.mutationGeneration++;
     }
 
     updateEnemy(id, data) {
         this.data.enemies[id] = data;
+        this.mutationGeneration++;
     }
 
     updateState(id, data) {
         this.data.states[id] = data;
+        this.mutationGeneration++;
     }
 
     updateAnimation(id, data) {
         this.data.animations[id] = data;
+        this.mutationGeneration++;
     }
 
     updateTroop(id, data) {
         this.data.troops[id] = data;
+        this.mutationGeneration++;
     }
 
     updateTileset(id, data) {
         this.data.tilesets[id] = data;
+        this.mutationGeneration++;
     }
 
     updateCommonEvent(id, data) {
         this.data.commonEvents[id] = data;
+        this.mutationGeneration++;
     }
 
     addEntry(dataKey, template) {
         if (!this.data[dataKey]) return null;
+        const maximum = this.getMaximumEntries(dataKey);
+        if (!maximum || this.getMaxEntries(dataKey) >= maximum) return null;
         template.id = this.data[dataKey].length;
         this.data[dataKey].push(template);
+        this.mutationGeneration++;
         return template;
     }
 
     deleteEntry(dataKey, id) {
         if (!this.data[dataKey]) return;
         this.data[dataKey][id] = null;
+        this.mutationGeneration++;
     }
 
     /**
@@ -343,6 +402,10 @@ class DatabaseManager {
         return Math.max(0, this.data[dataKey].length - 1);
     }
 
+    getMaximumEntries(dataKey) {
+        return DatabaseManager.maximumEntries(dataKey);
+    }
+
     /**
      * Change the maximum number of entries for a database type.
      * If increasing, adds new default entries. If decreasing, truncates.
@@ -352,14 +415,19 @@ class DatabaseManager {
      * @returns {boolean} Whether the operation succeeded
      */
     changeMaximum(dataKey, newMax, template) {
-        if (!this.data[dataKey] || newMax < 1) return false;
+        if (!this.data[dataKey] || !Number.isInteger(newMax) || newMax < 1) return false;
 
         const currentMax = this.getMaxEntries(dataKey);
+        const maximum = this.getMaximumEntries(dataKey);
+        // Preserve imported projects that already exceed a stock limit, but
+        // never let the editor grow them farther beyond it.
+        if (!maximum || (newMax > maximum && newMax > currentMax)) return false;
 
         if (newMax > currentMax) {
             // Add new entries
+            const serializedTemplate = JSON.stringify(template);
             for (let i = currentMax + 1; i <= newMax; i++) {
-                const newEntry = JSON.parse(JSON.stringify(template));
+                const newEntry = JSON.parse(serializedTemplate);
                 newEntry.id = i;
                 newEntry.name = '';
                 this.data[dataKey][i] = newEntry;
@@ -369,6 +437,8 @@ class DatabaseManager {
             this.data[dataKey].length = newMax + 1;
         }
 
+        if (newMax !== currentMax) this.mutationGeneration++;
+
         return true;
     }
 
@@ -377,7 +447,10 @@ class DatabaseManager {
 
         const failed = [];
         for (const [key, filename] of this.dataFiles) {
-            if (!await this.saveJSON(projectPath, filename, this.data[key])) {
+            // System.json is part of dataFiles and gets its own fresh
+            // versionId when its turn comes — skip the companion rewrite
+            // that would otherwise re-save it after every other file.
+            if (!await this.saveJSON(projectPath, filename, this.data[key], { skipVersionBump: true })) {
                 failed.push(filename);
             }
         }

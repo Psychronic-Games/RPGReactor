@@ -9,6 +9,14 @@ const { Worker } = require('node:worker_threads');
 const editorRoot = path.resolve(__dirname, '..');
 const nwCodec = require(path.join(editorRoot, 'build-scripts', 'nw-codec-utils.js'));
 
+function writeX64Elf(filePath) {
+    const elf = Buffer.alloc(64);
+    elf.set([0x7f, 0x45, 0x4c, 0x46, 2, 1, 1]);
+    elf.writeUInt16LE(62, 18);
+    fs.writeFileSync(filePath, elf);
+    fs.chmodSync(filePath, '755');
+}
+
 function runBuild(workerData) {
     return new Promise((resolve, reject) => {
         const logs = [];
@@ -52,8 +60,7 @@ test('desktop deployment reuses an exact archive from the second cache root', as
         const runtimeParent = path.join(root, 'runtime-source');
         const runtimeDir = path.join(runtimeParent, 'nwjs-v9.9.9-linux-x64');
         fs.mkdirSync(runtimeDir, { recursive: true });
-        fs.writeFileSync(path.join(runtimeDir, 'nw'), '#!/bin/sh\n');
-        fs.chmodSync(path.join(runtimeDir, 'nw'), '755');
+        writeX64Elf(path.join(runtimeDir, 'nw'));
         execFileSync('tar', ['czf', path.join(secondCache, 'nwjs-v9.9.9-linux-x64.tar.gz'), '-C', runtimeParent, path.basename(runtimeDir)]);
 
         const codecSource = path.join(root, 'codec-source');
@@ -84,6 +91,7 @@ test('desktop deployment reuses an exact archive from the second cache root', as
             appImageToolPath: fakeAppImageTool,
             appImageRuntimePath: fakeAppImageRuntime,
             appRoot,
+            releaseBuild: false,
         });
 
         assert.equal(result.success, true, result.logs.join('\n'));
@@ -108,12 +116,11 @@ test('packaged flat runtime does not recursively copy an output below the editor
         const outputDir = path.join(appRoot, 'dist');
         fs.mkdirSync(appRoot, { recursive: true });
         fs.mkdirSync(path.join(projectPath, 'data'), { recursive: true });
-        fs.writeFileSync(path.join(appRoot, 'nw'), '#!/bin/sh\n');
+        writeX64Elf(path.join(appRoot, 'nw'));
         fs.writeFileSync(path.join(appRoot, 'RPGReactor'), 'branded editor');
         fs.writeFileSync(path.join(appRoot, 'icudtl.dat'), 'runtime data');
         fs.mkdirSync(path.join(appRoot, 'unrelated-user-files'));
         fs.writeFileSync(path.join(appRoot, 'notes.txt'), 'not part of NW.js');
-        fs.chmodSync(path.join(appRoot, 'nw'), '755');
         fs.chmodSync(path.join(appRoot, 'RPGReactor'), '755');
         fs.writeFileSync(path.join(projectPath, 'package.json'), JSON.stringify({ name: 'raw-mv', main: 'index.html' }));
         fs.writeFileSync(path.join(projectPath, 'index.html'), '<!doctype html>');
@@ -130,6 +137,7 @@ test('packaged flat runtime does not recursively copy an output below the editor
             runtimeSource: 'bundled',
             appRoot,
             editorExecPath: path.join(appRoot, 'RPGReactor'),
+            releaseBuild: false,
         });
 
         assert.equal(result.success, true, result.logs.join('\n'));
@@ -154,10 +162,9 @@ test('specific NW.js version overrides a mismatched packaged runtime in Automati
         fs.mkdirSync(appRoot, { recursive: true });
         fs.mkdirSync(cache);
         fs.mkdirSync(path.join(projectPath, 'data'), { recursive: true });
-        fs.writeFileSync(path.join(appRoot, 'nw'), '#!/bin/sh\n');
+        writeX64Elf(path.join(appRoot, 'nw'));
         fs.writeFileSync(path.join(appRoot, 'RPGReactor'), 'editor 0.107.0');
         fs.writeFileSync(path.join(appRoot, 'icudtl.dat'), 'local runtime');
-        fs.chmodSync(path.join(appRoot, 'nw'), '755');
         fs.writeFileSync(path.join(projectPath, 'package.json'), JSON.stringify({ name: 'raw-mv', main: 'index.html' }));
         fs.writeFileSync(path.join(projectPath, 'index.html'), '<!doctype html>');
         fs.writeFileSync(path.join(projectPath, 'data', 'System.json'), JSON.stringify({ gameTitle: 'Exact Smoke' }));
@@ -165,9 +172,8 @@ test('specific NW.js version overrides a mismatched packaged runtime in Automati
         const runtimeParent = path.join(root, 'runtime-source');
         const runtimeDir = path.join(runtimeParent, 'nwjs-v9.9.9-linux-x64');
         fs.mkdirSync(runtimeDir, { recursive: true });
-        fs.writeFileSync(path.join(runtimeDir, 'nw'), '#!/bin/sh\n');
+        writeX64Elf(path.join(runtimeDir, 'nw'));
         fs.writeFileSync(path.join(runtimeDir, 'exact-runtime.dat'), '9.9.9');
-        fs.chmodSync(path.join(runtimeDir, 'nw'), '755');
         execFileSync('tar', ['czf', path.join(cache, 'nwjs-v9.9.9-linux-x64.tar.gz'), '-C', runtimeParent, path.basename(runtimeDir)]);
 
         const result = await runBuild({
@@ -181,6 +187,7 @@ test('specific NW.js version overrides a mismatched packaged runtime in Automati
             runtimeSource: 'bundled',
             appRoot,
             editorExecPath: path.join(appRoot, 'RPGReactor'),
+            releaseBuild: false,
         });
 
         assert.equal(result.success, true, result.logs.join('\n'));

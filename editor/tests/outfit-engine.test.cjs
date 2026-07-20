@@ -18,14 +18,6 @@ function loadRegistryPart(filePath) {
 }
 
 function bodyPathForStyle(style, gender = 'male') {
-    if (style === 'looseleaf') {
-        return path.join(
-            repoRoot,
-            'src', 'forge', 'CharacterGenerator', 'styles', 'looseleaf', 'parts', 'body', 'male',
-            'body-looseleaf-looseleaf-male-body-01.js'
-        );
-    }
-
     if (style === 'psychronic') {
         return path.join(
             repoRoot,
@@ -80,12 +72,12 @@ function expectedMiniSkirtKneePadY(anchors) {
     return Math.max(minKneeY, kneeY - 1);
 }
 
-test('Nova Sentinel recipe exposes Looseleaf and Psychronic part sets', () => {
+test('Nova Sentinel recipe exposes only the bundled Psychronic part set', () => {
     assert.equal(novaSentinel.key, 'nova-sentinel');
     assert.equal(novaSentinel.label, 'Nova Sentinel');
 
     const styles = new Set(novaSentinel.partSets.map(set => set.style));
-    assert.deepEqual(styles, new Set(['looseleaf', 'psychronic']));
+    assert.deepEqual(styles, new Set(['psychronic']));
 
     for (const style of styles) {
         const config = novaSentinel.defaultConfig(style);
@@ -119,9 +111,7 @@ test('Nova Sentinel recipe exposes a Mini Skirt preset for the Legs slot in each
     }
 });
 
-test('Outfit engine registers a miniSkirt legs painter for every built-in style', () => {
-    assert.equal(typeof engine.PAINTERS.legs.miniSkirt, 'function',
-        'Looseleaf PAINTERS.legs exposes a miniSkirt painter');
+test('Outfit engine registers a miniSkirt legs painter for Psychronic', () => {
     assert.equal(typeof engine.PSYCHRONIC_PAINTERS.legs.miniSkirt, 'function',
         'Psychronic PAINTERS.legs exposes a miniSkirt painter');
     assert.ok(engine.UI_SCHEMA.zones.some(z => z.key === 'legs' && z.styles.includes('miniSkirt')),
@@ -134,14 +124,14 @@ test('Outfit engine registers a miniSkirt legs painter for every built-in style'
     assert.deepEqual(hemParam.styles, ['miniSkirt'], 'hem is only shown for miniSkirt');
     assert.deepEqual(kneeParam.styles, ['segmented', 'miniSkirt'], 'knee plates are shown for segmented legs and miniSkirt knee pads');
     for (const partSet of engine.UI_SCHEMA.partSets) {
-        if (partSet.style !== 'looseleaf' && partSet.style !== 'psychronic') continue;
+        if (partSet.style !== 'psychronic') continue;
         assert.ok(partSet.parts.some(p => p.kind === 'zone' && p.key === 'legs' && p.label === 'Mini Skirt'),
             `${partSet.style} browser UI schema includes the Mini Skirt preset`);
     }
 });
 
 test('Outfit engine generates a valid Mini Skirt sheet that leaves bare legs visible', () => {
-    for (const style of ['looseleaf', 'psychronic']) {
+    for (const style of ['psychronic']) {
         const body = loadRegistryPart(bodyPathForStyle(style));
         const config = engine.defaultConfig(style);
         config.zones.legs.style = 'miniSkirt';
@@ -210,7 +200,7 @@ test('Outfit engine generates a valid Mini Skirt sheet that leaves bare legs vis
         // leg-ramp letter (outline + shadow = visible shading stripes, not a
         // flat single-letter wash). Larger legs zones (Psychronic) get the full
         // crown gradient and reach 5+ distinct letters; a tight legs zone
-        // (Looseleaf) still produces 2+ because the painter emits the outline
+        // still produces 2+ because the painter emits the outline
         // edge, the dark waistband, and crisp shadow crease stripes.
         const distinctLettersAboveHem = new Set();
         for (let y = minY; y <= hemY; y++) {
@@ -334,7 +324,7 @@ test('Outfit engine generates a valid Mini Skirt sheet that leaves bare legs vis
 });
 
 test('Outfit engine generates valid Nova Sentinel sheets for built-in styles', () => {
-    for (const style of ['looseleaf', 'psychronic']) {
+    for (const style of ['psychronic']) {
         const body = loadRegistryPart(bodyPathForStyle(style));
         const result = engine.generateOutfit(engine.defaultConfig(style), body.template);
 
@@ -343,7 +333,7 @@ test('Outfit engine generates valid Nova Sentinel sheets for built-in styles', (
 });
 
 test('Outfit engine keeps side-view pants and boots visibly shaded', () => {
-    for (const style of ['looseleaf', 'psychronic']) {
+    for (const style of ['psychronic']) {
         const config = engine.defaultConfig(style);
         const built = engine.buildPalette(config);
         const body = loadRegistryPart(bodyPathForStyle(style));
@@ -372,7 +362,7 @@ test('Outfit engine keeps side-view pants and boots visibly shaded', () => {
 });
 
 test('Outfit palette builder reuses families and validates bad names', () => {
-    const config = engine.defaultConfig('looseleaf');
+    const config = engine.defaultConfig('psychronic');
     const built = engine.buildPalette(config);
 
     assert.equal(built.zonePalettes.head.outline, built.zonePalettes.torso.outline);
@@ -390,7 +380,7 @@ test('Outfit palette builder reuses families and validates bad names', () => {
 });
 
 test('Outfit engine exposes eye-line anchors for helmet placement', () => {
-    for (const style of ['looseleaf', 'psychronic']) {
+    for (const style of ['psychronic']) {
         const body = loadRegistryPart(bodyPathForStyle(style));
         const debug = engine.debugClassifyFrame(
             engine.defaultConfig(style),

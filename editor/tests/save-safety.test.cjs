@@ -67,16 +67,118 @@ test('DatabaseManager rejects malformed JSON without replacing the loaded databa
         fs.writeFileSync(path.join(dataPath, fileName), JSON.stringify(data));
     }
     fs.writeFileSync(path.join(dataPath, 'MapInfos.json'), '[null]');
-    fs.writeFileSync(path.join(dataPath, 'Items.json'), '[null,{');
+    const itemsPath = path.join(dataPath, 'Items.json');
+    fs.writeFileSync(itemsPath, '\uFEFF[null,{"id":1,"name":"药草"}]');
     const previousItems = manager.data.items;
 
     try {
+        const nativeFs = manager.fs;
+        let itemReads = 0;
+        manager.fs = Object.create(nativeFs);
+        manager.fs.readFileSync = (filePath, ...args) => {
+            if (filePath === itemsPath && itemReads++ === 0) return '[null,{';
+            return nativeFs.readFileSync(filePath, ...args);
+        };
+        assert.equal(await manager.loadAllData(tempRoot), true);
+        assert.equal(manager.data.items[1].name, '药草');
+        assert.equal(itemReads, 2, 'a transient partial database read is retried');
+
+        manager.fs = nativeFs;
+        fs.writeFileSync(itemsPath, '[null,{');
+        const loadedItems = manager.data.items;
         assert.equal(await manager.loadAllData(tempRoot), false);
-        assert.equal(manager.data.items, previousItems, 'partial loads are not committed');
-        assert.equal(fs.readFileSync(path.join(dataPath, 'Items.json'), 'utf8'), '[null,{');
+        assert.equal(manager.data.items, loadedItems, 'partial loads are not committed');
+        assert.notEqual(manager.data.items, previousItems);
+        assert.equal(fs.readFileSync(itemsPath, 'utf8'), '[null,{');
     } finally {
         fs.rmSync(tempRoot, { recursive: true, force: true });
     }
+});
+
+test('DatabaseManager enforces RPG Maker database maximums without growing oversized imports', () => {
+    const DatabaseManager = loadBrowserClass('DatabaseManager.js', 'DatabaseManager');
+    const manager = new DatabaseManager();
+    const template = { id: 0, name: '', values: [] };
+
+    assert.equal(manager.getMaximumEntries('actors'), 9999);
+    assert.equal(manager.getMaximumEntries('animations'), 1000);
+    assert.equal(manager.getMaximumEntries('tilesets'), 1000);
+    assert.equal(manager.getMaximumEntries('elements'), 512);
+
+    manager.data.actors = [null];
+    assert.equal(manager.changeMaximum('actors', 3, template), true);
+    assert.equal(manager.data.actors.length, 4);
+    assert.notEqual(manager.data.actors[1], manager.data.actors[2]);
+    assert.equal(manager.changeMaximum('actors', 10000, template), false);
+    assert.equal(manager.changeMaximum('actors', 99999, template), false);
+    assert.equal(manager.changeMaximum('actors', 2.5, template), false);
+    assert.equal(manager.data.actors.length, 4);
+
+    manager.data.animations = [null];
+    assert.equal(manager.changeMaximum('animations', 1001, template), false);
+    manager.data.tilesets = [null];
+    assert.equal(manager.changeMaximum('tilesets', 9999, template), false);
+
+    manager.data.actors = new Array(10002);
+    assert.equal(manager.changeMaximum('actors', 10000, template), true, 'oversized imports can be reduced');
+    assert.equal(manager.data.actors.length, 10001);
+    assert.equal(manager.changeMaximum('actors', 10001, template), false, 'oversized imports cannot regrow');
+});
+
+test('DatabaseManager addEntry stops at the database maximum', () => {
+    const DatabaseManager = loadBrowserClass('DatabaseManager.js', 'DatabaseManager');
+    const manager = new DatabaseManager();
+    manager.data.animations = new Array(1001);
+
+    assert.equal(manager.addEntry('animations', { name: 'Too many' }), null);
+    assert.equal(manager.data.animations.length, 1001);
+});
+
+test('map allocation supports IDs above 1000, reuses holes, and bounds live map count', () => {
+    const ProjectController = loadBrowserClass('ProjectController.js', 'ProjectController');
+    const controller = Object.create(ProjectController.prototype);
+    controller.currentProject = { maps: [null] };
+    for (let id = 1; id <= 1000; id++) controller.currentProject.maps[id] = { id };
+
+    assert.equal(controller.getNextAvailableMapId(), 1001);
+    controller.currentProject.maps[500] = null;
+    assert.equal(controller.getNextMapId(), 500);
+
+    controller.currentProject.maps = [null];
+    for (let id = 1; id <= 2000; id++) controller.currentProject.maps[id] = { id };
+    assert.equal(controller.getNextAvailableMapId(), 0);
+
+    const runtime = fs.readFileSync(path.resolve(editorRoot, '..', 'runtime', 'reactor_managers.js'), 'utf8');
+    assert.match(runtime, /"Map%1\.json"\.format\(mapId\.padZero\(3\)\)/);
+    assert.equal(String(1000).padStart(3, '0'), '1000');
+
+    controller.currentProject.maps = [
+        null,
+        { id: 1, name: 'Folder', parentId: 0, order: 0 },
+        { id: 2, name: 'Other root', parentId: 0, order: 1 },
+        { id: 3, name: 'Child A', parentId: 1, order: 0 },
+        { id: 4, name: 'Child B', parentId: 1, order: 1 }
+    ];
+    const rootPlacement = controller.getMapPastePlacement(1);
+    assert.deepEqual({ ...rootPlacement }, { parentId: 0, order: 0.5 });
+    controller.currentProject.maps[5] = { id: 5, parentId: rootPlacement.parentId, order: rootPlacement.order };
+    controller.recalculateMapOrder(0);
+    assert.deepEqual(
+        controller.currentProject.maps.filter(map => map && map.parentId === 0).sort((a, b) => a.order - b.order).map(map => map.id),
+        [1, 5, 2]
+    );
+
+    const childPlacement = controller.getMapPastePlacement(3);
+    assert.deepEqual({ ...childPlacement }, { parentId: 1, order: 0.5 });
+    controller.currentProject.maps[6] = { id: 6, parentId: childPlacement.parentId, order: childPlacement.order };
+    controller.recalculateMapOrder(1);
+    assert.deepEqual(
+        controller.currentProject.maps.filter(map => map && map.parentId === 1).sort((a, b) => a.order - b.order).map(map => map.id),
+        [3, 6, 4]
+    );
+
+    const fallbackPlacement = controller.getMapPastePlacement(null);
+    assert.deepEqual({ ...fallbackPlacement }, { parentId: 0, order: 3 });
 });
 
 test('TilemapManager snapshots persisted map data and only clears dirty state after a successful save', () => {
@@ -166,10 +268,9 @@ test('ProjectController saveAll stops immediately when map or database persisten
 });
 
 test('ProjectController checks dirty state before deleting the loaded map', async () => {
-    const responses = [true, false, false];
     const ProjectController = loadBrowserClass('ProjectController.js', 'ProjectController', {
         alert: () => {},
-        confirm: () => responses.shift()
+        confirm: () => true
     });
     const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'rpg-reactor-delete-map-'));
     const dataPath = path.join(tempRoot, 'data');
@@ -180,7 +281,7 @@ test('ProjectController checks dirty state before deleting the loaded map', asyn
     const controller = new ProjectController(
         { saveMapInfos: () => true },
         { data: {}, isDirty: () => false },
-        { updateStatus: () => {} }
+        { updateStatus: () => {}, promptUnsavedChanges: async () => 'cancel' }
     );
     controller.currentProject = {
         path: tempRoot,
@@ -197,19 +298,23 @@ test('ProjectController checks dirty state before deleting the loaded map', asyn
         await controller.deleteMap(1);
         assert.equal(fs.existsSync(mapPath), true, 'canceling the dirty prompt keeps the map file');
         assert.equal(controller.currentProject.maps[1].name, 'Dirty Map');
-        assert.deepEqual(responses, []);
     } finally {
         fs.rmSync(tempRoot, { recursive: true, force: true });
     }
 });
 
-test('closing a project drops the old tilemap manager before a same-project reopen', async () => {
+test('discard closes projects and applications without saving', async () => {
     const ProjectController = loadBrowserClass('ProjectController.js', 'ProjectController', { nw: undefined });
     let destroyed = false;
+    let saves = 0;
     const controller = new ProjectController(
         {},
-        { data: {}, isDirty: () => false },
-        { showWelcomeScreen: () => {}, updateStatus: () => {} }
+        { data: {}, isDirty: () => true },
+        {
+            showWelcomeScreen: () => {},
+            updateStatus: () => {},
+            promptUnsavedChanges: async () => 'discard'
+        }
     );
     controller.projectLoaded = true;
     controller.currentProject = { path: '/project', maps: [] };
@@ -218,11 +323,33 @@ test('closing a project drops the old tilemap manager before a same-project reop
         isMapDirty: () => false,
         destroy: () => { destroyed = true; }
     };
+    controller.saveAll = async () => { saves++; return true; };
 
     await controller.closeProject();
+    assert.equal(saves, 0, 'discard does not save the project');
     assert.equal(destroyed, true);
     assert.equal(controller.tilemapManager, null);
     assert.equal(controller.lastLoadedProjectPath, null);
+    assert.equal(controller.currentProject, null);
+    assert.equal(controller.hasUnsavedChanges(), false,
+        'discarded database state cannot prompt again after the project closes');
+
+    let forcedCloses = 0;
+    const AppProjectController = loadBrowserClass('ProjectController.js', 'ProjectController', {
+        nw: { Window: { get: () => ({ close: force => { if (force) forcedCloses++; } }) } }
+    });
+    const appController = new AppProjectController(
+        {},
+        { data: {}, isDirty: () => true },
+        { promptUnsavedChanges: async () => 'discard' }
+    );
+    appController.currentProject = { path: '/project', maps: [] };
+    appController.projectLoaded = true;
+    appController.saveAll = async () => { saves++; return true; };
+    assert.equal(await appController.requestApplicationClose(), true);
+    assert.equal(saves, 0, 'discard does not save during application close');
+    assert.equal(forcedCloses, 1);
+    assert.equal(appController.allowApplicationClose, true);
 });
 
 test('a failed database load leaves the controller in a safe no-project state', async () => {

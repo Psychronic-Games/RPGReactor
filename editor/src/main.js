@@ -213,6 +213,7 @@ class RPGReactor {
             // Set up zoom change callback
             const tilemapManager = this.projectController.getTilemapManager();
             if (tilemapManager) {
+                this.applyAutotileAnimationPreference(this.optionsManager.getAnimateAutotiles());
                 tilemapManager.onZoomChange = () => {
                     this.updateMapZoom();
                 };
@@ -250,22 +251,29 @@ class RPGReactor {
 
         // Initialize Options Manager (theme/preferences modal)
         this.optionsManager = new OptionsManager();
+        window.addEventListener('rr-autotile-animation-changed', (event) => {
+            this.applyAutotileAnimationPreference(event.detail.enabled);
+        });
+        document.getElementById('map-autotile-animation')?.addEventListener('change', (event) => {
+            this.optionsManager.setAnimateAutotiles(event.currentTarget.checked);
+        });
+        this.applyAutotileAnimationPreference(this.optionsManager.getAnimateAutotiles());
 
         // Initialize Forge tool suite (character generator etc.)
         this.forgeManager = new ForgeManager(this.projectController);
 
         // Initialize Playtest Manager
-        this.playtestManager = new PlaytestManager();
+        this.playtestManager = new PlaytestManager(this.projectManager);
 
         // Initialize Build Manager
         const web = window.RPGReactorHost?.mode === 'web';
         this.buildManager = web
-            ? { open: () => window.RPGReactorHost.unsupported('Game deployment') }
+            ? { open: () => window.RPGReactorHost.unsupported(window.I18n ? window.I18n.tText('Game deployment') : 'Game deployment') }
             : new BuildManager();
 
         // Initialize Editor Distribution Manager
         this.distEditorManager = web
-            ? { open: () => window.RPGReactorHost.unsupported('Editor deployment') }
+            ? { open: () => window.RPGReactorHost.unsupported(window.I18n ? window.I18n.tText('Editor deployment') : 'Editor deployment') }
             : new DistEditorManager();
 
         // Initialize Plugin Manager
@@ -324,6 +332,17 @@ class RPGReactor {
         }, 2000);
     }
 
+    applyAutotileAnimationPreference(enabled) {
+        const next = enabled !== false;
+        const tilemapManager = this.projectController?.getTilemapManager?.() || this.tilemapManager;
+        if (tilemapManager?.setA1AnimationEnabled) {
+            tilemapManager.setA1AnimationEnabled(next);
+        }
+
+        const checkbox = document.getElementById('map-autotile-animation');
+        if (checkbox) checkbox.checked = next;
+    }
+
     // Playtest orchestration
     async playtest() {
         const project = this.projectController.getCurrentProject();
@@ -332,8 +351,14 @@ class RPGReactor {
             return;
         }
 
+        // Best-effort repair — a failure here (e.g. unreadable System.json)
+        // must not abort the playtest with an unhandled rejection.
         if (this.projectController.repairInvalidSystemMapReferences) {
-            await this.projectController.repairInvalidSystemMapReferences();
+            try {
+                await this.projectController.repairInvalidSystemMapReferences();
+            } catch (e) {
+                console.warn('repairInvalidSystemMapReferences failed:', e);
+            }
         }
 
         // Save the project (current map + database + MapInfos) before
@@ -664,7 +689,7 @@ class RPGReactor {
         }
 
         // Calculate how much space the icons occupy vs fixed elements (labels, separators, gaps, padding)
-        const iconCount = toolbar.querySelectorAll('.tool-button img').length;
+        const iconCount = toolbar.querySelectorAll('.tool-button img, .tool-button svg').length;
         const totalIconWidth = iconCount * maxSize;
         const fixedWidth = naturalWidth - totalIconWidth;
 
@@ -742,6 +767,7 @@ class RPGReactor {
                 {
                     updateStatus: (msg) => this.updateStatus(msg),
                     getRendererApp: () => this.tilemapManager?.app || null,
+                    getTilemapManager: () => this.projectController.getTilemapManager(),
                     showTilesetEditor: () => this.showTilesetEditor(),
                     closeTilesetEditor: () => this.closeTilesetEditor(),
                     showTypesEditor: () => this.showTypesEditor(),
@@ -755,7 +781,7 @@ class RPGReactor {
 
     openDatabase(type) {
         if (!this.projectController.isProjectLoaded()) {
-            alert('Please load a project first');
+            alert(window.I18n ? window.I18n.t('alert.loadProjectFirst') : 'Please load a project first.');
             return;
         }
 
@@ -766,6 +792,7 @@ class RPGReactor {
                 {
                     updateStatus: (msg) => this.updateStatus(msg),
                     getRendererApp: () => this.tilemapManager?.app || null,
+                    getTilemapManager: () => this.projectController.getTilemapManager(),
                     showTilesetEditor: () => this.showTilesetEditor(),
                     closeTilesetEditor: () => this.closeTilesetEditor(),
                     showTypesEditor: () => this.showTypesEditor(),
@@ -1123,15 +1150,16 @@ class RPGReactor {
     installCompatibilityTitlebar() {
         if (document.getElementById('compat-titlebar')) return;
 
+        const tt = text => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
         const titlebar = document.createElement('div');
         titlebar.id = 'compat-titlebar';
         titlebar.innerHTML = `
             <div class="compat-titlebar-icon"><img src="images/icon.png" alt=""></div>
             <div class="compat-titlebar-title">RPG Reactor | Reactor One</div>
             <div class="compat-titlebar-controls">
-                <button type="button" data-window-action="minimize" title="Minimize">&minus;</button>
-                <button type="button" data-window-action="maximize" title="Maximize">□</button>
-                <button type="button" data-window-action="close" title="Close">×</button>
+                <button type="button" data-window-action="minimize" title="${tt('Minimize')}">&minus;</button>
+                <button type="button" data-window-action="maximize" title="${tt('Maximize')}">□</button>
+                <button type="button" data-window-action="close" title="${tt('Close')}">×</button>
             </div>
         `;
 

@@ -9,12 +9,14 @@ class DatabaseSystem1Editor {
         this.projectManager = projectManager;
         this.commonUI = commonUI;
         this.parentEditor = parentEditor;
+        this.locationPicker = new TransferPlayerEditor(databaseManager, projectManager);
     }
 
     showSystem1Detail(container) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const system = this.databaseManager.getSystem();
         if (!system) {
-            container.innerHTML = '<p style="color: var(--color-text-muted); text-align: center; margin-top: 100px;">System data not loaded</p>';
+            container.innerHTML = `<p style="color: var(--color-text-muted); text-align: center; margin-top: 100px;">${tt('System data not loaded')}</p>`;
             return;
         }
 
@@ -36,7 +38,7 @@ class DatabaseSystem1Editor {
             font-weight: 600;
             color: var(--color-text-strong);
         `;
-        titleBanner.textContent = 'System 1';
+        titleBanner.textContent = tt('System 1');
         wrapper.appendChild(titleBanner);
 
         // 3-column grid
@@ -230,9 +232,15 @@ class DatabaseSystem1Editor {
                 });
             });
 
+            container.querySelectorAll('.system-pos-picker-btn').forEach(button => {
+                button.addEventListener('click', () => {
+                    this.showStartLocationPicker(system, button.dataset.posOwner, container);
+                });
+            });
+
             // Command Window Settings button
             const cmdWindowBtn = container.querySelector('.database-button');
-            if (cmdWindowBtn && cmdWindowBtn.textContent.trim() === 'Command Window Settings') {
+            if (cmdWindowBtn && cmdWindowBtn.textContent.trim() === tt('Command Window Settings')) {
                 cmdWindowBtn.addEventListener('click', () => {
                     this.showCommandWindowModal(system, container);
                 });
@@ -242,13 +250,14 @@ class DatabaseSystem1Editor {
     }
 
     createColumn1(system) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const column = document.createElement('div');
         column.style.cssText = 'display: flex; flex-direction: column; gap: 16px;';
 
         // Row 1: Game Title
-        const gameTitleSection = this.createSection('Game Title', `
+        const gameTitleSection = this.createSection(tt('Game Title'), `
             <div class="form-row">
-                <input type="text" class="database-field-value system-text-field" style="width: 100%;" value="${system.gameTitle || ''}" data-system-field="gameTitle">
+                <input type="text" class="database-field-value system-text-field" style="width: 100%;" value="${rrEscapeHtml(system.gameTitle)}" data-system-field="gameTitle">
             </div>
         `);
         column.appendChild(gameTitleSection);
@@ -260,35 +269,35 @@ class DatabaseSystem1Editor {
         partyMembers.forEach((actorId, idx) => {
             const actor = this.databaseManager.getActor(actorId);
             partyListHTML += `<div class="party-member-row" style="display: flex; align-items: center; gap: 6px; padding: 3px 0;">
-                <span style="color: var(--color-text); flex: 1; font-size: 12px;">${actor ? actor.name : 'Actor #' + actorId}</span>
-                <button class="party-move-up" data-idx="${idx}" style="padding: 2px 6px; background: var(--color-bg-menubar); color: var(--color-text); border: 1px solid var(--color-border-input); border-radius: 3px; cursor: pointer; font-size: 10px;" title="Move up">\u25B2</button>
-                <button class="party-move-down" data-idx="${idx}" style="padding: 2px 6px; background: var(--color-bg-menubar); color: var(--color-text); border: 1px solid var(--color-border-input); border-radius: 3px; cursor: pointer; font-size: 10px;" title="Move down">\u25BC</button>
-                <button class="party-remove" data-idx="${idx}" style="padding: 2px 6px; background: var(--color-bg-menubar); color: #f44; border: 1px solid var(--color-border-input); border-radius: 3px; cursor: pointer; font-size: 10px;" title="Remove">\u2715</button>
+                <span style="color: var(--color-text); flex: 1; font-size: 12px;">${rrEscapeHtml(actor ? actor.name : tt('Actor') + ' #' + actorId)}</span>
+                <button class="party-move-up" data-idx="${idx}" style="padding: 2px 6px; background: var(--color-bg-menubar); color: var(--color-text); border: 1px solid var(--color-border-input); border-radius: 3px; cursor: pointer; font-size: 10px;" title="${tt('Move up')}">\u25B2</button>
+                <button class="party-move-down" data-idx="${idx}" style="padding: 2px 6px; background: var(--color-bg-menubar); color: var(--color-text); border: 1px solid var(--color-border-input); border-radius: 3px; cursor: pointer; font-size: 10px;" title="${tt('Move down')}">\u25BC</button>
+                <button class="party-remove" data-idx="${idx}" style="padding: 2px 6px; background: var(--color-bg-menubar); color: #f44; border: 1px solid var(--color-border-input); border-radius: 3px; cursor: pointer; font-size: 10px;" title="${tt('Remove')}">\u2715</button>
             </div>`;
         });
         if (partyMembers.length === 0) {
-            partyListHTML += '<div style="color: var(--color-text-muted); font-size: 12px;">No party members</div>';
+            partyListHTML += `<div style="color: var(--color-text-muted); font-size: 12px;">${tt('No party members')}</div>`;
         }
         partyListHTML += '</div>';
         partyListHTML += `<div style="display: flex; gap: 6px; margin-top: 8px; align-items: center;">
             <select id="system-party-add-select" class="database-field-value" style="flex: 1; font-size: 12px;">
-                ${actors.filter(a => a).map(a => `<option value="${a.id}">${a.name}</option>`).join('')}
+                ${actors.filter(a => a).map(a => `<option value="${a.id}">${rrEscapeHtml(a.name)}</option>`).join('')}
             </select>
-            <button id="system-party-add-btn" style="padding: 4px 10px; background: var(--color-bg-menubar); color: var(--color-text); border: 1px solid var(--color-border-input); border-radius: 3px; cursor: pointer; font-size: 11px;">Add</button>
+            <button id="system-party-add-btn" style="padding: 4px 10px; background: var(--color-bg-menubar); color: var(--color-text); border: 1px solid var(--color-border-input); border-radius: 3px; cursor: pointer; font-size: 11px;">${tt('Add')}</button>
         </div>`;
 
-        const startingPartySection = this.createSection('Starting Party', partyListHTML);
+        const startingPartySection = this.createSection(tt('Starting Party'), partyListHTML);
         column.appendChild(startingPartySection);
 
         // Row 3: Currency & Window Tone
         const wt = system.windowTone || [0, 0, 0, 0];
-        const currencySection = this.createSection('Currency & Display', `
+        const currencySection = this.createSection(tt('Currency & Display'), `
             <div class="form-row">
-                <label class="database-field-label">Currency Unit:</label>
-                <input type="text" class="database-field-value system-text-field" style="width: 120px;" value="${system.currencyUnit || 'G'}" data-system-field="currencyUnit">
+                <label class="database-field-label">${tt('Currency Unit:')}</label>
+                <input type="text" class="database-field-value system-text-field" style="width: 120px;" value="${rrEscapeHtml(system.currencyUnit || 'G')}" data-system-field="currencyUnit">
             </div>
             <div style="margin-top: 10px;">
-                <label class="database-field-label" style="margin-bottom: 6px; display: block;">Window Tone:</label>
+                <label class="database-field-label" style="margin-bottom: 6px; display: block;">${tt('Window Tone:')}</label>
                 <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 2px;">
                     <span style="color: #f66; min-width: 14px; font-size: 11px;">R</span>
                     <input type="range" class="window-tone-slider" data-tone-idx="0" min="-255" max="255" value="${wt[0]}" style="flex: 1;">
@@ -317,51 +326,99 @@ class DatabaseSystem1Editor {
         // Row 4: Vehicle Images (with Change buttons)
         const vehicleImages = `
             <div class="form-row" style="display: flex; align-items: center; gap: 6px;">
-                <label class="database-field-label" style="min-width: 50px;">Boat:</label>
-                <input type="text" class="database-field-value" style="flex: 1;" value="${system.boat?.characterName || ''}" readonly>
-                <button class="vehicle-change-btn rr-btn-chip" data-vehicle="boat">Change</button>
+                <label class="database-field-label" style="min-width: 50px;">${tt('Boat:')}</label>
+                <input type="text" class="database-field-value" style="flex: 1;" value="${rrEscapeHtml(system.boat?.characterName || '')}" readonly>
+                <button class="vehicle-change-btn rr-btn-chip" data-vehicle="boat">${tt('Change')}</button>
             </div>
             <div class="form-row" style="display: flex; align-items: center; gap: 6px; margin-top: 6px;">
-                <label class="database-field-label" style="min-width: 50px;">Ship:</label>
-                <input type="text" class="database-field-value" style="flex: 1;" value="${system.ship?.characterName || ''}" readonly>
-                <button class="vehicle-change-btn rr-btn-chip" data-vehicle="ship">Change</button>
+                <label class="database-field-label" style="min-width: 50px;">${tt('Ship:')}</label>
+                <input type="text" class="database-field-value" style="flex: 1;" value="${rrEscapeHtml(system.ship?.characterName || '')}" readonly>
+                <button class="vehicle-change-btn rr-btn-chip" data-vehicle="ship">${tt('Change')}</button>
             </div>
             <div class="form-row" style="display: flex; align-items: center; gap: 6px; margin-top: 6px;">
-                <label class="database-field-label" style="min-width: 50px;">Airship:</label>
-                <input type="text" class="database-field-value" style="flex: 1;" value="${system.airship?.characterName || ''}" readonly>
-                <button class="vehicle-change-btn rr-btn-chip" data-vehicle="airship">Change</button>
+                <label class="database-field-label" style="min-width: 50px;">${tt('Airship:')}</label>
+                <input type="text" class="database-field-value" style="flex: 1;" value="${rrEscapeHtml(system.airship?.characterName || '')}" readonly>
+                <button class="vehicle-change-btn rr-btn-chip" data-vehicle="airship">${tt('Change')}</button>
             </div>
         `;
-        const vehicleSection = this.createSection('Vehicle Images', vehicleImages);
+        const vehicleSection = this.createSection(tt('Vehicle Images'), vehicleImages);
         column.appendChild(vehicleSection);
 
         // Row 5: Starting Positions (editable)
-        const posField = (label, mapVal, xVal, yVal, prefix) => `
-            <div class="form-row" style="margin-bottom: 6px;">
+        const posField = (label, mapVal, xVal, yVal, prefix, owner) => `
+            <div class="form-row system-pos-row" data-pos-owner="${owner}" style="margin-bottom: 6px;">
                 <label class="database-field-label" style="min-width: 50px;">${label}:</label>
                 <div style="display: flex; gap: 4px; align-items: center;">
-                    <span style="color: var(--color-text-muted); font-size: 11px;">Map</span>
-                    <input type="number" class="database-field-value system-pos-field" style="width: 50px; font-size: 11px;" value="${mapVal}" min="0" data-pos-target="${prefix}MapId">
-                    <span style="color: var(--color-text-muted); font-size: 11px;">X</span>
-                    <input type="number" class="database-field-value system-pos-field" style="width: 50px; font-size: 11px;" value="${xVal}" min="0" data-pos-target="${prefix}X">
-                    <span style="color: var(--color-text-muted); font-size: 11px;">Y</span>
-                    <input type="number" class="database-field-value system-pos-field" style="width: 50px; font-size: 11px;" value="${yVal}" min="0" data-pos-target="${prefix}Y">
+                    <span style="color: var(--color-text-muted); font-size: 11px;">${tt('Map')}</span>
+                    <input type="number" class="database-field-value system-pos-field" style="width: 50px; font-size: 11px;" value="${mapVal}" min="0" data-pos-target="${prefix}MapId" data-pos-part="mapId">
+                    <span style="color: var(--color-text-muted); font-size: 11px;">${tt('X')}</span>
+                    <input type="number" class="database-field-value system-pos-field" style="width: 50px; font-size: 11px;" value="${xVal}" min="0" data-pos-target="${prefix}X" data-pos-part="x">
+                    <span style="color: var(--color-text-muted); font-size: 11px;">${tt('Y')}</span>
+                    <input type="number" class="database-field-value system-pos-field" style="width: 50px; font-size: 11px;" value="${yVal}" min="0" data-pos-target="${prefix}Y" data-pos-part="y">
+                    <button class="system-pos-picker-btn rr-btn-chip" data-pos-owner="${owner}">${tt('Browse...')}</button>
                 </div>
             </div>`;
 
         const startingPos =
-            posField('Player', system.startMapId || 1, system.startX || 0, system.startY || 0, 'start') +
-            posField('Boat', system.boat?.startMapId || 0, system.boat?.startX || 0, system.boat?.startY || 0, 'boat.start') +
-            posField('Ship', system.ship?.startMapId || 0, system.ship?.startX || 0, system.ship?.startY || 0, 'ship.start') +
-            posField('Airship', system.airship?.startMapId || 0, system.airship?.startX || 0, system.airship?.startY || 0, 'airship.start');
+            posField(tt('Player'), system.startMapId || 1, system.startX || 0, system.startY || 0, 'start', 'player') +
+            posField(tt('Boat'), system.boat?.startMapId || 0, system.boat?.startX || 0, system.boat?.startY || 0, 'boat.start', 'boat') +
+            posField(tt('Ship'), system.ship?.startMapId || 0, system.ship?.startX || 0, system.ship?.startY || 0, 'ship.start', 'ship') +
+            posField(tt('Airship'), system.airship?.startMapId || 0, system.airship?.startX || 0, system.airship?.startY || 0, 'airship.start', 'airship');
 
-        const startingPosSection = this.createSection('Starting Positions', startingPos);
+        const startingPosSection = this.createSection(tt('Starting Positions'), startingPos);
         column.appendChild(startingPosSection);
 
         return column;
     }
 
+    applyStartLocation(system, ownerKey, location) {
+        if (!system || !location) return false;
+        const mapId = Math.max(0, Math.trunc(Number(location.mapId) || 0));
+        const x = Math.max(0, Math.trunc(Number(location.x) || 0));
+        const y = Math.max(0, Math.trunc(Number(location.y) || 0));
+
+        if (ownerKey === 'player') {
+            Object.assign(system, { startMapId: mapId, startX: x, startY: y });
+            return true;
+        }
+        if (!['boat', 'ship', 'airship'].includes(ownerKey)) return false;
+        if (!system[ownerKey]) {
+            system[ownerKey] = { characterName: '', characterIndex: 0 };
+        }
+        Object.assign(system[ownerKey], { startMapId: mapId, startX: x, startY: y });
+        return true;
+    }
+
+    showStartLocationPicker(system, ownerKey, container) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
+        const owner = ownerKey === 'player' ? system : system[ownerKey] || {};
+        const labels = {
+            player: tt('Player'),
+            boat: tt('Boat'),
+            ship: tt('Ship'),
+            airship: tt('Airship')
+        };
+        if (!labels[ownerKey]) return;
+
+        this.locationPicker.showMapPicker({
+            mapId: owner.startMapId,
+            x: owner.startX,
+            y: owner.startY,
+            title: `${labels[ownerKey]} - ${tt('Select Map & Position')}`,
+            onConfirm: location => {
+                if (!this.applyStartLocation(system, ownerKey, location)) return;
+                const row = Array.from(container.querySelectorAll('.system-pos-row'))
+                    .find(candidate => candidate.dataset.posOwner === ownerKey);
+                if (!row) return;
+                row.querySelector('[data-pos-part="mapId"]').value = location.mapId;
+                row.querySelector('[data-pos-part="x"]').value = location.x;
+                row.querySelector('[data-pos-part="y"]').value = location.y;
+            }
+        });
+    }
+
     createColumn2(system) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const column = document.createElement('div');
         column.style.cssText = 'display: flex; flex-direction: column; gap: 16px;';
 
@@ -369,27 +426,27 @@ class DatabaseSystem1Editor {
         const titleImageName = system.title1Name || '';
         const titleScreen = `
             <div class="form-row">
-                <label class="database-field-label">Title Image:</label>
+                <label class="database-field-label">${tt('Title Image:')}</label>
                 <div style="display: flex; gap: 8px; align-items: center;">
-                    <input type="text" class="database-field-value" style="flex: 1;" value="${titleImageName}" readonly>
+                    <input type="text" class="database-field-value" style="flex: 1;" value="${rrEscapeHtml(titleImageName)}" readonly>
                     <button class="title-image-picker-btn" style="padding: 6px 12px; background: var(--color-bg-panel); color: var(--color-text-strong); border: 1px solid var(--color-text-dim); border-radius: 4px; cursor: pointer; white-space: nowrap; transition: background-color 0.2s, border-color 0.2s;">
-                        Choose Image
+                        ${tt('Choose Image')}
                     </button>
                 </div>
             </div>
             <div class="form-row" style="margin-top: 8px;">
                 <label style="display: flex; align-items: center; gap: 8px; color: var(--color-text); cursor: pointer;">
                     <input type="checkbox" class="system-checkbox" ${system.optDrawTitle ? 'checked' : ''} data-field="optDrawTitle">
-                    Draw Game Title
+                    ${tt('Draw Game Title')}
                 </label>
             </div>
             <div class="form-row" style="margin-top: 8px;">
                 <button class="database-button" style="padding: 6px 12px; background: var(--color-bg-panel); color: var(--color-text-strong); border: 1px solid var(--color-text-dim); border-radius: 4px; cursor: pointer;">
-                    Command Window Settings
+                    ${tt('Command Window Settings')}
                 </button>
             </div>
         `;
-        const titleScreenSection = this.createSection('Title Screen', titleScreen);
+        const titleScreenSection = this.createSection(tt('Title Screen'), titleScreen);
         column.appendChild(titleScreenSection);
 
         // Row 2: Battle Screen
@@ -398,17 +455,17 @@ class DatabaseSystem1Editor {
             <div class="form-row">
                 <label style="display: flex; align-items: center; gap: 8px; color: var(--color-text); cursor: pointer;">
                     <input type="radio" class="system-radio" name="battleView" value="frontView" ${!system.optSideView ? 'checked' : ''} data-field="optSideView" data-value="false">
-                    Front View
+                    ${tt('Front View')}
                 </label>
             </div>
             <div class="form-row" style="margin-top: 4px;">
                 <label style="display: flex; align-items: center; gap: 8px; color: var(--color-text); cursor: pointer;">
                     <input type="radio" class="system-radio" name="battleView" value="sideView" ${system.optSideView ? 'checked' : ''} data-field="optSideView" data-value="true">
-                    Side View
+                    ${tt('Side View')}
                 </label>
             </div>
         `;
-        const battleScreenSection = this.createSection('Battle Screen', battleScreen);
+        const battleScreenSection = this.createSection(tt('Battle Screen'), battleScreen);
         column.appendChild(battleScreenSection);
 
         // Row 3: Battle System
@@ -416,23 +473,23 @@ class DatabaseSystem1Editor {
             <div class="form-row">
                 <label style="display: flex; align-items: center; gap: 8px; color: var(--color-text); cursor: pointer;">
                     <input type="radio" class="system-radio" name="battleSystem" value="turn" ${system.battleSystem === 0 ? 'checked' : ''} data-field="battleSystem" data-value="0">
-                    Turn-Based
+                    ${tt('Turn-Based')}
                 </label>
             </div>
             <div class="form-row" style="margin-top: 4px;">
                 <label style="display: flex; align-items: center; gap: 8px; color: var(--color-text); cursor: pointer;">
                     <input type="radio" class="system-radio" name="battleSystem" value="timeActive" ${system.battleSystem === 1 ? 'checked' : ''} data-field="battleSystem" data-value="1">
-                    Time Progress (Active)
+                    ${tt('Time Progress (Active)')}
                 </label>
             </div>
             <div class="form-row" style="margin-top: 4px;">
                 <label style="display: flex; align-items: center; gap: 8px; color: var(--color-text); cursor: pointer;">
                     <input type="radio" class="system-radio" name="battleSystem" value="timeWait" ${system.battleSystem === 2 ? 'checked' : ''} data-field="battleSystem" data-value="2">
-                    Time Progress (Wait)
+                    ${tt('Time Progress (Wait)')}
                 </label>
             </div>
         `;
-        const battleSystemSection = this.createSection('Battle System', battleSystem);
+        const battleSystemSection = this.createSection(tt('Battle System'), battleSystem);
         column.appendChild(battleSystemSection);
 
         // Row 4: Options
@@ -440,53 +497,54 @@ class DatabaseSystem1Editor {
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
                 <label style="display: flex; align-items: center; gap: 8px; color: var(--color-text); font-size: 12px; cursor: pointer;">
                     <input type="checkbox" class="system-checkbox" ${system.optTransparent ? 'checked' : ''} data-field="optTransparent">
-                    Start Transparent
+                    ${tt('Start Transparent')}
                 </label>
                 <label style="display: flex; align-items: center; gap: 8px; color: var(--color-text); font-size: 12px; cursor: pointer;">
                     <input type="checkbox" class="system-checkbox" ${system.optFollowers ? 'checked' : ''} data-field="optFollowers">
-                    Show Followers
+                    ${tt('Show Followers')}
                 </label>
                 <label style="display: flex; align-items: center; gap: 8px; color: var(--color-text); font-size: 12px; cursor: pointer;">
                     <input type="checkbox" class="system-checkbox" ${system.optSlipDeath ? 'checked' : ''} data-field="optSlipDeath">
-                    Slip Damage Death
+                    ${tt('Slip Damage Death')}
                 </label>
                 <label style="display: flex; align-items: center; gap: 8px; color: var(--color-text); font-size: 12px; cursor: pointer;">
                     <input type="checkbox" class="system-checkbox" ${system.optFloorDeath ? 'checked' : ''} data-field="optFloorDeath">
-                    Floor Damage Death
+                    ${tt('Floor Damage Death')}
                 </label>
                 <label style="display: flex; align-items: center; gap: 8px; color: var(--color-text); font-size: 12px; cursor: pointer;">
                     <input type="checkbox" class="system-checkbox" ${system.optDisplayTp ? 'checked' : ''} data-field="optDisplayTp">
-                    Display TP
+                    ${tt('Display TP')}
                 </label>
                 <label style="display: flex; align-items: center; gap: 8px; color: var(--color-text); font-size: 12px; cursor: pointer;">
                     <input type="checkbox" class="system-checkbox" ${system.optExtraExp ? 'checked' : ''} data-field="optExtraExp">
-                    EXP for Reserves
+                    ${tt('EXP for Reserves')}
                 </label>
                 <label style="display: flex; align-items: center; gap: 8px; color: var(--color-text); font-size: 12px; cursor: pointer;">
                     <input type="checkbox" class="system-checkbox" ${system.optKeyItemsNumber ? 'checked' : ''} data-field="optKeyItemsNumber">
-                    Show Key Item Count
+                    ${tt('Show Key Item Count')}
                 </label>
                 <label style="display: flex; align-items: center; gap: 8px; color: var(--color-text); font-size: 12px; cursor: pointer;">
                     <input type="checkbox" class="system-checkbox" ${system.optAutosave ? 'checked' : ''} data-field="optAutosave">
-                    Enable Autosave
+                    ${tt('Enable Autosave')}
                 </label>
                 <label style="display: flex; align-items: center; gap: 8px; color: var(--color-text); font-size: 12px; cursor: pointer;">
                     <input type="checkbox" class="system-checkbox" data-field="optSplashScreen">
-                    Show Splash Screen
+                    ${tt('Show Splash Screen')}
                 </label>
                 <label style="display: flex; align-items: center; gap: 8px; color: var(--color-text); font-size: 12px; cursor: pointer;">
                     <input type="checkbox" class="system-checkbox" data-field="optMessageSkip">
-                    Enable Message Skip
+                    ${tt('Enable Message Skip')}
                 </label>
             </div>
         `;
-        const optionsSection = this.createSection('Options', options);
+        const optionsSection = this.createSection(tt('Options'), options);
         column.appendChild(optionsSection);
 
         return column;
     }
 
     createColumn3(system) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const column = document.createElement('div');
         column.style.cssText = 'display: flex; flex-direction: column; gap: 16px;';
 
@@ -499,8 +557,8 @@ class DatabaseSystem1Editor {
             const bgm = system[`${type}Bgm`] || {};
             musicRows += `
                 <tr class="music-row" data-music-type="${type}" style="cursor: pointer;">
-                    <td>${musicLabels[idx]}</td>
-                    <td>${bgm.name || '(None)'}</td>
+                    <td>${tt(musicLabels[idx])}</td>
+                    <td>${rrEscapeHtml(bgm.name || tt('(None)'))}</td>
                 </tr>
             `;
         });
@@ -509,8 +567,8 @@ class DatabaseSystem1Editor {
             <table class="traits-table">
                 <thead>
                     <tr>
-                        <th>Type</th>
-                        <th>Filename</th>
+                        <th>${tt('Type')}</th>
+                        <th>${tt('Filename')}</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -518,7 +576,7 @@ class DatabaseSystem1Editor {
                 </tbody>
             </table>
         `;
-        const musicSection = this.createSection('Music', musicTable);
+        const musicSection = this.createSection(tt('Music'), musicTable);
         column.appendChild(musicSection);
 
         // Row 2: Sound
@@ -534,8 +592,8 @@ class DatabaseSystem1Editor {
             const se = system.sounds?.[idx] || {};
             soundRows += `
                 <tr class="sound-row" data-sound-index="${idx}" style="cursor: pointer;">
-                    <td>${soundLabels[idx]}</td>
-                    <td>${se.name || '(None)'}</td>
+                    <td>${tt(soundLabels[idx])}</td>
+                    <td>${rrEscapeHtml(se.name || tt('(None)'))}</td>
                 </tr>
             `;
         });
@@ -544,8 +602,8 @@ class DatabaseSystem1Editor {
             <table class="traits-table">
                 <thead>
                     <tr>
-                        <th>Type</th>
-                        <th>Filename</th>
+                        <th>${tt('Type')}</th>
+                        <th>${tt('Filename')}</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -553,7 +611,7 @@ class DatabaseSystem1Editor {
                 </tbody>
             </table>
         `;
-        const soundSection = this.createSection('Sound', soundTable);
+        const soundSection = this.createSection(tt('Sound'), soundTable);
         column.appendChild(soundSection);
 
         return column;
@@ -631,28 +689,27 @@ class DatabaseSystem1Editor {
     }
 
     showVehicleImagePicker(system, vehicleKey, container) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const path = require('path');
         const fs = require('fs');
 
         const project = this.projectManager.getCurrentProject();
-        if (!project) { alert('No project loaded'); return; }
+        if (!project) { alert(tt('No project loaded')); return; }
 
         const charactersPath = path.join(project.path, 'img', 'characters');
-        if (!fs.existsSync(charactersPath)) { alert('Characters folder not found'); return; }
+        if (!fs.existsSync(charactersPath)) { alert(tt('Characters folder not found')); return; }
 
-        const files = fs.readdirSync(charactersPath)
-            .filter(f => f.endsWith('.png'))
-            .map(f => f.replace('.png', ''));
+        const files = RRAssetFiles.listNames(charactersPath, ['.png']);
 
-        if (files.length === 0) { alert('No character images found'); return; }
+        if (files.length === 0) { alert(tt('No character images found')); return; }
 
-        this.parentEditor.showImagePicker('Select Vehicle Image', files, (selectedFile) => {
+        this.parentEditor.showImagePicker(tt('Select Vehicle Image'), files, (selectedFile) => {
             if (!system[vehicleKey]) {
                 system[vehicleKey] = { characterName: '', characterIndex: 0, startMapId: 0, startX: 0, startY: 0 };
             }
             system[vehicleKey].characterName = selectedFile;
 
-            const indexChoice = prompt('Enter character index (0-7) on the sprite sheet:', system[vehicleKey].characterIndex || '0');
+            const indexChoice = prompt(tt('Enter character index (0-7) on the sprite sheet:'), system[vehicleKey].characterIndex || '0');
             if (indexChoice !== null) {
                 system[vehicleKey].characterIndex = parseInt(indexChoice);
             }
@@ -664,11 +721,12 @@ class DatabaseSystem1Editor {
                 this.showSystem1Detail(detailEl);
             }
         }, (fileName) => {
-            return 'file://' + path.join(project.path, 'img', 'characters', fileName + '.png');
+            return RRAssetFiles.urlFor(charactersPath, fileName, ['.png']);
         });
     }
 
     showCommandWindowModal(system, container) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         if (!system.titleCommandWindow) {
             system.titleCommandWindow = { background: 0, offsetX: 0, offsetY: 0 };
         }
@@ -690,32 +748,32 @@ class DatabaseSystem1Editor {
 
         modal.innerHTML = `
             <div style="background-color: var(--color-bg-panel); padding: 12px 16px; border-bottom: 1px solid var(--color-border); border-radius: 8px 8px 0 0; display: flex; justify-content: space-between; align-items: center;">
-                <div style="font-size: 16px; font-weight: 600; color: var(--color-text);">Command Window Settings</div>
+                <div style="font-size: 16px; font-weight: 600; color: var(--color-text);">${tt('Command Window Settings')}</div>
                 <button class="cmd-modal-close" style="background: none; border: none; color: var(--color-text-muted); font-size: 24px; cursor: pointer;">×</button>
             </div>
             <div style="padding: 16px; display: flex; flex-direction: column; gap: 12px;">
                 <div class="form-row">
-                    <label class="database-field-label">Background:</label>
+                    <label class="database-field-label">${tt('Background:')}</label>
                     <select id="cmd-win-bg" class="database-field-value" style="width: 100%;">
-                        <option value="0" ${tcw.background === 0 ? 'selected' : ''}>Window</option>
-                        <option value="1" ${tcw.background === 1 ? 'selected' : ''}>Dim</option>
-                        <option value="2" ${tcw.background === 2 ? 'selected' : ''}>Transparent</option>
+                        <option value="0" ${tcw.background === 0 ? 'selected' : ''}>${tt('Window')}</option>
+                        <option value="1" ${tcw.background === 1 ? 'selected' : ''}>${tt('Dim')}</option>
+                        <option value="2" ${tcw.background === 2 ? 'selected' : ''}>${tt('Transparent')}</option>
                     </select>
                 </div>
                 <div class="form-row" style="display: flex; gap: 16px;">
                     <div>
-                        <label class="database-field-label">Offset X:</label>
+                        <label class="database-field-label">${tt('Offset X:')}</label>
                         <input type="number" id="cmd-win-ox" class="database-field-value" style="width: 80px;" value="${tcw.offsetX || 0}">
                     </div>
                     <div>
-                        <label class="database-field-label">Offset Y:</label>
+                        <label class="database-field-label">${tt('Offset Y:')}</label>
                         <input type="number" id="cmd-win-oy" class="database-field-value" style="width: 80px;" value="${tcw.offsetY || 0}">
                     </div>
                 </div>
             </div>
             <div style="padding: 12px 16px; border-top: 1px solid var(--color-border); display: flex; justify-content: flex-end; gap: 8px; background-color: var(--color-bg-panel);">
-                <button class="cmd-modal-cancel rr-btn-secondary">Cancel</button>
-                <button class="cmd-modal-ok" style="padding: 8px 16px; background: var(--color-accent); color: var(--color-bg-deep); border: 1px solid var(--color-accent); border-radius: 4px; cursor: pointer; font-weight: bold;">OK</button>
+                <button class="cmd-modal-cancel rr-btn-secondary">${tt('Cancel')}</button>
+                <button class="cmd-modal-ok" style="padding: 8px 16px; background: var(--color-accent); color: var(--color-bg-deep); border: 1px solid var(--color-accent); border-radius: 4px; cursor: pointer; font-weight: bold;">${tt('OK')}</button>
             </div>
         `;
 
@@ -750,12 +808,13 @@ class DatabaseSystem1Editor {
     }
 
     showTitleImagePicker(system) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const path = require('path');
         const fs = require('fs');
 
         const project = this.projectManager.getCurrentProject();
         if (!project) {
-            alert('No project loaded');
+            alert(tt('No project loaded'));
             return;
         }
 
@@ -763,17 +822,13 @@ class DatabaseSystem1Editor {
 
         // Check if directory exists
         if (!fs.existsSync(titlesPath)) {
-            alert('titles1 folder not found');
+            alert(tt('titles1 folder not found'));
             return;
         }
 
-        // Read image files
-        const files = fs.readdirSync(titlesPath).filter(file => {
-            const ext = path.extname(file).toLowerCase();
-            return ['.png', '.jpg', '.jpeg', '.webp'].includes(ext);
-        });
+        const files = RRAssetFiles.listUnique(titlesPath, ['.png']);
+        const fileByName = new Map(files.map(file => [file.name, file]));
 
-        // Create modal
         const overlay = document.createElement('div');
         overlay.style.cssText = `
             position: fixed;
@@ -793,8 +848,8 @@ class DatabaseSystem1Editor {
             background-color: var(--color-bg-surface);
             border: 1px solid var(--color-border);
             border-radius: 8px;
-            width: 900px;
-            max-height: 80vh;
+            width: min(1000px, 95vw);
+            height: min(760px, 88vh);
             display: flex;
             flex-direction: column;
         `;
@@ -810,27 +865,35 @@ class DatabaseSystem1Editor {
             border-radius: 8px 8px 0 0;
         `;
         header.innerHTML = `
-            <div style="font-size: 16px; font-weight: 600; color: var(--color-text);">Select Title Image</div>
+            <div style="font-size: 16px; font-weight: 600; color: var(--color-text);">${tt('Select Title Image')}</div>
             <button style="background: none; border: none; color: var(--color-text-muted); font-size: 24px; cursor: pointer; padding: 0; width: 30px; height: 30px;">×</button>
         `;
         modal.appendChild(header);
 
-        // Preview panel at top (widescreen)
+        const workspace = document.createElement('div');
+        workspace.style.cssText = 'display:flex;flex:1;min-height:0;overflow:hidden;';
+
+        const browserPanel = document.createElement('div');
+        browserPanel.style.cssText = 'flex:0 1 340px;min-width:180px;display:flex;flex-direction:column;border-right:1px solid var(--color-border);';
+
         const previewPanel = document.createElement('div');
         previewPanel.style.cssText = `
-            padding: 20px;
-            border-bottom: 1px solid var(--color-border);
+            flex: 1;
+            min-width: 0;
+            min-height: 0;
+            padding: 24px;
             display: flex;
             flex-direction: column;
             align-items: center;
+            justify-content: center;
             background-color: var(--color-bg-list-item);
-            min-height: 580px;
+            overflow: auto;
         `;
 
         const previewImage = document.createElement('img');
         previewImage.style.cssText = `
             max-width: 100%;
-            max-height: 560px;
+            max-height: calc(88vh - 190px);
             object-fit: contain;
             border: 1px solid var(--color-border);
             background-color: var(--color-bg-surface);
@@ -843,89 +906,45 @@ class DatabaseSystem1Editor {
             font-size: 12px;
             text-align: center;
         `;
-        previewLabel.textContent = 'Preview';
+        previewLabel.textContent = tt('Preview');
 
         previewPanel.appendChild(previewImage);
         previewPanel.appendChild(previewLabel);
-        modal.appendChild(previewPanel);
-
-        // File list content
-        const content = document.createElement('div');
-        content.style.cssText = `
-            padding: 12px 16px;
-            overflow-y: auto;
-            max-height: 200px;
-        `;
 
         let selectedFile = system.title1Name || '';
 
-        // Function to update preview
         const updatePreview = (fileName) => {
-            if (fileName) {
-                // Find the actual file with extension
-                const actualFile = files.find(f => path.basename(f, path.extname(f)) === fileName);
-                if (actualFile) {
-                    const fullPath = path.join(titlesPath, actualFile);
-                    // Use file:// protocol for NW.js
-                    previewImage.src = 'file://' + fullPath.replace(/\\/g, '/');
-                    previewLabel.textContent = fileName;
-                } else {
-                    previewImage.src = '';
-                    previewLabel.textContent = 'No preview';
-                }
-            } else {
+            const actualFile = fileByName.get(fileName);
+            if (!actualFile) {
                 previewImage.src = '';
-                previewLabel.textContent = 'No image selected';
+                previewImage.style.display = 'none';
+                previewLabel.textContent = fileName ? tt('No preview') : tt('No image selected');
+                return;
             }
+            selectedFile = fileName;
+            previewImage.style.display = '';
+            previewImage.src = RRAssetFiles.toUrl(actualFile.absolutePath);
+            previewLabel.textContent = fileName;
         };
 
-        // Set initial preview
-        updatePreview(selectedFile);
-
-        files.forEach(file => {
-            const fileNameWithoutExt = path.basename(file, path.extname(file));
-            const item = document.createElement('div');
-            item.style.cssText = `
-                padding: 6px 12px;
-                margin: 2px 0;
-                background-color: ${selectedFile === fileNameWithoutExt ? 'var(--color-accent-tint-15)' : 'var(--color-bg-list-item)'};
-                border: 1px solid ${selectedFile === fileNameWithoutExt ? 'var(--color-accent-border-strong)' : 'var(--color-border)'};
-                border-radius: 4px;
-                cursor: pointer;
-                color: var(--color-text);
-                transition: background-color 0.2s, border-color 0.2s;
-                font-size: 13px;
-            `;
-            item.textContent = fileNameWithoutExt;
-
-            item.addEventListener('click', () => {
-                selectedFile = fileNameWithoutExt;
-                // Update preview
-                updatePreview(selectedFile);
-                // Update all items
-                content.querySelectorAll('div').forEach(div => {
-                    const itemFile = div.textContent;
-                    div.style.backgroundColor = itemFile === selectedFile ? 'var(--color-accent-tint-15)' : 'var(--color-bg-list-item)';
-                    div.style.borderColor = itemFile === selectedFile ? 'var(--color-accent-border-strong)' : 'var(--color-border)';
-                });
-            });
-
-            item.addEventListener('mouseenter', () => {
-                if (selectedFile !== fileNameWithoutExt) {
-                    item.style.backgroundColor = 'var(--color-bg-button)';
-                }
-            });
-
-            item.addEventListener('mouseleave', () => {
-                if (selectedFile !== fileNameWithoutExt) {
-                    item.style.backgroundColor = 'var(--color-bg-list-item)';
-                }
-            });
-
-            content.appendChild(item);
+        const browser = RRPickerIndex.createBrowser({
+            files: files.map(file => file.name),
+            selectedName: selectedFile,
+            searchPlaceholder: tt('Search files...'),
+            emptyText: `${tt('No files found in:')} img/titles1`,
+            onSelect: updatePreview
         });
+        browserPanel.appendChild(browser.element);
+        workspace.appendChild(browserPanel);
+        workspace.appendChild(previewPanel);
+        modal.appendChild(workspace);
 
-        modal.appendChild(content);
+        if (fileByName.has(selectedFile)) {
+            updatePreview(selectedFile);
+            requestAnimationFrame(() => browser.scrollTo(selectedFile));
+        } else {
+            updatePreview('');
+        }
 
         const footer = document.createElement('div');
         footer.style.cssText = `
@@ -937,13 +956,14 @@ class DatabaseSystem1Editor {
             gap: 8px;
         `;
 
+        const close = () => overlay.remove();
         const cancelBtn = document.createElement('button');
-        cancelBtn.textContent = 'Cancel';
+        cancelBtn.textContent = tt('Cancel');
         cancelBtn.className = 'rr-btn-secondary';
-        cancelBtn.onclick = () => document.body.removeChild(overlay);
+        cancelBtn.onclick = close;
 
         const okBtn = document.createElement('button');
-        okBtn.textContent = 'OK';
+        okBtn.textContent = tt('OK');
         okBtn.style.cssText = `
             padding: 8px 16px;
             background-color: var(--color-accent);
@@ -955,13 +975,9 @@ class DatabaseSystem1Editor {
             transition: background-color 0.2s;
         `;
         okBtn.onclick = () => {
-            // Update system data
             system.title1Name = selectedFile;
+            close();
 
-            // Close modal
-            document.body.removeChild(overlay);
-
-            // Refresh the System 1 display
             const detailEl = document.getElementById('database-detail');
             if (detailEl) {
                 detailEl.innerHTML = '';
@@ -981,20 +997,23 @@ class DatabaseSystem1Editor {
         footer.appendChild(okBtn);
         modal.appendChild(footer);
 
-        // Close button
-        header.querySelector('button').onclick = () => document.body.removeChild(overlay);
+        header.querySelector('button').onclick = close;
+        overlay.addEventListener('click', event => {
+            if (event.target === overlay) close();
+        });
 
         overlay.appendChild(modal);
         document.body.appendChild(overlay);
     }
 
     showMusicPicker(system, musicType) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const path = require('path');
         const fs = require('fs');
 
         const project = this.projectManager.getCurrentProject();
         if (!project) {
-            alert('No project loaded');
+            alert(tt('No project loaded'));
             return;
         }
 
@@ -1006,46 +1025,40 @@ class DatabaseSystem1Editor {
         const folderName = ['victory', 'defeat', 'gameOver'].includes(musicType) ? 'ME' : 'BGM';
 
         if (!fs.existsSync(audioPath)) {
-            alert(`${folderName} folder not found`);
+            alert(`${folderName} ${tt('folder not found')}`);
             return;
         }
 
-        // Read audio files
-        const files = fs.readdirSync(audioPath).filter(file => {
-            const ext = path.extname(file).toLowerCase();
-            return ['.ogg', '.m4a', '.mp3', '.wav'].includes(ext);
-        });
+        const files = RRAssetFiles.listUnique(audioPath, ['.ogg']);
 
         this.showAudioPickerModal(system, files, audioPath, musicType, 'bgm', folderName);
     }
 
     showSoundPicker(system, soundIndex) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const path = require('path');
         const fs = require('fs');
 
         const project = this.projectManager.getCurrentProject();
         if (!project) {
-            alert('No project loaded');
+            alert(tt('No project loaded'));
             return;
         }
 
         const sePath = path.join(project.path, 'audio', 'se');
 
         if (!fs.existsSync(sePath)) {
-            alert('SE folder not found');
+            alert(tt('SE folder not found'));
             return;
         }
 
-        // Read audio files
-        const files = fs.readdirSync(sePath).filter(file => {
-            const ext = path.extname(file).toLowerCase();
-            return ['.ogg', '.m4a', '.mp3', '.wav'].includes(ext);
-        });
+        const files = RRAssetFiles.listUnique(sePath, ['.ogg']);
 
         this.showAudioPickerModal(system, files, sePath, soundIndex, 'se', 'SE');
     }
 
     showAudioPickerModal(system, files, audioPath, identifier, audioType, folderName) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const path = require('path');
 
         // Create modal
@@ -1085,7 +1098,7 @@ class DatabaseSystem1Editor {
             border-radius: 8px 8px 0 0;
         `;
         header.innerHTML = `
-            <div style="font-size: 16px; font-weight: 600; color: var(--color-text);">Select ${folderName} File</div>
+            <div style="font-size: 16px; font-weight: 600; color: var(--color-text);">${tt('Select')} ${folderName} ${tt('File')}</div>
             <button style="background: none; border: none; color: var(--color-text-muted); font-size: 24px; cursor: pointer; padding: 0; width: 30px; height: 30px;">×</button>
         `;
         modal.appendChild(header);
@@ -1140,6 +1153,20 @@ class DatabaseSystem1Editor {
             }
         };
 
+        // Close paths release the Web Audio context — Chromium caps live
+        // AudioContexts per page (~6); leaking one per picker open
+        // eventually silences every audio preview in the session.
+        const releaseAudio = () => {
+            stopAudio();
+            if (audioContext) {
+                try { audioContext.close(); } catch (e) {}
+                audioContext = null;
+                sourceNode = null;
+                gainNode = null;
+                pannerNode = null;
+            }
+        };
+
         // Function to play audio file
         const playAudio = (fileName, playButton) => {
             if (!fileName) return;
@@ -1154,11 +1181,10 @@ class DatabaseSystem1Editor {
             stopAudio();
 
             // Find the actual file with extension
-            const actualFile = files.find(f => path.basename(f, path.extname(f)) === fileName);
+            const actualFile = files.find(file => file.name === fileName);
             if (!actualFile) return;
 
-            const fullPath = path.join(audioPath, actualFile);
-            audioElement.src = 'file://' + fullPath.replace(/\\/g, '/');
+            audioElement.src = RRAssetFiles.toUrl(actualFile.absolutePath);
 
             // Initialize Web Audio API if not already done
             if (!audioContext) {
@@ -1214,7 +1240,7 @@ class DatabaseSystem1Editor {
             color: var(--color-text);
             transition: background-color 0.2s, border-color 0.2s;
         `;
-        noneItem.innerHTML = '<div style="flex: 1; cursor: pointer;">(None)</div>';
+        noneItem.innerHTML = `<div style="flex: 1; cursor: pointer;">${tt('(None)')}</div>`;
 
         noneItem.addEventListener('click', () => {
             selectedFile = '';
@@ -1246,7 +1272,7 @@ class DatabaseSystem1Editor {
         content.appendChild(noneItem);
 
         files.forEach(file => {
-            const fileNameWithoutExt = path.basename(file, path.extname(file));
+            const fileNameWithoutExt = file.name;
             const item = document.createElement('div');
             item.className = 'file-item';
             item.dataset.fileName = fileNameWithoutExt;
@@ -1424,7 +1450,7 @@ class DatabaseSystem1Editor {
         const volumeControl = document.createElement('div');
         volumeControl.innerHTML = `
             <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
-                <label style="color: var(--color-text); font-size: 12px;">Volume:</label>
+                <label style="color: var(--color-text); font-size: 12px;">${tt('Volume:')}</label>
                 <span id="volume-value" style="color: var(--color-text-muted); font-size: 12px;">${currentVolume}</span>
             </div>
             <input type="range" id="volume-slider" min="0" max="100" value="${currentVolume}"
@@ -1445,7 +1471,7 @@ class DatabaseSystem1Editor {
         const pitchControl = document.createElement('div');
         pitchControl.innerHTML = `
             <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
-                <label style="color: var(--color-text); font-size: 12px;">Pitch:</label>
+                <label style="color: var(--color-text); font-size: 12px;">${tt('Pitch:')}</label>
                 <span id="pitch-value" style="color: var(--color-text-muted); font-size: 12px;">${currentPitch}%</span>
             </div>
             <input type="range" id="pitch-slider" min="50" max="150" value="${currentPitch}"
@@ -1467,7 +1493,7 @@ class DatabaseSystem1Editor {
         const panControl = document.createElement('div');
         panControl.innerHTML = `
             <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
-                <label style="color: var(--color-text); font-size: 12px;">Pan:</label>
+                <label style="color: var(--color-text); font-size: 12px;">${tt('Pan:')}</label>
                 <span id="pan-value" style="color: var(--color-text-muted); font-size: 12px;">${currentPan}</span>
             </div>
             <input type="range" id="pan-slider" min="-100" max="100" value="${currentPan}"
@@ -1498,15 +1524,15 @@ class DatabaseSystem1Editor {
         `;
 
         const cancelBtn = document.createElement('button');
-        cancelBtn.textContent = 'Cancel';
+        cancelBtn.textContent = tt('Cancel');
         cancelBtn.className = 'rr-btn-secondary';
         cancelBtn.onclick = () => {
-            stopAudio();
+            releaseAudio();
             document.body.removeChild(overlay);
         };
 
         const okBtn = document.createElement('button');
-        okBtn.textContent = 'OK';
+        okBtn.textContent = tt('OK');
         okBtn.style.cssText = `
             padding: 8px 16px;
             background-color: var(--color-accent);
@@ -1540,8 +1566,8 @@ class DatabaseSystem1Editor {
                 system.sounds[identifier].pan = currentPan;
             }
 
-            // Stop audio before closing
-            stopAudio();
+            // Stop audio and release the audio context before closing
+            releaseAudio();
 
             // Close modal
             document.body.removeChild(overlay);
@@ -1573,7 +1599,7 @@ class DatabaseSystem1Editor {
 
         // Close button
         header.querySelector('button').onclick = () => {
-            stopAudio();
+            releaseAudio();
             document.body.removeChild(overlay);
         };
 

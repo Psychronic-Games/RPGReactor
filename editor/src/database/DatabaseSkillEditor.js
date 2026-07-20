@@ -49,42 +49,42 @@ class DatabaseSkillEditor {
         const generalSection = document.createElement('div');
         generalSection.className = 'database-section';
         generalSection.innerHTML = `
-            <div class="database-section-header">General</div>
+            <div class="database-section-header">${tt('General')}</div>
             <div class="database-section-content"><div class="db-general-grid">
                 <div style="display: flex; flex-direction: column; align-items: center; gap: 6px;">
-                    <label style="font-size: 11px; color: var(--color-text-muted); font-weight: 600;">Icon</label>
+                    <label style="font-size: 11px; color: var(--color-text-muted); font-weight: 600;">${tt('Icon')}</label>
                     <div id="skill-icon-container-${skill.id}"></div>
                 </div>
                 <div class="db-form db-fill">
                     <div class="db-row-cols">
                         <span class="db-col">
-                            <label>Name</label>
-                            <input type="text" class="database-field-value" value="${skill.name || ''}" data-field="name" data-skill-id="${skill.id}">
+                            <label>${tt('Name')}</label>
+                            <input type="text" class="database-field-value" value="${rrEscapeHtml(skill.name)}" data-field="name" data-skill-id="${skill.id}">
                         </span>
                     </div>
 
                     <div class="db-row-cols db-row-grow">
                         <span class="db-col">
-                            <label>Description</label>
-                            <textarea class="database-field-value" rows="2" data-field="description" data-skill-id="${skill.id}">${skill.description || ''}</textarea>
+                            <label>${tt('Description')}</label>
+                            <textarea class="database-field-value" rows="2" data-field="description" data-skill-id="${skill.id}">${rrEscapeHtml(skill.description)}</textarea>
                         </span>
                     </div>
 
                     <div class="db-row-cols">
                         <span class="db-col">
-                            <label>Skill Type</label>
+                            <label>${tt('Skill Type')}</label>
                             <select class="database-field-value" data-field="stypeId" data-skill-id="${skill.id}">
-                                ${skillTypeNames.map((name, idx) => idx > 0 && name ? `<option value="${idx}" ${skill.stypeId === idx ? 'selected' : ''}>${name}</option>` : '').join('')}
+                                ${skillTypeNames.map((name, idx) => idx > 0 && name ? `<option value="${idx}" ${skill.stypeId === idx ? 'selected' : ''}>${rrEscapeHtml(name)}</option>` : '').join('')}
                             </select>
                         </span>
                         <span class="db-col">
-                            <label>Scope</label>
+                            <label>${tt('Scope')}</label>
                             <select class="database-field-value" data-field="scope" data-skill-id="${skill.id}">
                                 ${scopeNames.map((name, idx) => `<option value="${idx}" ${skill.scope === idx ? 'selected' : ''}>${name}</option>`).join('')}
                             </select>
                         </span>
                         <span class="db-col">
-                            <label>Occasion</label>
+                            <label>${tt('Occasion')}</label>
                             <select class="database-field-value" data-field="occasion" data-skill-id="${skill.id}">
                                 ${occasionNames.map((name, idx) => `<option value="${idx}" ${skill.occasion === idx ? 'selected' : ''}>${name}</option>`).join('')}
                             </select>
@@ -112,48 +112,48 @@ class DatabaseSkillEditor {
         const invocationSection = document.createElement('div');
         invocationSection.className = 'database-section';
         invocationSection.innerHTML = `
-            <div class="database-section-header">Invocation</div>
+            <div class="database-section-header">${tt('Invocation')}</div>
             <div class="database-section-content">
                 <div class="db-form">
                     <div class="db-row-pair">
-                        <label>MP Cost</label>
-                        <input type="number" class="database-field-value" value="${skill.mpCost || 0}" data-field="mpCost" data-skill-id="${skill.id}">
-                        <label>TP Cost</label>
-                        <input type="number" class="database-field-value" value="${skill.tpCost || 0}" data-field="tpCost" data-skill-id="${skill.id}">
+                        <label>${tt('MP Cost')}</label>
+                        <input type="number" class="database-field-value" value="${rrEscapeHtml(skill.mpCost || 0)}" data-field="mpCost" data-skill-id="${skill.id}">
+                        <label>${tt('TP Cost')}</label>
+                        <input type="number" class="database-field-value" value="${rrEscapeHtml(skill.tpCost || 0)}" data-field="tpCost" data-skill-id="${skill.id}">
                     </div>
                     <div class="db-row-pair">
-                        <label>TP Gain</label>
-                        <input type="number" class="database-field-value" value="${skill.tpGain || 0}" data-field="tpGain" data-skill-id="${skill.id}">
-                        <label>Speed</label>
-                        <input type="number" class="database-field-value" value="${skill.speed || 0}" data-field="speed" data-skill-id="${skill.id}">
+                        <label>${tt('TP Gain')}</label>
+                        <input type="number" class="database-field-value" value="${rrEscapeHtml(skill.tpGain || 0)}" data-field="tpGain" data-skill-id="${skill.id}">
+                        <label>${tt('Speed')}</label>
+                        <input type="number" class="database-field-value" value="${rrEscapeHtml(skill.speed || 0)}" data-field="speed" data-skill-id="${skill.id}">
                     </div>
                     <div class="db-row-pair">
-                        <label>Success %</label>
-                        <input type="number" class="database-field-value" value="${skill.successRate != null ? skill.successRate : 100}" data-field="successRate" data-skill-id="${skill.id}">
-                        <label>Repeats</label>
-                        <input type="number" class="database-field-value" value="${skill.repeats != null ? skill.repeats : 1}" data-field="repeats" data-skill-id="${skill.id}" min="1">
+                        <label>${tt('Success %')}</label>
+                        <input type="number" class="database-field-value" value="${rrEscapeHtml(skill.successRate != null ? skill.successRate : 100)}" data-field="successRate" data-skill-id="${skill.id}">
+                        <label>${tt('Repeats')}</label>
+                        <input type="number" class="database-field-value" value="${rrEscapeHtml(skill.repeats != null ? skill.repeats : 1)}" data-field="repeats" data-skill-id="${skill.id}" min="1" max="${globalThis.RR_LIMITS?.ACTION_REPEATS || 100}">
                     </div>
                     <div class="db-row-pair">
-                        <label>Hit Type</label>
+                        <label>${tt('Hit Type')}</label>
                         <select class="database-field-value" data-field="hitType" data-skill-id="${skill.id}">
                             ${hitTypeNames.map((name, idx) => `<option value="${idx}" ${skill.hitType === idx ? 'selected' : ''}>${name}</option>`).join('')}
                         </select>
                         <label>${tt('Animation')}</label>
                         <span style="display: flex; min-width: 0;">
-                            <button type="button" class="database-field-value db-anim-picker" data-target-field="animationId" data-allow-normal-attack="1" data-rr-i18n-skip>${animationLabel(skill.animationId || 0)}</button>
-                            <input type="hidden" value="${skill.animationId || 0}" data-field="animationId" data-skill-id="${skill.id}">
+                            <button type="button" class="database-field-value db-anim-picker" data-target-field="animationId" data-allow-normal-attack="1" data-rr-i18n-skip>${rrEscapeHtml(animationLabel(skill.animationId || 0))}</button>
+                            <input type="hidden" value="${rrEscapeHtml(skill.animationId || 0)}" data-field="animationId" data-skill-id="${skill.id}">
                         </span>
                     </div>
                     <div class="db-row-pair">
                         <label>${tt('Req. Weapon 1')}</label>
                         <select class="database-field-value" data-field="requiredWtypeId1" data-skill-id="${skill.id}">
                             <option value="0" ${!skill.requiredWtypeId1 ? 'selected' : ''}>${tt('None')}</option>
-                            ${weaponTypeNames.map((name, idx) => idx > 0 && name ? `<option value="${idx}" ${skill.requiredWtypeId1 === idx ? 'selected' : ''}>${name}</option>` : '').join('')}
+                            ${weaponTypeNames.map((name, idx) => idx > 0 && name ? `<option value="${idx}" ${skill.requiredWtypeId1 === idx ? 'selected' : ''}>${rrEscapeHtml(name)}</option>` : '').join('')}
                         </select>
                         <label>${tt('Req. Weapon 2')}</label>
                         <select class="database-field-value" data-field="requiredWtypeId2" data-skill-id="${skill.id}">
                             <option value="0" ${!skill.requiredWtypeId2 ? 'selected' : ''}>${tt('None')}</option>
-                            ${weaponTypeNames.map((name, idx) => idx > 0 && name ? `<option value="${idx}" ${skill.requiredWtypeId2 === idx ? 'selected' : ''}>${name}</option>` : '').join('')}
+                            ${weaponTypeNames.map((name, idx) => idx > 0 && name ? `<option value="${idx}" ${skill.requiredWtypeId2 === idx ? 'selected' : ''}>${rrEscapeHtml(name)}</option>` : '').join('')}
                         </select>
                     </div>
                 </div>
@@ -165,17 +165,17 @@ class DatabaseSkillEditor {
         const messageSection = document.createElement('div');
         messageSection.className = 'database-section';
         messageSection.innerHTML = `
-            <div class="database-section-header">Message</div>
+            <div class="database-section-header">${tt('Message')}</div>
             <div class="database-section-content">
                 <div class="db-form">
-                    <label>Message 1</label>
-                    <input type="text" class="database-field-value" value="${skill.message1 || ''}" data-field="message1" data-skill-id="${skill.id}">
-                    <label>Message 2</label>
-                    <input type="text" class="database-field-value" value="${skill.message2 || ''}" data-field="message2" data-skill-id="${skill.id}">
-                    <label>Message 3</label>
-                    <input type="text" class="database-field-value" value="${skill.message3 || ''}" data-field="message3" data-skill-id="${skill.id}">
-                    <label>Message 4</label>
-                    <input type="text" class="database-field-value" value="${skill.message4 || ''}" data-field="message4" data-skill-id="${skill.id}">
+                    <label>${tt('Message 1')}</label>
+                    <input type="text" class="database-field-value" value="${rrEscapeHtml(skill.message1)}" data-field="message1" data-skill-id="${skill.id}">
+                    <label>${tt('Message 2')}</label>
+                    <input type="text" class="database-field-value" value="${rrEscapeHtml(skill.message2)}" data-field="message2" data-skill-id="${skill.id}">
+                    <label>${tt('Message 3')}</label>
+                    <input type="text" class="database-field-value" value="${rrEscapeHtml(skill.message3)}" data-field="message3" data-skill-id="${skill.id}">
+                    <label>${tt('Message 4')}</label>
+                    <input type="text" class="database-field-value" value="${rrEscapeHtml(skill.message4)}" data-field="message4" data-skill-id="${skill.id}">
                 </div>
             </div>
         `;
@@ -186,35 +186,35 @@ class DatabaseSkillEditor {
         const damageSection = document.createElement('div');
         damageSection.className = 'database-section';
         damageSection.innerHTML = `
-            <div class="database-section-header">Damage</div>
+            <div class="database-section-header">${tt('Damage')}</div>
             <div class="database-section-content">
                 <div class="db-form">
                     <div class="db-row-cols">
                         <span class="db-col">
-                            <label>Formula</label>
-                            <input type="text" class="database-field-value" style="font-family: monospace;" value="${damage.formula || ''}" data-field="damage.formula" data-skill-id="${skill.id}">
+                            <label>${tt('Formula')}</label>
+                            <input type="text" class="database-field-value" style="font-family: monospace;" value="${rrEscapeHtml(damage.formula || '')}" data-field="damage.formula" data-skill-id="${skill.id}">
                         </span>
                     </div>
                     <div class="db-row-cols">
                         <span class="db-col">
-                            <label>Type</label>
+                            <label>${tt('Type')}</label>
                             <select class="database-field-value" data-field="damage.type" data-skill-id="${skill.id}">
                                 ${damageTypeNames.map((name, idx) => `<option value="${idx}" ${damage.type === idx ? 'selected' : ''}>${name}</option>`).join('')}
                             </select>
                         </span>
                         <span class="db-col">
-                            <label>Element</label>
+                            <label>${tt('Element')}</label>
                             <select class="database-field-value" data-field="damage.elementId" data-skill-id="${skill.id}">
                                 <option value="-1" ${damage.elementId === -1 ? 'selected' : ''}>${tt('Normal Attack')}</option>
-                                ${elementNames.map((name, idx) => idx > 0 && name ? `<option value="${idx}" ${damage.elementId === idx ? 'selected' : ''}>${name}</option>` : '').join('')}
+                                ${elementNames.map((name, idx) => idx > 0 && name ? `<option value="${idx}" ${damage.elementId === idx ? 'selected' : ''}>${rrEscapeHtml(name)}</option>` : '').join('')}
                             </select>
                         </span>
                         <span class="db-col">
-                            <label>Variance %</label>
-                            <input type="number" class="database-field-value" value="${damage.variance != null ? damage.variance : 20}" data-field="damage.variance" data-skill-id="${skill.id}">
+                            <label>${tt('Variance %')}</label>
+                            <input type="number" class="database-field-value" value="${rrEscapeHtml(damage.variance != null ? damage.variance : 20)}" data-field="damage.variance" data-skill-id="${skill.id}">
                         </span>
                         <span class="db-col">
-                            <label>Critical</label>
+                            <label>${tt('Critical')}</label>
                             <input type="checkbox" class="system-checkbox" ${damage.critical ? 'checked' : ''} data-field="damage.critical" data-skill-id="${skill.id}">
                         </span>
                     </div>
@@ -227,14 +227,14 @@ class DatabaseSkillEditor {
         const effectsSection = document.createElement('div');
         effectsSection.className = 'database-section';
         effectsSection.innerHTML = `
-            <div class="database-section-header">Effects</div>
+            <div class="database-section-header">${tt('Effects')}</div>
             <div class="database-section-content">
                 <table class="traits-table" id="skill-effects-table-${skill.id}">
                     <thead>
                         <tr>
                             <th style="width: 3px; padding: 0; border: none; background: transparent;"></th>
-                            <th>Effect</th>
-                            <th>Value</th>
+                            <th>${tt('Effect')}</th>
+                            <th>${tt('Value')}</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -242,11 +242,11 @@ class DatabaseSkillEditor {
                             skill.effects.map((effect, index) => `
                                 <tr class="effect-row" data-effect-index="${index}">
                                     <td class="effect-indicator" style="width: 3px; padding: 0; border: none; background: transparent;"></td>
-                                    <td>${DatabaseEffectEditor.getEffectName(effect.code)}</td>
-                                    <td>${DatabaseEffectEditor.getEffectValue(effect, this.databaseManager)}</td>
+                                    <td>${rrEscapeHtml(DatabaseEffectEditor.getEffectName(effect.code))}</td>
+                                    <td>${rrEscapeHtml(DatabaseEffectEditor.getEffectValue(effect, this.databaseManager))}</td>
                                 </tr>
                             `).join('') :
-                            '<tr><td style="width: 3px; padding: 0; border: none; background: transparent;"></td><td colspan="2" style="text-align: center; color: var(--color-text-muted); font-style: italic; padding: 12px;">No effects</td></tr>'}
+                            `<tr><td style="width: 3px; padding: 0; border: none; background: transparent;"></td><td colspan="2" style="text-align: center; color: var(--color-text-muted); font-style: italic; padding: 12px;">${tt('No effects')}</td></tr>`}
                     </tbody>
                 </table>
             </div>
@@ -266,9 +266,9 @@ class DatabaseSkillEditor {
         const noteSection = document.createElement('div');
         noteSection.className = 'database-section';
         noteSection.innerHTML = `
-            <div class="database-section-header">Note</div>
+            <div class="database-section-header">${tt('Note')}</div>
             <div class="database-section-content">
-                <textarea class="database-field-value" rows="4" style="width: 100%;" data-field="note" data-skill-id="${skill.id}">${skill.note || ''}</textarea>
+                <textarea class="database-field-value" rows="4" style="width: 100%;" data-field="note" data-skill-id="${skill.id}">${rrEscapeHtml(skill.note)}</textarea>
             </div>
         `;
         gridWrapper.appendChild(noteSection);
@@ -290,7 +290,8 @@ class DatabaseSkillEditor {
                     } else {
                         value = e.target.value;
                     }
-                    this.updateSkillField(skillId, fieldName, value);
+                    const normalized = this.updateSkillField(skillId, fieldName, value);
+                    if (normalized !== undefined && e.target.type === 'number') e.target.value = String(normalized);
                 });
             });
         }, 0);
@@ -321,6 +322,9 @@ class DatabaseSkillEditor {
                    'speed', 'successRate', 'repeats', 'hitType', 'animationId',
                    'requiredWtypeId1', 'requiredWtypeId2'].includes(fieldName)) {
             skill[fieldName] = parseInt(value) || 0;
+            if (fieldName === 'repeats') {
+                skill[fieldName] = Math.max(1, Math.min(globalThis.RR_LIMITS?.ACTION_REPEATS || 100, skill[fieldName]));
+            }
             console.log(`Updated skill ${skillId} field ${fieldName} to:`, skill[fieldName]);
         }
         // Handle string fields (name, description, note, message1-4)
@@ -330,6 +334,7 @@ class DatabaseSkillEditor {
         }
 
         this.databaseManager.updateSkill(skillId, skill);
+        return fieldName.startsWith('damage.') ? skill.damage[fieldName.split('.')[1]] : skill[fieldName];
     }
 
     setupEffectInteraction(table, skill) {
@@ -382,6 +387,7 @@ class DatabaseSkillEditor {
     setupEffectsContextMenu(table, skill) {
         table.addEventListener('contextmenu', (e) => {
             e.preventDefault();
+            const tt = text => window.I18n ? window.I18n.tText(text) : text;
 
             const row = e.target.closest('.effect-row');
             const effectIndex = row ? parseInt(row.dataset.effectIndex) : null;
@@ -409,13 +415,13 @@ class DatabaseSkillEditor {
                 { label: 'Edit', action: () => this.editEffect(skill, effectIndex), enabled: effectIndex !== null },
                 { label: 'Cut', action: () => this.cutEffect(skill, effectIndex), enabled: effectIndex !== null },
                 { label: 'Copy', action: () => this.copyEffect(skill, effectIndex), enabled: effectIndex !== null },
-                { label: 'Paste', action: () => this.pasteEffect(skill), enabled: this.effectsClipboard !== null },
+                { label: 'Paste', action: () => this.pasteEffect(skill), enabled: true },
                 { label: 'Delete', action: () => this.deleteEffect(skill, effectIndex), enabled: effectIndex !== null }
             ];
 
             menuItems.forEach(item => {
                 const menuItem = document.createElement('div');
-                menuItem.textContent = item.label;
+                menuItem.textContent = tt(item.label);
                 menuItem.style.cssText = `
                     padding: 8px 16px;
                     cursor: ${item.enabled ? 'pointer' : 'not-allowed'};
@@ -467,9 +473,13 @@ class DatabaseSkillEditor {
         });
     }
 
-    cutEffect(skill, effectIndex) {
+    async cutEffect(skill, effectIndex) {
         if (effectIndex === null || !skill.effects) return;
-        this.effectsClipboard = { ...skill.effects[effectIndex] };
+        const target = DatabaseRowClipboard.capturePasteTarget(this.parentEditor, this.projectManager, this.databaseManager, skill.effects, effectIndex);
+        const payload = this.copyEffect(skill, effectIndex);
+        if (!await DatabaseRowClipboard.confirmCut(payload)) return;
+        if (this.currentSkill !== skill
+            || !DatabaseRowClipboard.isPasteTargetCurrent(target, this.parentEditor, this.projectManager, this.databaseManager, skill.effects)) return;
         skill.effects.splice(effectIndex, 1);
         this.databaseManager.updateSkill(skill.id, skill);
         this.refreshSkillDetail(skill);
@@ -477,13 +487,21 @@ class DatabaseSkillEditor {
 
     copyEffect(skill, effectIndex) {
         if (effectIndex === null || !skill.effects) return;
-        this.effectsClipboard = { ...skill.effects[effectIndex] };
+        this.effectsClipboard = DatabaseRowClipboard.write('effect', skill.effects[effectIndex], this.databaseManager);
+        return this.effectsClipboard;
     }
 
-    pasteEffect(skill) {
-        if (!this.effectsClipboard) return;
+    async pasteEffect(skill) {
+        const target = DatabaseRowClipboard.capturePasteTarget(this.parentEditor, this.projectManager, this.databaseManager, skill.effects);
+        const result = await DatabaseRowClipboard.read('effect', this.databaseManager, this.effectsClipboard);
+        if (this.currentSkill !== skill
+            || !DatabaseRowClipboard.isPasteTargetCurrent(target, this.parentEditor, this.projectManager, this.databaseManager, skill.effects)) return;
+        if (result.error) {
+            DatabaseRowClipboard.showError(result);
+            return;
+        }
         if (!skill.effects) skill.effects = [];
-        skill.effects.push({ ...this.effectsClipboard });
+        skill.effects.push(result.row);
         this.databaseManager.updateSkill(skill.id, skill);
         this.refreshSkillDetail(skill);
     }

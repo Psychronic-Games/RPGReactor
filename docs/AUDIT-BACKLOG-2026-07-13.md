@@ -3,32 +3,58 @@
 Findings from the seven-subsystem code audit that were **verified but deferred**
 (needs dedicated rework, UX decisions, or more test coverage than a batch fix
 allows). The ~25 highest-value verified findings were fixed the same day — see
-the 0.94.9 changelog. Ordered by severity.
+the 0.95.0 changelog.
 
-## High
+**Status: CLEARED in the 0.95.0 development cycle.** Every finding below is
+resolved in the current cycle. See the
+[root changelog](../CHANGELOG.md), the detailed
+[editor changelog](../editor/CHANGELOG.md), the draft
+[0.95.0 devlog](devlogs/2026-07-18-rpg-reactor-0.95.0.md). The original finding
+language is preserved below as a historical record. Current validation is
+343 passing Node tests with no failures; 0.95.0 has not been tagged or published.
 
-- **EventCommandList `editCommand` corrupts nested branch structures.** The
-  rebuild scan for Show Choices / Conditional Branch stops at the FIRST
-  404/412 regardless of indent, so editing an If that contains a nested If
-  (or choices containing choices) removes the wrong range and orphans/
-  duplicates markers. Empty branches also shift bodies into the wrong branch
-  on re-insert (no placeholder is pushed for an empty branch). Needs an
-  indent-aware structure parser plus round-trip tests over nested fixtures.
-  `editor/src/event/EventCommandList.js` (~3373 onward).
+## Disposition notes
 
-- **Preview resource leaks (contexts/timers/listeners).** Each of these
-  accumulates per open/render until the browser caps them:
-  - `AnimationPickerModal.open` builds a fresh WebGL + effekseer context per
-    modal; never released (~16 opens exhaust the context cap).
-  - `DatabaseSystem1Editor` audio picker: one `AudioContext` per session,
-    never closed (~6 opens silence previews).
-  - `DatabaseAnimationEditor`: document-level keydown/mouseup/mousemove per
-    detail view; actor-detail `setInterval(animate, 125)` never cleared.
-  - `EventPageEditor`: character-preview `setInterval` leaks per page render.
-  - `EffekseerGenerator`: window-level mousemove/mouseup per mount retain the
-    discarded 720×720 GL canvases.
+- **Types editor:** interior entries now clear to an empty string rather than
+  splice, preserving all later IDs. The resolved editor is a dense five-panel
+  workspace with multiselect clipboard actions and an explicit maximum control
+  for each type array; shrinking a maximum requires confirmation before the
+  discarded tail is removed.
+- **Conditional Branch follow-up:** the editor now implements all MZ condition
+  types 0 through 13 and their subtypes, with exact unchanged-data round trips
+  and canonical serialization for newly configured conditions. This extends
+  the indent-aware nested-structure fix recorded below.
+- **Database save baseline:** Save All forces a new database snapshot after a
+  successful save, so Cancel in an already-open database returns to the saved
+  state rather than the pre-save session baseline.
 
-## Medium
+## Fixed since
+
+- ~~EventCommandList `editCommand` corrupts nested branch structures~~ —
+  fixed in the 0.95.0 cycle via an indent-aware structure parser
+  (`EventCommandList.collectBranchStructure`) shared with the common-events
+  editor, empty-branch placeholders, marker-keyed body re-attachment, indent
+  rebasing of edited structures, indent-aware `expandSelection` for choice
+  structures, and a "Create Else Branch" checkbox. Round-trip tests:
+  `editor/tests/event-branch-editing.test.cjs`.
+
+- ~~Preview resource leaks (contexts/timers/listeners)~~ — fixed in the
+  0.95.0 cycle: `AnimationPickerModal` and `DatabaseAnimationEditor` (detail
+  view + effect-file picker) release their effekseer contexts and force-lose
+  their GL contexts; the System 1 audio picker closes its `AudioContext` on
+  every close path; `DatabaseAnimationEditor` unhooks its document-level
+  keydown/drag handlers via a per-detail-view cleanup registry (the leaked
+  keydown handlers were also applying shortcuts to stale animations); the
+  actor-detail and event-page walk-preview intervals self-stop on canvas
+  detach; the Effekseer Forge removes its window-level orbit handlers and
+  loses the discarded preview GL context on teardown. Wiring tests:
+  `editor/tests/preview-resource-cleanup.test.cjs`.
+
+## Medium (historical finding language; all fixed in 0.95.0)
+
+The entries in this section intentionally retain their original present-tense
+problem statements and proposed fixes. The cleared status and disposition
+notes above describe the current cycle result.
 
 - **Audio command editor commits on Cancel** — it mutates the live command
   object (`this.command.parameters[0].volume = ...`) with no clone/revert.
@@ -78,7 +104,9 @@ the 0.94.9 changelog. Ordered by severity.
   supports `<project>/forge/character_generator/styles/`. Also: forge/EFK
   direct-to-project saves overwrite existing assets without confirmation.
 
-## Low / Perf
+## Low / Perf (historical finding language; all fixed in 0.95.0)
+
+The entries in this section likewise preserve the original audit wording.
 
 - `ProjectController.renderMapsList` is O(n²) with a spread-copy of the whole
   maps array per tree node; build a parentId→children map per render.
@@ -113,3 +141,15 @@ the 0.94.9 changelog. Ordered by severity.
   listener per tab switch; AG save-dialog cancel leaves the GIF button stuck
   on "Saving…" and orphans hidden inputs; CG sheet saves crash before the
   web download fallback when no project is open.
+
+## Final validation
+
+The current 0.95.0 development cycle completed its end-to-end Node test run
+with **343 passing and 0 failures**. Relevant coverage includes
+`database-navigation.test.cjs`, `event-branch-editing.test.cjs`,
+`event-manager-interaction.test.cjs`, `i18n.test.cjs`,
+`plugin-manager.test.cjs`, `system1-location-picker.test.cjs`, `system2-magic-skills.test.cjs`, `mv-save-compat.test.cjs`,
+`mv-plugin-visual-compat.test.cjs`, `project-manager.test.cjs`,
+`picker-index.test.cjs`, `recursive-asset-files.test.cjs`, `runtime-manifest.test.cjs`,
+`runtime-snapshot.test.cjs`, and
+`preview-resource-cleanup.test.cjs`.

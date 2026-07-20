@@ -20,6 +20,7 @@ class DatabaseEnemyEditor {
     // ==========================================
 
     showEnemyDetail(container, enemy) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         this.currentEnemy = enemy;
 
         const wrapper = document.createElement('div');
@@ -39,44 +40,44 @@ class DatabaseEnemyEditor {
         generalSection.style.flex = '1';
         generalSection.style.minWidth = '0';
         generalSection.innerHTML = `
-            <div class="database-section-header">General</div>
+            <div class="database-section-header">${tt('General')}</div>
             <div class="database-section-content">
                 <div class="db-form" style="margin-bottom: 8px;">
                     <div class="db-row-cols">
                         <span class="db-col">
-                            <label>Name</label>
+                            <label>${tt('Name')}</label>
                             <input type="text" class="database-field-value" value="${this.escapeHTML(enemy.name || '')}" data-field="name" data-enemy-id="${enemy.id}">
                         </span>
                     </div>
                 </div>
                 <div class="form-row">
                     <div class="form-group-fixed">
-                        <label class="database-field-label">Battler Image:</label>
-                        <span class="database-field-value" style="display: inline-block; width: 150px; padding: 4px 6px; background: var(--color-bg-menubar); border: 1px solid var(--color-border-input); border-radius: 3px; color: var(--color-text); font-size: 12px; vertical-align: middle; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${this.escapeHTML(enemy.battlerName || '(None)')}</span>
-                        <button id="enemy-change-battler-${enemy.id}" class="rr-btn-chip" style="vertical-align: middle;">Change...</button>
+                        <label class="database-field-label">${tt('Battler Image:')}</label>
+                        <span class="database-field-value" style="display: inline-block; width: 150px; padding: 4px 6px; background: var(--color-bg-menubar); border: 1px solid var(--color-border-input); border-radius: 3px; color: var(--color-text); font-size: 12px; vertical-align: middle; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${enemy.battlerName ? this.escapeHTML(enemy.battlerName) : tt('(None)')}</span>
+                        <button id="enemy-change-battler-${enemy.id}" class="rr-btn-chip" style="vertical-align: middle;">${tt('Change...')}</button>
                     </div>
                 </div>
                 <div id="enemy-battler-preview-${enemy.id}" style="min-height: 100px; background: var(--color-bg-base); border: 1px solid var(--color-border); border-radius: 4px; display: flex; align-items: center; justify-content: center; margin: 4px 0 8px 0; overflow: hidden; padding: 8px;">
-                    <span style="color: var(--color-border-input); font-size: 11px;">(No battler)</span>
+                    <span style="color: var(--color-border-input); font-size: 11px;">${tt('(No battler)')}</span>
                 </div>
                 <div class="form-row">
                     <div class="form-group" style="flex: 1;">
-                        <label class="database-field-label">Battler Hue:</label>
+                        <label class="database-field-label">${tt('Battler Hue:')}</label>
                         <div style="display: flex; align-items: center; gap: 8px;">
-                            <input type="range" id="enemy-hue-slider-${enemy.id}" min="0" max="360" value="${enemy.battlerHue || 0}" style="flex: 1; accent-color: var(--color-accent-bright);">
-                            <input type="number" id="enemy-hue-number-${enemy.id}" class="database-field-value database-field-value-small" value="${enemy.battlerHue || 0}" min="0" max="360" data-field="battlerHue" data-enemy-id="${enemy.id}" style="width: 55px;">
+                            <input type="range" id="enemy-hue-slider-${enemy.id}" min="0" max="360" value="${this.escapeHTML(enemy.battlerHue || 0)}" style="flex: 1; accent-color: var(--color-accent-bright);">
+                            <input type="number" id="enemy-hue-number-${enemy.id}" class="database-field-value database-field-value-small" value="${this.escapeHTML(enemy.battlerHue || 0)}" min="0" max="360" data-field="battlerHue" data-enemy-id="${enemy.id}" style="width: 55px;">
                         </div>
                     </div>
                 </div>
                 <div class="db-form" style="margin-top: 8px;">
                     <div class="db-row-cols">
                         <span class="db-col">
-                            <label>EXP</label>
-                            <input type="number" class="database-field-value" value="${enemy.exp || 0}" min="0" data-field="exp" data-enemy-id="${enemy.id}">
+                            <label>${tt('EXP')}</label>
+                            <input type="number" class="database-field-value" value="${this.escapeHTML(enemy.exp || 0)}" min="0" data-field="exp" data-enemy-id="${enemy.id}">
                         </span>
                         <span class="db-col">
-                            <label>Gold</label>
-                            <input type="number" class="database-field-value" value="${enemy.gold || 0}" min="0" data-field="gold" data-enemy-id="${enemy.id}">
+                            <label>${tt('Gold')}</label>
+                            <input type="number" class="database-field-value" value="${this.escapeHTML(enemy.gold || 0)}" min="0" data-field="gold" data-enemy-id="${enemy.id}">
                         </span>
                     </div>
                 </div>
@@ -86,18 +87,18 @@ class DatabaseEnemyEditor {
 
         // Parameters Section
         const params = enemy.params || [0, 0, 0, 0, 0, 0, 0, 0];
-        const paramNames = ['Max HP', 'Max MP', 'Attack', 'Defense', 'M.Attack', 'M.Defense', 'Agility', 'Luck'].map(name => window.I18n ? window.I18n.tText(name) : name);
+        const paramNames = ['Max HP', 'Max MP', 'Attack', 'Defense', 'M.Attack', 'M.Defense', 'Agility', 'Luck'].map(name => tt(name));
         const paramsSection = document.createElement('div');
         paramsSection.className = 'database-section';
         paramsSection.style.flexShrink = '0';
         paramsSection.innerHTML = `
-            <div class="database-section-header">Parameters</div>
+            <div class="database-section-header">${tt('Parameters')}</div>
             <div class="database-section-content">
                 <table class="traits-table">
                     <thead>
                         <tr>
-                            <th>Parameter</th>
-                            <th>Value</th>
+                            <th>${tt('Parameter')}</th>
+                            <th>${tt('Value')}</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -107,7 +108,7 @@ class DatabaseEnemyEditor {
                                 <td>
                                     <input type="number"
                                            class="database-field-value database-field-value-small"
-                                           value="${params[idx] || 0}"
+                                           value="${this.escapeHTML(params[idx] || 0)}"
                                            data-field="params"
                                            data-param-index="${idx}"
                                            data-enemy-id="${enemy.id}"
@@ -127,7 +128,7 @@ class DatabaseEnemyEditor {
         dropItemsSection.style.flex = '1';
         dropItemsSection.style.minWidth = '0';
         dropItemsSection.innerHTML = `
-            <div class="database-section-header">Drop Items</div>
+            <div class="database-section-header">${tt('Drop Items')}</div>
             <div class="database-section-content">
                 ${this.buildDropItemsHTML(enemy)}
             </div>
@@ -182,15 +183,15 @@ class DatabaseEnemyEditor {
         actionsSection.className = 'database-section';
         actionsSection.style.marginBottom = '16px';
         actionsSection.innerHTML = `
-            <div class="database-section-header">Action Patterns</div>
+            <div class="database-section-header">${tt('Action Patterns')}</div>
             <div class="database-section-content">
                 <table class="traits-table" id="enemy-actions-table-${enemy.id}">
                     <thead>
                         <tr>
                             <th style="width: 3px; padding: 0; border: none; background: transparent;"></th>
-                            <th>Skill</th>
-                            <th>Condition</th>
-                            <th>Rating</th>
+                            <th>${tt('Skill')}</th>
+                            <th>${tt('Condition')}</th>
+                            <th>${tt('Rating')}</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -222,14 +223,14 @@ class DatabaseEnemyEditor {
         traitsSection.setAttribute('tabindex', '0');
         traitsSection.style.outline = 'none';
         traitsSection.innerHTML = `
-            <div class="database-section-header">Traits</div>
+            <div class="database-section-header">${tt('Traits')}</div>
             <div class="database-section-content">
                 <table class="traits-table" id="enemy-traits-table-${enemy.id}">
                     <thead>
                         <tr>
                             <th style="width: 3px; padding: 0; border: none; background: transparent;"></th>
-                            <th>Type</th>
-                            <th>Content</th>
+                            <th>${tt('Type')}</th>
+                            <th>${tt('Content')}</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -237,19 +238,19 @@ class DatabaseEnemyEditor {
                             enemy.traits.map((trait, index) => `
                                 <tr class="trait-row" data-trait-index="${index}">
                                     <td class="trait-indicator" style="width: 3px; padding: 0; border: none; background: transparent;"></td>
-                                    <td>${this.commonUI.getTraitName(trait.code)}</td>
-                                    <td>${this.commonUI.getTraitValue(trait)}</td>
+                                    <td>${this.escapeHTML(this.commonUI.getTraitName(trait.code))}</td>
+                                    <td>${this.escapeHTML(this.commonUI.getTraitValue(trait))}</td>
                                 </tr>
                             `).join('') :
-                            '<tr><td style="width: 3px; padding: 0; border: none; background: transparent;"></td><td colspan="2" style="text-align: center; color: var(--color-text-muted); font-style: italic; padding: 12px;">No traits</td></tr>'}
+                            `<tr><td style="width: 3px; padding: 0; border: none; background: transparent;"></td><td colspan="2" style="text-align: center; color: var(--color-text-muted); font-style: italic; padding: 12px;">${tt('No traits')}</td></tr>`}
                     </tbody>
                 </table>
                 <div class="trait-action-buttons" style="display: flex; gap: 6px; margin-top: 8px;">
-                    <button class="trait-btn-add" style="padding: 4px 12px; background: var(--color-border-subtle); border: 1px solid var(--color-border-input); color: var(--color-text-strong); border-radius: 4px; cursor: pointer; font-size: 12px;">Add</button>
-                    <button class="trait-btn-edit" style="padding: 4px 12px; background: var(--color-border-subtle); border: 1px solid var(--color-border-input); color: var(--color-text-dim); border-radius: 4px; cursor: default; font-size: 12px;" disabled>Edit</button>
-                    <button class="trait-btn-copy" style="padding: 4px 12px; background: var(--color-border-subtle); border: 1px solid var(--color-border-input); color: var(--color-text-dim); border-radius: 4px; cursor: default; font-size: 12px;" disabled>Copy</button>
-                    <button class="trait-btn-paste" style="padding: 4px 12px; background: var(--color-border-subtle); border: 1px solid var(--color-border-input); color: var(--color-text-dim); border-radius: 4px; cursor: default; font-size: 12px;" disabled>Paste</button>
-                    <button class="trait-btn-delete" style="padding: 4px 12px; background: var(--color-border-subtle); border: 1px solid var(--color-border-input); color: var(--color-text-dim); border-radius: 4px; cursor: default; font-size: 12px;" disabled>Delete</button>
+                    <button class="trait-btn-add" style="padding: 4px 12px; background: var(--color-border-subtle); border: 1px solid var(--color-border-input); color: var(--color-text-strong); border-radius: 4px; cursor: pointer; font-size: 12px;">${tt('Add')}</button>
+                    <button class="trait-btn-edit" style="padding: 4px 12px; background: var(--color-border-subtle); border: 1px solid var(--color-border-input); color: var(--color-text-dim); border-radius: 4px; cursor: default; font-size: 12px;" disabled>${tt('Edit')}</button>
+                    <button class="trait-btn-copy" style="padding: 4px 12px; background: var(--color-border-subtle); border: 1px solid var(--color-border-input); color: var(--color-text-dim); border-radius: 4px; cursor: default; font-size: 12px;" disabled>${tt('Copy')}</button>
+                    <button class="trait-btn-paste" style="padding: 4px 12px; background: var(--color-border-subtle); border: 1px solid var(--color-border-input); color: var(--color-text-strong); border-radius: 4px; cursor: pointer; font-size: 12px;">${tt('Paste')}</button>
+                    <button class="trait-btn-delete" style="padding: 4px 12px; background: var(--color-border-subtle); border: 1px solid var(--color-border-input); color: var(--color-text-dim); border-radius: 4px; cursor: default; font-size: 12px;" disabled>${tt('Delete')}</button>
                 </div>
             </div>
         `;
@@ -263,7 +264,7 @@ class DatabaseEnemyEditor {
         noteSection.style.display = 'flex';
         noteSection.style.flexDirection = 'column';
         noteSection.innerHTML = `
-            <div class="database-section-header">Note</div>
+            <div class="database-section-header">${tt('Note')}</div>
             <div class="database-section-content" style="flex: 1; display: flex; flex-direction: column;">
                 <textarea class="database-field-value" style="width: 100%; flex: 1; min-height: 60px; resize: vertical;" data-field="note" data-enemy-id="${enemy.id}">${this.escapeHTML(enemy.note || '')}</textarea>
             </div>
@@ -313,6 +314,7 @@ class DatabaseEnemyEditor {
     // ==========================================
 
     buildDropItemsHTML(enemy) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         if (!enemy.dropItems) {
             enemy.dropItems = [
                 { kind: 0, dataId: 1, denominator: 1 },
@@ -330,20 +332,20 @@ class DatabaseEnemyEditor {
             const drop = enemy.dropItems[i];
             html += `
                 <div style="margin-bottom: 10px; padding: 8px; background: var(--color-bg-base); border: 1px solid var(--color-border); border-radius: 4px;">
-                    <div style="font-size: 11px; color: var(--color-text-muted); margin-bottom: 4px;">Drop Slot ${i + 1}</div>
+                    <div style="font-size: 11px; color: var(--color-text-muted); margin-bottom: 4px;">${tt('Drop Slot')} ${i + 1}</div>
                     <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
                         <div style="display: flex; align-items: center; gap: 4px;">
-                            <label class="database-field-label" style="font-size: 11px;">Kind:</label>
+                            <label class="database-field-label" style="font-size: 11px;">${tt('Kind:')}</label>
                             <select class="database-field-value" style="width: 90px; font-size: 11px;"
                                     data-field="dropItems" data-drop-index="${i}" data-drop-field="kind" data-enemy-id="${enemy.id}">
-                                <option value="0" ${drop.kind === 0 ? 'selected' : ''}>None</option>
-                                <option value="1" ${drop.kind === 1 ? 'selected' : ''}>Item</option>
-                                <option value="2" ${drop.kind === 2 ? 'selected' : ''}>Weapon</option>
-                                <option value="3" ${drop.kind === 3 ? 'selected' : ''}>Armor</option>
+                                <option value="0" ${drop.kind === 0 ? 'selected' : ''}>${tt('None')}</option>
+                                <option value="1" ${drop.kind === 1 ? 'selected' : ''}>${tt('Item')}</option>
+                                <option value="2" ${drop.kind === 2 ? 'selected' : ''}>${tt('Weapon')}</option>
+                                <option value="3" ${drop.kind === 3 ? 'selected' : ''}>${tt('Armor')}</option>
                             </select>
                         </div>
                         <div style="display: flex; align-items: center; gap: 4px; ${drop.kind === 0 ? 'display: none;' : ''}" id="enemy-drop-dataid-wrapper-${enemy.id}-${i}">
-                            <label class="database-field-label" style="font-size: 11px;">Item:</label>
+                            <label class="database-field-label" style="font-size: 11px;">${tt('Item:')}</label>
                             <select class="database-field-value" style="width: 150px; font-size: 11px;"
                                     data-field="dropItems" data-drop-index="${i}" data-drop-field="dataId" data-enemy-id="${enemy.id}"
                                     id="enemy-drop-dataid-${enemy.id}-${i}">
@@ -412,32 +414,33 @@ class DatabaseEnemyEditor {
     // ==========================================
 
     buildActionsHTML(enemy) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const conditionNames = ['Always', 'Turn', 'HP', 'MP', 'State', 'Party Level', 'Switch'];
 
         if (!enemy.actions || enemy.actions.length === 0) {
-            return '<tr><td colspan="4" style="text-align: center; color: var(--color-text-muted);">No action patterns (right-click to add)</td></tr>';
+            return `<tr><td colspan="4" style="text-align: center; color: var(--color-text-muted);">${tt('No action patterns (right-click to add)')}</td></tr>`;
         }
 
         return enemy.actions.map((action, index) => {
             const skills = this.databaseManager.getSkills() || [];
             const skill = skills.find(s => s && s.id === action.skillId);
-            const skillName = skill ? skill.name : `Skill #${action.skillId}`;
+            const skillName = skill ? skill.name : `${tt('Skill')} #${action.skillId}`;
 
-            let condDesc = conditionNames[action.conditionType] || 'Unknown';
+            let condDesc = tt(conditionNames[action.conditionType] || 'Unknown');
             if (action.conditionType === 1) {
-                condDesc = `Turn ${action.conditionParam1}a + ${action.conditionParam2}b`;
+                condDesc = `${tt('Turn')} ${action.conditionParam1}a + ${action.conditionParam2}b`;
             } else if (action.conditionType === 2) {
-                condDesc = `HP ${action.conditionParam1}% ~ ${action.conditionParam2}%`;
+                condDesc = `${tt('HP')} ${action.conditionParam1}% ~ ${action.conditionParam2}%`;
             } else if (action.conditionType === 3) {
-                condDesc = `MP ${action.conditionParam1}% ~ ${action.conditionParam2}%`;
+                condDesc = `${tt('MP')} ${action.conditionParam1}% ~ ${action.conditionParam2}%`;
             } else if (action.conditionType === 4) {
                 const states = this.databaseManager.getStates() || [];
                 const state = states.find(s => s && s.id === action.conditionParam1);
-                condDesc = `State: ${state ? state.name : '#' + action.conditionParam1}`;
+                condDesc = `${tt('State')}: ${state ? state.name : '#' + action.conditionParam1}`;
             } else if (action.conditionType === 5) {
-                condDesc = `Party Lv >= ${action.conditionParam1}`;
+                condDesc = `${tt('Party Lv')} >= ${action.conditionParam1}`;
             } else if (action.conditionType === 6) {
-                condDesc = `Switch #${action.conditionParam1} ON`;
+                condDesc = `${tt('Switch')} #${action.conditionParam1} ${tt('ON')}`;
             }
 
             return `
@@ -504,6 +507,7 @@ class DatabaseEnemyEditor {
     }
 
     setupActionsContextMenu(table, enemy) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         table.addEventListener('contextmenu', (e) => {
             e.preventDefault();
 
@@ -536,7 +540,7 @@ class DatabaseEnemyEditor {
 
             menuItems.forEach(item => {
                 const menuItem = document.createElement('div');
-                menuItem.textContent = item.label;
+                menuItem.textContent = tt(item.label);
                 menuItem.style.cssText = `
                     padding: 8px 16px;
                     cursor: ${item.enabled ? 'pointer' : 'not-allowed'};
@@ -594,6 +598,7 @@ class DatabaseEnemyEditor {
     }
 
     showActionEditorModal(enemy, actionIndex, action) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const overlay = document.createElement('div');
         overlay.style.cssText = `
             position: fixed; top: 0; left: 0; right: 0; bottom: 0;
@@ -616,34 +621,34 @@ class DatabaseEnemyEditor {
 
         const conditionTypes = ['Always', 'Turn', 'HP', 'MP', 'State', 'Party Level', 'Switch'];
         const conditionOptions = conditionTypes
-            .map((name, idx) => `<option value="${idx}" ${idx === action.conditionType ? 'selected' : ''}>${name}</option>`)
+            .map((name, idx) => `<option value="${idx}" ${idx === action.conditionType ? 'selected' : ''}>${tt(name)}</option>`)
             .join('');
 
         const inputStyle = 'width: 100%; padding: 6px; background: var(--color-bg-menubar); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 3px; font-size: 12px; box-sizing: border-box;';
 
         modal.innerHTML = `
-            <h3 style="margin: 0 0 16px 0; color: var(--color-text-strong); font-size: 15px;">Edit Action Pattern</h3>
+            <h3 style="margin: 0 0 16px 0; color: var(--color-text-strong); font-size: 15px;">${tt('Edit Action Pattern')}</h3>
             <div style="display: flex; flex-direction: column; gap: 12px;">
                 <div>
-                    <label class="database-field-label" style="display: block; margin-bottom: 4px;">Skill:</label>
+                    <label class="database-field-label" style="display: block; margin-bottom: 4px;">${tt('Skill:')}</label>
                     <select id="action-edit-skill" style="${inputStyle}">${skillOptions}</select>
                 </div>
                 <div>
-                    <label class="database-field-label" style="display: block; margin-bottom: 4px;">Condition Type:</label>
+                    <label class="database-field-label" style="display: block; margin-bottom: 4px;">${tt('Condition Type:')}</label>
                     <select id="action-edit-condType" style="${inputStyle}">${conditionOptions}</select>
                 </div>
                 <div style="display: flex; gap: 12px;">
                     <div style="flex: 1;">
-                        <label class="database-field-label" style="display: block; margin-bottom: 4px;">Param 1:</label>
+                        <label class="database-field-label" style="display: block; margin-bottom: 4px;">${tt('Param 1:')}</label>
                         <input type="number" id="action-edit-param1" value="${action.conditionParam1 || 0}" style="${inputStyle}">
                     </div>
                     <div style="flex: 1;">
-                        <label class="database-field-label" style="display: block; margin-bottom: 4px;">Param 2:</label>
+                        <label class="database-field-label" style="display: block; margin-bottom: 4px;">${tt('Param 2:')}</label>
                         <input type="number" id="action-edit-param2" value="${action.conditionParam2 || 0}" style="${inputStyle}">
                     </div>
                 </div>
                 <div>
-                    <label class="database-field-label" style="display: block; margin-bottom: 4px;">Rating (1-10):</label>
+                    <label class="database-field-label" style="display: block; margin-bottom: 4px;">${tt('Rating (1-10):')}</label>
                     <input type="number" id="action-edit-rating" value="${action.rating || 5}" min="1" max="10" style="${inputStyle}">
                 </div>
             </div>
@@ -653,12 +658,12 @@ class DatabaseEnemyEditor {
         btnRow.style.cssText = 'display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px;';
 
         const cancelBtn = document.createElement('button');
-        cancelBtn.textContent = 'Cancel';
+        cancelBtn.textContent = tt('Cancel');
         cancelBtn.className = 'rr-btn-secondary';
         cancelBtn.addEventListener('click', () => overlay.remove());
 
         const okBtn = document.createElement('button');
-        okBtn.textContent = 'OK';
+        okBtn.textContent = tt('OK');
         okBtn.style.cssText = 'padding: 8px 16px; background: var(--color-accent); border: 1px solid var(--color-accent); color: var(--color-bg-deep); border-radius: 4px; cursor: pointer; font-weight: bold;';
         okBtn.addEventListener('click', () => {
             action.skillId = parseInt(document.getElementById('action-edit-skill').value) || 1;
@@ -791,7 +796,6 @@ class DatabaseEnemyEditor {
         if (!section) return;
         const table = section.querySelector('.traits-table');
         const hasSelection = table && table.querySelector('.trait-row.selected');
-        const hasClipboard = !!this.traitsClipboard;
 
         const setBtn = (btn, enabled) => {
             if (!btn) return;
@@ -802,7 +806,7 @@ class DatabaseEnemyEditor {
 
         setBtn(section.querySelector('.trait-btn-edit'), hasSelection);
         setBtn(section.querySelector('.trait-btn-copy'), hasSelection);
-        setBtn(section.querySelector('.trait-btn-paste'), hasClipboard);
+        setBtn(section.querySelector('.trait-btn-paste'), true);
         setBtn(section.querySelector('.trait-btn-delete'), hasSelection);
     }
 
@@ -835,7 +839,7 @@ class DatabaseEnemyEditor {
                 e.preventDefault();
                 e.stopPropagation();
                 this.cutTrait(entry, idx);
-            } else if (e.key === 'v' && this.traitsClipboard) {
+            } else if (e.key === 'v') {
                 e.preventDefault();
                 e.stopPropagation();
                 this.pasteTrait(entry);
@@ -844,6 +848,7 @@ class DatabaseEnemyEditor {
     }
 
     setupTraitsContextMenu(table, enemy) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         table.addEventListener('contextmenu', (e) => {
             e.preventDefault();
 
@@ -873,14 +878,14 @@ class DatabaseEnemyEditor {
                 { label: 'Edit', action: () => this.editTrait(enemy, traitIndex), enabled: traitIndex !== null },
                 { label: 'Cut', action: () => this.cutTrait(enemy, traitIndex), enabled: traitIndex !== null },
                 { label: 'Copy', action: () => this.copyTrait(enemy, traitIndex), enabled: traitIndex !== null },
-                { label: 'Paste', action: () => this.pasteTrait(enemy), enabled: this.traitsClipboard !== null },
+                { label: 'Paste', action: () => this.pasteTrait(enemy), enabled: true },
                 { label: 'Delete', action: () => this.deleteTrait(enemy, traitIndex), enabled: traitIndex !== null },
                 { label: 'Select All', action: () => this.selectAllTraits(enemy), enabled: true }
             ];
 
             menuItems.forEach(item => {
                 const menuItem = document.createElement('div');
-                menuItem.textContent = item.label;
+                menuItem.textContent = tt(item.label);
                 menuItem.style.cssText = `
                     padding: 8px 16px;
                     cursor: ${item.enabled ? 'pointer' : 'not-allowed'};
@@ -932,9 +937,13 @@ class DatabaseEnemyEditor {
         });
     }
 
-    cutTrait(enemy, traitIndex) {
+    async cutTrait(enemy, traitIndex) {
         if (traitIndex === null || !enemy.traits) return;
-        this.traitsClipboard = { ...enemy.traits[traitIndex] };
+        const target = DatabaseRowClipboard.capturePasteTarget(this.parentEditor, this.projectManager, this.databaseManager, enemy.traits, traitIndex);
+        const payload = this.copyTrait(enemy, traitIndex);
+        if (!await DatabaseRowClipboard.confirmCut(payload)) return;
+        if (this.currentEnemy !== enemy
+            || !DatabaseRowClipboard.isPasteTargetCurrent(target, this.parentEditor, this.projectManager, this.databaseManager, enemy.traits)) return;
         enemy.traits.splice(traitIndex, 1);
         this.databaseManager.updateEnemy(enemy.id, enemy);
         this.refreshEnemyDetail(enemy);
@@ -942,13 +951,21 @@ class DatabaseEnemyEditor {
 
     copyTrait(enemy, traitIndex) {
         if (traitIndex === null || !enemy.traits) return;
-        this.traitsClipboard = { ...enemy.traits[traitIndex] };
+        this.traitsClipboard = DatabaseRowClipboard.write('trait', enemy.traits[traitIndex], this.databaseManager);
+        return this.traitsClipboard;
     }
 
-    pasteTrait(enemy) {
-        if (!this.traitsClipboard) return;
+    async pasteTrait(enemy) {
+        const target = DatabaseRowClipboard.capturePasteTarget(this.parentEditor, this.projectManager, this.databaseManager, enemy.traits);
+        const result = await DatabaseRowClipboard.read('trait', this.databaseManager, this.traitsClipboard);
+        if (this.currentEnemy !== enemy
+            || !DatabaseRowClipboard.isPasteTargetCurrent(target, this.parentEditor, this.projectManager, this.databaseManager, enemy.traits)) return;
+        if (result.error) {
+            DatabaseRowClipboard.showError(result);
+            return;
+        }
         if (!enemy.traits) enemy.traits = [];
-        enemy.traits.push({ ...this.traitsClipboard });
+        enemy.traits.push(result.row);
         this.databaseManager.updateEnemy(enemy.id, enemy);
         this.refreshEnemyDetail(enemy);
     }
@@ -1023,12 +1040,13 @@ class DatabaseEnemyEditor {
     // ==========================================
 
     loadBattlerPreview(enemy) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const container = document.getElementById(`enemy-battler-preview-${enemy.id}`);
         if (!container) return;
 
         const battlerName = enemy.battlerName;
         if (!battlerName) {
-            container.innerHTML = '<span style="color: var(--color-border-input); font-size: 11px;">(No battler)</span>';
+            container.innerHTML = `<span style="color: var(--color-border-input); font-size: 11px;">${tt('(No battler)')}</span>`;
             return;
         }
 
@@ -1042,21 +1060,21 @@ class DatabaseEnemyEditor {
         const searchDirs = ['enemies', 'sv_enemies', 'characters'];
         let imagePath = null;
         for (const dir of searchDirs) {
-            const tryPath = path.join(project.path, 'img', dir, battlerName + '.png');
-            if (fs.existsSync(tryPath)) {
-                imagePath = 'file://' + tryPath.replace(/\\/g, '/');
+            const battlerFile = RRAssetFiles.find(path.join(project.path, 'img', dir), battlerName, ['.png']);
+            if (battlerFile) {
+                imagePath = RRAssetFiles.toUrl(battlerFile.absolutePath);
                 break;
             }
         }
 
         if (!imagePath) {
-            container.innerHTML = '<span style="color: var(--color-border-input); font-size: 11px;">(Image not found)</span>';
+            container.innerHTML = `<span style="color: var(--color-border-input); font-size: 11px;">${tt('(Image not found)')}</span>`;
             return;
         }
 
         // Detect charset-style battler
-        const firstChar = battlerName.charAt(0);
-        const isBigChar = battlerName.match(/^[!$]*\$/);
+        const firstChar = RRAssetFiles.basename(battlerName).charAt(0);
+        const isBigChar = RRAssetFiles.isBigCharacter(battlerName);
         const isCharBattler = (firstChar === '!' || firstChar === '$');
 
         const img = new Image();
@@ -1092,7 +1110,7 @@ class DatabaseEnemyEditor {
             }
         };
         img.onerror = () => {
-            container.innerHTML = '<span style="color: var(--color-border-input); font-size: 11px;">(Failed to load)</span>';
+            container.innerHTML = `<span style="color: var(--color-border-input); font-size: 11px;">${tt('(Failed to load)')}</span>`;
         };
         img.src = imagePath;
     }
@@ -1102,9 +1120,10 @@ class DatabaseEnemyEditor {
     // ==========================================
 
     selectBattlerImage(enemy) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const project = this.projectManager.getCurrentProject();
         if (!project) {
-            alert('No project loaded');
+            alert(tt('No project loaded'));
             return;
         }
 
@@ -1113,19 +1132,14 @@ class DatabaseEnemyEditor {
         const searchDirs = ['enemies', 'sv_enemies', 'characters'];
 
         // Collect files from all battler directories
-        const fileMap = new Map(); // name -> dir (first match wins for preview)
+        const fileMap = new Map(); // name -> record (first directory wins for preview)
         for (const dir of searchDirs) {
             const dirPath = path.join(project.path, 'img', dir);
             try {
                 if (fs.existsSync(dirPath)) {
-                    fs.readdirSync(dirPath)
-                        .filter(f => f.endsWith('.png'))
-                        .forEach(f => {
-                            const name = f.replace('.png', '');
-                            if (!fileMap.has(name)) {
-                                fileMap.set(name, dir);
-                            }
-                        });
+                    RRAssetFiles.listUnique(dirPath, ['.png']).forEach(file => {
+                        if (!fileMap.has(file.name)) fileMap.set(file.name, file);
+                    });
                 }
             } catch (e) {
                 console.error(`Error reading ${dir} folder:`, e);
@@ -1135,18 +1149,18 @@ class DatabaseEnemyEditor {
         const files = Array.from(fileMap.keys()).sort();
 
         if (files.length === 0) {
-            alert('No enemy battler images found in img/enemies, sv_enemies, or characters folders');
+            alert(tt('No enemy battler images found in img/enemies, sv_enemies, or characters folders'));
             return;
         }
 
-        this.parentEditor.showImagePicker('Select Enemy Battler', files, (selectedFile) => {
+        this.parentEditor.showImagePicker(tt('Select Enemy Battler'), files, (selectedFile) => {
             enemy.battlerName = selectedFile;
             this.databaseManager.updateEnemy(enemy.id, enemy);
-            this.parentEditor?.updateStatus?.('Enemy battler updated');
+            this.parentEditor?.updateStatus?.(tt('Enemy battler updated'));
             this.refreshEnemyDetail(enemy);
         }, (fileName) => {
-            const dir = fileMap.get(fileName) || 'enemies';
-            return 'file://' + path.join(project.path, 'img', dir, fileName + '.png').replace(/\\/g, '/');
+            const file = fileMap.get(fileName);
+            return file ? RRAssetFiles.toUrl(file.absolutePath) : '';
         }, enemy.battlerName);
     }
 
@@ -1169,8 +1183,8 @@ class DatabaseEnemyEditor {
     // ==========================================
 
     escapeHTML(str) {
-        const div = document.createElement('div');
-        div.textContent = str;
-        return div.innerHTML;
+        return typeof rrEscapeHtml !== 'undefined'
+            ? rrEscapeHtml(str)
+            : require('../utils/HtmlEscape.js')(str);
     }
 }

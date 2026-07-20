@@ -104,6 +104,7 @@ class SetEventLocationEditor {
     }
 
     renderContent() {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const container = this.modal.querySelector('.set-event-location-container');
         container.innerHTML = '';
 
@@ -120,7 +121,7 @@ class SetEventLocationEditor {
             border-top-right-radius: 6px;
         `;
         header.innerHTML = `
-            <h3 style="margin: 0; color: var(--color-text-strong); font-size: 16px;">Set Event Location</h3>
+            <h3 style="margin: 0; color: var(--color-text-strong); font-size: 16px;">${tt('Set Event Location')}</h3>
             <button class="close-btn" style="background: none; border: none; color: var(--color-text-strong); font-size: 20px; cursor: pointer; padding: 0; width: 24px; height: 24px;">×</button>
         `;
         container.appendChild(header);
@@ -141,7 +142,7 @@ class SetEventLocationEditor {
         charRow.style.cssText = 'display: flex; align-items: center; gap: 8px;';
 
         const charLabel = document.createElement('span');
-        charLabel.textContent = 'Character:';
+        charLabel.textContent = tt('Character:');
         charLabel.style.cssText = 'color: var(--color-text); font-size: 13px; min-width: 100px;';
 
         const charSelect = document.createElement('select');
@@ -160,7 +161,7 @@ class SetEventLocationEditor {
         `;
         // Add event IDs 1-20 (can be extended)
         for (let i = 1; i <= 20; i++) {
-            charSelect.innerHTML += `<option value="${i}">Event ${i.toString().padStart(3, '0')}</option>`;
+            charSelect.innerHTML += `<option value="${i}">${tt('Event')} ${i.toString().padStart(3, '0')}</option>`;
         }
         charSelect.value = this.characterId.toString();
         charSelect.addEventListener('change', (e) => {
@@ -176,7 +177,7 @@ class SetEventLocationEditor {
         typeRow.style.cssText = 'display: flex; flex-direction: column; gap: 8px; padding-top: 8px; border-top: 1px solid var(--color-border);';
 
         const typeLabel = document.createElement('div');
-        typeLabel.textContent = 'Location Type:';
+        typeLabel.textContent = tt('Location Type:');
         typeLabel.style.cssText = 'color: var(--color-text); font-size: 13px; font-weight: bold;';
         typeRow.appendChild(typeLabel);
 
@@ -255,7 +256,7 @@ class SetEventLocationEditor {
             const eventRow = this.createNumberInput('Event ID:', this.eventId, (value) => { this.eventId = value; }, 1, 999);
 
             const noteDiv = document.createElement('div');
-            noteDiv.textContent = 'Exchange positions with another event';
+            noteDiv.textContent = tt('Exchange positions with another event');
             noteDiv.style.cssText = 'color: var(--color-text-muted); font-size: 11px; font-style: italic;';
 
             inputSection.appendChild(mapRow);
@@ -278,12 +279,12 @@ class SetEventLocationEditor {
         `;
 
         const cancelBtn = document.createElement('button');
-        cancelBtn.textContent = 'Cancel';
+        cancelBtn.textContent = tt('Cancel');
         cancelBtn.className = 'rr-btn-secondary';
         cancelBtn.addEventListener('click', () => this.close());
 
         const okBtn = document.createElement('button');
-        okBtn.textContent = 'OK';
+        okBtn.textContent = tt('OK');
         okBtn.style.cssText = `
             padding: 6px 20px;
             background-color: var(--color-accent);
@@ -302,11 +303,12 @@ class SetEventLocationEditor {
     }
 
     createNumberInput(label, value, onChange, min = 0, max = 999) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const row = document.createElement('div');
         row.style.cssText = 'display: flex; align-items: center; gap: 8px;';
 
         const labelSpan = document.createElement('span');
-        labelSpan.textContent = label;
+        labelSpan.textContent = tt(label);
         labelSpan.style.cssText = 'color: var(--color-text); font-size: 12px; min-width: 80px;';
 
         const input = document.createElement('input');
@@ -334,11 +336,12 @@ class SetEventLocationEditor {
     }
 
     createVariableInput(label, value, onChange) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const row = document.createElement('div');
         row.style.cssText = 'display: flex; align-items: center; gap: 8px;';
 
         const labelSpan = document.createElement('span');
-        labelSpan.textContent = label;
+        labelSpan.textContent = tt(label);
         labelSpan.style.cssText = 'color: var(--color-text); font-size: 12px; min-width: 80px;';
 
         const select = document.createElement('select');
@@ -372,11 +375,12 @@ class SetEventLocationEditor {
     }
 
     createDirectionSelector() {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const row = document.createElement('div');
         row.style.cssText = 'display: flex; align-items: center; gap: 8px;';
 
         const labelSpan = document.createElement('span');
-        labelSpan.textContent = 'Direction:';
+        labelSpan.textContent = tt('Direction:');
         labelSpan.style.cssText = 'color: var(--color-text); font-size: 12px; min-width: 80px;';
 
         const select = document.createElement('select');

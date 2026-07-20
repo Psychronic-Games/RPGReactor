@@ -49,7 +49,22 @@ function resolveTextures(r, params) {
 }
 
 test('recipes are registered', () => {
-    assert.ok(g.RR_EFK_RECIPE_REGISTRY.length >= 2, 'expected at least 2 recipes');
+    assert.equal(g.RR_EFK_RECIPE_REGISTRY.length, 105, 'release recipe count');
+    assert.equal(g.RR_EFK_RECIPE_REGISTRY.some(recipe => recipe.id === 'portal'), false);
+    const categoryCounts = Object.fromEntries(
+        [...g.buildEfkRecipeCategories()].map(([category, recipes]) => [category, recipes.length])
+    );
+    assert.deepEqual(categoryCounts, {
+        Composer: 1,
+        Effect: 5,
+        Elements: 8,
+        Energy: 14,
+        Geometric: 15,
+        Interface: 21,
+        Object: 12,
+        Physical: 12,
+        Symbolic: 17
+    });
     for (const r of g.RR_EFK_RECIPE_REGISTRY) {
         assert.ok(r.id && r.name && r.category, `${r.id || '?'}: missing metadata`);
         const params = g.RR_EfkRecipeUtil.resolveParams(r);

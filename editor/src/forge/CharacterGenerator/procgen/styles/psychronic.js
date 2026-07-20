@@ -1,6 +1,6 @@
 // Psychronic Outfit Forge style adapter.
-// Psychronic uses the shared outfit config/palette/layer system, but its body
-// proportions and armour shapes differ from Looseleaf.
+// Psychronic uses the shared outfit config, palette, and layer system with
+// its own anatomy, classifiers, painters, masks, and extensions.
 
 'use strict';
 

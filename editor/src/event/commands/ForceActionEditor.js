@@ -79,6 +79,7 @@ class ForceActionEditor {
     }
 
     renderContent() {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const container = this.modal.querySelector('.force-action-container');
         container.innerHTML = '';
 
@@ -95,7 +96,7 @@ class ForceActionEditor {
             border-top-right-radius: 6px;
         `;
         header.innerHTML = `
-            <h3 style="margin: 0; color: var(--color-text-strong); font-size: 16px;">Force Action</h3>
+            <h3 style="margin: 0; color: var(--color-text-strong); font-size: 16px;">${tt('Force Action')}</h3>
             <button class="close-btn" style="background: none; border: none; color: var(--color-text-strong); font-size: 20px; cursor: pointer; padding: 0; width: 24px; height: 24px;">\u00d7</button>
         `;
         container.appendChild(header);
@@ -137,12 +138,12 @@ class ForceActionEditor {
         `;
 
         const cancelBtn = document.createElement('button');
-        cancelBtn.textContent = 'Cancel';
+        cancelBtn.textContent = tt('Cancel');
         cancelBtn.className = 'rr-btn-secondary';
         cancelBtn.addEventListener('click', () => this.close());
 
         const okBtn = document.createElement('button');
-        okBtn.textContent = 'OK';
+        okBtn.textContent = tt('OK');
         okBtn.style.cssText = `
             padding: 6px 20px;
             background-color: var(--color-accent);
@@ -161,6 +162,7 @@ class ForceActionEditor {
     }
 
     createBattlerTypeSection() {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const section = document.createElement('div');
         section.style.cssText = 'display: flex; gap: 12px;';
 
@@ -177,7 +179,7 @@ class ForceActionEditor {
 
         const enemyLabel = document.createElement('label');
         enemyLabel.htmlFor = 'battler-enemy-339';
-        enemyLabel.textContent = 'Enemy';
+        enemyLabel.textContent = tt('Enemy');
         enemyLabel.style.cssText = 'color: var(--color-text); cursor: pointer;';
 
         const actorRadio = document.createElement('input');
@@ -193,7 +195,7 @@ class ForceActionEditor {
 
         const actorLabel = document.createElement('label');
         actorLabel.htmlFor = 'battler-actor-339';
-        actorLabel.textContent = 'Actor';
+        actorLabel.textContent = tt('Actor');
         actorLabel.style.cssText = 'color: var(--color-text); cursor: pointer;';
 
         section.appendChild(enemyRadio);
@@ -204,13 +206,14 @@ class ForceActionEditor {
     }
 
     createBattlerSelector() {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const section = document.createElement('div');
         section.style.cssText = 'display: flex; align-items: center; gap: 8px; padding-top: 8px; border-top: 1px solid var(--color-border);';
 
         if (this.battlerType === 0) {
             // Enemy mode - enemy index dropdown (0-7)
             const label = document.createElement('span');
-            label.textContent = 'Enemy:';
+            label.textContent = tt('Enemy:');
             label.style.cssText = 'color: var(--color-text); font-size: 13px; min-width: 100px;';
 
             const select = document.createElement('select');
@@ -229,7 +232,7 @@ class ForceActionEditor {
         } else {
             // Actor mode - actor dropdown
             const label = document.createElement('span');
-            label.textContent = 'Actor:';
+            label.textContent = tt('Actor:');
             label.style.cssText = 'color: var(--color-text); font-size: 13px; min-width: 100px;';
 
             const select = document.createElement('select');
@@ -240,7 +243,7 @@ class ForceActionEditor {
                 if (!actors[i]) continue;
                 const option = document.createElement('option');
                 option.value = i;
-                option.textContent = `${i.toString().padStart(4, '0')}: ${actors[i].name || 'Unnamed'}`;
+                option.textContent = `${i.toString().padStart(4, '0')}: ${actors[i].name || tt('Unnamed')}`;
                 option.selected = (this.battlerId === i);
                 select.appendChild(option);
             }
@@ -254,11 +257,12 @@ class ForceActionEditor {
     }
 
     createSkillSelector() {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const section = document.createElement('div');
         section.style.cssText = 'display: flex; align-items: center; gap: 8px; padding-top: 8px; border-top: 1px solid var(--color-border);';
 
         const label = document.createElement('span');
-        label.textContent = 'Skill:';
+        label.textContent = tt('Skill:');
         label.style.cssText = 'color: var(--color-text); font-size: 13px; min-width: 100px;';
 
         const select = document.createElement('select');
@@ -269,7 +273,7 @@ class ForceActionEditor {
             if (!skills[i]) continue;
             const option = document.createElement('option');
             option.value = i;
-            option.textContent = `${i.toString().padStart(4, '0')}: ${skills[i].name || 'Unnamed'}`;
+            option.textContent = `${i.toString().padStart(4, '0')}: ${skills[i].name || tt('Unnamed')}`;
             option.selected = (this.skillId === i);
             select.appendChild(option);
         }
@@ -282,11 +286,12 @@ class ForceActionEditor {
     }
 
     createTargetSelector() {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const section = document.createElement('div');
         section.style.cssText = 'display: flex; align-items: center; gap: 8px; padding-top: 8px; border-top: 1px solid var(--color-border);';
 
         const label = document.createElement('span');
-        label.textContent = 'Target:';
+        label.textContent = tt('Target:');
         label.style.cssText = 'color: var(--color-text); font-size: 13px; min-width: 100px;';
 
         const select = document.createElement('select');
@@ -295,14 +300,14 @@ class ForceActionEditor {
         // Last Target option
         const lastTargetOption = document.createElement('option');
         lastTargetOption.value = -2;
-        lastTargetOption.textContent = 'Last Target';
+        lastTargetOption.textContent = tt('Last Target');
         lastTargetOption.selected = (this.targetIndex === -2);
         select.appendChild(lastTargetOption);
 
         // Random option
         const randomOption = document.createElement('option');
         randomOption.value = -1;
-        randomOption.textContent = 'Random';
+        randomOption.textContent = tt('Random');
         randomOption.selected = (this.targetIndex === -1);
         select.appendChild(randomOption);
 
@@ -310,7 +315,7 @@ class ForceActionEditor {
         for (let i = 1; i <= 8; i++) {
             const option = document.createElement('option');
             option.value = i - 1;
-            option.textContent = `Index ${i}`;
+            option.textContent = `${tt('Index')} ${i}`;
             option.selected = (this.targetIndex === i - 1);
             select.appendChild(option);
         }

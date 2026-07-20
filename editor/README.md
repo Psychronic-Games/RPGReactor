@@ -1,6 +1,6 @@
 # RPG Reactor
 
-RPG Reactor 0.94.9 is an open-source, cross-platform RPG game editor and runtime for RPG Maker MV/MZ-compatible projects, built on NW.js and PixiJS v8. RPG Reactor provides its own modern PIXI 8 runtime while preserving compatibility with RPG Maker project data and targeting backwards compatibility with both RPG Maker MZ and MV plugins. Create 2D RPG games with a complete development environment featuring map editing, event scripting, database management, and game testing capabilities.
+RPG Reactor 0.95.0 is an open-source, cross-platform RPG game editor and runtime for RPG Maker MV/MZ-compatible projects, built on NW.js and PixiJS v8. RPG Reactor provides its own modern PIXI 8 runtime while preserving compatibility with RPG Maker project data and targeting backwards compatibility with both RPG Maker MZ and MV plugins. Create 2D RPG games with a complete development environment featuring map editing, event scripting, database management, and game testing capabilities.
 
 ## Features
 
@@ -11,13 +11,15 @@ RPG Reactor 0.94.9 is an open-source, cross-platform RPG game editor and runtime
 - **Shadow pen mode**: Special layer effects for depth and atmosphere
 - **Undo/redo**: Full history support (up to 50 steps)
 - **Autotile support**: Automatic tile connection with animated water/waterfall tiles
+- **Six-plane rectangular sampling**: Right-drag captures tile layers 0-3, shadows, and regions; left-click/drag stamps the exact clipped patch with a live composite preview and one Undo entry per placement stroke
 - **Region painting**: 256 distinct regions for gameplay triggers and restrictions
-- **Map management**: Copy, paste, delete, and export whole maps from the map tree, including map data, `MapInfos.json` entries, compatible tileset database references, and full-size PNG image output
+- **Map management**: Copy, paste, delete, and export whole maps from the map tree, including cross-instance map data, `MapInfos.json` entries, compatible tileset database references, and full-size PNG image output; pasted maps are inserted immediately after the selected map at the same hierarchy level
 - **Map audio preview**: Preview autoplay BGM/BGS directly from Map Properties with Play/Pause/Stop controls and volume/pitch/pan settings
 - **Performance optimized**: Viewport culling and lazy-loading for large maps
 
 ### Event System
 - **Visual event editor**: Create interactive objects, NPCs, and triggers
+- **Transactional event workflow**: In Event mode, double-click an empty tile to open a detached default event; Apply or OK inserts it with one Undo snapshot, while Cancel, X, or backdrop dismissal leaves the map unchanged. Double-click an occupied tile to edit it
 - **Multi-page events**: Conditional pages that change based on game state
 - **100+ event commands** with dedicated editor UIs including:
   - Message display, choices, scrolling text, and input
@@ -30,13 +32,20 @@ RPG Reactor 0.94.9 is an open-source, cross-platform RPG game editor and runtime
   - Audio playback (BGM, BGS, ME, SE) and system audio settings
   - Battle processing, shop processing, and enemy manipulation
   - Map settings (tileset, parallax, battle background)
-  - Conditional branches, loops, labels, and common events
-  - Custom script and plugin command execution
-- **Copy/paste support**: Duplicate events, pages, and command selections, including cross-window clipboard support between RPG Reactor instances
+   - Complete MZ Conditional Branch editing: Switch, Variable, Self Switch, Timer, Actor, Enemy, Character, Gold, Item, Weapon, Armor, Button, Script, and Vehicle conditions with their MZ subtypes
+   - Advanced Control Variables expressions for arithmetic, trigonometry, random, min/max, and bitwise operations
+    - Direct stock Loop/Repeat Above insertion with nested-body preservation
+   - Direct/variable Common Event calls, direct/variable current-map event-page calls, and extended keyboard/mouse/wheel/pointer conditions
+   - Dynamic Picture IDs and duration, one/range/all erasure, angle, custom anchor, sine-wave, Overlay blend, and negative-scale Quick Setting preview
+   - Nested-structure-safe If/Else and Show Choices editing, optional Else creation, loops, labels, and common events
+   - Custom script and plugin command execution
+- **Portable advanced commands**: Stock-compatible forms stay ordinary stock command arrays. Reactor-only structured forms use syntax-checked, strictly versioned Script metadata and stock MV/MZ fallback bodies; modified or unknown tags remain normal Script commands rather than being reinterpreted
+- **RPG Maker-style Game Data**: Control Variables opens a nested selector with database names, actor/enemy/character properties, party data, Other data, and every Last Action Data operand while preserving stock command parameters
+- **Copy/paste support**: Exchange whole events, event pages, command blocks shared across map/Common/Troop events, troop battle pages, and movement-route command selections between RPG Reactor instances
 - **Find/search**: Locate events across your project
 
 ### Database Editors
-Comprehensive editors for all game data with right-click context menu clipboard operations (Copy, Cut, Paste, Duplicate), keyboard shortcuts (Ctrl+C/X/V/D, Delete, Ctrl+Z undo) on list entries, and shortcut isolation so database tools do not conflict with map or event editing. Entry lists show a framed mini icon beside each name — database icons for skills, items, weapons, armors, and states; face portraits for actors; battler thumbnails for enemies. Skills, Items, and Weapons assign animations through a searchable picker modal with a live playing preview of both sprite-sheet and Effekseer animations:
+Comprehensive editors for all game data in a near-full-viewport workspace with fixed shell controls and independently scrolling navigation, list, and detail panes. Web layouts retain the same scroll ownership and reflow specialized workspaces on narrow screens. Standard entry lists provide right-click clipboard operations (Copy, Cut, Paste, Duplicate), keyboard shortcuts (Ctrl+C/X/V/D, Delete, Ctrl+Z undo), shortcut isolation so database tools do not conflict with map or event editing, and typed cross-instance transfer for every top-level record category including Tilesets. Cross-project paste keeps the destination slot ID and rejects a record copied from a different database category. Change Maximum displays workload-aware ceilings with defensive model validation; major databases/Common Events retain 9,999 slots and Animations/Tilesets retain 1,000, while every Type list exceeds MZ's traditional 99-entry range. Large databases remain one continuous list: 250 rows appear immediately and later batches append while scrolling. Oversized imported arrays remain readable and can be reduced. Actors support level 999 through extrapolated Class curves, action repeats support 100 with runtime enforcement, and 2,000 maps can use IDs through 9,999. Entry lists show a framed mini icon beside each name — database icons for skills, items, weapons, armors, and states; face portraits for actors; battler thumbnails for enemies. Skills, Items, and Weapons assign animations through a searchable picker modal with a live playing preview of both sprite-sheet and Effekseer animations:
 
 | Editor | Purpose |
 |--------|---------|
@@ -47,30 +56,45 @@ Comprehensive editors for all game data with right-click context menu clipboard 
 | **Weapons** | Configure weapons with parameters, elements, traits, and an attack animation picker |
 | **Armors** | Set up defensive equipment with parameters, resistances, and full trait editing |
 | **Enemies** | Build enemies with visual battler preview (charset-aware), hue slider with live preview, parameters, drop items, action patterns, and traits |
-| **Troops** | Compose enemy groups with visual replace picker, visibility toggles, and event page scripting |
+| **Troops** | Compose enemy groups in a two-column workspace with a runtime-aligned preview on the left, stacked Battle Test/Members/Battleback/Note controls on the right, class-filtered Battle Test equipment, aligned Conditions dialog, and full-width event page scripting below |
 | **States** | Define status effects with auto-removal and parameter changes |
-| **Animations** | Create battle animations with sprite frames or Effekseer effects |
-| **Tilesets** | Configure tile passage, terrain tags, special flags, Change Maximum, and Ctrl+C/Ctrl+V slot copy/paste |
+| **Animations** | Create battle animations in a dense responsive workspace with scaled 960x540 preview editing, compact sprite sheets/properties, locally scrolling frames/effect controls, and timing SE stored in recursive subfolders |
+| **Tilesets** | Configure tile passage, terrain tags, special flags, Change Maximum, and Ctrl+C/Ctrl+V slot copy/paste; A-E previews support Unicode and URL-significant project/image paths without requiring an initialized map renderer |
 | **Common Events** | Script reusable event sequences with trigger conditions |
-| **System 1** | Game-wide settings including title, party, audio, battleback, title screen, and vehicle options |
-| **System 2** | Menu commands, item categories, magic skills, attack motions, editor settings, asset sizes, and advanced options |
+| **System 1** | Game-wide settings including title, party, audio, battleback, and vehicle options; Player/Boat/Ship/Airship start locations use a transaction-safe visual map picker or manual Map/X/Y fields, and title images use searchable Unicode navigation with a side-by-side preview |
+| **System 2** | Menu commands, item categories, attack motions, editor settings, asset sizes, advanced options, and an ordered fillable Magic Skills list of Skill Type IDs controlling side-view casting motion |
+| **Types** | Five simultaneous ID-preserving lists for Elements, Skill Types, Weapon Types, Armor Types, and Equipment Types, with multiselect, keyboard and context-menu Cut/Copy/Paste, bulk clear, Add, and confirmed Change Maximum |
+| **Terms** | One compact workspace for Basic Statuses, Parameters, Commands, and the complete grouped Messages schema with text clipboard context menus |
 
 ### Audio Player
 - **Multi-channel playback**: BGM, BGS, ME, and SE tracks
 - **Playback controls**: Volume, pitch, pan, and seek
 - **Loop configuration**: Set custom loop points
 - **Real-time preview**: Test audio while editing events, system audio, and map autoplay BGM/BGS settings
+- **Unicode filename index**: The left rail uses normalized Unicode initials and locale-aware ordering; numbers and punctuation remain under `#`
+- **Recursive folders**: BGM, BGS, ME, and SE browsers discover nested files and preserve extensionless relative names such as `Boss/Phase 2`
 
 ### Multi-Instance Editing
 - **Multiple project windows**: Launch separate RPG Reactor windows for different projects
-- **Same-project protection**: Per-project lock files prevent opening the same project twice at the same time
-- **Cross-instance clipboard**: Typed clipboard support for events, event pages, event command selections, maps, and plugin JSON/settings
+- **Same-project protection**: Per-project lock files prevent opening the same project twice at the same time, and a live lock reports only that conflict rather than a misleading invalid-project error
+- **Cross-instance clipboard**: Typed clipboard support for maps, multi-selected batches from all top-level database categories, individual trait/effect rows, whole events, event/troop pages, structural map/Common/Troop command blocks, movement-route commands, and plugin JSON/settings. Database lists support Ctrl/Cmd/Shift selection and keep their viewport stable after batch operations. Trait/effect database and Type references resolve by unique exact name in the target project; missing or duplicate matches reject the paste. Other source assets and numeric references are not remapped
+
+### Project Loading & Compatibility
+- **Recursive asset discovery**: Project-facing pickers recursively index animation sheets, Effekseer effects, characters, faces, battlers, tilesets, battlebacks, parallaxes, title images, audio, and plugin file parameters. Stored names always use RPG Maker-compatible forward-slash relative paths; `$` and `!$` sheet markers are read from the nested filename rather than its parent folders
+- **Searchable Unicode picker index**: Character, face, battler, vehicle, and animation-image browsers filter live by full relative path with case/accent-insensitive matching. A left Unicode rail and sticky section headers provide direct jumps for Latin, Greek, Cyrillic, CJK, kana, Hangul, and `#` names; results are keyboard-selectable
+- **Resilient JSON reads**: Project metadata and database files retry short-lived partial/locked reads, accept UTF-8 BOMs, and report the failing filename and reason
+- **Single-owner map metadata**: `MapInfos.json` is parsed once during project opening and remains controller-owned
+- **Safe MV launch metadata**: Install Reactor Runtime and desktop playtest repair only missing, non-string, or blank package `name`/`main` fields while preserving custom MV/NW.js settings; malformed packages fail before conversion or launch
 
 ### Plugin System
 - **Plugin discovery**: Automatically finds plugins in your project
 - **Enable/disable toggle**: Control which plugins are active
 - **Load order management**: Arrange plugin execution order
 - **Parameter configuration**: Edit plugin settings through the UI
+- **Searchable help**: Long `@help` guides highlight all literal case-insensitive matches with active/total counts, wraparound previous/next controls, Enter/Shift+Enter, F3/Shift+F3, and Plugin Manager-scoped Ctrl/Cmd+F navigation
+- **Searchable plugin lists**: Filter loaded plugins by name, description, or author without changing load-order identity; the Add Plugin dialog also filters available plugin filenames
+- **Persistent actions**: Remove Plugin and Save Changes remain at the bottom of the manager, with Save on the right and available regardless of list selection
+- **Schema-driven complex parameters**: MV/MZ `struct<T>`, nested struct arrays, and simple arrays render as named aligned forms with multiline notes and Add/Edit/Delete/reorder controls. Rows support double-click editing and direct full-row drag-and-drop with visible insertion feedback, while alternating list surfaces and neutral group headers follow every active theme. Element editors use an explicit OK action. Nested editors keep the source plugin's definitions, Cancel does not mutate the outer draft, Structure/Text tabs synchronize safely, JSON-looking strings remain strings, and saves restore RPG Maker's nested JSON-string encoding
 - **Multi-select actions**: Shift-click and Ctrl/Cmd-click plugins to copy, cut, paste, duplicate, or remove groups across windows
 - **RPG Maker-safe saves**: Existing MV/MZ projects keep `js/plugins.js` in RPG Maker's standard `name`/`status`/`description`/`parameters` format; Reactor-only parsed help, author, and URL metadata stays editor-only
 
@@ -82,6 +106,7 @@ Comprehensive editors for all game data with right-click context menu clipboard 
 - **Start-map validation**: Repairs invalid player and vehicle start-map references before launch when maps have been deleted
 - **Packaged editor support**: Final editor builds launch playtests through a clean NW.js runtime on Windows, macOS, and Linux so the editor package is not accidentally relaunched as the game
 - **Isolated profiles**: Every project uses its own Reactor-managed NW.js playtest profile on Windows, macOS, and Linux, preventing a deployed game or another project from blocking playtest launch
+- **Package preflight**: Launch-critical `package.json` metadata is validated before NW.js starts, preventing MV projects with an empty `name` from reaching NW.js's generic required-value error
 
 ### Build & Deploy (Games)
 - **Cross-platform builds**: Package games for Windows, macOS, Linux, and Web (HTML5)
@@ -120,6 +145,14 @@ Package the RPG Reactor editor itself for desktop or web distribution.
 - **Windows compatibility mode**: Windows editor packages use frameless RPG Reactor title controls, centered startup, and manual maximize/restore behavior so running the Windows build under Proton/Wine on Linux avoids native-frame white bars and click offsets
 - Access from **Build → Package Editor for Distribution...**
 
+Maintainers can produce the same release worker configuration non-interactively
+with `node build-scripts/release-editor.cjs --target <linux|windows|macos|web>
+--mode <candidate|publish> --version <package-version> --output-root <directory>`.
+The CLI pins NW.js 0.107.0, creates a fresh versioned output directory, and
+writes a hashed artifact manifest. Publish mode additionally requires a clean
+checkout and verified native signing/notarization. See
+[`../docs/RELEASE-CHECKLIST.md`](../docs/RELEASE-CHECKLIST.md).
+
 ### Forge - In-editor Asset Generators
 
 Suite of in-editor tools for generating game assets without leaving RPG Reactor. Open from the **Forge** menu.
@@ -131,7 +164,7 @@ Procedural sprite-sheet generator for visual effects and projectile animations.
 - **Keyframe timeline per layer**: Drop keyframes at any frame; sliders and colors interpolate linearly between them and textures cross-fade smoothly so a single layer can morph through several looks in one loop
 - **Animation library** across four categories:
   - **Geometric**: Cube, Pyramid, Cylinder, Cone, Sphere, Torus, Möbius Strip, Double Helix, Dodecahedron, Hypercube, Pentachoron (4D), Circular Saw Blade
-  - **Energy**: Fire, Portal (Stargate-style water-simulation shimmer), Energy Field, Energy Wisps, Teleport Column
+  - **Energy**: Fire, Energy Field, Energy Wisps, Teleport Column
   - **Object**: Sword, Knife, Hammer, Arrow, Bullet, Rock, Egg, Coin, Crown, Scythe
   - **Effect**: Hypnotize (seamless Archimedean spiral), Acid Trip (kaleidoscopic mandala)
 - **3D pipeline**: Every shape supports static tilts + per-axis rotation cycles, glow halo, textured faces with backface culling, and depth-sorted edges
@@ -144,8 +177,8 @@ Procedural sprite-sheet generator for visual effects and projectile animations.
 #### Effekseer Animation Generator
 Recipe-driven generator for native Effekseer particle effects (`.efkefc`), no external Effekseer editor needed. Exports drop straight into the project's `effects/` folder and play through the engine's bundled Effekseer runtime.
 
-- **Format engine**: In-house `.efkefc` reader for binary versions 15, 1500, 1610, and 1710; the writer emits runtime-native version 1500 and is proven by byte-identical round-trips of all 120 stock MZ effects. The `.efkmodel` writer supports v3 single-frame and v5 multi-frame vertex animation.
-- **Recipe library**: 106 recipes across nine categories: Geometric (15), Symbolic (17), Object (12), Interface (21 true-3D instruments with user-entered text), Energy (15), Elements (8), Effect (5), Physical (12), and the Custom Effect Composer.
+- **Format engine**: In-house `.efkefc` reader for binary versions 15, 1500, 1610, and 1710; the writer emits runtime-native version 1500 and is covered by tracked generated-format round trips. The `.efkmodel` writer supports v3 single-frame and v5 multi-frame vertex animation.
+- **Recipe library**: 105 recipes across nine categories: Geometric (15), Symbolic (17), Object (12), Interface (21 true-3D instruments with user-entered text), Energy (14), Elements (8), Effect (5), Physical (12), and the Custom Effect Composer.
 - **Render styles**: Glowing wireframe struts (energy-line look, texture flow along edges) or Solid textured surfaces, seam-correct UV-sphere mapping, normal-blend faithful texture rendering, and untinted custom textures so e.g. a planet map wraps a sphere like a globe
 - **Custom textures**: AG-style picker copies PNG/JPEG images into the project's `effects/Texture/` and maps them across the geometry
 - **Playback**: Spinning and steady-state recipes run continuously with degree-per-second controls; effects that need to settle declare preview prewarm, while bounded bursts and keyframed compositions repeat on the master Frames cycle.
@@ -158,9 +191,9 @@ Recipe-driven generator for native Effekseer particle effects (`.efkefc`), no ex
 #### Character Generator
 Composable character sprite generator for actor walking sprites and generated outfit parts.
 
-- **Style selector**: Built-in `Looseleaf` and `Psychronic` styles share the same part format while allowing style-specific anatomy and painter adapters
+- **Style selector**: `Psychronic` is the sole built-in style. Project PNG style folders remain supported. Project JavaScript parts are disabled by default because they execute with editor/filesystem privileges; trust is explicit per project and can be revoked.
 - **Procedural tab**: Renders layered ASCII/template parts from the part registry, with configurable frame size, alignment, palette overrides, and 3x4 walking-sheet export
-- **Outfit Forge tab**: Generates full-outfit Character Generator parts from recipe data. The current shared recipe is `Nova Sentinel`, available for both Looseleaf and Psychronic styles through `procgen/outfits/nova_sentinel.js`. The Legs slot offers a second preset, a procedural **Mini Skirt**, a one-cloth pleated triangular bell that flares past the body's per-row silhouette, beside the segmented leg armor. The skirt carries tunable `hem` (0–1 across waist-to-knee, default 0.35, with `0` as a micro-skirt), one-row `waistband`, `pleats`, and `kneeAccent` controls; below the hem the body legs show through except for optional knee pads stamped at the anatomical knees above the boot/shin band.
+- **Outfit Forge tab**: Generates full-outfit Character Generator parts from recipe data. The bundled `Nova Sentinel` recipe targets Psychronic through `procgen/outfits/nova_sentinel.js`. The Legs slot offers a second preset, a procedural **Mini Skirt**, beside the segmented leg armor.
 - **Outfit engine**: Browser/Node-compatible generator in `src/forge/CharacterGenerator/procgen/outfit_engine.js`, with per-zone palette families, role-based painters, extensions such as pauldrons/gauntlets, live 4-direction preview, walk preview, zone debug overlays, and save-to-library output under `styles/<style>/parts/full outfits/`
 - **Hair Forge tab**: Generates 4-direction walking hair parts with live walk preview, save-to-library output, expanded palettes (`auburn`, `platinum`, `rose`, `violet`, `navy`, `emerald`), front-view Eye Zone controls, and Hair Pattern sliders for lower-hair banding/scraggle or Short Spiky triangular texture.
 - **Hair Forge styles**: Includes `Layered Bob`, `Long Layered`, `Short Shag`, `Short Spiky`, and `Center Part Long`. Short Spiky uses style-specific spike silhouettes, spiky side bangs, connected rear spikes, and length-aware back/nape behavior; Center Part Long uses symmetrical straight strands, a visible middle part, smooth side bangs, face-framing long curtains, and subtle walk-frame sway.
@@ -177,6 +210,7 @@ Switch the editor's look from **File → Options**:
 - **Palettes**: Default (gold), Bubblegum (pink), Ocean (blue), Cascadia (forest green), Underworld (red), Orange Creamsicle (orange/cream), Royalty (purple with gold trim)
 - **Modes**: Dark and Light for every palette
 - **Palette picker**: Compact swatch dropdown with high-contrast themed rows and selected/hover highlights
+- **Map preview**: A persisted File → Options checkbox and compact synchronized `A1` checkbox beside the map zoom/coordinates can pause or resume water and waterfall animation without affecting the game runtime
 - Map editor canvas stays dark in every theme (cinematic feel)
 - Theme choice persists across sessions in `localStorage`
 - All themes built on a single CSS custom-property system (`css/theme.css`); adding a palette is a copy-paste block plus one line in the picker registry
@@ -186,8 +220,8 @@ Switch the editor's look from **File → Options**:
 Switch the editor language from **File → Options** or the top-menu language button. Language changes apply immediately and persist across sessions in `localStorage`.
 
 - **Languages**: English, Japanese, Spanish, Traditional Chinese, Simplified Chinese, Russian, Portuguese, German, French, Greek, Korean, Arabic, Italian, Polish, Indonesian, Vietnamese, Thai, and Turkish
-- **Current coverage**: editor shell, menu bar, toolbar titles/labels, welcome screen, Options modal, Forge launcher, Audio Player shell labels, About dialog, database/event editor chrome, many fixed event-command forms, high-visibility Forge tools, and common status/alert text
-- **Architecture**: `src/I18nManager.js` provides dictionaries, `I18n.t(key)`, `data-i18n`/`data-i18n-title`/`data-i18n-aria` DOM binding, exact-text fallback for generated editor chrome, mutation observation for dynamic UI, and a `rr-language-changed` event for dynamic UI rerenders
+- **Current coverage**: source-routed editor shell, menus, database editors, event-command forms, Forge tools, map/project controls, deployment UI, browser host, common status/alert text, fixed Terms array/message schemas, and every Options palette name/description
+- **Architecture**: `src/I18nManager.js` provides keyed dictionaries and runtime binding, while generated `src/I18nDeepTranslations.js` supplies the broad exact-text catalog. A source inventory recognizes static translation calls and consumed array/object schemas; tests enforce locale-key parity, interpolation placeholders, translated Terms labels, high-visibility labels, and Arabic `dir="rtl"` behavior
 - Project-authored content such as actor/item/switch/map/event/audio names remains untranslated so RPG project data is not modified by editor language changes
 
 ## Installation
@@ -220,7 +254,7 @@ Extract the `.zip` and double-click `RPG Reactor.exe`.
 Extract the `.zip` and open `RPG Reactor.app`. If macOS blocks the first launch, Control-click the app, choose **Open**, and confirm.
 
 ### From Source
-RPG Reactor runs on NW.js (not system Node.js). You need the NW.js runtime for your platform.
+RPG Reactor runs on NW.js, while dependency installation, tests, and release tooling require Node.js 22 or newer. You also need the NW.js runtime for your platform.
 
 ```bash
 # Clone the repository
@@ -246,7 +280,8 @@ nwjs-win\nw.exe .          # Windows
 ```
 RPG Reactor/
 ├── README.md                    # Repository overview
-├── LICENSE                      # MIT license
+├── LICENSE                      # MIT license for RPG Reactor-owned code
+├── THIRD_PARTY_NOTICES.md       # Bundled dependency license notices
 ├── RPGReactor.sh                # Linux source-checkout launcher
 ├── RPGReactor.bat               # Windows source-checkout launcher
 ├── RPGReactor.command           # macOS source-checkout launcher
@@ -292,6 +327,7 @@ MyGame/
 │   ├── reactor_core.js     # Core engine
 │   ├── reactor_managers.js # Game managers
 │   ├── reactor_objects.js  # Game objects
+│   ├── reactor_picture_extensions.js # Optional Reactor picture state/effects
 │   ├── reactor_scenes.js   # Scene system
 │   ├── reactor_sprites.js  # Sprite rendering
 │   ├── reactor_windows.js  # UI windows
@@ -337,20 +373,21 @@ MyGame/
 | `F11` | Toggle native fullscreen |
 | `F12` | Open NW.js developer tools |
 
-Database shortcuts are scoped to the active database section. Plugin Manager also supports Ctrl+C/X/V and Delete for selected plugin groups. Map tree shortcuts support Ctrl+C/Ctrl+V and Delete for whole-map clipboard/delete actions. Map and event global shortcuts are suppressed while database and editor modals are open.
+Database shortcuts are scoped to the active database section. The Types workspace adds Ctrl/Cmd-click and Shift-click range selection, Ctrl/Cmd+A/X/C/V, Delete/Backspace clear, arrow navigation, Enter/F2 editing, and the same actions in its right-click menu. Types clipboard rows are newline-separated for transfer between categories or spreadsheets. Terms and Types text fields provide editor-native Cut/Copy/Paste/Select All context menus instead of Chromium's generic menu. Plugin Manager also supports Ctrl+C/X/V and Delete for selected plugin groups. Map tree shortcuts support Ctrl+C/Ctrl+V and Delete for whole-map clipboard/delete actions. Map and event global shortcuts are suppressed while database and editor modals are open.
 
 ## Technical Details
 
 - **Runtime**: NW.js; deployment defaults to the latest stable release and also supports pinning a specific version or matching the editor runtime
 - **Rendering**: PixiJS 8.14.0, with compatibility shims and bundled PIXI 7-era library support for imported RPG Maker projects/plugins
 - **Animation Effects**: Effekseer
-- **Data Format**: RPG Maker MZ compatible JSON; RPG Maker MV projects are also compatible in most cases depending on corescripts and plugins
+- **Data Format**: RPG Maker MZ-compatible JSON plus stock MV-compatible LZString saves. The MV compatibility layer supports synchronous YEP-style local/browser save APIs, including custom directory, filename, and web-storage key contracts
 - **Tile Size**: 48x48 pixels
-- **Supported Platforms**: Windows (x64), macOS (x64), Linux (x64)
+- **Desktop platforms**: Windows (x64), macOS (x64), Linux (x64)
+- **Browser edition**: Modern HTTPS/localhost browsers with service-worker and IndexedDB support
 
 ### Tests
 
-The Node test suite covers project creation/import and version metadata, generated-project validity, runtime manifests, local Markdown links, all 18 localization dictionaries, database navigation, save failure handling, RPG Maker-safe plugin persistence, application shortcuts, playtest profile isolation, deployment runtime/locale/codec/asset behavior, Outfit Forge and Hair Forge generation, editor distribution contents, web deployment output, Effekseer format/model round-trips, all 106 recipes at default/extreme/swept parameter values, composition, and real-WASM playback. Full stock-effect corpus checks run when the optional local Demo corpus is available.
+The Node test suite covers project creation/import and version metadata, generated-project validity, runtime manifests, local Markdown links, all 18 localization dictionaries and no-fallback labels, cross-instance map/database/event clipboard transport, database batch/scroll behavior and trait/effect reference remapping, persisted A1 animation control, database limits and Types/Terms behavior, complete Conditional Branch and nested-structure round trips, advanced Control Variables and Game Data operands, stock Loop insertion, dynamic event calls, extended input conditions, dynamic/extended Picture commands, transactional event creation/editing, visual start locations, Magic Skills, searchable Plugin Help, nested plugin-parameter serialization, MV saves and visual compatibility, recursive/Unicode assets, project lock and atomic-write safety, package preflights, preview cleanup, deployment/runtime acquisition, release policy/signing gates, Forge generation, editor/Web distribution, Effekseer format/model round trips, all 105 recipes at default/extreme/swept values, composition, and real-WASM playback. Current validation is 343 passing tests with no failures.
 
 ```bash
 cd editor
@@ -364,7 +401,8 @@ Both game builds and editor distribution builds use `worker_threads` to run in b
 
 ## License
 
-MIT
+RPG Reactor-owned code is MIT-licensed. Bundled third-party components retain
+their own licenses; see [`../THIRD_PARTY_NOTICES.md`](../THIRD_PARTY_NOTICES.md).
 
 ## Author
 

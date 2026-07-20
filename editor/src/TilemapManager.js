@@ -26,6 +26,7 @@ class TilemapManager {
         this.databaseManager = databaseManager;
         this.fs = null;
         this.path = null;
+        this._mapLoadGeneration = 0;
 
         const host = typeof window !== 'undefined' ? window.RPGReactorHost : null;
         if (host?.fs && host?.path) {
@@ -95,6 +96,7 @@ class TilemapManager {
         this.waterfallAnimationFrame = 0; // 0, 1, or 2 (straight: 0→1→2→0)
         this.waterAnimationDirection = 1; // 1 for forward, -1 for backward
         this.animationTicker = null;
+        this.a1AnimationEnabled = true;
         // PERFORMANCE: Track A1 tile positions to avoid scanning entire map every frame
         this.a1TilePositions = []; // Array of {x, y, layerIndex, tileId, pixiLayer, sprites}
         // PERFORMANCE: Track all tile sprites by position for fast updates
@@ -161,11 +163,13 @@ class TilemapManager {
     }
 
     async loadMap(mapId) {
+        const generation = ++this._mapLoadGeneration;
         if (!this.fs || !this.path) {
             return false;
         }
 
         const previousMap = this.currentMap;
+        const previousTileset = this.currentTileset;
         const previousSavedMapState = this.savedMapState;
         try {
             // Load map data
@@ -179,23 +183,6 @@ class TilemapManager {
             const mapData = JSON.parse(this.fs.readFileSync(mapPath, 'utf8'));
             // Set the map ID (it's not stored in the JSON file)
             mapData.id = mapId;
-            this.currentMap = mapData;
-
-            // PERFORMANCE: Clear and destroy texture caches when loading a new map
-            // Destroy old cached textures to free GPU memory
-            for (const key in this.textureCache) {
-                if (this.textureCache[key] && this.textureCache[key].destroy) {
-                    this.textureCache[key].destroy(false); // Don't destroy base texture
-                }
-            }
-            for (const key in this.a1AnimationCache) {
-                if (this.a1AnimationCache[key] && this.a1AnimationCache[key].destroy) {
-                    this.a1AnimationCache[key].destroy(false);
-                }
-            }
-            this.textureCache = {};
-            this.a1AnimationCache = {};
-            this.tilesetTextures = {};
 
             // Load tileset for this map
             let tileset = this.databaseManager.getTileset(mapData.tilesetId);
@@ -206,10 +193,28 @@ class TilemapManager {
                     throw new Error(`No tileset is available for map ${mapId}`);
                 }
             }
-            this.currentTileset = tileset;
-
             // Load tileset images
-            await this.loadTilesetImages(tileset);
+            const tilesetTextures = await this.loadTilesetImages(tileset);
+            if (this.destroyed || generation !== this._mapLoadGeneration) return false;
+
+            // Commit only after every asynchronous dependency belongs to the
+            // latest request. Until here the previously rendered map remains intact.
+            for (const key in this.textureCache) {
+                if (this.textureCache[key] && this.textureCache[key].destroy) {
+                    this.textureCache[key].destroy(false);
+                }
+            }
+            for (const key in this.a1AnimationCache) {
+                if (this.a1AnimationCache[key] && this.a1AnimationCache[key].destroy) {
+                    this.a1AnimationCache[key].destroy(false);
+                }
+            }
+            this.textureCache = {};
+            this.a1AnimationCache = {};
+            this.currentMap = mapData;
+            this.currentTileset = tileset;
+            this.tilesetTextures = tilesetTextures;
+            this._a2DecorKinds = null;
 
             // Create tilemap container
             this.createTilemapContainer();
@@ -237,11 +242,18 @@ class TilemapManager {
 
             return true;
         } catch (error) {
-            this.currentMap = previousMap;
-            this.savedMapState = previousSavedMapState;
+            if (generation === this._mapLoadGeneration) {
+                this.currentMap = previousMap;
+                this.currentTileset = previousTileset;
+                this.savedMapState = previousSavedMapState;
+            }
             console.error(`Error loading map ${mapId}:`, error);
             return false;
         }
+    }
+
+    cancelPendingMapLoad() {
+        this._mapLoadGeneration++;
     }
 
     assetUrl(filePath) {
@@ -252,7 +264,7 @@ class TilemapManager {
 
     async loadTilesetImages(tileset) {
         const imgPath = this.path.join(this.projectPath, 'img', 'tilesets');
-        this._a2DecorKinds = null;   // re-analyze decorations for the new sheet
+        const textures = {};
 
         // Load all tileset images (A1-A5, B, C, D, E)
         const promises = [];
@@ -274,7 +286,7 @@ class TilemapManager {
                     texture.source.style.addressMode = 'clamp-to-edge';
                     texture.source.style.scaleMode = 'nearest'; // Pixel-perfect
                     // PIXI v8 defaults to proper alpha handling for PNG files
-                    this.tilesetTextures[idx] = texture;
+                    textures[idx] = texture;
                 }).catch(err => {
                     // Failed to load tileset image (file missing or corrupt)
                 })
@@ -282,6 +294,7 @@ class TilemapManager {
         }
 
         await Promise.all(promises);
+        return textures;
     }
 
     createTilemapContainer() {
@@ -1417,6 +1430,8 @@ class TilemapManager {
         this.waterAnimationFrame = 0;
         this.waterfallAnimationFrame = 0;
         this.waterAnimationDirection = 1;
+        if (!this.a1AnimationEnabled) return;
+
         let frameCounter = 0;
         const framesPerUpdate = 30; // Update every 30 frames (~0.5 seconds at 60fps)
 
@@ -1440,6 +1455,26 @@ class TilemapManager {
         };
 
         this.app.ticker.add(this.animationTicker);
+    }
+
+    setA1AnimationEnabled(enabled) {
+        this.a1AnimationEnabled = enabled !== false;
+
+        if (this.a1AnimationEnabled) {
+            if (!this.animationTicker && this.currentMap && this.currentTileset) {
+                this.startA1Animation();
+            }
+            return;
+        }
+
+        if (this.animationTicker) {
+            this.app.ticker.remove(this.animationTicker);
+            this.animationTicker = null;
+        }
+        this.waterAnimationFrame = 0;
+        this.waterfallAnimationFrame = 0;
+        this.waterAnimationDirection = 1;
+        this.updateA1Tiles();
     }
 
     // PERFORMANCE OPTIMIZED: Update only A1 autotiles for animation by updating textures, not recreating sprites
@@ -1614,6 +1649,9 @@ class TilemapManager {
     async renderParallax() {
         if (!this.currentMap) return;
 
+        const generation = this._mapLoadGeneration;
+        const map = this.currentMap;
+        const parallaxLayer = this.layers.parallax;
         const { parallaxName, parallaxShow, parallaxLoopX, parallaxLoopY, parallaxSx, parallaxSy } = this.currentMap;
 
         if (this.layers.parallax) {
@@ -1654,6 +1692,8 @@ class TilemapManager {
         try {
             // Load texture using PIXI.Assets.load() to ensure it's loaded before rendering
             const texture = await PIXI.Assets.load(fileUrl);
+            if (this.destroyed || generation !== this._mapLoadGeneration ||
+                this.currentMap !== map || this.layers.parallax !== parallaxLayer) return;
 
             // MZ semantics: the parallax ALWAYS repeats to fill the map —
             // in-game it's a screen-filling TilingSprite and the MZ editor
@@ -1663,8 +1703,8 @@ class TilemapManager {
             texture.source.style.addressMode = 'repeat';
             texture.source.style.scaleMode = 'nearest';
 
-            const mapPixelWidth = this.currentMap.width * this.TILE_WIDTH;
-            const mapPixelHeight = this.currentMap.height * this.TILE_HEIGHT;
+            const mapPixelWidth = map.width * this.TILE_WIDTH;
+            const mapPixelHeight = map.height * this.TILE_HEIGHT;
 
             this.parallaxSprite = new PIXI.TilingSprite({
                 texture: texture,
@@ -2218,6 +2258,7 @@ class TilemapManager {
     // Full cleanup when this TilemapManager is being replaced (e.g., project switch)
     destroy() {
         this.destroyed = true;
+        this.cancelPendingMapLoad();
 
         // Stop animation tickers
         if (this.animationTicker) {

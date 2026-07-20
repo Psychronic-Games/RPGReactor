@@ -10,10 +10,10 @@ function descriptor(id, category, tags) {
     return { id, category, tags, params: [], draw() {} };
 }
 
-test('switching character styles excludes old-style active layers without deleting them', () => {
+test('Psychronic is the built-in default and project styles remain selectable', () => {
     const registry = [
-        descriptor('body-looseleaf', 'body', ['male', 'looseleaf']),
-        descriptor('hair-looseleaf', 'hair', ['male', 'looseleaf']),
+        descriptor('body-project', 'body', ['male', 'project-style']),
+        descriptor('hair-project', 'hair', ['male', 'project-style']),
         descriptor('shared-accessory', 'accessory', ['neutral']),
         descriptor('body-psychronic', 'body', ['male', 'psychronic']),
         descriptor('hair-psychronic', 'hair', ['male', 'psychronic'])
@@ -24,6 +24,8 @@ test('switching character styles excludes old-style active layers without deleti
     );
     const CharacterGenerator = vm.runInNewContext(`${source}\nCharacterGenerator;`, {
         console,
+        process,
+        require,
         RR_CHARACTER_REGISTRY: registry,
         CharacterRenderer: {
             resolveParams: (_descriptor, values) => ({ ...values })
@@ -31,6 +33,8 @@ test('switching character styles excludes old-style active layers without deleti
     });
 
     const generator = new CharacterGenerator();
+    assert.equal(generator.characterStyle, 'psychronic');
+    generator._knownCharacterStyles.add('project-style');
     generator.activePartIds = new Set(registry.map(part => part.id));
     generator.activeLayerOrder = registry.map(part => part.id);
     generator._saveConfig = () => {};
@@ -41,12 +45,39 @@ test('switching character styles excludes old-style active layers without deleti
         Array.from(generator._buildActiveParts(), part => part.descriptor.id),
         ['shared-accessory', 'body-psychronic', 'hair-psychronic']
     );
-    assert.equal(generator.activeLayerOrder.includes('body-looseleaf'), true);
+    assert.equal(generator.activeLayerOrder.includes('body-project'), true);
 
-    generator._setCharacterStyle('looseleaf');
+    generator._setCharacterStyle('project-style');
     assert.deepEqual(
         Array.from(generator._buildActiveParts(), part => part.descriptor.id),
-        ['body-looseleaf', 'hair-looseleaf', 'shared-accessory']
+        ['body-project', 'hair-project', 'shared-accessory']
     );
     assert.equal(generator.activeLayerOrder.includes('body-psychronic'), true);
+});
+
+test('project character JavaScript remains disabled until per-project trust is granted', () => {
+    const source = fs.readFileSync(
+        path.join(editorRoot, 'src', 'forge', 'CharacterGenerator', 'CharacterGenerator.js'),
+        'utf8'
+    );
+    const CharacterGenerator = vm.runInNewContext(`${source}\nCharacterGenerator;`, {
+        console,
+        process,
+        require,
+        RR_CHARACTER_REGISTRY: []
+    });
+    const values = new Map();
+    const storage = {
+        getItem: key => values.get(key) ?? null,
+        setItem: (key, value) => values.set(key, value),
+        removeItem: key => values.delete(key)
+    };
+    const generator = new CharacterGenerator();
+    generator.projectPath = '/untrusted/project';
+
+    assert.equal(generator._isProjectCodeTrusted(storage), false);
+    assert.equal(generator._setProjectCodeTrusted(true, storage), true);
+    assert.equal(generator._isProjectCodeTrusted(storage), true);
+    assert.equal(generator._setProjectCodeTrusted(false, storage), true);
+    assert.equal(generator._isProjectCodeTrusted(storage), false);
 });

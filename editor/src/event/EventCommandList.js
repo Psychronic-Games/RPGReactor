@@ -396,7 +396,14 @@ class EventCommandList {
             // Check for Ctrl/Cmd key
             const isCtrl = e.ctrlKey || e.metaKey;
 
-            if (isCtrl && e.key === 'c') {
+            if (isCtrl && e.key.toLowerCase() === 'a') {
+                e.preventDefault();
+                this.selectedIndices = this.currentPage.list
+                    .map((command, index) => command?.code !== 0 ? index : -1)
+                    .filter(index => index >= 0);
+                const container = document.getElementById('event-command-list');
+                if (container) this.refreshCommandList(this.currentPage, this.currentPageIndex);
+            } else if (isCtrl && e.key === 'c') {
                 // Copy
                 e.preventDefault();
                 this.copyCommands(this.currentPage, this.currentPageIndex);
@@ -641,7 +648,9 @@ class EventCommandList {
                 // Single select
                 this.selectSingle(targetIndex);
             }
-            this.refreshCommandList(page, pageIndex);
+            // Restyle in place — a full refresh rebuilds the entire list DOM
+            // (and re-decodes face thumbnails) just to move the highlight.
+            this.updateSelectionStyles(page);
         });
 
         // Double-click to edit
@@ -654,30 +663,55 @@ class EventCommandList {
             this.editCommand(targetIndex, page, pageIndex);
         });
 
-        // Hover effect
+        // Hover effect. Selection changes without a rebuild, so read the
+        // CURRENT state instead of the value captured at render time.
+        const isRowSelected = () => this._isIndexSelected(page, index);
         div.addEventListener('mouseenter', () => {
-            if (!isSelected) {
+            if (!isRowSelected()) {
                 div.style.backgroundColor = 'var(--color-bg-input)';
             }
         });
 
         div.addEventListener('mouseleave', () => {
-            if (!isSelected) {
-                div.style.backgroundColor = 'var(--color-bg-list-item)';
-            }
+            div.style.backgroundColor = isRowSelected()
+                ? 'var(--color-bg-selected)'
+                : 'var(--color-bg-list-item)';
         });
 
         // Right-click context menu
         div.addEventListener('contextmenu', (e) => {
             e.preventDefault();
-            if (!isSelected) {
+            if (!isRowSelected()) {
                 this.selectSingle(index);
-                this.refreshCommandList(page, pageIndex);
+                this.updateSelectionStyles(page);
             }
             this.showContextMenu(e.clientX, e.clientY, page, pageIndex);
         });
 
         return div;
+    }
+
+    _isIndexSelected(page, index) {
+        const command = page.list[index];
+        if (!command) return false;
+        if (this.selectedIndices.includes(index)) return true;
+        if (command.code === 401 || command.code === 408) {
+            return this.selectedIndices.includes(this.findParentCommandIndex(index, page));
+        }
+        return false;
+    }
+
+    /**
+     * Restyle the selection highlight on the existing rows.
+     */
+    updateSelectionStyles(page) {
+        const rows = document.querySelectorAll('.command-list-container .command-item');
+        rows.forEach(div => {
+            const index = parseInt(div.dataset.index, 10);
+            div.style.backgroundColor = this._isIndexSelected(page, index)
+                ? 'var(--color-bg-selected)'
+                : 'var(--color-bg-list-item)';
+        });
     }
 
     /**
@@ -724,19 +758,20 @@ class EventCommandList {
             '#6666ff'  // 31 - Blue
         ];
 
-        let html = text;
-        let currentColor = 0;
+        const escapeHtml = typeof globalThis.rrEscapeHtml === 'function'
+            ? globalThis.rrEscapeHtml
+            : require('../utils/HtmlEscape.js');
+        let html = escapeHtml(text);
 
         // Replace \C[n] or \c[n] with color spans
         html = html.replace(/\\[Cc]\[(\d+)\]/g, (match, colorIndex) => {
             const index = parseInt(colorIndex);
             const color = textColors[index] || textColors[0];
-            currentColor = index;
             return `</span><span style="color: ${color}">`;
         });
 
         // Wrap in initial color span
-        html = `<span style="color: ${textColors[currentColor]}">${html}</span>`;
+        html = `<span style="color: ${textColors[0]}">${html}</span>`;
 
         // Clean up any empty spans
         html = html.replace(/<span[^>]*><\/span>/g, '');
@@ -745,7 +780,7 @@ class EventCommandList {
     }
 
     /**
-     * Find the parent command index for continuation lines (401, 408)
+     * Find the parent command index for continuation lines (401, 405, 408)
      * @param {number} index - The index of the continuation line
      * @param {object} page - The current page
      * @returns {number} - The index of the parent command (101 or 108)
@@ -762,11 +797,17 @@ class EventCommandList {
             if (page.list[index].code === 408 && code === 108) {
                 return i;
             }
+            if (page.list[index].code === 405 && code === 105) {
+                return i;
+            }
             // Stop if we hit a non-continuation command
             if (page.list[index].code === 401 && code !== 401) {
                 break;
             }
             if (page.list[index].code === 408 && code !== 408) {
+                break;
+            }
+            if (page.list[index].code === 405 && code !== 405) {
                 break;
             }
         }
@@ -800,11 +841,19 @@ class EventCommandList {
         const ctx = canvas.getContext('2d');
         const path = require('path');
         const imagePath = path.join(currentProject.path, 'img', 'faces', faceName + '.png');
+        const src = 'file://' + imagePath.replace(/\\/g, '/');
 
-        const faceSheet = new Image();
-        faceSheet.src = 'file://' + imagePath.replace(/\\/g, '/');
+        // One decoded sheet per face file — a fresh Image() per row
+        // re-fetched and re-decoded the same PNG for every message row.
+        if (!this._faceSheetCache) this._faceSheetCache = new Map();
+        let faceSheet = this._faceSheetCache.get(src);
+        if (!faceSheet) {
+            faceSheet = new Image();
+            faceSheet.src = src;
+            this._faceSheetCache.set(src, faceSheet);
+        }
 
-        faceSheet.onload = () => {
+        const draw = () => {
             const col = faceIndex % 4;
             const row = Math.floor(faceIndex / 4);
 
@@ -817,14 +866,20 @@ class EventCommandList {
                 32, 32
             );
         };
-
-        faceSheet.onerror = () => {
+        const drawError = () => {
             // Draw a placeholder if image fails to load
             ctx.fillStyle = ThemeColors.resolve('--color-border-subtle', '#333333');
             ctx.fillRect(0, 0, 32, 32);
             ctx.fillStyle = '#666';
             ctx.fillText('?', 12, 20);
         };
+
+        if (faceSheet.complete) {
+            if (faceSheet.naturalWidth) draw(); else drawError();
+        } else {
+            faceSheet.addEventListener('load', draw, { once: true });
+            faceSheet.addEventListener('error', drawError, { once: true });
+        }
 
         return canvas;
     }
@@ -848,8 +903,12 @@ class EventCommandList {
     getCommandInfo(command, page, index) {
         const code = command.code;
         const params = command.parameters || [];
+        const tt = (text) => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
 
-        const commandNames = {
+        // Static name table, built once — this literal used to be allocated
+        // for every rendered row.
+        let commandNames = EventCommandList._commandNameTable;
+        if (!commandNames) commandNames = EventCommandList._commandNameTable = {
             0: { name: 'End', color: 'var(--color-text-dim)' },
             101: { name: 'Show Text', color: 'var(--color-syntax-type)' },
             102: { name: 'Show Choices', color: 'var(--color-syntax-type)' },
@@ -976,8 +1035,10 @@ class EventCommandList {
             657: { name: 'Plugin Args', color: 'var(--color-syntax-comment)' }
         };
 
-        const rawInfo = commandNames[code] || { name: `Unknown (${code})`, color: '#f88' };
-        const info = { ...rawInfo, name: this._commandName(rawInfo.name) };
+        const rawInfo = commandNames[code];
+        const info = rawInfo
+            ? { ...rawInfo, name: rawInfo.name === 'Skip' ? tt('Skip') : this._commandName(rawInfo.name) }
+            : { name: `${tt('Unknown')} (${code})`, color: '#f88' };
 
         let description = '';
         let faceIcon = null;
@@ -990,7 +1051,7 @@ class EventCommandList {
                 const speakerName = params[4] || '';
 
                 if (faceName) {
-                    description = `Face: ${faceName} [${faceIndex}]`;
+                    description = `${tt('Face:')} ${faceName} [${faceIndex}]`;
                     if (speakerName) {
                         description += ` - ${speakerName}`;
                     }
@@ -999,7 +1060,7 @@ class EventCommandList {
                 } else if (speakerName) {
                     description = speakerName;
                 } else {
-                    description = '(No face or speaker)';
+                    description = tt('(No face or speaker)');
                 }
                 break;
             }
@@ -1009,33 +1070,100 @@ class EventCommandList {
                 break;
             case 111: {
                 // Conditional Branch - show condition details
-                const condType = params[0] || 0;
-                const condTypes = ['Switch', 'Variable', 'Self Switch', 'Timer', 'Actor', 'Enemy', 'Character', 'Gold', 'Item', 'Weapon', 'Armor', 'Button', 'Script'];
+                const condType = params[0] ?? 0;
 
                 if (condType === 0) { // Switch
-                    const switchId = params[1] || 1;
-                    const value = params[2] === 0 ? 'ON' : 'OFF';
-                    description = `Switch ${this._fmtSwitch(switchId)} is ${value}`;
+                    const switchId = params[1] ?? 1;
+                    const value = params[2] === 0 ? tt('ON') : tt('OFF');
+                    description = `${tt('Switch')} ${this._fmtSwitch(switchId)} ${tt('is')} ${value}`;
                 } else if (condType === 1) { // Variable
-                    const varId = params[1] || 1;
+                    const varId = params[1] ?? 1;
                     const compNames = ['==', '>=', '<=', '>', '<', '!='];
-                    const comp = compNames[params[4] || 0];
-                    const value = params[3] || 0;
-                    description = `Variable ${this._fmtVar(varId)} ${comp} ${value}`;
+                    const comp = compNames[params[4] ?? 0] || '?';
+                    const value = params[3] ?? 0;
+                    const rhs = params[2] === 1 ? this._fmtVarBracket(value) : String(value);
+                    description = `${tt('Variable')} ${this._fmtVar(varId)} ${comp} ${rhs}`;
                 } else if (condType === 2) { // Self Switch
-                    const ch = params[1] || 'A';
-                    const value = params[2] === 0 ? 'ON' : 'OFF';
-                    description = `Self Switch ${ch} is ${value}`;
+                    const ch = params[1] ?? 'A';
+                    const value = params[2] === 0 ? tt('ON') : tt('OFF');
+                    description = `${tt('Self Switch')} ${ch} ${tt('is')} ${value}`;
+                } else if (condType === 3) { // Timer
+                    const seconds = params[1] ?? 0;
+                    const time = `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+                    description = `${tt('Timer')} ${params[2] === 1 ? '<=' : '>='} ${time}`;
+                } else if (condType === 4) { // Actor
+                    const actor = this._fmtDatabaseEntry('getActor', params[1] ?? 1, tt('Actor'));
+                    const actorConditions = ['In the Party', 'Name', 'Class', 'Skill', 'Weapon', 'Armor', 'State'];
+                    const subtype = params[2] ?? 0;
+                    if (subtype === 0) {
+                        description = `${actor} ${tt('In the Party')}`;
+                    } else if (subtype === 1) {
+                        description = `${actor} ${tt('Name')} = ${params[3] ?? ''}`;
+                    } else {
+                        const getters = ['', '', 'getClass', 'getSkill', 'getWeapon', 'getArmor', 'getState'];
+                        const valueTypes = ['', '', tt('Class'), tt('Skill'), tt('Weapon'), tt('Armor'), tt('State')];
+                        const value = this._fmtDatabaseEntry(getters[subtype], params[3] ?? 0, valueTypes[subtype]);
+                        description = `${actor} ${tt(actorConditions[subtype] || 'Unknown condition')}: ${value}`;
+                    }
+                } else if (condType === 5) { // Enemy
+                    const enemy = `${tt('Enemy')} #${(params[1] ?? 0) + 1}`;
+                    if ((params[2] ?? 0) === 0) {
+                        description = `${enemy} ${tt('Appeared')}`;
+                    } else {
+                        description = `${enemy} ${tt('State')}: ${this._fmtDatabaseEntry('getState', params[3] ?? 1, tt('State'))}`;
+                    }
+                } else if (condType === 6) { // Character
+                    const characterId = params[1] ?? -1;
+                    const character = characterId === -1 ? tt('Player') :
+                        characterId === 0 ? tt('This Event') : this._fmtEvent(characterId);
+                    const directions = { 2: 'Down', 4: 'Left', 6: 'Right', 8: 'Up' };
+                    description = `${character} ${tt('Direction')}: ${tt(directions[params[2]] || 'Unknown')}`;
                 } else if (condType === 7) { // Gold
-                    const amount = params[1] || 0;
+                    const amount = params[1] ?? 0;
                     const compNames = ['>=', '<=', '<'];
-                    const comp = compNames[params[2] || 0];
-                    description = `Gold ${comp} ${amount}`;
+                    const comp = compNames[params[2] ?? 0] || '?';
+                    description = `${tt('Gold')} ${comp} ${amount}`;
+                } else if (condType === 8) { // Item
+                    description = `${tt('Item')}: ${this._fmtDatabaseEntry('getItem', params[1] ?? 1, tt('Item'))}`;
+                } else if (condType === 9 || condType === 10) { // Weapon / Armor
+                    const isWeapon = condType === 9;
+                    const type = isWeapon ? 'Weapon' : 'Armor';
+                    const getter = isWeapon ? 'getWeapon' : 'getArmor';
+                    description = `${tt(type)}: ${this._fmtDatabaseEntry(getter, params[1] ?? 1, tt(type))}`;
+                    if (params[2]) description += ` (${tt('Include Equipped')})`;
+                } else if (condType === 11) { // Button
+                    const buttonNames = {
+                        ok: 'OK', cancel: 'Cancel', shift: 'Shift', down: 'Down', left: 'Left',
+                        right: 'Right', up: 'Up', pageup: 'Page Up', pagedown: 'Page Down'
+                    };
+                    const buttonModes = ['Pressed', 'Triggered', 'Repeated'];
+                    const mode = params[2] ?? 0;
+                    description = `${tt('Button')} ${tt(buttonNames[params[1]] || params[1] || 'OK')} ${tt('is')} ${tt(buttonModes[mode] || 'Pressed')}`;
                 } else if (condType === 12) { // Script
-                    const s = String(params[1] || '');
-                    description = `Script: ${s.substring(0, 150)}${s.length > 150 ? '...' : ''}`;
+                    const generated = EventCommandList.generatedCommand(command, 'inputCondition');
+                    if (generated) {
+                        const data = generated.data;
+                        if (data.type === 'keyboard') {
+                            description = `${tt('Keyboard Extended')}: ${tt(data.button)} ${tt(data.mode)}`;
+                        } else if (data.type === 'mouse') {
+                            const buttons = ['Left', 'Middle', 'Right'];
+                            description = `${tt('Mouse Button')}: ${tt(buttons[data.button] || 'Unknown')} ${tt(data.mode)}`;
+                        } else if (data.type === 'wheel') {
+                            description = `${tt('Mouse Wheel')}: ${tt(data.direction)}`;
+                        } else if (data.type === 'pointer') {
+                            const rhs = data.valueType === 'variable'
+                                ? this._fmtVarBracket(data.value) : String(data.value);
+                            description = `${tt('Pointer Position')} ${data.axis.toUpperCase()} ${data.comparison} ${rhs}`;
+                        }
+                    } else {
+                        const s = String(params[1] ?? '');
+                        description = `${tt('Script:')} ${s.substring(0, 150)}${s.length > 150 ? '...' : ''}`;
+                    }
+                } else if (condType === 13) { // Vehicle
+                    const vehicles = ['Boat', 'Ship', 'Airship'];
+                    description = `${tt('Vehicle')}: ${tt(vehicles[params[1] ?? 0] || 'Unknown')}`;
                 } else {
-                    description = condTypes[condType] || 'Unknown condition';
+                    description = `${tt('Unknown condition')} (${condType})`;
                 }
                 break;
             }
@@ -1049,7 +1177,7 @@ class EventCommandList {
             case 402: {
                 // When [Choice N]
                 const choiceIndex = params[0];
-                description = `Choice ${choiceIndex + 1}`;
+                description = `${tt('Choice')} ${choiceIndex + 1}`;
                 break;
             }
             case 403:
@@ -1060,14 +1188,14 @@ class EventCommandList {
                 // Wait
                 const frames = params[0] || 60;
                 const seconds = (frames / 60).toFixed(2);
-                description = `${frames} frames (${seconds}s)`;
+                description = `${frames} ${tt('frames')} (${seconds}s)`;
                 break;
             }
             case 121: {
                 // Control Switches
                 const start = params[0];
                 const end = params[1];
-                const value = params[2] === 0 ? 'ON' : 'OFF';
+                const value = params[2] === 0 ? tt('ON') : tt('OFF');
                 if (start === end) {
                     description = `${this._fmtSwitch(start)} = ${value}`;
                 } else {
@@ -1096,15 +1224,33 @@ class EventCommandList {
                     // Random: params[4]=min, params[5]=max
                     const min = params[4] || 0;
                     const max = params[5] || 0;
-                    valueStr = `Random(${min}..${max})`;
+                    valueStr = `${tt('Random')}(${min}..${max})`;
                 } else if (operandType === 3) {
                     // Game Data: params[4]=type, params[5]=param1, params[6]=param2
                     valueStr = this._fmtGameDataOperand(params[4], params[5], params[6]);
                 } else if (operandType === 4) {
                     // Script: params[4]=script string
-                    const scriptText = String(params[4] || '');
-                    const trimmed = scriptText.substring(0, 150);
-                    valueStr = `Script: ${trimmed}${scriptText.length > 150 ? '...' : ''}`;
+                    const generated = EventCommandList.generatedCommand(command, 'control-variables-expression');
+                    if (generated) {
+                        const source = value => value.type === 'variable'
+                            ? this._fmtVarBracket(value.id) : String(value.value);
+                        const labels = {
+                            add: '+', subtract: '-', multiply: '*', divide: '/', modulo: '%',
+                            power: 'Power', minimum: 'Minimum', maximum: 'Maximum', atan2: 'Atan2',
+                            random: 'Random', bitwiseAnd: '&', bitwiseOr: '|', bitwiseXor: '^',
+                            leftShift: '<<', rightShift: '>>', absolute: 'Absolute',
+                            squareRoot: 'Square Root', sineDegrees: 'Sine', cosineDegrees: 'Cosine'
+                        };
+                        const data = generated.data;
+                        const unary = !data.right;
+                        valueStr = unary
+                            ? `${tt(labels[data.operator] || data.operator)}(${source(data.left)})`
+                            : `${source(data.left)} ${tt(labels[data.operator] || data.operator)} ${source(data.right)}`;
+                    } else {
+                        const scriptText = String(params[4] || '');
+                        const trimmed = scriptText.substring(0, 150);
+                        valueStr = `${tt('Script:')} ${trimmed}${scriptText.length > 150 ? '...' : ''}`;
+                    }
                 }
 
                 if (start === end) {
@@ -1115,7 +1261,7 @@ class EventCommandList {
                 break;
             }
             case 123:
-                description = `${params[0]} = ${params[1] === 0 ? 'ON' : 'OFF'}`;
+                description = `${params[0]} = ${params[1] === 0 ? tt('ON') : tt('OFF')}`;
                 break;
             case 125: {
                 // Change Gold: [operation, operandType, operand] (MZ order)
@@ -1124,10 +1270,10 @@ class EventCommandList {
                 const operand = params[2] || 0;
                 if (operandType === 1) {
                     // Variable
-                    description = `${operation}${this._fmtVarBracket(operand)} gold`;
+                    description = `${operation}${this._fmtVarBracket(operand)} ${tt('gold')}`;
                 } else {
                     // Constant
-                    description = `${operation}${operand} gold`;
+                    description = `${operation}${operand} ${tt('gold')}`;
                 }
                 break;
             }
@@ -1139,7 +1285,7 @@ class EventCommandList {
                 const operand = params[3] || 1;
 
                 // Get item name from database
-                let itemName = `Item ${itemId.toString().padStart(3, '0')}`;
+                let itemName = `${tt('Item')} ${itemId.toString().padStart(3, '0')}`;
                 if (this.eventEditor.databaseManager && this.eventEditor.databaseManager.data && this.eventEditor.databaseManager.data.items) {
                     const item = this.eventEditor.databaseManager.data.items[itemId];
                     if (item && item.name) {
@@ -1165,7 +1311,7 @@ class EventCommandList {
                 const includeEquipment = params[4] !== undefined ? params[4] : true;
 
                 // Get weapon name from database
-                let weaponName = `Weapon ${weaponId.toString().padStart(3, '0')}`;
+                let weaponName = `${tt('Weapon')} ${weaponId.toString().padStart(3, '0')}`;
                 if (this.eventEditor.databaseManager && this.eventEditor.databaseManager.data && this.eventEditor.databaseManager.data.weapons) {
                     const weapon = this.eventEditor.databaseManager.data.weapons[weaponId];
                     if (weapon && weapon.name) {
@@ -1181,7 +1327,7 @@ class EventCommandList {
                     description = `${weaponName} ${operation}${operand}`;
                 }
                 if (operation === '-' && !includeEquipment) {
-                    description += ' (Exclude equipped)';
+                    description += ` (${tt('Exclude equipped')})`;
                 }
                 break;
             }
@@ -1194,7 +1340,7 @@ class EventCommandList {
                 const includeEquipment = params[4] !== undefined ? params[4] : true;
 
                 // Get armor name from database
-                let armorName = `Armor ${armorId.toString().padStart(3, '0')}`;
+                let armorName = `${tt('Armor')} ${armorId.toString().padStart(3, '0')}`;
                 if (this.eventEditor.databaseManager && this.eventEditor.databaseManager.data && this.eventEditor.databaseManager.data.armors) {
                     const armor = this.eventEditor.databaseManager.data.armors[armorId];
                     if (armor && armor.name) {
@@ -1210,7 +1356,7 @@ class EventCommandList {
                     description = `${armorName} ${operation}${operand}`;
                 }
                 if (operation === '-' && !includeEquipment) {
-                    description += ' (Exclude equipped)';
+                    description += ` (${tt('Exclude equipped')})`;
                 }
                 break;
             }
@@ -1221,7 +1367,7 @@ class EventCommandList {
                 const initialize = params[2] !== undefined ? params[2] : true;
 
                 // Get actor name from database
-                let actorName = `Actor ${actorId.toString().padStart(3, '0')}`;
+                let actorName = `${tt('Actor')} ${actorId.toString().padStart(3, '0')}`;
                 if (this.eventEditor.databaseManager && this.eventEditor.databaseManager.data && this.eventEditor.databaseManager.data.actors) {
                     const actor = this.eventEditor.databaseManager.data.actors[actorId];
                     if (actor && actor.name) {
@@ -1231,13 +1377,13 @@ class EventCommandList {
 
                 if (operation === 0) {
                     // Add
-                    description = `Add ${actorName}`;
+                    description = `${tt('Add')} ${actorName}`;
                     if (initialize) {
-                        description += ' (Initialize)';
+                        description += ` (${tt('Initialize')})`;
                     }
                 } else {
                     // Remove
-                    description = `Remove ${actorName}`;
+                    description = `${tt('Remove')} ${actorName}`;
                 }
                 break;
             }
@@ -1270,10 +1416,10 @@ class EventCommandList {
                     description = `${this._fmtVarBracket(mapId)}, ${this._fmtVarBracket(x)}, ${this._fmtVarBracket(y)}`;
                 }
                 if (direction !== 0) {
-                    description += `, ${directionNames[direction]}`;
+                    description += `, ${tt(directionNames[direction] || '')}`;
                 }
                 if (fadeType !== 0) {
-                    description += `, Fade: ${fadeNames[fadeType]}`;
+                    description += `, ${tt('Fade:')} ${tt(fadeNames[fadeType] || '')}`;
                 }
                 break;
             }
@@ -1284,9 +1430,9 @@ class EventCommandList {
 
                 let charName = '';
                 if (characterId === -1) {
-                    charName = 'Player';
+                    charName = tt('Player');
                 } else if (characterId === 0) {
-                    charName = 'This Event';
+                    charName = tt('This Event');
                 } else {
                     charName = this._fmtEvent(characterId);
                 }
@@ -1320,18 +1466,18 @@ class EventCommandList {
                 const speed = params[2] || 4;
 
                 const directionNames = { 2: 'Down', 4: 'Left', 6: 'Right', 8: 'Up' };
-                description = `${directionNames[direction]} ${distance} tiles (Speed: ${speed})`;
+                description = `${tt(directionNames[direction] || '')} ${distance} ${tt('tiles')} (${tt('Speed:')} ${speed})`;
                 break;
             }
             case 205: {
                 // Set Movement Route
                 const charId = params[0] != null ? params[0] : -1;
                 const route = params[1];
-                let charName = 'Player';
-                if (charId === 0) charName = 'This Event';
+                let charName = tt('Player');
+                if (charId === 0) charName = tt('This Event');
                 else if (charId > 0) charName = this._fmtEvent(charId);
                 const cmdCount = route && route.list ? route.list.filter(c => c.code !== 0).length : 0;
-                description = `${charName} (${cmdCount} command${cmdCount !== 1 ? 's' : ''})`;
+                description = `${charName} (${cmdCount} ${tt(cmdCount !== 1 ? 'commands' : 'command')})`;
                 break;
             }
             case 213: {
@@ -1349,17 +1495,17 @@ class EventCommandList {
 
                 let charName = '';
                 if (characterId === -1) {
-                    charName = 'Player';
+                    charName = tt('Player');
                 } else if (characterId === 0) {
-                    charName = 'This Event';
+                    charName = tt('This Event');
                 } else {
                     charName = this._fmtEvent(characterId);
                 }
 
-                const balloonName = balloonNames[balloonId - 1] || 'Unknown';
+                const balloonName = tt(balloonNames[balloonId - 1] || 'Unknown');
                 description = `${charName}: ${balloonName}`;
                 if (waitForCompletion) {
-                    description += ' (Wait)';
+                    description += ` (${tt('Wait')})`;
                 }
                 break;
             }
@@ -1412,19 +1558,19 @@ class EventCommandList {
                         44: 'Play SE',
                         45: 'Script'
                     };
-                    const moveName = moveCommandNames[params[0].code] || `Move Code ${params[0].code}`;
+                    const moveName = moveCommandNames[params[0].code] ? tt(moveCommandNames[params[0].code]) : `${tt('Move Code')} ${params[0].code}`;
                     description = moveName;
                     const mp = params[0].parameters;
                     if (mp && mp.length > 0) {
                         const mc = params[0].code;
                         if (mc === 14) description += `: ${mp[0]}, ${mp[1]}`;
-                        else if (mc === 15) description += `: ${mp[0]} frames`;
+                        else if (mc === 15) description += `: ${mp[0]} ${tt('frames')}`;
                         else if (mc === 27 || mc === 28) description += `: [${mp[0]}]`;
-                        else if (mc === 29) description += `: ${({1:'x8 Slower',2:'x4 Slower',3:'x2 Slower',4:'Normal',5:'x2 Faster',6:'x4 Faster'})[mp[0]] || mp[0]}`;
-                        else if (mc === 30) description += `: ${({1:'Lowest',2:'Lower',3:'Normal',4:'Higher',5:'Highest'})[mp[0]] || mp[0]}`;
-                        else if (mc === 41) description += `: ${mp[0] || '(none)'} [${mp[1]}]`;
+                        else if (mc === 29) { const spdName = ({1:'x8 Slower',2:'x4 Slower',3:'x2 Slower',4:'Normal',5:'x2 Faster',6:'x4 Faster'})[mp[0]]; description += `: ${spdName ? tt(spdName) : mp[0]}`; }
+                        else if (mc === 30) { const freqName = ({1:'Lowest',2:'Lower',3:'Normal',4:'Higher',5:'Highest'})[mp[0]]; description += `: ${freqName ? tt(freqName) : mp[0]}`; }
+                        else if (mc === 41) description += `: ${mp[0] || tt('(none)')} [${mp[1]}]`;
                         else if (mc === 42) description += `: ${mp[0]}`;
-                        else if (mc === 43) description += `: ${({0:'Normal',1:'Additive',2:'Multiply',3:'Screen'})[mp[0]] || mp[0]}`;
+                        else if (mc === 43) { const blendName = ({0:'Normal',1:'Additive',2:'Multiply',3:'Screen'})[mp[0]]; description += `: ${blendName ? tt(blendName) : mp[0]}`; }
                         else if (mc === 44) description += mp[0] && mp[0].name ? `: ${mp[0].name}` : '';
                         else if (mc === 45) description += `: ${String(mp[0] || '').substring(0, 30)}`;
                     }
@@ -1435,9 +1581,9 @@ class EventCommandList {
             case 249: // Play ME
             case 250: // Play SE
                 if (params[0] && params[0].name) {
-                    description = `${params[0].name} (Vol: ${params[0].volume}, Pitch: ${params[0].pitch}%, Pan: ${params[0].pan})`;
+                    description = `${params[0].name} (${tt('Vol:')} ${params[0].volume}, ${tt('Pitch:')} ${params[0].pitch}%, ${tt('Pan:')} ${params[0].pan})`;
                 } else {
-                    description = '(None)';
+                    description = tt('(None)');
                 }
                 break;
             case 242: // Fadeout BGM
@@ -1448,6 +1594,40 @@ class EventCommandList {
                 description = '';
                 break;
             case 355: {
+                const eventCall = EventCommandList.generatedCommand(command, 'eventCall');
+                const picture = EventCommandList.generatedCommand(command, 'picture');
+                if (eventCall) {
+                    info.name = this._commandName('Common Event');
+                    const data = eventCall.data;
+                    if (data.target === 'commonEvent') {
+                        description = `${tt('Common Event')}: ${this._fmtVarBracket(data.variableId)}`;
+                    } else if (data.designation === 'direct') {
+                        description = `${tt('Current Map Event Page')}: #${data.eventId}, ${tt('Page')} ${data.pageNumber}`;
+                    } else {
+                        description = `${tt('Current Map Event Page')}: ${this._fmtVarBracket(data.eventVariableId)}, ${tt('Page')} ${this._fmtVarBracket(data.pageVariableId)}`;
+                    }
+                    break;
+                }
+                if (picture) {
+                    const data = picture.data;
+                    const ref = value => value.source === 'variable'
+                        ? this._fmtVarBracket(value.value) : `#${value.value}`;
+                    if (data.operation === 'show') {
+                        info.name = this._commandName('Show Picture');
+                        description = `${ref(data.pictureId)}: ${data.name || tt('(None)')}`;
+                    } else if (data.operation === 'move') {
+                        info.name = this._commandName('Move Picture');
+                        const duration = data.duration.source === 'variable'
+                            ? this._fmtVarBracket(data.duration.value)
+                            : `${data.duration.value} ${tt('frames')}`;
+                        description = `${ref(data.pictureId)}, ${tt('Duration:')} ${duration}`;
+                    } else {
+                        info.name = this._commandName('Erase Picture');
+                        description = data.mode === 'all' ? tt('All') : data.mode === 'range'
+                            ? `${ref(data.pictureId)}..${ref(data.endPictureId)}` : ref(data.pictureId);
+                    }
+                    break;
+                }
                 // Script - collect this line + all following 655 continuations
                 const lines = [params[0] || ''];
                 if (page && index !== undefined && page.list) {
@@ -1461,7 +1641,7 @@ class EventCommandList {
                 if (firstNonEmpty.length > 200) preview += '...';
                 const extra = lines.length - 1;
                 if (extra > 0) {
-                    description = `${preview}  (+${extra} more line${extra === 1 ? '' : 's'})`;
+                    description = `${preview}  (+${extra} ${tt(extra === 1 ? 'more line' : 'more lines')})`;
                 } else {
                     description = preview;
                 }
@@ -1477,7 +1657,7 @@ class EventCommandList {
                 } else if (pluginName) {
                     description = pluginName;
                 } else {
-                    description = '(not configured)';
+                    description = tt('(not configured)');
                 }
                 // 357: append args object (params[3]) inline so callers see
                 // "FollowerControl: setFollowerControl  (memberIndex=1, action=Move Down)"
@@ -1507,27 +1687,27 @@ class EventCommandList {
                 // Input Number
                 const varId = params[0] || 1;
                 const maxDigits = params[1] || 1;
-                description = `Variable ${this._fmtVar(varId)}, ${maxDigits} digits`;
+                description = `${tt('Variable')} ${this._fmtVar(varId)}, ${maxDigits} ${tt('digits')}`;
                 break;
             }
             case 104: {
                 // Select Item
                 const varId = params[0] || 1;
                 const itemTypes = { 1: 'Regular', 2: 'Key', 3: 'Hidden A', 4: 'Hidden B' };
-                description = `Variable ${this._fmtVar(varId)}, ${itemTypes[params[1]] || 'Regular'} Item`;
+                description = `${tt('Variable')} ${this._fmtVar(varId)}, ${tt(itemTypes[params[1]] || 'Regular')} ${tt('Item')}`;
                 break;
             }
             case 105: {
                 // Show Scrolling Text
                 const speed = params[0] || 2;
-                const noFastFwd = params[1] ? ' (No Fast Forward)' : '';
-                description = `Speed: ${speed}${noFastFwd}`;
+                const noFastFwd = params[1] ? ` (${tt('No Fast Forward')})` : '';
+                description = `${tt('Speed:')} ${speed}${noFastFwd}`;
                 break;
             }
             case 117: {
                 // Common Event
                 const ceId = params[0] || 1;
-                let ceName = `Common Event ${ceId}`;
+                let ceName = `${tt('Common Event')} ${ceId}`;
                 if (this.eventEditor.databaseManager && this.eventEditor.databaseManager.data && this.eventEditor.databaseManager.data.commonEvents) {
                     const ce = this.eventEditor.databaseManager.data.commonEvents[ceId];
                     if (ce && ce.name) ceName = ce.name;
@@ -1544,13 +1724,13 @@ class EventCommandList {
             case 132:
             case 133: {
                 const audio = params[0] || {};
-                description = audio.name || '(None)';
+                description = audio.name || tt('(None)');
                 break;
             }
-            case 134: description = params[0] === 0 ? 'Disable' : 'Enable'; break;
-            case 135: description = params[0] === 0 ? 'Disable' : 'Enable'; break;
-            case 136: description = params[0] === 0 ? 'Disable' : 'Enable'; break;
-            case 137: description = params[0] === 0 ? 'Disable' : 'Enable'; break;
+            case 134: description = params[0] === 0 ? tt('Disable') : tt('Enable'); break;
+            case 135: description = params[0] === 0 ? tt('Disable') : tt('Enable'); break;
+            case 136: description = params[0] === 0 ? tt('Disable') : tt('Enable'); break;
+            case 137: description = params[0] === 0 ? tt('Disable') : tt('Enable'); break;
             case 138: {
                 const tone = params[0] || [0,0,0,0];
                 description = `(${tone[0]}, ${tone[1]}, ${tone[2]}, ${tone[3]})`;
@@ -1558,62 +1738,62 @@ class EventCommandList {
             }
             case 139: {
                 const audio = params[0] || {};
-                description = audio.name || '(None)';
+                description = audio.name || tt('(None)');
                 break;
             }
             case 140: {
                 const vehicles = ['Boat', 'Ship', 'Airship'];
                 const audio = params[1] || {};
-                description = `${vehicles[params[0]] || 'Unknown'}: ${audio.name || '(None)'}`;
+                description = `${tt(vehicles[params[0]] || 'Unknown')}: ${audio.name || tt('(None)')}`;
                 break;
             }
             case 202: {
                 const vehicles = ['Boat', 'Ship', 'Airship'];
-                description = `${vehicles[params[0]] || 'Unknown'} → (${params[2]}, ${params[3]}, ${params[4]})`;
+                description = `${tt(vehicles[params[0]] || 'Unknown')} → (${params[2]}, ${params[3]}, ${params[4]})`;
                 break;
             }
-            case 216: description = params[0] === 0 ? 'Show' : 'Hide'; break;
+            case 216: description = params[0] === 0 ? tt('Show') : tt('Hide'); break;
             case 223: {
                 const tone = params[0] || [0,0,0,0];
                 const dur = params[1] || 60;
-                description = `(${tone[0]}, ${tone[1]}, ${tone[2]}, ${tone[3]}) ${dur} frames`;
+                description = `(${tone[0]}, ${tone[1]}, ${tone[2]}, ${tone[3]}) ${dur} ${tt('frames')}`;
                 break;
             }
             case 224: {
                 const color = params[0] || [255,255,255,190];
                 const dur = params[1] || 8;
-                description = `(${color[0]}, ${color[1]}, ${color[2]}, ${color[3]}) ${dur} frames`;
+                description = `(${color[0]}, ${color[1]}, ${color[2]}, ${color[3]}) ${dur} ${tt('frames')}`;
                 break;
             }
             case 225: {
-                description = `Power: ${params[0] || 5}, Speed: ${params[1] || 5}, ${params[2] || 60} frames`;
+                description = `${tt('Power:')} ${params[0] || 5}, ${tt('Speed:')} ${params[1] || 5}, ${params[2] || 60} ${tt('frames')}`;
                 break;
             }
             case 232: {
-                description = `#${params[0] || 1} (${params[4] || 0}, ${params[5] || 0}) ${params[10] || 60} frames`;
+                description = `#${params[0] || 1} (${params[4] || 0}, ${params[5] || 0}) ${params[10] || 60} ${tt('frames')}`;
                 break;
             }
             case 233: {
-                description = `#${params[0] || 1} Speed: ${params[1] || 0}`;
+                description = `#${params[0] || 1} ${tt('Speed:')} ${params[1] || 0}`;
                 break;
             }
             case 234: {
                 const tone = params[1] || [0,0,0,0];
-                description = `#${params[0] || 1} (${tone[0]}, ${tone[1]}, ${tone[2]}, ${tone[3]}) ${params[2] || 60} frames`;
+                description = `#${params[0] || 1} (${tone[0]}, ${tone[1]}, ${tone[2]}, ${tone[3]}) ${params[2] || 60} ${tt('frames')}`;
                 break;
             }
             case 236: {
                 const types = { none: 'None', rain: 'Rain', storm: 'Storm', snow: 'Snow' };
-                description = `${types[params[0]] || params[0]}, Power: ${params[1] || 5}, ${params[2] || 60} frames`;
+                description = `${types[params[0]] ? tt(types[params[0]]) : params[0]}, ${tt('Power:')} ${params[1] || 5}, ${params[2] || 60} ${tt('frames')}`;
                 break;
             }
             case 261:
                 description = params[0] || '';
                 break;
-            case 281: description = params[0] === 0 ? 'Enable' : 'Disable'; break;
+            case 281: description = params[0] === 0 ? tt('Enable') : tt('Disable'); break;
             case 282: {
                 const tsId = params[0] || 1;
-                let tsName = `Tileset ${tsId}`;
+                let tsName = `${tt('Tileset')} ${tsId}`;
                 if (this.eventEditor.databaseManager && this.eventEditor.databaseManager.data && this.eventEditor.databaseManager.data.tilesets) {
                     const ts = this.eventEditor.databaseManager.data.tilesets[tsId];
                     if (ts && ts.name) tsName = ts.name;
@@ -1625,46 +1805,46 @@ class EventCommandList {
                 description = `${params[0] || ''}, ${params[1] || ''}`;
                 break;
             case 284:
-                description = params[0] || '(None)';
+                description = params[0] || tt('(None)');
                 break;
             case 285: {
                 const infoTypes = ['Terrain Tag', 'Event ID', 'Tile ID (Layer 1)', 'Tile ID (Layer 2)', 'Tile ID (Layer 3)', 'Tile ID (Layer 4)', 'Region ID'];
-                description = `${this._fmtVar(params[0] || 1)} = ${infoTypes[params[1]] || 'Unknown'}`;
+                description = `${this._fmtVar(params[0] || 1)} = ${tt(infoTypes[params[1]] || 'Unknown')}`;
                 break;
             }
             case 301: {
                 const desig = params[0] || 0;
                 if (desig === 2) {
-                    description = 'Random Encounter';
+                    description = tt('Random Encounter');
                 } else {
                     const troopId = params[1] || 1;
-                    let troopName = `Troop ${troopId}`;
+                    let troopName = `${tt('Troop')} ${troopId}`;
                     if (desig === 0 && this.eventEditor.databaseManager && this.eventEditor.databaseManager.data && this.eventEditor.databaseManager.data.troops) {
                         const t = this.eventEditor.databaseManager.data.troops[troopId];
                         if (t && t.name) troopName = t.name;
                     }
-                    description = desig === 1 ? `Variable ${this._fmtVar(troopId)}` : troopName;
+                    description = desig === 1 ? `${tt('Variable')} ${this._fmtVar(troopId)}` : troopName;
                 }
-                if (params[2]) description += ' (Can Escape)';
-                if (params[3]) description += ' (Can Lose)';
+                if (params[2]) description += ` (${tt('Can Escape')})`;
+                if (params[3]) description += ` (${tt('Can Lose')})`;
                 break;
             }
             case 302: {
                 const types = ['Item', 'Weapon', 'Armor'];
-                const itemType = types[params[0]] || 'Item';
+                const itemType = tt(types[params[0]] || 'Item');
                 const itemId = params[1] || 1;
                 description = `${itemType} #${itemId.toString().padStart(4, '0')}`;
-                if (params[4]) description += ' (Purchase Only)';
+                if (params[4]) description += ` (${tt('Purchase Only')})`;
                 break;
             }
             case 303: {
                 const actorId = params[0] || 1;
-                let actorName = `Actor ${actorId}`;
+                let actorName = `${tt('Actor')} ${actorId}`;
                 if (this.eventEditor.databaseManager && this.eventEditor.databaseManager.data && this.eventEditor.databaseManager.data.actors) {
                     const a = this.eventEditor.databaseManager.data.actors[actorId];
                     if (a && a.name) actorName = a.name;
                 }
-                description = `${actorName}, Max ${params[1] || 8} chars`;
+                description = `${actorName}, ${tt('Max')} ${params[1] || 8} ${tt('chars')}`;
                 break;
             }
             case 311: case 312: case 326: {
@@ -1677,9 +1857,9 @@ class EventCommandList {
                 break;
             }
             case 313: {
-                const op = params[2] === 0 ? 'Add' : 'Remove';
+                const op = params[2] === 0 ? tt('Add') : tt('Remove');
                 const stId = params[3] || 1;
-                let stName = `State ${stId}`;
+                let stName = `${tt('State')} ${stId}`;
                 if (this.eventEditor.databaseManager && this.eventEditor.databaseManager.data && this.eventEditor.databaseManager.data.states) {
                     const s = this.eventEditor.databaseManager.data.states[stId];
                     if (s && s.name) stName = s.name;
@@ -1688,7 +1868,7 @@ class EventCommandList {
                 break;
             }
             case 314:
-                description = params[0] === 0 ? 'Fixed Actor' : 'Variable';
+                description = params[0] === 0 ? tt('Fixed Actor') : tt('Variable');
                 break;
             case 315: case 316: {
                 const op = params[2] === 0 ? '+' : '-';
@@ -1696,21 +1876,21 @@ class EventCommandList {
                 const val = params[4] || 0;
                 const valStr = opType === 1 ? this._fmtVarBracket(val) : val;
                 description = `${op}${valStr}`;
-                if (params[5]) description += ' (Show)';
+                if (params[5]) description += ` (${tt('Show')})`;
                 break;
             }
             case 317: {
                 const paramNames = ['Max HP', 'Max MP', 'Attack', 'Defense', 'M.Attack', 'M.Defense', 'Agility', 'Luck'];
-                const pName = paramNames[params[2]] || 'Unknown';
+                const pName = tt(paramNames[params[2]] || 'Unknown');
                 const op = params[3] === 0 ? '+' : '-';
                 const val = params[5] || 0;
                 description = `${pName} ${op}${val}`;
                 break;
             }
             case 318: {
-                const op = params[2] === 0 ? 'Learn' : 'Forget';
+                const op = params[2] === 0 ? tt('Learn') : tt('Forget');
                 const skId = params[3] || 1;
-                let skName = `Skill ${skId}`;
+                let skName = `${tt('Skill')} ${skId}`;
                 if (this.eventEditor.databaseManager && this.eventEditor.databaseManager.data && this.eventEditor.databaseManager.data.skills) {
                     const s = this.eventEditor.databaseManager.data.skills[skId];
                     if (s && s.name) skName = s.name;
@@ -1720,14 +1900,14 @@ class EventCommandList {
             }
             case 319: {
                 const slots = ['Weapon', 'Shield', 'Head', 'Body', 'Accessory'];
-                description = `${slots[params[1]] || 'Unknown'} = #${params[2] || 0}`;
+                description = `${tt(slots[params[1]] || 'Unknown')} = #${params[2] || 0}`;
                 break;
             }
             case 320: case 324:
                 description = `${params[1] || ''}`;
                 break;
             case 321: {
-                let clsName = `Class ${params[1] || 1}`;
+                let clsName = `${tt('Class')} ${params[1] || 1}`;
                 if (this.eventEditor.databaseManager && this.eventEditor.databaseManager.data && this.eventEditor.databaseManager.data.classes) {
                     const c = this.eventEditor.databaseManager.data.classes[params[1]];
                     if (c && c.name) clsName = c.name;
@@ -1736,11 +1916,11 @@ class EventCommandList {
                 break;
             }
             case 322:
-                description = `Character: ${params[1] || '(None)'}`;
+                description = `${tt('Character:')} ${params[1] || tt('(None)')}`;
                 break;
             case 323: {
                 const vehicles = ['Boat', 'Ship', 'Airship'];
-                description = `${vehicles[params[0]] || 'Unknown'}: ${params[1] || '(None)'}`;
+                description = `${tt(vehicles[params[0]] || 'Unknown')}: ${params[1] || tt('(None)')}`;
                 break;
             }
             case 325:
@@ -1755,20 +1935,20 @@ class EventCommandList {
             }
             case 333: {
                 const idx = params[0] || 0;
-                const op = params[1] === 0 ? 'Add' : 'Remove';
+                const op = params[1] === 0 ? tt('Add') : tt('Remove');
                 const stId = params[2] || 1;
-                description = `#${idx + 1} ${op} State ${stId}`;
+                description = `#${idx + 1} ${op} ${tt('State')} ${stId}`;
                 break;
             }
             case 334: case 335: {
                 const idx = params[0];
-                description = idx === -1 ? 'Entire Troop' : `#${(idx || 0) + 1}`;
+                description = idx === -1 ? tt('Entire Troop') : `#${(idx || 0) + 1}`;
                 break;
             }
             case 336: {
                 const idx = params[0] || 0;
                 const newId = params[1] || 1;
-                let eName = `Enemy ${newId}`;
+                let eName = `${tt('Enemy')} ${newId}`;
                 if (this.eventEditor.databaseManager && this.eventEditor.databaseManager.data && this.eventEditor.databaseManager.data.enemies) {
                     const e = this.eventEditor.databaseManager.data.enemies[newId];
                     if (e && e.name) eName = e.name;
@@ -1779,19 +1959,19 @@ class EventCommandList {
             case 337: {
                 const idx = params[0];
                 const animId = params[1] || 1;
-                description = `${idx === -1 ? 'All' : '#' + (idx + 1)} Anim ${this._fmtAnim(animId)}`;
+                description = `${idx === -1 ? tt('All') : '#' + (idx + 1)} ${tt('Anim')} ${this._fmtAnim(animId)}`;
                 break;
             }
             case 339: {
-                const bType = params[0] === 0 ? 'Enemy' : 'Actor';
+                const bType = params[0] === 0 ? tt('Enemy') : tt('Actor');
                 const bId = params[1] || 0;
                 const skId = params[2] || 1;
-                let skName = `Skill #${skId}`;
+                let skName = `${tt('Skill')} #${skId}`;
                 try {
                     const sk = this.eventEditor.databaseManager.data.skills[skId];
                     if (sk && sk.name) skName = sk.name;
                 } catch (e) { /* */ }
-                description = `${bType} #${bId + (params[0] === 0 ? 1 : 0)} uses ${skName}`;
+                description = `${bType} #${bId + (params[0] === 0 ? 1 : 0)} ${tt('uses')} ${skName}`;
                 break;
             }
             case 405:
@@ -1813,33 +1993,33 @@ class EventCommandList {
                     const seconds = params[1] || 0;
                     const min = Math.floor(seconds / 60);
                     const sec = seconds % 60;
-                    description = `Start ${min}:${sec.toString().padStart(2, '0')}`;
+                    description = `${tt('Start')} ${min}:${sec.toString().padStart(2, '0')}`;
                 } else {
-                    description = 'Stop';
+                    description = tt('Stop');
                 }
                 break;
             }
             case 211:
                 // Change Transparency
-                description = params[0] === 0 ? 'ON' : 'OFF';
+                description = params[0] === 0 ? tt('ON') : tt('OFF');
                 break;
             case 212: {
                 // Show Animation
                 const charId = params[0] !== undefined ? params[0] : -1;
                 const animId = params[1] || 1;
                 const wait = params[2];
-                let charName = 'Player';
-                if (charId === 0) charName = 'This Event';
+                let charName = tt('Player');
+                if (charId === 0) charName = tt('This Event');
                 else if (charId > 0) charName = this._fmtEvent(charId);
-                description = `${charName}, Anim ${this._fmtAnim(animId)}`;
-                if (wait) description += ' (Wait)';
+                description = `${charName}, ${tt('Anim')} ${this._fmtAnim(animId)}`;
+                if (wait) description += ` (${tt('Wait')})`;
                 break;
             }
             case 231: {
                 // Show Picture
                 const picNum = params[0] || 1;
                 const picName = params[1] || '';
-                description = `#${picNum}: ${picName || '(None)'}`;
+                description = `#${picNum}: ${picName || tt('(None)')}`;
                 break;
             }
             case 235:
@@ -1848,7 +2028,7 @@ class EventCommandList {
                 break;
             case 605: {
                 const types = ['Item', 'Weapon', 'Armor'];
-                description = `${types[params[0]] || 'Item'} #${(params[1] || 1).toString().padStart(4, '0')}`;
+                description = `${tt(types[params[0]] || 'Item')} #${(params[1] || 1).toString().padStart(4, '0')}`;
                 break;
             }
             default:
@@ -1914,66 +2094,69 @@ class EventCommandList {
 
     /** Format a switch reference: #0001 SwitchName */
     _fmtSwitch(id) {
+        const tt = (text) => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
         const num = `#${id.toString().padStart(4, '0')}`;
         const name = this._lookupSwitchName(id);
-        return name ? `${num} ${name}` : `${num} (unnamed)`;
+        return name ? `${num} ${name}` : `${num} ${tt('(unnamed)')}`;
     }
 
     /** Format a variable reference: #0001 VarName */
     _fmtVar(id) {
+        const tt = (text) => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
         const num = `#${id.toString().padStart(4, '0')}`;
         const name = this._lookupVariableName(id);
-        return name ? `${num} ${name}` : `${num} (unnamed)`;
+        return name ? `${num} ${name}` : `${num} ${tt('(unnamed)')}`;
     }
 
     /** Format a Game Data operand: type+param1+param2 → readable string */
     _fmtGameDataOperand(type, param1, param2) {
+        const tt = (text) => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
         type = type || 0;
         param1 = param1 || 0;
         param2 = param2 || 0;
         const data = this.eventEditor.databaseManager && this.eventEditor.databaseManager.data;
         switch (type) {
             case 0: { // Item count
-                let name = `Item ${param1}`;
+                let name = `${tt('Item')} ${param1}`;
                 if (data && data.items && data.items[param1] && data.items[param1].name) name = data.items[param1].name;
-                return `Item Count: ${name}`;
+                return `${tt('Item Count:')} ${name}`;
             }
             case 1: { // Weapon count
-                let name = `Weapon ${param1}`;
+                let name = `${tt('Weapon')} ${param1}`;
                 if (data && data.weapons && data.weapons[param1] && data.weapons[param1].name) name = data.weapons[param1].name;
-                return `Weapon Count: ${name}`;
+                return `${tt('Weapon Count:')} ${name}`;
             }
             case 2: { // Armor count
-                let name = `Armor ${param1}`;
+                let name = `${tt('Armor')} ${param1}`;
                 if (data && data.armors && data.armors[param1] && data.armors[param1].name) name = data.armors[param1].name;
-                return `Armor Count: ${name}`;
+                return `${tt('Armor Count:')} ${name}`;
             }
             case 3: { // Actor param
-                let name = `Actor ${param1}`;
+                let name = `${tt('Actor')} ${param1}`;
                 if (data && data.actors && data.actors[param1] && data.actors[param1].name) name = data.actors[param1].name;
                 const paramNames = ['Level', 'EXP', 'HP', 'MP', 'Max HP', 'Max MP', 'Attack', 'Defense', 'M.Attack', 'M.Defense', 'Agility', 'Luck'];
-                return `${name}.${paramNames[param2] || 'param'}`;
+                return `${name}.${tt(paramNames[param2] || 'param')}`;
             }
             case 4: { // Enemy param (param1 = troop member index)
                 const paramNames = ['HP', 'MP', 'Max HP', 'Max MP', 'Attack', 'Defense', 'M.Attack', 'M.Defense', 'Agility', 'Luck'];
-                return `Troop #${param1 + 1}.${paramNames[param2] || 'param'}`;
+                return `${tt('Troop')} #${param1 + 1}.${tt(paramNames[param2] || 'param')}`;
             }
             case 5: { // Character (param1 = char id, param2 = prop)
                 let charName = '';
-                if (param1 === -1) charName = 'Player';
-                else if (param1 === 0) charName = 'This Event';
+                if (param1 === -1) charName = tt('Player');
+                else if (param1 === 0) charName = tt('This Event');
                 else charName = this._fmtEvent(param1);
                 const propNames = ['Map X', 'Map Y', 'Direction', 'Screen X', 'Screen Y'];
-                return `${charName}.${propNames[param2] || 'prop'}`;
+                return `${charName}.${tt(propNames[param2] || 'prop')}`;
             }
             case 6: // Party member (param1 = member index)
-                return `Party Member #${param1 + 1} Actor ID`;
+                return `${tt('Party Member')} #${param1 + 1} ${tt('Actor ID')}`;
             case 7: { // Other
                 const otherNames = ['Map ID', 'Party Size', 'Gold', 'Steps', 'Play Time', 'Timer', 'Save Count', 'Battle Count', 'Win Count', 'Escape Count'];
-                return otherNames[param1] || 'Other';
+                return tt(otherNames[param1] || 'Other');
             }
             default:
-                return 'Game Data';
+                return tt('Game Data');
         }
     }
 
@@ -1986,9 +2169,22 @@ class EventCommandList {
 
     /** Format an event reference: Event 001: Name  (or just Event 001) */
     _fmtEvent(id) {
-        const num = `Event ${id.toString().padStart(3, '0')}`;
+        const tt = (text) => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
+        const num = `${tt('Event')} ${id.toString().padStart(3, '0')}`;
         const name = this._lookupEventName(id);
         return name ? `${num}: ${name}` : num;
+    }
+
+    /** Format a named database entry while retaining a visible missing ID. */
+    _fmtDatabaseEntry(getterName, id, typeName) {
+        const tt = (text) => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
+        try {
+            const manager = this.eventEditor && this.eventEditor.databaseManager;
+            const getter = manager && manager[getterName];
+            const entry = typeof getter === 'function' ? getter.call(manager, id) : null;
+            if (entry && entry.name) return `#${id} ${entry.name}`;
+        } catch (e) { /* */ }
+        return `${typeName} #${id} (${tt('Missing')})`;
     }
 
     /** Format an animation reference: #1 AnimName */
@@ -2026,7 +2222,7 @@ class EventCommandList {
     selectAll(page) {
         this.selectedIndices = [];
         for (let i = 0; i < page.list.length; i++) {
-            this.selectedIndices.push(i);
+            if (page.list[i]?.code !== 0) this.selectedIndices.push(i);
         }
     }
 
@@ -2138,6 +2334,10 @@ class EventCommandList {
      * the rest of the branch even when the branch is inactive.
      */
     _rebaseInsertIndent(commands, baseIndent) {
+        return EventCommandList.rebaseInsertIndent(commands, baseIndent);
+    }
+
+    static rebaseInsertIndent(commands, baseIndent) {
         if (!commands || commands.length === 0) return commands;
         const delta = baseIndent - (commands[0].indent || 0);
         if (delta !== 0) {
@@ -2146,6 +2346,218 @@ class EventCommandList {
             }
         }
         return commands;
+    }
+
+    static insertionIndent(list, insertIndex) {
+        const previous = list?.[insertIndex - 1];
+        const next = list?.[insertIndex];
+        if (previous && previous.code !== 0) {
+            const opensBody = [102, 111, 112, 301, 402, 403, 411, 601, 602, 603].includes(previous.code);
+            return Math.max(0, (previous.indent || 0) + (opensBody ? 1 : 0));
+        }
+        if (next && next.code !== 0) {
+            const followsBody = [404, 412, 413, 604].includes(next.code);
+            return Math.max(0, (next.indent || 0) + (followsBody ? 1 : 0));
+        }
+        return 0;
+    }
+
+    static safeInsertionIndex(list, insertIndex) {
+        const next = list?.[insertIndex];
+        const previous = list?.[insertIndex - 1];
+        const branchMarkers = [402, 403, 601, 602, 603];
+        if ([102, 301].includes(previous?.code) && branchMarkers.includes(next?.code)) return insertIndex + 1;
+        return insertIndex;
+    }
+
+    static generatedCommand(command, expectedKind) {
+        let Codec = typeof ReactorEventCommandCodec !== 'undefined' ? ReactorEventCommandCodec : null;
+        if (!Codec && typeof require === 'function') {
+            try { Codec = require('./commands/ReactorEventCommandCodec.js'); } catch (_error) { return null; }
+        }
+        try {
+            const parsed = Codec ? Codec.parseCommand(command, expectedKind) : null;
+            return parsed && this.isGeneratedDataValid(expectedKind, parsed.data) &&
+                this.isGeneratedBodyValid(expectedKind, parsed) ? parsed : null;
+        } catch (_error) {
+            return null;
+        }
+    }
+
+    static isGeneratedBodyValid(kind, parsed) {
+        if (kind === 'picture') {
+            let Codec = typeof ReactorEventCommandCodec !== 'undefined' ? ReactorEventCommandCodec : null;
+            if (!Codec && typeof require === 'function') Codec = require('./commands/ReactorEventCommandCodec.js');
+            return !!Codec && parsed.body === Codec.createPictureBody(parsed.data);
+        }
+        if (kind === 'control-variables-expression') {
+            const Editor = typeof ControlVariablesEditor !== 'undefined'
+                ? ControlVariablesEditor : require('./commands/ControlVariablesEditor.js');
+            return parsed.body === Editor.compileAdvancedExpressionBody(parsed.data);
+        }
+        if (kind === 'eventCall') {
+            const Editor = typeof CommonEventEditor !== 'undefined'
+                ? CommonEventEditor : require('./commands/CommonEventEditor.js');
+            return parsed.body === new Editor(null, null)._eventCallBody(parsed.data);
+        }
+        if (kind === 'inputCondition') {
+            const Editor = typeof ConditionalBranchEditor !== 'undefined'
+                ? ConditionalBranchEditor : require('./commands/ConditionalBranchEditor.js');
+            return parsed.body === new Editor(null, null)._advancedInputExpression(parsed.data);
+        }
+        return true;
+    }
+
+    static isGeneratedDataValid(kind, data) {
+        if (!data || typeof data !== 'object' || Array.isArray(data)) return false;
+        const hasKeys = keys => Object.keys(data).length === keys.length &&
+            keys.every(key => Object.prototype.hasOwnProperty.call(data, key));
+        const positiveInteger = value => Number.isInteger(value) && value > 0;
+        const finite = value => typeof value === 'number' && Number.isFinite(value);
+        const source = value => value && typeof value === 'object' && !Array.isArray(value) &&
+            ((value.type === 'constant' && Object.keys(value).length === 2 && finite(value.value)) ||
+             (value.type === 'variable' && Object.keys(value).length === 2 && positiveInteger(value.id)));
+        const ref = (value, allowDirectZero = false) => value && typeof value === 'object' &&
+            !Array.isArray(value) && Object.keys(value).length === 2 &&
+            ['direct', 'variable'].includes(value.source) && Number.isInteger(value.value) &&
+            value.value >= (allowDirectZero && value.source === 'direct' ? 0 : 1);
+        const position = value => value && typeof value === 'object' && !Array.isArray(value) &&
+            Object.keys(value).length === 3 && ['direct', 'variable'].includes(value.source) &&
+            Number.isInteger(value.x) && Number.isInteger(value.y);
+
+        if (kind === 'inputCondition') {
+            if (data.type === 'keyboard') {
+                return hasKeys(['type', 'button', 'mode']) &&
+                    ['ok', 'cancel', 'shift', 'down', 'left', 'right', 'up', 'pageup', 'pagedown'].includes(data.button) &&
+                    ['released', 'held'].includes(data.mode);
+            }
+            if (data.type === 'mouse') {
+                return hasKeys(['type', 'button', 'mode']) && [0, 1, 2].includes(data.button) &&
+                    ['pressed', 'triggered', 'released', 'held'].includes(data.mode);
+            }
+            if (data.type === 'wheel') {
+                return hasKeys(['type', 'direction']) && ['up', 'down', 'left', 'right'].includes(data.direction);
+            }
+            return data.type === 'pointer' && hasKeys(['type', 'axis', 'comparison', 'valueType', 'value']) &&
+                ['x', 'y'].includes(data.axis) && ['==', '!=', '>=', '<=', '>', '<'].includes(data.comparison) &&
+                ['constant', 'variable'].includes(data.valueType) && finite(data.value) &&
+                (data.valueType !== 'variable' || positiveInteger(data.value));
+        }
+
+        if (kind === 'control-variables-expression') {
+            const unary = ['absolute', 'squareRoot', 'sineDegrees', 'cosineDegrees'];
+            const binary = ['add', 'subtract', 'multiply', 'divide', 'modulo', 'power', 'minimum',
+                'maximum', 'atan2', 'random', 'bitwiseAnd', 'bitwiseOr', 'bitwiseXor', 'leftShift', 'rightShift'];
+            if (unary.includes(data.operator)) return hasKeys(['operator', 'left']) && source(data.left);
+            return binary.includes(data.operator) && hasKeys(['operator', 'left', 'right']) &&
+                source(data.left) && source(data.right);
+        }
+
+        if (kind === 'eventCall') {
+            if (data.target === 'commonEvent') {
+                return hasKeys(['target', 'designation', 'variableId']) &&
+                    data.designation === 'variable' && positiveInteger(data.variableId);
+            }
+            if (data.target !== 'mapEventPage') return false;
+            if (data.designation === 'direct') {
+                return hasKeys(['target', 'designation', 'eventId', 'pageNumber']) &&
+                    positiveInteger(data.eventId) && positiveInteger(data.pageNumber);
+            }
+            return data.designation === 'variable' &&
+                hasKeys(['target', 'designation', 'eventVariableId', 'pageVariableId']) &&
+                positiveInteger(data.eventVariableId) && positiveInteger(data.pageVariableId);
+        }
+
+        if (kind === 'picture') {
+            if (data.operation === 'show') {
+                const anchor = data.anchor;
+                const wave = data.wave;
+                return hasKeys(['operation', 'pictureId', 'name', 'origin', 'position', 'scaleX', 'scaleY',
+                    'opacity', 'blend', 'angle', 'anchor', 'wave']) && ref(data.pictureId) &&
+                    typeof data.name === 'string' && [0, 1].includes(data.origin) && position(data.position) &&
+                    finite(data.scaleX) && finite(data.scaleY) && finite(data.opacity) &&
+                    (data.blend === 'overlay' || [0, 1, 2, 3].includes(data.blend)) &&
+                    (data.angle === null || finite(data.angle)) &&
+                    (anchor === null || (Object.keys(anchor).length === 2 && finite(anchor.x) && finite(anchor.y))) &&
+                    (wave === null || (Object.keys(wave).length === 4 && finite(wave.amplitudeX) &&
+                        finite(wave.amplitudeY) && finite(wave.period) && wave.period > 0 && finite(wave.phase)));
+            }
+            if (data.operation === 'move') {
+                const angle = data.angle;
+                const anchor = data.anchor;
+                const wave = data.wave;
+                return hasKeys(['operation', 'pictureId', 'origin', 'position', 'scaleX', 'scaleY', 'opacity',
+                    'blend', 'duration', 'wait', 'easing', 'angle', 'anchor', 'wave']) && ref(data.pictureId) &&
+                    ref(data.duration, true) && [0, 1].includes(data.origin) && position(data.position) &&
+                    finite(data.scaleX) && finite(data.scaleY) && finite(data.opacity) &&
+                    (data.blend === 'overlay' || [0, 1, 2, 3].includes(data.blend)) &&
+                    typeof data.wait === 'boolean' && [0, 1, 2, 3].includes(data.easing) &&
+                    angle && Object.keys(angle).length === 2 && ['keep', 'set', 'tween'].includes(angle.mode) && finite(angle.value) &&
+                    anchor && Object.keys(anchor).length === 3 && ['keep', 'off', 'replace'].includes(anchor.mode) &&
+                    finite(anchor.x) && finite(anchor.y) && wave && Object.keys(wave).length === 5 &&
+                    ['keep', 'off', 'replace'].includes(wave.mode) && finite(wave.amplitudeX) &&
+                    finite(wave.amplitudeY) && finite(wave.period) && wave.period > 0 && finite(wave.phase);
+            }
+            return data.operation === 'erase' && hasKeys(['operation', 'mode', 'pictureId', 'endPictureId']) &&
+                ['one', 'range', 'all'].includes(data.mode) && ref(data.pictureId) && ref(data.endPictureId);
+        }
+
+        return true;
+    }
+
+    static loopEditorClass() {
+        if (typeof LoopEditor !== 'undefined') return LoopEditor;
+        if (typeof require === 'function') return require('./commands/LoopEditor.js');
+        return null;
+    }
+
+    static generatedLoopRangeContaining(list, index) {
+        const LoopClass = this.loopEditorClass();
+        if (!LoopClass || !Array.isArray(list)) return null;
+        for (let loopIndex = 0; loopIndex < list.length; loopIndex++) {
+            if (list[loopIndex]?.code !== 112) continue;
+            const range = LoopClass.findBlockRange(list, loopIndex);
+            if (!range || range.start !== loopIndex || range.start === 0) continue;
+            const start = range.start - 1;
+            if (index < start || index > range.end) continue;
+            try {
+                const parsed = LoopClass.parse(list.slice(start, range.end + 1));
+                if (parsed?.generated &&
+                    ['repeatCount', 'variableRange'].includes(parsed.config?.mode)) {
+                    const scaffold = new Set([
+                        start,
+                        range.start,
+                        range.start + 1,
+                        range.start + 2,
+                        range.start + 3,
+                        range.end - 1,
+                        range.end
+                    ]);
+                    if (scaffold.has(index)) return { start, end: range.end };
+                }
+            } catch (_error) {
+                // A malformed or non-generated loop remains an ordinary structure.
+            }
+        }
+        return null;
+    }
+
+    static pictureEditorFor(command, editors) {
+        const parsed = this.generatedCommand(command, 'picture');
+        if (!parsed) return null;
+        let Codec = typeof ReactorEventCommandCodec !== 'undefined' ? ReactorEventCommandCodec : null;
+        if (!Codec && typeof require === 'function') {
+            try { Codec = require('./commands/ReactorEventCommandCodec.js'); } catch (_error) { return null; }
+        }
+        try {
+            if (!Codec || parsed.body !== Codec.createPictureBody(parsed.data)) return null;
+        } catch (_error) {
+            return null;
+        }
+        if (parsed.data.operation === 'show') return editors.show;
+        if (parsed.data.operation === 'move') return editors.move;
+        if (parsed.data.operation === 'erase') return editors.erase;
+        return null;
     }
 
     /**
@@ -2167,19 +2579,8 @@ class EventCommandList {
             }
             // Clamp so we never insert past the End command
             insertIndex = Math.min(insertIndex, page.list.length - 1);
-
-            // MZ indent rule: a new command adopts the indent of the row it
-            // is inserted after — one level deeper when that row opens a
-            // block (If/Loop/When/Else/battle-result branches).
-            let baseIndent = 0;
-            if (this.selectedIndices.length > 0) {
-                const anchor = page.list[Math.max(...this.selectedIndices)];
-                if (anchor && anchor.code !== 0) {
-                    const blockOpeners = [111, 112, 402, 403, 411, 601, 602, 603];
-                    baseIndent = (anchor.indent || 0) +
-                        (blockOpeners.includes(anchor.code) ? 1 : 0);
-                }
-            }
+            insertIndex = EventCommandList.safeInsertionIndex(page.list, insertIndex);
+            const baseIndent = EventCommandList.insertionIndent(page.list, insertIndex);
 
             const code = command.code;
 
@@ -2247,11 +2648,12 @@ class EventCommandList {
                 return;
             }
 
-            // For loop commands, open the editor immediately
+            // Loop uses the stock RPG Maker Loop/Repeat Above structure directly.
             if (code === 112 || code === 413) {
-                this.loopEditor.show(null, (command) => {
-                    if (command) {
-                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
+                this.loopEditor.show(null, (commands) => {
+                    if (commands && commands.length > 0) {
+                        this._rebaseInsertIndent(commands, baseIndent);
+                        commands.forEach((cmd, i) => page.list.splice(insertIndex + i, 0, cmd));
                         this.selectedIndices = [insertIndex];
                         this.refreshCommandList(page, pageIndex);
                     }
@@ -2510,6 +2912,19 @@ class EventCommandList {
                         this.refreshCommandList(page, pageIndex);
                     }
                 });
+                return;
+            }
+
+            // For move picture commands, open the editor immediately
+            if (code === 232) {
+                this.movePictureEditor.show(null, (editedCommand) => {
+                    if (editedCommand) {
+                        page.list.splice(insertIndex, 0,
+                            this._rebaseInsertIndent([editedCommand], baseIndent)[0]);
+                        this.selectedIndices = [insertIndex];
+                        this.refreshCommandList(page, pageIndex);
+                    }
+                }, { commands: page.list, index: insertIndex });
                 return;
             }
 
@@ -2850,7 +3265,7 @@ class EventCommandList {
                         this.selectedIndices = [insertIndex];
                         this.refreshCommandList(page, pageIndex);
                     }
-                });
+                }, { commands: page.list, index: insertIndex });
                 return;
             }
 
@@ -3360,7 +3775,7 @@ class EventCommandList {
             // For other commands, insert with default parameters
             const newCommand = {
                 code: command.code,
-                indent: 0,
+                indent: baseIndent,
                 parameters: []
             };
 
@@ -3370,11 +3785,70 @@ class EventCommandList {
         });
     }
 
+    /**
+     * Collect the branch structure that a header command (Show Choices 102,
+     * Conditional Branch 111) owns, starting at headerIndex. The structure's
+     * own markers sit at the header's indent; anything deeper is body
+     * content and is captured verbatim, so nested If/Choices structures ride
+     * along inside the bodies untouched.
+     *
+     * Returns { branches, endIndex, terminated }:
+     * - branches: [{ marker, body }] in document order. Empty bodies are
+     *   kept as placeholders so branch N's body can never shift into branch
+     *   N-1. When headerOwnsBody is true the first entry has marker null —
+     *   the body that directly follows the header (an If's "then" body).
+     * - endIndex: index of the end marker, or of the last command that still
+     *   belongs to the structure when the end marker is missing.
+     * - terminated: whether the end marker was actually found. Callers must
+     *   not splice past endIndex when this is false.
+     */
+    static collectBranchStructure(list, headerIndex, markerCodes, endCode, headerOwnsBody) {
+        const baseIndent = list[headerIndex].indent || 0;
+        const branches = [];
+        let current = null;
+        if (headerOwnsBody) {
+            current = { marker: null, body: [] };
+            branches.push(current);
+        }
+        let endIndex = headerIndex;
+        let terminated = false;
+        for (let i = headerIndex + 1; i < list.length; i++) {
+            const cmd = list[i];
+            const indent = cmd.indent || 0;
+            if (indent <= baseIndent) {
+                if (indent === baseIndent && cmd.code === endCode) {
+                    endIndex = i;
+                    terminated = true;
+                    break;
+                }
+                if (indent === baseIndent && markerCodes.includes(cmd.code)) {
+                    current = { marker: cmd, body: [] };
+                    branches.push(current);
+                    endIndex = i;
+                    continue;
+                }
+                // A foreign command at (or above) the header's level before
+                // the end marker: the structure is truncated. Stop without
+                // consuming it.
+                break;
+            }
+            if (!current) break;
+            current.body.push(cmd);
+            endIndex = i;
+        }
+        return { branches, endIndex, terminated };
+    }
+
     editCommand(index, page, pageIndex) {
         const command = page.list[index];
         if (!command || command.code === 0) return;
 
         const code = command.code;
+        const rebaseReplacement = commands => this._rebaseInsertIndent(commands, command.indent || 0);
+        const replaceSingle = editedCommand => {
+            if (editedCommand) rebaseReplacement([editedCommand]);
+            page.list[index] = editedCommand;
+        };
 
         // Commands with no editable parameters — double-clicking is a no-op.
         // Insertion happens through the picker with `parameters: []`; there's
@@ -3401,6 +3875,7 @@ class EventCommandList {
             };
 
             this.messageEditor.show(messageData, (commands) => {
+                rebaseReplacement(commands);
                 // Replace the message command and its text lines
                 // First, remove the old message and all its 401 lines
                 let removeCount = 1; // Start with the 101 command itself
@@ -3429,63 +3904,42 @@ class EventCommandList {
         if (code === 102) {
             this.choicesEditor.show(command, (commands) => {
                 if (commands && commands.length > 0) {
-                    // Collect all the nested commands between branch markers
-                    const nestedCommands = [];
-                    let currentBranch = [];
-                    let i = index + 1;
-                    let currentIndent = 1;
-
-                    while (i < page.list.length) {
-                        const cmd = page.list[i];
-
-                        if (cmd.code === 402) {
-                            // Start of a new branch
-                            if (currentBranch.length > 0) {
-                                nestedCommands.push(currentBranch);
-                            }
-                            currentBranch = [];
-                            i++;
-                        } else if (cmd.code === 403) {
-                            // Cancel branch
-                            if (currentBranch.length > 0) {
-                                nestedCommands.push(currentBranch);
-                            }
-                            currentBranch = [];
-                            i++;
-                        } else if (cmd.code === 404) {
-                            // End of choices
-                            if (currentBranch.length > 0) {
-                                nestedCommands.push(currentBranch);
-                            }
-                            break;
+                    // Collect the old branch bodies. Choice bodies stay in
+                    // choice order; the cancel body stays bound to the 403
+                    // marker so a changed choice count can't migrate it into
+                    // a choice branch.
+                    const { branches, endIndex } = EventCommandList.collectBranchStructure(
+                        page.list, index, [402, 403], 404, false);
+                    const choiceBodies = [];
+                    let cancelBody = null;
+                    for (const branch of branches) {
+                        if (branch.marker.code === 403) {
+                            cancelBody = branch.body;
                         } else {
-                            // Regular command inside a branch
-                            currentBranch.push(cmd);
-                            i++;
+                            choiceBodies.push(branch.body);
                         }
                     }
 
-                    // Remove the entire old choice structure
-                    const removeCount = i - index + 1; // +1 to include the 404
-                    page.list.splice(index, removeCount);
+                    // Replace the old structure with the new one, re-attaching
+                    // each body after its marker at the header's indent.
+                    page.list.splice(index, endIndex - index + 1);
+                    this._rebaseInsertIndent(commands, command.indent || 0);
 
-                    // Insert new choice structure, re-inserting nested commands
                     let insertPos = index;
-                    let branchIndex = 0;
-
-                    commands.forEach((cmd) => {
+                    for (const cmd of commands) {
                         page.list.splice(insertPos++, 0, cmd);
-
-                        // After each 402/403, insert the nested commands from that branch
-                        if (cmd.code === 402 || cmd.code === 403) {
-                            if (nestedCommands[branchIndex]) {
-                                nestedCommands[branchIndex].forEach(nestedCmd => {
-                                    page.list.splice(insertPos++, 0, nestedCmd);
-                                });
-                                branchIndex++;
+                        let body = null;
+                        if (cmd.code === 402) {
+                            body = choiceBodies.shift();
+                        } else if (cmd.code === 403) {
+                            body = cancelBody;
+                        }
+                        if (body) {
+                            for (const nestedCmd of body) {
+                                page.list.splice(insertPos++, 0, nestedCmd);
                             }
                         }
-                    });
+                    }
 
                     this.refreshCommandList(page, pageIndex);
                 }
@@ -3497,6 +3951,7 @@ class EventCommandList {
         if (code === 108) {
             this.commentEditor.show(command, page.list, index, (commands) => {
                 if (commands && commands.length > 0) {
+                    rebaseReplacement(commands);
                     // Remove the comment command and all its 408 continuation lines
                     let removeCount = 1; // Start with the 108 command itself
                     for (let i = index + 1; i < page.list.length; i++) {
@@ -3523,69 +3978,68 @@ class EventCommandList {
 
         // Conditional Branch command
         if (code === 111) {
+            // Parse the structure up front: the "then" body follows the
+            // header itself, the "else" body stays bound to its 411 marker.
+            // The parse also tells the editor whether an Else branch exists
+            // so its checkbox can reflect (and preserve) the current shape.
+            // The modal is app-modal, so the list can't change underneath it.
+            const { branches, endIndex } = EventCommandList.collectBranchStructure(
+                page.list, index, [411], 412, true);
+            const thenBody = branches[0].body;
+            const elseBranch = branches.find(b => b.marker && b.marker.code === 411);
+            const elseBody = elseBranch ? elseBranch.body : null;
+
             this.conditionalBranchEditor.show(command, (commands) => {
                 if (commands && commands.length > 0) {
-                    // Collect all the nested commands between branch markers
-                    const nestedCommands = [];
-                    let currentBranch = [];
-                    let i = index + 1;
+                    // Replace the old structure with the new one, re-attaching
+                    // each body after its marker at the header's indent. If
+                    // the Else branch was removed in the editor, its body is
+                    // dropped with it.
+                    page.list.splice(index, endIndex - index + 1);
+                    this._rebaseInsertIndent(commands, command.indent || 0);
 
-                    while (i < page.list.length) {
-                        const cmd = page.list[i];
-
-                        if (cmd.code === 411) {
-                            // Else branch
-                            if (currentBranch.length > 0) {
-                                nestedCommands.push(currentBranch);
+                    let insertPos = index;
+                    for (const cmd of commands) {
+                        page.list.splice(insertPos++, 0, cmd);
+                        let body = null;
+                        if (cmd.code === 111) {
+                            body = thenBody;
+                        } else if (cmd.code === 411) {
+                            body = elseBody;
+                        }
+                        if (body) {
+                            for (const nestedCmd of body) {
+                                page.list.splice(insertPos++, 0, nestedCmd);
                             }
-                            currentBranch = [];
-                            i++;
-                        } else if (cmd.code === 412) {
-                            // End of conditional
-                            if (currentBranch.length > 0) {
-                                nestedCommands.push(currentBranch);
-                            }
-                            break;
-                        } else {
-                            // Regular command inside a branch
-                            currentBranch.push(cmd);
-                            i++;
                         }
                     }
 
-                    // Remove the entire old branch structure
-                    const removeCount = i - index + 1; // +1 to include the 412
-                    page.list.splice(index, removeCount);
-
-                    // Insert new branch structure, re-inserting nested commands
-                    let insertPos = index;
-                    let branchIndex = 0;
-
-                    commands.forEach((cmd) => {
-                        page.list.splice(insertPos++, 0, cmd);
-
-                        // After 111 or 411, insert the nested commands from that branch
-                        if (cmd.code === 111 || cmd.code === 411) {
-                            if (nestedCommands[branchIndex]) {
-                                nestedCommands[branchIndex].forEach(nestedCmd => {
-                                    page.list.splice(insertPos++, 0, nestedCmd);
-                                });
-                                branchIndex++;
-                            }
-                        }
-                    });
-
                     this.refreshCommandList(page, pageIndex);
                 }
-            });
+            }, { hasElse: !!elseBranch });
             return;
         }
 
         // Loop/Repeat Above commands
         if (code === 112 || code === 413) {
-            this.loopEditor.show(command, (editedCommand) => {
-                if (editedCommand) {
-                    page.list[index] = editedCommand;
+            const LoopClass = EventCommandList.loopEditorClass();
+            const range = LoopClass.findBlockRange(page.list, index);
+            if (!range) return;
+            let start = range.start;
+            let block = page.list.slice(start, range.end + 1);
+            if (start > 0) {
+                const candidate = page.list.slice(start - 1, range.end + 1);
+                const parsed = LoopClass.parse(candidate);
+                if (parsed && parsed.generated) {
+                    start--;
+                    block = candidate;
+                }
+            }
+            this.loopEditor.show(block, (editedCommands) => {
+                if (editedCommands && editedCommands.length > 0) {
+                    rebaseReplacement(editedCommands);
+                    page.list.splice(start, range.end - start + 1, ...editedCommands);
+                    this.selectedIndices = [start + (editedCommands[0].code === 122 ? 1 : 0)];
                     this.refreshCommandList(page, pageIndex);
                 }
             });
@@ -3596,7 +4050,7 @@ class EventCommandList {
         if (code === 113) {
             this.breakLoopEditor.show(command, (editedCommand) => {
                 if (editedCommand) {
-                    page.list[index] = editedCommand;
+                    replaceSingle(editedCommand);
                     this.refreshCommandList(page, pageIndex);
                 }
             });
@@ -3607,7 +4061,7 @@ class EventCommandList {
         if (code === 230) {
             this.waitEditor.show(command, (editedCommand) => {
                 if (editedCommand) {
-                    page.list[index] = editedCommand;
+                    replaceSingle(editedCommand);
                     this.refreshCommandList(page, pageIndex);
                 }
             });
@@ -3618,7 +4072,7 @@ class EventCommandList {
         if (code === 121) {
             this.switchesEditor.show(command, (editedCommand) => {
                 if (editedCommand) {
-                    page.list[index] = editedCommand;
+                    replaceSingle(editedCommand);
                     this.refreshCommandList(page, pageIndex);
                 }
             });
@@ -3629,7 +4083,7 @@ class EventCommandList {
         if (code === 122) {
             this.variablesEditor.show(command, (editedCommand) => {
                 if (editedCommand) {
-                    page.list[index] = editedCommand;
+                    replaceSingle(editedCommand);
                     this.refreshCommandList(page, pageIndex);
                 }
             });
@@ -3640,7 +4094,7 @@ class EventCommandList {
         if (code === 123) {
             this.controlSelfSwitchEditor.show(command, (editedCommand) => {
                 if (editedCommand) {
-                    page.list[index] = editedCommand;
+                    replaceSingle(editedCommand);
                     this.refreshCommandList(page, pageIndex);
                 }
             });
@@ -3651,7 +4105,7 @@ class EventCommandList {
         if (code === 124) {
             this.controlTimerEditor.show(command, (editedCommand) => {
                 if (editedCommand) {
-                    page.list[index] = editedCommand;
+                    replaceSingle(editedCommand);
                     this.refreshCommandList(page, pageIndex);
                 }
             });
@@ -3662,7 +4116,7 @@ class EventCommandList {
         if (code === 125) {
             this.goldEditor.show(command, (editedCommand) => {
                 if (editedCommand) {
-                    page.list[index] = editedCommand;
+                    replaceSingle(editedCommand);
                     this.refreshCommandList(page, pageIndex);
                 }
             });
@@ -3673,7 +4127,7 @@ class EventCommandList {
         if (code === 126) {
             this.changeItemsEditor.show(command, (editedCommand) => {
                 if (editedCommand) {
-                    page.list[index] = editedCommand;
+                    replaceSingle(editedCommand);
                     this.refreshCommandList(page, pageIndex);
                 }
             });
@@ -3684,7 +4138,7 @@ class EventCommandList {
         if (code === 129) {
             this.changePartyMemberEditor.show(command, (editedCommand) => {
                 if (editedCommand) {
-                    page.list[index] = editedCommand;
+                    replaceSingle(editedCommand);
                     this.refreshCommandList(page, pageIndex);
                 }
             });
@@ -3695,7 +4149,7 @@ class EventCommandList {
         if (code === 127) {
             this.changeWeaponsEditor.show(command, (editedCommand) => {
                 if (editedCommand) {
-                    page.list[index] = editedCommand;
+                    replaceSingle(editedCommand);
                     this.refreshCommandList(page, pageIndex);
                 }
             });
@@ -3706,7 +4160,7 @@ class EventCommandList {
         if (code === 128) {
             this.changeArmorsEditor.show(command, (editedCommand) => {
                 if (editedCommand) {
-                    page.list[index] = editedCommand;
+                    replaceSingle(editedCommand);
                     this.refreshCommandList(page, pageIndex);
                 }
             });
@@ -3717,7 +4171,7 @@ class EventCommandList {
         if (code === 201) {
             this.transferPlayerEditor.show(command, (editedCommand) => {
                 if (editedCommand) {
-                    page.list[index] = editedCommand;
+                    replaceSingle(editedCommand);
                     this.refreshCommandList(page, pageIndex);
                 }
             });
@@ -3728,7 +4182,7 @@ class EventCommandList {
         if (code === 203) {
             this.setEventLocationEditor.show(command, (editedCommand) => {
                 if (editedCommand) {
-                    page.list[index] = editedCommand;
+                    replaceSingle(editedCommand);
                     this.refreshCommandList(page, pageIndex);
                 }
             });
@@ -3739,7 +4193,7 @@ class EventCommandList {
         if (code === 204) {
             this.scrollMapEditor.show(command, (editedCommand) => {
                 if (editedCommand) {
-                    page.list[index] = editedCommand;
+                    replaceSingle(editedCommand);
                     this.refreshCommandList(page, pageIndex);
                 }
             });
@@ -3751,7 +4205,7 @@ class EventCommandList {
             this.setMovementRouteEditor.show(command, (editedCommand) => {
                 if (editedCommand) {
                     // Replace the 205 header command
-                    page.list[index] = editedCommand;
+                    replaceSingle(editedCommand);
                     // Remove old 505 continuation entries
                     let removeCount = 0;
                     let scan = index + 1;
@@ -3784,7 +4238,7 @@ class EventCommandList {
         if (code === 211) {
             this.changeTransparencyEditor.show(command, (editedCommand) => {
                 if (editedCommand) {
-                    page.list[index] = editedCommand;
+                    replaceSingle(editedCommand);
                     this.refreshCommandList(page, pageIndex);
                 }
             });
@@ -3795,7 +4249,7 @@ class EventCommandList {
         if (code === 212) {
             this.showAnimationEditor.show(command, (editedCommand) => {
                 if (editedCommand) {
-                    page.list[index] = editedCommand;
+                    replaceSingle(editedCommand);
                     this.refreshCommandList(page, pageIndex);
                 }
             });
@@ -3807,7 +4261,7 @@ class EventCommandList {
             const eventData = this.eventEditor ? this.eventEditor.event : null;
             this.balloonIconEditor.show(command, (editedCommand) => {
                 if (editedCommand) {
-                    page.list[index] = editedCommand;
+                    replaceSingle(editedCommand);
                     this.refreshCommandList(page, pageIndex);
                 }
             }, eventData);
@@ -3818,7 +4272,7 @@ class EventCommandList {
         if (code === 221 || code === 222) {
             this.fadeScreenEditor.show(command, (editedCommand) => {
                 if (editedCommand) {
-                    page.list[index] = editedCommand;
+                    replaceSingle(editedCommand);
                     this.refreshCommandList(page, pageIndex);
                 }
             });
@@ -3829,7 +4283,7 @@ class EventCommandList {
         if (code === 231) {
             this.showPictureEditor.show(command, (editedCommand) => {
                 if (editedCommand) {
-                    page.list[index] = editedCommand;
+                    replaceSingle(editedCommand);
                     this.refreshCommandList(page, pageIndex);
                 }
             });
@@ -3840,7 +4294,7 @@ class EventCommandList {
         if (code === 235) {
             this.erasePictureEditor.show(command, (editedCommand) => {
                 if (editedCommand) {
-                    page.list[index] = editedCommand;
+                    replaceSingle(editedCommand);
                     this.refreshCommandList(page, pageIndex);
                 }
             });
@@ -3851,7 +4305,7 @@ class EventCommandList {
         if (code === 356 || code === 357) {
             this.pluginCommandEditor.show(command, (editedCommand) => {
                 if (editedCommand) {
-                    page.list[index] = editedCommand;
+                    replaceSingle(editedCommand);
                     this.refreshCommandList(page, pageIndex);
                 }
             });
@@ -3860,8 +4314,34 @@ class EventCommandList {
 
         // Script command
         if (code === 355) {
+            const eventCall = EventCommandList.generatedCommand(command, 'eventCall');
+            if (eventCall) {
+                this.commonEventEditor.show(command, (editedCommand) => {
+                    if (editedCommand) {
+                        replaceSingle(editedCommand);
+                        this.refreshCommandList(page, pageIndex);
+                    }
+                });
+                return;
+            }
+            const pictureEditor = EventCommandList.pictureEditorFor(command, {
+                show: this.showPictureEditor,
+                move: this.movePictureEditor,
+                erase: this.erasePictureEditor
+            });
+            if (pictureEditor) {
+                const context = pictureEditor === this.movePictureEditor ? { commands: page.list, index } : undefined;
+                pictureEditor.show(command, (editedCommand) => {
+                    if (editedCommand) {
+                        replaceSingle(editedCommand);
+                        this.refreshCommandList(page, pageIndex);
+                    }
+                }, context);
+                return;
+            }
             this.scriptEditor.show(command, page.list, index, (commands) => {
                 if (commands && commands.length > 0) {
+                    rebaseReplacement(commands);
                     // Remove the script command and all its 655 continuation lines
                     let removeCount = 1; // Start with the 355 command itself
                     for (let i = index + 1; i < page.list.length; i++) {
@@ -3889,7 +4369,7 @@ class EventCommandList {
         // Audio commands
         if ([241, 242, 245, 246, 249, 250, 251].includes(code)) {
             this.audioEditor.show(command, code, (editedCommand) => {
-                page.list[index] = editedCommand;
+                replaceSingle(editedCommand);
                 this.refreshCommandList(page, pageIndex);
             });
             return;
@@ -3899,7 +4379,7 @@ class EventCommandList {
         if (code === 103) {
             this.inputNumberEditor.show(command, (editedCommand) => {
                 if (editedCommand) {
-                    page.list[index] = editedCommand;
+                    replaceSingle(editedCommand);
                     this.refreshCommandList(page, pageIndex);
                 }
             });
@@ -3910,7 +4390,7 @@ class EventCommandList {
         if (code === 104) {
             this.selectItemEditor.show(command, (editedCommand) => {
                 if (editedCommand) {
-                    page.list[index] = editedCommand;
+                    replaceSingle(editedCommand);
                     this.refreshCommandList(page, pageIndex);
                 }
             });
@@ -3929,6 +4409,7 @@ class EventCommandList {
             }
             this.showScrollingTextEditor.show(command, (commands) => {
                 if (commands && commands.length > 0) {
+                    rebaseReplacement(commands);
                     let removeCount = 1;
                     for (let i = index + 1; i < page.list.length; i++) {
                         if (page.list[i].code === 405) {
@@ -3951,7 +4432,7 @@ class EventCommandList {
         if (code === 117) {
             this.commonEventEditor.show(command, (editedCommand) => {
                 if (editedCommand) {
-                    page.list[index] = editedCommand;
+                    replaceSingle(editedCommand);
                     this.refreshCommandList(page, pageIndex);
                 }
             });
@@ -3962,7 +4443,7 @@ class EventCommandList {
         if (code === 118) {
             this.labelEditor.show(command, (editedCommand) => {
                 if (editedCommand) {
-                    page.list[index] = editedCommand;
+                    replaceSingle(editedCommand);
                     this.refreshCommandList(page, pageIndex);
                 }
             });
@@ -3973,7 +4454,7 @@ class EventCommandList {
         if (code === 119) {
             this.jumpToLabelEditor.show(command, (editedCommand) => {
                 if (editedCommand) {
-                    page.list[index] = editedCommand;
+                    replaceSingle(editedCommand);
                     this.refreshCommandList(page, pageIndex);
                 }
             });
@@ -3984,7 +4465,7 @@ class EventCommandList {
         if (code === 132) {
             this.changeBattleBGMEditor.show(command, (editedCommand) => {
                 if (editedCommand) {
-                    page.list[index] = editedCommand;
+                    replaceSingle(editedCommand);
                     this.refreshCommandList(page, pageIndex);
                 }
             });
@@ -3995,7 +4476,7 @@ class EventCommandList {
         if (code === 133) {
             this.changeVictoryMEEditor.show(command, (editedCommand) => {
                 if (editedCommand) {
-                    page.list[index] = editedCommand;
+                    replaceSingle(editedCommand);
                     this.refreshCommandList(page, pageIndex);
                 }
             });
@@ -4006,7 +4487,7 @@ class EventCommandList {
         if (code === 134) {
             this.toggleCommandEditor.show(command, (editedCommand) => {
                 if (editedCommand) {
-                    page.list[index] = editedCommand;
+                    replaceSingle(editedCommand);
                     this.refreshCommandList(page, pageIndex);
                 }
             }, { code: 134, title: 'Change Save Access', option0: 'Disable', option1: 'Enable' });
@@ -4017,7 +4498,7 @@ class EventCommandList {
         if (code === 135) {
             this.toggleCommandEditor.show(command, (editedCommand) => {
                 if (editedCommand) {
-                    page.list[index] = editedCommand;
+                    replaceSingle(editedCommand);
                     this.refreshCommandList(page, pageIndex);
                 }
             }, { code: 135, title: 'Change Menu Access', option0: 'Disable', option1: 'Enable' });
@@ -4028,7 +4509,7 @@ class EventCommandList {
         if (code === 136) {
             this.toggleCommandEditor.show(command, (editedCommand) => {
                 if (editedCommand) {
-                    page.list[index] = editedCommand;
+                    replaceSingle(editedCommand);
                     this.refreshCommandList(page, pageIndex);
                 }
             }, { code: 136, title: 'Change Encounter', option0: 'Disable', option1: 'Enable' });
@@ -4039,7 +4520,7 @@ class EventCommandList {
         if (code === 137) {
             this.toggleCommandEditor.show(command, (editedCommand) => {
                 if (editedCommand) {
-                    page.list[index] = editedCommand;
+                    replaceSingle(editedCommand);
                     this.refreshCommandList(page, pageIndex);
                 }
             }, { code: 137, title: 'Change Formation Access', option0: 'Disable', option1: 'Enable' });
@@ -4050,7 +4531,7 @@ class EventCommandList {
         if (code === 138) {
             this.changeWindowColorEditor.show(command, (editedCommand) => {
                 if (editedCommand) {
-                    page.list[index] = editedCommand;
+                    replaceSingle(editedCommand);
                     this.refreshCommandList(page, pageIndex);
                 }
             });
@@ -4061,7 +4542,7 @@ class EventCommandList {
         if (code === 139) {
             this.changeDefeatMEEditor.show(command, (editedCommand) => {
                 if (editedCommand) {
-                    page.list[index] = editedCommand;
+                    replaceSingle(editedCommand);
                     this.refreshCommandList(page, pageIndex);
                 }
             });
@@ -4072,7 +4553,7 @@ class EventCommandList {
         if (code === 140) {
             this.changeVehicleBGMEditor.show(command, (editedCommand) => {
                 if (editedCommand) {
-                    page.list[index] = editedCommand;
+                    replaceSingle(editedCommand);
                     this.refreshCommandList(page, pageIndex);
                 }
             });
@@ -4083,7 +4564,7 @@ class EventCommandList {
         if (code === 202) {
             this.setVehicleLocationEditor.show(command, (editedCommand) => {
                 if (editedCommand) {
-                    page.list[index] = editedCommand;
+                    replaceSingle(editedCommand);
                     this.refreshCommandList(page, pageIndex);
                 }
             });
@@ -4094,7 +4575,7 @@ class EventCommandList {
         if (code === 216) {
             this.toggleCommandEditor.show(command, (editedCommand) => {
                 if (editedCommand) {
-                    page.list[index] = editedCommand;
+                    replaceSingle(editedCommand);
                     this.refreshCommandList(page, pageIndex);
                 }
             }, { code: 216, title: 'Change Player Followers', option0: 'Show', option1: 'Hide' });
@@ -4105,7 +4586,7 @@ class EventCommandList {
         if (code === 223) {
             this.tintScreenEditor.show(command, (editedCommand) => {
                 if (editedCommand) {
-                    page.list[index] = editedCommand;
+                    replaceSingle(editedCommand);
                     this.refreshCommandList(page, pageIndex);
                 }
             });
@@ -4116,7 +4597,7 @@ class EventCommandList {
         if (code === 224) {
             this.flashScreenEditor.show(command, (editedCommand) => {
                 if (editedCommand) {
-                    page.list[index] = editedCommand;
+                    replaceSingle(editedCommand);
                     this.refreshCommandList(page, pageIndex);
                 }
             });
@@ -4127,7 +4608,7 @@ class EventCommandList {
         if (code === 225) {
             this.shakeScreenEditor.show(command, (editedCommand) => {
                 if (editedCommand) {
-                    page.list[index] = editedCommand;
+                    replaceSingle(editedCommand);
                     this.refreshCommandList(page, pageIndex);
                 }
             });
@@ -4138,10 +4619,10 @@ class EventCommandList {
         if (code === 232) {
             this.movePictureEditor.show(command, (editedCommand) => {
                 if (editedCommand) {
-                    page.list[index] = editedCommand;
+                    replaceSingle(editedCommand);
                     this.refreshCommandList(page, pageIndex);
                 }
-            });
+            }, { commands: page.list, index });
             return;
         }
 
@@ -4149,7 +4630,7 @@ class EventCommandList {
         if (code === 233) {
             this.rotatePictureEditor.show(command, (editedCommand) => {
                 if (editedCommand) {
-                    page.list[index] = editedCommand;
+                    replaceSingle(editedCommand);
                     this.refreshCommandList(page, pageIndex);
                 }
             });
@@ -4160,7 +4641,7 @@ class EventCommandList {
         if (code === 234) {
             this.tintPictureEditor.show(command, (editedCommand) => {
                 if (editedCommand) {
-                    page.list[index] = editedCommand;
+                    replaceSingle(editedCommand);
                     this.refreshCommandList(page, pageIndex);
                 }
             });
@@ -4171,7 +4652,7 @@ class EventCommandList {
         if (code === 236) {
             this.setWeatherEffectEditor.show(command, (editedCommand) => {
                 if (editedCommand) {
-                    page.list[index] = editedCommand;
+                    replaceSingle(editedCommand);
                     this.refreshCommandList(page, pageIndex);
                 }
             });
@@ -4182,7 +4663,7 @@ class EventCommandList {
         if (code === 261) {
             this.playMovieEditor.show(command, (editedCommand) => {
                 if (editedCommand) {
-                    page.list[index] = editedCommand;
+                    replaceSingle(editedCommand);
                     this.refreshCommandList(page, pageIndex);
                 }
             });
@@ -4193,7 +4674,7 @@ class EventCommandList {
         if (code === 281) {
             this.toggleCommandEditor.show(command, (editedCommand) => {
                 if (editedCommand) {
-                    page.list[index] = editedCommand;
+                    replaceSingle(editedCommand);
                     this.refreshCommandList(page, pageIndex);
                 }
             }, { code: 281, title: 'Change Map Name Display', option0: 'Enable', option1: 'Disable' });
@@ -4204,7 +4685,7 @@ class EventCommandList {
         if (code === 282) {
             this.changeTilesetEditor.show(command, (editedCommand) => {
                 if (editedCommand) {
-                    page.list[index] = editedCommand;
+                    replaceSingle(editedCommand);
                     this.refreshCommandList(page, pageIndex);
                 }
             });
@@ -4215,7 +4696,7 @@ class EventCommandList {
         if (code === 283) {
             this.changeBattleBackgroundEditor.show(command, (editedCommand) => {
                 if (editedCommand) {
-                    page.list[index] = editedCommand;
+                    replaceSingle(editedCommand);
                     this.refreshCommandList(page, pageIndex);
                 }
             });
@@ -4226,7 +4707,7 @@ class EventCommandList {
         if (code === 284) {
             this.changeParallaxEditor.show(command, (editedCommand) => {
                 if (editedCommand) {
-                    page.list[index] = editedCommand;
+                    replaceSingle(editedCommand);
                     this.refreshCommandList(page, pageIndex);
                 }
             });
@@ -4237,7 +4718,7 @@ class EventCommandList {
         if (code === 285) {
             this.getLocationInfoEditor.show(command, (editedCommand) => {
                 if (editedCommand) {
-                    page.list[index] = editedCommand;
+                    replaceSingle(editedCommand);
                     this.refreshCommandList(page, pageIndex);
                 }
             });
@@ -4248,7 +4729,7 @@ class EventCommandList {
         if (code === 301) {
             this.battleProcessingEditor.show(command, (editedCommand) => {
                 if (editedCommand) {
-                    page.list[index] = editedCommand;
+                    replaceSingle(editedCommand);
                     this.refreshCommandList(page, pageIndex);
                 }
             });
@@ -4259,6 +4740,7 @@ class EventCommandList {
         if (code === 302) {
             this.shopProcessingEditor.show(command, (commands) => {
                 if (commands && commands.length > 0) {
+                    rebaseReplacement(commands);
                     let removeCount = 1;
                     for (let i = index + 1; i < page.list.length; i++) {
                         if (page.list[i].code === 605) {
@@ -4281,7 +4763,7 @@ class EventCommandList {
         if (code === 303) {
             this.nameInputProcessingEditor.show(command, (editedCommand) => {
                 if (editedCommand) {
-                    page.list[index] = editedCommand;
+                    replaceSingle(editedCommand);
                     this.refreshCommandList(page, pageIndex);
                 }
             });
@@ -4292,7 +4774,7 @@ class EventCommandList {
         if (code === 311) {
             this.changeHPEditor.show(command, (editedCommand) => {
                 if (editedCommand) {
-                    page.list[index] = editedCommand;
+                    replaceSingle(editedCommand);
                     this.refreshCommandList(page, pageIndex);
                 }
             });
@@ -4303,7 +4785,7 @@ class EventCommandList {
         if (code === 312) {
             this.changeMPEditor.show(command, (editedCommand) => {
                 if (editedCommand) {
-                    page.list[index] = editedCommand;
+                    replaceSingle(editedCommand);
                     this.refreshCommandList(page, pageIndex);
                 }
             });
@@ -4314,7 +4796,7 @@ class EventCommandList {
         if (code === 313) {
             this.changeStateEditor.show(command, (editedCommand) => {
                 if (editedCommand) {
-                    page.list[index] = editedCommand;
+                    replaceSingle(editedCommand);
                     this.refreshCommandList(page, pageIndex);
                 }
             });
@@ -4325,7 +4807,7 @@ class EventCommandList {
         if (code === 314) {
             this.recoverAllEditor.show(command, (editedCommand) => {
                 if (editedCommand) {
-                    page.list[index] = editedCommand;
+                    replaceSingle(editedCommand);
                     this.refreshCommandList(page, pageIndex);
                 }
             });
@@ -4336,7 +4818,7 @@ class EventCommandList {
         if (code === 315) {
             this.changeEXPEditor.show(command, (editedCommand) => {
                 if (editedCommand) {
-                    page.list[index] = editedCommand;
+                    replaceSingle(editedCommand);
                     this.refreshCommandList(page, pageIndex);
                 }
             });
@@ -4347,7 +4829,7 @@ class EventCommandList {
         if (code === 316) {
             this.changeLevelEditor.show(command, (editedCommand) => {
                 if (editedCommand) {
-                    page.list[index] = editedCommand;
+                    replaceSingle(editedCommand);
                     this.refreshCommandList(page, pageIndex);
                 }
             });
@@ -4358,7 +4840,7 @@ class EventCommandList {
         if (code === 317) {
             this.changeParameterEditor.show(command, (editedCommand) => {
                 if (editedCommand) {
-                    page.list[index] = editedCommand;
+                    replaceSingle(editedCommand);
                     this.refreshCommandList(page, pageIndex);
                 }
             });
@@ -4369,7 +4851,7 @@ class EventCommandList {
         if (code === 318) {
             this.changeSkillEditor.show(command, (editedCommand) => {
                 if (editedCommand) {
-                    page.list[index] = editedCommand;
+                    replaceSingle(editedCommand);
                     this.refreshCommandList(page, pageIndex);
                 }
             });
@@ -4380,7 +4862,7 @@ class EventCommandList {
         if (code === 319) {
             this.changeEquipmentEditor.show(command, (editedCommand) => {
                 if (editedCommand) {
-                    page.list[index] = editedCommand;
+                    replaceSingle(editedCommand);
                     this.refreshCommandList(page, pageIndex);
                 }
             });
@@ -4391,7 +4873,7 @@ class EventCommandList {
         if (code === 320) {
             this.changeNameEditor.show(command, (editedCommand) => {
                 if (editedCommand) {
-                    page.list[index] = editedCommand;
+                    replaceSingle(editedCommand);
                     this.refreshCommandList(page, pageIndex);
                 }
             });
@@ -4402,7 +4884,7 @@ class EventCommandList {
         if (code === 321) {
             this.changeClassEditor.show(command, (editedCommand) => {
                 if (editedCommand) {
-                    page.list[index] = editedCommand;
+                    replaceSingle(editedCommand);
                     this.refreshCommandList(page, pageIndex);
                 }
             });
@@ -4413,7 +4895,7 @@ class EventCommandList {
         if (code === 322) {
             this.changeActorImagesEditor.show(command, (editedCommand) => {
                 if (editedCommand) {
-                    page.list[index] = editedCommand;
+                    replaceSingle(editedCommand);
                     this.refreshCommandList(page, pageIndex);
                 }
             });
@@ -4424,7 +4906,7 @@ class EventCommandList {
         if (code === 323) {
             this.changeVehicleImageEditor.show(command, (editedCommand) => {
                 if (editedCommand) {
-                    page.list[index] = editedCommand;
+                    replaceSingle(editedCommand);
                     this.refreshCommandList(page, pageIndex);
                 }
             });
@@ -4435,7 +4917,7 @@ class EventCommandList {
         if (code === 324) {
             this.changeNicknameEditor.show(command, (editedCommand) => {
                 if (editedCommand) {
-                    page.list[index] = editedCommand;
+                    replaceSingle(editedCommand);
                     this.refreshCommandList(page, pageIndex);
                 }
             });
@@ -4446,7 +4928,7 @@ class EventCommandList {
         if (code === 325) {
             this.changeProfileEditor.show(command, (editedCommand) => {
                 if (editedCommand) {
-                    page.list[index] = editedCommand;
+                    replaceSingle(editedCommand);
                     this.refreshCommandList(page, pageIndex);
                 }
             });
@@ -4457,7 +4939,7 @@ class EventCommandList {
         if (code === 326) {
             this.changeTPEditor.show(command, (editedCommand) => {
                 if (editedCommand) {
-                    page.list[index] = editedCommand;
+                    replaceSingle(editedCommand);
                     this.refreshCommandList(page, pageIndex);
                 }
             });
@@ -4468,7 +4950,7 @@ class EventCommandList {
         if (code === 331) {
             this.changeEnemyHPEditor.show(command, (editedCommand) => {
                 if (editedCommand) {
-                    page.list[index] = editedCommand;
+                    replaceSingle(editedCommand);
                     this.refreshCommandList(page, pageIndex);
                 }
             });
@@ -4479,7 +4961,7 @@ class EventCommandList {
         if (code === 332) {
             this.changeEnemyMPEditor.show(command, (editedCommand) => {
                 if (editedCommand) {
-                    page.list[index] = editedCommand;
+                    replaceSingle(editedCommand);
                     this.refreshCommandList(page, pageIndex);
                 }
             });
@@ -4490,7 +4972,7 @@ class EventCommandList {
         if (code === 333) {
             this.changeEnemyStateEditor.show(command, (editedCommand) => {
                 if (editedCommand) {
-                    page.list[index] = editedCommand;
+                    replaceSingle(editedCommand);
                     this.refreshCommandList(page, pageIndex);
                 }
             });
@@ -4501,7 +4983,7 @@ class EventCommandList {
         if (code === 334) {
             this.enemyRecoverAllEditor.show(command, (editedCommand) => {
                 if (editedCommand) {
-                    page.list[index] = editedCommand;
+                    replaceSingle(editedCommand);
                     this.refreshCommandList(page, pageIndex);
                 }
             });
@@ -4512,7 +4994,7 @@ class EventCommandList {
         if (code === 335) {
             this.enemyAppearEditor.show(command, (editedCommand) => {
                 if (editedCommand) {
-                    page.list[index] = editedCommand;
+                    replaceSingle(editedCommand);
                     this.refreshCommandList(page, pageIndex);
                 }
             });
@@ -4523,7 +5005,7 @@ class EventCommandList {
         if (code === 336) {
             this.enemyTransformEditor.show(command, (editedCommand) => {
                 if (editedCommand) {
-                    page.list[index] = editedCommand;
+                    replaceSingle(editedCommand);
                     this.refreshCommandList(page, pageIndex);
                 }
             });
@@ -4534,7 +5016,7 @@ class EventCommandList {
         if (code === 337) {
             this.showBattleAnimationEditor.show(command, (editedCommand) => {
                 if (editedCommand) {
-                    page.list[index] = editedCommand;
+                    replaceSingle(editedCommand);
                     this.refreshCommandList(page, pageIndex);
                 }
             });
@@ -4545,7 +5027,7 @@ class EventCommandList {
         if (code === 339) {
             this.forceActionEditor.show(command, (editedCommand) => {
                 if (editedCommand) {
-                    page.list[index] = editedCommand;
+                    replaceSingle(editedCommand);
                     this.refreshCommandList(page, pageIndex);
                 }
             });
@@ -4556,7 +5038,7 @@ class EventCommandList {
         if (code === 342) {
             this.changeEnemyTPEditor.show(command, (editedCommand) => {
                 if (editedCommand) {
-                    page.list[index] = editedCommand;
+                    replaceSingle(editedCommand);
                     this.refreshCommandList(page, pageIndex);
                 }
             });
@@ -4564,7 +5046,8 @@ class EventCommandList {
         }
 
         // For other commands, show placeholder
-        alert(`Edit command dialog for "${this.getCommandInfo(command).name}" will be implemented for each command type.`);
+        const tt = (text) => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
+        alert(`${tt('Edit command dialog for')} "${this.getCommandInfo(command).name}" ${tt('will be implemented for each command type.')}`);
     }
 
     /**
@@ -4576,7 +5059,13 @@ class EventCommandList {
         const expanded = new Set();
 
         this.selectedIndices.forEach(index => {
+            const generatedLoop = EventCommandList.generatedLoopRangeContaining(page.list, index);
+            if (generatedLoop) {
+                for (let i = generatedLoop.start; i <= generatedLoop.end; i++) expanded.add(i);
+                return;
+            }
             const command = page.list[index];
+            if (!command) return;
             const code = command.code;
 
             // For Show Text (101), include all 401 continuation lines
@@ -4612,12 +5101,18 @@ class EventCommandList {
                     }
                 }
             }
-            // For Show Choices (102), include entire branch structure
+            // For Show Choices (102), include entire branch structure. The
+            // End marker must sit at the header's indent — a nested choice
+            // structure inside a branch body ends with its own deeper 404.
             else if (code === 102) {
+                const headerIndent = command.indent || 0;
                 expanded.add(index);
                 for (let i = index + 1; i < page.list.length; i++) {
                     expanded.add(i);
-                    if (page.list[i].code === 404) break; // Stop at End
+                    if (page.list[i].code === 404 &&
+                        (page.list[i].indent || 0) === headerIndent) {
+                        break;
+                    }
                 }
             }
             // For continuation lines, include parent AND all siblings
@@ -4717,6 +5212,19 @@ class EventCommandList {
                     }
                 }
             }
+            else if ([411, 412, 413].includes(code)) {
+                const headerCode = code === 413 ? 112 : 111;
+                const endCode = code === 413 ? 413 : 412;
+                const markerIndent = command.indent || 0;
+                for (let i = index - 1; i >= 0; i--) {
+                    if (page.list[i].code !== headerCode || (page.list[i].indent || 0) !== markerIndent) continue;
+                    for (let j = i; j < page.list.length; j++) {
+                        expanded.add(j);
+                        if (page.list[j].code === endCode && (page.list[j].indent || 0) === markerIndent) break;
+                    }
+                    break;
+                }
+            }
             else if (code === 301) {
                 expanded.add(index);
                 // Only a "branch results" battle carries 601-604 markers;
@@ -4733,19 +5241,43 @@ class EventCommandList {
                     }
                 }
             }
+            else if ([601, 602, 603, 604].includes(code)) {
+                const markerIndent = command.indent || 0;
+                for (let i = index - 1; i >= 0; i--) {
+                    if (page.list[i].code !== 301 || (page.list[i].indent || 0) !== markerIndent) continue;
+                    for (let j = i; j < page.list.length; j++) {
+                        expanded.add(j);
+                        if (page.list[j].code === 604 && (page.list[j].indent || 0) === markerIndent) break;
+                    }
+                    break;
+                }
+            }
             // For branch markers inside choices, don't copy individually
             else if ([402, 403, 404].includes(code)) {
-                // Find the parent 102 command
+                // Find the parent 102: it sits at the marker's own indent.
+                // Walking back, only this structure's other markers can
+                // appear at that indent (bodies sit deeper) — anything else
+                // means the structure is malformed, so leave the row alone
+                // rather than grab an unrelated earlier choice block.
+                const markerIndent = command.indent || 0;
                 for (let i = index - 1; i >= 0; i--) {
-                    if (page.list[i].code === 102) {
+                    const prev = page.list[i];
+                    const prevIndent = prev.indent || 0;
+                    if (prevIndent > markerIndent) continue;
+                    if (prevIndent < markerIndent) break;
+                    if (prev.code === 102) {
                         // Add entire choice structure
                         expanded.add(i);
                         for (let j = i + 1; j < page.list.length; j++) {
                             expanded.add(j);
-                            if (page.list[j].code === 404) break;
+                            if (page.list[j].code === 404 &&
+                                (page.list[j].indent || 0) === markerIndent) {
+                                break;
+                            }
                         }
                         break;
                     }
+                    if (prev.code !== 402 && prev.code !== 403) break;
                 }
             }
             else {
@@ -4757,8 +5289,19 @@ class EventCommandList {
         return Array.from(expanded).sort((a, b) => a - b);
     }
 
-    cutCommands(page, pageIndex) {
-        this.copyCommands(page, pageIndex);
+    async cutCommands(page, pageIndex) {
+        const targetPage = this.currentPage;
+        const selected = [...this.selectedIndices];
+        const listSnapshot = JSON.stringify(page.list);
+        const wrote = await this.copyCommands(page, pageIndex);
+        if (!wrote) {
+            alert(window.I18n?.t('db.clipboardWriteFailed') || 'Could not write data to the clipboard.');
+            return;
+        }
+        if (this.currentPage !== targetPage || targetPage !== page
+            || JSON.stringify(page.list) !== listSnapshot
+            || selected.length !== this.selectedIndices.length
+            || selected.some((index, i) => index !== this.selectedIndices[i])) return;
         this.deleteCommands(page, pageIndex);
     }
 
@@ -4767,17 +5310,27 @@ class EventCommandList {
         const expandedIndices = this.expandSelection(page);
         this.clipboard = expandedIndices.map(i => JSON.parse(JSON.stringify(page.list[i])));
         if (typeof ReactorClipboard !== 'undefined') {
-            ReactorClipboard.write('eventCommands', { commands: this.clipboard });
+            return ReactorClipboard.write('eventCommands', { commands: this.clipboard });
         }
         console.log('Copied', this.clipboard.length, 'commands:', this.clipboard.map(c => `${c.code}(${c.parameters})`).join(', '));
+        return Promise.resolve(true);
     }
 
     async pasteCommands(page, pageIndex) {
-        let commands = this.clipboard;
-        if (!commands && typeof ReactorClipboard !== 'undefined') {
+        const targetPage = this.currentPage;
+        const selected = [...this.selectedIndices];
+        const listSnapshot = JSON.stringify(page.list);
+        let commands = null;
+        if (typeof ReactorClipboard !== 'undefined') {
             const clipboardData = await ReactorClipboard.read('eventCommands');
             commands = clipboardData?.payload?.commands || null;
+        } else {
+            commands = this.clipboard;
         }
+        if (this.currentPage !== targetPage || (targetPage && targetPage !== page)
+            || JSON.stringify(page.list) !== listSnapshot
+            || selected.length !== this.selectedIndices.length
+            || selected.some((index, i) => index !== this.selectedIndices[i])) return;
 
         if (!commands || commands.length === 0) {
             alert(window.I18n ? window.I18n.tText('No event commands in clipboard to paste.') : 'No event commands in clipboard to paste.');
@@ -4785,10 +5338,10 @@ class EventCommandList {
         }
 
         let insertIndex;
-        if (this.selectedIndices.length > 0) {
+        if (selected.length > 0) {
             // Insert BEFORE the selected command (RPG Maker behavior)
             // Find the start of the selected command group
-            const minSelected = Math.min(...this.selectedIndices);
+            const minSelected = Math.min(...selected);
             const selectedCommand = page.list[minSelected];
 
             // If it's a continuation line, find the parent command
@@ -4805,10 +5358,9 @@ class EventCommandList {
             insertIndex = page.list.length - 1;
         }
 
+        insertIndex = EventCommandList.safeInsertionIndex(page.list, insertIndex);
         const pasted = commands.map(cmd => JSON.parse(JSON.stringify(cmd)));
-        const pasteAnchor = page.list[insertIndex];
-        this._rebaseInsertIndent(pasted,
-            pasteAnchor && pasteAnchor.code !== 0 ? (pasteAnchor.indent || 0) : 0);
+        this._rebaseInsertIndent(pasted, EventCommandList.insertionIndent(page.list, insertIndex));
         pasted.forEach((cmd, i) => {
             page.list.splice(insertIndex + i, 0, cmd);
         });
@@ -4850,9 +5402,12 @@ class EventCommandList {
     }
 
     copyAsHTML(page) {
+        const escapeHtml = typeof globalThis.rrEscapeHtml === 'function'
+            ? globalThis.rrEscapeHtml
+            : require('../utils/HtmlEscape.js');
         const html = '<pre>' + page.list.map((cmd, i) => {
             const info = this.getCommandInfo(cmd);
-            return `<span style="color: ${info.color}">${String(i + 1).padStart(3, '0')}: ${info.name}</span> ${info.description}`;
+            return `<span style="color: ${info.color}">${String(i + 1).padStart(3, '0')}: ${escapeHtml(info.name)}</span> ${escapeHtml(info.description)}`;
         }).join('\n') + '</pre>';
 
         navigator.clipboard.writeText(html);

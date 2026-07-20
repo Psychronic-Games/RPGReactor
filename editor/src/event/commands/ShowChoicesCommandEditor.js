@@ -57,7 +57,8 @@ class ShowChoicesCommandEditor {
      * Reset to default values
      */
     resetToDefaults() {
-        this.choices = ['Choice 1', 'Choice 2', '', ''];
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
+        this.choices = [tt('Choice 1'), tt('Choice 2'), '', ''];
         this.cancelType = -1;
         this.defaultType = 0;
         this.positionType = 2;
@@ -110,6 +111,7 @@ class ShowChoicesCommandEditor {
      * Render modal content
      */
     renderContent() {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const container = this.modal.querySelector('.choices-command-container');
         container.innerHTML = '';
 
@@ -126,7 +128,7 @@ class ShowChoicesCommandEditor {
             border-top-right-radius: 6px;
         `;
         header.innerHTML = `
-            <h3 style="margin: 0; color: var(--color-text-strong); font-size: 16px;">Show Choices</h3>
+            <h3 style="margin: 0; color: var(--color-text-strong); font-size: 16px;">${tt('Show Choices')}</h3>
             <button class="close-btn" style="background: none; border: none; color: var(--color-text-strong); font-size: 20px; cursor: pointer; padding: 0; width: 24px; height: 24px;">×</button>
         `;
         container.appendChild(header);
@@ -162,12 +164,12 @@ class ShowChoicesCommandEditor {
         `;
 
         const cancelBtn = document.createElement('button');
-        cancelBtn.textContent = 'Cancel';
+        cancelBtn.textContent = tt('Cancel');
         cancelBtn.className = 'rr-btn-secondary';
         cancelBtn.addEventListener('click', () => this.close());
 
         const okBtn = document.createElement('button');
-        okBtn.textContent = 'OK';
+        okBtn.textContent = tt('OK');
         okBtn.style.cssText = `
             padding: 6px 20px;
             background-color: var(--color-accent);
@@ -189,11 +191,12 @@ class ShowChoicesCommandEditor {
      * Create choices input section
      */
     createChoicesSection() {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const section = document.createElement('div');
         section.style.cssText = 'display: flex; flex-direction: column; gap: 8px;';
 
         const label = document.createElement('div');
-        label.textContent = 'Choices:';
+        label.textContent = tt('Choices:');
         label.style.cssText = 'font-weight: bold; font-size: 13px; color: var(--color-text);';
         section.appendChild(label);
 
@@ -210,7 +213,7 @@ class ShowChoicesCommandEditor {
             input.type = 'text';
             input.className = `choice-input-${i}`;
             input.value = this.choices[i] || '';
-            input.placeholder = i < 2 ? 'Required' : 'Optional';
+            input.placeholder = i < 2 ? tt('Required') : tt('Optional');
             input.style.cssText = `
                 flex: 1;
                 padding: 6px 10px;
@@ -236,6 +239,7 @@ class ShowChoicesCommandEditor {
      * Create settings section
      */
     createSettingsSection() {
+        const t = text => window.I18n ? window.I18n.tText(text) : text;
         const section = document.createElement('div');
         section.style.cssText = `
             display: grid;
@@ -250,7 +254,7 @@ class ShowChoicesCommandEditor {
         cancelGroup.style.cssText = 'display: flex; flex-direction: column; gap: 4px;';
 
         const cancelLabel = document.createElement('label');
-        cancelLabel.textContent = 'When Cancel:';
+        cancelLabel.textContent = t('When Cancel:');
         cancelLabel.style.cssText = 'color: var(--color-text); font-size: 12px;';
 
         const cancelSelect = document.createElement('select');
@@ -263,7 +267,6 @@ class ShowChoicesCommandEditor {
             border-radius: 3px;
             font-size: 12px;
         `;
-        const t = text => window.I18n ? window.I18n.tText(text) : text;
         cancelSelect.innerHTML = `
             <option value="-2">${t('Disallow')}</option>
             <option value="-1">${t('Branch')}</option>
@@ -287,7 +290,7 @@ class ShowChoicesCommandEditor {
         defaultGroup.style.cssText = 'display: flex; flex-direction: column; gap: 4px;';
 
         const defaultLabel = document.createElement('label');
-        defaultLabel.textContent = 'Default:';
+        defaultLabel.textContent = t('Default:');
         defaultLabel.style.cssText = 'color: var(--color-text); font-size: 12px;';
 
         const defaultSelect = document.createElement('select');
@@ -321,7 +324,7 @@ class ShowChoicesCommandEditor {
         posGroup.style.cssText = 'display: flex; flex-direction: column; gap: 4px;';
 
         const posLabel = document.createElement('label');
-        posLabel.textContent = 'Window Position:';
+        posLabel.textContent = t('Window Position:');
         posLabel.style.cssText = 'color: var(--color-text); font-size: 12px;';
 
         const posSelect = document.createElement('select');
@@ -352,7 +355,7 @@ class ShowChoicesCommandEditor {
         bgGroup.style.cssText = 'display: flex; flex-direction: column; gap: 4px;';
 
         const bgLabel = document.createElement('label');
-        bgLabel.textContent = 'Background:';
+        bgLabel.textContent = t('Background:');
         bgLabel.style.cssText = 'color: var(--color-text); font-size: 12px;';
 
         const bgSelect = document.createElement('select');
@@ -390,12 +393,32 @@ class ShowChoicesCommandEditor {
      * Build commands array (includes branching structure)
      */
     buildCommands() {
-        // Filter out empty choices and ensure at least 2
-        const filteredChoices = this.choices.filter(c => c.trim() !== '');
+        // Filter out empty choices and ensure at least 2. Cancel/default
+        // reference choices BY INDEX, so removing a blank choice must remap
+        // them to the surviving positions — otherwise they shift onto the
+        // wrong choice (or off the end of the list).
+        const filteredChoices = [];
+        const indexMap = new Map();
+        this.choices.forEach((choice, i) => {
+            if (choice.trim() !== '') {
+                indexMap.set(i, filteredChoices.length);
+                filteredChoices.push(choice);
+            }
+        });
         if (filteredChoices.length < 2) {
-            alert('You must have at least 2 choices.');
+            const tt = text => window.I18n ? window.I18n.tText(text) : text;
+            alert(tt('You must have at least 2 choices.'));
             return null;
         }
+
+        // Negative values (Disallow/Branch) pass through; an index pointing
+        // at a removed blank choice falls back to Disallow / Choice 1.
+        const cancelType = this.cancelType >= 0
+            ? (indexMap.has(this.cancelType) ? indexMap.get(this.cancelType) : -2)
+            : this.cancelType;
+        const defaultType = this.defaultType >= 0
+            ? (indexMap.has(this.defaultType) ? indexMap.get(this.defaultType) : 0)
+            : this.defaultType;
 
         const commands = [];
 
@@ -405,8 +428,8 @@ class ShowChoicesCommandEditor {
             indent: 0,
             parameters: [
                 filteredChoices,
-                this.cancelType,
-                this.defaultType,
+                cancelType,
+                defaultType,
                 this.positionType,
                 this.background
             ]
@@ -428,7 +451,7 @@ class ShowChoicesCommandEditor {
             // Placeholder for commands under this choice (empty for now)
 
             // If this is the last choice and cancel is set to branch, add cancel branch
-            if (i === filteredChoices.length - 1 && this.cancelType === -1) {
+            if (i === filteredChoices.length - 1 && cancelType === -1) {
                 commands.push({
                     code: 403,
                     indent: 0,

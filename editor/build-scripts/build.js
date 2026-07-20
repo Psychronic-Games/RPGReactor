@@ -7,6 +7,7 @@ const platformArg = args.find(arg => arg.startsWith('--platform='));
 const outputArg = args.find(arg => arg.startsWith('--output='));
 const projectArg = args.find(arg => arg.startsWith('--project='));
 const nameArg = args.find(arg => arg.startsWith('--name='));
+const allowUnverifiedDownloads = args.includes('--developer-unverified-downloads');
 
 // Parse arguments
 // nw-builder v4 takes one platform per build call
@@ -28,7 +29,15 @@ const appName = nameArg ? nameArg.split('=').slice(1).join('=') : null;
 
 if (!projectPath) {
     console.error('ERROR: --project=<path> argument is required.');
-    console.error('Usage: node build.js --project=/path/to/project [--name="Game Name"] [--platform=win|mac|linux] [--output=/path/to/output]');
+    console.error('Usage: node build.js --project=/path/to/project --developer-unverified-downloads ' +
+        '[--name="Game Name"] [--platform=win|mac|linux] [--output=/path/to/output]');
+    process.exit(1);
+}
+
+if (!allowUnverifiedDownloads) {
+    console.error('ERROR: build.js delegates dynamic NW.js acquisition to nw-builder and cannot authenticate that download.');
+    console.error('Public release builds require a trusted SHA-256 release hash manifest. Use Deploy Game, or pass');
+    console.error('--developer-unverified-downloads only for a non-release local developer build.');
     process.exit(1);
 }
 
@@ -106,10 +115,10 @@ function copyDirFiltered(src, dest, relBase) {
 function validateProjectRuntime(root) {
     const required = [
         'reactor_main.js', 'reactor_core.js', 'reactor_managers.js',
-        'reactor_objects.js', 'reactor_scenes.js', 'reactor_sprites.js',
+        'reactor_objects.js', 'reactor_scenes.js', 'reactor_sprites.js', 'reactor_picture_extensions.js',
         'reactor_windows.js', 'reactor_mv_compat.js', 'reactor_plugins.js',
         path.join('libs', 'pixi.js'), path.join('libs', 'pixi_compat.js'),
-        path.join('libs', 'pako.min.js'), path.join('libs', 'localforage.min.js'),
+        path.join('libs', 'pako.min.js'), path.join('libs', 'lz-string.js'), path.join('libs', 'localforage.min.js'),
         path.join('libs', 'effekseer.min.js'), path.join('libs', 'effekseer.wasm'),
         path.join('libs', 'vorbisdecoder.js'),
     ];

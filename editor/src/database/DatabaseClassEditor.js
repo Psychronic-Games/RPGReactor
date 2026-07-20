@@ -3,10 +3,11 @@
  * Features: General settings, parameter curves with graphs, learnable skills, traits with context menu
  */
 class DatabaseClassEditor {
-    constructor(databaseManager, projectManager, commonUI) {
+    constructor(databaseManager, projectManager, commonUI, parentEditor) {
         this.databaseManager = databaseManager;
         this.projectManager = projectManager;
         this.commonUI = commonUI;
+        this.parentEditor = parentEditor;
         this.currentClass = null;
         this.traitsClipboard = null;
         this.traitEditor = new DatabaseTraitEditor(databaseManager, commonUI);
@@ -44,44 +45,45 @@ class DatabaseClassEditor {
     }
 
     createGeneralSection(classEntry) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const section = document.createElement('div');
         section.className = 'database-section';
         section.innerHTML = `
-            <div class="database-section-header">General Settings</div>
+            <div class="database-section-header">${tt('General Settings')}</div>
             <div class="database-section-content">
                 <div class="db-form" style="margin-bottom: 10px;">
                     <div class="db-row-cols">
                         <span class="db-col">
-                            <label>Name</label>
-                            <input type="text" class="database-field-value" value="${classEntry.name || ''}" data-field="name" data-class-id="${classEntry.id}">
+                            <label>${tt('Name')}</label>
+                            <input type="text" class="database-field-value" value="${rrEscapeHtml(classEntry.name)}" data-field="name" data-class-id="${classEntry.id}">
                         </span>
                     </div>
                 </div>
                 <div class="form-row">
-                    <label class="database-field-label">EXP Curve:</label>
+                    <label class="database-field-label">${tt('EXP Curve:')}</label>
                 </div>
                 <div class="form-row exp-curve-trigger" data-class-id="${classEntry.id}"
                      style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; cursor: pointer; padding: 8px; border: 1px solid transparent; border-radius: 4px;"
                      onmouseover="this.style.borderColor='var(--color-accent-bright)'; this.style.background='var(--color-bg-base)';"
                      onmouseout="this.style.borderColor='transparent'; this.style.background='transparent';"
-                     title="Click to edit EXP curve">
+                     title="${tt('Click to edit EXP curve')}">
                     <div>
-                        <label class="database-field-label" style="font-size: 11px;">Basis:</label>
+                        <label class="database-field-label" style="font-size: 11px;">${tt('Basis:')}</label>
                         <div class="database-field-value database-field-value-small exp-basis-display"
                              style="width: 100%; text-align: center; padding: 6px;">${classEntry.expParams ? classEntry.expParams[0] : 30}</div>
                     </div>
                     <div>
-                        <label class="database-field-label" style="font-size: 11px;">Extra:</label>
+                        <label class="database-field-label" style="font-size: 11px;">${tt('Extra:')}</label>
                         <div class="database-field-value database-field-value-small exp-extra-display"
                              style="width: 100%; text-align: center; padding: 6px;">${classEntry.expParams ? classEntry.expParams[1] : 20}</div>
                     </div>
                     <div>
-                        <label class="database-field-label" style="font-size: 11px;">Accel A:</label>
+                        <label class="database-field-label" style="font-size: 11px;">${tt('Accel A:')}</label>
                         <div class="database-field-value database-field-value-small exp-accelA-display"
                              style="width: 100%; text-align: center; padding: 6px;">${classEntry.expParams ? classEntry.expParams[2] : 30}</div>
                     </div>
                     <div>
-                        <label class="database-field-label" style="font-size: 11px;">Accel B:</label>
+                        <label class="database-field-label" style="font-size: 11px;">${tt('Accel B:')}</label>
                         <div class="database-field-value database-field-value-small exp-accelB-display"
                              style="width: 100%; text-align: center; padding: 6px;">${classEntry.expParams ? classEntry.expParams[3] : 30}</div>
                     </div>
@@ -92,35 +94,40 @@ class DatabaseClassEditor {
     }
 
     createNoteSection(classEntry) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const section = document.createElement('div');
         section.className = 'database-section';
         section.innerHTML = `
-            <div class="database-section-header">Note</div>
+            <div class="database-section-header">${tt('Note')}</div>
             <div class="database-section-content">
-                <textarea class="database-field-value" rows="4" style="width: 100%; box-sizing: border-box;" data-field="note" data-class-id="${classEntry.id}">${classEntry.note || ''}</textarea>
+                <textarea class="database-field-value" rows="4" style="width: 100%; box-sizing: border-box;" data-field="note" data-class-id="${classEntry.id}">${rrEscapeHtml(classEntry.note)}</textarea>
             </div>
         `;
         return section;
     }
 
     createParameterCurvesSection(classEntry) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const section = document.createElement('div');
         section.className = 'database-section';
 
-        const paramNames = ['Max HP', 'Max MP', 'Attack', 'Defense', 'M.Attack', 'M.Defense', 'Agility', 'Luck'].map(name => window.I18n ? window.I18n.tText(name) : name);
+        const paramNames = ['Max HP', 'Max MP', 'Attack', 'Defense', 'M.Attack', 'M.Defense', 'Agility', 'Luck'].map(name => tt(name));
         const paramColors = ['#FF3366', '#33CCFF', '#FF9933', '#FFD700', '#9966FF', '#33FF99', '#FF66CC', '#66FFFF'];
         const params = classEntry.params || [];
 
         let paramsHTML = '';
         paramNames.forEach((name, idx) => {
             const values = params[idx] || [];
+            const level1 = globalThis.rrClassParamAtLevel?.(values, 1) ?? 0;
+            const level99 = globalThis.rrClassParamAtLevel?.(values, 99) ?? 0;
+            const level999 = globalThis.rrClassParamAtLevel?.(values, 999) ?? level99;
             const canvasId = `param-curve-${classEntry.id}-${idx}`;
             const color = paramColors[idx];
             paramsHTML += `
-                <div class="param-curve-cell" data-param-idx="${idx}" style="display: flex; flex-direction: column; cursor: pointer; padding: 4px; border-radius: 4px; transition: background 0.15s;" title="Click to edit ${name} curve">
+                <div class="param-curve-cell" data-param-idx="${idx}" style="display: flex; flex-direction: column; cursor: pointer; padding: 4px; border-radius: 4px; transition: background 0.15s;" title="${tt('Click to edit')} ${name} ${tt('curve')}">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
                         <label class="database-field-label" style="font-size: 10px; color: ${color}; font-weight: bold;">${name}</label>
-                        <span style="font-size: 9px; color: var(--color-text-muted);">Lv1: ${values[1] || 0} → Lv99: ${values[99] || 0}</span>
+                         <span style="font-size: 9px; color: var(--color-text-muted);">${tt('Lv')}1: ${level1} → ${tt('Lv')}99: ${level99} → ${tt('Lv')}999: ${level999}</span>
                     </div>
                     <canvas id="${canvasId}" width="200" height="50"
                             style="width: 100%; height: 50px; border: 1px solid var(--color-border); background: #0a0a0a; border-radius: 4px;"
@@ -130,7 +137,7 @@ class DatabaseClassEditor {
         });
 
         section.innerHTML = `
-            <div class="database-section-header">Parameter Curves</div>
+            <div class="database-section-header">${tt('Parameter Curves')}</div>
             <div class="database-section-content" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px;">
                 ${paramsHTML}
             </div>
@@ -169,16 +176,21 @@ class DatabaseClassEditor {
      * editor recomputes all 100 levels. Apply writes back to classEntry.params[paramIdx].
      */
     showParameterCurveModal(classEntry, paramIdx, paramName, color) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         if (!classEntry.params) classEntry.params = [];
-        if (!classEntry.params[paramIdx]) classEntry.params[paramIdx] = new Array(100).fill(1);
+        if (!Array.isArray(classEntry.params[paramIdx]) || classEntry.params[paramIdx].length < 100) {
+            const source = classEntry.params[paramIdx] || [];
+            const seed = source.find(value => Number.isFinite(Number(value))) ?? 1;
+            classEntry.params[paramIdx] = new Array(100).fill(Number(seed));
+        }
         const current = classEntry.params[paramIdx];
 
         // Param-specific sane bounds. HP/MP go high; other stats stay smaller.
         const maxAllowed = (paramIdx === 0) ? 9999 : (paramIdx === 1) ? 9999 : 999;
-        const initialLv1 = current[1] || 1;
-        const initialLv99 = current[99] || 1;
+        const initialLv1 = Number.isFinite(Number(current[1])) ? Number(current[1]) : 1;
+        const initialLv99 = Number.isFinite(Number(current[99])) ? Number(current[99]) : initialLv1;
         // Best-fit exponent from existing curve so the slider starts where the curve already lives.
-        const initialExponent = this._inferCurveExponent(current);
+        const initialExponent = this._inferCurveExponent(current.slice(0, 100));
 
         let lv1 = initialLv1;
         let lv99 = initialLv99;
@@ -186,7 +198,9 @@ class DatabaseClassEditor {
         let workingValues = current.slice();
 
         const recompute = () => {
-            workingValues = this._generateParamCurve(lv1, lv99, exponent, current.length || 100);
+            const generated = this._generateParamCurve(lv1, lv99, exponent, 100);
+            workingValues = current.length > 100 ? current.slice() : generated;
+            generated.forEach((value, index) => { workingValues[index] = value; });
             redraw();
         };
 
@@ -214,37 +228,37 @@ class DatabaseClassEditor {
 
         modal.innerHTML = `
             <div style="padding: 14px 18px; border-bottom: 1px solid var(--color-border-subtle); display: flex; justify-content: space-between; align-items: center; background: var(--color-bg-panel);">
-                <h3 style="margin: 0; color: var(--color-text-strong); font-size: 16px;">Generate Curve &mdash; <span style="color: ${color};">${paramName}</span></h3>
+                <h3 style="margin: 0; color: var(--color-text-strong); font-size: 16px;">${tt('Generate Curve')} &mdash; <span style="color: ${color};">${paramName}</span></h3>
                 <button class="rr-param-curve-close" style="background: none; border: none; color: var(--color-text-muted); font-size: 24px; cursor: pointer; padding: 0; width: 30px; height: 30px; line-height: 1;">&times;</button>
             </div>
 
             <div style="padding: 18px; display: flex; flex-direction: column; gap: 16px;">
                 <div style="display: grid; grid-template-columns: 110px 1fr 80px; gap: 12px; align-items: center;">
-                    <label style="font-size: 12px; color: var(--color-text-muted);">Level 1 value</label>
+                    <label style="font-size: 12px; color: var(--color-text-muted);">${tt('Level 1 value')}</label>
                     <input type="range" class="rr-pc-lv1-slider rr-range" min="1" max="${maxAllowed}" value="${lv1}">
                     <input type="number" class="rr-pc-lv1-input rr-input" min="1" max="${maxAllowed}" value="${lv1}">
                 </div>
 
                 <div style="display: grid; grid-template-columns: 110px 1fr 80px; gap: 12px; align-items: center;">
-                    <label style="font-size: 12px; color: var(--color-text-muted);">Level 99 value</label>
+                    <label style="font-size: 12px; color: var(--color-text-muted);">${tt('Level 99 value')}</label>
                     <input type="range" class="rr-pc-lv99-slider rr-range" min="1" max="${maxAllowed}" value="${lv99}">
                     <input type="number" class="rr-pc-lv99-input rr-input" min="1" max="${maxAllowed}" value="${lv99}">
                 </div>
 
                 <div style="display: grid; grid-template-columns: 110px 1fr 80px; gap: 12px; align-items: center;">
-                    <label style="font-size: 12px; color: var(--color-text-muted);">Curve shape</label>
+                    <label style="font-size: 12px; color: var(--color-text-muted);">${tt('Curve shape')}</label>
                     <input type="range" class="rr-pc-shape-slider rr-range" min="30" max="300" value="${Math.round(exponent * 100)}">
                     <div class="rr-pc-shape-label" style="font-size: 11px; text-align: center; color: var(--color-text); background: var(--color-bg-input-alt); padding: 4px 6px; border: 1px solid var(--color-border-input); border-radius: 3px;"></div>
                 </div>
                 <div style="display: flex; justify-content: space-between; font-size: 10px; color: var(--color-text-dim); margin-top: -10px; padding-left: 122px; padding-right: 92px;">
-                    <span>Fast early</span>
-                    <span>Linear</span>
-                    <span>Slow early</span>
+                    <span>${tt('Fast early')}</span>
+                    <span>${tt('Linear')}</span>
+                    <span>${tt('Slow early')}</span>
                 </div>
 
                 <div style="background: #0a0a0a; border: 1px solid var(--color-border); border-radius: 4px; padding: 8px;">
                     <div style="display: flex; justify-content: space-between; font-size: 10px; color: var(--color-text-muted); margin-bottom: 4px;">
-                        <span>Preview</span>
+                        <span>${tt('Preview')}</span>
                         <span class="rr-pc-readout"></span>
                     </div>
                     <canvas class="rr-pc-preview" width="520" height="180" style="width: 100%; height: 180px; display: block;"></canvas>
@@ -252,8 +266,8 @@ class DatabaseClassEditor {
             </div>
 
             <div style="padding: 12px 18px; border-top: 1px solid var(--color-border-subtle); display: flex; justify-content: flex-end; gap: 8px; background: var(--color-bg-panel);">
-                <button class="rr-pc-cancel rr-btn-chip" style="padding: 6px 16px;">Cancel</button>
-                <button class="rr-pc-apply rr-btn-chip" style="padding: 6px 16px; color: var(--color-accent-bright);">Apply</button>
+                <button class="rr-pc-cancel rr-btn-chip" style="padding: 6px 16px;">${tt('Cancel')}</button>
+                <button class="rr-pc-apply rr-btn-chip" style="padding: 6px 16px; color: var(--color-accent-bright);">${tt('Apply')}</button>
             </div>
         `;
 
@@ -269,9 +283,11 @@ class DatabaseClassEditor {
             // (auto-fit would mirror rising vs falling curves of the same shape).
             const yMax = Math.max(lv1, lv99, 1);
             this.drawParameterCurve(previewCanvas, workingValues, color, { min: 0, max: yMax });
-            const mid = workingValues[49] || 0;
-            readout.textContent = `Lv1: ${workingValues[0]}  Lv50: ${mid}  Lv99: ${workingValues[98]}`;
-            shapeLabel.textContent = exponent === 1 ? 'Linear' : exponent.toFixed(2);
+            const mid = workingValues[50] || 0;
+            const level = tt('Lv');
+            const level999 = globalThis.rrClassParamAtLevel?.(workingValues, 999) ?? workingValues[99];
+            readout.textContent = `${level}1: ${workingValues[1]}  ${level}50: ${mid}  ${level}99: ${workingValues[99]}  ${level}999: ${level999}`;
+            shapeLabel.textContent = exponent === 1 ? tt('Linear') : exponent.toFixed(2);
         };
 
         // Wire up inputs
@@ -297,7 +313,7 @@ class DatabaseClassEditor {
         modal.querySelector('.rr-pc-apply').addEventListener('click', () => {
             classEntry.params[paramIdx] = workingValues.slice();
             this.databaseManager.updateClass(classEntry.id, classEntry);
-            this.commonUI.updateStatus(`${paramName} curve updated`);
+            this.commonUI.updateStatus(`${paramName} ${tt('curve updated')}`);
             close();
             // Redraw the mini curve in the section
             const mini = document.getElementById(`param-curve-${classEntry.id}-${paramIdx}`);
@@ -305,7 +321,10 @@ class DatabaseClassEditor {
             // Refresh the Lv1/Lv99 readout span next to the param name
             const cell = mini ? mini.closest('.param-curve-cell') : null;
             const readoutSpan = cell ? cell.querySelector('span') : null;
-            if (readoutSpan) readoutSpan.textContent = `Lv1: ${workingValues[0]} → Lv99: ${workingValues[98]}`;
+            if (readoutSpan) {
+                const level999 = globalThis.rrClassParamAtLevel?.(workingValues, 999) ?? workingValues[99];
+                readoutSpan.textContent = `${tt('Lv')}1: ${workingValues[1]} → ${tt('Lv')}99: ${workingValues[99]} → ${tt('Lv')}999: ${level999}`;
+            }
         });
         overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
 
@@ -339,9 +358,9 @@ class DatabaseClassEditor {
     _inferCurveExponent(values) {
         if (!values || values.length < 3) return 1;
         const lv1 = values[1];
-        const lv99 = values[values.length - 1];
+        const lv99 = values[Math.min(99, values.length - 1)];
         if (lv99 === lv1) return 1;
-        const mid = values[Math.floor(values.length / 2)];
+        const mid = values[Math.min(50, values.length - 1)];
         // mid = lv1 + (lv99 - lv1) * 0.5^exponent  =>  0.5^exponent = (mid-lv1)/(lv99-lv1)
         const ratio = (mid - lv1) / (lv99 - lv1);
         if (ratio <= 0 || ratio >= 1) return 1;
@@ -364,10 +383,12 @@ class DatabaseClassEditor {
         ctx.clearRect(0, 0, width, height);
 
         if (!values || values.length === 0) return;
+        const plotValues = values.slice(1).map(value => Number(value)).filter(Number.isFinite);
+        if (plotValues.length === 0) return;
 
         // Find min/max for scaling
-        const min = bounds ? bounds.min : Math.min(...values);
-        const max = bounds ? bounds.max : Math.max(...values);
+        const min = bounds ? bounds.min : Math.min(...plotValues);
+        const max = bounds ? bounds.max : Math.max(...plotValues);
         const range = max - min || 1;
 
         // Draw gradient fill under curve
@@ -379,8 +400,8 @@ class DatabaseClassEditor {
         ctx.beginPath();
         ctx.moveTo(0, height);
 
-        values.forEach((value, index) => {
-            const x = (index / (values.length - 1)) * width;
+        plotValues.forEach((value, index) => {
+            const x = (index / Math.max(1, plotValues.length - 1)) * width;
             const y = height - ((value - min) / range) * (height - 6) - 3;
             ctx.lineTo(x, y);
         });
@@ -396,8 +417,8 @@ class DatabaseClassEditor {
         ctx.shadowBlur = 8;
         ctx.beginPath();
 
-        values.forEach((value, index) => {
-            const x = (index / (values.length - 1)) * width;
+        plotValues.forEach((value, index) => {
+            const x = (index / Math.max(1, plotValues.length - 1)) * width;
             const y = height - ((value - min) / range) * (height - 6) - 3;
 
             if (index === 0) {
@@ -414,6 +435,7 @@ class DatabaseClassEditor {
     }
 
     createLearnableSkillsSection(classEntry) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const section = document.createElement('div');
         section.className = 'database-section';
 
@@ -421,26 +443,26 @@ class DatabaseClassEditor {
         const learningsHTML = classEntry.learnings && classEntry.learnings.length > 0 ?
             classEntry.learnings.map(learning => {
                 const skill = skills.find(s => s && s.id === learning.skillId);
-                const skillName = skill ? skill.name : `Skill #${learning.skillId}`;
+                const skillName = skill ? skill.name : `${tt('Skill')} #${learning.skillId}`;
                 return `
                     <tr>
                         <td style="width: 60px; text-align: center;">${learning.level}</td>
-                        <td>${skillName}</td>
-                        <td style="color: var(--color-text-muted); font-size: 11px;">${learning.note || ''}</td>
+                        <td>${rrEscapeHtml(skillName)}</td>
+                        <td style="color: var(--color-text-muted); font-size: 11px;">${rrEscapeHtml(learning.note || '')}</td>
                     </tr>
                 `;
             }).join('') :
-            '<tr><td colspan="3" style="text-align: center; color: var(--color-text-muted);">No skills learned</td></tr>';
+            `<tr><td colspan="3" style="text-align: center; color: var(--color-text-muted);">${tt('No skills learned')}</td></tr>`;
 
         section.innerHTML = `
-            <div class="database-section-header">Learnable Skills</div>
+            <div class="database-section-header">${tt('Learnable Skills')}</div>
             <div class="database-section-content">
                 <table class="traits-table">
                     <thead>
                         <tr>
-                            <th>Level</th>
-                            <th>Skill</th>
-                            <th>Note</th>
+                            <th>${tt('Level')}</th>
+                            <th>${tt('Skill')}</th>
+                            <th>${tt('Note')}</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -453,6 +475,7 @@ class DatabaseClassEditor {
     }
 
     createTraitsSection(classEntry) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const section = document.createElement('div');
         section.className = 'database-section';
         section.setAttribute('data-class-id', classEntry.id);
@@ -464,21 +487,21 @@ class DatabaseClassEditor {
                 <tr class="trait-row" data-trait-index="${index}" data-class-id="${classEntry.id}"
                     style="cursor: pointer; transition: all 0.15s ease;">
                     <td class="trait-indicator" style="width: 3px; padding: 0; border: none; background: transparent;"></td>
-                    <td>${this.commonUI.getTraitName(trait.code)}</td>
-                    <td>${this.commonUI.getTraitValue(trait)}</td>
+                    <td>${rrEscapeHtml(this.commonUI.getTraitName(trait.code))}</td>
+                    <td>${rrEscapeHtml(this.commonUI.getTraitValue(trait))}</td>
                 </tr>
             `).join('') :
-            '<tr><td colspan="3" style="text-align: center; color: var(--color-text-muted);">No traits</td></tr>';
+            `<tr><td colspan="3" style="text-align: center; color: var(--color-text-muted);">${tt('No traits')}</td></tr>`;
 
         section.innerHTML = `
-            <div class="database-section-header">Traits</div>
+            <div class="database-section-header">${tt('Traits')}</div>
             <div class="database-section-content">
                 <table class="traits-table" id="traits-table-${classEntry.id}">
                     <thead>
                         <tr>
                             <th style="width: 3px; padding: 0; border: none; background: transparent;"></th>
-                            <th>Type</th>
-                            <th>Content</th>
+                            <th>${tt('Type')}</th>
+                            <th>${tt('Content')}</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -486,11 +509,11 @@ class DatabaseClassEditor {
                     </tbody>
                 </table>
                 <div class="trait-action-buttons" style="display: flex; gap: 6px; margin-top: 8px;">
-                    <button class="trait-btn-add" style="padding: 4px 12px; background: var(--color-border-subtle); border: 1px solid var(--color-border-input); color: var(--color-text-strong); border-radius: 4px; cursor: pointer; font-size: 12px;">Add</button>
-                    <button class="trait-btn-edit" style="padding: 4px 12px; background: var(--color-border-subtle); border: 1px solid var(--color-border-input); color: var(--color-text-dim); border-radius: 4px; cursor: default; font-size: 12px;" disabled>Edit</button>
-                    <button class="trait-btn-copy" style="padding: 4px 12px; background: var(--color-border-subtle); border: 1px solid var(--color-border-input); color: var(--color-text-dim); border-radius: 4px; cursor: default; font-size: 12px;" disabled>Copy</button>
-                    <button class="trait-btn-paste" style="padding: 4px 12px; background: var(--color-border-subtle); border: 1px solid var(--color-border-input); color: var(--color-text-dim); border-radius: 4px; cursor: default; font-size: 12px;" disabled>Paste</button>
-                    <button class="trait-btn-delete" style="padding: 4px 12px; background: var(--color-border-subtle); border: 1px solid var(--color-border-input); color: var(--color-text-dim); border-radius: 4px; cursor: default; font-size: 12px;" disabled>Delete</button>
+                    <button class="trait-btn-add" style="padding: 4px 12px; background: var(--color-border-subtle); border: 1px solid var(--color-border-input); color: var(--color-text-strong); border-radius: 4px; cursor: pointer; font-size: 12px;">${tt('Add')}</button>
+                    <button class="trait-btn-edit" style="padding: 4px 12px; background: var(--color-border-subtle); border: 1px solid var(--color-border-input); color: var(--color-text-dim); border-radius: 4px; cursor: default; font-size: 12px;" disabled>${tt('Edit')}</button>
+                    <button class="trait-btn-copy" style="padding: 4px 12px; background: var(--color-border-subtle); border: 1px solid var(--color-border-input); color: var(--color-text-dim); border-radius: 4px; cursor: default; font-size: 12px;" disabled>${tt('Copy')}</button>
+                    <button class="trait-btn-paste" style="padding: 4px 12px; background: var(--color-border-subtle); border: 1px solid var(--color-border-input); color: var(--color-text-strong); border-radius: 4px; cursor: pointer; font-size: 12px;">${tt('Paste')}</button>
+                    <button class="trait-btn-delete" style="padding: 4px 12px; background: var(--color-border-subtle); border: 1px solid var(--color-border-input); color: var(--color-text-dim); border-radius: 4px; cursor: default; font-size: 12px;" disabled>${tt('Delete')}</button>
                 </div>
             </div>
         `;
@@ -637,7 +660,6 @@ class DatabaseClassEditor {
         if (!section) return;
         const table = section.querySelector('.traits-table');
         const hasSelection = table && table.querySelector('.trait-row.trait-selected');
-        const hasClipboard = !!this.traitsClipboard;
 
         const setBtn = (btn, enabled) => {
             if (!btn) return;
@@ -648,7 +670,7 @@ class DatabaseClassEditor {
 
         setBtn(section.querySelector('.trait-btn-edit'), hasSelection);
         setBtn(section.querySelector('.trait-btn-copy'), hasSelection);
-        setBtn(section.querySelector('.trait-btn-paste'), hasClipboard);
+        setBtn(section.querySelector('.trait-btn-paste'), true);
         setBtn(section.querySelector('.trait-btn-delete'), hasSelection);
     }
 
@@ -681,7 +703,7 @@ class DatabaseClassEditor {
                 e.preventDefault();
                 e.stopPropagation();
                 this.cutTrait(entry, idx);
-            } else if (e.key === 'v' && this.traitsClipboard) {
+            } else if (e.key === 'v') {
                 e.preventDefault();
                 e.stopPropagation();
                 this.pasteTrait(entry, idx);
@@ -690,6 +712,7 @@ class DatabaseClassEditor {
     }
 
     setupTraitsContextMenu(table, classEntry) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const tbody = table.querySelector('tbody');
         if (!tbody) return;
 
@@ -724,7 +747,7 @@ class DatabaseClassEditor {
                 { label: 'Edit', action: () => this.editTrait(classEntry, traitIndex), disabled: traitIndex === null },
                 { label: 'Cut', action: () => this.cutTrait(classEntry, traitIndex), disabled: traitIndex === null },
                 { label: 'Copy', action: () => this.copyTrait(classEntry, traitIndex), disabled: traitIndex === null },
-                { label: 'Paste', action: () => this.pasteTrait(classEntry, traitIndex), disabled: !this.traitsClipboard },
+                { label: 'Paste', action: () => this.pasteTrait(classEntry, traitIndex), disabled: false },
                 { label: 'Delete', action: () => this.deleteTrait(classEntry, traitIndex), disabled: traitIndex === null },
                 { divider: true },
                 { label: 'Select All', action: () => this.selectAllTraits(classEntry) }
@@ -737,7 +760,7 @@ class DatabaseClassEditor {
                     menu.appendChild(divider);
                 } else {
                     const menuItem = document.createElement('div');
-                    menuItem.textContent = item.label;
+                    menuItem.textContent = tt(item.label);
                     menuItem.style.cssText = `
                         padding: 6px 12px;
                         cursor: ${item.disabled ? 'not-allowed' : 'pointer'};
@@ -789,8 +812,13 @@ class DatabaseClassEditor {
         });
     }
 
-    cutTrait(classEntry, traitIndex) {
-        this.copyTrait(classEntry, traitIndex);
+    async cutTrait(classEntry, traitIndex) {
+        if (traitIndex === null || !classEntry.traits?.[traitIndex]) return;
+        const target = DatabaseRowClipboard.capturePasteTarget(this.parentEditor, this.projectManager, this.databaseManager, classEntry.traits, traitIndex);
+        const payload = this.copyTrait(classEntry, traitIndex);
+        if (!await DatabaseRowClipboard.confirmCut(payload)) return;
+        if (this.currentClass !== classEntry
+            || !DatabaseRowClipboard.isPasteTargetCurrent(target, this.parentEditor, this.projectManager, this.databaseManager, classEntry.traits)) return;
         this.deleteTrait(classEntry, traitIndex);
     }
 
@@ -799,14 +827,21 @@ class DatabaseClassEditor {
         const trait = classEntry.traits[traitIndex];
         if (!trait) return;
 
-        this.traitsClipboard = JSON.parse(JSON.stringify(trait));
-        console.log('Trait copied:', this.traitsClipboard);
+        this.traitsClipboard = DatabaseRowClipboard.write('trait', trait, this.databaseManager);
+        return this.traitsClipboard;
     }
 
-    pasteTrait(classEntry, traitIndex) {
-        if (!this.traitsClipboard) return;
+    async pasteTrait(classEntry, traitIndex) {
+        const target = DatabaseRowClipboard.capturePasteTarget(this.parentEditor, this.projectManager, this.databaseManager, classEntry.traits, traitIndex);
+        const result = await DatabaseRowClipboard.read('trait', this.databaseManager, this.traitsClipboard);
+        if (this.currentClass !== classEntry
+            || !DatabaseRowClipboard.isPasteTargetCurrent(target, this.parentEditor, this.projectManager, this.databaseManager, classEntry.traits)) return;
+        if (result.error) {
+            DatabaseRowClipboard.showError(result);
+            return;
+        }
 
-        const newTrait = JSON.parse(JSON.stringify(this.traitsClipboard));
+        const newTrait = result.row;
 
         if (traitIndex !== null) {
             // Insert after selected trait
@@ -872,10 +907,12 @@ class DatabaseClassEditor {
         this.databaseManager.updateClass(classId, classEntry);
         console.log(`Updated class ${classId} field ${fieldName} to:`, value);
 
-        this.commonUI.updateStatus(`${fieldName} updated`);
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
+        this.commonUI.updateStatus(`${fieldName} ${tt('updated')}`);
     }
 
     showExpCurveModal(classEntry) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         // Initialize expParams if not present
         if (!classEntry.expParams) {
             classEntry.expParams = [30, 20, 30, 30]; // [basis, extra, accelA, accelB]
@@ -925,7 +962,7 @@ class DatabaseClassEditor {
             background: var(--color-bg-panel);
         `;
         header.innerHTML = `
-            <h3 style="margin: 0; color: var(--color-text-strong);">EXP Curve</h3>
+            <h3 style="margin: 0; color: var(--color-text-strong);">${tt('EXP Curve')}</h3>
             <button class="close-btn" style="background: none; border: none; color: var(--color-text-muted); font-size: 24px; cursor: pointer; padding: 0; width: 30px; height: 30px;">&times;</button>
         `;
 
@@ -946,7 +983,7 @@ class DatabaseClassEditor {
             const tabBtn = document.createElement('button');
             tabBtn.className = 'exp-tab';
             tabBtn.dataset.tab = tab.id;
-            tabBtn.textContent = tab.label;
+            tabBtn.textContent = tt(tab.label);
             tabBtn.style.cssText = `
                 flex: 1;
                 padding: 12px;
@@ -960,7 +997,7 @@ class DatabaseClassEditor {
             `;
             tabBtn.addEventListener('click', () => {
                 activeTab = tab.id;
-                updateTabDisplay();
+                scheduleTabDisplay();
             });
             tabBar.appendChild(tabBtn);
         });
@@ -999,10 +1036,10 @@ class DatabaseClassEditor {
             return controlDiv;
         };
 
-        controls.appendChild(createSliderControl('Base Value', params[0], 0, 5, 100));
-        controls.appendChild(createSliderControl('Extra Value', params[1], 1, 0, 100));
-        controls.appendChild(createSliderControl('Acceleration A', params[2], 2, 0, 100));
-        controls.appendChild(createSliderControl('Acceleration B', params[3], 3, 0, 100));
+        controls.appendChild(createSliderControl(tt('Base Value'), params[0], 0, 5, 100));
+        controls.appendChild(createSliderControl(tt('Extra Value'), params[1], 1, 0, 100));
+        controls.appendChild(createSliderControl(tt('Acceleration A'), params[2], 2, 0, 100));
+        controls.appendChild(createSliderControl(tt('Acceleration B'), params[3], 3, 0, 100));
 
         // Footer with buttons
         const footer = document.createElement('div');
@@ -1014,28 +1051,12 @@ class DatabaseClassEditor {
             gap: 8px;
         `;
         footer.innerHTML = `
-            <button class="cancel-btn rr-btn-secondary">Cancel</button>
-            <button class="ok-btn" style="padding: 8px 16px; background: var(--color-accent-bright); border: none; color: var(--color-bg-deep); border-radius: 4px; cursor: pointer; font-weight: bold;">OK</button>
+            <button class="cancel-btn rr-btn-secondary">${tt('Cancel')}</button>
+            <button class="ok-btn" style="padding: 8px 16px; background: var(--color-accent-bright); border: none; color: var(--color-bg-deep); border-radius: 4px; cursor: pointer; font-weight: bold;">${tt('OK')}</button>
         `;
 
-        // Calculate EXP for a given level (RPG Maker MZ formula)
-        const calculateExpForNextLevel = (level, basis, extra, accelA, accelB) => {
-            // Ensure valid inputs
-            if (!level || level < 1) return 0;
-            basis = Math.max(1, basis || 30);
-            extra = Math.max(0, extra || 20);
-            accelA = Math.max(0, accelA || 30);
-            accelB = Math.max(0, accelB || 30);
-
-            // RPG Maker MZ EXP formula
-            const acc1 = 0.9 + accelA / 250;
-            const levelCurrent = Math.pow(level, acc1);
-            const levelNext = Math.pow(level + 1, acc1);
-            const baseExp = basis * (levelNext - levelCurrent);
-            const extraExp = extra * level * (accelB / 100);
-
-            const result = Math.round(baseExp + extraExp);
-            return Math.max(0, result); // Ensure non-negative
+        const calculateTotalExp = (level, basis, extra, accelA, accelB) => {
+            return globalThis.rrExpForLevel([basis, extra, accelA, accelB], level);
         };
 
         // Update table and graph display
@@ -1049,24 +1070,24 @@ class DatabaseClassEditor {
             });
 
             // Generate data for all levels
-            const maxLevel = 100;
+            const maxLevel = globalThis.RR_LIMITS?.ACTOR_LEVEL || 999;
             const nextLevelData = [];
             const totalData = [];
-            let cumulativeExp = 0;
 
             console.log('EXP Curve Parameters:', params);
 
-            for (let level = 1; level < maxLevel; level++) {
-                const expForNext = calculateExpForNextLevel(level, params[0], params[1], params[2], params[3]);
+            for (let level = 1; level <= maxLevel; level++) {
+                const totalExp = calculateTotalExp(level, params[0], params[1], params[2], params[3]);
+                const nextTotal = calculateTotalExp(level + 1, params[0], params[1], params[2], params[3]);
+                const expForNext = Math.max(0, nextTotal - totalExp);
                 nextLevelData.push({ level, exp: expForNext });
-                cumulativeExp += expForNext;
-                totalData.push({ level, exp: cumulativeExp });
+                totalData.push({ level, exp: totalExp });
             }
 
             const data = activeTab === 'nextLevel' ? nextLevelData : totalData;
             const maxExp = Math.max(...data.map(d => d.exp));
 
-            console.log('Tab:', activeTab, 'MaxExp:', maxExp, 'L1:', data[0]?.exp, 'L50:', data[49]?.exp, 'L99:', data[98]?.exp);
+            console.log('Tab:', activeTab, 'MaxExp:', maxExp, 'L1:', data[0]?.exp, 'L99:', data[98]?.exp, 'L999:', data[998]?.exp);
 
             // Create table with graph background
             tabContent.innerHTML = `
@@ -1081,7 +1102,7 @@ class DatabaseClassEditor {
                                         let rowHtml = '<tr>';
                                         for (let i = 0; i < 5 && idx + i < data.length; i++) {
                                             const item = data[idx + i];
-                                            rowHtml += `<td style="padding: 2px 6px; color: var(--color-text-muted); border: 1px solid var(--color-bg-list-item-alt);">L${item.level}:</td>`;
+                                             rowHtml += `<td style="padding: 2px 6px; color: var(--color-text-muted); border: 1px solid var(--color-bg-list-item-alt);">${tt('Lv')}${item.level}:</td>`;
                                             rowHtml += `<td style="padding: 2px 6px; color: ${item.exp > 40000 ? '#50fa7b' : item.exp > 20000 ? '#8be9fd' : '#f1fa8c'}; text-align: right; border: 1px solid var(--color-bg-list-item-alt);">${item.exp}</td>`;
                                         }
                                         rowHtml += '</tr>';
@@ -1193,6 +1214,15 @@ class DatabaseClassEditor {
             }, 50);
         };
 
+        let updateFrame = null;
+        const scheduleTabDisplay = () => {
+            if (updateFrame !== null) return;
+            updateFrame = requestAnimationFrame(() => {
+                updateFrame = null;
+                updateTabDisplay();
+            });
+        };
+
         // Sync slider and number input
         const syncInputs = () => {
             modal.querySelectorAll('.exp-slider').forEach(slider => {
@@ -1201,7 +1231,7 @@ class DatabaseClassEditor {
                     const value = parseInt(e.target.value);
                     params[index] = value;
                     modal.querySelector(`.exp-number[data-param-index="${index}"]`).value = value;
-                    updateTabDisplay();
+                    scheduleTabDisplay();
                 });
             });
 
@@ -1214,7 +1244,7 @@ class DatabaseClassEditor {
                     value = Math.max(min, Math.min(max, value));
                     params[index] = value;
                     modal.querySelector(`.exp-slider[data-param-index="${index}"]`).value = value;
-                    updateTabDisplay();
+                    scheduleTabDisplay();
                 });
             });
         };

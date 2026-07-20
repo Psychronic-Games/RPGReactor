@@ -1789,7 +1789,7 @@ Window_StatusBase.prototype.drawActorLevel = function(actor, x, y) {
     this.changeTextColor(ColorManager.systemColor());
     this.drawText(TextManager.levelA, x, y, 48);
     this.resetTextColor();
-    this.drawText(actor.level, x + 84, y, 36, "right");
+    this.drawText(actor.level, x + 72, y, 48, "right");
 };
 
 Window_StatusBase.prototype.drawActorIcons = function(actor, x, y, width) {

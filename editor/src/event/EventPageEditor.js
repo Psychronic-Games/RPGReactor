@@ -59,6 +59,7 @@ class EventPageEditor {
      * Create Conditions section
      */
     createConditionsSection(page, pageIndex) {
+        const tt = (text) => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
         const section = document.createElement('div');
         section.className = 'event-section conditions-section';
         section.style.backgroundColor = 'var(--color-bg-input)';
@@ -73,12 +74,12 @@ class EventPageEditor {
         // Convert switches and variables arrays to objects with id and name
         const switches = (systemData.switches || []).map((name, index) => {
             if (index === 0) return null; // Skip index 0
-            return { id: index, name: name || `Switch ${String(index).padStart(4, '0')}` };
+            return { id: index, name: name || `${tt('Switch')} ${String(index).padStart(4, '0')}` };
         }).filter(item => item !== null);
 
         const variables = (systemData.variables || []).map((name, index) => {
             if (index === 0) return null; // Skip index 0
-            return { id: index, name: name || `Variable ${String(index).padStart(4, '0')}` };
+            return { id: index, name: name || `${tt('Variable')} ${String(index).padStart(4, '0')}` };
         }).filter(item => item !== null);
 
         const items = this.databaseManager.getItems() || [];
@@ -100,7 +101,7 @@ class EventPageEditor {
                         data-page-index="${pageIndex}"
                         style="flex: 1; min-width: 0; padding: 5px 8px; font-size: 11px; background: var(--color-bg-surface); color: var(--color-text); border: 1px solid var(--color-border-input); text-align: left; cursor: pointer; border-radius: 3px; min-height: 24px;"
                         ${!conditions.switch1Valid ? 'disabled' : ''}>
-                    #${String(conditions.switch1Id || 1).padStart(4, '0')}: ${switches.find(s => s.id === (conditions.switch1Id || 1))?.name || 'Switch 0001'}
+                    #${String(conditions.switch1Id || 1).padStart(4, '0')}: ${rrEscapeHtml(switches.find(s => s.id === (conditions.switch1Id || 1))?.name || `${tt('Switch')} 0001`)}
                 </button>
             </div>
 
@@ -117,7 +118,7 @@ class EventPageEditor {
                         data-page-index="${pageIndex}"
                         style="flex: 1; min-width: 0; padding: 5px 8px; font-size: 11px; background: var(--color-bg-surface); color: var(--color-text); border: 1px solid var(--color-border-input); text-align: left; cursor: pointer; border-radius: 3px; min-height: 24px;"
                         ${!conditions.switch2Valid ? 'disabled' : ''}>
-                    #${String(conditions.switch2Id || 1).padStart(4, '0')}: ${switches.find(s => s.id === (conditions.switch2Id || 1))?.name || 'Switch 0001'}
+                    #${String(conditions.switch2Id || 1).padStart(4, '0')}: ${rrEscapeHtml(switches.find(s => s.id === (conditions.switch2Id || 1))?.name || `${tt('Switch')} 0001`)}
                 </button>
             </div>
 
@@ -134,7 +135,7 @@ class EventPageEditor {
                         data-page-index="${pageIndex}"
                         style="flex: 1; min-width: 0; padding: 5px 8px; font-size: 11px; background: var(--color-bg-surface); color: var(--color-text); border: 1px solid var(--color-border-input); text-align: left; cursor: pointer; border-radius: 3px; min-height: 24px;"
                         ${!conditions.variableValid ? 'disabled' : ''}>
-                    #${String(conditions.variableId || 1).padStart(4, '0')}: ${variables.find(v => v.id === (conditions.variableId || 1))?.name || 'Variable 0001'}
+                    #${String(conditions.variableId || 1).padStart(4, '0')}: ${rrEscapeHtml(variables.find(v => v.id === (conditions.variableId || 1))?.name || `${tt('Variable')} 0001`)}
                 </button>
                 <input type="number"
                        class="condition-input"
@@ -210,6 +211,7 @@ class EventPageEditor {
      * Create Image section
      */
     createImageSection(page, pageIndex) {
+        const tt = (text) => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
         const section = document.createElement('div');
         section.className = 'event-section image-section';
         section.style.backgroundColor = 'var(--color-bg-input)';
@@ -242,7 +244,7 @@ class EventPageEditor {
                            class="image-input image-name-display"
                            data-field="characterName"
                            data-page-index="${pageIndex}"
-                           value="${image.characterName || ''}"
+                           value="${rrEscapeHtml(image.characterName || '')}"
                            placeholder="${this._t('event.none')}"
                            readonly
                            style="flex: 1; min-width: 0; padding: 3px 6px; background: var(--color-bg-surface); color: var(--color-text); border: 1px solid var(--color-border-input); font-size: 11px;">
@@ -250,7 +252,7 @@ class EventPageEditor {
 
                 <!-- Info Display -->
                 <div style="display: flex; flex-direction: column; gap: 1px; font-size: 10px; color: var(--color-text-muted);">
-                    <span>${this._t('event.index')} <strong style="color: var(--color-text);">${image.characterIndex || 0}</strong> | ${this._t('event.dir')} <strong style="color: var(--color-text);">${directionName}</strong></span>
+                    <span>${this._t('event.index')} <strong style="color: var(--color-text);">${image.characterIndex || 0}</strong> | ${this._t('event.dir')} <strong style="color: var(--color-text);">${tt(directionName)}</strong></span>
                     <span>${this._t('event.pattern')} <strong style="color: var(--color-text);">${image.pattern || 0}</strong>${image.tileId > 0 ? ` | ${this._t('event.tile')} <strong style="color: var(--color-text);">${image.tileId}</strong>` : ''}</span>
                 </div>
             </div>
@@ -269,11 +271,19 @@ class EventPageEditor {
      * Render character preview canvas
      */
     renderCharacterPreview(section, page) {
+        const tt = (text) => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
         const image = page.image;
         const canvas = section.querySelector('.character-preview-canvas');
         if (!canvas) return;
 
-        // Clear any existing animation interval
+        // Clear any existing animation interval. The instance-level handle
+        // covers re-renders that build a NEW canvas — the discarded canvas's
+        // interval would otherwise run (and pin the canvas + sheet image)
+        // forever.
+        if (this._previewAnimInterval) {
+            clearInterval(this._previewAnimInterval);
+            this._previewAnimInterval = null;
+        }
         if (canvas.animationInterval) {
             clearInterval(canvas.animationInterval);
             canvas.animationInterval = null;
@@ -299,7 +309,7 @@ class EventPageEditor {
             ctx.fillStyle = '#999';
             ctx.font = '12px Arial';
             ctx.textAlign = 'center';
-            ctx.fillText('No Character', canvas.width / 2, canvas.height / 2);
+            ctx.fillText(tt('No Character'), canvas.width / 2, canvas.height / 2);
             return;
         }
 
@@ -310,14 +320,14 @@ class EventPageEditor {
         const path = require('path');
         // Add .png extension if not already present (RPG Maker stores names without extension)
         const filename = image.characterName.endsWith('.png') ? image.characterName : image.characterName + '.png';
-        const imgPath = 'file://' + path.join(currentProject.path, 'img', 'characters', filename).replace(/\\/g, '/');
+        const imgPath = RRAssetFiles.toUrl(path.join(currentProject.path, 'img', 'characters', filename));
 
         console.log('Loading character preview:', imgPath);
 
         img.onload = () => {
             const shouldAnimate = page.stepAnime; // Check stepping animation option
             // Check if this is a big character ($ or !$ prefix)
-            const isBigCharacter = image.characterName.includes('$');
+            const isBigCharacter = RRAssetFiles.isBigCharacter(image.characterName);
 
             let characterWidth, characterHeight, baseX, baseY;
 
@@ -372,12 +382,23 @@ class EventPageEditor {
                 let frameIndex = 0;
 
                 const animate = () => {
+                    // Self-stop once the canvas leaves the DOM, whatever
+                    // rebuilt or closed the surrounding editor.
+                    if (!canvas.isConnected) {
+                        if (this._previewAnimInterval === canvas.animationInterval) {
+                            this._previewAnimInterval = null;
+                        }
+                        clearInterval(canvas.animationInterval);
+                        canvas.animationInterval = null;
+                        return;
+                    }
                     drawFrame(frames[frameIndex]);
                     frameIndex = (frameIndex + 1) % frames.length;
                 };
 
                 // Start animation at ~8 FPS
                 canvas.animationInterval = setInterval(animate, 125);
+                this._previewAnimInterval = canvas.animationInterval;
                 animate(); // Draw first frame immediately
             } else {
                 // Static - just draw the selected pattern
@@ -391,7 +412,7 @@ class EventPageEditor {
             ctx.fillStyle = '#f88';
             ctx.font = '10px Arial';
             ctx.textAlign = 'center';
-            ctx.fillText('Error Loading', canvas.width / 2, canvas.height / 2);
+            ctx.fillText(tt('Error Loading'), canvas.width / 2, canvas.height / 2);
         };
 
         img.src = imgPath;
@@ -401,6 +422,7 @@ class EventPageEditor {
      * Render tileset preview for events with tileId
      */
     renderTilesetPreview(canvas, ctx, tileId) {
+        const tt = (text) => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
         const currentProject = this.projectController.getCurrentProject ? this.projectController.getCurrentProject() : this.projectController.currentProject;
         if (!currentProject) return;
 
@@ -511,7 +533,7 @@ class EventPageEditor {
             ctx.fillStyle = '#999';
             ctx.font = '12px Arial';
             ctx.textAlign = 'center';
-            ctx.fillText('No Tileset', canvas.width / 2, canvas.height / 2);
+            ctx.fillText(tt('No Tileset'), canvas.width / 2, canvas.height / 2);
             return;
         }
 
@@ -544,7 +566,7 @@ class EventPageEditor {
             ctx.fillStyle = '#f88';
             ctx.font = '10px Arial';
             ctx.textAlign = 'center';
-            ctx.fillText('Error Loading Tile', canvas.width / 2, canvas.height / 2);
+            ctx.fillText(tt('Error Loading Tile'), canvas.width / 2, canvas.height / 2);
         };
 
         img.src = imgPath;
@@ -612,6 +634,7 @@ class EventPageEditor {
      * Create Autonomous Movement section
      */
     createMovementSection(page, pageIndex) {
+        const tt = (text) => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
         const section = document.createElement('div');
         section.className = 'event-section movement-section';
         section.style.backgroundColor = 'var(--color-bg-input)';
@@ -641,12 +664,12 @@ class EventPageEditor {
                             data-field="moveSpeed"
                             data-page-index="${pageIndex}"
                             style="flex: 1; min-width: 0; padding: 3px; font-size: 11px;">
-                        <option value="1" ${page.moveSpeed === 1 ? 'selected' : ''}>1: x8 slower</option>
-                        <option value="2" ${page.moveSpeed === 2 ? 'selected' : ''}>2: x4 slower</option>
-                        <option value="3" ${page.moveSpeed === 3 ? 'selected' : ''}>3: x2 slower</option>
+                        <option value="1" ${page.moveSpeed === 1 ? 'selected' : ''}>1: ${tt('x8 slower')}</option>
+                        <option value="2" ${page.moveSpeed === 2 ? 'selected' : ''}>2: ${tt('x4 slower')}</option>
+                        <option value="3" ${page.moveSpeed === 3 ? 'selected' : ''}>3: ${tt('x2 slower')}</option>
                         <option value="4" ${page.moveSpeed === 4 ? 'selected' : ''}>4: ${this._t('event.normal')}</option>
-                        <option value="5" ${page.moveSpeed === 5 ? 'selected' : ''}>5: x2 faster</option>
-                        <option value="6" ${page.moveSpeed === 6 ? 'selected' : ''}>6: x4 faster</option>
+                        <option value="5" ${page.moveSpeed === 5 ? 'selected' : ''}>5: ${tt('x2 faster')}</option>
+                        <option value="6" ${page.moveSpeed === 6 ? 'selected' : ''}>6: ${tt('x4 faster')}</option>
                     </select>
                 </div>
 
@@ -740,6 +763,7 @@ class EventPageEditor {
      * Generate options from array (for switches, variables, items, actors)
      */
     generateOptionsFromArray(array, selectedId) {
+        const tt = (text) => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
         if (!array || array.length === 0) {
             return `<option value="1">${this._t('event.noneAvailable')}</option>`;
         }
@@ -747,9 +771,9 @@ class EventPageEditor {
         return array
             .filter(item => item && item.id) // Filter out null/undefined entries
             .map(item => {
-                const name = item.name || `Unnamed #${item.id}`;
+                const name = item.name || `${tt('Unnamed')} #${item.id}`;
                 const selected = item.id === selectedId ? 'selected' : '';
-                return `<option value="${item.id}" ${selected}>#${String(item.id).padStart(4, '0')}: ${name}</option>`;
+                return `<option value="${item.id}" ${selected}>#${String(item.id).padStart(4, '0')}: ${rrEscapeHtml(name)}</option>`;
             })
             .join('');
     }

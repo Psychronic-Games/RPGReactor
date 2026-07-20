@@ -53,6 +53,7 @@ class BattleTestConfigModal {
 
     show() {
         this.modal = document.createElement('div');
+        this.modal.className = 'battle-test-config-modal';
         this.modal.style.cssText = `
             position: fixed; top: 0; left: 0; right: 0; bottom: 0;
             background-color: rgba(0, 0, 0, 0.8); display: flex;
@@ -61,32 +62,41 @@ class BattleTestConfigModal {
 
         const dialog = document.createElement('div');
         dialog.style.cssText = `
-            background-color: var(--color-bg-surface); border: 1px solid var(--color-border); border-radius: 8px;
-            padding: 20px; width: 520px; max-width: 90vw; max-height: 85vh;
-            display: flex; flex-direction: column;
+            background-color: var(--color-bg-surface); border: 1px solid var(--color-border-input); border-radius: 8px;
+            width: 560px; max-width: 90vw; max-height: 85vh;
+            display: flex; flex-direction: column; overflow: hidden; box-shadow: var(--shadow-modal);
         `;
 
-        // Title
+        const header = document.createElement('div');
+        header.className = 'battle-test-config-header';
+        header.style.cssText = 'padding:12px 16px;background-color:var(--color-bg-toolbar);border-bottom:1px solid var(--color-border);flex-shrink:0;';
         const title = document.createElement('h3');
         title.textContent = this._t('Battle Test Configuration');
-        title.style.cssText = 'margin: 0 0 16px 0; color: var(--color-text-strong); font-size: 15px;';
-        dialog.appendChild(title);
+        title.style.cssText = 'margin:0;color:var(--color-text-strong);font-size:15px;';
+        header.appendChild(title);
+        dialog.appendChild(header);
+
+        const body = document.createElement('div');
+        body.className = 'battle-test-config-body';
+        body.style.cssText = 'display:flex;flex:1;flex-direction:column;min-height:0;padding:16px;background-color:var(--color-bg-surface);';
 
         // Battler tabs row
         const tabsRow = document.createElement('div');
         tabsRow.id = 'btest-tabs-row';
         tabsRow.style.cssText = 'display: flex; align-items: center; gap: 4px; margin-bottom: 12px; flex-wrap: wrap;';
-        dialog.appendChild(tabsRow);
+        body.appendChild(tabsRow);
 
         // Battler config area
         const configArea = document.createElement('div');
         configArea.id = 'btest-config-area';
-        configArea.style.cssText = 'flex: 1; overflow-y: auto;';
-        dialog.appendChild(configArea);
+        configArea.style.cssText = 'flex:1;min-height:0;overflow-y:auto;padding-inline-end:12px;scrollbar-gutter:stable;';
+        body.appendChild(configArea);
+        dialog.appendChild(body);
 
         // Buttons
         const btnRow = document.createElement('div');
-        btnRow.style.cssText = 'display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; flex-shrink: 0;';
+        btnRow.className = 'battle-test-config-footer';
+        btnRow.style.cssText = 'display:flex;justify-content:flex-end;gap:8px;padding:12px 16px;background-color:var(--color-bg-panel);border-top:1px solid var(--color-border);flex-shrink:0;';
 
         const cancelBtn = this.createButton('Cancel', () => this.close());
         cancelBtn.style.backgroundColor = 'var(--color-bg-button)';
@@ -211,6 +221,42 @@ class BattleTestConfigModal {
     // CONFIG AREA
     // ==========================================
 
+    collectActorTraitDataIds(actor, traitCode) {
+        const result = new Set();
+        const collect = traits => {
+            for (const trait of traits || []) {
+                if (trait.code === traitCode) result.add(trait.dataId);
+            }
+        };
+        collect(actor?.traits);
+        collect(this.databaseManager.getClass(actor?.classId)?.traits);
+        return result;
+    }
+
+    getCompatibleEquipment(actor, etypeId) {
+        if (!actor || this.collectActorTraitDataIds(actor, 54).has(etypeId)) return [];
+        if (etypeId === 1) {
+            const allowedWtypes = this.collectActorTraitDataIds(actor, 51);
+            return this.databaseManager.getWeapons()
+                .filter(weapon => weapon && allowedWtypes.has(weapon.wtypeId));
+        }
+        const allowedAtypes = this.collectActorTraitDataIds(actor, 52);
+        return this.databaseManager.getArmors()
+            .filter(armor => armor && armor.etypeId === etypeId && allowedAtypes.has(armor.atypeId));
+    }
+
+    getEquipmentForSlot(equipId, etypeId) {
+        if (!equipId) return null;
+        return etypeId === 1
+            ? this.databaseManager.getWeapon(equipId)
+            : this.databaseManager.getArmor(equipId);
+    }
+
+    isCompatibleEquipment(actor, item, etypeId) {
+        return !!item && this.getCompatibleEquipment(actor, etypeId)
+            .some(candidate => candidate.id === item.id);
+    }
+
     renderConfig() {
         const area = document.getElementById('btest-config-area');
         if (!area) return;
@@ -227,11 +273,15 @@ class BattleTestConfigModal {
         const equipTypes = system.equipTypes || [];
         const weaponTypes = system.weaponTypes || [];
         const armorTypes = system.armorTypes || [];
+        const actor = this.databaseManager.getActor(battler.actorId);
+        const engineLevelLimit = globalThis.RR_LIMITS?.ACTOR_LEVEL || 999;
+        const actorLevelLimit = Math.max(1, Math.min(engineLevelLimit, Number(actor?.maxLevel) || engineLevelLimit));
+        battler.level = Math.max(1, Math.min(actorLevelLimit, Number(battler.level) || 1));
 
         // Actor selector
         const actorRow = this.createFormRow('Actor:');
         const actorSelect = document.createElement('select');
-        actorSelect.style.cssText = 'flex: 1; background: var(--color-bg-menubar); border: 1px solid var(--color-border-input); color: var(--color-text); padding: 4px; border-radius: 3px;';
+        actorSelect.style.cssText = 'width:100%;min-width:0;background:var(--color-bg-menubar);border:1px solid var(--color-border-input);color:var(--color-text);padding:4px;border-radius:3px;';
         actors.forEach(actor => {
             const opt = document.createElement('option');
             opt.value = actor.id;
@@ -256,11 +306,11 @@ class BattleTestConfigModal {
         const levelInput = document.createElement('input');
         levelInput.type = 'number';
         levelInput.min = 1;
-        levelInput.max = 99;
+        levelInput.max = actorLevelLimit;
         levelInput.value = battler.level || 1;
         levelInput.style.cssText = 'width: 60px; background: var(--color-bg-menubar); border: 1px solid var(--color-border-input); color: var(--color-text); padding: 4px; border-radius: 3px;';
         levelInput.onchange = () => {
-            battler.level = Math.max(1, Math.min(99, parseInt(levelInput.value) || 1));
+            battler.level = Math.max(1, Math.min(actorLevelLimit, parseInt(levelInput.value) || 1));
             levelInput.value = battler.level;
             this.renderStats(area, battler);
         };
@@ -273,42 +323,66 @@ class BattleTestConfigModal {
         equipHeader.textContent = this._t('Equipment');
         area.appendChild(equipHeader);
 
-        const actor = this.databaseManager.getActor(battler.actorId);
-        const equipSlots = this.getEquipSlots(actor);
+        const actorClass = this.databaseManager.getClass(actor?.classId);
+        const filterHint = document.createElement('div');
+        filterHint.style.cssText = 'margin:0 0 8px 106px;color:var(--color-text-muted);font-size:10px;';
+        filterHint.textContent = actorClass
+            ? `${this._t('Filtered by class:')} ${actorClass.name}`
+            : this._t('Filtered by actor traits');
+        area.appendChild(filterHint);
+
+        const equipSlots = this.getEquipSlotBindings(actor);
 
         // Ensure equips array is long enough
-        while (battler.equips.length < equipSlots.length) {
+        if (!Array.isArray(battler.equips)) battler.equips = [];
+        const requiredEquipLength = equipSlots.reduce((length, slot) => Math.max(length, slot.slotIndex + 1), 0);
+        while (battler.equips.length < requiredEquipLength) {
             battler.equips.push(0);
         }
 
-        equipSlots.forEach((etypeId, slotIndex) => {
-            const slotName = equipTypes[etypeId] || `Slot ${slotIndex + 1}`;
+        const visibleEquipSlots = equipSlots
+            .map(({ etypeId, slotIndex }) => ({
+                etypeId,
+                slotIndex,
+                currentEquipId: Number(battler.equips[slotIndex]) || 0,
+                compatibleItems: this.getCompatibleEquipment(actor, etypeId)
+            }))
+            .filter(slot => typeof equipTypes[slot.etypeId] === 'string' && equipTypes[slot.etypeId].trim())
+            .filter(slot => slot.compatibleItems.length > 0 || slot.currentEquipId > 0);
+
+        visibleEquipSlots.forEach(({ etypeId, slotIndex, currentEquipId, compatibleItems }) => {
+            const slotName = equipTypes[etypeId] || `${this._t('Slot')} ${slotIndex + 1}`;
             const row = this.createFormRow(slotName + ':');
 
             const select = document.createElement('select');
-            select.style.cssText = 'flex: 1; background: var(--color-bg-menubar); border: 1px solid var(--color-border-input); color: var(--color-text); padding: 4px; border-radius: 3px; font-size: 12px;';
-            select.innerHTML = `<option value="0">${this._t('(None)')}</option>`;
+            select.style.cssText = 'width:100%;min-width:0;background:var(--color-bg-menubar);border:1px solid var(--color-border-input);color:var(--color-text);padding:4px;border-radius:3px;font-size:12px;';
+            const noneOption = document.createElement('option');
+            noneOption.value = '0';
+            noneOption.textContent = this._t('(None)');
+            noneOption.selected = currentEquipId === 0;
+            select.appendChild(noneOption);
 
-            if (etypeId === 1) {
-                // Weapon slot
-                const weapons = this.databaseManager.getWeapons();
-                weapons.forEach(weapon => {
-                    if (weapon) {
-                        const wtype = weaponTypes[weapon.wtypeId] || 'Weapon';
-                        const selected = weapon.id === battler.equips[slotIndex] ? 'selected' : '';
-                        select.innerHTML += `<option value="${weapon.id}" ${selected}>${weapon.name} (${wtype})</option>`;
-                    }
-                });
-            } else {
-                // Armor slot
-                const armors = this.databaseManager.getArmors();
-                armors.forEach(armor => {
-                    if (armor && armor.etypeId === etypeId) {
-                        const atype = armorTypes[armor.atypeId] || 'Armor';
-                        const selected = armor.id === battler.equips[slotIndex] ? 'selected' : '';
-                        select.innerHTML += `<option value="${armor.id}" ${selected}>${armor.name} (${atype})</option>`;
-                    }
-                });
+            compatibleItems.forEach(item => {
+                const typeName = etypeId === 1
+                    ? (weaponTypes[item.wtypeId] || this._t('Weapon'))
+                    : (armorTypes[item.atypeId] || this._t('Armor'));
+                const option = document.createElement('option');
+                option.value = String(item.id);
+                option.textContent = `${item.name} (${typeName})`;
+                option.selected = item.id === currentEquipId;
+                select.appendChild(option);
+            });
+
+            if (currentEquipId > 0 && !compatibleItems.some(item => item.id === currentEquipId)) {
+                const staleItem = this.getEquipmentForSlot(currentEquipId, etypeId);
+                const staleOption = document.createElement('option');
+                staleOption.value = String(currentEquipId);
+                staleOption.textContent = staleItem
+                    ? `${staleItem.name} ${this._t('(incompatible)')}`
+                    : `#${currentEquipId} ${this._t('(missing)')}`;
+                staleOption.selected = true;
+                staleOption.disabled = true;
+                select.appendChild(staleOption);
             }
 
             select.onchange = () => {
@@ -316,9 +390,19 @@ class BattleTestConfigModal {
                 this.renderStats(area, battler);
             };
 
-            row.appendChild(select);
+            const field = document.createElement('div');
+            field.style.cssText = 'min-width:0;';
+            field.appendChild(select);
+            row.appendChild(field);
             area.appendChild(row);
         });
+
+        if (visibleEquipSlots.length === 0) {
+            const emptyEquipment = document.createElement('div');
+            emptyEquipment.style.cssText = 'margin:8px 0 10px 106px;color:var(--color-text-muted);font-size:11px;';
+            emptyEquipment.textContent = this._t('No equipment slots available');
+            area.appendChild(emptyEquipment);
+        }
 
         // Stats display
         const statsHeader = document.createElement('div');
@@ -347,7 +431,13 @@ class BattleTestConfigModal {
         paramNames.forEach((name, idx) => {
             const row = document.createElement('div');
             row.style.cssText = 'display: flex; justify-content: space-between; font-size: 12px;';
-            row.innerHTML = `<span style="color: var(--color-text-muted);">${name}:</span><span style="color: var(--color-text);">${stats[idx]}</span>`;
+            const label = document.createElement('span');
+            label.style.color = 'var(--color-text-muted)';
+            label.textContent = `${name}:`;
+            const value = document.createElement('span');
+            value.style.color = 'var(--color-text)';
+            value.textContent = stats[idx];
+            row.append(label, value);
             grid.appendChild(row);
         });
 
@@ -361,33 +451,26 @@ class BattleTestConfigModal {
         const classData = this.databaseManager.getClass(actor.classId);
         if (!classData || !classData.params) return [0, 0, 0, 0, 0, 0, 0, 0];
 
-        const level = Math.max(1, Math.min(99, battler.level || 1));
+        const engineLevelLimit = globalThis.RR_LIMITS?.ACTOR_LEVEL || 999;
+        const actorLevelLimit = Math.max(1, Math.min(engineLevelLimit, Number(actor.maxLevel) || engineLevelLimit));
+        const level = Math.max(1, Math.min(actorLevelLimit, battler.level || 1));
         const stats = [];
+        const equipSlots = this.getEquipSlotBindings(actor);
+        const equippedItems = equipSlots.map(({ etypeId, slotIndex }) => {
+            const item = this.getEquipmentForSlot(Number(battler.equips?.[slotIndex]) || 0, etypeId);
+            return this.isCompatibleEquipment(actor, item, etypeId) ? item : null;
+        });
 
         for (let paramIdx = 0; paramIdx < 8; paramIdx++) {
             // Base stat from class curve at level
-            let base = 0;
-            if (classData.params[paramIdx] && classData.params[paramIdx][level] !== undefined) {
-                base = classData.params[paramIdx][level];
-            }
+            const base = globalThis.rrClassParamAtLevel
+                ? globalThis.rrClassParamAtLevel(classData.params[paramIdx], level)
+                : Number(classData.params[paramIdx]?.[level]) || 0;
 
             // Add equipment bonuses
             let equipBonus = 0;
-            if (battler.equips) {
-                const equipSlots = this.getEquipSlots(actor);
-                battler.equips.forEach((equipId, slotIndex) => {
-                    if (equipId <= 0) return;
-                    const etypeId = equipSlots[slotIndex];
-                    let item = null;
-                    if (etypeId === 1) {
-                        item = this.databaseManager.getWeapon(equipId);
-                    } else {
-                        item = this.databaseManager.getArmor(equipId);
-                    }
-                    if (item && item.params && item.params[paramIdx] !== undefined) {
-                        equipBonus += item.params[paramIdx];
-                    }
-                });
+            for (const item of equippedItems) {
+                if (item?.params?.[paramIdx] !== undefined) equipBonus += item.params[paramIdx];
             }
 
             stats.push(base + equipBonus);
@@ -397,22 +480,21 @@ class BattleTestConfigModal {
     }
 
     getEquipSlots(actor) {
-        const system = this.databaseManager.getSystem();
-        if (!system || !system.equipTypes) {
-            return [1, 2, 3, 4, 5];
-        }
+        return RREquipSlots.resolve(
+            this.databaseManager,
+            this.project,
+            actor,
+            this.isDualWield(actor)
+        );
+    }
 
-        const slots = [];
-        for (let i = 1; i < system.equipTypes.length; i++) {
-            slots.push(i);
-        }
-
-        // Check for dual-wield trait (code 55, dataId 1)
-        if (slots.length >= 2 && this.isDualWield(actor)) {
-            slots[1] = 1;
-        }
-
-        return slots;
+    getEquipSlotBindings(actor) {
+        return RREquipSlots.resolveInitialBindings(
+            this.databaseManager,
+            this.project,
+            actor,
+            this.isDualWield(actor)
+        );
     }
 
     isDualWield(actor) {
@@ -433,9 +515,9 @@ class BattleTestConfigModal {
 
     createFormRow(label) {
         const row = document.createElement('div');
-        row.style.cssText = 'display: flex; align-items: center; gap: 8px; margin-bottom: 6px;';
+        row.style.cssText = 'display:grid;grid-template-columns:96px minmax(0,1fr);align-items:center;gap:10px;width:100%;min-width:0;margin-bottom:6px;';
         const labelEl = document.createElement('label');
-        labelEl.style.cssText = 'width: 80px; color: var(--color-text-muted); font-size: 12px; text-align: right; flex-shrink: 0;';
+        labelEl.style.cssText = 'color:var(--color-text-muted);font-size:12px;text-align:right;';
         labelEl.textContent = this._t(label);
         row.appendChild(labelEl);
         return row;
@@ -452,10 +534,15 @@ class BattleTestConfigModal {
             return;
         }
 
+        // The test party/troop persist in System.json (as in MZ), but the
+        // battleback picked for this run is preview-only — it goes into the
+        // Test_ copy and must not overwrite the game's default battlebacks.
         system.testBattlers = this.battlers;
         system.testTroopId = this.troopId;
-        system.battleback1Name = this.battleback1Name;
-        system.battleback2Name = this.battleback2Name;
+
+        const testSystem = JSON.parse(JSON.stringify(system));
+        testSystem.battleback1Name = this.battleback1Name;
+        testSystem.battleback2Name = this.battleback2Name;
 
         const path = require('path');
         const fs = require('fs');
@@ -477,7 +564,7 @@ class BattleTestConfigModal {
             ['Animations.json', dm.data.animations],
             ['Tilesets.json', dm.data.tilesets],
             ['CommonEvents.json', dm.data.commonEvents],
-            ['System.json', system],
+            ['System.json', testSystem],
             ['MapInfos.json', dm.data.mapInfos],
         ];
 

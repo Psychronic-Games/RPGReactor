@@ -66,6 +66,7 @@ class ChangeVehicleImageEditor {
      * Render modal content
      */
     renderContent() {
+        const t = text => window.I18n ? window.I18n.tText(text) : text;
         const container = this.modal.querySelector('.change-vehicle-image-container');
         container.innerHTML = '';
 
@@ -73,7 +74,7 @@ class ChangeVehicleImageEditor {
         const header = document.createElement('div');
         header.style.cssText = 'padding: 12px 16px; background-color: var(--color-bg-panel); border-bottom: 1px solid var(--color-border); display: flex; justify-content: space-between; align-items: center; border-top-left-radius: 6px; border-top-right-radius: 6px;';
         header.innerHTML = `
-            <h3 style="margin: 0; color: var(--color-text-strong); font-size: 16px;">Change Vehicle Image</h3>
+            <h3 style="margin: 0; color: var(--color-text-strong); font-size: 16px;">${t('Change Vehicle Image')}</h3>
             <button class="close-btn" style="background: none; border: none; color: var(--color-text-strong); font-size: 20px; cursor: pointer; padding: 0; width: 24px; height: 24px;">\u00d7</button>
         `;
         container.appendChild(header);
@@ -89,12 +90,11 @@ class ChangeVehicleImageEditor {
         vehicleRow.style.cssText = 'display: flex; align-items: center; gap: 8px;';
 
         const vehicleLabel = document.createElement('span');
-        vehicleLabel.textContent = 'Vehicle:';
+        vehicleLabel.textContent = t('Vehicle:');
         vehicleLabel.style.cssText = 'color: var(--color-text); font-size: 13px; min-width: 120px;';
 
         const vehicleSelect = document.createElement('select');
         vehicleSelect.style.cssText = 'padding: 6px 10px; background-color: var(--color-bg-input); color: var(--color-text); border: 1px solid var(--color-border-input); border-radius: 3px; font-size: 12px; flex: 1;';
-        const t = text => window.I18n ? window.I18n.tText(text) : text;
         vehicleSelect.innerHTML = `
             <option value="0" ${this.vehicleType === 0 ? 'selected' : ''}>${t('Boat')}</option>
             <option value="1" ${this.vehicleType === 1 ? 'selected' : ''}>${t('Ship')}</option>
@@ -113,7 +113,7 @@ class ChangeVehicleImageEditor {
         charFileRow.style.cssText = 'display: flex; align-items: center; gap: 8px;';
 
         const charFileLabel = document.createElement('span');
-        charFileLabel.textContent = 'Char File:';
+        charFileLabel.textContent = t('Char File:');
         charFileLabel.style.cssText = 'color: var(--color-text); font-size: 13px; min-width: 120px;';
 
         const charFileInput = document.createElement('input');
@@ -133,7 +133,7 @@ class ChangeVehicleImageEditor {
         charIdxRow.style.cssText = 'display: flex; align-items: center; gap: 8px;';
 
         const charIdxLabel = document.createElement('span');
-        charIdxLabel.textContent = 'Char Index:';
+        charIdxLabel.textContent = t('Char Index:');
         charIdxLabel.style.cssText = 'color: var(--color-text); font-size: 13px; min-width: 120px;';
 
         const charIdxInput = document.createElement('input');
@@ -157,12 +157,12 @@ class ChangeVehicleImageEditor {
         footer.style.cssText = 'padding: 12px 16px; border-top: 1px solid var(--color-border); background-color: var(--color-bg-panel); display: flex; justify-content: flex-end; gap: 8px;';
 
         const cancelBtn = document.createElement('button');
-        cancelBtn.textContent = 'Cancel';
+        cancelBtn.textContent = t('Cancel');
         cancelBtn.className = 'rr-btn-secondary';
         cancelBtn.addEventListener('click', () => this.close());
 
         const okBtn = document.createElement('button');
-        okBtn.textContent = 'OK';
+        okBtn.textContent = t('OK');
         okBtn.style.cssText = 'padding: 6px 20px; background-color: var(--color-accent); color: var(--color-bg-deep); border: none; border-radius: 3px; cursor: pointer; font-size: 12px; font-weight: bold;';
         okBtn.addEventListener('click', () => this.save());
 

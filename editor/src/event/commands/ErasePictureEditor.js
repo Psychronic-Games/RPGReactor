@@ -8,6 +8,10 @@ class ErasePictureEditor {
         this.modal = null;
         this.callback = null;
         this.pictureId = 1;
+        this.pictureIdSource = 'direct';
+        this.eraseMode = 'one';
+        this.endPictureId = 1;
+        this.endPictureIdSource = 'direct';
     }
 
     /**
@@ -16,13 +20,24 @@ class ErasePictureEditor {
      * @param {function} callback - Callback when done editing
      */
     show(command, callback) {
+        if (command && command.code === 355 && !this.parseExtendedCommand(command)) return false;
         this.callback = callback;
 
         if (command && command.code === 235) {
             const params = command.parameters;
             this.pictureId = params[0] || 1;
+            this.pictureIdSource = 'direct';
+            this.eraseMode = 'one';
+            this.endPictureId = this.pictureId;
+            this.endPictureIdSource = 'direct';
+        } else if (this.loadExtendedCommand(command)) {
+            // Extended values were loaded by loadExtendedCommand.
         } else {
             this.pictureId = 1;
+            this.pictureIdSource = 'direct';
+            this.eraseMode = 'one';
+            this.endPictureId = 1;
+            this.endPictureIdSource = 'direct';
         }
 
         if (!this.modal) {
@@ -31,6 +46,55 @@ class ErasePictureEditor {
 
         this.renderContent();
         this.modal.style.display = 'flex';
+    }
+
+    getCodec() {
+        if (typeof globalThis !== 'undefined' && globalThis.ReactorEventCommandCodec) {
+            return globalThis.ReactorEventCommandCodec;
+        }
+        if (typeof require === 'function') {
+            try { return require('./ReactorEventCommandCodec.js'); } catch (_) { return null; }
+        }
+        return null;
+    }
+
+    parseExtendedCommand(command) {
+        if (!command || command.code !== 355) return null;
+        const codec = this.getCodec();
+        if (!codec || typeof codec.parseCommand !== 'function') return null;
+        try {
+            const parsed = codec.parseCommand(command, 'picture');
+            const data = parsed && (parsed.data || parsed);
+            const body = data && typeof codec.createPictureBody === 'function'
+                ? codec.createPictureBody(data) : '';
+            return data && this.isExtendedDataValid(data) && parsed.body === body ? data : null;
+        } catch (_) {
+            return null;
+        }
+    }
+
+    isExtendedDataValid(data) {
+        const ref = value => value && ['direct', 'variable'].includes(value.source)
+            && Number.isInteger(value.value) && value.value >= 1;
+        return data.operation === 'erase'
+            && ['one', 'range', 'all'].includes(data.mode)
+            && ref(data.pictureId)
+            && ref(data.endPictureId);
+    }
+
+    acceptsCommand(command) {
+        return !!(command && (command.code === 235 || this.parseExtendedCommand(command)));
+    }
+
+    loadExtendedCommand(command) {
+        const data = this.parseExtendedCommand(command);
+        if (!data || !['one', 'range', 'all'].includes(data.mode)) return false;
+        this.eraseMode = data.mode;
+        this.pictureIdSource = data.pictureId?.source === 'variable' ? 'variable' : 'direct';
+        this.pictureId = Number(data.pictureId?.value) || 1;
+        this.endPictureIdSource = data.endPictureId?.source === 'variable' ? 'variable' : 'direct';
+        this.endPictureId = Number(data.endPictureId?.value) || this.pictureId;
+        return true;
     }
 
     /**
@@ -79,6 +143,7 @@ class ErasePictureEditor {
      * Render modal content
      */
     renderContent() {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const container = this.modal.querySelector('.erase-picture-container');
         container.innerHTML = '';
 
@@ -95,7 +160,7 @@ class ErasePictureEditor {
             border-top-right-radius: 6px;
         `;
         header.innerHTML = `
-            <h3 style="margin: 0; color: var(--color-text-strong); font-size: 16px;">Erase Picture</h3>
+            <h3 style="margin: 0; color: var(--color-text-strong); font-size: 16px;">${tt('Erase Picture')}</h3>
             <button class="close-btn" style="background: none; border: none; color: var(--color-text-strong); font-size: 20px; cursor: pointer; padding: 0; width: 24px; height: 24px;">×</button>
         `;
         container.appendChild(header);
@@ -111,35 +176,27 @@ class ErasePictureEditor {
             gap: 12px;
         `;
 
-        // Picture ID input
-        const idSection = document.createElement('div');
-        idSection.style.cssText = 'display: flex; align-items: center; gap: 8px;';
-
-        const label = document.createElement('span');
-        label.textContent = 'Picture #:';
-        label.style.cssText = 'color: var(--color-text); font-size: 13px; min-width: 80px;';
-
-        const input = document.createElement('input');
-        input.type = 'number';
-        input.min = 1;
-        input.max = 100;
-        input.value = this.pictureId;
-        input.style.cssText = `
-            padding: 6px 10px;
-            background-color: var(--color-bg-input);
-            color: var(--color-text);
-            border: 1px solid var(--color-border-input);
-            border-radius: 3px;
-            font-size: 12px;
-            width: 100px;
-        `;
-        input.addEventListener('input', (e) => {
-            this.pictureId = parseInt(e.target.value) || 1;
-        });
-
-        idSection.appendChild(label);
-        idSection.appendChild(input);
-        content.appendChild(idSection);
+        content.appendChild(this.createSelectInput('Erase:', 'eraseMode', [
+            { value: 'one', text: 'One' },
+            { value: 'range', text: 'Range' },
+            { value: 'all', text: 'All' }
+        ]));
+        if (this.eraseMode !== 'all') {
+            content.appendChild(this.createSelectInput('Start ID Source:', 'pictureIdSource', [
+                { value: 'direct', text: 'Direct' },
+                { value: 'variable', text: 'Variable' }
+            ]));
+            content.appendChild(this.createNumberInput(
+                this.pictureIdSource === 'variable' ? 'Variable:' : 'Picture Number:', 'pictureId'));
+        }
+        if (this.eraseMode === 'range') {
+            content.appendChild(this.createSelectInput('End ID Source:', 'endPictureIdSource', [
+                { value: 'direct', text: 'Direct' },
+                { value: 'variable', text: 'Variable' }
+            ]));
+            content.appendChild(this.createNumberInput(
+                this.endPictureIdSource === 'variable' ? 'Variable:' : 'Picture Number:', 'endPictureId'));
+        }
 
         container.appendChild(content);
 
@@ -155,12 +212,12 @@ class ErasePictureEditor {
         `;
 
         const cancelBtn = document.createElement('button');
-        cancelBtn.textContent = 'Cancel';
+        cancelBtn.textContent = tt('Cancel');
         cancelBtn.className = 'rr-btn-secondary';
         cancelBtn.addEventListener('click', () => this.close());
 
         const okBtn = document.createElement('button');
-        okBtn.textContent = 'OK';
+        okBtn.textContent = tt('OK');
         okBtn.style.cssText = `
             padding: 6px 20px;
             background-color: var(--color-accent);
@@ -178,10 +235,69 @@ class ErasePictureEditor {
         container.appendChild(footer);
     }
 
+    createSelectInput(label, property, options) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
+        const row = document.createElement('div');
+        row.style.cssText = 'display: flex; align-items: center; gap: 8px;';
+        const labelEl = document.createElement('span');
+        labelEl.textContent = tt(label);
+        labelEl.style.cssText = 'color: var(--color-text); font-size: 13px; min-width: 120px;';
+        const select = document.createElement('select');
+        select.style.cssText = 'padding: 6px 10px; background-color: var(--color-bg-input); color: var(--color-text); border: 1px solid var(--color-border-input); border-radius: 3px; font-size: 12px; flex: 1;';
+        for (const item of options) {
+            const option = document.createElement('option');
+            option.value = item.value;
+            option.textContent = tt(item.text);
+            option.selected = this[property] === item.value;
+            select.appendChild(option);
+        }
+        select.addEventListener('change', event => {
+            this[property] = event.target.value;
+            this.renderContent();
+        });
+        row.appendChild(labelEl);
+        row.appendChild(select);
+        return row;
+    }
+
+    createNumberInput(label, property) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
+        const row = document.createElement('div');
+        row.style.cssText = 'display: flex; align-items: center; gap: 8px;';
+        const labelEl = document.createElement('span');
+        labelEl.textContent = tt(label);
+        labelEl.style.cssText = 'color: var(--color-text); font-size: 13px; min-width: 120px;';
+        const input = document.createElement('input');
+        input.type = 'number';
+        input.min = 1;
+        input.max = 9999;
+        input.value = this[property];
+        input.style.cssText = 'padding: 6px 10px; background-color: var(--color-bg-input); color: var(--color-text); border: 1px solid var(--color-border-input); border-radius: 3px; font-size: 12px; width: 100px;';
+        input.addEventListener('input', event => { this[property] = parseInt(event.target.value) || 1; });
+        row.appendChild(labelEl);
+        row.appendChild(input);
+        return row;
+    }
+
     /**
      * Build command from current data
      */
     buildCommand() {
+        const stock = this.eraseMode === 'one' && this.pictureIdSource === 'direct';
+        if (!stock) {
+            const payload = {
+                operation: 'erase',
+                mode: this.eraseMode,
+                pictureId: { source: this.pictureIdSource, value: this.pictureId },
+                endPictureId: { source: this.endPictureIdSource, value: this.endPictureId }
+            };
+            const codec = this.getCodec();
+            if (!codec || typeof codec.createScriptCommand !== 'function') {
+                throw new Error('ReactorEventCommandCodec is unavailable');
+            }
+            const body = codec.createPictureBody(payload);
+            return codec.createScriptCommand('picture', payload, body);
+        }
         return {
             code: 235,
             indent: 0,

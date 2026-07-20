@@ -18,9 +18,6 @@ function loadRegistryPart(filePath) {
 }
 
 function bodyPathForStyle(style, gender = 'male') {
-    if (style === 'looseleaf') {
-        return path.join(repoRoot, 'src', 'forge', 'CharacterGenerator', 'styles', 'looseleaf', 'parts', 'body', 'male', 'body-looseleaf-looseleaf-male-body-01.js');
-    }
     if (style === 'psychronic') {
         return path.join(repoRoot, 'src', 'forge', 'CharacterGenerator', 'styles', 'psychronic', 'parts', 'body', gender, `body-psychronic-psychronic-body-${gender}-01.js`);
     }
@@ -88,7 +85,7 @@ function visibleEyeY(bodyFrame, palette, anchors, half) {
 }
 
 test('Hair Forge generates valid animated hair sheets for built-in styles', () => {
-    for (const style of ['looseleaf', 'psychronic']) {
+    for (const style of ['psychronic']) {
         const body = loadRegistryPart(bodyPathForStyle(style));
         const config = Object.assign(hairEngine.defaultConfig(style), { tags: [style, 'male', 'hair'] });
         const result = hairEngine.generateHair(config, body.template);

@@ -34,6 +34,7 @@ test('codec archives are validated, cached, extracted, and installed', async () 
         const options = {
             version: '0.113.0', platform: 'linux', arch: 'x64', cacheDirectories: [cache],
             download: async (url, destination) => { downloads++; requested.push(url); fs.copyFileSync(prepared, destination); },
+            releaseBuild: false,
         };
         const acquired = await codec.acquireArchive(options);
         assert.deepEqual(requested, [
@@ -73,6 +74,7 @@ test('corrupt cached and downloaded codec archives are rejected', async () => {
             version: '0.113.0', platform: 'linux', arch: 'x64', cacheDirectories: [cache],
             download: async (_url, destination) => fs.copyFileSync(prepared, destination),
             onWarning: message => warnings.push(message),
+            releaseBuild: false,
         });
         assert.equal(acquired.expectedHash, codec.sha256(prepared));
         assert.ok(warnings.some(message => /Discarding corrupt cached codec/.test(message)));
@@ -82,8 +84,44 @@ test('corrupt cached and downloaded codec archives are rejected', async () => {
         await assert.rejects(codec.acquireArchive({
             version: '0.113.0', platform: 'linux', arch: 'x64', cacheDirectories: [cache],
             download: async (_url, destination) => fs.writeFileSync(destination, 'not a zip'),
+            releaseBuild: false,
         }), /failed archive validation/);
         assert.equal(fs.existsSync(path.join(cache, '0.113.0-linux-x64.zip')), false);
+    } finally {
+        fs.rmSync(root, { recursive: true, force: true });
+    }
+});
+
+test('release codec acquisition requires and verifies a pinned hash for caches and downloads', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'rpg-reactor-codec-trusted-'));
+    try {
+        const cache = path.join(root, 'cache');
+        const source = path.join(root, 'source');
+        const prepared = path.join(root, 'prepared.zip');
+        fs.mkdirSync(cache);
+        fs.mkdirSync(source);
+        fs.writeFileSync(path.join(source, 'libffmpeg.so'), 'trusted codec');
+        execFileSync('zip', ['-q', prepared, 'libffmpeg.so'], { cwd: source });
+        const name = codec.assetName('0.113.0', 'linux');
+        const manifest = { schema: 1, nwjs: {}, codecs: { [name]: codec.sha256(prepared) } };
+
+        fs.writeFileSync(path.join(cache, name), 'untrusted cached bytes');
+        const warnings = [];
+        const acquired = await codec.acquireArchive({
+            version: '0.113.0', platform: 'linux', arch: 'x64', cacheDirectories: [cache],
+            hashManifest: manifest,
+            download: async (_url, destination) => fs.copyFileSync(prepared, destination),
+            onWarning: warning => warnings.push(warning),
+        });
+        assert.equal(acquired.hashTrusted, true);
+        assert.equal(acquired.expectedHash, manifest.codecs[name]);
+        assert.ok(warnings.some(warning => /unverified cached archive/.test(warning)));
+
+        await assert.rejects(codec.acquireArchive({
+            version: '0.114.0', platform: 'linux', arch: 'x64', cacheDirectories: [cache],
+            hashManifest: manifest,
+            download: async () => {},
+        }), /no trusted SHA-256/);
     } finally {
         fs.rmSync(root, { recursive: true, force: true });
     }

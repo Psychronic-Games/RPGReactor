@@ -84,6 +84,7 @@ class PluginCommandEditor {
      * Show loading state while plugins are being loaded
      */
     showLoadingState() {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const container = this.modal.querySelector('.plugin-command-container');
         container.innerHTML = '';
 
@@ -100,7 +101,7 @@ class PluginCommandEditor {
             border-top-right-radius: 6px;
         `;
         header.innerHTML = `
-            <h3 style="margin: 0; color: var(--color-text-strong); font-size: 16px;">Plugin Command</h3>
+            <h3 style="margin: 0; color: var(--color-text-strong); font-size: 16px;">${tt('Plugin Command')}</h3>
             <button class="close-btn" style="background: none; border: none; color: var(--color-text-strong); font-size: 20px; cursor: pointer; padding: 0; width: 24px; height: 24px;">×</button>
         `;
         container.appendChild(header);
@@ -119,7 +120,7 @@ class PluginCommandEditor {
             color: var(--color-text);
         `;
         content.innerHTML = `
-            <div style="font-size: 14px;">Loading plugins...</div>
+            <div style="font-size: 14px;">${tt('Loading plugins...')}</div>
         `;
         container.appendChild(content);
     }
@@ -128,6 +129,7 @@ class PluginCommandEditor {
      * Show error state if plugin loading fails
      */
     showErrorState(err) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const container = this.modal.querySelector('.plugin-command-container');
         container.innerHTML = '';
 
@@ -144,7 +146,7 @@ class PluginCommandEditor {
             border-top-right-radius: 6px;
         `;
         header.innerHTML = `
-            <h3 style="margin: 0; color: var(--color-text-strong); font-size: 16px;">Plugin Command</h3>
+            <h3 style="margin: 0; color: var(--color-text-strong); font-size: 16px;">${tt('Plugin Command')}</h3>
             <button class="close-btn" style="background: none; border: none; color: var(--color-text-strong); font-size: 20px; cursor: pointer; padding: 0; width: 24px; height: 24px;">×</button>
         `;
         container.appendChild(header);
@@ -160,11 +162,16 @@ class PluginCommandEditor {
             gap: 16px;
             color: #ff6666;
         `;
-        content.innerHTML = `
-            <div style="font-size: 14px; font-weight: bold;">Error loading plugins</div>
-            <div style="font-size: 12px; color: var(--color-text);">${err.message || err}</div>
-            <div style="font-size: 11px; color: var(--color-text-muted);">Make sure your project has a plugins file (reactor_plugins.js or plugins.js).</div>
-        `;
+        const heading = document.createElement('div');
+        heading.style.cssText = 'font-size: 14px; font-weight: bold;';
+        heading.textContent = tt('Error loading plugins');
+        const detail = document.createElement('div');
+        detail.style.cssText = 'font-size: 12px; color: var(--color-text);';
+        detail.textContent = tt(err.message || String(err));
+        const hint = document.createElement('div');
+        hint.style.cssText = 'font-size: 11px; color: var(--color-text-muted);';
+        hint.textContent = tt('Make sure your project has a plugins file (reactor_plugins.js or plugins.js).');
+        content.append(heading, detail, hint);
         container.appendChild(content);
 
         // Footer
@@ -178,7 +185,7 @@ class PluginCommandEditor {
         `;
 
         const closeBtn = document.createElement('button');
-        closeBtn.textContent = 'Close';
+        closeBtn.textContent = tt('Close');
         closeBtn.className = 'rr-btn-secondary';
         closeBtn.addEventListener('click', () => this.close());
 
@@ -196,12 +203,13 @@ class PluginCommandEditor {
             return;
         }
 
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         try {
             const currentProject = this.projectController.getCurrentProject();
             console.log('Current project:', currentProject);
 
             if (!currentProject || !currentProject.path) {
-                throw new Error('No project loaded');
+                throw new Error(tt('No project loaded'));
             }
 
             const projectPath = currentProject.path;
@@ -214,7 +222,7 @@ class PluginCommandEditor {
             console.log('Loading plugins from:', pluginsPath);
 
             if (!this.fs.existsSync(pluginsPath)) {
-                throw new Error(`Plugins file not found: ${pluginsFile}`);
+                throw new Error(`${tt('Plugins file not found:')} ${pluginsFile}`);
             }
 
             const text = this.fs.readFileSync(pluginsPath, 'utf8');
@@ -222,7 +230,7 @@ class PluginCommandEditor {
             // Extract the $plugins array
             const pluginsMatch = text.match(/var\s+\$plugins\s*=\s*(\[[\s\S]*\]);/);
             if (!pluginsMatch) {
-                throw new Error('Could not parse plugins file - no $plugins array found');
+                throw new Error(tt('Could not parse plugins file - no $plugins array found'));
             }
 
             const pluginsArray = JSON.parse(pluginsMatch[1]);
@@ -433,6 +441,7 @@ class PluginCommandEditor {
      * Render modal content
      */
     renderContent() {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const container = this.modal.querySelector('.plugin-command-container');
         container.innerHTML = '';
 
@@ -449,7 +458,7 @@ class PluginCommandEditor {
             border-top-right-radius: 6px;
         `;
         header.innerHTML = `
-            <h3 style="margin: 0; color: var(--color-text-strong); font-size: 16px;">Plugin Command</h3>
+            <h3 style="margin: 0; color: var(--color-text-strong); font-size: 16px;">${tt('Plugin Command')}</h3>
             <button class="close-btn" style="background: none; border: none; color: var(--color-text-strong); font-size: 20px; cursor: pointer; padding: 0; width: 24px; height: 24px;">×</button>
         `;
         container.appendChild(header);
@@ -490,7 +499,7 @@ class PluginCommandEditor {
             this.renderContent();
         });
         classicRow.appendChild(classicCheckbox);
-        classicRow.appendChild(document.createTextNode('Classic Plugin Command (MV-style text command)'));
+        classicRow.appendChild(document.createTextNode(tt('Classic Plugin Command (MV-style text command)')));
         content.appendChild(classicRow);
 
         if (this.classicMode) {
@@ -499,7 +508,7 @@ class PluginCommandEditor {
             classicSection.style.cssText = 'display: flex; flex-direction: column; gap: 8px;';
 
             const classicLabel = document.createElement('div');
-            classicLabel.textContent = 'Command Text:';
+            classicLabel.textContent = tt('Command Text:');
             classicLabel.style.cssText = 'color: var(--color-text); font-size: 13px; font-weight: bold;';
             classicSection.appendChild(classicLabel);
 
@@ -526,7 +535,7 @@ class PluginCommandEditor {
 
             const hint = document.createElement('div');
             hint.style.cssText = 'color: var(--color-text-muted); font-size: 11px; line-height: 1.4;';
-            hint.textContent = 'Enter the full plugin command as a single line, e.g. FogEffect 1 Fog_Image 80 100 3 3';
+            hint.textContent = tt('Enter the full plugin command as a single line, e.g. FogEffect 1 Fog_Image 80 100 3 3');
             classicSection.appendChild(hint);
 
             content.appendChild(classicSection);
@@ -542,7 +551,7 @@ class PluginCommandEditor {
         pluginSection.style.cssText = 'display: flex; flex-direction: column; gap: 8px;';
 
         const pluginLabel = document.createElement('div');
-        pluginLabel.textContent = 'Plugin:';
+        pluginLabel.textContent = tt('Plugin:');
         pluginLabel.style.cssText = 'color: var(--color-text); font-size: 13px; font-weight: bold;';
         pluginSection.appendChild(pluginLabel);
 
@@ -559,7 +568,7 @@ class PluginCommandEditor {
 
         const pluginDefaultOption = document.createElement('option');
         pluginDefaultOption.value = '';
-        pluginDefaultOption.textContent = '-- Select Plugin --';
+        pluginDefaultOption.textContent = tt('-- Select Plugin --');
         pluginSelect.appendChild(pluginDefaultOption);
 
         const sortedPlugins = this.availablePlugins.slice().sort((a, b) =>
@@ -595,7 +604,7 @@ class PluginCommandEditor {
             commandSection.style.cssText = 'display: flex; flex-direction: column; gap: 8px;';
 
             const commandLabel = document.createElement('div');
-            commandLabel.textContent = 'Command:';
+            commandLabel.textContent = tt('Command:');
             commandLabel.style.cssText = 'color: var(--color-text); font-size: 13px; font-weight: bold;';
             commandSection.appendChild(commandLabel);
 
@@ -612,7 +621,7 @@ class PluginCommandEditor {
 
             const commandDefaultOption = document.createElement('option');
             commandDefaultOption.value = '';
-            commandDefaultOption.textContent = '-- Select Command --';
+            commandDefaultOption.textContent = tt('-- Select Command --');
             commandSelect.appendChild(commandDefaultOption);
 
             const commands = this.pluginCommands[this.pluginName];
@@ -684,6 +693,7 @@ class PluginCommandEditor {
      * Append OK/Cancel footer to the container
      */
     _appendFooter(container) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const footer = document.createElement('div');
         footer.style.cssText = `
             padding: 12px 16px;
@@ -695,12 +705,12 @@ class PluginCommandEditor {
         `;
 
         const cancelBtn = document.createElement('button');
-        cancelBtn.textContent = 'Cancel';
+        cancelBtn.textContent = tt('Cancel');
         cancelBtn.className = 'rr-btn-secondary';
         cancelBtn.addEventListener('click', () => this.close());
 
         const okBtn = document.createElement('button');
-        okBtn.textContent = 'OK';
+        okBtn.textContent = tt('OK');
         okBtn.style.cssText = `
             padding: 6px 20px;
             background-color: var(--color-accent);
@@ -722,6 +732,7 @@ class PluginCommandEditor {
      * Create input field for a command argument
      */
     createArgumentInput(arg) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const section = document.createElement('div');
         section.style.cssText = 'display: flex; flex-direction: column; gap: 6px;';
 
@@ -756,12 +767,12 @@ class PluginCommandEditor {
 
                 const trueOption = document.createElement('option');
                 trueOption.value = 'true';
-                trueOption.textContent = 'True';
+                trueOption.textContent = tt('True');
                 trueOption.selected = currentValue === 'true' || currentValue === true;
 
                 const falseOption = document.createElement('option');
                 falseOption.value = 'false';
-                falseOption.textContent = 'False';
+                falseOption.textContent = tt('False');
                 falseOption.selected = currentValue === 'false' || currentValue === false;
 
                 input.appendChild(trueOption);
@@ -814,7 +825,7 @@ class PluginCommandEditor {
                 });
 
                 const browseBtn = document.createElement('button');
-                browseBtn.textContent = 'Browse...';
+                browseBtn.textContent = tt('Browse...');
                 browseBtn.className = 'rr-btn-browse';
                 browseBtn.addEventListener('click', () => {
                     this.showFilePicker(arg, input);
@@ -865,6 +876,7 @@ class PluginCommandEditor {
      * Show file picker for @type file arguments
      */
     showFilePicker(arg, inputElement) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const currentProject = this.projectController.getCurrentProject();
         if (!currentProject || !currentProject.path) return;
 
@@ -877,18 +889,16 @@ class PluginCommandEditor {
         }
 
         if (!this.fs.existsSync(browseDir)) {
-            alert('Directory not found: ' + (arg.dir || browseDir));
+            alert(tt('Directory not found:') + ' ' + (arg.dir || browseDir));
             return;
         }
 
-        // Read files from directory
-        const files = this.fs.readdirSync(browseDir).filter(f => {
-            const ext = this.path.extname(f).toLowerCase();
-            return ['.png', '.jpg', '.jpeg', '.webp', '.bmp', '.ogg', '.m4a', '.wav', '.mp3'].includes(ext);
-        }).map(f => this.path.basename(f, this.path.extname(f))).sort();
+        const files = RRAssetFiles.listNames(browseDir, [
+            '.png', '.jpg', '.jpeg', '.webp', '.bmp', '.ogg', '.m4a', '.wav', '.mp3'
+        ], { recursive: Boolean(arg.dir) });
 
         if (files.length === 0) {
-            alert('No files found in: ' + (arg.dir || browseDir));
+            alert(tt('No files found in:') + ' ' + (arg.dir || browseDir));
             return;
         }
 
@@ -915,14 +925,14 @@ class PluginCommandEditor {
             border-top-left-radius: 6px; border-top-right-radius: 6px;
         `;
         header.innerHTML = `
-            <h3 style="margin: 0; color: var(--color-text-strong); font-size: 16px;">Select File${arg.dir ? ' — ' + arg.dir : ''}</h3>
+            <h3 style="margin: 0; color: var(--color-text-strong); font-size: 16px;">${tt('Select File')}${arg.dir ? ' — ' + arg.dir : ''}</h3>
             <button class="close-picker" style="background: none; border: none; color: var(--color-text-strong); font-size: 20px; cursor: pointer;">×</button>
         `;
 
         // Search bar
         const searchBox = document.createElement('input');
         searchBox.type = 'text';
-        searchBox.placeholder = 'Search files...';
+        searchBox.placeholder = tt('Search files...');
         searchBox.style.cssText = `
             margin: 8px 16px; padding: 8px 12px; background-color: var(--color-bg-input); color: var(--color-text);
             border: 1px solid var(--color-border-input); border-radius: 3px; font-size: 13px;
@@ -941,7 +951,7 @@ class PluginCommandEditor {
 
             // Add "(None)" option
             const noneItem = document.createElement('div');
-            noneItem.textContent = '(None)';
+            noneItem.textContent = tt('(None)');
             const isNoneSelected = !selectedFile;
             noneItem.style.cssText = `
                 padding: 8px 12px; margin-bottom: 2px; cursor: pointer; font-size: 12px; border-radius: 3px;
@@ -985,12 +995,12 @@ class PluginCommandEditor {
         `;
 
         const cancelBtn = document.createElement('button');
-        cancelBtn.textContent = 'Cancel';
+        cancelBtn.textContent = tt('Cancel');
         cancelBtn.className = 'rr-btn-secondary';
         cancelBtn.addEventListener('click', () => picker.remove());
 
         const okBtn = document.createElement('button');
-        okBtn.textContent = 'OK';
+        okBtn.textContent = tt('OK');
         okBtn.style.cssText = `padding: 6px 20px; background-color: var(--color-accent); color: var(--color-bg-deep); border: none; border-radius: 3px; cursor: pointer; font-size: 12px; font-weight: bold;`;
         okBtn.addEventListener('click', () => selectAndClose(selectedFile));
 

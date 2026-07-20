@@ -89,7 +89,7 @@ function classifyAnchorsForFrame(config, bodyTemplate, direction, frameIndex) {
     const dirFrames = bodyTemplate.sheet[direction] || [];
     const frame = dirFrames[frameIndex];
     if (OUTFIT_ENGINE && typeof OUTFIT_ENGINE.debugClassifyFrame === 'function') {
-        const style = config.style || 'looseleaf';
+        const style = config.style || 'psychronic';
         const debugConfig = { style, tags: config.tags || [style], zones: {} };
         try {
             const debug = OUTFIT_ENGINE.debugClassifyFrame(debugConfig, frame, direction, bodyTemplate.palette || {}, frameIndex);
@@ -134,7 +134,7 @@ function anchorsFor(config, bodyTemplate, direction, frameIndex) {
     return merged;
 }
 
-function defaultConfig(style = 'looseleaf') {
+function defaultConfig(style = 'psychronic') {
     return {
         name: 'Layered Bob',
         category: 'hair',
@@ -2221,7 +2221,7 @@ function composeFrame(config, bodyTemplate, direction, frameIndex) {
 
 function generateHair(config = {}, bodyTemplate) {
     if (!bodyTemplate || !bodyTemplate.sheet) throw new Error('Hair Forge requires a body template sheet.');
-    const cfg = Object.assign(defaultConfig(config.style || 'looseleaf'), config || {});
+    const cfg = Object.assign(defaultConfig(config.style || 'psychronic'), config || {});
     cfg.params = Object.assign({}, defaultConfig(cfg.style).params, config.params || {});
     const sheet = [];
     for (let d = 0; d < 4; d++) {

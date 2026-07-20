@@ -16,6 +16,10 @@ class PluginManager {
         }
     }
 
+    _tt(text) {
+        return (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
+    }
+
     constructor(projectController) {
         this.projectController = projectController;
         this.container = null;
@@ -24,6 +28,7 @@ class PluginManager {
         this.selectedPluginIndex = -1;
         this.selectedPluginIndices = new Set();
         this.lastSelectedPluginIndex = -1;
+        this._pluginFilterQuery = '';
         this._clipboard = null;  // {plugins, plugin, isCut, sourceIndices} for copy/cut/paste
         this._dragState = null;  // drag-and-drop state
 
@@ -102,6 +107,21 @@ class PluginManager {
             // Keyboard shortcuts for copy/cut/paste
             this._keyHandler = (e) => {
                 if (modal.style.display === 'none') return;
+                if (document.querySelector('.plugin-manager-child-modal')) return;
+                const helpSearch = this._helpSearch;
+                if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f' && helpSearch?.input?.isConnected) {
+                    e.preventDefault();
+                    helpSearch.section.open = true;
+                    helpSearch.input.focus();
+                    helpSearch.input.select();
+                    return;
+                }
+                if (e.key === 'F3' && helpSearch?.input?.isConnected) {
+                    e.preventDefault();
+                    helpSearch.section.open = true;
+                    helpSearch.move(e.shiftKey ? -1 : 1);
+                    return;
+                }
                 // Don't intercept when typing in an input/select
                 if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA') return;
                 if (e.ctrlKey || e.metaKey) {
@@ -171,6 +191,145 @@ class PluginManager {
         return value;
     }
 
+    getStructName(type) {
+        const match = String(type || '').match(/struct<([^>]+)>/);
+        return match ? match[1].trim() : '';
+    }
+
+    parsePluginJsonLayer(value, fallback) {
+        if (typeof value !== 'string') return value;
+        try {
+            return JSON.parse(value);
+        } catch (error) {
+            return fallback !== undefined ? fallback : value;
+        }
+    }
+
+    clonePluginValue(value) {
+        if (value === undefined) return undefined;
+        return JSON.parse(JSON.stringify(value));
+    }
+
+    deserializeStructFieldValue(rawValue, fieldSchema, structDefinitions) {
+        const type = String(fieldSchema?.type || 'string');
+        const nestedStructName = this.getStructName(type);
+        if (nestedStructName) {
+            const nestedSchema = structDefinitions[nestedStructName] || {};
+            if (type.includes('[]')) {
+                const entries = this.parsePluginJsonLayer(rawValue, []);
+                return Array.isArray(entries)
+                    ? entries.map(entry => this.deserializeStructValue(entry, nestedSchema, structDefinitions))
+                    : [];
+            }
+            return this.deserializeStructValue(rawValue, nestedSchema, structDefinitions);
+        }
+        if (type === 'note') {
+            const note = this.parsePluginJsonLayer(rawValue, rawValue ?? '');
+            return typeof note === 'string' ? note : String(rawValue ?? '');
+        }
+        if (type.includes('[]')) {
+            const entries = this.parsePluginJsonLayer(rawValue, []);
+            return Array.isArray(entries) ? entries : [];
+        }
+        return rawValue === null || rawValue === undefined ? '' : rawValue;
+    }
+
+    deserializeStructValue(value, structSchema, structDefinitions) {
+        const parsed = this.parsePluginJsonLayer(value, {});
+        const source = parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+        const result = {};
+        const fieldNames = new Set([...Object.keys(structSchema || {}), ...Object.keys(source)]);
+
+        for (const fieldName of fieldNames) {
+            const fieldSchema = structSchema?.[fieldName] || { type: 'string', default: '' };
+            const rawValue = source[fieldName] !== undefined ? source[fieldName] : fieldSchema.default;
+            result[fieldName] = this.deserializeStructFieldValue(rawValue, fieldSchema, structDefinitions);
+        }
+        return result;
+    }
+
+    deserializeComplexPluginParameter(value, metadata, structDefinitions) {
+        const type = String(metadata?.type || '');
+        const structName = this.getStructName(type);
+        if (structName) {
+            const structSchema = structDefinitions[structName] || {};
+            if (type.includes('[]')) {
+                const entries = this.parsePluginJsonLayer(value, []);
+                return Array.isArray(entries)
+                    ? entries.map(entry => this.deserializeStructValue(entry, structSchema, structDefinitions))
+                    : [];
+            }
+            return this.deserializeStructValue(value, structSchema, structDefinitions);
+        }
+        if (type.includes('[]')) {
+            const entries = this.parsePluginJsonLayer(value, []);
+            return Array.isArray(entries) ? entries : [];
+        }
+        return this.parsePluginJsonLayer(value, value);
+    }
+
+    createDefaultStructValue(structSchema, structDefinitions = {}) {
+        return this.deserializeStructValue({}, structSchema, structDefinitions);
+    }
+
+    serializeStructValue(structData, structSchema, structDefinitions) {
+        const source = structData && typeof structData === 'object' && !Array.isArray(structData) ? structData : {};
+        const result = {};
+        const fieldNames = new Set([...Object.keys(structSchema || {}), ...Object.keys(source)]);
+
+        for (const fieldName of fieldNames) {
+            const fieldSchema = structSchema?.[fieldName] || { type: 'string', default: '' };
+            const rawValue = source[fieldName] !== undefined
+                ? source[fieldName]
+                : this.deserializeStructFieldValue(fieldSchema.default, fieldSchema, structDefinitions);
+            const type = String(fieldSchema.type || 'string');
+            const nestedStructName = this.getStructName(type);
+
+            if (nestedStructName) {
+                const nestedSchema = structDefinitions[nestedStructName] || {};
+                if (type.includes('[]')) {
+                    const entries = Array.isArray(rawValue) ? rawValue : [];
+                    result[fieldName] = JSON.stringify(entries.map(entry =>
+                        JSON.stringify(this.serializeStructValue(entry, nestedSchema, structDefinitions))
+                    ));
+                } else {
+                    result[fieldName] = JSON.stringify(
+                        this.serializeStructValue(rawValue, nestedSchema, structDefinitions)
+                    );
+                }
+            } else if (type === 'note') {
+                result[fieldName] = JSON.stringify(String(rawValue ?? ''));
+            } else if (type.includes('[]')) {
+                result[fieldName] = JSON.stringify(Array.isArray(rawValue) ? rawValue : []);
+            } else if (rawValue && typeof rawValue === 'object') {
+                result[fieldName] = JSON.stringify(rawValue);
+            } else {
+                result[fieldName] = String(rawValue ?? '');
+            }
+        }
+        return result;
+    }
+
+    serializeComplexPluginParameter(value, metadata, structDefinitions) {
+        const type = String(metadata?.type || '');
+        const structName = this.getStructName(type);
+        if (!structName) return JSON.stringify(value);
+        const structSchema = structDefinitions[structName] || {};
+        if (type.includes('[]')) {
+            const entries = Array.isArray(value) ? value : [];
+            return JSON.stringify(entries.map(entry =>
+                JSON.stringify(this.serializeStructValue(entry, structSchema, structDefinitions))
+            ));
+        }
+        return JSON.stringify(this.serializeStructValue(value, structSchema, structDefinitions));
+    }
+
+    setSimpleArrayElement(arrayData, index, value) {
+        if (!Array.isArray(arrayData) || index < 0 || index >= arrayData.length) return false;
+        arrayData[index] = String(value);
+        return true;
+    }
+
     /**
      * Show complex parameter editor for struct/array types
      * @param {Object} plugin - The plugin object
@@ -181,15 +340,6 @@ class PluginManager {
      * @param {Object} structDefinitions - Optional pre-parsed struct definitions
      */
     showComplexParameterEditor(plugin, key, value, metadata, onSave = null, structDefinitions = null) {
-        // Parse the current value with deep parsing for nested JSON strings
-        let parsedValue;
-        try {
-            parsedValue = value ? this.deepParseJSON(value) : null;
-        } catch (e) {
-            console.error('Error parsing parameter value:', e);
-            parsedValue = null;
-        }
-
         // Determine if this is an array or struct
         const isArray = metadata.type && metadata.type.includes('[]');
         const isStruct = metadata.type && metadata.type.includes('struct<');
@@ -205,12 +355,14 @@ class PluginManager {
             structDefinitions = {};
         }
 
+        let parsedValue = this.deserializeComplexPluginParameter(value, metadata, structDefinitions);
+
         // Extract struct name from type
         let structName = null;
         let structSchema = null;
-        const structMatch = metadata.type.match(/struct<(\w+)>/);
-        if (structMatch) {
-            structName = structMatch[1];
+        const parsedStructName = this.getStructName(metadata.type);
+        if (parsedStructName) {
+            structName = parsedStructName;
             structSchema = structDefinitions[structName] || null;
         }
 
@@ -238,6 +390,7 @@ class PluginManager {
 
         // Create modal overlay
         const overlay = document.createElement('div');
+        overlay.className = 'plugin-manager-child-modal';
         overlay.style.cssText = `
             position: fixed;
             top: 0;
@@ -314,7 +467,7 @@ class PluginManager {
         `;
 
         const structureTab = document.createElement('button');
-        structureTab.textContent = isArray ? 'Structure List' : 'Structure';
+        structureTab.textContent = isArray ? this._tt('Structure List') : this._tt('Structure');
         structureTab.style.cssText = `
             padding: 8px 16px;
             background-color: var(--color-bg-input);
@@ -326,7 +479,7 @@ class PluginManager {
         `;
 
         const textTab = document.createElement('button');
-        textTab.textContent = 'Text';
+        textTab.textContent = this._tt('Text');
         textTab.style.cssText = `
             padding: 8px 16px;
             background-color: transparent;
@@ -356,11 +509,15 @@ class PluginManager {
             display: block;
         `;
 
-        if (isArray) {
-            this.renderArrayStructureEditor(structureView, parsedValue, metadata, structDefinitions, structDefinitions);
-        } else if (isStruct) {
-            this.renderStructStructureEditor(structureView, parsedValue, metadata, structSchema, structDefinitions);
-        }
+        const renderStructureView = () => {
+            structureView.innerHTML = '';
+            if (isArray) {
+                this.renderArrayStructureEditor(structureView, parsedValue, metadata, structDefinitions, structDefinitions);
+            } else if (isStruct) {
+                this.renderStructStructureEditor(structureView, parsedValue, metadata, structSchema, structDefinitions);
+            }
+        };
+        renderStructureView();
 
         content.appendChild(structureView);
 
@@ -392,8 +549,27 @@ class PluginManager {
         content.appendChild(textView);
         modal.appendChild(content);
 
+        const applyTextValue = () => {
+            try {
+                const nextValue = JSON.parse(textarea.value);
+                if (isArray && !Array.isArray(nextValue)) throw new Error('Expected an array');
+                if (isStruct && (!nextValue || typeof nextValue !== 'object' || Array.isArray(nextValue))) {
+                    throw new Error('Expected an object');
+                }
+                parsedValue = nextValue;
+                return true;
+            } catch (error) {
+                alert(this._tt('Invalid JSON format. Please fix the syntax errors.'));
+                return false;
+            }
+        };
+
         // Tab switching
         structureTab.addEventListener('click', () => {
+            if (textView.style.display !== 'none') {
+                if (!applyTextValue()) return;
+                renderStructureView();
+            }
             structureTab.style.backgroundColor = 'var(--color-bg-input)';
             structureTab.style.color = 'var(--color-text)';
             textTab.style.backgroundColor = 'transparent';
@@ -445,13 +621,13 @@ class PluginManager {
         `;
 
         const cancelBtn = document.createElement('button');
-        cancelBtn.textContent = 'Cancel';
+        cancelBtn.textContent = this._tt('Cancel');
         cancelBtn.className = 'rr-btn-secondary';
         cancelBtn.addEventListener('click', () => document.body.removeChild(overlay));
         footer.appendChild(cancelBtn);
 
         const saveBtn = document.createElement('button');
-        saveBtn.textContent = 'OK';
+        saveBtn.textContent = this._tt('OK');
         saveBtn.style.cssText = `
             padding: 6px 16px;
             background-color: var(--color-accent);
@@ -467,19 +643,14 @@ class PluginManager {
         saveBtn.addEventListener('click', () => {
             // Update from text view if active
             if (textView.style.display !== 'none') {
-                try {
-                    parsedValue = JSON.parse(textarea.value);
-                } catch (e) {
-                    alert('Invalid JSON format. Please fix the syntax errors.');
-                    return;
-                }
+                if (!applyTextValue()) return;
             }
 
             // Update the plugin parameter
             if (!plugin.parameters) {
                 plugin.parameters = {};
             }
-            plugin.parameters[key] = JSON.stringify(parsedValue);
+            plugin.parameters[key] = this.serializeComplexPluginParameter(parsedValue, metadata, structDefinitions);
             document.body.removeChild(overlay);
 
             // Call the onSave callback if provided
@@ -512,62 +683,49 @@ class PluginManager {
      * @param {Object} fieldSchema - The field schema
      * @param {Function} onSave - Callback when saved
      */
-    showNestedStructEditor(fieldName, value, fieldSchema, onSave) {
-        // Parse the current value with deep parsing
-        let parsedValue;
-        try {
-            parsedValue = typeof value === 'string' ? this.deepParseJSON(value) : value;
-            if (!parsedValue || typeof parsedValue !== 'object' || Array.isArray(parsedValue)) {
-                parsedValue = {};
-            }
-        } catch (e) {
-            console.error('Error parsing nested struct value:', e);
-            parsedValue = {};
-        }
-
-        // Extract struct name from type
-        const structMatch = fieldSchema.type.match(/struct<(\w+)>/);
-        if (!structMatch) {
-            alert('Invalid struct type: ' + fieldSchema.type);
+    showNestedStructEditor(fieldName, value, fieldSchema, onSave, suppliedStructDefinitions = {}) {
+        const isArray = String(fieldSchema.type || '').includes('[]');
+        const structName = this.getStructName(fieldSchema.type);
+        if (!structName && !isArray) {
+            alert(this._tt('Invalid struct type:') + ' ' + fieldSchema.type);
             return;
         }
 
-        const structName = structMatch[1];
-
-        // We need to get the struct definitions from the parent plugin
-        // For now, we'll parse them from the current project's plugin
-        const currentProject = this.projectController.getCurrentProject();
-        const projectPath = currentProject.path;
-
-        // Find the plugin file that contains this struct definition
-        // We need to search through available plugins
-        let structSchema = null;
-        let structDefinitions = {};
-
-        for (const pluginName of this.availablePlugins) {
-            try {
-                const pluginPath = this.path.join(projectPath, 'js', 'plugins', `${pluginName}.js`);
-                if (this.fs.existsSync(pluginPath)) {
-                    const pluginSource = this.fs.readFileSync(pluginPath, 'utf8');
-                    const defs = this.parseStructDefinitions(pluginSource);
-                    if (defs[structName]) {
-                        structSchema = defs[structName];
-                        structDefinitions = defs;
-                        break;
+        let structDefinitions = suppliedStructDefinitions || {};
+        let structSchema = structName ? structDefinitions[structName] || null : null;
+        if (structName && !structSchema) {
+            const currentProject = this.projectController.getCurrentProject();
+            const projectPath = currentProject.path;
+            for (const pluginName of this.availablePlugins) {
+                try {
+                    const pluginPath = this.path.join(projectPath, 'js', 'plugins', `${pluginName}.js`);
+                    if (this.fs.existsSync(pluginPath)) {
+                        const defs = this.parseStructDefinitions(this.fs.readFileSync(pluginPath, 'utf8'));
+                        if (defs[structName]) {
+                            structSchema = defs[structName];
+                            structDefinitions = defs;
+                            break;
+                        }
                     }
+                } catch (error) {
+                    // Skip unreadable plugin files while resolving legacy callers.
                 }
-            } catch (e) {
-                // Skip this plugin
             }
         }
 
-        if (!structSchema) {
-            alert('Could not find struct definition for: ' + structName);
+        if (structName && !structSchema) {
+            alert(this._tt('Could not find struct definition for:') + ' ' + structName);
             return;
         }
+
+        const decodedValue = typeof value === 'string'
+            ? this.deserializeComplexPluginParameter(value, fieldSchema, structDefinitions)
+            : value;
+        const parsedValue = this.clonePluginValue(decodedValue ?? (isArray ? [] : {}));
 
         // Create modal overlay
         const overlay = document.createElement('div');
+        overlay.className = 'plugin-manager-child-modal';
         overlay.style.cssText = `
             position: fixed;
             top: 0;
@@ -644,8 +802,11 @@ class PluginManager {
             min-height: 0;
         `;
 
-        // Render struct editor
-        this.renderStructStructureEditor(content, parsedValue, fieldSchema, structSchema, structDefinitions);
+        if (isArray) {
+            this.renderArrayStructureEditor(content, parsedValue, fieldSchema, structDefinitions, structDefinitions);
+        } else {
+            this.renderStructStructureEditor(content, parsedValue, fieldSchema, structSchema, structDefinitions);
+        }
 
         modal.appendChild(content);
 
@@ -680,13 +841,13 @@ class PluginManager {
         `;
 
         const cancelBtn = document.createElement('button');
-        cancelBtn.textContent = 'Cancel';
+        cancelBtn.textContent = this._tt('Cancel');
         cancelBtn.className = 'rr-btn-secondary';
         cancelBtn.addEventListener('click', () => document.body.removeChild(overlay));
         footer.appendChild(cancelBtn);
 
         const saveBtn = document.createElement('button');
-        saveBtn.textContent = 'OK';
+        saveBtn.textContent = this._tt('OK');
         saveBtn.style.cssText = `
             padding: 6px 16px;
             background-color: var(--color-accent);
@@ -725,71 +886,181 @@ class PluginManager {
         // Parse struct type from metadata if it's struct<Name>[]
         let structType = null;
         let structSchema = null;
-        const structMatch = metadata.type.match(/struct<(\w+)>\[\]/);
-        if (structMatch) {
-            structType = structMatch[1];
+        const parsedStructType = this.getStructName(metadata.type);
+        if (parsedStructType && String(metadata.type).includes('[]')) {
+            structType = parsedStructType;
             structSchema = structDefinitions[structType] || null;
         }
+        const refresh = () => {
+            container.innerHTML = '';
+            this.renderArrayStructureEditor(container, arrayData, metadata, structDefinitions, allStructDefinitions);
+        };
+        let dragState = null;
 
         // Create table header
         const table = document.createElement('div');
         table.style.cssText = `
             display: flex;
             flex-direction: column;
-            gap: 1px;
-            background-color: var(--color-border);
-            border: 1px solid var(--color-border);
+            gap: 2px;
+            padding: 3px;
+            background-color: var(--color-bg-panel);
+            border: 1px solid var(--color-border-input);
+            border-radius: var(--radius-md);
         `;
+
+        const clearDropIndicators = () => {
+            table.querySelectorAll('[data-array-drop-position]').forEach(element => {
+                element.removeAttribute('data-array-drop-position');
+                element.style.boxShadow = '';
+            });
+        };
 
         // Header row
         const headerRow = document.createElement('div');
         headerRow.style.cssText = `
             display: grid;
-            grid-template-columns: 40px 1fr;
-            background-color: var(--color-bg-input);
+            grid-template-columns: 40px minmax(0, 1fr) auto;
+            background-color: var(--color-bg-toolbar);
             font-weight: bold;
-            color: var(--color-text);
+            color: var(--color-text-strong);
             font-size: 12px;
         `;
 
         const indexHeader = document.createElement('div');
-        indexHeader.style.cssText = 'padding: 8px; border-right: 1px solid var(--color-border);';
+        indexHeader.style.cssText = 'padding:8px 4px;border-right:1px solid var(--color-border);text-align:center;box-sizing:border-box;';
         indexHeader.textContent = '#';
         headerRow.appendChild(indexHeader);
 
         const valueHeader = document.createElement('div');
         valueHeader.style.cssText = 'padding: 8px;';
-        valueHeader.textContent = 'Value';
+        valueHeader.textContent = this._tt('Value');
         headerRow.appendChild(valueHeader);
+
+        const actionsHeader = document.createElement('div');
+        actionsHeader.style.cssText = 'min-width:150px;';
+        headerRow.appendChild(actionsHeader);
 
         table.appendChild(headerRow);
 
         // Data rows
         arrayData.forEach((item, index) => {
             const row = document.createElement('div');
+            const rowBackground = index % 2 === 0
+                ? 'var(--color-bg-list-item)'
+                : 'var(--color-bg-list-item-alt)';
             row.style.cssText = `
                 display: grid;
-                grid-template-columns: 40px 1fr;
-                background-color: var(--color-bg-list-item);
+                grid-template-columns: 40px minmax(0, 1fr) auto;
+                align-items: center;
+                min-height: 36px;
+                background-color: ${rowBackground};
+                border-left: 3px solid transparent;
+                transition: background-color var(--ease-fast), opacity var(--ease-fast);
             `;
+            row.dataset.arrayRowIndex = index;
+            row.addEventListener('mouseenter', () => {
+                if (!dragState) row.style.backgroundColor = 'var(--color-bg-hover)';
+            });
+            row.addEventListener('mouseleave', () => {
+                row.style.backgroundColor = rowBackground;
+            });
 
             const indexCell = document.createElement('div');
-            indexCell.style.cssText = 'padding: 8px; border-right: 1px solid var(--color-border); color: var(--color-text-muted); font-size: 11px; text-align: center;';
+            indexCell.style.cssText = 'align-self:stretch;display:flex;align-items:center;justify-content:center;padding:8px 4px;border-right:1px solid var(--color-border);color:var(--color-text-muted);font-size:11px;user-select:none;';
             indexCell.textContent = index + 1;
+            row.draggable = true;
+            row.style.cursor = 'grab';
+            row.addEventListener('dragstart', event => {
+                dragState = { fromIndex: index, toIndex: index };
+                row.style.opacity = '0.45';
+                row.style.cursor = 'grabbing';
+                event.dataTransfer.effectAllowed = 'move';
+                event.dataTransfer.setData('text/plain', String(index));
+            });
+            row.addEventListener('dragend', () => {
+                row.style.opacity = '1';
+                row.style.cursor = 'grab';
+                dragState = null;
+                clearDropIndicators();
+            });
             row.appendChild(indexCell);
 
+            row.addEventListener('dragover', event => {
+                if (!dragState) return;
+                event.preventDefault();
+                event.dataTransfer.dropEffect = 'move';
+                const bounds = row.getBoundingClientRect();
+                const insertBefore = event.clientY < bounds.top + bounds.height / 2;
+                dragState.toIndex = insertBefore ? index : index + 1;
+                clearDropIndicators();
+                row.dataset.arrayDropPosition = insertBefore ? 'before' : 'after';
+                row.style.boxShadow = insertBefore
+                    ? 'inset 0 2px 0 var(--color-accent)'
+                    : 'inset 0 -2px 0 var(--color-accent)';
+            });
+            row.addEventListener('drop', event => {
+                event.preventDefault();
+                if (!dragState) return;
+                const fromIndex = dragState.fromIndex;
+                let toIndex = dragState.toIndex;
+                if (fromIndex < toIndex) toIndex--;
+                dragState = null;
+                clearDropIndicators();
+                if (this.moveArrayElement(arrayData, fromIndex, toIndex)) refresh();
+            });
+
             const valueCell = document.createElement('div');
-            valueCell.style.cssText = 'padding: 4px 8px; color: var(--color-syntax-keyword); font-size: 11px; font-family: monospace; overflow: hidden; text-overflow: ellipsis;';
-            valueCell.textContent = typeof item === 'object' ? JSON.stringify(item) : String(item);
-            valueCell.style.cursor = 'pointer';
-            valueCell.addEventListener('click', () => {
-                // Open editor for this array element
-                this.showArrayElementEditor(arrayData, index, metadata, structSchema, () => {
-                    container.innerHTML = '';
-                    this.renderArrayStructureEditor(container, arrayData, metadata, structDefinitions);
+            valueCell.style.cssText = 'padding:8px;color:var(--color-text);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+            if (item && typeof item === 'object' && !Array.isArray(item)) {
+                const preferredKey = ['Name', 'name', 'Text', 'text', 'Title', 'title']
+                    .find(key => item[key] !== undefined && item[key] !== '');
+                const firstReadableKey = Object.keys(structSchema || {}).find(key =>
+                    !/^---.*---$/.test(key) && item[key] !== undefined && typeof item[key] !== 'object'
+                );
+                const displayKey = preferredKey || firstReadableKey;
+                valueCell.textContent = displayKey ? String(item[displayKey]) : `${structType || this._tt('Element')} ${index + 1}`;
+            } else {
+                valueCell.textContent = String(item);
+            }
+            const editElement = () => {
+                this.showArrayElementEditor(arrayData, index, metadata, structSchema, allStructDefinitions, () => {
+                    refresh();
                 });
+            };
+            row.title = this._tt('Edit');
+            row.addEventListener('dblclick', event => {
+                if (event.target.closest('button')) return;
+                editElement();
             });
             row.appendChild(valueCell);
+
+            const actions = document.createElement('div');
+            actions.style.cssText = 'display:flex;gap:4px;padding:4px 6px;';
+            const makeAction = (label, title, action, disabled = false) => {
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.textContent = label;
+                button.title = title;
+                button.className = 'rr-btn-chip';
+                button.disabled = disabled;
+                button.style.cssText = 'padding:3px 7px;min-width:26px;font-size:11px;';
+                button.addEventListener('click', action);
+                return button;
+            };
+            actions.appendChild(makeAction('↑', this._tt('Move up'), () => {
+                if (this.moveArrayElement(arrayData, index, index - 1)) refresh();
+            }, index === 0));
+            actions.appendChild(makeAction('↓', this._tt('Move down'), () => {
+                if (this.moveArrayElement(arrayData, index, index + 1)) refresh();
+            }, index === arrayData.length - 1));
+            actions.appendChild(makeAction(this._tt('Edit'), this._tt('Edit'), editElement));
+            actions.appendChild(makeAction('×', this._tt('Delete'), () => {
+                if (!confirm(this._tt('Delete this element?'))) return;
+                arrayData.splice(index, 1);
+                refresh();
+            }));
+            row.appendChild(actions);
 
             table.appendChild(row);
         });
@@ -798,7 +1069,7 @@ class PluginManager {
 
         // Add button
         const addButton = document.createElement('button');
-        addButton.textContent = '+ Add Element';
+        addButton.textContent = this._tt('+ Add Element');
         addButton.style.cssText = `
             margin-top: 12px;
             padding: 8px 16px;
@@ -814,14 +1085,24 @@ class PluginManager {
         addButton.addEventListener('mouseleave', () => { addButton.style.backgroundColor = 'var(--color-accent)'; });
         addButton.addEventListener('click', () => {
             // Add new element
-            const newElement = structType ? {} : '';
+            const newElement = structType ? this.createDefaultStructValue(structSchema, allStructDefinitions) : '';
             arrayData.push(newElement);
 
-            // Re-render
-            container.innerHTML = '';
-            this.renderArrayStructureEditor(container, arrayData, metadata, structDefinitions);
+            refresh();
         });
         container.appendChild(addButton);
+    }
+
+    moveArrayElement(arrayData, fromIndex, toIndex) {
+        if (!Array.isArray(arrayData)
+            || fromIndex < 0 || fromIndex >= arrayData.length
+            || toIndex < 0 || toIndex >= arrayData.length
+            || fromIndex === toIndex) {
+            return false;
+        }
+        const [moved] = arrayData.splice(fromIndex, 1);
+        arrayData.splice(toIndex, 0, moved);
+        return true;
     }
 
     /**
@@ -839,67 +1120,94 @@ class PluginManager {
         table.style.cssText = `
             display: flex;
             flex-direction: column;
-            gap: 1px;
-            background-color: var(--color-border);
-            border: 1px solid var(--color-border);
+            gap: 2px;
+            padding: 3px;
+            background-color: var(--color-bg-panel);
+            border: 1px solid var(--color-border-input);
+            border-radius: var(--radius-md);
         `;
 
         // Header row
         const headerRow = document.createElement('div');
         headerRow.style.cssText = `
             display: grid;
-            grid-template-columns: 250px 1fr;
-            background-color: var(--color-bg-input);
+            grid-template-columns: minmax(180px, 36%) minmax(0, 1fr);
+            background-color: var(--color-bg-toolbar);
             font-weight: bold;
-            color: var(--color-text);
+            color: var(--color-text-strong);
             font-size: 12px;
         `;
 
         const nameHeader = document.createElement('div');
         nameHeader.style.cssText = 'padding: 8px; border-right: 1px solid var(--color-border);';
-        nameHeader.textContent = 'Name';
+        nameHeader.textContent = this._tt('Name');
         headerRow.appendChild(nameHeader);
 
         const valueHeader = document.createElement('div');
         valueHeader.style.cssText = 'padding: 8px;';
-        valueHeader.textContent = 'Value';
+        valueHeader.textContent = this._tt('Value');
         headerRow.appendChild(valueHeader);
 
         table.appendChild(headerRow);
 
-        // Data rows - iterate through schema fields
-        for (const [fieldName, fieldSchema] of Object.entries(structSchema)) {
-            const row = document.createElement('div');
-            row.style.cssText = `
-                display: grid;
-                grid-template-columns: 250px 1fr;
-                background-color: var(--color-bg-list-item);
-            `;
+        const schemaValues = Object.fromEntries(Object.keys(structSchema).map(key => [key, structData[key]]));
+        const nodes = this.organizeParametersHierarchically(schemaValues, structSchema);
+        let fieldRowIndex = 0;
+        const renderNodes = (items, depth = 0) => {
+            for (const node of items) {
+                const fieldName = node.key;
+                const fieldSchema = structSchema[fieldName] || {};
+                const groupMatch = fieldName.match(/^---\s*(.*?)\s*---$/);
+                const isGroup = Boolean(groupMatch);
+                const row = document.createElement('div');
 
-            const nameCell = document.createElement('div');
-            nameCell.style.cssText = 'padding: 8px; border-right: 1px solid var(--color-border); color: var(--color-syntax-function); font-size: 11px;';
-            nameCell.textContent = fieldSchema.text || fieldName;
+                if (isGroup) {
+                    row.style.cssText = `
+                        padding: 7px 10px 7px ${10 + depth * 16}px;
+                        background-color: var(--color-bg-toolbar);
+                        color: var(--color-text-strong);
+                        border-left: 3px solid var(--color-accent);
+                        font-size: 11px;
+                        font-weight: bold;
+                        text-transform: uppercase;
+                        letter-spacing: 0.5px;
+                    `;
+                    row.textContent = fieldSchema.text || groupMatch?.[1] || fieldName;
+                    table.appendChild(row);
+                } else {
+                    row.style.cssText = `
+                        display: grid;
+                        grid-template-columns: minmax(180px, 36%) minmax(0, 1fr);
+                        align-items: start;
+                        background-color: ${fieldRowIndex++ % 2 === 0 ? 'var(--color-bg-list-item)' : 'var(--color-bg-list-item-alt)'};
+                    `;
 
-            // Add description tooltip if available
-            if (fieldSchema.desc) {
-                nameCell.title = fieldSchema.desc;
+                    const nameCell = document.createElement('div');
+                    nameCell.style.cssText = `padding:8px 8px 8px ${8 + depth * 16}px;border-right:1px solid var(--color-border);color:var(--color-syntax-function);font-size:11px;line-height:1.35;`;
+                    nameCell.textContent = fieldSchema.text || fieldName;
+                    if (fieldSchema.desc) nameCell.title = fieldSchema.desc;
+                    row.appendChild(nameCell);
+
+                    const valueCell = document.createElement('div');
+                    valueCell.style.cssText = 'padding:8px;min-width:0;';
+                    const currentValue = structData[fieldName] !== undefined
+                        ? structData[fieldName]
+                        : this.deserializeStructFieldValue(fieldSchema.default, fieldSchema, allStructDefinitions);
+                    valueCell.appendChild(this.createStructFieldInput(
+                        fieldName,
+                        currentValue,
+                        fieldSchema,
+                        structData,
+                        allStructDefinitions
+                    ));
+                    row.appendChild(valueCell);
+                    table.appendChild(row);
+                }
+
+                if (node.children?.length) renderNodes(node.children, depth + 1);
             }
-
-            row.appendChild(nameCell);
-
-            const valueCell = document.createElement('div');
-            valueCell.style.cssText = 'padding: 8px;';
-
-            // Get current value or use default
-            const currentValue = structData[fieldName] !== undefined ? structData[fieldName] : fieldSchema.default;
-
-            // Create appropriate input based on field type
-            const input = this.createStructFieldInput(fieldName, currentValue, fieldSchema, structData, allStructDefinitions);
-            valueCell.appendChild(input);
-            row.appendChild(valueCell);
-
-            table.appendChild(row);
-        }
+        };
+        renderNodes(nodes);
 
         container.appendChild(table);
     }
@@ -993,10 +1301,10 @@ class PluginManager {
             return input;
         }
 
-        // Handle nested struct
-        if (type && type.includes('struct<')) {
+        // Handle nested structs and arrays with the same structured list editor.
+        if (type && (type.includes('struct<') || type.includes('[]'))) {
             const button = document.createElement('button');
-            button.textContent = `Edit ${fieldSchema.text || fieldName}...`;
+            button.textContent = `${this._tt('Edit')} ${fieldSchema.text || fieldName}...`;
             button.style.cssText = `
                 padding: 6px 12px;
                 background-color: var(--color-accent);
@@ -1023,10 +1331,35 @@ class PluginManager {
                     (newValue) => {
                         // Update the parent struct with the new value
                         structData[fieldName] = newValue;
-                    }
+                    },
+                    allStructDefinitions
                 );
             });
             return button;
+        }
+
+        if (type === 'note') {
+            const textarea = document.createElement('textarea');
+            textarea.value = String(value ?? '');
+            textarea.rows = 5;
+            textarea.style.cssText = `
+                width: 100%;
+                min-height: 88px;
+                padding: 6px 8px;
+                background-color: var(--color-border);
+                color: var(--color-text);
+                border: 1px solid var(--color-border-input);
+                border-radius: 3px;
+                box-sizing: border-box;
+                font-size: 11px;
+                line-height: 1.4;
+                font-family: monospace;
+                resize: vertical;
+            `;
+            textarea.addEventListener('change', event => {
+                structData[fieldName] = event.target.value;
+            });
+            return textarea;
         }
 
         // Default: text input
@@ -1075,12 +1408,12 @@ class PluginManager {
 
         const nameHeader = document.createElement('div');
         nameHeader.style.cssText = 'padding: 8px; border-right: 1px solid var(--color-border);';
-        nameHeader.textContent = 'Name';
+        nameHeader.textContent = this._tt('Name');
         headerRow.appendChild(nameHeader);
 
         const valueHeader = document.createElement('div');
         valueHeader.style.cssText = 'padding: 8px;';
-        valueHeader.textContent = 'Value';
+        valueHeader.textContent = this._tt('Value');
         headerRow.appendChild(valueHeader);
 
         table.appendChild(headerRow);
@@ -1137,11 +1470,12 @@ class PluginManager {
     /**
      * Show editor for individual array element
      */
-    showArrayElementEditor(arrayData, index, parentMetadata, structSchema, onSave) {
+    showArrayElementEditor(arrayData, index, parentMetadata, structSchema, allStructDefinitions, onSave) {
         const element = arrayData[index];
 
         // Create mini modal
         const overlay = document.createElement('div');
+        overlay.className = 'plugin-manager-child-modal';
         overlay.style.cssText = `
             position: fixed;
             top: 0;
@@ -1181,12 +1515,15 @@ class PluginManager {
         `;
 
         const title = document.createElement('h3');
-        title.textContent = `Element ${index + 1}`;
+        const itemName = element && typeof element === 'object'
+            ? (element.Name || element.name || element.Title || element.title)
+            : '';
+        title.textContent = itemName || `${this._tt('Element')} ${index + 1}`;
         title.style.cssText = 'margin: 0; color: var(--color-text-strong); font-size: 14px;';
         header.appendChild(title);
 
         const deleteBtn = document.createElement('button');
-        deleteBtn.textContent = 'Delete';
+        deleteBtn.textContent = this._tt('Delete');
         deleteBtn.style.cssText = `
             padding: 4px 12px;
             background-color: var(--color-danger-soft);
@@ -1197,7 +1534,7 @@ class PluginManager {
             font-size: 11px;
         `;
         deleteBtn.addEventListener('click', () => {
-            if (confirm('Delete this element?')) {
+            if (confirm(this._tt('Delete this element?'))) {
                 arrayData.splice(index, 1);
                 document.body.removeChild(overlay);
                 onSave();
@@ -1217,7 +1554,7 @@ class PluginManager {
 
         if (typeof element === 'object' && !Array.isArray(element)) {
             // Render struct fields with schema
-            this.renderStructStructureEditor(content, element, {}, structSchema);
+            this.renderStructStructureEditor(content, element, {}, structSchema, allStructDefinitions);
         } else {
             // Simple value editor
             const input = document.createElement('textarea');
@@ -1237,11 +1574,7 @@ class PluginManager {
             content.appendChild(input);
 
             input.addEventListener('change', (e) => {
-                try {
-                    arrayData[index] = JSON.parse(e.target.value);
-                } catch (err) {
-                    arrayData[index] = e.target.value;
-                }
+                this.setSimpleArrayElement(arrayData, index, e.target.value);
             });
         }
 
@@ -1258,9 +1591,9 @@ class PluginManager {
             gap: 8px;
         `;
 
-        const closeBtn = document.createElement('button');
-        closeBtn.textContent = 'Close';
-        closeBtn.style.cssText = `
+        const okBtn = document.createElement('button');
+        okBtn.textContent = this._tt('OK');
+        okBtn.style.cssText = `
             padding: 6px 16px;
             background-color: var(--color-accent);
             color: var(--color-bg-deep);
@@ -1270,13 +1603,13 @@ class PluginManager {
             font-size: 12px;
             font-weight: bold;
         `;
-        closeBtn.addEventListener('mouseenter', () => { closeBtn.style.backgroundColor = 'var(--color-accent-muted)'; });
-        closeBtn.addEventListener('mouseleave', () => { closeBtn.style.backgroundColor = 'var(--color-accent)'; });
-        closeBtn.addEventListener('click', () => {
+        okBtn.addEventListener('mouseenter', () => { okBtn.style.backgroundColor = 'var(--color-accent-muted)'; });
+        okBtn.addEventListener('mouseleave', () => { okBtn.style.backgroundColor = 'var(--color-accent)'; });
+        okBtn.addEventListener('click', () => {
             document.body.removeChild(overlay);
             onSave();
         });
-        footer.appendChild(closeBtn);
+        footer.appendChild(okBtn);
 
         modal.appendChild(footer);
         overlay.appendChild(modal);
@@ -1337,29 +1670,12 @@ class PluginManager {
         });
 
         const title = document.createElement('h2');
-        title.textContent = 'Plugin Manager';
+        title.textContent = this._tt('Plugin Manager');
         title.style.cssText = 'margin: 0; color: var(--color-text-strong); font-size: 16px; pointer-events: none;';
         header.appendChild(title);
 
         const buttonContainer = document.createElement('div');
         buttonContainer.style.cssText = 'display: flex; gap: 8px; align-items: center;';
-
-        const saveBtn = document.createElement('button');
-        saveBtn.textContent = 'Save Changes';
-        saveBtn.style.cssText = `
-            padding: 6px 16px;
-            background-color: var(--color-accent);
-            color: var(--color-bg-deep);
-            border: 1px solid var(--color-accent);
-            border-radius: 3px;
-            cursor: pointer;
-            font-size: 13px;
-            font-weight: bold;
-        `;
-        saveBtn.addEventListener('mouseenter', () => { saveBtn.style.backgroundColor = 'var(--color-accent-muted)'; });
-        saveBtn.addEventListener('mouseleave', () => { saveBtn.style.backgroundColor = 'var(--color-accent)'; });
-        saveBtn.addEventListener('click', () => this.savePlugins());
-        buttonContainer.appendChild(saveBtn);
 
         const closeBtn = document.createElement('button');
         closeBtn.textContent = '×';
@@ -1412,8 +1728,66 @@ class PluginManager {
             font-weight: bold;
             font-size: 13px;
         `;
-        listHeader.textContent = 'Plugins (Load Order)';
+        listHeader.textContent = this._tt('Plugins (Load Order)');
         listContainer.appendChild(listHeader);
+
+        const searchBar = document.createElement('div');
+        searchBar.style.cssText = `
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            padding: 7px 8px;
+            background-color: var(--color-bg-panel);
+            border-bottom: 1px solid var(--color-border);
+        `;
+        const pluginSearchInput = document.createElement('input');
+        pluginSearchInput.type = 'text';
+        pluginSearchInput.className = 'plugin-list-search-input';
+        pluginSearchInput.placeholder = this._tt('Search...');
+        pluginSearchInput.setAttribute('aria-label', `${this._tt('Plugins (Load Order)')} ${this._tt('Search...')}`);
+        pluginSearchInput.autocomplete = 'off';
+        pluginSearchInput.spellcheck = false;
+        pluginSearchInput.value = this._pluginFilterQuery;
+        pluginSearchInput.style.cssText = `
+            flex: 1;
+            min-width: 0;
+            padding: 5px 7px;
+            background-color: var(--color-bg-input);
+            color: var(--color-text);
+            border: 1px solid var(--color-border-input);
+            border-radius: var(--radius-md);
+            outline: none;
+            font-size: 12px;
+            box-sizing: border-box;
+        `;
+        pluginSearchInput.addEventListener('focus', () => {
+            pluginSearchInput.style.borderColor = 'var(--color-accent-border-strong)';
+        });
+        pluginSearchInput.addEventListener('blur', () => {
+            pluginSearchInput.style.borderColor = 'var(--color-border-input)';
+        });
+        pluginSearchInput.addEventListener('input', () => {
+            this._pluginFilterQuery = pluginSearchInput.value;
+            this.renderPluginList();
+        });
+        searchBar.appendChild(pluginSearchInput);
+
+        const clearSearchBtn = document.createElement('button');
+        clearSearchBtn.type = 'button';
+        clearSearchBtn.textContent = '×';
+        clearSearchBtn.title = this._tt('Clear');
+        clearSearchBtn.setAttribute('aria-label', clearSearchBtn.title);
+        clearSearchBtn.className = 'rr-btn-chip';
+        clearSearchBtn.style.cssText = 'width:24px;height:24px;padding:0;font-size:15px;line-height:1;';
+        clearSearchBtn.addEventListener('click', () => {
+            pluginSearchInput.value = '';
+            this._pluginFilterQuery = '';
+            this.renderPluginList();
+            pluginSearchInput.focus();
+        });
+        searchBar.appendChild(clearSearchBtn);
+        listContainer.appendChild(searchBar);
+        this._pluginListSearch = pluginSearchInput;
 
         this.pluginListContainer = document.createElement('div');
         this.pluginListContainer.style.cssText = `
@@ -1427,17 +1801,70 @@ class PluginManager {
 
         // Right side - Plugin details and parameters
         this.detailsContainer = document.createElement('div');
+        this.detailsContainer.className = 'plugin-details-container';
         this.detailsContainer.style.cssText = `
             flex: 1;
             display: flex;
             flex-direction: column;
-            overflow: hidden;
+            overflow-x: hidden;
+            overflow-y: auto;
             min-width: 0;
             min-height: 0;
+            scrollbar-gutter: stable;
         `;
         mainContent.appendChild(this.detailsContainer);
 
         this.container.appendChild(mainContent);
+
+        const actionFooter = document.createElement('div');
+        actionFooter.className = 'plugin-manager-action-footer';
+        actionFooter.style.cssText = `
+            padding: 10px 24px 10px 16px;
+            border-top: 1px solid var(--color-border);
+            background-color: var(--color-bg-panel);
+            display: flex;
+            justify-content: flex-end;
+            align-items: center;
+            gap: 8px;
+            flex-shrink: 0;
+        `;
+
+        const removePluginBtn = document.createElement('button');
+        removePluginBtn.type = 'button';
+        removePluginBtn.textContent = this._tt('Remove Plugin');
+        removePluginBtn.style.cssText = `
+            padding: 6px 16px;
+            background-color: var(--color-danger-soft);
+            color: var(--color-text-strong);
+            border: 1px solid var(--color-danger-soft);
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 13px;
+        `;
+        removePluginBtn.addEventListener('click', () => this._removeSelectedPlugins());
+        actionFooter.appendChild(removePluginBtn);
+        this._removePluginBtn = removePluginBtn;
+
+        const saveChangesBtn = document.createElement('button');
+        saveChangesBtn.type = 'button';
+        saveChangesBtn.textContent = this._tt('Save Changes');
+        saveChangesBtn.style.cssText = `
+            padding: 6px 16px;
+            background-color: var(--color-accent);
+            color: var(--color-bg-deep);
+            border: 1px solid var(--color-accent);
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: bold;
+        `;
+        saveChangesBtn.addEventListener('mouseenter', () => { saveChangesBtn.style.backgroundColor = 'var(--color-accent-muted)'; });
+        saveChangesBtn.addEventListener('mouseleave', () => { saveChangesBtn.style.backgroundColor = 'var(--color-accent)'; });
+        saveChangesBtn.addEventListener('click', () => this.savePlugins());
+        actionFooter.appendChild(saveChangesBtn);
+
+        this.container.appendChild(actionFooter);
+        this.updatePluginActionFooter();
 
         // Resize handle at bottom-right corner
         const resizeHandle = document.createElement('div');
@@ -1500,6 +1927,7 @@ class PluginManager {
      * Load plugins from reactor_plugins.js (or plugins.js for MV/MZ projects)
      */
     async loadPlugins() {
+        if (this.detailsContainer) this.renderEmptyDetails();
         try {
             const currentProject = this.projectController.getCurrentProject();
             if (!currentProject || !currentProject.path) {
@@ -1511,12 +1939,17 @@ class PluginManager {
             const pluginsPath = this.resolvePluginsPath(projectPath);
 
             if (!pluginsPath) {
+                // No manifest yet: show an empty manager. The file is
+                // created when the user actually saves — opening a window
+                // must not write into the project (or pop a "saved" alert).
                 const usesReactor = this.fs.existsSync(this.path.join(projectPath, 'js', 'reactor_main.js'));
                 const defaultFile = usesReactor ? 'reactor_plugins.js' : 'plugins.js';
-                console.warn(`No plugins file found, creating default ${defaultFile}`);
+                console.warn(`No plugins file found; ${defaultFile} will be created on first save`);
                 this._pluginsFilePath = this.path.join(projectPath, 'js', defaultFile);
                 this.plugins = [];
-                this.savePlugins();
+                this.clearPluginSelection();
+                await this.scanAvailablePlugins(projectPath);
+                this.renderPluginList();
                 return;
             }
 
@@ -1532,18 +1965,19 @@ class PluginManager {
             if (pluginsMatch) {
                 this.plugins = JSON.parse(pluginsMatch[1]);
 
-                // Enrich plugins with descriptions and help from their source files
+                // Enrich plugins with descriptions and help from their source
+                // files (cached by mtime — edits still show up immediately,
+                // but unchanged plugins aren't re-read and re-parsed on every
+                // manager open)
                 for (const plugin of this.plugins) {
                     try {
                         const pluginPath = this.path.join(projectPath, 'js', 'plugins', `${plugin.name}.js`);
-                        if (this.fs.existsSync(pluginPath)) {
-                            const pluginSource = this.fs.readFileSync(pluginPath, 'utf8');
-                                // Always re-read metadata from the source file so
-                            // edits to the plugin are reflected immediately
-                            plugin.description = this.parsePluginDescription(pluginSource) || plugin.description || '';
-                            plugin.help = this.parsePluginHelp(pluginSource) || plugin.help || '';
-                            plugin.author = this.parsePluginAuthor(pluginSource) || plugin.author || '';
-                            plugin.url = this.parsePluginUrl(pluginSource) || plugin.url || '';
+                        const meta = this.getPluginMetadata(pluginPath);
+                        if (meta) {
+                            plugin.description = meta.description || plugin.description || '';
+                            plugin.help = meta.help || plugin.help || '';
+                            plugin.author = meta.author || plugin.author || '';
+                            plugin.url = meta.url || plugin.url || '';
                         }
                     } catch (err) {
                         console.warn(`Could not load metadata for plugin ${plugin.name}:`, err);
@@ -1560,6 +1994,30 @@ class PluginManager {
         } catch (err) {
             console.error('Error loading plugins:', err);
         }
+    }
+
+    /**
+     * Parse (and cache by mtime) a plugin source file's metadata comment
+     * block. Re-reading and regex-parsing every plugin on each manager open
+     * dominated open latency on large plugin stacks.
+     */
+    getPluginMetadata(pluginPath) {
+        if (!this.fs.existsSync(pluginPath)) return null;
+        const mtimeMs = this.fs.statSync(pluginPath).mtimeMs;
+        if (!this._pluginMetadataCache) this._pluginMetadataCache = new Map();
+        const cached = this._pluginMetadataCache.get(pluginPath);
+        if (cached && cached.mtimeMs === mtimeMs) return cached;
+
+        const source = this.fs.readFileSync(pluginPath, 'utf8');
+        const meta = {
+            mtimeMs,
+            description: this.parsePluginDescription(source) || '',
+            help: this.parsePluginHelp(source) || '',
+            author: this.parsePluginAuthor(source) || '',
+            url: this.parsePluginUrl(source) || ''
+        };
+        this._pluginMetadataCache.set(pluginPath, meta);
+        return meta;
     }
 
     /**
@@ -1590,6 +2048,7 @@ class PluginManager {
         this.selectedPluginIndices.clear();
         this.selectedPluginIndex = -1;
         this.lastSelectedPluginIndex = -1;
+        this.updatePluginActionFooter();
     }
 
     getSelectedPluginIndices() {
@@ -1611,6 +2070,15 @@ class PluginManager {
         }
 
         this.lastSelectedPluginIndex = this.selectedPluginIndex;
+        this.updatePluginActionFooter();
+    }
+
+    updatePluginActionFooter() {
+        if (!this._removePluginBtn) return;
+        const hasSelection = this.getSelectedPluginIndices().length > 0;
+        this._removePluginBtn.disabled = !hasSelection;
+        this._removePluginBtn.style.opacity = hasSelection ? '1' : '0.5';
+        this._removePluginBtn.style.cursor = hasSelection ? 'pointer' : 'default';
     }
 
     selectPluginFromEvent(index, event = null) {
@@ -1658,6 +2126,7 @@ class PluginManager {
     }
 
     renderMultiPluginDetails(selectedIndices) {
+        this._helpSearch = null;
         this.detailsContainer.innerHTML = '';
 
         const wrapper = document.createElement('div');
@@ -1669,12 +2138,12 @@ class PluginManager {
 
         const title = document.createElement('h3');
         title.style.cssText = 'margin: 0 0 10px 0; color: var(--color-text-strong); font-size: 16px;';
-        title.textContent = `${selectedIndices.length} plugins selected`;
+        title.textContent = `${selectedIndices.length} ${this._tt('plugins selected')}`;
         wrapper.appendChild(title);
 
         const hint = document.createElement('div');
         hint.style.cssText = 'color: var(--color-text-muted); font-size: 12px; margin-bottom: 12px; line-height: 1.4;';
-        hint.textContent = 'Use Ctrl+C, Ctrl+X, Delete, or the buttons below to act on the selected group. Select one plugin to edit parameters.';
+        hint.textContent = this._tt('Use Ctrl+C, Ctrl+X, Delete, or the buttons below to act on the selected group. Select one plugin to edit parameters.');
         wrapper.appendChild(hint);
 
         const list = document.createElement('div');
@@ -1717,9 +2186,9 @@ class PluginManager {
             return button;
         };
 
-        actions.appendChild(makeButton('Copy Selected', 'var(--color-border)', () => this._copyPlugin(this.selectedPluginIndex, false)));
-        actions.appendChild(makeButton('Cut Selected', 'var(--color-border)', () => this._copyPlugin(this.selectedPluginIndex, true)));
-        actions.appendChild(makeButton('Remove Selected', 'var(--color-danger-soft)', () => this._removeSelectedPlugins()));
+        actions.appendChild(makeButton(this._tt('Copy Selected'), 'var(--color-border)', () => this._copyPlugin(this.selectedPluginIndex, false)));
+        actions.appendChild(makeButton(this._tt('Cut Selected'), 'var(--color-border)', () => this._copyPlugin(this.selectedPluginIndex, true)));
+        actions.appendChild(makeButton(this._tt('Remove Selected'), 'var(--color-danger-soft)', () => this._removeSelectedPlugins()));
         wrapper.appendChild(actions);
 
         this.detailsContainer.appendChild(wrapper);
@@ -1731,10 +2200,18 @@ class PluginManager {
     renderPluginList() {
         this.pluginListContainer.innerHTML = '';
 
-        this.plugins.forEach((plugin, index) => {
+        const visiblePlugins = this.getFilteredPluginEntries(this._pluginFilterQuery);
+        visiblePlugins.forEach(({ plugin, index }) => {
             const item = this.createPluginListItem(plugin, index);
             this.pluginListContainer.appendChild(item);
         });
+
+        if (visiblePlugins.length === 0 && this._pluginFilterQuery.trim()) {
+            const empty = document.createElement('div');
+            empty.style.cssText = 'padding:16px 10px;color:var(--color-text-muted);font-size:12px;text-align:center;';
+            empty.textContent = this._tt('No matches');
+            this.pluginListContainer.appendChild(empty);
+        }
 
         // Add "Add Plugin" button at the bottom
         const addBtn = document.createElement('div');
@@ -1746,13 +2223,24 @@ class PluginManager {
             border-top: 1px solid var(--color-border);
             background-color: var(--color-bg-list-item);
         `;
-        addBtn.textContent = '+ Add Plugin';
+        addBtn.textContent = this._tt('+ Add Plugin');
         addBtn.addEventListener('click', () => this.showAddPluginDialog());
         addBtn.addEventListener('contextmenu', (e) => {
             e.preventDefault();
             this._showPluginContextMenu(e.clientX, e.clientY, this.plugins.length, { pasteOnly: true });
         });
         this.pluginListContainer.appendChild(addBtn);
+    }
+
+    getFilteredPluginEntries(query = '') {
+        const normalizedQuery = String(query).trim().toLocaleLowerCase();
+        return this.plugins
+            .map((plugin, index) => ({ plugin, index }))
+            .filter(({ plugin }) => {
+                if (!normalizedQuery) return true;
+                return [plugin.name, plugin.description, plugin.author]
+                    .some(value => String(value || '').toLocaleLowerCase().includes(normalizedQuery));
+            });
     }
 
     /**
@@ -2118,7 +2606,7 @@ class PluginManager {
 
         const clipboardPlugins = clipboard?.plugins || (clipboard?.plugin ? [clipboard.plugin] : []);
         if (clipboardPlugins.length === 0) {
-            alert('No plugin in clipboard to paste.');
+            alert(this._tt('No plugin in clipboard to paste.'));
             return;
         }
 
@@ -2156,8 +2644,8 @@ class PluginManager {
         if (selectedIndices.length === 0) return;
 
         const label = selectedIndices.length === 1
-            ? `Remove plugin "${this.plugins[selectedIndices[0]].name}"?`
-            : `Remove ${selectedIndices.length} selected plugins?`;
+            ? `${this._tt('Remove plugin')} "${this.plugins[selectedIndices[0]].name}"?`
+            : `${this._tt('Remove')} ${selectedIndices.length} ${this._tt('selected plugins?')}`;
         if (!confirm(label)) return;
 
         for (const index of [...selectedIndices].sort((a, b) => b - a)) {
@@ -2178,12 +2666,13 @@ class PluginManager {
         );
 
         if (unusedPlugins.length === 0) {
-            alert('All available plugins are already added!');
+            alert(this._tt('All available plugins are already added!'));
             return;
         }
 
         // Create simple selection dialog
         const modal = document.createElement('div');
+        modal.className = 'plugin-manager-child-modal';
         modal.style.cssText = `
             position: fixed;
             top: 0;
@@ -2216,8 +2705,33 @@ class PluginManager {
             color: var(--color-text-strong);
             font-weight: bold;
         `;
-        header.textContent = 'Add Plugin';
+        header.textContent = this._tt('Add Plugin');
         dialog.appendChild(header);
+
+        const searchInput = document.createElement('input');
+        searchInput.type = 'text';
+        searchInput.className = 'plugin-add-search-input';
+        searchInput.placeholder = this._tt('Search...');
+        searchInput.setAttribute('aria-label', `${this._tt('Add Plugin')} ${this._tt('Search...')}`);
+        searchInput.autocomplete = 'off';
+        searchInput.spellcheck = false;
+        searchInput.style.cssText = `
+            margin: 8px 8px 0;
+            padding: 6px 8px;
+            background-color: var(--color-bg-input);
+            color: var(--color-text);
+            border: 1px solid var(--color-border-input);
+            border-radius: var(--radius-md);
+            outline: none;
+            font-size: 12px;
+        `;
+        searchInput.addEventListener('focus', () => {
+            searchInput.style.borderColor = 'var(--color-accent-border-strong)';
+        });
+        searchInput.addEventListener('blur', () => {
+            searchInput.style.borderColor = 'var(--color-border-input)';
+        });
+        dialog.appendChild(searchInput);
 
         const listContainer = document.createElement('div');
         listContainer.style.cssText = `
@@ -2226,27 +2740,41 @@ class PluginManager {
             padding: 8px;
         `;
 
-        unusedPlugins.forEach(name => {
-            const item = document.createElement('div');
-            item.style.cssText = `
-                padding: 8px 12px;
-                color: var(--color-text);
-                cursor: pointer;
-                border-radius: 3px;
-            `;
-            item.textContent = name;
-            item.addEventListener('mouseenter', () => {
-                item.style.backgroundColor = 'var(--color-bg-input)';
+        const renderUnusedPlugins = () => {
+            listContainer.innerHTML = '';
+            const query = searchInput.value.trim().toLocaleLowerCase();
+            const matches = unusedPlugins.filter(name => name.toLocaleLowerCase().includes(query));
+            if (matches.length === 0) {
+                const empty = document.createElement('div');
+                empty.style.cssText = 'padding:16px 10px;color:var(--color-text-muted);font-size:12px;text-align:center;';
+                empty.textContent = this._tt('No matches');
+                listContainer.appendChild(empty);
+                return;
+            }
+            matches.forEach(name => {
+                const item = document.createElement('div');
+                item.style.cssText = `
+                    padding: 8px 12px;
+                    color: var(--color-text);
+                    cursor: pointer;
+                    border-radius: 3px;
+                `;
+                item.textContent = name;
+                item.addEventListener('mouseenter', () => {
+                    item.style.backgroundColor = 'var(--color-bg-input)';
+                });
+                item.addEventListener('mouseleave', () => {
+                    item.style.backgroundColor = 'transparent';
+                });
+                item.addEventListener('click', () => {
+                    this.addPlugin(name);
+                    document.body.removeChild(modal);
+                });
+                listContainer.appendChild(item);
             });
-            item.addEventListener('mouseleave', () => {
-                item.style.backgroundColor = 'transparent';
-            });
-            item.addEventListener('click', () => {
-                this.addPlugin(name);
-                document.body.removeChild(modal);
-            });
-            listContainer.appendChild(item);
-        });
+        };
+        searchInput.addEventListener('input', renderUnusedPlugins);
+        renderUnusedPlugins();
 
         dialog.appendChild(listContainer);
 
@@ -2260,7 +2788,7 @@ class PluginManager {
         `;
 
         const cancelBtn = document.createElement('button');
-        cancelBtn.textContent = 'Cancel';
+        cancelBtn.textContent = this._tt('Cancel');
         cancelBtn.className = 'rr-btn-secondary';
         cancelBtn.addEventListener('click', () => {
             document.body.removeChild(modal);
@@ -2270,6 +2798,7 @@ class PluginManager {
         dialog.appendChild(footer);
         modal.appendChild(dialog);
         document.body.appendChild(modal);
+        searchInput.focus();
     }
 
     /**
@@ -2303,7 +2832,7 @@ class PluginManager {
             this.renderPluginList();
         } catch (err) {
             console.error('Error adding plugin:', err);
-            alert(`Error adding plugin: ${err.message}`);
+            alert(`${this._tt('Error adding plugin:')} ${err.message}`);
         }
     }
 
@@ -2372,6 +2901,51 @@ class PluginManager {
         }
 
         return cleanedLines.join('\n').trim();
+    }
+
+    findPluginHelpMatches(helpText, query) {
+        const text = String(helpText || '');
+        const needle = String(query || '');
+        if (!needle) return [];
+        const escaped = needle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const pattern = new RegExp(escaped, 'giu');
+        return Array.from(text.matchAll(pattern), match => ({
+            index: match.index,
+            length: match[0].length
+        }));
+    }
+
+    nextPluginHelpMatchIndex(currentIndex, matchCount, direction = 1) {
+        if (matchCount <= 0) return -1;
+        const current = Number.isInteger(currentIndex) && currentIndex >= 0 && currentIndex < matchCount
+            ? currentIndex
+            : (direction < 0 ? 0 : -1);
+        return (current + (direction < 0 ? -1 : 1) + matchCount) % matchCount;
+    }
+
+    renderPluginHelpMatches(container, helpText, matches, activeIndex) {
+        container.replaceChildren();
+        if (!matches.length) {
+            container.textContent = helpText;
+            return [];
+        }
+
+        const marks = [];
+        let cursor = 0;
+        matches.forEach((match, index) => {
+            container.appendChild(document.createTextNode(helpText.slice(cursor, match.index)));
+            const mark = document.createElement('mark');
+            mark.className = `plugin-help-match${index === activeIndex ? ' active' : ''}`;
+            mark.textContent = helpText.slice(match.index, match.index + match.length);
+            mark.style.cssText = index === activeIndex
+                ? 'background:var(--color-accent);color:var(--color-bg-deep);border-radius:2px;outline:2px solid var(--color-accent-shadow);'
+                : 'background:var(--color-accent-tint-35);color:var(--color-text-strong);border-radius:2px;';
+            container.appendChild(mark);
+            marks.push(mark);
+            cursor = match.index + match.length;
+        });
+        container.appendChild(document.createTextNode(helpText.slice(cursor)));
+        return marks;
     }
 
     /**
@@ -2452,7 +3026,9 @@ class PluginManager {
      * Render empty details panel
      */
     renderEmptyDetails() {
+        this._helpSearch = null;
         this.detailsContainer.innerHTML = '';
+        this.detailsContainer.scrollTop = 0;
 
         const emptyMessage = document.createElement('div');
         emptyMessage.style.cssText = `
@@ -2463,7 +3039,7 @@ class PluginManager {
             color: var(--color-text-dim);
             font-size: 14px;
         `;
-        emptyMessage.textContent = 'Select a plugin to view details';
+        emptyMessage.textContent = this._tt('Select a plugin to view details');
         this.detailsContainer.appendChild(emptyMessage);
     }
 
@@ -2471,7 +3047,9 @@ class PluginManager {
      * Render plugin details and parameter editor
      */
     renderPluginDetails(plugin) {
+        this._helpSearch = null;
         this.detailsContainer.innerHTML = '';
+        this.detailsContainer.scrollTop = 0;
 
         // Header
         const header = document.createElement('div');
@@ -2479,6 +3057,7 @@ class PluginManager {
             padding: 12px 16px;
             background-color: var(--color-bg-list-item);
             border-bottom: 1px solid var(--color-border);
+            flex-shrink: 0;
         `;
 
         const name = document.createElement('h3');
@@ -2503,7 +3082,7 @@ class PluginManager {
 
             const authorLabel = document.createElement('span');
             authorLabel.style.cssText = 'color: var(--color-text-muted);';
-            authorLabel.textContent = 'Author: ';
+            authorLabel.textContent = this._tt('Author:') + ' ';
             authorDiv.appendChild(authorLabel);
 
             const authorValue = document.createElement('span');
@@ -2520,7 +3099,7 @@ class PluginManager {
 
             const urlLabel = document.createElement('span');
             urlLabel.style.cssText = 'color: var(--color-text-muted);';
-            urlLabel.textContent = 'URL: ';
+            urlLabel.textContent = this._tt('URL:') + ' ';
             urlDiv.appendChild(urlLabel);
 
             const urlLink = document.createElement('a');
@@ -2544,10 +3123,12 @@ class PluginManager {
         // Help/Documentation section (if available)
         if (plugin.help) {
             const helpSection = document.createElement('details');
+            helpSection.className = 'plugin-help-section';
             helpSection.style.cssText = `
                 padding: 12px 16px;
                 background-color: var(--color-bg-list-item);
                 border-bottom: 1px solid var(--color-border);
+                flex-shrink: 0;
             `;
 
             const summary = document.createElement('summary');
@@ -2558,10 +3139,88 @@ class PluginManager {
                 font-weight: bold;
                 margin-bottom: 8px;
             `;
-            summary.textContent = 'Plugin Help & Documentation';
+            summary.textContent = this._tt('Plugin Help & Documentation');
             helpSection.appendChild(summary);
 
+            const searchBar = document.createElement('div');
+            searchBar.className = 'plugin-help-search';
+            searchBar.style.cssText = `
+                display: flex;
+                align-items: center;
+                gap: 6px;
+                margin: 8px 0;
+                padding: 7px;
+                background-color: var(--color-bg-deep);
+                border: 1px solid var(--color-border);
+                border-radius: 4px;
+            `;
+
+            const searchInput = document.createElement('input');
+            searchInput.type = 'text';
+            searchInput.className = 'plugin-help-search-input';
+            searchInput.placeholder = this._tt('Search...');
+            searchInput.setAttribute('aria-label', `${this._tt('Plugin Help & Documentation')} ${this._tt('Search...')}`);
+            searchInput.autocomplete = 'off';
+            searchInput.spellcheck = false;
+            searchInput.style.cssText = `
+                flex: 1;
+                min-width: 80px;
+                padding: 6px 8px;
+                background-color: var(--color-bg-input);
+                color: var(--color-text-strong);
+                border: 1px solid var(--color-border-input);
+                border-radius: 3px;
+                outline: none;
+                font-size: 12px;
+            `;
+            searchInput.addEventListener('focus', () => {
+                searchInput.style.borderColor = 'var(--color-accent-bright)';
+                searchInput.style.boxShadow = '0 0 0 1px var(--color-accent-shadow)';
+            });
+            searchInput.addEventListener('blur', () => {
+                searchInput.style.borderColor = 'var(--color-border-input)';
+                searchInput.style.boxShadow = 'none';
+            });
+
+            const matchCount = document.createElement('span');
+            matchCount.className = 'plugin-help-match-count';
+            matchCount.setAttribute('role', 'status');
+            matchCount.setAttribute('aria-live', 'polite');
+            matchCount.style.cssText = 'min-width:52px;color:var(--color-text-muted);font-size:11px;text-align:center;white-space:nowrap;';
+            matchCount.textContent = '0/0';
+
+            const makeFindButton = (text, title) => {
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.textContent = text;
+                button.title = title;
+                button.setAttribute('aria-label', title);
+                button.className = 'rr-btn-chip';
+                button.style.cssText = 'min-width:28px;padding:4px 7px;background:var(--color-bg-button);color:var(--color-text-strong);border:1px solid var(--color-accent-border-strong);font-size:14px;line-height:1;';
+                button.addEventListener('mouseenter', () => {
+                    if (!button.disabled) button.style.background = 'var(--color-accent-tint-25)';
+                });
+                button.addEventListener('mouseleave', () => {
+                    button.style.background = 'var(--color-bg-button)';
+                });
+                return button;
+            };
+            const previousBtn = makeFindButton('‹', `${this._tt('Plugin Help & Documentation')} ‹ (Shift+Enter)`);
+            previousBtn.classList.add('plugin-help-previous');
+            const nextBtn = makeFindButton('›', `${this._tt('Plugin Help & Documentation')} › (Enter)`);
+            nextBtn.classList.add('plugin-help-next');
+            const clearBtn = makeFindButton('×', this._tt('Clear'));
+            clearBtn.classList.add('plugin-help-clear');
+
+            searchBar.appendChild(searchInput);
+            searchBar.appendChild(matchCount);
+            searchBar.appendChild(previousBtn);
+            searchBar.appendChild(nextBtn);
+            searchBar.appendChild(clearBtn);
+            helpSection.appendChild(searchBar);
+
             const helpContent = document.createElement('pre');
+            helpContent.className = 'plugin-help-content';
             helpContent.style.cssText = `
                 margin: 8px 0 0 0;
                 padding: 12px;
@@ -2573,26 +3232,84 @@ class PluginManager {
                 line-height: 1.6;
                 white-space: pre-wrap;
                 overflow-x: auto;
-                max-height: 300px;
+                height: clamp(180px, 42vh, 420px);
+                min-height: 120px;
                 overflow-y: auto;
+                resize: vertical;
+                box-sizing: border-box;
             `;
             helpContent.textContent = plugin.help;
             helpSection.appendChild(helpContent);
+
+            let matches = [];
+            let activeMatch = -1;
+            let marks = [];
+            const updateMatchDisplay = (scrollToActive = false) => {
+                marks = this.renderPluginHelpMatches(helpContent, plugin.help, matches, activeMatch);
+                matchCount.textContent = matches.length
+                    ? `${activeMatch + 1}/${matches.length}`
+                    : (searchInput.value ? this._tt('No matches') : '0/0');
+                previousBtn.disabled = matches.length === 0;
+                nextBtn.disabled = matches.length === 0;
+                previousBtn.style.opacity = matches.length ? '1' : '0.48';
+                nextBtn.style.opacity = matches.length ? '1' : '0.48';
+                if (scrollToActive && marks[activeMatch]) {
+                    const mark = marks[activeMatch];
+                    helpContent.scrollTop = Math.max(0,
+                        mark.offsetTop - (helpContent.clientHeight - mark.offsetHeight) / 2);
+                }
+            };
+            const search = () => {
+                matches = this.findPluginHelpMatches(plugin.help, searchInput.value);
+                activeMatch = matches.length ? 0 : -1;
+                updateMatchDisplay(matches.length > 0);
+            };
+            const move = direction => {
+                if (!matches.length) {
+                    searchInput.focus();
+                    return;
+                }
+                activeMatch = this.nextPluginHelpMatchIndex(activeMatch, matches.length, direction);
+                updateMatchDisplay(true);
+            };
+
+            searchInput.addEventListener('input', search);
+            searchInput.addEventListener('keydown', event => {
+                if (event.key === 'Enter') {
+                    event.preventDefault();
+                    move(event.shiftKey ? -1 : 1);
+                } else if (event.key === 'Escape') {
+                    event.preventDefault();
+                    searchInput.value = '';
+                    search();
+                }
+            });
+            previousBtn.addEventListener('click', () => move(-1));
+            nextBtn.addEventListener('click', () => move(1));
+            clearBtn.addEventListener('click', () => {
+                searchInput.value = '';
+                search();
+                searchInput.focus();
+            });
+
+            this._helpSearch = { section: helpSection, input: searchInput, move };
+            updateMatchDisplay();
 
             this.detailsContainer.appendChild(helpSection);
         }
 
         // Parameters section
         const paramsContainer = document.createElement('div');
+        paramsContainer.className = 'plugin-parameters-container';
         paramsContainer.style.cssText = `
-            flex: 1;
-            overflow-y: auto;
+            flex: 0 0 auto;
+            overflow: visible;
             padding: 10px;
         `;
 
         const paramsTitle = document.createElement('h4');
         paramsTitle.style.cssText = 'margin: 0 0 8px 0; color: var(--color-text-muted); font-size: 11px; text-transform: uppercase; letter-spacing: 1px;';
-        paramsTitle.textContent = 'Parameters';
+        paramsTitle.textContent = this._tt('Parameters');
         paramsContainer.appendChild(paramsTitle);
 
         // Always parse metadata from source to determine available parameters.
@@ -2617,14 +3334,14 @@ class PluginManager {
                 font-size: 12px;
                 line-height: 1.4;
             `;
-            missingFile.textContent = `Plugin file missing: js/plugins/${plugin.name}.js. This entry can be removed and saved.`;
+            missingFile.textContent = `${this._tt('Plugin file missing:')} js/plugins/${plugin.name}.js. ${this._tt('This entry can be removed and saved.')}`;
             paramsContainer.appendChild(missingFile);
         }
 
         if (Object.keys(paramMetadata).length === 0) {
             const noParams = document.createElement('div');
             noParams.style.cssText = 'color: var(--color-text-dim); font-size: 13px;';
-            noParams.textContent = pluginFileExists ? 'This plugin has no configurable parameters.' : 'No parameters available because the plugin file is missing.';
+            noParams.textContent = pluginFileExists ? this._tt('This plugin has no configurable parameters.') : this._tt('No parameters available because the plugin file is missing.');
             paramsContainer.appendChild(noParams);
         } else {
             // Build merged params: all metadata keys, using saved values where available,
@@ -2646,33 +3363,6 @@ class PluginManager {
         }
 
         this.detailsContainer.appendChild(paramsContainer);
-
-        // Footer with delete button
-        const footer = document.createElement('div');
-        footer.style.cssText = `
-            padding: 12px 16px;
-            border-top: 1px solid var(--color-border);
-            background-color: var(--color-bg-panel);
-            display: flex;
-            justify-content: flex-end;
-        `;
-
-        const deleteBtn = document.createElement('button');
-        deleteBtn.textContent = 'Remove Plugin';
-        deleteBtn.style.cssText = `
-            padding: 6px 16px;
-            background-color: var(--color-danger-soft);
-            color: var(--color-text-strong);
-            border: none;
-            border-radius: 3px;
-            cursor: pointer;
-        `;
-        deleteBtn.addEventListener('click', () => {
-            this._removeSelectedPlugins();
-        });
-        footer.appendChild(deleteBtn);
-
-        this.detailsContainer.appendChild(footer);
     }
 
     /**
@@ -2735,13 +3425,13 @@ class PluginManager {
      * Create parameter input field with depth information
      */
     createParameterInputWithDepth(plugin, key, value, metadata, depth) {
-        // Check if this is a separator (text is '-' or '---' etc, or key is empty)
-        const isSeparator = key === '' || metadata.text === '-' || /^-+$/.test(metadata.text);
+        const groupMatch = key.match(/^---\s*(.*?)\s*---$/);
+        const isSeparator = key === '' || metadata.text === '-' || /^-+$/.test(metadata.text || '');
 
         // Check if this is a header-only parameter (no @default annotation at all)
         // Header params are used for grouping and have children
         // null means no @default was declared; '' means @default with empty value (real param)
-        const isHeaderOnly = metadata.default === null && !isSeparator;
+        const isHeaderOnly = Boolean(groupMatch) && !isSeparator;
 
         const container = document.createElement('div');
 
@@ -2761,19 +3451,20 @@ class PluginManager {
         // Header-only parameters (grouping labels)
         if (isHeaderOnly) {
             // Clean up display name: strip leading arrows/decorators
-            const displayName = (metadata.text || key).replace(/^->\s*/, '').replace(/<+$/, '').trim();
+            const displayName = (metadata.text || groupMatch?.[1] || key).replace(/^->\s*/, '').replace(/<+$/, '').trim();
 
             container.style.cssText = `
                 margin: ${depth > 0 ? '6px' : '10px'} 0 2px 0;
                 padding: 5px 10px 5px ${leftPadding}px;
-                background: linear-gradient(90deg, #2a3a4a 0%, var(--color-bg-surface) 100%);
-                border-left: 3px solid var(--color-syntax-keyword);
+                background-color: var(--color-bg-toolbar);
+                border-left: 3px solid var(--color-accent);
+                border-bottom: 1px solid var(--color-border);
                 border-radius: 0 3px 3px 0;
             `;
 
             const header = document.createElement('div');
             header.style.cssText = `
-                color: #7cb8e4;
+                color: var(--color-text-strong);
                 font-weight: bold;
                 font-size: 12px;
                 text-transform: uppercase;
@@ -2796,20 +3487,20 @@ class PluginManager {
         container.style.cssText = `
             margin-bottom: 4px;
             padding: 6px 8px;
-            padding-left: ${leftPadding}px;
-            background-color: ${depth > 0 ? '#262626' : 'var(--color-bg-list-item)'};
+            background-color: ${depth > 0 ? 'var(--color-bg-list-item-alt)' : 'var(--color-bg-list-item)'};
             border-radius: 2px;
             ${depth > 0 ? 'border-left: 2px solid var(--color-border-subtle);' : ''}
-            display: flex;
-            align-items: center;
+            display: grid;
+            grid-template-columns: minmax(180px, 38%) minmax(0, 500px);
+            align-items: start;
             gap: 8px;
             min-height: 32px;
         `;
 
         const labelContainer = document.createElement('div');
         labelContainer.style.cssText = `
-            flex: 0 0 35%;
-            min-width: 150px;
+            min-width: 0;
+            padding-left: ${depth * 20}px;
         `;
 
         const label = document.createElement('div');
@@ -2828,7 +3519,7 @@ class PluginManager {
 
         // Input wrapper takes remaining space, capped at a reasonable width
         const inputWrapper = document.createElement('div');
-        inputWrapper.style.cssText = 'flex: 1; min-width: 0; max-width: 500px;';
+        inputWrapper.style.cssText = 'min-width:0;width:100%;';
 
         // Shared input style
         const inputStyle = `
@@ -2845,11 +3536,11 @@ class PluginManager {
         // Check if this is a struct or array type
         const isStruct = metadata.type && metadata.type.includes('struct<');
         const isArray = metadata.type && metadata.type.includes('[]');
-        const isComplexType = isStruct || (isArray && !metadata.type.startsWith('number') && !metadata.type.startsWith('string') && !metadata.type.startsWith('boolean'));
+        const isComplexType = isStruct || isArray;
 
         if (isComplexType) {
             const editButton = document.createElement('button');
-            editButton.textContent = `Edit...`;
+            editButton.textContent = this._tt('Edit...');
             editButton.style.cssText = `
                 padding: 4px 12px;
                 background-color: var(--color-accent);
@@ -2957,6 +3648,20 @@ class PluginManager {
             return container;
         }
 
+        if (metadata.type === 'note') {
+            const textarea = document.createElement('textarea');
+            const decodedValue = this.parsePluginJsonLayer(value, value ?? '');
+            textarea.value = typeof decodedValue === 'string' ? decodedValue : String(value ?? '');
+            textarea.rows = 4;
+            textarea.style.cssText = `${inputStyle}min-height:82px;line-height:1.4;font-family:monospace;resize:vertical;`;
+            textarea.addEventListener('change', event => {
+                plugin.parameters[key] = JSON.stringify(event.target.value);
+            });
+            inputWrapper.appendChild(textarea);
+            container.appendChild(inputWrapper);
+            return container;
+        }
+
         // Handle file type - scan directory and show dropdown
         if (metadata.type && metadata.type === 'file' && metadata.dir) {
             const select = document.createElement('select');
@@ -2965,7 +3670,7 @@ class PluginManager {
             // Add empty/none option
             const noneOpt = document.createElement('option');
             noneOpt.value = '';
-            noneOpt.textContent = '(none)';
+            noneOpt.textContent = this._tt('(none)');
             noneOpt.selected = !value;
             select.appendChild(noneOpt);
 
@@ -2974,14 +3679,10 @@ class PluginManager {
                 const currentProject = this.projectController.getCurrentProject();
                 const dirPath = this.path.join(currentProject.path, metadata.dir);
                 if (this.fs.existsSync(dirPath)) {
-                    const files = this.fs.readdirSync(dirPath);
                     const imageExts = ['.png', '.jpg', '.jpeg', '.webp', '.bmp'];
                     const audioExts = ['.ogg', '.m4a', '.wav', '.mp3'];
                     const validExts = metadata.dir.includes('img') ? imageExts : audioExts;
-                    const filtered = files
-                        .filter(f => validExts.some(ext => f.toLowerCase().endsWith(ext)))
-                        .map(f => f.replace(/\.[^.]+$/, ''))
-                        .sort();
+                    const filtered = RRAssetFiles.listNames(dirPath, validExts);
                     for (const fileName of filtered) {
                         const opt = document.createElement('option');
                         opt.value = fileName;
@@ -3039,20 +3740,14 @@ class PluginManager {
      */
     parseStructDefinitions(source) {
         const structs = {};
+        const structPattern = /\/\*~struct~([^:\r\n]+):([\s\S]*?)\*\//g;
 
-        // Match all struct definition blocks: /*~struct~StructName:
-        const structBlocks = source.match(/\/\*~struct~(\w+):([\s\S]*?)(?=\/\*~struct~|\*\/\s*$)/g);
-
-        if (!structBlocks) return structs;
-
-        for (const block of structBlocks) {
-            const nameMatch = block.match(/\/\*~struct~(\w+):/);
-            if (!nameMatch) continue;
-
-            const structName = nameMatch[1];
+        for (const match of source.matchAll(structPattern)) {
+            const structName = match[1].trim();
+            if (!structName) continue;
             structs[structName] = {};
 
-            const lines = block.split('\n');
+            const lines = match[2].split('\n');
             let currentParam = null;
 
             for (const line of lines) {
@@ -3071,7 +3766,8 @@ class PluginManager {
                         text: '',
                         desc: '',
                         type: 'string',
-                        default: '',
+                        default: null,
+                        parent: null,
                         min: null,
                         max: null,
                         options: [],
@@ -3101,7 +3797,13 @@ class PluginManager {
 
                     const typeMatch = normalized.match(/^@type\s+(.+)/);
                     if (typeMatch) {
-                        structs[structName][currentParam].type = typeMatch[1];
+                        structs[structName][currentParam].type = typeMatch[1].trim();
+                        continue;
+                    }
+
+                    const parentMatch = normalized.match(/^@parent\s+(.+)/);
+                    if (parentMatch) {
+                        structs[structName][currentParam].parent = parentMatch[1].trim();
                         continue;
                     }
 
@@ -3286,7 +3988,7 @@ class PluginManager {
         try {
             const currentProject = this.projectController.getCurrentProject();
             if (!currentProject || !currentProject.path) {
-                alert('No project loaded');
+                alert(this._tt('No project loaded'));
                 return;
             }
 
@@ -3296,7 +3998,7 @@ class PluginManager {
             const isRpgMakerPluginsFile = this.path.basename(pluginsPath) === 'plugins.js';
             const pluginsToWrite = isRpgMakerPluginsFile
                 ? this.serializeRpgMakerPlugins(this.plugins)
-                : this.plugins;
+                : this.serializeReactorPlugins(this.plugins);
             const header = isRpgMakerPluginsFile
                 ? '// Generated by RPG Maker.\n// Do not edit this file directly.\n'
                 : '// Generated by RPG Reactor Plugin Manager\n// Do not edit this file directly - use the Plugin Manager instead\n';
@@ -3308,11 +4010,27 @@ ${JSON.stringify(pluginsToWrite, null, 4)};
 `;
 
             this._writeFileAtomic(this.fs, pluginsPath, content, 'utf8');
-            alert('Plugins saved successfully!');
+            alert(this._tt('Plugins saved successfully!'));
         } catch (err) {
             console.error('Error saving plugins:', err);
-            alert(`Error saving plugins: ${err.message}`);
+            alert(`${this._tt('Error saving plugins:')} ${err.message}`);
         }
+    }
+
+    /**
+     * The manifest is parsed by every game boot — keep it to what the
+     * runtime reads. Help text, author, and url are source-derived and the
+     * manager re-parses them from the plugin files on open.
+     */
+    serializeReactorPlugins(plugins) {
+        return (plugins || []).map(plugin => ({
+            name: String(plugin.name || ''),
+            status: !!plugin.status,
+            description: String(plugin.description || ''),
+            parameters: plugin.parameters && typeof plugin.parameters === 'object'
+                ? plugin.parameters
+                : {}
+        }));
     }
 
     serializeRpgMakerPlugins(plugins) {

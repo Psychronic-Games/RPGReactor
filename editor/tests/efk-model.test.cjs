@@ -1,32 +1,12 @@
-// Validates the .efkmodel reader/writer: every stock MZ model must parse
-// strictly to its final byte (the format spec was reverse-engineered from
-// these files), and every procedural shape must build and round-trip in
-// both wire and solid styles, including the multi-frame (v5) 4D shapes.
+// Validates tracked procedural .efkmodel fixtures in both wire and solid
+// styles, including the multi-frame (v5) 4D shapes.
 
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
 
 const repoRoot = path.resolve(__dirname, '..', '..');
 const M = require(path.join(repoRoot, 'editor', 'src', 'forge', 'EffekseerGenerator', 'format', 'efk_model.js'));
-
-const modelDir = path.join(repoRoot, 'template', 'Demo', 'effects', 'Model');
-const corpusPresent = fs.existsSync(modelDir);
-const corpusSkip = corpusPresent ? false : 'template/Demo model corpus is not present';
-
-test('every stock .efkmodel parses strictly', { skip: corpusSkip }, () => {
-    const files = fs.readdirSync(modelDir).filter((f) => f.endsWith('.efkmodel'));
-    assert.ok(files.length >= 4, 'expected stock models');
-    for (const f of files) {
-        const m = M.parseEfkmodel(new Uint8Array(fs.readFileSync(path.join(modelDir, f))));
-        assert.equal(m.version, 3, `${f}: unexpected version`);
-        assert.ok(m.vertices.length > 0 && m.faces.length > 0, `${f}: empty mesh`);
-        for (const face of m.faces) {
-            for (const i of face) assert.ok(i >= 0 && i < m.vertices.length, `${f}: face index out of range`);
-        }
-    }
-});
 
 test('every shape builds and round-trips (wire + solid where applicable)', () => {
     for (const shape of M.SHAPES) {

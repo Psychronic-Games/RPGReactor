@@ -119,10 +119,28 @@ DataManager.loadDataFile = function(name, src) {
     const xhr = new XMLHttpRequest();
     const url = "data/" + src;
     window[name] = null;
+    // Generation guard: a watchdog retry supersedes the previous request
+    // for this name. A late arrival (or late error) from a superseded XHR
+    // is dropped so it can't double-apply data or surface a stale error
+    // after the retry already succeeded.
+    this._loadGenerations = this._loadGenerations || {};
+    const gen = (this._loadGenerations[name] || 0) + 1;
+    this._loadGenerations[name] = gen;
     xhr.open("GET", url);
     xhr.overrideMimeType("application/json");
-    xhr.onload = () => this.onXhrLoad(xhr, name, src, url);
-    xhr.onerror = () => this.onXhrError(name, src, url);
+    xhr.onload = () => {
+        if (this._loadGenerations[name] === gen) this.onXhrLoad(xhr, name, src, url);
+    };
+    xhr.onerror = () => {
+        if (this._loadGenerations[name] === gen) this.onXhrError(name, src, url);
+    };
+    // Bytes flowing means the request is alive, not stalled — push the
+    // watchdog deadline forward so a slow (but live) download is never
+    // double-fired.
+    xhr.onprogress = () => {
+        const watch = this._loadWatch && this._loadWatch[name];
+        if (watch) watch.time = performance.now();
+    };
     xhr.send();
 };
 

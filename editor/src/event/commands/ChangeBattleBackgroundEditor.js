@@ -63,6 +63,7 @@ class ChangeBattleBackgroundEditor {
      * Render modal content
      */
     renderContent() {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const container = this.modal.querySelector('.change-battle-background-container');
         container.innerHTML = '';
 
@@ -70,7 +71,7 @@ class ChangeBattleBackgroundEditor {
         const header = document.createElement('div');
         header.style.cssText = 'padding: 12px 16px; background-color: var(--color-bg-panel); border-bottom: 1px solid var(--color-border); display: flex; justify-content: space-between; align-items: center; border-top-left-radius: 6px; border-top-right-radius: 6px;';
         header.innerHTML = `
-            <h3 style="margin: 0; color: var(--color-text-strong); font-size: 16px;">Change Battle Background</h3>
+            <h3 style="margin: 0; color: var(--color-text-strong); font-size: 16px;">${tt('Change Battle Background')}</h3>
             <button class="close-btn" style="background: none; border: none; color: var(--color-text-strong); font-size: 20px; cursor: pointer; padding: 0; width: 24px; height: 24px;">\u00d7</button>
         `;
         container.appendChild(header);
@@ -86,7 +87,7 @@ class ChangeBattleBackgroundEditor {
         bb1Row.style.cssText = 'display: flex; align-items: center; gap: 8px;';
 
         const bb1Label = document.createElement('span');
-        bb1Label.textContent = 'Battleback 1:';
+        bb1Label.textContent = tt('Battleback 1:');
         bb1Label.style.cssText = 'color: var(--color-text); font-size: 13px; min-width: 120px;';
 
         const bb1Input = document.createElement('input');
@@ -106,7 +107,7 @@ class ChangeBattleBackgroundEditor {
         bb2Row.style.cssText = 'display: flex; align-items: center; gap: 8px;';
 
         const bb2Label = document.createElement('span');
-        bb2Label.textContent = 'Battleback 2:';
+        bb2Label.textContent = tt('Battleback 2:');
         bb2Label.style.cssText = 'color: var(--color-text); font-size: 13px; min-width: 120px;';
 
         const bb2Input = document.createElement('input');
@@ -128,12 +129,12 @@ class ChangeBattleBackgroundEditor {
         footer.style.cssText = 'padding: 12px 16px; border-top: 1px solid var(--color-border); background-color: var(--color-bg-panel); display: flex; justify-content: flex-end; gap: 8px;';
 
         const cancelBtn = document.createElement('button');
-        cancelBtn.textContent = 'Cancel';
+        cancelBtn.textContent = tt('Cancel');
         cancelBtn.className = 'rr-btn-secondary';
         cancelBtn.addEventListener('click', () => this.close());
 
         const okBtn = document.createElement('button');
-        okBtn.textContent = 'OK';
+        okBtn.textContent = tt('OK');
         okBtn.style.cssText = 'padding: 6px 20px; background-color: var(--color-accent); color: var(--color-bg-deep); border: none; border-radius: 3px; cursor: pointer; font-size: 12px; font-weight: bold;';
         okBtn.addEventListener('click', () => this.save());
 

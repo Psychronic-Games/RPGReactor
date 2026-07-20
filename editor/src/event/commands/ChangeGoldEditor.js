@@ -85,6 +85,7 @@ class ChangeGoldEditor {
      * Render modal content
      */
     renderContent() {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const container = this.modal.querySelector('.change-gold-container');
         container.innerHTML = '';
 
@@ -101,7 +102,7 @@ class ChangeGoldEditor {
             border-top-right-radius: 6px;
         `;
         header.innerHTML = `
-            <h3 style="margin: 0; color: var(--color-text-strong); font-size: 16px;">Change Gold</h3>
+            <h3 style="margin: 0; color: var(--color-text-strong); font-size: 16px;">${tt('Change Gold')}</h3>
             <button class="close-btn" style="background: none; border: none; color: var(--color-text-strong); font-size: 20px; cursor: pointer; padding: 0; width: 24px; height: 24px;">×</button>
         `;
         container.appendChild(header);
@@ -132,7 +133,7 @@ class ChangeGoldEditor {
 
         const increaseLabel = document.createElement('label');
         increaseLabel.htmlFor = 'increase-gold';
-        increaseLabel.textContent = 'Increase';
+        increaseLabel.textContent = tt('Increase');
         increaseLabel.style.cssText = 'color: var(--color-text); cursor: pointer;';
 
         const decreaseRadio = document.createElement('input');
@@ -146,7 +147,7 @@ class ChangeGoldEditor {
 
         const decreaseLabel = document.createElement('label');
         decreaseLabel.htmlFor = 'decrease-gold';
-        decreaseLabel.textContent = 'Decrease';
+        decreaseLabel.textContent = tt('Decrease');
         decreaseLabel.style.cssText = 'color: var(--color-text); cursor: pointer;';
 
         operationRow.appendChild(increaseRadio);
@@ -171,7 +172,7 @@ class ChangeGoldEditor {
 
         const constantLabel = document.createElement('label');
         constantLabel.htmlFor = 'constant-gold';
-        constantLabel.textContent = 'Constant';
+        constantLabel.textContent = tt('Constant');
         constantLabel.style.cssText = 'color: var(--color-text); cursor: pointer;';
 
         const variableRadio = document.createElement('input');
@@ -186,7 +187,7 @@ class ChangeGoldEditor {
 
         const variableLabel = document.createElement('label');
         variableLabel.htmlFor = 'variable-gold';
-        variableLabel.textContent = 'Variable';
+        variableLabel.textContent = tt('Variable');
         variableLabel.style.cssText = 'color: var(--color-text); cursor: pointer;';
 
         operandTypeRow.appendChild(constantRadio);
@@ -218,12 +219,12 @@ class ChangeGoldEditor {
         `;
 
         const cancelBtn = document.createElement('button');
-        cancelBtn.textContent = 'Cancel';
+        cancelBtn.textContent = tt('Cancel');
         cancelBtn.className = 'rr-btn-secondary';
         cancelBtn.addEventListener('click', () => this.close());
 
         const okBtn = document.createElement('button');
-        okBtn.textContent = 'OK';
+        okBtn.textContent = tt('OK');
         okBtn.style.cssText = `
             padding: 6px 20px;
             background-color: var(--color-accent);
@@ -245,11 +246,12 @@ class ChangeGoldEditor {
      * Create constant input field
      */
     createConstantInput() {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const section = document.createElement('div');
         section.style.cssText = 'display: flex; align-items: center; gap: 8px;';
 
         const label = document.createElement('span');
-        label.textContent = 'Amount:';
+        label.textContent = tt('Amount:');
         label.style.cssText = 'color: var(--color-text); font-size: 13px; min-width: 80px;';
 
         const input = document.createElement('input');
@@ -280,11 +282,12 @@ class ChangeGoldEditor {
      * Create variable input field
      */
     createVariableInput() {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const section = document.createElement('div');
         section.style.cssText = 'display: flex; align-items: center; gap: 8px;';
 
         const label = document.createElement('span');
-        label.textContent = 'Variable:';
+        label.textContent = tt('Variable:');
         label.style.cssText = 'color: var(--color-text); font-size: 13px; min-width: 80px;';
 
         const input = document.createElement('input');

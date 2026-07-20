@@ -82,6 +82,7 @@ class ControlSelfSwitchEditor {
      * Render modal content
      */
     renderContent() {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const container = this.modal.querySelector('.control-self-switch-container');
         container.innerHTML = '';
 
@@ -98,7 +99,7 @@ class ControlSelfSwitchEditor {
             border-top-right-radius: 6px;
         `;
         header.innerHTML = `
-            <h3 style="margin: 0; color: var(--color-text-strong); font-size: 16px;">Control Self Switch</h3>
+            <h3 style="margin: 0; color: var(--color-text-strong); font-size: 16px;">${tt('Control Self Switch')}</h3>
             <button class="close-btn" style="background: none; border: none; color: var(--color-text-strong); font-size: 20px; cursor: pointer; padding: 0; width: 24px; height: 24px;">×</button>
         `;
         container.appendChild(header);
@@ -119,7 +120,7 @@ class ControlSelfSwitchEditor {
         switchSection.style.cssText = 'display: flex; flex-direction: column; gap: 8px;';
 
         const switchLabel = document.createElement('div');
-        switchLabel.textContent = 'Self Switch:';
+        switchLabel.textContent = tt('Self Switch:');
         switchLabel.style.cssText = 'color: var(--color-text); font-size: 13px; font-weight: bold;';
         switchSection.appendChild(switchLabel);
 
@@ -154,7 +155,7 @@ class ControlSelfSwitchEditor {
         valueSection.style.cssText = 'display: flex; flex-direction: column; gap: 8px;';
 
         const valueLabel = document.createElement('div');
-        valueLabel.textContent = 'Set to:';
+        valueLabel.textContent = tt('Set to:');
         valueLabel.style.cssText = 'color: var(--color-text); font-size: 13px; font-weight: bold;';
         valueSection.appendChild(valueLabel);
 
@@ -162,7 +163,7 @@ class ControlSelfSwitchEditor {
         valueButtons.style.cssText = 'display: flex; gap: 8px;';
 
         const onBtn = document.createElement('button');
-        onBtn.textContent = 'ON';
+        onBtn.textContent = tt('ON');
         onBtn.style.cssText = `
             padding: 8px 16px;
             background-color: ${this.value === 0 ? 'var(--color-link)' : 'var(--color-bg-panel)'};
@@ -179,7 +180,7 @@ class ControlSelfSwitchEditor {
         });
 
         const offBtn = document.createElement('button');
-        offBtn.textContent = 'OFF';
+        offBtn.textContent = tt('OFF');
         offBtn.style.cssText = `
             padding: 8px 16px;
             background-color: ${this.value === 1 ? 'var(--color-link)' : 'var(--color-bg-panel)'};
@@ -214,12 +215,12 @@ class ControlSelfSwitchEditor {
         `;
 
         const cancelBtn = document.createElement('button');
-        cancelBtn.textContent = 'Cancel';
+        cancelBtn.textContent = tt('Cancel');
         cancelBtn.className = 'rr-btn-secondary';
         cancelBtn.addEventListener('click', () => this.close());
 
         const okBtn = document.createElement('button');
-        okBtn.textContent = 'OK';
+        okBtn.textContent = tt('OK');
         okBtn.style.cssText = `
             padding: 6px 20px;
             background-color: var(--color-accent);

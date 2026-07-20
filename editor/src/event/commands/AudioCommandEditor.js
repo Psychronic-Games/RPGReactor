@@ -48,15 +48,15 @@ class AudioCommandEditor {
 
     stripAudioExtension(filename) {
         if (!filename) return '';
-        const basename = filename.split('/').pop().split('\\').pop();
+        const normalized = String(filename).replace(/\\/g, '/');
         const decodedName = (() => {
             try {
-                return decodeURIComponent(basename);
+                return decodeURIComponent(normalized);
             } catch (error) {
-                return basename;
+                return normalized;
             }
         })();
-        return decodedName.replace(/\.(ogg|m4a|mp3)$/i, '');
+        return decodedName.replace(/\.(ogg|m4a|mp3|wav)$/i, '');
     }
 
     getCurrentTrackName() {
@@ -112,16 +112,14 @@ class AudioCommandEditor {
             return [];
         }
 
-        return fs.readdirSync(audioFolder)
-            .filter(file => file.endsWith('.ogg') || file.endsWith('.m4a') || file.endsWith('.mp3'))
-            .map(file => file.replace(/\.(ogg|m4a|mp3)$/i, ''))
-            .sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
+        return RRAssetFiles.listNames(audioFolder, ['.ogg']);
     }
 
     refreshInlineSelection(container, selectedFile) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const selectedText = container.querySelector('.audio-command-selected-track');
         if (selectedText) {
-            selectedText.textContent = selectedFile ? `[${this.commandType.folder.toUpperCase()}] ${selectedFile}` : 'No Track Selected';
+            selectedText.textContent = selectedFile ? `[${this.commandType.folder.toUpperCase()}] ${selectedFile}` : tt('No Track Selected');
         }
 
         container.querySelectorAll('.audio-track-item').forEach(item => {
@@ -140,7 +138,10 @@ class AudioCommandEditor {
      */
     show(command, code, callback) {
         this.commandType = this.getCommandType(code);
-        this.command = command || this.createDefaultCommand(code);
+        // Work on a clone: the sliders and track list mutate this.command
+        // live for preview, and OK hands the clone back to the caller —
+        // Cancel must leave the original command untouched.
+        this.command = command ? JSON.parse(JSON.stringify(command)) : this.createDefaultCommand(code);
         this.applyCurrentTrackDefaults();
         this.callback = callback;
 
@@ -252,6 +253,7 @@ class AudioCommandEditor {
      * Render modal content
      */
     renderContent() {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const container = this.modal.querySelector('.audio-command-container');
         container.innerHTML = '';
 
@@ -268,7 +270,7 @@ class AudioCommandEditor {
             border-top-right-radius: 6px;
         `;
         header.innerHTML = `
-            <h3 style="margin: 0; color: var(--color-text-strong); font-size: 16px;">${this.commandType.name}</h3>
+            <h3 style="margin: 0; color: var(--color-text-strong); font-size: 16px;">${tt(this.commandType.name)}</h3>
             <button class="close-btn" style="background: none; border: none; color: var(--color-text-strong); font-size: 20px; cursor: pointer; padding: 0; width: 24px; height: 24px;">×</button>
         `;
         container.appendChild(header);
@@ -291,7 +293,7 @@ class AudioCommandEditor {
             content.appendChild(this.createFadeoutControls());
         } else if (!this.commandType.hasParams) {
             // Stop SE: no parameters
-            content.innerHTML = '<div style="color: var(--color-text-muted); padding: 20px; text-align: center;">This command has no parameters.</div>';
+            content.innerHTML = `<div style="color: var(--color-text-muted); padding: 20px; text-align: center;">${tt('This command has no parameters.')}</div>`;
         } else {
             // Play commands: full audio browser/player matching the main Audio Player UI
             content.appendChild(this.createInlineAudioPlayer());
@@ -311,12 +313,12 @@ class AudioCommandEditor {
         `;
 
         const cancelBtn = document.createElement('button');
-        cancelBtn.textContent = 'Cancel';
+        cancelBtn.textContent = tt('Cancel');
         cancelBtn.className = 'rr-btn-secondary';
         cancelBtn.addEventListener('click', () => this.close());
 
         const okBtn = document.createElement('button');
-        okBtn.textContent = 'OK';
+        okBtn.textContent = tt('OK');
         okBtn.style.cssText = `
             padding: 6px 20px;
             background-color: var(--color-accent);
@@ -344,6 +346,7 @@ class AudioCommandEditor {
      * Create file selector for audio file
      */
     createInlineAudioPlayer() {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const wrapper = document.createElement('div');
         wrapper.style.cssText = `
             display: flex;
@@ -363,10 +366,17 @@ class AudioCommandEditor {
             padding: 12px;
             text-align: center;
         `;
-        info.innerHTML = `
-            <div class="current-track audio-command-selected-track" style="color: var(--color-accent-hover); font-size: 15px; font-weight: 600; margin-bottom: 4px;">${selectedName ? `[${this.commandType.folder.toUpperCase()}] ${selectedName}` : 'No Track Selected'}</div>
-            <div class="track-time audio-command-track-time" style="color: var(--color-text-muted); font-size: 12px;">0:00 / 0:00</div>
-        `;
+        const selectedTrack = document.createElement('div');
+        selectedTrack.className = 'current-track audio-command-selected-track';
+        selectedTrack.style.cssText = 'color: var(--color-accent-hover); font-size: 15px; font-weight: 600; margin-bottom: 4px;';
+        selectedTrack.textContent = selectedName
+            ? `[${this.commandType.folder.toUpperCase()}] ${selectedName}`
+            : tt('No Track Selected');
+        const trackTime = document.createElement('div');
+        trackTime.className = 'track-time audio-command-track-time';
+        trackTime.style.cssText = 'color: var(--color-text-muted); font-size: 12px;';
+        trackTime.textContent = '0:00 / 0:00';
+        info.append(selectedTrack, trackTime);
         wrapper.appendChild(info);
 
         const seekRow = document.createElement('div');
@@ -436,18 +446,18 @@ class AudioCommandEditor {
             return btn;
         };
 
-        const playBtn = createTransportButton('Play', 'M8 5v14l11-7z', () => this.playPreview());
-        const pauseBtn = createTransportButton('Pause', 'M6 19h4V5H6v14zm8-14v14h4V5h-4z', () => {
+        const playBtn = createTransportButton(tt('Play'), 'M8 5v14l11-7z', () => this.playPreview());
+        const pauseBtn = createTransportButton(tt('Pause'), 'M6 19h4V5H6v14zm8-14v14h4V5h-4z', () => {
             const audioElement = this.getAudioElement();
             const channel = this.getCurrentChannel();
             if (audioElement) audioElement.pause();
             if (channel) channel.playing = false;
         });
-        const stopBtn = createTransportButton('Stop', 'M6 6h12v12H6z', () => this.stopPreview());
-        const loopBtn = createTransportButton('Loop: On', 'M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z', () => {
+        const stopBtn = createTransportButton(tt('Stop'), 'M6 6h12v12H6z', () => this.stopPreview());
+        const loopBtn = createTransportButton(tt('Loop: On'), 'M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z', () => {
             loopBtn.classList.toggle('active-toggle');
             const loopActive = loopBtn.classList.contains('active-toggle');
-            loopBtn.title = loopActive ? 'Loop: On' : 'Loop: Off';
+            loopBtn.title = loopActive ? tt('Loop: On') : tt('Loop: Off');
             loopBtn.style.backgroundColor = loopActive ? 'var(--color-accent-hover)' : 'var(--color-bg-panel)';
             loopBtn.style.borderColor = loopActive ? 'var(--color-accent-hover)' : 'var(--color-border-input)';
             loopBtn.style.color = loopActive ? 'var(--color-bg-deep)' : 'var(--color-text)';
@@ -462,7 +472,7 @@ class AudioCommandEditor {
             loopBtn.style.borderColor = 'var(--color-accent-hover)';
             loopBtn.style.color = 'var(--color-bg-deep)';
         } else {
-            loopBtn.title = 'Loop: Off';
+            loopBtn.title = tt('Loop: Off');
         }
 
         controls.appendChild(playBtn);
@@ -481,20 +491,20 @@ class AudioCommandEditor {
             border-radius: 4px;
             border: 1px solid var(--color-bg-button);
         `;
-        controlsGrid.appendChild(this.createCompactSliderControl('Volume', this.command.parameters[0]?.volume || 90, 0, 100, 1, '%', (value) => {
+        controlsGrid.appendChild(this.createCompactSliderControl(tt('Volume'), this.command.parameters[0]?.volume || 90, 0, 100, 1, '%', (value) => {
             this.command.parameters[0].volume = parseInt(value);
             this.updateAudioVolume(parseInt(value));
         }));
-        controlsGrid.appendChild(this.createCompactSliderControl('Pitch', this.command.parameters[0]?.pitch || 100, 50, 150, 1, '%', (value) => {
+        controlsGrid.appendChild(this.createCompactSliderControl(tt('Pitch'), this.command.parameters[0]?.pitch || 100, 50, 150, 1, '%', (value) => {
             this.command.parameters[0].pitch = parseInt(value);
             this.updateAudioPitch(parseInt(value));
         }));
-        controlsGrid.appendChild(this.createCompactSliderControl('Pan', this.command.parameters[0]?.pan || 0, -100, 100, 1, '', (value, valueDisplay) => {
+        controlsGrid.appendChild(this.createCompactSliderControl(tt('Pan'), this.command.parameters[0]?.pan || 0, -100, 100, 1, '', (value, valueDisplay) => {
             const pan = parseInt(value);
             this.command.parameters[0].pan = pan;
             this.updateAudioPan(pan);
-            valueDisplay.textContent = pan === 0 ? 'Center' : (pan > 0 ? `R${Math.abs(pan)}` : `L${Math.abs(pan)}`);
-        }, (value) => value === 0 ? 'Center' : (value > 0 ? `R${Math.abs(value)}` : `L${Math.abs(value)}`)));
+            valueDisplay.textContent = pan === 0 ? tt('Center') : (pan > 0 ? `R${Math.abs(pan)}` : `L${Math.abs(pan)}`);
+        }, (value) => value === 0 ? tt('Center') : (value > 0 ? `R${Math.abs(value)}` : `L${Math.abs(value)}`)));
         wrapper.appendChild(controlsGrid);
 
         const browser = this.createInlineTrackBrowser(wrapper);
@@ -576,6 +586,7 @@ class AudioCommandEditor {
     }
 
     createInlineTrackBrowser(wrapper) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const files = this.getProjectAudioFiles();
         const browser = document.createElement('div');
         browser.style.cssText = `
@@ -605,7 +616,7 @@ class AudioCommandEditor {
         trackList.style.cssText = 'background: var(--color-bg-surface); flex: 1; overflow-y: auto; padding: 0;';
 
         if (files.length === 0) {
-            trackList.innerHTML = `<p style="color: var(--color-text-muted); padding: 20px; text-align: center;">No ${this.commandType.folder.toUpperCase()} files found</p>`;
+            trackList.innerHTML = `<p style="color: var(--color-text-muted); padding: 20px; text-align: center;">${tt('No')} ${this.commandType.folder.toUpperCase()} ${tt('files found')}</p>`;
             browser.appendChild(tabBar);
             browser.appendChild(trackList);
             return browser;
@@ -766,11 +777,12 @@ class AudioCommandEditor {
     }
 
     createFileSelector() {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const div = document.createElement('div');
         div.style.cssText = 'display: flex; flex-direction: column; gap: 6px;';
 
         const label = document.createElement('div');
-        label.textContent = 'Audio File:';
+        label.textContent = tt('Audio File:');
         label.style.cssText = 'font-weight: bold; font-size: 13px; color: var(--color-text);';
 
         const row = document.createElement('div');
@@ -778,7 +790,7 @@ class AudioCommandEditor {
 
         const fileDisplay = document.createElement('input');
         fileDisplay.type = 'text';
-        fileDisplay.value = this.command.parameters[0]?.name || '(None)';
+        fileDisplay.value = this.command.parameters[0]?.name || tt('(None)');
         fileDisplay.readOnly = true;
         fileDisplay.className = 'audio-file-display';
         fileDisplay.style.cssText = `
@@ -792,7 +804,7 @@ class AudioCommandEditor {
         `;
 
         const browseBtn = document.createElement('button');
-        browseBtn.textContent = 'Browse...';
+        browseBtn.textContent = tt('Browse...');
         browseBtn.style.cssText = `
             padding: 6px 16px;
             background-color: var(--color-accent);
@@ -823,7 +835,7 @@ class AudioCommandEditor {
         previewRow.style.cssText = 'display: flex; gap: 8px; align-items: center; margin-top: 4px;';
 
         const playBtn = document.createElement('button');
-        playBtn.innerHTML = '<svg viewBox="0 0 24 24" width="14" height="14"><path d="M8 5v14l11-7z" fill="currentColor"/></svg> Play';
+        playBtn.innerHTML = `<svg viewBox="0 0 24 24" width="14" height="14"><path d="M8 5v14l11-7z" fill="currentColor"/></svg> ${tt('Play')}`;
         playBtn.className = 'audio-play-btn';
         playBtn.style.cssText = `
             padding: 6px 16px;
@@ -843,7 +855,7 @@ class AudioCommandEditor {
         playBtn.addEventListener('mouseleave', () => { playBtn.style.backgroundColor = 'var(--color-bg-panel)'; });
 
         const stopBtn = document.createElement('button');
-        stopBtn.innerHTML = '<svg viewBox="0 0 24 24" width="14" height="14"><path d="M6 6h12v12H6z" fill="currentColor"/></svg> Stop';
+        stopBtn.innerHTML = `<svg viewBox="0 0 24 24" width="14" height="14"><path d="M6 6h12v12H6z" fill="currentColor"/></svg> ${tt('Stop')}`;
         stopBtn.className = 'audio-stop-btn';
         stopBtn.style.cssText = `
             padding: 6px 16px;
@@ -876,7 +888,7 @@ class AudioCommandEditor {
         });
 
         const loopLabel = document.createElement('label');
-        loopLabel.textContent = 'Loop';
+        loopLabel.textContent = tt('Loop');
         loopLabel.style.cssText = 'color: var(--color-text); font-size: 12px; cursor: pointer;';
         loopLabel.addEventListener('click', () => loopCheckbox.click());
 
@@ -975,8 +987,9 @@ class AudioCommandEditor {
      * Create volume control slider
      */
     createVolumeControl() {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         return this.createSliderControl(
-            'Volume:',
+            tt('Volume:'),
             this.command.parameters[0]?.volume || 90,
             0,
             100,
@@ -993,8 +1006,9 @@ class AudioCommandEditor {
      * Create pitch control slider
      */
     createPitchControl() {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         return this.createSliderControl(
-            'Pitch:',
+            tt('Pitch:'),
             this.command.parameters[0]?.pitch || 100,
             50,
             150,
@@ -1011,8 +1025,9 @@ class AudioCommandEditor {
      * Create pan control slider
      */
     createPanControl() {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         return this.createSliderControl(
-            'Pan:',
+            tt('Pan:'),
             this.command.parameters[0]?.pan || 0,
             -100,
             100,
@@ -1029,8 +1044,9 @@ class AudioCommandEditor {
      * Create fadeout duration control
      */
     createFadeoutControls() {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         return this.createSliderControl(
-            'Duration (seconds):',
+            tt('Duration (seconds):'),
             (this.command.parameters[0] || 60) / 60,
             0,
             10,
@@ -1087,12 +1103,13 @@ class AudioCommandEditor {
      * Browse for audio files
      */
     browseAudioFiles(callback) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const currentProject = this.projectController.getCurrentProject ?
             this.projectController.getCurrentProject() :
             this.projectController.currentProject;
 
         if (!currentProject || !currentProject.path) {
-            alert('No project loaded');
+            alert(tt('No project loaded'));
             return;
         }
 
@@ -1102,17 +1119,14 @@ class AudioCommandEditor {
 
         // Check if folder exists
         if (!fs.existsSync(audioFolder)) {
-            alert(`Audio folder not found: ${audioFolder}`);
+            alert(tt('Audio folder not found:') + ' ' + audioFolder);
             return;
         }
 
-        // Read audio files
-        const files = fs.readdirSync(audioFolder).filter(file => {
-            return file.endsWith('.ogg') || file.endsWith('.m4a') || file.endsWith('.mp3');
-        });
+        const files = RRAssetFiles.listNames(audioFolder, ['.ogg']);
 
         if (files.length === 0) {
-            alert('No audio files found in folder');
+            alert(tt('No audio files found in folder'));
             return;
         }
 
@@ -1127,6 +1141,7 @@ class AudioCommandEditor {
      * Show file picker dialog
      */
     showFilePicker(files, currentSelection, callback) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         let selectedFile = currentSelection;
         const picker = document.createElement('div');
         picker.style.cssText = `
@@ -1174,7 +1189,7 @@ class AudioCommandEditor {
             align-items: center;
         `;
         titleRow.innerHTML = `
-            <h3 style="margin: 0; color: var(--color-text-strong); font-size: 16px;">Select Audio File</h3>
+            <h3 style="margin: 0; color: var(--color-text-strong); font-size: 16px;">${tt('Select Audio File')}</h3>
             <button class="close-picker" style="background: none; border: none; color: var(--color-text-strong); font-size: 20px; cursor: pointer;">×</button>
         `;
         header.appendChild(titleRow);
@@ -1188,7 +1203,7 @@ class AudioCommandEditor {
         `;
 
         const playPreviewBtn = document.createElement('button');
-        playPreviewBtn.innerHTML = '<svg viewBox="0 0 24 24" width="14" height="14"><path d="M8 5v14l11-7z" fill="currentColor"/></svg> Preview';
+        playPreviewBtn.innerHTML = `<svg viewBox="0 0 24 24" width="14" height="14"><path d="M8 5v14l11-7z" fill="currentColor"/></svg> ${tt('Preview')}`;
         playPreviewBtn.style.cssText = `
             padding: 6px 16px;
             background-color: var(--color-bg-panel);
@@ -1206,7 +1221,7 @@ class AudioCommandEditor {
         playPreviewBtn.addEventListener('mouseleave', () => { playPreviewBtn.style.backgroundColor = 'var(--color-bg-panel)'; });
 
         const stopPreviewBtn = document.createElement('button');
-        stopPreviewBtn.innerHTML = '<svg viewBox="0 0 24 24" width="14" height="14"><path d="M6 6h12v12H6z" fill="currentColor"/></svg> Stop';
+        stopPreviewBtn.innerHTML = `<svg viewBox="0 0 24 24" width="14" height="14"><path d="M6 6h12v12H6z" fill="currentColor"/></svg> ${tt('Stop')}`;
         stopPreviewBtn.style.cssText = `
             padding: 6px 16px;
             background-color: var(--color-bg-panel);
@@ -1225,7 +1240,7 @@ class AudioCommandEditor {
 
         const previewLabel = document.createElement('span');
         previewLabel.className = 'preview-filename';
-        previewLabel.textContent = selectedFile ? selectedFile : 'No file selected';
+        previewLabel.textContent = selectedFile ? selectedFile : tt('No file selected');
         previewLabel.style.cssText = `
             color: var(--color-text);
             font-size: 12px;
@@ -1246,7 +1261,7 @@ class AudioCommandEditor {
         `;
 
         // Sort files alphabetically
-        const sortedFiles = files.map(file => file.replace(/\.(ogg|m4a|mp3)$/, '')).sort();
+        const sortedFiles = files.slice();
 
         // Create alphabet tabs
         const tabBar = document.createElement('div');
@@ -1453,11 +1468,11 @@ class AudioCommandEditor {
         `;
 
         const cancelBtn = document.createElement('button');
-        cancelBtn.textContent = 'Cancel';
+        cancelBtn.textContent = tt('Cancel');
         cancelBtn.className = 'rr-btn-secondary';
 
         const okBtn = document.createElement('button');
-        okBtn.textContent = 'OK';
+        okBtn.textContent = tt('OK');
         okBtn.style.cssText = `
             padding: 6px 20px;
             background-color: var(--color-accent);
@@ -1491,24 +1506,14 @@ class AudioCommandEditor {
             if (!currentProject) return;
 
             const path = require('path');
-            const fs = require('fs');
             const audioFolder = path.join(currentProject.path, 'audio', this.commandType.folder);
 
-            const extensions = ['.ogg', '.m4a', '.mp3'];
-            let audioPath = null;
+            const audioFile = RRAssetFiles.find(audioFolder, filename, ['.ogg']);
 
-            for (const ext of extensions) {
-                const testPath = path.join(audioFolder, filename + ext);
-                if (fs.existsSync(testPath)) {
-                    audioPath = testPath;
-                    break;
-                }
-            }
-
-            if (audioPath) {
+            if (audioFile) {
                 const player = this.getAudioPlayer();
                 if (player) {
-                    const fileUrl = 'file://' + audioPath.replace(/\\/g, '/');
+                    const fileUrl = RRAssetFiles.toUrl(audioFile.absolutePath);
                     // SE shouldn't loop by default in preview
                     const shouldLoop = (this.commandType.folder !== 'se');
                     player.playExternal(fileUrl, {
@@ -1526,7 +1531,7 @@ class AudioCommandEditor {
             if (selectedFile) {
                 loadPreviewFile(selectedFile);
             } else {
-                alert('Please select a file to preview');
+                alert(tt('Please select a file to preview'));
             }
         });
 
@@ -1571,7 +1576,8 @@ class AudioCommandEditor {
         // Auto-scroll to selected file if one exists
         if (selectedFile) {
             setTimeout(() => {
-                const selectedBtn = fileList.querySelector(`[data-filename="${selectedFile}"]`);
+                const selectedBtn = Array.from(fileList.querySelectorAll('.audio-file-btn'))
+                    .find(button => button.dataset.filename === selectedFile);
                 if (selectedBtn) {
                     selectedBtn.scrollIntoView({ behavior: 'smooth', block: 'center' });
                 }
@@ -1602,27 +1608,15 @@ class AudioCommandEditor {
         if (!currentProject || !currentProject.path) return;
 
         const path = require('path');
-        const fs = require('fs');
         const audioFolder = path.join(currentProject.path, 'audio', this.commandType.folder);
 
-        // Try different extensions
-        const extensions = ['.ogg', '.m4a', '.mp3'];
-        let audioPath = null;
+        const audioFile = RRAssetFiles.find(audioFolder, filename, ['.ogg']);
 
-        for (const ext of extensions) {
-            const testPath = path.join(audioFolder, filename + ext);
-            if (fs.existsSync(testPath)) {
-                audioPath = testPath;
-                break;
-            }
-        }
-
-        if (audioPath) {
+        if (audioFile) {
             const player = this.getAudioPlayer();
             if (!player) return;
 
-            // Convert to file:// URL for NW.js
-            const fileUrl = 'file://' + audioPath.replace(/\\/g, '/');
+            const fileUrl = RRAssetFiles.toUrl(audioFile.absolutePath);
 
             // Get loop control value
             const loopCheckbox = document.querySelector('.audio-loop-checkbox');
@@ -1645,11 +1639,12 @@ class AudioCommandEditor {
      * Play audio preview
      */
     playPreview() {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const filename = this.command.parameters[0]?.name;
         if (filename) {
             this.loadAudioFile(filename);
         } else {
-            alert('Please select an audio file first');
+            alert(tt('Please select an audio file first'));
         }
     }
 

@@ -8,7 +8,6 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const https = require('https');
-const { execSync } = require('child_process');
 const iconHelpers = require('./icon-helpers');
 const nwRuntime = require('./nw-runtime-utils');
 const nwCodec = require('./nw-codec-utils');
@@ -60,6 +59,8 @@ const {
     createLinuxAppImage = false,
     appImageToolPath,
     appImageRuntimePath,
+    releaseBuild = false,
+    releaseHashManifestPath,
 } = workerData;
 let nwVersion = requestedNwVersion;
 let nwVersionResolved = false;
@@ -73,6 +74,17 @@ const bundledDirs = {
 
 const cacheCandidates = nwRuntime.cacheDirectories(appRoot);
 const codecCacheCandidates = nwCodec.cacheDirectories(appRoot);
+let releaseHashManifest = null;
+
+function getReleaseHashManifest() {
+    if (!releaseBuild) return null;
+    if (!releaseHashManifest) {
+        const manifestPath = releaseHashManifestPath || process.env.RPG_REACTOR_RELEASE_HASH_MANIFEST ||
+            path.join(appRoot, 'build-scripts', 'release-hashes.json');
+        releaseHashManifest = nwRuntime.loadReleaseHashManifest(manifestPath);
+    }
+    return releaseHashManifest;
+}
 
 function bundledRuntimeVersion(platform, bundledDir, packagedDir) {
     if (packagedDir) return nwRuntime.normalizeVersion(editorNwVersion);
@@ -140,10 +152,10 @@ function copyDirRecursive(src, dest) {
 function validateProjectRuntime(root) {
     const required = [
         'reactor_main.js', 'reactor_core.js', 'reactor_managers.js',
-        'reactor_objects.js', 'reactor_scenes.js', 'reactor_sprites.js',
+        'reactor_objects.js', 'reactor_scenes.js', 'reactor_sprites.js', 'reactor_picture_extensions.js',
         'reactor_windows.js', 'reactor_mv_compat.js', 'reactor_plugins.js',
         path.join('libs', 'pixi.js'), path.join('libs', 'pixi_compat.js'),
-        path.join('libs', 'pako.min.js'), path.join('libs', 'localforage.min.js'),
+        path.join('libs', 'pako.min.js'), path.join('libs', 'lz-string.js'), path.join('libs', 'localforage.min.js'),
         path.join('libs', 'effekseer.min.js'), path.join('libs', 'effekseer.wasm'),
         path.join('libs', 'vorbisdecoder.js'),
     ];
@@ -375,6 +387,8 @@ async function installProprietaryCodec(platform, runtimeRoot, runtimeVersion, pr
         cacheDirectories: codecCacheCandidates,
         download: (url, destination) => downloadFile(url, destination, progressBase, progressSpan),
         onWarning: logWarn,
+        releaseBuild,
+        hashManifest: getReleaseHashManifest(),
     });
     const temp = path.join(os.tmpdir(), `rpgreactor-codec-${process.pid}-${threadId}-${Date.now()}`);
     try {
@@ -511,7 +525,15 @@ async function installProprietaryCodec(platform, runtimeRoot, runtimeVersion, pr
                 const bundledDir = bundledDirs[nwPlatform];
                 const packagedDir = nwRuntime.packagedFlatRuntime(editorExecPath, nwPlatform);
                 const localRuntimeVersion = bundledRuntimeVersion(nwPlatform, bundledDir, bundledDir ? null : packagedDir);
-                const hasBundledRuntime = (bundledDir && fs.existsSync(bundledDir)) || packagedDir;
+                const localRuntimeRoot = bundledDir || packagedDir;
+                const localRuntimeArch = localRuntimeRoot
+                    ? nwRuntime.detectRuntimeArchitecture(localRuntimeRoot, nwPlatform)
+                    : null;
+                const hasBundledRuntime = Boolean(localRuntimeRoot &&
+                    (localRuntimeArch === 'x64' || localRuntimeArch === 'universal'));
+                if (localRuntimeRoot && !hasBundledRuntime) {
+                    logWarn(`Ignoring local ${label} runtime: expected x64 executable, detected ${localRuntimeArch || 'unknown'}.`);
+                }
                 const requiresSelectedVersion = nwVersionPolicy === 'exact' || nwVersionPolicy === 'editor';
                 if (requiresSelectedVersion) await ensureNwVersion();
                 const localVersionMatches = !requiresSelectedVersion ||
@@ -545,7 +567,15 @@ async function installProprietaryCodec(platform, runtimeRoot, runtimeVersion, pr
                     // Download NW.js for the target platform
                     await ensureNwVersion();
                     const archiveName = nwRuntime.archiveName(nwVersion, nwPlatform, 'normal');
-                    let archivePath = nwRuntime.findCachedFile(cacheCandidates, archiveName);
+                    const trustedHash = releaseBuild
+                        ? nwRuntime.trustedArchiveHash(getReleaseHashManifest(), 'nwjs', archiveName)
+                        : null;
+                    let archivePath = trustedHash
+                        ? nwRuntime.findVerifiedCachedFile(cacheCandidates, archiveName, trustedHash, logWarn)
+                        : nwRuntime.findCachedFile(cacheCandidates, archiveName);
+                    if (!releaseBuild) {
+                        logWarn(`Developer build: ${archiveName} is not authenticated by a trusted hash manifest.`);
+                    }
 
                     if (!archivePath) {
                         const downloadCacheDir = nwRuntime.writableCacheDirectory(cacheCandidates);
@@ -555,6 +585,14 @@ async function installProprietaryCodec(platform, runtimeRoot, runtimeVersion, pr
                         logDim(`  ${url}`);
                         // Download gets pRuntime → pCopy range for progress
                         await downloadFile(url, archivePath, Math.round(pRuntime), Math.round(platformShare * 0.5));
+                        if (trustedHash) {
+                            try {
+                                nwRuntime.verifyArchiveHash(archivePath, trustedHash, `NW.js runtime ${archiveName}`);
+                            } catch (error) {
+                                fs.rmSync(archivePath, { force: true });
+                                throw error;
+                            }
+                        }
                         logGood('Download complete.');
                     } else {
                         logInfo(`Using cached NW.js: ${archivePath}`);
@@ -575,6 +613,7 @@ async function installProprietaryCodec(platform, runtimeRoot, runtimeVersion, pr
                             ? path.join(extractDir, extracted[0])
                             : extractDir;
 
+                        nwRuntime.assertRuntimeArchitecture(innerDir, nwPlatform, 'x64');
                         copyDirRecursive(innerDir, platformOutDir);
                         nwRuntime.writeRuntimeMarker(platformOutDir, {
                             version: nwVersion, edition: 'normal', platform: nwPlatform, arch: 'x64',

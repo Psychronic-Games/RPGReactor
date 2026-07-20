@@ -55,6 +55,7 @@ class DatabaseCommonEventEditor {
     // ==========================================
 
     createTopSection() {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const section = document.createElement('div');
         section.style.cssText = 'display: flex; flex-direction: column; gap: 8px; flex-shrink: 0;';
 
@@ -62,7 +63,7 @@ class DatabaseCommonEventEditor {
         const nameRow = document.createElement('div');
         nameRow.style.cssText = 'display: flex; gap: 8px; align-items: center;';
         nameRow.innerHTML = `
-            <label class="database-field-label" style="flex-shrink: 0;">Name:</label>
+            <label class="database-field-label" style="flex-shrink: 0;">${tt('Name:')}</label>
             <input type="text" class="database-field-value" id="common-event-name-input"
                    data-field="name" data-common-event-id="${this.currentEventId}"
                    value="${this.escapeHTML(this.currentEvent.name || '')}" style="flex: 1;">
@@ -76,7 +77,7 @@ class DatabaseCommonEventEditor {
         const triggerLabel = document.createElement('label');
         triggerLabel.className = 'database-field-label';
         triggerLabel.style.cssText = 'flex-shrink: 0;';
-        triggerLabel.textContent = 'Trigger:';
+        triggerLabel.textContent = tt('Trigger:');
         triggerRow.appendChild(triggerLabel);
 
         const triggerSelect = document.createElement('select');
@@ -87,7 +88,7 @@ class DatabaseCommonEventEditor {
         [{ value: 0, label: 'None' }, { value: 1, label: 'Autorun' }, { value: 2, label: 'Parallel' }].forEach(opt => {
             const option = document.createElement('option');
             option.value = opt.value;
-            option.textContent = opt.label;
+            option.textContent = tt(opt.label);
             if (this.currentEvent.trigger === opt.value) option.selected = true;
             triggerSelect.appendChild(option);
         });
@@ -98,7 +99,7 @@ class DatabaseCommonEventEditor {
         switchLabel.id = 'common-event-switch-label';
         switchLabel.className = 'database-field-label';
         switchLabel.style.cssText = `flex-shrink: 0; margin-left: 16px; ${this.currentEvent.trigger > 0 ? '' : 'display: none;'}`;
-        switchLabel.textContent = 'Switch:';
+        switchLabel.textContent = tt('Switch:');
         triggerRow.appendChild(switchLabel);
 
         const switchInput = document.createElement('input');
@@ -121,11 +122,12 @@ class DatabaseCommonEventEditor {
     // ==========================================
 
     createCommandListSection() {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const section = document.createElement('div');
         section.className = 'database-section';
         section.style.cssText = 'flex: 1; display: flex; flex-direction: column; min-height: 300px;';
 
-        section.innerHTML = '<div class="database-section-header">Event Commands</div>';
+        section.innerHTML = `<div class="database-section-header">${tt('Event Commands')}</div>`;
 
         const content = document.createElement('div');
         content.className = 'database-section-content';
@@ -164,7 +166,14 @@ class DatabaseCommonEventEditor {
             if (tag === 'INPUT' || tag === 'TEXTAREA' || e.target.isContentEditable) return;
 
             const isCtrl = e.ctrlKey || e.metaKey;
-            if (e.key === 'Delete' && this.selectedCommandIndices.length > 0) {
+            if (isCtrl && e.key.toLowerCase() === 'a') {
+                e.preventDefault();
+                e.stopPropagation();
+                this.selectedCommandIndices = this.currentEvent.list
+                    .map((command, index) => command?.code !== 0 ? index : -1)
+                    .filter(index => index >= 0);
+                this.renderCommandList(container, this.currentEvent);
+            } else if (e.key === 'Delete' && this.selectedCommandIndices.length > 0) {
                 e.preventDefault();
                 e.stopPropagation();
                 this.deleteCommands(this.currentEvent, container);
@@ -189,6 +198,8 @@ class DatabaseCommonEventEditor {
     // ==========================================
 
     renderCommandList(container, event) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
+        const previousScrollTop = container.scrollTop;
         container.innerHTML = '';
 
         if (!event.list || event.list.length === 0) {
@@ -215,11 +226,11 @@ class DatabaseCommonEventEditor {
             `;
 
             if (isEnd) {
-                div.innerHTML = '<span style="color: var(--color-border-input);">End</span>';
+                div.innerHTML = `<span style="color: var(--color-border-input);">${tt('End')}</span>`;
             } else {
                 const info = this.getCommandDisplay(cmd, event, idx);
                 div.innerHTML = `<span style="color: var(--color-text-dim); min-width: 32px; display: inline-block;">${String(idx + 1).padStart(3, '0')}</span>` +
-                    `<span style="color: ${info.color}; font-weight: 600; margin-right: 8px;">${this.escapeHTML(info.name)}</span>` +
+                    `<span style="color: ${info.color}; font-weight: 600; margin-right: 8px;">${this.escapeHTML(tt(info.name))}</span>` +
                     `<span style="color: var(--color-text);">${this.escapeHTML(info.description)}</span>`;
             }
 
@@ -278,9 +289,11 @@ class DatabaseCommonEventEditor {
 
             container.appendChild(div);
         });
+        container.scrollTop = previousScrollTop;
     }
 
     showCommandContextMenu(x, y, event, container) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const existing = document.querySelector('.common-event-cmd-context-menu');
         if (existing) existing.remove();
 
@@ -298,7 +311,7 @@ class DatabaseCommonEventEditor {
             { divider: true },
             { label: 'Cut', action: () => this.cutCommands(event, container) },
             { label: 'Copy', action: () => this.copyCommands(event) },
-            { label: 'Paste', action: () => this.pasteCommands(event, container), disabled: !this.commandClipboard },
+            { label: 'Paste', action: () => this.pasteCommands(event, container) },
             { label: 'Delete', action: () => this.deleteCommands(event, container) },
         ];
 
@@ -310,7 +323,7 @@ class DatabaseCommonEventEditor {
                 return;
             }
             const mi = document.createElement('div');
-            mi.textContent = item.label;
+            mi.textContent = tt(item.label);
             mi.style.cssText = `padding: 5px 12px; cursor: ${item.disabled ? 'not-allowed' : 'pointer'}; color: ${item.disabled ? 'var(--color-text-dim)' : 'var(--color-text)'}; font-size: 12px; border-radius: 2px;`;
             if (!item.disabled) {
                 mi.onmouseenter = () => { mi.style.backgroundColor = 'var(--color-bg-hover)'; };
@@ -326,6 +339,7 @@ class DatabaseCommonEventEditor {
     }
 
     insertNewCommand(event, insertBeforeIndex) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         if (!this.commandPicker) {
             this.commandPicker = new EventCommandPicker();
         }
@@ -336,10 +350,13 @@ class DatabaseCommonEventEditor {
             if (container) this.renderCommandList(container, event);
         };
 
+        const ECL = this._eventCommandListClass();
+        const insertIndex = ECL.safeInsertionIndex(event.list, insertBeforeIndex);
         const insertAndRefresh = (commands) => {
             if (commands && commands.length > 0) {
-                commands.forEach((cmd, i) => event.list.splice(insertBeforeIndex + i, 0, cmd));
-                this.selectedCommandIndices = [insertBeforeIndex];
+                ECL.rebaseInsertIndent(commands, ECL.insertionIndent(event.list, insertIndex));
+                commands.forEach((cmd, i) => event.list.splice(insertIndex + i, 0, cmd));
+                this.selectedCommandIndices = [insertIndex];
                 refreshList();
             }
         };
@@ -377,17 +394,19 @@ class DatabaseCommonEventEditor {
             const singleInsert = (editor, ...extraArgs) => {
                 editor.show(null, (editedCommand) => {
                     if (editedCommand) {
-                        event.list.splice(insertBeforeIndex, 0, editedCommand);
-                        this.selectedCommandIndices = [insertBeforeIndex];
-                        refreshList();
+                        insertAndRefresh([editedCommand]);
                     }
                 }, ...extraArgs);
             };
 
+            if (code === 112 || code === 413) {
+                this.getEditor('loop', LoopEditor).show(null, insertAndRefresh);
+                return;
+            }
+
             const simpleEditorMap = {
                 103: ['inputNumber', InputNumberEditor],
                 104: ['selectItem', SelectItemEditor],
-                112: ['loop', LoopEditor],
                 113: ['breakLoop', BreakLoopEditor],
                 117: ['commonEvent', CommonEventEditor],
                 118: ['label', LabelEditor],
@@ -408,6 +427,7 @@ class DatabaseCommonEventEditor {
                 213: ['balloonIcon', ShowBalloonIconEditor],
                 230: ['wait', WaitCommandEditor],
                 231: ['showPicture', ShowPictureEditor],
+                232: ['movePicture', MovePictureEditor],
                 235: ['erasePicture', ErasePictureEditor],
                 301: ['battleProcessing', BattleProcessingEditor],
                 303: ['nameInputProcessing', NameInputProcessingEditor],
@@ -445,9 +465,7 @@ class DatabaseCommonEventEditor {
                 const editor = this.getEditor('audio', AudioCommandEditor);
                 editor.show(null, code, (editedCommand) => {
                     if (editedCommand) {
-                        event.list.splice(insertBeforeIndex, 0, editedCommand);
-                        this.selectedCommandIndices = [insertBeforeIndex];
-                        refreshList();
+                        insertAndRefresh([editedCommand]);
                     }
                 });
                 return;
@@ -455,12 +473,12 @@ class DatabaseCommonEventEditor {
 
             // Toggle commands
             const toggleMap = {
-                134: { code: 134, title: 'Change Save Access', option0: 'Disable', option1: 'Enable' },
-                135: { code: 135, title: 'Change Menu Access', option0: 'Disable', option1: 'Enable' },
-                136: { code: 136, title: 'Change Encounter', option0: 'Disable', option1: 'Enable' },
-                137: { code: 137, title: 'Change Formation Access', option0: 'Disable', option1: 'Enable' },
-                216: { code: 216, title: 'Change Player Followers', option0: 'Show', option1: 'Hide' },
-                281: { code: 281, title: 'Change Map Name Display', option0: 'Enable', option1: 'Disable' },
+                134: { code: 134, title: tt('Change Save Access'), option0: tt('Disable'), option1: tt('Enable') },
+                135: { code: 135, title: tt('Change Menu Access'), option0: tt('Disable'), option1: tt('Enable') },
+                136: { code: 136, title: tt('Change Encounter'), option0: tt('Disable'), option1: tt('Enable') },
+                137: { code: 137, title: tt('Change Formation Access'), option0: tt('Disable'), option1: tt('Enable') },
+                216: { code: 216, title: tt('Change Player Followers'), option0: tt('Show'), option1: tt('Hide') },
+                281: { code: 281, title: tt('Change Map Name Display'), option0: tt('Enable'), option1: tt('Disable') },
             };
             if (toggleMap[code]) {
                 singleInsert(this.getEditor('toggle', ToggleCommandEditor), toggleMap[code]);
@@ -469,9 +487,7 @@ class DatabaseCommonEventEditor {
 
             // Default: insert with default params (no editor)
             const cmds = this.buildCommandStructure(code);
-            cmds.forEach((cmd, i) => event.list.splice(insertBeforeIndex + i, 0, cmd));
-            this.selectedCommandIndices = [insertBeforeIndex];
-            refreshList();
+            insertAndRefresh(cmds);
         });
     }
 
@@ -490,11 +506,21 @@ class DatabaseCommonEventEditor {
     // COMMAND EDITING (dispatch to specialized editors)
     // ==========================================
 
+    // EventCommandList carries the shared branch-structure helpers
+    // (collectBranchStructure / rebaseInsertIndent). Resolved at call time:
+    // a global in the app, require() under Node.
+    _eventCommandListClass() {
+        if (typeof EventCommandList !== 'undefined') return EventCommandList;
+        return require('../event/EventCommandList.js');
+    }
+
     editCommand(idx, event) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const command = event.list[idx];
         if (!command || command.code === 0) return;
 
         const code = command.code;
+        const ECL = this._eventCommandListClass();
         const refreshList = () => {
             this.persistEvent();
             const container = document.getElementById('common-event-command-list');
@@ -505,6 +531,7 @@ class DatabaseCommonEventEditor {
         const singleReplace = (editor, ...showArgs) => {
             editor.show(command, (editedCommand) => {
                 if (editedCommand) {
+                    editedCommand.indent = command.indent || 0;
                     event.list[idx] = editedCommand;
                     refreshList();
                 }
@@ -525,6 +552,7 @@ class DatabaseCommonEventEditor {
             editor.show(command, (commands) => {
                 if (commands && commands.length > 0) {
                     event.list.splice(idx, removeCount);
+                    ECL.rebaseInsertIndent(commands, command.indent || 0);
                     commands.forEach((cmd, i) => event.list.splice(idx + i, 0, cmd));
                     refreshList();
                 }
@@ -548,6 +576,7 @@ class DatabaseCommonEventEditor {
                         else break;
                     }
                     event.list.splice(idx, removeCount);
+                    ECL.rebaseInsertIndent(commands, command.indent || 0);
                     commands.forEach((cmd, i) => event.list.splice(idx + i, 0, cmd));
                     refreshList();
                 }
@@ -557,39 +586,35 @@ class DatabaseCommonEventEditor {
 
         // Show Choices (102) - structural command with branches
         if (code === 102) {
+            const ECL = this._eventCommandListClass();
             const editor = this.getEditor('choices', ShowChoicesCommandEditor);
             editor.show(command, (commands) => {
                 if (commands && commands.length > 0) {
-                    const nestedCommands = [];
-                    let currentBranch = [];
-                    let i = idx + 1;
-                    while (i < event.list.length) {
-                        const cmd = event.list[i];
-                        if (cmd.code === 402 || cmd.code === 403) {
-                            if (currentBranch.length > 0) nestedCommands.push(currentBranch);
-                            currentBranch = [];
-                            i++;
-                        } else if (cmd.code === 404) {
-                            if (currentBranch.length > 0) nestedCommands.push(currentBranch);
-                            break;
-                        } else {
-                            currentBranch.push(cmd);
-                            i++;
+                    // Choice bodies stay in choice order; the cancel body
+                    // stays bound to the 403 marker. Nested structures ride
+                    // along inside the bodies untouched.
+                    const { branches, endIndex } = ECL.collectBranchStructure(
+                        event.list, idx, [402, 403], 404, false);
+                    const choiceBodies = [];
+                    let cancelBody = null;
+                    for (const branch of branches) {
+                        if (branch.marker.code === 403) cancelBody = branch.body;
+                        else choiceBodies.push(branch.body);
+                    }
+
+                    event.list.splice(idx, endIndex - idx + 1);
+                    ECL.rebaseInsertIndent(commands, command.indent || 0);
+
+                    let insertPos = idx;
+                    for (const cmd of commands) {
+                        event.list.splice(insertPos++, 0, cmd);
+                        let body = null;
+                        if (cmd.code === 402) body = choiceBodies.shift();
+                        else if (cmd.code === 403) body = cancelBody;
+                        if (body) {
+                            for (const nc of body) event.list.splice(insertPos++, 0, nc);
                         }
                     }
-                    const removeCount = i - idx + 1;
-                    event.list.splice(idx, removeCount);
-                    let insertPos = idx;
-                    let branchIndex = 0;
-                    commands.forEach((cmd) => {
-                        event.list.splice(insertPos++, 0, cmd);
-                        if (cmd.code === 402 || cmd.code === 403) {
-                            if (nestedCommands[branchIndex]) {
-                                nestedCommands[branchIndex].forEach(nc => event.list.splice(insertPos++, 0, nc));
-                                branchIndex++;
-                            }
-                        }
-                    });
                     refreshList();
                 }
             });
@@ -618,6 +643,7 @@ class DatabaseCommonEventEditor {
                         else break;
                     }
                     event.list.splice(idx, removeCount);
+                    ECL.rebaseInsertIndent(commands, command.indent || 0);
                     commands.forEach((cmd, i) => event.list.splice(idx + i, 0, cmd));
                     refreshList();
                 }
@@ -636,6 +662,7 @@ class DatabaseCommonEventEditor {
                         else break;
                     }
                     event.list.splice(idx, removeCount);
+                    ECL.rebaseInsertIndent(commands, command.indent || 0);
                     commands.forEach((cmd, i) => event.list.splice(idx + i, 0, cmd));
                     refreshList();
                 }
@@ -645,47 +672,63 @@ class DatabaseCommonEventEditor {
 
         // Conditional Branch (111) - structural with nested branches
         if (code === 111) {
+            const ECL = this._eventCommandListClass();
+            // Parse up front: the "then" body follows the header itself, the
+            // "else" body stays bound to its 411 marker, and the editor's
+            // Else checkbox mirrors the current shape. The modal is
+            // app-modal, so the list can't change underneath it.
+            const { branches, endIndex } = ECL.collectBranchStructure(
+                event.list, idx, [411], 412, true);
+            const thenBody = branches[0].body;
+            const elseBranch = branches.find(b => b.marker && b.marker.code === 411);
+            const elseBody = elseBranch ? elseBranch.body : null;
+
             const editor = this.getEditor('conditionalBranch', ConditionalBranchEditor);
             editor.show(command, (commands) => {
                 if (commands && commands.length > 0) {
-                    const nestedCommands = [];
-                    let currentBranch = [];
-                    let i = idx + 1;
-                    while (i < event.list.length) {
-                        const cmd = event.list[i];
-                        if (cmd.code === 411) {
-                            if (currentBranch.length > 0) nestedCommands.push(currentBranch);
-                            currentBranch = [];
-                            i++;
-                        } else if (cmd.code === 412) {
-                            if (currentBranch.length > 0) nestedCommands.push(currentBranch);
-                            break;
-                        } else {
-                            currentBranch.push(cmd);
-                            i++;
+                    event.list.splice(idx, endIndex - idx + 1);
+                    ECL.rebaseInsertIndent(commands, command.indent || 0);
+
+                    let insertPos = idx;
+                    for (const cmd of commands) {
+                        event.list.splice(insertPos++, 0, cmd);
+                        let body = null;
+                        if (cmd.code === 111) body = thenBody;
+                        else if (cmd.code === 411) body = elseBody;
+                        if (body) {
+                            for (const nc of body) event.list.splice(insertPos++, 0, nc);
                         }
                     }
-                    const removeCount = i - idx + 1;
-                    event.list.splice(idx, removeCount);
-                    let insertPos = idx;
-                    let branchIndex = 0;
-                    commands.forEach((cmd) => {
-                        event.list.splice(insertPos++, 0, cmd);
-                        if (cmd.code === 111 || cmd.code === 411) {
-                            if (nestedCommands[branchIndex]) {
-                                nestedCommands[branchIndex].forEach(nc => event.list.splice(insertPos++, 0, nc));
-                                branchIndex++;
-                            }
-                        }
-                    });
                     refreshList();
                 }
-            });
+            }, { hasElse: !!elseBranch });
             return;
         }
 
-        // Loop (112)
-        if (code === 112) { singleReplace(this.getEditor('loop', LoopEditor)); return; }
+        // Loop (112/413) - replace the complete structure and optional generated initializer.
+        if (code === 112 || code === 413) {
+            const ECL = this._eventCommandListClass();
+            const LoopClass = ECL.loopEditorClass();
+            const range = LoopClass.findBlockRange(event.list, idx);
+            if (!range) return;
+            let start = range.start;
+            let block = event.list.slice(start, range.end + 1);
+            if (start > 0) {
+                const candidate = event.list.slice(start - 1, range.end + 1);
+                const parsed = LoopClass.parse(candidate);
+                if (parsed && parsed.generated) {
+                    start--;
+                    block = candidate;
+                }
+            }
+            this.getEditor('loop', LoopEditor).show(block, commands => {
+                if (!commands?.length) return;
+                event.list.splice(start, range.end - start + 1, ...commands);
+                this.selectedCommandIndices = [start + (commands[0].code === 122 ? 1 : 0)];
+                refreshList();
+            });
+            return;
+        }
 
         // Break Loop (113)
         if (code === 113) { singleReplace(this.getEditor('breakLoop', BreakLoopEditor)); return; }
@@ -733,10 +776,10 @@ class DatabaseCommonEventEditor {
         if (code === 133) { singleReplace(this.getEditor('changeVictoryME', ChangeVictoryMEEditor)); return; }
 
         // Toggle commands (134-137)
-        if (code === 134) { singleReplace(this.getEditor('toggle', ToggleCommandEditor), { code: 134, title: 'Change Save Access', option0: 'Disable', option1: 'Enable' }); return; }
-        if (code === 135) { singleReplace(this.getEditor('toggle', ToggleCommandEditor), { code: 135, title: 'Change Menu Access', option0: 'Disable', option1: 'Enable' }); return; }
-        if (code === 136) { singleReplace(this.getEditor('toggle', ToggleCommandEditor), { code: 136, title: 'Change Encounter', option0: 'Disable', option1: 'Enable' }); return; }
-        if (code === 137) { singleReplace(this.getEditor('toggle', ToggleCommandEditor), { code: 137, title: 'Change Formation Access', option0: 'Disable', option1: 'Enable' }); return; }
+        if (code === 134) { singleReplace(this.getEditor('toggle', ToggleCommandEditor), { code: 134, title: tt('Change Save Access'), option0: tt('Disable'), option1: tt('Enable') }); return; }
+        if (code === 135) { singleReplace(this.getEditor('toggle', ToggleCommandEditor), { code: 135, title: tt('Change Menu Access'), option0: tt('Disable'), option1: tt('Enable') }); return; }
+        if (code === 136) { singleReplace(this.getEditor('toggle', ToggleCommandEditor), { code: 136, title: tt('Change Encounter'), option0: tt('Disable'), option1: tt('Enable') }); return; }
+        if (code === 137) { singleReplace(this.getEditor('toggle', ToggleCommandEditor), { code: 137, title: tt('Change Formation Access'), option0: tt('Disable'), option1: tt('Enable') }); return; }
 
         // Change Window Color (138)
         if (code === 138) { singleReplace(this.getEditor('changeWindowColor', ChangeWindowColorEditor)); return; }
@@ -764,6 +807,7 @@ class DatabaseCommonEventEditor {
             const editor = this.getEditor('setMovementRoute', SetMovementRouteEditor);
             editor.show(command, (editedCommand) => {
                 if (editedCommand) {
+                    editedCommand.indent = command.indent || 0;
                     event.list[idx] = editedCommand;
                     let removeCount = 0;
                     let scan = idx + 1;
@@ -797,7 +841,7 @@ class DatabaseCommonEventEditor {
         if (code === 213) { singleReplace(this.getEditor('balloonIcon', ShowBalloonIconEditor)); return; }
 
         // Change Player Followers (216)
-        if (code === 216) { singleReplace(this.getEditor('toggle', ToggleCommandEditor), { code: 216, title: 'Change Player Followers', option0: 'Show', option1: 'Hide' }); return; }
+        if (code === 216) { singleReplace(this.getEditor('toggle', ToggleCommandEditor), { code: 216, title: tt('Change Player Followers'), option0: tt('Show'), option1: tt('Hide') }); return; }
 
         // Fadeout/Fadein Screen (221, 222)
         if (code === 221 || code === 222) { singleReplace(this.getEditor('fadeScreen', FadeScreenEditor)); return; }
@@ -818,7 +862,10 @@ class DatabaseCommonEventEditor {
         if (code === 231) { singleReplace(this.getEditor('showPicture', ShowPictureEditor)); return; }
 
         // Move Picture (232)
-        if (code === 232) { singleReplace(this.getEditor('movePicture', MovePictureEditor)); return; }
+        if (code === 232) {
+            singleReplace(this.getEditor('movePicture', MovePictureEditor), { commands: event.list, index: idx });
+            return;
+        }
 
         // Rotate Picture (233)
         if (code === 233) { singleReplace(this.getEditor('rotatePicture', RotatePictureEditor)); return; }
@@ -836,6 +883,7 @@ class DatabaseCommonEventEditor {
         if ([241, 242, 245, 246, 249, 250, 251].includes(code)) {
             const editor = this.getEditor('audio', AudioCommandEditor);
             editor.show(command, code, (editedCommand) => {
+                editedCommand.indent = command.indent || 0;
                 event.list[idx] = editedCommand;
                 refreshList();
             });
@@ -846,7 +894,7 @@ class DatabaseCommonEventEditor {
         if (code === 261) { singleReplace(this.getEditor('playMovie', PlayMovieEditor)); return; }
 
         // Change Map Name Display (281)
-        if (code === 281) { singleReplace(this.getEditor('toggle', ToggleCommandEditor), { code: 281, title: 'Change Map Name Display', option0: 'Enable', option1: 'Disable' }); return; }
+        if (code === 281) { singleReplace(this.getEditor('toggle', ToggleCommandEditor), { code: 281, title: tt('Change Map Name Display'), option0: tt('Enable'), option1: tt('Disable') }); return; }
 
         // Change Tileset (282)
         if (code === 282) { singleReplace(this.getEditor('changeTileset', ChangeTilesetEditor)); return; }
@@ -874,6 +922,7 @@ class DatabaseCommonEventEditor {
                         else break;
                     }
                     event.list.splice(idx, removeCount);
+                    ECL.rebaseInsertIndent(commands, command.indent || 0);
                     commands.forEach((cmd, i) => event.list.splice(idx + i, 0, cmd));
                     refreshList();
                 }
@@ -961,6 +1010,20 @@ class DatabaseCommonEventEditor {
 
         // Script (355) - multi-line with 655 continuation
         if (code === 355) {
+            if (ECL.generatedCommand(command, 'eventCall')) {
+                singleReplace(this.getEditor('commonEvent', CommonEventEditor));
+                return;
+            }
+            const pictureEditor = ECL.pictureEditorFor(command, {
+                show: this.getEditor('showPicture', ShowPictureEditor),
+                move: this.getEditor('movePicture', MovePictureEditor),
+                erase: this.getEditor('erasePicture', ErasePictureEditor)
+            });
+            if (pictureEditor) {
+                const args = pictureEditor === this._editors.movePicture ? [{ commands: event.list, index: idx }] : [];
+                singleReplace(pictureEditor, ...args);
+                return;
+            }
             const editor = this.getEditor('script', ScriptEditor);
             editor.show(command, event.list, idx, (commands) => {
                 if (commands && commands.length > 0) {
@@ -970,6 +1033,7 @@ class DatabaseCommonEventEditor {
                         else break;
                     }
                     event.list.splice(idx, removeCount);
+                    ECL.rebaseInsertIndent(commands, command.indent || 0);
                     commands.forEach((cmd, i) => event.list.splice(idx + i, 0, cmd));
                     refreshList();
                 }
@@ -1115,6 +1179,7 @@ class DatabaseCommonEventEditor {
      * Fallback raw JSON editor for unrecognized command codes
      */
     editCommandRawJSON(cmd, idx, event) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         if (cmd.code === 0) return;
 
         const modal = document.createElement('div');
@@ -1124,7 +1189,7 @@ class DatabaseCommonEventEditor {
         dialog.style.cssText = 'background-color: var(--color-bg-surface); border: 1px solid var(--color-border); border-radius: 8px; padding: 20px; width: 500px; max-width: 90vw; max-height: 80vh; overflow-y: auto;';
 
         const info = this.getCommandDisplay(cmd);
-        dialog.innerHTML = `<h3 style="margin: 0 0 12px 0; color: var(--color-text-strong); font-size: 14px;">${this.escapeHTML(info.name)} (Code ${cmd.code})</h3>`;
+        dialog.innerHTML = `<h3 style="margin: 0 0 12px 0; color: var(--color-text-strong); font-size: 14px;">${this.escapeHTML(tt(info.name))} (${tt('Code')} ${cmd.code})</h3>`;
 
         const textarea = document.createElement('textarea');
         textarea.value = JSON.stringify(cmd.parameters, null, 2);
@@ -1143,7 +1208,7 @@ class DatabaseCommonEventEditor {
                 if (container) this.renderCommandList(container, event);
                 document.body.removeChild(modal);
             } catch (e) {
-                alert('Invalid JSON: ' + e.message);
+                alert(`${tt('Invalid JSON:')} ` + e.message);
             }
         });
 
@@ -1165,6 +1230,10 @@ class DatabaseCommonEventEditor {
         const indices = this.expandToBlocks(this.selectedCommandIndices, event);
         if (indices.length === 0) return;
         this.commandClipboard = indices.map(i => JSON.parse(JSON.stringify(event.list[i])));
+        if (typeof ReactorClipboard !== 'undefined') {
+            return ReactorClipboard.write('eventCommands', { commands: this.commandClipboard });
+        }
+        return Promise.resolve(true);
     }
 
     /**
@@ -1175,6 +1244,11 @@ class DatabaseCommonEventEditor {
      * whole if/else/end block.
      */
     expandToBlocks(indices, event) {
+        if (typeof EventCommandList !== 'undefined' && EventCommandList.prototype.expandSelection) {
+            const helper = Object.create(EventCommandList.prototype);
+            helper.selectedIndices = [...indices];
+            return helper.expandSelection(event);
+        }
         const expanded = new Set();
         for (const idx of indices) {
             if (!event.list[idx] || event.list[idx].code === 0) continue;
@@ -1184,8 +1258,19 @@ class DatabaseCommonEventEditor {
         return Array.from(expanded).sort((a, b) => a - b);
     }
 
-    cutCommands(event, container) {
-        this.copyCommands(event);
+    async cutCommands(event, container) {
+        const targetEvent = this.currentEvent;
+        const selected = [...this.selectedCommandIndices];
+        const listSnapshot = JSON.stringify(event.list);
+        const wrote = await this.copyCommands(event);
+        if (!wrote) {
+            alert(window.I18n?.t('db.clipboardWriteFailed') || 'Could not write data to the clipboard.');
+            return;
+        }
+        if (this.currentEvent !== targetEvent || event !== targetEvent
+            || JSON.stringify(event.list) !== listSnapshot
+            || selected.length !== this.selectedCommandIndices.length
+            || selected.some((index, i) => index !== this.selectedCommandIndices[i])) return;
         this.deleteCommands(event, container);
     }
 
@@ -1201,12 +1286,39 @@ class DatabaseCommonEventEditor {
         if (container) this.renderCommandList(container, event);
     }
 
-    pasteCommands(event, container) {
-        if (!this.commandClipboard) return;
-        const insertAt = this.selectedCommandIndices.length > 0 ? Math.max(...this.selectedCommandIndices) + 1 : event.list.length - 1;
-        this.commandClipboard.forEach((cmd, i) => {
-            event.list.splice(insertAt + i, 0, JSON.parse(JSON.stringify(cmd)));
+    async pasteCommands(event, container) {
+        const targetEvent = this.currentEvent;
+        const selected = [...this.selectedCommandIndices];
+        const listSnapshot = JSON.stringify(event.list);
+        let commands = null;
+        if (typeof ReactorClipboard !== 'undefined') {
+            const clipboardData = await ReactorClipboard.read('eventCommands');
+            commands = clipboardData?.payload?.commands || null;
+        } else {
+            commands = this.commandClipboard;
+        }
+        if (this.currentEvent !== targetEvent || event !== targetEvent
+            || JSON.stringify(event.list) !== listSnapshot
+            || selected.length !== this.selectedCommandIndices.length
+            || selected.some((index, i) => index !== this.selectedCommandIndices[i])) return;
+        if (!commands?.length) {
+            alert(window.I18n ? window.I18n.tText('No event commands in clipboard to paste.') : 'No event commands in clipboard to paste.');
+            return;
+        }
+        const selectedIndex = selected.length > 0 ? Math.max(...selected) : -1;
+        let insertAt = selectedIndex >= 0 ? selectedIndex + 1 : event.list.length - 1;
+        if (typeof EventCommandList !== 'undefined' && EventCommandList.safeInsertionIndex) {
+            insertAt = EventCommandList.safeInsertionIndex(event.list, insertAt);
+        }
+        const pasted = commands.map(command => JSON.parse(JSON.stringify(command)));
+        if (typeof EventCommandList !== 'undefined' && EventCommandList.rebaseInsertIndent) {
+            const baseIndent = EventCommandList.insertionIndent(event.list, insertAt);
+            EventCommandList.rebaseInsertIndent(pasted, baseIndent);
+        }
+        pasted.forEach((cmd, i) => {
+            event.list.splice(insertAt + i, 0, cmd);
         });
+        this.selectedCommandIndices = pasted.map((_, index) => insertAt + index);
         this.persistEvent();
         if (container) this.renderCommandList(container, event);
     }
@@ -1280,8 +1392,8 @@ class DatabaseCommonEventEditor {
             335: [0],                    // Enemy Appear
             336: [0, 1],                // Enemy Transform
             337: [0, 0, 1, false],       // Show Battle Animation
-            338: [0, 0, 0],             // Force Action
-            339: [],                     // Abort Battle
+            339: [0, 0, 1, -1],         // Force Action
+            340: [],                     // Abort Battle
             355: [''],                   // Script
         };
         return defaults[code] || [];
@@ -1377,8 +1489,9 @@ class DatabaseCommonEventEditor {
     // ==========================================
 
     createSmallButton(label, onclick) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const btn = document.createElement('button');
-        btn.textContent = label;
+        btn.textContent = tt(label);
         btn.style.cssText = 'padding: 3px 10px; background-color: var(--color-bg-menubar); color: var(--color-text); border: 1px solid var(--color-border-input); border-radius: 3px; cursor: pointer; font-size: 11px; transition: background-color 0.2s; white-space: nowrap;';
         btn.onmouseenter = () => { btn.style.backgroundColor = 'var(--color-accent-tint-25)'; };
         btn.onmouseleave = () => { btn.style.backgroundColor = 'var(--color-bg-menubar)'; };
@@ -1387,8 +1500,9 @@ class DatabaseCommonEventEditor {
     }
 
     createButton(label, onclick) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const btn = document.createElement('button');
-        btn.textContent = label;
+        btn.textContent = tt(label);
         if (label === 'OK') {
             btn.style.cssText = 'padding: 8px 16px; background-color: var(--color-accent); color: var(--color-bg-deep); border: 1px solid var(--color-accent); border-radius: 4px; cursor: pointer; font-weight: bold;';
             btn.onmouseenter = () => { btn.style.backgroundColor = 'var(--color-accent-muted)'; };
@@ -1403,8 +1517,13 @@ class DatabaseCommonEventEditor {
     }
 
     escapeHTML(str) {
-        const div = document.createElement('div');
-        div.textContent = str;
-        return div.innerHTML;
+        return typeof rrEscapeHtml !== 'undefined'
+            ? rrEscapeHtml(str)
+            : require('../utils/HtmlEscape.js')(str);
     }
+}
+
+// Export
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = DatabaseCommonEventEditor;
 }

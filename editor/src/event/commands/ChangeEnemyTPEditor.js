@@ -79,6 +79,7 @@ class ChangeEnemyTPEditor {
     }
 
     renderContent() {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const container = this.modal.querySelector('.change-enemy-tp-container');
         container.innerHTML = '';
 
@@ -95,7 +96,7 @@ class ChangeEnemyTPEditor {
             border-top-right-radius: 6px;
         `;
         header.innerHTML = `
-            <h3 style="margin: 0; color: var(--color-text-strong); font-size: 16px;">Change Enemy TP</h3>
+            <h3 style="margin: 0; color: var(--color-text-strong); font-size: 16px;">${tt('Change Enemy TP')}</h3>
             <button class="close-btn" style="background: none; border: none; color: var(--color-text-strong); font-size: 20px; cursor: pointer; padding: 0; width: 24px; height: 24px;">\u00d7</button>
         `;
         container.appendChild(header);
@@ -134,12 +135,12 @@ class ChangeEnemyTPEditor {
         `;
 
         const cancelBtn = document.createElement('button');
-        cancelBtn.textContent = 'Cancel';
+        cancelBtn.textContent = tt('Cancel');
         cancelBtn.className = 'rr-btn-secondary';
         cancelBtn.addEventListener('click', () => this.close());
 
         const okBtn = document.createElement('button');
-        okBtn.textContent = 'OK';
+        okBtn.textContent = tt('OK');
         okBtn.style.cssText = `
             padding: 6px 20px;
             background-color: var(--color-accent);
@@ -158,10 +159,11 @@ class ChangeEnemyTPEditor {
     }
 
     createEnemyIndexSelector() {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const section = document.createElement('div');
         section.style.cssText = 'display: flex; align-items: center; gap: 8px;';
         const label = document.createElement('span');
-        label.textContent = 'Enemy:';
+        label.textContent = tt('Enemy:');
         label.style.cssText = 'color: var(--color-text); font-size: 13px; min-width: 100px;';
         const select = document.createElement('select');
         select.style.cssText = 'padding:6px 10px; background-color:var(--color-bg-input); color:var(--color-text); border:1px solid var(--color-border-input); border-radius:3px; font-size:12px; flex:1;';
@@ -179,6 +181,7 @@ class ChangeEnemyTPEditor {
     }
 
     createOperationSection() {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const section = document.createElement('div');
         section.style.cssText = 'display: flex; gap: 12px;';
 
@@ -191,7 +194,7 @@ class ChangeEnemyTPEditor {
 
         const increaseLabel = document.createElement('label');
         increaseLabel.htmlFor = 'increase-342';
-        increaseLabel.textContent = 'Increase';
+        increaseLabel.textContent = tt('Increase');
         increaseLabel.style.cssText = 'color: var(--color-text); cursor: pointer;';
 
         const decreaseRadio = document.createElement('input');
@@ -203,7 +206,7 @@ class ChangeEnemyTPEditor {
 
         const decreaseLabel = document.createElement('label');
         decreaseLabel.htmlFor = 'decrease-342';
-        decreaseLabel.textContent = 'Decrease';
+        decreaseLabel.textContent = tt('Decrease');
         decreaseLabel.style.cssText = 'color: var(--color-text); cursor: pointer;';
 
         section.appendChild(increaseRadio);
@@ -214,6 +217,7 @@ class ChangeEnemyTPEditor {
     }
 
     createOperandSection() {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const section = document.createElement('div');
         section.style.cssText = 'display: flex; flex-direction: column; gap: 8px; padding-top: 8px; border-top: 1px solid var(--color-border);';
 
@@ -230,7 +234,7 @@ class ChangeEnemyTPEditor {
 
         const constLabel = document.createElement('label');
         constLabel.htmlFor = 'constant-342';
-        constLabel.textContent = 'Constant';
+        constLabel.textContent = tt('Constant');
         constLabel.style.cssText = 'color: var(--color-text); cursor: pointer; min-width: 60px;';
 
         constRow.appendChild(constRadio);
@@ -258,7 +262,7 @@ class ChangeEnemyTPEditor {
 
         const varLabel = document.createElement('label');
         varLabel.htmlFor = 'variable-342';
-        varLabel.textContent = 'Variable';
+        varLabel.textContent = tt('Variable');
         varLabel.style.cssText = 'color: var(--color-text); cursor: pointer; min-width: 60px;';
 
         varRow.appendChild(varRadio);

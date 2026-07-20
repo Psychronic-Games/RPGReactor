@@ -13,9 +13,10 @@ class DatabaseSystem2Editor {
     }
 
     showSystem2Detail(container) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const system = this.databaseManager.getSystem();
         if (!system) {
-            container.innerHTML = '<p style="color: var(--color-text-muted); text-align: center; margin-top: 100px;">System data not loaded</p>';
+            container.innerHTML = `<p style="color: var(--color-text-muted); text-align: center; margin-top: 100px;">${tt('System data not loaded')}</p>`;
             return;
         }
 
@@ -37,7 +38,7 @@ class DatabaseSystem2Editor {
             font-weight: 600;
             color: var(--color-text-strong);
         `;
-        titleBanner.textContent = 'System 2';
+        titleBanner.textContent = tt('System 2');
         wrapper.appendChild(titleBanner);
 
         // 3 independent flex columns — each stacks tightly without shared row heights
@@ -82,6 +83,7 @@ class DatabaseSystem2Editor {
     }
 
     createMenuCommandsSection(system) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         if (!system.menuCommands) system.menuCommands = [true, true, true, true, true, true];
         const menuLabels = ['Item', 'Skill', 'Equip', 'Status', 'Formation', 'Save'];
         let html = '<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px;">';
@@ -89,14 +91,15 @@ class DatabaseSystem2Editor {
             html += `
                 <label style="display: flex; align-items: center; gap: 8px; color: var(--color-text); font-size: 12px; cursor: pointer;">
                     <input type="checkbox" class="system-checkbox sys2-menu-cmd" data-idx="${idx}" ${system.menuCommands[idx] ? 'checked' : ''}>
-                    ${label}
+                    ${tt(label)}
                 </label>`;
         });
         html += '</div>';
-        return this.createSection('Menu Commands', html);
+        return this.createSection(tt('Menu Commands'), html);
     }
 
     createItemCategoriesSection(system) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         if (!system.itemCategories) system.itemCategories = [true, true, true, true];
         const catLabels = ['Item', 'Weapon', 'Armor', 'Key Item'];
         let html = '<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px;">';
@@ -104,36 +107,54 @@ class DatabaseSystem2Editor {
             html += `
                 <label style="display: flex; align-items: center; gap: 8px; color: var(--color-text); font-size: 12px; cursor: pointer;">
                     <input type="checkbox" class="system-checkbox sys2-item-cat" data-idx="${idx}" ${system.itemCategories[idx] ? 'checked' : ''}>
-                    ${label}
+                    ${tt(label)}
                 </label>`;
         });
         html += '</div>';
-        return this.createSection('Item Categories', html);
+        return this.createSection(tt('Item Categories'), html);
     }
 
     createMagicSkillsSection(system) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const skillTypes = system.skillTypes || [''];
-        if (!system.magicSkills) system.magicSkills = [];
+        const magicSkills = Array.isArray(system.magicSkills) ? system.magicSkills : [];
+        const optionHtml = selectedId => {
+            let options = `<option value="0">${tt('(None)')}</option>`;
+            for (let id = 1; id < skillTypes.length; id++) {
+                const name = skillTypes[id] || `${tt('(Unnamed)')} #${id}`;
+                options += `<option value="${id}" ${id === selectedId ? 'selected' : ''}>${rrEscapeHtml(name)}</option>`;
+            }
+            if (selectedId > 0 && selectedId >= skillTypes.length) {
+                options += `<option value="${selectedId}" selected>${tt('Missing Skill Type')} #${selectedId}</option>`;
+            }
+            return options;
+        };
+        const rowHtml = (id, row) => `
+            <div class="sys2-magic-skill-row" data-row="${row}">
+                <span>${String(row + 1).padStart(2, '0')}</span>
+                <select class="database-field-value sys2-magic-skill" data-row="${row}">${optionHtml(id)}</select>
+            </div>`;
 
-        let html = '<div style="border: 1px solid var(--color-border); border-radius: 3px;">';
-        for (let i = 1; i < skillTypes.length; i++) {
-            const isMagic = system.magicSkills.includes(i);
-            html += `
-                <div style="display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-bottom: 1px solid var(--color-bg-menubar);">
-                    <label style="display: flex; align-items: center; gap: 8px; color: var(--color-text); font-size: 12px; cursor: pointer; flex: 1;">
-                        <input type="checkbox" class="system-checkbox sys2-magic-skill" data-skill-type-idx="${i}" ${isMagic ? 'checked' : ''}>
-                        ${skillTypes[i]}
-                    </label>
-                </div>`;
-        }
-        if (skillTypes.length <= 1) {
-            html += '<div style="padding: 10px; color: var(--color-text-muted); font-size: 12px; text-align: center;">No skill types defined</div>';
-        }
-        html += '</div>';
-        return this.createSection('[SV] Magic Skills', html);
+        let html = '<div class="sys2-magic-skills-list">';
+        magicSkills.forEach((id, row) => { html += rowHtml(Number(id), row); });
+        html += rowHtml(0, magicSkills.length);
+        html += `</div><div class="sys2-magic-skills-hint">${tt('Choose the skill types that use the side-view casting motion. Select None to remove a row.')}</div>`;
+        return this.createSection(tt('[SV] Magic Skills'), html);
+    }
+
+    setMagicSkillIds(system, values) {
+        if (!system || !Array.isArray(values)) return false;
+        const ids = [];
+        values.forEach(value => {
+            const id = Number(value);
+            if (Number.isInteger(id) && id > 0 && !ids.includes(id)) ids.push(id);
+        });
+        system.magicSkills = ids;
+        return true;
     }
 
     createAttackMotionsSection(system) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const motionNames = ['Thrust', 'Swing', 'Missile'];
         const weaponImageNames = ['None', 'Dagger', 'Sword', 'Flail', 'Axe', 'Whip', 'Staff', 'Bow', 'Crossbow', 'Gun', 'Claw', 'Glove', 'Spear'];
         const weaponTypes = system.weaponTypes || [''];
@@ -144,21 +165,21 @@ class DatabaseSystem2Editor {
                 <table class="traits-table" style="width: 100%;">
                     <thead>
                         <tr>
-                            <th>Type</th>
-                            <th>Motion</th>
-                            <th>Image</th>
+                            <th>${tt('Type')}</th>
+                            <th>${tt('Motion')}</th>
+                            <th>${tt('Image')}</th>
                         </tr>
                     </thead>
                     <tbody>`;
 
         for (let i = 0; i < attackMotions.length; i++) {
-            const typeName = weaponTypes[i] !== undefined ? weaponTypes[i] : `Type ${i}`;
+            const typeName = weaponTypes[i] !== undefined ? weaponTypes[i] : `${tt('Type')} ${i}`;
             const motion = attackMotions[i] || { type: 0, weaponImageId: 0 };
             html += `
                 <tr class="attack-motion-row" data-idx="${i}" style="cursor: pointer;">
-                    <td style="color: var(--color-text); font-size: 12px;">${typeName || '(Bare Hands)'}</td>
-                    <td style="color: var(--color-text-muted); font-size: 12px;">${motionNames[motion.type] || 'Thrust'}</td>
-                    <td style="color: var(--color-text-muted); font-size: 12px;">${weaponImageNames[motion.weaponImageId] || 'None'}</td>
+                    <td style="color: var(--color-text); font-size: 12px;">${rrEscapeHtml(typeName || tt('(Bare Hands)'))}</td>
+                    <td style="color: var(--color-text-muted); font-size: 12px;">${tt(motionNames[motion.type] || 'Thrust')}</td>
+                    <td style="color: var(--color-text-muted); font-size: 12px;">${tt(weaponImageNames[motion.weaponImageId] || 'None')}</td>
                 </tr>`;
         }
 
@@ -166,10 +187,11 @@ class DatabaseSystem2Editor {
                     </tbody>
                 </table>
             </div>`;
-        return this.createSection('[SV] Attack Motions', html);
+        return this.createSection(tt('[SV] Attack Motions'), html);
     }
 
     createAssetSizesSection(system) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const groups = [
             { title: 'Tile', field: 'tileSize', current: system.tileSize || 48, sizes: [48, 32, 24, 16], css: 'sys2-tile-size' },
             { title: 'Icon', field: 'iconSize', current: system.iconSize || 32, sizes: [32, 24, 16, 12, 8], css: 'sys2-icon-size' },
@@ -178,7 +200,7 @@ class DatabaseSystem2Editor {
         let html = '<div style="display: flex; gap: 16px;">';
         for (const g of groups) {
             html += `<div style="flex: 1; min-width: 0;">
-                <div style="color: var(--color-text-muted); font-size: 11px; font-weight: 600; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px;">${g.title}</div>`;
+                <div style="color: var(--color-text-muted); font-size: 11px; font-weight: 600; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px;">${tt(g.title)}</div>`;
             for (const size of g.sizes) {
                 html += `<label style="display: flex; align-items: center; gap: 6px; color: var(--color-text); font-size: 11px; cursor: pointer; margin-bottom: 2px;">
                     <input type="radio" class="system-radio ${g.css}" name="${g.field}" value="${size}" ${g.current === size ? 'checked' : ''}>
@@ -188,36 +210,38 @@ class DatabaseSystem2Editor {
             html += '</div>';
         }
         html += '</div>';
-        return this.createSection('Asset Sizes', html);
+        return this.createSection(tt('Asset Sizes'), html);
     }
 
     createEditorSettingsSection(system) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         if (!system.editor) system.editor = { messageWidth1: 60, messageWidth2: 47, jsonFormatLevel: 1 };
         const editor = system.editor;
         const editorHTML = `
             <table class="traits-table" style="width: 100%;">
                 <thead>
-                    <tr><th>Setting</th><th>Value</th></tr>
+                    <tr><th>${tt('Setting')}</th><th>${tt('Value')}</th></tr>
                 </thead>
                 <tbody>
                     <tr>
-                        <td style="color: var(--color-text); font-size: 12px;">Message Width (Normal)</td>
+                        <td style="color: var(--color-text); font-size: 12px;">${tt('Message Width (Normal)')}</td>
                         <td><input type="number" class="database-field-value sys2-editor-field" data-editor-field="messageWidth1" value="${editor.messageWidth1 || 60}" style="width: 70px; font-size: 12px;"></td>
                     </tr>
                     <tr>
-                        <td style="color: var(--color-text); font-size: 12px;">Message Width (with Face)</td>
+                        <td style="color: var(--color-text); font-size: 12px;">${tt('Message Width (with Face)')}</td>
                         <td><input type="number" class="database-field-value sys2-editor-field" data-editor-field="messageWidth2" value="${editor.messageWidth2 || 47}" style="width: 70px; font-size: 12px;"></td>
                     </tr>
                     <tr>
-                        <td style="color: var(--color-text); font-size: 12px;">JSON Format Level</td>
+                        <td style="color: var(--color-text); font-size: 12px;">${tt('JSON Format Level')}</td>
                         <td><input type="number" class="database-field-value sys2-editor-field" data-editor-field="jsonFormatLevel" value="${editor.jsonFormatLevel || 1}" min="0" style="width: 70px; font-size: 12px;"></td>
                     </tr>
                 </tbody>
             </table>`;
-        return this.createSection('Editor Settings', editorHTML);
+        return this.createSection(tt('Editor Settings'), editorHTML);
     }
 
     createAdvancedSettingsSection(system) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const adv = system.advanced || {};
         const fields = [
             { label: 'Game ID', field: 'gameId', value: adv.gameId || 0, type: 'number' },
@@ -235,19 +259,19 @@ class DatabaseSystem2Editor {
         ];
         let rows = '';
         for (const f of fields) {
-            const ro = f.readonly ? ' readonly title="Read-only"' : '';
+            const ro = f.readonly ? ` readonly title="${tt('Read-only')}"` : '';
             const step = f.step ? ` step="${f.step}"` : '';
             rows += `<tr>
-                <td style="color: var(--color-text); font-size: 12px; white-space: nowrap;">${f.label}</td>
-                <td><input type="${f.type}" class="database-field-value sys2-advanced-field" data-advanced-field="${f.field}" value="${f.value}" style="width: 100%; font-size: 12px; box-sizing: border-box;"${step}${ro}></td>
+                <td style="color: var(--color-text); font-size: 12px; white-space: nowrap;">${tt(f.label)}</td>
+                <td><input type="${f.type}" class="database-field-value sys2-advanced-field" data-advanced-field="${f.field}" value="${rrEscapeHtml(f.value)}" style="width: 100%; font-size: 12px; box-sizing: border-box;"${step}${ro}></td>
             </tr>`;
         }
         const advHTML = `
             <table class="traits-table" style="width: 100%;">
-                <thead><tr><th>Setting</th><th>Value</th></tr></thead>
+                <thead><tr><th>${tt('Setting')}</th><th>${tt('Value')}</th></tr></thead>
                 <tbody>${rows}</tbody>
             </table>`;
-        return this.createSection('Advanced Settings', advHTML);
+        return this.createSection(tt('Advanced Settings'), advHTML);
     }
 
     createSection(title, content) {
@@ -293,22 +317,47 @@ class DatabaseSystem2Editor {
             row.addEventListener('mouseleave', () => { row.style.backgroundColor = ''; });
         });
 
-        // Magic Skills checkboxes
-        container.querySelectorAll('.sys2-magic-skill').forEach(cb => {
-            cb.addEventListener('change', (e) => {
-                const skillTypeIdx = parseInt(e.target.dataset.skillTypeIdx);
-                if (!system.magicSkills) system.magicSkills = [];
-                if (e.target.checked) {
-                    if (!system.magicSkills.includes(skillTypeIdx)) {
-                        system.magicSkills.push(skillTypeIdx);
-                        system.magicSkills.sort((a, b) => a - b);
-                    }
-                } else {
-                    system.magicSkills = system.magicSkills.filter(v => v !== skillTypeIdx);
+        // Magic Skills are an ordered list of Skill Type IDs, not booleans.
+        const magicList = container.querySelector('.sys2-magic-skills-list');
+        if (magicList) {
+            const updateRows = changedSelect => {
+                let rows = [...magicList.querySelectorAll('.sys2-magic-skill-row')];
+                if (changedSelect.value === '0' && rows.length > 1) {
+                    changedSelect.closest('.sys2-magic-skill-row')?.remove();
+                    rows = [...magicList.querySelectorAll('.sys2-magic-skill-row')];
                 }
-                console.log('Updated magicSkills to:', system.magicSkills);
-            });
-        });
+
+                const seen = new Set();
+                [...magicList.querySelectorAll('.sys2-magic-skill')].forEach(select => {
+                    const id = Number(select.value);
+                    if (id > 0 && seen.has(id)) select.closest('.sys2-magic-skill-row')?.remove();
+                    else if (id > 0) seen.add(id);
+                });
+
+                let selects = [...magicList.querySelectorAll('.sys2-magic-skill')];
+                const lastSelect = selects[selects.length - 1];
+                if (!lastSelect || lastSelect.value !== '0') {
+                    const sourceRow = changedSelect.closest('.sys2-magic-skill-row');
+                    const blankRow = sourceRow.cloneNode(true);
+                    const blankSelect = blankRow.querySelector('.sys2-magic-skill');
+                    blankSelect.value = '0';
+                    magicList.appendChild(blankRow);
+                    wireMagicSelect(blankSelect);
+                    selects = [...magicList.querySelectorAll('.sys2-magic-skill')];
+                }
+
+                [...magicList.querySelectorAll('.sys2-magic-skill-row')].forEach((row, index) => {
+                    row.dataset.row = index;
+                    row.querySelector('span').textContent = String(index + 1).padStart(2, '0');
+                    row.querySelector('.sys2-magic-skill').dataset.row = index;
+                });
+                this.setMagicSkillIds(system, selects.map(select => select.value));
+            };
+            const wireMagicSelect = select => {
+                select.addEventListener('change', () => updateRows(select));
+            };
+            magicList.querySelectorAll('.sys2-magic-skill').forEach(wireMagicSelect);
+        }
 
         // Tile Size radios
         container.querySelectorAll('.sys2-tile-size').forEach(radio => {
@@ -346,11 +395,14 @@ class DatabaseSystem2Editor {
             });
         });
 
-        // Advanced Settings fields
+        // Advanced Settings fields. MV-era System.json has no `advanced`
+        // object — create it on first edit instead of silently dropping the
+        // change.
         container.querySelectorAll('.sys2-advanced-field').forEach(field => {
             field.addEventListener('change', (e) => {
                 const advField = e.target.dataset.advancedField;
-                if (advField && system.advanced) {
+                if (advField) {
+                    if (!system.advanced) system.advanced = {};
                     const val = e.target.type === 'number' ? parseFloat(e.target.value) : e.target.value;
                     system.advanced[advField] = val;
                 }
@@ -359,11 +411,12 @@ class DatabaseSystem2Editor {
     }
 
     showAttackMotionEditor(system, index, parentContainer) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const motionNames = ['Thrust', 'Swing', 'Missile'];
         const weaponImageNames = ['None', 'Dagger', 'Sword', 'Flail', 'Axe', 'Whip', 'Staff', 'Bow', 'Crossbow', 'Gun', 'Claw', 'Glove', 'Spear'];
         const weaponTypes = system.weaponTypes || [''];
         const motion = system.attackMotions[index] || { type: 0, weaponImageId: 0 };
-        const typeName = weaponTypes[index] !== undefined ? weaponTypes[index] : `Type ${index}`;
+        const typeName = weaponTypes[index] !== undefined ? weaponTypes[index] : `${tt('Type')} ${index}`;
 
         const overlay = document.createElement('div');
         overlay.style.cssText = `
@@ -381,26 +434,26 @@ class DatabaseSystem2Editor {
 
         modal.innerHTML = `
             <div style="background-color: var(--color-bg-panel); padding: 12px 16px; border-bottom: 1px solid var(--color-border); border-radius: 8px 8px 0 0; display: flex; justify-content: space-between; align-items: center;">
-                <div style="font-size: 16px; font-weight: 600; color: var(--color-text);">Edit Attack Motion — ${typeName || '(Bare Hands)'}</div>
+                <div style="font-size: 16px; font-weight: 600; color: var(--color-text);">${tt('Edit Attack Motion')} — ${rrEscapeHtml(typeName || tt('(Bare Hands)'))}</div>
                 <button class="atk-modal-close" style="background: none; border: none; color: var(--color-text-muted); font-size: 24px; cursor: pointer;">×</button>
             </div>
             <div style="padding: 16px; display: flex; flex-direction: column; gap: 12px;">
                 <div class="form-row">
-                    <label class="database-field-label">Motion:</label>
+                    <label class="database-field-label">${tt('Motion:')}</label>
                     <select id="atk-motion-type" class="database-field-value" style="width: 100%;">
-                        ${motionNames.map((name, i) => `<option value="${i}" ${motion.type === i ? 'selected' : ''}>${name}</option>`).join('')}
+                        ${motionNames.map((name, i) => `<option value="${i}" ${motion.type === i ? 'selected' : ''}>${tt(name)}</option>`).join('')}
                     </select>
                 </div>
                 <div class="form-row">
-                    <label class="database-field-label">Weapon Image:</label>
+                    <label class="database-field-label">${tt('Weapon Image:')}</label>
                     <select id="atk-weapon-image" class="database-field-value" style="width: 100%;">
-                        ${weaponImageNames.map((name, i) => `<option value="${i}" ${motion.weaponImageId === i ? 'selected' : ''}>${name}</option>`).join('')}
+                        ${weaponImageNames.map((name, i) => `<option value="${i}" ${motion.weaponImageId === i ? 'selected' : ''}>${tt(name)}</option>`).join('')}
                     </select>
                 </div>
             </div>
             <div style="padding: 12px 16px; border-top: 1px solid var(--color-border); display: flex; justify-content: flex-end; gap: 8px; background-color: var(--color-bg-panel);">
-                <button class="atk-modal-cancel rr-btn-secondary">Cancel</button>
-                <button class="atk-modal-ok" style="padding: 8px 16px; background: var(--color-accent); color: var(--color-bg-deep); border: 1px solid var(--color-accent); border-radius: 4px; cursor: pointer; font-weight: bold;">OK</button>
+                <button class="atk-modal-cancel rr-btn-secondary">${tt('Cancel')}</button>
+                <button class="atk-modal-ok" style="padding: 8px 16px; background: var(--color-accent); color: var(--color-bg-deep); border: 1px solid var(--color-accent); border-radius: 4px; cursor: pointer; font-weight: bold;">${tt('OK')}</button>
             </div>
         `;
 

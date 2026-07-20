@@ -265,6 +265,10 @@
                                 <span class="map-info-item">(<span class="map-info-value" id="map-dimensions">-- x --</span>)</span>
                             </div>
                             <div id="map-info-right">
+                                <label class="map-info-item map-autotile-animation" title="Toggle A1 Autotile Animation" data-i18n-title="toolbar.title.animateAutotiles">
+                                    <input id="map-autotile-animation" type="checkbox" checked aria-label="Toggle A1 Autotile Animation" data-i18n-aria="toolbar.title.animateAutotiles">
+                                    <span>A1</span>
+                                </label>
                                 <span class="map-info-item"><span data-i18n="workspace.zoom">Zoom:</span> <span class="map-info-value" id="map-zoom">100%</span></span>
                                 <span class="map-info-item">(<span class="map-info-value" id="map-coordinates">--,--</span>)</span>
                             </div>
@@ -454,14 +458,14 @@
                                         <input type="checkbox" id="map-parallax-loop-x-checkbox" style="margin-right: 4px;">
                                         <span data-i18n="mapProps.loopX">Loop X</span>
                                     </label>
-                                    <input type="number" id="map-parallax-sx-input" placeholder="Speed" value="0" style="width: 100%; padding: 4px 6px; background-color: var(--color-bg-input); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 3px; font-size: 11px;">
+                                    <input type="number" id="map-parallax-sx-input" placeholder="Speed" data-i18n-placeholder="mapTools.speedPlaceholder" value="0" style="width: 100%; padding: 4px 6px; background-color: var(--color-bg-input); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 3px; font-size: 11px;">
                                 </div>
                                 <div>
                                     <label style="display: flex; align-items: center; font-size: 11px; color: var(--color-text); cursor: pointer; margin-bottom: 4px;">
                                         <input type="checkbox" id="map-parallax-loop-y-checkbox" style="margin-right: 4px;">
                                         <span data-i18n="mapProps.loopY">Loop Y</span>
                                     </label>
-                                    <input type="number" id="map-parallax-sy-input" placeholder="Speed" value="0" style="width: 100%; padding: 4px 6px; background-color: var(--color-bg-input); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 3px; font-size: 11px;">
+                                    <input type="number" id="map-parallax-sy-input" placeholder="Speed" data-i18n-placeholder="mapTools.speedPlaceholder" value="0" style="width: 100%; padding: 4px 6px; background-color: var(--color-bg-input); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 3px; font-size: 11px;">
                                 </div>
                             </div>
 
@@ -567,7 +571,7 @@
             <div class="modal-body">
                 <img src="images/logo.png" alt="RPG Reactor" style="max-width: 300px; width: 100%; height: auto; margin-bottom: 24px;" onerror="this.style.display='none'">
 
-                <h3 data-i18n="about.version" style="color: #e8b817; margin-bottom: 16px;">RPG Reactor v0.94.9</h3>
+                <h3 data-i18n="about.version" style="color: #e8b817; margin-bottom: 16px;">RPG Reactor v0.95.0</h3>
 
                 <p data-i18n="about.description" style="color: var(--color-text); line-height: 1.6; margin-bottom: 16px;">
                     An open-source, cross-platform RPG game engine built with NW.js and PixiJS v8
@@ -729,7 +733,13 @@
     <script src="libs/effekseer.min.js"></script>
     <!-- Performance profiler -->
     <script src="src/utils/ThemeColors.js"></script>
+    <script src="src/utils/HtmlEscape.js"></script>
+    <script src="src/utils/DataLimits.js"></script>
+    <script src="src/utils/AssetFiles.js"></script>
+    <script src="src/utils/PickerIndex.js"></script>
+    <script src="src/utils/EquipSlots.js"></script>
     <script src="src/utils/FsAtomic.js"></script>
+    <script src="src/I18nDeepTranslations.js"></script>
     <script src="src/I18nManager.js"></script>
     <script src="src/OptionsManager.js"></script>
     <!-- Forge tool suite -->
@@ -800,7 +810,6 @@
     <script src="src/forge/AnimationGenerator/animations/TeleportColumn.js"></script>
     <script src="src/forge/AnimationGenerator/animations/EnergyField.js"></script>
     <script src="src/forge/AnimationGenerator/animations/EnergyWisps.js"></script>
-    <script src="src/forge/AnimationGenerator/animations/Portal.js"></script>
     <script src="src/forge/AnimationGenerator/animations/Hypnotize.js"></script>
     <script src="src/forge/AnimationGenerator/animations/AcidTrip.js"></script>
     <script src="src/forge/AnimationGenerator/animations/Egg.js"></script>
@@ -899,6 +908,7 @@
     <script src="src/event/EventEditor.js"></script>
     <script src="src/event/EventPageEditor.js"></script>
     <script src="src/event/EventCommandPicker.js"></script>
+    <script src="src/event/commands/ReactorEventCommandCodec.js"></script>
     <script src="src/event/commands/AudioCommandEditor.js"></script>
     <script src="src/event/commands/MessageCommandEditor.js"></script>
     <script src="src/event/commands/ShowChoicesCommandEditor.js"></script>
@@ -994,6 +1004,7 @@
     <script src="src/database/AnimationPickerModal.js"></script>
     <script src="src/database/DatabaseCommonUI.js"></script>
     <script src="src/database/DatabaseItemBaseEditor.js"></script>
+    <script src="src/database/DatabaseRowClipboard.js"></script>
     <script src="src/database/DatabaseTraitEditor.js"></script>
     <script src="src/database/DatabaseEffectEditor.js"></script>
     <script src="src/database/DatabaseActorEditor.js"></script>

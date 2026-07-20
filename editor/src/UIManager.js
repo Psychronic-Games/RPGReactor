@@ -674,6 +674,7 @@ class UIManager {
 
     confirmApplicationReload() {
         if (document.getElementById('rr-reload-confirm')) return false;
+        const tt = text => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
 
         const overlay = document.createElement('div');
         overlay.id = 'rr-reload-confirm';
@@ -691,11 +692,11 @@ class UIManager {
         const title = document.createElement('div');
         title.id = 'rr-reload-confirm-title';
         title.className = 'rr-modal-title';
-        title.textContent = 'Reload Application?';
+        title.textContent = tt('Reload Application?');
         const closeButton = document.createElement('button');
         closeButton.type = 'button';
         closeButton.className = 'rr-modal-close';
-        closeButton.setAttribute('aria-label', 'Cancel reload');
+        closeButton.setAttribute('aria-label', tt('Cancel reload'));
         closeButton.textContent = '\u00d7';
         header.append(title, closeButton);
 
@@ -703,10 +704,10 @@ class UIManager {
         body.className = 'rr-modal-body';
         const message = document.createElement('p');
         message.style.cssText = 'margin:0;color:var(--color-text);line-height:1.5;';
-        message.textContent = 'Reload RPG Reactor and simulate a browser restart?';
+        message.textContent = tt('Reload RPG Reactor and simulate a browser restart?');
         const warning = document.createElement('p');
         warning.style.cssText = 'margin:0;padding:9px 10px;background:var(--color-danger-bg-deep);border:1px solid var(--color-danger-border);border-radius:var(--radius-md);color:var(--color-danger-light);font-weight:600;line-height:1.4;';
-        warning.textContent = 'Any unsaved changes will be lost.';
+        warning.textContent = tt('Any unsaved changes will be lost.');
         body.append(message, warning);
 
         const footer = document.createElement('div');
@@ -715,12 +716,12 @@ class UIManager {
         cancelButton.id = 'rr-reload-cancel';
         cancelButton.type = 'button';
         cancelButton.className = 'rr-btn-secondary';
-        cancelButton.textContent = 'Cancel';
+        cancelButton.textContent = tt('Cancel');
         const reloadButton = document.createElement('button');
         reloadButton.id = 'rr-reload-accept';
         reloadButton.type = 'button';
         reloadButton.className = 'rr-button-primary';
-        reloadButton.textContent = 'Reload';
+        reloadButton.textContent = tt('Reload');
         footer.append(cancelButton, reloadButton);
         modal.append(header, body, footer);
         overlay.appendChild(modal);
@@ -749,6 +750,101 @@ class UIManager {
         document.body.appendChild(overlay);
         cancelButton.focus();
         return true;
+    }
+
+    promptUnsavedChanges(subject) {
+        if (this.unsavedChangesPrompt) return this.unsavedChangesPrompt;
+        const tt = text => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
+        const previouslyFocused = document.activeElement;
+
+        const overlay = document.createElement('div');
+        overlay.id = 'rr-unsaved-confirm';
+        overlay.className = 'rr-modal-overlay';
+
+        const modal = document.createElement('div');
+        modal.className = 'rr-modal';
+        modal.style.width = 'min(500px, 92vw)';
+        modal.setAttribute('role', 'alertdialog');
+        modal.setAttribute('aria-modal', 'true');
+        modal.setAttribute('aria-labelledby', 'rr-unsaved-confirm-title');
+
+        const header = document.createElement('div');
+        header.className = 'rr-modal-header';
+        const title = document.createElement('div');
+        title.id = 'rr-unsaved-confirm-title';
+        title.className = 'rr-modal-title';
+        title.textContent = tt('Unsaved Changes');
+        const closeButton = document.createElement('button');
+        closeButton.type = 'button';
+        closeButton.className = 'rr-modal-close';
+        closeButton.setAttribute('aria-label', tt('Cancel'));
+        closeButton.textContent = '\u00d7';
+        header.append(title, closeButton);
+
+        const body = document.createElement('div');
+        body.className = 'rr-modal-body';
+        const message = document.createElement('p');
+        message.style.cssText = 'margin:0;color:var(--color-text);line-height:1.5;';
+        message.textContent = `${tt('There are unsaved changes in')} ${subject}.`;
+        const explanation = document.createElement('p');
+        explanation.style.cssText = 'margin:0;color:var(--color-text-muted);line-height:1.5;';
+        explanation.textContent = tt('Save your changes, discard them, or cancel this action.');
+        body.append(message, explanation);
+
+        const footer = document.createElement('div');
+        footer.className = 'rr-modal-footer';
+        const cancelButton = document.createElement('button');
+        cancelButton.id = 'rr-unsaved-cancel';
+        cancelButton.type = 'button';
+        cancelButton.className = 'rr-btn-secondary';
+        cancelButton.textContent = tt('Cancel');
+        const discardButton = document.createElement('button');
+        discardButton.id = 'rr-unsaved-discard';
+        discardButton.type = 'button';
+        discardButton.className = 'rr-button-danger';
+        discardButton.textContent = tt('Discard Changes');
+        const saveButton = document.createElement('button');
+        saveButton.id = 'rr-unsaved-save';
+        saveButton.type = 'button';
+        saveButton.className = 'rr-button-primary';
+        saveButton.textContent = tt('Save');
+        footer.append(cancelButton, discardButton, saveButton);
+        modal.append(header, body, footer);
+        overlay.appendChild(modal);
+
+        this.unsavedChangesPrompt = new Promise(resolve => {
+            let settled = false;
+            const finish = decision => {
+                if (settled) return;
+                settled = true;
+                document.removeEventListener('keydown', handleKeyDown, true);
+                overlay.remove();
+                this.unsavedChangesPrompt = null;
+                if (previouslyFocused && previouslyFocused.isConnected !== false &&
+                    typeof previouslyFocused.focus === 'function') {
+                    previouslyFocused.focus();
+                }
+                resolve(decision);
+            };
+            const handleKeyDown = event => {
+                if (event.key === 'Escape') {
+                    event.preventDefault();
+                    finish('cancel');
+                }
+            };
+            closeButton.addEventListener('click', () => finish('cancel'));
+            cancelButton.addEventListener('click', () => finish('cancel'));
+            discardButton.addEventListener('click', () => finish('discard'));
+            saveButton.addEventListener('click', () => finish('save'));
+            overlay.addEventListener('click', event => {
+                if (event.target === overlay) finish('cancel');
+            });
+            document.addEventListener('keydown', handleKeyDown, true);
+        });
+
+        document.body.appendChild(overlay);
+        cancelButton.focus();
+        return this.unsavedChangesPrompt;
     }
 
     reloadApplicationIgnoringCache() {

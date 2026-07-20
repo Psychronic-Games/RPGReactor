@@ -9,13 +9,14 @@ const { execFileSync } = require('node:child_process');
 const repoRoot = path.resolve(__dirname, '..');
 const workspaceRoot = path.resolve(repoRoot, '..');
 
-function loadBrowserClass(filePath, className) {
+function loadBrowserClass(filePath, className, globals = {}) {
     const source = fs.readFileSync(filePath, 'utf8');
     return vm.runInNewContext(`${source}\n${className};`, {
         console,
         process,
         require,
-        nw: {}
+        nw: {},
+        ...globals
     });
 }
 
@@ -52,6 +53,7 @@ test('runtime corescript files are present', () => {
         'reactor_main.js',
         'reactor_managers.js',
         'reactor_objects.js',
+        'reactor_picture_extensions.js',
         'reactor_plugins.js',
         'reactor_scenes.js',
         'reactor_sprites.js',
@@ -202,12 +204,27 @@ test('ProjectManager installs the Reactor runtime and quarantines the old coresc
     fs.writeFileSync(path.join(projectPath, 'js', 'libs', 'pako.min.js'), 'mz pako');
     const mzPlugins = 'var $plugins = [{ "name": "VisuMZ_0_CoreEngine", "status": true }];';
     fs.writeFileSync(path.join(projectPath, 'js', 'plugins.js'), mzPlugins);
+    const packagePath = path.join(projectPath, 'package.json');
+    fs.writeFileSync(packagePath, '{ invalid package');
 
     try {
         const manager = new ProjectManager();
         manager.getRuntimePath = () => runtimePath;
         manager.getEngineVersion = () => '0.94.5';
 
+        const invalidResult = await manager.installReactorRuntime(projectPath, 'Imported Game');
+        assert.equal(invalidResult.ok, false);
+        assert.match(invalidResult.error, /package\.json/);
+        assert.equal(fs.existsSync(path.join(projectPath, 'js', 'rmmz_core.js')), true,
+            'invalid package metadata is rejected before runtime conversion');
+        assert.equal(fs.existsSync(path.join(projectPath, 'rpgmaker-runtime-backup.zip')), false);
+
+        fs.writeFileSync(packagePath, JSON.stringify({
+            name: '',
+            main: '',
+            'js-flags': '--expose-gc',
+            window: { title: '', toolbar: false, width: 816, height: 624 }
+        }));
         const result = await manager.installReactorRuntime(projectPath, 'Imported Game');
         assert.equal(result.ok, true);
         assert.equal(result.archivedTo, 'rpgmaker-runtime-backup.zip');
@@ -223,6 +240,12 @@ test('ProjectManager installs the Reactor runtime and quarantines the old coresc
         assert.match(installedIndex, /window\.\$reactorMvCompat = false/,
             'MZ imports ship with the MV compatibility layer disabled');
         assert.equal(readJson(path.join(projectPath, 'package.json')).name, 'imported-game');
+        const repairedPackage = readJson(packagePath);
+        assert.equal(repairedPackage.main, 'index.html');
+        assert.equal(repairedPackage['js-flags'], '--expose-gc');
+        assert.equal(repairedPackage.window.toolbar, false);
+        assert.equal(repairedPackage.window.width, 816);
+        assert.deepEqual(Array.from(result.package.repaired), ['name', 'main']);
 
         const zipPath = path.join(projectPath, 'rpgmaker-runtime-backup.zip');
         execFileSync('unzip', ['-t', zipPath], { stdio: 'pipe' });
@@ -288,6 +311,9 @@ test('MV imports get the MV compatibility flag and the runtime gates on it', asy
     if (fs.existsSync(starShiftIndex)) {
         assert.match(fs.readFileSync(starShiftIndex, 'utf8'), /window\.\$reactorMvCompat = true/,
             'the MV template opts in explicitly so deploys keep the mode');
+        const starShiftMain = fs.readFileSync(path.join(workspaceRoot, 'template', 'Star Shift Rebellion', 'js', 'reactor_main.js'), 'utf8');
+        assert.ok(starShiftMain.indexOf('js/libs/lz-string.js') < starShiftMain.indexOf('js/reactor_mv_compat.js'),
+            'the converted MV template loads its legacy save decoder before compatibility');
     }
 });
 
@@ -301,28 +327,49 @@ test('deploy staging keys Reactor validation off index.html and guides recovery'
 });
 
 test('ProjectManager imports RPG Maker projects with current engine metadata', async () => {
-    const ProjectManager = loadBrowserClass(path.join(repoRoot, 'src', 'ProjectManager.js'), 'ProjectManager');
+    const quietConsole = { ...console, error: () => {} };
+    const ProjectManager = loadBrowserClass(path.join(repoRoot, 'src', 'ProjectManager.js'), 'ProjectManager', { console: quietConsole });
     const packageJson = readJson(path.join(repoRoot, 'package.json'));
     const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'rpg-reactor-rmmz-test-'));
-    const projectPath = path.join(tempRoot, 'ImportedGame');
+    const projectPath = path.join(tempRoot, '吞食天地 #2（测试）');
 
     fs.mkdirSync(path.join(projectPath, 'data'), { recursive: true });
     fs.writeFileSync(path.join(projectPath, 'game.rmmzproject'), 'RPGMZ 1.0.0');
-    fs.writeFileSync(path.join(projectPath, 'data', 'MapInfos.json'), JSON.stringify([null]));
+    const mapInfosPath = path.join(projectPath, 'data', 'MapInfos.json');
+    fs.writeFileSync(mapInfosPath, '\uFEFF' + JSON.stringify([null, { id: 1, name: '皇宫' }]));
 
     const previousCwd = process.cwd();
     process.chdir(repoRoot);
     try {
         const manager = new ProjectManager();
+        const nativeFs = manager.fs;
+        let mapInfoReads = 0;
+        manager.fs = Object.create(nativeFs);
+        manager.fs.readFileSync = (filePath, ...args) => {
+            if (filePath === mapInfosPath && mapInfoReads++ === 0) return '[null,{';
+            return nativeFs.readFileSync(filePath, ...args);
+        };
         const projectData = await manager.loadProject(projectPath);
 
-        assert.equal(projectData.name, 'ImportedGame');
+        assert.equal(projectData.name, '吞食天地 #2（测试）');
         assert.equal(projectData.version, packageJson.version);
         assert.equal(projectData.engineVersion, packageJson.version);
         assert.equal(projectData.imported, true);
         assert.equal(projectData.importedFrom, 'RPG Maker MZ');
-        assert.equal(projectData.maps.length, 1);
+        assert.equal(projectData.maps.length, 2);
         assert.equal(projectData.maps[0], null);
+        assert.equal(projectData.maps[1].name, '皇宫');
+        assert.equal(mapInfoReads, 2, 'a transient partial MapInfos read is retried');
+
+        nativeFs.writeFileSync(path.join(projectPath, 'project.rpgreactor'),
+            '\uFEFF' + JSON.stringify({ name: '元数据项目', imported: true }));
+        const metadataProject = await manager.loadProject(projectPath);
+        assert.equal(metadataProject.name, '元数据项目', 'BOM-prefixed Reactor metadata loads');
+
+        nativeFs.writeFileSync(mapInfosPath, '[null,{');
+        assert.equal(await manager.loadProject(projectPath), null);
+        assert.equal(manager.lastLoadError.filePath, mapInfosPath);
+        assert.match(manager.lastLoadError.message, /MapInfos\.json/);
     } finally {
         process.chdir(previousCwd);
         fs.rmSync(tempRoot, { recursive: true, force: true });

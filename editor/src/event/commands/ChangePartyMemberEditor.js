@@ -78,6 +78,7 @@ class ChangePartyMemberEditor {
     }
 
     renderContent() {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const container = this.modal.querySelector('.change-party-member-container');
         container.innerHTML = '';
 
@@ -94,7 +95,7 @@ class ChangePartyMemberEditor {
             border-top-right-radius: 6px;
         `;
         header.innerHTML = `
-            <h3 style="margin: 0; color: var(--color-text-strong); font-size: 16px;">Change Party Member</h3>
+            <h3 style="margin: 0; color: var(--color-text-strong); font-size: 16px;">${tt('Change Party Member')}</h3>
             <button class="close-btn" style="background: none; border: none; color: var(--color-text-strong); font-size: 20px; cursor: pointer; padding: 0; width: 24px; height: 24px;">×</button>
         `;
         container.appendChild(header);
@@ -115,7 +116,7 @@ class ChangePartyMemberEditor {
         actorRow.style.cssText = 'display: flex; align-items: center; gap: 8px;';
 
         const actorLabel = document.createElement('span');
-        actorLabel.textContent = 'Actor:';
+        actorLabel.textContent = tt('Actor:');
         actorLabel.style.cssText = 'color: var(--color-text); font-size: 13px; min-width: 80px;';
 
         const actorSelect = document.createElement('select');
@@ -154,7 +155,7 @@ class ChangePartyMemberEditor {
         operationSection.style.cssText = 'display: flex; flex-direction: column; gap: 8px; padding-top: 8px; border-top: 1px solid var(--color-border);';
 
         const operationLabel = document.createElement('div');
-        operationLabel.textContent = 'Operation:';
+        operationLabel.textContent = tt('Operation:');
         operationLabel.style.cssText = 'color: var(--color-text); font-size: 13px; font-weight: bold;';
         operationSection.appendChild(operationLabel);
 
@@ -168,7 +169,7 @@ class ChangePartyMemberEditor {
 
         operations.forEach(({ value, label }) => {
             const btn = document.createElement('button');
-            btn.textContent = label;
+            btn.textContent = tt(label);
             btn.style.cssText = `
                 flex: 1;
                 padding: 8px;
@@ -222,7 +223,7 @@ class ChangePartyMemberEditor {
 
             const initLabel = document.createElement('label');
             initLabel.htmlFor = 'initialize-actor';
-            initLabel.textContent = 'Initialize (reset to starting level and equipment)';
+            initLabel.textContent = tt('Initialize (reset to starting level and equipment)');
             initLabel.style.cssText = 'color: var(--color-text); font-size: 12px; cursor: pointer;';
 
             initRow.appendChild(initCheckbox);
@@ -230,7 +231,7 @@ class ChangePartyMemberEditor {
             initSection.appendChild(initRow);
 
             const noteDiv = document.createElement('div');
-            noteDiv.textContent = 'If unchecked, actor keeps current stats and equipment';
+            noteDiv.textContent = tt('If unchecked, actor keeps current stats and equipment');
             noteDiv.style.cssText = 'color: var(--color-text-muted); font-size: 11px; font-style: italic; margin-top: 8px; margin-left: 24px;';
             initSection.appendChild(noteDiv);
 
@@ -241,7 +242,7 @@ class ChangePartyMemberEditor {
             noteSection.style.cssText = 'padding: 12px; background-color: var(--color-bg-list-item); border-radius: 3px;';
 
             const noteDiv = document.createElement('div');
-            noteDiv.textContent = 'Note: If the actor is the party leader, the next member becomes the leader.';
+            noteDiv.textContent = tt('Note: If the actor is the party leader, the next member becomes the leader.');
             noteDiv.style.cssText = 'color: var(--color-text-muted); font-size: 11px; font-style: italic;';
             noteSection.appendChild(noteDiv);
 
@@ -262,12 +263,12 @@ class ChangePartyMemberEditor {
         `;
 
         const cancelBtn = document.createElement('button');
-        cancelBtn.textContent = 'Cancel';
+        cancelBtn.textContent = tt('Cancel');
         cancelBtn.className = 'rr-btn-secondary';
         cancelBtn.addEventListener('click', () => this.close());
 
         const okBtn = document.createElement('button');
-        okBtn.textContent = 'OK';
+        okBtn.textContent = tt('OK');
         okBtn.style.cssText = `
             padding: 6px 20px;
             background-color: var(--color-accent);

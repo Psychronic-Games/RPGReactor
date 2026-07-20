@@ -73,6 +73,7 @@ class RecoverAllEditor {
     }
 
     renderContent() {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const container = this.modal.querySelector('.recover-all-container');
         container.innerHTML = '';
 
@@ -89,7 +90,7 @@ class RecoverAllEditor {
             border-top-right-radius: 6px;
         `;
         header.innerHTML = `
-            <h3 style="margin: 0; color: var(--color-text-strong); font-size: 16px;">Recover All</h3>
+            <h3 style="margin: 0; color: var(--color-text-strong); font-size: 16px;">${tt('Recover All')}</h3>
             <button class="close-btn" style="background: none; border: none; color: var(--color-text-strong); font-size: 20px; cursor: pointer; padding: 0; width: 24px; height: 24px;">×</button>
         `;
         container.appendChild(header);
@@ -122,12 +123,12 @@ class RecoverAllEditor {
         `;
 
         const cancelBtn = document.createElement('button');
-        cancelBtn.textContent = 'Cancel';
+        cancelBtn.textContent = tt('Cancel');
         cancelBtn.className = 'rr-btn-secondary';
         cancelBtn.addEventListener('click', () => this.close());
 
         const okBtn = document.createElement('button');
-        okBtn.textContent = 'OK';
+        okBtn.textContent = tt('OK');
         okBtn.style.cssText = `
             padding: 6px 20px;
             background-color: var(--color-accent);
@@ -146,6 +147,7 @@ class RecoverAllEditor {
     }
 
     createActorSelector() {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const section = document.createElement('div');
         section.style.cssText = 'display: flex; flex-direction: column; gap: 8px; padding-bottom: 8px; border-bottom: 1px solid var(--color-border);';
 
@@ -157,7 +159,7 @@ class RecoverAllEditor {
         fixedRadio.checked = (this.actorSelect === 0);
         fixedRadio.addEventListener('change', () => { this.actorSelect = 0; this.renderContent(); });
         const fixedLabel = document.createElement('label');
-        fixedLabel.htmlFor = 'actor-fixed-314'; fixedLabel.textContent = 'Fixed';
+        fixedLabel.htmlFor = 'actor-fixed-314'; fixedLabel.textContent = tt('Fixed');
         fixedLabel.style.cssText = 'color: var(--color-text); cursor: pointer; min-width: 60px;';
         fixedRow.appendChild(fixedRadio); fixedRow.appendChild(fixedLabel);
 
@@ -168,7 +170,7 @@ class RecoverAllEditor {
             for (let i = 1; i < actors.length; i++) {
                 if (!actors[i]) continue;
                 const option = document.createElement('option');
-                option.value = i; option.textContent = `${i.toString().padStart(4, '0')}: ${actors[i].name || 'Unnamed'}`;
+                option.value = i; option.textContent = `${i.toString().padStart(4, '0')}: ${actors[i].name || tt('Unnamed')}`;
                 option.selected = (this.actorId === i);
                 select.appendChild(option);
             }
@@ -185,7 +187,7 @@ class RecoverAllEditor {
         varRadio.checked = (this.actorSelect === 1);
         varRadio.addEventListener('change', () => { this.actorSelect = 1; this.renderContent(); });
         const varLabel = document.createElement('label');
-        varLabel.htmlFor = 'actor-variable-314'; varLabel.textContent = 'Variable';
+        varLabel.htmlFor = 'actor-variable-314'; varLabel.textContent = tt('Variable');
         varLabel.style.cssText = 'color: var(--color-text); cursor: pointer; min-width: 60px;';
         varRow.appendChild(varRadio); varRow.appendChild(varLabel);
 

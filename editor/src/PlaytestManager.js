@@ -2,9 +2,11 @@
 // Handles launching and managing game playtesting
 
 class PlaytestManager {
-    constructor() {
+    constructor(projectManager = null) {
+        this.projectManager = projectManager;
         this.playtestProcess = null;
         this.lastResolveDebug = null;
+        this.lastLaunchError = null;
     }
 
     playtest(projectPath) {
@@ -48,6 +50,19 @@ class PlaytestManager {
 
     launchPlaytestWindow(projectPath, mode) {
         if (mode === undefined) mode = 'test';
+
+        this.lastLaunchError = null;
+        if (this.projectManager?.ensureProjectPackageMetadata) {
+            const packageResult = this.projectManager.ensureProjectPackageMetadata(projectPath);
+            if (!packageResult.ok) {
+                this.lastLaunchError = packageResult.error;
+                console.error('Cannot start playtest:', packageResult.error);
+                if (typeof window !== 'undefined' && typeof window.alert === 'function') {
+                    window.alert(`Cannot start playtest.\n\n${packageResult.error}`);
+                }
+                return false;
+            }
+        }
 
         // Close existing playtest process if any
         if (this.playtestProcess) {

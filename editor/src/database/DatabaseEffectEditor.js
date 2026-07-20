@@ -19,8 +19,9 @@ class DatabaseEffectEditor {
             31: 'Add Buff', 32: 'Add Debuff', 33: 'Remove Buff', 34: 'Remove Debuff',
             41: 'Special Effect', 42: 'Grow', 43: 'Learn Skill', 44: 'Common Event'
         };
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const name = names[code];
-        return name ? (window.I18n ? window.I18n.tText(name) : name) : `Effect ${code}`;
+        return name ? tt(name) : `${tt('Effect')} ${code}`;
     }
 
     static getEffectValue(effect, dbManager) {
@@ -40,33 +41,34 @@ class DatabaseEffectEditor {
                     return `${tt('Normal Attack')} (${Math.round(effect.value1 * 100)}%)`;
                 }
                 const state = dbManager ? dbManager.getState(effect.dataId) : null;
-                const name = state ? state.name : `State #${effect.dataId}`;
+                const name = state ? state.name : `${tt('State')} #${effect.dataId}`;
                 return `${name} (${Math.round(effect.value1 * 100)}%)`;
             }
             case 31: case 32:
-                return `${p[effect.dataId] || 'Param'} (${effect.value1} ${tt('turns')})`;
+                return `${p[effect.dataId] || tt('Param')} (${effect.value1} ${tt('turns')})`;
             case 33: case 34:
-                return `${p[effect.dataId] || 'Param'}`;
+                return `${p[effect.dataId] || tt('Param')}`;
             case 41: {
                 const specials = ['Escape'];
-                return specials[effect.dataId] || `Special #${effect.dataId}`;
+                return specials[effect.dataId] ? tt(specials[effect.dataId]) : `${tt('Special')} #${effect.dataId}`;
             }
             case 42:
-                return `${p[effect.dataId] || 'Param'} +${effect.value1}`;
+                return `${p[effect.dataId] || tt('Param')} +${effect.value1}`;
             case 43: {
                 const skill = dbManager ? dbManager.getSkill(effect.dataId) : null;
-                return skill ? skill.name : `Skill #${effect.dataId}`;
+                return skill ? skill.name : `${tt('Skill')} #${effect.dataId}`;
             }
             case 44: {
                 const ce = dbManager ? dbManager.getCommonEvent(effect.dataId) : null;
-                return ce ? ce.name : `Common Event #${effect.dataId}`;
+                return ce ? ce.name : `${tt('Common Event')} #${effect.dataId}`;
             }
             default:
-                return `Data: ${effect.dataId}, V1: ${effect.value1}, V2: ${effect.value2}`;
+                return `${tt('Data')}: ${effect.dataId}, V1: ${effect.value1}, V2: ${effect.value2}`;
         }
     }
 
     showEffectEditorModal(entry, effectIndex = -1, onSave = null) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         this.currentEntry = entry;
         this.currentEffectIndex = effectIndex;
         this.onSaveCallback = onSave;
@@ -96,7 +98,7 @@ class DatabaseEffectEditor {
             display: flex; justify-content: space-between; align-items: center; background: var(--color-bg-panel);
         `;
         header.innerHTML = `
-            <h3 style="margin: 0; color: var(--color-text-strong);">Edit Effect</h3>
+            <h3 style="margin: 0; color: var(--color-text-strong);">${tt('Edit Effect')}</h3>
             <button class="close-btn" style="background: none; border: none; color: var(--color-text-muted); font-size: 24px; cursor: pointer; padding: 0; width: 30px; height: 30px;">&times;</button>
         `;
 
@@ -122,7 +124,7 @@ class DatabaseEffectEditor {
             const tabBtn = document.createElement('button');
             tabBtn.className = 'effect-tab';
             tabBtn.dataset.tab = tab.id;
-            tabBtn.textContent = tab.label;
+            tabBtn.textContent = tt(tab.label);
             tabBtn.style.cssText = `
                 flex: 1; padding: 12px; background: ${tab.id === activeTab ? 'var(--color-bg-surface)' : 'transparent'};
                 border: none; border-bottom: 2px solid ${tab.id === activeTab ? 'var(--color-accent-bright)' : 'transparent'};
@@ -143,8 +145,8 @@ class DatabaseEffectEditor {
         const footer = document.createElement('div');
         footer.style.cssText = 'padding: 16px; border-top: 1px solid var(--color-border-subtle); display: flex; justify-content: flex-end; gap: 8px;';
         footer.innerHTML = `
-            <button class="cancel-btn rr-btn-secondary">Cancel</button>
-            <button class="ok-btn" style="padding: 8px 16px; background: var(--color-accent-bright); border: none; color: var(--color-bg-deep); border-radius: 4px; cursor: pointer; font-weight: bold;">OK</button>
+            <button class="cancel-btn rr-btn-secondary">${tt('Cancel')}</button>
+            <button class="ok-btn" style="padding: 8px 16px; background: var(--color-accent-bright); border: none; color: var(--color-bg-deep); border-radius: 4px; cursor: pointer; font-weight: bold;">${tt('OK')}</button>
         `;
 
         modal.appendChild(header);
@@ -188,49 +190,51 @@ class DatabaseEffectEditor {
     }
 
     createRecoveryTab(container, effect, optStyle, selStyle, numStyle) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         container.innerHTML = `
             <div class="effect-option" style="${optStyle}">
                 <input type="radio" name="effect-type" value="11" ${effect.code === 11 ? 'checked' : ''}>
-                <span style="color: var(--color-text-strong); min-width: 100px;">HP Recovery</span>
+                <span style="color: var(--color-text-strong); min-width: 100px;">${tt('HP Recovery')}</span>
                 <input type="number" class="effect-val" data-code="11" data-field="value1" value="${effect.code === 11 ? Math.round(effect.value1 * 100) : 0}" style="${numStyle}">
                 <span style="color: var(--color-text-muted);">%</span>
                 <span style="color: var(--color-text-muted);">+</span>
-                <input type="number" class="effect-val" data-code="11" data-field="value2" value="${effect.code === 11 ? effect.value2 : 0}" style="${numStyle}">
+                <input type="number" class="effect-val" data-code="11" data-field="value2" value="${rrEscapeHtml(effect.code === 11 ? effect.value2 : 0)}" style="${numStyle}">
             </div>
             <div class="effect-option" style="${optStyle}">
                 <input type="radio" name="effect-type" value="12" ${effect.code === 12 ? 'checked' : ''}>
-                <span style="color: var(--color-text-strong); min-width: 100px;">MP Recovery</span>
+                <span style="color: var(--color-text-strong); min-width: 100px;">${tt('MP Recovery')}</span>
                 <input type="number" class="effect-val" data-code="12" data-field="value1" value="${effect.code === 12 ? Math.round(effect.value1 * 100) : 0}" style="${numStyle}">
                 <span style="color: var(--color-text-muted);">%</span>
                 <span style="color: var(--color-text-muted);">+</span>
-                <input type="number" class="effect-val" data-code="12" data-field="value2" value="${effect.code === 12 ? effect.value2 : 0}" style="${numStyle}">
+                <input type="number" class="effect-val" data-code="12" data-field="value2" value="${rrEscapeHtml(effect.code === 12 ? effect.value2 : 0)}" style="${numStyle}">
             </div>
             <div class="effect-option" style="${optStyle}">
                 <input type="radio" name="effect-type" value="13" ${effect.code === 13 ? 'checked' : ''}>
-                <span style="color: var(--color-text-strong); min-width: 100px;">TP Gain</span>
-                <input type="number" class="effect-val" data-code="13" data-field="value1" value="${effect.code === 13 ? effect.value1 : 0}" style="${numStyle}">
+                <span style="color: var(--color-text-strong); min-width: 100px;">${tt('TP Gain')}</span>
+                <input type="number" class="effect-val" data-code="13" data-field="value1" value="${rrEscapeHtml(effect.code === 13 ? effect.value1 : 0)}" style="${numStyle}">
             </div>
         `;
         this.setupEffectRadioInputs(container, effect);
     }
 
     createStateTab(container, effect, optStyle, selStyle, numStyle) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const states = this.databaseManager.getStates() || [];
         const stateOpts = states.filter(s => s && s.id > 0).map(s =>
-            `<option value="${s.id}" ${effect.dataId === s.id ? 'selected' : ''}>${s.name}</option>`
+            `<option value="${s.id}" ${effect.dataId === s.id ? 'selected' : ''}>${rrEscapeHtml(s.name)}</option>`
         ).join('');
 
         container.innerHTML = `
             <div class="effect-option" style="${optStyle}">
                 <input type="radio" name="effect-type" value="21" ${effect.code === 21 ? 'checked' : ''}>
-                <span style="color: var(--color-text-strong); min-width: 110px;">Add State</span>
+                <span style="color: var(--color-text-strong); min-width: 110px;">${tt('Add State')}</span>
                 <select class="effect-sel" data-code="21" style="${selStyle}">${stateOpts}</select>
                 <input type="number" class="effect-val" data-code="21" data-field="value1" value="${effect.code === 21 ? Math.round(effect.value1 * 100) : 100}" style="${numStyle}">
                 <span style="color: var(--color-text-muted);">%</span>
             </div>
             <div class="effect-option" style="${optStyle}">
                 <input type="radio" name="effect-type" value="22" ${effect.code === 22 ? 'checked' : ''}>
-                <span style="color: var(--color-text-strong); min-width: 110px;">Remove State</span>
+                <span style="color: var(--color-text-strong); min-width: 110px;">${tt('Remove State')}</span>
                 <select class="effect-sel" data-code="22" style="${selStyle}">${stateOpts}</select>
                 <input type="number" class="effect-val" data-code="22" data-field="value1" value="${effect.code === 22 ? Math.round(effect.value1 * 100) : 100}" style="${numStyle}">
                 <span style="color: var(--color-text-muted);">%</span>
@@ -249,26 +253,26 @@ class DatabaseEffectEditor {
         container.innerHTML = `
             <div class="effect-option" style="${optStyle}">
                 <input type="radio" name="effect-type" value="31" ${effect.code === 31 ? 'checked' : ''}>
-                <span style="color: var(--color-text-strong); min-width: 110px;">Add Buff</span>
+                <span style="color: var(--color-text-strong); min-width: 110px;">${tt('Add Buff')}</span>
                 <select class="effect-sel" data-code="31" style="${selStyle}">${paramOpts}</select>
-                <input type="number" class="effect-val" data-code="31" data-field="value1" value="${effect.code === 31 ? effect.value1 : 5}" min="1" style="${numStyle}">
+                <input type="number" class="effect-val" data-code="31" data-field="value1" value="${rrEscapeHtml(effect.code === 31 ? effect.value1 : 5)}" min="1" style="${numStyle}">
                 <span style="color: var(--color-text-muted);">${tt('turns')}</span>
             </div>
             <div class="effect-option" style="${optStyle}">
                 <input type="radio" name="effect-type" value="32" ${effect.code === 32 ? 'checked' : ''}>
-                <span style="color: var(--color-text-strong); min-width: 110px;">Add Debuff</span>
+                <span style="color: var(--color-text-strong); min-width: 110px;">${tt('Add Debuff')}</span>
                 <select class="effect-sel" data-code="32" style="${selStyle}">${paramOpts}</select>
-                <input type="number" class="effect-val" data-code="32" data-field="value1" value="${effect.code === 32 ? effect.value1 : 5}" min="1" style="${numStyle}">
+                <input type="number" class="effect-val" data-code="32" data-field="value1" value="${rrEscapeHtml(effect.code === 32 ? effect.value1 : 5)}" min="1" style="${numStyle}">
                 <span style="color: var(--color-text-muted);">${tt('turns')}</span>
             </div>
             <div class="effect-option" style="${optStyle}">
                 <input type="radio" name="effect-type" value="33" ${effect.code === 33 ? 'checked' : ''}>
-                <span style="color: var(--color-text-strong); min-width: 110px;">Remove Buff</span>
+                <span style="color: var(--color-text-strong); min-width: 110px;">${tt('Remove Buff')}</span>
                 <select class="effect-sel" data-code="33" style="${selStyle}">${paramOpts}</select>
             </div>
             <div class="effect-option" style="${optStyle}">
                 <input type="radio" name="effect-type" value="34" ${effect.code === 34 ? 'checked' : ''}>
-                <span style="color: var(--color-text-strong); min-width: 110px;">Remove Debuff</span>
+                <span style="color: var(--color-text-strong); min-width: 110px;">${tt('Remove Debuff')}</span>
                 <select class="effect-sel" data-code="34" style="${selStyle}">${paramOpts}</select>
             </div>
         `;
@@ -284,36 +288,36 @@ class DatabaseEffectEditor {
 
         const skills = this.databaseManager.getSkills() || [];
         const skillOpts = skills.filter(s => s && s.id > 0).map(s =>
-            `<option value="${s.id}" ${effect.code === 43 && effect.dataId === s.id ? 'selected' : ''}>${s.name}</option>`
+            `<option value="${s.id}" ${effect.code === 43 && effect.dataId === s.id ? 'selected' : ''}>${rrEscapeHtml(s.name)}</option>`
         ).join('');
 
         const commonEvents = this.databaseManager.getCommonEvents() || [];
         const ceOpts = commonEvents.filter(ce => ce && ce.id > 0).map(ce =>
-            `<option value="${ce.id}" ${effect.code === 44 && effect.dataId === ce.id ? 'selected' : ''}>${ce.name}</option>`
+            `<option value="${ce.id}" ${effect.code === 44 && effect.dataId === ce.id ? 'selected' : ''}>${rrEscapeHtml(ce.name)}</option>`
         ).join('');
 
         container.innerHTML = `
             <div class="effect-option" style="${optStyle}">
                 <input type="radio" name="effect-type" value="41" ${effect.code === 41 ? 'checked' : ''}>
-                <span style="color: var(--color-text-strong); min-width: 110px;">Special Effect</span>
+                <span style="color: var(--color-text-strong); min-width: 110px;">${tt('Special Effect')}</span>
                 <select class="effect-sel" data-code="41" style="${selStyle}">
                     <option value="0" ${effect.code === 41 && effect.dataId === 0 ? 'selected' : ''}>${tt('Escape')}</option>
                 </select>
             </div>
             <div class="effect-option" style="${optStyle}">
                 <input type="radio" name="effect-type" value="42" ${effect.code === 42 ? 'checked' : ''}>
-                <span style="color: var(--color-text-strong); min-width: 110px;">Grow</span>
+                <span style="color: var(--color-text-strong); min-width: 110px;">${tt('Grow')}</span>
                 <select class="effect-sel" data-code="42" style="${selStyle}">${paramOpts}</select>
-                <input type="number" class="effect-val" data-code="42" data-field="value1" value="${effect.code === 42 ? effect.value1 : 1}" style="${numStyle}">
+                <input type="number" class="effect-val" data-code="42" data-field="value1" value="${rrEscapeHtml(effect.code === 42 ? effect.value1 : 1)}" style="${numStyle}">
             </div>
             <div class="effect-option" style="${optStyle}">
                 <input type="radio" name="effect-type" value="43" ${effect.code === 43 ? 'checked' : ''}>
-                <span style="color: var(--color-text-strong); min-width: 110px;">Learn Skill</span>
+                <span style="color: var(--color-text-strong); min-width: 110px;">${tt('Learn Skill')}</span>
                 <select class="effect-sel" data-code="43" style="${selStyle}">${skillOpts}</select>
             </div>
             <div class="effect-option" style="${optStyle}">
                 <input type="radio" name="effect-type" value="44" ${effect.code === 44 ? 'checked' : ''}>
-                <span style="color: var(--color-text-strong); min-width: 110px;">Common Event</span>
+                <span style="color: var(--color-text-strong); min-width: 110px;">${tt('Common Event')}</span>
                 <select class="effect-sel" data-code="44" style="${selStyle}">${ceOpts}</select>
             </div>
         `;

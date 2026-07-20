@@ -115,6 +115,7 @@ class ShowBalloonIconEditor {
     }
 
     renderContent() {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const container = this.modal.querySelector('.show-balloon-icon-container');
         container.innerHTML = '';
 
@@ -131,7 +132,7 @@ class ShowBalloonIconEditor {
             border-top-right-radius: 6px;
         `;
         header.innerHTML = `
-            <h3 style="margin: 0; color: var(--color-text-strong); font-size: 16px;">Show Balloon Icon</h3>
+            <h3 style="margin: 0; color: var(--color-text-strong); font-size: 16px;">${tt('Show Balloon Icon')}</h3>
             <button class="close-btn" style="background: none; border: none; color: var(--color-text-strong); font-size: 20px; cursor: pointer; padding: 0; width: 24px; height: 24px;">×</button>
         `;
         container.appendChild(header);
@@ -152,7 +153,7 @@ class ShowBalloonIconEditor {
         charRow.style.cssText = 'display: flex; align-items: center; gap: 8px;';
 
         const charLabel = document.createElement('span');
-        charLabel.textContent = 'Character:';
+        charLabel.textContent = tt('Character:');
         charLabel.style.cssText = 'color: var(--color-text); font-size: 13px; min-width: 100px;';
 
         const charSelect = document.createElement('select');
@@ -184,10 +185,10 @@ class ShowBalloonIconEditor {
         if (mapData && mapData.events) {
             mapData.events.forEach((event, index) => {
                 if (event && index > 0) {
-                    const eventName = event.name || `Event ${index.toString().padStart(3, '0')}`;
+                    const eventName = event.name || `${tt('Event')} ${index.toString().padStart(3, '0')}`;
                     const option = document.createElement('option');
                     option.value = index;
-                    option.textContent = `Event ${index.toString().padStart(3, '0')} - ${eventName}`;
+                    option.textContent = `${tt('Event')} ${index.toString().padStart(3, '0')} - ${eventName}`;
                     charSelect.appendChild(option);
                 }
             });
@@ -196,7 +197,7 @@ class ShowBalloonIconEditor {
             for (let i = 1; i <= 20; i++) {
                 const option = document.createElement('option');
                 option.value = i;
-                option.textContent = `Event ${i.toString().padStart(3, '0')}`;
+                option.textContent = `${tt('Event')} ${i.toString().padStart(3, '0')}`;
                 charSelect.appendChild(option);
             }
         }
@@ -216,7 +217,7 @@ class ShowBalloonIconEditor {
         balloonSection.style.cssText = 'display: flex; flex-direction: column; gap: 8px; padding-top: 8px; border-top: 1px solid var(--color-border);';
 
         const balloonLabel = document.createElement('div');
-        balloonLabel.textContent = 'Balloon Icon:';
+        balloonLabel.textContent = tt('Balloon Icon:');
         balloonLabel.style.cssText = 'color: var(--color-text); font-size: 13px; font-weight: bold;';
         balloonSection.appendChild(balloonLabel);
 
@@ -297,7 +298,7 @@ class ShowBalloonIconEditor {
             }
 
             const name = document.createElement('div');
-            name.textContent = this.balloonNames[i];
+            name.textContent = tt(this.balloonNames[i]);
             name.style.cssText = `font-size: 9px; color: ${isSelected ? 'var(--color-bg-deep)' : 'var(--color-text-muted)'}; text-align: center; line-height: 1.2; max-width: 60px;`;
 
             balloonBtn.appendChild(canvas);
@@ -341,7 +342,7 @@ class ShowBalloonIconEditor {
         `;
 
         const previewLabel = document.createElement('div');
-        previewLabel.textContent = 'Preview';
+        previewLabel.textContent = tt('Preview');
         previewLabel.style.cssText = 'color: var(--color-text-muted); font-size: 11px;';
         previewSection.appendChild(previewLabel);
 
@@ -400,7 +401,7 @@ class ShowBalloonIconEditor {
 
         const waitLabel = document.createElement('label');
         waitLabel.htmlFor = 'wait-for-completion';
-        waitLabel.textContent = 'Wait for Completion';
+        waitLabel.textContent = tt('Wait for Completion');
         waitLabel.style.cssText = 'color: var(--color-text); font-size: 12px; cursor: pointer;';
 
         waitRow.appendChild(waitCheckbox);
@@ -421,12 +422,12 @@ class ShowBalloonIconEditor {
         `;
 
         const cancelBtn = document.createElement('button');
-        cancelBtn.textContent = 'Cancel';
+        cancelBtn.textContent = tt('Cancel');
         cancelBtn.className = 'rr-btn-secondary';
         cancelBtn.addEventListener('click', () => this.close());
 
         const okBtn = document.createElement('button');
-        okBtn.textContent = 'OK';
+        okBtn.textContent = tt('OK');
         okBtn.style.cssText = `
             padding: 6px 20px;
             background-color: var(--color-accent);
@@ -561,12 +562,11 @@ class ShowBalloonIconEditor {
         if (characterName && characterName.trim() !== '') {
             const characterImage = new Image();
             const imagePath = path.join(currentProject.path, 'img', 'characters', characterName + '.png');
-            characterImage.src = 'file://' + imagePath.replace(/\\/g, '/');
+            characterImage.src = RRAssetFiles.toUrl(imagePath);
 
             characterImage.onload = () => {
                 // Detect character sheet format based on filename and image size
-                const isBigCharacter = characterName.startsWith('!$');
-                const isSingleCharacter = characterName.startsWith('$') || isBigCharacter;
+                const isSingleCharacter = RRAssetFiles.isBigCharacter(characterName);
 
                 let cols, rows, frameWidth, frameHeight;
 

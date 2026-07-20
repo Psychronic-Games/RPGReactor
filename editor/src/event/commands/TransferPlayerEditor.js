@@ -99,6 +99,7 @@ class TransferPlayerEditor {
      * Render modal content
      */
     renderContent() {
+        const t = text => window.I18n ? window.I18n.tText(text) : text;
         const container = this.modal.querySelector('.transfer-player-container');
         container.innerHTML = '';
 
@@ -115,7 +116,7 @@ class TransferPlayerEditor {
             border-top-right-radius: 6px;
         `;
         header.innerHTML = `
-            <h3 style="margin: 0; color: var(--color-text-strong); font-size: 16px;">Transfer Player</h3>
+            <h3 style="margin: 0; color: var(--color-text-strong); font-size: 16px;">${t('Transfer Player')}</h3>
             <button class="close-btn" style="background: none; border: none; color: var(--color-text-strong); font-size: 20px; cursor: pointer; padding: 0; width: 24px; height: 24px;">×</button>
         `;
         container.appendChild(header);
@@ -136,7 +137,7 @@ class TransferPlayerEditor {
         mapRow.style.cssText = 'display: flex; align-items: center; gap: 8px;';
 
         const mapLabel = document.createElement('span');
-        mapLabel.textContent = 'Map:';
+        mapLabel.textContent = t('Map:');
         mapLabel.style.cssText = 'color: var(--color-text); font-size: 13px; min-width: 80px;';
 
         const mapInput = document.createElement('input');
@@ -168,7 +169,7 @@ class TransferPlayerEditor {
         mapName.textContent = this.getMapName(this.mapId);
 
         const browseBtn = document.createElement('button');
-        browseBtn.textContent = 'Browse...';
+        browseBtn.textContent = t('Browse...');
         browseBtn.style.cssText = `
             padding: 6px 12px;
             background-color: var(--color-accent);
@@ -196,7 +197,7 @@ class TransferPlayerEditor {
         xRow.style.cssText = 'display: flex; align-items: center; gap: 8px;';
 
         const xLabel = document.createElement('span');
-        xLabel.textContent = 'X:';
+        xLabel.textContent = t('X:');
         xLabel.style.cssText = 'color: var(--color-text); font-size: 13px; min-width: 80px;';
 
         const xInput = document.createElement('input');
@@ -226,7 +227,7 @@ class TransferPlayerEditor {
         yRow.style.cssText = 'display: flex; align-items: center; gap: 8px;';
 
         const yLabel = document.createElement('span');
-        yLabel.textContent = 'Y:';
+        yLabel.textContent = t('Y:');
         yLabel.style.cssText = 'color: var(--color-text); font-size: 13px; min-width: 80px;';
 
         const yInput = document.createElement('input');
@@ -256,7 +257,7 @@ class TransferPlayerEditor {
         directionRow.style.cssText = 'display: flex; align-items: center; gap: 8px; padding-top: 8px; border-top: 1px solid var(--color-border);';
 
         const directionLabel = document.createElement('span');
-        directionLabel.textContent = 'Direction:';
+        directionLabel.textContent = t('Direction:');
         directionLabel.style.cssText = 'color: var(--color-text); font-size: 13px; min-width: 80px;';
 
         const directionSelect = document.createElement('select');
@@ -269,7 +270,6 @@ class TransferPlayerEditor {
             font-size: 12px;
             width: 150px;
         `;
-        const t = text => window.I18n ? window.I18n.tText(text) : text;
         directionSelect.innerHTML = `
             <option value="0" ${this.direction === 0 ? 'selected' : ''}>${t('Retain')}</option>
             <option value="2" ${this.direction === 2 ? 'selected' : ''}>${t('Down')}</option>
@@ -290,7 +290,7 @@ class TransferPlayerEditor {
         fadeRow.style.cssText = 'display: flex; align-items: center; gap: 8px;';
 
         const fadeLabel = document.createElement('span');
-        fadeLabel.textContent = 'Fade:';
+        fadeLabel.textContent = t('Fade:');
         fadeLabel.style.cssText = 'color: var(--color-text); font-size: 13px; min-width: 80px;';
 
         const fadeSelect = document.createElement('select');
@@ -332,12 +332,12 @@ class TransferPlayerEditor {
         `;
 
         const cancelBtn = document.createElement('button');
-        cancelBtn.textContent = 'Cancel';
+        cancelBtn.textContent = t('Cancel');
         cancelBtn.className = 'rr-btn-secondary';
         cancelBtn.addEventListener('click', () => this.close());
 
         const okBtn = document.createElement('button');
-        okBtn.textContent = 'OK';
+        okBtn.textContent = t('OK');
         okBtn.style.cssText = `
             padding: 6px 20px;
             background-color: var(--color-accent);
@@ -356,9 +356,24 @@ class TransferPlayerEditor {
     }
 
     /**
-     * Show map picker with visual preview
+     * Show map picker with visual preview.
+     * @param {object} options - Initial location and optional confirmation callback
      */
-    showMapPicker() {
+    showMapPicker(options = {}) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
+        const currentProject = this.projectController.getCurrentProject ?
+            this.projectController.getCurrentProject() :
+            this.projectController.currentProject;
+        const firstMapId = currentProject?.maps?.find(map => map?.id)?.id || 1;
+        const requestedMapId = Number(options.mapId ?? this.mapId);
+        const selection = {
+            mapId: requestedMapId > 0 ? requestedMapId : firstMapId,
+            x: Math.max(0, Math.trunc(Number(options.x ?? this.x) || 0)),
+            y: Math.max(0, Math.trunc(Number(options.y ?? this.y) || 0))
+        };
+        const expandedMapIds = new Set((currentProject?.maps || [])
+            .filter(map => map?.id && map.expanded)
+            .map(map => map.id));
         const picker = document.createElement('div');
         picker.style.cssText = `
             position: fixed;
@@ -397,7 +412,7 @@ class TransferPlayerEditor {
             align-items: center;
         `;
         header.innerHTML = `
-            <h3 style="margin: 0; color: var(--color-text-strong); font-size: 16px;">Select Map & Position</h3>
+            <h3 style="margin: 0; color: var(--color-text-strong); font-size: 16px;">${options.title || tt('Select Map & Position')}</h3>
             <button class="close-picker" style="background: none; border: none; color: var(--color-text-strong); font-size: 20px; cursor: pointer;">×</button>
         `;
 
@@ -465,7 +480,7 @@ class TransferPlayerEditor {
         `;
 
         const zoomResetBtn = document.createElement('button');
-        zoomResetBtn.textContent = 'Reset';
+        zoomResetBtn.textContent = tt('Reset');
         zoomResetBtn.style.cssText = `
             padding: 4px 12px;
             background-color: var(--color-bg-panel);
@@ -516,7 +531,7 @@ class TransferPlayerEditor {
             float: right;
             margin: 8px;
         `;
-        coordsDisplay.textContent = `X: ${this.x}, Y: ${this.y}`;
+        coordsDisplay.textContent = `X: ${selection.x}, Y: ${selection.y}`;
         previewContainer.appendChild(coordsDisplay);
 
         const mapCanvas = document.createElement('canvas');
@@ -574,7 +589,7 @@ class TransferPlayerEditor {
         `;
 
         const mapTreeHeader = document.createElement('div');
-        mapTreeHeader.textContent = 'Maps';
+        mapTreeHeader.textContent = tt('Maps');
         mapTreeHeader.style.cssText = `
             padding: 12px;
             background-color: var(--color-bg-panel);
@@ -595,7 +610,7 @@ class TransferPlayerEditor {
 
         const searchInput = document.createElement('input');
         searchInput.type = 'text';
-        searchInput.placeholder = 'Search maps...';
+        searchInput.placeholder = tt('Search maps...');
         searchInput.style.cssText = `
             width: 100%;
             padding: 6px 10px;
@@ -626,6 +641,15 @@ class TransferPlayerEditor {
         // Search functionality
         searchInput.addEventListener('input', (e) => {
             const searchTerm = e.target.value.toLowerCase();
+            this.buildMapTreeForPicker(
+                mapTreeList,
+                mapCanvas,
+                coordsDisplay,
+                searchInput,
+                loadMap,
+                selection,
+                expandedMapIds
+            );
             const items = mapTreeList.querySelectorAll('.tree-item');
 
             items.forEach(item => {
@@ -661,14 +685,13 @@ class TransferPlayerEditor {
         `;
 
         const cancelBtn = document.createElement('button');
-        cancelBtn.textContent = 'Cancel';
+        cancelBtn.textContent = tt('Cancel');
         cancelBtn.className = 'rr-btn-secondary';
-        cancelBtn.addEventListener('click', () => {
-            document.body.removeChild(picker);
-        });
+        const closePicker = () => picker.remove();
+        cancelBtn.addEventListener('click', closePicker);
 
         const okBtn = document.createElement('button');
-        okBtn.textContent = 'OK';
+        okBtn.textContent = tt('OK');
         okBtn.style.cssText = `
             padding: 6px 20px;
             background-color: var(--color-accent);
@@ -680,13 +703,16 @@ class TransferPlayerEditor {
             font-weight: bold;
         `;
         okBtn.addEventListener('click', () => {
-            // Update main dialog
-            const mapInputElem = this.modal.querySelector('.map-id-input');
-            if (mapInputElem) {
-                mapInputElem.value = this.mapId;
+            const confirmedLocation = { ...selection };
+            if (options.onConfirm) {
+                options.onConfirm(confirmedLocation);
+            } else {
+                this.mapId = confirmedLocation.mapId;
+                this.x = confirmedLocation.x;
+                this.y = confirmedLocation.y;
+                this.renderContent();
             }
-            this.renderContent(); // Refresh to show updated coordinates
-            document.body.removeChild(picker);
+            closePicker();
         });
 
         footer.appendChild(cancelBtn);
@@ -698,9 +724,21 @@ class TransferPlayerEditor {
         // Load map and render preview
         // Cache the base map image to avoid re-rendering on every click
         let baseMapCanvas = null;
+        let mapLoadGeneration = 0;
 
         const loadMap = async (mapId) => {
-            await this.renderMapPreview(mapCanvas, coordsDisplay, mapId);
+            const generation = ++mapLoadGeneration;
+            okBtn.disabled = true;
+            mapCanvas.style.pointerEvents = 'none';
+            const renderedCanvas = document.createElement('canvas');
+            renderedCanvas.width = mapCanvas.width;
+            renderedCanvas.height = mapCanvas.height;
+            await this.renderMapPreview(renderedCanvas, coordsDisplay, mapId);
+            if (generation !== mapLoadGeneration) return false;
+
+            mapCanvas.width = renderedCanvas.width;
+            mapCanvas.height = renderedCanvas.height;
+            mapCanvas.getContext('2d').drawImage(renderedCanvas, 0, 0);
 
             // Cache the base map (tiles + events + grid, but WITHOUT selection)
             // The current canvas has grid but no selection
@@ -711,9 +749,12 @@ class TransferPlayerEditor {
             baseCtx.drawImage(mapCanvas, 0, 0);
 
             // Now draw the selection on top
-            this.drawSelectionOverlay(mapCanvas);
+            this.drawSelectionOverlay(mapCanvas, selection);
 
             updateZoom();
+            okBtn.disabled = false;
+            mapCanvas.style.pointerEvents = '';
+            return true;
         };
 
         // Click on map to select position
@@ -727,10 +768,10 @@ class TransferPlayerEditor {
             const adjustedX = clickX / zoomLevel;
             const adjustedY = clickY / zoomLevel;
 
-            this.x = Math.floor(adjustedX / tileSize);
-            this.y = Math.floor(adjustedY / tileSize);
+            selection.x = Math.floor(adjustedX / tileSize);
+            selection.y = Math.floor(adjustedY / tileSize);
 
-            coordsDisplay.textContent = `X: ${this.x}, Y: ${this.y}`;
+            coordsDisplay.textContent = `X: ${selection.x}, Y: ${selection.y}`;
 
             // Restore base map and redraw selection (no re-rendering needed)
             if (baseMapCanvas && baseMapCanvas.width > 0 && baseMapCanvas.height > 0) {
@@ -746,7 +787,7 @@ class TransferPlayerEditor {
                 ctx.globalCompositeOperation = previousOperation;
 
                 // Draw the new selection on top
-                this.drawSelectionOverlay(mapCanvas);
+                this.drawSelectionOverlay(mapCanvas, selection);
             }
         });
 
@@ -763,47 +804,69 @@ class TransferPlayerEditor {
             // Could add hover highlight here if desired
         });
 
-        header.querySelector('.close-picker').addEventListener('click', () => {
-            document.body.removeChild(picker);
-        });
+        header.querySelector('.close-picker').addEventListener('click', closePicker);
 
         picker.addEventListener('click', (e) => {
             if (e.target === picker) {
-                document.body.removeChild(picker);
+                closePicker();
             }
         });
 
         document.body.appendChild(picker);
 
         // Build the map tree now that loadMap is defined
-        this.buildMapTreeForPicker(mapTreeList, mapCanvas, coordsDisplay, searchInput, loadMap);
+        this.buildMapTreeForPicker(
+            mapTreeList,
+            mapCanvas,
+            coordsDisplay,
+            searchInput,
+            loadMap,
+            selection,
+            expandedMapIds
+        );
 
         // Initial load
-        loadMap(this.mapId);
+        loadMap(selection.mapId);
     }
 
     /**
      * Build hierarchical map tree for picker dialog
      */
-    buildMapTreeForPicker(container, mapCanvas, coordsDisplay, searchInput, loadMap) {
+    buildMapTreeForPicker(
+        container,
+        mapCanvas,
+        coordsDisplay,
+        searchInput,
+        loadMap,
+        selection = this,
+        expandedMapIds = new Set()
+    ) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const currentProject = this.projectController.getCurrentProject ?
             this.projectController.getCurrentProject() :
             this.projectController.currentProject;
 
         if (!currentProject || !currentProject.maps) {
-            container.innerHTML = '<div class="tree-item" style="padding: 8px; color: var(--color-text-muted);">No maps available</div>';
+            container.innerHTML = `<div class="tree-item" style="padding: 8px; color: var(--color-text-muted);">${tt('No maps available')}</div>`;
             return;
         }
 
         container.innerHTML = '';
 
+        const childrenByParent = new Map();
+        currentProject.maps.forEach((map, index) => {
+            if (!map || !map.id) return;
+            const parentId = map.parentId || 0;
+            if (!childrenByParent.has(parentId)) childrenByParent.set(parentId, []);
+            childrenByParent.get(parentId).push({ ...map, index });
+        });
+        childrenByParent.forEach(children => {
+            children.sort((a, b) => (a.order || 0) - (b.order || 0));
+        });
+
         // Build hierarchical tree starting from root (parentId = 0)
         const buildTree = (parentId, depth = 0) => {
-            // Get all maps with this parentId, sorted by order
-            const children = currentProject.maps
-                .map((map, index) => ({ ...map, index }))
-                .filter(map => map && map.id && map.parentId === parentId)
-                .sort((a, b) => (a.order || 0) - (b.order || 0));
+            const children = childrenByParent.get(parentId) || [];
 
             children.forEach(map => {
                 const mapItem = document.createElement('div');
@@ -819,18 +882,27 @@ class TransferPlayerEditor {
                 `;
 
                 // Check if this map has children
-                const hasChildren = currentProject.maps.some(m => m && m.parentId === map.id);
+                const hasChildren = childrenByParent.has(map.id);
 
                 // Add expand/collapse icon if has children
                 if (hasChildren) {
                     const icon = document.createElement('span');
                     icon.className = 'tree-icon';
-                    icon.textContent = map.expanded ? '▼ ' : '► ';
+                    icon.textContent = expandedMapIds.has(map.id) ? '▼ ' : '► ';
                     icon.style.cssText = 'cursor: pointer; user-select: none; margin-right: 4px;';
                     icon.addEventListener('click', (e) => {
                         e.stopPropagation();
-                        map.expanded = !map.expanded;
-                        this.buildMapTreeForPicker(container, mapCanvas, coordsDisplay, searchInput, loadMap);
+                        if (expandedMapIds.has(map.id)) expandedMapIds.delete(map.id);
+                        else expandedMapIds.add(map.id);
+                        this.buildMapTreeForPicker(
+                            container,
+                            mapCanvas,
+                            coordsDisplay,
+                            searchInput,
+                            loadMap,
+                            selection,
+                            expandedMapIds
+                        );
                     });
                     mapItem.appendChild(icon);
                 } else {
@@ -841,33 +913,33 @@ class TransferPlayerEditor {
 
                 // Add map name
                 const nameSpan = document.createElement('span');
-                nameSpan.textContent = map.name || 'Unnamed Map';
+                nameSpan.textContent = map.name || tt('Unnamed Map');
                 mapItem.appendChild(nameSpan);
 
                 // Highlight if this is the selected map
-                if (map.id === this.mapId) {
+                if (map.id === selection.mapId) {
                     mapItem.style.backgroundColor = 'var(--color-selection-deep)';
                 }
 
                 // Hover effects
                 mapItem.addEventListener('mouseenter', () => {
-                    if (map.id !== this.mapId) {
+                    if (map.id !== selection.mapId) {
                         mapItem.style.backgroundColor = 'var(--color-bg-list-item)';
                     }
                 });
 
                 mapItem.addEventListener('mouseleave', () => {
-                    if (map.id !== this.mapId) {
+                    if (map.id !== selection.mapId) {
                         mapItem.style.backgroundColor = '';
                     }
                 });
 
                 // Add click handler to load map
                 mapItem.addEventListener('click', async () => {
-                    this.mapId = map.id;
-                    this.x = 0;
-                    this.y = 0;
-                    coordsDisplay.textContent = `X: ${this.x}, Y: ${this.y}`;
+                    selection.mapId = map.id;
+                    selection.x = 0;
+                    selection.y = 0;
+                    coordsDisplay.textContent = `X: ${selection.x}, Y: ${selection.y}`;
 
                     // Update selection highlighting
                     container.querySelectorAll('.tree-item').forEach(item => {
@@ -882,7 +954,7 @@ class TransferPlayerEditor {
                 container.appendChild(mapItem);
 
                 // Recursively build children if expanded
-                if (hasChildren && map.expanded) {
+                if (hasChildren && (expandedMapIds.has(map.id) || searchInput.value)) {
                     buildTree(map.id, depth + 1);
                 }
             });
@@ -896,6 +968,7 @@ class TransferPlayerEditor {
      * Render map preview on canvas using TilemapManager's direct canvas rendering
      */
     async renderMapPreview(canvas, coordsDisplay, mapId) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const ctx = canvas.getContext('2d');
 
         // Check if project is loaded
@@ -908,7 +981,7 @@ class TransferPlayerEditor {
             ctx.fillRect(0, 0, canvas.width, canvas.height);
             ctx.fillStyle = '#999';
             ctx.font = '14px monospace';
-            ctx.fillText('No project loaded', 10, 30);
+            ctx.fillText(tt('No project loaded'), 10, 30);
             return;
         }
 
@@ -951,7 +1024,7 @@ class TransferPlayerEditor {
                 ctx.fillRect(0, 0, 400, 300);
                 ctx.fillStyle = '#999';
                 ctx.font = '14px monospace';
-                ctx.fillText('TilemapManager not available', 10, 30);
+                ctx.fillText(tt('TilemapManager not available'), 10, 30);
             }
 
         } catch (e) {
@@ -960,7 +1033,7 @@ class TransferPlayerEditor {
             ctx.fillRect(0, 0, 400, 300);
             ctx.fillStyle = '#ff6666';
             ctx.font = '14px monospace';
-            ctx.fillText(`Failed to load Map${mapId.toString().padStart(3, '0')}`, 10, 30);
+            ctx.fillText(`${tt('Failed to load Map')}${mapId.toString().padStart(3, '0')}`, 10, 30);
             ctx.fillText(e.message, 10, 50);
         }
     }
@@ -1031,24 +1104,24 @@ class TransferPlayerEditor {
     /**
      * Draw selection overlay on canvas (grid and highlight)
      */
-    drawSelectionOverlay(canvas) {
+    drawSelectionOverlay(canvas, location = this) {
         const ctx = canvas.getContext('2d');
         const tileSize = 48;
 
         // Highlight selected position
         ctx.fillStyle = 'rgba(212, 175, 55, 0.4)';
-        ctx.fillRect(this.x * tileSize, this.y * tileSize, tileSize, tileSize);
+        ctx.fillRect(location.x * tileSize, location.y * tileSize, tileSize, tileSize);
 
         ctx.strokeStyle = '#d4af37';
         ctx.lineWidth = 3;
-        ctx.strokeRect(this.x * tileSize, this.y * tileSize, tileSize, tileSize);
+        ctx.strokeRect(location.x * tileSize, location.y * tileSize, tileSize, tileSize);
 
         // Draw position marker
         ctx.fillStyle = '#d4af37';
         ctx.beginPath();
         ctx.arc(
-            this.x * tileSize + tileSize / 2,
-            this.y * tileSize + tileSize / 2,
+            location.x * tileSize + tileSize / 2,
+            location.y * tileSize + tileSize / 2,
             8,
             0,
             Math.PI * 2
@@ -1058,8 +1131,8 @@ class TransferPlayerEditor {
         ctx.fillStyle = '#000';
         ctx.beginPath();
         ctx.arc(
-            this.x * tileSize + tileSize / 2,
-            this.y * tileSize + tileSize / 2,
+            location.x * tileSize + tileSize / 2,
+            location.y * tileSize + tileSize / 2,
             4,
             0,
             Math.PI * 2

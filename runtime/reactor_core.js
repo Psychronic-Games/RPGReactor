@@ -7102,8 +7102,12 @@ Input.gamepadMapper = {
  */
 Input.clear = function() {
     this._currentState = {};
+    this._keyboardState = {};
+    this._physicalKeyState = {};
     this._previousState = {};
+    this._releasedState = {};
     this._gamepadStates = [];
+    this._gamepadLogicalState = {};
     this._latestButton = null;
     this._pressedTime = 0;
     this._dir4 = 0;
@@ -7118,12 +7122,16 @@ Input.clear = function() {
  */
 Input.update = function() {
     this._pollGamepads();
+    this._releasedState = {};
     if (this._currentState[this._latestButton]) {
         this._pressedTime++;
     } else {
         this._latestButton = null;
     }
     for (const name in this._currentState) {
+        if (!this._currentState[name] && this._previousState[name]) {
+            this._releasedState[name] = true;
+        }
         if (this._currentState[name] && !this._previousState[name]) {
             this._latestButton = name;
             this._pressedTime = 0;
@@ -7164,6 +7172,20 @@ Input.isTriggered = function(keyName) {
         return true;
     } else {
         return this._latestButton === keyName && this._pressedTime === 0;
+    }
+};
+
+/**
+ * Checks whether a key was released during the latest update.
+ *
+ * @param {string} keyName - The mapped name of the key.
+ * @returns {boolean} True if the key was released.
+ */
+Input.isReleased = function(keyName) {
+    if (this._isEscapeCompatible(keyName) && this.isReleased("escape")) {
+        return true;
+    } else {
+        return !!this._releasedState[keyName];
     }
 };
 
@@ -7265,6 +7287,8 @@ Input._onKeyDown = function(event) {
     }
     const buttonName = this.keyMapper[event.keyCode];
     if (buttonName) {
+        this._physicalKeyState[event.keyCode] = true;
+        this._keyboardState[buttonName] = true;
         this._currentState[buttonName] = true;
     }
 };
@@ -7287,7 +7311,11 @@ Input._shouldPreventDefault = function(keyCode) {
 Input._onKeyUp = function(event) {
     const buttonName = this.keyMapper[event.keyCode];
     if (buttonName) {
-        this._currentState[buttonName] = false;
+        this._physicalKeyState[event.keyCode] = false;
+        const keyboardPressed = Object.keys(this.keyMapper).some(keyCode =>
+            this.keyMapper[keyCode] === buttonName && this._physicalKeyState[keyCode]);
+        this._keyboardState[buttonName] = keyboardPressed;
+        this._currentState[buttonName] = keyboardPressed || !!this._gamepadLogicalState[buttonName];
     }
 };
 
@@ -7296,20 +7324,40 @@ Input._onLostFocus = function() {
 };
 
 Input._pollGamepads = function() {
+    const connected = [];
     if (navigator.getGamepads) {
         const gamepads = navigator.getGamepads();
         if (gamepads) {
             for (const gamepad of gamepads) {
                 if (gamepad && gamepad.connected) {
+                    connected[gamepad.index] = true;
                     this._updateGamepadState(gamepad);
                 }
             }
         }
     }
+    for (let index = 0; index < this._gamepadStates.length; index++) {
+        const state = this._gamepadStates[index];
+        if (!state || connected[index]) continue;
+        this._gamepadStates[index] = [];
+    }
+    const mappedNames = new Set(Object.values(this.gamepadMapper));
+    for (const buttonName of mappedNames) {
+        let pressed = false;
+        for (const state of this._gamepadStates) {
+            if (!state) continue;
+            for (let button = 0; button < state.length; button++) {
+                if (this.gamepadMapper[button] === buttonName && state[button]) pressed = true;
+            }
+        }
+        if (pressed !== !!this._gamepadLogicalState[buttonName]) {
+            this._gamepadLogicalState[buttonName] = pressed;
+            this._currentState[buttonName] = pressed || !!this._keyboardState[buttonName];
+        }
+    }
 };
 
 Input._updateGamepadState = function(gamepad) {
-    const lastState = this._gamepadStates[gamepad.index] || [];
     const newState = [];
     const buttons = gamepad.buttons;
     const axes = gamepad.axes;
@@ -7330,14 +7378,6 @@ Input._updateGamepadState = function(gamepad) {
         newState[14] = true; // left
     } else if (axes[0] > threshold) {
         newState[15] = true; // right
-    }
-    for (let j = 0; j < newState.length; j++) {
-        if (newState[j] !== lastState[j]) {
-            const buttonName = this.gamepadMapper[j];
-            if (buttonName) {
-                this._currentState[buttonName] = newState[j];
-            }
-        }
     }
     this._gamepadStates[gamepad.index] = newState;
 };
@@ -7428,6 +7468,8 @@ TouchInput.moveThreshold = 10;
  */
 TouchInput.clear = function() {
     this._mousePressed = false;
+    this._mouseButtonStates = [false, false, false];
+    this._mouseButtonTimes = [0, 0, 0];
     this._screenPressed = false;
     this._pressedTime = 0;
     this._clicked = false;
@@ -7450,6 +7492,11 @@ TouchInput.update = function() {
     this._clicked = this._currentState.released && !this._moved;
     if (this.isPressed()) {
         this._pressedTime++;
+    }
+    for (let button = 0; button < this._mouseButtonStates.length; button++) {
+        if (this._mouseButtonStates[button]) {
+            this._mouseButtonTimes[button]++;
+        }
     }
 };
 
@@ -7504,6 +7551,35 @@ TouchInput.isRepeated = function() {
 TouchInput.isLongPressed = function() {
     return this.isPressed() && this._pressedTime >= this.keyRepeatWait;
 };
+
+/**
+ * Checks the independent state of a mouse button.
+ *
+ * @param {number} button - 0=left, 1=middle, 2=right.
+ * @returns {boolean} True if the button is pressed.
+ */
+TouchInput.isMouseButtonPressed = function(button) {
+    return !!this._mouseButtonStates[button];
+};
+
+TouchInput.isMouseButtonTriggered = function(button) {
+    return !!this._currentState.mouseTriggered[button];
+};
+
+TouchInput.isMouseButtonReleased = function(button) {
+    return !!this._currentState.mouseReleased[button];
+};
+
+TouchInput.isMouseButtonLongPressed = function(button) {
+    return this.isMouseButtonPressed(button) &&
+        this._mouseButtonTimes[button] >= this.keyRepeatWait;
+};
+
+// Short aliases keep script calls readable while retaining explicit API names.
+TouchInput.isMousePressed = TouchInput.isMouseButtonPressed;
+TouchInput.isMouseTriggered = TouchInput.isMouseButtonTriggered;
+TouchInput.isMouseReleased = TouchInput.isMouseButtonReleased;
+TouchInput.isMouseLongPressed = TouchInput.isMouseButtonLongPressed;
 
 /**
  * Checks whether the right mouse button is just pressed.
@@ -7618,6 +7694,8 @@ TouchInput._createNewState = function() {
         moved: false,
         hovered: false,
         released: false,
+        mouseTriggered: [false, false, false],
+        mouseReleased: [false, false, false],
         wheelX: 0,
         wheelY: 0
     };
@@ -7650,20 +7728,26 @@ TouchInput._onLeftButtonDown = function(event) {
     const x = Graphics.pageToCanvasX(event.pageX);
     const y = Graphics.pageToCanvasY(event.pageY);
     if (Graphics.isInsideCanvas(x, y)) {
+        this._onMouseButtonTrigger(0);
         this._mousePressed = true;
         this._pressedTime = 0;
         this._onTrigger(x, y);
     }
 };
 
-TouchInput._onMiddleButtonDown = function(/*event*/) {
-    //
+TouchInput._onMiddleButtonDown = function(event) {
+    const x = Graphics.pageToCanvasX(event.pageX);
+    const y = Graphics.pageToCanvasY(event.pageY);
+    if (Graphics.isInsideCanvas(x, y)) {
+        this._onMouseButtonTrigger(1);
+    }
 };
 
 TouchInput._onRightButtonDown = function(event) {
     const x = Graphics.pageToCanvasX(event.pageX);
     const y = Graphics.pageToCanvasY(event.pageY);
     if (Graphics.isInsideCanvas(x, y)) {
+        this._onMouseButtonTrigger(2);
         this._onCancel(x, y);
     }
 };
@@ -7683,7 +7767,26 @@ TouchInput._onMouseUp = function(event) {
         const x = Graphics.pageToCanvasX(event.pageX);
         const y = Graphics.pageToCanvasY(event.pageY);
         this._mousePressed = false;
+        this._onMouseButtonRelease(0);
         this._onRelease(x, y);
+    } else if (event.button === 1 || event.button === 2) {
+        this._onMouseButtonRelease(event.button);
+    }
+};
+
+TouchInput._onMouseButtonTrigger = function(button) {
+    if (!this._mouseButtonStates[button]) {
+        this._mouseButtonStates[button] = true;
+        this._mouseButtonTimes[button] = 0;
+        this._newState.mouseTriggered[button] = true;
+    }
+};
+
+TouchInput._onMouseButtonRelease = function(button) {
+    if (this._mouseButtonStates[button]) {
+        this._mouseButtonStates[button] = false;
+        this._mouseButtonTimes[button] = 0;
+        this._newState.mouseReleased[button] = true;
     }
 };
 

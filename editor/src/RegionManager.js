@@ -221,11 +221,12 @@ class RegionManager {
 
     // Initialize the region palette UI
     initializeUI(container) {
+        const tt = text => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
         container.innerHTML = `
             <div id="region-palette-container" style="display: flex; flex-direction: column; height: 100%; background-color: var(--color-bg-surface);">
                 <!-- Region Info -->
                 <div id="region-selection-info" style="padding: 8px; background-color: var(--color-bg-list-item); border-bottom: 1px solid var(--color-border);">
-                    <div style="font-size: 11px; color: var(--color-text-muted);">Selected: Region <span id="selected-region-number">1</span></div>
+                    <div style="font-size: 11px; color: var(--color-text-muted);">${tt('Selected: Region')} <span id="selected-region-number">1</span></div>
                 </div>
 
                 <!-- Region Palette Canvas (scrollable) -->
@@ -334,6 +335,7 @@ class RegionManager {
 
     // Select a region
     selectRegion(regionId) {
+        if (this.mapEditor?.mapStamp) this.mapEditor.clearMapStamp();
         this.selectedRegion = regionId;
 
         // Update selectedTiles array (similar to tileset palette)

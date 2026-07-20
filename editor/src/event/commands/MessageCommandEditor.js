@@ -17,6 +17,10 @@ class MessageCommandEditor {
         this.speakerName = '';
     }
 
+    _t(text) {
+        return window.I18n ? window.I18n.tText(text) : text;
+    }
+
     /**
      * Show editor for a message command
      * @param {object} messageData - The message data to edit (or null for new)
@@ -144,7 +148,7 @@ class MessageCommandEditor {
             border-top-right-radius: 6px;
         `;
         header.innerHTML = `
-            <h3 style="margin: 0; color: var(--color-text-strong); font-size: 16px;">Show Text</h3>
+            <h3 style="margin: 0; color: var(--color-text-strong); font-size: 16px;">${this._t('Show Text')}</h3>
             <button class="close-btn" style="background: none; border: none; color: var(--color-text-strong); font-size: 20px; cursor: pointer; padding: 0; width: 24px; height: 24px;">×</button>
         `;
         container.appendChild(header);
@@ -192,12 +196,12 @@ class MessageCommandEditor {
         `;
 
         const cancelBtn = document.createElement('button');
-        cancelBtn.textContent = 'Cancel';
+        cancelBtn.textContent = this._t('Cancel');
         cancelBtn.className = 'rr-btn-secondary';
         cancelBtn.addEventListener('click', () => this.close());
 
         const okBtn = document.createElement('button');
-        okBtn.textContent = 'OK';
+        okBtn.textContent = this._t('OK');
         okBtn.style.cssText = `
             padding: 6px 20px;
             background-color: var(--color-accent);
@@ -233,7 +237,7 @@ class MessageCommandEditor {
         `;
 
         const label = document.createElement('div');
-        label.textContent = 'Face:';
+        label.textContent = this._t('Face:');
         label.style.cssText = 'font-weight: bold; font-size: 13px; color: var(--color-text);';
 
         // Face preview canvas (144x144 to show one face from the sheet)
@@ -255,7 +259,7 @@ class MessageCommandEditor {
 
         // Browse button
         const browseBtn = document.createElement('button');
-        browseBtn.textContent = 'Browse...';
+        browseBtn.textContent = this._t('Browse...');
         browseBtn.style.cssText = `
             padding: 6px 16px;
             background-color: var(--color-bg-panel);
@@ -269,7 +273,7 @@ class MessageCommandEditor {
 
         // Clear button
         const clearBtn = document.createElement('button');
-        clearBtn.textContent = 'Clear';
+        clearBtn.textContent = this._t('Clear');
         clearBtn.style.cssText = `
             padding: 6px 16px;
             background-color: var(--color-bg-panel);
@@ -308,7 +312,7 @@ class MessageCommandEditor {
         `;
 
         const label = document.createElement('div');
-        label.textContent = 'Message:';
+        label.textContent = this._t('Message:');
         label.style.cssText = 'font-weight: bold; font-size: 13px; color: var(--color-text);';
 
         column.appendChild(label);
@@ -352,7 +356,7 @@ class MessageCommandEditor {
 
         // Add helper text
         const helper = document.createElement('div');
-        helper.textContent = 'Maximum 4 lines of text';
+        helper.textContent = this._t('Maximum 4 lines of text');
         helper.style.cssText = 'font-size: 11px; color: var(--color-text-muted); margin-top: -4px;';
         column.appendChild(helper);
 
@@ -377,7 +381,7 @@ class MessageCommandEditor {
         nameGroup.style.cssText = 'display: flex; align-items: center; gap: 6px;';
 
         const nameLabel = document.createElement('label');
-        nameLabel.textContent = 'Name:';
+        nameLabel.textContent = this._t('Name:');
         nameLabel.style.cssText = 'color: var(--color-text); font-size: 12px;';
 
         const nameInput = document.createElement('input');
@@ -405,7 +409,7 @@ class MessageCommandEditor {
         bgGroup.style.cssText = 'display: flex; align-items: center; gap: 6px;';
 
         const bgLabel = document.createElement('label');
-        bgLabel.textContent = 'Background:';
+        bgLabel.textContent = this._t('Background:');
         bgLabel.style.cssText = 'color: var(--color-text); font-size: 12px;';
 
         const bgSelect = document.createElement('select');
@@ -436,7 +440,7 @@ class MessageCommandEditor {
         posGroup.style.cssText = 'display: flex; align-items: center; gap: 6px;';
 
         const posLabel = document.createElement('label');
-        posLabel.textContent = 'Window Position:';
+        posLabel.textContent = this._t('Window Position:');
         posLabel.style.cssText = 'color: var(--color-text); font-size: 12px;';
 
         const posSelect = document.createElement('select');
@@ -464,7 +468,7 @@ class MessageCommandEditor {
 
         // Preview button
         const previewBtn = document.createElement('button');
-        previewBtn.textContent = 'Preview';
+        previewBtn.textContent = this._t('Preview');
         previewBtn.style.cssText = `
             padding: 6px 16px;
             background-color: var(--color-accent);
@@ -495,7 +499,7 @@ class MessageCommandEditor {
             this.projectController.currentProject;
 
         if (!currentProject || !currentProject.path) {
-            alert('No project loaded');
+            alert(this._t('No project loaded'));
             return;
         }
 
@@ -504,17 +508,14 @@ class MessageCommandEditor {
         const facesFolder = path.join(currentProject.path, 'img', 'faces');
 
         if (!fs.existsSync(facesFolder)) {
-            alert('Faces folder not found: ' + facesFolder);
+            alert(this._t('Faces folder not found:') + ' ' + facesFolder);
             return;
         }
 
-        // Read face files
-        const files = fs.readdirSync(facesFolder).filter(file => {
-            return file.endsWith('.png');
-        }).map(file => file.replace('.png', ''));
+        const files = RRAssetFiles.listNames(facesFolder, ['.png']);
 
         if (files.length === 0) {
-            alert('No face images found');
+            alert(this._t('No face images found'));
             return;
         }
 
@@ -563,28 +564,9 @@ class MessageCommandEditor {
             align-items: center;
         `;
         header.innerHTML = `
-            <h3 style="margin: 0; color: var(--color-text-strong); font-size: 16px;">Select Face</h3>
+            <h3 style="margin: 0; color: var(--color-text-strong); font-size: 16px;">${this._t('Select Face')}</h3>
             <button class="close-picker" style="background: none; border: none; color: var(--color-text-strong); font-size: 20px; cursor: pointer;">×</button>
         `;
-
-        // Search bar
-        const searchContainer = document.createElement('div');
-        searchContainer.style.cssText = 'padding: 8px 16px; background-color: var(--color-bg-list-item);';
-
-        const searchInput = document.createElement('input');
-        searchInput.type = 'text';
-        searchInput.placeholder = 'Search facesets...';
-        searchInput.style.cssText = `
-            width: 100%;
-            padding: 8px 12px;
-            background-color: var(--color-bg-input);
-            color: var(--color-text);
-            border: 1px solid var(--color-border-input);
-            border-radius: 3px;
-            font-size: 13px;
-        `;
-
-        searchContainer.appendChild(searchInput);
 
         // Main content - split view (file list + preview pane)
         const mainContent = document.createElement('div');
@@ -601,8 +583,7 @@ class MessageCommandEditor {
         fileListContainer.style.cssText = `
             width: 280px;
             background-color: var(--color-bg-surface);
-            overflow-y: auto;
-            padding: 8px;
+            overflow: hidden;
         `;
 
         // Right side - preview pane
@@ -618,7 +599,7 @@ class MessageCommandEditor {
         `;
 
         const previewTitle = document.createElement('div');
-        previewTitle.textContent = this.faceImage || 'Select a faceset';
+        previewTitle.textContent = this.faceImage || this._t('Select a faceset');
         previewTitle.className = 'preview-title';
         previewTitle.style.cssText = `
             color: var(--color-text);
@@ -643,54 +624,18 @@ class MessageCommandEditor {
 
         const path = require('path');
         let selectedFilename = this.faceImage;
-        let allFileItems = [];
-
-        // Render file list
-        const renderFileList = (filterText = '') => {
-            fileListContainer.innerHTML = '';
-            const lowerFilter = filterText.toLowerCase();
-
-            allFileItems = files.filter(filename =>
-                filename.toLowerCase().includes(lowerFilter)
-            ).map(filename => {
-                const fileItem = document.createElement('div');
-                fileItem.className = 'file-list-item';
-                fileItem.textContent = filename;
-                fileItem.style.cssText = `
-                    padding: 8px 12px;
-                    margin-bottom: 4px;
-                    background-color: ${filename === selectedFilename ? 'var(--color-accent)' : 'var(--color-bg-input)'};
-                    color: ${filename === selectedFilename ? 'var(--color-bg-deep)' : 'var(--color-text)'};
-                    border: 1px solid ${filename === selectedFilename ? 'var(--color-accent)' : 'var(--color-border-input)'};
-                    border-radius: 3px;
-                    cursor: pointer;
-                    font-size: 12px;
-                    transition: all 0.15s;
-                `;
-
-                fileItem.addEventListener('mouseenter', () => {
-                    if (filename !== selectedFilename) {
-                        fileItem.style.backgroundColor = '#3d3d3d';
-                    }
-                });
-
-                fileItem.addEventListener('mouseleave', () => {
-                    if (filename !== selectedFilename) {
-                        fileItem.style.backgroundColor = 'var(--color-bg-input)';
-                    }
-                });
-
-                fileItem.addEventListener('click', () => {
-                    selectedFilename = filename;
-                    previewTitle.textContent = filename;
-                    renderFileList(filterText);
-                    renderFaceGrid(filename);
-                });
-
-                fileListContainer.appendChild(fileItem);
-                return { filename, element: fileItem };
-            });
-        };
+        const browser = RRPickerIndex.createBrowser({
+            files,
+            selectedName: selectedFilename,
+            itemClass: 'file-list-item',
+            searchPlaceholder: this._t('Search facesets...'),
+            onSelect: filename => {
+                selectedFilename = filename;
+                previewTitle.textContent = filename;
+                renderFaceGrid(filename);
+            }
+        });
+        fileListContainer.appendChild(browser.element);
 
         // Render face grid for selected file
         const renderFaceGrid = (filename) => {
@@ -698,7 +643,7 @@ class MessageCommandEditor {
 
             const imagePath = path.join(projectPath, 'img', 'faces', filename + '.png');
             const faceSheet = new Image();
-            faceSheet.src = 'file://' + imagePath.replace(/\\/g, '/');
+            faceSheet.src = RRAssetFiles.toUrl(imagePath);
 
             faceSheet.onload = () => {
                 // Draw all 8 faces in a horizontal 4x2 grid
@@ -759,14 +704,9 @@ class MessageCommandEditor {
             };
 
             faceSheet.onerror = () => {
-                faceGridContainer.innerHTML = '<div style="color: #ff6666; padding: 20px;">Failed to load faceset image</div>';
+                faceGridContainer.innerHTML = `<div style="color: #ff6666; padding: 20px;">${this._t('Failed to load faceset image')}</div>`;
             };
         };
-
-        // Search functionality
-        searchInput.addEventListener('input', (e) => {
-            renderFileList(e.target.value);
-        });
 
         // Footer
         const footer = document.createElement('div');
@@ -780,7 +720,7 @@ class MessageCommandEditor {
 
         // Open in Folder button
         const openFolderBtn = document.createElement('button');
-        openFolderBtn.textContent = 'Open in Folder';
+        openFolderBtn.textContent = this._t('Open in Folder');
         openFolderBtn.style.cssText = `
             padding: 6px 20px;
             background-color: var(--color-border-subtle);
@@ -803,7 +743,7 @@ class MessageCommandEditor {
         openFolderBtn.addEventListener('mouseleave', () => { openFolderBtn.style.backgroundColor = 'var(--color-border-subtle)'; openFolderBtn.style.borderColor = 'var(--color-border-input)'; });
 
         const cancelBtn = document.createElement('button');
-        cancelBtn.textContent = 'Cancel';
+        cancelBtn.textContent = this._t('Cancel');
         cancelBtn.className = 'rr-btn-secondary';
         cancelBtn.addEventListener('click', () => {
             document.body.removeChild(picker);
@@ -813,7 +753,6 @@ class MessageCommandEditor {
         footer.appendChild(cancelBtn);
 
         container.appendChild(header);
-        container.appendChild(searchContainer);
         container.appendChild(mainContent);
         container.appendChild(footer);
         picker.appendChild(container);
@@ -831,13 +770,13 @@ class MessageCommandEditor {
         document.body.appendChild(picker);
 
         // Initial render
-        renderFileList();
         if (selectedFilename) {
             renderFaceGrid(selectedFilename);
+            browser.scrollTo(selectedFilename);
         }
 
         // Focus search input
-        setTimeout(() => searchInput.focus(), 100);
+        setTimeout(() => browser.searchInput.focus(), 100);
     }
 
     /**
@@ -879,10 +818,14 @@ class MessageCommandEditor {
             justify-content: space-between;
             align-items: center;
         `;
-        header.innerHTML = `
-            <h3 style="margin: 0; color: var(--color-text-strong); font-size: 16px;">${filename}</h3>
-            <button class="close-picker" style="background: none; border: none; color: var(--color-text-strong); font-size: 20px; cursor: pointer;">×</button>
-        `;
+        const heading = document.createElement('h3');
+        heading.style.cssText = 'margin: 0; color: var(--color-text-strong); font-size: 16px;';
+        heading.textContent = filename;
+        const closeButton = document.createElement('button');
+        closeButton.className = 'close-picker';
+        closeButton.style.cssText = 'background: none; border: none; color: var(--color-text-strong); font-size: 20px; cursor: pointer;';
+        closeButton.textContent = '×';
+        header.append(heading, closeButton);
 
         // Content - 4x2 grid of faces (horizontal layout matching faceset format)
         const content = document.createElement('div');
@@ -898,7 +841,7 @@ class MessageCommandEditor {
 
         // Load the face image
         const faceSheet = new Image();
-        faceSheet.src = 'file://' + imagePath.replace(/\\/g, '/');
+        faceSheet.src = RRAssetFiles.toUrl(imagePath);
 
         faceSheet.onload = () => {
             // Each face is 144x144 on the sheet
@@ -955,7 +898,7 @@ class MessageCommandEditor {
         };
 
         faceSheet.onerror = () => {
-            content.innerHTML = '<div style="color: #ff6666; padding: 20px;">Failed to load face image</div>';
+            content.innerHTML = `<div style="color: #ff6666; padding: 20px;">${this._t('Failed to load face image')}</div>`;
         };
 
         container.appendChild(header);
@@ -998,7 +941,7 @@ class MessageCommandEditor {
         const imagePath = path.join(currentProject.path, 'img', 'faces', this.faceImage + '.png');
 
         const faceSheet = new Image();
-        faceSheet.src = 'file://' + imagePath.replace(/\\/g, '/');
+        faceSheet.src = RRAssetFiles.toUrl(imagePath);
 
         faceSheet.onload = () => {
             // Faceset is 4 columns × 2 rows
@@ -1023,7 +966,7 @@ class MessageCommandEditor {
      * Show preview of the message in-game
      */
     showPreview() {
-        alert('Preview functionality will be implemented in the game engine preview system.');
+        alert(this._t('Preview functionality will be implemented in the game engine preview system.'));
     }
 
     /**
@@ -1045,15 +988,19 @@ class MessageCommandEditor {
             ]
         });
 
-        // Following commands: code 401 (text lines)
+        // Following commands: code 401 (text lines). Emit through the last
+        // non-empty line so interior blank lines survive the round-trip;
+        // only trailing blanks are trimmed.
+        let lastLine = 0;
         for (let i = 0; i < 4; i++) {
-            if (this.textLines[i] || i === 0) { // Always add at least first line
-                commands.push({
-                    code: 401,
-                    indent: 0,
-                    parameters: [this.textLines[i]]
-                });
-            }
+            if (this.textLines[i]) lastLine = i;
+        }
+        for (let i = 0; i <= lastLine; i++) {
+            commands.push({
+                code: 401,
+                indent: 0,
+                parameters: [this.textLines[i] || '']
+            });
         }
 
         return commands;

@@ -1505,7 +1505,7 @@ Game_Action.prototype.numRepeats = function() {
     if (this.isAttack()) {
         repeats += this.subject().attackTimesAdd();
     }
-    return Math.floor(repeats);
+    return Math.max(1, Math.min(100, Math.floor(Number(repeats) || 1)));
 };
 
 Game_Action.prototype.checkItemScope = function(list) {
@@ -4067,7 +4067,8 @@ Game_Actor.prototype.setup = function(actorId) {
     this._nickname = actor.nickname;
     this._profile = actor.profile;
     this._classId = actor.classId;
-    this._level = actor.initialLevel;
+    const maximumLevel = Math.max(1, Math.min(999, Math.floor(Number(actor.maxLevel) || 99)));
+    this._level = Math.max(1, Math.min(maximumLevel, Math.floor(Number(actor.initialLevel) || 1)));
     this.initImages();
     this.initExp();
     this.initSkills();
@@ -4186,7 +4187,7 @@ Game_Actor.prototype.nextRequiredExp = function() {
 };
 
 Game_Actor.prototype.maxLevel = function() {
-    return this.actor().maxLevel;
+    return Math.max(1, Math.min(999, Math.floor(Number(this.actor().maxLevel) || 99)));
 };
 
 Game_Actor.prototype.isMaxLevel = function() {
@@ -4469,8 +4470,29 @@ Game_Actor.prototype.bareHandsElementId = function() {
     return 1;
 };
 
+Game_Actor.prototype.classParamAtLevel = function(classData, paramId, level) {
+    const values = classData?.params?.[paramId];
+    if (!Array.isArray(values) || values.length === 0) return 0;
+    const requestedLevel = Math.max(1, Math.min(999, Math.floor(Number(level) || 1)));
+    const exact = Number(values[requestedLevel]);
+    if (Number.isFinite(exact)) return exact;
+
+    let lastIndex = Math.min(requestedLevel, values.length - 1);
+    while (lastIndex >= 1 && !Number.isFinite(Number(values[lastIndex]))) lastIndex--;
+    if (lastIndex < 1) return 0;
+
+    const lastValue = Number(values[lastIndex]);
+    let previousIndex = lastIndex - 1;
+    while (previousIndex >= 1 && !Number.isFinite(Number(values[previousIndex]))) previousIndex--;
+    if (previousIndex < 1) return lastValue;
+
+    const previousValue = Number(values[previousIndex]);
+    const slope = (lastValue - previousValue) / (lastIndex - previousIndex);
+    return Math.round(lastValue + slope * (requestedLevel - lastIndex));
+};
+
 Game_Actor.prototype.paramBase = function(paramId) {
-    return this.currentClass().params[paramId][this._level];
+    return this.classParamAtLevel(this.currentClass(), paramId, this._level);
 };
 
 Game_Actor.prototype.paramPlus = function(paramId) {
@@ -6216,6 +6238,7 @@ Game_Map.prototype.airship = function() {
 Game_Map.prototype.setupEvents = function() {
     this._events = [];
     this._commonEvents = [];
+    this.refreshCommonEventTriggerCache();
     for (const event of $dataMap.events.filter(event => !!event)) {
         this._events[event.id] = new Game_Event(this._mapId, event.id);
     }
@@ -6223,6 +6246,17 @@ Game_Map.prototype.setupEvents = function() {
         this._commonEvents.push(new Game_CommonEvent(commonEvent.id));
     }
     this.refreshTileEvents();
+};
+
+Game_Map.prototype.refreshCommonEventTriggerCache = function() {
+    this._commonEventTriggerSource = $dataCommonEvents;
+    this._autorunCommonEvents = [];
+    this._parallelCommonEvents = [];
+    for (const commonEvent of $dataCommonEvents) {
+        if (!commonEvent) continue;
+        if (commonEvent.trigger === 1) this._autorunCommonEvents.push(commonEvent);
+        if (commonEvent.trigger === 2) this._parallelCommonEvents.push(commonEvent);
+    }
 };
 
 Game_Map.prototype.events = function() {
@@ -6238,15 +6272,17 @@ Game_Map.prototype.eraseEvent = function(eventId) {
 };
 
 Game_Map.prototype.autorunCommonEvents = function() {
-    return $dataCommonEvents.filter(
-        commonEvent => commonEvent && commonEvent.trigger === 1
-    );
+    if (this._commonEventTriggerSource !== $dataCommonEvents || !this._autorunCommonEvents) {
+        this.refreshCommonEventTriggerCache();
+    }
+    return this._autorunCommonEvents;
 };
 
 Game_Map.prototype.parallelCommonEvents = function() {
-    return $dataCommonEvents.filter(
-        commonEvent => commonEvent && commonEvent.trigger === 2
-    );
+    if (this._commonEventTriggerSource !== $dataCommonEvents || !this._parallelCommonEvents) {
+        this.refreshCommonEventTriggerCache();
+    }
+    return this._parallelCommonEvents;
 };
 
 Game_Map.prototype.setupScroll = function() {

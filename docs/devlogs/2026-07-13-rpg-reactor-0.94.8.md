@@ -4,7 +4,7 @@ RPG Reactor 0.94.8 makes the editor fast where it hurt most: giant maps. Loading
 
 ## Large maps load in a quarter of the time
 
-A 256×256 map (Star Shift Rebellion's Map 850, ~131,000 placed tiles) took around 10 seconds to finish loading. The visible viewport always appeared instantly — the time went to the background fill, which streamed the off-screen tiles straight into the live scene, so every frame re-rendered the ever-growing, uncached map (over a second per frame near the end) and starved its own loader. Off-screen tiles now build in detached containers the renderer never sees, then attach and cache layer by layer. The same map now fully loads in about 2.5 seconds, and the editor stays responsive the whole time.
+A 256×256 compatibility-project map with roughly 131,000 placed tiles took around 10 seconds to finish loading. The visible viewport always appeared instantly — the time went to the background fill, which streamed the off-screen tiles straight into the live scene, so every frame re-rendered the ever-growing, uncached map (over a second per frame near the end) and starved its own loader. Off-screen tiles now build in detached containers the renderer never sees, then attach and cache layer by layer. The same map now fully loads in about 2.5 seconds, and the editor stays responsive the whole time.
 
 ## Full frame rate on maps with water
 

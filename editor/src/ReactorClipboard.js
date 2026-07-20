@@ -75,17 +75,21 @@ class ReactorClipboard {
     }
 
     static readSharedFile(expectedType = null) {
+        return ReactorClipboard.readSharedFileDetailed(expectedType).envelope;
+    }
+
+    static readSharedFileDetailed(expectedType = null) {
         const filePath = ReactorClipboard.getClipboardFilePath();
-        if (!filePath) return null;
+        if (!filePath) return { available: false, envelope: null };
 
         try {
             const fs = require('fs');
-            if (!fs.existsSync(filePath)) return null;
+            if (!fs.existsSync(filePath)) return { available: false, envelope: null };
             const text = fs.readFileSync(filePath, 'utf8');
-            return ReactorClipboard.parse(text, expectedType);
+            return { available: !!text, envelope: ReactorClipboard.parse(text, expectedType) };
         } catch (error) {
             console.warn('Shared clipboard file read failed:', error);
-            return null;
+            return { available: false, envelope: null };
         }
     }
 
@@ -100,7 +104,7 @@ class ReactorClipboard {
                 wrote = true;
             }
 
-            if (navigator.clipboard && navigator.clipboard.writeText) {
+            if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
                 await navigator.clipboard.writeText(text);
                 wrote = true;
             }
@@ -119,34 +123,36 @@ class ReactorClipboard {
     }
 
     static async read(expectedType = null) {
+        return (await ReactorClipboard.readDetailed(expectedType)).envelope;
+    }
+
+    static async readDetailed(expectedType = null) {
         let text = '';
 
         try {
             const nwClipboard = ReactorClipboard.getNwClipboard();
             if (nwClipboard) {
                 text = nwClipboard.get('text') || '';
-                const parsed = ReactorClipboard.parse(text, expectedType);
-                if (parsed) return parsed;
+                if (text) return { available: true, envelope: ReactorClipboard.parse(text, expectedType) };
             }
 
-            if (navigator.clipboard && navigator.clipboard.readText) {
+            if (typeof navigator !== 'undefined' && navigator.clipboard?.readText) {
                 text = await navigator.clipboard.readText();
-                const parsed = ReactorClipboard.parse(text, expectedType);
-                if (parsed) return parsed;
+                if (text) return { available: true, envelope: ReactorClipboard.parse(text, expectedType) };
             }
         } catch (error) {
             console.warn('System clipboard read failed:', error);
         }
 
-        const sharedFileData = ReactorClipboard.readSharedFile(expectedType);
-        if (sharedFileData) return sharedFileData;
+        const sharedFileData = ReactorClipboard.readSharedFileDetailed(expectedType);
+        if (sharedFileData.available) return sharedFileData;
 
         try {
             text = localStorage.getItem('rpg-reactor.clipboard') || '';
-            return ReactorClipboard.parse(text, expectedType);
+            return { available: !!text, envelope: ReactorClipboard.parse(text, expectedType) };
         } catch (error) {
             console.warn('Fallback clipboard read failed:', error);
-            return null;
+            return { available: false, envelope: null };
         }
     }
 }

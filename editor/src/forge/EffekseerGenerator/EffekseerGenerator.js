@@ -119,6 +119,15 @@ class EffekseerGenerator {
         return window.I18n && window.I18n.tText ? window.I18n.tText(label) : label;
     }
 
+    _escapeHtml(value) {
+        if (typeof globalThis.rrEscapeHtml === 'function') return globalThis.rrEscapeHtml(value);
+        return require('../../utils/HtmlEscape.js')(value);
+    }
+
+    _safeColor(value, fallback = '#ffffff') {
+        return /^#[0-9a-f]{6}(?:[0-9a-f]{2})?$/i.test(String(value)) ? String(value) : fallback;
+    }
+
     /** The active layer entry { recipeId, keyframes, activeKf, start, end }. */
     _layer() {
         if (this._activeLayer >= this._stack.length) this._activeLayer = this._stack.length - 1;
@@ -1005,7 +1014,7 @@ class EffekseerGenerator {
                     <div style="padding: 10px 14px 4px; font-size: 9px; font-weight: 700; color: var(--color-accent-bright); text-transform: uppercase; letter-spacing: 0.5px;">${this._t('efk.orientation')}</div>
                     <div style="display: flex; flex-direction: column; gap: 6px; align-items: center; padding: 4px 14px 10px; border-bottom: 1px solid var(--color-border-subtle);">
                         <canvas class="rr-efk-gizmo" width="148" height="148" style="cursor: grab; display: block; touch-action: none;"></canvas>
-                        <button class="rr-efk-gizmo-reset rr-btn-chip" style="padding: 3px 10px; font-size: 10px;" title="Reset the active keyframe's orientation (tilts to 0)">Reset</button>
+                        <button class="rr-efk-gizmo-reset rr-btn-chip" style="padding: 3px 10px; font-size: 10px;" title="${this._tx("Reset the active keyframe's orientation (tilts to 0)")}">${this._tx('Reset')}</button>
                     </div>
                     <div style="display: flex; align-items: center; justify-content: space-between; padding: 10px 14px 4px;">
                         <span style="font-size: 9px; font-weight: 700; color: var(--color-accent-bright); text-transform: uppercase; letter-spacing: 0.5px;">${this._t('efk.parameters')}</span>
@@ -1124,7 +1133,7 @@ class EffekseerGenerator {
             ).join('');
             const kfFrameBox = `
                 <label class="rr-efk-kf-frame-group" style="display: inline-flex; align-items: center; gap: 5px; flex: 0 0 auto; margin-left: auto; font-size: 10px; color: var(--color-text-muted); white-space: nowrap;" title="${this._t('efk.kfFrameField')} ${(entry.activeKf || 0) + 1}">
-                    KF ${(entry.activeKf || 0) + 1} · ${this._t('efk.framesLabel')}
+                    ${this._tx('KF')} ${(entry.activeKf || 0) + 1} · ${this._t('efk.framesLabel')}
                     <input type="number" class="rr-efk-lp-kfframe rr-input" data-i="${i}" min="0" max="3600" step="1"
                            value="${entry.kfTimes[entry.activeKf || 0]}" style="width: 56px; font-size: 10px; padding: 1px 4px;">
                 </label>`;
@@ -1151,7 +1160,7 @@ class EffekseerGenerator {
                     <span class="rr-efk-lp-alpha-value" style="font-size: 9px; color: var(--color-text-muted); text-align: right;">${Math.round((entry.opacity ?? 1) * 100)}%</span>
                 </div>
                 <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 6px;">
-                    <span style="font-size: 9px; color: var(--color-text-muted);">KF</span>
+                    <span style="font-size: 9px; color: var(--color-text-muted);">${this._tx('KF')}</span>
                     <span style="display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px;">
                         ${kfChips}
                         <button class="rr-efk-lp-kfadd rr-btn-chip" data-i="${i}" title="${this._t('efk.addKeyframe')}" style="padding: 1px 7px; font-size: 9px;">＋</button>
@@ -1278,6 +1287,10 @@ class EffekseerGenerator {
     /** Preview mouse controls: left-drag rotates the effect (synced with
      *  the gizmo), right/Shift-drag orbits the camera, wheel zooms. */
     _bindOrbitControls(canvas) {
+        // The drag handlers live on window (drags continue outside the
+        // canvas) and close over the canvas — remove the previous mount's
+        // pair or every Forge remount retains another dead GL canvas.
+        if (this._orbitCleanup) this._orbitCleanup();
         let mode = null, lastX = 0, lastY = 0;
         const wrap180 = (v) => ((v + 180) % 360 + 360) % 360 - 180;
         canvas.addEventListener('contextmenu', (e) => e.preventDefault());
@@ -1286,7 +1299,7 @@ class EffekseerGenerator {
             lastX = e.clientX; lastY = e.clientY;
             canvas.style.cursor = 'grabbing';
         });
-        window.addEventListener('mousemove', (e) => {
+        const onOrbitMouseMove = (e) => {
             if (!mode) return;
             const dx = e.clientX - lastX, dy = e.clientY - lastY;
             lastX = e.clientX; lastY = e.clientY;
@@ -1305,11 +1318,18 @@ class EffekseerGenerator {
                 if (this._gizmo) this._gizmo.setRotation(n.x, n.y, n.z);
                 this._setActiveTilt(n.x, n.y, n.z);
             }
-        });
-        window.addEventListener('mouseup', () => {
+        };
+        const onOrbitMouseUp = () => {
             mode = null;
             canvas.style.cursor = 'grab';
-        });
+        };
+        window.addEventListener('mousemove', onOrbitMouseMove);
+        window.addEventListener('mouseup', onOrbitMouseUp);
+        this._orbitCleanup = () => {
+            window.removeEventListener('mousemove', onOrbitMouseMove);
+            window.removeEventListener('mouseup', onOrbitMouseUp);
+            this._orbitCleanup = null;
+        };
         canvas.addEventListener('wheel', (e) => {
             e.preventDefault();
             this._camDist *= e.deltaY > 0 ? 1.1 : 1 / 1.1;
@@ -1344,7 +1364,7 @@ class EffekseerGenerator {
         ).join('');
         const kfFrameRow = `
             <div class="rr-efk-param-kf-frame-row" style="display: grid; grid-template-columns: minmax(0, 1fr) 64px; align-items: center; gap: 8px; margin-top: 5px; min-width: 0;">
-                <label style="min-width: 0; font-size: 10px; color: var(--color-accent-bright); font-weight: 700;">KF ${layer.activeKf + 1} · ${this._t('efk.framesLabel')}</label>
+                <label style="min-width: 0; font-size: 10px; color: var(--color-accent-bright); font-weight: 700;">${this._tx('KF')} ${layer.activeKf + 1} · ${this._t('efk.framesLabel')}</label>
                 <input type="number" class="rr-efk-kf-frame rr-input" min="0" max="3600" step="1" value="${layer.kfTimes[layer.activeKf]}" style="width: 100%; min-width: 0; box-sizing: border-box; font-size: 11px; padding: 3px 6px;">
             </div>`;
         const dur = (layer.end || 0) > (layer.start || 0) ? layer.end - (layer.start || 0) : 0;
@@ -1375,7 +1395,7 @@ class EffekseerGenerator {
             if (s.type === 'layers') return this._renderLayerCards(recipe);
             const label = `<label style="font-size: 11px; color: var(--color-text-muted); display: block; margin-bottom: 3px;">${this._tx(s.label)}</label>`;
             if (s.type === 'color') {
-                return `<div>${label}<button type="button" class="rr-color-swatch-btn rr-efk-color" data-ckey="${s.key}" title="Click to choose color" style="background: ${v}; width: 100%; height: 26px; display: block;"></button></div>`;
+                return `<div>${label}<button type="button" class="rr-color-swatch-btn rr-efk-color" data-ckey="${s.key}" title="${this._tx('Click to choose color')}" style="background: ${this._safeColor(v)}; width: 100%; height: 26px; display: block;"></button></div>`;
             }
             if (s.type === 'toggle') {
                 return `<div style="display: flex; align-items: center; gap: 8px;"><input type="checkbox" data-param="${s.key}" ${v ? 'checked' : ''} style="cursor: pointer;"><span style="font-size: 11px; color: var(--color-text-muted);">${this._tx(s.label)}</span></div>`;
@@ -1397,13 +1417,14 @@ class EffekseerGenerator {
                 // The picked file is copied into <project>/effects/Texture/.
                 return `<div>${label}
                     <div style="display: flex; gap: 4px; align-items: center;">
-                        <div data-tex-name="${s.key}" style="flex: 1; padding: 4px 8px; background: var(--color-bg-input-alt); border: 1px solid var(--color-border-input); border-radius: 3px; font-size: 11px; color: var(--color-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${v || '(none)'}</div>
-                        <button class="rr-efk-tex-pick rr-btn-chip" data-key="${s.key}" title="Pick texture image (copied into effects/Texture/)" style="padding: 4px 10px; font-size: 11px;">…</button>
-                        <button class="rr-efk-tex-clear rr-btn-chip" data-key="${s.key}" title="Clear (use built-in texture)" style="padding: 4px 8px; font-size: 11px;">✕</button>
+                        <div data-tex-name="${s.key}" style="flex: 1; padding: 4px 8px; background: var(--color-bg-input-alt); border: 1px solid var(--color-border-input); border-radius: 3px; font-size: 11px; color: var(--color-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${this._escapeHtml(v || this._tx('(none)'))}</div>
+                        <button class="rr-efk-tex-pick rr-btn-chip" data-key="${s.key}" title="${this._tx('Pick texture image (copied into effects/Texture/)')}" style="padding: 4px 10px; font-size: 11px;">…</button>
+                        <button class="rr-efk-tex-clear rr-btn-chip" data-key="${s.key}" title="${this._tx('Clear (use built-in texture)')}" style="padding: 4px 8px; font-size: 11px;">✕</button>
                     </div>
                 </div>`;
             }
-            return `<div>${label}<div style="display: flex; align-items: center; gap: 8px;"><input type="range" data-param="${s.key}" min="${s.min}" max="${s.max}" step="${s.step || 1}" value="${v}" style="flex: 1;"><span data-param-value="${s.key}" style="font-size: 11px; color: var(--color-text); min-width: 26px; text-align: right;">${v}</span></div></div>`;
+            const numericValue = Number.isFinite(Number(v)) ? Number(v) : (Number(s.min) || 0);
+            return `<div>${label}<div style="display: flex; align-items: center; gap: 8px;"><input type="range" data-param="${s.key}" min="${s.min}" max="${s.max}" step="${s.step || 1}" value="${numericValue}" style="flex: 1;"><span data-param-value="${s.key}" style="font-size: 11px; color: var(--color-text); min-width: 26px; text-align: right;">${numericValue}</span></div></div>`;
         }).join('');
 
         const kfFrameInput = host.querySelector('.rr-efk-kf-frame');
@@ -1496,7 +1517,7 @@ class EffekseerGenerator {
             btn.addEventListener('click', () => {
                 this._values()[btn.dataset.key] = '';
                 const nameEl = host.querySelector(`[data-tex-name="${btn.dataset.key}"]`);
-                if (nameEl) nameEl.textContent = '(none)';
+                if (nameEl) nameEl.textContent = this._tx('(none)');
                 this._scheduleRebuild();
             });
         });
@@ -1902,7 +1923,7 @@ class EffekseerGenerator {
             const lab = `<label style="font-size: 10px; color: var(--color-text-muted); display: block; margin-bottom: 2px;">${this._tx(s.label)}</label>`;
             const data = `data-lidx="${idx}" data-lkey="${s.key}"`;
             if (s.type === 'color') {
-                return `<div>${lab}<button type="button" class="rr-color-swatch-btn rr-efk-lcolor" data-clidx="${idx}" data-clkey="${s.key}" title="Click to choose color" style="background: ${v}; width: 100%; height: 22px; display: block;"></button></div>`;
+                return `<div>${lab}<button type="button" class="rr-color-swatch-btn rr-efk-lcolor" data-clidx="${idx}" data-clkey="${s.key}" title="${this._tx('Click to choose color')}" style="background: ${this._safeColor(v)}; width: 100%; height: 22px; display: block;"></button></div>`;
             }
             if (s.type === 'toggle') {
                 return `<div style="display: flex; align-items: center; gap: 6px; padding-top: 12px;"><input type="checkbox" ${data} ${v ? 'checked' : ''} style="cursor: pointer;"><span style="font-size: 10px; color: var(--color-text-muted);">${this._tx(s.label)}</span></div>`;
@@ -1911,7 +1932,8 @@ class EffekseerGenerator {
                 const opts = s.options.map(o => `<option value="${o.value}" ${o.value === v ? 'selected' : ''}>${this._tx(o.label)}</option>`).join('');
                 return `<div>${lab}<select ${data} class="rr-input" style="width: 100%; font-size: 11px; padding: 2px 4px;">${opts}</select></div>`;
             }
-            return `<div>${lab}<div style="display: flex; align-items: center; gap: 5px;"><input type="range" ${data} min="${s.min}" max="${s.max}" step="${s.step || 1}" value="${v}" style="flex: 1;"><span data-lval="${idx}:${s.key}" style="font-size: 10px; color: var(--color-text); min-width: 30px; text-align: right;">${v}</span></div></div>`;
+            const numericValue = Number.isFinite(Number(v)) ? Number(v) : (Number(s.min) || 0);
+            return `<div>${lab}<div style="display: flex; align-items: center; gap: 5px;"><input type="range" ${data} min="${s.min}" max="${s.max}" step="${s.step || 1}" value="${numericValue}" style="flex: 1;"><span data-lval="${idx}:${s.key}" style="font-size: 10px; color: var(--color-text); min-width: 30px; text-align: right;">${numericValue}</span></div></div>`;
         };
 
         const cards = layers.map((ly, idx) => {
@@ -2147,6 +2169,13 @@ class EffekseerGenerator {
             this._efkContext = null;
         }
         this._retiredEffects = [];
+        if (this._orbitCleanup) this._orbitCleanup();
+        if (this._gl) {
+            // renderInto always builds a fresh canvas, so force-lose the old
+            // GL context instead of waiting for GC (contexts are capped).
+            const lose = this._gl.getExtension && this._gl.getExtension('WEBGL_lose_context');
+            if (lose) { try { lose.loseContext(); } catch (e) {} }
+        }
         this._gl = null;
     }
 
@@ -2309,7 +2338,7 @@ class EffekseerGenerator {
         this._watchdogTimer = setTimeout(() => {
             if (gen === this._generation) {
                 this._overlay(this._t('efk.loadFailed'), true);
-                this._status('Load timed out — check console, tweak a slider to retry', true);
+                this._status(this._tx('Load timed out — check console, tweak a slider to retry'), true);
             }
         }, 8000);
 
@@ -2357,7 +2386,7 @@ class EffekseerGenerator {
         if (syncLoaded) finish();
         const visLayers = this._stack.filter(e => !e.hidden).length;
         const tracks = (this._lastComposed && this._lastComposed.kfTracks) || 0;
-        this._status(`${bytes.byteLength} B · ${visLayers}L · ${tracks} KF tracks · r16`);
+        this._status(`${bytes.byteLength} B · ${visLayers}L · ${tracks} ${this._tx('KF tracks')} · r16`);
     }
 
     /** Retire the old effect and start the new one — mid-playback. */
@@ -2378,7 +2407,7 @@ class EffekseerGenerator {
             // _play runs inside the runtime's load callback; an exception
             // here would otherwise vanish and leave the UI on "loading".
             console.error('EffekseerGenerator: play after swap failed:', e);
-            this._status(`Preview error: ${e.message || e}`, true);
+            this._status(`${this._tx('Preview error:')} ${e.message || e}`, true);
         }
     }
 
@@ -2407,7 +2436,7 @@ class EffekseerGenerator {
         this._efkHandle = this._efkContext.play(this._efkEffect);
         if (this._efkHandle) this._efkHandle.setLocation(0, 0, 0);
         this._applyOrientation();
-        // Continuous stacks (steady-state emitters — portals, auras, …)
+        // Continuous stacks (steady-state emitters such as auras)
         // pre-simulate silently so the preview opens mid-flow instead of
         // showing the emitter's ramp-in from zero particles.
         const warm = (this._stackFlags && this._stackFlags.prewarm) || 0;
@@ -2447,7 +2476,7 @@ class EffekseerGenerator {
                 });
             } catch (e) {
                 console.error('EffekseerGenerator: render error:', e);
-                this._status(`Preview error: ${e.message || e}`, true);
+                this._status(`${this._tx('Preview error:')} ${e.message || e}`, true);
                 if (this._efkHandle) {
                     try { this._efkHandle.stop(); } catch (e2) {}
                     this._efkHandle = null;
@@ -2594,6 +2623,11 @@ class EffekseerGenerator {
 
             const fs = require('fs');
             const effectsDir = path.join(project.path, 'effects');
+            const mainPath = path.join(effectsDir, `${name}.efkefc`);
+            if (fs.existsSync(mainPath) &&
+                !confirm(`effects/${name}.efkefc ${this._tx('already exists in this project. Overwrite it?')}`)) {
+                return;
+            }
             for (const file of files.values()) {
                 const outPath = path.join(effectsDir, file.path);
                 fs.mkdirSync(path.dirname(outPath), { recursive: true });

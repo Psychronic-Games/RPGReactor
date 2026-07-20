@@ -80,18 +80,47 @@ class DatabaseAnimationEditor {
         this._currentSpriteRenderFrame = null;
     }
 
+    /**
+     * Detail views register their teardown here (document-level listeners,
+     * WebGL/effekseer contexts); the next showAnimationDetail runs the lot.
+     * Without this, every animation switch stacked another live set — the
+     * leaked keydown handlers even kept applying Ctrl+V/Delete shortcuts to
+     * previously viewed animations' data.
+     */
+    _registerDetailCleanup(fn) {
+        if (!this._detailCleanups) this._detailCleanups = [];
+        this._detailCleanups.push(fn);
+    }
+
+    _runDetailCleanups() {
+        const fns = this._detailCleanups || [];
+        this._detailCleanups = [];
+        for (const fn of fns) {
+            try { fn(); } catch (e) {}
+        }
+    }
+
+    getAnimationCanvasPoint(canvas, event) {
+        const rect = canvas.getBoundingClientRect();
+        const displayWidth = rect.width || canvas.width || 1;
+        const displayHeight = rect.height || canvas.height || 1;
+        return {
+            x: (event.clientX - rect.left) * (canvas.width / displayWidth),
+            y: (event.clientY - rect.top) * (canvas.height / displayHeight)
+        };
+    }
+
     showAnimationDetail(container, animation) {
         // Stop any currently playing animation before switching
         if (this._currentEffekseerStop) {
             this._currentEffekseerStop();
             this._currentEffekseerStop = null;
         }
+        this._runDetailCleanups();
+
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
 
         container.innerHTML = '';
-        container.style.overflow = '';
-        container.style.display = '';
-        container.style.flexDirection = '';
-        container.style.padding = '10px';
 
         // Determine animation type
         const isEffekseer = animation.effectName !== undefined;
@@ -181,19 +210,19 @@ class DatabaseAnimationEditor {
                     font-size: 9px;
                 }
             </style>
-            <div class="anim-editor-root" style="display: flex; flex-direction: column; gap: 10px; width: 100%; height: 100%;">
+            <div class="anim-editor-root" style="display:flex;flex-direction:column;gap:8px;width:100%;height:100%;min-height:0;padding:8px;box-sizing:border-box;overflow:hidden;">
                 <!-- Header with black background -->
-                <div style="background: var(--color-bg-deep); padding: 8px 12px; border: 1px solid var(--color-border); border-radius: 3px; flex-shrink: 0;">
+                <div style="background:var(--color-bg-deep);padding:6px 10px;border:1px solid var(--color-border);border-radius:3px;flex-shrink:0;">
                     <div style="display: flex; justify-content: space-between; align-items: center; gap: 12px;">
                         <div style="display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0;">
-                            <span style="font-size: 10px; color: var(--color-text-muted); white-space: nowrap; padding: 4px 6px; background: var(--color-bg-base); border: 1px solid var(--color-border-subtle); border-radius: 3px;">ID: ${animation.id}</span>
-                            <label for="animation-name-input" style="font-size: 10px; color: var(--color-text-muted); flex-shrink: 0;">Name:</label>
-                            <input id="animation-name-input" type="text" value="${(animation.name || '').replace(/"/g, '&quot;')}" placeholder="Unnamed Animation" style="font-size: 13px; font-weight: 600; color: var(--color-text-strong); background: var(--color-bg-input); border: 1px solid var(--color-border-input); border-radius: 3px; padding: 4px 8px; outline: none; flex: 1; max-width: 320px; font-family: inherit;">
+                            <span style="font-size: 10px; color: var(--color-text-muted); white-space: nowrap; padding: 4px 6px; background: var(--color-bg-base); border: 1px solid var(--color-border-subtle); border-radius: 3px;">${tt('ID:')} ${animation.id}</span>
+                            <label for="animation-name-input" style="font-size: 10px; color: var(--color-text-muted); flex-shrink: 0;">${tt('Name:')}</label>
+                            <input id="animation-name-input" type="text" value="${rrEscapeHtml(animation.name)}" placeholder="${tt('Unnamed Animation')}" style="font-size: 13px; font-weight: 600; color: var(--color-text-strong); background: var(--color-bg-input); border: 1px solid var(--color-border-input); border-radius: 3px; padding: 4px 8px; outline: none; flex: 1; max-width: 320px; font-family: inherit;">
                         </div>
                         <div style="display: flex; align-items: center; gap: 8px; flex-shrink: 0;">
-                            <label style="font-size: 10px; color: var(--color-text-muted);">Type:</label>
+                            <label style="font-size: 10px; color: var(--color-text-muted);">${tt('Type:')}</label>
                             <div id="animation-type-selector" data-value="${isEffekseer ? 'effekseer' : 'sprite'}" tabindex="0" style="position: relative; padding: 4px 24px 4px 10px; background: var(--color-accent-tint-15); border: 1px solid var(--color-accent-border-mid); color: var(--color-accent-bright); border-radius: 3px; cursor: pointer; font-size: 11px; font-weight: 600; outline: none; min-width: 110px; user-select: none;">
-                            <span class="animation-type-label">${isEffekseer ? 'Effekseer' : 'Sprite-based'}</span>
+                            <span class="animation-type-label">${tt(isEffekseer ? 'Effekseer' : 'Sprite-based')}</span>
                             <span style="position: absolute; right: 8px; top: 50%; transform: translateY(-50%); font-size: 9px;">▼</span>
                             </div>
                         </div>
@@ -201,84 +230,84 @@ class DatabaseAnimationEditor {
                 </div>
 
                 <!-- Properties and Timings Row (Top) -->
-                <div style="display: flex; gap: 10px; flex-wrap: nowrap; flex-shrink: 0;">
+                <div class="anim-editor-summary-row" style="display:flex;gap:8px;flex-wrap:nowrap;flex-shrink:0;min-height:0;">
                     <!-- Properties -->
-                    <div style="flex: 0 0 33%; min-width: 200px; background: var(--color-bg-panel); border: 1px solid var(--color-border); border-radius: 3px; padding: 8px; display: flex; flex-direction: column;">
-                        <div style="font-size: 11px; font-weight: 600; margin-bottom: 8px; color: var(--color-text); flex-shrink: 0;">Properties</div>
-                        <div style="display: flex; flex-direction: column; gap: 8px; font-size: 10px; flex: 1; min-height: 0; padding-right: 4px;">
+                    <div style="flex:0 0 33%;min-width:180px;max-height:clamp(140px,20vh,190px);background:var(--color-bg-panel);border:1px solid var(--color-border);border-radius:3px;padding:6px;display:flex;flex-direction:column;">
+                        <div style="font-size:11px;font-weight:600;margin-bottom:6px;color:var(--color-text);flex-shrink:0;">${tt('Properties')}</div>
+                        <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;font-size:10px;flex:1;min-height:0;overflow-y:auto;padding-right:2px;">
                             ${isSpriteAnimation ? `
                                 ${[1, 2].map(slot => {
                                     const hue = (slot === 1 ? animation.animation1Hue : animation.animation2Hue) || 0;
-                                    const name = (slot === 1 ? animation.animation1Name : animation.animation2Name) || 'None';
+                                    const name = (slot === 1 ? animation.animation1Name : animation.animation2Name) || tt('None');
                                     return `
-                                <div>
-                                    <div style="color: var(--color-text-muted); margin-bottom: 4px; font-weight: 600;">Animation ${slot}</div>
+                                <div style="min-width:0;">
+                                    <div style="color: var(--color-text-muted); margin-bottom: 4px; font-weight: 600;">${tt('Animation')} ${slot}</div>
                                     <div style="display: flex; gap: 4px; margin-bottom: 5px;">
-                                        <div id="anim${slot}-name-display" style="flex: 1; min-width: 0; background: var(--color-bg-input-alt); padding: 6px; border: 1px solid var(--color-border-input); border-radius: 2px; word-break: break-word;">${name}</div>
+                                        <div id="anim${slot}-name-display" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;background:var(--color-bg-input-alt);padding:6px;border:1px solid var(--color-border-input);border-radius:2px;">${rrEscapeHtml(name)}</div>
                                         <button id="anim${slot}-pick-btn" style="padding: 4px 10px; background: var(--color-accent-tint-15); border: 1px solid var(--color-accent-border-mid); color: var(--color-accent-bright); border-radius: 3px; cursor: pointer; font-size: 11px; font-weight: 600; white-space: nowrap;">...</button>
                                     </div>
                                     <div style="display: flex; align-items: center; gap: 6px;">
-                                        <label for="anim${slot}-hue-slider" style="color: var(--color-text-muted); font-size: 10px; flex-shrink: 0;">Hue</label>
+                                        <label for="anim${slot}-hue-slider" style="color: var(--color-text-muted); font-size: 10px; flex-shrink: 0;">${tt('Hue')}</label>
                                         <input id="anim${slot}-hue-slider" class="hue-slider" type="range" min="0" max="360" value="${hue}" style="flex: 1; min-width: 0;">
                                         <span id="anim${slot}-hue-value" style="color: var(--color-text); font-size: 10px; min-width: 32px; text-align: right; font-variant-numeric: tabular-nums;">${hue}°</span>
                                     </div>
                                 </div>`;
                                 }).join('')}
-                                <div style="display: flex; gap: 8px;">
+                                <div style="grid-column:1 / -1;display:flex;gap:8px;">
                                     <div style="flex: 1; min-width: 0;">
-                                        <div style="color: var(--color-text-muted); margin-bottom: 4px;">Position</div>
+                                        <div style="color: var(--color-text-muted); margin-bottom: 4px;">${tt('Position')}</div>
                                         <div id="anim-position-select" class="anim-gold-dropdown" data-value="${animation.position || 0}" tabindex="0" style="width: 100%; box-sizing: border-box;">
-                                            ${['Head', 'Center', 'Feet', 'Screen'][animation.position || 0]}
+                                            ${tt(['Head', 'Center', 'Feet', 'Screen'][animation.position || 0])}
                                         </div>
                                     </div>
                                     <div style="flex: 1; min-width: 0;">
-                                        <div style="color: var(--color-text-muted); margin-bottom: 4px;">Frames</div>
+                                        <div style="color: var(--color-text-muted); margin-bottom: 4px;">${tt('Frames')}</div>
                                         <div style="background: var(--color-bg-input-alt); padding: 6px; border: 1px solid var(--color-border-input); border-radius: 2px; text-align: center; color: var(--color-text);">${animation.frames ? animation.frames.length : 0}</div>
                                     </div>
                                 </div>
                             ` : ''}
 
                             ${isEffekseer ? `
-                                <div style="color: var(--color-text-muted); font-size: 10px; font-style: italic; padding: 4px;">
-                                    Effect file, display type, scale and other settings are editable in the Particle Effect panel below.
+                                <div style="grid-column:1 / -1;color:var(--color-text-muted);font-size:10px;font-style:italic;padding:4px;">
+                                    ${tt('Effect file, display type, scale and other settings are editable in the Particle Effect panel below.')}
                                 </div>
                             ` : ''}
                         </div>
                     </div>
 
                     <!-- Sound & Flash Timings -->
-                    <div style="flex: 1; min-width: 400px; max-height: 220px; background: var(--color-bg-panel); border: 1px solid var(--color-border); border-radius: 3px; padding: 8px; display: flex; flex-direction: column;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-shrink: 0;">
-                            <div style="font-size: 11px; font-weight: 600; color: var(--color-text);">SE & Flash Timings</div>
-                            <button id="add-timing-btn" style="padding: 4px 8px; background: var(--color-success); border: 1px solid var(--color-success-border); color: var(--color-text-strong); border-radius: 2px; cursor: pointer; font-size: 10px;">+ Add</button>
+                    <div style="flex:1;min-width:300px;max-height:clamp(140px,20vh,190px);background:var(--color-bg-panel);border:1px solid var(--color-border);border-radius:3px;padding:6px;display:flex;flex-direction:column;">
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;flex-shrink:0;">
+                            <div style="font-size: 11px; font-weight: 600; color: var(--color-text);">${tt('SE & Flash Timings')}</div>
+                            <button id="add-timing-btn" style="padding: 4px 8px; background: var(--color-success); border: 1px solid var(--color-success-border); color: var(--color-text-strong); border-radius: 2px; cursor: pointer; font-size: 10px;">+ ${tt('Add')}</button>
                         </div>
 
-                        <div id="timings-list" style="flex: 1; min-height: 0; overflow-y: auto; background: var(--color-bg-input-alt); border: 1px solid var(--color-border-input); border-radius: 2px; padding: 8px;">
-                            <div style="font-size: 10px; color: var(--color-text-muted); padding: 6px;">No timings added</div>
+                        <div id="timings-list" style="flex:1;min-height:0;overflow-y:auto;background:var(--color-bg-input-alt);border:1px solid var(--color-border-input);border-radius:2px;padding:6px;">
+                            <div style="font-size: 10px; color: var(--color-text-muted); padding: 6px;">${tt('No timings added')}</div>
                         </div>
                     </div>
                 </div>
 
                 <!-- Sprite Sheet Preview Row -->
                 ${isSpriteAnimation ? `
-                    <div style="background: var(--color-bg-panel); border: 1px solid var(--color-border); border-radius: 3px; padding: 8px; flex-shrink: 0;">
-                        <div style="font-size: 11px; font-weight: 600; margin-bottom: 6px; color: var(--color-text);">Sprite Sheet</div>
+                    <div class="anim-sprite-sheet-panel" style="background:var(--color-bg-panel);border:1px solid var(--color-border);border-radius:3px;padding:6px;flex-shrink:0;">
+                        <div style="font-size:11px;font-weight:600;margin-bottom:4px;color:var(--color-text);">${tt('Sprite Sheet')}</div>
                         <div style="overflow-x: auto; overflow-y: hidden; background: var(--color-bg-deep); border: 1px solid var(--color-border-input); border-radius: 2px; padding: 2px;">
-                            <canvas id="sprite-sheet-preview" style="display: block; image-rendering: pixelated; height: 96px;"></canvas>
+                            <canvas id="sprite-sheet-preview" style="display:block;image-rendering:pixelated;height:72px;"></canvas>
                         </div>
                     </div>
                 ` : ''}
 
                 <!-- Frames and Preview Row (Bottom) -->
-                <div style="display: flex; gap: 10px; flex-wrap: nowrap; flex: 1; min-height: 0;">
+                <div class="anim-editor-main-row" style="display:flex;gap:8px;flex-wrap:nowrap;flex:1;min-height:0;">
                     <!-- Left: Frame Timeline or Particle Effect Controls -->
                     ${isSpriteAnimation ? `
-                    <div style="width: 160px; min-width: 160px; background: var(--color-bg-panel); border: 1px solid var(--color-border); border-radius: 3px; padding: 8px; display: flex; flex-direction: column;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                            <div style="font-size: 11px; font-weight: 600; color: var(--color-text);">Frames</div>
+                    <div style="width:144px;min-width:144px;min-height:0;background:var(--color-bg-panel);border:1px solid var(--color-border);border-radius:3px;padding:6px;display:flex;flex-direction:column;">
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                            <div style="font-size: 11px; font-weight: 600; color: var(--color-text);">${tt('Frames')}</div>
                             <div style="display: flex; gap: 3px;">
-                                <button id="add-frame-btn" style="padding: 3px 6px; background: var(--color-success); border: 1px solid var(--color-success-border); color: var(--color-text-strong); border-radius: 2px; cursor: pointer; font-size: 9px;" title="Add Frame">+</button>
-                                <button id="remove-frame-btn" style="padding: 3px 6px; background: var(--color-danger); border: 1px solid var(--color-danger-border); color: var(--color-text); border-radius: 2px; cursor: pointer; font-size: 9px;" title="Remove Frame">-</button>
+                                <button id="add-frame-btn" style="padding: 3px 6px; background: var(--color-success); border: 1px solid var(--color-success-border); color: var(--color-text-strong); border-radius: 2px; cursor: pointer; font-size: 9px;" title="${tt('Add Frame')}">+</button>
+                                <button id="remove-frame-btn" style="padding: 3px 6px; background: var(--color-danger); border: 1px solid var(--color-danger-border); color: var(--color-text); border-radius: 2px; cursor: pointer; font-size: 9px;" title="${tt('Remove Frame')}">-</button>
                             </div>
                         </div>
                         <div id="animation-frame-list" style="flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 3px;">
@@ -288,43 +317,43 @@ class DatabaseAnimationEditor {
                     ` : ''}
 
                     ${isEffekseer ? `
-                    <div style="width: 280px; min-width: 280px; background: var(--color-bg-panel); border: 1px solid var(--color-border); border-radius: 3px; padding: 10px; display: flex; flex-direction: column; gap: 8px;">
-                        <div style="font-size: 11px; font-weight: 600; color: var(--color-text); margin-bottom: 2px;">Particle Effect</div>
+                    <div style="width:248px;min-width:248px;min-height:0;overflow-y:auto;background:var(--color-bg-panel);border:1px solid var(--color-border);border-radius:3px;padding:8px;display:flex;flex-direction:column;gap:6px;">
+                        <div style="font-size: 11px; font-weight: 600; color: var(--color-text); margin-bottom: 2px;">${tt('Particle Effect')}</div>
 
                         <!-- Effect File -->
                         <div>
-                            <div style="font-size: 10px; color: var(--color-text-muted); margin-bottom: 4px;">Effect File:</div>
+                            <div style="font-size: 10px; color: var(--color-text-muted); margin-bottom: 4px;">${tt('Effect File:')}</div>
                             <div style="display: flex; gap: 6px; align-items: stretch;">
-                                <div id="effekseer-effect-name" style="flex: 1; background: var(--color-bg-input-alt); padding: 6px; border: 1px solid var(--color-border-input); border-radius: 2px; word-break: break-word; font-size: 11px; display: flex; align-items: center;">${animation.effectName || 'None'}</div>
-                                <button id="effekseer-pick-effect" style="padding: 6px 12px; background: var(--color-info); border: 1px solid #3a7a9a; color: var(--color-text-strong); border-radius: 2px; cursor: pointer; font-size: 10px; white-space: nowrap;">Change...</button>
+                                <div id="effekseer-effect-name" style="flex: 1; background: var(--color-bg-input-alt); padding: 6px; border: 1px solid var(--color-border-input); border-radius: 2px; word-break: break-word; font-size: 11px; display: flex; align-items: center;">${rrEscapeHtml(animation.effectName || tt('None'))}</div>
+                                <button id="effekseer-pick-effect" style="padding: 6px 12px; background: var(--color-info); border: 1px solid #3a7a9a; color: var(--color-text-strong); border-radius: 2px; cursor: pointer; font-size: 10px; white-space: nowrap;">${tt('Change...')}</button>
                             </div>
                         </div>
 
                         <!-- Display Type -->
                         <div>
-                            <div style="font-size: 10px; color: var(--color-text-muted); margin-bottom: 4px;">Display Type:</div>
+                            <div style="font-size: 10px; color: var(--color-text-muted); margin-bottom: 4px;">${tt('Display Type:')}</div>
                             <select id="effekseer-display-type" style="width: 100%; padding: 6px; background: var(--color-bg-input-alt); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 2px; font-size: 11px;">
-                                <option value="0" ${animation.displayType === 0 ? 'selected' : ''}>For each target</option>
-                                <option value="1" ${animation.displayType === 1 ? 'selected' : ''}>Center of all targets</option>
-                                <option value="2" ${animation.displayType === 2 ? 'selected' : ''}>Center of the screen</option>
+                                <option value="0" ${animation.displayType === 0 ? 'selected' : ''}>${tt('For each target')}</option>
+                                <option value="1" ${animation.displayType === 1 ? 'selected' : ''}>${tt('Center of all targets')}</option>
+                                <option value="2" ${animation.displayType === 2 ? 'selected' : ''}>${tt('Center of the screen')}</option>
                             </select>
                         </div>
 
                         <!-- Scale -->
                         <div>
-                            <div style="font-size: 10px; color: var(--color-text-muted); margin-bottom: 4px;">Scale (%):</div>
+                            <div style="font-size: 10px; color: var(--color-text-muted); margin-bottom: 4px;">${tt('Scale (%):')}</div>
                             <input type="number" id="effekseer-scale" value="${animation.scale || 100}" min="1" max="1000" style="width: 100%; padding: 6px; background: var(--color-bg-input-alt); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 2px; font-size: 11px;">
                         </div>
 
                         <!-- Speed -->
                         <div>
-                            <div style="font-size: 10px; color: var(--color-text-muted); margin-bottom: 4px;">Speed (%):</div>
+                            <div style="font-size: 10px; color: var(--color-text-muted); margin-bottom: 4px;">${tt('Speed (%):')}</div>
                             <input type="number" id="effekseer-speed" value="${animation.speed || 100}" min="1" max="1000" style="width: 100%; padding: 6px; background: var(--color-bg-input-alt); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 2px; font-size: 11px;">
                         </div>
 
                         <!-- Rotation -->
                         <div>
-                            <div style="font-size: 10px; color: var(--color-text-muted); margin-bottom: 6px;">Rotation:</div>
+                            <div style="font-size: 10px; color: var(--color-text-muted); margin-bottom: 6px;">${tt('Rotation:')}</div>
                             <div style="display: flex; flex-direction: column; gap: 6px;">
                                 <div style="display: flex; align-items: center; gap: 6px;">
                                     <label style="font-size: 10px; color: var(--color-text-muted); min-width: 20px;">X:</label>
@@ -343,7 +372,7 @@ class DatabaseAnimationEditor {
 
                         <!-- Offset -->
                         <div>
-                            <div style="font-size: 10px; color: var(--color-text-muted); margin-bottom: 6px;">Offset:</div>
+                            <div style="font-size: 10px; color: var(--color-text-muted); margin-bottom: 6px;">${tt('Offset:')}</div>
                             <div style="display: flex; flex-direction: column; gap: 6px;">
                                 <div style="display: flex; align-items: center; gap: 6px;">
                                     <label style="font-size: 10px; color: var(--color-text-muted); min-width: 20px;">X:</label>
@@ -358,36 +387,36 @@ class DatabaseAnimationEditor {
 
                         <!-- 3D Rotation Control -->
                         <div>
-                            <div style="font-size: 10px; color: var(--color-text-muted); margin-bottom: 4px;">3D Rotation Control:</div>
+                            <div style="font-size: 10px; color: var(--color-text-muted); margin-bottom: 4px;">${tt('3D Rotation Control:')}</div>
                             <div style="display: flex; justify-content: center; align-items: center; background: var(--color-bg-base); border: 1px solid var(--color-border-input); border-radius: 4px; padding: 6px; overflow: hidden;">
-                                <canvas id="effekseer-rotation-sphere" width="150" height="150" style="cursor: grab; display: block;"></canvas>
+                                <canvas id="effekseer-rotation-sphere" width="120" height="120" style="cursor:grab;display:block;"></canvas>
                             </div>
-                            <div style="font-size: 9px; color: var(--color-text-dim); margin-top: 3px; text-align: center;">Drag to rotate</div>
+                            <div style="font-size: 9px; color: var(--color-text-dim); margin-top: 3px; text-align: center;">${tt('Drag to rotate')}</div>
                         </div>
                     </div>
                     ` : ''}
 
                     <!-- Right: Preview + Controls -->
-                    <div style="flex: 1; min-width: 600px; display: flex; flex-direction: column;">
-                        <div style="background: var(--color-bg-panel); border: 1px solid var(--color-border); border-radius: 3px; padding: 10px; display: flex; flex-direction: column;">
-                            <div style="font-size: 11px; font-weight: 600; margin-bottom: 6px; color: var(--color-text);">Preview</div>
-                            <div class="rr-dark-surface" style="display: flex; align-items: center; justify-content: center; background: var(--color-bg-deep); border: 1px solid var(--color-border-input); position: relative; height: 470px;">
+                    <div class="anim-preview-column" style="flex:1;min-width:0;min-height:0;display:flex;flex-direction:column;">
+                        <div style="height:100%;min-height:0;overflow-y:auto;background:var(--color-bg-panel);border:1px solid var(--color-border);border-radius:3px;padding:8px;display:flex;flex-direction:column;box-sizing:border-box;">
+                            <div style="font-size:11px;font-weight:600;margin-bottom:4px;color:var(--color-text);">${tt('Preview')}</div>
+                            <div class="rr-dark-surface anim-preview-surface" style="display:flex;align-items:center;justify-content:center;background:var(--color-bg-deep);border:1px solid var(--color-border-input);position:relative;height:clamp(180px,30vh,420px);flex-shrink:0;">
                                 <canvas id="animation-preview-canvas" width="960" height="540" style="image-rendering: pixelated; max-width: 100%; max-height: 100%;"></canvas>
-                                ${!isSpriteAnimation && !isEffekseer ? '<div style="color: var(--color-text-muted); position: absolute;">No preview available</div>' : ''}
+                                ${!isSpriteAnimation && !isEffekseer ? `<div style="color: var(--color-text-muted); position: absolute;">${tt('No preview available')}</div>` : ''}
                             </div>
 
                             <!-- Playback Controls -->
-                            <div style="margin-top: 8px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
-                                <button id="animation-play-btn" style="padding: 5px 12px; background: var(--color-success); border: 1px solid var(--color-success-border); color: var(--color-text-strong); border-radius: 3px; cursor: pointer; font-size: 10px;">▶ Play</button>
-                                <button id="animation-stop-btn" style="padding: 5px 12px; background: var(--color-danger); border: 1px solid var(--color-danger-border); color: var(--color-text); border-radius: 3px; cursor: pointer; font-size: 10px;">■ Stop</button>
+                            <div style="margin-top:6px;display:flex;gap:5px;align-items:center;flex-wrap:wrap;">
+                                <button id="animation-play-btn" style="padding: 5px 12px; background: var(--color-success); border: 1px solid var(--color-success-border); color: var(--color-text-strong); border-radius: 3px; cursor: pointer; font-size: 10px;">▶ ${tt('Play')}</button>
+                                <button id="animation-stop-btn" style="padding: 5px 12px; background: var(--color-danger); border: 1px solid var(--color-danger-border); color: var(--color-text); border-radius: 3px; cursor: pointer; font-size: 10px;">■ ${tt('Stop')}</button>
                                 ${isEffekseer ? `
                                 <label style="display: flex; align-items: center; gap: 4px; font-size: 10px; color: var(--color-text); cursor: pointer; margin-left: 4px;">
                                     <input type="checkbox" id="animation-repeat-checkbox" style="cursor: pointer;">
-                                    <span>Repeat</span>
+                                    <span>${tt('Repeat')}</span>
                                 </label>
                                 ` : ''}
                                 <div style="flex: 1; text-align: right; font-size: 9px; color: var(--color-text-muted); min-width: 100px;">
-                                    <span id="animation-frame-counter">Frame: 0 / ${animation.frames ? animation.frames.length : 0}</span>
+                                    <span id="animation-frame-counter">${tt('Frame:')} 0 / ${animation.frames ? animation.frames.length : 0}</span>
                                 </div>
                             </div>
 
@@ -395,16 +424,16 @@ class DatabaseAnimationEditor {
                             <div id="preview-controls-row" style="margin-top: 6px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 10px;">
                                 <label style="display: flex; align-items: center; gap: 3px; color: var(--color-text); cursor: pointer;">
                                     <input type="checkbox" id="preview-bg-checkbox" style="cursor: pointer;">
-                                    <span>Background</span>
+                                    <span>${tt('Background')}</span>
                                 </label>
-                                <div id="preview-bb1-select" class="anim-gold-dropdown" tabindex="0" data-value="" style="font-size: 10px; min-width: 110px; max-width: 130px; padding: 3px 22px 3px 8px;">(none)</div>
-                                <div id="preview-bb2-select" class="anim-gold-dropdown" tabindex="0" data-value="" style="font-size: 10px; min-width: 110px; max-width: 130px; padding: 3px 22px 3px 8px;">(none)</div>
+                                <div id="preview-bb1-select" class="anim-gold-dropdown" tabindex="0" data-value="" style="font-size: 10px; min-width: 110px; max-width: 130px; padding: 3px 22px 3px 8px;">${tt('(none)')}</div>
+                                <div id="preview-bb2-select" class="anim-gold-dropdown" tabindex="0" data-value="" style="font-size: 10px; min-width: 110px; max-width: 130px; padding: 3px 22px 3px 8px;">${tt('(none)')}</div>
                                 <div style="width: 1px; height: 16px; background: var(--color-border-input); margin: 0 2px;"></div>
                                 <label style="display: flex; align-items: center; gap: 3px; color: var(--color-text); cursor: pointer;">
                                     <input type="checkbox" id="preview-target-checkbox" style="cursor: pointer;">
-                                    <span>Target</span>
+                                    <span>${tt('Target')}</span>
                                 </label>
-                                <div id="preview-target-select" class="anim-gold-dropdown" tabindex="0" data-value="" style="font-size: 10px; min-width: 140px; max-width: 200px; padding: 3px 22px 3px 8px;">(none)</div>
+                                <div id="preview-target-select" class="anim-gold-dropdown" tabindex="0" data-value="" style="font-size: 10px; min-width: 140px; max-width: 200px; padding: 3px 22px 3px 8px;">${tt('(none)')}</div>
                             </div>
                         </div>
                     </div>
@@ -432,7 +461,7 @@ class DatabaseAnimationEditor {
                 // Update the list item in the left panel
                 const selectedItem = document.querySelector('.database-list-item.selected .database-list-name');
                 if (selectedItem) {
-                    selectedItem.textContent = animation.name || 'Unnamed';
+                    selectedItem.textContent = animation.name || tt('Unnamed');
                 }
             });
         }
@@ -448,22 +477,22 @@ class DatabaseAnimationEditor {
 
             const pickAnimationImage = (slot) => {
                 const currentProject = this.projectManager.getCurrentProject();
-                if (!currentProject) { alert('No project loaded'); return; }
+                if (!currentProject) { alert(tt('No project loaded')); return; }
                 const path = require('path');
                 const fs = require('fs');
                 const animDir = path.join(currentProject.path, 'img', 'animations');
                 let files;
                 try {
-                    files = fs.readdirSync(animDir).filter(f => f.endsWith('.png')).map(f => f.replace('.png', ''));
+                    files = RRAssetFiles.listNames(animDir, ['.png']);
                 } catch (e) {
-                    alert('No img/animations folder found');
+                    alert(tt('No img/animations folder found'));
                     return;
                 }
                 if (files.length === 0) {
-                    alert('No animation images found in img/animations folder');
+                    alert(tt('No animation images found in img/animations folder'));
                     return;
                 }
-                const title = `Select Animation ${slot} Image`;
+                const title = `${tt('Select Animation')} ${slot} ${tt('Image')}`;
                 const cb = (selectedFile) => {
                     if (slot === 1) animation.animation1Name = selectedFile;
                     else animation.animation2Name = selectedFile;
@@ -471,11 +500,11 @@ class DatabaseAnimationEditor {
                     // Re-render the detail view so the display updates
                     self.showAnimationDetail(container, animation);
                 };
-                const previewCb = (fileName) => 'file://' + path.join(currentProject.path, 'img', 'animations', fileName + '.png');
+                const previewCb = fileName => RRAssetFiles.urlFor(animDir, fileName, ['.png']);
                 if (this.parentEditor && this.parentEditor.showImagePicker) {
                     this.parentEditor.showImagePicker(title, files, cb, previewCb);
                 } else {
-                    alert('Image picker unavailable');
+                    alert(tt('Image picker unavailable'));
                 }
             };
 
@@ -514,10 +543,10 @@ class DatabaseAnimationEditor {
             const positionTrigger = document.getElementById('anim-position-select');
             if (positionTrigger) {
                 const positionOpts = [
-                    { value: '0', label: 'Head' },
-                    { value: '1', label: 'Center' },
-                    { value: '2', label: 'Feet' },
-                    { value: '3', label: 'Screen' }
+                    { value: '0', label: tt('Head') },
+                    { value: '1', label: tt('Center') },
+                    { value: '2', label: tt('Feet') },
+                    { value: '3', label: tt('Screen') }
                 ];
                 const showPositionDropdown = () => {
                     document.querySelectorAll('.animation-type-popup, .anim-position-popup').forEach(el => el.remove());
@@ -709,8 +738,8 @@ class DatabaseAnimationEditor {
 
                 const current = typeSelector.dataset.value;
                 const opts = [
-                    { value: 'sprite', label: 'Sprite-based' },
-                    { value: 'effekseer', label: 'Effekseer' }
+                    { value: 'sprite', label: tt('Sprite-based') },
+                    { value: 'effekseer', label: tt('Effekseer') }
                 ];
                 opts.forEach(opt => {
                     const item = document.createElement('div');
@@ -766,6 +795,7 @@ class DatabaseAnimationEditor {
     // ── Preview Background & Target ──────────────────────────────────
 
     setupPreviewControls(animation) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const fs = require('fs');
         const pathMod = require('path');
         const project = this.projectManager.getCurrentProject();
@@ -797,7 +827,7 @@ class DatabaseAnimationEditor {
             try {
                 const dir = pathMod.join(project.path, 'img', subdir);
                 if (!fs.existsSync(dir)) return [];
-                return fs.readdirSync(dir).filter(f => f.endsWith('.png')).map(f => f.replace('.png', '')).sort();
+                return RRAssetFiles.listNames(dir, ['.png']);
             } catch (e) { return []; }
         };
 
@@ -816,7 +846,7 @@ class DatabaseAnimationEditor {
         // Background battleback 1 dropdown
         const bb1Select = document.getElementById('preview-bb1-select');
         if (bb1Select) {
-            const bb1Opts = [{ value: '', label: '(none)' }, ...bb1Files.map(n => ({ value: n, label: n }))];
+            const bb1Opts = [{ value: '', label: tt('(none)') }, ...bb1Files.map(n => ({ value: n, label: n }))];
             this._attachGoldDropdown(bb1Select, bb1Opts, this._previewBB1Name || '', (value, label) => {
                 this._previewBB1Name = value || null;
                 bb1Select.dataset.value = value;
@@ -830,7 +860,7 @@ class DatabaseAnimationEditor {
         // Background battleback 2 dropdown
         const bb2Select = document.getElementById('preview-bb2-select');
         if (bb2Select) {
-            const bb2Opts = [{ value: '', label: '(none)' }, ...bb2Files.map(n => ({ value: n, label: n }))];
+            const bb2Opts = [{ value: '', label: tt('(none)') }, ...bb2Files.map(n => ({ value: n, label: n }))];
             this._attachGoldDropdown(bb2Select, bb2Opts, this._previewBB2Name || '', (value, label) => {
                 this._previewBB2Name = value || null;
                 bb2Select.dataset.value = value;
@@ -845,10 +875,10 @@ class DatabaseAnimationEditor {
         if (targetSelect) {
             const enemies = this.databaseManager.getEnemies ? this.databaseManager.getEnemies() : [];
             const targetOpts = [
-                { value: '', label: '(none)' },
+                { value: '', label: tt('(none)') },
                 ...enemies.filter(e => e && e.id > 0).map(e => ({
                     value: String(e.id),
-                    label: `${String(e.id).padStart(4, '0')}: ${e.name || 'Unnamed'}`
+                    label: `${String(e.id).padStart(4, '0')}: ${e.name || tt('Unnamed')}`
                 }))
             ];
             this._attachGoldDropdown(targetSelect, targetOpts, this._previewTargetEnemyId ? String(this._previewTargetEnemyId) : '', (value, label) => {
@@ -863,12 +893,12 @@ class DatabaseAnimationEditor {
         }
 
         // Sync initial display labels for the dropdowns
-        if (bb1Select) bb1Select.textContent = this._previewBB1Name || '(none)';
-        if (bb2Select) bb2Select.textContent = this._previewBB2Name || '(none)';
+        if (bb1Select) bb1Select.textContent = this._previewBB1Name || tt('(none)');
+        if (bb2Select) bb2Select.textContent = this._previewBB2Name || tt('(none)');
         if (targetSelect) {
             const enemies = this.databaseManager.getEnemies ? this.databaseManager.getEnemies() : [];
             const e = enemies.find(en => en && en.id === this._previewTargetEnemyId);
-            targetSelect.textContent = e ? `${String(e.id).padStart(4, '0')}: ${e.name || 'Unnamed'}` : '(none)';
+            targetSelect.textContent = e ? `${String(e.id).padStart(4, '0')}: ${e.name || tt('Unnamed')}` : tt('(none)');
         }
 
         // Checkbox restore + listeners
@@ -966,7 +996,7 @@ class DatabaseAnimationEditor {
             this._previewBB1Img = new Image();
             this._previewBB1Img.onload = done;
             this._previewBB1Img.onerror = () => { this._previewBB1Img = null; done(); };
-            this._previewBB1Img.src = 'file://' + pathMod.join(project.path, 'img', 'battlebacks1', this._previewBB1Name + '.png').replace(/\\/g, '/');
+            this._previewBB1Img.src = RRAssetFiles.urlFor(pathMod.join(project.path, 'img', 'battlebacks1'), this._previewBB1Name, ['.png']);
         } else {
             this._previewBB1Img = null;
         }
@@ -977,7 +1007,7 @@ class DatabaseAnimationEditor {
             this._previewBB2Img = new Image();
             this._previewBB2Img.onload = done;
             this._previewBB2Img.onerror = () => { this._previewBB2Img = null; done(); };
-            this._previewBB2Img.src = 'file://' + pathMod.join(project.path, 'img', 'battlebacks2', this._previewBB2Name + '.png').replace(/\\/g, '/');
+            this._previewBB2Img.src = RRAssetFiles.urlFor(pathMod.join(project.path, 'img', 'battlebacks2'), this._previewBB2Name, ['.png']);
         } else {
             this._previewBB2Img = null;
         }
@@ -993,7 +1023,7 @@ class DatabaseAnimationEditor {
                 for (const dir of searchDirs) {
                     const tryPath = pathMod.join(project.path, 'img', dir, enemy.battlerName + '.png');
                     if (fs.existsSync(tryPath)) {
-                        imagePath = 'file://' + tryPath.replace(/\\/g, '/');
+                        imagePath = RRAssetFiles.toUrl(tryPath);
                         break;
                     }
                 }
@@ -1035,8 +1065,8 @@ class DatabaseAnimationEditor {
         if (this._previewTargetEnabled && this._previewTargetImg && this._previewTargetImg.complete && this._previewTargetImg.naturalWidth) {
             const img = this._previewTargetImg;
             const battlerName = this._previewTargetBattlerName || '';
-            const firstChar = battlerName.charAt(0);
-            const isBigChar = battlerName.match(/^[!$]*\$/);
+            const firstChar = RRAssetFiles.basename(battlerName).charAt(0);
+            const isBigChar = RRAssetFiles.isBigCharacter(battlerName);
             const isCharBattler = (firstChar === '!' || firstChar === '$');
 
             const targetX = canvas.width / 2;
@@ -1078,6 +1108,8 @@ class DatabaseAnimationEditor {
     populateTimingsList(animation) {
         const timingsList = document.getElementById('timings-list');
         if (!timingsList) return;
+
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
 
         // Initialize per-session selection / clipboard state (reset by showAnimationDetail).
         if (!this._selectedTimingIndices) this._selectedTimingIndices = new Set();
@@ -1138,15 +1170,15 @@ class DatabaseAnimationEditor {
         timingsList.innerHTML = '';
 
         if (timingsData.length === 0) {
-            timingsList.innerHTML = '<div style="font-size: 10px; color: var(--color-text-muted); padding: 8px;">No timings added</div>';
+            timingsList.innerHTML = `<div style="font-size: 10px; color: var(--color-text-muted); padding: 8px;">${tt('No timings added')}</div>`;
             return;
         }
 
         // Populate list with timing entries
         timingsData.forEach((timing, index) => {
-            const flashTypeNames = ['None', 'Target', 'Screen', 'Hide Target'];
+            const flashTypeNames = [tt('None'), tt('Target'), tt('Screen'), tt('Hide Target')];
             const flashScope = timing.flashScope !== undefined ? timing.flashScope : (timing.flashColor ? 1 : 0);
-            const flashTypeName = flashTypeNames[flashScope] || 'None';
+            const flashTypeName = flashTypeNames[flashScope] || tt('None');
             const seName = timing.se?.name || 'None';
             const flashColor = timing.flashColor || [0, 0, 0, 0];
             const [r, g, b, a] = flashColor;
@@ -1189,8 +1221,8 @@ class DatabaseAnimationEditor {
 
             // Format SE info compactly
             const seInfo = seName !== 'None' && timing.se?.volume !== undefined
-                ? `${seName} (Vol:${timing.se.volume} Pitch:${timing.se.pitch})`
-                : seName;
+                ? `${seName} (${tt('Vol:')}${timing.se.volume} ${tt('Pitch:')}${timing.se.pitch})`
+                : (seName === 'None' ? tt('None') : seName);
 
             // When selected, the entry has a gold-tinted background. All text
             // bumps to bright white for max contrast (gold-on-gold is invisible).
@@ -1198,18 +1230,18 @@ class DatabaseAnimationEditor {
             const textColor = isSelected ? 'var(--color-text-strong)' : 'var(--color-text)';
             const mutedColor = isSelected ? 'var(--color-text-strong)' : 'var(--color-text-muted)';
             timingEntry.innerHTML = `
-                <div style="font-weight: 600; color: ${frameLabelColor}; font-size: 12px; min-width: 70px;">Frame ${timing.frame}</div>
-                <div style="color: ${textColor}; font-size: 11px; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"><strong>SE:</strong> ${seInfo}</div>
+                <div style="font-weight: 600; color: ${frameLabelColor}; font-size: 12px; min-width: 70px;">${tt('Frame')} ${timing.frame}</div>
+                <div style="color: ${textColor}; font-size: 11px; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"><strong>${tt('SE:')}</strong> ${rrEscapeHtml(seInfo)}</div>
                 <div style="display: flex; align-items: center; gap: 6px; font-size: 11px;">
-                    <span style="color: ${textColor};"><strong>Flash:</strong> ${flashTypeName}</span>
+                    <span style="color: ${textColor};"><strong>${tt('Flash:')}</strong> ${flashTypeName}</span>
                     ${flashScope !== 0 ? `
                         <div style="width: 24px; height: 14px; border: 1px solid var(--color-border-input); background: rgb(${r}, ${g}, ${b}); border-radius: 2px;" title="RGB(${r}, ${g}, ${b}) A:${a}"></div>
-                        <span style="color: ${mutedColor};">Dur:${timing.flashDuration || 0}</span>
+                        <span style="color: ${mutedColor};">${tt('Dur:')}${timing.flashDuration || 0}</span>
                     ` : ''}
                 </div>
                 <div style="display: flex; gap: 6px;">
-                    <button class="edit-timing-btn rr-btn-chip" data-index="${index}">Edit</button>
-                    <button class="remove-timing-btn rr-btn-chip-danger" data-index="${index}">Remove</button>
+                    <button class="edit-timing-btn rr-btn-chip" data-index="${index}">${tt('Edit')}</button>
+                    <button class="remove-timing-btn rr-btn-chip-danger" data-index="${index}">${tt('Remove')}</button>
                 </div>
             `;
 
@@ -1344,6 +1376,7 @@ class DatabaseAnimationEditor {
     }
 
     editTiming(animation, index) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         // Get the timing data
         const isEffekseer = animation.effectName !== undefined;
         const isSpriteAnimation = animation.animation1Name !== undefined && animation.animation1Name !== '';
@@ -1429,7 +1462,7 @@ class DatabaseAnimationEditor {
         document.getElementById('timing-intensity-value').textContent = flashColor[3];
 
         // Change button text to "Update Timing"
-        saveBtn.textContent = 'Update Timing';
+        saveBtn.textContent = tt('Update Timing');
 
         // Store edit mode flag
         saveBtn.dataset.editMode = 'true';
@@ -1494,61 +1527,62 @@ class DatabaseAnimationEditor {
     }
 
     setupTimingModal(animation, container) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         // Create modal HTML
         const modalHTML = `
             <div id="timing-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); z-index: 10000; align-items: center; justify-content: center;">
                 <div style="background: var(--color-bg-surface); border: 1px solid var(--color-border); border-radius: 8px; width: 600px; max-height: 80vh; overflow-y: auto; padding: 20px;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                        <div style="font-size: 16px; font-weight: 600; color: var(--color-text-strong);">SE and Flash Timing</div>
+                        <div style="font-size: 16px; font-weight: 600; color: var(--color-text-strong);">${tt('SE and Flash Timing')}</div>
                         <button id="timing-modal-close" style="background: none; border: none; color: var(--color-text-muted); font-size: 24px; cursor: pointer;">×</button>
                     </div>
 
                     <!-- Frame and SE Section -->
                     <div style="display: flex; gap: 16px; margin-bottom: 20px;">
                         <div style="flex: 0 0 100px;">
-                            <div style="font-size: 12px; color: var(--color-text-muted); margin-bottom: 6px;">Frame:</div>
+                            <div style="font-size: 12px; color: var(--color-text-muted); margin-bottom: 6px;">${tt('Frame:')}</div>
                             <input type="number" id="timing-frame" min="0" value="0" style="width: 100%; padding: 8px; background: var(--color-bg-input-alt); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 3px; font-size: 12px;">
                         </div>
                         <div style="flex: 1;">
-                            <div style="font-size: 12px; color: var(--color-text-muted); margin-bottom: 6px;">SE:</div>
+                            <div style="font-size: 12px; color: var(--color-text-muted); margin-bottom: 6px;">${tt('SE:')}</div>
                             <div style="display: flex; gap: 8px; margin-bottom: 8px;">
-                                <input type="text" id="timing-se-name" readonly value="None" style="flex: 1; padding: 8px; background: var(--color-bg-input-alt); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 3px; font-size: 12px;">
-                                <button id="timing-se-pick" style="padding: 8px 12px; background: var(--color-success); border: 1px solid var(--color-success-border); color: var(--color-text-strong); border-radius: 3px; cursor: pointer; font-size: 11px;">Pick SE</button>
-                                <button id="timing-se-clear" style="padding: 8px 12px; background: var(--color-bg-button); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 3px; cursor: pointer; font-size: 11px;">Clear</button>
+                                <input type="text" id="timing-se-name" readonly value="${tt('None')}" style="flex: 1; padding: 8px; background: var(--color-bg-input-alt); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 3px; font-size: 12px;">
+                                <button id="timing-se-pick" style="padding: 8px 12px; background: var(--color-success); border: 1px solid var(--color-success-border); color: var(--color-text-strong); border-radius: 3px; cursor: pointer; font-size: 11px;">${tt('Pick SE')}</button>
+                                <button id="timing-se-clear" style="padding: 8px 12px; background: var(--color-bg-button); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 3px; cursor: pointer; font-size: 11px;">${tt('Clear')}</button>
                             </div>
                             <div style="display: flex; gap: 12px; align-items: center;">
                                 <div style="display: flex; align-items: center; gap: 6px; flex: 1;">
-                                    <span style="font-size: 11px; color: var(--color-text-muted); white-space: nowrap;">Vol:</span>
+                                    <span style="font-size: 11px; color: var(--color-text-muted); white-space: nowrap;">${tt('Vol:')}</span>
                                     <input type="range" id="timing-se-volume" min="0" max="100" value="90" style="flex: 1;">
                                     <span id="timing-se-volume-value" style="font-size: 11px; color: var(--color-text); min-width: 28px; text-align: right;">90</span>
                                 </div>
                                 <div style="display: flex; align-items: center; gap: 6px; flex: 1;">
-                                    <span style="font-size: 11px; color: var(--color-text-muted); white-space: nowrap;">Pitch:</span>
+                                    <span style="font-size: 11px; color: var(--color-text-muted); white-space: nowrap;">${tt('Pitch:')}</span>
                                     <input type="range" id="timing-se-pitch" min="50" max="150" value="100" style="flex: 1;">
                                     <span id="timing-se-pitch-value" style="font-size: 11px; color: var(--color-text); min-width: 28px; text-align: right;">100</span>
                                 </div>
-                                <button id="timing-se-preview" style="padding: 4px 10px; background: var(--color-bg-panel); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 3px; cursor: pointer; font-size: 11px;">&#9654; Preview</button>
+                                <button id="timing-se-preview" style="padding: 4px 10px; background: var(--color-bg-panel); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 3px; cursor: pointer; font-size: 11px;">&#9654; ${tt('Preview')}</button>
                             </div>
                         </div>
                     </div>
 
                     <!-- Flash Section -->
                     <div style="background: var(--color-bg-panel); border: 1px solid var(--color-border); border-radius: 3px; padding: 16px; margin-bottom: 20px;">
-                        <div style="font-size: 13px; font-weight: 600; color: var(--color-text); margin-bottom: 12px;">Flash</div>
+                        <div style="font-size: 13px; font-weight: 600; color: var(--color-text); margin-bottom: 12px;">${tt('Flash')}</div>
 
                         <!-- Flash Type Radio Buttons -->
                         <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 16px;">
                             <label style="display: flex; align-items: center; gap: 6px; color: var(--color-text); font-size: 11px; cursor: pointer;">
-                                <input type="radio" name="flash-type" value="0" checked style="cursor: pointer;"> None
+                                <input type="radio" name="flash-type" value="0" checked style="cursor: pointer;"> ${tt('None')}
                             </label>
                             <label style="display: flex; align-items: center; gap: 6px; color: var(--color-text); font-size: 11px; cursor: pointer;">
-                                <input type="radio" name="flash-type" value="1" style="cursor: pointer;"> Target
+                                <input type="radio" name="flash-type" value="1" style="cursor: pointer;"> ${tt('Target')}
                             </label>
                             <label style="display: flex; align-items: center; gap: 6px; color: var(--color-text); font-size: 11px; cursor: pointer;">
-                                <input type="radio" name="flash-type" value="2" style="cursor: pointer;"> Screen
+                                <input type="radio" name="flash-type" value="2" style="cursor: pointer;"> ${tt('Screen')}
                             </label>
                             <label style="display: flex; align-items: center; gap: 6px; color: var(--color-text); font-size: 11px; cursor: pointer;">
-                                <input type="radio" name="flash-type" value="3" style="cursor: pointer;"> Hide Target
+                                <input type="radio" name="flash-type" value="3" style="cursor: pointer;"> ${tt('Hide Target')}
                             </label>
                         </div>
 
@@ -1557,7 +1591,7 @@ class DatabaseAnimationEditor {
                             ${['Red', 'Green', 'Blue', 'Intensity'].map(color => `
                                 <div>
                                     <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
-                                        <span style="font-size: 11px; color: var(--color-text-muted);">${color}:</span>
+                                        <span style="font-size: 11px; color: var(--color-text-muted);">${tt(color)}:</span>
                                         <span id="timing-${color.toLowerCase()}-value" style="font-size: 11px; color: var(--color-text);">0</span>
                                     </div>
                                     <input type="range" id="timing-${color.toLowerCase()}" min="0" max="255" value="0" style="width: 100%;">
@@ -1567,21 +1601,21 @@ class DatabaseAnimationEditor {
 
                         <!-- Color Preview -->
                         <div style="margin-top: 12px;">
-                            <div style="font-size: 11px; color: var(--color-text-muted); margin-bottom: 6px;">Preview:</div>
+                            <div style="font-size: 11px; color: var(--color-text-muted); margin-bottom: 6px;">${tt('Preview:')}</div>
                             <div id="timing-color-preview" style="width: 100%; height: 40px; border: 1px solid var(--color-border-input); border-radius: 3px; background: rgb(0,0,0);"></div>
                         </div>
 
                         <!-- Duration -->
                         <div style="margin-top: 12px;">
-                            <div style="font-size: 11px; color: var(--color-text-muted); margin-bottom: 6px;">Duration:</div>
+                            <div style="font-size: 11px; color: var(--color-text-muted); margin-bottom: 6px;">${tt('Duration:')}</div>
                             <input type="number" id="timing-duration" min="1" value="8" style="width: 100%; padding: 8px; background: var(--color-bg-input-alt); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 3px; font-size: 12px;">
                         </div>
                     </div>
 
                     <!-- Action Buttons -->
                     <div style="display: flex; gap: 12px; justify-content: flex-end;">
-                        <button id="timing-modal-cancel" class="rr-btn-secondary">Cancel</button>
-                        <button id="timing-modal-save" style="padding: 8px 16px; background: var(--color-accent); border: 1px solid var(--color-accent); color: var(--color-bg-deep); border-radius: 3px; cursor: pointer; font-size: 12px; font-weight: bold;">Add Timing</button>
+                        <button id="timing-modal-cancel" class="rr-btn-secondary">${tt('Cancel')}</button>
+                        <button id="timing-modal-save" style="padding: 8px 16px; background: var(--color-accent); border: 1px solid var(--color-accent); color: var(--color-bg-deep); border-radius: 3px; cursor: pointer; font-size: 12px; font-weight: bold;">${tt('Add Timing')}</button>
                     </div>
                 </div>
             </div>
@@ -1623,13 +1657,13 @@ class DatabaseAnimationEditor {
         // Open modal
         addBtn?.addEventListener('click', () => {
             // Reset to add mode
-            saveBtn.textContent = 'Add Timing';
+            saveBtn.textContent = tt('Add Timing');
             saveBtn.dataset.editMode = 'false';
             delete saveBtn.dataset.editIndex;
 
             // Reset form fields
             document.getElementById('timing-frame').value = 0;
-            document.getElementById('timing-se-name').value = 'None';
+            document.getElementById('timing-se-name').value = tt('None');
             redSlider.value = 0;
             greenSlider.value = 0;
             blueSlider.value = 0;
@@ -1787,8 +1821,10 @@ class DatabaseAnimationEditor {
             if (previewAudio) { previewAudio.pause(); previewAudio = null; }
 
             const path = require('path');
-            const audioPath = path.join(currentProject.path, 'audio', 'se', seName + '.ogg');
-            previewAudio = new Audio('file://' + audioPath);
+            const seFolder = path.join(currentProject.path, 'audio', 'se');
+            const audioFile = RRAssetFiles.find(seFolder, seName, ['.ogg']);
+            if (!audioFile) return;
+            previewAudio = new Audio(RRAssetFiles.toUrl(audioFile.absolutePath));
             previewAudio.volume = (parseInt(seVolumeSlider.value) || 90) / 100;
             previewAudio.playbackRate = (parseInt(sePitchSlider.value) || 100) / 100;
             previewAudio.play().catch(err => console.warn('Failed to play SE preview:', err));
@@ -1797,7 +1833,7 @@ class DatabaseAnimationEditor {
         // SE clear button
         const seClearBtn = document.getElementById('timing-se-clear');
         seClearBtn?.addEventListener('click', () => {
-            document.getElementById('timing-se-name').value = 'None';
+            document.getElementById('timing-se-name').value = tt('None');
             seVolumeSlider.value = 90;
             seVolumeValue.textContent = '90';
             sePitchSlider.value = 100;
@@ -1808,20 +1844,17 @@ class DatabaseAnimationEditor {
         const sePickBtn = document.getElementById('timing-se-pick');
         sePickBtn?.addEventListener('click', () => {
             const currentProject = this.projectManager.getCurrentProject();
-            if (!currentProject) { alert('No project loaded'); return; }
+            if (!currentProject) { alert(tt('No project loaded')); return; }
 
             const fs = require('fs');
             const path = require('path');
             const seFolder = path.join(currentProject.path, 'audio', 'se');
 
-            if (!fs.existsSync(seFolder)) { alert('SE folder not found: audio/se'); return; }
+            if (!fs.existsSync(seFolder)) { alert(tt('SE folder not found: audio/se')); return; }
 
-            const files = fs.readdirSync(seFolder)
-                .filter(f => f.endsWith('.ogg') || f.endsWith('.m4a'))
-                .map(f => f.replace(/\.(ogg|m4a|mp3)$/, ''))
-                .sort((a, b) => a.localeCompare(b));
+            const files = RRAssetFiles.listNames(seFolder, ['.ogg']);
 
-            if (files.length === 0) { alert('No audio files found in audio/se'); return; }
+            if (files.length === 0) { alert(tt('No audio files found in audio/se')); return; }
 
             this._showSEPicker(files, seFolder, document.getElementById('timing-se-name'));
         });
@@ -1831,6 +1864,7 @@ class DatabaseAnimationEditor {
      * Show SE file picker modal
      */
     _showSEPicker(files, seFolder, seNameInput) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         let selectedFile = seNameInput.value !== 'None' ? seNameInput.value : null;
         let pickerAudio = null;
 
@@ -1859,7 +1893,7 @@ class DatabaseAnimationEditor {
         const titleRow = document.createElement('div');
         titleRow.style.cssText = 'display: flex; justify-content: space-between; align-items: center;';
         titleRow.innerHTML = `
-            <h3 style="margin: 0; color: var(--color-text-strong); font-size: 16px;">Select Sound Effect</h3>
+            <h3 style="margin: 0; color: var(--color-text-strong); font-size: 16px;">${tt('Select Sound Effect')}</h3>
             <button style="background: none; border: none; color: var(--color-text-strong); font-size: 20px; cursor: pointer; padding: 0; width: 24px; height: 24px;">×</button>
         `;
         header.appendChild(titleRow);
@@ -1869,13 +1903,13 @@ class DatabaseAnimationEditor {
         previewRow.style.cssText = 'display: flex; gap: 8px; align-items: center;';
 
         const playBtn = document.createElement('button');
-        playBtn.innerHTML = '&#9654; Preview';
+        playBtn.innerHTML = `&#9654; ${tt('Preview')}`;
         playBtn.style.cssText = 'padding: 5px 12px; background: var(--color-bg-panel); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 3px; cursor: pointer; font-size: 11px;';
         playBtn.addEventListener('mouseenter', () => { playBtn.style.backgroundColor = 'var(--color-accent-tint-25)'; playBtn.style.borderColor = 'var(--color-accent)'; });
         playBtn.addEventListener('mouseleave', () => { playBtn.style.backgroundColor = 'var(--color-bg-panel)'; playBtn.style.borderColor = 'var(--color-border-input)'; });
 
         const stopBtn = document.createElement('button');
-        stopBtn.innerHTML = '&#9632; Stop';
+        stopBtn.innerHTML = `&#9632; ${tt('Stop')}`;
         stopBtn.style.cssText = 'padding: 5px 12px; background: var(--color-bg-panel); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 3px; cursor: pointer; font-size: 11px;';
         stopBtn.addEventListener('mouseenter', () => { stopBtn.style.backgroundColor = 'var(--color-accent-tint-25)'; stopBtn.style.borderColor = 'var(--color-accent)'; });
         stopBtn.addEventListener('mouseleave', () => { stopBtn.style.backgroundColor = 'var(--color-bg-panel)'; stopBtn.style.borderColor = 'var(--color-border-input)'; });
@@ -1888,7 +1922,7 @@ class DatabaseAnimationEditor {
         // Search
         const searchInput = document.createElement('input');
         searchInput.type = 'text';
-        searchInput.placeholder = 'Search SE files...';
+        searchInput.placeholder = tt('Search SE files...');
         searchInput.style.cssText = `
             margin: 8px; padding: 6px 10px; background-color: var(--color-bg-input); color: var(--color-text);
             border: 1px solid var(--color-border-input); border-radius: 3px; font-size: 12px; outline: none; flex-shrink: 0;
@@ -1953,11 +1987,11 @@ class DatabaseAnimationEditor {
         `;
 
         const cancelBtn = document.createElement('button');
-        cancelBtn.textContent = 'Cancel';
+        cancelBtn.textContent = tt('Cancel');
         cancelBtn.className = 'rr-btn-secondary';
 
         const okBtn = document.createElement('button');
-        okBtn.textContent = 'OK';
+        okBtn.textContent = tt('OK');
         okBtn.style.cssText = 'padding: 6px 20px; background: var(--color-accent); color: var(--color-bg-deep); border: none; border-radius: 3px; cursor: pointer; font-size: 12px; font-weight: bold;';
         okBtn.addEventListener('mouseenter', () => { okBtn.style.backgroundColor = 'var(--color-accent-muted)'; });
         okBtn.addEventListener('mouseleave', () => { okBtn.style.backgroundColor = 'var(--color-accent)'; });
@@ -1973,9 +2007,9 @@ class DatabaseAnimationEditor {
         playBtn.addEventListener('click', () => {
             if (!selectedFile) return;
             stopAudio();
-            const path = require('path');
-            const audioPath = path.join(seFolder, selectedFile + '.ogg');
-            pickerAudio = new Audio('file://' + audioPath);
+            const audioFile = RRAssetFiles.find(seFolder, selectedFile, ['.ogg']);
+            if (!audioFile) return;
+            pickerAudio = new Audio(RRAssetFiles.toUrl(audioFile.absolutePath));
             pickerAudio.volume = 0.9;
             pickerAudio.play().catch(err => console.warn('Failed to play SE:', err));
         });
@@ -2002,6 +2036,7 @@ class DatabaseAnimationEditor {
     }
 
     showCellPropertiesModal(animation, frameIndex, cellIndex, renderFrame) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const frameData = animation.frames[frameIndex];
         if (!frameData || cellIndex >= frameData.length) return;
 
@@ -2025,41 +2060,41 @@ class DatabaseAnimationEditor {
                 <div style="background:var(--color-bg-base); border:1px solid rgba(255,215,0,0.4); border-radius:6px; width:440px; max-height:88vh; display:flex; flex-direction:column; box-shadow:0 8px 32px rgba(0,0,0,0.7);">
                     <!-- Black header -->
                     <div style="background:var(--color-bg-deep); padding:12px 16px; border-bottom:1px solid var(--color-border); border-radius:6px 6px 0 0; display:flex; justify-content:space-between; align-items:center;">
-                        <div style="font-size:14px; font-weight:600; color:var(--color-text-strong); letter-spacing:0.5px;">Cell Properties</div>
+                        <div style="font-size:14px; font-weight:600; color:var(--color-text-strong); letter-spacing:0.5px;">${tt('Cell Properties')}</div>
                         <button id="cell-modal-close" style="background:none; border:none; color:var(--color-text-muted); font-size:22px; cursor:pointer; padding:0; line-height:1; transition:color 0.15s;" onmouseover="this.style.color='var(--color-accent-bright)'" onmouseout="this.style.color='var(--color-text-muted)'">×</button>
                     </div>
 
                     <!-- Body -->
                     <div style="padding:18px 20px; overflow-y:auto; display:flex; flex-direction:column; gap:14px;">
                         <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
-                            ${fieldRow('Tileset Frame', `<input type="number" id="cell-pattern" value="${pattern}" min="0" max="199" style="${inputBase}" ${inputFocus}>`)}
-                            ${fieldRow('Scale (%)', `<input type="number" id="cell-scale" value="${scale}" min="1" max="1000" style="${inputBase}" ${inputFocus}>`)}
+                            ${fieldRow(tt('Tileset Frame'), `<input type="number" id="cell-pattern" value="${pattern}" min="0" max="199" style="${inputBase}" ${inputFocus}>`)}
+                            ${fieldRow(tt('Scale (%)'), `<input type="number" id="cell-scale" value="${scale}" min="1" max="1000" style="${inputBase}" ${inputFocus}>`)}
                             ${fieldRow('X', `<input type="number" id="cell-x" value="${x}" style="${inputBase}" ${inputFocus}>`)}
                             ${fieldRow('Y', `<input type="number" id="cell-y" value="${y}" style="${inputBase}" ${inputFocus}>`)}
-                            ${fieldRow('Rotation (°)', `<input type="number" id="cell-rotation" value="${rotation}" min="-360" max="360" style="${inputBase}" ${inputFocus}>`)}
-                            ${fieldRow('Opacity (0-255)', `<input type="number" id="cell-opacity" value="${opacity}" min="0" max="255" style="${inputBase}" ${inputFocus}>`)}
+                            ${fieldRow(tt('Rotation (°)'), `<input type="number" id="cell-rotation" value="${rotation}" min="-360" max="360" style="${inputBase}" ${inputFocus}>`)}
+                            ${fieldRow(tt('Opacity (0-255)'), `<input type="number" id="cell-opacity" value="${opacity}" min="0" max="255" style="${inputBase}" ${inputFocus}>`)}
                         </div>
-                        ${fieldRow('Mirror', `
+                        ${fieldRow(tt('Mirror'), `
                             <div style="display:flex; gap:18px;">
                                 <label style="display:flex; align-items:center; gap:6px; color:var(--color-text); cursor:pointer; font-size:12px;">
-                                    <input type="radio" name="cell-mirror" value="0" ${mirror === 0 ? 'checked' : ''} style="accent-color:var(--color-accent-bright); cursor:pointer;"> No
+                                    <input type="radio" name="cell-mirror" value="0" ${mirror === 0 ? 'checked' : ''} style="accent-color:var(--color-accent-bright); cursor:pointer;"> ${tt('No')}
                                 </label>
                                 <label style="display:flex; align-items:center; gap:6px; color:var(--color-text); cursor:pointer; font-size:12px;">
-                                    <input type="radio" name="cell-mirror" value="1" ${mirror === 1 ? 'checked' : ''} style="accent-color:var(--color-accent-bright); cursor:pointer;"> Yes
+                                    <input type="radio" name="cell-mirror" value="1" ${mirror === 1 ? 'checked' : ''} style="accent-color:var(--color-accent-bright); cursor:pointer;"> ${tt('Yes')}
                                 </label>
                             </div>
                         `)}
-                        ${fieldRow('Blend Mode', `
+                        ${fieldRow(tt('Blend Mode'), `
                             <select id="cell-blend" style="${inputBase}; cursor:pointer;">
-                                ${blendModes.map((mode, index) => `<option value="${index}" ${blendMode === index ? 'selected' : ''} style="background:var(--color-bg-base);color:var(--color-text);">${mode}</option>`).join('')}
+                                ${blendModes.map((mode, index) => `<option value="${index}" ${blendMode === index ? 'selected' : ''} style="background:var(--color-bg-base);color:var(--color-text);">${tt(mode)}</option>`).join('')}
                             </select>
                         `)}
                     </div>
 
                     <!-- Black footer -->
                     <div style="background:var(--color-bg-deep); padding:12px 16px; border-top:1px solid var(--color-border); border-radius:0 0 6px 6px; display:flex; gap:10px; justify-content:flex-end;">
-                        <button id="cell-modal-cancel" class="rr-btn-secondary">Cancel</button>
-                        <button id="cell-modal-save" style="padding:7px 18px; background:var(--color-accent); border:1px solid var(--color-accent); color:var(--color-bg-deep); border-radius:3px; cursor:pointer; font-size:12px; font-weight:bold;">Save</button>
+                        <button id="cell-modal-cancel" class="rr-btn-secondary">${tt('Cancel')}</button>
+                        <button id="cell-modal-save" style="padding:7px 18px; background:var(--color-accent); border:1px solid var(--color-accent); color:var(--color-bg-deep); border-radius:3px; cursor:pointer; font-size:12px; font-weight:bold;">${tt('Save')}</button>
                     </div>
                 </div>
             </div>
@@ -2086,14 +2121,21 @@ class DatabaseAnimationEditor {
 
         // Save changes
         saveBtn?.addEventListener('click', () => {
-            const newPattern = parseInt(document.getElementById('cell-pattern').value) || 0;
-            const newX = parseInt(document.getElementById('cell-x').value) || 0;
-            const newY = parseInt(document.getElementById('cell-y').value) || 0;
-            const newScale = parseInt(document.getElementById('cell-scale').value) || 100;
-            const newRotation = parseInt(document.getElementById('cell-rotation').value) || 0;
+            // `|| default` would clobber legitimate zeros (invisible or
+            // zero-scale cells) — only fall back when the input isn't a number.
+            const intOr = (id, fallback) => {
+                const parsed = parseInt(document.getElementById(id).value, 10);
+                return Number.isFinite(parsed) ? parsed : fallback;
+            };
+            const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+            const newPattern = clamp(intOr('cell-pattern', 0), 0, 199);
+            const newX = intOr('cell-x', 0);
+            const newY = intOr('cell-y', 0);
+            const newScale = clamp(intOr('cell-scale', 100), 1, 1000);
+            const newRotation = clamp(intOr('cell-rotation', 0), -360, 360);
             const newMirror = parseInt(document.querySelector('input[name="cell-mirror"]:checked').value);
-            const newOpacity = parseInt(document.getElementById('cell-opacity').value) || 255;
-            const newBlend = parseInt(document.getElementById('cell-blend').value) || 0;
+            const newOpacity = clamp(intOr('cell-opacity', 255), 0, 255);
+            const newBlend = intOr('cell-blend', 0);
 
             // Update cell data
             frameData[cellIndex] = [newPattern, newX, newY, newScale, newRotation, newMirror, newOpacity, newBlend];
@@ -2106,6 +2148,7 @@ class DatabaseAnimationEditor {
     }
 
     setupSpriteSheetPreview(animation) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const canvas = document.getElementById('sprite-sheet-preview');
         if (!canvas) return;
 
@@ -2116,7 +2159,7 @@ class DatabaseAnimationEditor {
         ctx.imageSmoothingEnabled = false;
 
         const sourceCellSize = 192; // Size in sprite sheet
-        const displayCellSize = 96; // Size in preview (half size for compact view)
+        const displayCellSize = 72; // Compact preview size; source cells remain 192px.
         const cols = 5;
 
         let spriteSheet1 = null;
@@ -2139,7 +2182,7 @@ class DatabaseAnimationEditor {
                         console.warn(`Failed to load: ${imgPath}`);
                         resolve();
                     };
-                    img1.src = 'file://' + imgPath;
+                    img1.src = RRAssetFiles.toUrl(imgPath);
                 });
                 promises.push(promise1);
             }
@@ -2157,7 +2200,7 @@ class DatabaseAnimationEditor {
                         console.warn(`Failed to load: ${imgPath}`);
                         resolve();
                     };
-                    img2.src = 'file://' + imgPath;
+                    img2.src = RRAssetFiles.toUrl(imgPath);
                 });
                 promises.push(promise2);
             }
@@ -2194,7 +2237,7 @@ class DatabaseAnimationEditor {
                 ctx.fillStyle = ThemeColors.resolve('--color-text-muted', '#999999');
                 ctx.font = '12px Arial';
                 ctx.textAlign = 'center';
-                ctx.fillText('No sprite sheets found', canvas.width / 2, canvas.height / 2);
+                ctx.fillText(tt('No sprite sheets found'), canvas.width / 2, canvas.height / 2);
                 return;
             }
 
@@ -2431,7 +2474,7 @@ class DatabaseAnimationEditor {
                 updateDragPreviewPosition(e.clientX, e.clientY);
             });
 
-            document.addEventListener('mouseup', (e) => {
+            const onSheetDragMouseUp = (e) => {
                 if (isDraggingFromSheet) {
                     // Check if mouse is over the preview canvas
                     const previewCanvas = document.getElementById('animation-preview-canvas');
@@ -2443,13 +2486,12 @@ class DatabaseAnimationEditor {
                         if (mouseX >= rect.left && mouseX <= rect.right &&
                             mouseY >= rect.top && mouseY <= rect.bottom) {
 
-                            // Calculate position relative to preview canvas center
-                            const canvasX = mouseX - rect.left;
-                            const canvasY = mouseY - rect.top;
+                            // Convert displayed CSS coordinates into the 960x540 backing space.
+                            const point = this.getAnimationCanvasPoint(previewCanvas, e);
                             const centerX = previewCanvas.width / 2;
                             const centerY = previewCanvas.height / 2;
-                            const relativeX = canvasX - centerX;
-                            const relativeY = canvasY - centerY;
+                            const relativeX = point.x - centerX;
+                            const relativeY = point.y - centerY;
 
                             // Get current frame from animation playback
                             const frameIndex = window.currentAnimationFrameIndex || 0;
@@ -2474,14 +2516,22 @@ class DatabaseAnimationEditor {
                     // Remove drag preview
                     removeDragPreview();
                 }
-            });
+            };
 
-            document.addEventListener('mousemove', (e) => {
+            const onSheetDragMouseMove = (e) => {
                 if (isDraggingFromSheet) {
                     // Update drag preview position
                     updateDragPreviewPosition(e.clientX, e.clientY);
                     e.preventDefault();
                 }
+            };
+
+            document.addEventListener('mouseup', onSheetDragMouseUp);
+            document.addEventListener('mousemove', onSheetDragMouseMove);
+            this._registerDetailCleanup(() => {
+                document.removeEventListener('mouseup', onSheetDragMouseUp);
+                document.removeEventListener('mousemove', onSheetDragMouseMove);
+                removeDragPreview();
             });
         };
     }
@@ -2495,6 +2545,8 @@ class DatabaseAnimationEditor {
 
         const currentProject = this.projectManager.getCurrentProject();
         if (!canvas || !playBtn || !stopBtn || !frameList || !currentProject) return;
+
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
 
         // Reference to this for closures
         const editorSelf = this;
@@ -2537,7 +2589,7 @@ class DatabaseAnimationEditor {
                         console.warn(`Failed to load: ${imgPath}`);
                         resolve();
                     };
-                    img1.src = 'file://' + imgPath;
+                    img1.src = RRAssetFiles.toUrl(imgPath);
                 });
                 promises.push(promise1);
             }
@@ -2555,7 +2607,7 @@ class DatabaseAnimationEditor {
                         console.warn(`Failed to load: ${imgPath}`);
                         resolve();
                     };
-                    img2.src = 'file://' + imgPath;
+                    img2.src = RRAssetFiles.toUrl(imgPath);
                 });
                 promises.push(promise2);
             }
@@ -2651,7 +2703,7 @@ class DatabaseAnimationEditor {
                 }
             });
 
-            frameCounter.textContent = `Frame: ${frameIndex + 1} / ${animation.frames.length}`;
+            frameCounter.textContent = `${tt('Frame:')} ${frameIndex + 1} / ${animation.frames.length}`;
         };
 
         // Save state for undo/redo
@@ -2799,19 +2851,19 @@ class DatabaseAnimationEditor {
             `;
 
             const menuItems = [
-                { label: 'New', action: 'new', enabled: cellIndex !== -1 },
-                { label: 'Edit', action: 'edit', enabled: cellIndex !== -1 },
+                { label: tt('New'), action: 'new', enabled: cellIndex !== -1 },
+                { label: tt('Edit'), action: 'edit', enabled: cellIndex !== -1 },
                 { separator: true },
-                { label: 'Cut', action: 'cut', enabled: cellIndex !== -1 },
-                { label: 'Copy', action: 'copy', enabled: cellIndex !== -1 },
-                { label: 'Paste', action: 'paste', enabled: copiedCell !== null || cutCell !== null },
-                { label: 'Delete', action: 'delete', enabled: cellIndex !== -1 },
+                { label: tt('Cut'), action: 'cut', enabled: cellIndex !== -1 },
+                { label: tt('Copy'), action: 'copy', enabled: cellIndex !== -1 },
+                { label: tt('Paste'), action: 'paste', enabled: copiedCell !== null || cutCell !== null },
+                { label: tt('Delete'), action: 'delete', enabled: cellIndex !== -1 },
                 { separator: true },
-                { label: 'Undo', action: 'undo', enabled: undoStack.length > 0 },
-                { label: 'Redo', action: 'redo', enabled: redoStack.length > 0 },
+                { label: tt('Undo'), action: 'undo', enabled: undoStack.length > 0 },
+                { label: tt('Redo'), action: 'redo', enabled: redoStack.length > 0 },
                 { separator: true },
-                { label: 'To Upper', action: 'upper', enabled: cellIndex !== -1 && cellIndex < animation.frames[currentFrame].length - 1 },
-                { label: 'To Lower', action: 'lower', enabled: cellIndex !== -1 && cellIndex > 0 }
+                { label: tt('To Upper'), action: 'upper', enabled: cellIndex !== -1 && cellIndex < animation.frames[currentFrame].length - 1 },
+                { label: tt('To Lower'), action: 'lower', enabled: cellIndex !== -1 && cellIndex > 0 }
             ];
 
             menuItems.forEach(item => {
@@ -2986,9 +3038,11 @@ class DatabaseAnimationEditor {
                 if (!se || !se.name) return;
 
                 const path = require('path');
-                const audioPath = path.join(currentProject.path, 'audio', 'se', se.name + '.ogg');
+                const seFolder = path.join(currentProject.path, 'audio', 'se');
+                const audioFile = RRAssetFiles.find(seFolder, se.name, ['.ogg']);
+                if (!audioFile) return;
 
-                const audio = new Audio('file://' + audioPath);
+                const audio = new Audio(RRAssetFiles.toUrl(audioFile.absolutePath));
                 audio.volume = (se.volume || 90) / 100;
 
                 // Handle pitch (playbackRate)
@@ -3052,7 +3106,7 @@ class DatabaseAnimationEditor {
 
             currentFrame = 0;
             editorSelf._drawPreviewBackground(ctx, canvas);
-            frameCounter.textContent = `Frame: 0 / ${animation.frames.length}`;
+            frameCounter.textContent = `${tt('Frame:')} 0 / ${animation.frames.length}`;
 
             playBtn.disabled = false;
             playBtn.style.opacity = '1';
@@ -3069,9 +3123,9 @@ class DatabaseAnimationEditor {
 
             if (animationInterval) return; // Don't show menu during playback
 
-            const rect = canvas.getBoundingClientRect();
-            const mouseX = e.clientX - rect.left;
-            const mouseY = e.clientY - rect.top;
+            const point = editorSelf.getAnimationCanvasPoint(canvas, e);
+            const mouseX = point.x;
+            const mouseY = point.y;
 
             const cellIndex = getCellAtPosition(mouseX, mouseY);
             selectedCellIndex = cellIndex;
@@ -3084,9 +3138,9 @@ class DatabaseAnimationEditor {
             if (animationInterval) return; // Don't allow dragging during playback
             if (e.button !== 0) return; // Only left click
 
-            const rect = canvas.getBoundingClientRect();
-            const mouseX = e.clientX - rect.left;
-            const mouseY = e.clientY - rect.top;
+            const point = editorSelf.getAnimationCanvasPoint(canvas, e);
+            const mouseX = point.x;
+            const mouseY = point.y;
 
             const frameData = animation.frames[currentFrame];
             if (!frameData) return;
@@ -3117,9 +3171,9 @@ class DatabaseAnimationEditor {
         canvas.addEventListener('mousemove', (e) => {
             if (!isDragging || draggedCellIndex === -1) return;
 
-            const rect = canvas.getBoundingClientRect();
-            const mouseX = e.clientX - rect.left;
-            const mouseY = e.clientY - rect.top;
+            const point = editorSelf.getAnimationCanvasPoint(canvas, e);
+            const mouseX = point.x;
+            const mouseY = point.y;
 
             const deltaX = mouseX - dragStartX;
             const deltaY = mouseY - dragStartY;
@@ -3186,6 +3240,9 @@ class DatabaseAnimationEditor {
         };
 
         document.addEventListener('keydown', handleKeyDown);
+        this._registerDetailCleanup(() => {
+            document.removeEventListener('keydown', handleKeyDown);
+        });
 
         // Add/Remove frame buttons
         const addFrameBtn = document.getElementById('add-frame-btn');
@@ -3212,13 +3269,13 @@ class DatabaseAnimationEditor {
         if (removeFrameBtn) {
             removeFrameBtn.addEventListener('click', () => {
                 if (animation.frames.length <= selectedFrameIndices.size) {
-                    alert('Cannot remove all frames; at least one frame must remain.');
+                    alert(tt('Cannot remove all frames; at least one frame must remain.'));
                     return;
                 }
                 const count = selectedFrameIndices.size;
                 const confirmDelete = confirm(count === 1
-                    ? `Remove frame ${currentFrame + 1}?`
-                    : `Remove ${count} selected frames?`);
+                    ? `${tt('Remove frame')} ${currentFrame + 1}?`
+                    : `${tt('Remove')} ${count} ${tt('selected frames?')}`);
                 if (!confirmDelete) return;
 
                 const indicesDesc = Array.from(selectedFrameIndices).sort((a, b) => b - a);
@@ -3263,7 +3320,7 @@ class DatabaseAnimationEditor {
                 frameItem.className = 'animation-frame-item';
                 frameItem.dataset.frameIndex = index;
                 frameItem.style.cssText = 'padding: 8px 10px; background: var(--color-bg-input-alt); border: 1px solid var(--color-border-input); border-radius: 3px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.15s;';
-                frameItem.textContent = `Frame ${index + 1}`;
+                frameItem.textContent = `${tt('Frame')} ${index + 1}`;
 
                 frameItem.addEventListener('click', (e) => {
                     // Stop animation playback if running so the user can browse.
@@ -3326,7 +3383,7 @@ class DatabaseAnimationEditor {
         };
         const updateFrameCounter = () => {
             if (frameCounter) {
-                frameCounter.textContent = `Frame: ${currentFrame + 1} / ${animation.frames.length}`;
+                frameCounter.textContent = `${tt('Frame:')} ${currentFrame + 1} / ${animation.frames.length}`;
             }
         };
         frameList.addEventListener('keydown', (e) => {
@@ -3338,7 +3395,7 @@ class DatabaseAnimationEditor {
                 e.preventDefault();
                 e.stopPropagation();
                 if (animation.frames.length <= selectedFrameIndices.size) {
-                    alert('Cannot remove all frames; at least one frame must remain.');
+                    alert(tt('Cannot remove all frames; at least one frame must remain.'));
                     return;
                 }
                 const indicesDesc = Array.from(selectedFrameIndices).sort((a, b) => b - a);
@@ -3359,7 +3416,7 @@ class DatabaseAnimationEditor {
                 e.preventDefault();
                 e.stopPropagation();
                 if (animation.frames.length <= selectedFrameIndices.size) {
-                    alert('Cannot cut all frames; at least one frame must remain.');
+                    alert(tt('Cannot cut all frames; at least one frame must remain.'));
                     return;
                 }
                 const indicesAsc = Array.from(selectedFrameIndices).sort((a, b) => a - b);
@@ -3413,7 +3470,7 @@ class DatabaseAnimationEditor {
                 ctx.fillStyle = ThemeColors.resolve('--color-text-muted', '#999999');
                 ctx.font = '14px Arial';
                 ctx.textAlign = 'center';
-                ctx.fillText('Failed to load animation sprites', canvas.width / 2, canvas.height / 2);
+                ctx.fillText(tt('Failed to load animation sprites'), canvas.width / 2, canvas.height / 2);
             }
         });
 
@@ -3432,6 +3489,8 @@ class DatabaseAnimationEditor {
         const currentProject = this.projectManager.getCurrentProject();
         if (!canvasContainer || !playBtn || !stopBtn || !currentProject) return;
 
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
+
         // Check if Effekseer is available and initialized
         console.log('[Effekseer Preview] Checking status...');
         console.log('[Effekseer Preview] typeof effekseer:', typeof effekseer);
@@ -3444,8 +3503,8 @@ class DatabaseAnimationEditor {
                 ctx.font = '12px Arial';
                 ctx.textAlign = 'center';
                 const msg = typeof effekseer === 'undefined' ?
-                    'Effekseer library not loaded' :
-                    'Effekseer initializing... Please wait';
+                    tt('Effekseer library not loaded') :
+                    tt('Effekseer initializing... Please wait');
                 ctx.fillText(msg, canvasContainer.width / 2, canvasContainer.height / 2);
                 console.log('[Effekseer Preview] Showing message:', msg);
             }
@@ -3487,7 +3546,7 @@ class DatabaseAnimationEditor {
                     console.error('[Effekseer Preview] Failed to initialize after 20 retries');
                     if (ctx) {
                         ctx.fillStyle = '#ff6666';
-                        ctx.fillText('Effekseer initialization timeout', canvasContainer.width / 2, canvasContainer.height / 2);
+                        ctx.fillText(tt('Effekseer initialization timeout'), canvasContainer.width / 2, canvasContainer.height / 2);
                     }
                 }
             } else {
@@ -3506,7 +3565,7 @@ class DatabaseAnimationEditor {
 
         // Create wrapper div
         const wrapper = document.createElement('div');
-        wrapper.style.cssText = 'position: relative; width: 960px; height: 540px; max-width: 100%; max-height: 100%;';
+        wrapper.style.cssText = 'position:relative;height:100%;width:auto;max-width:100%;aspect-ratio:16 / 9;';
 
         // Background canvas (Canvas2D) for battlebacks + target
         const bgCanvas = document.createElement('canvas');
@@ -3581,7 +3640,13 @@ class DatabaseAnimationEditor {
             }
 
             const path = require('path');
-            const effectPath = path.join(currentProject.path, 'effects', animation.effectName + '.efkefc');
+            const effectsPath = path.join(currentProject.path, 'effects');
+            const effectFile = RRAssetFiles.find(effectsPath, animation.effectName, ['.efkefc']);
+            const effectPath = effectFile?.absolutePath;
+            if (!effectPath) {
+                console.error('Effekseer effect not found:', animation.effectName);
+                return;
+            }
 
             console.log('Loading Effekseer effect:', effectPath);
 
@@ -3650,7 +3715,7 @@ class DatabaseAnimationEditor {
             }
 
             // Update frame counter
-            frameCounter.textContent = `Frame: ${currentFrame}`;
+            frameCounter.textContent = `${tt('Frame:')} ${currentFrame}`;
 
             // Clear canvas (transparent so background canvas shows through)
             gl.viewport(0, 0, canvas.width, canvas.height);
@@ -3739,9 +3804,11 @@ class DatabaseAnimationEditor {
                 if (!se || !se.name) return;
 
                 const path = require('path');
-                const audioPath = path.join(currentProject.path, 'audio', 'se', se.name + '.ogg');
+                const seFolder = path.join(currentProject.path, 'audio', 'se');
+                const audioFile = RRAssetFiles.find(seFolder, se.name, ['.ogg']);
+                if (!audioFile) return;
 
-                const audio = new Audio('file://' + audioPath);
+                const audio = new Audio(RRAssetFiles.toUrl(audioFile.absolutePath));
                 audio.volume = (se.volume || 90) / 100;
                 audio.playbackRate = (se.pitch || 100) / 100;
 
@@ -3825,7 +3892,7 @@ class DatabaseAnimationEditor {
             }
 
             currentFrame = 0;
-            frameCounter.textContent = `Frame: 0`;
+            frameCounter.textContent = `${tt('Frame:')} 0`;
 
             playBtn.disabled = false;
             playBtn.style.opacity = '1';
@@ -3838,6 +3905,29 @@ class DatabaseAnimationEditor {
 
         // Initialize and load effect
         if (initWebGL()) {
+            // Release the context pair on animation switch — WebGL contexts
+            // are capped per page (~16 in Chromium) and are not reclaimed
+            // just because their canvas left the DOM.
+            this._registerDetailCleanup(() => {
+                try { if (handle) handle.stop(); } catch (e) {}
+                if (animationFrameId) {
+                    cancelAnimationFrame(animationFrameId);
+                    animationFrameId = null;
+                }
+                isPlaying = false;
+                if (effekseerContext) {
+                    try { if (effect) effekseerContext.releaseEffect(effect); } catch (e) {}
+                    try { effekseer.releaseContext(effekseerContext); } catch (e) {}
+                    effekseerContext = null;
+                    effect = null;
+                    handle = null;
+                }
+                if (gl && gl.getExtension) {
+                    const lose = gl.getExtension('WEBGL_lose_context');
+                    if (lose) { try { lose.loseContext(); } catch (e) {} }
+                    gl = null;
+                }
+            });
             loadEffect();
         } else {
             // Display error on canvas
@@ -3846,7 +3936,7 @@ class DatabaseAnimationEditor {
                 gl.fillStyle = '#ff6666';
                 gl.font = '14px Arial';
                 gl.textAlign = 'center';
-                gl.fillText('WebGL initialization failed', canvas.width / 2, canvas.height / 2);
+                gl.fillText(tt('WebGL initialization failed'), canvas.width / 2, canvas.height / 2);
             }
         }
 
@@ -3867,14 +3957,20 @@ class DatabaseAnimationEditor {
             const displayTypeSelect = document.getElementById('effekseer-display-type');
 
             const updateAnimation = () => {
+                const clampInput = (input, fallback, min, max) => {
+                    const parsed = parseInt(input?.value, 10);
+                    const value = Math.max(min, Math.min(max, Number.isFinite(parsed) ? parsed : fallback));
+                    if (input) input.value = String(value);
+                    return value;
+                };
                 // Update animation data
-                animation.scale = parseInt(scaleInput?.value) || 100;
-                animation.speed = parseInt(speedInput?.value) || 100;
+                animation.scale = clampInput(scaleInput, 100, 1, 1000);
+                animation.speed = clampInput(speedInput, 100, 1, 1000);
                 animation.displayType = displayTypeSelect ? parseInt(displayTypeSelect.value) : (animation.displayType || 0);
                 animation.rotation = {
-                    x: parseInt(rotXInput?.value) || 0,
-                    y: parseInt(rotYInput?.value) || 0,
-                    z: parseInt(rotZInput?.value) || 0
+                    x: clampInput(rotXInput, 0, -360, 360),
+                    y: clampInput(rotYInput, 0, -360, 360),
+                    z: clampInput(rotZInput, 0, -360, 360)
                 };
                 animation.offsetX = parseInt(offsetXInput?.value) || 0;
                 animation.offsetY = parseInt(offsetYInput?.value) || 0;
@@ -4287,6 +4383,8 @@ class DatabaseAnimationEditor {
         const currentProject = this.projectManager.getCurrentProject();
         if (!currentProject) return;
 
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
+
         const fs = require('fs');
         const path = require('path');
 
@@ -4296,11 +4394,7 @@ class DatabaseAnimationEditor {
 
         try {
             if (fs.existsSync(effectsPath)) {
-                const files = fs.readdirSync(effectsPath);
-                effectFiles = files
-                    .filter(f => f.endsWith('.efkefc'))
-                    .map(f => f.replace('.efkefc', ''))
-                    .sort();
+                effectFiles = RRAssetFiles.listNames(effectsPath, ['.efkefc']);
             }
         } catch (err) {
             console.error('Error reading effects folder:', err);
@@ -4314,7 +4408,7 @@ class DatabaseAnimationEditor {
             <div id="effect-picker-modal" style="display: flex; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); z-index: 10000; align-items: center; justify-content: center;">
                 <div style="background: var(--color-bg-surface); border: 1px solid var(--color-border); border-radius: 8px; width: 800px; max-height: 80vh; display: flex; flex-direction: column; padding: 20px;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                        <div style="font-size: 16px; font-weight: 600; color: var(--color-text-strong);">Select Effect File</div>
+                        <div style="font-size: 16px; font-weight: 600; color: var(--color-text-strong);">${tt('Select Effect File')}</div>
                         <button id="effect-picker-close" style="background: none; border: none; color: var(--color-text-muted); font-size: 24px; cursor: pointer; padding: 0; line-height: 1;">×</button>
                     </div>
 
@@ -4322,31 +4416,31 @@ class DatabaseAnimationEditor {
                         <!-- Left: Effect list -->
                         <div style="flex: 1; display: flex; flex-direction: column; min-width: 250px;">
                             <div style="margin-bottom: 12px;">
-                                <input type="text" id="effect-search" placeholder="Search effects..." style="width: 100%; padding: 8px; background: var(--color-bg-input-alt); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 3px; font-size: 12px;">
+                                <input type="text" id="effect-search" placeholder="${tt('Search effects...')}" style="width: 100%; padding: 8px; background: var(--color-bg-input-alt); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 3px; font-size: 12px;">
                             </div>
 
                             <div id="effect-list" style="display: flex; flex-direction: column; gap: 4px; max-height: 450px; overflow-y: auto; flex: 1;">
                                 ${effectFiles.length > 0 ? effectFiles.map(effectName => `
-                                    <div class="effect-item" data-effect="${effectName}" style="padding: 10px; background: ${animation.effectName === effectName ? 'var(--color-info)' : 'var(--color-bg-input-alt)'}; border: 1px solid var(--color-border-input); border-radius: 3px; cursor: pointer; font-size: 12px; color: var(--color-text); transition: background 0.2s;">
-                                        ${effectName}
+                                    <div class="effect-item" data-effect="${rrEscapeHtml(effectName)}" style="padding: 10px; background: ${animation.effectName === effectName ? 'var(--color-info)' : 'var(--color-bg-input-alt)'}; border: 1px solid var(--color-border-input); border-radius: 3px; cursor: pointer; font-size: 12px; color: var(--color-text); transition: background 0.2s;">
+                                        ${rrEscapeHtml(effectName)}
                                     </div>
-                                `).join('') : '<div style="padding: 20px; text-align: center; color: var(--color-text-muted);">No effect files found in effects/ folder</div>'}
+                                `).join('') : `<div style="padding: 20px; text-align: center; color: var(--color-text-muted);">${tt('No effect files found in effects/ folder')}</div>`}
                             </div>
                         </div>
 
                         <!-- Right: Preview -->
                         <div style="flex: 1; display: flex; flex-direction: column; background: var(--color-bg-panel); border: 1px solid var(--color-border); border-radius: 4px; padding: 10px;">
-                            <div style="font-size: 12px; color: var(--color-text-muted); margin-bottom: 8px;">Preview</div>
+                            <div style="font-size: 12px; color: var(--color-text-muted); margin-bottom: 8px;">${tt('Preview')}</div>
                             <div style="flex: 1; display: flex; align-items: center; justify-content: center; background: var(--color-bg-deep); border: 1px solid var(--color-border-input); border-radius: 3px; position: relative;">
                                 <canvas id="effect-preview-canvas" width="400" height="300" style="max-width: 100%; max-height: 100%;"></canvas>
-                                <div id="effect-preview-message" style="position: absolute; color: var(--color-text-muted); font-size: 12px; text-align: center;">Select an effect to preview</div>
+                                <div id="effect-preview-message" style="position: absolute; color: var(--color-text-muted); font-size: 12px; text-align: center;">${tt('Select an effect to preview')}</div>
                             </div>
                         </div>
                     </div>
 
                     <div style="display: flex; gap: 10px; margin-top: 20px; justify-content: flex-end;">
-                        <button id="effect-picker-cancel" class="rr-btn-secondary">Cancel</button>
-                        <button id="effect-picker-ok" style="padding: 8px 16px; background: var(--color-accent); border: 1px solid var(--color-accent); color: var(--color-bg-deep); border-radius: 3px; cursor: pointer; font-size: 12px; font-weight: bold;">OK</button>
+                        <button id="effect-picker-cancel" class="rr-btn-secondary">${tt('Cancel')}</button>
+                        <button id="effect-picker-ok" style="padding: 8px 16px; background: var(--color-accent); border: 1px solid var(--color-accent); color: var(--color-bg-deep); border-radius: 3px; cursor: pointer; font-size: 12px; font-weight: bold;">${tt('OK')}</button>
                     </div>
                 </div>
             </div>
@@ -4375,7 +4469,7 @@ class DatabaseAnimationEditor {
 
         const initPreview = () => {
             if (!window._effekseerReady) {
-                previewMessage.textContent = 'Effekseer not initialized';
+                previewMessage.textContent = tt('Effekseer not initialized');
                 return false;
             }
 
@@ -4384,13 +4478,13 @@ class DatabaseAnimationEditor {
                            previewCanvas.getContext('experimental-webgl', { premultipliedAlpha: false });
 
                 if (!previewGL) {
-                    previewMessage.textContent = 'WebGL not supported';
+                    previewMessage.textContent = tt('WebGL not supported');
                     return false;
                 }
 
                 previewEffekseerContext = effekseer.createContext();
                 if (!previewEffekseerContext) {
-                    previewMessage.textContent = 'Failed to create Effekseer context';
+                    previewMessage.textContent = tt('Failed to create Effekseer context');
                     return false;
                 }
 
@@ -4399,7 +4493,7 @@ class DatabaseAnimationEditor {
                 return true;
             } catch (e) {
                 console.error('Preview initialization error:', e);
-                previewMessage.textContent = 'Preview initialization failed';
+                previewMessage.textContent = tt('Preview initialization failed');
                 return false;
             }
         };
@@ -4420,7 +4514,13 @@ class DatabaseAnimationEditor {
             currentPreviewEffect = effectName;
             previewMessage.style.display = 'none';
 
-            const effectPath = path.join(currentProject.path, 'effects', effectName + '.efkefc');
+            const effectFile = RRAssetFiles.find(effectsPath, effectName, ['.efkefc']);
+            if (!effectFile) {
+                previewMessage.style.display = 'block';
+                previewMessage.textContent = tt('Failed to load effect');
+                return;
+            }
+            const effectPath = effectFile.absolutePath;
 
             const startPlayback = () => {
                 if (currentPreviewEffect !== effectName) return; // Effect changed
@@ -4498,7 +4598,7 @@ class DatabaseAnimationEditor {
             const onError = (message) => {
                 console.error('Preview load error:', message);
                 previewMessage.style.display = 'block';
-                previewMessage.textContent = 'Failed to load effect';
+                previewMessage.textContent = tt('Failed to load effect');
             };
 
             // onLoad can fire synchronously inside loadEffect when the core
@@ -4529,19 +4629,33 @@ class DatabaseAnimationEditor {
 
         // Initialize preview
         if (initPreview()) {
-            previewMessage.textContent = 'Select an effect to preview';
+            previewMessage.textContent = tt('Select an effect to preview');
         }
 
         // Close modal
         const closeModal = () => {
-            // Clean up preview
+            // Clean up preview, releasing the WebGL/effekseer context pair —
+            // contexts are capped per page and survive DOM removal.
             if (previewAnimationFrameId) {
                 cancelAnimationFrame(previewAnimationFrameId);
+                previewAnimationFrameId = null;
             }
             if (previewHandle) {
-                previewHandle.stop();
+                try { previewHandle.stop(); } catch (e) {}
+                previewHandle = null;
             }
             currentPreviewEffect = null;
+            if (previewEffekseerContext) {
+                try { if (previewEffect) previewEffekseerContext.releaseEffect(previewEffect); } catch (e) {}
+                try { effekseer.releaseContext(previewEffekseerContext); } catch (e) {}
+                previewEffekseerContext = null;
+                previewEffect = null;
+            }
+            if (previewGL) {
+                const lose = previewGL.getExtension && previewGL.getExtension('WEBGL_lose_context');
+                if (lose) { try { lose.loseContext(); } catch (e) {} }
+                previewGL = null;
+            }
 
             modal.remove();
         };
@@ -4600,4 +4714,9 @@ class DatabaseAnimationEditor {
             }
         });
     }
+}
+
+// Export
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = DatabaseAnimationEditor;
 }

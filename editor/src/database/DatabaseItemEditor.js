@@ -43,23 +43,23 @@ class DatabaseItemEditor {
         const generalSection = document.createElement('div');
         generalSection.className = 'database-section';
         generalSection.innerHTML = `
-            <div class="database-section-header">General</div>
+            <div class="database-section-header">${tt('General')}</div>
             <div class="database-section-content"><div class="db-general-grid">
                 <div style="display: flex; flex-direction: column; align-items: center; gap: 6px;">
-                    <label style="font-size: 11px; color: var(--color-text-muted); font-weight: 600;">Icon</label>
+                    <label style="font-size: 11px; color: var(--color-text-muted); font-weight: 600;">${tt('Icon')}</label>
                     <div id="item-icon-container-${item.id}"></div>
                 </div>
                 <div class="db-form db-fill">
                     <div class="db-row-cols">
                         <span class="db-col">
-                            <label>Name</label>
-                            <input type="text" class="database-field-value" value="${item.name || ''}" data-field="name" data-item-id="${item.id}">
+                            <label>${tt('Name')}</label>
+                            <input type="text" class="database-field-value" value="${rrEscapeHtml(item.name)}" data-field="name" data-item-id="${item.id}">
                         </span>
                     </div>
                     <div class="db-row-cols db-row-grow">
                         <span class="db-col">
-                            <label>Description</label>
-                            <textarea class="database-field-value" rows="2" data-field="description" data-item-id="${item.id}">${item.description || ''}</textarea>
+                            <label>${tt('Description')}</label>
+                            <textarea class="database-field-value" rows="2" data-field="description" data-item-id="${item.id}">${rrEscapeHtml(item.description)}</textarea>
                         </span>
                     </div>
                     <div class="db-row-cols">
@@ -71,17 +71,17 @@ class DatabaseItemEditor {
                             </select>
                         </span>
                         <span class="db-col">
-                            <label>Price</label>
-                            <input type="number" class="database-field-value" value="${item.price || 0}" data-field="price" data-item-id="${item.id}">
+                            <label>${tt('Price')}</label>
+                            <input type="number" class="database-field-value" value="${rrEscapeHtml(item.price || 0)}" data-field="price" data-item-id="${item.id}">
                         </span>
                         <span class="db-col">
-                            <label>Scope</label>
+                            <label>${tt('Scope')}</label>
                             <select class="database-field-value" data-field="scope" data-item-id="${item.id}">
                                 ${scopeNames.map((name, idx) => `<option value="${idx}" ${item.scope === idx ? 'selected' : ''}>${name}</option>`).join('')}
                             </select>
                         </span>
                         <span class="db-col">
-                            <label>Occasion</label>
+                            <label>${tt('Occasion')}</label>
                             <select class="database-field-value" data-field="occasion" data-item-id="${item.id}">
                                 ${occasionNames.map((name, idx) => `<option value="${idx}" ${item.occasion === idx ? 'selected' : ''}>${name}</option>`).join('')}
                             </select>
@@ -89,7 +89,7 @@ class DatabaseItemEditor {
                     </div>
                     <div class="db-row-cols">
                         <span class="db-col">
-                            <label>Consumable</label>
+                            <label>${tt('Consumable')}</label>
                             <span style="display: flex; align-items: center; gap: 8px;">
                                 <input type="checkbox" class="system-checkbox" ${item.consumable ? 'checked' : ''} data-field="consumable" data-item-id="${item.id}">
                                 <span style="color: var(--color-text-muted); font-size: 11px;">${tt('Item is removed from inventory after use')}</span>
@@ -118,30 +118,30 @@ class DatabaseItemEditor {
         const invocationSection = document.createElement('div');
         invocationSection.className = 'database-section';
         invocationSection.innerHTML = `
-            <div class="database-section-header">Invocation</div>
+            <div class="database-section-header">${tt('Invocation')}</div>
             <div class="database-section-content">
                 <div class="db-form">
                     <div class="db-row-pair">
-                        <label>Speed</label>
-                        <input type="number" class="database-field-value" value="${item.speed || 0}" data-field="speed" data-item-id="${item.id}">
-                        <label>Success %</label>
-                        <input type="number" class="database-field-value" value="${item.successRate != null ? item.successRate : 100}" data-field="successRate" data-item-id="${item.id}">
+                        <label>${tt('Speed')}</label>
+                        <input type="number" class="database-field-value" value="${rrEscapeHtml(item.speed || 0)}" data-field="speed" data-item-id="${item.id}">
+                        <label>${tt('Success %')}</label>
+                        <input type="number" class="database-field-value" value="${rrEscapeHtml(item.successRate != null ? item.successRate : 100)}" data-field="successRate" data-item-id="${item.id}">
                     </div>
                     <div class="db-row-pair">
-                        <label>Repeats</label>
-                        <input type="number" class="database-field-value" value="${item.repeats || 1}" min="1" data-field="repeats" data-item-id="${item.id}">
-                        <label>TP Gain</label>
-                        <input type="number" class="database-field-value" value="${item.tpGain || 0}" data-field="tpGain" data-item-id="${item.id}">
+                        <label>${tt('Repeats')}</label>
+                        <input type="number" class="database-field-value" value="${rrEscapeHtml(item.repeats || 1)}" min="1" max="${globalThis.RR_LIMITS?.ACTION_REPEATS || 100}" data-field="repeats" data-item-id="${item.id}">
+                        <label>${tt('TP Gain')}</label>
+                        <input type="number" class="database-field-value" value="${rrEscapeHtml(item.tpGain || 0)}" data-field="tpGain" data-item-id="${item.id}">
                     </div>
                     <div class="db-row-pair">
-                        <label>Hit Type</label>
+                        <label>${tt('Hit Type')}</label>
                         <select class="database-field-value" data-field="hitType" data-item-id="${item.id}">
                             ${hitTypeNames.map((name, idx) => `<option value="${idx}" ${item.hitType === idx ? 'selected' : ''}>${name}</option>`).join('')}
                         </select>
                         <label>${tt('Animation')}</label>
                         <span style="display: flex; min-width: 0;">
-                            <button type="button" class="database-field-value db-anim-picker" data-target-field="animationId" data-allow-normal-attack="1" data-rr-i18n-skip>${animationLabel(item.animationId || 0)}</button>
-                            <input type="hidden" value="${item.animationId || 0}" data-field="animationId" data-item-id="${item.id}">
+                            <button type="button" class="database-field-value db-anim-picker" data-target-field="animationId" data-allow-normal-attack="1" data-rr-i18n-skip>${rrEscapeHtml(animationLabel(item.animationId || 0))}</button>
+                            <input type="hidden" value="${rrEscapeHtml(item.animationId || 0)}" data-field="animationId" data-item-id="${item.id}">
                         </span>
                     </div>
                 </div>
@@ -154,35 +154,35 @@ class DatabaseItemEditor {
         const damageSection = document.createElement('div');
         damageSection.className = 'database-section';
         damageSection.innerHTML = `
-            <div class="database-section-header">Damage</div>
+            <div class="database-section-header">${tt('Damage')}</div>
             <div class="database-section-content">
                 <div class="db-form">
                     <div class="db-row-cols">
                         <span class="db-col">
-                            <label>Formula</label>
-                            <input type="text" class="database-field-value" style="font-family: monospace;" value="${damage.formula || '0'}" data-field="damage.formula" data-item-id="${item.id}">
+                            <label>${tt('Formula')}</label>
+                            <input type="text" class="database-field-value" style="font-family: monospace;" value="${rrEscapeHtml(damage.formula || '0')}" data-field="damage.formula" data-item-id="${item.id}">
                         </span>
                     </div>
                     <div class="db-row-cols">
                         <span class="db-col">
-                            <label>Type</label>
+                            <label>${tt('Type')}</label>
                             <select class="database-field-value" data-field="damage.type" data-item-id="${item.id}">
                                 ${damageTypeNames.map((name, idx) => `<option value="${idx}" ${damage.type === idx ? 'selected' : ''}>${name}</option>`).join('')}
                             </select>
                         </span>
                         <span class="db-col">
-                            <label>Element</label>
+                            <label>${tt('Element')}</label>
                             <select class="database-field-value" data-field="damage.elementId" data-item-id="${item.id}">
                                 <option value="-1" ${damage.elementId === -1 ? 'selected' : ''}>${tt('Normal Attack')}</option>
-                                ${elements.map((name, idx) => idx > 0 && name ? `<option value="${idx}" ${damage.elementId === idx ? 'selected' : ''}>${name}</option>` : '').join('')}
+                                ${elements.map((name, idx) => idx > 0 && name ? `<option value="${idx}" ${damage.elementId === idx ? 'selected' : ''}>${rrEscapeHtml(name)}</option>` : '').join('')}
                             </select>
                         </span>
                         <span class="db-col">
-                            <label>Variance %</label>
-                            <input type="number" class="database-field-value" value="${damage.variance != null ? damage.variance : 20}" data-field="damage.variance" data-item-id="${item.id}">
+                            <label>${tt('Variance %')}</label>
+                            <input type="number" class="database-field-value" value="${rrEscapeHtml(damage.variance != null ? damage.variance : 20)}" data-field="damage.variance" data-item-id="${item.id}">
                         </span>
                         <span class="db-col">
-                            <label>Critical</label>
+                            <label>${tt('Critical')}</label>
                             <input type="checkbox" class="system-checkbox" ${damage.critical ? 'checked' : ''} data-field="damage.critical" data-item-id="${item.id}">
                         </span>
                     </div>
@@ -195,14 +195,14 @@ class DatabaseItemEditor {
         const effectsSection = document.createElement('div');
         effectsSection.className = 'database-section';
         effectsSection.innerHTML = `
-            <div class="database-section-header">Effects</div>
+            <div class="database-section-header">${tt('Effects')}</div>
             <div class="database-section-content">
                 <table class="traits-table" id="item-effects-table-${item.id}">
                     <thead>
                         <tr>
                             <th style="width: 3px; padding: 0; border: none; background: transparent;"></th>
-                            <th>Effect</th>
-                            <th>Value</th>
+                            <th>${tt('Effect')}</th>
+                            <th>${tt('Value')}</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -210,11 +210,11 @@ class DatabaseItemEditor {
                             item.effects.map((effect, index) => `
                                 <tr class="effect-row" data-effect-index="${index}">
                                     <td class="effect-indicator" style="width: 3px; padding: 0; border: none; background: transparent;"></td>
-                                    <td>${DatabaseEffectEditor.getEffectName(effect.code)}</td>
-                                    <td>${DatabaseEffectEditor.getEffectValue(effect, this.databaseManager)}</td>
+                                    <td>${rrEscapeHtml(DatabaseEffectEditor.getEffectName(effect.code))}</td>
+                                    <td>${rrEscapeHtml(DatabaseEffectEditor.getEffectValue(effect, this.databaseManager))}</td>
                                 </tr>
                             `).join('') :
-                            '<tr><td style="width: 3px; padding: 0; border: none; background: transparent;"></td><td colspan="2" style="text-align: center; color: var(--color-text-muted); font-style: italic; padding: 12px;">No effects</td></tr>'}
+                            `<tr><td style="width: 3px; padding: 0; border: none; background: transparent;"></td><td colspan="2" style="text-align: center; color: var(--color-text-muted); font-style: italic; padding: 12px;">${tt('No effects')}</td></tr>`}
                     </tbody>
                 </table>
             </div>
@@ -234,9 +234,9 @@ class DatabaseItemEditor {
         const noteSection = document.createElement('div');
         noteSection.className = 'database-section';
         noteSection.innerHTML = `
-            <div class="database-section-header">Note</div>
+            <div class="database-section-header">${tt('Note')}</div>
             <div class="database-section-content">
-                <textarea class="database-field-value" rows="4" style="width: 100%;" data-field="note" data-item-id="${item.id}">${item.note || ''}</textarea>
+                <textarea class="database-field-value" rows="4" style="width: 100%;" data-field="note" data-item-id="${item.id}">${rrEscapeHtml(item.note)}</textarea>
             </div>
         `;
         gridWrapper.appendChild(noteSection);
@@ -253,7 +253,8 @@ class DatabaseItemEditor {
                     const fieldName = e.target.dataset.field;
                     const itemId = parseInt(e.target.dataset.itemId);
                     const value = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
-                    this.updateItemField(itemId, fieldName, value);
+                    const normalized = this.updateItemField(itemId, fieldName, value);
+                    if (normalized !== undefined && e.target.type === 'number') e.target.value = String(normalized);
                 });
             });
         }, 0);
@@ -291,6 +292,9 @@ class DatabaseItemEditor {
         // Handle numeric fields
         else if (['itypeId', 'price', 'scope', 'occasion', 'speed', 'successRate', 'repeats', 'hitType', 'animationId', 'tpGain'].includes(fieldName)) {
             item[fieldName] = parseInt(value) || 0;
+            if (fieldName === 'repeats') {
+                item[fieldName] = Math.max(1, Math.min(globalThis.RR_LIMITS?.ACTION_REPEATS || 100, item[fieldName]));
+            }
             console.log(`Updated item ${itemId} field ${fieldName} to:`, item[fieldName]);
         }
         // Handle string fields (name, description, note)
@@ -300,6 +304,7 @@ class DatabaseItemEditor {
         }
 
         this.databaseManager.updateItem(itemId, item);
+        return fieldName.startsWith('damage.') ? item.damage[fieldName.split('.')[1]] : item[fieldName];
     }
 
     setupEffectInteraction(table, item) {
@@ -352,6 +357,7 @@ class DatabaseItemEditor {
     setupEffectsContextMenu(table, item) {
         table.addEventListener('contextmenu', (e) => {
             e.preventDefault();
+            const tt = text => window.I18n ? window.I18n.tText(text) : text;
 
             const row = e.target.closest('.effect-row');
             const effectIndex = row ? parseInt(row.dataset.effectIndex) : null;
@@ -379,13 +385,13 @@ class DatabaseItemEditor {
                 { label: 'Edit', action: () => this.editEffect(item, effectIndex), enabled: effectIndex !== null },
                 { label: 'Cut', action: () => this.cutEffect(item, effectIndex), enabled: effectIndex !== null },
                 { label: 'Copy', action: () => this.copyEffect(item, effectIndex), enabled: effectIndex !== null },
-                { label: 'Paste', action: () => this.pasteEffect(item), enabled: this.effectsClipboard !== null },
+                { label: 'Paste', action: () => this.pasteEffect(item), enabled: true },
                 { label: 'Delete', action: () => this.deleteEffect(item, effectIndex), enabled: effectIndex !== null }
             ];
 
             menuItems.forEach(menuItemDef => {
                 const menuItem = document.createElement('div');
-                menuItem.textContent = menuItemDef.label;
+                menuItem.textContent = tt(menuItemDef.label);
                 menuItem.style.cssText = `
                     padding: 8px 16px;
                     cursor: ${menuItemDef.enabled ? 'pointer' : 'not-allowed'};
@@ -437,9 +443,13 @@ class DatabaseItemEditor {
         });
     }
 
-    cutEffect(item, effectIndex) {
+    async cutEffect(item, effectIndex) {
         if (effectIndex === null || !item.effects) return;
-        this.effectsClipboard = { ...item.effects[effectIndex] };
+        const target = DatabaseRowClipboard.capturePasteTarget(this.parentEditor, this.projectManager, this.databaseManager, item.effects, effectIndex);
+        const payload = this.copyEffect(item, effectIndex);
+        if (!await DatabaseRowClipboard.confirmCut(payload)) return;
+        if (this.currentItem !== item
+            || !DatabaseRowClipboard.isPasteTargetCurrent(target, this.parentEditor, this.projectManager, this.databaseManager, item.effects)) return;
         item.effects.splice(effectIndex, 1);
         this.databaseManager.updateItem(item.id, item);
         this.refreshItemDetail(item);
@@ -447,13 +457,21 @@ class DatabaseItemEditor {
 
     copyEffect(item, effectIndex) {
         if (effectIndex === null || !item.effects) return;
-        this.effectsClipboard = { ...item.effects[effectIndex] };
+        this.effectsClipboard = DatabaseRowClipboard.write('effect', item.effects[effectIndex], this.databaseManager);
+        return this.effectsClipboard;
     }
 
-    pasteEffect(item) {
-        if (!this.effectsClipboard) return;
+    async pasteEffect(item) {
+        const target = DatabaseRowClipboard.capturePasteTarget(this.parentEditor, this.projectManager, this.databaseManager, item.effects);
+        const result = await DatabaseRowClipboard.read('effect', this.databaseManager, this.effectsClipboard);
+        if (this.currentItem !== item
+            || !DatabaseRowClipboard.isPasteTargetCurrent(target, this.parentEditor, this.projectManager, this.databaseManager, item.effects)) return;
+        if (result.error) {
+            DatabaseRowClipboard.showError(result);
+            return;
+        }
         if (!item.effects) item.effects = [];
-        item.effects.push({ ...this.effectsClipboard });
+        item.effects.push(result.row);
         this.databaseManager.updateItem(item.id, item);
         this.refreshItemDetail(item);
     }

@@ -1,14 +1,18 @@
-# RPG Reactor Maintainer Docs
+# RPG Reactor Documentation
 
-This folder contains project-maintenance workflows that are not required for normal RPG Reactor editor use.
+This folder contains release notes, audit history, and maintainer workflows that are not required for normal RPG Reactor editor use.
 
-- [PSYCHRONIC Plugin GitHub Sync](PSYCHRONIC_PLUGIN_GITHUB_SYNC.md): notes for publishing private/external Complex-template `PSYCHRONIC_*.js` plugins as standalone RPG Maker MZ plugin repositories.
+- [Deep Audit Backlog — 2026-07-13](AUDIT-BACKLOG-2026-07-13.md): cleared historical record of the seven-subsystem audit findings and their 0.95.0 disposition.
+- [Release Checklist](RELEASE-CHECKLIST.md): clean validation, signed candidate production, artifact inspection, GitHub/itch publication, rollback, and post-release checks.
 
 Release progress for GitHub visitors is tracked in the root [`CHANGELOG.md`](../CHANGELOG.md). Detailed editor/runtime change history is tracked in [`editor/CHANGELOG.md`](../editor/CHANGELOG.md).
 
-Public release explanations (one devlog per release):
+Current unpublished cycle draft:
 
-- [RPG Reactor 0.94.9: Instant Fills](devlogs/2026-07-13-rpg-reactor-0.94.9.md) (unreleased)
+- [RPG Reactor 0.95.0: A More Complete Editor](devlogs/2026-07-18-rpg-reactor-0.95.0.md)
+
+Published release explanations (one devlog per release):
+
 - [RPG Reactor 0.94.8: Big Maps Without the Wait](devlogs/2026-07-13-rpg-reactor-0.94.8.md)
 - [RPG Reactor 0.94.7: Map Editing You Can Trust](devlogs/2026-07-13-rpg-reactor-0.94.7.md)
 - [RPG Reactor 0.94.5: The Performance Release](devlogs/2026-07-12-rpg-reactor-0.94.5.md)
@@ -16,5 +20,3 @@ Public release explanations (one devlog per release):
 - [RPG Reactor 0.94.3: Web Editor and Reliable Downloads](devlogs/2026-07-10-rpg-reactor-0.94.3.md)
 - [RPG Reactor 0.94.2: Safer Saves and Better Deployments](devlogs/2026-07-10-rpg-reactor-0.94.2.md)
 - [RPG Reactor 0.94.1: Make Your Own Effects with the Forge](devlogs/2026-07-05-rpg-reactor-0.94.1.md)
-
-The public RPG Reactor source checkout does not include the private Complex template plugin source folder. Treat these notes as an operator workflow for maintainers who have access to that external source material.

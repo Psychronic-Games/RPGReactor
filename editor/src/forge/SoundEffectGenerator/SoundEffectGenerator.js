@@ -1182,8 +1182,8 @@ class SoundEffectGenerator {
             for (const a of list) {
                 archetypeHtml += `
                     <div class="rr-sfx-arch" data-id="${a.id}" style="padding: 9px 14px; cursor: pointer; font-size: 12px; color: var(--color-text); background: ${a.id === this.activeArchetypeId ? 'var(--color-bg-hover)' : 'transparent'}; border-left: 3px solid ${a.id === this.activeArchetypeId ? 'var(--color-accent-bright)' : 'transparent'};">
-                        <div style="font-weight: 600;">${a.name}</div>
-                        <div style="font-size: 10px; color: var(--color-text-muted); margin-top: 2px;">${a.description}</div>
+                        <div style="font-weight: 600;">${this._t(a.name)}</div>
+                        <div style="font-size: 10px; color: var(--color-text-muted); margin-top: 2px;">${this._t(a.description)}</div>
                     </div>
                 `;
             }
@@ -1271,8 +1271,8 @@ class SoundEffectGenerator {
                 <!-- Footer -->
                 <div style="padding: 12px 18px; border-top: 1px solid var(--color-border-subtle); background: var(--color-bg-panel); display: flex; align-items: center; gap: 10px; flex-shrink: 0;">
                     <label style="font-size: 12px; color: var(--color-text-muted);">${this._t('Default name:')}</label>
-                    <input type="text" class="rr-sfx-name rr-input" placeholder="MySFX" style="width: 200px; padding: 4px 8px; font-size: 12px;">
-                    <div style="font-size: 10px; color: var(--color-text-dim);">${this._t('defaults to audio/se/ - pick any location in the dialog')}</div>
+                    <input type="text" class="rr-sfx-name rr-input" placeholder="${this._t('MySFX')}" style="width: 200px; padding: 4px 8px; font-size: 12px;">
+                    <div style="font-size: 10px; color: var(--color-text-dim);">${this._t('defaults to {path} - pick any location in the dialog').replace('{path}', 'audio/se/')}</div>
                     <div class="rr-sfx-save-status" style="font-size: 10px; color: var(--color-accent-bright); opacity: 0; transition: opacity 0.3s; margin-left: 8px; max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"></div>
                     <button class="rr-sfx-save rr-btn-chip" style="margin-left: auto; padding: 6px 18px; color: var(--color-accent-bright);">${this._t('Bake & Save...')}</button>
                 </div>

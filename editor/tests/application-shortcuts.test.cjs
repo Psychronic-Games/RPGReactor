@@ -125,7 +125,7 @@ test('File menu exposes all application commands and shortcut indicators', () =>
     }
 });
 
-test('F5 confirms before performing an uncached application reload', () => {
+test('F5 confirms before performing an uncached application reload', async () => {
     const harness = loadUIManager();
     const manager = new harness.UIManager({});
     manager.setupKeyboardShortcuts();
@@ -168,6 +168,25 @@ test('F5 confirms before performing an uncached application reload', () => {
     handler(event({ repeat: true }));
     handler(event({ shiftKey: true }));
     assert.equal(harness.getReloads(), 1, 'held or modified F5 does not trigger another reload');
+
+    const discardDecision = manager.promptUnsavedChanges('the project');
+    assert.equal(manager.promptUnsavedChanges('the project'), discardDecision,
+        'repeated close requests share one unsaved-changes prompt');
+    assert.equal(harness.getElementById('rr-unsaved-confirm').className, 'rr-modal-overlay');
+    assert.equal(harness.getElementById('rr-unsaved-cancel').className, 'rr-btn-secondary');
+    assert.equal(harness.getElementById('rr-unsaved-discard').className, 'rr-button-danger');
+    assert.equal(harness.getElementById('rr-unsaved-save').className, 'rr-button-primary');
+    harness.getElementById('rr-unsaved-discard').dispatch('click');
+    assert.equal(await discardDecision, 'discard');
+    assert.equal(harness.getElementById('rr-unsaved-confirm'), null);
+
+    const cancelDecision = manager.promptUnsavedChanges('the project');
+    harness.dispatchDocumentKey('Escape');
+    assert.equal(await cancelDecision, 'cancel');
+
+    const saveDecision = manager.promptUnsavedChanges('the project');
+    harness.getElementById('rr-unsaved-save').dispatch('click');
+    assert.equal(await saveDecision, 'save');
 });
 
 test('F11 toggles native fullscreen without repeating while held', () => {

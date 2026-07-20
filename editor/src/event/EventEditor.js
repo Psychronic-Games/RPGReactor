@@ -8,6 +8,10 @@ class EventEditor {
         this.databaseManager = databaseManager;
         this.projectController = projectController;
         this.currentEvent = null;
+        this.sourceEvent = null;
+        this.cancelBaseline = null;
+        this.onCommit = null;
+        this.onCancel = null;
         this.currentPageIndex = 0;
         this.clipboard = null; // For copy/paste event pages
         this.commandList = new EventCommandList(this); // Command list manager
@@ -25,9 +29,16 @@ class EventEditor {
     /**
      * Show event editor panel
      */
-    showEventEditor(container, event) {
-        const sameEvent = this.currentEvent === event;
-        this.currentEvent = event;
+    showEventEditor(container, event, options = null) {
+        const sameEvent = this.currentEvent === event && !options;
+        if (!sameEvent) {
+            this.sourceEvent = event;
+            this.cancelBaseline = this._clone(event);
+            this.currentEvent = this._clone(event);
+            this.onCommit = options?.onCommit || null;
+            this.onCancel = options?.onCancel || null;
+        }
+        event = this.currentEvent;
         if (!sameEvent) this.currentPageIndex = 0;
 
         // Ensure event has at least one page
@@ -85,27 +96,57 @@ class EventEditor {
      * Save changes and close editor
      */
     saveAndClose() {
-        // Changes are already saved in real-time
-        this.closeEditor();
+        if (this._commitChanges()) this._hideEditor();
     }
 
     /**
      * Apply changes without closing
      */
     applyChanges() {
-        // Changes are already saved in real-time
-        console.log('Changes applied');
-        // Could add visual feedback here
+        return this._commitChanges();
     }
 
     /**
      * Close the editor
      */
     closeEditor() {
+        this.cancelChanges();
+    }
+
+    cancelChanges() {
+        if (this.cancelBaseline) this.currentEvent = this._clone(this.cancelBaseline);
+        if (this.onCancel) this.onCancel(this.sourceEvent);
+        this._hideEditor();
+    }
+
+    _hideEditor() {
         const modal = document.getElementById('event-editor-modal');
         if (modal) {
             modal.style.display = 'none';
         }
+    }
+
+    _commitChanges() {
+        if (!this.currentEvent || !this.sourceEvent) return false;
+        const committed = this._clone(this.currentEvent);
+        if (JSON.stringify(committed) !== JSON.stringify(this.cancelBaseline)) {
+            if (this.onCommit) {
+                if (this.onCommit(this.sourceEvent, committed) === false) return false;
+            } else {
+                this._replaceObject(this.sourceEvent, committed);
+            }
+        }
+        this.cancelBaseline = this._clone(committed);
+        return true;
+    }
+
+    _clone(value) {
+        return JSON.parse(JSON.stringify(value));
+    }
+
+    _replaceObject(target, source) {
+        for (const key of Object.keys(target)) delete target[key];
+        Object.assign(target, this._clone(source));
     }
 
     /**
@@ -398,7 +439,7 @@ class EventEditor {
         cancelButton.addEventListener('mouseenter', () => cancelButton.style.backgroundColor = 'var(--color-accent-tint-25)');
         cancelButton.addEventListener('mouseleave', () => cancelButton.style.backgroundColor = 'var(--color-bg-panel)');
         cancelButton.addEventListener('click', () => {
-            this.closeEditor();
+            this.cancelChanges();
         });
 
         // Apply button
@@ -554,11 +595,15 @@ class EventEditor {
      * Paste event page from clipboard
      */
     async pasteEventPage() {
-        let pageData = this.clipboard;
-        if (!pageData && typeof ReactorClipboard !== 'undefined') {
+        const targetEvent = this.currentEvent;
+        let pageData = null;
+        if (typeof ReactorClipboard !== 'undefined') {
             const clipboardData = await ReactorClipboard.read('eventPage');
             pageData = clipboardData?.payload?.page || null;
+        } else {
+            pageData = this.clipboard;
         }
+        if (this.currentEvent !== targetEvent) return;
 
         if (!pageData) {
             alert(this._t('event.noPageClipboard'));

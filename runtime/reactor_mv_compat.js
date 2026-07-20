@@ -533,6 +533,33 @@
         };
         StorageManager.filePath.__mvCompatWrapped = true;
 
+        if (typeof StorageManager.localFileDirectoryPath !== "function") {
+            StorageManager.localFileDirectoryPath = function() {
+                return this.fileDirectoryPath();
+            };
+            StorageManager.localFileDirectoryPath.__mvCompatAlias = true;
+        }
+
+        if (mvGameSemantics && StorageManager.jsonToZip && !StorageManager.jsonToZip.__mvCompatWrapped) {
+            StorageManager.jsonToZip = function(json) {
+                return new Promise(function(resolve, reject) {
+                    try {
+                        if (!global.LZString || !LZString.compressToBase64) {
+                            throw new Error("MV save encoding requires LZString.compressToBase64");
+                        }
+                        const zip = LZString.compressToBase64(json);
+                        if (zip.length >= 50000 && (!global.Utils || !Utils.isNwjs || !Utils.isNwjs())) {
+                            console.warn("Save data is too big.");
+                        }
+                        resolve(zip);
+                    } catch (e) {
+                        reject(e);
+                    }
+                });
+            };
+            StorageManager.jsonToZip.__mvCompatWrapped = true;
+        }
+
         if (StorageManager.zipToJson && !StorageManager.zipToJson.__mvCompatWrapped) {
             const originalZipToJson = StorageManager.zipToJson;
             StorageManager.zipToJson = function(zip) {
@@ -554,6 +581,21 @@
                 }
                 return String(savefileId);
             };
+            const localPathOf = function(manager, savefileId, saveName) {
+                if (typeof manager.localFilePath === "function") return manager.localFilePath(savefileId);
+                return manager.filePath(saveName);
+            };
+            const localDirectoryOf = function(manager, filePath) {
+                if (typeof manager.localFileDirectoryPath === "function" && !manager.localFileDirectoryPath.__mvCompatAlias) {
+                    return manager.localFileDirectoryPath();
+                }
+                try { return require("path").dirname(filePath); } catch (e) {}
+                return manager.fileDirectoryPath();
+            };
+            const webKeyOf = function(manager, savefileId, saveName) {
+                if (typeof manager.webStorageKey === "function") return manager.webStorageKey(savefileId);
+                return manager.forageKey ? manager.forageKey(saveName) : saveName;
+            };
             const decodeSaveData = function(data) {
                 if (!data) return null;
                 try { return pako.inflate(data, { to: "string" }); } catch (e) {}
@@ -573,9 +615,9 @@
             StorageManager.load = function(savefileId) {
                 const saveName = saveNameOf(savefileId);
                 if (this.isLocalMode && this.isLocalMode()) {
-                    return decodeSaveData(this.fsReadFile(this.filePath(saveName)));
+                    return decodeSaveData(this.fsReadFile(localPathOf(this, savefileId, saveName)));
                 }
-                const key = this.forageKey ? this.forageKey(saveName) : saveName;
+                const key = webKeyOf(this, savefileId, saveName);
                 let data = null;
                 if (global.localStorage) data = localStorage.getItem(key);
                 return decodeSaveData(data);
@@ -585,10 +627,11 @@
                 const saveName = saveNameOf(savefileId);
                 const data = encodeSaveData(json);
                 if (this.isLocalMode && this.isLocalMode()) {
-                    this.fsMkdir(this.fileDirectoryPath());
-                    this.fsWriteFile(this.filePath(saveName), data);
+                    const filePath = localPathOf(this, savefileId, saveName);
+                    this.fsMkdir(localDirectoryOf(this, filePath));
+                    this.fsWriteFile(filePath, data);
                 } else if (global.localStorage) {
-                    const key = this.forageKey ? this.forageKey(saveName) : saveName;
+                    const key = webKeyOf(this, savefileId, saveName);
                     localStorage.setItem(key, data);
                 }
                 return true;
@@ -839,11 +882,19 @@
             // a window then call refresh() expecting a fresh contents bitmap
             // — YEP_SaveCore's confirm dialog set width to fit its text but
             // kept drawing on the old 240px-wide contents, clipping the text
-            // ("Do you wish to load t…"). MV verbatim, deliberate override.
+            // ("Do you wish to load t…"). Recreate only when the inner size
+            // actually changed: that preserves the resize-then-refresh MV
+            // contract while sparing MZ windows (which never resize) a new
+            // canvas + texture on every refresh.
             Window_Command.prototype.refresh = function() {
                 this.clearCommandList();
                 this.makeCommandList();
-                this.createContents();
+                const contents = this.contents;
+                if (!contents ||
+                    contents.width !== this.contentsWidth() ||
+                    contents.height !== this.contentsHeight()) {
+                    this.createContents();
+                }
                 Window_Selectable.prototype.refresh.call(this);
             };
             Window_Command.prototype.windowWidth = Window_Command.prototype.windowWidth || function() { return 240; };
@@ -2695,22 +2746,40 @@
             };
         }
         if (global.Game_Battler) {
+            // The MV-side queue is a compatibility mirror for plugins that
+            // poll isAnimationRequested/shiftAnimation; the MZ request path
+            // plays the animation. Keep the mirror non-enumerable so it
+            // stays OUT of save files, and bounded — in a pure-MZ battle
+            // flow nothing drains it, and it previously grew (and was
+            // serialized) without limit.
+            var mvAnimationQueue = function(battler) {
+                var desc = Object.getOwnPropertyDescriptor(battler, '_animations');
+                if (!desc || desc.enumerable) {
+                    Object.defineProperty(battler, '_animations', {
+                        value: (desc && Array.isArray(desc.value)) ? desc.value : [],
+                        writable: true,
+                        configurable: true,
+                        enumerable: false
+                    });
+                }
+                return battler._animations;
+            };
             Game_Battler.prototype.clearAnimations = Game_Battler.prototype.clearAnimations || function() {
-                this._animations = [];
+                mvAnimationQueue(this).length = 0;
             };
             Game_Battler.prototype.startAnimation = function(animationId, mirror, delay) {
                 if (animationId) {
-                    this._animations = this._animations || [];
-                    this._animations.push({ animationId: animationId, mirror: !!mirror, delay: delay || 0 });
+                    var queue = mvAnimationQueue(this);
+                    queue.push({ animationId: animationId, mirror: !!mirror, delay: delay || 0 });
+                    if (queue.length > 20) queue.shift();
                     $gameTemp.requestAnimation([this], animationId, mirror);
                 }
             };
             Game_Battler.prototype.isAnimationRequested = function() {
-                return !!(this._animations && this._animations.length > 0);
+                return mvAnimationQueue(this).length > 0;
             };
             Game_Battler.prototype.shiftAnimation = function() {
-                this._animations = this._animations || [];
-                return this._animations.shift();
+                return mvAnimationQueue(this).shift();
             };
         }
     }
@@ -3359,11 +3428,31 @@
         installFinalAnimationCompatibility();
         installFinalLightingCompatibility();
         installFinalBattleHudCompatibility();
+        installFinalDamagePopupCompatibility();
+        installFinalTreasurePopupCompatibility();
         installFinalLeTBSAiPerformance();
         installGraphicsCompatibility();
         installJsonExCompatibility();
         installDataManagerCompatibility();
         installStorageManagerCompatibility();
+    }
+
+    function installFinalTreasurePopupCompatibility() {
+        if (!global.Imported || !Imported.MOG_TreasurePopup || !global.Window_DragonTreasure) return;
+        const proto = Window_DragonTreasure.prototype;
+        if (!proto.initialize || proto.initialize.__reactorTreasureContents) return;
+
+        const originalInitialize = proto.initialize;
+        proto.initialize = function() {
+            originalInitialize.apply(this, arguments);
+            const contentsSprite = this._windowContentsSprite;
+            if (this._clientArea && contentsSprite && contentsSprite.parent === this._clientArea) {
+                this._clientArea.removeChild(contentsSprite);
+                this.addChild(contentsSprite);
+                contentsSprite.move(0, 0);
+            }
+        };
+        proto.initialize.__reactorTreasureContents = true;
     }
 
     function installFinalAnimationCompatibility() {
@@ -3401,6 +3490,34 @@
             // MOG_BattleHud owns the battle status display
         };
         Window_BattleStatus.prototype.show.__mvCompatMogHide = true;
+    }
+
+    function installFinalDamagePopupCompatibility() {
+        // MOG_BattleHud snapshots Sprite_Battler.setupDamagePopup and installs
+        // that stale copy directly on Sprite_Actor. If VE_DamagePopup loads
+        // later, enemies inherit VE's final implementation while actors keep
+        // consuming requests through the old basic Sprite_Damage path. Keep
+        // MOG's special front-view HUD behavior, but resolve the side-view
+        // implementation dynamically so actors and enemies use the same path.
+        if (!global.Imported || !Imported.MOG_BattleHud ||
+            !Imported["VE - Damge Popup"] || !global.Sprite_Actor ||
+            !global.Sprite_Battler || !Sprite_Actor.prototype.setupDamagePopup ||
+            !Sprite_Battler.prototype.setupDamagePopup) {
+            return;
+        }
+        var actorProto = Sprite_Actor.prototype;
+        var mogSetup = actorProto.setupDamagePopup;
+        if (mogSetup.__mvCompatDynamicDamagePopup ||
+            String(mogSetup).indexOf("_alias_mog_bhud_sprt_actor_setupDamagePopup") < 0) {
+            return;
+        }
+        actorProto.setupDamagePopup = function() {
+            if (global.$gameSystem && !$gameSystem.isSideView() && this._sprite_face) {
+                return mogSetup.apply(this, arguments);
+            }
+            return Sprite_Battler.prototype.setupDamagePopup.apply(this, arguments);
+        };
+        actorProto.setupDamagePopup.__mvCompatDynamicDamagePopup = true;
     }
 
     function installFinalLeTBSAiPerformance() {

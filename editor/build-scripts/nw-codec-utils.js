@@ -51,15 +51,20 @@ function archiveIsValid(archivePath, platform) {
 async function acquireArchive(options) {
     const version = nwRuntime.normalizeVersion(options.version);
     const directories = options.cacheDirectories;
-    // Release asset URLs are fully determined by NW.js version and platform,
-    // so download directly instead of consulting the rate-limited GitHub API.
-    // Integrity rests on the archive's structural validation: exactly one
-    // entry with the expected binary name and consistent sizes.
     const name = assetName(version, options.platform, options.arch);
     const url = `https://github.com/${REPOSITORY}/releases/download/${version}/${name}`;
     const asset = { name, browser_download_url: url };
-    let archivePath = nwRuntime.findCachedFile(directories, name);
-    if (archivePath && !archiveIsValid(archivePath, options.platform)) {
+    const releaseBuild = options.releaseBuild !== false;
+    const trustedHash = releaseBuild
+        ? nwRuntime.trustedArchiveHash(options.hashManifest, 'codecs', name)
+        : null;
+    let archivePath = trustedHash
+        ? nwRuntime.findVerifiedCachedFile(directories, name, trustedHash, options.onWarning)
+        : nwRuntime.findCachedFile(directories, name);
+    if (!releaseBuild && options.onWarning) {
+        options.onWarning(`Developer build: ${name} is structurally checked but is not authenticated by a trusted hash manifest.`);
+    }
+    if (!trustedHash && archivePath && !archiveIsValid(archivePath, options.platform)) {
         if (options.onWarning) options.onWarning(`Discarding corrupt cached codec: ${archivePath}`);
         fs.rmSync(archivePath, { force: true });
         archivePath = null;
@@ -74,12 +79,26 @@ async function acquireArchive(options) {
             fs.rmSync(archivePath, { force: true });
             throw new Error(`FFmpeg codec for NW.js ${version} (${options.platform}-x64) could not be downloaded: ${error.message}`);
         }
+        if (trustedHash) {
+            try {
+                nwRuntime.verifyArchiveHash(archivePath, trustedHash, `FFmpeg codec ${name}`);
+            } catch (error) {
+                fs.rmSync(archivePath, { force: true });
+                throw error;
+            }
+        }
         if (!archiveIsValid(archivePath, options.platform)) {
             fs.rmSync(archivePath, { force: true });
             throw new Error(`Downloaded FFmpeg codec ${name} failed archive validation.`);
         }
     }
-    return { archivePath, asset, version, expectedHash: sha256(archivePath) };
+    return {
+        archivePath,
+        asset,
+        version,
+        expectedHash: trustedHash || sha256(archivePath),
+        hashTrusted: Boolean(trustedHash),
+    };
 }
 
 function extractBinary(archivePath, platform, tempRoot) {
@@ -148,6 +167,7 @@ function installBinary(binaryPath, runtimeRoot, platform, metadata) {
         arch: 'x64',
         asset: metadata.asset.name,
         archiveSha256: metadata.expectedHash,
+        archiveHashTrusted: metadata.hashTrusted === true,
         binarySha256: installedHash,
         notice: 'Third-party codec binary. No patent license is granted by RPG Reactor.',
     }, null, 2));

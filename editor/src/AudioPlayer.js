@@ -162,6 +162,37 @@ class AudioPlayer {
         return 'file://' + encodeURI(normalized).replace(/#/g, '%23');
     }
 
+    getAudioSectionKey(name) {
+        const normalized = String(name || '').normalize('NFC');
+        if (!normalized) return '#';
+
+        let firstGrapheme = Array.from(normalized)[0];
+        if (typeof Intl !== 'undefined' && Intl.Segmenter) {
+            const segments = new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(normalized);
+            firstGrapheme = segments[Symbol.iterator]().next().value?.segment || firstGrapheme;
+        }
+
+        return firstGrapheme && /\p{L}/u.test(firstGrapheme)
+            ? firstGrapheme.toLocaleUpperCase().normalize('NFC')
+            : '#';
+    }
+
+    compareAudioSectionKeys(a, b) {
+        if (a === '#') return b === '#' ? 0 : -1;
+        if (b === '#') return 1;
+        return a.localeCompare(b, undefined, { sensitivity: 'base' })
+            || a.localeCompare(b, undefined, { sensitivity: 'variant' });
+    }
+
+    compareAudioTrackNames(a, b) {
+        const sectionOrder = this.compareAudioSectionKeys(
+            this.getAudioSectionKey(a),
+            this.getAudioSectionKey(b)
+        );
+        return sectionOrder || a.localeCompare(b, undefined, { sensitivity: 'base', numeric: true })
+            || a.localeCompare(b, undefined, { sensitivity: 'variant', numeric: true });
+    }
+
     playChannel(channel, label = 'audio') {
         try {
             const playPromise = channel.audio.play();
@@ -180,6 +211,7 @@ class AudioPlayer {
     }
 
     showAudioPlayer() {
+        const tt = (text) => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
         // Show modal
         const modal = document.getElementById('audio-player-modal');
 
@@ -233,7 +265,7 @@ class AudioPlayer {
             // Show a message in the track list
             const trackList = document.getElementById('audio-track-list');
             if (trackList) {
-                trackList.innerHTML = `<p style="color: #ff9800; padding: 20px; text-align: center;">No project loaded.<br>Please open or create a project first.</p>`;
+                trackList.innerHTML = `<p style="color: #ff9800; padding: 20px; text-align: center;">${tt('No project loaded.')}<br>${tt('Please open or create a project first.')}</p>`;
             }
             // Clear alphabet tabs
             const alphTabs = document.getElementById('audio-alphabet-tabs');
@@ -420,6 +452,7 @@ class AudioPlayer {
     }
 
     switchAudioType(type) {
+        const tt = (text) => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
         this.audioPlayer.currentType = type;
 
         // Update tab UI
@@ -448,7 +481,7 @@ class AudioPlayer {
             if (currentChannel.currentTrack) {
                 trackNameEl.textContent = `[${currentChannel.currentTrack.type.toUpperCase()}] ${currentChannel.currentTrack.name}`;
             } else {
-                trackNameEl.textContent = 'No Track Selected';
+                trackNameEl.textContent = tt('No Track Selected');
             }
         }
 
@@ -459,60 +492,44 @@ class AudioPlayer {
     }
 
     loadAudioTracks(type) {
+        const tt = (text) => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
         const fs = require('fs');
         const path = require('path');
 
         const audioPath = path.join(this.currentProject.path, 'audio', type);
 
         if (!fs.existsSync(audioPath)) {
-            document.getElementById('audio-track-list').innerHTML = `<p style="color: var(--color-text-muted); padding: 20px; text-align: center;">No ${type.toUpperCase()} folder found</p>`;
+            document.getElementById('audio-track-list').innerHTML = `<p style="color: var(--color-text-muted); padding: 20px; text-align: center;">${tt('No')} ${type.toUpperCase()} ${tt('folder found')}</p>`;
             document.getElementById('audio-alphabet-tabs').innerHTML = '';
             return;
         }
 
-        // Read all audio files
-        const files = fs.readdirSync(audioPath);
-        const audioFiles = files.filter(file =>
-            file.endsWith('.ogg') || file.endsWith('.m4a') || file.endsWith('.mp3')
-        );
+        const audioFiles = RRAssetFiles.listUnique(audioPath, ['.ogg']);
 
         if (audioFiles.length === 0) {
-            document.getElementById('audio-track-list').innerHTML = `<p style="color: var(--color-text-muted); padding: 20px; text-align: center;">No ${type.toUpperCase()} files found</p>`;
+            document.getElementById('audio-track-list').innerHTML = `<p style="color: var(--color-text-muted); padding: 20px; text-align: center;">${tt('No')} ${type.toUpperCase()} ${tt('files found')}</p>`;
             document.getElementById('audio-alphabet-tabs').innerHTML = '';
             return;
         }
 
-        // Sort files alphabetically
-        audioFiles.sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
+        // Keep every Unicode initial in one contiguous, locale-aware section.
+        audioFiles.sort((a, b) => this.compareAudioTrackNames(a.relativePath, b.relativePath));
 
         // Store tracks for this type
         // Convert filesystem path to file:// URL for HTML5 Audio
         this.audioPlayer.tracks[type] = audioFiles.map(file => {
-            const filePath = path.join(audioPath, file);
-            const fileUrl = this.toAudioSource(filePath);
             return {
-                name: file,
-                path: fileUrl,
-                type: type
+                name: file.relativePath,
+                path: this.toAudioSource(file.absolutePath),
+                type: type,
+                section: this.getAudioSectionKey(file.relativePath)
             };
         });
 
-        // Get first letters that exist in the file list
-        const firstLetters = new Set();
-        audioFiles.forEach(name => {
-            const firstChar = name.charAt(0).toUpperCase();
-            if (/[A-Z]/.test(firstChar)) {
-                firstLetters.add(firstChar);
-            } else {
-                firstLetters.add('#'); // For numbers and special chars
-            }
-        });
+        // Get Unicode section symbols that exist in the file list.
+        const firstLetters = new Set(this.audioPlayer.tracks[type].map(track => track.section));
 
-        const sortedLetters = Array.from(firstLetters).sort((a, b) => {
-            if (a === '#') return -1;
-            if (b === '#') return 1;
-            return a.localeCompare(b);
-        });
+        const sortedLetters = Array.from(firstLetters).sort((a, b) => this.compareAudioSectionKeys(a, b));
 
         // Render alphabet tabs
         const tabBar = document.getElementById('audio-alphabet-tabs');
@@ -571,8 +588,7 @@ class AudioPlayer {
         let currentLetter = null;
 
         for (const track of this.audioPlayer.tracks[type]) {
-            const firstChar = track.name.charAt(0).toUpperCase();
-            const letter = /[A-Z]/.test(firstChar) ? firstChar : '#';
+            const letter = track.section;
 
             // Add letter header if it's a new letter
             if (letter !== currentLetter) {
@@ -611,9 +627,14 @@ class AudioPlayer {
             trackListEl.appendChild(trackItem);
         }
 
-        // Scroll detection for active letter tab
+        // Scroll detection for active letter tab. The list element persists
+        // across tab switches — remove the previous handler or every switch
+        // stacks another scroll listener doing full DOM queries.
+        if (this._trackListScrollHandler) {
+            trackListEl.removeEventListener('scroll', this._trackListScrollHandler);
+        }
         let currentActiveTab = null;
-        trackListEl.addEventListener('scroll', () => {
+        this._trackListScrollHandler = () => {
             const sections = trackListEl.querySelectorAll('.letter-section');
             const containerTop = trackListEl.getBoundingClientRect().top;
 
@@ -640,7 +661,8 @@ class AudioPlayer {
                     }
                 });
             }
-        });
+        };
+        trackListEl.addEventListener('scroll', this._trackListScrollHandler);
     }
 
     /**

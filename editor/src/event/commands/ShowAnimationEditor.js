@@ -85,6 +85,7 @@ class ShowAnimationEditor {
      * Render modal content
      */
     renderContent() {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const container = this.modal.querySelector('.show-animation-container');
         container.innerHTML = '';
 
@@ -101,7 +102,7 @@ class ShowAnimationEditor {
             border-top-right-radius: 6px;
         `;
         header.innerHTML = `
-            <h3 style="margin: 0; color: var(--color-text-strong); font-size: 16px;">Show Animation</h3>
+            <h3 style="margin: 0; color: var(--color-text-strong); font-size: 16px;">${tt('Show Animation')}</h3>
             <button class="close-btn" style="background: none; border: none; color: var(--color-text-strong); font-size: 20px; cursor: pointer; padding: 0; width: 24px; height: 24px;">×</button>
         `;
         container.appendChild(header);
@@ -122,7 +123,7 @@ class ShowAnimationEditor {
         characterSection.style.cssText = 'display: flex; flex-direction: column; gap: 8px;';
 
         const characterLabel = document.createElement('span');
-        characterLabel.textContent = 'Character:';
+        characterLabel.textContent = tt('Character:');
         characterLabel.style.cssText = 'color: var(--color-text); font-size: 13px; font-weight: bold;';
         characterSection.appendChild(characterLabel);
 
@@ -139,13 +140,13 @@ class ShowAnimationEditor {
         // Add character options
         const playerOption = document.createElement('option');
         playerOption.value = '-1';
-        playerOption.textContent = 'Player';
+        playerOption.textContent = tt('Player');
         playerOption.selected = (this.characterId === -1);
         characterSelect.appendChild(playerOption);
 
         const thisEventOption = document.createElement('option');
         thisEventOption.value = '0';
-        thisEventOption.textContent = 'This Event';
+        thisEventOption.textContent = tt('This Event');
         thisEventOption.selected = (this.characterId === 0);
         characterSelect.appendChild(thisEventOption);
 
@@ -158,10 +159,10 @@ class ShowAnimationEditor {
         if (mapData && mapData.events) {
             mapData.events.forEach((event, index) => {
                 if (event && index > 0) {
-                    const eventName = event.name || `Event ${String(index).padStart(3, '0')}`;
+                    const eventName = event.name || `${tt('Event')} ${String(index).padStart(3, '0')}`;
                     const option = document.createElement('option');
                     option.value = index.toString();
-                    option.textContent = `Event ${String(index).padStart(3, '0')} - ${eventName}`;
+                    option.textContent = `${tt('Event')} ${String(index).padStart(3, '0')} - ${eventName}`;
                     option.selected = (this.characterId === index);
                     characterSelect.appendChild(option);
                 }
@@ -180,7 +181,7 @@ class ShowAnimationEditor {
         animationSection.style.cssText = 'display: flex; flex-direction: column; gap: 8px;';
 
         const animationLabel = document.createElement('span');
-        animationLabel.textContent = 'Animation:';
+        animationLabel.textContent = tt('Animation:');
         animationLabel.style.cssText = 'color: var(--color-text); font-size: 13px; font-weight: bold;';
         animationSection.appendChild(animationLabel);
 
@@ -237,7 +238,7 @@ class ShowAnimationEditor {
 
         const waitLabel = document.createElement('label');
         waitLabel.htmlFor = 'wait-for-completion';
-        waitLabel.textContent = 'Wait for Completion';
+        waitLabel.textContent = tt('Wait for Completion');
         waitLabel.style.cssText = 'color: var(--color-text); font-size: 12px; cursor: pointer;';
 
         waitSection.appendChild(waitCheck);
@@ -258,12 +259,12 @@ class ShowAnimationEditor {
         `;
 
         const cancelBtn = document.createElement('button');
-        cancelBtn.textContent = 'Cancel';
+        cancelBtn.textContent = tt('Cancel');
         cancelBtn.className = 'rr-btn-secondary';
         cancelBtn.addEventListener('click', () => this.close());
 
         const okBtn = document.createElement('button');
-        okBtn.textContent = 'OK';
+        okBtn.textContent = tt('OK');
         okBtn.style.cssText = `
             padding: 6px 20px;
             background-color: var(--color-accent);
