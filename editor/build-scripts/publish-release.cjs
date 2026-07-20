@@ -50,8 +50,8 @@ function verifyCandidateSet(root, version, commit) {
             throw new Error(`${data.target || 'unknown'} candidate has an invalid itch channel.`);
         }
         if (data.nwjsVersion !== release.NW_VERSION || data.releaseBuild !== true ||
-            data.starter !== 'generated-clean' || data.sourceDirty !== false) {
-            throw new Error(`${data.target} candidate does not satisfy release provenance policy.`);
+            data.starter !== 'bundled-demo' || data.sourceDirty !== false) {
+            throw new Error(`${data.target} candidate does not satisfy release integrity requirements.`);
         }
         if (['windows', 'macos'].includes(data.target) && !data.signed) {
             throw new Error(`${data.target} candidate is not signed.`);

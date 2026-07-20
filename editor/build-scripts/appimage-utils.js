@@ -82,7 +82,7 @@ async function acquireTools(options) {
         acquired[key] = filePath;
     }
 
-    fs.writeFileSync(path.join(path.dirname(acquired.tool), 'provenance.json'), JSON.stringify({
+    fs.writeFileSync(path.join(path.dirname(acquired.tool), 'verification.json'), JSON.stringify({
         acquiredAt: new Date().toISOString(),
         assets: ASSETS,
     }, null, 2));

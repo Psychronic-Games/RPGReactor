@@ -12,7 +12,7 @@ const cli = require('../build-scripts/release-editor.cjs');
 const publication = require('../build-scripts/publish-release.cjs');
 const readRepo = relativePath => fs.readFileSync(path.join(repoRoot, relativePath), 'utf8');
 
-test('release CLI config pins trusted NW.js and generated release staging', () => {
+test('release CLI config pins trusted NW.js and bundled Demo staging', () => {
     for (const target of Object.keys(config.TARGETS)) {
         const workerData = config.createWorkerData({
             editorRoot,
@@ -29,8 +29,8 @@ test('release CLI config pins trusted NW.js and generated release staging', () =
         assert.match(workerData.releaseHashManifestPath, /release-hashes\.json$/);
     }
     const worker = readRepo('editor/build-scripts/dist-editor-worker.js');
-    assert.match(worker, /await generateCleanStarter\(stageRoot\)/);
-    assert.doesNotMatch(worker, /templateCandidates|copyDirRecursive\(templateSrc/);
+    assert.match(worker, /prepareBundledStarter\(stageRoot\)/);
+    assert.match(worker, /path\.join\('template', 'Demo'\)/);
     assert.match(worker, /releaseBuild = false/);
     assert.match(worker, /if \(releaseBuild\) \{\s*await nativeRelease\.updateWindowsMetadata/s);
     const interactiveManager = readRepo('editor/src/DistEditorManager.js');
@@ -121,7 +121,7 @@ test('publication verifier accepts only complete hash-matching publish candidate
                 signed: ['windows', 'macos'].includes(target),
                 nwjsVersion: config.NW_VERSION,
                 releaseBuild: true,
-                starter: 'generated-clean',
+                starter: 'bundled-demo',
                 sourceCommit: 'abc123',
                 sourceDirty: false,
                 artifacts: [{ name: archiveName, size: target.length, sha256: config.sha256(archivePath) }],
@@ -135,16 +135,15 @@ test('publication verifier accepts only complete hash-matching publish candidate
     }
 });
 
-test('third-party notices and complete pako/stb terms are staged', () => {
+test('the single third-party notices document includes complete pako/stb terms', () => {
     const notices = readRepo('THIRD_PARTY_NOTICES.md');
     assert.match(notices, /https:\/\/github\.com\/nodeca\/pako/);
     assert.match(notices, /https:\/\/github\.com\/nothings\/stb\/blob\/master\/stb_vorbis\.c/);
-    assert.match(readRepo('THIRD_PARTY_LICENSES/pako-MIT.txt'), /Vitaly Puzrin and Andrei Tuputcyn/);
-    assert.match(readRepo('THIRD_PARTY_LICENSES/stb-MIT-or-Unlicense.txt'), /ALTERNATIVE B - Public Domain/);
+    assert.match(notices, /Vitaly Puzrin and Andrei Tuputcyn/);
+    assert.match(notices, /ALTERNATIVE B - Public Domain/);
     const worker = readRepo('editor/build-scripts/dist-editor-worker.js');
-    assert.match(worker, /INCLUDE_REPOSITORY_DIRS = \['THIRD_PARTY_LICENSES'\]/);
+    assert.match(worker, /INCLUDE_REPOSITORY_DIRS = \[path\.join\('template', 'Demo'\)\]/);
     assert.match(worker, /THIRD_PARTY_NOTICES\.md/);
-    assert.match(worker, /path\.join\(appDir, 'THIRD_PARTY_LICENSES'\)/);
     assert.match(worker, /path\.join\(appDir, 'THIRD_PARTY_NOTICES\.md'\)/);
     assert.match(worker, /path\.join\(appDir, 'LICENSE'\)/);
 });

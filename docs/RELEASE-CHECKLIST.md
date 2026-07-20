@@ -43,7 +43,7 @@ For a local Windows publish build, set `WINDOWS_CERTIFICATE_PATH` to the PFX
 file and `WINDOWS_CERTIFICATE_PASSWORD` to its password. `signtool.exe` must be
 on `PATH` unless `WINDOWS_SIGNTOOL` names its full path.
 
-## 2. NW.js And Hash Provenance
+## 2. NW.js Hash Verification
 
 The release CLI hard-codes NW.js `0.107.0`, passes `nwVersionPolicy=exact` and
 `releaseBuild=true`, and reads `editor/build-scripts/release-hashes.json`.
@@ -92,9 +92,10 @@ test -z "$(git status --porcelain=v1 --untracked-files=all)"
 node -e "const p=require('./editor/package.json'); if(p.version!=='0.95.0') process.exit(1)"
 ```
 
-The test suite statically rejects hard dependencies on ignored private
-projects. The distribution worker always generates `template/Demo` from the
-tracked `ProjectManager`, runtime, and empty project data during that run.
+The test suite statically rejects hard dependencies on ignored local projects.
+The distribution worker copies the tracked Reactor One project from
+`template/Demo`, preserves its authored content and plugin configuration, and
+refreshes its Reactor runtime files from the staged runtime.
 
 ## 4. Optional Unsigned Candidate
 
@@ -159,10 +160,10 @@ Inspect every `artifact-manifest-*.json` and confirm:
 
 - `version` is `0.95.0`, `nwjsVersion` is `0.107.0`, and `sourceCommit` is the tag commit.
 - `mode` is `publish`; Windows/macOS have `signed: true`.
-- `releaseBuild` is true and `starter` is `generated-clean`.
+- `releaseBuild` is true and `starter` is `bundled-demo`.
 - Every listed size and SHA-256 matches the adjacent file.
-- Archives include `THIRD_PARTY_NOTICES.md`, `THIRD_PARTY_LICENSES/pako-MIT.txt`, and `THIRD_PARTY_LICENSES/stb-MIT-or-Unlicense.txt`.
-- The Web archive contains only the generated clean Reactor One starter, not a local/private project.
+- Archives include `THIRD_PARTY_NOTICES.md` with bundled component credits and license details.
+- The Web archive contains the tracked bundled Reactor One Demo starter.
 
 Platform inspection commands:
 
@@ -183,9 +184,9 @@ On each actual target OS, extract into a new directory and perform these tests:
 
 1. Launch the editor without a console error or signing warning.
 2. Confirm About/package version is `0.95.0`.
-3. Open the generated Reactor One starter and verify it has no private plugins or authored fixture content.
+3. Open the bundled Reactor One Demo and verify its maps, database, plugins, music, images, and effects are present.
 4. Create and save a new project outside the extracted application directory.
-5. Playtest that project using the package's clean internal NW.js runtime.
+5. Playtest that project using the package's internal NW.js runtime.
 6. Close and reopen the project, then make one desktop deployment.
 7. Open the Web ZIP over HTTPS or localhost, edit Reactor One, reload, and confirm browser persistence and Playtest.
 

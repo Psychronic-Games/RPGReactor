@@ -40,14 +40,14 @@ test('Deploy Editor exposes a provider-neutral Web package', () => {
     assert.match(manager, />\$\{tt\('Web'\)\}<\/div>/);
     assert.match(worker, /packageType === 'web'/);
     assert.match(worker, /RPGReactor-v\$\{appVersion\}-web\.zip/);
-    assert.match(worker, /generateCleanStarter\(stageRoot\)/);
+    assert.match(worker, /prepareBundledStarter\(stageRoot\)/);
     assert.match(worker, /refreshStarterRuntime\(path\.join\(stageRoot, 'runtime'\)/);
-    assert.doesNotMatch(worker, /templateCandidates|copyDirRecursive\(templateSrc/);
+    assert.match(worker, /path\.join\('template', 'Demo'\)/);
     assert.doesNotMatch(worker, /execSync\(/);
     assert.doesNotMatch(`${manager}\n${worker}`, /itch\.io|web-demo|Web Demo/i);
 });
 
-test('web distribution uses the generated staged runtime and checksums only current artifacts', async () => {
+test('web distribution uses the bundled Demo, staged runtime, and current artifact checksums', async () => {
     const outputDir = fs.mkdtempSync(path.join(os.tmpdir(), 'rpg-reactor-web-editor-'));
     const staleArchive = path.join(outputDir, 'stale-from-previous-run.zip');
     fs.writeFileSync(staleArchive, 'stale');
@@ -60,11 +60,19 @@ test('web distribution uses the generated staged runtime and checksums only curr
         const archivedManagers = execFileSync('unzip', ['-p', archive, 'project/js/reactor_managers.js']);
         assert.deepEqual(archivedManagers, fs.readFileSync(path.resolve(editorRoot, '..', 'runtime', 'reactor_managers.js')));
         const plugins = execFileSync('unzip', ['-p', archive, 'project/js/reactor_plugins.js'], { encoding: 'utf8' });
-        assert.equal(plugins, 'var $plugins = [];\n');
+        assert.equal(plugins, fs.readFileSync(path.resolve(
+            editorRoot, '..', 'template', 'Demo', 'js', 'reactor_plugins.js'), 'utf8'));
         const metadata = JSON.parse(execFileSync('unzip', ['-p', archive, 'project/project.rpgreactor'], { encoding: 'utf8' }));
-        assert.equal(metadata.starter, 'generated-clean');
-        assert.match(execFileSync('unzip', ['-p', archive, 'THIRD_PARTY_NOTICES.md'], { encoding: 'utf8' }), /stb_vorbis Basis/);
-        assert.match(execFileSync('unzip', ['-p', archive, 'THIRD_PARTY_LICENSES/pako-MIT.txt'], { encoding: 'utf8' }), /Vitaly Puzrin/);
+        assert.equal(metadata.name, 'Reactor One');
+        assert.ok(execFileSync(
+            'unzip',
+            ['-p', archive, 'project/audio/bgm/Psychronic - Acoustic Circuits.ogg'],
+            { maxBuffer: 4 * 1024 * 1024 }
+        ).length > 0);
+        const notices = execFileSync('unzip', ['-p', archive, 'THIRD_PARTY_NOTICES.md'], { encoding: 'utf8' });
+        assert.match(notices, /stb_vorbis Basis/);
+        assert.match(notices, /Vitaly Puzrin and Andrei Tuputcyn/);
+        assert.match(notices, /ALTERNATIVE B - Public Domain/);
 
         const sums = fs.readFileSync(path.join(outputDir, 'SHA256SUMS.txt'), 'utf8');
         assert.match(sums, /RPGReactor-v0\.95\.0-web\.zip/);

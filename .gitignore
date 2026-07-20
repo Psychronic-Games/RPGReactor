@@ -49,10 +49,12 @@ npm-debug.log*
 tmp/
 temp/
 
-# Local templates and user data are intentionally omitted from source releases
-template/
-save/
-editor/save/
+# Track the bundled Demo starter; keep other local templates and editor saves out.
+/template/*
+!/template/Demo/
+!/template/Demo/**
+/save/
+/editor/save/
 
 # Build output directories
 dist/

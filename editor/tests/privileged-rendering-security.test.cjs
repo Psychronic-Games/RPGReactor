@@ -79,8 +79,8 @@ test('generic database details render project JSON as text', () => {
     assert.equal(created.some(element => Object.hasOwn(element, 'innerHTML')), false);
 });
 
-test('CharacterGenerator denies project JavaScript until that project is explicitly trusted', t => {
-    const projectPath = fs.mkdtempSync(path.join(os.tmpdir(), 'rr-cg-trust-'));
+test('CharacterGenerator loads project JavaScript character parts automatically', t => {
+    const projectPath = fs.mkdtempSync(path.join(os.tmpdir(), 'rr-cg-project-parts-'));
     t.after(() => fs.rmSync(projectPath, { recursive: true, force: true }));
     const partDir = path.join(
         projectPath, 'forge', 'character_generator', 'styles', 'custom', 'parts', 'body');
@@ -88,19 +88,12 @@ test('CharacterGenerator denies project JavaScript until that project is explici
     fs.writeFileSync(path.join(partDir, 'payload.js'),
         'globalThis.rrProjectPartExecuted = true; RR_CHARACTER_REGISTRY.push({ id: "project-part", tags: [] });\n');
 
-    const storageValues = new Map();
-    const localStorage = {
-        getItem: key => storageValues.get(key) ?? null,
-        setItem: (key, value) => storageValues.set(key, String(value)),
-        removeItem: key => storageValues.delete(key)
-    };
     const registry = [];
     const source = fs.readFileSync(path.join(
         editorRoot, 'src', 'forge', 'CharacterGenerator', 'CharacterGenerator.js'), 'utf8');
     const context = {
         console,
         globalThis: null,
-        localStorage,
         process,
         require,
         RR_CHARACTER_REGISTRY: registry,
@@ -111,11 +104,6 @@ test('CharacterGenerator denies project JavaScript until that project is explici
     const generator = new CharacterGenerator();
     generator.projectPath = projectPath;
 
-    assert.equal(generator._loadProjectProceduralParts(), false);
-    assert.equal(context.rrProjectPartExecuted, undefined);
-    assert.deepEqual(registry, []);
-
-    assert.equal(generator._setProjectCodeTrusted(true, localStorage), true);
     assert.equal(generator._loadProjectProceduralParts(), true);
     assert.equal(context.rrProjectPartExecuted, true);
     assert.equal(registry.some(part => part.id === 'project-part'), true);

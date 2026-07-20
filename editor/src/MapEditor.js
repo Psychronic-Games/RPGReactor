@@ -21,6 +21,7 @@ class MapEditor {
         this.layerMode = 'auto'; // auto, or layer number (0-3)
         this.enabled = true; // Whether map editor is enabled (disabled during event mode)
         this.pendingAutotileUpdates = []; // Accumulate autotile updates during drag, process on mouseup
+        this.preserveAutotileShape = false; // Shift-paint without reconnecting autotile shapes
         this.mapStamp = null; // Six-layer map rectangle sampled with right-drag
         this.mapSampleDrag = null;
         this._mapStampPreviewTexture = null;
@@ -464,6 +465,7 @@ class MapEditor {
         this.isDrawing = false;
         this.drawStart = null;
         this.shadowPaintMode = null;
+        this.preserveAutotileShape = false;
         this.lastPaintedTile = { x: -1, y: -1, quadrant: -1 };
 
         if (commitEdit) {
@@ -554,6 +556,9 @@ class MapEditor {
 
         const container = this.tilemapManager.container;
 
+        this._shiftAutotilePaintClaim = event => this.claimsShiftAutotilePaint(event);
+        this.tilemapManager.shouldBypassShiftPanning = this._shiftAutotilePaintClaim;
+
         // Remove only OUR previous listeners. A blanket off('pointerdown')
         // strips EVERY listener for the event — including TilemapManager's
         // pan handlers registered on the same container, which left
@@ -607,8 +612,11 @@ class MapEditor {
             // Don't process if map editor is disabled (event mode is active)
             if (!this.enabled) return;
 
-            // Only left-click paints. Middle/shift drag is panning; right-click must not edit tiles.
-            if (event.data.button !== 0 || event.data.originalEvent.shiftKey) {
+            // Shift+left-click on an autotile pencil selection preserves the exact
+            // selected shape. Every other Shift gesture remains map panning.
+            const preserveAutotileShape = this.claimsShiftAutotilePaint(event);
+            this.preserveAutotileShape = preserveAutotileShape;
+            if (event.data.button !== 0 || (event.data.originalEvent.shiftKey && !preserveAutotileShape)) {
                 return;
             }
 
@@ -673,6 +681,9 @@ class MapEditor {
                 return;
             }
 
+            this.preserveAutotileShape = Boolean(event.data.originalEvent.shiftKey) &&
+                this.canPreserveAutotileShape();
+
             // Update coordinate display in tileset mode
             if (this.enabled && this.onCoordinatesChange && this.tilemapManager.currentMap) {
                 if (tileX >= 0 && tileY >= 0 &&
@@ -716,6 +727,9 @@ class MapEditor {
             const tileX = Math.floor(pos.x / this.tilemapManager.TILE_WIDTH);
             const tileY = Math.floor(pos.y / this.tilemapManager.TILE_HEIGHT);
 
+            this.preserveAutotileShape = Boolean(event.data.originalEvent.shiftKey) &&
+                this.canPreserveAutotileShape();
+
             if (this.currentTool === 'rectangle') {
                 this.paintRectangle(this.drawStart, { x: tileX, y: tileY });
             } else if (this.currentTool === 'circle') {
@@ -747,6 +761,7 @@ class MapEditor {
         // Mouse leave - hide tile preview and clear coordinates
         _rrOn('pointerleave', () => {
             if (!this.mapSampleDrag) this.hideTilePreview();
+            if (!this.isDrawing) this.preserveAutotileShape = false;
 
             // Clear coordinate display when mouse leaves map
             if (this.enabled && this.onCoordinatesChange) {
@@ -765,12 +780,32 @@ class MapEditor {
                 } else if (this.isDrawing) {
                     this.resetDrawingState(true);
                 } else {
+                    this.preserveAutotileShape = false;
                     this.hideTilePreview();
                     this.clearPreview();
                 }
             };
             window.addEventListener('blur', this._windowBlurHandler);
         }
+    }
+
+    canPreserveAutotileShape() {
+        if (!this.enabled || !['pencil', 'rectangle', 'circle'].includes(this.currentTool) || this.eraserMode ||
+            this.shadowPenMode || this.mapStamp) return false;
+        const currentLayer = this.tilesetPaletteViewer?.currentLayer;
+        const selectedTiles = this.tilesetPaletteViewer?.selectedTiles;
+        return currentLayer !== 'R' && Array.isArray(selectedTiles) && selectedTiles.length > 0 &&
+            selectedTiles.every(tile => ['A1', 'A2', 'A3', 'A4'].includes(tile.layer || currentLayer));
+    }
+
+    claimsShiftAutotilePaint(event) {
+        return event?.data?.button === 0 && Boolean(event.data.originalEvent?.shiftKey) &&
+            this.canPreserveAutotileShape();
+    }
+
+    preservesSelectedAutotileShapes(selectedTiles, currentLayer = this.tilesetPaletteViewer?.currentLayer) {
+        return this.preserveAutotileShape && Array.isArray(selectedTiles) && selectedTiles.length > 0 &&
+            selectedTiles.every(tile => ['A1', 'A2', 'A3', 'A4'].includes(tile.layer || currentLayer));
     }
 
     // Update autotiles surrounding a painted area (not the painted tiles themselves)
@@ -913,6 +948,8 @@ class MapEditor {
             return;
         }
 
+        const preserveSelectedAutotileShapes = this.preservesSelectedAutotileShapes(selectedTiles, currentLayer);
+
         // Paint the selected tiles (support multi-tile selection)
         const minX = Math.min(...selectedTiles.map(t => t.x));
         const minY = Math.min(...selectedTiles.map(t => t.y));
@@ -1007,12 +1044,11 @@ class MapEditor {
                             affectedTiles.add(`${targetX},${targetY},0`);
                         }
 
-                        // Calculate correct shape
-                        const shapeResult = this.calculateAutotileShape(baseTileId, targetX, targetY, null, actualPlacementLayer);
-                        const tileId = shapeResult.tileId;
-
-                        // Update with correctly shaped tile
-                        data[targetLayerIndex] = tileId;
+                        if (!preserveSelectedAutotileShapes) {
+                            const shapeResult = this.calculateAutotileShape(
+                                baseTileId, targetX, targetY, null, actualPlacementLayer);
+                            data[targetLayerIndex] = shapeResult.tileId;
+                        }
                     } else {
                         // For non-autotiles, use the original function
                         const tileId = this.getTileIdFromPalettePosition(tile.x, tile.y, tileLayer, targetX, targetY);
@@ -1036,6 +1072,14 @@ class MapEditor {
                     }
                 }
             }
+        }
+
+        if (preserveSelectedAutotileShapes) {
+            this.tilemapManager.updateTiles([...affectedTiles].map(tileKey => {
+                const [tileX, tileY, layer] = tileKey.split(',').map(Number);
+                return { x: tileX, y: tileY, layer };
+            }));
+            return;
         }
 
         // PERFORMANCE: After placing all tiles, recalculate autotile shapes
@@ -1142,6 +1186,8 @@ class MapEditor {
         } else {
             // Use the tile's stored layer (important for merged 'A' layer which stores A1-A5)
             const tileLayer = paletteTile.layer || currentLayer;
+            const preserveAutotileShape = this.preserveAutotileShape &&
+                ['A1', 'A2', 'A3', 'A4'].includes(tileLayer);
 
             // For autotiles, determine placement layer first
             const baseTileId = this.getBaseTileIdFromPalettePosition(paletteTile.x, paletteTile.y, tileLayer);
@@ -1213,12 +1259,11 @@ class MapEditor {
                     const targetLayerIndex = actualPlacementLayer * layerSize + basePos;
                     data[targetLayerIndex] = baseTileId; // Base shape first
 
-                    // NOW calculate the correct shape based on current map state (includes this tile)
-                    const result = this.calculateAutotileShape(baseTileId, mapX, mapY, null, actualPlacementLayer);
-                    const tileId = result.tileId;
-
-                    // Update with the correctly shaped tile
-                    data[targetLayerIndex] = tileId;
+                    if (!preserveAutotileShape) {
+                        const result = this.calculateAutotileShape(
+                            baseTileId, mapX, mapY, null, actualPlacementLayer);
+                        data[targetLayerIndex] = result.tileId;
+                    }
 
                     // PERFORMANCE: Skip autotile update if doing batch operation (caller will update once at end)
                     if (!skipAutotileUpdate) {
@@ -1232,7 +1277,7 @@ class MapEditor {
 
                         // Update neighboring autotiles after placing this tile
                         // A2 objects are transparent, so neighbors will see through them
-                        this.updateNeighboringAutotiles(mapX, mapY);
+                        if (!preserveAutotileShape) this.updateNeighboringAutotiles(mapX, mapY);
                     }
                     // NOTE: Erased tiles will be updated by the batch update at the end (paintRectangle/paintCircle)
                     // which already includes all layers 0-3 for each painted position
@@ -1356,6 +1401,14 @@ class MapEditor {
                     }
                 }
             }
+        }
+
+        if (this.preservesSelectedAutotileShapes(selectedTiles)) {
+            this.tilemapManager.updateTiles([...affectedTiles].map(tileKey => {
+                const [tileX, tileY, layer] = tileKey.split(',').map(Number);
+                return { x: tileX, y: tileY, layer };
+            }));
+            return;
         }
 
         // PERFORMANCE: After placing all tiles, recalculate autotile shapes
@@ -1522,6 +1575,14 @@ class MapEditor {
                     }
                 }
             }
+        }
+
+        if (this.preservesSelectedAutotileShapes(selectedTiles)) {
+            this.tilemapManager.updateTiles([...affectedTiles].map(tileKey => {
+                const [tileX, tileY, layer] = tileKey.split(',').map(Number);
+                return { x: tileX, y: tileY, layer };
+            }));
+            return;
         }
 
         // PERFORMANCE: After placing all tiles, recalculate autotile shapes
@@ -2498,10 +2559,13 @@ class MapEditor {
                     // produce — same target z-slot, same shape, neighbors
                     // from both the selection footprint and the real map.
                     const placeLayer = this.getAutotilePlacementLayer(baseTileId, px, py);
-                    const shapeResult = this.calculateAutotileShape(baseTileId, px, py, hoverPattern, placeLayer);
+                    const previewTileId = this.preserveAutotileShape &&
+                        ['A1', 'A2', 'A3', 'A4'].includes(layerToUse)
+                        ? baseTileId
+                        : this.calculateAutotileShape(baseTileId, px, py, hoverPattern, placeLayer).tileId;
                     const auto = new PIXI.Container();
                     auto.alpha = 0.7;
-                    this.renderAutotilePreviewToContainer(shapeResult.tileId, auto, tilesetTexture);
+                    this.renderAutotilePreviewToContainer(previewTileId, auto, tilesetTexture);
                     container.addChild(auto);
                 } else {
                     const tileTexture = this.getTileTextureFromPalette(tile.x, tile.y, layerToUse, tilesetTexture);
@@ -3762,6 +3826,9 @@ class MapEditor {
         if (typeof window !== 'undefined' && this._windowBlurHandler) {
             window.removeEventListener('blur', this._windowBlurHandler);
             this._windowBlurHandler = null;
+        }
+        if (this.tilemapManager?.shouldBypassShiftPanning === this._shiftAutotilePaintClaim) {
+            this.tilemapManager.shouldBypassShiftPanning = null;
         }
     }
 }

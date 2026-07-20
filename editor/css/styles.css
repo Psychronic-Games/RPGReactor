@@ -223,18 +223,190 @@
             flex: 1;
             display: flex;
             justify-content: center;
+            align-items: flex-start;
+            min-width: 0;
+            min-height: 0;
+            overflow-x: hidden;
+            overflow-y: auto;
+            padding: clamp(16px, 4vh, 40px) clamp(16px, 4vw, 48px);
+            background:
+                radial-gradient(circle at 50% 0, var(--color-accent-tint-10), transparent 46%),
+                var(--color-bg-base);
+            scrollbar-color: var(--color-border-input) var(--color-bg-base);
+        }
+
+        .welcome-content {
+            width: min(100%, 920px);
+            margin: auto 0;
+            display: flex;
+            flex-direction: column;
             align-items: center;
-            padding: 40px;
+            gap: clamp(14px, 2.5vh, 24px);
+            text-align: center;
+        }
+
+        .welcome-logo {
+            display: block;
+            width: clamp(240px, 34vw, 400px);
+            max-width: 100%;
+            max-height: min(32vh, 300px);
+            object-fit: contain;
+        }
+
+        .welcome-tagline {
+            max-width: 680px;
+            color: var(--color-text-muted);
+            font-size: clamp(14px, 1.8vw, 18px);
+            line-height: 1.45;
+        }
+
+        .welcome-actions {
+            display: flex;
+            justify-content: center;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        .welcome-button.rr-button,
+        .welcome-button.rr-button-primary {
+            min-width: 166px;
+            min-height: 48px;
+            padding: 12px 24px;
+            font-size: var(--font-size-lg);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-inset);
+            transition:
+                transform var(--ease-base),
+                background var(--ease-base),
+                border-color var(--ease-base),
+                box-shadow var(--ease-base);
         }
 
         .welcome-button:hover {
-            opacity: 0.9;
             transform: translateY(-2px);
-            transition: all 0.2s;
+            box-shadow: var(--shadow-popup);
         }
 
         .welcome-button:active {
             transform: translateY(0);
+        }
+
+        .welcome-button:focus-visible,
+        .welcome-links a:focus-visible {
+            outline: 2px solid var(--color-accent-bright);
+            outline-offset: 3px;
+        }
+
+        .welcome-cards {
+            width: 100%;
+            display: grid;
+            grid-template-columns: minmax(0, 1.08fr) minmax(300px, 0.92fr);
+            gap: clamp(12px, 2vw, 20px);
+            text-align: left;
+        }
+
+        .welcome-card {
+            min-width: 0;
+            padding: clamp(16px, 2.2vw, 22px);
+            background: var(--color-bg-list-item);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-inset);
+        }
+
+        .welcome-card h2 {
+            margin: 0 0 12px;
+            color: var(--color-accent-bright);
+            font-size: var(--font-size-xl);
+            line-height: 1.25;
+        }
+
+        .welcome-getting-started ul {
+            margin: 0;
+            padding-inline-start: 20px;
+            color: var(--color-text-muted);
+            line-height: 1.65;
+        }
+
+        .welcome-getting-started li::marker {
+            color: var(--color-accent);
+        }
+
+        .welcome-links {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 8px;
+        }
+
+        .welcome-links a {
+            display: flex;
+            align-items: center;
+            min-width: 0;
+            min-height: 34px;
+            padding: 7px 9px;
+            color: var(--color-text);
+            background: var(--color-bg-button);
+            border: 1px solid var(--color-border-input);
+            border-radius: var(--radius-md);
+            font-size: var(--font-size-base);
+            line-height: 1.3;
+            text-decoration: none;
+            overflow-wrap: anywhere;
+            transition:
+                color var(--ease-base),
+                background var(--ease-base),
+                border-color var(--ease-base);
+        }
+
+        .welcome-links a:hover {
+            color: var(--color-accent-bright);
+            background: var(--color-accent-tint-15);
+            border-color: var(--color-accent);
+        }
+
+        @media (max-width: 720px) {
+            .welcome-cards {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 460px) {
+            #welcome-screen {
+                padding-inline: 12px;
+            }
+
+            .welcome-logo {
+                width: min(82vw, 320px);
+            }
+
+            .welcome-actions,
+            .welcome-button.rr-button,
+            .welcome-button.rr-button-primary {
+                width: 100%;
+            }
+
+            .welcome-links {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-height: 760px) and (min-width: 721px) {
+            #welcome-screen {
+                padding-block: 14px;
+            }
+
+            .welcome-content {
+                gap: 12px;
+            }
+
+            .welcome-logo {
+                width: min(30vw, 340px);
+                max-height: 27vh;
+            }
+
+            .welcome-card {
+                padding: 14px 16px;
+            }
         }
 
         /* Editor UI */

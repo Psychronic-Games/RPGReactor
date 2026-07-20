@@ -7,6 +7,7 @@
  *   • Aurora       — drifting vertical curtains + starfield glints
  *   • Black Hole   — dark core + accretion ring + infalling sparks
  *                    (uses a real AttractiveForce field)
+ *   • Portal       — rippling event-horizon disc + rim + drifting motes
  *   • Energy Field — wire-sphere bubble + fresnel rim + surface sparks
  *   • Energy Wisps — rainbow trail tendrils curling out of a bright core
  *   • Holy Aura    — rotating ray fan + golden glow + rising motes
@@ -605,6 +606,139 @@
             })];
         },
     });
+
+    // ── Portal ───────────────────────────────────────────────────────────
+    // Stargate event horizon with the standard Animation Generator's REAL
+    // water-ripple surface: the AG portal's discrete-wave-equation sim
+    // (rain-driven ripples + per-pixel refraction) is baked into a
+    // sprite-sheet texture and played back on a camera-facing quad, with
+    // an additive halo ring and motes falling in through an attractive
+    // force field for 3D depth around it.
+    (function () {
+        const hash = (s) => {
+            let h = 5381;
+            for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) >>> 0;
+            return h.toString(36);
+        };
+        const FRAMES = 96, CELL = 192, COLS = 8;   // 8×12 sheet, ~1.6s loop
+        const mapParams = (p) => ({
+            color1: p.color,
+            color2: p.edge,
+            color3: p.glowColor,
+            rainCount: p.rain,
+            lightRefraction: p.refraction,
+            size: 0.95,
+            radius: 0.95,
+            centralGlow: 0.6,
+            outerRing: 0.35,
+        });
+        // The WASM core caches textures by path, so the path must change
+        // with the baked params or slider changes would show stale pixels.
+        const texPath = (p) => `Texture/rr_bake_portal_${hash(JSON.stringify(mapParams(p)))}.png`;
+
+        RR_EFK_RECIPE_REGISTRY.push({
+            id: 'portal',
+            name: 'Portal',
+            category: 'Energy',
+            continuous: true,
+            prewarm: 60,
+            bake: { animationId: 'portal', frames: FRAMES, cell: CELL, cols: COLS, map: mapParams },
+            textures: (p) => [texPath(p), 'Texture/rr_ring_soft.png', 'Texture/rr_particle_hard.png'],
+            params: [
+                { key: 'color',      label: 'Surface Color', type: 'color', default: '#90b8e0' },
+                { key: 'edge',       label: 'Edge Color',    type: 'color', default: '#10243d' },
+                { key: 'glowColor',  label: 'Glow Color',    type: 'color', default: '#e8f4ff' },
+                { key: 'size',       label: 'Size',          type: 'range', default: 6, min: 2, max: 14, step: 1 },
+                { key: 'rain',       label: 'Ripple Drops',  type: 'range', default: 10, min: 1, max: 60, step: 1 },
+                { key: 'refraction', label: 'Refraction',    type: 'range', default: 8, min: 0, max: 20, step: 1 },
+                { key: 'motes',      label: 'Infalling Motes', type: 'range', default: 14, min: 0, max: 40, step: 1 },
+                { key: 'halo',       label: 'Outer Halo',    type: 'toggle', default: true },
+            ],
+            build(p) {
+                const B = RR_EfkBuilder;
+                const U = RR_EfkRecipeUtil;
+                const { rf, rv3, v3, v2 } = B;
+                const glowC = U.hexToRgba(p.glowColor);
+                const bindAlways = { translationBindType: 2, rotationBindType: 2, scalingBindType: 2 };
+
+                // The baked water surface — fixed orientation so the 3D
+                // gizmo can tilt the whole portal in space.
+                const surface = B.makeNode(RR_EfkFormat.NODE_TYPE.SPRITE, {
+                    commonValues: { ...bindAlways, maxGeneration: 1, life: rf(LONG) },
+                    scaling: { type: 0, refEq: -1, scale: v3(2.3, 2.3, 1) },
+                    rendererCommon: {
+                        colorTextureIndex: 0,
+                        alphaBlend: 1,   // the sim's colors are already lit
+                        uv: {
+                            type: 2,
+                            // Frame rect is NORMALIZED (corpus-verified).
+                            position: { x: 0, y: 0, w: 1 / COLS, h: 1 / Math.ceil(FRAMES / COLS) },
+                            frameLength: 1,
+                            frameCountX: COLS,
+                            frameCountY: Math.ceil(FRAMES / COLS),
+                            loopType: 1,
+                            startFrame: { max: 0, min: 0 },
+                        },
+                    },
+                    rendererParams: {
+                        billboard: 2,
+                        allColor: U.fixedColor({ r: 255, g: 255, b: 255, a: 255 }),
+                    },
+                });
+
+                const halo = B.makeNode(RR_EfkFormat.NODE_TYPE.RING, {
+                    commonValues: { ...bindAlways, maxGeneration: 1, life: rf(LONG) },
+                    rendererCommon: { colorTextureIndex: 1 },
+                    rendererParams: {
+                        billboard: 2,
+                        vertexCount: 48,
+                        outerLocation: { type: 0, location: v2(1.5, 0) },
+                        innerLocation: { type: 0, location: v2(1.02, 0) },
+                        outerColor: U.fixedColor({ ...glowC, a: 0 }),
+                        centerColor: U.fixedColor({ ...glowC, a: 80 }),
+                        innerColor: U.fixedColor({ ...glowC, a: 0 }),
+                    },
+                });
+
+                // Motes spawn outside the rim and fall in through the
+                // surface (attractive field pulls them to the center).
+                const motes = B.makeNode(RR_EfkFormat.NODE_TYPE.SPRITE, {
+                    commonValues: {
+                        ...bindAlways,
+                        maxGeneration: 99999,
+                        life: rf(35, 65),
+                        generationTime: rf(Math.max(0.5, 50 / Math.max(1, p.motes))),
+                    },
+                    generationLocation: {
+                        type: 3, division: 24, radius: rf(1.25, 1.6),
+                        angleStart: rf(0), angleEnd: rf(360),
+                        circleType: 0, axisDirection: 2, angleNoize: rf(30),
+                    },
+                    localForceField: {
+                        elements: [{ type: 9, control: 1.6, minRange: 0, maxRange: 4 }],
+                        locationAbs: { type: 0 },
+                    },
+                    scaling: { type: 4, start: rf(0.05, 0.13), end: rf(0), params: [0, 0, 1] },
+                    rendererCommon: {
+                        colorTextureIndex: 2,
+                        fadeInType: 1, fadeIn: { frame: 8, params: [0, 0, 0] },
+                    },
+                    rendererParams: { allColor: U.fixedColor({ ...glowC, a: 235 }) },
+                });
+
+                const children = [surface];
+                if (p.halo) children.push(halo);
+                if (p.motes > 0) children.push(motes);
+
+                return [B.makeNode(RR_EfkFormat.NODE_TYPE.NONE, {
+                    commonValues: { ...bindAlways, maxGeneration: 1, life: rf(LONG) },
+                    scaling: { type: 0, refEq: -1, scale: v3(p.size * 0.5, p.size * 0.5, p.size * 0.5) },
+                    children,
+                })];
+            },
+        });
+    })();
+
 
     // ── Energy Field ─────────────────────────────────────────────────────
     // Force-field bubble: the Geometric wire sphere with energy flowing

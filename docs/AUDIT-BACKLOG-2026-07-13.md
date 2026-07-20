@@ -11,7 +11,7 @@ resolved in the current cycle. See the
 [editor changelog](../editor/CHANGELOG.md), the draft
 [0.95.0 devlog](devlogs/2026-07-18-rpg-reactor-0.95.0.md). The original finding
 language is preserved below as a historical record. Current validation is
-343 passing Node tests with no failures; 0.95.0 has not been tagged or published.
+350 passing Node tests with no failures; 0.95.0 has not been tagged or published.
 
 ## Disposition notes
 

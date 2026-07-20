@@ -49,8 +49,8 @@ function resolveTextures(r, params) {
 }
 
 test('recipes are registered', () => {
-    assert.equal(g.RR_EFK_RECIPE_REGISTRY.length, 105, 'release recipe count');
-    assert.equal(g.RR_EFK_RECIPE_REGISTRY.some(recipe => recipe.id === 'portal'), false);
+    assert.equal(g.RR_EFK_RECIPE_REGISTRY.length, 106, 'release recipe count');
+    assert.equal(g.RR_EFK_RECIPE_REGISTRY.some(recipe => recipe.id === 'portal'), true);
     const categoryCounts = Object.fromEntries(
         [...g.buildEfkRecipeCategories()].map(([category, recipes]) => [category, recipes.length])
     );
@@ -58,7 +58,7 @@ test('recipes are registered', () => {
         Composer: 1,
         Effect: 5,
         Elements: 8,
-        Energy: 14,
+        Energy: 15,
         Geometric: 15,
         Interface: 21,
         Object: 12,

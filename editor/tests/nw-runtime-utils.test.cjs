@@ -195,7 +195,7 @@ test('deployment dialogs expose stable, editor, and exact NW.js versions', () =>
             'specific versions must come from the official searchable release list');
         assert.match(source, /min-width: 16px; min-height: 16px; max-width: 16px; max-height: 16px; flex: 0 0 16px/,
             'codec checkbox dimensions remain square inside flex layouts');
-        assert.doesNotMatch(source, /No patent license is granted|Exact-version nwjs-ffmpeg-prebuilt overlay|Downloads the exact NW\.js-version binary/,
+        assert.doesNotMatch(source, /Exact-version nwjs-ffmpeg-prebuilt overlay|Downloads the exact NW\.js-version binary/,
             'codec option does not include an explanatory blurb');
     }
     assert.match(distSource, /overflow-y: auto; padding-right: 12px; scrollbar-gutter: stable/,

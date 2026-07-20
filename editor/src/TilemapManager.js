@@ -460,8 +460,10 @@ class TilemapManager {
         // the viewport, so DOM scrollLeft/scrollTop are pinned at 0 and
         // panning through them silently did nothing.
         this.container.on('pointerdown', (event) => {
-            // Check for middle mouse button or shift key
-            if (event.data.button === 1 || event.data.originalEvent.shiftKey) {
+            const shiftPressed = Boolean(event.data.originalEvent.shiftKey);
+            const shiftClaimedByPainter = shiftPressed && event.data.button === 0 &&
+                this.shouldBypassShiftPanning?.(event);
+            if (event.data.button === 1 || (shiftPressed && !shiftClaimedByPainter)) {
                 isDragging = true;
                 dragStart = {
                     x: event.data.global.x - this.container.x,

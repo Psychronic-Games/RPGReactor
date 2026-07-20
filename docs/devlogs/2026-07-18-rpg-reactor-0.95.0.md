@@ -1,15 +1,12 @@
 # RPG Reactor 0.95.0: A More Complete Editor
 
-## Release provenance
+## Bundled Forge content
 
-This release removes bundled animation and Character Generator material whose
-rights have not yet been verified. Psychronic is the sole/default built-in
-character style, while ordinary project PNG style folders remain supported.
-Project JavaScript parts execute with editor/filesystem privileges, so they are
-disabled by default and require explicit, revocable trust for each project.
-The resulting Forge registries contain 75
-Animation Generator recipes and 105 Effekseer recipes, including 14 Energy
-recipes.
+Psychronic and Looseleaf are bundled Character Generator styles, with
+Psychronic selected by default. Ordinary project PNG style folders remain
+supported, and project JavaScript styles load automatically. Portal is available
+in both animation generators. The Forge registries contain 76 Animation
+Generator recipes and 106 Effekseer recipes, including 15 Energy recipes.
 
 RPG Reactor-owned code is MIT-licensed. Bundled third-party components retain
 their respective licenses as recorded in `THIRD_PARTY_NOTICES.md`; the project
@@ -157,8 +154,8 @@ Save All now forces a fresh database snapshot after successful persistence. This
 
 ## Reproducible release candidates
 
-The release pipeline now distinguishes ordinary development packages from authenticated public candidates. Interactive editor builds can acquire Latest Stable or a selected NW.js version and clearly warn when that developer runtime is not authenticated. Public builds instead pin NW.js 0.107.0 to trusted hashes, reject dirty source trees, generate the starter project rather than copying local templates, and write manifests that bind each artifact to its source commit, target, signing state, size, and SHA-256. Windows candidates require verified Authenticode signing; macOS candidates require hardened-runtime signing, notarization, and stapling. GitHub and optional itch publication consume the inspected Linux, Windows, macOS, and Web candidate bytes without rebuilding them.
+The release pipeline now distinguishes ordinary development packages from authenticated public candidates. Interactive editor builds can acquire Latest Stable or a selected NW.js version and clearly warn when that developer runtime is not authenticated. Public builds instead pin NW.js 0.107.0 to trusted hashes, reject dirty source trees, package the tracked Reactor One Demo starter, and write manifests that bind each artifact to its source commit, target, signing state, size, and SHA-256. Windows candidates require verified Authenticode signing; macOS candidates require hardened-runtime signing, notarization, and stapling. GitHub and optional itch publication consume the inspected Linux, Windows, macOS, and Web candidate bytes without rebuilding them.
 
 Current cycle history is available in the [GitHub changelog](../../CHANGELOG.md). The full technical list is in the [editor changelog](../../editor/CHANGELOG.md), the public release procedure is in the [release checklist](../RELEASE-CHECKLIST.md), and the [audit disposition](../AUDIT-BACKLOG-2026-07-13.md) preserves the original findings.
 
-Current Node validation: 343 passing, 0 failures. Major coverage includes cross-instance clipboard transport, database and event-command serialization, localization no-fallback checks, map sampling, transactional event editing, project lifecycle and atomic-write safety, runtime compatibility, deployment, and release policy/signing gates.
+Current Node validation: 350 passing, 0 failures. Major coverage includes cross-instance clipboard transport, database and event-command serialization, localization no-fallback checks, map sampling, exact Shift autotile placement, transactional event editing, project lifecycle and atomic-write safety, runtime compatibility, deployment, and release policy/signing gates.

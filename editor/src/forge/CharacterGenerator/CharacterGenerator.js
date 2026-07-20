@@ -20,7 +20,7 @@ class CharacterGenerator {
         this.projectPath       = null;
         this.activeTab         = 'procedural';
         this.characterStyle    = 'psychronic';
-        this._knownCharacterStyles = new Set(['psychronic']);
+        this._knownCharacterStyles = new Set(['psychronic', 'looseleaf']);
 
         // ── Procedural state ──────────────────────────────────────────────────
         this.gender    = 'male';
@@ -159,11 +159,11 @@ class CharacterGenerator {
                 false
             );
         }
-        if (this._isProjectCodeTrusted()) this._loadProjectProceduralParts(existingIds);
+        this._loadProjectProceduralParts(existingIds);
     }
 
     _loadProjectProceduralParts(existingIds = new Set(RR_CHARACTER_REGISTRY.map(d => d.id))) {
-        if (!this.projectPath || !this._isProjectCodeTrusted()) return false;
+        if (!this.projectPath) return false;
         const path = require('path');
         this._loadPartsFromRoot(
             path.join(this.projectPath, 'forge', 'character_generator', 'styles'),
@@ -171,32 +171,6 @@ class CharacterGenerator {
             true
         );
         return true;
-    }
-
-    _projectCodeTrustKey() {
-        if (!this.projectPath) return null;
-        let canonical = this.projectPath;
-        try { canonical = require('fs').realpathSync(this.projectPath); } catch (_) {}
-        if (process.platform === 'win32') canonical = canonical.toLowerCase();
-        return `rpg-reactor.trusted-project-code:${canonical}`;
-    }
-
-    _isProjectCodeTrusted(storage = globalThis.localStorage) {
-        const key = this._projectCodeTrustKey();
-        if (!key || !storage) return false;
-        try { return storage.getItem(key) === 'true'; } catch (_) { return false; }
-    }
-
-    _setProjectCodeTrusted(trusted, storage = globalThis.localStorage) {
-        const key = this._projectCodeTrustKey();
-        if (!key || !storage) return false;
-        try {
-            if (trusted) storage.setItem(key, 'true');
-            else storage.removeItem(key);
-            return true;
-        } catch (_) {
-            return false;
-        }
     }
 
     _removeProjectParts() {
@@ -209,37 +183,6 @@ class CharacterGenerator {
         this.activeLayerOrder = this.activeLayerOrder.filter(id => RR_CHARACTER_REGISTRY.some(d => d.id === id));
     }
 
-    _projectCodeTrustControlsHTML() {
-        if (typeof window === 'undefined' || window.RPGReactorHost?.mode === 'web') return '';
-        const tt = text => window.I18n ? window.I18n.tText(text) : text;
-        const trusted = this._isProjectCodeTrusted();
-        const message = trusted
-            ? tt('Project JavaScript character parts are trusted and may execute with editor privileges.')
-            : tt('Project JavaScript character parts are disabled. Only trust projects whose code you have reviewed.');
-        const action = trusted ? tt('Revoke Project JS Trust') : tt('Trust and Load Project JS');
-        return `<div class="rr-cg-project-code-trust" style="display:flex;align-items:center;gap:10px;padding:7px 16px;background:${trusted ? 'var(--color-bg-panel)' : 'var(--color-warning-bg, #3a2d12)'};border-bottom:1px solid var(--color-border);font-size:10px;color:var(--color-text-muted);">
-            <span style="flex:1;">${this._escapeHtml(message)}</span>
-            <button type="button" class="rr-cg-project-code-trust-action rr-btn-chip" style="padding:3px 9px;font-size:10px;">${this._escapeHtml(action)}</button>
-        </div>`;
-    }
-
-    _wireProjectCodeTrustControls() {
-        const button = this.root?.querySelector('.rr-cg-project-code-trust-action');
-        if (!button) return;
-        button.addEventListener('click', () => {
-            const tt = text => window.I18n ? window.I18n.tText(text) : text;
-            if (this._isProjectCodeTrusted()) {
-                this._setProjectCodeTrusted(false);
-                this._removeProjectParts();
-                this._render();
-                return;
-            }
-            const warning = tt('Project JavaScript runs with full editor and filesystem access. Trust and load it?');
-            if (!window.confirm(warning) || !this._setProjectCodeTrusted(true)) return;
-            this._loadProjectProceduralParts();
-            this._render();
-        });
-    }
 
     _loadPartsFromRoot(root, existingIds, projectLocal = false) {
         const fs = require('fs');
@@ -327,7 +270,6 @@ class CharacterGenerator {
         });
         this.root.innerHTML = `
             <div style="display:flex;flex-direction:column;height:100%;min-height:0;">
-                ${this._projectCodeTrustControlsHTML()}
                 <div style="display:flex;align-items:flex-end;gap:2px;padding:0 16px;background:var(--color-bg-panel);border-bottom:1px solid var(--color-border);flex-shrink:0;">
                     ${this._tabBtn('procedural', this._t('forge.tab.procedural'))}
                     ${this._tabBtn('forge',       this._t('forge.tab.outfit'))}
@@ -347,7 +289,6 @@ class CharacterGenerator {
                         : this._partsHTML()}
                 </div>
             </div>`;
-        this._wireProjectCodeTrustControls();
         this.root.querySelectorAll('.rr-cg-tab').forEach(btn => {
             btn.addEventListener('click', () => {
                 if (this._procAnimTimer) {
@@ -403,7 +344,7 @@ class CharacterGenerator {
     }
 
     _characterStyles() {
-        const ids = new Set(this._knownCharacterStyles || ['psychronic']);
+        const ids = new Set(this._knownCharacterStyles || ['psychronic', 'looseleaf']);
         if (this.projectPath && typeof require === 'function') {
             try {
                 const fs = require('fs');

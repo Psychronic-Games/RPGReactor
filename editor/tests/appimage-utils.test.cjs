@@ -90,6 +90,9 @@ test('AppImage creation invokes tooling without a shell and replaces output atom
 });
 
 test('AppImage tooling rejects unsupported hosts and unverified downloads', async () => {
+    const source = fs.readFileSync(path.join(editorRoot, 'build-scripts', 'appimage-utils.js'), 'utf8');
+    assert.match(source, /verification\.json/);
+
     await assert.rejects(() => appImage.createAppImage({
         hostPlatform: 'win32',
         hostArch: 'x64',

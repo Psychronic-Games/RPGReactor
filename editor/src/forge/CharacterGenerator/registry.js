@@ -6,7 +6,7 @@
  *
  * Descriptor shape:
  * {
- *   id:       string   — unique identifier, e.g. 'body-psychronic-body-male-01'
+ *   id:       string   — unique identifier, e.g. 'body-looseleaf-looseleaf-male-body-01'
  *   category: string   — drawing layer group: 'body' | 'head' | 'face' |
  *                        'hair' | 'clothing' | 'hat' | 'equipment' | 'accessory'
  *   name:     string   — display name in the UI

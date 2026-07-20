@@ -18,15 +18,15 @@ Game and editor deployment now search packaged runtimes and every cache before d
 
 Desktop game packages can retain only the Chromium runtime locales you select, with English always preserved as a fallback. This reduces package size without touching your project's translation files. Linux editor packages are now symlink-preserving ZIP archives, matching the Windows and macOS distribution convention.
 
-Both Deploy Game and Deploy Editor can optionally add a portable Linux x86_64 AppImage while retaining the normal Linux game folder and editor ZIP. The option is available when building on Linux x86_64 and is off by default. RPG Reactor downloads immutable `appimagetool` and Type 2 runtime assets on first use, verifies their pinned SHA-256 hashes, caches them separately, preserves NW.js permissions and symlinks, and includes desktop metadata, icons, and the AppImage runtime license.
+Both Deploy Game and Deploy Editor can optionally add a portable Linux x86_64 AppImage while retaining the normal Linux game folder and editor ZIP. The option is available when building on Linux x86_64 and is off by default. RPG Reactor downloads immutable `appimagetool` and Type 2 runtime assets on first use, verifies their pinned SHA-256 hashes, caches them separately, preserves NW.js permissions and symlinks, and includes desktop metadata and icons.
 
-For projects that need H.264 or AAC playback, game and full editor deployments can optionally install an exact-version `nwjs-ffmpeg-prebuilt` codec. The codec is separately cached, checked against GitHub release SHA-256 metadata, constrained to the expected platform binary, and never enabled by default. Codec patent and royalty obligations vary by jurisdiction and distribution; RPG Reactor grants no patent license.
+For projects that need H.264 or AAC playback, game and full editor deployments can optionally install an exact-version `nwjs-ffmpeg-prebuilt` codec. The codec is separately cached, checked against GitHub release SHA-256 metadata, constrained to the expected platform binary, and never enabled by default.
 
 ## Optional staged asset optimization
 
 Deploy Game can losslessly recompress PNG images with Oxipng and can re-encode OGG Vorbis audio at a selected quality. Optimization runs only on temporary staged copies: source-project assets are never modified, and a result replaces the staged file only when it is valid and smaller. RPG Maker `LOOPSTART` and `LOOPLENGTH` comments are preserved.
 
-OGG optimization uses a pinned, SHA-256-verified FFmpeg executable kept in a separate cache with its GPL license and provenance. Per-file logging and progress keep large projects visibly moving. The PNG path uses the single-thread Oxipng WASM codec supported by NW.js build workers.
+OGG optimization uses a pinned, SHA-256-verified FFmpeg executable kept in a separate cache. Per-file logging and progress keep large projects visibly moving. The PNG path uses the single-thread Oxipng WASM codec supported by NW.js build workers.
 
 ## Editor workflow polish
 

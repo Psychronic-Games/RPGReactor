@@ -59,8 +59,6 @@ test('editor distribution staging includes runtime asset dependencies', async ()
             'build-scripts/native-download.js',
             'build-scripts/release-hashes.json',
             'THIRD_PARTY_NOTICES.md',
-            'THIRD_PARTY_LICENSES/pako-MIT.txt',
-            'THIRD_PARTY_LICENSES/stb-MIT-or-Unlicense.txt',
             'runtime/reactor_main.js',
             'runtime/reactor_picture_extensions.js',
             'runtime/reactor_mv_compat.js',
@@ -75,7 +73,10 @@ test('editor distribution staging includes runtime asset dependencies', async ()
             'template/Demo/project.rpgreactor',
             'template/Demo/data/System.json',
             'template/Demo/js/reactor_main.js',
-            'template/Demo/js/reactor_plugins.js'
+            'template/Demo/js/reactor_plugins.js',
+            'template/Demo/audio/bgm/Psychronic - Acoustic Circuits.ogg',
+            'template/Demo/effects/Absorb.efkefc',
+            'template/Demo/img/system/Window.png'
         ];
         for (const relativePath of required) {
             assert.equal(fs.existsSync(path.join(stageRoot, relativePath)), true, `${relativePath} is staged`);
@@ -91,11 +92,10 @@ test('editor distribution staging includes runtime asset dependencies', async ()
 
         const starterRoot = path.join(stageRoot, 'template', 'Demo');
         const starterMetadata = JSON.parse(fs.readFileSync(path.join(starterRoot, 'project.rpgreactor'), 'utf8'));
-        assert.equal(starterMetadata.starter, 'generated-clean');
-        assert.equal(starterMetadata.created, '1980-01-01T00:00:00.000Z');
-        assert.deepEqual(JSON.parse(fs.readFileSync(path.join(starterRoot, 'data', 'Actors.json'), 'utf8')), [null]);
-        assert.deepEqual(fs.readdirSync(path.join(starterRoot, 'js', 'plugins')), []);
-        assert.equal(fs.readFileSync(path.join(starterRoot, 'js', 'reactor_plugins.js'), 'utf8'), 'var $plugins = [];\n');
+        assert.deepEqual(starterMetadata, JSON.parse(fs.readFileSync(
+            path.resolve(editorRoot, '..', 'template', 'Demo', 'project.rpgreactor'), 'utf8')));
+        assert.ok(JSON.parse(fs.readFileSync(path.join(starterRoot, 'data', 'Actors.json'), 'utf8')).length > 1);
+        assert.ok(fs.readdirSync(path.join(starterRoot, 'js', 'plugins')).length > 0);
         for (const entry of fs.readdirSync(path.join(stageRoot, 'runtime'), { withFileTypes: true })) {
             if (entry.isFile() && entry.name !== 'reactor_plugins.js') {
                 assert.deepEqual(

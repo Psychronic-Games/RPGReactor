@@ -61,4 +61,4 @@ Download it, start creating, and if you like what you see — join the community
 
 The best RPG engine is one that belongs to its creators. Let's build it together.
 
-Created by Psychronic. Developed with Claude Code. MIT License.
+Created by Psychronic. MIT License.

@@ -8632,38 +8632,6 @@ for (const [locale, translations] of Object.entries(RR_TROOP_BATTLEBACK_LAYER_TR
     RR_TEXT_TRANSLATIONS[locale]['Upper Layer:'] = translations[1];
 }
 
-const RR_PROJECT_CODE_TRUST_TRANSLATIONS = {
-    ja: ['プロジェクトのJavaScriptキャラクターパーツは信頼されており、エディター権限で実行される可能性があります。', 'プロジェクトのJavaScriptキャラクターパーツは無効です。コードを確認したプロジェクトのみ信頼してください。', 'プロジェクトJSの信頼を取り消す', 'プロジェクトJSを信頼して読み込む', 'プロジェクトのJavaScriptは、エディターとファイルシステムへの完全なアクセス権で実行されます。信頼して読み込みますか？'],
-    es: ['Las piezas de personaje JavaScript del proyecto son de confianza y pueden ejecutarse con privilegios del editor.', 'Las piezas de personaje JavaScript del proyecto están desactivadas. Confía solo en proyectos cuyo código hayas revisado.', 'Revocar confianza en el JS del proyecto', 'Confiar y cargar JS del proyecto', 'El JavaScript del proyecto se ejecuta con acceso completo al editor y al sistema de archivos. ¿Confiar y cargarlo?'],
-    'zh-Hant': ['專案的 JavaScript 角色零件已受信任，可能會以編輯器權限執行。', '專案的 JavaScript 角色零件已停用。請只信任您已審查其程式碼的專案。', '撤銷專案 JS 信任', '信任並載入專案 JS', '專案 JavaScript 會以完整的編輯器與檔案系統存取權限執行。要信任並載入嗎？'],
-    'zh-Hans': ['项目的 JavaScript 角色部件已受信任，可能会以编辑器权限运行。', '项目的 JavaScript 角色部件已禁用。请只信任您已审查其代码的项目。', '撤销项目 JS 信任', '信任并加载项目 JS', '项目 JavaScript 会以完整的编辑器和文件系统访问权限运行。要信任并加载吗？'],
-    ru: ['JavaScript-компоненты персонажей проекта считаются доверенными и могут выполняться с правами редактора.', 'JavaScript-компоненты персонажей проекта отключены. Доверяйте только проектам, код которых вы проверили.', 'Отозвать доверие к JS проекта', 'Доверять и загрузить JS проекта', 'JavaScript проекта выполняется с полным доступом к редактору и файловой системе. Доверять и загрузить его?'],
-    pt: ['As partes de personagem em JavaScript do projeto são confiáveis e podem ser executadas com privilégios do editor.', 'As partes de personagem em JavaScript do projeto estão desativadas. Confie apenas em projetos cujo código você revisou.', 'Revogar confiança no JS do projeto', 'Confiar e carregar JS do projeto', 'O JavaScript do projeto é executado com acesso total ao editor e ao sistema de arquivos. Confiar e carregá-lo?'],
-    de: ['Die JavaScript-Charakterteile des Projekts sind vertrauenswürdig und können mit Editorrechten ausgeführt werden.', 'Die JavaScript-Charakterteile des Projekts sind deaktiviert. Vertraue nur Projekten, deren Code du geprüft hast.', 'Vertrauen in Projekt-JS widerrufen', 'Projekt-JS vertrauen und laden', 'Projekt-JavaScript wird mit vollständigem Zugriff auf den Editor und das Dateisystem ausgeführt. Vertrauen und laden?'],
-    fr: ['Les éléments de personnage JavaScript du projet sont approuvés et peuvent s’exécuter avec les privilèges de l’éditeur.', 'Les éléments de personnage JavaScript du projet sont désactivés. N’approuvez que les projets dont vous avez examiné le code.', 'Révoquer l’approbation du JS du projet', 'Approuver et charger le JS du projet', 'Le JavaScript du projet s’exécute avec un accès complet à l’éditeur et au système de fichiers. L’approuver et le charger ?'],
-    el: ['Τα μέρη χαρακτήρων JavaScript του έργου είναι αξιόπιστα και ενδέχεται να εκτελεστούν με δικαιώματα επεξεργαστή.', 'Τα μέρη χαρακτήρων JavaScript του έργου είναι απενεργοποιημένα. Εμπιστευτείτε μόνο έργα των οποίων έχετε ελέγξει τον κώδικα.', 'Ανάκληση εμπιστοσύνης στο JS του έργου', 'Εμπιστοσύνη και φόρτωση JS έργου', 'Η JavaScript του έργου εκτελείται με πλήρη πρόσβαση στον επεξεργαστή και στο σύστημα αρχείων. Να θεωρηθεί αξιόπιστη και να φορτωθεί;'],
-    ko: ['프로젝트 JavaScript 캐릭터 파츠를 신뢰하며 에디터 권한으로 실행할 수 있습니다.', '프로젝트 JavaScript 캐릭터 파츠가 비활성화되어 있습니다. 코드를 검토한 프로젝트만 신뢰하세요.', '프로젝트 JS 신뢰 취소', '프로젝트 JS 신뢰 및 불러오기', '프로젝트 JavaScript는 에디터와 파일 시스템에 대한 전체 접근 권한으로 실행됩니다. 신뢰하고 불러오시겠습니까?'],
-    ar: ['أجزاء الشخصيات المكتوبة بـ JavaScript في المشروع موثوقة وقد تعمل بصلاحيات المحرر.', 'أجزاء الشخصيات المكتوبة بـ JavaScript في المشروع معطلة. لا تثق إلا بالمشاريع التي راجعت شيفرتها.', 'إلغاء الثقة في JavaScript المشروع', 'الوثوق بـ JavaScript المشروع وتحميله', 'يعمل JavaScript المشروع بصلاحية وصول كاملة إلى المحرر ونظام الملفات. هل تريد الوثوق به وتحميله؟'],
-    it: ['Le parti del personaggio JavaScript del progetto sono attendibili e possono essere eseguite con i privilegi dell’editor.', 'Le parti del personaggio JavaScript del progetto sono disattivate. Considera attendibili solo i progetti di cui hai esaminato il codice.', 'Revoca attendibilità JS del progetto', 'Considera attendibile e carica JS del progetto', 'Il JavaScript del progetto viene eseguito con accesso completo all’editor e al file system. Considerarlo attendibile e caricarlo?'],
-    pl: ['Części postaci JavaScript projektu są zaufane i mogą działać z uprawnieniami edytora.', 'Części postaci JavaScript projektu są wyłączone. Ufaj tylko projektom, których kod został przez Ciebie sprawdzony.', 'Cofnij zaufanie do JS projektu', 'Zaufaj i wczytaj JS projektu', 'JavaScript projektu działa z pełnym dostępem do edytora i systemu plików. Zaufać mu i go wczytać?'],
-    id: ['Bagian karakter JavaScript proyek dipercaya dan dapat dijalankan dengan hak istimewa editor.', 'Bagian karakter JavaScript proyek dinonaktifkan. Percayai hanya proyek yang kodenya telah Anda tinjau.', 'Cabut Kepercayaan JS Proyek', 'Percayai dan Muat JS Proyek', 'JavaScript proyek berjalan dengan akses penuh ke editor dan sistem berkas. Percayai dan muat?'],
-    vi: ['Các bộ phận nhân vật JavaScript của dự án được tin cậy và có thể chạy với đặc quyền của trình biên tập.', 'Các bộ phận nhân vật JavaScript của dự án đã bị tắt. Chỉ tin cậy những dự án có mã mà bạn đã xem xét.', 'Thu hồi tin cậy JS dự án', 'Tin cậy và tải JS dự án', 'JavaScript của dự án chạy với toàn quyền truy cập trình biên tập và hệ thống tệp. Tin cậy và tải mã này?'],
-    th: ['ชิ้นส่วนตัวละคร JavaScript ของโปรเจกต์ได้รับความเชื่อถือและอาจทำงานด้วยสิทธิ์ของตัวแก้ไข', 'ชิ้นส่วนตัวละคร JavaScript ของโปรเจกต์ถูกปิดใช้งาน โปรดเชื่อถือเฉพาะโปรเจกต์ที่คุณตรวจสอบโค้ดแล้ว', 'เพิกถอนความเชื่อถือ JS ของโปรเจกต์', 'เชื่อถือและโหลด JS ของโปรเจกต์', 'JavaScript ของโปรเจกต์จะทำงานด้วยสิทธิ์เข้าถึงตัวแก้ไขและระบบไฟล์อย่างเต็มรูปแบบ ต้องการเชื่อถือและโหลดหรือไม่'],
-    tr: ['Projenin JavaScript karakter parçaları güvenilir ve düzenleyici ayrıcalıklarıyla çalışabilir.', 'Projenin JavaScript karakter parçaları devre dışı. Yalnızca kodunu incelediğiniz projelere güvenin.', 'Proje JS Güvenini Kaldır', 'Proje JS Koduna Güven ve Yükle', 'Proje JavaScript kodu düzenleyiciye ve dosya sistemine tam erişimle çalışır. Güvenip yüklemek istiyor musunuz?']
-};
-const RR_PROJECT_CODE_TRUST_PHRASES = [
-    'Project JavaScript character parts are trusted and may execute with editor privileges.',
-    'Project JavaScript character parts are disabled. Only trust projects whose code you have reviewed.',
-    'Revoke Project JS Trust',
-    'Trust and Load Project JS',
-    'Project JavaScript runs with full editor and filesystem access. Trust and load it?'
-];
-for (const [locale, translations] of Object.entries(RR_PROJECT_CODE_TRUST_TRANSLATIONS)) {
-    for (let i = 0; i < RR_PROJECT_CODE_TRUST_PHRASES.length; i++) {
-        RR_TEXT_TRANSLATIONS[locale][RR_PROJECT_CODE_TRUST_PHRASES[i]] = translations[i];
-    }
-}
-
 // The broad database/event/Forge pass is generated separately so this manager
 // remains reviewable. It is loaded synchronously before I18nManager.js.
 const RR_DEEP_TRANSLATIONS = globalThis.RR_DEEP_TEXT_TRANSLATIONS || {};

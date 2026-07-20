@@ -11,6 +11,7 @@ RPG Reactor 0.95.0 is an open-source, cross-platform RPG game editor and runtime
 - **Shadow pen mode**: Special layer effects for depth and atmosphere
 - **Undo/redo**: Full history support (up to 50 steps)
 - **Autotile support**: Automatic tile connection with animated water/waterfall tiles
+- **Exact autotile placement**: Hold Shift while painting A1-A4 with Pencil, Rectangle, or Circle to place the selected shape without reconnecting it or changing neighboring autotiles
 - **Six-plane rectangular sampling**: Right-drag captures tile layers 0-3, shadows, and regions; left-click/drag stamps the exact clipped patch with a live composite preview and one Undo entry per placement stroke
 - **Region painting**: 256 distinct regions for gameplay triggers and restrictions
 - **Map management**: Copy, paste, delete, and export whole maps from the map tree, including cross-instance map data, `MapInfos.json` entries, compatible tileset database references, and full-size PNG image output; pasted maps are inserted immediately after the selected map at the same hierarchy level
@@ -115,8 +116,8 @@ Comprehensive editors for all game data in a near-full-viewport workspace with f
 - **Asset bundling**: Game files copied into `package.nw` alongside NW.js runtime
 - **NW.js runtime options**: Reuse bundled/cached runtimes first or download from dl.nwjs.io; choose latest stable, the editor's version, or an exact version through a themed selector searchable by version or release date
 - **Runtime locales**: Optionally retain only selected Chromium locale families in desktop packages; English is always kept as a fallback and project translation assets are untouched
-- **Optional proprietary codecs**: Game and full editor deployments can overlay the exact-version `nwjs-ffmpeg-prebuilt` H.264/AAC binary, verified against GitHub release SHA-256 metadata and cached separately. This is opt-in; RPG Reactor grants no codec patent license, and distributors are responsible for applicable licensing and royalties
-- **Optional asset optimization**: Deploy Game can losslessly recompress staged PNG files with Oxipng and optionally re-encode staged OGG audio at an explicit Vorbis quality. Existing project files are never modified, larger or invalid results are discarded, and RPG Maker loop comments are preserved. Audio optimization automatically downloads a pinned, SHA-256-verified FFmpeg executable into a separate cache on first use; the corresponding GPL license and provenance manifest are retained beside it. Per-file progress appears in the existing build log and progress bar
+- **Optional proprietary codecs**: Game and full editor deployments can overlay the exact-version `nwjs-ffmpeg-prebuilt` H.264/AAC binary, verified against GitHub release SHA-256 metadata and cached separately. This is opt-in
+- **Optional asset optimization**: Deploy Game can losslessly recompress staged PNG files with Oxipng and optionally re-encode staged OGG audio at an explicit Vorbis quality. Existing project files are never modified, larger or invalid results are discarded, and RPG Maker loop comments are preserved. Audio optimization automatically downloads a pinned, SHA-256-verified FFmpeg executable into a separate cache on first use; the corresponding GPL license and verification manifest are retained beside it. Per-file progress appears in the existing build log and progress bar
 - **Persistent choices**: Game output directory, runtime locales, and optimization settings are restored independently on the next editor session
 - **Optional Linux AppImage**: On Linux x86_64 build hosts, Linux game deployment can also emit one portable `.AppImage` file beside the normal Linux folder. The existing folder remains unchanged, and the AppImage option is off by default
 - **Web export**: HTML5 builds for browser deployment
@@ -162,9 +163,9 @@ Procedural sprite-sheet generator for visual effects and projectile animations.
 
 - **Layered composition**: Stack multiple animations as layers; per-layer visibility, opacity, and blend mode (`source-over`, `add`, `multiply`, `screen`, etc.)
 - **Keyframe timeline per layer**: Drop keyframes at any frame; sliders and colors interpolate linearly between them and textures cross-fade smoothly so a single layer can morph through several looks in one loop
-- **Animation library** across four categories:
+- **Animation library**: 76 recipes across four categories, including these examples:
   - **Geometric**: Cube, Pyramid, Cylinder, Cone, Sphere, Torus, Möbius Strip, Double Helix, Dodecahedron, Hypercube, Pentachoron (4D), Circular Saw Blade
-  - **Energy**: Fire, Energy Field, Energy Wisps, Teleport Column
+  - **Energy**: Fire, Energy Field, Energy Wisps, Teleport Column, Portal
   - **Object**: Sword, Knife, Hammer, Arrow, Bullet, Rock, Egg, Coin, Crown, Scythe
   - **Effect**: Hypnotize (seamless Archimedean spiral), Acid Trip (kaleidoscopic mandala)
 - **3D pipeline**: Every shape supports static tilts + per-axis rotation cycles, glow halo, textured faces with backface culling, and depth-sorted edges
@@ -178,7 +179,7 @@ Procedural sprite-sheet generator for visual effects and projectile animations.
 Recipe-driven generator for native Effekseer particle effects (`.efkefc`), no external Effekseer editor needed. Exports drop straight into the project's `effects/` folder and play through the engine's bundled Effekseer runtime.
 
 - **Format engine**: In-house `.efkefc` reader for binary versions 15, 1500, 1610, and 1710; the writer emits runtime-native version 1500 and is covered by tracked generated-format round trips. The `.efkmodel` writer supports v3 single-frame and v5 multi-frame vertex animation.
-- **Recipe library**: 105 recipes across nine categories: Geometric (15), Symbolic (17), Object (12), Interface (21 true-3D instruments with user-entered text), Energy (14), Elements (8), Effect (5), Physical (12), and the Custom Effect Composer.
+- **Recipe library**: 106 recipes across nine categories: Geometric (15), Symbolic (17), Object (12), Interface (21 true-3D instruments with user-entered text), Energy (15), Elements (8), Effect (5), Physical (12), and the Custom Effect Composer.
 - **Render styles**: Glowing wireframe struts (energy-line look, texture flow along edges) or Solid textured surfaces, seam-correct UV-sphere mapping, normal-blend faithful texture rendering, and untinted custom textures so e.g. a planet map wraps a sphere like a globe
 - **Custom textures**: AG-style picker copies PNG/JPEG images into the project's `effects/Texture/` and maps them across the geometry
 - **Playback**: Spinning and steady-state recipes run continuously with degree-per-second controls; effects that need to settle declare preview prewarm, while bounded bursts and keyframed compositions repeat on the master Frames cycle.
@@ -191,9 +192,9 @@ Recipe-driven generator for native Effekseer particle effects (`.efkefc`), no ex
 #### Character Generator
 Composable character sprite generator for actor walking sprites and generated outfit parts.
 
-- **Style selector**: `Psychronic` is the sole built-in style. Project PNG style folders remain supported. Project JavaScript parts are disabled by default because they execute with editor/filesystem privileges; trust is explicit per project and can be revoked.
+- **Style selector**: `Psychronic` and `Looseleaf` are bundled, with Psychronic selected by default. Project JavaScript and PNG style folders remain supported and load automatically.
 - **Procedural tab**: Renders layered ASCII/template parts from the part registry, with configurable frame size, alignment, palette overrides, and 3x4 walking-sheet export
-- **Outfit Forge tab**: Generates full-outfit Character Generator parts from recipe data. The bundled `Nova Sentinel` recipe targets Psychronic through `procgen/outfits/nova_sentinel.js`. The Legs slot offers a second preset, a procedural **Mini Skirt**, beside the segmented leg armor.
+- **Outfit Forge tab**: Generates full-outfit Character Generator parts from recipe data. The bundled `Nova Sentinel` recipe targets both Psychronic and Looseleaf through `procgen/outfits/nova_sentinel.js`. The Legs slot offers a second preset, a procedural **Mini Skirt**, beside the segmented leg armor.
 - **Outfit engine**: Browser/Node-compatible generator in `src/forge/CharacterGenerator/procgen/outfit_engine.js`, with per-zone palette families, role-based painters, extensions such as pauldrons/gauntlets, live 4-direction preview, walk preview, zone debug overlays, and save-to-library output under `styles/<style>/parts/full outfits/`
 - **Hair Forge tab**: Generates 4-direction walking hair parts with live walk preview, save-to-library output, expanded palettes (`auburn`, `platinum`, `rose`, `violet`, `navy`, `emerald`), front-view Eye Zone controls, and Hair Pattern sliders for lower-hair banding/scraggle or Short Spiky triangular texture.
 - **Hair Forge styles**: Includes `Layered Bob`, `Long Layered`, `Short Shag`, `Short Spiky`, and `Center Part Long`. Short Spiky uses style-specific spike silhouettes, spiky side bangs, connected rear spikes, and length-aware back/nape behavior; Center Part Long uses symmetrical straight strands, a visible middle part, smooth side bangs, face-framing long curtains, and subtle walk-frame sway.
@@ -269,9 +270,13 @@ npm ci
 #   nwjs-win/     (Windows)
 #   nwjs-mac/     (macOS)
 
-# Launch with the NW.js binary
+# Launch with NW.js placed inside editor/
 ./nwjs-linux/nw .          # Linux
 nwjs-win\nw.exe .          # Windows
+
+# Or with NW.js placed at the repository root
+../nwjs-linux/nw .         # Linux
+..\nwjs-win\nw.exe .       # Windows
 # macOS: use ../RPGReactor.command from the repository root
 ```
 
@@ -387,7 +392,7 @@ Database shortcuts are scoped to the active database section. The Types workspac
 
 ### Tests
 
-The Node test suite covers project creation/import and version metadata, generated-project validity, runtime manifests, local Markdown links, all 18 localization dictionaries and no-fallback labels, cross-instance map/database/event clipboard transport, database batch/scroll behavior and trait/effect reference remapping, persisted A1 animation control, database limits and Types/Terms behavior, complete Conditional Branch and nested-structure round trips, advanced Control Variables and Game Data operands, stock Loop insertion, dynamic event calls, extended input conditions, dynamic/extended Picture commands, transactional event creation/editing, visual start locations, Magic Skills, searchable Plugin Help, nested plugin-parameter serialization, MV saves and visual compatibility, recursive/Unicode assets, project lock and atomic-write safety, package preflights, preview cleanup, deployment/runtime acquisition, release policy/signing gates, Forge generation, editor/Web distribution, Effekseer format/model round trips, all 105 recipes at default/extreme/swept values, composition, and real-WASM playback. Current validation is 343 passing tests with no failures.
+The Node test suite covers project creation/import and version metadata, generated-project validity, runtime manifests, local Markdown links, all 18 localization dictionaries and no-fallback labels, cross-instance map/database/event clipboard transport, database batch/scroll behavior and trait/effect reference remapping, persisted A1 animation control, exact Shift autotile placement, database limits and Types/Terms behavior, complete Conditional Branch and nested-structure round trips, advanced Control Variables and Game Data operands, stock Loop insertion, dynamic event calls, extended input conditions, dynamic/extended Picture commands, transactional event creation/editing, visual start locations, Magic Skills, searchable Plugin Help, nested plugin-parameter serialization, MV saves and visual compatibility, recursive/Unicode assets, project lock and atomic-write safety, package preflights, preview cleanup, deployment/runtime acquisition, release policy/signing gates, Forge generation, editor/Web distribution, Effekseer format/model round trips, all 106 recipes at default/extreme/swept values, composition, and real-WASM playback. Current validation is 350 passing tests with no failures.
 
 ```bash
 cd editor

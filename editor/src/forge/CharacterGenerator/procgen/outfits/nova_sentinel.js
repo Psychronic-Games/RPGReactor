@@ -1,4 +1,5 @@
-// Nova Sentinel outfit recipe for the bundled Psychronic style.
+// Nova Sentinel outfit recipe across supported character styles.
+// The outfit identity is shared; each style uses its own renderer adapter.
 
 'use strict';
 
@@ -32,8 +33,8 @@ function clone(value) {
 }
 
 function partSetForStyle(style) {
-    const prefix = 'psychronic-nova';
-    const key = 'nova-sentinel-psychronic';
+    const prefix = style === 'psychronic' ? 'psychronic-nova' : 'nova';
+    const key = style === 'psychronic' ? 'nova-sentinel-psychronic' : 'nova-sentinel';
     return {
         key,
         label: 'Nova Sentinel',
@@ -67,6 +68,6 @@ function defaultConfig(style = 'psychronic') {
 module.exports = {
     key: 'nova-sentinel',
     label: 'Nova Sentinel',
-    partSets: [partSetForStyle('psychronic')],
+    partSets: [partSetForStyle('looseleaf'), partSetForStyle('psychronic')],
     defaultConfig
 };

@@ -44,7 +44,9 @@ test('codec archives are validated, cached, extracted, and installed', async () 
         const extracted = codec.extractBinary(acquired.archivePath, 'linux', path.join(root, 'extract'));
         const destination = codec.installBinary(extracted, runtime, 'linux', acquired);
         assert.equal(fs.readFileSync(destination, 'utf8'), 'codec binary');
-        assert.equal(JSON.parse(fs.readFileSync(path.join(runtime, 'rpg-reactor-codec.json'), 'utf8')).nwVersion, '0.113.0');
+        const installedMetadata = JSON.parse(fs.readFileSync(path.join(runtime, 'rpg-reactor-codec.json'), 'utf8'));
+        assert.equal(installedMetadata.nwVersion, '0.113.0');
+        assert.equal(Object.hasOwn(installedMetadata, 'notice'), false);
 
         await codec.acquireArchive({
             ...options,

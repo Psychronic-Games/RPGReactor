@@ -1,0 +1,38 @@
+{
+  "activeArchetypeId": "magic-ice",
+  "params": {
+    "waveform": "sine",
+    "attack": 0.005,
+    "decay": 0.15,
+    "sustain": 0.12,
+    "release": 0.65,
+    "sustainLevel": 0.3,
+    "baseFreq": 1200,
+    "freqSlide": 0.1,
+    "pitchPeak": 4,
+    "pitchDecayTime": 0.12,
+    "vibratoDepth": 2,
+    "vibratoRate": 15,
+    "tremoloDepth": 0.1,
+    "tremoloRate": 8,
+    "squareDuty": 0.5,
+    "subOscLevel": 0.2,
+    "subOscDetune": 12,
+    "ksDampening": 0.995,
+    "lowpassFreq": 8000,
+    "lowpassEnd": 2500,
+    "lowpassQ": 5,
+    "highpassFreq": 350,
+    "distortion": 0,
+    "volume": 1,
+    "noiseMix": 0.15,
+    "reverb": 0.5,
+    "reverbDecay": 2.5
+  },
+  "mode": "pattern",
+  "pattern": [
+    "7,2"
+  ],
+  "bpm": 120,
+  "jitterStrength": "medium"
+}

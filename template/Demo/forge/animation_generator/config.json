@@ -1,0 +1,66 @@
+{
+  "version": 2,
+  "frameWidth": 192,
+  "frameHeight": 192,
+  "frameCount": 100,
+  "interpolation": "nearest",
+  "layers": [
+    {
+      "id": "Lmr5ie6nmraau",
+      "categoryId": "effect",
+      "animationId": "chromatic-pulse",
+      "blend": "screen",
+      "opacity": 0.35,
+      "visible": true,
+      "keyframes": [
+        {
+          "_layerOpacity": 0.35,
+          "centerX": 0.5,
+          "centerY": 0.5,
+          "maxRadius": 0.45,
+          "ringCount": 4,
+          "pulseCycles": 2,
+          "ringWidth": 6,
+          "aberrationStrength": 0.5,
+          "particleCount": 16,
+          "tiltX": -90,
+          "tiltY": 0,
+          "tiltZ": 0,
+          "cycX": 0,
+          "cycY": 0,
+          "cycZ": 0
+        }
+      ],
+      "activeKeyframe": 0
+    }
+  ],
+  "activeLayerId": "Lmr5ie6nmraau",
+  "previewMode": "single",
+  "previewSingle": {
+    "categoryId": "elements",
+    "animationId": "light",
+    "params": {
+      "color1": "#b21dd5",
+      "color2": "#cee86b",
+      "centerX": 0.5,
+      "centerY": 0.5,
+      "rayCount": 20,
+      "innerRadius": 0.32,
+      "outerRadius": 1.2,
+      "rayWidth": 0.4,
+      "rotationCycles": -3,
+      "pulseCycles": 3,
+      "pulseStrength": 0.15,
+      "coreSize": 0.14,
+      "glow": 0.55,
+      "volume": 5,
+      "tiltX": -106,
+      "tiltY": 74,
+      "tiltZ": -128,
+      "cycX": -3,
+      "cycY": 2,
+      "cycZ": 1,
+      "opacity": 0.95
+    }
+  }
+}

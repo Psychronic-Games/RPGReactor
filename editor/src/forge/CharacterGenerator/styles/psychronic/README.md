@@ -1,8 +1,9 @@
 Psychronic character style
 ==========================
 
-This is RPG Reactor's sole bundled character style. Add part descriptors under
-`parts/<category>/`, tagged with `psychronic` and the applicable gender tag.
+This is RPG Reactor's default bundled character style; Looseleaf is also
+bundled. Add part descriptors under `parts/<category>/`, tagged with
+`psychronic` and the applicable gender tag.
 
 Current state
 -------------

@@ -99,7 +99,7 @@ async function main(argv = process.argv.slice(2)) {
         signed: mode === 'publish' && ['windows', 'macos'].includes(target),
         nwjsVersion: release.NW_VERSION,
         releaseBuild: true,
-        starter: 'generated-clean',
+        starter: 'bundled-demo',
         sourceCommit: git(repoRoot, ['rev-parse', 'HEAD']),
         sourceDirty: Boolean(status),
         artifacts,

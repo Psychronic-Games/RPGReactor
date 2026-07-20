@@ -1,0 +1,12 @@
+{
+  "characterStyle": "psychronic",
+  "frameWidth": 144,
+  "frameHeight": 144,
+  "templateAlignX": "center",
+  "templateAlignY": "middle",
+  "gridEnabled": false,
+  "gridStep": 16,
+  "layerOrderByStyle": {
+    "psychronic": []
+  }
+}

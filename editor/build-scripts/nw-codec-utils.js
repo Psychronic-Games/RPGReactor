@@ -169,7 +169,6 @@ function installBinary(binaryPath, runtimeRoot, platform, metadata) {
         archiveSha256: metadata.expectedHash,
         archiveHashTrusted: metadata.hashTrusted === true,
         binarySha256: installedHash,
-        notice: 'Third-party codec binary. No patent license is granted by RPG Reactor.',
     }, null, 2));
     return destination;
 }

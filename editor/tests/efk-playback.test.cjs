@@ -242,10 +242,11 @@ function loadAGRegistry() {
 // editor runs.
 test('baked recipes render through the real AG animations', () => {
     const registry = loadAGRegistry();
-    assert.equal(registry.length, 75, 'release Animation Generator recipe count');
-    assert.equal(registry.some(animation => animation.id === 'portal'), false);
+    assert.equal(registry.length, 76, 'release Animation Generator recipe count');
+    assert.equal(registry.some(animation => animation.id === 'portal'), true);
     const g = loadRecipes();
     const baked = g.R.filter((r) => r.bake);
+    assert.equal(baked.length, 1, 'Portal is the baked Animation Generator recipe');
     for (const recipe of baked) {
         const anim = registry.find((a) => a.id === recipe.bake.animationId);
         assert.ok(anim, `${recipe.id}: AG animation '${recipe.bake.animationId}' not found`);

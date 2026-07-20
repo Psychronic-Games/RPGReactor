@@ -10,8 +10,10 @@ function descriptor(id, category, tags) {
     return { id, category, tags, params: [], draw() {} };
 }
 
-test('Psychronic is the built-in default and project styles remain selectable', () => {
+test('Psychronic is the default while Looseleaf and project styles remain selectable', () => {
     const registry = [
+        descriptor('body-looseleaf', 'body', ['male', 'looseleaf']),
+        descriptor('hair-looseleaf', 'hair', ['male', 'looseleaf']),
         descriptor('body-project', 'body', ['male', 'project-style']),
         descriptor('hair-project', 'hair', ['male', 'project-style']),
         descriptor('shared-accessory', 'accessory', ['neutral']),
@@ -45,7 +47,14 @@ test('Psychronic is the built-in default and project styles remain selectable', 
         Array.from(generator._buildActiveParts(), part => part.descriptor.id),
         ['shared-accessory', 'body-psychronic', 'hair-psychronic']
     );
+    assert.equal(generator.activeLayerOrder.includes('body-looseleaf'), true);
     assert.equal(generator.activeLayerOrder.includes('body-project'), true);
+
+    generator._setCharacterStyle('looseleaf');
+    assert.deepEqual(
+        Array.from(generator._buildActiveParts(), part => part.descriptor.id),
+        ['body-looseleaf', 'hair-looseleaf', 'shared-accessory']
+    );
 
     generator._setCharacterStyle('project-style');
     assert.deepEqual(
@@ -55,29 +64,13 @@ test('Psychronic is the built-in default and project styles remain selectable', 
     assert.equal(generator.activeLayerOrder.includes('body-psychronic'), true);
 });
 
-test('project character JavaScript remains disabled until per-project trust is granted', () => {
+test('project JavaScript character parts load without a trust gate or warning banner', () => {
     const source = fs.readFileSync(
         path.join(editorRoot, 'src', 'forge', 'CharacterGenerator', 'CharacterGenerator.js'),
         'utf8'
     );
-    const CharacterGenerator = vm.runInNewContext(`${source}\nCharacterGenerator;`, {
-        console,
-        process,
-        require,
-        RR_CHARACTER_REGISTRY: []
-    });
-    const values = new Map();
-    const storage = {
-        getItem: key => values.get(key) ?? null,
-        setItem: (key, value) => values.set(key, value),
-        removeItem: key => values.delete(key)
-    };
-    const generator = new CharacterGenerator();
-    generator.projectPath = '/untrusted/project';
 
-    assert.equal(generator._isProjectCodeTrusted(storage), false);
-    assert.equal(generator._setProjectCodeTrusted(true, storage), true);
-    assert.equal(generator._isProjectCodeTrusted(storage), true);
-    assert.equal(generator._setProjectCodeTrusted(false, storage), true);
-    assert.equal(generator._isProjectCodeTrusted(storage), false);
+    assert.match(source, /this\._loadProjectProceduralParts\(existingIds\)/);
+    assert.doesNotMatch(source, /_isProjectCodeTrusted|_projectCodeTrustControlsHTML|trusted-project-code/);
+    assert.doesNotMatch(source, /Project JavaScript character parts are disabled|Only trust projects/);
 });

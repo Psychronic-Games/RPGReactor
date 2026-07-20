@@ -111,7 +111,7 @@ test('application shortcuts dispatch New, Open, Save, and Playtest', () => {
     assert.deepEqual(calls, ['new', 'open', 'save', 'playtest']);
 });
 
-test('File menu exposes all application commands and shortcut indicators', () => {
+test('application shell exposes menu commands and the responsive welcome screen', () => {
     const html = fs.readFileSync(path.join(editorRoot, 'index.html'), 'utf8');
     const fileMenu = html.match(/<div class="html-submenu" id="submenu-file"[\s\S]*?<\/div>\s*<\/div>\s*<div class="html-menu-item" data-menu="database"/);
     assert.ok(fileMenu, 'File submenu is present');
@@ -123,6 +123,34 @@ test('File menu exposes all application commands and shortcut indicators', () =>
     ]) {
         assert.match(fileMenu[0], new RegExp(`data-action="${action}"[\\s\\S]*?${shortcut.replace('+', '\\+')}`));
     }
+
+    const styles = fs.readFileSync(path.join(editorRoot, 'css', 'styles.css'), 'utf8');
+    const start = html.indexOf('<div id="welcome-screen">');
+    const end = html.indexOf('<!-- Editor UI - only shown when project is loaded -->', start);
+    const welcome = html.slice(start, end);
+
+    assert.ok(start >= 0 && end > start, 'welcome markup is present');
+    assert.doesNotMatch(welcome, /data-i18n="app\.title"/, 'the logo is not followed by a duplicate title');
+    assert.match(welcome, /class="welcome-button rr-button-primary"/);
+    assert.match(welcome, /class="welcome-button rr-button"/);
+    assert.match(welcome, /class="welcome-cards"/);
+
+    for (const href of [
+        'https://psychronic.itch.io',
+        'https://store.steampowered.com/developer/psychronic',
+        'https://github.com/Psychronic-Games?tab=repositories',
+        'https://www.youtube.com/@PsychronicGames',
+        'https://www.youtube.com/@RarelyTypicalPlayers',
+        'https://discord.gg/hXacc38PTw',
+    ]) {
+        assert.match(welcome, new RegExp(`href="${href.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"[^>]*target="_blank"`));
+    }
+
+    assert.match(styles, /#welcome-screen\s*\{[\s\S]*?overflow-y:\s*auto;/);
+    assert.match(styles, /\.welcome-cards\s*\{[\s\S]*?grid-template-columns:/);
+    assert.match(styles, /@media \(max-width: 720px\)/);
+    assert.match(styles, /@media \(max-height: 760px\) and \(min-width: 721px\)/);
+    assert.match(styles, /\.welcome-button\.rr-button-primary[\s\S]*?var\(--radius-lg\)/);
 });
 
 test('F5 confirms before performing an uncached application reload', async () => {
