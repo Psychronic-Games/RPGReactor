@@ -513,3 +513,17 @@ test('an above-characters event billboard rides the above pass', () => {
     assert.match(sync, /depthTest = !above/, 'depth-free over the star tiles');
     assert.match(sprites, /mapHasAboveEvents/, 'the above pass exists for such maps');
 });
+
+test('character billboards take the same footward step as tile cut-outs', () => {
+    // Tile cut-outs plant their base half a cell towards the camera; a
+    // billboard anchored at plain tile centre drifted off the tile art it
+    // was authored over as the camera crossed the map, and only agreed at
+    // dead centre — a console screen event slid off its tile-drawn pedestal.
+    const core3d = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_3d.js'), 'utf8');
+    const at = core3d.indexOf('_updateCharacterBillboard = function');
+    const body = core3d.slice(at, core3d.indexOf('_clearCharacterBillboards = function', at));
+    assert.match(body, /camera\.matrixWorld/);
+    assert.match(body, /\* 0\.5;/, 'half a cell, matching the shader footward');
+    assert.match(body, /_realX \+ 0\.5 \+ footX/, 'applied to the anchor');
+    assert.match(body, /_realY \+ 0\.5 \+ footZ/);
+});

@@ -7409,9 +7409,28 @@ Reactor3D.MapScene.prototype._updateCharacterBillboard = function(holder, sprite
         Math.round(character._realX),
         Math.round(character._realY)
     );
-    holder.object.position.set(character._realX + 0.5, ground, character._realY + 0.5);
     const viewport = Reactor3D.viewport();
-    Reactor3D.aimCharacterBillboard(holder.object, viewport && viewport.camera && viewport.camera());
+    const camera = viewport && viewport.camera && viewport.camera();
+    // The same half-cell step towards the camera the tile cut-out shader
+    // takes (`footward`), for the same reason — and, more than that, so a
+    // character billboard and the tile art on its cell keep the alignment
+    // they were authored with in 2D. Without it a console screen event
+    // drifted off its tile-drawn pedestal as the camera crossed the map:
+    // the pedestal's anchor slid with the view while the event's stood
+    // still, and only agreed at dead centre.
+    let footX = 0;
+    let footZ = 0;
+    if (camera && camera.matrixWorld) {
+        const e = camera.matrixWorld.elements;
+        const reach = Math.hypot(e[8], e[10]);
+        if (reach > 0.0001) {
+            footX = (e[8] / reach) * 0.5;
+            footZ = (e[10] / reach) * 0.5;
+        }
+    }
+    holder.object.position.set(
+        character._realX + 0.5 + footX, ground, character._realY + 0.5 + footZ);
+    Reactor3D.aimCharacterBillboard(holder.object, camera);
 };
 
 Reactor3D.MapScene.prototype._clearCharacterBillboards = function() {
