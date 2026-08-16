@@ -7195,6 +7195,11 @@ Game_CharacterBase.prototype._reactorCanFace = function(d) {
 
 Game_CharacterBase.prototype.setDirection = function(d) {
     if (!this.isDirectionFixed() && d && this._reactorCanFace(d)) {
+        // A 3D model's mesh eases into the new facing over several frames;
+        // the stamp lets its footprint cover the swing while it plays out.
+        if (d !== this._direction && typeof Graphics !== "undefined") {
+            this._reactorTurnStamp = Graphics.frameCount;
+        }
         this._direction = d;
         this._reactorDir8 = d;
     }

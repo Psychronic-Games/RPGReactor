@@ -407,3 +407,48 @@ test('billboards depth-test as if standing upright at their anchor', () => {
     assert.match(matBody, /rrVerticalPos/, 'tile cut-outs build the vertical twin');
     assert.match(matBody, /#include <project_vertex>/, 'and override depth after projection');
 });
+
+test('a turning model must clear the disc its corners sweep', () => {
+    const previousMap = global.$dataMap;
+    const previousGraphics = global.Graphics;
+    const event = {
+        _x: 5, _y: 5, _realX: 5, _realY: 5, _pageIndex: 0,
+        event: () => ({ id: 1 }), eventId: () => 1, direction: () => 6
+    };
+    global.$dataMap = { reactor3d: { events: { 1: { 0: { name: 'Car', size: 4 } } } } };
+    const spec = Reactor3D.characterModelSpec(event);
+    const key = Reactor3D.modelCacheKey(spec.name, spec.ext, spec.file);
+    const previousEntry = Reactor3D._glbCache[key];
+    Reactor3D._glbCache[key] = { template: { userData: { glbSize: { x: 1, y: 1, z: 4 } } } };
+    try {
+        // halfX 0.5, halfZ 2 -> corner radius ~2.06, sweep blocks r < 2.56.
+        assert.equal(Number(Reactor3D.eventModelSweepRadius(event, spec).toFixed(2)), 2.06);
+
+        // (6,6) is outside BOTH end rectangles of an east<->south turn but
+        // inside the sweep arc — the exact blind spot a bystander stood in.
+        const bystander = { _x: 6, _y: 6 };
+        assert.equal(Reactor3D.eventModelWouldOverlap(event, 5, 5, bystander), false,
+            'not overlapped while the car holds its facing');
+        assert.equal(Reactor3D.eventModelWouldOverlap(event, 5, 5, bystander, 2), true,
+            'a turning step sweeps the diagonal');
+        assert.equal(Reactor3D.eventModelWouldOverlap(event, 5, 5, bystander, 8), true,
+            'in either swing direction');
+        const far = { _x: 9, _y: 9 };
+        assert.equal(Reactor3D.eventModelWouldOverlap(event, 5, 5, far, 2), false,
+            'outside the sweep the turn is free');
+
+        // While the mesh is still easing, the footprint covers the arc, so a
+        // character cannot step into the swing; it frees once settled.
+        global.Graphics = { frameCount: 100 };
+        event._reactorTurnStamp = 98;
+        assert.equal(Reactor3D.eventModelOccupies(event, 6, 6), true, 'mid-swing blocked');
+        event._reactorTurnStamp = 100 - Reactor3D.MODEL_TURN_SWEEP_FRAMES - 1;
+        assert.equal(Reactor3D.eventModelOccupies(event, 6, 6), false, 'settled swing frees');
+    } finally {
+        Reactor3D._glbCache[key] = previousEntry;
+        if (previousMap === undefined) delete global.$dataMap;
+        else global.$dataMap = previousMap;
+        if (previousGraphics === undefined) delete global.Graphics;
+        else global.Graphics = previousGraphics;
+    }
+});

@@ -79,4 +79,5 @@ test('the Key and its tool palettes stay pinned while the sheet scrolls', () => 
     // A sheet is up to 32 display rows; without stickiness the brushes were a
     // full scroll away from the tiles being painted.
     assert.match(source, /id="flag-mode-key"[^>]*position: sticky; top: 0/);
+    assert.match(source, /id="tile3d-preview"[^>]*position: sticky; top: 0/);
 });

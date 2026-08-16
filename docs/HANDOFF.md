@@ -10,7 +10,7 @@ Last updated 2026-08-16.
   READMEs, and `[Unreleased - 0.98.2]` sections in both changelogs.
 - The 0.98.1 Web 3D, renderer-lifecycle, PIXI filter, and camera-pan changes are
   preserved in the immutable `v0.98.1` tag. New reports belong to 0.98.2.
-- Current validation is **1,387 passing tests** with no failures, skips, or
+- Current validation is **1,388 passing tests** with no failures, skips, or
   TODOs. Syntax and `git diff --check` also pass.
 
 ## Event 3D Models (active, 2026-08-15)
@@ -88,8 +88,13 @@ Open questions worth not re-fighting blindly:
   true GPU depth only?
 - `size` 9 on the Buick is the longest-axis fit. The collision box after load
   uses the real aspect; before the GLB arrives it is a square of `size`.
-- The visual swing at corners briefly lags the discrete collision footprint;
-  acceptable now, worth revisiting if models get much longer.
+- Turn collision now covers the swing: a turning step and a turn in place
+  must clear the sweep disc (`eventModelSweepRadius`, corner diagonal) in
+  both swing directions, and `eventModelOccupies` keeps the arc solid for
+  `MODEL_TURN_SWEEP_FRAMES` after a facing change so nothing steps into a
+  playing swing. Verified live: a diagonal bystander outside both end
+  rectangles blocks the turn either way, the turn frees when clear, and
+  mid-swing entry is blocked then released.
 
 ### Key files
 

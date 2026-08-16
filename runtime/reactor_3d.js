@@ -42,6 +42,10 @@ Reactor3D.SIDECAR_SUFFIX = ".r3d.json";
 // quarter second. Facing itself changes instantly — this only paces the mesh.
 Reactor3D.MODEL_TURN_SPEED = 0.1;
 
+// How long a footprint keeps covering the turn's sweep arc after a facing
+// change: a half-turn at MODEL_TURN_SPEED plus a couple of frames of margin.
+Reactor3D.MODEL_TURN_SWEEP_FRAMES = Math.ceil(Math.PI / Reactor3D.MODEL_TURN_SPEED) + 4;
+
 Reactor3D._loadPromise = null;
 Reactor3D._viewport = null;
 Reactor3D._unsupportedReason = null;
@@ -6249,9 +6253,18 @@ Reactor3D.eventModelContains = function(character, foot, x, y) {
 Reactor3D.eventModelCanFace = function(character, direction) {
     const spec = this.characterModelSpec(character);
     if (!spec || !character) return true;
-    const foot = this.eventModelFootprint(character, spec, this.dir8Yaw(direction));
+    // The mesh eases through every angle on the way to the new facing, so a
+    // turn in place must clear the disc its corners sweep, not only the
+    // destination rectangle. A half-turn sweeps it twice over.
+    const turning = this.dir8Yaw(direction) !== this.characterModelYaw(character);
+    const blockedBy = (x, y) => {
+        const foot = this.eventModelFootprint(character, spec, this.dir8Yaw(direction));
+        if (this.eventModelContains(character, foot, x, y)) return true;
+        return turning
+            && this.eventModelSweepHits(character, spec, character._x, character._y, x, y);
+    };
     if (typeof $gamePlayer !== "undefined" && $gamePlayer
-        && this.eventModelContains(character, foot, $gamePlayer._x, $gamePlayer._y)) {
+        && blockedBy($gamePlayer._x, $gamePlayer._y)) {
         return false;
     }
     const map = typeof $gameMap !== "undefined" ? $gameMap : null;
@@ -6262,9 +6275,20 @@ Reactor3D.eventModelCanFace = function(character, direction) {
         if (!other || other === character) continue;
         if (other.isThrough && other.isThrough()) continue;
         if (other.isNormalPriority && !other.isNormalPriority()) continue;
-        if (this.eventModelContains(character, foot, other._x, other._y)) return false;
+        if (blockedBy(other._x, other._y)) return false;
     }
     return true;
+};
+
+/**
+ * The circle a model's corners trace when it turns: the radius of its
+ * unrotated footprint's diagonal. Rotation-invariant, so it is measured at
+ * yaw zero — a rotated footprint's halves are axis projections and their
+ * diagonal overstates the body.
+ */
+Reactor3D.eventModelSweepRadius = function(character, spec) {
+    const foot = this.eventModelFootprint(character, spec, 0);
+    return Math.hypot(foot.halfX, foot.halfZ);
 };
 
 Reactor3D.eventModelWouldOverlap = function(character, x, y, other, direction) {
@@ -6277,9 +6301,13 @@ Reactor3D.eventModelWouldOverlap = function(character, x, y, other, direction) {
     // one let a long vehicle rotate 90 degrees mid-step straight over a
     // standing character.
     const yaws = [this.characterModelYaw(character)];
+    let turning = false;
     if (direction) {
         const moveYaw = this.dir8Yaw(direction);
-        if (moveYaw !== yaws[0]) yaws.push(moveYaw);
+        if (moveYaw !== yaws[0]) {
+            yaws.push(moveYaw);
+            turning = true;
+        }
     }
     const ox = character._x;
     const oy = character._y;
@@ -6295,7 +6323,25 @@ Reactor3D.eventModelWouldOverlap = function(character, x, y, other, direction) {
     }
     character._x = ox;
     character._y = oy;
+    // A turn does not jump between its two end rectangles — the mesh eases
+    // through every angle between them, and a long body's corners trace an
+    // arc that reaches beyond both. So a turning step must also clear the
+    // disc those corners sweep, at the tile it leaves and the tile it
+    // enters; without this a bystander standing diagonally off the car was
+    // inside neither end rectangle and still swept through.
+    if (!hit && turning) {
+        hit = this.eventModelSweepHits(character, spec, x, y, other._x, other._y)
+            || this.eventModelSweepHits(character, spec, ox, oy, other._x, other._y);
+    }
     return hit;
+};
+
+/** Whether (x, y) lies inside the turn sweep disc centred at (cx, cy). */
+Reactor3D.eventModelSweepHits = function(character, spec, cx, cy, x, y) {
+    const map = typeof $gameMap !== "undefined" ? $gameMap : null;
+    const dx = map && map.deltaX ? map.deltaX(x, cx) : x - cx;
+    const dy = map && map.deltaY ? map.deltaY(y, cy) : y - cy;
+    return Math.hypot(dx, dy) < this.eventModelSweepRadius(character, spec) + 0.5 - 1e-6;
 };
 
 /** Whether moving the model event's center to (x, y) would cover another solid event. */
@@ -6343,7 +6389,19 @@ Reactor3D.eventModelOccupies = function(character, x, y) {
     if (!character) return false;
     const spec = this.characterModelSpec(character);
     if (!spec) return character._x === x && character._y === y;
-    return this.eventModelContains(character, this.eventModelFootprint(character, spec), x, y);
+    if (this.eventModelContains(character, this.eventModelFootprint(character, spec), x, y)) {
+        return true;
+    }
+    // While the mesh is still easing into a new facing, the body occupies
+    // the swing arc, not just the settled rectangle — without this a
+    // character could step into the sweep during the quarter second the
+    // turn takes and be passed through.
+    if (character._reactorTurnStamp != null && typeof Graphics !== "undefined"
+        && Graphics.frameCount - character._reactorTurnStamp < this.MODEL_TURN_SWEEP_FRAMES) {
+        return this.eventModelSweepHits(character, spec, character._x, character._y, x, y)
+            || this.eventModelSweepHits(character, spec, character._realX, character._realY, x, y);
+    }
+    return false;
 };
 
 Reactor3D.applyEventModelPose = function(object, spec, direction, options) {

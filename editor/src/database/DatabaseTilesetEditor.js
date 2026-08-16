@@ -488,7 +488,10 @@ class DatabaseTilesetEditor {
                             <div id="compact-tileset-canvas-container" style="max-width: 100%;">
                                 <p style="color: var(--color-text-muted); font-size: 10px;">${tt('Click a layer on the left to view')}</p>
                             </div>
-                            <div id="tile3d-preview" style="flex: 0 0 168px; align-self: flex-start;"></div>
+                            <!-- Sticky like the Key beside it: the 3D preview
+                                 answers a click anywhere on the sheet, so it
+                                 must be visible from anywhere on the sheet. -->
+                            <div id="tile3d-preview" style="flex: 0 0 168px; align-self: flex-start; position: sticky; top: 0; max-height: 100%; overflow-y: auto;"></div>
                         </div>
                     </div>
                 </div>
