@@ -24,6 +24,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Effekseer effects no longer draw black slabs where they meant distortion or shading.** Effects with distortion or darkening layers sample a captured background; on the transparent overlay canvas those layers had nothing to sample and rendered as solid black — worst on 3D maps, where the whole scene lives on a canvas Effekseer never saw. The composited scene (3D canvas, then the game canvas) is now blitted into the overlay, captured into Effekseer's background texture, and cleared away again before each frame's effects draw.
+
 - **Editing an event no longer strips its model's texture.** Opening the event editor rebuilt the model spec for its pending pages and dropped the `texture` field, so pressing OK after any change — movement, a switch, anything — rewrote the sidecar without the colour map and the model stood gray in game.
 
 - **A plugin that replaces `Tilemap.prototype.update` no longer blanks the tile layer.** MultiTweaks' "Tilemap animation speed" option installs a copy of the stock MZ update body; PIXI v5 tolerated that because it invoked `updateTransform` itself during render, but the PIXI 8 runtime runs repaint from its update tail, so the replacement left `_addAllSpots` unreachable — a black map with sprites, windows, and a clean console. `Tilemap.initialize` now installs a v8 `onRender` fallback that runs the shared `_prepareV8Frame` when the frame reaches render unprepared; a frame stamp keeps preparation single-shot so the Project3 double-preparation seams cannot return.

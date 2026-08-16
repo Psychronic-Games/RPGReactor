@@ -124,3 +124,24 @@ test('a texture source with no picture is not uploaded', () => {
     // still be handled normally.
     assert.match(body, /uploadMethodId === "image"/);
 });
+
+test('effekseer effects sample the real scene as their background', () => {
+    const fs = require('node:fs');
+    const path = require('node:path');
+    const repoRoot = path.resolve(__dirname, '..', '..');
+    const core = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_core.js'), 'utf8');
+    const sprites = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_sprites.js'), 'utf8');
+    // Distortion and darkening layers sample a captured background; on the
+    // transparent overlay canvas that background was empty, so those layers
+    // drew solid black slabs over the map — worst on 3D maps, where the
+    // scene lives on a canvas Effekseer never saw. The scene is blitted into
+    // the overlay, captured, and cleared before effects draw.
+    assert.match(core, /Graphics\.blitSceneBehindEffects = function/);
+    assert.match(core, /getElementById\("reactor3dCanvas"\)/, 'the 3D canvas is part of the background');
+    assert.match(sprites, /efx\.captureBackground\(0, 0,/);
+    // The capture happens before the queued effect draws and is cleared away
+    // so the blitted scene itself never shows on the overlay.
+    const capture = sprites.indexOf('efx.captureBackground');
+    const draw = sprites.indexOf('inst._doEffekseerDraw(renderer)');
+    assert.ok(capture > 0 && draw > capture, 'capture precedes the effect draw');
+});

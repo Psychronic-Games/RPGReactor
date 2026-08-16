@@ -1754,6 +1754,85 @@ window.testEffekseerOverlay = function(effectName) {
     tick();
 };
 
+/**
+ * Draw the composited scene — the 3D canvas when a map renders in 3D, then
+ * the game canvas — into the Effekseer overlay's framebuffer. Effects with
+ * distortion or darkening layers sample a captured background; on its own
+ * transparent overlay canvas that background is empty, so those layers
+ * rendered as solid black. The scene is blitted, captured into Effekseer's
+ * background texture, and cleared away again before the effects draw.
+ */
+Graphics.blitSceneBehindEffects = function() {
+    const gl = this._effekseerGL;
+    const overlay = this._effekseerCanvas;
+    if (!gl || !overlay) return false;
+    if (!this._efxBlit) {
+        const compile = (type, src) => {
+            const shader = gl.createShader(type);
+            gl.shaderSource(shader, src);
+            gl.compileShader(shader);
+            return shader;
+        };
+        const program = gl.createProgram();
+        gl.attachShader(program, compile(gl.VERTEX_SHADER,
+            "attribute vec2 aPos; varying vec2 vUv;" +
+            "void main() { vUv = aPos * 0.5 + 0.5; gl_Position = vec4(aPos, 0.0, 1.0); }"));
+        gl.attachShader(program, compile(gl.FRAGMENT_SHADER,
+            "precision mediump float; varying vec2 vUv; uniform sampler2D uTex;" +
+            "void main() { gl_FragColor = texture2D(uTex, vUv); }"));
+        gl.linkProgram(program);
+        if (!gl.getProgramParameter(program, gl.LINK_STATUS)) return false;
+        const buffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+        this._efxBlit = {
+            program,
+            buffer,
+            aPos: gl.getAttribLocation(program, "aPos"),
+            uTex: gl.getUniformLocation(program, "uTex"),
+            texture: gl.createTexture()
+        };
+    }
+    const sources = [];
+    const three = document.getElementById("reactor3dCanvas");
+    if (three && three.width > 0 && three.style.display !== "none"
+        && three.style.visibility !== "hidden") {
+        sources.push(three);
+    }
+    if (this._canvas) sources.push(this._canvas);
+    if (!sources.length) return false;
+    const blit = this._efxBlit;
+    gl.useProgram(blit.program);
+    gl.bindBuffer(gl.ARRAY_BUFFER, blit.buffer);
+    gl.enableVertexAttribArray(blit.aPos);
+    gl.vertexAttribPointer(blit.aPos, 2, gl.FLOAT, false, 0, 0);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, blit.texture);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.uniform1i(blit.uTex, 0);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+    gl.disable(gl.DEPTH_TEST);
+    gl.enable(gl.BLEND);
+    // Both source canvases hold premultiplied alpha.
+    gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+    let drew = false;
+    for (const source of sources) {
+        try {
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, source);
+        } catch (error) {
+            continue;
+        }
+        gl.drawArrays(gl.TRIANGLES, 0, 3);
+        drew = true;
+    }
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+    gl.disable(gl.BLEND);
+    return drew;
+};
+
 Graphics._createEffekseerContext = function() {
     if (!window.effekseer) return;
     try {

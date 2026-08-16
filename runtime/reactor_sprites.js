@@ -1584,6 +1584,17 @@ Sprite_Animation.renderActive = function(renderer) {
     }
     const list = Sprite_Animation._pendingRenders;
     if (list.length === 0) return;
+    // Hand Effekseer the scene as its background before the effects draw:
+    // distortion and darkening layers sample it, and on an otherwise
+    // transparent overlay they rendered as solid black slabs.
+    const efx = Graphics.effekseer;
+    if (efxGL && Graphics._effekseerCanvas && efx && efx.captureBackground
+        && Graphics.blitSceneBehindEffects && Graphics.blitSceneBehindEffects()) {
+        efx.captureBackground(0, 0,
+            Graphics._effekseerCanvas.width, Graphics._effekseerCanvas.height);
+        efxGL.clearColor(0, 0, 0, 0);
+        efxGL.clear(efxGL.COLOR_BUFFER_BIT | efxGL.DEPTH_BUFFER_BIT);
+    }
     for (const inst of list) {
         try { inst._doEffekseerDraw(renderer); } catch (e) {}
     }
