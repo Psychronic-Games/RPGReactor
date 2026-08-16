@@ -81,6 +81,16 @@ test('web distribution uses the bundled Demo, staged runtime, and current artifa
             ['-p', archive, 'project/audio/bgm/Psychronic - Acoustic Circuits.ogg'],
             { maxBuffer: 4 * 1024 * 1024 }
         ).length > 0);
+        // Itch.io caps HTML5 uploads at 1000 files; the bundled library is
+        // trimmed to hold a healthy margin under it.
+        const entries = execFileSync('unzip', ['-Z1', archive], { encoding: 'utf8', maxBuffer: 8 * 1024 * 1024 })
+            .split('\n').filter(line => line && !line.endsWith('/'));
+        assert.ok(entries.length <= 900,
+            `web zip holds ${entries.length} files; itch.io rejects more than 1000`);
+        assert.ok(entries.some(line => line === 'project/img/battlehud/Face_1.png'),
+            'faces for defined actors survive the trim');
+        assert.ok(!entries.some(line => line === 'project/img/battlehud/Face_286.png'),
+            'faces for undefined actors are trimmed');
         const notices = execFileSync('unzip', ['-p', archive, 'THIRD_PARTY_NOTICES.md'], { encoding: 'utf8' });
         assert.match(notices, /stb_vorbis Basis/);
         assert.match(notices, /Vitaly Puzrin and Andrei Tuputcyn/);

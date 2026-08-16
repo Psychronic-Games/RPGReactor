@@ -818,6 +818,52 @@ function copyWebProject(source, destination, relativePath = '') {
     }
 }
 
+/**
+ * Trim the bundled web project's asset library to what its own data
+ * actually references. Browser-game storefronts cap uploads at 1000
+ * files, and the bulk of the zip was library stock the demo never touches: MOG
+ * battle-hud face skins for 280 actors when the project defines eight,
+ * a hundred enemy battlers behind five referenced ones, and three audio
+ * folders of unreferenced tracks. The desktop editor keeps the full
+ * library; only the web bundle slims, and pickers list what exists.
+ */
+function trimWebProject(projectRoot, log) {
+    const dataRoot = path.join(projectRoot, 'data');
+    let blob = '';
+    for (const file of fs.readdirSync(dataRoot)) {
+        if (file.endsWith('.json')) blob += fs.readFileSync(path.join(dataRoot, file), 'utf8');
+    }
+    const pluginsPath = path.join(projectRoot, 'js', 'reactor_plugins.js');
+    if (fs.existsSync(pluginsPath)) blob += fs.readFileSync(pluginsPath, 'utf8');
+    const referenced = name =>
+        blob.includes('"' + name + '"') || blob.includes("'" + name + "'");
+    let removed = 0;
+    const trimDir = (relative, keep) => {
+        const dir = path.join(projectRoot, relative);
+        if (!fs.existsSync(dir)) return;
+        for (const file of fs.readdirSync(dir)) {
+            const full = path.join(dir, file);
+            if (!fs.statSync(full).isFile()) continue;
+            if (keep(file)) continue;
+            fs.rmSync(full);
+            removed++;
+        }
+    };
+    // Only provably dead weight goes: hud faces for actors the project
+    // does not define, source .psd files, and stock enemy battlers nothing
+    // references. Audio and fog libraries stay — they are the browsing
+    // palette (and the soundtrack) of the web sandbox.
+    const actors = JSON.parse(fs.readFileSync(path.join(dataRoot, 'Actors.json'), 'utf8'));
+    const actorIds = new Set(actors.filter(Boolean).map(actor => String(actor.id)));
+    trimDir('img/battlehud', file => {
+        if (/\.psd$/i.test(file)) return false;
+        const face = /^Face_(\d+)\.png$/i.exec(file);
+        return face ? actorIds.has(face[1]) : true;
+    });
+    trimDir('img/enemies', file => referenced(path.parse(file).name));
+    log(`Trimmed ${removed} unreferenced library files from the bundled web project.`);
+}
+
 function refreshStarterRuntime(runtimeRoot, projectRoot) {
     const jsRoot = path.join(projectRoot, 'js');
     const pluginConfigPath = path.join(jsRoot, 'reactor_plugins.js');
@@ -910,6 +956,7 @@ function buildWeb(stageRoot, stagingDir) {
     fs.copyFileSync(path.join(stageRoot, 'LICENSE'), path.join(webRoot, 'LICENSE'));
     fs.copyFileSync(path.join(stageRoot, 'runtime', 'libs', 'pixi.js'), path.join(webRoot, 'libs', 'pixi.js'));
     copyWebProject(templateRoot, path.join(webRoot, 'project'));
+    trimWebProject(path.join(webRoot, 'project'), log);
     refreshStarterRuntime(path.join(stageRoot, 'runtime'), path.join(webRoot, 'project'));
     patchWebProject(path.join(webRoot, 'project'));
 
