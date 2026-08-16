@@ -463,13 +463,26 @@ class ModelGraphicPicker {
                 point.add(normal.multiplyScalar(0.035));
             }
         } else {
-            // A near miss still lands. Sparse meshes — foliage, struts —
-            // let a ray slip between triangles at the very spot the eye
-            // says is on the model; swallowing that click left the mode
-            // armed and the rings away, which read as placement refusing
-            // to work. The ray's entry into the model's bounds stands in.
+            // An armed click ALWAYS lands — a canvas click in this mode
+            // means nothing but "this side". Sparse meshes let a ray slip
+            // between triangles at spots the eye says are on the model,
+            // and clicks out where the rings circle sit past the mesh
+            // entirely; swallowing those left the mode armed and the
+            // rings away, which read as placement refusing to work. The
+            // ray's entry into the model's bounds stands in; a ray that
+            // misses even those places on the bounds in its direction.
             const bounds = new THREE.Box3().setFromObject(this._object);
             point = raycaster.ray.intersectBox(bounds, new THREE.Vector3());
+            if (!point) {
+                const centre = bounds.getCenter(new THREE.Vector3());
+                const dir = raycaster.ray
+                    .closestPointToPoint(centre, new THREE.Vector3())
+                    .sub(centre);
+                if (dir.lengthSq() < 1e-8) dir.set(0, 0, 1);
+                const reach = bounds.getBoundingSphere(new THREE.Sphere()).radius;
+                point = centre.clone().add(dir.normalize().multiplyScalar(reach));
+                bounds.clampPoint(point, point);
+            }
         }
         if (!point) return;
         const local = this._object.worldToLocal(point);

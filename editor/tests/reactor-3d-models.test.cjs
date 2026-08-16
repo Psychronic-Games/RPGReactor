@@ -743,6 +743,12 @@ test('the picker poses through rings around the model', () => {
     // click kept the mode armed with the rings away — placement looked
     // refused. The ray's entry into the model's bounds stands in.
     assert.match(source, /raycaster\.ray\.intersectBox\(bounds, new THREE\.Vector3\(\)\)/);
+    // And a click past the bounds entirely — out where the rings circle —
+    // still means "this side": the ray's nearest approach to the model
+    // gives the direction, clamped onto the bounds surface. An armed
+    // canvas click is never swallowed.
+    assert.match(source, /closestPointToPoint\(centre, new THREE\.Vector3\(\)\)/);
+    assert.match(source, /bounds\.clampPoint\(point, point\)/);
     assert.match(source, /this\._dragPoseRing\(e, ringGrab\)/, 'drag follows the grabbed ring');
     // The turn is the signed pointer angle about the ring's own plane, so
     // exactly one euler moves per drag.
