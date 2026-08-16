@@ -391,3 +391,19 @@ test('the rendered model turns at a paced rate instead of pivoting in one frame'
     assert.match(body, /Math\.atan2\(\s*Math\.sin\(targetYaw - holder\.smoothYaw\),/,
         'the swing takes the shortest arc');
 });
+
+test('billboards depth-test as if standing upright at their anchor', () => {
+    // The lean is a drawing device; depth-testing the leaned geometry buried
+    // a sprite's head in the mesh behind it. Depth comes from a vertical twin
+    // of each vertex, so in-front/behind settles per pixel by ground row.
+    const core3d = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_3d.js'), 'utf8');
+    assert.match(core3d, /Reactor3D\.straightenBillboardDepth = function/);
+    const chars = core3d.indexOf('syncCharacterBillboards = function');
+    const charBody = core3d.slice(chars, core3d.indexOf('_updateCharacterBillboard = function', chars));
+    assert.match(charBody, /straightenBillboardDepth\(material\)/,
+        'character billboards route through the depth straightener');
+    const mat = core3d.indexOf('Reactor3D.billboardMaterial = function');
+    const matBody = core3d.slice(mat, core3d.indexOf('\n};', core3d.indexOf('onBeforeCompile', mat)));
+    assert.match(matBody, /rrVerticalPos/, 'tile cut-outs build the vertical twin');
+    assert.match(matBody, /#include <project_vertex>/, 'and override depth after projection');
+});

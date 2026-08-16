@@ -4377,6 +4377,48 @@ Reactor3D.billboardTiltFor = function(mapData) {
     return Math.max(0, Math.min(1, asked));
 };
 
+/**
+ * Write a leaned billboard's depth as if it stood bolt upright at its anchor.
+ *
+ * The lean is a drawing device: the art tips towards the camera so it is not
+ * foreshortened to a sliver. But the GPU depth-tests the leaned geometry,
+ * whose upper half physically enters the space of whatever stands on the
+ * tiles behind it — a sprite in front of a 3D car lost its head to the car's
+ * body. Rays cross a *vertical* plane at the anchor in true near/far order
+ * against every other surface, so the vertex shader keeps the leaned clip
+ * position for x/y and takes z from the same vertex un-leaned. In front,
+ * touching, and behind then settle per pixel with no sorting rules.
+ *
+ * For meshes posed on the CPU (character billboards) the vertical twin is
+ * rebuilt from the model matrix: column 0 is the scaled right axis, column
+ * 1's length is the height, column 3 the anchor.
+ */
+Reactor3D.straightenBillboardDepth = function(material) {
+    if (!material || material.__reactorStraightDepth) return material;
+    material.__reactorStraightDepth = true;
+    const earlier = material.onBeforeCompile;
+    material.onBeforeCompile = function(shader, renderer) {
+        if (typeof earlier === "function") earlier.call(this, shader, renderer);
+        shader.vertexShader = shader.vertexShader.replace(
+            "#include <project_vertex>",
+            `
+            #include <project_vertex>
+            {
+                vec3 rrRight = modelMatrix[0].xyz;
+                float rrHeight = length(modelMatrix[1].xyz);
+                vec3 rrAnchor = modelMatrix[3].xyz;
+                vec3 rrVertical = rrAnchor
+                    + rrRight * position.x
+                    + vec3(0.0, rrHeight, 0.0) * position.y;
+                vec4 rrClip = projectionMatrix * viewMatrix * vec4(rrVertical, 1.0);
+                gl_Position.z = rrClip.z / max(rrClip.w, 1e-6) * gl_Position.w;
+            }
+            `
+        );
+    };
+    return material;
+};
+
 Reactor3D.billboardMaterial = function(texture, edgeHinged) {
     // The ordinary tile material, with only the vertex position replaced.
     //
@@ -4488,6 +4530,24 @@ Reactor3D.billboardMaterial = function(texture, edgeHinged) {
                 + footward
                 + billboardRight * offset.x
                 + billboardUp * offset.y;
+
+            // The same vertex bolt upright: depth comes from this twin (see
+            // straightenBillboardDepth) so a leaning cut-out orders against
+            // real meshes by where it stands, not where its head tips.
+            vec3 rrVerticalPos = position
+                + footward
+                + billboardRight * offset.x
+                + vec3(0.0, 1.0, 0.0) * offset.y;
+            `
+        );
+        shader.vertexShader = shader.vertexShader.replace(
+            "#include <project_vertex>",
+            `
+            #include <project_vertex>
+            {
+                vec4 rrClip = projectionMatrix * modelViewMatrix * vec4(rrVerticalPos, 1.0);
+                gl_Position.z = rrClip.z / max(rrClip.w, 1e-6) * gl_Position.w;
+            }
             `
         );
     };
@@ -7171,6 +7231,14 @@ Reactor3D.MapScene.prototype.syncCharacterBillboards = function(sprites) {
                 side: THREE.DoubleSide,
                 fog: false
             });
+            // The quad is leaned towards the camera, which tips its upper half
+            // into whatever stands on the tiles behind it — a sprite in front
+            // of a car lost its head to the car's depth buffer. Depth is
+            // written as if the quad stood bolt upright at its anchor instead:
+            // rays cross a vertical plane in true north/south order, so in
+            // front and behind settle per pixel against any mesh while the
+            // drawn shape keeps its lean.
+            Reactor3D.straightenBillboardDepth(material);
             const object = new THREE.Mesh(geometry, material);
             group.add(object);
             holder = { canvas, texture, geometry, object, stamp: "" };

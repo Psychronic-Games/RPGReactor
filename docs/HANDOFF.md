@@ -10,7 +10,7 @@ Last updated 2026-08-16.
   READMEs, and `[Unreleased - 0.98.2]` sections in both changelogs.
 - The 0.98.1 Web 3D, renderer-lifecycle, PIXI filter, and camera-pan changes are
   preserved in the immutable `v0.98.1` tag. New reports belong to 0.98.2.
-- Current validation is **1,378 passing tests** with no failures, skips, or
+- Current validation is **1,379 passing tests** with no failures, skips, or
   TODOs. Syntax and `git diff --check` also pass.
 
 ## Event 3D Models (active, 2026-08-15)
@@ -64,6 +64,15 @@ the work to pick up first. Demo: Map001 event 22 ("Tank"), Buick at
   position". `syncCharacterModels` eases the visible yaw along the shortest
   arc at `MODEL_TURN_SPEED` (0.1 rad/frame); facing and collision stay
   instant. Owner confirmed the smooth turn feels right.
+- A sprite in front of the car lost its head to the car's depth buffer: the
+  billboard lean (a drawing device against foreshortening) tips a quad's
+  upper half into the mesh behind it, and per-pixel depth honestly buried
+  it. `straightenBillboardDepth` writes each vertex's depth from a vertical
+  twin at the anchor — screen shape keeps the lean, depth is the upright
+  quad — applied to character billboards and the tile cut-out material.
+  Rays cross a vertical plane in true near/far order, so in front / behind
+  settles per pixel against any mesh with no sort rules. Verified south
+  (fully in front) and north (correctly clear) of the parked Buick.
 
 ### What is still off
 
