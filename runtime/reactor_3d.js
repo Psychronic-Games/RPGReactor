@@ -4416,20 +4416,28 @@ Reactor3D.billboardTiltFor = function(mapData) {
 Reactor3D.straightenBillboardDepth = function(material) {
     if (!material || material.__reactorStraightDepth) return material;
     material.__reactorStraightDepth = true;
+    // How far up a leaning facade this billboard was lifted (a decoration
+    // anchored by `facadeAt`). The twin walks that lift back down the leaned
+    // axis and up world-up instead, so the decoration depth-tests as part of
+    // the wall it sits on rather than as a plane standing north of it.
+    material.userData.rrDepthLift = { value: 0 };
     const earlier = material.onBeforeCompile;
     material.onBeforeCompile = function(shader, renderer) {
         if (typeof earlier === "function") earlier.call(this, shader, renderer);
-        shader.vertexShader = shader.vertexShader.replace(
+        shader.uniforms.rrDepthLift = material.userData.rrDepthLift;
+        shader.vertexShader = "uniform float rrDepthLift;\n" + shader.vertexShader.replace(
             "#include <project_vertex>",
             `
             #include <project_vertex>
             {
                 vec3 rrRight = modelMatrix[0].xyz;
-                float rrHeight = length(modelMatrix[1].xyz);
-                vec3 rrAnchor = modelMatrix[3].xyz;
+                vec3 rrLeanUp = modelMatrix[1].xyz;
+                float rrHeight = length(rrLeanUp);
+                vec3 rrAnchor = modelMatrix[3].xyz
+                    - normalize(rrLeanUp) * rrDepthLift;
                 vec3 rrVertical = rrAnchor
                     + rrRight * position.x
-                    + vec3(0.0, rrHeight, 0.0) * position.y;
+                    + vec3(0.0, 1.0, 0.0) * (rrHeight * position.y + rrDepthLift);
                 vec4 rrClip = projectionMatrix * viewMatrix * vec4(rrVertical, 1.0);
                 gl_Position.z = rrClip.z / max(rrClip.w, 1e-6) * gl_Position.w;
             }
@@ -7345,23 +7353,6 @@ Reactor3D.MapScene.prototype.syncCharacterBillboards = function(sprites) {
             holder = { canvas, texture, geometry, object, stamp: "", above: false };
             this._billboards.set(key, holder);
         }
-        // An above-characters event rides the above pass over the star tiles,
-        // as MZ's z=5 does, and ignores depth there: a console screen must
-        // not be buried inside the console it decorates. Priority can change
-        // with the event page, so the parent follows it.
-        const above = character._priorityType === 2;
-        if (holder.above !== above) {
-            holder.above = above;
-            const parent = above ? this.aboveBillboardsGroup() : group;
-            if (holder.object.parent !== parent) {
-                if (holder.object.parent) holder.object.parent.remove(holder.object);
-                parent.add(holder.object);
-            }
-            holder.object.material.depthTest = !above;
-            holder.object.material.depthWrite = !above;
-            holder.object.renderOrder = above ? 10 : 0;
-            holder.object.material.needsUpdate = true;
-        }
         this._updateCharacterBillboard(holder, sprite, character);
     }
     for (const [key, holder] of this._billboards) {
@@ -7438,10 +7429,20 @@ Reactor3D.MapScene.prototype._updateCharacterBillboard = function(holder, sprite
     // console screen glued to its tile-drawn pedestal from every camera
     // position. Left at its own row it sat a tile nearer the camera than the
     // art it belongs to and slid against it as the view crossed the map.
-    if (character._priorityType === 2) {
+    // A stationary event standing on a cell whose art was stood into a
+    // facade belongs to that facade, whatever its priority: in 2D the event
+    // simply draws over the tile art on its own cell, and the 3D equivalent
+    // is sitting on the same wall plane, whatever way it leans. The player
+    // and anything mid-step stay on the ground — a character walking under
+    // an archway must not snap onto its wall.
+    let depthLift = 0;
+    let snapped = false;
+    if (typeof character.eventId === "function"
+        && !(character.isMoving && character.isMoving())) {
         const facade = Reactor3D.facadeAt(
             Math.round(character._realX), Math.round(character._realY));
         if (facade) {
+            snapped = true;
             baseY = facade.height;
             baseZ = facade.z + footZ;
             const up = camera ? Reactor3D.billboardUp(camera) : null;
@@ -7449,8 +7450,26 @@ Reactor3D.MapScene.prototype._updateCharacterBillboard = function(holder, sprite
                 baseX += up.x * facade.lift;
                 baseY += up.y * facade.lift;
                 baseZ += up.z * facade.lift;
+                depthLift = facade.lift;
             }
         }
+    }
+    // Depth-test as part of the wall it sits on: the twin walks the lift
+    // back to the facade base (see straightenBillboardDepth).
+    const liftUniform = holder.object.material.userData
+        && holder.object.material.userData.rrDepthLift;
+    if (liftUniform) liftUniform.value = depthLift;
+    // Snapped onto a wall, the billboard is coplanar with the wall's own
+    // quads; a depth bias pulls it just ahead of them — over its pedestal,
+    // never over a genuinely nearer character, who wins by real depth.
+    const biased = snapped || character._priorityType === 2;
+    if (holder.biased !== biased) {
+        holder.biased = biased;
+        holder.object.material.polygonOffset = biased;
+        holder.object.material.polygonOffsetFactor = biased ? -4 : 0;
+        holder.object.material.polygonOffsetUnits = biased ? -4 : 0;
+        holder.object.renderOrder = biased ? 2 : 0;
+        holder.object.material.needsUpdate = true;
     }
     holder.object.position.set(baseX, baseY, baseZ);
     Reactor3D.aimCharacterBillboard(holder.object, camera);

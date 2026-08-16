@@ -505,12 +505,20 @@ test('an above-characters event billboard rides the above pass', () => {
     assert.match(sprites, /modelsInWorld \? "world" : \(split \? "below" : "all"\)/,
         'the sprite pass picker uses world on model maps');
 
+    // Billboards live in the world's depth: a stationary event on a facade
+    // cell snaps to that wall's plane (whatever its priority) and is pulled
+    // just ahead of the coplanar wall quads — over its pedestal, never over
+    // a genuinely nearer character.
     const core3d = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_3d.js'), 'utf8');
-    const sync = core3d.slice(core3d.indexOf('syncCharacterBillboards = function'),
-        core3d.indexOf('_updateCharacterBillboard = function'));
-    assert.match(sync, /character\._priorityType === 2/, 'priority is read per character');
-    assert.match(sync, /aboveBillboardsGroup\(\)/, 'and routes to the above group');
-    assert.match(sync, /depthTest = !above/, 'depth-free over the star tiles');
+    const update = core3d.slice(core3d.indexOf('_updateCharacterBillboard = function'),
+        core3d.indexOf('_clearCharacterBillboards = function'));
+    assert.match(update, /typeof character\.eventId === "function"/,
+        'events snap; the player and followers stay on the ground');
+    assert.match(update, /character\.isMoving && character\.isMoving\(\)/,
+        'and nothing snaps mid-step');
+    assert.match(update, /snapped \|\| character\._priorityType === 2/,
+        'the coplanar pull follows the snap or the authored priority');
+    assert.match(update, /polygonOffsetFactor = biased \? -4 : 0/);
     assert.match(sprites, /mapHasAboveEvents/, 'the above pass exists for such maps');
 });
 
