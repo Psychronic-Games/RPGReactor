@@ -738,6 +738,11 @@ test('the picker poses through rings around the model', () => {
     // though plain drags orbit; the old gate required the pre-orbit pose
     // state, so once looking around stopped reposing, placement went dead.
     assert.match(source, /const placed = dragging\s*\n\s*&& this\._placingFace\s*\n\s*&& e\.button === 0/);
+    // A near miss still lands: sparse meshes let the ray slip between
+    // triangles at spots the eye reads as on the model, and swallowing the
+    // click kept the mode armed with the rings away — placement looked
+    // refused. The ray's entry into the model's bounds stands in.
+    assert.match(source, /raycaster\.ray\.intersectBox\(bounds, new THREE\.Vector3\(\)\)/);
     assert.match(source, /this\._dragPoseRing\(e, ringGrab\)/, 'drag follows the grabbed ring');
     // The turn is the signed pointer angle about the ring's own plane, so
     // exactly one euler moves per drag.

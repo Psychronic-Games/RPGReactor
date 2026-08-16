@@ -359,7 +359,7 @@ class ModelGraphicPicker {
             const placed = dragging
                 && this._placingFace
                 && e.button === 0
-                && Math.hypot(e.clientX - startX, e.clientY - startY) < 5;
+                && Math.hypot(e.clientX - startX, e.clientY - startY) < 8;
             dragging = false;
             ringGrab = null;
             this._emphasizePoseRing('', false);
@@ -455,12 +455,23 @@ class ModelGraphicPicker {
             if (child.isMesh && !child.userData.faceMarker) targets.push(child);
         });
         const hit = raycaster.intersectObjects(targets, false)[0];
-        if (!hit) return;
-        const point = hit.point.clone();
-        if (hit.face && hit.face.normal) {
-            const normal = hit.face.normal.clone().transformDirection(hit.object.matrixWorld).normalize();
-            point.add(normal.multiplyScalar(0.035));
+        let point = null;
+        if (hit) {
+            point = hit.point.clone();
+            if (hit.face && hit.face.normal) {
+                const normal = hit.face.normal.clone().transformDirection(hit.object.matrixWorld).normalize();
+                point.add(normal.multiplyScalar(0.035));
+            }
+        } else {
+            // A near miss still lands. Sparse meshes — foliage, struts —
+            // let a ray slip between triangles at the very spot the eye
+            // says is on the model; swallowing that click left the mode
+            // armed and the rings away, which read as placement refusing
+            // to work. The ray's entry into the model's bounds stands in.
+            const bounds = new THREE.Box3().setFromObject(this._object);
+            point = raycaster.ray.intersectBox(bounds, new THREE.Vector3());
         }
+        if (!point) return;
         const local = this._object.worldToLocal(point);
         this.selectedFaces[this._placingFace] = [local.x, local.y, local.z];
         this._placingFace = '';
