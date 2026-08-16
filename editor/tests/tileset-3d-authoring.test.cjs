@@ -372,7 +372,7 @@ test('every flag mode explains its own marks', () => {
     // flagKey delegates to flagKeyRows, so both come across, and the class
     // keeps its own name because the one calls the other through it.
     const rowsStart = source.indexOf('    static flagKeyRows(mode) {');
-    const keyStart = source.indexOf('    static flagKey(mode) {');
+    const keyStart = source.indexOf('    static flagKey(mode, passageBrush) {');
     assert.ok(rowsStart > 0 && keyStart > rowsStart, 'flagKey and flagKeyRows exist');
     const body = source.slice(rowsStart, source.indexOf('\n    }\n', keyStart) + 6);
     // eslint-disable-next-line no-new-func

@@ -55,6 +55,7 @@ class DatabaseTilesetEditor {
         this.selectedTerrain = 0; // For terrain tag: 0-7
         this.currentTab = 'A'; // Current layer tab: 'A', 'B', 'C', 'D', 'E', 'F', 'G'
         this.selectedTile = null; // Currently selected tile { x, y } for highlighting
+        this.passageBrush = null; // 'o' | 'x' | 'star' picked in the Key, null = click-to-cycle
         this.imageCache = new Map(); // Cache rendered tileset images to avoid redrawing
         // Sheets are laid out in whatever size the project chose, so the
         // editor samples them in that step rather than assuming 48.
@@ -1069,6 +1070,7 @@ class DatabaseTilesetEditor {
                     this.handleCompactCanvasClick(e, canvas, index, fileName, isSplitSheet);
                 });
                 this.attachTile3DDrag(canvas, index, isSplitSheet);
+                this.attachPassageBrushDrag(canvas, index, isSplitSheet);
 
                 this.tabCanvases.push({ canvas, imageIndex: index, isSplitSheet });
                 wrapper.appendChild(canvas);
@@ -1288,6 +1290,7 @@ class DatabaseTilesetEditor {
                 this.handleCompactCanvasClick(e, canvas, imageIndex, fileName, isSplitSheet);
             });
             this.attachTile3DDrag(canvas, imageIndex, isSplitSheet);
+            this.attachPassageBrushDrag(canvas, imageIndex, isSplitSheet);
 
             // Store current canvas info for updates
             this.currentCanvas = { canvas, ctx, imageIndex, isSplitSheet, baseCanvas };
@@ -2122,6 +2125,13 @@ class DatabaseTilesetEditor {
         // Apply the selected edit mode
         switch (this.currentEditMode) {
             case 'passability':
+                // A mark picked in the Key paints its value; the pointer
+                // handlers already painted this tile on pointerdown, so the
+                // trailing click resolves to the same flag and no-ops.
+                if (this.passageBrush) {
+                    currentFlag = this.passageBrushFlag(oldFlag);
+                    break;
+                }
                 // Cycle through: O (passable) → X (impassable) → ★ (above) → O
                 const passageBits = oldFlag & 0x1F; // Bits 0-4
 
@@ -2373,20 +2383,39 @@ class DatabaseTilesetEditor {
         return rows[mode] || null;
     }
 
-    static flagKey(mode) {
+    static flagKey(mode, passageBrush) {
         const rows = DatabaseTilesetEditor.flagKeyRows(mode);
         if (!rows) return '';
-        const items = rows.map(([mark, label]) =>
-            `<div style="display:flex;align-items:center;gap:8px;margin-bottom:7px;">`
-            + `<canvas class="flag-key-mark" data-mark="${mark}" width="26" height="26" `
-            + `style="width:26px;height:26px;flex:0 0 26px;border-radius:4px;`
-            + `background:var(--color-bg-deep);"></canvas>`
-            + `<span style="font-size:10px;color:var(--color-text-muted);line-height:1.3;">`
-            + `${label}</span></div>`).join('');
+        const tt = text => (typeof window !== 'undefined' && window.I18n)
+            ? window.I18n.tText(text) : text;
+        // In passability mode the Key doubles as a palette: pick a mark and
+        // clicks (and drags) paint that value instead of cycling.
+        const brushOf = { 'pass-o': 'o', 'pass-x': 'x', 'pass-star': 'star' };
+        const paintable = mode === 'passability';
+        const items = rows.map(([mark, label]) => {
+            const brush = paintable ? brushOf[mark] : null;
+            const active = brush && brush === passageBrush;
+            const rowAttrs = brush ? ` data-passage-brush="${brush}"` : '';
+            const rowStyle = brush
+                ? `cursor:pointer;border-radius:5px;padding:2px 4px;margin:0 -4px 5px -4px;`
+                    + `border:1px solid ${active ? 'var(--color-accent-bright)' : 'transparent'};`
+                    + `background:${active ? 'var(--color-bg-hover)' : 'transparent'};`
+                : 'margin-bottom:7px;';
+            return `<div${rowAttrs} style="display:flex;align-items:center;gap:8px;${rowStyle}">`
+                + `<canvas class="flag-key-mark" data-mark="${mark}" width="26" height="26" `
+                + `style="width:26px;height:26px;flex:0 0 26px;border-radius:4px;`
+                + `background:var(--color-bg-deep);pointer-events:none;"></canvas>`
+                + `<span style="font-size:10px;color:var(--color-text-muted);line-height:1.3;`
+                + `pointer-events:none;">${label}</span></div>`;
+        }).join('');
+        const hint = paintable
+            ? `<p style="font-size:9px;color:var(--color-text-dim);margin:8px 0 0 0;line-height:1.4;">`
+                + tt('Click a mark to paint it — click or drag across the sheet. Click the mark again to go back to cycling.') + `</p>`
+            : '';
         return `<div style="background:var(--color-bg-panel);border:1px solid var(--color-border);`
             + `border-radius:6px;padding:10px;">`
             + `<h4 style="margin:0 0 8px 0;font-size:9px;text-transform:uppercase;`
-            + `letter-spacing:0.5px;color:var(--color-text-muted);">Key</h4>${items}</div>`;
+            + `letter-spacing:0.5px;color:var(--color-text-muted);">Key</h4>${items}${hint}</div>`;
     }
 
     /**
@@ -2459,7 +2488,8 @@ class DatabaseTilesetEditor {
         if (!this.tile3dTool) this.tile3dTool = 'select';
         const toolbar = this.currentEditMode === 'tile3d'
             ? DatabaseTilesetEditor.tile3dToolbar(this.tile3dTool) : '';
-        host.innerHTML = toolbar + DatabaseTilesetEditor.flagKey(this.currentEditMode);
+        host.innerHTML = toolbar
+            + DatabaseTilesetEditor.flagKey(this.currentEditMode, this.passageBrush);
         for (const canvas of host.querySelectorAll('canvas.flag-key-mark')) {
             this.drawKeyMark(canvas.getContext('2d'), canvas.dataset.mark, canvas.width);
         }
@@ -2471,6 +2501,102 @@ class DatabaseTilesetEditor {
                 this.refreshFlagKey();
             });
         }
+        for (const row of host.querySelectorAll('[data-passage-brush]')) {
+            row.addEventListener('click', () => {
+                const brush = row.dataset.passageBrush;
+                // The same mark again puts the click back to cycling.
+                this.passageBrush = this.passageBrush === brush ? null : brush;
+                this.refreshFlagKey();
+            });
+        }
+    }
+
+    /** The flag a passage brush writes, over whatever the tile had. */
+    passageBrushFlag(oldFlag) {
+        switch (this.passageBrush) {
+            case 'o': return oldFlag & ~0x1F;
+            case 'x': return (oldFlag & ~0x1F) | 0x0F;
+            case 'star': return (oldFlag & ~0x1F) | 0x10;
+        }
+        return oldFlag;
+    }
+
+    /** Write one tile's flag with autotile mirroring, repaint, and announce. */
+    writeTileFlag(canvas, imageIndex, isSplitSheet, tileIndex, newFlag) {
+        const oldFlag = this.currentTileset.flags[tileIndex] || 0;
+        if (newFlag === oldFlag) return false;
+        this.currentTileset.flags[tileIndex] = newFlag;
+        // Autotiles: mirror the flag to all 48 shape slots of the kind — the
+        // runtime looks flags up by the FULL tile id (base + shape).
+        if (tileIndex >= 2048 && tileIndex < 8192) {
+            for (let s = 1; s < 48; s++) {
+                this.currentTileset.flags[tileIndex + s] = newFlag;
+            }
+        }
+        this.repaintClickedCanvas(canvas, imageIndex, isSplitSheet);
+        this.notifyTilesetSaved();
+        return true;
+    }
+
+    /**
+     * Sweep-paint the picked passage mark across the sheet.
+     *
+     * The Key's O/X/star rows are a palette: with one picked, a click paints
+     * that value and a drag paints every tile the pointer crosses — retreading
+     * a tile is idempotent, so a wobbly sweep cannot cycle anything. With no
+     * mark picked the canvases keep their click-to-cycle behaviour untouched.
+     */
+    attachPassageBrushDrag(canvas, imageIndex, isSplitSheet) {
+        if (!canvas || canvas.dataset.passageBrushDrag) return;
+        canvas.dataset.passageBrushDrag = '1';
+
+        const cellAt = event => {
+            const rect = canvas.getBoundingClientRect();
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            const lastX = Math.max(0, Math.floor(canvas.width / this.tileSize) - 1);
+            const lastY = Math.max(0, Math.floor(canvas.height / this.tileSize) - 1);
+            const clamp = (value, last) => Math.max(0, Math.min(last, value));
+            return {
+                x: clamp(Math.floor(((event.clientX - rect.left) * scaleX) / this.tileSize), lastX),
+                y: clamp(Math.floor(((event.clientY - rect.top) * scaleY) / this.tileSize), lastY)
+            };
+        };
+
+        const paint = cell => {
+            const tilesX = Math.floor(canvas.width / this.tileSize);
+            const tileIndex = this.getTileIndexForImage(imageIndex, cell.x, cell.y, tilesX);
+            const oldFlag = this.currentTileset.flags[tileIndex] || 0;
+            this.selectedTile = { x: cell.x, y: cell.y };
+            this.writeTileFlag(canvas, imageIndex, isSplitSheet, tileIndex,
+                this.passageBrushFlag(oldFlag));
+        };
+
+        canvas.addEventListener('pointerdown', event => {
+            if (this.currentEditMode !== 'passability' || !this.passageBrush) return;
+            event.preventDefault();
+            const cell = cellAt(event);
+            this._passageBrushDrag = { imageIndex, last: cell };
+            canvas.setPointerCapture?.(event.pointerId);
+            paint(cell);
+        });
+
+        canvas.addEventListener('pointermove', event => {
+            const drag = this._passageBrushDrag;
+            if (!drag || drag.imageIndex !== imageIndex) return;
+            const cell = cellAt(event);
+            if (cell.x === drag.last.x && cell.y === drag.last.y) return;
+            drag.last = cell;
+            paint(cell);
+        });
+
+        const release = event => {
+            if (!this._passageBrushDrag) return;
+            this._passageBrushDrag = null;
+            canvas.releasePointerCapture?.(event.pointerId);
+        };
+        canvas.addEventListener('pointerup', release);
+        canvas.addEventListener('pointercancel', release);
     }
 
     /**

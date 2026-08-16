@@ -169,14 +169,28 @@ test('assigning G to a legacy tileset leaves no holes', () => {
         'and no null survives a save/load round trip');
 });
 
-test('no authored map in the bundled Demo uses the F/G band', () => {
-    // The band is only safe because RPG Maker never emits it. Check it against
-    // real authored data. Only template/Demo is tracked by the repository, so
-    // that is the one project a test may reach for; it is absent from a
-    // source-only checkout, in which case this is a no-op rather than a
-    // failure.
+test('Demo maps only use the F/G band where their tileset assigns a sheet', () => {
+    // The band is only safe because RPG Maker never emits it, so a map may
+    // carry ids in it only when its own tileset actually names an F or G
+    // sheet — which is Reactor authoring, not imported data. A band id under
+    // a tileset with empty F/G slots would be a collision. Only template/Demo
+    // is tracked by the repository, so that is the one project a test may
+    // reach for; it is absent from a source-only checkout, in which case this
+    // is a no-op rather than a failure.
     const dir = path.join(repoRoot, 'template', 'Demo', 'data');
     if (!fs.existsSync(dir)) return;
+
+    let tilesets = null;
+    try {
+        tilesets = JSON.parse(fs.readFileSync(path.join(dir, 'Tilesets.json'), 'utf8'));
+    } catch {
+        tilesets = null;
+    }
+    const hasExtendedSheets = tilesetId => {
+        const tileset = tilesets && tilesets[tilesetId];
+        const names = tileset && tileset.tilesetNames;
+        return !!(names && (names[9] || names[10]));
+    };
 
     let mapsChecked = 0;
     const offenders = [];
@@ -191,6 +205,7 @@ test('no authored map in the bundled Demo uses the F/G band', () => {
         }
         if (!map || !Array.isArray(map.data)) continue;
         mapsChecked++;
+        if (hasExtendedSheets(map.tilesetId)) continue;
         for (const tileId of map.data) {
             if (sheets.isExtendedTileId(tileId)) {
                 offenders.push(`${file}:${tileId}`);
@@ -200,7 +215,7 @@ test('no authored map in the bundled Demo uses the F/G band', () => {
     }
 
     assert.deepEqual(offenders, [],
-        `authored maps must not already use 1024-1535 (checked ${mapsChecked} maps)`);
+        `maps without F/G sheets must not use 1024-1535 (checked ${mapsChecked} maps)`);
 });
 
 test('every palette-to-tile-id path knows about F and G', () => {
