@@ -1584,8 +1584,16 @@ Sprite_Animation.renderActive = function(renderer) {
     }
     const list = Sprite_Animation._pendingRenders;
     if (list.length === 0) return;
+    // While effects play, the overlay carries a copy of the whole rendered
+    // scene and the effects draw ON that copy — the same shared-framebuffer
+    // semantics the stock runtime has. On a transparent overlay every blend
+    // mode broke a different way: additive layers wrote alpha into empty
+    // pixels so black-backed textures composited as opaque black squares,
+    // and multiply layers darkened nothing into solid black. The copy is
+    // pixel-identical to what it covers, so it is invisible in itself.
+    const composited = !!(Graphics.blitSceneBehindEffects && Graphics.blitSceneBehindEffects());
     for (const inst of list) {
-        try { inst._doEffekseerDraw(renderer); } catch (e) {}
+        try { inst._doEffekseerDraw(renderer, composited); } catch (e) {}
     }
     list.length = 0;
 };
@@ -1622,7 +1630,7 @@ Sprite_Animation.prototype._render = function(renderer) {
 // window.__effekseerOverlayDiagDone = false in the console to re-arm.
 window.__effekseerOverlayDiagDone = window.__effekseerOverlayDiagDone || false;
 
-Sprite_Animation.prototype._doEffekseerDraw = function(renderer) {
+Sprite_Animation.prototype._doEffekseerDraw = function(renderer, composited) {
     // Draws to the Effekseer overlay canvas's WebGL1 context (Graphics._effekseerGL).
     // The overlay canvas sits absolutely positioned over the game canvas with
     // pointer-events:none, so the browser compositor layers our effects on top
@@ -1661,19 +1669,15 @@ Sprite_Animation.prototype._doEffekseerDraw = function(renderer) {
             "  pre-frame readback: " + (preFrame ? "ok (" + preFrame.length + " bytes)" : "FAILED")
         );
     }
-    // Hand Effekseer the scene as this effect's background: distortion and
-    // darkening layers sample a captured backdrop, and on an otherwise
-    // transparent overlay they rendered as solid black slabs. The capture
-    // must cover the effect's own square viewport — Effekseer samples the
-    // background by fragment position within the viewport, so a
-    // canvas-sized capture reads back misaligned, smeared scenery.
+    // Distortion layers additionally sample a captured backdrop; with the
+    // scene composited into the framebuffer the capture takes it from
+    // there, covering this effect's own square viewport — Effekseer maps
+    // background UVs across the viewport, so a canvas-sized capture would
+    // read back misaligned, smeared scenery.
     const efxContext = Graphics.effekseer;
-    if (efxGL && overlay && efxContext && efxContext.captureBackground
-        && Graphics.blitSceneBehindEffects && Graphics.blitSceneBehindEffects()) {
+    if (composited && efxGL && overlay && efxContext && efxContext.captureBackground) {
         const rect = this.effekseerViewportRect(renderer);
         efxContext.captureBackground(rect.x, rect.y, rect.side, rect.side);
-        efxGL.clearColor(0, 0, 0, 0);
-        efxGL.clear(efxGL.COLOR_BUFFER_BIT | efxGL.DEPTH_BUFFER_BIT);
     }
     this.setProjectionMatrix(renderer);
     this.setCameraMatrix(renderer);
