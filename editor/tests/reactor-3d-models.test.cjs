@@ -708,9 +708,41 @@ test('looking around the model picker never edits the pose', () => {
     // Reset rescue a drifted pose.
     const source = fs.readFileSync(
         path.join(repoRoot, 'editor', 'src', 'event', 'ModelGraphicPicker.js'), 'utf8');
-    assert.match(source, /orbit = !\(e\.button === 2 \|\| e\.ctrlKey \|\| e\.metaKey\)/);
+    assert.match(source, /orbit = !ringGrab && !\(e\.button === 2 \|\| e\.ctrlKey \|\| e\.metaKey\)/);
     assert.match(source, /model-angle-level/);
     assert.match(source, /model-angle-reset/);
     assert.match(source, /setAngles\(0, this\.selectedYaw, 0\)/, 'Upright keeps the turn');
     assert.match(source, /setAngles\(0, 0, 0\)/, 'Reset clears everything');
+});
+
+test('the picker poses through rings around the model', () => {
+    // Free-drag posing about camera axes bled every drag into all three
+    // angles at once. The pose controls are rings wrapped around the model
+    // now: grab a ring and the model follows the pointer around that one
+    // axis, the other two untouched. The rings nest like a gimbal so each
+    // always matches the axis it changes, and the arc passing behind the
+    // model hides behind it with a faint depth-free twin keeping the circle
+    // traceable.
+    const source = fs.readFileSync(
+        path.join(repoRoot, 'editor', 'src', 'event', 'ModelGraphicPicker.js'), 'utf8');
+    assert.match(source, /_buildPoseRings\(\)/);
+    assert.match(source, /userData\.poseAxis = axis/, 'grips carry their axis');
+    assert.match(source, /ringGrab = this\._pickPoseRing\(e\)/, 'pointer down grabs a ring');
+    assert.match(source, /this\._dragPoseRing\(e, ringGrab\)/, 'drag follows the grabbed ring');
+    // The turn is the signed pointer angle about the ring's own plane, so
+    // exactly one euler moves per drag.
+    assert.match(source, /crossVectors\(grab\.startVec, vec\)/);
+    assert.match(source, /grab\.axis === 'yaw'/);
+    // Gimbal nesting: the pitch ring follows the turn, roll follows both.
+    assert.match(source, /this\._rings\.pitch\.group\.rotation\.set\(0, yaw, 0\)/);
+    assert.match(source, /this\._rings\.roll\.group\.rotation\.set\(pitch, yaw, 0\)/);
+    // Depth honesty: the solid pass depth-tests (no depthTest:false on it);
+    // only the faint ghost renders through the model.
+    assert.match(source, /opacity: 0\.12,\s*\n\s*depthTest: false, depthWrite: false/);
+    // The rings die with the preview.
+    assert.match(source, /_disposePreview\(\) \{\s*\n\s*this\._disposePoseRings\(\)/);
+    // Turntable fallback for Ctrl/right drags: one axis per gesture, never
+    // camera-axis tumble.
+    assert.match(source, /this\.selectedYaw = this\._wrapAngle\(this\.selectedYaw \+ dx \* 0\.5\)/);
+    assert.doesNotMatch(source, /premultiply/, 'no camera-axis quaternion posing');
 });

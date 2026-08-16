@@ -306,26 +306,42 @@ class ModelGraphicPicker {
         let lastY = 0;
         let startX = 0;
         let startY = 0;
+        let ringGrab = null;
         const down = e => {
             dragging = true;
-            // Left-drag orbits the view — looking around must never edit the
-            // pose. Orbiting used to be the modifier and plain drags rewrote
-            // the model's X/Y/Z about camera axes, so inspecting a model
-            // quietly baked an unrecoverable tilt into the spec that stood
-            // the thing crooked in game. Turning the model is deliberate:
-            // right-drag or Ctrl-drag.
-            orbit = !(e.button === 2 || e.ctrlKey || e.metaKey);
+            ringGrab = null;
+            // A grab on a pose ring turns that axis — the rings around the
+            // model ARE the pose control. Anywhere else, left-drag orbits
+            // the view (looking around must never edit the pose; plain
+            // drags used to rewrite X/Y/Z about camera axes and baked
+            // unrecoverable tilt into the spec). Ctrl- or right-drag keeps
+            // the turntable nudge for those who prefer it.
+            if (!this._placingFace && e.button === 0 && !e.ctrlKey && !e.metaKey) {
+                ringGrab = this._pickPoseRing(e);
+            }
+            orbit = !ringGrab && !(e.button === 2 || e.ctrlKey || e.metaKey);
             lastX = startX = e.clientX;
             lastY = startY = e.clientY;
             canvas.style.cursor = 'grabbing';
             e.preventDefault();
         };
         const move = e => {
-            if (!dragging) return;
+            if (!dragging) {
+                if (e.target === canvas && this._rings && !this._placingFace) {
+                    const over = this._pickPoseRing(e);
+                    canvas.style.cursor = over ? 'pointer' : 'grab';
+                }
+                return;
+            }
             const dx = e.clientX - lastX;
             const dy = e.clientY - lastY;
             lastX = e.clientX;
             lastY = e.clientY;
+            if (ringGrab) {
+                this._dragPoseRing(e, ringGrab);
+                this._emphasizePoseRing(ringGrab.axis);
+                return;
+            }
             if (orbit) {
                 this._view.yaw -= dx * 0.4;
                 this._view.pitch = Math.min(72, Math.max(5, this._view.pitch - dy * 0.3));
@@ -339,6 +355,8 @@ class ModelGraphicPicker {
                 && !orbit
                 && Math.hypot(e.clientX - startX, e.clientY - startY) < 5;
             dragging = false;
+            ringGrab = null;
+            this._emphasizePoseRing('');
             this._refreshCursor();
             if (placed) this._placeFaceAt(e);
         };
@@ -363,26 +381,17 @@ class ModelGraphicPicker {
     }
 
     _nudgeRotation(dx, dy, roll = 0) {
-        if (this._object && this._camera && typeof THREE !== 'undefined') {
-            const q = this._object.quaternion.clone();
-            const cam = this._camera.quaternion;
-            const yawAxis = new THREE.Vector3(0, 1, 0);
-            const pitchAxis = new THREE.Vector3(1, 0, 0).applyQuaternion(cam);
-            const rollAxis = new THREE.Vector3(0, 0, 1).applyQuaternion(cam);
-            q.premultiply(new THREE.Quaternion().setFromAxisAngle(yawAxis, dx * 0.01));
-            q.premultiply(new THREE.Quaternion().setFromAxisAngle(pitchAxis, dy * 0.01));
-            if (roll) q.premultiply(new THREE.Quaternion().setFromAxisAngle(rollAxis, roll * 0.01));
-            this._object.quaternion.copy(q);
-            this._object.rotation.setFromQuaternion(q, 'YXZ');
-            this.selectedPitch = this._wrapAngle(this._object.rotation.x * 180 / Math.PI);
-            this.selectedYaw = this._wrapAngle(this._object.rotation.y * 180 / Math.PI);
-            this.selectedRoll = this._wrapAngle(this._object.rotation.z * 180 / Math.PI);
-        } else {
-            this.selectedYaw = this._wrapAngle(this.selectedYaw + dx * 0.5);
-            this.selectedPitch = this._wrapAngle(this.selectedPitch + dy * 0.5);
-            this.selectedRoll = this._wrapAngle(this.selectedRoll + roll * 0.5);
-            this._applyModelRotation();
-        }
+        // Turntable, not tumble: horizontal drag is pure yaw, vertical is
+        // pure pitch, and roll only moves through its own field or gesture.
+        // Rotating about the CAMERA's axes and decomposing back to X/Y/Z
+        // eulers meant that once the view was orbited — or any roll existed —
+        // a straight drag bled into all three angles at once (a vertical
+        // drag moved pitch, yaw, and roll together), which felt like the
+        // model fighting the hand and left poses no field edit could undo.
+        this.selectedYaw = this._wrapAngle(this.selectedYaw + dx * 0.5);
+        this.selectedPitch = this._wrapAngle(this.selectedPitch + dy * 0.5);
+        if (roll) this.selectedRoll = this._wrapAngle(this.selectedRoll + roll * 0.5);
+        this._applyModelRotation();
         if (this._gizmo) this._gizmo.setRotation(this.selectedPitch, this.selectedYaw, this.selectedRoll);
         this._syncAngleInputs();
     }
@@ -506,9 +515,165 @@ class ModelGraphicPicker {
             this.selectedYaw * Math.PI / 180,
             this.selectedRoll * Math.PI / 180
         );
+        this._syncPoseRings();
+    }
+
+    /**
+     * Rotation rings around the model itself — grab a ring and drag along
+     * it. Green turns (yaw), red tips (pitch), blue rolls; each follows the
+     * pose like a gimbal, so the ring being dragged always matches the axis
+     * it will change. Free-drag posing kept fighting the hand: rotating
+     * about camera axes bled every drag into all three angles.
+     */
+    _buildPoseRings() {
+        if (typeof THREE === 'undefined' || !this._scene) return;
+        this._disposePoseRings();
+        const radius = 1.15;
+        const ringRoot = new THREE.Group();
+        ringRoot.name = 'pose-rings';
+        const makeRing = (axis, color, orient) => {
+            const group = new THREE.Group();
+            // The arc passing behind the model hides like any solid would;
+            // a faint depth-free twin keeps the circle traceable through
+            // the silhouette.
+            const solid = new THREE.Mesh(
+                new THREE.TorusGeometry(radius, 0.02, 8, 64),
+                new THREE.MeshBasicMaterial({
+                    color, transparent: true, opacity: 0.85, fog: false
+                })
+            );
+            const ghost = new THREE.Mesh(
+                solid.geometry,
+                new THREE.MeshBasicMaterial({
+                    color, transparent: true, opacity: 0.12,
+                    depthTest: false, depthWrite: false, fog: false
+                })
+            );
+            ghost.renderOrder = 5;
+            const grip = new THREE.Mesh(
+                new THREE.TorusGeometry(radius, 0.14, 8, 32),
+                new THREE.MeshBasicMaterial({ visible: false })
+            );
+            grip.userData.poseAxis = axis;
+            orient(solid);
+            orient(ghost);
+            orient(grip);
+            group.add(solid);
+            group.add(ghost);
+            group.add(grip);
+            ringRoot.add(group);
+            return { group, solid, ghost, grip };
+        };
+        this._rings = {
+            root: ringRoot,
+            yaw: makeRing('yaw', 0x3ddc84, mesh => mesh.rotation.x = Math.PI / 2),
+            pitch: makeRing('pitch', 0xff5c5c, mesh => mesh.rotation.y = Math.PI / 2),
+            roll: makeRing('roll', 0x5ca8ff, () => {})
+        };
+        this._scene.add(ringRoot);
+        this._syncPoseRings();
+    }
+
+    _disposePoseRings() {
+        if (!this._rings) return;
+        if (this._rings.root.parent) this._rings.root.parent.remove(this._rings.root);
+        this._rings.root.traverse(node => {
+            if (node.geometry) node.geometry.dispose();
+            if (node.material) node.material.dispose();
+        });
+        this._rings = null;
+    }
+
+    /** Gimbal nesting: pitch follows the turn, roll follows both. */
+    _syncPoseRings() {
+        if (!this._rings) return;
+        const yaw = this.selectedYaw * Math.PI / 180;
+        const pitch = this.selectedPitch * Math.PI / 180;
+        this._rings.pitch.group.rotation.set(0, yaw, 0);
+        this._rings.roll.group.rotation.order = 'YXZ';
+        this._rings.roll.group.rotation.set(pitch, yaw, 0);
+    }
+
+    /** While one ring is held, the others fade so the turn reads clearly. */
+    _emphasizePoseRing(axis) {
+        if (!this._rings) return;
+        for (const key of ['yaw', 'pitch', 'roll']) {
+            const held = !axis || key === axis;
+            this._rings[key].solid.material.opacity = held ? 0.85 : 0.25;
+            this._rings[key].ghost.material.opacity = held ? 0.12 : 0.04;
+        }
+    }
+
+    /** The pose ring under the pointer, with its rotation plane, or null. */
+    _pickPoseRing(event) {
+        if (!this._rings || !this._camera || typeof THREE === 'undefined') return null;
+        const canvas = this._modal && this._modal.querySelector('.model-preview-canvas');
+        if (!canvas) return null;
+        const rect = canvas.getBoundingClientRect();
+        const ndc = new THREE.Vector2(
+            ((event.clientX - rect.left) / rect.width) * 2 - 1,
+            -((event.clientY - rect.top) / rect.height) * 2 + 1
+        );
+        const caster = new THREE.Raycaster();
+        caster.setFromCamera(ndc, this._camera);
+        const grips = [this._rings.yaw.grip, this._rings.pitch.grip, this._rings.roll.grip];
+        const hits = caster.intersectObjects(grips, false);
+        if (!hits.length) return null;
+        const axis = hits[0].object.userData.poseAxis;
+        const ring = this._rings[axis];
+        // The ring's rotation plane: normal is the ring group's local axis
+        // the torus circles, taken to world space.
+        const local = axis === 'yaw' ? new THREE.Vector3(0, 1, 0)
+            : axis === 'pitch' ? new THREE.Vector3(1, 0, 0)
+            : new THREE.Vector3(0, 0, 1);
+        const normal = local.applyQuaternion(
+            ring.group.getWorldQuaternion(new THREE.Quaternion())).normalize();
+        const centre = this._rings.root.getWorldPosition(new THREE.Vector3());
+        const start = this._ringPlanePoint(event, normal, centre);
+        if (!start) return null;
+        return {
+            axis, normal, centre,
+            startVec: start.sub(centre).normalize(),
+            startValue: axis === 'yaw' ? this.selectedYaw
+                : axis === 'pitch' ? this.selectedPitch : this.selectedRoll
+        };
+    }
+
+    _ringPlanePoint(event, normal, centre) {
+        const canvas = this._modal && this._modal.querySelector('.model-preview-canvas');
+        if (!canvas) return null;
+        const rect = canvas.getBoundingClientRect();
+        const ndc = new THREE.Vector2(
+            ((event.clientX - rect.left) / rect.width) * 2 - 1,
+            -((event.clientY - rect.top) / rect.height) * 2 + 1
+        );
+        const caster = new THREE.Raycaster();
+        caster.setFromCamera(ndc, this._camera);
+        const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(normal, centre);
+        const point = new THREE.Vector3();
+        return caster.ray.intersectPlane(plane, point) ? point : null;
+    }
+
+    /** Follow the grabbed point around the ring: the model turns with it. */
+    _dragPoseRing(event, grab) {
+        const point = this._ringPlanePoint(event, grab.normal, grab.centre);
+        if (!point) return;
+        const vec = point.sub(grab.centre).normalize();
+        const delta = Math.atan2(
+            grab.normal.dot(new THREE.Vector3().crossVectors(grab.startVec, vec)),
+            grab.startVec.dot(vec)
+        ) * 180 / Math.PI;
+        const value = this._wrapAngle(grab.startValue + delta);
+        if (grab.axis === 'yaw') this.selectedYaw = value;
+        else if (grab.axis === 'pitch') this.selectedPitch = value;
+        else this.selectedRoll = value;
+        this._applyModelRotation();
+        if (this._gizmo) this._gizmo.setRotation(this.selectedPitch, this.selectedYaw, this.selectedRoll);
+        this._syncAngleInputs();
     }
 
     _disposePreview() {
+        this._disposePoseRings();
         if (this._object && this._object.parent) this._object.parent.remove(this._object);
         this._object = null;
         if (this._renderer) {
@@ -598,6 +763,7 @@ class ModelGraphicPicker {
             model.position.sub(center);
             this._object = new THREE.Group();
             this._object.add(model);
+            this._buildPoseRings();
             this._applyModelRotation();
             this._rebuildFaceMarkers();
             this._scene.add(this._object);
