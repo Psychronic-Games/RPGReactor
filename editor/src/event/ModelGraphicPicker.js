@@ -33,6 +33,18 @@ class ModelGraphicPicker {
         const path = require('path');
         const found = [];
         const seen = new Set();
+        // The colour map for formats that do not embed one: a file in the
+        // sibling textures/ folder, preferring names that say they are the
+        // colour pass over normal/emissive companions.
+        const textureFrom = dir => {
+            const texDir = path.join(path.dirname(dir), 'textures');
+            if (!fs.existsSync(texDir)) return '';
+            const images = fs.readdirSync(texDir)
+                .filter(name => /\.(png|jpe?g|webp)$/i.test(name)).sort();
+            if (!images.length) return '';
+            return images.find(name => /clr|colou?r|diffuse|albedo|base/i.test(name))
+                || images[0];
+        };
         const pickFrom = (dir, folderName) => {
             if (!fs.existsSync(dir) || typeof RRAssetFiles === 'undefined') return;
             // anyCase: a model file keeps whatever extension case it shipped
@@ -44,7 +56,8 @@ class ModelGraphicPicker {
             seen.add(folderName);
             found.push({
                 name: folderName, file: match.name,
-                ext: match.sourceExtension || match.extension
+                ext: match.sourceExtension || match.extension,
+                texture: textureFrom(dir)
             });
         };
         const root = path.join(projectPath, '3d');
@@ -62,6 +75,7 @@ class ModelGraphicPicker {
         this.selectedName = (current && current.name) || '';
         this.selectedFile = (current && current.file) || '';
         this.selectedExt = (current && current.ext) || '';
+        this.selectedTexture = (current && current.texture) || '';
         this.selectedYaw = Number(current && current.yaw) || 0;
         this.selectedPitch = Number(current && current.pitch) || 0;
         this.selectedRoll = Number(current && current.roll) || 0;
@@ -167,7 +181,8 @@ class ModelGraphicPicker {
                         yaw: this.selectedYaw,
                         pitch: this.selectedPitch,
                         roll: this.selectedRoll,
-                        faces: Object.assign({}, this.selectedFaces)
+                        faces: Object.assign({}, this.selectedFaces),
+                        texture: this.selectedTexture || ''
                     }
                     : null);
             }
@@ -213,6 +228,7 @@ class ModelGraphicPicker {
                 this.selectedName = file.name;
                 this.selectedFile = file.file;
                 this.selectedExt = file.ext;
+                this.selectedTexture = file.texture || '';
                 this._placingFace = '';
                 this._refreshFaceButtons();
                 this._refreshCursor();
@@ -229,6 +245,7 @@ class ModelGraphicPicker {
         if (current) {
             this.selectedFile = current.file;
             this.selectedExt = current.ext;
+            if (!this.selectedTexture) this.selectedTexture = current.texture || '';
             browser.scrollTo(this.selectedName);
         }
         this._drawPreview();
@@ -516,7 +533,8 @@ class ModelGraphicPicker {
             const buffer = data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength);
             const path = require('path');
             const baseUrl = 'file://' + path.dirname(filePath).replace(/\\/g, '/') + '/';
-            const template = Reactor3D.readModel(buffer, this.selectedExt, baseUrl);
+            const template = Reactor3D.readModel(
+                buffer, this.selectedExt, baseUrl, this.selectedTexture);
             if (gen !== this._previewGen || !this._modal) return;
             if (!this._renderer) {
                 this._scene = new THREE.Scene();

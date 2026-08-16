@@ -314,7 +314,7 @@ test('the picker lists folders and uses the file inside source/', () => {
         fs.mkdirSync(source, { recursive: true });
         fs.writeFileSync(path.join(source, 'mesh.glb'), 'glb');
         const listed = ModelGraphicPicker.listModels(root);
-        assert.deepEqual(listed, [{ name: 'Prop', file: 'mesh', ext: '.glb' }]);
+        assert.deepEqual(listed, [{ name: 'Prop', file: 'mesh', ext: '.glb', texture: '' }]);
     } finally {
         fs.rmSync(root, { recursive: true, force: true });
         if (previous === undefined) delete global.RRAssetFiles;
@@ -643,4 +643,49 @@ test('a model file keeps whatever extension case it shipped with', () => {
     const at = core3d.indexOf('Reactor3D.loadModel = function');
     const body = core3d.slice(at, core3d.indexOf('\n};', at));
     assert.match(body, /next\.toUpperCase\(\)/);
+});
+
+test('an OBJ with texture coordinates keeps them, and the spec its texture', () => {
+    // v/vt corners weld per unique pair so the geometry carries one uv
+    // attribute; the picker names a colour map from textures/ (preferring
+    // the colour pass over normal/emissive companions) and the sidecar
+    // carries it to the runtime, extension case intact.
+    const obj = [
+        'v 0 0 0', 'v 1 0 0', 'v 1 1 0', 'v 0 1 0',
+        'vt 0 0', 'vt 1 0', 'vt 1 1', 'vt 0 1',
+        'f 1/1 2/2 3/3 4/4'
+    ].join('\n');
+    const bytes = Buffer.from(obj);
+    const mesh = Reactor3D.readObj(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength));
+    assert.equal(mesh.positions.length / 3, 4);
+    assert.equal(mesh.uvs.length / 2, 4);
+    assert.equal(mesh.indices.length, 6, 'the quad fans into two triangles');
+    assert.deepEqual([...mesh.uvs.slice(4, 6)], [1, 1]);
+
+    const previousAssets = global.RRAssetFiles;
+    global.RRAssetFiles = AssetFiles;
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'rr-obj-tex-'));
+    try {
+        fs.mkdirSync(path.join(root, '3d', 'plant', 'source'), { recursive: true });
+        fs.mkdirSync(path.join(root, '3d', 'plant', 'textures'), { recursive: true });
+        fs.writeFileSync(path.join(root, '3d', 'plant', 'source', 'Plant_001.OBJ'), obj);
+        fs.writeFileSync(path.join(root, '3d', 'plant', 'textures', 'PLANT_NM_002.png'), 'n');
+        fs.writeFileSync(path.join(root, '3d', 'plant', 'textures', 'PLANT_CLR_002.jpg'), 'c');
+        const model = ModelGraphicPicker.listModels(root)[0];
+        assert.equal(model.texture, 'PLANT_CLR_002.jpg', 'the colour pass wins');
+
+        const mapData = { reactor3d: { events: {} } };
+        Reactor3D.setEventModelSpec(mapData, 7, 0,
+            { name: 'plant', file: 'Plant_001', ext: '.OBJ', texture: model.texture, size: 2 });
+        const written = mapData.reactor3d.events['7']['0'];
+        assert.equal(written.ext, '.OBJ', 'extension case survives the sidecar');
+        assert.equal(written.texture, 'PLANT_CLR_002.jpg');
+        const read = Reactor3D.eventModelSpec(mapData, 7, 0);
+        assert.equal(read.ext, '.OBJ');
+        assert.equal(read.texture, 'PLANT_CLR_002.jpg');
+    } finally {
+        fs.rmSync(root, { recursive: true, force: true });
+        if (previousAssets === undefined) delete global.RRAssetFiles;
+        else global.RRAssetFiles = previousAssets;
+    }
 });

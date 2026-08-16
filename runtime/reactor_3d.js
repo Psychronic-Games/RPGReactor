@@ -6078,8 +6078,10 @@ Reactor3D.eventModelSpec = function(mapData, eventId, pageIndex) {
     if (!spec || !spec.name) return null;
     const ref = this.splitModelRef(spec.name);
     if (!ref) return null;
+    // Validated by lowercase, stored as shipped: the load URL must match the
+    // file's real name (Plant_001.OBJ) on a case-sensitive filesystem.
     const ext = spec.ext && this.MODEL_EXTS.indexOf(String(spec.ext).toLowerCase()) >= 0
-        ? String(spec.ext).toLowerCase()
+        ? String(spec.ext)
         : ref.ext;
     const size = Number(spec.size);
     const scale = Number(spec.scale);
@@ -6096,7 +6098,8 @@ Reactor3D.eventModelSpec = function(mapData, eventId, pageIndex) {
         yaw: Number.isFinite(yaw) ? yaw * Math.PI / 180 : 0,
         pitch: Number.isFinite(pitch) ? pitch * Math.PI / 180 : 0,
         roll: Number.isFinite(roll) ? roll * Math.PI / 180 : 0,
-        faces: this.readModelFaces(spec.faces)
+        faces: this.readModelFaces(spec.faces),
+        texture: spec.texture ? String(spec.texture) : ""
     };
 };
 
@@ -6135,7 +6138,7 @@ Reactor3D.setEventModelSpec = function(mapData, eventId, pageIndex, spec) {
     const ref = this.splitModelRef(spec.name);
     if (!ref) return null;
     const ext = spec.ext && this.MODEL_EXTS.indexOf(String(spec.ext).toLowerCase()) >= 0
-        ? String(spec.ext).toLowerCase()
+        ? String(spec.ext)
         : ref.ext;
     const fileRef = spec.file ? this.splitModelRef(spec.file) : null;
     const written = {
@@ -6150,6 +6153,7 @@ Reactor3D.setEventModelSpec = function(mapData, eventId, pageIndex, spec) {
     };
     const faces = this.readModelFaces(spec.faces);
     if (faces) written.faces = faces;
+    if (spec.texture) written.texture = String(spec.texture);
     store.events[key][page] = written;
     return store.events[key][page];
 };
@@ -6559,7 +6563,7 @@ Reactor3D.loadGlb = function(name) {
     return this.loadModel(name, ".glb");
 };
 
-Reactor3D.loadModel = function(name, ext, file) {
+Reactor3D.loadModel = function(name, ext, file, texture) {
     const key = this.modelCacheKey(name, ext, file);
     const cached = this._glbCache[key];
     if (cached) return cached.promise;
@@ -6608,7 +6612,7 @@ Reactor3D.loadModel = function(name, ext, file) {
                 }
                 try {
                     const baseUrl = job.url.replace(/[^/]+$/, "");
-                    entry.template = this.readModel(xhr.response, job.ext, baseUrl);
+                    entry.template = this.readModel(xhr.response, job.ext, baseUrl, texture);
                     resolve(entry.template);
                 } catch (error) {
                     entry.failed = true;
@@ -6624,18 +6628,18 @@ Reactor3D.loadModel = function(name, ext, file) {
     return entry.promise;
 };
 
-Reactor3D.readModel = function(buffer, ext, baseUrl) {
+Reactor3D.readModel = function(buffer, ext, baseUrl, texture) {
     const kind = String(ext || ".glb").toLowerCase();
     if (kind === ".glb") {
         const parsed = this.readGlb(buffer);
         return this.buildGlbTemplate(parsed.json, parsed.bin, baseUrl);
     }
-    if (kind === ".obj") return this.buildMeshTemplate(this.readObj(buffer));
-    if (kind === ".stl") return this.buildMeshTemplate(this.readStl(buffer));
-    if (kind === ".dxf") return this.buildMeshTemplate(this.readDxf(buffer));
-    if (kind === ".fbx") return this.buildMeshTemplate(this.readFbx(buffer));
-    if (kind === ".3mf") return this.buildMeshTemplate(this.read3mf(buffer));
-    if (kind === ".usdz") return this.buildMeshTemplate(this.readUsdz(buffer));
+    if (kind === ".obj") return this.buildMeshTemplate(this.readObj(buffer), baseUrl, texture);
+    if (kind === ".stl") return this.buildMeshTemplate(this.readStl(buffer), baseUrl, texture);
+    if (kind === ".dxf") return this.buildMeshTemplate(this.readDxf(buffer), baseUrl, texture);
+    if (kind === ".fbx") return this.buildMeshTemplate(this.readFbx(buffer), baseUrl, texture);
+    if (kind === ".3mf") return this.buildMeshTemplate(this.read3mf(buffer), baseUrl, texture);
+    if (kind === ".usdz") return this.buildMeshTemplate(this.readUsdz(buffer), baseUrl, texture);
     if (kind === ".blend") throw new Error("export Blend files as GLB, OBJ or FBX");
     throw new Error("unsupported model type " + kind);
 };
@@ -6669,24 +6673,54 @@ Reactor3D._zipFiles = function(buffer) {
 
 Reactor3D.readObj = function(buffer) {
     const verts = [];
+    const coords = [];
     const faces = [];
+    const outPositions = [];
+    const outUvs = [];
+    // OBJ indexes positions and texture coordinates separately; a textured
+    // corner is welded per unique v/vt pair so the geometry can carry a
+    // single uv attribute. Position-only files keep the plain index path.
+    const welded = new Map();
+    const weld = (vi, ti) => {
+        const key = vi + "/" + ti;
+        let at = welded.get(key);
+        if (at === undefined) {
+            at = outPositions.length / 3;
+            welded.set(key, at);
+            outPositions.push(verts[vi * 3], verts[vi * 3 + 1], verts[vi * 3 + 2]);
+            outUvs.push(coords[ti * 2] || 0, coords[ti * 2 + 1] || 0);
+        }
+        return at;
+    };
+    let anyUv = false;
     const lines = this._modelText(buffer).split(/\r?\n/);
     for (let i = 0; i < lines.length; i++) {
         const parts = lines[i].trim().split(/\s+/);
         if (parts[0] === "v" && parts.length >= 4) {
             verts.push(+parts[1], +parts[2], +parts[3]);
+        } else if (parts[0] === "vt" && parts.length >= 3) {
+            coords.push(+parts[1], +parts[2]);
         } else if (parts[0] === "f" && parts.length >= 4) {
             const ids = [];
             for (let p = 1; p < parts.length; p++) {
-                const raw = parseInt(parts[p], 10);
+                const pieces = parts[p].split("/");
+                const raw = parseInt(pieces[0], 10);
                 if (!Number.isFinite(raw) || raw === 0) continue;
-                ids.push(raw < 0 ? verts.length / 3 + raw : raw - 1);
+                const vi = raw < 0 ? verts.length / 3 + raw : raw - 1;
+                const rawT = parseInt(pieces[1], 10);
+                const ti = Number.isFinite(rawT) && rawT !== 0
+                    ? (rawT < 0 ? coords.length / 2 + rawT : rawT - 1)
+                    : -1;
+                if (ti >= 0) anyUv = true;
+                ids.push(weld(vi, ti));
             }
             for (let t = 1; t + 1 < ids.length; t++) faces.push(ids[0], ids[t], ids[t + 1]);
         }
     }
     if (!faces.length) throw new Error("OBJ has no faces");
-    return { positions: new Float32Array(verts), indices: faces };
+    const mesh = { positions: new Float32Array(outPositions), indices: faces };
+    if (anyUv) mesh.uvs = new Float32Array(outUvs);
+    return mesh;
 };
 
 Reactor3D.readStl = function(buffer) {
@@ -6927,17 +6961,49 @@ Reactor3D.readUsdz = function(buffer) {
     return this.readUsdaMesh(this._modelText(files[names[0]]));
 };
 
-Reactor3D.buildMeshTemplate = function(mesh) {
+Reactor3D.buildMeshTemplate = function(mesh, baseUrl, textureFile) {
     if (typeof THREE === "undefined") throw new Error("three.js is not loaded");
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute("position", new THREE.BufferAttribute(mesh.positions, 3));
+    if (mesh.uvs && mesh.uvs.length) {
+        geometry.setAttribute("uv", new THREE.BufferAttribute(mesh.uvs, 2));
+    }
     if (mesh.indices && mesh.indices.length) {
         const max = mesh.indices.reduce((high, value) => value > high ? value : high, 0);
         const Index = max > 65535 ? Uint32Array : Uint16Array;
         geometry.setIndex(new THREE.BufferAttribute(new Index(mesh.indices), 1));
     }
     geometry.computeVertexNormals();
-    const material = new THREE.MeshBasicMaterial({ color: 0x888888, side: THREE.FrontSide, fog: false });
+    // A colour map from the model's textures/ folder, when the format
+    // carries UVs and the sidecar names one — chosen by the picker, since
+    // these formats do not embed their images the way GLB does. Image-based
+    // loading works from both the editor's file:// base and the game's
+    // relative one, where fetch would not.
+    let map = null;
+    const textures = [];
+    if (mesh.uvs && textureFile && baseUrl) {
+        map = new THREE.Texture();
+        if (THREE.SRGBColorSpace) map.colorSpace = THREE.SRGBColorSpace;
+        const candidates = [
+            baseUrl.replace(/\/source\/$/, "/textures/") + textureFile,
+            baseUrl + textureFile
+        ];
+        const tryAt = index => {
+            if (index >= candidates.length) return;
+            const img = new Image();
+            img.onload = () => {
+                map.image = img;
+                map.needsUpdate = true;
+            };
+            img.onerror = () => tryAt(index + 1);
+            img.src = candidates[index];
+        };
+        tryAt(0);
+        textures.push(map);
+    }
+    const material = new THREE.MeshBasicMaterial(map
+        ? { color: 0xffffff, map, side: THREE.FrontSide, fog: false }
+        : { color: 0x888888, side: THREE.FrontSide, fog: false });
     material.__reactorModel = true;
     const root = new THREE.Group();
     root.name = "model";
@@ -6951,7 +7017,7 @@ Reactor3D.buildMeshTemplate = function(mesh) {
         child.position.z -= center.z;
     }
     root.userData.glbSize = { x: size.x, y: size.y, z: size.z };
-    root.userData.glbTextures = [];
+    root.userData.glbTextures = textures;
     return root;
 };
 
@@ -7315,7 +7381,7 @@ Reactor3D.MapScene.prototype.syncCharacterModels = function(characters) {
         if (!holder) {
             holder = { spec: Reactor3D.modelCacheKey(spec.name, spec.ext, spec.file), object: null };
             this._modelInstances.set(key, holder);
-            Reactor3D.loadModel(spec.name, spec.ext, spec.file).then(template => {
+            Reactor3D.loadModel(spec.name, spec.ext, spec.file, spec.texture).then(template => {
                 if (!template || !this._modelsGroup) return;
                 const current = this._modelInstances.get(key);
                 if (!current || current.spec !== Reactor3D.modelCacheKey(spec.name, spec.ext, spec.file)) return;
