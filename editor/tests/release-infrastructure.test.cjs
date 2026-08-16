@@ -199,7 +199,10 @@ test('tests do not depend on ignored private project fixtures', () => {
     // so on a clean checkout it checks the tracked Demo alone and locally it
     // also covers the private test beds — which is exactly where a runtime fix
     // gets tried by hand, and where it silently went stale before.
-    const ENUMERATES_SAFELY = new Set(['runtime-template-sync.test.cjs']);
+    const ENUMERATES_SAFELY = new Set([
+        'runtime-template-sync.test.cjs',
+        'mz3d-hidden-tilemap-sprites.test.cjs'
+    ]);
     for (const entry of fs.readdirSync(__dirname).filter(name => name.endsWith('.cjs'))) {
         if (entry === path.basename(__filename)) continue;
         if (ENUMERATES_SAFELY.has(entry)) continue;

@@ -1,10 +1,10 @@
 # RPG Reactor
 
-RPG Reactor 0.98.1 is an open-source, cross-platform RPG game editor and runtime for RPG Maker MV/MZ-compatible projects. RPG Reactor provides its own modern PIXI 8-based runtime while preserving compatibility with RPG Maker project data and targeting backwards compatibility with both RPG Maker MZ and MV plugins, including mixing plugins from both engines within a single project through complementary MZ and MV compatibility layers.
+RPG Reactor 0.98.2 is an open-source, cross-platform RPG game editor and runtime for RPG Maker MV/MZ-compatible projects. RPG Reactor provides its own modern PIXI 8-based runtime while preserving compatibility with RPG Maker project data and targeting backwards compatibility with both RPG Maker MZ and MV plugins, including mixing plugins from both engines within a single project through complementary MZ and MV compatibility layers.
 
 Use RPG Reactor to create, edit, playtest, and package 2D RPGs with familiar RPG Maker-style maps, events, database records, plugins, and deployment workflows, without depending on the original RPG Maker runtime or editor.
 
-Pre-built download binaries are available at <https://psychronic.itch.io/rpg-reactor>. The latest tagged source release is [0.98.1](https://github.com/Psychronic-Games/RPGReactor/releases/tag/v0.98.1).
+Pre-built download binaries are available at <https://psychronic.itch.io/rpg-reactor>. The current development version is 0.98.2 and is not published yet; the latest tagged source release is [0.98.1](https://github.com/Psychronic-Games/RPGReactor/releases/tag/v0.98.1).
 
 ## Repository Layout
 
@@ -45,16 +45,16 @@ RPGReactor/
 - **Build & deploy**: one-click isolated playtests; cross-platform game packaging for Windows, macOS, Linux, and Web; optional Linux AppImages for games and the editor; configurable NW.js releases and runtime locales; optional staged PNG/OGG optimization; and an editor distribution builder with SHA-256 checksums.
 - **Source-audited 18-language localization** across editor-generated interface text, with locale-key and placeholder validation, Arabic right-to-left direction, and project-authored game content deliberately left untouched; plus a theme system with multiple color palettes in light and dark modes.
 
-## What's New in 0.98.1
+## What's New in 0.98.2
 
 The full list for this release cycle is in the [changelog](CHANGELOG.md).
 
-- **The Web editor can enter 3D mode.** The viewport now loads `three.js` and `reactor_3d.js` lazily from the bundled project's URL-addressable runtime instead of looking for a desktop filesystem directory.
-- **A failed 3D activation cannot brick later launches.** Saved 3D state is cleared before startup, durable state remains 2D until an initial render succeeds, and renderer/library failures return to the working 2D map.
-- **Windows 3D activation no longer creates a crash-prone second GPU context.** Three.js temporarily shares PIXI's existing WebGL2 canvas and context, then resets and returns it to 2D without forcing context loss. Concurrent enables still share one activation, disabling cancels pending work, and stale rebuilds cannot commit after teardown.
-- **Unsafe preview allocations are refused early.** Maps above 40,000 cells or 400,000 estimated source quads stay in 2D with a clear status instead of risking renderer-process exhaustion. The validated 200×200 production-map size remains supported.
-- **MV-era PIXI filters compile on PIXI 8 during snapshots and battle transitions.** Legacy `filterArea` and `filterClamp` coordinates now use PIXI 8's real filter globals without plugin defaults overwriting them, eliminating Haven/Project3's Pixelate shader failure and invalid-program console flood.
-- **PIXI 8 tilemaps stay complete and joined while the camera moves.** Camera position reaches the tilemap before its update, repaints synchronize every mesh immediately, and plugin row layers are prepared once before rendering. This eliminates blank frames and transient folded seams during Haven/Project3 map pans.
+- **Existing projects use the runtime fixes shipped by the current editor.** Opening an older Reactor project refreshes its versioned engine files before loading game data while preserving its own plugin list, preventing stale corescripts from reproducing already-fixed shader failures.
+- **Database editing is more direct.** Learnable Skills, Effects, and Enemy Action Patterns have visible controls, double-click editing, and keyboard actions instead of relying on hidden context menus.
+- **Extended face sheets and MV animations are authorable.** Four-column face sheets may have additional 144px rows, and switching an Animation to Sprite-based now produces a valid editable MV-format record.
+- **Chinese localization and layout are safer.** Reviewed Simplified Chinese terms override machine-assisted guesses, common locale aliases work, and database forms reflow according to their actual available width.
+- **Quick Event Creation covers common map interactions.** Right-click an empty cell in Event mode to generate a Transfer, Door, Treasure, or Inn event through guided project-aware controls.
+- **Events can use a 3D model.** The Event editor Image section can pick a mesh from `3d/<name>/source`, mark Front/Back/Left/Right, and store the pose in the map's `.r3d.json` sidecar. In playtest the model follows the event and blocks the tiles it covers.
 
 ## Development Launchers
 
@@ -131,7 +131,7 @@ cd editor
 npm test
 ```
 
-GitHub Actions runs the same suite from a clean checkout, including syntax, project scaffolding, runtime manifests, save safety, localization no-fallback checks, cross-instance clipboard transport, database and event-command serialization, map sampling and exact autotile placement, picture extensions, project lifecycle security, runtime compatibility, deployment, and release policy/signing gates. Current validation completed with **1,304 passing tests and no failures**.
+GitHub Actions runs the same suite from a clean checkout, including syntax, project scaffolding, runtime manifests, save safety, localization no-fallback checks, cross-instance clipboard transport, database and event-command serialization, map sampling and exact autotile placement, picture extensions, project lifecycle security, runtime compatibility, deployment, and release policy/signing gates. Current validation completed with **1,366 passing tests and no failures**.
 
 ## Runtime
 
@@ -147,17 +147,17 @@ for third-party files or user/project content.
 ## Cutting a Source Release
 
 `cut-release.cjs` is the canonical source-release path. Run it from a clean
-`main` worktree after all 0.98.1 changes have been committed:
+`main` worktree after all 0.98.2 changes have been committed:
 
 ```bash
-node editor/build-scripts/cut-release.cjs 0.98.1 --dry-run
-node editor/build-scripts/cut-release.cjs 0.98.1
+node editor/build-scripts/cut-release.cjs 0.98.2 --dry-run
+node editor/build-scripts/cut-release.cjs 0.98.2
 ```
 
 The command runs the complete editor test suite, finalizes both changelog
 headings with the release date, updates the package/README version surfaces and
 test count, creates a release commit when those surfaces changed, creates an
-annotated `v0.98.1` tag, and pushes the branch and tag. The tag push starts
+annotated `v0.98.2` tag, and pushes the branch and tag. The tag push starts
 `publish-release.yml`, which creates or updates the GitHub source release using
 that version's root changelog section. `--no-push` stops after creating the tag.
 

@@ -441,7 +441,8 @@ test('a prop is hidden where the hide will actually stick', () => {
     const hide = sprites.lastIndexOf('Sprite_Character.prototype.updateVisibility = function() {');
     assert.ok(hide > -1, 'updateVisibility is overridden');
     const hideBody = sprites.slice(hide, sprites.indexOf('\n};', hide));
-    assert.match(hideBody, /Reactor3D\.isEventProp\(character\.eventId\(\)\)\) this\.visible = false;/);
+    assert.match(hideBody, /Reactor3D\.isEventProp\(character\.eventId\(\)\)/);
+    assert.match(hideBody, /this\.visible = false/);
     assert.match(hideBody, /this\._reactor3dBaseVisibility\(\);/, 'and the stock rules still run');
 
     // And positioning no longer bails out early, so nothing can go stale.

@@ -141,6 +141,22 @@ test('flattening a map takes its sidecar away again', () => {
     }
 });
 
+test('a sidecar that only holds event models is kept', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'rpg-reactor-elevation-'));
+    fs.mkdirSync(path.join(root, 'data'));
+    try {
+        const map = mapOf(3, 3, 8);
+        Reactor3D.setEventModelSpec(map, 22, 0, { name: 'Oth97_CNO_Consul', size: 20, yaw: -90 });
+        assert.equal(elevation.save(fs, path, root, map), true);
+        const file = path.join(root, 'data', 'Map008.r3d.json');
+        assert.equal(fs.existsSync(file), true);
+        const written = JSON.parse(fs.readFileSync(file, 'utf8'));
+        assert.equal(written.events['22']['0'].name, 'Oth97_CNO_Consul');
+    } finally {
+        fs.rmSync(root, { recursive: true, force: true });
+    }
+});
+
 test('the map file never carries the sidecar', () => {
     // This is the compatibility promise: Map###.json stays data RPG Maker, the
     // engine and every plugin can read. The sidecar is attached to the loaded

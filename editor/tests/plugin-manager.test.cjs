@@ -265,7 +265,7 @@ test('complex plugin lists use themed draggable rows and aligned parameter grids
     assert.match(source, /showNestedStructEditor\(fieldName, value, fieldSchema, onSave, suppliedStructDefinitions = \{\}\)/);
     assert.match(source, /this\.renderArrayStructureEditor\(content, parsedValue, fieldSchema, structDefinitions, structDefinitions\)/);
     assert.match(source, /const parsedValue = this\.clonePluginValue/);
-    assert.match(source, /const isGroup = Boolean\(groupMatch\)/);
+    assert.match(source, /isPluginParameterGroupHeader\(/);
     assert.match(source, /const decodedValue = typeof value === 'string'/);
     assert.match(source, /const applyTextValue = \(\) =>/);
     assert.match(source, /renderStructureView\(\)/);
@@ -431,4 +431,50 @@ test('nothing is invented for a plugin that genuinely has no parameters', () => 
     assert.match(source,
         /if \(Object\.keys\(metadata\)\.length === 0 && pluginFileExists\) \{\s*\n\s*const fromValues = this\.parameterMetadataFromSavedValues\(plugin\.parameters, \{\}\)/);
     assert.match(source, /let metadata = paramMetadata;/);
+});
+
+test('one-line @param @text @desc annotations keep the real parameter name', () => {
+    const PluginManager = loadBrowserClass(path.join(repoRoot, 'src', 'PluginManager.js'), 'PluginManager');
+    const manager = Object.create(PluginManager.prototype);
+    const source = `/*:
+@param Foo @default 3
+@param spacer|graphics @text\u200f\u200f\u200e \u200e@desc ===============================================
+@param graphics
+@text Graphics
+*/`;
+
+    const defaults = manager.parsePluginParameters(source);
+    const metadata = manager.parsePluginParameterMetadata(source);
+
+    assert.equal(defaults.Foo, '3');
+    assert.ok(!Object.keys(defaults).some(key => key.includes('@text')));
+    assert.deepEqual(Object.keys(metadata), ['Foo', 'spacer|graphics', 'graphics']);
+    assert.equal(metadata['spacer|graphics'].text, '');
+    assert.equal(metadata['spacer|graphics'].textSpecified, true);
+    assert.equal(metadata['spacer|graphics'].desc, '===============================================');
+    assert.equal(metadata.graphics.text, 'Graphics');
+    assert.equal(metadata.Foo.default, '3');
+    assert.equal(manager.isPluginParameterSeparator('spacer|graphics', metadata['spacer|graphics']), true);
+    assert.equal(manager.isPluginParameterSeparator('graphics', metadata.graphics), false);
+    assert.equal(manager.isPluginParameterSeparator('Foo', metadata.Foo), false);
+    assert.equal(manager.isPluginParameterGroupHeader('graphics', metadata.graphics, true), true);
+    assert.equal(manager.isPluginParameterGroupHeader('Foo', metadata.Foo, false), false);
+});
+
+test('MZ3D spacer lines parse as spacer|section instead of a glued @text @desc name', () => {
+    const pluginPath = path.join(repoRoot, '..', 'template', 'MZ3D', 'js', 'plugins', 'mz3d.js');
+    if (!fs.existsSync(pluginPath)) return;
+
+    const PluginManager = loadBrowserClass(path.join(repoRoot, 'src', 'PluginManager.js'), 'PluginManager');
+    const manager = Object.create(PluginManager.prototype);
+    const metadata = manager.parsePluginParameterMetadata(fs.readFileSync(pluginPath, 'utf8'));
+
+    assert.ok(metadata['spacer|graphics']);
+    assert.ok(metadata.graphics);
+    assert.equal(metadata.graphics.text, 'Graphics');
+    assert.ok(!Object.keys(metadata).some(key => key.includes('@text') || key.includes('@desc')));
+    assert.equal(manager.isPluginParameterGroupHeader('map', metadata.map, true), true);
+    assert.equal(manager.isPluginParameterGroupHeader('input', metadata.input, true), true);
+    assert.equal(manager.isPluginParameterGroupHeader('renderDistOptionName', metadata.renderDistOptionName, true), false);
+    assert.equal(manager.isPluginParameterGroupHeader('cellSize', metadata.cellSize, false), false);
 });

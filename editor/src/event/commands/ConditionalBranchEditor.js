@@ -398,24 +398,28 @@ class ConditionalBranchEditor {
             font-size: 12px;
         `;
         select.innerHTML = `
-            <option value="0">${tt('Switch')}</option>
-            <option value="1">${tt('Variable')}</option>
-            <option value="2">${tt('Self Switch')}</option>
-            <option value="3">${tt('Timer')}</option>
-            <option value="4">${tt('Actor')}</option>
-            <option value="5">${tt('Enemy')}</option>
-            <option value="6">${tt('Character')}</option>
-            <option value="7">${tt('Gold')}</option>
-            <option value="8">${tt('Item')}</option>
-            <option value="9">${tt('Weapon')}</option>
-            <option value="10">${tt('Armor')}</option>
-            <option value="11">${tt('Button')}</option>
-            <option value="12">${tt('Script')}</option>
-            <option value="13">${tt('Vehicle')}</option>
-            <option value="14">${tt('Keyboard Extended')}</option>
-            <option value="15">${tt('Mouse Button')}</option>
-            <option value="16">${tt('Mouse Wheel')}</option>
-            <option value="17">${tt('Pointer Position')}</option>
+            <optgroup label="${tt('MZ Conditions')}">
+                <option value="0">${tt('Switch')}</option>
+                <option value="1">${tt('Variable')}</option>
+                <option value="2">${tt('Self Switch')}</option>
+                <option value="3">${tt('Timer')}</option>
+                <option value="4">${tt('Actor')}</option>
+                <option value="5">${tt('Enemy')}</option>
+                <option value="6">${tt('Character')}</option>
+                <option value="7">${tt('Gold')}</option>
+                <option value="8">${tt('Item')}</option>
+                <option value="9">${tt('Weapon')}</option>
+                <option value="10">${tt('Armor')}</option>
+                <option value="11">${tt('Button')}</option>
+                <option value="12">${tt('Script')}</option>
+                <option value="13">${tt('Vehicle')}</option>
+            </optgroup>
+            <optgroup label="${tt('Reactor Advanced')}">
+                <option value="14">${tt('Keyboard Extended')}</option>
+                <option value="15">${tt('Mouse Button')}</option>
+                <option value="16">${tt('Mouse Wheel')}</option>
+                <option value="17">${tt('Pointer Position')}</option>
+            </optgroup>
         `;
         select.value = this.conditionType.toString();
         select.addEventListener('change', (e) => {

@@ -575,6 +575,7 @@ class MessageCommandEditor {
             flex: 1;
             overflow: hidden;
             display: flex;
+            min-width: 0;
             gap: 1px;
             background-color: var(--color-border);
         `;
@@ -582,7 +583,8 @@ class MessageCommandEditor {
         // Left side - file list
         const fileListContainer = document.createElement('div');
         fileListContainer.style.cssText = `
-            width: 280px;
+            width: min(280px, 35%);
+            min-width: 160px;
             background-color: var(--color-bg-surface);
             overflow: hidden;
         `;
@@ -591,6 +593,7 @@ class MessageCommandEditor {
         const previewPane = document.createElement('div');
         previewPane.style.cssText = `
             flex: 1;
+            min-width: 0;
             background-color: var(--color-bg-surface);
             padding: 16px;
             display: flex;
@@ -612,9 +615,10 @@ class MessageCommandEditor {
         faceGridContainer.className = 'face-grid-container';
         faceGridContainer.style.cssText = `
             display: grid;
-            grid-template-columns: repeat(4, 144px);
+            grid-template-columns: repeat(4, minmax(0, 144px));
             gap: 8px;
             justify-content: center;
+            width: 100%;
         `;
 
         previewPane.appendChild(previewTitle);
@@ -644,15 +648,13 @@ class MessageCommandEditor {
 
             const imagePath = path.join(projectPath, 'img', 'faces', filename + '.png');
             const faceSheet = new Image();
-            faceSheet.src = RRAssetFiles.toUrl(imagePath);
 
             faceSheet.onload = () => {
-                // Draw all 8 faces in a horizontal 4x2 grid
-                // Faceset format: 4 columns × 2 rows (576px × 288px, each face 144×144)
-                for (let i = 0; i < 8; i++) {
+                const sheet = RRFaceSheet.metrics(faceSheet);
+                for (let i = 0; i < sheet.count; i++) {
                     const canvas = document.createElement('canvas');
-                    canvas.width = 144;
-                    canvas.height = 144;
+                    canvas.width = RRFaceSheet.FACE_SIZE;
+                    canvas.height = RRFaceSheet.FACE_SIZE;
                     canvas.className = 'face-option';
                     canvas.dataset.index = i;
                     canvas.style.cssText = `
@@ -662,20 +664,20 @@ class MessageCommandEditor {
                         image-rendering: -moz-crisp-edges;
                         image-rendering: crisp-edges;
                         transition: all 0.15s;
+                        width: 100%;
+                        height: auto;
+                        box-sizing: border-box;
                     `;
 
                     const ctx = canvas.getContext('2d');
-                    // Faceset is 4 columns × 2 rows
-                    const col = i % 4;  // 0-3
-                    const row = Math.floor(i / 4);  // 0-1
+                    const source = RRFaceSheet.sourceRect(i, faceSheet);
 
-                    // Draw the face from the sheet
                     ctx.drawImage(
                         faceSheet,
-                        col * 144, row * 144,
-                        144, 144,
+                        source.x, source.y,
+                        source.width, source.height,
                         0, 0,
-                        144, 144
+                        RRFaceSheet.FACE_SIZE, RRFaceSheet.FACE_SIZE
                     );
 
                     canvas.addEventListener('mouseenter', () => {
@@ -707,6 +709,7 @@ class MessageCommandEditor {
             faceSheet.onerror = () => {
                 faceGridContainer.innerHTML = `<div style="color: #ff6666; padding: 20px;">${this._t('Failed to load faceset image')}</div>`;
             };
+            faceSheet.src = RRAssetFiles.toUrl(imagePath);
         };
 
         // Footer
@@ -780,9 +783,7 @@ class MessageCommandEditor {
         setTimeout(() => browser.searchInput.focus(), 100);
     }
 
-    /**
-     * Show face index picker (8 faces per sheet, 2 columns x 4 rows)
-     */
+    /** Show the face index picker for one loaded sheet. */
     showFaceIndexPicker(filename, projectPath) {
         const picker = document.createElement('div');
         picker.style.cssText = `
@@ -803,7 +804,8 @@ class MessageCommandEditor {
             background-color: var(--color-bg-surface);
             border: 1px solid var(--color-border);
             border-radius: 6px;
-            width: 400px;
+            width: min(640px, 90%);
+            max-height: 85vh;
             display: flex;
             flex-direction: column;
             box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
@@ -828,13 +830,15 @@ class MessageCommandEditor {
         closeButton.textContent = '×';
         header.append(heading, closeButton);
 
-        // Content - 4x2 grid of faces (horizontal layout matching faceset format)
+        // Content - four stock face columns with as many rows as the image contains
         const content = document.createElement('div');
         content.style.cssText = `
             padding: 16px;
             display: grid;
-            grid-template-columns: repeat(4, 1fr);
+            grid-template-columns: repeat(4, minmax(0, 144px));
             gap: 8px;
+            justify-content: center;
+            overflow-y: auto;
         `;
 
         const path = require('path');
@@ -842,34 +846,33 @@ class MessageCommandEditor {
 
         // Load the face image
         const faceSheet = new Image();
-        faceSheet.src = RRAssetFiles.toUrl(imagePath);
 
         faceSheet.onload = () => {
-            // Each face is 144x144 on the sheet
-            // Faceset format: 4 columns × 2 rows
-            for (let i = 0; i < 8; i++) {
+            const sheet = RRFaceSheet.metrics(faceSheet);
+            for (let i = 0; i < sheet.count; i++) {
                 const canvas = document.createElement('canvas');
-                canvas.width = 144;
-                canvas.height = 144;
+                canvas.width = RRFaceSheet.FACE_SIZE;
+                canvas.height = RRFaceSheet.FACE_SIZE;
                 canvas.style.cssText = `
                     border: 2px solid var(--color-border-input);
                     cursor: pointer;
                     image-rendering: pixelated;
                     image-rendering: -moz-crisp-edges;
                     image-rendering: crisp-edges;
+                    width: 100%;
+                    height: auto;
+                    box-sizing: border-box;
                 `;
 
                 const ctx = canvas.getContext('2d');
-                const col = i % 4;  // 0-3
-                const row = Math.floor(i / 4);  // 0-1
+                const source = RRFaceSheet.sourceRect(i, faceSheet);
 
-                // Draw the face from the sheet
                 ctx.drawImage(
                     faceSheet,
-                    col * 144, row * 144, // Source position
-                    144, 144,              // Source size
-                    0, 0,                  // Dest position
-                    144, 144               // Dest size
+                    source.x, source.y,
+                    source.width, source.height,
+                    0, 0,
+                    RRFaceSheet.FACE_SIZE, RRFaceSheet.FACE_SIZE
                 );
 
                 canvas.addEventListener('mouseenter', () => {
@@ -901,6 +904,7 @@ class MessageCommandEditor {
         faceSheet.onerror = () => {
             content.innerHTML = `<div style="color: #ff6666; padding: 20px;">${this._t('Failed to load face image')}</div>`;
         };
+        faceSheet.src = RRAssetFiles.toUrl(imagePath);
 
         container.appendChild(header);
         container.appendChild(content);
@@ -942,25 +946,24 @@ class MessageCommandEditor {
         const imagePath = path.join(currentProject.path, 'img', 'faces', this.faceImage + '.png');
 
         const faceSheet = new Image();
-        faceSheet.src = RRAssetFiles.toUrl(imagePath);
 
         faceSheet.onload = () => {
-            // Faceset is 4 columns × 2 rows
-            const col = this.faceIndex % 4;  // 0-3
-            const row = Math.floor(this.faceIndex / 4);  // 0-1
+            const source = RRFaceSheet.sourceRect(this.faceIndex, faceSheet);
+            if (!source) return;
 
             ctx.drawImage(
                 faceSheet,
-                col * 144, row * 144,
-                144, 144,
+                source.x, source.y,
+                source.width, source.height,
                 0, 0,
-                144, 144
+                RRFaceSheet.FACE_SIZE, RRFaceSheet.FACE_SIZE
             );
         };
 
         faceSheet.onerror = () => {
             console.error('Failed to load face image:', imagePath);
         };
+        faceSheet.src = RRAssetFiles.toUrl(imagePath);
     }
 
     /**

@@ -607,6 +607,7 @@
         }
 
         .map-autotile-animation,
+        .map-grid,
         .map-3d-view {
             display: inline-flex;
             align-items: center;
@@ -617,6 +618,7 @@
         }
 
         .map-autotile-animation input,
+        .map-grid input,
         .map-3d-view input {
             width: 12px;
             height: 12px;
@@ -989,6 +991,8 @@
             flex: 1;
             min-width: 0;
             min-height: 0;
+            container-type: inline-size;
+            container-name: database-detail;
             padding: 0;
             overflow-y: auto;
             overflow-x: hidden;
@@ -1461,6 +1465,8 @@
             font-weight: bold;
             color: var(--color-text-strong);
             margin-bottom: 6px;
+            overflow-wrap: anywhere;
+            white-space: normal;
         }
 
         /* Light themes: white-on-white blends in, so swap to brand accent. */
@@ -1555,7 +1561,7 @@
 
         /* Grid layout for database sections: two equal columns, sections
          * keep their natural height (no stretching to match the tallest
-         * neighbor), single column on narrow windows. */
+         * neighbor), single column when the detail pane is narrow. */
         .database-sections-grid {
             display: grid;
             grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1581,12 +1587,6 @@
             min-height: 60px;
         }
 
-        @media (max-width: 1100px) {
-            .database-sections-grid {
-                grid-template-columns: minmax(0, 1fr);
-            }
-        }
-
         .database-section.full-width {
             grid-column: 1 / -1;
         }
@@ -1607,9 +1607,8 @@
             font-size: 13px;
             font-weight: 600;
             text-align: right;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
+            overflow-wrap: anywhere;
+            white-space: normal;
         }
         .db-form > .db-row-pair {
             grid-column: 1 / -1;
@@ -1669,7 +1668,8 @@
             color: var(--color-text-muted);
             font-size: 13px;
             font-weight: 600;
-            white-space: nowrap;
+            overflow-wrap: anywhere;
+            white-space: normal;
         }
         /* Lead row: label flush against the panel's left edge, field
          * filling the rest of the line. For a panel's primary field. */
@@ -1683,7 +1683,8 @@
             color: var(--color-text-muted);
             font-size: 13px;
             font-weight: 600;
-            white-space: nowrap;
+            overflow-wrap: anywhere;
+            white-space: normal;
         }
         .db-form > .db-row-lead > input,
         .db-form > .db-row-lead > textarea {
@@ -1718,9 +1719,8 @@
             color: var(--color-text-muted);
             font-size: 12px;
             font-weight: 600;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
+            overflow-wrap: anywhere;
+            white-space: normal;
         }
         .db-row-cols > .db-col select,
         .db-row-cols > .db-col input[type="text"],
@@ -1745,7 +1745,8 @@
             color: var(--color-text-muted);
             font-size: 13px;
             font-weight: 600;
-            white-space: nowrap;
+            overflow-wrap: anywhere;
+            white-space: normal;
         }
         .db-form input[type="text"],
         .db-form input[type="number"],
@@ -1836,7 +1837,54 @@
             font-size: 13px;
             color: var(--color-text);
             min-width: 80px;
-            white-space: nowrap;
+            overflow-wrap: anywhere;
+            white-space: normal;
+        }
+
+        @container database-detail (max-width: 760px) {
+            .database-sections-grid {
+                grid-template-columns: minmax(0, 1fr);
+            }
+
+            .db-form {
+                grid-template-columns: minmax(0, 1fr);
+            }
+
+            .db-form > label,
+            .db-form .db-row-pair > label {
+                text-align: left;
+            }
+
+            .db-form > .db-row-pair,
+            .db-form > .db-row-cols {
+                grid-auto-flow: row;
+                grid-template-columns: minmax(0, 1fr);
+            }
+
+            .db-form > .db-row-inline,
+            .db-form > .db-row-lead,
+            .db-row-inline .db-inline-group {
+                align-items: stretch;
+                flex-direction: column;
+            }
+
+            .database-class-columns,
+            .database-actor-pair {
+                grid-template-columns: minmax(0, 1fr) !important;
+            }
+        }
+
+        @container database-detail (max-width: 900px) {
+            .database-enemy-top-row,
+            .database-enemy-bottom-row {
+                flex-wrap: wrap;
+            }
+
+            .database-enemy-top-row > .database-section,
+            .database-enemy-bottom-row > .database-section {
+                flex: 1 1 320px !important;
+                min-width: 0;
+            }
         }
 
         .database-field-value {
@@ -2457,10 +2505,6 @@
             html.rr-web #database-list-panel {
                 min-width: 180px;
                 max-width: 180px;
-            }
-
-            html.rr-web .database-sections-grid {
-                grid-template-columns: minmax(0, 1fr);
             }
         }
 

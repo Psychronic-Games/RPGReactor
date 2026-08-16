@@ -1166,10 +1166,20 @@ class PluginManager {
                 const fieldName = node.key;
                 const fieldSchema = structSchema[fieldName] || {};
                 const groupMatch = fieldName.match(/^---\s*(.*?)\s*---$/);
-                const isGroup = Boolean(groupMatch);
+                const isSeparator = this.isPluginParameterSeparator(fieldName, fieldSchema);
+                const isGroup = this.isPluginParameterGroupHeader(
+                    fieldName, fieldSchema, Boolean(node.children && node.children.length)
+                ) && !isSeparator;
                 const row = document.createElement('div');
 
-                if (isGroup) {
+                if (isSeparator) {
+                    row.style.cssText = `
+                        margin: 8px 10px 4px ${10 + depth * 16}px;
+                        padding: 0;
+                        border-bottom: 1px solid var(--color-border);
+                    `;
+                    table.appendChild(row);
+                } else if (isGroup) {
                     row.style.cssText = `
                         padding: 7px 10px 7px ${10 + depth * 16}px;
                         background-color: var(--color-bg-toolbar);
@@ -2852,6 +2862,72 @@ class PluginManager {
         return line.trim().replace(/^\*\s?/, '');
     }
 
+    cleanAnnotationValue(value) {
+        return String(value || '').replace(/[\u200B-\u200F\u202A-\u202E\u2060-\u2064\uFEFF]/g, '').trim();
+    }
+
+    splitAnnotationLine(line) {
+        const pattern = /@(param|text|desc|type|default|parent|on|off|min|max|dir|option|command|arg|plugindesc|author|help|url|target|base|decimals)\b/gi;
+        const matches = [];
+        let match;
+        while ((match = pattern.exec(line))) {
+            matches.push({
+                tag: match[1].toLowerCase(),
+                index: match.index,
+                end: match.index + match[0].length
+            });
+        }
+        return matches.map((item, index) => {
+            const valueEnd = index + 1 < matches.length ? matches[index + 1].index : line.length;
+            return {
+                tag: item.tag,
+                value: this.cleanAnnotationValue(line.slice(item.end, valueEnd))
+            };
+        });
+    }
+
+    applyAnnotationToSchema(schema, tag, value) {
+        if (!schema) return;
+        switch (tag) {
+            case 'text':
+                schema.text = value;
+                schema.textSpecified = true;
+                break;
+            case 'desc':
+                schema.desc = schema.desc ? `${schema.desc} ${value}` : value;
+                if (Array.isArray(schema.descLines)) schema.descLines.push(value);
+                break;
+            case 'type':
+                schema.type = value;
+                schema.typeSpecified = true;
+                break;
+            case 'parent':
+                schema.parent = value;
+                break;
+            case 'default':
+                schema.default = value;
+                break;
+            case 'on':
+                schema.on = value;
+                break;
+            case 'off':
+                schema.off = value;
+                break;
+            case 'min':
+                schema.min = value.split(/\s+/, 1)[0] || value;
+                break;
+            case 'max':
+                schema.max = value.split(/\s+/, 1)[0] || value;
+                break;
+            case 'dir':
+                schema.dir = value;
+                break;
+            case 'option':
+                if (Array.isArray(schema.options)) schema.options.push(value);
+                break;
+        }
+    }
+
     /**
      * Parse plugin description from source.
      * @plugindesc is MULTILINE: it runs until the next @annotation. The
@@ -3003,35 +3079,18 @@ class PluginManager {
         let currentParam = null;
 
         for (const line of lines) {
-            const normalized = this.normalizeAnnotationLine(line);
-
-            // A @command or @arg block starts plugin-command metadata, whose
-            // own @default lines belong to the command argument, not to the
-            // last plugin parameter. Without this reset they overwrite it —
-            // parsePluginParameterMetadata already guards the same way.
-            if (normalized.match(/^@command\s+/) || normalized.match(/^@arg\s+/)) {
-                currentParam = null;
-                continue;
-            }
-
-            // @param defines a new parameter - capture everything including spaces
-            const paramMatch = normalized.match(/^@param\s*(.*)/);
-            if (paramMatch) {
-                const paramName = paramMatch[1].trim();
-                // Skip empty @param lines (used as separators in some plugins)
-                if (paramName === '') {
+            const tokens = this.splitAnnotationLine(this.normalizeAnnotationLine(line));
+            for (const token of tokens) {
+                if (token.tag === 'command' || token.tag === 'arg') {
                     currentParam = null;
                     continue;
                 }
-                currentParam = paramName;
-                continue;
-            }
-
-            // @default sets the default value (allow empty)
-            if (currentParam) {
-                const defaultMatch = normalized.match(/^@default(?:\s+(.*))?$/);
-                if (defaultMatch) {
-                    params[currentParam] = defaultMatch[1] !== undefined ? defaultMatch[1] : '';
+                if (token.tag === 'param') {
+                    currentParam = token.value || null;
+                    continue;
+                }
+                if (token.tag === 'default' && currentParam) {
+                    params[currentParam] = token.value;
                 }
             }
         }
@@ -3457,7 +3516,9 @@ class PluginManager {
             const value = plugin.parameters.hasOwnProperty(key) ? plugin.parameters[key] : (meta.default || '');
 
             // Create parameter input with depth information
-            const paramItem = this.createParameterInputWithDepth(plugin, key, value, meta, depth);
+            const paramItem = this.createParameterInputWithDepth(
+                plugin, key, value, meta, depth, Boolean(node.children && node.children.length)
+            );
             container.appendChild(paramItem);
 
             // Render children
@@ -3470,14 +3531,22 @@ class PluginManager {
     /**
      * Create parameter input field with depth information
      */
-    createParameterInputWithDepth(plugin, key, value, metadata, depth) {
-        const groupMatch = key.match(/^---\s*(.*?)\s*---$/);
-        const isSeparator = key === '' || metadata.text === '-' || /^-+$/.test(metadata.text || '');
+    isPluginParameterSeparator(key, metadata = {}) {
+        if (key === '' || metadata.text === '-' || /^-+$/.test(metadata.text || '')) return true;
+        if (/^spacer[|_]/i.test(key)) return true;
+        const rule = String(metadata.desc || '').replace(/\s+/g, '');
+        return Boolean(metadata.textSpecified && !metadata.text && /^[=-]+$/.test(rule));
+    }
 
-        // Check if this is a header-only parameter (no @default annotation at all)
-        // Header params are used for grouping and have children
-        // null means no @default was declared; '' means @default with empty value (real param)
-        const isHeaderOnly = Boolean(groupMatch) && !isSeparator;
+    isPluginParameterGroupHeader(key, metadata = {}, hasChildren = false) {
+        if (/^---\s*.*?\s*---$/.test(key)) return true;
+        return Boolean(hasChildren && metadata.default === null && !metadata.typeSpecified);
+    }
+
+    createParameterInputWithDepth(plugin, key, value, metadata, depth, hasChildren = false) {
+        const groupMatch = key.match(/^---\s*(.*?)\s*---$/);
+        const isSeparator = this.isPluginParameterSeparator(key, metadata);
+        const isHeaderOnly = this.isPluginParameterGroupHeader(key, metadata, hasChildren) && !isSeparator;
 
         const container = document.createElement('div');
 
@@ -3813,96 +3882,19 @@ class PluginManager {
             let currentParam = null;
 
             for (const line of lines) {
-                const normalized = this.normalizeAnnotationLine(line);
-
-                const paramMatch = normalized.match(/^@param\s*(.*)/);
-                if (paramMatch) {
-                    const paramName = paramMatch[1].trim();
-                    // Skip empty @param lines (used as separators)
-                    if (paramName === '') {
-                        currentParam = null;
-                        continue;
-                    }
-                    currentParam = paramName;
-                    structs[structName][currentParam] = {
-                        text: '',
-                        desc: '',
-                        type: 'string',
-                        default: null,
-                        parent: null,
-                        min: null,
-                        max: null,
-                        options: [],
-                        on: null,
-                        off: null
-                    };
-                    continue;
-                }
-
-                if (currentParam && structs[structName][currentParam]) {
-                    const textMatch = normalized.match(/^@text\s+(.+)/);
-                    if (textMatch) {
-                        structs[structName][currentParam].text = textMatch[1];
-                        continue;
-                    }
-
-                    const descMatch = normalized.match(/^@desc\s+(.+)/);
-                    if (descMatch) {
-                        const descText = descMatch[1];
-                        if (structs[structName][currentParam].desc) {
-                            structs[structName][currentParam].desc += ' ' + descText;
-                        } else {
-                            structs[structName][currentParam].desc = descText;
+                const tokens = this.splitAnnotationLine(this.normalizeAnnotationLine(line));
+                for (const token of tokens) {
+                    if (token.tag === 'param') {
+                        if (!token.value) {
+                            currentParam = null;
+                            continue;
                         }
+                        currentParam = token.value;
+                        structs[structName][currentParam] = this.blankParameterSchema();
                         continue;
                     }
-
-                    const typeMatch = normalized.match(/^@type\s+(.+)/);
-                    if (typeMatch) {
-                        structs[structName][currentParam].type = typeMatch[1].trim();
-                        continue;
-                    }
-
-                    const parentMatch = normalized.match(/^@parent\s+(.+)/);
-                    if (parentMatch) {
-                        structs[structName][currentParam].parent = parentMatch[1].trim();
-                        continue;
-                    }
-
-                    const defaultMatch = normalized.match(/^@default(?:\s+(.*))?$/);
-                    if (defaultMatch) {
-                        structs[structName][currentParam].default = defaultMatch[1] !== undefined ? defaultMatch[1] : '';
-                        continue;
-                    }
-
-                    const minMatch = normalized.match(/^@min\s+(\S+)/);
-                    if (minMatch) {
-                        structs[structName][currentParam].min = minMatch[1];
-                        continue;
-                    }
-
-                    const maxMatch = normalized.match(/^@max\s+(\S+)/);
-                    if (maxMatch) {
-                        structs[structName][currentParam].max = maxMatch[1];
-                        continue;
-                    }
-
-                    const optionMatch = normalized.match(/^@option\s+(.+)/);
-                    if (optionMatch) {
-                        structs[structName][currentParam].options.push(optionMatch[1]);
-                        continue;
-                    }
-
-                    const onMatch = normalized.match(/^@on\s+(.+)/);
-                    if (onMatch) {
-                        structs[structName][currentParam].on = onMatch[1];
-                        continue;
-                    }
-
-                    const offMatch = normalized.match(/^@off\s+(.+)/);
-                    if (offMatch) {
-                        structs[structName][currentParam].off = offMatch[1];
-                        continue;
+                    if (currentParam && structs[structName][currentParam]) {
+                        this.applyAnnotationToSchema(structs[structName][currentParam], token.tag, token.value);
                     }
                 }
             }
@@ -4007,9 +3999,11 @@ class PluginManager {
     blankParameterSchema() {
         return {
             text: '',
+            textSpecified: false,
             desc: '',
             descLines: [],
             type: 'string',
+            typeSpecified: false,
             default: null,
             parent: null,
             on: null,
@@ -4138,113 +4132,23 @@ class PluginManager {
         let currentParam = null;
 
         for (const line of lines) {
-            const normalized = this.normalizeAnnotationLine(line);
-
-            // Reset currentParam if we hit a @command or @arg (plugin commands)
-            // This prevents plugin command args from polluting parameter metadata
-            if (normalized.match(/^@command\s+/) || normalized.match(/^@arg\s+/)) {
-                currentParam = null;
-                continue;
-            }
-
-            const paramMatch = normalized.match(/^@param\s*(.*)/);
-            if (paramMatch) {
-                const paramName = paramMatch[1].trim();
-                // Skip empty @param lines (used as separators in some plugins)
-                if (paramName === '') {
+            const tokens = this.splitAnnotationLine(this.normalizeAnnotationLine(line));
+            for (const token of tokens) {
+                if (token.tag === 'command' || token.tag === 'arg') {
                     currentParam = null;
                     continue;
                 }
-                currentParam = paramName;
-                metadata[currentParam] = {
-                    text: '',
-                    desc: '',
-                    descLines: [], // Support multi-line descriptions
-                    type: 'string',
-                    default: null, // null = no @default annotation; '' = @default with empty value
-                    parent: null,
-                    on: null,  // For boolean labels
-                    off: null, // For boolean labels
-                    min: null,
-                    max: null,
-                    dir: null, // For file[] types
-                    options: [] // For combo/select types
-                };
-                continue;
-            }
-
-            if (currentParam && metadata[currentParam]) {
-                const textMatch = normalized.match(/^@text\s+(.+)/);
-                if (textMatch) {
-                    metadata[currentParam].text = textMatch[1];
-                    continue;
-                }
-
-                const descMatch = normalized.match(/^@desc\s+(.+)/);
-                if (descMatch) {
-                    const descText = descMatch[1];
-                    // Append to existing description
-                    if (metadata[currentParam].desc) {
-                        metadata[currentParam].desc += ' ' + descText;
-                    } else {
-                        metadata[currentParam].desc = descText;
+                if (token.tag === 'param') {
+                    if (!token.value) {
+                        currentParam = null;
+                        continue;
                     }
-                    metadata[currentParam].descLines.push(descText);
+                    currentParam = token.value;
+                    metadata[currentParam] = this.blankParameterSchema();
                     continue;
                 }
-
-                const typeMatch = normalized.match(/^@type\s+(.+)/);
-                if (typeMatch) {
-                    metadata[currentParam].type = typeMatch[1];
-                    continue;
-                }
-
-                const parentMatch = normalized.match(/^@parent\s+(.+)/);
-                if (parentMatch) {
-                    metadata[currentParam].parent = parentMatch[1].trim();
-                    continue;
-                }
-
-                const defaultMatch = normalized.match(/^@default(?:\s+(.*))?$/);
-                if (defaultMatch) {
-                    metadata[currentParam].default = defaultMatch[1] !== undefined ? defaultMatch[1] : '';
-                    continue;
-                }
-
-                const onMatch = normalized.match(/^@on\s+(.+)/);
-                if (onMatch) {
-                    metadata[currentParam].on = onMatch[1];
-                    continue;
-                }
-
-                const offMatch = normalized.match(/^@off\s+(.+)/);
-                if (offMatch) {
-                    metadata[currentParam].off = offMatch[1];
-                    continue;
-                }
-
-                const minMatch = normalized.match(/^@min\s+(\S+)/);
-                if (minMatch) {
-                    metadata[currentParam].min = minMatch[1];
-                    continue;
-                }
-
-                const maxMatch = normalized.match(/^@max\s+(\S+)/);
-                if (maxMatch) {
-                    metadata[currentParam].max = maxMatch[1];
-                    continue;
-                }
-
-                const dirMatch = normalized.match(/^@dir\s+(.+)/);
-                if (dirMatch) {
-                    metadata[currentParam].dir = dirMatch[1];
-                    continue;
-                }
-
-                const optionMatch = normalized.match(/^@option\s+(.+)/);
-                if (optionMatch) {
-                    metadata[currentParam].options.push(optionMatch[1]);
-                    continue;
+                if (currentParam && metadata[currentParam]) {
+                    this.applyAnnotationToSchema(metadata[currentParam], token.tag, token.value);
                 }
             }
         }

@@ -1,6 +1,8 @@
 // RPG Reactor - Event Manager
 // Handles event creation, editing, and management on maps
 
+const EVENT_DOUBLE_CLICK_INTERVAL = 500;
+
 class EventManager {
     constructor(projectController, databaseManager) {
         this.projectController = projectController;
@@ -440,14 +442,12 @@ class EventManager {
         }
 
         const currentTime = Date.now();
-        const isDoubleClick = currentTime - this._lastMapClickTime < 300 &&
-            this._lastMapClickX === tileX && this._lastMapClickY === tileY;
+        const isDoubleClick = this.isMapDoubleClick(
+            tileX, tileY, event.data.originalEvent, currentTime);
 
         if (isDoubleClick) {
             this.resetMapClickTracking();
-            const eventAtPos = this.getEventAt(tileX, tileY);
-            if (eventAtPos) this.editEvent(eventAtPos);
-            else this.createNewEvent(tileX, tileY);
+            this.activateEventAt(tileX, tileY);
             return;
         }
 
@@ -479,6 +479,35 @@ class EventManager {
             // which opens a new event.
             this.selectTile(tileX, tileY);
         }
+    }
+
+    isMapDoubleClick(tileX, tileY, originalEvent, currentTime = Date.now()) {
+        const sameTile = this._lastMapClickX === tileX && this._lastMapClickY === tileY;
+        if (!sameTile) return false;
+        return Number(originalEvent?.detail) >= 2 ||
+            currentTime - this._lastMapClickTime <= EVENT_DOUBLE_CLICK_INTERVAL;
+    }
+
+    activateEventAt(tileX, tileY) {
+        if (!this.eventMode || !this.currentMap ||
+            !Number.isInteger(tileX) || !Number.isInteger(tileY) ||
+            tileX < 0 || tileX >= this.currentMap.width ||
+            tileY < 0 || tileY >= this.currentMap.height) return false;
+
+        const eventAtPos = this.getEventAt(tileX, tileY);
+        if (eventAtPos) this.editEvent(eventAtPos);
+        else this.createNewEvent(tileX, tileY);
+        return true;
+    }
+
+    activateEventSelection() {
+        const tileX = Number.isInteger(this.selectedTileX)
+            ? this.selectedTileX
+            : this.selectedEvent?.x;
+        const tileY = Number.isInteger(this.selectedTileY)
+            ? this.selectedTileY
+            : this.selectedEvent?.y;
+        return this.activateEventAt(tileX, tileY);
     }
 
     updateHoverHighlight(pointerEvent, container = this.tilemapManager?.container) {
@@ -646,16 +675,25 @@ class EventManager {
         };
 
         // Menu items
+        const shortcutPrefix = typeof navigator !== 'undefined' &&
+            /Mac|iPhone|iPad|iPod/.test(navigator.platform || navigator.userAgent || '')
+            ? 'Cmd' : 'Ctrl';
         const menuItems = [
-            { label: this._t('eventCtx.newEvent'), action: createEventAction, enabled: !eventAtPos },
-            { label: this._t('eventCtx.editEvent'), action: () => this.editEvent(eventAtPos), enabled: !!eventAtPos },
+            { label: this._t('eventCtx.newEvent'), shortcut: 'Enter', action: createEventAction, enabled: !eventAtPos },
+            { label: this._t('eventCtx.editEvent'), shortcut: 'Enter', action: () => this.editEvent(eventAtPos), enabled: !!eventAtPos },
+            { label: this._t('quickEvent.title'), enabled: !eventAtPos, submenu: [
+                { label: this._t('quickEvent.transfer'), action: () => this.showQuickEventDialog('transfer', tileX, tileY) },
+                { label: this._t('quickEvent.door'), action: () => this.showQuickEventDialog('door', tileX, tileY) },
+                { label: this._t('quickEvent.treasure'), action: () => this.showQuickEventDialog('treasure', tileX, tileY) },
+                { label: this._t('quickEvent.inn'), action: () => this.showQuickEventDialog('inn', tileX, tileY) }
+            ] },
             { separator: true },
-            { label: this._t('eventCtx.cutEvent'), action: () => this.cutEvent(eventAtPos), enabled: !!eventAtPos },
-            { label: this._t('eventCtx.copyEvent'), action: () => this.copyEvent(eventAtPos), enabled: !!eventAtPos },
-            { label: this._t('eventCtx.pasteEvent'), action: () => this.pasteEvent(tileX, tileY), enabled: true },
-            { label: this._t('eventCtx.deleteEvent'), action: () => this.deleteEvent(eventAtPos), enabled: !!eventAtPos },
+            { label: this._t('eventCtx.cutEvent'), shortcut: `${shortcutPrefix}+X`, action: () => this.cutEvent(eventAtPos), enabled: !!eventAtPos },
+            { label: this._t('eventCtx.copyEvent'), shortcut: `${shortcutPrefix}+C`, action: () => this.copyEvent(eventAtPos), enabled: !!eventAtPos },
+            { label: this._t('eventCtx.pasteEvent'), shortcut: `${shortcutPrefix}+V`, action: () => this.pasteEvent(tileX, tileY), enabled: true },
+            { label: this._t('eventCtx.deleteEvent'), shortcut: 'Delete', action: () => this.deleteEvent(eventAtPos), enabled: !!eventAtPos },
             { separator: true },
-            { label: this._t('eventCtx.findEvent'), action: () => this.showFindDialog(), enabled: true },
+            { label: this._t('eventCtx.findEvent'), shortcut: `${shortcutPrefix}+F`, action: () => this.showFindDialog(), enabled: true },
             { label: this._t('eventCtx.findNext'), action: () => this.findNext(), enabled: this.currentSearchResults.length > 0 },
             { label: this._t('eventCtx.findPrev'), action: () => this.findPrevious(), enabled: this.currentSearchResults.length > 0 },
             { separator: true },
@@ -678,9 +716,9 @@ class EventManager {
                 menuItem.textContent = item.label + ' ▶';
                 menuItem.style.cssText = `
                     padding: 8px 16px;
-                    cursor: pointer;
+                    cursor: ${item.enabled === false ? 'not-allowed' : 'pointer'};
                     font-size: 13px;
-                    color: var(--color-text);
+                    color: ${item.enabled === false ? 'var(--color-text-dim)' : 'var(--color-text)'};
                     position: relative;
                 `;
 
@@ -711,6 +749,7 @@ class EventManager {
                     `;
 
                     subMenuItem.addEventListener('click', () => {
+                        if (item.enabled === false) return;
                         subItem.action();
                         this.hideContextMenu();
                     });
@@ -729,6 +768,7 @@ class EventManager {
                 menuItem.appendChild(submenu);
 
                 menuItem.addEventListener('mouseenter', () => {
+                    if (item.enabled === false) return;
                     menuItem.style.backgroundColor = 'var(--color-accent-tint-25)';
                     submenu.style.display = 'block';
                 });
@@ -742,13 +782,24 @@ class EventManager {
             } else {
                 const menuItem = document.createElement('div');
                 menuItem.className = 'context-menu-item';
-                menuItem.textContent = item.label;
                 menuItem.style.cssText = `
                     padding: 8px 16px;
                     cursor: ${item.enabled ? 'pointer' : 'not-allowed'};
                     font-size: 13px;
                     color: ${item.enabled ? 'var(--color-text)' : 'var(--color-text-dim)'};
+                    display: grid;
+                    grid-template-columns: minmax(0, 1fr) auto;
+                    gap: 24px;
                 `;
+                const label = document.createElement('span');
+                label.textContent = item.label;
+                menuItem.appendChild(label);
+                if (item.shortcut) {
+                    const shortcut = document.createElement('span');
+                    shortcut.textContent = item.shortcut;
+                    shortcut.style.cssText = 'color: var(--color-text-muted); font-size: 12px;';
+                    menuItem.appendChild(shortcut);
+                }
 
                 if (item.enabled) {
                     menuItem.addEventListener('click', () => {
@@ -1061,6 +1112,355 @@ class EventManager {
         return nextId;
     }
 
+    makeDefaultEventPage(overrides = {}) {
+        const page = {
+            conditions: {
+                actorId: 1, actorValid: false, itemId: 1, itemValid: false,
+                selfSwitchCh: 'A', selfSwitchValid: false,
+                switch1Id: 1, switch1Valid: false,
+                switch2Id: 1, switch2Valid: false,
+                variableId: 1, variableValid: false, variableValue: 0
+            },
+            directionFix: false,
+            image: { tileId: 0, characterName: '', direction: 2, pattern: 0, characterIndex: 0 },
+            moveFrequency: 3,
+            moveRoute: {
+                list: [{ code: 0, indent: null, parameters: [] }],
+                repeat: true, skippable: false, wait: false
+            },
+            moveSpeed: 3, moveType: 0, priorityType: 1,
+            stepAnime: false, through: false, trigger: 0, walkAnime: true,
+            list: [{ code: 0, indent: 0, parameters: [] }]
+        };
+        for (const [key, value] of Object.entries(overrides)) {
+            if (key === 'conditions' || key === 'image' || key === 'moveRoute') {
+                page[key] = { ...page[key], ...value };
+            } else {
+                page[key] = value;
+            }
+        }
+        return page;
+    }
+
+    makeQuickEvent(x, y, name, pages) {
+        const id = this.getNextEventId();
+        return { id, name, note: '', pages, x, y };
+    }
+
+    quickEventMoveRoute(characterId, commands) {
+        const list = commands.concat({ code: 0 });
+        const route = { list, repeat: false, skippable: false, wait: true };
+        return [
+            { code: 205, indent: 0, parameters: [characterId, route] },
+            ...commands.map(command => ({ code: 505, indent: 0, parameters: [command] }))
+        ];
+    }
+
+    buildQuickEvent(kind, x, y, config = {}) {
+        const destination = config.destination || { mapId: 1, x: 0, y: 0 };
+        const image = {
+            tileId: 0,
+            characterName: config.characterName || '',
+            characterIndex: Number(config.characterIndex) || 0,
+            pattern: Number(config.pattern) || 0,
+            direction: Number(config.imageDirection) || 2
+        };
+        const transfer = { code: 201, indent: 0, parameters: [
+            0, destination.mapId, destination.x, destination.y,
+            Number(config.direction) || 0, Number.isFinite(config.fadeType) ? config.fadeType : 0
+        ] };
+        const end = { code: 0, indent: 0, parameters: [] };
+
+        if (kind === 'transfer') {
+            const page = this.makeDefaultEventPage({
+                image, priorityType: image.characterName ? 1 : 0,
+                trigger: image.characterName ? 0 : 1,
+                list: [transfer, end]
+            });
+            return this.makeQuickEvent(x, y, 'Transfer', [page]);
+        }
+
+        if (kind === 'door') {
+            const routeCommands = [];
+            if (config.se?.name) routeCommands.push({ code: 44, parameters: [config.se] });
+            routeCommands.push(
+                { code: 17 }, { code: 15, parameters: [3] },
+                { code: 18 }, { code: 15, parameters: [3] },
+                { code: 19 }, { code: 15, parameters: [3] }
+            );
+            const page = this.makeDefaultEventPage({
+                image: { ...image, pattern: 1, direction: 2 },
+                directionFix: true,
+                list: [...this.quickEventMoveRoute(0, routeCommands), transfer, end]
+            });
+            return this.makeQuickEvent(x, y, 'Door', [page]);
+        }
+
+        if (kind === 'treasure') {
+            const rewardKind = config.rewardKind || 'item';
+            const rewardId = Math.max(1, Number(config.rewardId) || 1);
+            const amount = Math.max(1, Number(config.amount) || 1);
+            const rewardCodes = { item: 126, weapon: 127, armor: 128 };
+            const reward = rewardKind === 'gold'
+                ? { code: 125, indent: 0, parameters: [0, 0, amount] }
+                : { code: rewardCodes[rewardKind] || 126, indent: 0,
+                    parameters: rewardKind === 'item'
+                        ? [rewardId, 0, 0, amount]
+                        : [rewardId, 0, 0, amount, false] };
+            const routeCommands = [];
+            if (config.se?.name) routeCommands.push({ code: 44, parameters: [config.se] });
+            routeCommands.push(
+                { code: 17 }, { code: 15, parameters: [3] },
+                { code: 18 }, { code: 15, parameters: [3] },
+                { code: 19 }, { code: 15, parameters: [3] }
+            );
+            const page1 = this.makeDefaultEventPage({
+                image: { ...image, pattern: 1, direction: 2 }, directionFix: true,
+                list: [
+                    ...this.quickEventMoveRoute(0, routeCommands), reward,
+                    { code: 101, indent: 0, parameters: ['', 0, 0, 2, ''] },
+                    { code: 401, indent: 0, parameters: [config.message || 'You found treasure!'] },
+                    { code: 123, indent: 0, parameters: ['A', 0] }, end
+                ]
+            });
+            const page2 = this.makeDefaultEventPage({
+                conditions: { selfSwitchCh: 'A', selfSwitchValid: true },
+                image: { ...image, pattern: 1, direction: 8 }, directionFix: true
+            });
+            return this.makeQuickEvent(x, y, 'Treasure', [page1, page2]);
+        }
+
+        if (kind === 'inn') {
+            const price = Math.max(0, Number(config.price) || 0);
+            const currency = config.currency || 'G';
+            const page = this.makeDefaultEventPage({ image, list: [
+                { code: 101, indent: 0, parameters: ['', 0, 0, 2, ''] },
+                { code: 401, indent: 0, parameters: [config.offerMessage || `It is ${price} ${currency} per night. Would you like to stay?`] },
+                { code: 102, indent: 0, parameters: [['Yes', 'No'], 1, 0, 2, 0] },
+                { code: 402, indent: 0, parameters: [0, 'Yes'] },
+                { code: 111, indent: 1, parameters: [7, price, 0] },
+                { code: 125, indent: 2, parameters: [1, 0, price] },
+                { code: 221, indent: 2, parameters: [] },
+                { code: 230, indent: 2, parameters: [30] },
+                { code: 314, indent: 2, parameters: [0, 0] },
+                { code: 222, indent: 2, parameters: [] },
+                { code: 411, indent: 1, parameters: [] },
+                { code: 101, indent: 2, parameters: ['', 0, 0, 2, ''] },
+                { code: 401, indent: 2, parameters: [config.failureMessage || `You do not have enough ${currency}.`] },
+                { code: 412, indent: 1, parameters: [] },
+                { code: 402, indent: 0, parameters: [1, 'No'] },
+                { code: 404, indent: 0, parameters: [] }, end
+            ] });
+            return this.makeQuickEvent(x, y, 'Inn', [page]);
+        }
+        return null;
+    }
+
+    commitQuickEvent(event, targetMap = this.currentMap) {
+        if (!event || !targetMap || this.currentMap !== targetMap) return false;
+        if (event.x < 0 || event.x >= targetMap.width || event.y < 0 || event.y >= targetMap.height) return false;
+        if (this.getEventAt(event.x, event.y)) return false;
+        const events = targetMap.events || (targetMap.events = []);
+        if (events[event.id] || events.some(entry => entry && entry.id === event.id)) return false;
+        this.saveState();
+        events[event.id] = event;
+        this.renderEvents();
+        this.selectEvent(event);
+        return true;
+    }
+
+    quickEventAssetDefaults(kind) {
+        const project = this.projectController.getCurrentProject?.() || this.projectController.currentProject;
+        if (!project?.path || typeof RRAssetFiles === 'undefined') return {};
+        const path = require('path');
+        const names = RRAssetFiles.listNames(path.join(project.path, 'img', 'characters'), ['.png']);
+        const wanted = kind === 'door' ? /door/i : /chest|treasure/i;
+        const characterName = names.find(name => wanted.test(RRAssetFiles.basename(name))) || '';
+        return { characterName, characterIndex: 0, pattern: 1, imageDirection: 2 };
+    }
+
+    quickEventSeDefault(kind) {
+        const project = this.projectController.getCurrentProject?.() || this.projectController.currentProject;
+        if (!project?.path || typeof RRAssetFiles === 'undefined') return null;
+        const path = require('path');
+        const names = RRAssetFiles.listNames(path.join(project.path, 'audio', 'se'), ['.ogg', '.m4a', '.wav']);
+        const wanted = kind === 'door' ? /door|open/i : /treasure|chest|item|select|approve/i;
+        const name = names.find(candidate => wanted.test(RRAssetFiles.basename(candidate)));
+        return name ? { name, volume: 90, pitch: 100, pan: 0 } : null;
+    }
+
+    showQuickEventDialog(kind, x, y) {
+        if (!this.currentMap || this.getEventAt(x, y)) return;
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
+        const targetMap = this.currentMap;
+        const defaults = this.quickEventAssetDefaults(kind);
+        const config = {
+            ...defaults,
+            destination: { mapId: this.currentMap.id || 1, x, y },
+            direction: 0,
+            fadeType: 0,
+            rewardKind: 'item', rewardId: 1, amount: 1,
+            price: 0,
+            currency: this.databaseManager.getSystem()?.currencyUnit || 'G'
+        };
+        if (kind === 'door' || kind === 'treasure') config.se = this.quickEventSeDefault(kind);
+        const overlay = document.createElement('div');
+        overlay.className = 'modal-overlay quick-event-overlay';
+        overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:10005;display:flex;align-items:center;justify-content:center;';
+        const dialog = document.createElement('div');
+        dialog.style.cssText = 'width:min(560px,calc(100vw - 32px));max-height:calc(100vh - 32px);overflow:auto;background:var(--color-bg-surface);border:1px solid var(--color-border);border-radius:8px;box-shadow:var(--shadow-modal);';
+        const title = { transfer: 'Transfer', door: 'Door', treasure: 'Treasure', inn: 'Inn' }[kind];
+        dialog.innerHTML = `
+            <div style="padding:14px 16px;border-bottom:1px solid var(--color-border);font-weight:700;color:var(--color-text-strong);">${tt('Quick Event Creation')}: ${tt(title)}</div>
+            <div class="quick-event-body" style="padding:16px;display:flex;flex-direction:column;gap:12px;"></div>
+            <div style="padding:12px 16px;border-top:1px solid var(--color-border);display:flex;justify-content:flex-end;gap:8px;">
+                <button class="quick-event-cancel rr-btn-secondary">${tt('Cancel')}</button>
+                <button class="quick-event-create rr-btn-primary">${tt('Create')}</button>
+            </div>`;
+        const body = dialog.querySelector('.quick-event-body');
+        const row = (label, control) => {
+            const element = document.createElement('label');
+            element.style.cssText = 'display:grid;grid-template-columns:150px minmax(0,1fr);align-items:center;gap:10px;color:var(--color-text);';
+            const caption = document.createElement('span');
+            caption.textContent = tt(label);
+            element.append(caption, control);
+            body.appendChild(element);
+            return element;
+        };
+        const select = options => {
+            const control = document.createElement('select');
+            control.className = 'database-field-value';
+            for (const option of options) {
+                const item = document.createElement('option');
+                item.value = option.value;
+                item.textContent = tt(option.label);
+                control.appendChild(item);
+            }
+            return control;
+        };
+        const input = (type, value, min = null) => {
+            const control = document.createElement('input');
+            control.className = 'database-field-value';
+            control.type = type;
+            control.value = value;
+            if (min !== null) control.min = min;
+            return control;
+        };
+
+        let graphicName = null;
+        if (kind !== 'transfer') {
+            const group = document.createElement('div');
+            group.style.cssText = 'display:flex;gap:8px;align-items:center;min-width:0;';
+            graphicName = document.createElement('span');
+            graphicName.style.cssText = 'flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--color-text);';
+            graphicName.textContent = config.characterName || tt('(None)');
+            const change = document.createElement('button');
+            change.className = 'rr-btn-chip';
+            change.textContent = tt('Change...');
+            change.addEventListener('click', () => {
+                new CharacterGraphicPicker(this.projectController).show(
+                    config.characterName || '', config.characterIndex || 0,
+                    config.pattern || 0, config.imageDirection || 2, result => {
+                        Object.assign(config, result);
+                        config.imageDirection = result.direction;
+                        graphicName.textContent = result.characterName || tt('(None)');
+                    });
+            });
+            group.append(graphicName, change);
+            row('Character Graphic:', group);
+        }
+
+        if (kind === 'transfer' || kind === 'door') {
+            const destinationGroup = document.createElement('div');
+            destinationGroup.style.cssText = 'display:flex;gap:8px;align-items:center;';
+            const destinationText = document.createElement('span');
+            destinationText.style.flex = '1';
+            const refreshDestination = () => {
+                const d = config.destination;
+                destinationText.textContent = `Map ${d.mapId}: (${d.x}, ${d.y})`;
+            };
+            refreshDestination();
+            const browse = document.createElement('button');
+            browse.className = 'rr-btn-chip';
+            browse.textContent = tt('Browse...');
+            browse.addEventListener('click', () => {
+                new TransferPlayerEditor(this.databaseManager, this.projectController).showMapPicker({
+                    ...config.destination,
+                    title: tt('Select Transfer Destination'),
+                    onConfirm: location => { config.destination = location; refreshDestination(); }
+                });
+            });
+            destinationGroup.append(destinationText, browse);
+            row('Destination:', destinationGroup);
+            const direction = select([
+                { value: 0, label: 'Retain' }, { value: 2, label: 'Down' },
+                { value: 4, label: 'Left' }, { value: 6, label: 'Right' }, { value: 8, label: 'Up' }
+            ]);
+            direction.addEventListener('change', () => { config.direction = Number(direction.value); });
+            row('Player Direction:', direction);
+            const fade = select([
+                { value: 0, label: 'Black' }, { value: 1, label: 'White' }, { value: 2, label: 'None' }
+            ]);
+            fade.addEventListener('change', () => { config.fadeType = Number(fade.value); });
+            row('Fade:', fade);
+        }
+
+        if (kind === 'treasure') {
+            const rewardType = select([
+                { value: 'gold', label: 'Gold' }, { value: 'item', label: 'Item' },
+                { value: 'weapon', label: 'Weapon' }, { value: 'armor', label: 'Armor' }
+            ]);
+            rewardType.value = config.rewardKind;
+            const rewardData = select([]);
+            const amount = input('number', 1, 1);
+            const message = input('text', tt('You found treasure!'));
+            const populateRewards = () => {
+                config.rewardKind = rewardType.value;
+                rewardData.innerHTML = '';
+                rewardData.disabled = config.rewardKind === 'gold';
+                const getter = { item: 'getItems', weapon: 'getWeapons', armor: 'getArmors' }[config.rewardKind];
+                for (const entry of getter ? (this.databaseManager[getter]?.() || []) : []) {
+                    if (!entry?.id) continue;
+                    const option = document.createElement('option');
+                    option.value = entry.id;
+                    option.textContent = `#${entry.id} ${entry.name || ''}`;
+                    rewardData.appendChild(option);
+                }
+                config.rewardId = Number(rewardData.value) || 1;
+            };
+            rewardType.addEventListener('change', populateRewards);
+            rewardData.addEventListener('change', () => { config.rewardId = Number(rewardData.value) || 1; });
+            amount.addEventListener('input', () => { config.amount = Math.max(1, Number(amount.value) || 1); });
+            message.addEventListener('input', () => { config.message = message.value; });
+            row('Reward Type:', rewardType);
+            row('Reward:', rewardData);
+            row('Amount:', amount);
+            row('Message:', message);
+            populateRewards();
+        }
+
+        if (kind === 'inn') {
+            const price = input('number', 0, 0);
+            price.addEventListener('input', () => { config.price = Math.max(0, Number(price.value) || 0); });
+            row(`Price (${config.currency}):`, price);
+        }
+
+        overlay.appendChild(dialog);
+        document.body.appendChild(overlay);
+        const close = () => overlay.remove();
+        dialog.querySelector('.quick-event-cancel').addEventListener('click', close);
+        overlay.addEventListener('click', event => { if (event.target === overlay) close(); });
+        overlay.addEventListener('keydown', event => { if (event.key === 'Escape') close(); });
+        dialog.querySelector('.quick-event-create').addEventListener('click', () => {
+            if ((kind === 'door' || kind === 'treasure') && !config.characterName) {
+                alert(tt('Choose a character graphic.'));
+                return;
+            }
+            const event = this.buildQuickEvent(kind, x, y, config);
+            if (this.commitQuickEvent(event, targetMap)) close();
+        });
+    }
+
     createNewEventWithTileset(x, y, tileId) {
         console.log(`createNewEventWithTileset called: position (${x}, ${y}), tileId: ${tileId}`);
 
@@ -1235,9 +1635,9 @@ class EventManager {
         // Initialize event editor if not already created
         if (!this.eventEditor) {
             this.eventEditor = new EventEditor(
-                null, // mapManager (not needed for now)
+                this,
                 this.databaseManager,
-                this.projectController // Pass the whole controller so we can access currentProject
+                this.projectController
             );
         }
 

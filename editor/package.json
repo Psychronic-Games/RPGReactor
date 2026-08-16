@@ -1,6 +1,6 @@
 {
   "name": "rpg-reactor",
-  "version": "0.98.1",
+  "version": "0.98.2",
   "private": true,
   "description": "An open-source, cross-platform RPG game engine",
   "main": "index.html",

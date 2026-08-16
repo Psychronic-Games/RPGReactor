@@ -60,14 +60,13 @@ test('plugin command metadata does not overwrite plugin parameter defaults', () 
     const at = source.indexOf('parsePluginParameters(source) {');
     assert.ok(at >= 0);
     const body = source.slice(at, source.indexOf('\n    }', at));
-    assert.match(body, /@command\\s\+.*\|\|.*@arg\\s\+|\^@command\\s\+/,
+    assert.match(body, /token\.tag === 'command' \|\| token\.tag === 'arg'/,
         'the parser resets on a command block');
     assert.match(body, /currentParam = null;\s*\n\s*continue;/);
 
-    // The sibling parser has had this guard all along.
-    const metaAt = source.indexOf('parsePluginParameterMetadata');
+    const metaAt = source.indexOf('parsePluginParameterMetadata(source)');
     assert.ok(metaAt >= 0);
-    assert.match(source.slice(metaAt, metaAt + 1500), /\^@command\\s\+/);
+    assert.match(source.slice(metaAt, metaAt + 1500), /token\.tag === 'command'/);
 });
 
 test('the two plugin annotation parsers agree on every bundled plugin', () => {
@@ -82,6 +81,8 @@ test('the two plugin annotation parsers agree on every bundled plugin', () => {
     const host = {
         normalizeAnnotationLine: new Function('line', lift('normalizeAnnotationLine(line) {'))
     };
+    host.cleanAnnotationValue = new Function('value', lift('cleanAnnotationValue(value) {')).bind(host);
+    host.splitAnnotationLine = new Function('line', lift('splitAnnotationLine(line) {')).bind(host);
     host.parsePluginParameters = new Function('source', lift('parsePluginParameters(source) {')).bind(host);
 
     const templates = path.join(repoRoot, 'template', 'Demo', 'js', 'plugins');
@@ -98,13 +99,12 @@ test('the two plugin annotation parsers agree on every bundled plugin', () => {
         const expected = {};
         let current = null;
         for (const line of block.split('\n')) {
-            const normalized = host.normalizeAnnotationLine(line);
-            if (/^@command\s+/.test(normalized) || /^@arg\s+/.test(normalized)) { current = null; continue; }
-            const param = normalized.match(/^@param\s*(.*)/);
-            if (param) { current = param[1].trim() || null; continue; }
-            if (!current) continue;
-            const def = normalized.match(/^@default(?:\s+(.*))?$/);
-            if (def) expected[current] = def[1] !== undefined ? def[1] : '';
+            const tokens = host.splitAnnotationLine(host.normalizeAnnotationLine(line));
+            for (const token of tokens) {
+                if (token.tag === 'command' || token.tag === 'arg') { current = null; continue; }
+                if (token.tag === 'param') { current = token.value || null; continue; }
+                if (token.tag === 'default' && current) expected[current] = token.value;
+            }
         }
         for (const [key, value] of Object.entries(expected)) {
             assert.equal(parsed[key], value, `${file} :: ${key}`);

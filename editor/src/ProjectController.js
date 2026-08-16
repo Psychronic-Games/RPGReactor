@@ -548,6 +548,17 @@ class ProjectController {
     }
 
     async populateProjectUI() {
+        const runtimeRefresh = await this.projectManager.refreshReactorRuntime?.(
+            this.currentProject.path,
+            this.currentProject
+        );
+        if (runtimeRefresh?.updated) {
+            this.logProjectOpen('populate:runtime-refreshed', runtimeRefresh);
+        } else if (runtimeRefresh && !runtimeRefresh.ok) {
+            console.error('Could not refresh the project runtime:', runtimeRefresh.error);
+            alert(`${this._tt('Could not install the Reactor runtime:')}\n\n${runtimeRefresh.error}`);
+        }
+
         // Load database
         this.uiManager.updateStatus('Loading database...');
         this.logProjectOpen('populate:start', { projectPath: this.currentProject?.path || null });
@@ -1211,6 +1222,8 @@ class ProjectController {
             document.activeElement.blur();
         }
 
+        const eventEditor = this.eventManager && this.eventManager.eventEditor;
+        if (eventEditor && eventEditor._writePendingModels) eventEditor._writePendingModels();
         if (this.tilemapManager?.currentMap && this.tilemapManager.saveMap() !== true) {
             this.uiManager.updateStatus('Error saving current map');
             alert(this._tt('The current map could not be saved.'));
@@ -1241,9 +1254,18 @@ class ProjectController {
         return true;
     }
 
+    _runtimeInstallTitle() {
+        return this._t('menu.installRuntime').replace(/\.+$/, '');
+    }
+
     async installReactorRuntime() {
+        const ui = this.uiManager;
+        const title = this._runtimeInstallTitle();
         if (!this.projectLoaded || !this.currentProject) {
-            alert(this._tt('Open a project before installing the Reactor runtime.'));
+            await ui.showAlert(
+                title,
+                this._tt('Open a project before installing the Reactor runtime.')
+            );
             return false;
         }
         const pm = this.projectManager;
@@ -1256,26 +1278,42 @@ class ProjectController {
         const summary = alreadyInstalled
             ? this._tt("This updates the engine files (reactor_*.js and js/libs) to this editor's versions. Your plugin manifest and game data are untouched.")
             : this._tt('This moves the RPG Maker corescript, js/libs, and index.html into rpgmaker-runtime-backup.zip in the project folder, then installs the Reactor engine files (reactor_*.js and js/libs) in their place.');
-        if (!confirm(`${this._tt('Install the Reactor runtime into:')}\n${jsPath}\n\n${summary}`)) return false;
+        const confirmed = await ui.showConfirm(
+            title,
+            `${this._tt('Install the Reactor runtime into:')}\n${jsPath}\n\n${summary}`,
+            this._tt('Install'),
+            this._tt('Cancel')
+        );
+        if (!confirmed) return false;
 
         let regenerateManifest = false;
         if (hasReactorManifest && hasRpgMakerManifest) {
-            regenerateManifest = confirm(
+            regenerateManifest = await ui.showConfirm(
+                this._tt('Plugin Manifest'),
                 this._tt("Rebuild reactor_plugins.js from the project's plugins.js?") + '\n\n'
-                + this._tt('OK: replace the Reactor plugin manifest with the RPG Maker one.') + '\n'
-                + this._tt('Cancel: keep the current reactor_plugins.js.'));
+                + this._tt('Rebuild replaces the Reactor plugin manifest with the RPG Maker one.') + '\n'
+                + this._tt('Keep Current leaves reactor_plugins.js unchanged.'),
+                this._tt('Rebuild'),
+                this._tt('Keep Current')
+            );
         }
 
         const gameTitle = this.databaseManager.data.system?.gameTitle || this.currentProject.name;
         const result = await pm.installReactorRuntime(projectPath, gameTitle, { regenerateManifest });
         if (!result.ok) {
             this.uiManager.updateStatus('Reactor runtime install failed');
-            alert(`${this._tt('Could not install the Reactor runtime:')}\n${result.error}`);
+            await ui.showAlert(
+                title,
+                `${this._tt('Could not install the Reactor runtime:')}\n${result.error}`
+            );
             return false;
         }
         this.uiManager.updateStatus('Reactor runtime installed');
-        alert(this._tt('Reactor runtime installed. Playtest and deployment now use the RPG Reactor engine.')
-            + (result.archivedTo ? `\n\n${this._tt('The previous RPG Maker runtime was archived to')} ${result.archivedTo} ${this._tt('in the project folder.')}` : ''));
+        await ui.showAlert(
+            title,
+            this._tt('Reactor runtime installed. Playtest and deployment now use the RPG Reactor engine.')
+            + (result.archivedTo ? `\n\n${this._tt('The previous RPG Maker runtime was archived to')} ${result.archivedTo} ${this._tt('in the project folder.')}` : '')
+        );
         return true;
     }
 

@@ -2526,6 +2526,10 @@
             try { window.installUltraMode7V8Compat(); }
             catch (e) { console.warn("UltraMode7V8 install threw:", e); }
         }
+        if (typeof window.installMz3dCompat === "function") {
+            try { window.installMz3dCompat(); }
+            catch (e) { console.warn("Mz3dCompat install threw:", e); }
+        }
     };
 })();
 
@@ -3095,3 +3099,170 @@
         compatLog("pixi_compat: UltraMode7V8 render hook installed (Tilemap.Layer.render override)");
     };
 })();
+
+//=============================================================================
+// MZ3D compatibility: imported models and the hidden 2D map
+//=============================================================================
+//
+// MZ3D draws the world in babylon.js and sets `_tilemap.visible = false`.
+// Tilemap.updateTransform skips the v8 cascade, so 2D character sprites can
+// still be collected on top of the imported model. Hide those sprites here;
+// do not UV-crop GLB materials — their sheet layout is authored in the mesh.
+//
+// Installed from MZGlobalUpgrade, after corescript and plugins exist.
+(function() {
+    if (window.installMz3dCompat) return;
+
+    function mz3dActive() {
+        const mz3d = window.mz3d;
+        return Boolean(mz3d && typeof mz3d.isDisabled === "function" && !mz3d.isDisabled());
+    }
+
+    function hidePixi8DisplayObject(obj) {
+        if (!obj) return;
+        obj.visible = false;
+        obj.renderable = false;
+        if (obj.localDisplayStatus !== undefined) obj.localDisplayStatus = 0;
+        if (obj.globalDisplayStatus !== undefined) obj.globalDisplayStatus = 0;
+        hidePixi8DisplayObject(obj._upperBody);
+        hidePixi8DisplayObject(obj._lowerBody);
+    }
+
+    function fixImportedHairCards(model) {
+        if (!model || typeof model.isComplexMesh !== "function" || !model.isComplexMesh()) return;
+        const cutoff = (window.mz3d && mz3d.ALPHA_CUTOFF) || 0.51;
+        const alphaTest = (window.BABYLON && BABYLON.Material && BABYLON.Material.MATERIAL_ALPHATEST) || 1;
+        for (const mesh of model.meshes || []) {
+            if (!mesh || !/^mHair/i.test(mesh.name)) continue;
+            mesh.setEnabled(true);
+            mesh.isVisible = true;
+            let mat = mesh.material;
+            if (!mat) continue;
+            if (!mat.__reactorHairAlpha && typeof mat.clone === "function") {
+                mat = mat.clone(mat.name + "_hair");
+                mat.__reactorHairAlpha = true;
+                mesh.material = mat;
+            }
+            const tex = mat.diffuseTexture || mat.albedoTexture;
+            if (tex) {
+                tex.hasAlpha = true;
+                tex.getAlphaFromRGB = false;
+            }
+            mat.opacityTexture = null;
+            mat.useAlphaFromDiffuseTexture = true;
+            mat.alphaCutOff = cutoff;
+            mat.transparencyMode = alphaTest;
+            mat.disableDepthWrite = false;
+            if (typeof mat.markDirty === "function") mat.markDirty();
+        }
+    }
+
+    function hideMz3dMapSprites(spriteset) {
+        if (!mz3dActive()) return;
+        if (spriteset._tilemap) {
+            hidePixi8DisplayObject(spriteset._tilemap);
+            if (typeof spriteset._tilemap._syncSubtreeDisplayStatus === "function") {
+                spriteset._tilemap._syncSubtreeDisplayStatus(0);
+            }
+            const renderGroup = spriteset._tilemap.renderGroup || spriteset._tilemap.parentRenderGroup;
+            if (renderGroup) renderGroup.structureDidChange = true;
+        }
+        for (const sprite of spriteset._characterSprites || []) {
+            hidePixi8DisplayObject(sprite);
+        }
+        hidePixi8DisplayObject(spriteset._shadowSprite);
+        hidePixi8DisplayObject(spriteset._destinationSprite);
+    }
+
+    function patchTilemapVisible() {
+        if (typeof Tilemap === "undefined" || !Tilemap.prototype || Tilemap.prototype.__reactorMz3dVisible) {
+            return;
+        }
+        if (!Tilemap.prototype._syncSubtreeDisplayStatus) {
+            Tilemap.prototype._syncSubtreeDisplayStatus = function(parentGlobal) {
+                const inherited = parentGlobal === undefined
+                    ? (this.parent && this.parent.globalDisplayStatus !== undefined
+                        ? this.parent.globalDisplayStatus
+                        : 7)
+                    : parentGlobal;
+                this.globalDisplayStatus = this.localDisplayStatus & inherited;
+                for (const child of this.children) {
+                    if (typeof child._syncSubtreeDisplayStatus === "function") {
+                        child._syncSubtreeDisplayStatus(this.globalDisplayStatus);
+                    } else if (child) {
+                        child.globalDisplayStatus = (child.localDisplayStatus !== undefined
+                            ? child.localDisplayStatus
+                            : 7) & this.globalDisplayStatus;
+                    }
+                }
+            };
+        }
+        const containerVisible = Object.getOwnPropertyDescriptor(
+            PIXI.Container && PIXI.Container.prototype, "visible"
+        );
+        if (containerVisible && containerVisible.set) {
+            Object.defineProperty(Tilemap.prototype, "visible", {
+                get: function() {
+                    return containerVisible.get.call(this);
+                },
+                set: function(value) {
+                    containerVisible.set.call(this, value);
+                    this._syncSubtreeDisplayStatus();
+                    const renderGroup = this.renderGroup || this.parentRenderGroup;
+                    if (renderGroup) renderGroup.structureDidChange = true;
+                },
+                configurable: true
+            });
+        }
+        Tilemap.prototype.__reactorMz3dVisible = true;
+    }
+
+    function patchCharacterUpdate() {
+        if (typeof Sprite_Character === "undefined" || !Sprite_Character.prototype) return;
+        if (Sprite_Character.prototype.__reactorMz3dUpdate) return;
+        const original = Sprite_Character.prototype.update;
+        Sprite_Character.prototype.update = function() {
+            if (mz3dActive()) {
+                hidePixi8DisplayObject(this);
+                if (this.updateBitmap) this.updateBitmap();
+                if (this.updateFrame) this.updateFrame();
+                hidePixi8DisplayObject(this);
+                const mzChar = this._character && this._character.mv3d_sprite;
+                if (mzChar && mzChar.model) fixImportedHairCards(mzChar.model);
+                return;
+            }
+            return original.apply(this, arguments);
+        };
+        Sprite_Character.prototype.__reactorMz3dUpdate = true;
+        if (Sprite_Character.prototype.updateVisibility && !Sprite_Character.prototype.__reactorMz3dVis) {
+            const originalVis = Sprite_Character.prototype.updateVisibility;
+            Sprite_Character.prototype.updateVisibility = function() {
+                if (mz3dActive()) {
+                    hidePixi8DisplayObject(this);
+                    return;
+                }
+                return originalVis.apply(this, arguments);
+            };
+            Sprite_Character.prototype.__reactorMz3dVis = true;
+        }
+    }
+
+    function patchSpritesetUpdate() {
+        if (typeof Spriteset_Map === "undefined" || !Spriteset_Map.prototype) return;
+        if (Spriteset_Map.prototype.__reactorMz3dUpdate) return;
+        const original = Spriteset_Map.prototype.update;
+        Spriteset_Map.prototype.update = function() {
+            const result = original.apply(this, arguments);
+            hideMz3dMapSprites(this);
+            return result;
+        };
+        Spriteset_Map.prototype.__reactorMz3dUpdate = true;
+    }
+
+    window.installMz3dCompat = function() {
+        patchTilemapVisible();
+        patchCharacterUpdate();
+        patchSpritesetUpdate();
+    };
+})();
+

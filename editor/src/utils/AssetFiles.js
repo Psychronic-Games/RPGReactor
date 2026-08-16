@@ -130,6 +130,29 @@
         return `file://${encodeURI(normalized).replace(/#/g, '%23')}`;
     };
 
+    // RPG Maker face sheets always have four 144px columns. Reactor also
+    // accepts additional complete rows instead of limiting selection to two.
+    const FACE_COLUMNS = 4;
+    const FACE_SIZE = 144;
+    const faceSheetMetrics = imageOrHeight => {
+        const height = Number(imageOrHeight && typeof imageOrHeight === 'object'
+            ? (imageOrHeight.naturalHeight || imageOrHeight.height)
+            : imageOrHeight) || 0;
+        const rows = Math.floor(height / FACE_SIZE);
+        return { columns: FACE_COLUMNS, rows, count: FACE_COLUMNS * rows, faceSize: FACE_SIZE };
+    };
+    const faceSourceRect = (index, imageOrHeight) => {
+        const value = Number(index);
+        const sheet = faceSheetMetrics(imageOrHeight);
+        if (!Number.isInteger(value) || value < 0 || value >= sheet.count) return null;
+        return {
+            x: (value % FACE_COLUMNS) * FACE_SIZE,
+            y: Math.floor(value / FACE_COLUMNS) * FACE_SIZE,
+            width: FACE_SIZE,
+            height: FACE_SIZE
+        };
+    };
+
     const api = {
         basename(name) {
             return normalizeRelative(name).split('/').pop() || '';
@@ -159,5 +182,11 @@
     };
 
     root.RRAssetFiles = api;
+    root.RRFaceSheet = {
+        COLUMNS: FACE_COLUMNS,
+        FACE_SIZE,
+        metrics: faceSheetMetrics,
+        sourceRect: faceSourceRect
+    };
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof globalThis !== 'undefined' ? globalThis : window);

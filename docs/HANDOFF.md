@@ -1,19 +1,103 @@
-# Handoff - 0.98.1 In Progress
+# Handoff - 0.98.2 In Progress
 
-Last updated 2026-08-10.
+Last updated 2026-08-15.
 
 ## Release State
 
-- 0.98.0 is tagged and published at
-  <https://github.com/Psychronic-Games/RPGReactor/releases/tag/v0.98.0>.
-- 0.98.1 is open in package metadata, application startup surfaces, both
-  READMEs, and `[Unreleased - 0.98.1]` sections in both changelogs.
-- 0.98.1 contains the Web 3D dependency-loader fix, the desktop 3D crash-loop,
-  Windows native-crash and lifecycle hotfixes, and the PIXI 8 legacy-filter
-  shader and camera-pan tilemap fixes. None is part of the immutable `v0.98.0`
-  tag or an artifact built from it.
-- Current validation is **1,304 passing tests** with no failures, skips, or
+- 0.98.1 is tagged and published at
+  <https://github.com/Psychronic-Games/RPGReactor/releases/tag/v0.98.1>.
+- 0.98.2 is open in package metadata, application startup surfaces, both
+  READMEs, and `[Unreleased - 0.98.2]` sections in both changelogs.
+- The 0.98.1 Web 3D, renderer-lifecycle, PIXI filter, and camera-pan changes are
+  preserved in the immutable `v0.98.1` tag. New reports belong to 0.98.2.
+- Current validation is **1,366 passing tests** with no failures, skips, or
   TODOs. Syntax and `git diff --check` also pass.
+
+## Event 3D Models (active, 2026-08-15)
+
+Events can now carry a GLB/OBJ/FBX/… mesh instead of a walking sheet. This is
+the work to pick up first. Demo: Map001 event 22 ("Tank"), Buick at
+`template/Demo/3d/free-buick-riviera-car/source/`, sidecar
+`template/Demo/data/Map001.r3d.json`.
+
+### What is built
+
+- **Sidecar, not notes.** `map.reactor3d.events[eventId][pageIndex] = { name,
+  file, ext, size, scale, yaw, pitch, roll, faces? }`. Degrees in the file,
+  radians at runtime. `characterModelSpec` prefers the sidecar, then `<r3d>`
+  notes. `MapElevation.save` keeps `events` even on a flat map.
+- **Folders.** `3d/<folder>/source` + `3d/<folder>/textures`. Legacy
+  `3d/source/<file>` is still probed. The picker lists folder names.
+- **Picker** (`editor/src/event/ModelGraphicPicker.js`). Orbit preview, gizmo,
+  X/Y/Z, size in tiles. Front/Back/Left/Right are placeable colored dots
+  parented to the mesh (not snap-yaw buttons). Dots persist as
+  `faces: { front: [x,y,z], … }` in object-local space.
+- **Event editor.** 3D checkbox, title "3D Model", live WebGL thumbnail, Down /
+  Left / Right / Up buttons. Image preview (2D and 3D) flex-fills the leftover
+  left column with no scrollbar. Specs reload from the sidecar even when
+  `Reactor3D` is not loaded yet. Picker OK writes the map immediately; Event
+  Editor Cancel restores the baseline; project save flushes pending models.
+- **Runtime pose.** In-game the Front mark aims at the event facing
+  (`characterModelDir8`, including 1/3/7/9). Preview aims the matching face
+  mark at the camera. A turn that would swing the footprint onto the player or
+  another solid event is refused.
+- **Collision.** `size` is the ground footprint. After the GLB loads, the
+  actual XZ AABB is used and rotated with facing. `Game_Event.pos` occupies
+  every overlapping tile; the event does not collide with itself.
+- **Depth.** On a map with event models, other characters become upright
+  (not `THREE.Sprite`) billboards in the 3D below pass so the car's depth
+  buffer can hide them when they stand north of it. PIXI character sprites
+  are hidden on those maps.
+
+### What is still off
+
+Playtest Demo Map001 and walk around the Buick. Collision and facing are close;
+depth is closer after the upright billboard change but the owner still finds
+the player/car relationship "not quite right." Next session should stand in
+front of, beside, and behind the car, then while it drives its route, and
+adjust sort / billboard tilt / footprint vs visual mesh until the feet and
+the body agree.
+
+Open questions worth not re-fighting blindly:
+
+- Should the sort line be the event tile, the south edge of the footprint, or
+  true GPU depth only?
+- A long vehicle that turns 90° grows sideways. Turns into the player are
+  blocked; standing in the sweep of a future turn is still allowed.
+- `size` 9 on the Buick is the longest-axis fit. The collision box after load
+  uses the real aspect; before the GLB arrives it is a square of `size`.
+
+### Key files
+
+- `runtime/reactor_3d.js` — load, pose, footprint, billboards
+- `runtime/reactor_objects.js` — `Game_Event.pos`, self-exclusion, can-face
+- `runtime/reactor_sprites.js` — hide PIXI sprites, sync billboards
+- `editor/src/event/ModelGraphicPicker.js`, `EventPageEditor.js`, `EventEditor.js`
+- `editor/tests/reactor-3d-models.test.cjs`
+- Sync copies with `node editor/build-scripts/sync-runtime.cjs`
+
+World axes: X = map x, Y = up, Z = map y. Event Down = +Z.
+
+## Chinese Audience Usability Pass
+
+The reported database and event workflow gaps are covered in 0.98.2:
+
+- Class learnable skills now have complete CRUD rather than a read-only table.
+- Skill/Item Effects and Enemy Action Patterns have visible controls,
+  double-click editing, and keyboard actions.
+- Troop Plugin Commands open the annotated plugin/command selector.
+- Event-mode double-click is more forgiving, Enter creates/edits at the target,
+  and context menus display the shortcuts that operate on that target.
+- Four-column 144px face sheets can contain additional rows.
+- Sprite-based animation conversion produces a valid editable MV record.
+- Curated Simplified Chinese terms take precedence over generated translations,
+  and database layouts reflow from the detail pane's available width.
+
+The stock MZ Conditional Branch set was already complete; the selector now
+labels it separately from Reactor's extra input conditions. Quick Event Creation
+is now present on an empty Event-mode cell for Transfer, Door, Treasure, and Inn.
+The four recipes emit stock MZ event-command arrays, use project graphics,
+database records, currency and map locations, and commit as one Undo operation.
 
 ## Web 3D Fix
 
@@ -76,6 +160,29 @@ opens a disposable copy of Reactor One, enables 3D, renders the complete 50x50
 scene (10 sheets, 3 map meshes, and 63 events), disables 3D, and confirms PIXI's
 canvas and ticker are restored. The same test passes in native Linux NW.js and in
 the Windows NW.js binary under Wine.
+
+## Open 0.98.2 Reports
+
+- Native Windows users still report that checking 3D can terminate the editor
+  process immediately. The 0.98.1 shared-context path passed Linux and Wine but
+  has not contained every physical Windows ANGLE/driver failure. Treat this as
+  unresolved; JavaScript rollback prevents a restart loop but cannot catch a
+  native renderer-process exit.
+
+## Stale Project Runtime Fix
+
+The repeated `filterArea.zw` screenshot identifies the 0.98.0 translator, not a
+new shader variant. Updating Reactor changed the editor's canonical `runtime/`,
+but an existing project's copied `js/reactor_mv_compat.js` remained untouched and
+was the file Playtest actually loaded.
+
+`reactor_main.js` now carries the Reactor engine version. During project
+population, a desktop project whose `index.html` already boots Reactor is
+refreshed from the canonical runtime before database or map loading. The copy is
+recursive but preserves `reactor_plugins.js` and unrelated third-party plugins.
+Project metadata advances with the runtime, and a project already current for
+the editor version is not rewritten. Raw RPG Maker projects are not converted or
+modified by this path.
 
 ## Project3 Legacy Filter Fix
 
@@ -141,8 +248,8 @@ frame and no hidden, dirty, fallback, or missing-layer frame.
 
 ## Deployment Note
 
-Publishing the 0.98.1 source does not modify the 0.98.0 Web ZIP or an itch.io Web
-channel. Build and deploy a new 0.98.1 Web artifact from the patch tag. Browsers
+Publishing the 0.98.2 source will not modify the 0.98.1 Web ZIP or an itch.io Web
+channel. Build and deploy a new 0.98.2 Web artifact from the patch tag. Browsers
 may retain an older service worker briefly; after deployment, reload the page
 once (or clear the site's service worker/cache) before testing the checkbox.
 

@@ -38,6 +38,7 @@ test('application version matches package metadata in every startup surface', ()
         ['src/I18nManager.js', /const RR_APP_VERSION = '([^']+)'/],
         ['index.html', /RPG Reactor v([\d.]+)/],
         ['src/web/WebHost.js', /version: '([^']+)'/],
+        ['../runtime/reactor_main.js', /RPG Reactor runtime version:\s*([\d.]+)/],
     ];
 
     for (const [relativePath, pattern] of sources) {
@@ -237,6 +238,72 @@ test('ProjectManager refreshes template runtime files while preserving its plugi
     } finally {
         fs.rmSync(tempRoot, { recursive: true, force: true });
     }
+});
+
+test('opening a Reactor project refreshes its versioned runtime but preserves plugins', async () => {
+    const ProjectManager = loadBrowserClass(path.join(repoRoot, 'src', 'ProjectManager.js'), 'ProjectManager');
+    const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'rpg-reactor-open-runtime-test-'));
+    const runtimePath = path.join(tempRoot, 'runtime');
+    const projectPath = path.join(tempRoot, 'Project');
+    fs.mkdirSync(runtimePath, { recursive: true });
+    fs.mkdirSync(path.join(projectPath, 'js'), { recursive: true });
+    fs.writeFileSync(path.join(projectPath, 'index.html'), '<script src="js/reactor_main.js"></script>');
+    fs.writeFileSync(path.join(projectPath, 'project.rpgreactor'), JSON.stringify({
+        name: 'Existing',
+        version: '0.98.0',
+        engine: 'RPG Reactor',
+        engineVersion: '0.98.0',
+        imported: true,
+        importedFrom: 'RPG Maker MZ'
+    }));
+    fs.writeFileSync(path.join(projectPath, 'js', 'reactor_main.js'),
+        '// RPG Reactor runtime version: 0.98.0\n');
+    fs.writeFileSync(path.join(projectPath, 'js', 'reactor_mv_compat.js'), 'stale filterArea translator');
+    fs.writeFileSync(path.join(projectPath, 'js', 'reactor_plugins.js'), 'var $plugins = [{ name: "KeepMe" }];');
+    fs.writeFileSync(path.join(runtimePath, 'reactor_main.js'),
+        '// RPG Reactor runtime version: 0.98.2\n');
+    fs.writeFileSync(path.join(runtimePath, 'reactor_mv_compat.js'), 'current filterArea translator');
+    fs.writeFileSync(path.join(runtimePath, 'reactor_plugins.js'), 'var $plugins = [];');
+
+    try {
+        const manager = new ProjectManager();
+        manager.getRuntimePath = () => runtimePath;
+        manager.getEngineVersion = () => '0.98.2';
+        const projectData = readJson(path.join(projectPath, 'project.rpgreactor'));
+
+        const result = await manager.refreshReactorRuntime(projectPath, projectData);
+        assert.deepEqual(JSON.parse(JSON.stringify(result)), {
+            ok: true,
+            updated: true,
+            fromVersion: '0.98.0',
+            toVersion: '0.98.2'
+        });
+        assert.equal(fs.readFileSync(path.join(projectPath, 'js', 'reactor_mv_compat.js'), 'utf8'),
+            'current filterArea translator');
+        assert.equal(fs.readFileSync(path.join(projectPath, 'js', 'reactor_plugins.js'), 'utf8'),
+            'var $plugins = [{ name: "KeepMe" }];');
+        assert.deepEqual(readJson(path.join(projectPath, 'project.rpgreactor')), {
+            name: 'Existing',
+            version: '0.98.2',
+            engine: 'RPG Reactor',
+            engineVersion: '0.98.2',
+            imported: true,
+            importedFrom: 'RPG Maker MZ',
+            modified: projectData.modified
+        });
+        assert.equal((await manager.refreshReactorRuntime(projectPath, projectData)).updated, false,
+            'a current project is not rewritten every time it opens');
+    } finally {
+        fs.rmSync(tempRoot, { recursive: true, force: true });
+    }
+});
+
+test('project population refreshes the runtime before loading game data', () => {
+    const controller = fs.readFileSync(path.join(repoRoot, 'src', 'ProjectController.js'), 'utf8');
+    const start = controller.indexOf('async populateProjectUI()');
+    const body = controller.slice(start, controller.indexOf('\n    async ', start + 20));
+    assert.ok(body.indexOf('refreshReactorRuntime') >= 0);
+    assert.ok(body.indexOf('refreshReactorRuntime') < body.indexOf('databaseManager.loadAllData'));
 });
 
 test('ProjectManager avoids rmmz-game for new project package identity', () => {

@@ -1331,7 +1331,9 @@ class DatabaseTroopEditor {
                 231: ['showPicture', ShowPictureEditor],
                 232: ['movePicture', MovePictureEditor],
                 235: ['erasePicture', ErasePictureEditor],
-                339: ['forceAction', ForceActionEditor]
+                339: ['forceAction', ForceActionEditor],
+                356: ['pluginCommand', PluginCommandEditor],
+                357: ['pluginCommand', PluginCommandEditor]
             };
             const editorConfig = editorMap[command.code];
             if (editorConfig) {
@@ -1515,6 +1517,10 @@ class DatabaseTroopEditor {
         }
         if (cmd.code === 339) {
             replaceSingle(this.getCommandEditor('forceAction', ForceActionEditor));
+            return;
+        }
+        if (cmd.code === 356 || cmd.code === 357) {
+            replaceSingle(this.getCommandEditor('pluginCommand', PluginCommandEditor));
             return;
         }
         if (cmd.code === 355 && ECL.generatedCommand(cmd, 'eventCall')) {

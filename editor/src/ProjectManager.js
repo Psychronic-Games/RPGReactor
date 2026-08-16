@@ -357,6 +357,55 @@ class ProjectManager {
         return null;
     }
 
+    async refreshReactorRuntime(projectPath, projectData) {
+        if (!this.fs || !this.path || !projectPath || !projectData) {
+            return { ok: true, updated: false };
+        }
+
+        const indexPath = this.path.join(projectPath, 'index.html');
+        if (!this.fs.existsSync(indexPath) ||
+            !/js\/reactor_main\.js/.test(this.fs.readFileSync(indexPath, 'utf8'))) {
+            return { ok: true, updated: false };
+        }
+
+        const runtimePath = this.getRuntimePath();
+        if (!runtimePath) {
+            const webHost = typeof window !== 'undefined' && window.RPGReactorHost?.mode === 'web';
+            return webHost
+                ? { ok: true, updated: false }
+                : { ok: false, updated: false, error: 'The current Reactor runtime could not be found.' };
+        }
+
+        try {
+            const engineVersion = this.getEngineVersion();
+            const targetMain = this.path.join(projectPath, 'js', 'reactor_main.js');
+            const targetSource = this.fs.existsSync(targetMain)
+                ? this.fs.readFileSync(targetMain, 'utf8')
+                : '';
+            const targetVersion = targetSource.match(/RPG Reactor runtime version:\s*([\d.]+)/)?.[1] || '';
+            if (targetVersion === engineVersion && projectData.engineVersion === engineVersion) {
+                return { ok: true, updated: false };
+            }
+
+            await this.copyRuntimeIntoProject(runtimePath, this.path.join(projectPath, 'js'), true);
+            projectData.version = engineVersion;
+            projectData.engine = 'RPG Reactor';
+            projectData.engineVersion = engineVersion;
+            projectData.modified = new Date().toISOString();
+            const { path: ignoredPath, maps: ignoredMaps, ...metadata } = projectData;
+            this._writeFileAtomic(
+                this.fs,
+                this.path.join(projectPath, 'project.rpgreactor'),
+                JSON.stringify(metadata, null, 2),
+                'utf8'
+            );
+            return { ok: true, updated: true, fromVersion: targetVersion || null, toVersion: engineVersion };
+        } catch (error) {
+            console.error('Error refreshing Reactor runtime:', error);
+            return { ok: false, updated: false, error: error.message || String(error) };
+        }
+    }
+
     getTemplateProjectPath() {
         if (!this.fs || !this.path || typeof process === 'undefined') return null;
 

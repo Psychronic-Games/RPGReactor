@@ -420,8 +420,8 @@ test('a cone shines out of its source, not into it', () => {
     // `CanvasTexture` flips V by default, which would put the wide end of the
     // beam where the torch is and the source out at the far wall.
     const three = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_3d.js'), 'utf8');
-    assert.equal((three.match(/flipY = false;/g) || []).length, 2,
-        'both light pictures are used as drawn');
+    assert.match(three, /_roundLight\.flipY = false;/);
+    assert.match(three, /_coneLight\.flipY = false;/);
 
     // The near corner of the cone takes the bottom of the picture, which is
     // where it was drawn from; a round pool still takes the whole square.

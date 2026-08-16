@@ -140,7 +140,13 @@
             && Object.keys(sidecar3d.objects).some(layer =>
                 Array.isArray(sidecar3d.objects[layer])
                 && sidecar3d.objects[layer].some(value => value)));
-        if (isFlat(mapData) && !grouped && !(sidecar3d && sidecar3d.camera)) {
+        const modeled = !!(sidecar3d && sidecar3d.events
+            && Object.keys(sidecar3d.events).some(id => {
+                const pages = sidecar3d.events[id];
+                return pages && typeof pages === 'object'
+                    && Object.keys(pages).some(page => pages[page] && pages[page].name);
+            }));
+        if (isFlat(mapData) && !grouped && !modeled && !(sidecar3d && sidecar3d.camera)) {
             if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
             return true;
         }

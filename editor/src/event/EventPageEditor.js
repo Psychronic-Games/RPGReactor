@@ -26,23 +26,30 @@ class EventPageEditor {
         container.innerHTML = '';
         container.style.display = 'flex';
         container.style.flexDirection = 'column';
-        container.style.gap = '6px';
+        container.style.gap = '4px';
+
+        container.style.overflow = 'hidden';
 
         // Conditions Section (full width)
         const conditionsSection = this.createConditionsSection(page, pageIndex);
+        conditionsSection.style.flexShrink = '0';
         container.appendChild(conditionsSection);
 
         // Image Section (full width)
         const imageSection = this.createImageSection(page, pageIndex);
+        imageSection.style.flex = '1';
+        imageSection.style.minHeight = '0';
+        imageSection.style.overflow = 'hidden';
         container.appendChild(imageSection);
 
         // Autonomous Movement Section (full width)
         const movementSection = this.createMovementSection(page, pageIndex);
+        movementSection.style.flexShrink = '0';
         container.appendChild(movementSection);
 
         // Row: Options + (Priority + Trigger stacked)
         const row = document.createElement('div');
-        row.style.cssText = 'display: flex; gap: 6px;';
+        row.style.cssText = 'display: flex; gap: 6px; flex-shrink: 0;';
 
         const optionsSection = this.createOptionsSection(page, pageIndex);
         optionsSection.style.flex = '1';
@@ -219,46 +226,63 @@ class EventPageEditor {
         const tt = (text) => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
         const section = document.createElement('div');
         section.className = 'event-section image-section';
-        section.style.backgroundColor = 'var(--color-bg-input)';
-        section.style.padding = '6px';
-        section.style.borderRadius = '4px';
-
         const image = page.image || {};
+        const model = this.pageModelSpec(pageIndex);
+        const use3d = !!(model && model.name);
+        section.style.backgroundColor = 'var(--color-bg-input)';
+        section.style.padding = '4px';
+        section.style.borderRadius = '4px';
+        section.style.display = 'flex';
+        section.style.flexDirection = 'column';
+        section.style.minHeight = '0';
 
         // Get direction name
         const directionNames = { 2: 'Down', 4: 'Left', 6: 'Right', 8: 'Up' };
         const directionName = directionNames[image.direction] || 'Down';
+        const displayName = use3d ? model.name : (image.characterName || '');
+        const title = use3d ? tt('3D Model') : this._t('event.image');
 
         section.innerHTML = `
-            <div style="font-weight: bold; margin-bottom: 4px; font-size: 13px;">${this._t('event.image')}</div>
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 3px; flex-shrink: 0;">
+                <div style="font-weight: bold; font-size: 13px;">${title}</div>
+                <label style="display: flex; align-items: center; gap: 4px; font-size: 11px; font-weight: normal;">
+                    <input type="checkbox" class="image-3d-checkbox" data-page-index="${pageIndex}" ${use3d ? 'checked' : ''}>
+                    ${tt('3D')}
+                </label>
+            </div>
 
-            <div style="display: flex; flex-direction: column; gap: 4px;">
-                <!-- Preview Canvas -->
-                <div style="background: var(--color-bg-surface); border: 1px solid var(--color-border); border-radius: 4px; overflow: hidden; width: 100%;">
+            <div style="display: flex; flex-direction: column; gap: 3px;flex:1;min-height:0;">
+                <div style="background: var(--color-bg-surface); border: 1px solid var(--color-border); border-radius: 4px; overflow: hidden; width: 100%;flex:1;min-height:0;">
                     <canvas class="character-preview-canvas"
                             width="192"
-                            height="128"
-                            style="image-rendering: pixelated; image-rendering: -moz-crisp-edges; image-rendering: crisp-edges; display: block; width: 100%; height: auto;"></canvas>
+                            height="88"
+                            style="image-rendering: pixelated; image-rendering: -moz-crisp-edges; image-rendering: crisp-edges; display: block; width: 100%; height: 100%;"></canvas>
                 </div>
 
-                <!-- Browse Button -->
-                <div style="display: flex; align-items: center; gap: 4px; min-width: 0;">
+                <div style="display: flex; align-items: center; gap: 4px; min-width: 0; flex-shrink: 0;">
                     <button class="image-browse-button rr-btn-browse"
                             data-page-index="${pageIndex}">${this._t('event.browse')}</button>
                     <input type="text"
                            class="image-input image-name-display"
                            data-field="characterName"
                            data-page-index="${pageIndex}"
-                           value="${rrEscapeHtml(image.characterName || '')}"
+                           value="${rrEscapeHtml(displayName)}"
                            placeholder="${this._t('event.none')}"
                            readonly
                            style="flex: 1; min-width: 0; padding: 3px 6px; background: var(--color-bg-surface); color: var(--color-text); border: 1px solid var(--color-border-input); font-size: 11px;">
                 </div>
 
-                <!-- Info Display -->
-                <div style="display: flex; flex-direction: column; gap: 1px; font-size: 10px; color: var(--color-text-muted);">
-                    <span>${this._t('event.index')} <strong style="color: var(--color-text);">${image.characterIndex || 0}</strong> | ${this._t('event.dir')} <strong style="color: var(--color-text);">${tt(directionName)}</strong></span>
-                    <span>${this._t('event.pattern')} <strong style="color: var(--color-text);">${image.pattern || 0}</strong>${image.tileId > 0 ? ` | ${this._t('event.tile')} <strong style="color: var(--color-text);">${image.tileId}</strong>` : ''}</span>
+                <div style="font-size: 10px; color: var(--color-text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex-shrink: 0;">
+                    ${use3d
+                        ? `${tt('Model size (tiles)')} <strong style="color: var(--color-text);">${model.size || 2}</strong>
+                            <span style="margin-left:6px;">${this._t('event.dir')}</span>
+                            ${[2, 4, 6, 8].map(dir => {
+                                const label = { 2: 'Down', 4: 'Left', 6: 'Right', 8: 'Up' }[dir];
+                                const on = (image.direction || 2) === dir;
+                                return `<button type="button" class="image-dir-btn" data-dir="${dir}"
+                                    style="margin-left:3px;padding:1px 5px;font-size:10px;border-radius:3px;cursor:pointer;border:1px solid ${on ? 'var(--color-accent-bright)' : 'var(--color-border-input)'};background:${on ? 'var(--color-accent-tint-30)' : 'var(--color-bg-surface)'};color:var(--color-text);">${tt(label)}</button>`;
+                            }).join('')}`
+                        : `${this._t('event.index')} <strong style="color: var(--color-text);">${image.characterIndex || 0}</strong> | ${this._t('event.dir')} <strong style="color: var(--color-text);">${tt(directionName)}</strong> | ${this._t('event.pattern')} <strong style="color: var(--color-text);">${image.pattern || 0}</strong>${image.tileId > 0 ? ` | ${this._t('event.tile')} <strong style="color: var(--color-text);">${image.tileId}</strong>` : ''}`}
                 </div>
             </div>
         `;
@@ -294,8 +318,15 @@ class EventPageEditor {
             canvas.animationInterval = null;
         }
 
-        const ctx = canvas.getContext('2d');
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        this._disposeModelPreview();
+
+        const model = this.pageModelSpec(this.parentEditor.currentPageIndex);
+        if (model && model.name) {
+            this._renderModelPreview(canvas, model, page);
+            return;
+        }
+
+        const fit = () => this._fitPreviewCanvas(canvas);
 
         console.log('renderCharacterPreview - image data:', image);
         console.log('renderCharacterPreview - tileId:', image.tileId);
@@ -303,18 +334,24 @@ class EventPageEditor {
         // Check if this is a tileset graphic (tileId > 0)
         if (image.tileId && image.tileId > 0) {
             console.log('Rendering tileset preview for tileId:', image.tileId);
-            this.renderTilesetPreview(canvas, ctx, image.tileId);
+            requestAnimationFrame(() => {
+                if (!canvas.isConnected) return;
+                this.renderTilesetPreview(canvas, fit(), image.tileId);
+            });
             return;
         }
 
         if (!image.characterName) {
-            // Show placeholder
-            ctx.fillStyle = '#3e3e42';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-            ctx.fillStyle = '#999';
-            ctx.font = '12px Arial';
-            ctx.textAlign = 'center';
-            ctx.fillText(tt('No Character'), canvas.width / 2, canvas.height / 2);
+            requestAnimationFrame(() => {
+                if (!canvas.isConnected) return;
+                const ctx = fit();
+                ctx.fillStyle = '#3e3e42';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = '#999';
+                ctx.font = '12px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText(tt('No Character'), canvas.width / 2, canvas.height / 2);
+            });
             return;
         }
 
@@ -330,6 +367,8 @@ class EventPageEditor {
         console.log('Loading character preview:', imgPath);
 
         img.onload = () => {
+            if (!canvas.isConnected) return;
+            const ctx = fit();
             const shouldAnimate = page.stepAnime; // Check stepping animation option
             // Check if this is a big character ($ or !$ prefix)
             const isBigCharacter = RRAssetFiles.isBigCharacter(image.characterName);
@@ -412,12 +451,14 @@ class EventPageEditor {
         };
 
         img.onerror = () => {
-            ctx.fillStyle = '#3e3e42';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-            ctx.fillStyle = '#f88';
-            ctx.font = '10px Arial';
-            ctx.textAlign = 'center';
-            ctx.fillText(tt('Error Loading'), canvas.width / 2, canvas.height / 2);
+            if (!canvas.isConnected) return;
+            const failed = fit();
+            failed.fillStyle = '#3e3e42';
+            failed.fillRect(0, 0, canvas.width, canvas.height);
+            failed.fillStyle = '#f88';
+            failed.font = '10px Arial';
+            failed.textAlign = 'center';
+            failed.fillText(tt('Error Loading'), canvas.width / 2, canvas.height / 2);
         };
 
         img.src = imgPath;
@@ -874,8 +915,141 @@ class EventPageEditor {
     /**
      * Attach event listeners for image settings
      */
+    pageModelSpec(pageIndex) {
+        const models = this.parentEditor && this.parentEditor.pendingModels;
+        return (models && models[pageIndex]) || null;
+    }
+
+    setPageModelSpec(pageIndex, spec) {
+        if (!this.parentEditor.pendingModels) this.parentEditor.pendingModels = [];
+        this.parentEditor.pendingModels[pageIndex] = spec;
+        if (this.parentEditor._writePendingModels) this.parentEditor._writePendingModels();
+    }
+
+    _fitPreviewCanvas(canvas) {
+        const rect = canvas.getBoundingClientRect();
+        const width = Math.max(1, Math.round(rect.width));
+        const height = Math.max(1, Math.round(rect.height));
+        if (canvas.width !== width || canvas.height !== height) {
+            canvas.width = width;
+            canvas.height = height;
+        }
+        return canvas.getContext('2d');
+    }
+
+    _disposeModelPreview() {
+        if (this._modelPreviewRaf) cancelAnimationFrame(this._modelPreviewRaf);
+        this._modelPreviewRaf = 0;
+        if (this._modelPreviewRenderer) {
+            this._modelPreviewRenderer.dispose();
+            const gl = this._modelPreviewRenderer.getContext && this._modelPreviewRenderer.getContext();
+            const lose = gl && gl.getExtension && gl.getExtension('WEBGL_lose_context');
+            if (lose) lose.loseContext();
+        }
+        this._modelPreviewRenderer = null;
+        this._modelPreviewScene = null;
+        this._modelPreviewCamera = null;
+    }
+
+    async _renderModelPreview(canvas, model, page) {
+        const gen = (this._modelPreviewGen = (this._modelPreviewGen || 0) + 1);
+        await new Promise(resolve => requestAnimationFrame(resolve));
+        if (gen !== this._modelPreviewGen) return;
+        const map3d = this.projectController && this.projectController.mapEditor3D;
+        const ready = (typeof window !== 'undefined' && window.THREE && window.Reactor3D)
+            || (map3d && map3d.ensureLibraries && await map3d.ensureLibraries());
+        if (gen !== this._modelPreviewGen || !canvas.isConnected) return;
+        if (!ready || typeof THREE === 'undefined' || typeof Reactor3D === 'undefined') return;
+        const project = this.projectController.getCurrentProject
+            ? this.projectController.getCurrentProject()
+            : this.projectController.currentProject;
+        if (!project || !project.path) return;
+        const path = require('path');
+        const fs = require('fs');
+        const file = (model.file || model.name) + (model.ext || '.glb');
+        const next = path.join(project.path, '3d', model.name, 'source', file);
+        const filePath = fs.existsSync(next) ? next : path.join(project.path, '3d', 'source', file);
+        if (!fs.existsSync(filePath)) return;
+        try {
+            const data = fs.readFileSync(filePath);
+            const buffer = data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength);
+            const baseUrl = 'file://' + path.dirname(filePath).replace(/\\/g, '/') + '/';
+            const template = Reactor3D.readModel(buffer, model.ext || '.glb', baseUrl);
+            if (gen !== this._modelPreviewGen || !canvas.isConnected) return;
+            const mesh = template.clone(true);
+            const extent = template.userData.glbSize || { x: 1, y: 1, z: 1 };
+            const span = Math.max(extent.x, extent.y, extent.z, 0.0001);
+            mesh.scale.setScalar(1.4 / span);
+            const box = new THREE.Box3().setFromObject(mesh);
+            mesh.position.sub(box.getCenter(new THREE.Vector3()));
+            const object = new THREE.Group();
+            object.add(mesh);
+            Reactor3D.applyEventModelPose(object, {
+                pitch: (Number(model.pitch) || 0) * Math.PI / 180,
+                yaw: (Number(model.yaw) || 0) * Math.PI / 180,
+                roll: (Number(model.roll) || 0) * Math.PI / 180,
+                faces: model.faces
+            }, (page && page.image && page.image.direction) || 2, { preview: true, faceYaw: 0 });
+            const scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x1a1a1e);
+            scene.add(object);
+            const camera = Reactor3D.createCamera({ fov: 35 });
+            const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+            renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+            if (THREE.SRGBColorSpace) renderer.outputColorSpace = THREE.SRGBColorSpace;
+            this._modelPreviewScene = scene;
+            this._modelPreviewCamera = camera;
+            this._modelPreviewRenderer = renderer;
+            const tick = () => {
+                if (gen !== this._modelPreviewGen || !canvas.isConnected || !this._modelPreviewRenderer) return;
+                const rect = canvas.getBoundingClientRect();
+                const width = Math.max(1, Math.round(rect.width));
+                const height = Math.max(1, Math.round(rect.height));
+                if (canvas.width !== width || canvas.height !== height) {
+                    renderer.setSize(width, height, false);
+                    camera.aspect = width / height;
+                    camera.updateProjectionMatrix();
+                }
+                Reactor3D.aimCamera(camera, { x: -0.5, y: 0, z: -0.5 }, { yaw: 0, pitch: 12, distance: 2.4 });
+                renderer.render(scene, camera);
+                this._modelPreviewRaf = requestAnimationFrame(tick);
+            };
+            this._modelPreviewRaf = requestAnimationFrame(tick);
+        } catch (error) {
+            console.error('Event model preview failed.', error);
+        }
+    }
+
+    openModelPicker(pageIndex, current) {
+        const picker = new ModelGraphicPicker(this.projectController);
+        picker.show(current, result => {
+            this.setPageModelSpec(pageIndex, result);
+            this.parentEditor.renderCurrentPage();
+        });
+    }
+
     attachImageListeners(section, page, pageIndex) {
+        const threeD = section.querySelector('.image-3d-checkbox');
+        if (threeD) {
+            threeD.addEventListener('change', () => {
+                if (threeD.checked) {
+                    this.openModelPicker(pageIndex, this.pageModelSpec(pageIndex));
+                } else {
+                    this.setPageModelSpec(pageIndex, null);
+                    this.parentEditor.renderCurrentPage();
+                }
+            });
+        }
+
         // Browse button for character selection
+        section.querySelectorAll('.image-dir-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                if (!page.image) page.image = {};
+                page.image.direction = Number(btn.dataset.dir) || 2;
+                this.parentEditor.renderCurrentPage();
+            });
+        });
+
         const browseButton = section.querySelector('.image-browse-button');
         if (browseButton) {
             // Add hover effects
@@ -885,6 +1059,11 @@ class EventPageEditor {
             browseButton.addEventListener('mouseup', () => browseButton.style.backgroundColor = 'var(--color-bg-deep)');
 
             browseButton.addEventListener('click', () => {
+                if (threeD && threeD.checked) {
+                    this.openModelPicker(pageIndex, this.pageModelSpec(pageIndex));
+                    return;
+                }
+
                 // Create character graphic picker
                 const picker = new CharacterGraphicPicker(this.projectController);
 

@@ -7,9 +7,10 @@
  * Design constraints this file exists to honour:
  *
  * 1. The grid stays authoritative. `Game_Map`, `Game_Character`, passability,
- *    region logic and the event interpreter are untouched and keep operating on
- *    the same `width * height * 6` planes. What follows is a *view* of that
- *    grid plus elevation; nothing here feeds back into game logic.
+ *    region logic and the event interpreter keep operating on the same
+ *    `width * height * 6` planes. A 3D event model is the exception: its
+ *    authored size occupies every tile the mesh covers, so collision matches
+ *    what is on screen.
  *
  * 2. The map file is never rewritten. Elevation and geometry live in a sidecar
  *    (`Map###.r3d.json`), so a 2D project never gains a file, and a 3D map's
@@ -4918,6 +4919,11 @@ Reactor3D.MapScene.prototype.syncLights = function(focus) {
         const g = (((colour >> 8) & 255) / 255) * level;
         const b = ((colour & 255) / 255) * level;
         for (const material of this._materials) {
+            if (material.__reactorModel) {
+                const base = material.userData.baseColor;
+                if (base) material.color.setRGB(base.r * r, base.g * g, base.b * b);
+                continue;
+            }
             if (material.__reactorBillboard || material.__reactorShaded) {
                 material.color.setRGB(r, g, b);
             }
@@ -5872,6 +5878,1322 @@ Reactor3D.renderBlocker = function(mapData) {
             + "spriteset before the fetch returned";
     }
     return null;
+};
+
+//-----------------------------------------------------------------------------
+// Character models
+//
+// An event can stand as a sprite (the default, and what RPG Maker authored)
+// or as a model in `3d/<name>/source/`. GLB, OBJ, FBX, STL, USDZ, 3MF, DXF
+// and Blend are accepted. The note is Reactor-only and ignored by MZ:
+//
+//   <r3d>
+//   model(Oth97_CNO_Consul)
+//   size(2)
+//   yaw(0)
+//   scale(1)
+//   </r3d>
+//
+// `size` fits the longest ground axis to that many tiles. `scale` is an extra
+// multiplier. `yaw` is degrees added on top of the event's facing.
+
+Reactor3D.MODEL_DIR = "3d/";
+Reactor3D.MODEL_EXTS = [".glb", ".obj", ".fbx", ".stl", ".usdz", ".3mf", ".dxf", ".blend"];
+Reactor3D._glbCache = Object.create(null);
+
+Reactor3D.splitModelRef = function(named) {
+    let raw = String(named || "").trim();
+    if (!raw || /[\\/]/.test(raw) || raw === "." || raw === "..") return null;
+    let ext = "";
+    const match = raw.match(/(\.[a-z0-9]+)$/i);
+    if (match && this.MODEL_EXTS.indexOf(match[1].toLowerCase()) >= 0) {
+        ext = match[1].toLowerCase();
+        raw = raw.slice(0, -ext.length);
+    }
+    if (!raw || /[\\/]/.test(raw)) return null;
+    return { name: raw, ext };
+};
+
+Reactor3D.modelSpecFromNote = function(note) {
+    if (typeof note !== "string" || !note) return null;
+    const block = note.match(/<\s*r3d\s*>([\s\S]*?)<\s*\/\s*r3d\s*>/i);
+    const body = block ? block[1] : "";
+    const named = (body.match(/model\s*\(\s*([^)\s]+)\s*\)/i)
+        || note.match(/<\s*r3d\s*:\s*model\s*:\s*([^>\s]+)\s*>/i)
+        || [])[1];
+    const ref = this.splitModelRef(named);
+    if (!ref) return null;
+    const number = (label, fallback) => {
+        const match = body.match(new RegExp(label + "\\s*\\(\\s*([-+0-9.]+)\\s*\\)", "i"));
+        if (!match) return fallback;
+        const value = Number(match[1]);
+        return Number.isFinite(value) ? value : fallback;
+    };
+    return {
+        name: ref.name,
+        ext: ref.ext,
+        size: number("size", 2),
+        scale: number("scale", 1),
+        yaw: number("yaw", 0) * Math.PI / 180,
+        pitch: number("pitch", 0) * Math.PI / 180,
+        roll: number("roll", 0) * Math.PI / 180
+    };
+};
+
+Reactor3D.modelSourceName = function(name, ext, file) {
+    if (file) {
+        const ref = this.splitModelRef(file);
+        if (ref) return ref.name + (ref.ext || ext || ".glb");
+        const cleaned = String(file).replace(/[\\/]/g, "").trim();
+        if (cleaned) return cleaned + (ext || ".glb");
+    }
+    return name + (ext || ".glb");
+};
+
+Reactor3D.modelUrls = function(name, ext, file) {
+    const source = this.modelSourceName(name, ext, file);
+    return ["3d/" + name + "/source/" + source, "3d/source/" + source];
+};
+
+Reactor3D.modelUrl = function(name, ext, file) {
+    return this.modelUrls(name, ext, file)[0];
+};
+
+Reactor3D.modelTextureDir = function(name) {
+    return "3d/" + name + "/textures/";
+};
+
+Reactor3D.modelCacheKey = function(name, ext, file) {
+    return name + (ext || "") + (file ? ":" + file : "");
+};
+
+Reactor3D.eventModelSpec = function(mapData, eventId, pageIndex) {
+    const pages = mapData && mapData.reactor3d && mapData.reactor3d.events
+        && mapData.reactor3d.events[String(eventId)];
+    if (!pages || typeof pages !== "object") return null;
+    const spec = pages[String(pageIndex == null ? 0 : pageIndex)] || pages[pageIndex];
+    if (!spec || !spec.name) return null;
+    const ref = this.splitModelRef(spec.name);
+    if (!ref) return null;
+    const ext = spec.ext && this.MODEL_EXTS.indexOf(String(spec.ext).toLowerCase()) >= 0
+        ? String(spec.ext).toLowerCase()
+        : ref.ext;
+    const size = Number(spec.size);
+    const scale = Number(spec.scale);
+    const yaw = Number(spec.yaw);
+    const pitch = Number(spec.pitch);
+    const roll = Number(spec.roll);
+    const fileRef = spec.file ? this.splitModelRef(spec.file) : null;
+    return {
+        name: ref.name,
+        file: fileRef ? fileRef.name : (spec.file ? String(spec.file) : ""),
+        ext,
+        size: Number.isFinite(size) && size > 0 ? size : 2,
+        scale: Number.isFinite(scale) && scale > 0 ? scale : 1,
+        yaw: Number.isFinite(yaw) ? yaw * Math.PI / 180 : 0,
+        pitch: Number.isFinite(pitch) ? pitch * Math.PI / 180 : 0,
+        roll: Number.isFinite(roll) ? roll * Math.PI / 180 : 0,
+        faces: this.readModelFaces(spec.faces)
+    };
+};
+
+Reactor3D.readModelFaces = function(faces) {
+    if (!faces || typeof faces !== "object") return null;
+    const out = {};
+    const names = ["front", "back", "left", "right"];
+    for (let i = 0; i < names.length; i++) {
+        const point = faces[names[i]];
+        if (!Array.isArray(point) || point.length < 3) continue;
+        const x = Number(point[0]);
+        const y = Number(point[1]);
+        const z = Number(point[2]);
+        if (![x, y, z].every(Number.isFinite)) continue;
+        out[names[i]] = [x, y, z];
+    }
+    return Object.keys(out).length ? out : null;
+};
+
+Reactor3D.setEventModelSpec = function(mapData, eventId, pageIndex, spec) {
+    if (!mapData || !eventId) return null;
+    if (!mapData.reactor3d || typeof mapData.reactor3d !== "object") {
+        mapData.reactor3d = { version: 1, mode: this.MODE_3D };
+    }
+    const store = mapData.reactor3d;
+    if (!store.events || typeof store.events !== "object") store.events = {};
+    const key = String(eventId);
+    const page = String(pageIndex == null ? 0 : pageIndex);
+    if (!spec || !spec.name) {
+        if (store.events[key]) delete store.events[key][page];
+        if (store.events[key] && !Object.keys(store.events[key]).length) delete store.events[key];
+        if (!Object.keys(store.events).length) delete store.events;
+        return null;
+    }
+    if (!store.events[key] || typeof store.events[key] !== "object") store.events[key] = {};
+    const ref = this.splitModelRef(spec.name);
+    if (!ref) return null;
+    const ext = spec.ext && this.MODEL_EXTS.indexOf(String(spec.ext).toLowerCase()) >= 0
+        ? String(spec.ext).toLowerCase()
+        : ref.ext;
+    const fileRef = spec.file ? this.splitModelRef(spec.file) : null;
+    const written = {
+        name: ref.name,
+        file: fileRef ? fileRef.name : "",
+        ext,
+        size: Number(spec.size) > 0 ? Number(spec.size) : 2,
+        scale: Number(spec.scale) > 0 ? Number(spec.scale) : 1,
+        yaw: Number.isFinite(Number(spec.yaw)) ? Number(spec.yaw) : 0,
+        pitch: Number.isFinite(Number(spec.pitch)) ? Number(spec.pitch) : 0,
+        roll: Number.isFinite(Number(spec.roll)) ? Number(spec.roll) : 0
+    };
+    const faces = this.readModelFaces(spec.faces);
+    if (faces) written.faces = faces;
+    store.events[key][page] = written;
+    return store.events[key][page];
+};
+
+Reactor3D.hasEventModels = function(mapData) {
+    const events = mapData && mapData.reactor3d && mapData.reactor3d.events;
+    if (!events || typeof events !== "object") return false;
+    return Object.keys(events).some(id => {
+        const pages = events[id];
+        return pages && typeof pages === "object"
+            && Object.keys(pages).some(page => pages[page] && pages[page].name);
+    });
+};
+
+Reactor3D.characterModelSpec = function(character) {
+    if (!character || typeof character.event !== "function") return null;
+    const data = character.event();
+    const pageIndex = character._pageIndex != null ? character._pageIndex : 0;
+    const fromSidecar = this.eventModelSpec(
+        typeof $dataMap !== "undefined" ? $dataMap : null,
+        character.eventId ? character.eventId() : data && data.id,
+        pageIndex
+    );
+    return fromSidecar || this.modelSpecFromNote(data && data.note);
+};
+
+Reactor3D.hasCharacterModel = function(character) {
+    const spec = this.characterModelSpec(character);
+    if (!spec) return false;
+    const entry = this._glbCache[this.modelCacheKey(spec.name, spec.ext, spec.file)];
+    return !!(entry && entry.template);
+};
+
+Reactor3D.characterModelYaw = function(character, extra) {
+    return this.dir8Yaw(this.characterModelDir8(character)) + (extra || 0);
+};
+
+Reactor3D.dir8Yaw = function(direction) {
+    const yaws = {
+        2: 0,
+        3: Math.PI / 4,
+        6: Math.PI / 2,
+        9: 3 * Math.PI / 4,
+        8: Math.PI,
+        7: -3 * Math.PI / 4,
+        4: -Math.PI / 2,
+        1: -Math.PI / 4
+    };
+    return yaws[direction] != null ? yaws[direction] : 0;
+};
+
+Reactor3D.characterModelDir8 = function(character) {
+    if (!character) return 2;
+    if (character.isMoving && character.isMoving()) {
+        const dx = character._x - character._realX;
+        const dy = character._y - character._realY;
+        if (Math.abs(dx) > 0.001 && Math.abs(dy) > 0.001) {
+            return dy > 0 ? (dx > 0 ? 3 : 1) : (dx > 0 ? 9 : 7);
+        }
+        if (Math.abs(dx) > 0.001) return dx > 0 ? 6 : 4;
+        if (Math.abs(dy) > 0.001) return dy > 0 ? 2 : 8;
+    }
+    const stored = character._reactorDir8;
+    if (stored === 1 || stored === 3 || stored === 7 || stored === 9) return stored;
+    return character.direction ? character.direction() : 2;
+};
+
+Reactor3D.eventModelFaceName = function(direction) {
+    return { 2: "front", 4: "left", 6: "right", 8: "back" }[direction] || "front";
+};
+
+Reactor3D.eventModelFaceTurn = function(direction) {
+    return this.dir8Yaw(direction);
+};
+
+Reactor3D.eventModelInterpolatedMark = function(faces, direction) {
+    if (!faces) return null;
+    const pairs = {
+        2: ["front"],
+        4: ["left"],
+        6: ["right"],
+        8: ["back"],
+        1: ["front", "left"],
+        3: ["front", "right"],
+        7: ["back", "left"],
+        9: ["back", "right"]
+    };
+    const names = pairs[direction] || ["front"];
+    if (names.length === 1) return faces[names[0]] || faces.front || null;
+    const a = faces[names[0]];
+    const b = faces[names[1]];
+    if (a && b) return [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2];
+    return a || b || faces.front || null;
+};
+
+Reactor3D.eventModelFootprint = function(character, spec, yaw) {
+    spec = spec || this.characterModelSpec(character);
+    const size = spec && spec.size > 0 ? spec.size : 2;
+    const extra = spec && spec.scale > 0 ? spec.scale : 1;
+    const entry = spec ? this._glbCache[this.modelCacheKey(spec.name, spec.ext, spec.file)] : null;
+    const extent = entry && entry.template && entry.template.userData.glbSize;
+    let halfX = size * extra / 2;
+    let halfZ = halfX;
+    if (extent) {
+        const span = Math.max(extent.x, extent.z, 0.0001);
+        const scale = size / span * extra;
+        halfX = extent.x * scale / 2;
+        halfZ = extent.z * scale / 2;
+    }
+    if (yaw == null) yaw = this.characterModelYaw(character);
+    const cos = Math.abs(Math.cos(yaw));
+    const sin = Math.abs(Math.sin(yaw));
+    return {
+        halfX: halfX * cos + halfZ * sin,
+        halfZ: halfX * sin + halfZ * cos
+    };
+};
+
+Reactor3D.eventModelContains = function(character, foot, x, y) {
+    const map = typeof $gameMap !== "undefined" ? $gameMap : null;
+    const dx = map && map.deltaX ? map.deltaX(x, character._x) : x - character._x;
+    const dy = map && map.deltaY ? map.deltaY(y, character._y) : y - character._y;
+    return Math.abs(dx) < foot.halfX + 0.5 - 1e-6
+        && Math.abs(dy) < foot.halfZ + 0.5 - 1e-6;
+};
+
+Reactor3D.eventModelCanFace = function(character, direction) {
+    const spec = this.characterModelSpec(character);
+    if (!spec || !character) return true;
+    const foot = this.eventModelFootprint(character, spec, this.dir8Yaw(direction));
+    if (typeof $gamePlayer !== "undefined" && $gamePlayer
+        && this.eventModelContains(character, foot, $gamePlayer._x, $gamePlayer._y)) {
+        return false;
+    }
+    const map = typeof $gameMap !== "undefined" ? $gameMap : null;
+    const events = map && map.events ? map.events() : null;
+    if (!events) return true;
+    for (let i = 0; i < events.length; i++) {
+        const other = events[i];
+        if (!other || other === character) continue;
+        if (other.isThrough && other.isThrough()) continue;
+        if (other.isNormalPriority && !other.isNormalPriority()) continue;
+        if (this.eventModelContains(character, foot, other._x, other._y)) return false;
+    }
+    return true;
+};
+
+Reactor3D.eventModelWouldOverlap = function(character, x, y, other) {
+    if (!character || !other) return false;
+    const ox = character._x;
+    const oy = character._y;
+    character._x = x;
+    character._y = y;
+    const hit = this.eventModelOccupies(character, other._x, other._y);
+    character._x = ox;
+    character._y = oy;
+    return hit;
+};
+
+Reactor3D.aimCharacterBillboard = function(object, camera) {
+    if (!object || !camera || typeof THREE === "undefined") return;
+    const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
+    right.y = 0;
+    if (right.lengthSq() < 1e-8) right.set(1, 0, 0);
+    else right.normalize();
+    const up = this.billboardUp(camera);
+    const forward = new THREE.Vector3().crossVectors(right, up).normalize();
+    const trueUp = new THREE.Vector3().crossVectors(forward, right).normalize();
+    object.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(right, trueUp, forward));
+};
+
+Reactor3D.characterIsBehindModel = function(character, event) {
+    if (!character || !event) return false;
+    const spec = this.characterModelSpec(event);
+    if (!spec) return false;
+    const foot = this.eventModelFootprint(event, spec);
+    const map = typeof $gameMap !== "undefined" ? $gameMap : null;
+    const dx = map && map.deltaX ? map.deltaX(character._realX, event._realX)
+        : character._realX - event._realX;
+    const dy = map && map.deltaY ? map.deltaY(character._realY, event._realY)
+        : character._realY - event._realY;
+    return Math.abs(dx) <= foot.halfX + 0.51 && dy < -0.01;
+};
+
+Reactor3D.eventModelOccupies = function(character, x, y) {
+    if (!character) return false;
+    const spec = this.characterModelSpec(character);
+    if (!spec) return character._x === x && character._y === y;
+    return this.eventModelContains(character, this.eventModelFootprint(character, spec), x, y);
+};
+
+Reactor3D.applyEventModelPose = function(object, spec, direction, options) {
+    if (!object || !spec) return;
+    const preview = options && typeof options === "object" && options.preview;
+    const faceYaw = preview ? (options.faceYaw != null ? options.faceYaw : 0) : null;
+    const pitch = spec.pitch || 0;
+    const yaw = spec.yaw || 0;
+    const roll = spec.roll || 0;
+    object.rotation.order = "YXZ";
+    object.rotation.set(pitch, yaw, roll);
+    if (object.updateMatrix) object.updateMatrix();
+    const dir = direction || 2;
+    const character = { direction: function() { return dir; }, _reactorDir8: dir };
+    const faces = spec.faces || {};
+    const used = preview
+        ? (faces[this.eventModelFaceName(dir)] || faces.front || null)
+        : (faces.front || this.eventModelInterpolatedMark(faces, dir));
+    let target = preview ? faceYaw : this.dir8Yaw(dir);
+    if (preview && !faces[this.eventModelFaceName(dir)] && faces.front) {
+        target -= this.eventModelFaceTurn(dir);
+    }
+    if (used && typeof THREE !== "undefined") {
+        const local = new THREE.Vector3(used[0], used[1], used[2]);
+        local.applyQuaternion(object.quaternion);
+        local.y = 0;
+        if (local.lengthSq() > 1e-8) {
+            object.rotation.y += target - Math.atan2(local.x, local.z);
+            return;
+        }
+    }
+    if (preview) {
+        object.rotation.y = yaw + this.eventModelFaceTurn(dir);
+        return;
+    }
+    object.rotation.y = this.characterModelYaw(character, yaw);
+};
+
+Reactor3D.readGlb = function(buffer) {
+    const view = new DataView(buffer);
+    if (view.byteLength < 20 || view.getUint32(0, true) !== 0x46546C67) {
+        throw new Error("not a GLB");
+    }
+    let offset = 12;
+    let json = null;
+    let bin = null;
+    while (offset + 8 <= view.byteLength) {
+        const length = view.getUint32(offset, true);
+        const type = view.getUint32(offset + 4, true);
+        const start = offset + 8;
+        if (start + length > view.byteLength) break;
+        const bytes = new Uint8Array(buffer, start, length);
+        if (type === 0x4E4F534A) {
+            json = JSON.parse(new TextDecoder("utf-8").decode(bytes));
+        } else if (type === 0x004E4942) {
+            bin = bytes;
+        }
+        offset = start + length;
+    }
+    if (!json) throw new Error("GLB has no JSON chunk");
+    return { json, bin };
+};
+
+Reactor3D.loadGlb = function(name) {
+    return this.loadModel(name, ".glb");
+};
+
+Reactor3D.loadModel = function(name, ext, file) {
+    const key = this.modelCacheKey(name, ext, file);
+    const cached = this._glbCache[key];
+    if (cached) return cached.promise;
+    const entry = { promise: null, template: null, failed: false };
+    this._glbCache[key] = entry;
+    const jobs = [];
+    const kinds = ext ? [ext] : this.MODEL_EXTS;
+    for (let i = 0; i < kinds.length; i++) {
+        const next = kinds[i];
+        const urls = this.modelUrls(name, next, file);
+        for (let u = 0; u < urls.length; u++) jobs.push({ url: urls[u], ext: next });
+    }
+    entry.promise = new Promise(resolve => {
+        if (typeof XMLHttpRequest === "undefined") {
+            entry.failed = true;
+            resolve(null);
+            return;
+        }
+        const tryAt = index => {
+            if (index >= jobs.length) {
+                entry.failed = true;
+                console.error("Reactor3D: could not load " + this.modelUrl(name, ext));
+                resolve(null);
+                return;
+            }
+            const job = jobs[index];
+            const xhr = new XMLHttpRequest();
+            xhr.open("GET", job.url);
+            xhr.responseType = "arraybuffer";
+            xhr.onload = () => {
+                if (xhr.status >= 400 || !xhr.response) {
+                    tryAt(index + 1);
+                    return;
+                }
+                try {
+                    const baseUrl = job.url.replace(/[^/]+$/, "");
+                    entry.template = this.readModel(xhr.response, job.ext, baseUrl);
+                    resolve(entry.template);
+                } catch (error) {
+                    entry.failed = true;
+                    console.error("Reactor3D: " + name + job.ext + " could not be built.", error);
+                    resolve(null);
+                }
+            };
+            xhr.onerror = () => tryAt(index + 1);
+            xhr.send();
+        };
+        tryAt(0);
+    });
+    return entry.promise;
+};
+
+Reactor3D.readModel = function(buffer, ext, baseUrl) {
+    const kind = String(ext || ".glb").toLowerCase();
+    if (kind === ".glb") {
+        const parsed = this.readGlb(buffer);
+        return this.buildGlbTemplate(parsed.json, parsed.bin, baseUrl);
+    }
+    if (kind === ".obj") return this.buildMeshTemplate(this.readObj(buffer));
+    if (kind === ".stl") return this.buildMeshTemplate(this.readStl(buffer));
+    if (kind === ".dxf") return this.buildMeshTemplate(this.readDxf(buffer));
+    if (kind === ".fbx") return this.buildMeshTemplate(this.readFbx(buffer));
+    if (kind === ".3mf") return this.buildMeshTemplate(this.read3mf(buffer));
+    if (kind === ".usdz") return this.buildMeshTemplate(this.readUsdz(buffer));
+    if (kind === ".blend") throw new Error("export Blend files as GLB, OBJ or FBX");
+    throw new Error("unsupported model type " + kind);
+};
+
+Reactor3D._modelText = function(buffer) {
+    const bytes = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
+    return new TextDecoder("utf-8").decode(bytes);
+};
+
+Reactor3D._zipFiles = function(buffer) {
+    const bytes = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
+    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    const files = Object.create(null);
+    let offset = 0;
+    while (offset + 30 <= bytes.length && view.getUint32(offset, true) === 0x04034b50) {
+        const method = view.getUint16(offset + 8, true);
+        const compSize = view.getUint32(offset + 18, true);
+        const nameLen = view.getUint16(offset + 26, true);
+        const extraLen = view.getUint16(offset + 28, true);
+        const nameStart = offset + 30;
+        const name = this._modelText(bytes.subarray(nameStart, nameStart + nameLen)).replace(/\\/g, "/");
+        const start = nameStart + nameLen + extraLen;
+        if (start + compSize > bytes.length) break;
+        const packed = bytes.subarray(start, start + compSize);
+        if (method === 0) files[name] = packed;
+        else if (method === 8 && typeof pako !== "undefined") files[name] = pako.inflate(packed);
+        offset = start + compSize;
+    }
+    return files;
+};
+
+Reactor3D.readObj = function(buffer) {
+    const verts = [];
+    const faces = [];
+    const lines = this._modelText(buffer).split(/\r?\n/);
+    for (let i = 0; i < lines.length; i++) {
+        const parts = lines[i].trim().split(/\s+/);
+        if (parts[0] === "v" && parts.length >= 4) {
+            verts.push(+parts[1], +parts[2], +parts[3]);
+        } else if (parts[0] === "f" && parts.length >= 4) {
+            const ids = [];
+            for (let p = 1; p < parts.length; p++) {
+                const raw = parseInt(parts[p], 10);
+                if (!Number.isFinite(raw) || raw === 0) continue;
+                ids.push(raw < 0 ? verts.length / 3 + raw : raw - 1);
+            }
+            for (let t = 1; t + 1 < ids.length; t++) faces.push(ids[0], ids[t], ids[t + 1]);
+        }
+    }
+    if (!faces.length) throw new Error("OBJ has no faces");
+    return { positions: new Float32Array(verts), indices: faces };
+};
+
+Reactor3D.readStl = function(buffer) {
+    const bytes = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
+    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    const asText = this._modelText(bytes.subarray(0, Math.min(bytes.length, 80)));
+    const ascii = /^solid\b/i.test(asText) && bytes.length !== 84 + 50 * view.getUint32(80, true);
+    const positions = [];
+    if (!ascii && bytes.length >= 84) {
+        const count = view.getUint32(80, true);
+        if (bytes.length >= 84 + count * 50) {
+            for (let i = 0; i < count; i++) {
+                const base = 84 + i * 50 + 12;
+                for (let v = 0; v < 9; v++) positions.push(view.getFloat32(base + v * 4, true));
+            }
+            if (positions.length) return { positions: new Float32Array(positions) };
+        }
+    }
+    const text = this._modelText(bytes);
+    const vertex = /vertex\s+([-+0-9.eE]+)\s+([-+0-9.eE]+)\s+([-+0-9.eE]+)/g;
+    let match;
+    while ((match = vertex.exec(text))) {
+        positions.push(+match[1], +match[2], +match[3]);
+    }
+    if (positions.length < 9) throw new Error("STL has no triangles");
+    return { positions: new Float32Array(positions) };
+};
+
+Reactor3D.readDxf = function(buffer) {
+    const lines = this._modelText(buffer).split(/\r?\n/);
+    const positions = [];
+    const take = (start, codes) => {
+        const point = {};
+        for (let i = start; i + 1 < lines.length; i += 2) {
+            const code = lines[i].trim();
+            if (code === "0") break;
+            if (codes.indexOf(code) >= 0) point[code] = +lines[i + 1];
+        }
+        return point;
+    };
+    for (let i = 0; i + 1 < lines.length; i++) {
+        if (lines[i].trim() !== "0" || String(lines[i + 1]).trim().toUpperCase() !== "3DFACE") continue;
+        const face = take(i + 2, ["10", "20", "30", "11", "21", "31", "12", "22", "32", "13", "23", "33"]);
+        const pts = [
+            [face["10"], face["20"], face["30"]],
+            [face["11"], face["21"], face["31"]],
+            [face["12"], face["22"], face["32"]],
+            [face["13"], face["23"], face["33"]]
+        ].filter(p => p.every(Number.isFinite));
+        if (pts.length < 3) continue;
+        const push = (a, b, c) => positions.push(a[0], a[1], a[2], b[0], b[1], b[2], c[0], c[1], c[2]);
+        push(pts[0], pts[1], pts[2]);
+        if (pts.length > 3) push(pts[0], pts[2], pts[3]);
+    }
+    if (positions.length < 9) throw new Error("DXF has no 3DFACE triangles");
+    return { positions: new Float32Array(positions) };
+};
+
+Reactor3D._fbxPolygons = function(vertices, indices) {
+    const positions = [];
+    let poly = [];
+    for (let i = 0; i < indices.length; i++) {
+        const value = indices[i];
+        const end = value < 0;
+        poly.push(end ? ~value : value);
+        if (!end) continue;
+        for (let t = 1; t + 1 < poly.length; t++) {
+            for (const index of [poly[0], poly[t], poly[t + 1]]) {
+                positions.push(vertices[index * 3] || 0, vertices[index * 3 + 1] || 0, vertices[index * 3 + 2] || 0);
+            }
+        }
+        poly = [];
+    }
+    if (positions.length < 9) throw new Error("FBX has no polygons");
+    return { positions: new Float32Array(positions) };
+};
+
+Reactor3D.readFbxAscii = function(text) {
+    const block = (label) => {
+        const match = text.match(new RegExp(label + "\\s*:\\s*\\*\\d+\\s*\\{([\\s\\S]*?)\\}", "i"));
+        if (!match) return null;
+        const numbers = (match[1].match(/[-+0-9.eE]+/g) || []).map(Number).filter(Number.isFinite);
+        return numbers.length ? numbers : null;
+    };
+    const vertices = block("Vertices");
+    const indices = block("PolygonVertexIndex");
+    if (!vertices || !indices) throw new Error("FBX has no mesh");
+    return this._fbxPolygons(vertices, indices);
+};
+
+Reactor3D.readFbxBinary = function(buffer) {
+    const bytes = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
+    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    const version = view.getUint32(23, true);
+    const wide = version >= 7500;
+    let cursor = 27;
+    const u32 = () => {
+        const value = wide ? Number(view.getBigUint64(cursor, true)) : view.getUint32(cursor, true);
+        cursor += wide ? 8 : 4;
+        return value;
+    };
+    const readArray = type => {
+        const count = view.getUint32(cursor, true);
+        const encoding = view.getUint32(cursor + 4, true);
+        const length = view.getUint32(cursor + 8, true);
+        cursor += 12;
+        let data = bytes.subarray(cursor, cursor + length);
+        cursor += length;
+        if (encoding === 1 && typeof pako !== "undefined") data = pako.inflate(data);
+        const src = new DataView(data.buffer, data.byteOffset, data.byteLength);
+        const out = [];
+        const size = type === "d" ? 8 : 4;
+        for (let i = 0; i < count; i++) {
+            out.push(type === "d" ? src.getFloat64(i * size, true)
+                : type === "i" ? src.getInt32(i * size, true)
+                : src.getFloat32(i * size, true));
+        }
+        return out;
+    };
+    const readProperty = () => {
+        const type = String.fromCharCode(bytes[cursor++]);
+        if (type === "Y") { const v = view.getInt16(cursor, true); cursor += 2; return v; }
+        if (type === "C") return bytes[cursor++];
+        if (type === "I") { const v = view.getInt32(cursor, true); cursor += 4; return v; }
+        if (type === "F") { const v = view.getFloat32(cursor, true); cursor += 4; return v; }
+        if (type === "D") { const v = view.getFloat64(cursor, true); cursor += 8; return v; }
+        if (type === "L") { cursor += 8; return 0; }
+        if (type === "S" || type === "R") {
+            const length = view.getUint32(cursor, true);
+            cursor += 4 + length;
+            return "";
+        }
+        if (type === "d" || type === "f" || type === "i") return readArray(type);
+        throw new Error("FBX property " + type);
+    };
+    let vertices = null;
+    let indices = null;
+    const readNode = () => {
+        const start = cursor;
+        const end = u32();
+        const count = u32();
+        u32();
+        const nameLen = bytes[cursor++];
+        const name = this._modelText(bytes.subarray(cursor, cursor + nameLen));
+        cursor += nameLen;
+        if (!end) return;
+        const props = [];
+        for (let i = 0; i < count; i++) props.push(readProperty());
+        if (name === "Vertices" && Array.isArray(props[0])) vertices = props[0];
+        if (name === "PolygonVertexIndex" && Array.isArray(props[0])) indices = props[0];
+        while (cursor + (wide ? 25 : 13) < end) readNode();
+        cursor = Math.max(cursor, end);
+        if (cursor < start) throw new Error("FBX walk");
+    };
+    while (cursor + (wide ? 25 : 13) < bytes.length) {
+        const mark = cursor;
+        readNode();
+        if (cursor === mark) break;
+        if (vertices && indices) break;
+    }
+    if (!vertices || !indices) throw new Error("FBX has no mesh");
+    return this._fbxPolygons(vertices, indices);
+};
+
+Reactor3D.readFbx = function(buffer) {
+    const bytes = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
+    const magic = this._modelText(bytes.subarray(0, 20));
+    if (magic.indexOf("Kaydara FBX Binary") === 0) return this.readFbxBinary(bytes);
+    return this.readFbxAscii(this._modelText(bytes));
+};
+
+Reactor3D._xmlAttr = function(tag, name) {
+    const match = String(tag).match(new RegExp("\\b" + name + "\\s*=\\s*[\"']([^\"']+)[\"']", "i"));
+    return match ? match[1] : "";
+};
+
+Reactor3D.read3mf = function(buffer) {
+    const files = this._zipFiles(buffer);
+    const names = Object.keys(files).filter(name => /\.model$/i.test(name));
+    if (!names.length) throw new Error("3MF has no model");
+    const verts = [];
+    const faces = [];
+    for (let n = 0; n < names.length; n++) {
+        const text = this._modelText(files[names[n]]);
+        const base = verts.length / 3;
+        const vertex = /<vertex\b([^>]*)>/gi;
+        let match;
+        while ((match = vertex.exec(text))) {
+            verts.push(+this._xmlAttr(match[1], "x"), +this._xmlAttr(match[1], "y"), +this._xmlAttr(match[1], "z"));
+        }
+        const triangle = /<triangle\b([^>]*)>/gi;
+        while ((match = triangle.exec(text))) {
+            faces.push(base + (+this._xmlAttr(match[1], "v1")),
+                base + (+this._xmlAttr(match[1], "v2")),
+                base + (+this._xmlAttr(match[1], "v3")));
+        }
+    }
+    if (!faces.length) throw new Error("3MF has no triangles");
+    return { positions: new Float32Array(verts), indices: faces };
+};
+
+Reactor3D.readUsdaMesh = function(text) {
+    const points = [];
+    const pointBlock = text.match(/point3f\[\]\s+points\s*=\s*\[([\s\S]*?)\]/i);
+    if (pointBlock) {
+        const nums = pointBlock[1].match(/[-+0-9.eE]+/g) || [];
+        for (let i = 0; i + 2 < nums.length; i += 3) points.push(+nums[i], +nums[i + 1], +nums[i + 2]);
+    }
+    const counts = [];
+    const countBlock = text.match(/int\[\]\s+faceVertexCounts\s*=\s*\[([\s\S]*?)\]/i);
+    if (countBlock) {
+        const nums = countBlock[1].match(/[-+0-9]+/g) || [];
+        for (let i = 0; i < nums.length; i++) counts.push(+nums[i]);
+    }
+    const indices = [];
+    const indexBlock = text.match(/int\[\]\s+faceVertexIndices\s*=\s*\[([\s\S]*?)\]/i);
+    if (indexBlock) {
+        const nums = indexBlock[1].match(/[-+0-9]+/g) || [];
+        for (let i = 0; i < nums.length; i++) indices.push(+nums[i]);
+    }
+    if (!points.length || !indices.length) throw new Error("USDZ has no mesh");
+    const faces = [];
+    let cursor = 0;
+    const rings = counts.length ? counts : [3];
+    for (let r = 0; r < rings.length; r++) {
+        const count = rings[r];
+        const ring = indices.slice(cursor, cursor + count);
+        cursor += count;
+        for (let t = 1; t + 1 < ring.length; t++) faces.push(ring[0], ring[t], ring[t + 1]);
+    }
+    return { positions: new Float32Array(points), indices: faces };
+};
+
+Reactor3D.readUsdz = function(buffer) {
+    const files = this._zipFiles(buffer);
+    const names = Object.keys(files).filter(name => /\.usda$/i.test(name));
+    if (!names.length) throw new Error("USDZ needs a USDA mesh (USDC is not read)");
+    return this.readUsdaMesh(this._modelText(files[names[0]]));
+};
+
+Reactor3D.buildMeshTemplate = function(mesh) {
+    if (typeof THREE === "undefined") throw new Error("three.js is not loaded");
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute("position", new THREE.BufferAttribute(mesh.positions, 3));
+    if (mesh.indices && mesh.indices.length) {
+        const max = mesh.indices.reduce((high, value) => value > high ? value : high, 0);
+        const Index = max > 65535 ? Uint32Array : Uint16Array;
+        geometry.setIndex(new THREE.BufferAttribute(new Index(mesh.indices), 1));
+    }
+    geometry.computeVertexNormals();
+    const material = new THREE.MeshBasicMaterial({ color: 0x888888, side: THREE.FrontSide, fog: false });
+    material.__reactorModel = true;
+    const root = new THREE.Group();
+    root.name = "model";
+    root.add(new THREE.Mesh(geometry, material));
+    const box = new THREE.Box3().setFromObject(root);
+    const size = box.getSize(new THREE.Vector3());
+    const center = box.getCenter(new THREE.Vector3());
+    for (const child of root.children) {
+        child.position.x -= center.x;
+        child.position.y -= box.min.y;
+        child.position.z -= center.z;
+    }
+    root.userData.glbSize = { x: size.x, y: size.y, z: size.z };
+    root.userData.glbTextures = [];
+    return root;
+};
+
+Reactor3D._glbAccessor = function(json, bin, index) {
+    const accessor = json.accessors[index];
+    const view = json.bufferViews[accessor.bufferView];
+    const offset = (view.byteOffset || 0) + (accessor.byteOffset || 0);
+    const comps = { SCALAR: 1, VEC2: 2, VEC3: 3, VEC4: 4, MAT3: 9, MAT4: 16 }[accessor.type] || 1;
+    const bytes = { 5120: 1, 5121: 1, 5122: 2, 5123: 2, 5125: 4, 5126: 4 }[accessor.componentType];
+    const stride = view.byteStride || bytes * comps;
+    const ctor = {
+        5120: Int8Array, 5121: Uint8Array, 5122: Int16Array,
+        5123: Uint16Array, 5125: Uint32Array, 5126: Float32Array
+    }[accessor.componentType];
+    const packed = stride === bytes * comps;
+    if (packed && ctor) {
+        return new ctor(bin.buffer, bin.byteOffset + offset, accessor.count * comps);
+    }
+    const out = new Float32Array(accessor.count * comps);
+    const src = new DataView(bin.buffer, bin.byteOffset + offset);
+    const reader = {
+        5120: (v, o) => v.getInt8(o),
+        5121: (v, o) => v.getUint8(o),
+        5122: (v, o) => v.getInt16(o, true),
+        5123: (v, o) => v.getUint16(o, true),
+        5125: (v, o) => v.getUint32(o, true),
+        5126: (v, o) => v.getFloat32(o, true)
+    }[accessor.componentType];
+    for (let i = 0; i < accessor.count; i++) {
+        for (let c = 0; c < comps; c++) {
+            out[i * comps + c] = reader(src, i * stride + c * bytes);
+        }
+    }
+    return out;
+};
+
+Reactor3D.studioEnvMap = function() {
+    if (this._studioEnv !== undefined) return this._studioEnv;
+    if (typeof document === "undefined" || typeof THREE === "undefined") {
+        this._studioEnv = null;
+        return null;
+    }
+    const size = 32;
+    const stops = [
+        [[228, 232, 236], [118, 122, 128]],
+        [[176, 180, 186], [86, 90, 96]],
+        [[248, 246, 242], [198, 194, 188]],
+        [[72, 70, 68], [36, 34, 32]],
+        [[210, 214, 218], [102, 106, 112]],
+        [[164, 168, 174], [78, 82, 88]]
+    ];
+    const faces = stops.map(([hi, lo]) => {
+        const canvas = document.createElement("canvas");
+        canvas.width = canvas.height = size;
+        const ctx = canvas.getContext("2d");
+        const gradient = ctx.createLinearGradient(0, 0, 0, size);
+        gradient.addColorStop(0, "rgb(" + hi.join(",") + ")");
+        gradient.addColorStop(1, "rgb(" + lo.join(",") + ")");
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, size, size);
+        return canvas;
+    });
+    const cube = new THREE.CubeTexture(faces);
+    cube.needsUpdate = true;
+    if (THREE.SRGBColorSpace) cube.colorSpace = THREE.SRGBColorSpace;
+    this._studioEnv = cube;
+    return cube;
+};
+
+Reactor3D._glbImageUrl = function(json, bin, image, baseUrl) {
+    if (image.uri) {
+        if (/^(data:|blob:|https?:|file:)/i.test(image.uri)) return image.uri;
+        const cleaned = String(image.uri).replace(/\\/g, "/").replace(/^\.\//, "");
+        return (baseUrl || "") + cleaned;
+    }
+    const view = json.bufferViews[image.bufferView];
+    const bytes = bin.subarray(view.byteOffset || 0, (view.byteOffset || 0) + view.byteLength);
+    const blob = new Blob([bytes], { type: image.mimeType || "image/png" });
+    return URL.createObjectURL(blob);
+};
+
+Reactor3D._loadGlbTexture = function(json, bin, texInfo, baseUrl, textures) {
+    if (!texInfo || !json.textures || !json.images) return null;
+    const textureDef = json.textures[texInfo.index];
+    if (!textureDef) return null;
+    const image = json.images[textureDef.source];
+    if (!image) return null;
+    const map = new THREE.Texture();
+    map.flipY = false;
+    if (THREE.SRGBColorSpace) map.colorSpace = THREE.SRGBColorSpace;
+    const primary = this._glbImageUrl(json, bin, image, baseUrl);
+    if (/^(blob:|data:)/i.test(primary)) {
+        const embedded = new THREE.TextureLoader().load(primary);
+        embedded.flipY = false;
+        if (THREE.SRGBColorSpace) embedded.colorSpace = THREE.SRGBColorSpace;
+        textures.push(embedded);
+        return embedded;
+    }
+    const candidates = [primary];
+    if (image.uri && baseUrl && /\/source\/$/.test(baseUrl)) {
+        const name = String(image.uri).replace(/\\/g, "/").split("/").pop();
+        candidates.push(baseUrl.replace(/\/source\/$/, "/textures/") + name);
+    }
+    const tryAt = index => {
+        if (index >= candidates.length) return;
+        const img = new Image();
+        img.onload = () => {
+            map.image = img;
+            map.needsUpdate = true;
+        };
+        img.onerror = () => tryAt(index + 1);
+        img.src = candidates[index];
+    };
+    tryAt(0);
+    textures.push(map);
+    return map;
+};
+
+Reactor3D.buildGlbTemplate = function(json, bin, baseUrl) {
+    if (typeof THREE === "undefined") throw new Error("three.js is not loaded");
+    const root = new THREE.Group();
+    root.name = "glb";
+    const textures = [];
+    const materials = (json.materials || []).map(def => {
+        const specgloss = def.extensions && def.extensions.KHR_materials_pbrSpecularGlossiness;
+        const pbr = def.pbrMetallicRoughness || {};
+        const color = pbr.baseColorFactor || (specgloss && specgloss.diffuseFactor) || [1, 1, 1, 1];
+        const blend = def.alphaMode === "BLEND" || color[3] < 1;
+        const mat = new THREE.MeshBasicMaterial({
+            color: new THREE.Color(color[0], color[1], color[2]),
+            transparent: blend,
+            opacity: color[3],
+            depthWrite: !blend,
+            side: def.doubleSided ? THREE.DoubleSide : THREE.FrontSide,
+            fog: false
+        });
+        if (def.alphaMode === "MASK") mat.alphaTest = def.alphaCutoff != null ? def.alphaCutoff : 0.5;
+        mat.__reactorModel = true;
+        mat.userData.baseColor = mat.color.clone();
+        const texInfo = pbr.baseColorTexture || (specgloss && specgloss.diffuseTexture);
+        const map = this._loadGlbTexture(json, bin, texInfo, baseUrl, textures);
+        if (map) mat.map = map;
+        const metallic = pbr.metallicFactor != null ? pbr.metallicFactor : 1;
+        const roughness = pbr.roughnessFactor != null ? pbr.roughnessFactor : 1;
+        const env = this.studioEnvMap();
+        if (env && metallic > 0.25 && roughness < 0.65) {
+            mat.envMap = env;
+            mat.combine = THREE.MultiplyOperation;
+            mat.reflectivity = Math.max(0.2, metallic * (1 - roughness * 0.65));
+        }
+        return mat;
+    });
+    const defaultMat = new THREE.MeshBasicMaterial({ color: 0xcccccc, side: THREE.FrontSide, fog: false });
+    defaultMat.__reactorModel = true;
+    defaultMat.userData.baseColor = defaultMat.color.clone();
+    const meshes = (json.meshes || []).map(mesh => {
+        const group = new THREE.Group();
+        group.name = mesh.name || "";
+        for (const prim of mesh.primitives || []) {
+            if (prim.mode != null && prim.mode !== 4) continue;
+            const pos = this._glbAccessor(json, bin, prim.attributes.POSITION);
+            const geometry = new THREE.BufferGeometry();
+            geometry.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+            if (prim.attributes.NORMAL != null) {
+                geometry.setAttribute("normal", new THREE.BufferAttribute(
+                    this._glbAccessor(json, bin, prim.attributes.NORMAL), 3));
+            } else {
+                geometry.computeVertexNormals();
+            }
+            if (prim.attributes.TEXCOORD_0 != null) {
+                geometry.setAttribute("uv", new THREE.BufferAttribute(
+                    this._glbAccessor(json, bin, prim.attributes.TEXCOORD_0), 2));
+            }
+            if (prim.attributes.COLOR_0 != null) {
+                const color = this._glbAccessor(json, bin, prim.attributes.COLOR_0);
+                const comps = color.length && (json.accessors[prim.attributes.COLOR_0].type === "VEC4") ? 4 : 3;
+                geometry.setAttribute("color", new THREE.BufferAttribute(color, comps));
+            }
+            if (prim.indices != null) {
+                const idx = this._glbAccessor(json, bin, prim.indices);
+                geometry.setIndex(new THREE.BufferAttribute(idx, 1));
+            }
+            if (prim.attributes.JOINTS_0 != null && prim.attributes.WEIGHTS_0 != null) {
+                geometry.userData.joints = this._glbAccessor(json, bin, prim.attributes.JOINTS_0);
+                geometry.userData.weights = this._glbAccessor(json, bin, prim.attributes.WEIGHTS_0);
+            }
+            let material = materials[prim.material] || defaultMat;
+            if (prim.attributes.COLOR_0 != null) {
+                material = material.clone();
+                material.vertexColors = true;
+                material.__reactorModel = true;
+            }
+            group.add(new THREE.Mesh(geometry, material));
+        }
+        return group;
+    });
+    const nodes = (json.nodes || []).map(node => {
+        const object = node.mesh != null ? meshes[node.mesh].clone() : new THREE.Group();
+        object.name = node.name || object.name;
+        if (node.translation) object.position.fromArray(node.translation);
+        if (node.rotation) object.quaternion.fromArray(node.rotation);
+        if (node.scale) object.scale.fromArray(node.scale);
+        if (node.matrix) {
+            const matrix = new THREE.Matrix4().fromArray(node.matrix);
+            object.applyMatrix4(matrix);
+        }
+        if (node.skin != null && json.skins && json.skins[node.skin]) {
+            object.userData.skin = json.skins[node.skin];
+        }
+        return object;
+    });
+    (json.nodes || []).forEach((node, index) => {
+        for (const child of node.children || []) nodes[index].add(nodes[child]);
+    });
+    const scene = json.scenes && json.scenes[json.scene || 0];
+    const tops = scene && scene.nodes ? scene.nodes : nodes.map((_, i) => i);
+    for (const index of tops) {
+        const node = nodes[index];
+        if (node && !node.parent) root.add(node);
+    }
+    root.updateMatrixWorld(true);
+    this.applyRestSkins(json, bin, root, nodes);
+    this.flattenModelWorld(root);
+    const box = new THREE.Box3().setFromObject(root);
+    const size = box.getSize(new THREE.Vector3());
+    const center = box.getCenter(new THREE.Vector3());
+    for (const child of root.children) {
+        child.position.x -= center.x;
+        child.position.y -= box.min.y;
+        child.position.z -= center.z;
+    }
+    root.userData.glbSize = { x: size.x, y: size.y, z: size.z };
+    root.userData.glbTextures = textures;
+    return root;
+};
+
+Reactor3D.applyRestSkins = function(json, bin, root, nodes) {
+    root.traverse(object => {
+        const skin = object.userData.skin;
+        if (!skin || !skin.joints) return;
+        const ibm = this._glbAccessor(json, bin, skin.inverseBindMatrices);
+        if (!ibm || ibm.length < skin.joints.length * 16) return;
+        const binds = [];
+        for (let j = 0; j < skin.joints.length; j++) {
+            const bone = nodes[skin.joints[j]];
+            const world = bone ? bone.matrixWorld : new THREE.Matrix4();
+            const inv = new THREE.Matrix4().fromArray(ibm, j * 16);
+            binds.push(new THREE.Matrix4().multiplyMatrices(world, inv));
+        }
+        object.traverse(child => {
+            if (!child.isMesh || !child.geometry || !child.geometry.userData.joints) return;
+            this.skinGeometryAtRest(child.geometry, binds);
+            child.userData.skinned = true;
+        });
+    });
+};
+
+Reactor3D.skinGeometryAtRest = function(geometry, binds) {
+    const pos = geometry.getAttribute("position");
+    const nor = geometry.getAttribute("normal");
+    const joints = geometry.userData.joints;
+    const weights = geometry.userData.weights;
+    if (!pos || !joints || !weights) return;
+    const mixed = new THREE.Matrix4();
+    const vertex = new THREE.Vector3();
+    const normal = new THREE.Vector3();
+    const normalMat = new THREE.Matrix3();
+    for (let i = 0; i < pos.count; i++) {
+        for (let e = 0; e < 16; e++) mixed.elements[e] = 0;
+        for (let k = 0; k < 4; k++) {
+            const weight = weights[i * 4 + k];
+            if (!weight) continue;
+            const bind = binds[joints[i * 4 + k]];
+            if (!bind) continue;
+            const els = bind.elements;
+            for (let e = 0; e < 16; e++) mixed.elements[e] += els[e] * weight;
+        }
+        vertex.fromBufferAttribute(pos, i).applyMatrix4(mixed);
+        pos.setXYZ(i, vertex.x, vertex.y, vertex.z);
+        if (nor) {
+            normalMat.getNormalMatrix(mixed);
+            normal.fromBufferAttribute(nor, i).applyMatrix3(normalMat).normalize();
+            nor.setXYZ(i, normal.x, normal.y, normal.z);
+        }
+    }
+    pos.needsUpdate = true;
+    if (nor) nor.needsUpdate = true;
+    geometry.computeBoundingBox();
+    geometry.computeBoundingSphere();
+};
+
+Reactor3D.flattenModelWorld = function(root) {
+    root.updateMatrixWorld(true);
+    const meshes = [];
+    root.traverse(child => {
+        if (child.isMesh) meshes.push(child);
+    });
+    for (let i = 0; i < meshes.length; i++) {
+        const mesh = meshes[i];
+        mesh.geometry = mesh.geometry.clone();
+        if (!mesh.userData.skinned) mesh.geometry.applyMatrix4(mesh.matrixWorld);
+        if (mesh.parent) mesh.parent.remove(mesh);
+        mesh.position.set(0, 0, 0);
+        mesh.quaternion.identity();
+        mesh.scale.set(1, 1, 1);
+        root.add(mesh);
+    }
+    const leftover = root.children.slice();
+    for (let i = 0; i < leftover.length; i++) {
+        if (!leftover[i].isMesh) root.remove(leftover[i]);
+    }
+};
+
+Reactor3D.MapScene.prototype.modelsGroup = function() {
+    if (!this._modelsGroup) {
+        this._modelsGroup = new THREE.Group();
+        this._modelsGroup.name = "character-models";
+        this._scene.add(this._modelsGroup);
+    }
+    return this._modelsGroup;
+};
+
+Reactor3D.MapScene.prototype.syncCharacterModels = function(characters) {
+    if (typeof THREE === "undefined") return;
+    const group = this.modelsGroup();
+    if (!this._modelInstances) this._modelInstances = new Map();
+    const live = new Set();
+    for (const character of characters || []) {
+        const spec = Reactor3D.characterModelSpec(character);
+        if (!spec) continue;
+        const key = character.eventId ? "e" + character.eventId() : "p";
+        live.add(key);
+        let holder = this._modelInstances.get(key);
+        if (!holder) {
+            holder = { spec: Reactor3D.modelCacheKey(spec.name, spec.ext, spec.file), object: null };
+            this._modelInstances.set(key, holder);
+            Reactor3D.loadModel(spec.name, spec.ext, spec.file).then(template => {
+                if (!template || !this._modelsGroup) return;
+                const current = this._modelInstances.get(key);
+                if (!current || current.spec !== Reactor3D.modelCacheKey(spec.name, spec.ext, spec.file)) return;
+                const object = template.clone(true);
+                object.userData.glbSize = template.userData.glbSize;
+                current.object = object;
+                group.add(object);
+                object.traverse(child => {
+                    const mats = child.material
+                        ? (Array.isArray(child.material) ? child.material : [child.material])
+                        : [];
+                    for (const mat of mats) {
+                        mat.__reactorModel = true;
+                        mat.fog = false;
+                        if (!mat.userData.baseColor) mat.userData.baseColor = mat.color.clone();
+                        if (this._materials.indexOf(mat) < 0) this._materials.push(mat);
+                    }
+                });
+                this._ambientLevel = undefined;
+            });
+        }
+        const object = holder.object;
+        if (!object) continue;
+        const extent = object.userData.glbSize || { x: 1, y: 1, z: 1 };
+        const span = Math.max(extent.x, extent.z, 0.0001);
+        const fit = (spec.size > 0 ? spec.size : 2) / span;
+        const scale = fit * (spec.scale > 0 ? spec.scale : 1);
+        const ground = Reactor3D.elevationAt(
+            typeof $dataMap !== "undefined" ? $dataMap : null,
+            Math.round(character._realX),
+            Math.round(character._realY)
+        );
+        object.scale.setScalar(scale);
+        Reactor3D.applyEventModelPose(object, spec, Reactor3D.characterModelDir8(character));
+        object.position.set(character._realX + 0.5, ground, character._realY + 0.5);
+        object.visible = !(character.isTransparent && character.isTransparent());
+    }
+    for (const [key, holder] of this._modelInstances) {
+        if (live.has(key)) continue;
+        if (holder.object && holder.object.parent) holder.object.parent.remove(holder.object);
+        this._modelInstances.delete(key);
+    }
+};
+
+Reactor3D.MapScene.prototype.syncCharacterBillboards = function(sprites) {
+    if (typeof THREE === "undefined") return;
+    if (typeof $dataMap === "undefined" || !Reactor3D.hasEventModels($dataMap)) {
+        this._clearCharacterBillboards();
+        return;
+    }
+    const group = this.modelsGroup();
+    if (!this._billboards) this._billboards = new Map();
+    const live = new Set();
+    for (const sprite of sprites || []) {
+        const character = sprite && sprite._character;
+        if (!character) continue;
+        if (Reactor3D.hasCharacterModel(character)) continue;
+        if (typeof character.eventId === "function" && Reactor3D.isEventProp(character.eventId())) continue;
+        if (sprite.isEmptyCharacter && sprite.isEmptyCharacter()) continue;
+        const key = typeof character.eventId === "function"
+            ? "e" + character.eventId()
+            : (typeof $gamePlayer !== "undefined" && character === $gamePlayer
+                ? "p"
+                : "c" + (character._memberIndex != null ? character._memberIndex : live.size));
+        live.add(key);
+        let holder = this._billboards.get(key);
+        if (!holder) {
+            const canvas = document.createElement("canvas");
+            const texture = new THREE.CanvasTexture(canvas);
+            texture.flipY = false;
+            if (THREE.SRGBColorSpace) texture.colorSpace = THREE.SRGBColorSpace;
+            const geometry = new THREE.PlaneGeometry(1, 1);
+            geometry.translate(0, 0.5, 0);
+            const material = new THREE.MeshBasicMaterial({
+                map: texture,
+                transparent: true,
+                depthTest: true,
+                depthWrite: true,
+                alphaTest: 0.35,
+                side: THREE.DoubleSide,
+                fog: false
+            });
+            const object = new THREE.Mesh(geometry, material);
+            group.add(object);
+            holder = { canvas, texture, geometry, object, stamp: "" };
+            this._billboards.set(key, holder);
+        }
+        this._updateCharacterBillboard(holder, sprite, character);
+    }
+    for (const [key, holder] of this._billboards) {
+        if (live.has(key)) continue;
+        if (holder.object && holder.object.parent) holder.object.parent.remove(holder.object);
+        if (holder.texture) holder.texture.dispose();
+        if (holder.geometry) holder.geometry.dispose();
+        if (holder.object && holder.object.material) holder.object.material.dispose();
+        this._billboards.delete(key);
+    }
+};
+
+Reactor3D.MapScene.prototype._updateCharacterBillboard = function(holder, sprite, character) {
+    const bitmap = sprite.bitmap;
+    const frame = sprite._frame;
+    const ready = bitmap && (!bitmap.isReady || bitmap.isReady())
+        && frame && frame.width > 0 && frame.height > 0;
+    const hidden = character.isTransparent && character.isTransparent();
+    holder.object.visible = !!(ready && !hidden);
+    if (!ready) return;
+    const stamp = [
+        bitmap.url || bitmap._url || "",
+        frame.x, frame.y, frame.width, frame.height,
+        sprite.scale && sprite.scale.x < 0 ? 1 : 0
+    ].join(":");
+    if (holder.stamp !== stamp) {
+        holder.stamp = stamp;
+        holder.canvas.width = Math.max(1, Math.round(frame.width));
+        holder.canvas.height = Math.max(1, Math.round(frame.height));
+        const ctx = holder.canvas.getContext("2d");
+        ctx.clearRect(0, 0, holder.canvas.width, holder.canvas.height);
+        const src = bitmap.canvas || bitmap._canvas || bitmap._image;
+        if (src) {
+            ctx.drawImage(src, frame.x, frame.y, frame.width, frame.height,
+                0, 0, holder.canvas.width, holder.canvas.height);
+        }
+        holder.texture.needsUpdate = true;
+    }
+    const map = typeof $gameMap !== "undefined" ? $gameMap : null;
+    const tw = map && map.tileWidth ? map.tileWidth() : 48;
+    const th = map && map.tileHeight ? map.tileHeight() : 48;
+    holder.object.scale.set(frame.width / tw, frame.height / th, 1);
+    const ground = Reactor3D.elevationAt(
+        typeof $dataMap !== "undefined" ? $dataMap : null,
+        Math.round(character._realX),
+        Math.round(character._realY)
+    );
+    holder.object.position.set(character._realX + 0.5, ground, character._realY + 0.5);
+    const viewport = Reactor3D.viewport();
+    Reactor3D.aimCharacterBillboard(holder.object, viewport && viewport.camera && viewport.camera());
+};
+
+Reactor3D.MapScene.prototype._clearCharacterBillboards = function() {
+    if (!this._billboards) return;
+    for (const holder of this._billboards.values()) {
+        if (holder.object && holder.object.parent) holder.object.parent.remove(holder.object);
+        if (holder.texture) holder.texture.dispose();
+        if (holder.geometry) holder.geometry.dispose();
+        if (holder.object && holder.object.material) holder.object.material.dispose();
+    }
+    this._billboards.clear();
+};
+
+const _reactorClearModels = Reactor3D.MapScene.prototype.clear;
+Reactor3D.MapScene.prototype.clear = function() {
+    if (this._modelInstances) {
+        for (const holder of this._modelInstances.values()) {
+            if (holder.object && holder.object.parent) holder.object.parent.remove(holder.object);
+        }
+        this._modelInstances.clear();
+    }
+    this._clearCharacterBillboards();
+    if (this._modelsGroup && this._modelsGroup.parent) {
+        this._modelsGroup.parent.remove(this._modelsGroup);
+    }
+    this._modelsGroup = null;
+    return _reactorClearModels.apply(this, arguments);
+};
+
+const _reactorSetPassModels = Reactor3D.MapScene.prototype.setPass;
+Reactor3D.MapScene.prototype.setPass = function(which) {
+    const result = _reactorSetPassModels.apply(this, arguments);
+    if (this._modelsGroup) {
+        this._modelsGroup.visible = which === "below" || which === "all";
+    }
+    return result;
 };
 
 if (typeof module !== "undefined" && module.exports) {

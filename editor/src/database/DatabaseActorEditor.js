@@ -25,7 +25,8 @@ class DatabaseActorEditor {
 
         // ROW 1: General Settings (left) + Images (right)
         const topRow = document.createElement('div');
-        topRow.style.cssText = 'display: grid; grid-template-columns: 1fr 1fr; gap: 16px;';
+        topRow.className = 'database-actor-pair';
+        topRow.style.cssText = 'display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px;';
 
         // General Settings Section
         const generalSection = this.createGeneralSettingsSection(actor);
@@ -39,7 +40,8 @@ class DatabaseActorEditor {
 
         // ROW 2: Traits (left) + Equipment (right)
         const middleRow = document.createElement('div');
-        middleRow.style.cssText = 'display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 16px;';
+        middleRow.className = 'database-actor-pair';
+        middleRow.style.cssText = 'display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-top: 16px;';
 
         // Traits Section
         const traitsSection = this.createTraitsSection(actor);

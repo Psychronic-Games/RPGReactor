@@ -7185,9 +7185,18 @@ Game_CharacterBase.prototype.direction = function() {
     return this._direction;
 };
 
+Game_CharacterBase.prototype._reactorCanFace = function(d) {
+    return typeof Reactor3D === "undefined"
+        || !Reactor3D.eventModelCanFace
+        || typeof this.eventId !== "function"
+        || !Reactor3D.characterModelSpec(this)
+        || Reactor3D.eventModelCanFace(this, d);
+};
+
 Game_CharacterBase.prototype.setDirection = function(d) {
-    if (!this.isDirectionFixed() && d) {
+    if (!this.isDirectionFixed() && d && this._reactorCanFace(d)) {
         this._direction = d;
+        this._reactorDir8 = d;
     }
     this.resetStopCount();
 };
@@ -7471,6 +7480,8 @@ Game_CharacterBase.prototype.moveStraight = function(d) {
 };
 
 Game_CharacterBase.prototype.moveDiagonally = function(horz, vert) {
+    const d8 = { 42: 1, 62: 3, 48: 7, 68: 9 }[horz * 10 + vert];
+    if (d8 && this._reactorCanFace(d8)) this._reactorDir8 = d8;
     this.setMovementSuccess(
         this.canPassDiagonally(this._x, this._y, horz, vert)
     );
@@ -9249,11 +9260,16 @@ Game_Event.prototype.isCollidedWithCharacters = function(x, y) {
 
 Game_Event.prototype.isCollidedWithEvents = function(x, y) {
     const events = $gameMap.eventsXyNt(x, y);
-    return events.some(event => event.isNormalPriority());
+    return events.some(event => event !== this && event.isNormalPriority());
 };
 
 Game_Event.prototype.isCollidedWithPlayerCharacters = function(x, y) {
-    return this.isNormalPriority() && $gamePlayer.isCollided(x, y);
+    if (!this.isNormalPriority()) return false;
+    if (typeof Reactor3D !== "undefined" && Reactor3D.eventModelWouldOverlap
+        && Reactor3D.characterModelSpec(this)) {
+        return Reactor3D.eventModelWouldOverlap(this, x, y, $gamePlayer);
+    }
+    return $gamePlayer.isCollided(x, y);
 };
 
 Game_Event.prototype.lock = function() {
@@ -9538,6 +9554,14 @@ Game_Event.prototype.locate = function(x, y) {
 Game_Event.prototype.forceMoveRoute = function(moveRoute) {
     Game_Character.prototype.forceMoveRoute.call(this, moveRoute);
     this._prelockDirection = 0;
+};
+
+Game_Event.prototype.pos = function(x, y) {
+    if (typeof Reactor3D !== "undefined" && Reactor3D.characterModelSpec
+        && Reactor3D.characterModelSpec(this)) {
+        return Reactor3D.eventModelOccupies(this, x, y);
+    }
+    return this._x === x && this._y === y;
 };
 
 //-----------------------------------------------------------------------------

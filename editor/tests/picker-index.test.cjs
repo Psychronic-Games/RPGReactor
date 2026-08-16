@@ -47,6 +47,7 @@ test('character and face pickers use the shared searchable Unicode browser', () 
         'src/DatabaseEditorUI.js',
         'src/database/DatabaseSystem1Editor.js',
         'src/event/CharacterGraphicPicker.js',
+        'src/event/ModelGraphicPicker.js',
         'src/event/commands/MessageCommandEditor.js'
     ];
     for (const relativePath of consumers) {

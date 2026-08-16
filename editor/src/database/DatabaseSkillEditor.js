@@ -226,6 +226,8 @@ class DatabaseSkillEditor {
         // ── Effects Section ──
         const effectsSection = document.createElement('div');
         effectsSection.className = 'database-section';
+        effectsSection.setAttribute('tabindex', '0');
+        effectsSection.style.outline = 'none';
         effectsSection.innerHTML = `
             <div class="database-section-header">${tt('Effects')}</div>
             <div class="database-section-content">
@@ -249,6 +251,11 @@ class DatabaseSkillEditor {
                             `<tr><td style="width: 3px; padding: 0; border: none; background: transparent;"></td><td colspan="2" style="text-align: center; color: var(--color-text-muted); font-style: italic; padding: 12px;">${tt('No effects')}</td></tr>`}
                     </tbody>
                 </table>
+                <div class="effect-action-buttons" style="display: flex; gap: 6px; margin-top: 8px;">
+                    <button class="effect-btn-add rr-btn-chip">${tt('Add')}</button>
+                    <button class="effect-btn-edit rr-btn-chip" disabled>${tt('Edit')}</button>
+                    <button class="effect-btn-delete rr-btn-chip" disabled>${tt('Delete')}</button>
+                </div>
             </div>
         `;
         gridWrapper.appendChild(effectsSection);
@@ -259,6 +266,9 @@ class DatabaseSkillEditor {
             if (effectsTable) {
                 this.setupEffectInteraction(effectsTable, skill);
                 this.setupEffectsContextMenu(effectsTable, skill);
+                this.setupEffectActionButtons(effectsSection, effectsTable, skill);
+                this.setupEffectKeyboardShortcuts(effectsSection, effectsTable, skill);
+                this.updateEffectButtonStates(effectsSection, effectsTable);
             }
         }, 0);
 
@@ -380,7 +390,47 @@ class DatabaseSkillEditor {
                 contentCells.forEach(cell => {
                     cell.style.setProperty('background-color', 'var(--color-bg-panel)', 'important');
                 });
+                table.closest('.database-section')?.focus();
+                this.updateEffectButtonStates(table.closest('.database-section'), table);
             });
+
+            row.addEventListener('dblclick', () => this.editEffect(skill, parseInt(row.dataset.effectIndex)));
+        });
+    }
+
+    setupEffectActionButtons(section, table, skill) {
+        section.querySelector('.effect-btn-add').addEventListener('click', () => this.addEffect(skill));
+        section.querySelector('.effect-btn-edit').addEventListener('click', () => {
+            const index = this.getSelectedEffectIndex(table);
+            if (index !== null) this.editEffect(skill, index);
+        });
+        section.querySelector('.effect-btn-delete').addEventListener('click', () => {
+            const index = this.getSelectedEffectIndex(table);
+            if (index !== null) this.deleteEffect(skill, index);
+        });
+    }
+
+    getSelectedEffectIndex(table) {
+        const selected = table.querySelector('.effect-row.selected');
+        return selected ? parseInt(selected.dataset.effectIndex) : null;
+    }
+
+    updateEffectButtonStates(section, table) {
+        if (!section) return;
+        const enabled = this.getSelectedEffectIndex(table) !== null;
+        section.querySelector('.effect-btn-edit').disabled = !enabled;
+        section.querySelector('.effect-btn-delete').disabled = !enabled;
+    }
+
+    setupEffectKeyboardShortcuts(section, table, skill) {
+        section.addEventListener('keydown', event => {
+            if (event.target !== section) return;
+            const index = this.getSelectedEffectIndex(table);
+            if (index === null || (event.key !== 'Enter' && event.key !== 'Delete')) return;
+            event.preventDefault();
+            event.stopPropagation();
+            if (event.key === 'Enter') this.editEffect(skill, index);
+            else this.deleteEffect(skill, index);
         });
     }
 

@@ -483,6 +483,7 @@ class UIManager {
                 : null;
             const eventEditorModal = document.getElementById('event-editor-modal');
             const eventEditorOpen = eventEditorModal && eventEditorModal.style.display !== 'none';
+            const commandModifier = e.ctrlKey || e.metaKey;
             if (arrowDelta && !isTextInput && !eventEditorOpen && this.callbacks.getEventManager) {
                 const eventManager = this.callbacks.getEventManager();
                 if (eventManager?.eventMode) {
@@ -493,8 +494,29 @@ class UIManager {
                 }
             }
 
-            // Ctrl+Z - Undo (only when not in a text input)
-            if (e.ctrlKey && e.key === 'z' && !e.shiftKey) {
+            if (e.key === 'Enter' && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey &&
+                !isTextInput && !eventEditorOpen && this.callbacks.getEventManager) {
+                const eventManager = this.callbacks.getEventManager();
+                if (eventManager?.eventMode && eventManager.activateEventSelection()) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    return;
+                }
+            }
+
+            if (commandModifier && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'f' &&
+                !isTextInput && !eventEditorOpen && this.callbacks.getEventManager) {
+                const eventManager = this.callbacks.getEventManager();
+                if (eventManager?.eventMode) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    eventManager.showFindDialog();
+                    return;
+                }
+            }
+
+            // Ctrl/Cmd+Z - Undo (only when not in a text input)
+            if (commandModifier && e.key.toLowerCase() === 'z' && !e.shiftKey) {
                 const activeElement = document.activeElement;
                 const isTextInput = activeElement && (
                     activeElement.tagName === 'INPUT' ||
@@ -524,8 +546,9 @@ class UIManager {
                 }
             }
 
-            // Ctrl+Y or Ctrl+Shift+Z - Redo (only when not in a text input)
-            if ((e.ctrlKey && e.key === 'y') || (e.ctrlKey && e.shiftKey && e.key === 'z')) {
+            // Ctrl/Cmd+Y or Ctrl/Cmd+Shift+Z - Redo (only when not in a text input)
+            if ((commandModifier && !e.shiftKey && e.key.toLowerCase() === 'y') ||
+                (commandModifier && e.shiftKey && e.key.toLowerCase() === 'z')) {
                 const activeElement = document.activeElement;
                 const isTextInput = activeElement && (
                     activeElement.tagName === 'INPUT' ||
@@ -555,8 +578,8 @@ class UIManager {
                 }
             }
 
-            // Ctrl+C - Copy event (only in event mode)
-            if (e.ctrlKey && e.key === 'c') {
+            // Ctrl/Cmd+C - Copy event (only in event mode)
+            if (commandModifier && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'c') {
                 const activeElement = document.activeElement;
                 const isTextInput = activeElement && (
                     activeElement.tagName === 'INPUT' ||
@@ -583,8 +606,8 @@ class UIManager {
                 }
             }
 
-            // Ctrl+X - Cut event (only in event mode)
-            if (e.ctrlKey && e.key === 'x') {
+            // Ctrl/Cmd+X - Cut event (only in event mode)
+            if (commandModifier && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'x') {
                 const activeElement = document.activeElement;
                 const isTextInput = activeElement && (
                     activeElement.tagName === 'INPUT' ||
@@ -615,8 +638,8 @@ class UIManager {
                 }
             }
 
-            // Ctrl+V - Paste event (only in event mode)
-            if (e.ctrlKey && e.key === 'v') {
+            // Ctrl/Cmd+V - Paste event (only in event mode)
+            if (commandModifier && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'v') {
                 const activeElement = document.activeElement;
                 const isTextInput = activeElement && (
                     activeElement.tagName === 'INPUT' ||
@@ -882,6 +905,112 @@ class UIManager {
         document.body.appendChild(overlay);
         cancelButton.focus();
         return this.unsavedChangesPrompt;
+    }
+
+    showAlert(title, message, okLabel) {
+        return this.openThemedDialog({
+            title,
+            message,
+            okLabel: okLabel || ((typeof window !== 'undefined' && window.I18n) ? window.I18n.tText('OK') : 'OK')
+        });
+    }
+
+    showConfirm(title, message, okLabel, cancelLabel) {
+        const tt = text => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
+        return this.openThemedDialog({
+            title,
+            message,
+            okLabel: okLabel || tt('OK'),
+            cancelLabel: cancelLabel || tt('Cancel')
+        });
+    }
+
+    openThemedDialog({ title, message, okLabel, cancelLabel }) {
+        const tt = text => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
+        const previouslyFocused = document.activeElement;
+        const overlay = document.createElement('div');
+        overlay.id = 'rr-themed-dialog';
+        overlay.className = 'rr-modal-overlay';
+
+        const modal = document.createElement('div');
+        modal.className = 'rr-modal';
+        modal.style.width = 'min(520px, 92vw)';
+        modal.setAttribute('role', 'alertdialog');
+        modal.setAttribute('aria-modal', 'true');
+        modal.setAttribute('aria-labelledby', 'rr-themed-dialog-title');
+
+        const header = document.createElement('div');
+        header.className = 'rr-modal-header';
+        const titleEl = document.createElement('div');
+        titleEl.id = 'rr-themed-dialog-title';
+        titleEl.className = 'rr-modal-title';
+        titleEl.textContent = title || '';
+        const closeButton = document.createElement('button');
+        closeButton.type = 'button';
+        closeButton.id = 'rr-themed-dialog-close';
+        closeButton.className = 'rr-modal-close';
+        closeButton.setAttribute('aria-label', cancelLabel || tt('Close'));
+        closeButton.textContent = '\u00d7';
+        header.append(titleEl, closeButton);
+
+        const body = document.createElement('div');
+        body.className = 'rr-modal-body';
+        String(message || '').split('\n').forEach(line => {
+            const p = document.createElement('p');
+            p.style.cssText = 'margin:0;color:var(--color-text);line-height:1.5;white-space:pre-wrap;';
+            p.textContent = line;
+            body.appendChild(p);
+        });
+
+        const footer = document.createElement('div');
+        footer.className = 'rr-modal-footer';
+        let cancelButton = null;
+        if (cancelLabel) {
+            cancelButton = document.createElement('button');
+            cancelButton.id = 'rr-themed-dialog-cancel';
+            cancelButton.type = 'button';
+            cancelButton.className = 'rr-button-danger';
+            cancelButton.textContent = cancelLabel;
+            footer.appendChild(cancelButton);
+        }
+        const okButton = document.createElement('button');
+        okButton.id = 'rr-themed-dialog-ok';
+        okButton.type = 'button';
+        okButton.className = 'rr-button-primary';
+        okButton.textContent = okLabel || tt('OK');
+        footer.appendChild(okButton);
+        modal.append(header, body, footer);
+        overlay.appendChild(modal);
+
+        return new Promise(resolve => {
+            let settled = false;
+            const finish = value => {
+                if (settled) return;
+                settled = true;
+                document.removeEventListener('keydown', handleKeyDown, true);
+                overlay.remove();
+                if (previouslyFocused && previouslyFocused.isConnected !== false &&
+                    typeof previouslyFocused.focus === 'function') {
+                    previouslyFocused.focus();
+                }
+                resolve(value);
+            };
+            const handleKeyDown = event => {
+                if (event.key === 'Escape') {
+                    event.preventDefault();
+                    finish(!cancelLabel);
+                }
+            };
+            closeButton.addEventListener('click', () => finish(!cancelLabel));
+            if (cancelButton) cancelButton.addEventListener('click', () => finish(false));
+            okButton.addEventListener('click', () => finish(true));
+            overlay.addEventListener('click', event => {
+                if (event.target === overlay) finish(!cancelLabel);
+            });
+            document.addEventListener('keydown', handleKeyDown, true);
+            document.body.appendChild(overlay);
+            (cancelButton || okButton).focus();
+        });
     }
 
     reloadApplicationIgnoringCache() {

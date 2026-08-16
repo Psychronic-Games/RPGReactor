@@ -198,6 +198,7 @@ Ordered by payoff per unit of work, not by dependency. Each step is shippable.
 | 6 | **Structures: define, stamp, place** | Building a world becomes fast rather than possible. See *Where one structure ends* below. | Open |
 | 7 | **Direct manipulation in the 3D view** | Comfort. Everything above is usable without it. | Open |
 | 8 | **Lights as 3D lights** | A lantern becomes a sphere, a torch a cone. | **Done** |
+| — | **Event meshes** (sidecar, not a tileset class) | An event can stand a GLB/OBJ/… from `3d/<folder>/source` instead of a sheet. Pose and facing marks live in `Map###.r3d.json`. Collision and character depth are in progress. | **In 0.98.2** |
 
 Steps 1–3 are corrections to what exists and touch the runtime almost
 exclusively. Steps 4–7 are new authoring surface and are mostly editor work.

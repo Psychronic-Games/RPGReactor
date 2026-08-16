@@ -493,8 +493,16 @@ Sprite_Character.prototype.updateVisibility = function() {
     this._reactor3dBaseVisibility();
     if (typeof Reactor3D === "undefined") return;
     const character = this._character;
-    if (!character || typeof character.eventId !== "function") return;
-    if (Reactor3D.isEventProp(character.eventId())) this.visible = false;
+    if (!character) return;
+    const isEvent = typeof character.eventId === "function";
+    if (isEvent && Reactor3D.isEventProp(character.eventId())) {
+        this.visible = false;
+        return;
+    }
+    if (Reactor3D.hasCharacterModel(character)) this.visible = false;
+    if (typeof $dataMap !== "undefined" && Reactor3D.hasEventModels($dataMap)) {
+        this.visible = false;
+    }
 };
 
 Sprite_Character.prototype.reactor3DScale = function() {
@@ -4460,6 +4468,12 @@ Spriteset_Map.prototype.updateReactor3D = function() {
     // stepping a whole tile at a time.
     this.updateReactor3DCamera();
     this.updateReactor3DLights(state);
+    if (state.scene.syncCharacterModels && typeof $gameMap !== "undefined" && $gameMap) {
+        state.scene.syncCharacterModels($gameMap.events().filter(Boolean));
+    }
+    if (state.scene.syncCharacterBillboards) {
+        state.scene.syncCharacterBillboards(this._characterSprites);
+    }
     if (state.scene.setAnimationFrame) {
         const frame = this._tilemap && Number.isFinite(this._tilemap.animationFrame)
             ? this._tilemap.animationFrame : 0;

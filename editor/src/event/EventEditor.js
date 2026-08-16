@@ -13,6 +13,8 @@ class EventEditor {
         this.onCommit = null;
         this.onCancel = null;
         this.currentPageIndex = 0;
+        this.pendingModels = [];
+        this.pendingModelsBaseline = [];
         this.clipboard = null; // For copy/paste event pages
         this.commandList = new EventCommandList(this); // Command list manager
 
@@ -37,6 +39,7 @@ class EventEditor {
             this.currentEvent = this._clone(event);
             this.onCommit = options?.onCommit || null;
             this.onCancel = options?.onCancel || null;
+            this._loadPendingModels(event);
         }
         event = this.currentEvent;
         if (!sameEvent) this.currentPageIndex = 0;
@@ -90,6 +93,16 @@ class EventEditor {
 
         // Render current page
         this.renderCurrentPage();
+        this._bindModalChrome();
+    }
+
+    _bindModalChrome() {
+        const ok = document.getElementById('event-editor-ok-btn');
+        const cancel = document.getElementById('event-editor-cancel-btn');
+        const apply = document.getElementById('event-editor-apply-btn');
+        if (ok) ok.onclick = () => this.saveAndClose();
+        if (cancel) cancel.onclick = () => this.cancelChanges();
+        if (apply) apply.onclick = () => this.applyChanges();
     }
 
     /**
@@ -115,6 +128,8 @@ class EventEditor {
 
     cancelChanges() {
         if (this.cancelBaseline) this.currentEvent = this._clone(this.cancelBaseline);
+        this.pendingModels = this._clone(this.pendingModelsBaseline);
+        this._writePendingModels();
         if (this.onCancel) this.onCancel(this.sourceEvent);
         this._hideEditor();
     }
@@ -126,16 +141,117 @@ class EventEditor {
         }
     }
 
+    _currentMap() {
+        const controller = this.projectController;
+        const tilemap = controller && (controller.getTilemapManager
+            ? controller.getTilemapManager()
+            : controller.tilemapManager);
+        return (tilemap && tilemap.currentMap)
+            || (this.mapManager && this.mapManager.currentMap)
+            || null;
+    }
+
+    _storedModelSpec(eventId, pageIndex) {
+        const map = this._currentMap();
+        if (typeof Reactor3D !== 'undefined' && Reactor3D.eventModelSpec) {
+            const spec = Reactor3D.eventModelSpec(map, eventId, pageIndex);
+            if (!spec) return null;
+            return {
+                name: spec.name,
+                file: spec.file || '',
+                ext: spec.ext || '',
+                size: spec.size,
+                scale: spec.scale,
+                yaw: Math.round(spec.yaw * 180 / Math.PI),
+                pitch: Math.round((spec.pitch || 0) * 180 / Math.PI),
+                roll: Math.round((spec.roll || 0) * 180 / Math.PI),
+                faces: spec.faces ? JSON.parse(JSON.stringify(spec.faces)) : {}
+            };
+        }
+        const raw = map && map.reactor3d && map.reactor3d.events
+            && map.reactor3d.events[String(eventId)];
+        const spec = raw && (raw[String(pageIndex == null ? 0 : pageIndex)] || raw[pageIndex]);
+        if (!spec || !spec.name) return null;
+        return {
+            name: spec.name,
+            file: spec.file || '',
+            ext: spec.ext || '',
+            size: spec.size || 2,
+            scale: spec.scale || 1,
+            yaw: Number(spec.yaw) || 0,
+            pitch: Number(spec.pitch) || 0,
+            roll: Number(spec.roll) || 0,
+            faces: spec.faces ? JSON.parse(JSON.stringify(spec.faces)) : {}
+        };
+    }
+
+    _loadPendingModels(event) {
+        const pages = (event && event.pages) || [];
+        this.pendingModels = pages.map((_, index) => this._storedModelSpec(event && event.id, index));
+        this.pendingModelsBaseline = this._clone(this.pendingModels);
+    }
+
+    _writePendingModels() {
+        const map = this._currentMap();
+        const event = this.currentEvent;
+        if (!map || !event || event.id == null) return;
+        if (typeof Reactor3D !== 'undefined' && Reactor3D.setEventModelSpec) {
+            const pageCount = (event.pages || []).length;
+            const store = map.reactor3d && map.reactor3d.events && map.reactor3d.events[String(event.id)];
+            if (store) {
+                Object.keys(store).forEach(page => {
+                    if (Number(page) >= pageCount) Reactor3D.setEventModelSpec(map, event.id, page, null);
+                });
+            }
+            (this.pendingModels || []).forEach((spec, index) => {
+                Reactor3D.setEventModelSpec(map, event.id, index, spec);
+            });
+            return;
+        }
+        if (!map.reactor3d || typeof map.reactor3d !== 'object') {
+            map.reactor3d = { version: 1, mode: '3d' };
+        }
+        if (!map.reactor3d.events || typeof map.reactor3d.events !== 'object') {
+            map.reactor3d.events = {};
+        }
+        const key = String(event.id);
+        const pages = {};
+        (this.pendingModels || []).forEach((spec, index) => {
+            if (!spec || !spec.name) return;
+            const written = {
+                name: spec.name,
+                file: spec.file || '',
+                ext: spec.ext || '',
+                size: Number(spec.size) > 0 ? Number(spec.size) : 2,
+                scale: Number(spec.scale) > 0 ? Number(spec.scale) : 1,
+                yaw: Number(spec.yaw) || 0,
+                pitch: Number(spec.pitch) || 0,
+                roll: Number(spec.roll) || 0
+            };
+            if (spec.faces && typeof spec.faces === 'object' && Object.keys(spec.faces).length) {
+                written.faces = spec.faces;
+            }
+            pages[String(index)] = written;
+        });
+        if (Object.keys(pages).length) map.reactor3d.events[key] = pages;
+        else delete map.reactor3d.events[key];
+        if (!Object.keys(map.reactor3d.events).length) delete map.reactor3d.events;
+    }
+
     _commitChanges() {
         if (!this.currentEvent || !this.sourceEvent) return false;
         const committed = this._clone(this.currentEvent);
-        if (JSON.stringify(committed) !== JSON.stringify(this.cancelBaseline)) {
+        const eventChanged = JSON.stringify(committed) !== JSON.stringify(this.cancelBaseline);
+        const modelsChanged = JSON.stringify(this.pendingModels) !== JSON.stringify(this.pendingModelsBaseline);
+        if (eventChanged) {
             if (this.onCommit) {
                 if (this.onCommit(this.sourceEvent, committed) === false) return false;
             } else {
                 this._replaceObject(this.sourceEvent, committed);
             }
         }
+        if (eventChanged || modelsChanged) this._writePendingModels();
+        this.pendingModelsBaseline = this._clone(this.pendingModels);
         this.cancelBaseline = this._clone(committed);
         return true;
     }
@@ -238,6 +354,7 @@ class EventEditor {
 
         // Page tabs
         const pageTabs = this.createPageTabs(event);
+        pageTabs.style.flexShrink = '0';
         column.appendChild(pageTabs);
 
         // Page configuration container (will be populated by renderCurrentPage)
@@ -373,8 +490,7 @@ class EventEditor {
         contentsArea.style.flex = '1';
         contentsArea.style.backgroundColor = 'var(--color-bg-surface)';
         contentsArea.style.border = '1px solid var(--color-bg-input-alt)';
-        contentsArea.style.borderRadius = '4px 4px 0 0';
-        contentsArea.style.borderBottom = 'none';
+        contentsArea.style.borderRadius = '4px';
         contentsArea.style.padding = '8px';
         contentsArea.style.overflowY = 'auto';
         contentsArea.style.minHeight = '0';
@@ -395,74 +511,6 @@ class EventEditor {
 
         column.appendChild(header);
         column.appendChild(contentsArea);
-
-        // Add action buttons at the bottom of this column
-        const buttonContainer = document.createElement('div');
-        buttonContainer.className = 'event-action-buttons';
-        buttonContainer.style.cssText = `
-            display: flex;
-            justify-content: flex-end;
-            gap: 8px;
-            padding: 8px;
-            background-color: var(--color-bg-surface);
-            border: 1px solid var(--color-bg-input-alt);
-            border-top: none;
-            border-radius: 0 0 4px 4px;
-            flex-shrink: 0;
-        `;
-
-        const buttonStyle = `
-            padding: 6px 20px;
-            background-color: var(--color-bg-panel);
-            color: var(--color-text);
-            border: 1px solid var(--color-border-input);
-            border-radius: 3px;
-            cursor: pointer;
-            font-size: 12px;
-            transition: background-color 0.15s;
-        `;
-
-        // OK button
-        const okButton = document.createElement('button');
-        okButton.textContent = this._t('common.ok');
-        okButton.style.cssText = buttonStyle;
-        okButton.addEventListener('mouseenter', () => okButton.style.backgroundColor = 'var(--color-accent-tint-25)');
-        okButton.addEventListener('mouseleave', () => okButton.style.backgroundColor = 'var(--color-bg-panel)');
-        okButton.addEventListener('click', () => {
-            this.saveAndClose();
-        });
-
-        // Cancel button
-        const cancelButton = document.createElement('button');
-        cancelButton.textContent = this._t('common.cancel');
-        cancelButton.style.cssText = buttonStyle;
-        cancelButton.addEventListener('mouseenter', () => cancelButton.style.backgroundColor = 'var(--color-accent-tint-25)');
-        cancelButton.addEventListener('mouseleave', () => cancelButton.style.backgroundColor = 'var(--color-bg-panel)');
-        cancelButton.addEventListener('click', () => {
-            this.cancelChanges();
-        });
-
-        // Apply button
-        const applyButton = document.createElement('button');
-        applyButton.textContent = this._t('common.apply');
-        applyButton.style.cssText = buttonStyle;
-        applyButton.addEventListener('mouseenter', () => applyButton.style.backgroundColor = 'var(--color-accent-tint-25)');
-        applyButton.addEventListener('mouseleave', () => applyButton.style.backgroundColor = 'var(--color-bg-panel)');
-        applyButton.addEventListener('click', () => {
-            this.applyChanges();
-            applyButton.style.backgroundColor = 'var(--color-accent)';
-            applyButton.style.color = 'var(--color-bg-deep)';
-            setTimeout(() => {
-                applyButton.style.backgroundColor = 'var(--color-bg-panel)';
-                applyButton.style.color = 'var(--color-text)';
-            }, 200);
-        });
-
-        buttonContainer.appendChild(okButton);
-        buttonContainer.appendChild(cancelButton);
-        buttonContainer.appendChild(applyButton);
-
-        column.appendChild(buttonContainer);
 
         return column;
     }
@@ -570,6 +618,7 @@ class EventEditor {
     addNewPage() {
         const newPage = this.createDefaultPage();
         this.currentEvent.pages.push(newPage);
+        this.pendingModels.push(null);
         this.currentPageIndex = this.currentEvent.pages.length - 1;
 
         // Refresh the entire editor
@@ -612,6 +661,8 @@ class EventEditor {
 
         const pastedPage = JSON.parse(JSON.stringify(pageData)); // Deep clone
         this.currentEvent.pages.push(pastedPage);
+        if (!this.pendingModels) this.pendingModels = [];
+        this.pendingModels.push(null);
         this.currentPageIndex = this.currentEvent.pages.length - 1;
 
         // Refresh the entire editor
@@ -632,6 +683,7 @@ class EventEditor {
 
         if (confirm(this._t('event.deletePageConfirm'))) {
             this.currentEvent.pages.splice(this.currentPageIndex, 1);
+            this.pendingModels.splice(this.currentPageIndex, 1);
             this.currentPageIndex = Math.max(0, this.currentPageIndex - 1);
 
             // Refresh the entire editor
@@ -648,6 +700,7 @@ class EventEditor {
     clearCurrentPage() {
         if (confirm(this._t('event.clearPageConfirm'))) {
             this.currentEvent.pages[this.currentPageIndex] = this.createDefaultPage();
+            this.pendingModels[this.currentPageIndex] = null;
             this.renderCurrentPage();
         }
     }

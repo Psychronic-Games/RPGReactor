@@ -21,18 +21,19 @@ class DatabaseClassEditor {
 
         // Two-column layout
         const columnsWrapper = document.createElement('div');
-        columnsWrapper.style.cssText = 'display: grid; grid-template-columns: 1fr 1fr; gap: 16px; overflow-y: auto;';
+        columnsWrapper.className = 'database-class-columns';
+        columnsWrapper.style.cssText = 'display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; overflow-y: auto;';
 
         // FIRST COLUMN
         const leftColumn = document.createElement('div');
-        leftColumn.style.cssText = 'display: flex; flex-direction: column; gap: 16px;';
+        leftColumn.style.cssText = 'display: flex; flex-direction: column; gap: 16px; min-width: 0;';
         leftColumn.appendChild(this.createGeneralSection(classEntry));
         leftColumn.appendChild(this.createParameterCurvesSection(classEntry));
         leftColumn.appendChild(this.createLearnableSkillsSection(classEntry));
 
         // SECOND COLUMN
         const rightColumn = document.createElement('div');
-        rightColumn.style.cssText = 'display: flex; flex-direction: column; gap: 16px;';
+        rightColumn.style.cssText = 'display: flex; flex-direction: column; gap: 16px; min-width: 0;';
         rightColumn.appendChild(this.createTraitsSection(classEntry));
         rightColumn.appendChild(this.createNoteSection(classEntry));
 
@@ -62,8 +63,8 @@ class DatabaseClassEditor {
                 <div class="form-row">
                     <label class="database-field-label">${tt('EXP Curve:')}</label>
                 </div>
-                <div class="form-row exp-curve-trigger" data-class-id="${classEntry.id}"
-                     style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; cursor: pointer; padding: 8px; border: 1px solid transparent; border-radius: 4px;"
+                <div class="form-row exp-curve-trigger database-class-exp-grid" data-class-id="${classEntry.id}"
+                     style="display: grid; grid-template-columns: repeat(auto-fit, minmax(90px, 1fr)); gap: 8px; cursor: pointer; padding: 8px; border: 1px solid transparent; border-radius: 4px;"
                      onmouseover="this.style.borderColor='var(--color-accent-bright)'; this.style.background='var(--color-bg-base)';"
                      onmouseout="this.style.borderColor='transparent'; this.style.background='transparent';"
                      title="${tt('Click to edit EXP curve')}">
@@ -138,7 +139,7 @@ class DatabaseClassEditor {
 
         section.innerHTML = `
             <div class="database-section-header">${tt('Parameter Curves')}</div>
-            <div class="database-section-content" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px;">
+            <div class="database-section-content database-class-parameter-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px;">
                 ${paramsHTML}
             </div>
         `;
@@ -438,28 +439,32 @@ class DatabaseClassEditor {
         const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const section = document.createElement('div');
         section.className = 'database-section';
+        section.setAttribute('tabindex', '0');
+        section.style.outline = 'none';
 
         const skills = this.databaseManager.getSkills();
         const learningsHTML = classEntry.learnings && classEntry.learnings.length > 0 ?
-            classEntry.learnings.map(learning => {
+            classEntry.learnings.map((learning, index) => {
                 const skill = skills.find(s => s && s.id === learning.skillId);
                 const skillName = skill ? skill.name : `${tt('Skill')} #${learning.skillId}`;
                 return `
-                    <tr>
+                    <tr class="learning-row" data-learning-index="${index}" style="cursor: pointer;">
+                        <td class="learning-indicator" style="width: 3px; padding: 0; border: none; background: transparent;"></td>
                         <td style="width: 60px; text-align: center;">${learning.level}</td>
                         <td>${rrEscapeHtml(skillName)}</td>
                         <td style="color: var(--color-text-muted); font-size: 11px;">${rrEscapeHtml(learning.note || '')}</td>
                     </tr>
                 `;
             }).join('') :
-            `<tr><td colspan="3" style="text-align: center; color: var(--color-text-muted);">${tt('No skills learned')}</td></tr>`;
+            `<tr><td colspan="4" style="text-align: center; color: var(--color-text-muted);">${tt('No skills learned')}</td></tr>`;
 
         section.innerHTML = `
             <div class="database-section-header">${tt('Learnable Skills')}</div>
             <div class="database-section-content">
-                <table class="traits-table">
+                <table class="traits-table learnings-table">
                     <thead>
                         <tr>
+                            <th style="width: 3px; padding: 0; border: none; background: transparent;"></th>
                             <th>${tt('Level')}</th>
                             <th>${tt('Skill')}</th>
                             <th>${tt('Note')}</th>
@@ -469,9 +474,151 @@ class DatabaseClassEditor {
                         ${learningsHTML}
                     </tbody>
                 </table>
+                <div class="learning-action-buttons" style="display: flex; gap: 6px; margin-top: 8px;">
+                    <button class="learning-btn-add rr-btn-chip">${tt('Add')}</button>
+                    <button class="learning-btn-edit rr-btn-chip" disabled>${tt('Edit')}</button>
+                    <button class="learning-btn-delete rr-btn-chip" disabled>${tt('Delete')}</button>
+                </div>
             </div>
         `;
+
+        setTimeout(() => {
+            const table = section.querySelector('.learnings-table');
+            if (!table) return;
+            this.setupLearningInteraction(section, table, classEntry);
+            this.setupLearningActionButtons(section, table, classEntry);
+            this.setupLearningKeyboardShortcuts(section, table, classEntry);
+            this.updateLearningButtonStates(section, table);
+        }, 0);
         return section;
+    }
+
+    setupLearningInteraction(section, table, classEntry) {
+        const rows = table.querySelectorAll('.learning-row');
+        rows.forEach(row => {
+            row.addEventListener('click', () => {
+                rows.forEach(other => {
+                    other.classList.remove('selected');
+                    const indicator = other.querySelector('.learning-indicator');
+                    if (indicator) indicator.style.backgroundColor = 'transparent';
+                    Array.from(other.querySelectorAll('td')).slice(1).forEach(cell => { cell.style.backgroundColor = ''; });
+                });
+                row.classList.add('selected');
+                const indicator = row.querySelector('.learning-indicator');
+                if (indicator) indicator.style.backgroundColor = 'var(--color-accent-bright)';
+                Array.from(row.querySelectorAll('td')).slice(1).forEach(cell => { cell.style.backgroundColor = 'var(--color-bg-panel)'; });
+                section.focus();
+                this.updateLearningButtonStates(section, table);
+            });
+            row.addEventListener('dblclick', () => {
+                this.editLearning(classEntry, parseInt(row.dataset.learningIndex));
+            });
+        });
+    }
+
+    setupLearningActionButtons(section, table, classEntry) {
+        section.querySelector('.learning-btn-add').addEventListener('click', () => this.addLearning(classEntry));
+        section.querySelector('.learning-btn-edit').addEventListener('click', () => {
+            const index = this.getSelectedLearningIndex(table);
+            if (index !== null) this.editLearning(classEntry, index);
+        });
+        section.querySelector('.learning-btn-delete').addEventListener('click', () => {
+            const index = this.getSelectedLearningIndex(table);
+            if (index !== null) this.deleteLearning(classEntry, index);
+        });
+    }
+
+    getSelectedLearningIndex(table) {
+        const selected = table.querySelector('.learning-row.selected');
+        return selected ? parseInt(selected.dataset.learningIndex) : null;
+    }
+
+    updateLearningButtonStates(section, table) {
+        const enabled = this.getSelectedLearningIndex(table) !== null;
+        for (const selector of ['.learning-btn-edit', '.learning-btn-delete']) {
+            const button = section.querySelector(selector);
+            button.disabled = !enabled;
+        }
+    }
+
+    setupLearningKeyboardShortcuts(section, table, classEntry) {
+        section.addEventListener('keydown', event => {
+            if (event.target !== section) return;
+            const index = this.getSelectedLearningIndex(table);
+            if (index === null || (event.key !== 'Enter' && event.key !== 'Delete')) return;
+            event.preventDefault();
+            event.stopPropagation();
+            if (event.key === 'Enter') this.editLearning(classEntry, index);
+            else this.deleteLearning(classEntry, index);
+        });
+    }
+
+    addLearning(classEntry) {
+        this.showLearningEditorModal(classEntry, -1);
+    }
+
+    editLearning(classEntry, learningIndex) {
+        if (!classEntry.learnings?.[learningIndex]) return;
+        this.showLearningEditorModal(classEntry, learningIndex);
+    }
+
+    deleteLearning(classEntry, learningIndex) {
+        if (!classEntry.learnings?.[learningIndex]) return;
+        classEntry.learnings.splice(learningIndex, 1);
+        this.databaseManager.updateClass(classEntry.id, classEntry);
+        this.refreshClassDetail(classEntry);
+    }
+
+    showLearningEditorModal(classEntry, learningIndex) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
+        const existing = learningIndex >= 0 ? classEntry.learnings?.[learningIndex] : null;
+        const firstSkill = (this.databaseManager.getSkills() || []).find(skill => skill && skill.id > 0);
+        const draft = existing
+            ? { level: existing.level, skillId: existing.skillId, note: existing.note || '' }
+            : { level: 1, skillId: firstSkill?.id || 1, note: '' };
+        const skills = this.databaseManager.getSkills() || [];
+        const skillOptions = skills.filter(skill => skill && skill.id > 0).map(skill =>
+            `<option value="${skill.id}" ${skill.id === draft.skillId ? 'selected' : ''}>#${skill.id} ${rrEscapeHtml(skill.name || '')}</option>`
+        ).join('');
+
+        const overlay = document.createElement('div');
+        overlay.className = 'modal-overlay';
+        overlay.style.cssText = 'position: fixed; inset: 0; background: rgba(0, 0, 0, 0.7); display: flex; align-items: center; justify-content: center; z-index: 10000;';
+        const modal = document.createElement('div');
+        modal.style.cssText = 'background: var(--color-bg-surface); border: 1px solid var(--color-border-subtle); border-radius: 8px; width: 440px; max-width: 90vw; padding: 20px;';
+        modal.innerHTML = `
+            <h3 style="margin: 0 0 16px; color: var(--color-text-strong);">${tt(existing ? 'Edit Learnable Skill' : 'Add Learnable Skill')}</h3>
+            <div class="db-form">
+                <label>${tt('Level')}</label>
+                <input class="database-field-value learning-edit-level" type="number" min="1" max="${globalThis.RR_LIMITS?.ACTOR_LEVEL || 999}" value="${draft.level}">
+                <label>${tt('Skill')}</label>
+                <select class="database-field-value learning-edit-skill">${skillOptions}</select>
+                <label>${tt('Note')}</label>
+                <textarea class="database-field-value learning-edit-note" rows="3">${rrEscapeHtml(draft.note)}</textarea>
+            </div>
+            <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px;">
+                <button class="learning-edit-cancel rr-btn-secondary">${tt('Cancel')}</button>
+                <button class="learning-edit-ok rr-btn-chip">${tt('OK')}</button>
+            </div>
+        `;
+        overlay.appendChild(modal);
+        document.body.appendChild(overlay);
+
+        const close = () => overlay.remove();
+        modal.querySelector('.learning-edit-cancel').addEventListener('click', close);
+        overlay.addEventListener('click', event => { if (event.target === overlay) close(); });
+        modal.querySelector('.learning-edit-ok').addEventListener('click', () => {
+            const maxLevel = globalThis.RR_LIMITS?.ACTOR_LEVEL || 999;
+            draft.level = Math.max(1, Math.min(maxLevel, parseInt(modal.querySelector('.learning-edit-level').value) || 1));
+            draft.skillId = parseInt(modal.querySelector('.learning-edit-skill').value) || draft.skillId;
+            draft.note = modal.querySelector('.learning-edit-note').value;
+            if (!classEntry.learnings) classEntry.learnings = [];
+            if (learningIndex >= 0) classEntry.learnings[learningIndex] = draft;
+            else classEntry.learnings.push(draft);
+            this.databaseManager.updateClass(classEntry.id, classEntry);
+            close();
+            this.refreshClassDetail(classEntry);
+        });
     }
 
     createTraitsSection(classEntry) {

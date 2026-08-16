@@ -1210,10 +1210,17 @@ class DatabaseEditorUI {
             if (!entry.faceName) return;
             const facePath = path.join(this.currentProject.path, 'img', 'faces', entry.faceName + '.png');
             const idx = entry.faceIndex || 0;
-            span.style.backgroundImage = `url("${imageUrl(facePath)}")`;
-            span.style.backgroundSize = `${4 * SIZE}px ${2 * SIZE}px`;
-            span.style.backgroundPosition = `-${(idx % 4) * SIZE}px -${Math.floor(idx / 4) * SIZE}px`;
-            span.classList.add('has-icon');
+            const url = imageUrl(facePath);
+            const img = new Image();
+            img.onload = () => {
+                const sheet = RRFaceSheet.metrics(img);
+                if (!RRFaceSheet.sourceRect(idx, img)) return;
+                span.style.backgroundImage = `url("${url}")`;
+                span.style.backgroundSize = `${sheet.columns * SIZE}px ${sheet.rows * SIZE}px`;
+                span.style.backgroundPosition = `-${(idx % sheet.columns) * SIZE}px -${Math.floor(idx / sheet.columns) * SIZE}px`;
+                span.classList.add('has-icon');
+            };
+            img.src = url;
             return;
         }
         if (type === 'enemies') {
@@ -1317,10 +1324,8 @@ class DatabaseEditorUI {
             // sprites undefined and the state shows nothing at all.
             states: { name: 'New State', iconIndex: 0, restriction: 0, priority: 50, motion: 0, overlay: 0, removeAtBattleEnd: false, removeByRestriction: false, autoRemovalTiming: 0, minTurns: 1, maxTurns: 1, removeByDamage: false, chanceByDamage: 100, removeByWalking: false, stepsToRemove: 100, traits: [], note: '', messageType: 1, message1: '', message2: '', message3: '', message4: '' },
             // displayType drives Spriteset_Base.isAnimationForEach, which tests
-            // it with a strict === 0. Absent, that is false, so a new animation
-            // on an all-targets skill plays once at the group centroid while
-            // the editor dropdown claims per-target. Every MZ-format authored
-            // animation carries it.
+            // it with a strict === 0. The Type control can convert this record
+            // into an immediately editable stock MV sprite animation.
             animations: { name: 'New Animation', flashTimings: [], soundTimings: [], effectName: '', displayType: 0, offsetX: 0, offsetY: 0, rotation: { x: 0, y: 0, z: 0 }, scale: 100, speed: 100 },
             tilesets: { name: 'New Tileset', mode: 0, tilesetNames: ['', '', '', '', '', '', '', '', ''], flags: new Array(8192).fill(0), note: '' },
             commonEvents: { name: 'New Common Event', trigger: 0, switchId: 1, list: [{code:0,indent:0,parameters:[]}] }
@@ -1717,7 +1722,6 @@ class DatabaseEditorUI {
             faceCanvasContainer.style.minHeight = '160px';
 
             if (entry.faceName) {
-                // Face graphics are 4x2 layout (8 faces per file)
                 const faceCanvas = document.createElement('canvas');
                 faceCanvas.width = 144;
                 faceCanvas.height = 144;
@@ -1733,18 +1737,12 @@ class DatabaseEditorUI {
                 console.log('Loading face graphic:', faceImgPath);
 
                 faceImg.onload = () => {
-                    // Face files are 4 columns x 2 rows (8 faces)
-                    const faceWidth = faceImg.width / 4;
-                    const faceHeight = faceImg.height / 2;
-
-                    // Get position based on faceIndex (0-7)
-                    const col = entry.faceIndex % 4;
-                    const row = Math.floor(entry.faceIndex / 4);
-
+                    const source = RRFaceSheet.sourceRect(entry.faceIndex || 0, faceImg);
+                    if (!source) return;
                     faceCtx.drawImage(
                         faceImg,
-                        col * faceWidth, row * faceHeight,
-                        faceWidth, faceHeight,
+                        source.x, source.y,
+                        source.width, source.height,
                         0, 0,
                         faceCanvas.width, faceCanvas.height
                     );
@@ -2429,11 +2427,11 @@ class DatabaseEditorUI {
                 const isFaceSheet = options.sheetType === 'face';
                 const hasSheetSelection = isCharacterSheet || isFaceSheet;
                 const isBigCharacter = isCharacterSheet && RRAssetFiles.isBigCharacter(file);
-                const sheetColumns = isFaceSheet ? 4 : (isBigCharacter ? 1 : 4);
-                const sheetRows = isFaceSheet ? 2 : (isBigCharacter ? 1 : 2);
-                const maxIndex = sheetColumns * sheetRows - 1;
+                const sheetColumns = isFaceSheet ? RRFaceSheet.COLUMNS : (isBigCharacter ? 1 : 4);
+                let sheetRows = isFaceSheet ? 0 : (isBigCharacter ? 1 : 2);
+                let maxIndex = sheetColumns * sheetRows - 1;
                 let selectedIndex = file === currentFile ? parseInt(options.currentIndex || 0) : 0;
-                if (isNaN(selectedIndex) || selectedIndex < 0 || selectedIndex > maxIndex) selectedIndex = 0;
+                if (isNaN(selectedIndex) || selectedIndex < 0 || (!isFaceSheet && selectedIndex > maxIndex)) selectedIndex = 0;
 
                 previewEl.innerHTML = '';
 
@@ -2461,7 +2459,6 @@ class DatabaseEditorUI {
                 imageWrap.style.cssText = 'position: relative; display: inline-block; line-height: 0;';
 
                 const img = document.createElement('img');
-                img.src = imagePath;
                 img.style.cssText = 'image-rendering: pixelated; image-rendering: -moz-crisp-edges; image-rendering: crisp-edges; max-width: 100%; display: block;';
                 imageWrap.appendChild(img);
 
@@ -2486,35 +2483,50 @@ class DatabaseEditorUI {
                     overlay.style.cssText = 'position: absolute; inset: 0; pointer-events: none;';
                     imageWrap.appendChild(overlay);
 
-                    for (let index = 0; index <= maxIndex; index++) {
-                        const col = index % sheetColumns;
-                        const row = Math.floor(index / sheetColumns);
-                        const cell = document.createElement('div');
-                        cell.style.cssText = `
-                            position: absolute;
-                            left: ${(col / sheetColumns) * 100}%;
-                            top: ${(row / sheetRows) * 100}%;
-                            width: ${100 / sheetColumns}%;
-                            height: ${100 / sheetRows}%;
-                            box-sizing: border-box;
-                            border: 3px solid rgba(255, 255, 255, 0.35);
-                            cursor: pointer;
-                            pointer-events: auto;
-                            transition: border-color 0.12s, background-color 0.12s, box-shadow 0.12s;
-                        `;
-                        cell.title = `${tt('Index')} ${index}`;
-                        cell.addEventListener('mouseenter', () => {
-                            if (index !== selectedIndex) cell.style.borderColor = 'rgba(212, 175, 55, 0.85)';
-                        });
-                        cell.addEventListener('mouseleave', updateSelection);
-                        cell.addEventListener('click', () => {
-                            selectedIndex = index;
-                            updateSelection();
-                        });
-                        overlay.appendChild(cell);
-                        selectionCells.push(cell);
-                    }
+                    const buildSelectionCells = () => {
+                        if (isFaceSheet) {
+                            const sheet = RRFaceSheet.metrics(img);
+                            sheetRows = sheet.rows;
+                            maxIndex = sheet.count - 1;
+                            if (selectedIndex > maxIndex) selectedIndex = 0;
+                        }
+                        overlay.innerHTML = '';
+                        selectionCells.length = 0;
+                        for (let index = 0; index <= maxIndex; index++) {
+                            const col = index % sheetColumns;
+                            const row = Math.floor(index / sheetColumns);
+                            const cell = document.createElement('div');
+                            cell.style.cssText = `
+                                position: absolute;
+                                left: ${(col / sheetColumns) * 100}%;
+                                top: ${(row / sheetRows) * 100}%;
+                                width: ${100 / sheetColumns}%;
+                                height: ${100 / sheetRows}%;
+                                box-sizing: border-box;
+                                border: 3px solid rgba(255, 255, 255, 0.35);
+                                cursor: pointer;
+                                pointer-events: auto;
+                                transition: border-color 0.12s, background-color 0.12s, box-shadow 0.12s;
+                            `;
+                            cell.title = `${tt('Index')} ${index}`;
+                            cell.addEventListener('mouseenter', () => {
+                                if (index !== selectedIndex) cell.style.borderColor = 'rgba(212, 175, 55, 0.85)';
+                            });
+                            cell.addEventListener('mouseleave', updateSelection);
+                            cell.addEventListener('click', () => {
+                                selectedIndex = index;
+                                updateSelection();
+                            });
+                            overlay.appendChild(cell);
+                            selectionCells.push(cell);
+                        }
+                        updateSelection();
+                    };
+                    if (isFaceSheet) img.addEventListener('load', buildSelectionCells);
+                    else buildSelectionCells();
                 }
+
+                img.src = imagePath;
 
                 imageFrame.appendChild(imageWrap);
                 wrapper.appendChild(imageFrame);

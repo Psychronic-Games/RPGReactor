@@ -195,6 +195,7 @@ class ChangeActorImagesEditor {
         faceFileInput.style.cssText = 'padding: 6px 10px; background-color: var(--color-bg-input); color: var(--color-text); border: 1px solid var(--color-border-input); border-radius: 3px; font-size: 12px; flex: 1;';
         faceFileInput.addEventListener('input', (e) => {
             this.faceFile = e.target.value;
+            updateFaceIndexLimit();
         });
 
         faceFileRow.appendChild(faceFileLabel);
@@ -212,16 +213,36 @@ class ChangeActorImagesEditor {
         const faceIdxInput = document.createElement('input');
         faceIdxInput.type = 'number';
         faceIdxInput.min = 0;
-        faceIdxInput.max = 7;
         faceIdxInput.value = this.faceIdx;
         faceIdxInput.style.cssText = 'padding: 6px 10px; background-color: var(--color-bg-input); color: var(--color-text); border: 1px solid var(--color-border-input); border-radius: 3px; font-size: 12px; width: 80px;';
         faceIdxInput.addEventListener('input', (e) => {
             this.faceIdx = parseInt(e.target.value) || 0;
         });
 
+        const updateFaceIndexLimit = () => {
+            faceIdxInput.removeAttribute('max');
+            if (!this.faceFile) {
+                return;
+            }
+            const project = this.projectController.getCurrentProject
+                ? this.projectController.getCurrentProject()
+                : this.projectController.currentProject;
+            if (!project || !project.path) return;
+            const path = require('path');
+            const image = new Image();
+            const expectedFile = this.faceFile;
+            image.onload = () => {
+                if (this.faceFile !== expectedFile) return;
+                const maxIndex = RRFaceSheet.metrics(image).count - 1;
+                if (maxIndex >= 0) faceIdxInput.max = maxIndex;
+            };
+            image.src = RRAssetFiles.toUrl(path.join(project.path, 'img', 'faces', expectedFile + '.png'));
+        };
+
         faceIdxRow.appendChild(faceIdxLabel);
         faceIdxRow.appendChild(faceIdxInput);
         content.appendChild(faceIdxRow);
+        updateFaceIndexLimit();
 
         // Separator
         const sep3 = document.createElement('div');

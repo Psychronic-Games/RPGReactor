@@ -30,7 +30,14 @@ const RR_LANGUAGES = [
     { id: 'tr', name: 'Turkish', nativeName: 'Türkçe', flag: '🇹🇷' }
 ];
 
-const RR_APP_VERSION = '0.98.1';
+function normalizeI18nLanguage(language) {
+    const normalized = String(language || '').trim().replace(/_/g, '-').toLowerCase();
+    if (['zh-cn', 'zh-sg', 'zh-hans'].includes(normalized)) return 'zh-Hans';
+    if (['zh-tw', 'zh-hk', 'zh-mo', 'zh-hant'].includes(normalized)) return 'zh-Hant';
+    return RR_LANGUAGES.find(candidate => candidate.id.toLowerCase() === normalized)?.id || 'en';
+}
+
+const RR_APP_VERSION = '0.98.2';
 
 const RR_DB_TYPE_KEYS = {
     actors: 'menu.actors', classes: 'menu.classes', skills: 'menu.skills', items: 'menu.items',
@@ -1307,7 +1314,7 @@ const RR_ADDITIONAL_LOCALES = {
         'mapCtx.saveImage': '将地图保存为图片',
         'app.title': 'RPG Reactor', 'app.loading': '加载中...',
         'menu.file': '文件', 'menu.newProject': '新建项目', 'menu.openProject': '打开项目', 'menu.closeProject': '关闭项目', 'menu.options': '选项...', 'menu.exit': '退出',
-        'menu.database': '数据库', 'menu.actors': '角色', 'menu.classes': '职业', 'menu.skills': '技能', 'menu.items': '物品', 'menu.weapons': '武器', 'menu.armors': '防具', 'menu.enemies': '敌人', 'menu.troops': '敌群', 'menu.states': '状态', 'menu.animations': '动画', 'menu.tilesets': '图块组', 'menu.commonEvents': '公共事件', 'menu.system': '系统', 'menu.types': '类型', 'menu.terms': '术语',
+        'menu.database': '数据库', 'menu.actors': '角色', 'menu.classes': '职业', 'menu.skills': '技能', 'menu.items': '物品', 'menu.weapons': '武器', 'menu.armors': '护甲', 'menu.enemies': '敌方角色', 'menu.troops': '敌群', 'menu.states': '状态', 'menu.animations': '动画', 'menu.tilesets': '图块', 'menu.commonEvents': '公共事件', 'menu.system': '系统', 'menu.types': '类型', 'menu.terms': '用语',
         'menu.plugins': '插件', 'menu.managePlugins': '管理插件', 'menu.tools': '工具', 'menu.eventManager': '事件管理器', 'menu.audioPlayer': '♪ 音频播放器', 'menu.forge': '锻造坊', 'menu.forgeLauncher': '锻造坊启动器', 'menu.characterGenerator': '角色生成器', 'menu.animationGenerator': '动画生成器', 'menu.soundEffectGenerator': '音效生成器', 'menu.effekseerGenerator': 'Effekseer动画生成器', 'menu.build': '构建', 'menu.installRuntime': '安装 Reactor 运行时...', 'menu.deployGame': '导出游戏...', 'menu.deployEditor': '导出编辑器...', 'menu.help': '帮助', 'menu.developerTools': '开发者工具', 'menu.about': '关于 RPG Reactor',
         'toolbar.tileset': '图块组:', 'toolbar.layer': '图层:', 'toolbar.tools': '工具:', 'toolbar.forge': '锻造坊:', 'toolbar.title.newProject': '新建项目', 'toolbar.title.openProject': '打开项目', 'toolbar.title.saveProject': '保存项目', 'toolbar.title.undo': '撤销 (Ctrl+Z)', 'toolbar.title.redo': '重做 (Ctrl+Y)', 'toolbar.title.playtest': '测试游玩', 'toolbar.title.eventManager': '事件管理器', 'toolbar.title.database': '数据库', 'toolbar.title.plugins': '插件', 'toolbar.title.audioPlayer': '音频播放器', 'toolbar.title.forgeLauncher': '锻造坊 - 开发工具套件',
         'welcome.tagline': '使用开源、跨平台引擎制作精彩 RPG 游戏', 'welcome.gettingStarted': '开始使用', 'welcome.step.create': '创建新项目开始制作 RPG', 'welcome.step.design': '设计地图、事件和游戏机制', 'welcome.step.test': '使用内置测试游玩立即试玩', 'welcome.step.export': '导出到 Windows、Mac 和 Linux',
@@ -8723,11 +8730,117 @@ for (const [locale, translations] of Object.entries(RR_TROOP_BATTLEBACK_LAYER_TR
     RR_TEXT_TRANSLATIONS[locale]['Upper Layer:'] = translations[1];
 }
 
+Object.assign(RR_TEXT_TRANSLATIONS['zh-Hans'], {
+    'Class': '职业',
+    'Critical': '会心',
+    'Comment': '注释',
+    'Common Event:': '公共事件：',
+    'Change HP': '更改 HP',
+    'Change MP': '更改 MP',
+    'Change Enemy MP': '更改敌人 MP',
+    'Above Character': '在角色上方',
+    'AGI': 'AGI',
+    'Count': '数量',
+    'Close': '关闭'
+});
+
+// Structural labels may remain recognizable product terminology in locales
+// where no reviewed translation exists; their presence still keeps routing
+// explicit and prevents generated catalogs from silently changing them.
+for (const locale of Object.keys(RR_TEXT_TRANSLATIONS)) {
+    RR_TEXT_TRANSLATIONS[locale]['MZ Conditions'] ||= 'MZ Conditions';
+    RR_TEXT_TRANSLATIONS[locale]['Reactor Advanced'] ||= 'Reactor Advanced';
+}
+Object.assign(RR_TEXT_TRANSLATIONS['zh-Hans'], {
+    'MZ Conditions': 'MZ 条件',
+    'Reactor Advanced': 'Reactor 高级条件'
+});
+
 // The broad database/event/Forge pass is generated separately so this manager
 // remains reviewable. It is loaded synchronously before I18nManager.js.
 const RR_DEEP_TRANSLATIONS = globalThis.RR_DEEP_TEXT_TRANSLATIONS || {};
 for (const [locale, translations] of Object.entries(RR_DEEP_TRANSLATIONS)) {
-    if (RR_TEXT_TRANSLATIONS[locale]) Object.assign(RR_TEXT_TRANSLATIONS[locale], translations);
+    const table = RR_TEXT_TRANSLATIONS[locale];
+    if (!table) continue;
+    for (const [source, translation] of Object.entries(translations)) {
+        if (!Object.hasOwn(table, source)) table[source] = translation;
+    }
+}
+
+const RR_QUICK_EVENT_LABELS = {
+    en: ['Quick Event Creation', 'Transfer', 'Door', 'Treasure', 'Inn'],
+    ja: ['クイックイベント作成', '場所移動', '扉', '宝箱', '宿屋'],
+    es: ['Creación rápida de eventos', 'Transferencia', 'Puerta', 'Tesoro', 'Posada'],
+    'zh-Hans': ['快速事件创建', '场所移动', '门', '宝箱', '旅店'],
+    'zh-Hant': ['快速事件建立', '場所移動', '門', '寶箱', '旅店'],
+    ru: ['Быстрое создание событий', 'Перемещение', 'Дверь', 'Сокровище', 'Гостиница'],
+    pt: ['Criação rápida de eventos', 'Transferência', 'Porta', 'Tesouro', 'Estalagem'],
+    de: ['Schnelle Ereigniserstellung', 'Ortswechsel', 'Tür', 'Schatz', 'Gasthaus'],
+    fr: ['Création rapide d’événement', 'Transfert', 'Porte', 'Trésor', 'Auberge'],
+    el: ['Γρήγορη δημιουργία συμβάντος', 'Μεταφορά', 'Πόρτα', 'Θησαυρός', 'Πανδοχείο'],
+    ko: ['빠른 이벤트 생성', '장소 이동', '문', '보물 상자', '여관'],
+    ar: ['إنشاء حدث سريع', 'انتقال', 'باب', 'كنز', 'نُزل'],
+    it: ['Creazione rapida evento', 'Trasferimento', 'Porta', 'Tesoro', 'Locanda'],
+    pl: ['Szybkie tworzenie zdarzeń', 'Przeniesienie', 'Drzwi', 'Skarb', 'Gospoda'],
+    id: ['Pembuatan Event Cepat', 'Pindah Tempat', 'Pintu', 'Harta', 'Penginapan'],
+    vi: ['Tạo sự kiện nhanh', 'Dịch chuyển', 'Cửa', 'Kho báu', 'Nhà trọ'],
+    th: ['สร้างอีเวนต์ด่วน', 'ย้ายสถานที่', 'ประตู', 'สมบัติ', 'โรงแรม'],
+    tr: ['Hızlı Etkinlik Oluşturma', 'Aktarma', 'Kapı', 'Hazine', 'Han']
+};
+for (const language of RR_LANGUAGES) {
+    const labels = RR_QUICK_EVENT_LABELS[language.id];
+    Object.assign(RR_I18N_STRINGS[language.id], {
+        'quickEvent.title': labels[0],
+        'quickEvent.transfer': labels[1],
+        'quickEvent.door': labels[2],
+        'quickEvent.treasure': labels[3],
+        'quickEvent.inn': labels[4]
+    });
+}
+
+const RR_QUICK_EVENT_TEXT = {
+    'Quick Event Creation': {
+        ja: 'クイックイベント作成', es: 'Creación rápida de eventos', 'zh-Hant': '快速事件建立',
+        'zh-Hans': '快速事件创建', ru: 'Быстрое создание событий', pt: 'Criação rápida de eventos',
+        de: 'Schnelle Ereigniserstellung', fr: 'Création rapide d’événement', el: 'Γρήγορη δημιουργία συμβάντος',
+        ko: '빠른 이벤트 생성', ar: 'إنشاء حدث سريع', it: 'Creazione rapida evento',
+        pl: 'Szybkie tworzenie zdarzeń', id: 'Pembuatan Event Cepat', vi: 'Tạo sự kiện nhanh',
+        th: 'สร้างอีเวนต์ด่วน', tr: 'Hızlı Etkinlik Oluşturma'
+    },
+    'Create': {
+        ja: '作成', es: 'Crear', 'zh-Hant': '建立', 'zh-Hans': '创建', ru: 'Создать', pt: 'Criar',
+        de: 'Erstellen', fr: 'Créer', el: 'Δημιουργία', ko: '생성', ar: 'إنشاء', it: 'Crea',
+        pl: 'Utwórz', id: 'Buat', vi: 'Tạo', th: 'สร้าง', tr: 'Oluştur'
+    },
+    'Select Transfer Destination': {
+        ja: '移動先を選択', es: 'Seleccionar destino', 'zh-Hant': '選擇移動目的地', 'zh-Hans': '选择移动目的地',
+        ru: 'Выберите место назначения', pt: 'Selecionar destino', de: 'Transferziel auswählen',
+        fr: 'Sélectionner la destination', el: 'Επιλογή προορισμού', ko: '이동 위치 선택', ar: 'اختر وجهة الانتقال',
+        it: 'Seleziona destinazione', pl: 'Wybierz cel', id: 'Pilih Tujuan', vi: 'Chọn điểm đến',
+        th: 'เลือกปลายทาง', tr: 'Aktarma Hedefini Seç'
+    },
+    'You found treasure!': {
+        ja: '宝物を見つけた！', es: '¡Has encontrado un tesoro!', 'zh-Hant': '發現了寶物！',
+        'zh-Hans': '发现了宝物！', ru: 'Вы нашли сокровище!', pt: 'Você encontrou um tesouro!',
+        de: 'Du hast einen Schatz gefunden!', fr: 'Vous avez trouvé un trésor !', el: 'Βρήκατε θησαυρό!',
+        ko: '보물을 발견했다!', ar: 'لقد وجدت كنزًا!', it: 'Hai trovato un tesoro!',
+        pl: 'Znaleziono skarb!', id: 'Kamu menemukan harta!', vi: 'Bạn đã tìm thấy kho báu!',
+        th: 'พบสมบัติ!', tr: 'Bir hazine buldun!'
+    },
+    'Choose a character graphic.': {
+        ja: 'キャラクター画像を選択してください。', es: 'Elige un gráfico de personaje.',
+        'zh-Hant': '請選擇角色圖像。', 'zh-Hans': '请选择角色图像。', ru: 'Выберите изображение персонажа.',
+        pt: 'Escolha um gráfico de personagem.', de: 'Wähle eine Charaktergrafik.',
+        fr: 'Choisissez une image de personnage.', el: 'Επιλέξτε γραφικό χαρακτήρα.',
+        ko: '캐릭터 그래픽을 선택하세요.', ar: 'اختر صورة شخصية.', it: 'Scegli una grafica personaggio.',
+        pl: 'Wybierz grafikę postaci.', id: 'Pilih grafis karakter.', vi: 'Chọn hình nhân vật.',
+        th: 'เลือกกราฟิกตัวละคร', tr: 'Bir karakter grafiği seçin.'
+    }
+};
+for (const [source, translations] of Object.entries(RR_QUICK_EVENT_TEXT)) {
+    for (const language of RR_LANGUAGES) {
+        if (language.id !== 'en') RR_TEXT_TRANSLATIONS[language.id][source] = translations[language.id];
+    }
 }
 
 // Locales introduced through RR_ADDITIONAL_LOCALES inherit the English table,
@@ -9764,11 +9877,11 @@ Object.assign(RR_I18N_STRINGS['zh-Hans'], {
     'toolbar.title.plugins': '插件',
     'toolbar.title.rectangle': '矩形区域工具',
     'toolbar.title.shadowPen': '阴影笔（切换图块上的阴影）',
-    'toolbar.title.heightBrush': 'Yükseklik fırçası (3B haritalar için yükseklik boyar)',
-    'toolbar.height': 'Yükseklik:',
-    'toolbar.height.set': 'Şuna ayarla',
-    'toolbar.height.raise': 'Yükselt',
-    'toolbar.height.lower': 'Alçalt',
+    'toolbar.title.heightBrush': '高度画笔（绘制 3D 地图的高程）',
+    'toolbar.height': '高度：',
+    'toolbar.height.set': '设置为',
+    'toolbar.height.raise': '升高',
+    'toolbar.height.lower': '降低',
     'toolbar.title.singleTile': '单图块工具',
     'workspace.zoom': '缩放：'
 });
@@ -10380,6 +10493,156 @@ Object.assign(RR_TEXT_TRANSLATIONS.vi, { 'Entire Party': 'Toàn Đội' });
 Object.assign(RR_TEXT_TRANSLATIONS.th, { 'Entire Party': 'ทั้งปาร์ตี้' });
 Object.assign(RR_TEXT_TRANSLATIONS.tr, { 'Entire Party': 'Tüm Takım' });
 
+Object.assign(RR_TEXT_TRANSLATIONS.ja, { 'Install': 'インストール', 'Plugin Manifest': 'プラグインマニフェスト', 'Rebuild': '再構築', 'Keep Current': '維持する', 'Rebuild replaces the Reactor plugin manifest with the RPG Maker one.': '再構築すると、Reactor のプラグインマニフェストが RPG Maker のものに置き換わります。', 'Keep Current leaves reactor_plugins.js unchanged.': '維持すると reactor_plugins.js はそのまま残ります。' });
+Object.assign(RR_TEXT_TRANSLATIONS.es, { 'Install': 'Instalar', 'Plugin Manifest': 'Manifiesto de plugins', 'Rebuild': 'Reconstruir', 'Keep Current': 'Conservar actual', 'Rebuild replaces the Reactor plugin manifest with the RPG Maker one.': 'Reconstruir sustituye el manifiesto de plugins de Reactor por el de RPG Maker.', 'Keep Current leaves reactor_plugins.js unchanged.': 'Conservar actual deja reactor_plugins.js sin cambios.' });
+Object.assign(RR_TEXT_TRANSLATIONS['zh-Hant'], { 'Install': '安裝', 'Plugin Manifest': '外掛清單', 'Rebuild': '重建', 'Keep Current': '維持現況', 'Rebuild replaces the Reactor plugin manifest with the RPG Maker one.': '重建會用 RPG Maker 的外掛清單取代 Reactor 的外掛清單。', 'Keep Current leaves reactor_plugins.js unchanged.': '維持現況會讓 reactor_plugins.js 保持不變。' });
+Object.assign(RR_TEXT_TRANSLATIONS['zh-Hans'], { 'Install': '安装', 'Plugin Manifest': '插件清单', 'Rebuild': '重建', 'Keep Current': '保持现有', 'Rebuild replaces the Reactor plugin manifest with the RPG Maker one.': '重建会用 RPG Maker 的插件清单替换 Reactor 的插件清单。', 'Keep Current leaves reactor_plugins.js unchanged.': '保持现有会让 reactor_plugins.js 保持不变。' });
+Object.assign(RR_TEXT_TRANSLATIONS.ru, { 'Install': 'Установить', 'Plugin Manifest': 'Манифест плагинов', 'Rebuild': 'Пересобрать', 'Keep Current': 'Оставить текущий', 'Rebuild replaces the Reactor plugin manifest with the RPG Maker one.': 'Пересборка заменяет манифест плагинов Reactor манифестом RPG Maker.', 'Keep Current leaves reactor_plugins.js unchanged.': '«Оставить текущий» не изменяет reactor_plugins.js.' });
+Object.assign(RR_TEXT_TRANSLATIONS.pt, { 'Install': 'Instalar', 'Plugin Manifest': 'Manifesto de plugins', 'Rebuild': 'Reconstruir', 'Keep Current': 'Manter atual', 'Rebuild replaces the Reactor plugin manifest with the RPG Maker one.': 'Reconstruir substitui o manifesto de plugins do Reactor pelo do RPG Maker.', 'Keep Current leaves reactor_plugins.js unchanged.': 'Manter atual deixa o reactor_plugins.js inalterado.' });
+Object.assign(RR_TEXT_TRANSLATIONS.de, { 'Install': 'Installieren', 'Plugin Manifest': 'Plugin-Manifest', 'Rebuild': 'Neu aufbauen', 'Keep Current': 'Aktuell behalten', 'Rebuild replaces the Reactor plugin manifest with the RPG Maker one.': 'Neu aufbauen ersetzt das Reactor-Plugin-Manifest durch das von RPG Maker.', 'Keep Current leaves reactor_plugins.js unchanged.': 'Aktuell behalten lässt reactor_plugins.js unverändert.' });
+Object.assign(RR_TEXT_TRANSLATIONS.fr, { 'Install': 'Installer', 'Plugin Manifest': 'Manifeste des extensions', 'Rebuild': 'Reconstruire', 'Keep Current': 'Conserver', 'Rebuild replaces the Reactor plugin manifest with the RPG Maker one.': 'Reconstruire remplace le manifeste des extensions Reactor par celui de RPG Maker.', 'Keep Current leaves reactor_plugins.js unchanged.': 'Conserver laisse reactor_plugins.js inchangé.' });
+Object.assign(RR_TEXT_TRANSLATIONS.el, { 'Install': 'Εγκατάσταση', 'Plugin Manifest': 'Δήλωση προσθέτων', 'Rebuild': 'Ανακατασκευή', 'Keep Current': 'Διατήρηση', 'Rebuild replaces the Reactor plugin manifest with the RPG Maker one.': 'Η ανακατασκευή αντικαθιστά τη δήλωση προσθέτων του Reactor με αυτή του RPG Maker.', 'Keep Current leaves reactor_plugins.js unchanged.': 'Η διατήρηση αφήνει το reactor_plugins.js ως έχει.' });
+Object.assign(RR_TEXT_TRANSLATIONS.ko, { 'Install': '설치', 'Plugin Manifest': '플러그인 매니페스트', 'Rebuild': '다시 만들기', 'Keep Current': '유지', 'Rebuild replaces the Reactor plugin manifest with the RPG Maker one.': '다시 만들면 Reactor 플러그인 매니페스트가 RPG Maker 매니페스트로 바뀝니다.', 'Keep Current leaves reactor_plugins.js unchanged.': '유지를 선택하면 reactor_plugins.js가 그대로 남습니다.' });
+Object.assign(RR_TEXT_TRANSLATIONS.ar, { 'Install': 'تثبيت', 'Plugin Manifest': 'بيان الإضافات', 'Rebuild': 'إعادة البناء', 'Keep Current': 'الإبقاء على الحالي', 'Rebuild replaces the Reactor plugin manifest with the RPG Maker one.': 'إعادة البناء تستبدل بيان إضافات Reactor ببيان RPG Maker.', 'Keep Current leaves reactor_plugins.js unchanged.': 'الإبقاء على الحالي يترك reactor_plugins.js دون تغيير.' });
+Object.assign(RR_TEXT_TRANSLATIONS.it, { 'Install': 'Installa', 'Plugin Manifest': 'Manifesto plugin', 'Rebuild': 'Ricostruisci', 'Keep Current': 'Mantieni attuale', 'Rebuild replaces the Reactor plugin manifest with the RPG Maker one.': 'Ricostruisci sostituisce il manifesto plugin di Reactor con quello di RPG Maker.', 'Keep Current leaves reactor_plugins.js unchanged.': 'Mantieni attuale lascia reactor_plugins.js invariato.' });
+Object.assign(RR_TEXT_TRANSLATIONS.pl, { 'Install': 'Zainstaluj', 'Plugin Manifest': 'Manifest wtyczek', 'Rebuild': 'Przebuduj', 'Keep Current': 'Zachowaj obecny', 'Rebuild replaces the Reactor plugin manifest with the RPG Maker one.': 'Przebudowa zastępuje manifest wtyczek Reactor manifestem RPG Maker.', 'Keep Current leaves reactor_plugins.js unchanged.': 'Zachowaj obecny pozostawia reactor_plugins.js bez zmian.' });
+Object.assign(RR_TEXT_TRANSLATIONS.id, { 'Install': 'Pasang', 'Plugin Manifest': 'Manifes plugin', 'Rebuild': 'Bangun ulang', 'Keep Current': 'Pertahankan', 'Rebuild replaces the Reactor plugin manifest with the RPG Maker one.': 'Membangun ulang mengganti manifes plugin Reactor dengan milik RPG Maker.', 'Keep Current leaves reactor_plugins.js unchanged.': 'Pertahankan membiarkan reactor_plugins.js tidak berubah.' });
+Object.assign(RR_TEXT_TRANSLATIONS.vi, { 'Install': 'Cài đặt', 'Plugin Manifest': 'Bản kê plugin', 'Rebuild': 'Tạo lại', 'Keep Current': 'Giữ hiện tại', 'Rebuild replaces the Reactor plugin manifest with the RPG Maker one.': 'Tạo lại sẽ thay bản kê plugin Reactor bằng bản của RPG Maker.', 'Keep Current leaves reactor_plugins.js unchanged.': 'Giữ hiện tại để nguyên reactor_plugins.js.' });
+Object.assign(RR_TEXT_TRANSLATIONS.th, { 'Install': 'ติดตั้ง', 'Plugin Manifest': 'รายการปลั๊กอิน', 'Rebuild': 'สร้างใหม่', 'Keep Current': 'คงของเดิม', 'Rebuild replaces the Reactor plugin manifest with the RPG Maker one.': 'การสร้างใหม่จะแทนที่รายการปลั๊กอินของ Reactor ด้วยของ RPG Maker', 'Keep Current leaves reactor_plugins.js unchanged.': 'คงของเดิมจะไม่เปลี่ยน reactor_plugins.js' });
+Object.assign(RR_TEXT_TRANSLATIONS.tr, { 'Install': 'Yükle', 'Plugin Manifest': 'Eklenti bildirimi', 'Rebuild': 'Yeniden oluştur', 'Keep Current': 'Mevcut olanı koru', 'Rebuild replaces the Reactor plugin manifest with the RPG Maker one.': 'Yeniden oluşturmak, Reactor eklenti bildirimini RPG Maker bildirimiyle değiştirir.', 'Keep Current leaves reactor_plugins.js unchanged.': 'Mevcut olanı koru, reactor_plugins.js dosyasını değiştirmez.' });
+
+Object.assign(RR_TEXT_TRANSLATIONS.ja, { '3D': '3D', '3D Model': '3Dモデル', 'This face is Down': 'この面が下', 'Model size (tiles)': 'モデルサイズ（タイル）', 'Front': '前', 'Back': '後', 'This side is': 'この面は' });
+Object.assign(RR_TEXT_TRANSLATIONS.es, { '3D': '3D', '3D Model': 'Modelo 3D', 'This face is Down': 'Esta cara mira abajo', 'Model size (tiles)': 'Tamaño del modelo (tiles)', 'Front': 'Frente', 'Back': 'Atrás', 'This side is': 'Este lado es' });
+Object.assign(RR_TEXT_TRANSLATIONS['zh-Hant'], { '3D': '3D', '3D Model': '3D 模型', 'This face is Down': '此面朝下', 'Model size (tiles)': '模型大小（圖塊）', 'Front': '前', 'Back': '後', 'This side is': '此面是' });
+Object.assign(RR_TEXT_TRANSLATIONS['zh-Hans'], { '3D': '3D', '3D Model': '3D 模型', 'This face is Down': '此面朝下', 'Model size (tiles)': '模型大小（图块）', 'Front': '前', 'Back': '后', 'This side is': '此面是' });
+Object.assign(RR_TEXT_TRANSLATIONS.ru, { '3D': '3D', '3D Model': '3D-модель', 'This face is Down': 'Эта сторона смотрит вниз', 'Model size (tiles)': 'Размер модели (тайлы)', 'Front': 'Перед', 'Back': 'Зад', 'This side is': 'Эта сторона' });
+Object.assign(RR_TEXT_TRANSLATIONS.pt, { '3D': '3D', '3D Model': 'Modelo 3D', 'This face is Down': 'Esta face aponta para baixo', 'Model size (tiles)': 'Tamanho do modelo (tiles)', 'Front': 'Frente', 'Back': 'Trás', 'This side is': 'Este lado é' });
+Object.assign(RR_TEXT_TRANSLATIONS.de, { '3D': '3D', '3D Model': '3D-Modell', 'This face is Down': 'Diese Seite zeigt nach unten', 'Model size (tiles)': 'Modellgröße (Kacheln)', 'Front': 'Vorne', 'Back': 'Hinten', 'This side is': 'Diese Seite ist' });
+Object.assign(RR_TEXT_TRANSLATIONS.fr, { '3D': '3D', '3D Model': 'Modèle 3D', 'This face is Down': 'Cette face est le bas', 'Model size (tiles)': 'Taille du modèle (tiles)', 'Front': 'Avant', 'Back': 'Arrière', 'This side is': 'Ce côté est' });
+Object.assign(RR_TEXT_TRANSLATIONS.el, { '3D': '3D', '3D Model': 'Μοντέλο 3D', 'This face is Down': 'Αυτή η όψη κοιτά κάτω', 'Model size (tiles)': 'Μέγεθος μοντέλου (πλακίδια)', 'Front': 'Μπροστά', 'Back': 'Πίσω', 'This side is': 'Αυτή η πλευρά είναι' });
+Object.assign(RR_TEXT_TRANSLATIONS.ko, { '3D': '3D', '3D Model': '3D 모델', 'This face is Down': '이 면이 아래', 'Model size (tiles)': '모델 크기(타일)', 'Front': '앞', 'Back': '뒤', 'This side is': '이 면은' });
+Object.assign(RR_TEXT_TRANSLATIONS.ar, { '3D': '3D', '3D Model': 'نموذج ثلاثي الأبعاد', 'This face is Down': 'هذا الوجه للأسفل', 'Model size (tiles)': 'حجم النموذج (بلاطات)', 'Front': 'أمام', 'Back': 'خلف', 'This side is': 'هذا الجانب' });
+Object.assign(RR_TEXT_TRANSLATIONS.it, { '3D': '3D', '3D Model': 'Modello 3D', 'This face is Down': 'Questa faccia è in basso', 'Model size (tiles)': 'Dimensione del modello (tile)', 'Front': 'Fronte', 'Back': 'Retro', 'This side is': 'Questo lato è' });
+Object.assign(RR_TEXT_TRANSLATIONS.pl, { '3D': '3D', '3D Model': 'Model 3D', 'This face is Down': 'Ta ściana jest na dole', 'Model size (tiles)': 'Rozmiar modelu (kafelki)', 'Front': 'Przód', 'Back': 'Tył', 'This side is': 'Ta strona to' });
+Object.assign(RR_TEXT_TRANSLATIONS.id, { '3D': '3D', '3D Model': 'Model 3D', 'This face is Down': 'Sisi ini menghadap bawah', 'Model size (tiles)': 'Ukuran model (tile)', 'Front': 'Depan', 'Back': 'Belakang', 'This side is': 'Sisi ini' });
+Object.assign(RR_TEXT_TRANSLATIONS.vi, { '3D': '3D', '3D Model': 'Mô hình 3D', 'This face is Down': 'Mặt này hướng xuống', 'Model size (tiles)': 'Kích thước mô hình (ô)', 'Front': 'Trước', 'Back': 'Sau', 'This side is': 'Mặt này là' });
+Object.assign(RR_TEXT_TRANSLATIONS.th, { '3D': '3D', '3D Model': 'โมเดล 3D', 'This face is Down': 'ด้านนี้หันลง', 'Model size (tiles)': 'ขนาดโมเดล (ไทล์)', 'Front': 'หน้า', 'Back': 'หลัง', 'This side is': 'ด้านนี้คือ' });
+Object.assign(RR_TEXT_TRANSLATIONS.tr, { '3D': '3D', '3D Model': '3D model', 'This face is Down': 'Bu yüz aşağı bakar', 'Model size (tiles)': 'Model boyutu (kare)', 'Front': 'Ön', 'Back': 'Arka', 'This side is': 'Bu taraf' });
+
+Object.assign(RR_EVENT_COMMAND_NAMES.ja, {
+    'Show Scrolling Text': '文章のスクロール表示'
+});
+
+Object.assign(RR_EVENT_COMMAND_NAMES['zh-Hans'], {
+    'Show Text': '显示文本',
+    'Show Choices': '显示选项',
+    'Input Number': '数值输入处理',
+    'Select Item': '物品选择处理',
+    'Show Scrolling Text': '滚动显示文本',
+    'Comment': '注释',
+    'Conditional Branch': '条件分支',
+    'Loop': '循环',
+    'Break Loop': '中断循环',
+    'Exit Event Processing': '中断事件处理',
+    'Exit Event': '中断事件处理',
+    'Common Event': '公共事件',
+    'Label': '标签',
+    'Jump to Label': '标注跳跃',
+    'Control Switches': '操作开关',
+    'Control Variables': '操作变量',
+    'Control Self Switch': '独立开关的操作',
+    'Control Timer': '计时器的操作',
+    'Change Gold': '增减金钱',
+    'Change Items': '增减物品',
+    'Change Weapons': '增减武器',
+    'Change Armors': '增减护甲',
+    'Change Party Members': '交换成员',
+    'Change Party Member': '交换成员',
+    'Change HP': '增减HP',
+    'Change MP': '增减MP',
+    'Change TP': '增减TP',
+    'Change State': '变更状态',
+    'Recover All': '完全恢复',
+    'Change EXP': '增减经验值',
+    'Change Level': '增减等级',
+    'Change Parameter': '增减能力值',
+    'Change Skill': '增减技能',
+    'Change Equipment': '变更装备',
+    'Change Name': '变更名字',
+    'Change Class': '变更职业',
+    'Change Nickname': '变更别名',
+    'Change Profile': '变更个人资料',
+    'Transfer Player': '移动位置',
+    'Set Vehicle Location': '设置载具位置',
+    'Set Event Location': '设置事件位置',
+    'Scroll Map': '滚动地图',
+    'Set Movement Route': '移动路线的设置',
+    'Get on/off Vehicle': '载具的乘降',
+    'Change Transparency': '变更透明状态',
+    'Change Player Followers': '变更队列步行',
+    'Gather Followers': '集合队列成员',
+    'Show Animation': '显示动画',
+    'Show Balloon Icon': '显示气泡图标',
+    'Erase Event': '暂时消除事件',
+    'Show Picture': '显示图片',
+    'Move Picture': '移动图片',
+    'Rotate Picture': '旋转图片',
+    'Tint Picture': '图片的色调变更',
+    'Erase Picture': '消除图片',
+    'Wait': '等待',
+    'Fadeout Screen': '淡出画面',
+    'Fadein Screen': '淡入画面',
+    'Tint Screen': '变更画面色调',
+    'Flash Screen': '闪烁画面',
+    'Shake Screen': '震动画面',
+    'Set Weather Effect': '设置天气',
+    'Play BGM': '播放BGM',
+    'Fadeout BGM': '淡出BGM',
+    'Save BGM': '保存BGM',
+    'Replay BGM': '再开BGM',
+    'Play BGS': '播放BGS',
+    'Fadeout BGS': '淡出BGS',
+    'Play ME': '播放ME',
+    'Play SE': '播放SE',
+    'Stop SE': '停止SE',
+    'Play Movie': '播放影像',
+    'Battle Processing': '战斗处理',
+    'Shop Processing': '商店处理',
+    'Name Input Processing': '名字输入处理',
+    'Open Menu Screen': '开启菜单画面',
+    'Open Save Screen': '开启存档画面',
+    'Game Over': '游戏结束',
+    'Return to Title Screen': '返回标题画面',
+    'Change Battle BGM': '变更战斗BGM',
+    'Change Victory ME': '变更胜利ME',
+    'Change Defeat ME': '变更战败ME',
+    'Change Vehicle BGM': '变更载具BGM',
+    'Change Save Access': '启用/禁用存档',
+    'Change Menu Access': '启用/禁用菜单',
+    'Change Encounter': '启用/禁用遇敌',
+    'Change Formation Access': '启用/禁用排序',
+    'Change Window Color': '变更窗口颜色',
+    'Change Actor Images': '变更角色图像',
+    'Change Vehicle Image': '变更载具图像',
+    'Change Map Name Display': '变更地图名称显示',
+    'Change Tileset': '变更图块组',
+    'Change Battle Background': '变更战斗背景',
+    'Change Parallax': '变更远景',
+    'Get Location Info': '获取指定位置的信息',
+    'Change Enemy HP': '增减敌方角色HP',
+    'Change Enemy MP': '增减敌方角色MP',
+    'Change Enemy TP': '增减敌方角色TP',
+    'Change Enemy State': '变更敌方角色状态',
+    'Enemy Recover All': '完全恢复敌方角色',
+    'Enemy Appear': '敌方角色的出现',
+    'Enemy Transform': '敌方角色的变身',
+    'Show Battle Animation': '显示战斗动画',
+    'Force Action': '强制战斗行动',
+    'Abort Battle': '中断战斗',
+    'Script': '脚本',
+    'Plugin Command': '插件指令'
+});
+
 class I18nManager {
     constructor() {
         for (const table of Object.values(RR_I18N_STRINGS)) {
@@ -10432,7 +10695,7 @@ class I18nManager {
     }
 
     setLanguage(language, options = {}) {
-        const next = RR_I18N_STRINGS[language] ? language : 'en';
+        const next = normalizeI18nLanguage(language);
         if (next === this.language && options.force !== true) return;
         this.language = next;
         if (options.persist !== false) this._writeSavedLanguage(next);
@@ -10524,7 +10787,7 @@ class I18nManager {
             const raw = localStorage.getItem(this.SETTINGS_KEY);
             if (!raw) return 'en';
             const parsed = JSON.parse(raw);
-            return RR_I18N_STRINGS[parsed.language] ? parsed.language : 'en';
+            return normalizeI18nLanguage(parsed.language);
         } catch (e) {
             return 'en';
         }

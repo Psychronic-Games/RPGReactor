@@ -72,6 +72,98 @@ class DatabaseAnimationEditor {
         return Number.isFinite(value) ? value : fallback;
     }
 
+    static isSpriteAnimation(animation) {
+        return !!animation && Array.isArray(animation.frames);
+    }
+
+    static normalizeFlashColor(color) {
+        return [0, 1, 2, 3].map(index => Number.isFinite(color?.[index]) ? color[index] : 0);
+    }
+
+    static convertAnimationFormat(animation, newType) {
+        if (newType === 'effekseer') {
+            const timings = Array.isArray(animation.timings) ? animation.timings : [];
+            animation.soundTimings = timings
+                .filter(timing => timing.se?.name)
+                .map(timing => ({
+                    frame: Number.isFinite(timing.frame) ? timing.frame : 0,
+                    se: timing.se
+                }));
+            animation.flashTimings = timings
+                .filter(timing => Number.isFinite(timing.flashScope) && timing.flashScope !== 0)
+                .map(timing => ({
+                    frame: Number.isFinite(timing.frame) ? timing.frame : 0,
+                    color: DatabaseAnimationEditor.normalizeFlashColor(timing.flashColor),
+                    duration: Number.isFinite(timing.flashDuration) ? timing.flashDuration : 0
+                }));
+
+            delete animation.animation1Name;
+            delete animation.animation1Hue;
+            delete animation.animation2Name;
+            delete animation.animation2Hue;
+            delete animation.frames;
+            delete animation.position;
+            delete animation.timings;
+
+            animation.effectName = '';
+            animation.displayType = 0;
+            animation.scale = 100;
+            animation.speed = 100;
+            animation.rotation = { x: 0, y: 0, z: 0 };
+            animation.offsetX = 0;
+            animation.offsetY = 0;
+            return;
+        }
+
+        const timingsMap = new Map();
+        const ensureTiming = frame => {
+            const safeFrame = Number.isFinite(frame) ? frame : 0;
+            if (!timingsMap.has(safeFrame)) {
+                timingsMap.set(safeFrame, {
+                    frame: safeFrame,
+                    se: { name: '', pan: 0, pitch: 100, volume: 90 },
+                    flashScope: 0,
+                    flashColor: [0, 0, 0, 0],
+                    flashDuration: 0
+                });
+            }
+            return timingsMap.get(safeFrame);
+        };
+
+        (animation.soundTimings || []).forEach(timing => {
+            ensureTiming(timing.frame).se = timing.se || { name: '', pan: 0, pitch: 100, volume: 90 };
+        });
+        (animation.flashTimings || []).forEach(timing => {
+            const combined = ensureTiming(timing.frame);
+            // MZ flash timings always target battlers, so MV's closest scope is 1.
+            combined.flashScope = 1;
+            combined.flashColor = DatabaseAnimationEditor.normalizeFlashColor(timing.color);
+            combined.flashDuration = Number.isFinite(timing.duration) ? timing.duration : 0;
+        });
+
+        delete animation.effectName;
+        delete animation.displayType;
+        delete animation.scale;
+        delete animation.speed;
+        delete animation.rotation;
+        delete animation.offsetX;
+        delete animation.offsetY;
+        delete animation.soundTimings;
+        delete animation.flashTimings;
+
+        animation.animation1Name = '';
+        animation.animation1Hue = 0;
+        animation.animation2Name = '';
+        animation.animation2Hue = 0;
+        animation.position = 1;
+        animation.frames = [[]];
+        animation.timings = Array.from(timingsMap.values()).sort((a, b) => a.frame - b.frame);
+    }
+
+    static canAddMVCell(frame) {
+        return Array.isArray(frame) && frame.length < 16;
+    }
+
     constructor(databaseManager, projectManager, commonUI, parentEditor) {
         this.databaseManager = databaseManager;
         this.projectManager = projectManager;
@@ -135,8 +227,8 @@ class DatabaseAnimationEditor {
         container.innerHTML = '';
 
         // Determine animation type
-        const isEffekseer = animation.effectName !== undefined;
-        const isSpriteAnimation = animation.animation1Name !== undefined && animation.animation1Name !== '';
+        const isSpriteAnimation = DatabaseAnimationEditor.isSpriteAnimation(animation);
+        const isEffekseer = !isSpriteAnimation && animation.effectName !== undefined;
 
         const html = `
             <style>
@@ -617,7 +709,7 @@ class DatabaseAnimationEditor {
         this.populateTimingsList(animation);
 
         // Set up animation playback for sprite-based animations
-        if (isSpriteAnimation && animation.frames && animation.frames.length > 0) {
+        if (isSpriteAnimation) {
             this.setupSpriteAnimationPlayback(animation);
         }
 
@@ -636,106 +728,8 @@ class DatabaseAnimationEditor {
         // and ignore <option style=""> attributes).
         const typeSelector = document.getElementById('animation-type-selector');
         const triggerTypeChange = (newType) => {
-
-                if (newType === 'effekseer') {
-                    // Convert to Effekseer animation
-                    delete animation.animation1Name;
-                    delete animation.animation1Hue;
-                    delete animation.animation2Name;
-                    delete animation.animation2Hue;
-                    delete animation.frames;
-                    delete animation.position;
-
-                    // Initialize Effekseer properties
-                    animation.effectName = '';
-                    animation.displayType = 0;
-                    animation.scale = 100;
-                    animation.speed = 100;
-                    animation.rotation = { x: 0, y: 0, z: 0 };
-                    animation.offsetX = 0;
-                    animation.offsetY = 0;
-
-                    // Convert timings to Effekseer format
-                    if (animation.timings && animation.timings.length > 0) {
-                        animation.soundTimings = animation.timings
-                            .filter(t => t.se && t.se.name)
-                            .map(t => ({ frame: t.frame, se: t.se }));
-                        animation.flashTimings = animation.timings
-                            .filter(t => t.flashScope !== 0)
-                            .map(t => ({
-                                frame: t.frame,
-                                flashScope: t.flashScope,
-                                flashColor: t.flashColor,
-                                flashDuration: t.flashDuration
-                            }));
-                        delete animation.timings;
-                    } else {
-                        animation.soundTimings = [];
-                        animation.flashTimings = [];
-                    }
-                } else if (newType === 'sprite') {
-                    // Convert to Sprite-based animation
-                    delete animation.effectName;
-                    delete animation.displayType;
-                    delete animation.scale;
-                    delete animation.speed;
-                    delete animation.rotation;
-                    delete animation.offsetX;
-                    delete animation.offsetY;
-
-                    // Initialize sprite properties
-                    animation.animation1Name = '';
-                    animation.animation1Hue = 0;
-                    animation.animation2Name = '';
-                    animation.animation2Hue = 0;
-                    animation.position = 1; // Center
-                    animation.frames = [];
-
-                    // Convert timings to sprite format
-                    if (animation.soundTimings || animation.flashTimings) {
-                        const timingsMap = new Map();
-
-                        // Merge sound and flash timings
-                        (animation.soundTimings || []).forEach(st => {
-                            if (!timingsMap.has(st.frame)) {
-                                timingsMap.set(st.frame, {
-                                    frame: st.frame,
-                                    se: st.se,
-                                    flashScope: 0,
-                                    flashColor: [0, 0, 0, 0],
-                                    flashDuration: 0
-                                });
-                            } else {
-                                timingsMap.get(st.frame).se = st.se;
-                            }
-                        });
-
-                        (animation.flashTimings || []).forEach(ft => {
-                            if (!timingsMap.has(ft.frame)) {
-                                timingsMap.set(ft.frame, {
-                                    frame: ft.frame,
-                                    se: { name: '', pan: 0, pitch: 100, volume: 90 },
-                                    flashScope: ft.flashScope,
-                                    flashColor: ft.flashColor,
-                                    flashDuration: ft.flashDuration
-                                });
-                            } else {
-                                const timing = timingsMap.get(ft.frame);
-                                timing.flashScope = ft.flashScope;
-                                timing.flashColor = ft.flashColor;
-                                timing.flashDuration = ft.flashDuration;
-                            }
-                        });
-
-                        animation.timings = Array.from(timingsMap.values());
-                        delete animation.soundTimings;
-                        delete animation.flashTimings;
-                    } else {
-                        animation.timings = [];
-                    }
-                }
-
-                // Reload the animation detail view
+                DatabaseAnimationEditor.convertAnimationFormat(animation, newType);
+                this.databaseManager?.updateAnimation?.(animation.id, animation);
                 this.showAnimationDetail(container, animation);
         };
 
@@ -1133,8 +1127,8 @@ class DatabaseAnimationEditor {
         timingsList.style.outline = 'none';
 
         // Determine animation type
-        const isEffekseer = animation.effectName !== undefined;
-        const isSpriteAnimation = animation.animation1Name !== undefined && animation.animation1Name !== '';
+        const isSpriteAnimation = DatabaseAnimationEditor.isSpriteAnimation(animation);
+        const isEffekseer = !isSpriteAnimation && animation.effectName !== undefined;
 
         // Collect all timings
         let timingsData = [];
@@ -1340,8 +1334,8 @@ class DatabaseAnimationEditor {
 
     // Helper: returns the merged timings array (the same view populateTimingsList renders)
     _collectMergedTimings(animation) {
-        const isEffekseer = animation.effectName !== undefined;
-        const isSpriteAnimation = animation.animation1Name !== undefined && animation.animation1Name !== '';
+        const isSpriteAnimation = DatabaseAnimationEditor.isSpriteAnimation(animation);
+        const isEffekseer = !isSpriteAnimation && animation.effectName !== undefined;
         if (isSpriteAnimation && animation.timings && animation.timings.length > 0) {
             return animation.timings.map(t => ({ ...t }));
         }
@@ -1365,7 +1359,7 @@ class DatabaseAnimationEditor {
     // For sprite-based: pushes to animation.timings. For Effekseer: splits into
     // soundTimings + flashTimings. Used by Ctrl+V paste.
     _appendTiming(animation, timing) {
-        const isEffekseer = animation.effectName !== undefined;
+        const isEffekseer = !DatabaseAnimationEditor.isSpriteAnimation(animation);
         if (isEffekseer) {
             if (!animation.soundTimings) animation.soundTimings = [];
             if (!animation.flashTimings) animation.flashTimings = [];
@@ -1390,8 +1384,8 @@ class DatabaseAnimationEditor {
     editTiming(animation, index) {
         const tt = text => window.I18n ? window.I18n.tText(text) : text;
         // Get the timing data
-        const isEffekseer = animation.effectName !== undefined;
-        const isSpriteAnimation = animation.animation1Name !== undefined && animation.animation1Name !== '';
+        const isSpriteAnimation = DatabaseAnimationEditor.isSpriteAnimation(animation);
+        const isEffekseer = !isSpriteAnimation && animation.effectName !== undefined;
 
         let timingData;
         let timingsData = [];
@@ -1485,7 +1479,7 @@ class DatabaseAnimationEditor {
     }
 
     removeTiming(animation, index) {
-        const isEffekseer = animation.effectName !== undefined;
+        const isEffekseer = !DatabaseAnimationEditor.isSpriteAnimation(animation);
 
         if (isEffekseer) {
             // For Effekseer, rebuild the timings map to find which frame to remove
@@ -1726,7 +1720,7 @@ class DatabaseAnimationEditor {
             const editIndex = parseInt(saveBtn.dataset.editIndex);
 
             // Determine animation type
-            const isEffekseer = animation.effectName !== undefined;
+            const isEffekseer = !DatabaseAnimationEditor.isSpriteAnimation(animation);
 
             if (isEditMode) {
                 // Remove the old timing first
@@ -1804,6 +1798,7 @@ class DatabaseAnimationEditor {
             }
 
             // Refresh the timings list
+            this.databaseManager?.updateAnimation?.(animation.id, animation);
             this.populateTimingsList(animation);
 
             console.log(isEditMode ? 'Updated timing:' : 'Added timing:', { frame, seName, flashType, color: [red, green, blue, intensity], duration });
@@ -2082,7 +2077,7 @@ class DatabaseAnimationEditor {
                     <!-- Body -->
                     <div style="padding:18px 20px; overflow-y:auto; display:flex; flex-direction:column; gap:14px;">
                         <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
-                            ${fieldRow(tt('Tileset Frame'), `<input type="number" id="cell-pattern" value="${pattern}" min="0" max="199" style="${inputBase}" ${inputFocus}>`)}
+                            ${fieldRow(tt('Tileset Frame'), `<input type="number" id="cell-pattern" value="${pattern}" min="-1" max="199" style="${inputBase}" ${inputFocus}>`)}
                             ${fieldRow(tt('Scale (%)'), `<input type="number" id="cell-scale" value="${scale}" min="1" max="1000" style="${inputBase}" ${inputFocus}>`)}
                             ${fieldRow('X', `<input type="number" id="cell-x" value="${x}" style="${inputBase}" ${inputFocus}>`)}
                             ${fieldRow('Y', `<input type="number" id="cell-y" value="${y}" style="${inputBase}" ${inputFocus}>`)}
@@ -2143,7 +2138,7 @@ class DatabaseAnimationEditor {
                 return Number.isFinite(parsed) ? parsed : fallback;
             };
             const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
-            const newPattern = clamp(intOr('cell-pattern', 0), 0, 199);
+            const newPattern = clamp(intOr('cell-pattern', pattern), -1, 199);
             const newX = intOr('cell-x', 0);
             const newY = intOr('cell-y', 0);
             const newScale = clamp(intOr('cell-scale', 100), 1, 1000);
@@ -2458,10 +2453,13 @@ class DatabaseAnimationEditor {
 
                 // Get current frame from animation playback
                 const frameIndex = window.currentAnimationFrameIndex || 0;
+                const frame = animation.frames[frameIndex];
+                if (!DatabaseAnimationEditor.canAddMVCell(frame)) return;
 
                 // Add new cell at center with this pattern
                 const newCell = [pattern, 0, 0, 100, 0, 0, 255, 0];
-                animation.frames[frameIndex].push(newCell);
+                frame.push(newCell);
+                this.databaseManager?.updateAnimation?.(animation.id, animation);
 
                 // Trigger re-render of main preview
                 if (window.currentAnimationRenderFrame) {
@@ -2510,10 +2508,13 @@ class DatabaseAnimationEditor {
 
                             // Get current frame from animation playback
                             const frameIndex = window.currentAnimationFrameIndex || 0;
+                            const frame = animation.frames[frameIndex];
+                            if (!DatabaseAnimationEditor.canAddMVCell(frame)) return;
 
                             // Add new cell at drop position
                             const newCell = [draggedPattern, relativeX, relativeY, 100, 0, 0, 255, 0];
-                            animation.frames[frameIndex].push(newCell);
+                            frame.push(newCell);
+                            this.databaseManager?.updateAnimation?.(animation.id, animation);
 
                             // Trigger re-render of main preview
                             if (window.currentAnimationRenderFrame) {
@@ -2648,8 +2649,9 @@ class DatabaseAnimationEditor {
             const centerY = canvas.height / 2;
 
             // Each cell is [pattern, x, y, scale, rotation, mirror, opacity, blendMode]
-            frameData.forEach((cell, index) => {
+            frameData.slice(0, 16).forEach((cell, index) => {
                 const [pattern, x, y, scale, rotation, mirror, opacity, blendMode] = cell;
+                if (pattern < 0) return;
 
                 // Determine which sprite sheet to use (pattern 0-99 = sheet 1, 100+ = sheet 2)
                 const sheet = pattern < 100 ? spriteSheet1 : spriteSheet2;
@@ -2806,10 +2808,11 @@ class DatabaseAnimationEditor {
             let boundingBoxCells = [];
 
             // Check all cells
-            for (let i = frameData.length - 1; i >= 0; i--) {
+            for (let i = Math.min(frameData.length, 16) - 1; i >= 0; i--) {
                 if (i === skipIndex) continue;
 
                 const [pattern, x, y, scale, rotation, mirror, opacity, blendMode] = frameData[i];
+                if (pattern < 0) continue;
 
                 const spriteX = centerX + x;
                 const spriteY = centerY + y;
@@ -2866,12 +2869,12 @@ class DatabaseAnimationEditor {
             `;
 
             const menuItems = [
-                { label: tt('New'), action: 'new', enabled: cellIndex !== -1 },
+                { label: tt('New'), action: 'new', enabled: cellIndex !== -1 && DatabaseAnimationEditor.canAddMVCell(animation.frames[currentFrame]) },
                 { label: tt('Edit'), action: 'edit', enabled: cellIndex !== -1 },
                 { separator: true },
                 { label: tt('Cut'), action: 'cut', enabled: cellIndex !== -1 },
                 { label: tt('Copy'), action: 'copy', enabled: cellIndex !== -1 },
-                { label: tt('Paste'), action: 'paste', enabled: copiedCell !== null || cutCell !== null },
+                { label: tt('Paste'), action: 'paste', enabled: (copiedCell !== null || cutCell !== null) && DatabaseAnimationEditor.canAddMVCell(animation.frames[currentFrame]) },
                 { label: tt('Delete'), action: 'delete', enabled: cellIndex !== -1 },
                 { separator: true },
                 { label: tt('Undo'), action: 'undo', enabled: undoStack.length > 0 },
@@ -2936,7 +2939,7 @@ class DatabaseAnimationEditor {
 
             switch (action) {
                 case 'new':
-                    if (cellIndex !== -1) {
+                    if (cellIndex !== -1 && DatabaseAnimationEditor.canAddMVCell(frameData)) {
                         saveState();
                         const cell = frameData[cellIndex];
                         const newCell = JSON.parse(JSON.stringify(cell));
@@ -2945,6 +2948,7 @@ class DatabaseAnimationEditor {
                         newCell[2] += 16; // y offset
                         frameData.push(newCell);
                         selectedCellIndex = frameData.length - 1; // Select the newly created cell
+                        persistAnimation();
                         renderFrame(currentFrame);
                     }
                     break;
@@ -2974,6 +2978,7 @@ class DatabaseAnimationEditor {
                     break;
 
                 case 'paste':
+                    if (!DatabaseAnimationEditor.canAddMVCell(frameData)) break;
                     saveState();
                     if (cutCell) {
                         frameData.push(cutCell);
@@ -2981,6 +2986,7 @@ class DatabaseAnimationEditor {
                     } else if (copiedCell) {
                         frameData.push(JSON.parse(JSON.stringify(copiedCell)));
                     }
+                    persistAnimation();
                     renderFrame(currentFrame);
                     break;
 
@@ -3076,7 +3082,7 @@ class DatabaseAnimationEditor {
 
         // Play animation
         const play = () => {
-            if (animationInterval) return; // Already playing
+            if (animationInterval || animation.frames.length === 0) return;
 
             currentFrame = 0;
             // 15fps MV cadence paced by rAF (setInterval drifts and fires
@@ -3267,7 +3273,7 @@ class DatabaseAnimationEditor {
             addFrameBtn.addEventListener('click', () => {
                 // Copy current frame or create empty frame
                 const newFrame = currentFrame < animation.frames.length
-                    ? JSON.parse(JSON.stringify(animation.frames[currentFrame]))
+                    ? JSON.parse(JSON.stringify(animation.frames[currentFrame].slice(0, 16)))
                     : []; // Empty frame
 
                 animation.frames.push(newFrame);
@@ -3450,7 +3456,7 @@ class DatabaseAnimationEditor {
                 e.stopPropagation();
                 const insertAt = currentFrame + 1;
                 frameClipboard.forEach((f, i) => {
-                    animation.frames.splice(insertAt + i, 0, JSON.parse(JSON.stringify(f)));
+                    animation.frames.splice(insertAt + i, 0, JSON.parse(JSON.stringify(f.slice(0, 16))));
                 });
                 selectedFrameIndices.clear();
                 for (let i = 0; i < frameClipboard.length; i++) selectedFrameIndices.add(insertAt + i);
@@ -3478,15 +3484,8 @@ class DatabaseAnimationEditor {
 
         // Load sprite sheets and render first frame
         loadSpriteSheets().then(() => {
-            if (spriteSheet1 || spriteSheet2) {
-                populateFrameList();
-                renderFrame(0);
-            } else {
-                ctx.fillStyle = ThemeColors.resolve('--color-text-muted', '#999999');
-                ctx.font = '14px Arial';
-                ctx.textAlign = 'center';
-                ctx.fillText(tt('Failed to load animation sprites'), canvas.width / 2, canvas.height / 2);
-            }
+            populateFrameList();
+            renderFrame(0);
         });
 
         // Initial state

@@ -290,6 +290,35 @@ test('F5 confirms before performing an uncached application reload', async () =>
     assert.equal(await saveDecision, 'save');
 });
 
+test('themed alert and confirm use editor modal chrome instead of window dialogs', async () => {
+    const harness = loadUIManager();
+    const manager = new harness.UIManager({});
+
+    const alertDone = manager.showAlert('Install Reactor Runtime', 'Open a project first.');
+    const alertOverlay = harness.getElementById('rr-themed-dialog');
+    assert.equal(alertOverlay.className, 'rr-modal-overlay');
+    assert.equal(harness.getElementById('rr-themed-dialog-title').textContent, 'Install Reactor Runtime');
+    assert.equal(harness.getElementById('rr-themed-dialog-ok').className, 'rr-button-primary');
+    assert.equal(harness.getElementById('rr-themed-dialog-cancel'), null);
+    harness.getElementById('rr-themed-dialog-ok').dispatch('click');
+    assert.equal(await alertDone, true);
+    assert.equal(harness.getElementById('rr-themed-dialog'), null);
+
+    const confirmDone = manager.showConfirm('Install Reactor Runtime', 'Install into js?', 'Install', 'Cancel');
+    assert.equal(harness.getElementById('rr-themed-dialog-ok').textContent, 'Install');
+    assert.equal(harness.getElementById('rr-themed-dialog-cancel').className, 'rr-button-danger');
+    harness.getElementById('rr-themed-dialog-cancel').dispatch('click');
+    assert.equal(await confirmDone, false);
+
+    const acceptDone = manager.showConfirm('Plugin Manifest', 'Rebuild?', 'Rebuild', 'Keep Current');
+    harness.getElementById('rr-themed-dialog-ok').dispatch('click');
+    assert.equal(await acceptDone, true);
+
+    const escapeDone = manager.showConfirm('Install Reactor Runtime', 'Install?', 'Install', 'Cancel');
+    harness.dispatchDocumentKey('Escape');
+    assert.equal(await escapeDone, false);
+});
+
 test('F11 toggles native fullscreen without repeating while held', () => {
     const harness = loadUIManager();
     const manager = new harness.UIManager({});

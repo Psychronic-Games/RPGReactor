@@ -32,6 +32,7 @@ class DatabaseEnemyEditor {
 
         // Top row: General + Parameters + Drop Items side by side
         const topRow = document.createElement('div');
+        topRow.className = 'database-enemy-top-row';
         topRow.style.cssText = 'display: flex; gap: 16px; margin-bottom: 16px;';
 
         // General Settings
@@ -182,6 +183,8 @@ class DatabaseEnemyEditor {
         const actionsSection = document.createElement('div');
         actionsSection.className = 'database-section';
         actionsSection.style.marginBottom = '16px';
+        actionsSection.setAttribute('tabindex', '0');
+        actionsSection.style.outline = 'none';
         actionsSection.innerHTML = `
             <div class="database-section-header">${tt('Action Patterns')}</div>
             <div class="database-section-content">
@@ -198,6 +201,11 @@ class DatabaseEnemyEditor {
                         ${this.buildActionsHTML(enemy)}
                     </tbody>
                 </table>
+                <div class="action-action-buttons" style="display: flex; gap: 6px; margin-top: 8px;">
+                    <button class="action-btn-add rr-btn-chip">${tt('Add')}</button>
+                    <button class="action-btn-edit rr-btn-chip" disabled>${tt('Edit')}</button>
+                    <button class="action-btn-delete rr-btn-chip" disabled>${tt('Delete')}</button>
+                </div>
             </div>
         `;
         wrapper.appendChild(actionsSection);
@@ -208,11 +216,15 @@ class DatabaseEnemyEditor {
             if (actionsTable) {
                 this.setupActionInteraction(actionsTable, enemy);
                 this.setupActionsContextMenu(actionsTable, enemy);
+                this.setupActionButtons(actionsSection, actionsTable, enemy);
+                this.setupActionKeyboardShortcuts(actionsSection, actionsTable, enemy);
+                this.updateActionButtonStates(actionsSection, actionsTable);
             }
         }, 0);
 
         // Traits + Note row (side by side)
         const traitsNoteRow = document.createElement('div');
+        traitsNoteRow.className = 'database-enemy-bottom-row';
         traitsNoteRow.style.cssText = 'display: flex; gap: 16px;';
 
         // Traits Section
@@ -430,9 +442,9 @@ class DatabaseEnemyEditor {
             if (action.conditionType === 1) {
                 condDesc = `${tt('Turn')} ${action.conditionParam1}a + ${action.conditionParam2}b`;
             } else if (action.conditionType === 2) {
-                condDesc = `${tt('HP')} ${action.conditionParam1}% ~ ${action.conditionParam2}%`;
+                condDesc = `${tt('HP')} ${this.formatConditionPercent(action.conditionParam1)}% ~ ${this.formatConditionPercent(action.conditionParam2)}%`;
             } else if (action.conditionType === 3) {
-                condDesc = `${tt('MP')} ${action.conditionParam1}% ~ ${action.conditionParam2}%`;
+                condDesc = `${tt('MP')} ${this.formatConditionPercent(action.conditionParam1)}% ~ ${this.formatConditionPercent(action.conditionParam2)}%`;
             } else if (action.conditionType === 4) {
                 const states = this.databaseManager.getStates() || [];
                 const state = states.find(s => s && s.id === action.conditionParam1);
@@ -468,6 +480,8 @@ class DatabaseEnemyEditor {
                 contentCells.forEach(cell => {
                     cell.style.setProperty('background-color', 'var(--color-bg-panel)', 'important');
                 });
+                table.closest('.database-section')?.focus();
+                this.updateActionButtonStates(table.closest('.database-section'), table);
             });
 
             row.addEventListener('mouseleave', () => {
@@ -503,6 +517,46 @@ class DatabaseEnemyEditor {
                 const actionIndex = parseInt(row.dataset.actionIndex);
                 this.editAction(enemy, actionIndex);
             });
+        });
+    }
+
+    formatConditionPercent(value) {
+        return Math.round((Number(value) || 0) * 10000) / 100;
+    }
+
+    setupActionButtons(section, table, enemy) {
+        section.querySelector('.action-btn-add').addEventListener('click', () => this.addAction(enemy));
+        section.querySelector('.action-btn-edit').addEventListener('click', () => {
+            const index = this.getSelectedActionIndex(table);
+            if (index !== null) this.editAction(enemy, index);
+        });
+        section.querySelector('.action-btn-delete').addEventListener('click', () => {
+            const index = this.getSelectedActionIndex(table);
+            if (index !== null) this.deleteAction(enemy, index);
+        });
+    }
+
+    getSelectedActionIndex(table) {
+        const selected = table.querySelector('.action-row.selected');
+        return selected ? parseInt(selected.dataset.actionIndex) : null;
+    }
+
+    updateActionButtonStates(section, table) {
+        if (!section) return;
+        const enabled = this.getSelectedActionIndex(table) !== null;
+        section.querySelector('.action-btn-edit').disabled = !enabled;
+        section.querySelector('.action-btn-delete').disabled = !enabled;
+    }
+
+    setupActionKeyboardShortcuts(section, table, enemy) {
+        section.addEventListener('keydown', event => {
+            if (event.target !== section) return;
+            const index = this.getSelectedActionIndex(table);
+            if (index === null || (event.key !== 'Enter' && event.key !== 'Delete')) return;
+            event.preventDefault();
+            event.stopPropagation();
+            if (event.key === 'Enter') this.editAction(enemy, index);
+            else this.deleteAction(enemy, index);
         });
     }
 
@@ -575,12 +629,9 @@ class DatabaseEnemyEditor {
     }
 
     addAction(enemy) {
-        if (!enemy.actions) enemy.actions = [];
-
-        const newAction = { skillId: 1, conditionType: 0, conditionParam1: 0, conditionParam2: 0, rating: 5 };
-        enemy.actions.push(newAction);
-        this.databaseManager.updateEnemy(enemy.id, enemy);
-        this.refreshEnemyDetail(enemy);
+        const firstSkill = (this.databaseManager.getSkills() || []).find(skill => skill && skill.id > 0);
+        const draft = { skillId: firstSkill?.id || 1, conditionType: 0, conditionParam1: 0, conditionParam2: 0, rating: 5 };
+        this.showActionEditorModal(enemy, -1, draft);
     }
 
     editAction(enemy, actionIndex) {
@@ -599,6 +650,7 @@ class DatabaseEnemyEditor {
 
     showActionEditorModal(enemy, actionIndex, action) {
         const tt = text => window.I18n ? window.I18n.tText(text) : text;
+        const draft = { ...action };
         const overlay = document.createElement('div');
         overlay.style.cssText = `
             position: fixed; top: 0; left: 0; right: 0; bottom: 0;
@@ -616,18 +668,18 @@ class DatabaseEnemyEditor {
         const skills = this.databaseManager.getSkills() || [];
         const skillOptions = skills
             .filter(s => s && s.id > 0)
-            .map(s => `<option value="${s.id}" ${s.id === action.skillId ? 'selected' : ''}>#${s.id} ${this.escapeHTML(s.name || '')}</option>`)
+            .map(s => `<option value="${s.id}" ${s.id === draft.skillId ? 'selected' : ''}>#${s.id} ${this.escapeHTML(s.name || '')}</option>`)
             .join('');
 
         const conditionTypes = ['Always', 'Turn', 'HP', 'MP', 'State', 'Party Level', 'Switch'];
         const conditionOptions = conditionTypes
-            .map((name, idx) => `<option value="${idx}" ${idx === action.conditionType ? 'selected' : ''}>${tt(name)}</option>`)
+            .map((name, idx) => `<option value="${idx}" ${idx === draft.conditionType ? 'selected' : ''}>${tt(name)}</option>`)
             .join('');
 
         const inputStyle = 'width: 100%; padding: 6px; background: var(--color-bg-menubar); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 3px; font-size: 12px; box-sizing: border-box;';
 
         modal.innerHTML = `
-            <h3 style="margin: 0 0 16px 0; color: var(--color-text-strong); font-size: 15px;">${tt('Edit Action Pattern')}</h3>
+            <h3 style="margin: 0 0 16px 0; color: var(--color-text-strong); font-size: 15px;">${tt(actionIndex >= 0 ? 'Edit Action Pattern' : 'Add Action Pattern')}</h3>
             <div style="display: flex; flex-direction: column; gap: 12px;">
                 <div>
                     <label class="database-field-label" style="display: block; margin-bottom: 4px;">${tt('Skill:')}</label>
@@ -640,16 +692,16 @@ class DatabaseEnemyEditor {
                 <div style="display: flex; gap: 12px;">
                     <div style="flex: 1;">
                         <label class="database-field-label" style="display: block; margin-bottom: 4px;">${tt('Param 1:')}</label>
-                        <input type="number" id="action-edit-param1" value="${action.conditionParam1 || 0}" style="${inputStyle}">
+                        <input type="number" id="action-edit-param1" value="${draft.conditionType === 2 || draft.conditionType === 3 ? this.formatConditionPercent(draft.conditionParam1) : draft.conditionParam1 || 0}" style="${inputStyle}">
                     </div>
                     <div style="flex: 1;">
                         <label class="database-field-label" style="display: block; margin-bottom: 4px;">${tt('Param 2:')}</label>
-                        <input type="number" id="action-edit-param2" value="${action.conditionParam2 || 0}" style="${inputStyle}">
+                        <input type="number" id="action-edit-param2" value="${draft.conditionType === 2 || draft.conditionType === 3 ? this.formatConditionPercent(draft.conditionParam2) : draft.conditionParam2 || 0}" style="${inputStyle}">
                     </div>
                 </div>
                 <div>
                     <label class="database-field-label" style="display: block; margin-bottom: 4px;">${tt('Rating (1-10):')}</label>
-                    <input type="number" id="action-edit-rating" value="${action.rating || 5}" min="1" max="10" style="${inputStyle}">
+                    <input type="number" id="action-edit-rating" value="${draft.rating || 5}" min="1" max="10" style="${inputStyle}">
                 </div>
             </div>
         `;
@@ -666,15 +718,19 @@ class DatabaseEnemyEditor {
         okBtn.textContent = tt('OK');
         okBtn.style.cssText = 'padding: 8px 16px; background: var(--color-accent); border: 1px solid var(--color-accent); color: var(--color-bg-deep); border-radius: 4px; cursor: pointer; font-weight: bold;';
         okBtn.addEventListener('click', () => {
-            action.skillId = parseInt(document.getElementById('action-edit-skill').value) || 1;
-            action.conditionType = parseInt(document.getElementById('action-edit-condType').value) || 0;
-            // HP/MP/state-chance condition params are fractional rates
-            // (0.3 = 30%); parseInt collapsed them to 0 on every OK click.
-            action.conditionParam1 = parseFloat(document.getElementById('action-edit-param1').value) || 0;
-            action.conditionParam2 = parseFloat(document.getElementById('action-edit-param2').value) || 0;
-            action.rating = Math.max(1, Math.min(10, parseInt(document.getElementById('action-edit-rating').value) || 5));
+            draft.skillId = parseInt(modal.querySelector('#action-edit-skill').value) || 1;
+            draft.conditionType = parseInt(modal.querySelector('#action-edit-condType').value) || 0;
+            draft.conditionParam1 = parseFloat(modal.querySelector('#action-edit-param1').value) || 0;
+            draft.conditionParam2 = parseFloat(modal.querySelector('#action-edit-param2').value) || 0;
+            if (draft.conditionType === 2 || draft.conditionType === 3) {
+                draft.conditionParam1 /= 100;
+                draft.conditionParam2 /= 100;
+            }
+            draft.rating = Math.max(1, Math.min(10, parseInt(modal.querySelector('#action-edit-rating').value) || 5));
 
-            enemy.actions[actionIndex] = action;
+            if (!enemy.actions) enemy.actions = [];
+            if (actionIndex >= 0) enemy.actions[actionIndex] = draft;
+            else enemy.actions.push(draft);
             this.databaseManager.updateEnemy(enemy.id, enemy);
             overlay.remove();
             this.refreshEnemyDetail(enemy);

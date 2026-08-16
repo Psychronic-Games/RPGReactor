@@ -4,6 +4,25 @@ All notable changes to RPG Reactor will be documented in this file.
 
 This root changelog summarizes public release progress for GitHub; larger releases group their fixes by theme. The detailed editor changelog lives at [`editor/CHANGELOG.md`](editor/CHANGELOG.md).
 
+## [Unreleased - 0.98.2]
+
+### Added
+
+- **Events can carry a 3D model instead of a walking sheet.** The Event editor's Image section has a 3D checkbox that opens a folder picker under `3d/<name>/source` (GLB, OBJ, FBX, STL, USDZ, 3MF, DXF). Pose, size in tiles, and Front/Back/Left/Right marks are authored in a live preview and stored in `Map###.r3d.json`, not in the event note. In game the mesh follows the event, occupies every tile it covers, and other characters stand in front of or behind it by world depth. Demo Map001 event 22 ships a car.
+
+### Fixed
+
+- **Existing Reactor projects now receive the current runtime when they open.** Updating the editor previously left each project's private `js/reactor_*.js` files untouched, so a 0.98.1 editor could still playtest through 0.98.0's incomplete `filterArea` shader translation and report the same Pixelate errors. The runtime now carries an engine-version marker; opening an older Reactor project refreshes only engine-owned files while preserving its plugin configuration.
+- **Database row editing is visible instead of hidden behind right-click menus.** Classes can now add, edit, and delete learnable skills. Skills and Items expose buttons, double-click editing, and keyboard actions for Effects, while Enemies do the same for Action Patterns; adding an enemy action opens an editor before it changes the record, and HP/MP conditions display as percentages.
+- **Face sheets can contain more than two rows.** Actor previews and lists, actor selection, Show Text, and Change Actor Images retain RPG Maker's four 144px columns while deriving every available row from the image, so extended face sheets can select indexes beyond 7.
+- **MV-style animation records can be created and edited from a blank state.** Switching an animation to Sprite-based now creates a valid first frame with working sheet and frame controls, persists the format change, preserves imported hidden cells, enforces MV's 16-cell runtime limit, and converts flash timing fields without writing malformed data.
+- **Troop events open the real Plugin Command editor.** Plugin and command selection now works in Troop battle pages as it already did in map and Common Events, instead of falling through to a raw parameter dialog.
+- **Event creation and shortcuts are easier to discover.** Empty map cells still create events by double-click in Event mode, now with a more forgiving interval; Enter creates or edits at the outlined cell, context menus display their keyboard shortcuts, and event clipboard/history shortcuts accept Command on macOS as well as Ctrl. Conditional Branch labels stock MZ conditions separately from Reactor's additional input conditions without changing the command data.
+- **MZ-style Quick Event Creation is available from an empty map cell.** The Event-mode context menu can generate Transfer, Door, Treasure, and Inn events. Transfers use the visual map picker; doors and treasure choose project graphics and animate through stock movement routes; treasure supports gold, items, weapons, and armors with an opened self-switch page; and inns check and deduct the configured price before fading and recovering the party. Cancel changes nothing, occupied cells are refused, and creation is one Undo action.
+- **Simplified Chinese terminology and database layouts received a correctness pass.** Curated translations now take precedence over the machine-assisted catalog, known mistranslations such as Class, Critical, MP, Common Event, Comment, and Count are corrected, Chinese locale aliases are recognized, and database cards, translated labels, Class curves, Actor panels, and Enemy panels reflow from the width they actually receive instead of clipping inside a nominally wide window.
+- **Plugin parameters that put `@param`, `@text`, and `@desc` on one line keep their real names.** MZ3D's spacer rows were shown as `spacer|graphics @text @desc` because the rest of the line was treated as the parameter name. Each annotation on the line is now read separately, and those spacer rows render as a divider instead of an empty field.
+- **MZ3D character models no longer draw the 2D walking sprite on top of the model.** The plugin hides the tilemap and renders the world in babylon.js; PIXI 8 could still collect the tilemap's character sprites, so a model and its sheet appeared together (four eyes, doubled faces). Hiding the tilemap now updates the PIXI 8 display status of its subtree, and character sprites stay hidden while their parent is hidden.
+
 ## [0.98.1] - 2026-08-11
 
 ### Fixed
