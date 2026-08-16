@@ -1536,12 +1536,13 @@ class DatabaseAnimationEditor {
         const tt = text => window.I18n ? window.I18n.tText(text) : text;
         // Create modal HTML
         const modalHTML = `
-            <div id="timing-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); z-index: 10000; align-items: center; justify-content: center;">
-                <div style="background: var(--color-bg-surface); border: 1px solid var(--color-border); border-radius: 8px; width: 600px; max-height: 80vh; overflow-y: auto; padding: 20px;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                        <div style="font-size: 16px; font-weight: 600; color: var(--color-text-strong);">${tt('SE and Flash Timing')}</div>
-                        <button id="timing-modal-close" style="background: none; border: none; color: var(--color-text-muted); font-size: 24px; cursor: pointer;">×</button>
+            <div id="timing-modal" class="rr-modal-overlay" style="display: none;">
+                <div class="rr-modal" style="width: 600px; max-width: 94vw;">
+                    <div class="rr-modal-header">
+                        <div class="rr-modal-title">${tt('SE and Flash Timing')}</div>
+                        <button id="timing-modal-close" class="rr-modal-close">&times;</button>
                     </div>
+                    <div class="rr-modal-body">
 
                     <!-- Frame and SE Section -->
                     <div style="display: flex; gap: 16px; margin-bottom: 20px;">
@@ -1553,7 +1554,12 @@ class DatabaseAnimationEditor {
                             <div style="font-size: 12px; color: var(--color-text-muted); margin-bottom: 6px;">${tt('SE:')}</div>
                             <div style="display: flex; gap: 8px; margin-bottom: 8px;">
                                 <input type="text" id="timing-se-name" readonly value="${tt('None')}" style="flex: 1; padding: 8px; background: var(--color-bg-input-alt); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 3px; font-size: 12px;">
-                                <button id="timing-se-pick" style="padding: 8px 12px; background: var(--color-success); border: 1px solid var(--color-success-border); color: var(--color-text-strong); border-radius: 3px; cursor: pointer; font-size: 11px;">${tt('Pick SE')}</button>
+                                <button id="timing-se-pick" class="rr-btn-secondary" style="display: inline-flex; align-items: center; gap: 6px; font-size: 11px;">
+                                    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                                        <path d="M2 6h3l4-3.5v11L5 10H2z" fill="currentColor"/>
+                                        <path d="M11 5.5a3.4 3.4 0 0 1 0 5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+                                        <path d="M13 3.5a6.2 6.2 0 0 1 0 9" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+                                    </svg>${tt('Pick SE')}</button>
                                 <button id="timing-se-clear" style="padding: 8px 12px; background: var(--color-bg-button); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 3px; cursor: pointer; font-size: 11px;">${tt('Clear')}</button>
                             </div>
                             <div style="display: flex; gap: 12px; align-items: center;">
@@ -1573,7 +1579,7 @@ class DatabaseAnimationEditor {
                     </div>
 
                     <!-- Flash Section -->
-                    <div style="background: var(--color-bg-panel); border: 1px solid var(--color-border); border-radius: 3px; padding: 16px; margin-bottom: 20px;">
+                    <div style="background: var(--color-bg-panel); border: 1px solid var(--color-border); border-radius: 3px; padding: 16px;">
                         <div style="font-size: 13px; font-weight: 600; color: var(--color-text); margin-bottom: 12px;">${tt('Flash')}</div>
 
                         <!-- Flash Type Radio Buttons -->
@@ -1618,10 +1624,10 @@ class DatabaseAnimationEditor {
                         </div>
                     </div>
 
-                    <!-- Action Buttons -->
-                    <div style="display: flex; gap: 12px; justify-content: flex-end;">
+                    </div>
+                    <div class="rr-modal-footer">
                         <button id="timing-modal-cancel" class="rr-btn-secondary">${tt('Cancel')}</button>
-                        <button id="timing-modal-save" style="padding: 8px 16px; background: var(--color-accent); border: 1px solid var(--color-accent); color: var(--color-bg-deep); border-radius: 3px; cursor: pointer; font-size: 12px; font-weight: bold;">${tt('Add Timing')}</button>
+                        <button id="timing-modal-save" class="rr-button-primary">${tt('Add Timing')}</button>
                     </div>
                 </div>
             </div>
