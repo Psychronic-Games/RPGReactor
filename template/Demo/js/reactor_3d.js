@@ -6245,6 +6245,40 @@ Reactor3D.eventModelInterpolatedMark = function(faces, direction) {
     return a || b || faces.front || null;
 };
 
+/**
+ * The yaw the mesh actually stands at in the world: the authored spec
+ * rotation plus the front-mark aim, exactly as `applyEventModelPose`
+ * computes it. The collision footprint must rotate by THIS — rotating by
+ * the facing alone left a model posed with an authored yaw (a motorcycle
+ * turned 163 degrees in the picker) colliding crosswise to its visible
+ * body, so a character clipped into the metal from one side and was
+ * stopped short of it from another.
+ */
+Reactor3D.eventModelWorldYaw = function(character, spec, direction) {
+    spec = spec || this.characterModelSpec(character);
+    if (!spec) return 0;
+    const dir = direction || this.characterModelDir8(character);
+    const target = this.dir8Yaw(dir);
+    const yaw = spec.yaw || 0;
+    const pitch = spec.pitch || 0;
+    const roll = spec.roll || 0;
+    const front = spec.faces && spec.faces.front;
+    if (!front) return target + yaw;
+    // The front mark through the spec's YXZ rotation, without THREE.
+    const cz = Math.cos(roll), sz = Math.sin(roll);
+    let x = front[0] * cz - front[1] * sz;
+    let y = front[0] * sz + front[1] * cz;
+    let z = front[2];
+    const cx = Math.cos(pitch), sx = Math.sin(pitch);
+    const y2 = y * cx - z * sx;
+    const z2 = y * sx + z * cx;
+    const cy = Math.cos(yaw), sy = Math.sin(yaw);
+    const wx = x * cy + z2 * sy;
+    const wz = -x * sy + z2 * cy;
+    if (wx * wx + wz * wz < 1e-8) return target + yaw;
+    return yaw + (target - Math.atan2(wx, wz));
+};
+
 Reactor3D.eventModelFootprint = function(character, spec, yaw) {
     spec = spec || this.characterModelSpec(character);
     const size = spec && spec.size > 0 ? spec.size : 2;
@@ -6259,7 +6293,7 @@ Reactor3D.eventModelFootprint = function(character, spec, yaw) {
         halfX = extent.x * scale / 2;
         halfZ = extent.z * scale / 2;
     }
-    if (yaw == null) yaw = this.characterModelYaw(character);
+    if (yaw == null) yaw = this.eventModelWorldYaw(character, spec);
     const cos = Math.abs(Math.cos(yaw));
     const sin = Math.abs(Math.sin(yaw));
     return {
@@ -6311,9 +6345,10 @@ Reactor3D.eventModelCanFace = function(character, direction) {
     // The mesh eases through every angle on the way to the new facing, so a
     // turn in place must clear the disc its corners sweep, not only the
     // destination rectangle. A half-turn sweeps it twice over.
-    const turning = this.dir8Yaw(direction) !== this.characterModelYaw(character);
+    const turning = this.dir8Yaw(direction) !== this.dir8Yaw(this.characterModelDir8(character));
     const blockedBy = (x, y) => {
-        const foot = this.eventModelFootprint(character, spec, this.dir8Yaw(direction));
+        const foot = this.eventModelFootprint(
+            character, spec, this.eventModelWorldYaw(character, spec, direction));
         if (this.eventModelContains(character, foot, x, y)) return true;
         return turning
             && this.eventModelSweepHits(character, spec, character._x, character._y, x, y);
@@ -6355,10 +6390,10 @@ Reactor3D.eventModelWouldOverlap = function(character, x, y, other, direction) {
     // the facing the glide will visually snap to. Testing only the current
     // one let a long vehicle rotate 90 degrees mid-step straight over a
     // standing character.
-    const yaws = [this.characterModelYaw(character)];
+    const yaws = [this.eventModelWorldYaw(character, spec)];
     let turning = false;
     if (direction) {
-        const moveYaw = this.dir8Yaw(direction);
+        const moveYaw = this.eventModelWorldYaw(character, spec, direction);
         if (moveYaw !== yaws[0]) {
             yaws.push(moveYaw);
             turning = true;

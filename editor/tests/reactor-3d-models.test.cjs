@@ -371,7 +371,8 @@ test('a moving step tests the footprint in both orientations', () => {
     const at = core3d.indexOf('Reactor3D.eventModelWouldOverlap = function(character, x, y, other, direction)');
     assert.ok(at >= 0, 'wouldOverlap accepts the movement direction');
     const body = core3d.slice(at, core3d.indexOf('\n};', at));
-    assert.match(body, /dir8Yaw\(direction\)/, 'the implied facing joins the yaw list');
+    assert.match(body, /eventModelWorldYaw\(character, spec, direction\)/,
+        'the implied facing joins the yaw list, at the mesh world yaw');
     assert.ok(core3d.includes('Reactor3D.eventModelWouldOverlapEvents = function'),
         'model events collide footprint-wide with other events');
 
@@ -573,6 +574,45 @@ test('an angled model collides as its rotated rectangle, not its box', () => {
         assert.equal(Reactor3D.eventModelContains(event, foot, 5, 8), false);
         // A plain box still tests as a box (older callers and stubs).
         assert.equal(Reactor3D.eventModelContains(event, { halfX: 2, halfZ: 2 }, 7, 5), true);
+    } finally {
+        Reactor3D._glbCache[key] = previousEntry;
+        if (previousMap === undefined) delete global.$dataMap;
+        else global.$dataMap = previousMap;
+    }
+});
+
+test('collision follows the mesh world yaw, not the facing alone', () => {
+    // A model posed with an authored yaw in the picker (the Demo motorcycle
+    // carries ~163 degrees) stands at spec-yaw-plus-front-aim, and rotating
+    // the collision by the facing alone left it crosswise to the visible
+    // body — a character clipped into the metal from one side and was
+    // stopped short of it from another.
+    const previousMap = global.$dataMap;
+    const event = {
+        _x: 5, _y: 5, _realX: 5, _realY: 5, _pageIndex: 0,
+        event: () => ({ id: 1 }), eventId: () => 1, direction: () => 2
+    };
+    // Front mark on local -X, like a bike modelled lying along X.
+    global.$dataMap = { reactor3d: { events: { 1: { 0: {
+        name: 'Bike', size: 4, yaw: 0, faces: { front: [-1, 0, 0] }
+    } } } } };
+    const spec = Reactor3D.characterModelSpec(event);
+    const key = Reactor3D.modelCacheKey(spec.name, spec.ext, spec.file);
+    const previousEntry = Reactor3D._glbCache[key];
+    Reactor3D._glbCache[key] = { template: { userData: { glbSize: { x: 4, y: 1, z: 1 } } } };
+    try {
+        // Facing down (+Z): the front aim turns local -X onto +Z, i.e. a
+        // +90-degree world yaw — the long local-X axis ends up north-south.
+        const yaw = Reactor3D.eventModelWorldYaw(event, spec, 2);
+        assert.equal(Number(Math.abs(yaw).toFixed(4)), Number((Math.PI / 2).toFixed(4)));
+        const foot = Reactor3D.eventModelFootprint(event, spec);
+        assert.equal(Reactor3D.eventModelContains(event, foot, 5, 7), true,
+            'long axis lies north-south, as the mesh does');
+        assert.equal(Reactor3D.eventModelContains(event, foot, 7, 5), false,
+            'and not east-west, as facing-only rotation had it');
+        // Without a front mark the facing plus authored yaw is all there is.
+        delete spec.faces;
+        assert.equal(Reactor3D.eventModelWorldYaw(event, spec, 2), 0);
     } finally {
         Reactor3D._glbCache[key] = previousEntry;
         if (previousMap === undefined) delete global.$dataMap;
