@@ -35,9 +35,9 @@ class Database3DEditor {
             <div style="display:flex;flex-direction:row;gap:0;height:100%;min-height:0;">
                 <div style="width:220px;flex:0 0 220px;display:flex;flex-direction:column;border-right:1px solid var(--color-border);min-height:0;">
                     <div style="padding:6px 10px;font-weight:bold;color:var(--color-text);border-bottom:1px solid var(--color-border);">${this._t('Models')}</div>
-                    <div style="padding:6px 8px;border-bottom:1px solid var(--color-border);">
+                    <div class="database-search-container" style="padding:8px;background-color:var(--color-bg-menubar);border-bottom:1px solid var(--color-border);flex-shrink:0;">
                         <input type="text" class="r3d-model-search" placeholder="${this._t('Search files...')}"
-                            style="width:100%;box-sizing:border-box;padding:5px 8px;background:var(--color-bg-input, var(--color-bg-surface));color:var(--color-text);border:1px solid var(--color-border-input);border-radius:3px;">
+                            style="width:100%;padding:6px 10px;background-color:var(--color-bg-panel);border:1px solid var(--color-border-input);border-radius:3px;color:var(--color-text);font-size:12px;box-sizing:border-box;">
                     </div>
                     <div class="r3d-model-list" style="flex:1;overflow-y:auto;min-height:0;"></div>
                 </div>
@@ -56,7 +56,15 @@ class Database3DEditor {
                     <div class="r3d-status" style="padding:4px 10px;font-size:11px;color:var(--color-text-muted);min-height:20px;"></div>
                 </div>
             </div>`;
-        detailEl.querySelector('.r3d-model-search').addEventListener('input', () => this.renderModelList(true));
+        const search = detailEl.querySelector('.r3d-model-search');
+        search.addEventListener('input', () => this.renderModelList(true));
+        search.addEventListener('focus', () => {
+            search.style.borderColor = 'var(--color-accent-border-strong)';
+            search.style.outline = 'none';
+        });
+        search.addEventListener('blur', () => {
+            search.style.borderColor = 'var(--color-border-input)';
+        });
         detailEl.querySelector('.r3d-rule-add').addEventListener('click', () => this.addRule());
         detailEl.querySelector('.r3d-rule-delete').addEventListener('click', () => this.deleteRule());
         this._bindPreviewInput(detailEl.querySelector('.r3d-db-canvas'));
@@ -85,12 +93,21 @@ class Database3DEditor {
         for (const entry of shown) {
             const row = document.createElement('div');
             row.className = 'database-list-item';
-            row.textContent = entry.name;
             row.dataset.model = entry.name;
+            const icon = document.createElement('span');
+            icon.className = 'database-list-icon';
+            icon.style.cssText = 'flex:0 0 22px;width:22px;height:22px;margin-right:8px;background-size:contain;background-position:center;background-repeat:no-repeat;border-radius:3px;background-color:var(--color-bg-deep);border:1px solid var(--color-border);';
+            const name = document.createElement('span');
+            name.className = 'database-list-name';
+            name.textContent = entry.name;
+            name.style.cssText = 'flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+            row.appendChild(icon);
+            row.appendChild(name);
             row.addEventListener('click', () => this.selectModel(entry));
             list.appendChild(row);
         }
         this.highlightModel();
+        this._fillThumbnails(shown);
         if (!fromSearch) {
             this.selectModel(models.find(m => m.name === this.selectedName) || models[0]);
         }
@@ -100,6 +117,96 @@ class Database3DEditor {
         this._detail.querySelectorAll('.r3d-model-list > .database-list-item').forEach(row => {
             row.classList.toggle('selected', row.dataset.model === this.selectedName);
         });
+    }
+
+    _thumbRow(name) {
+        return this._detail
+            ? this._detail.querySelector('.r3d-model-list [data-model="' + CSS.escape(name) + '"] .database-list-icon')
+            : null;
+    }
+
+    async _fillThumbnails(entries) {
+        if (!this._thumbs) this._thumbs = {};
+        for (const entry of entries) {
+            const cached = this._thumbs[entry.name];
+            if (cached) {
+                const icon = this._thumbRow(entry.name);
+                if (icon) icon.style.backgroundImage = `url("${cached}")`;
+                continue;
+            }
+            const url = await this._renderThumbnail(entry);
+            if (!url) continue;
+            this._thumbs[entry.name] = url;
+            const icon = this._thumbRow(entry.name);
+            if (icon) icon.style.backgroundImage = `url("${url}")`;
+            // Textures decode after the first draw; one late re-render
+            // trades a moment of gray silhouette for the coloured icon.
+            setTimeout(async () => {
+                const again = await this._renderThumbnail(entry);
+                if (!again) return;
+                this._thumbs[entry.name] = again;
+                const late = this._thumbRow(entry.name);
+                if (late) late.style.backgroundImage = `url("${again}")`;
+            }, 1600);
+        }
+    }
+
+    async _renderThumbnail(entry) {
+        const template = await this._loadTemplate(entry);
+        if (!template || typeof THREE === 'undefined') return null;
+        if (!this._thumbRenderer) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 64;
+            canvas.height = 64;
+            this._thumbRenderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, preserveDrawingBuffer: true });
+            this._thumbRenderer.setClearColor(0x000000, 0);
+            this._thumbScene = new THREE.Scene();
+            this._thumbCamera = Reactor3D.createCamera({ fov: 40 });
+        }
+        const object = Reactor3D.cloneModelTemplate
+            ? Reactor3D.cloneModelTemplate(template)
+            : template.clone(true);
+        const extent = template.userData.glbSize || { x: 1, y: 1, z: 1 };
+        const span = Math.max(extent.x, extent.y, extent.z, 0.0001);
+        object.scale.setScalar(1.6 / span);
+        this._thumbScene.add(object);
+        Reactor3D.aimCamera(this._thumbCamera, { x: -0.5, y: 0.3, z: -0.5 }, { yaw: 35, pitch: 18, distance: 2.6 });
+        this._thumbCamera.aspect = 1;
+        this._thumbCamera.updateProjectionMatrix();
+        this._thumbRenderer.render(this._thumbScene, this._thumbCamera);
+        this._thumbScene.remove(object);
+        try {
+            return this._thumbRenderer.domElement.toDataURL('image/png');
+        } catch (error) {
+            return null;
+        }
+    }
+
+    /** Templates cached per model: the preview and the thumbnails share them. */
+    async _loadTemplate(entry) {
+        if (!this._templates) this._templates = {};
+        if (this._templates[entry.name]) return this._templates[entry.name];
+        const ready = (typeof window !== 'undefined' && window.THREE && window.Reactor3D)
+            || (this.projectController.mapEditor3D && this.projectController.mapEditor3D.ensureLibraries
+                && await this.projectController.mapEditor3D.ensureLibraries());
+        if (!ready) return null;
+        const fs = require('fs');
+        const path = require('path');
+        const project = this._project();
+        if (!project || !project.path) return null;
+        const file = (entry.file || entry.name) + (entry.ext || '.glb');
+        const next = path.join(project.path, '3d', entry.name, 'source', file);
+        const filePath = fs.existsSync(next) ? next : path.join(project.path, '3d', 'source', file);
+        if (!fs.existsSync(filePath)) return null;
+        try {
+            const data = fs.readFileSync(filePath);
+            const buffer = data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength);
+            const baseUrl = 'file://' + path.dirname(filePath).replace(/\\/g, '/') + '/';
+            this._templates[entry.name] = Reactor3D.readModel(buffer, entry.ext || '.glb', baseUrl, entry.texture || '');
+            return this._templates[entry.name];
+        } catch (error) {
+            return null;
+        }
     }
 
     rulesPath(name) {
@@ -231,11 +338,8 @@ class Database3DEditor {
         const filePath = fs.existsSync(next) ? next : path.join(project.path, '3d', 'source', file);
         if (!fs.existsSync(filePath)) return;
         try {
-            const data = fs.readFileSync(filePath);
-            const buffer = data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength);
-            const baseUrl = 'file://' + path.dirname(filePath).replace(/\\/g, '/') + '/';
-            const template = Reactor3D.readModel(buffer, entry.ext || '.glb', baseUrl, entry.texture || '');
-            if (gen !== this._gen || !canvas.isConnected) return;
+            const template = await this._loadTemplate(entry);
+            if (!template || gen !== this._gen || !canvas.isConnected) return;
             const object = Reactor3D.cloneModelTemplate
                 ? Reactor3D.cloneModelTemplate(template)
                 : template.clone(true);
