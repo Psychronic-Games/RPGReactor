@@ -208,6 +208,9 @@ class CharacterGraphicPicker {
             } else {
                 previewArea.innerHTML = `<div style="color: var(--color-text-muted);">${this._t('Select a character file from the list')}</div>`;
             }
+            // Arrow keys step through the files from the moment the picker
+            // opens, without a click on the list first.
+            browser.focusSelected();
 
         } catch (error) {
             console.error('Error loading character files:', error);

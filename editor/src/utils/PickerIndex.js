@@ -188,6 +188,46 @@
             if (sections[0]) setActiveSection(sections[0].key);
         };
 
+        /**
+         * Arrow keys walk the files one at a time instead of scrolling the
+         * pane: the native behaviour scrolled the selection out from under
+         * the reader. The list only scrolls when the selection reaches its
+         * edge, and the sticky section header is compensated for so an
+         * upward step is never hidden beneath it.
+         */
+        const moveSelection = step => {
+            const items = Array.from(list.querySelectorAll('.rr-picker-file-item'));
+            if (!items.length) return;
+            const at = items.findIndex(item => item.dataset.fileName === selectedName);
+            const next = at < 0
+                ? (step > 0 ? 0 : items.length - 1)
+                : Math.max(0, Math.min(items.length - 1, at + step));
+            const item = items[next];
+            if (!item) return;
+            const changed = item.dataset.fileName !== selectedName;
+            if (changed) setSelected(item.dataset.fileName);
+            item.scrollIntoView({ block: 'nearest' });
+            const header = list.querySelector('.rr-picker-section');
+            if (header) {
+                const covered = (header.offsetHeight || 0)
+                    - (item.getBoundingClientRect().top - list.getBoundingClientRect().top);
+                if (covered > 0) list.scrollTop -= covered;
+            }
+            if (document.activeElement !== searchInput) item.focus({ preventScroll: true });
+            if (changed && options.onSelect) options.onSelect(item.dataset.fileName, item);
+        };
+
+        element.addEventListener('keydown', event => {
+            if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+                event.preventDefault();
+                moveSelection(event.key === 'ArrowDown' ? 1 : -1);
+            } else if ((event.key === 'Home' || event.key === 'End')
+                && document.activeElement !== searchInput) {
+                event.preventDefault();
+                moveSelection(event.key === 'Home' ? -Infinity : Infinity);
+            }
+        });
+
         list.addEventListener('scroll', () => {
             let active = null;
             const listTop = list.getBoundingClientRect().top;
@@ -238,6 +278,13 @@
                 const item = Array.from(list.querySelectorAll('.rr-picker-file-item'))
                     .find(candidate => candidate.dataset.fileName === name);
                 item?.scrollIntoView({ block: 'center' });
+            },
+            /** Put the keyboard on the list so the arrows work immediately. */
+            focusSelected() {
+                const items = Array.from(list.querySelectorAll('.rr-picker-file-item'));
+                const item = items.find(candidate => candidate.dataset.fileName === selectedName)
+                    || items[0];
+                item?.focus({ preventScroll: true });
             }
         };
     };
