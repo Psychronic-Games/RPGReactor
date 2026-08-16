@@ -1584,17 +1584,6 @@ Sprite_Animation.renderActive = function(renderer) {
     }
     const list = Sprite_Animation._pendingRenders;
     if (list.length === 0) return;
-    // Hand Effekseer the scene as its background before the effects draw:
-    // distortion and darkening layers sample it, and on an otherwise
-    // transparent overlay they rendered as solid black slabs.
-    const efx = Graphics.effekseer;
-    if (efxGL && Graphics._effekseerCanvas && efx && efx.captureBackground
-        && Graphics.blitSceneBehindEffects && Graphics.blitSceneBehindEffects()) {
-        efx.captureBackground(0, 0,
-            Graphics._effekseerCanvas.width, Graphics._effekseerCanvas.height);
-        efxGL.clearColor(0, 0, 0, 0);
-        efxGL.clear(efxGL.COLOR_BUFFER_BIT | efxGL.DEPTH_BUFFER_BIT);
-    }
     for (const inst of list) {
         try { inst._doEffekseerDraw(renderer); } catch (e) {}
     }
@@ -1671,6 +1660,20 @@ Sprite_Animation.prototype._doEffekseerDraw = function(renderer) {
             "  Graphics.effekseer === init'd: " + !!Graphics.effekseer + "\n" +
             "  pre-frame readback: " + (preFrame ? "ok (" + preFrame.length + " bytes)" : "FAILED")
         );
+    }
+    // Hand Effekseer the scene as this effect's background: distortion and
+    // darkening layers sample a captured backdrop, and on an otherwise
+    // transparent overlay they rendered as solid black slabs. The capture
+    // must cover the effect's own square viewport — Effekseer samples the
+    // background by fragment position within the viewport, so a
+    // canvas-sized capture reads back misaligned, smeared scenery.
+    const efxContext = Graphics.effekseer;
+    if (efxGL && overlay && efxContext && efxContext.captureBackground
+        && Graphics.blitSceneBehindEffects && Graphics.blitSceneBehindEffects()) {
+        const rect = this.effekseerViewportRect(renderer);
+        efxContext.captureBackground(rect.x, rect.y, rect.side, rect.side);
+        efxGL.clearColor(0, 0, 0, 0);
+        efxGL.clear(efxGL.COLOR_BUFFER_BIT | efxGL.DEPTH_BUFFER_BIT);
     }
     this.setProjectionMatrix(renderer);
     this.setCameraMatrix(renderer);
@@ -1754,6 +1757,17 @@ Sprite_Animation.prototype.setCameraMatrix = function(/*renderer*/) {
     ]);
 };
 
+Sprite_Animation.prototype.effekseerViewportRect = function(renderer) {
+    const canvas = Graphics._effekseerCanvas || renderer.view;
+    const side = Sprite_Animation.effekseerViewportSide();
+    const pos = this.effekseerScreenPosition(renderer);
+    return {
+        x: Math.round(pos.x - side / 2),
+        y: Math.round((canvas.height - pos.y) - side / 2),
+        side
+    };
+};
+
 Sprite_Animation.prototype.setViewport = function(renderer) {
     // Square viewport centered on the target: the effect renders on the
     // camera axis wherever the target is on screen (see updateEffectGeometry
@@ -1761,12 +1775,8 @@ Sprite_Animation.prototype.setViewport = function(renderer) {
     // top-down, hence the ch - py flip. Rects extending past the canvas are
     // legal; fragments outside the framebuffer are simply clipped.
     const efxGL = Graphics._effekseerGL || renderer.gl;
-    const canvas = Graphics._effekseerCanvas || renderer.view;
-    const side = Sprite_Animation.effekseerViewportSide();
-    const pos = this.effekseerScreenPosition(renderer);
-    const vx = Math.round(pos.x - side / 2);
-    const vy = Math.round((canvas.height - pos.y) - side / 2);
-    efxGL.viewport(vx, vy, side, side);
+    const rect = this.effekseerViewportRect(renderer);
+    efxGL.viewport(rect.x, rect.y, rect.side, rect.side);
 };
 
 Sprite_Animation.prototype.targetPosition = function(renderer) {

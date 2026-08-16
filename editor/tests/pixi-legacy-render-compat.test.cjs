@@ -138,10 +138,13 @@ test('effekseer effects sample the real scene as their background', () => {
     // the overlay, captured, and cleared before effects draw.
     assert.match(core, /Graphics\.blitSceneBehindEffects = function/);
     assert.match(core, /getElementById\("reactor3dCanvas"\)/, 'the 3D canvas is part of the background');
-    assert.match(sprites, /efx\.captureBackground\(0, 0,/);
-    // The capture happens before the queued effect draws and is cleared away
-    // so the blitted scene itself never shows on the overlay.
-    const capture = sprites.indexOf('efx.captureBackground');
-    const draw = sprites.indexOf('inst._doEffekseerDraw(renderer)');
+    // The capture covers the effect's own square viewport — Effekseer maps
+    // background UVs across the viewport, so a canvas-sized capture reads
+    // back misaligned scenery — and it happens per effect, before that
+    // effect's draw, then the blitted scene is cleared off the overlay.
+    assert.match(sprites, /efxContext\.captureBackground\(rect\.x, rect\.y, rect\.side, rect\.side\)/);
+    assert.match(sprites, /effekseerViewportRect = function/);
+    const capture = sprites.indexOf('efxContext.captureBackground');
+    const draw = sprites.indexOf('Graphics.effekseer.beginDraw();', capture);
     assert.ok(capture > 0 && draw > capture, 'capture precedes the effect draw');
 });

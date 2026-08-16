@@ -1802,6 +1802,7 @@ Graphics.blitSceneBehindEffects = function() {
     if (this._canvas) sources.push(this._canvas);
     if (!sources.length) return false;
     const blit = this._efxBlit;
+    gl.viewport(0, 0, overlay.width, overlay.height);
     gl.useProgram(blit.program);
     gl.bindBuffer(gl.ARRAY_BUFFER, blit.buffer);
     gl.enableVertexAttribArray(blit.aPos);
