@@ -9259,15 +9259,30 @@ Game_Event.prototype.isCollidedWithCharacters = function(x, y) {
 };
 
 Game_Event.prototype.isCollidedWithEvents = function(x, y) {
+    if (typeof Reactor3D !== "undefined" && Reactor3D.eventModelWouldOverlapEvents
+        && Reactor3D.characterModelSpec && Reactor3D.characterModelSpec(this)) {
+        // A model's body is wider than its center tile; checking only (x, y)
+        // let a driving vehicle plow through single-tile events.
+        return Reactor3D.eventModelWouldOverlapEvents(this, x, y, this._reactorMoveDirection(x, y));
+    }
     const events = $gameMap.eventsXyNt(x, y);
     return events.some(event => event !== this && event.isNormalPriority());
+};
+
+/** The facing a step onto (x, y) implies, for footprint sweep tests. */
+Game_Event.prototype._reactorMoveDirection = function(x, y) {
+    const dx = $gameMap.deltaX(x, this._x);
+    const dy = $gameMap.deltaY(y, this._y);
+    if (Math.abs(dx) > Math.abs(dy)) return dx > 0 ? 6 : 4;
+    if (Math.abs(dy) > 0) return dy > 0 ? 2 : 8;
+    return 0;
 };
 
 Game_Event.prototype.isCollidedWithPlayerCharacters = function(x, y) {
     if (!this.isNormalPriority()) return false;
     if (typeof Reactor3D !== "undefined" && Reactor3D.eventModelWouldOverlap
         && Reactor3D.characterModelSpec(this)) {
-        return Reactor3D.eventModelWouldOverlap(this, x, y, $gamePlayer);
+        return Reactor3D.eventModelWouldOverlap(this, x, y, $gamePlayer, this._reactorMoveDirection(x, y));
     }
     return $gamePlayer.isCollided(x, y);
 };

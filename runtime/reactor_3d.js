@@ -38,6 +38,10 @@ function Reactor3D() {
 Reactor3D.LIB_URL = "js/libs/three.js";
 Reactor3D.SIDECAR_SUFFIX = ".r3d.json";
 
+// Radians per frame an event model may visibly turn; 90 degrees takes about a
+// quarter second. Facing itself changes instantly — this only paces the mesh.
+Reactor3D.MODEL_TURN_SPEED = 0.1;
+
 Reactor3D._loadPromise = null;
 Reactor3D._viewport = null;
 Reactor3D._unsupportedReason = null;
@@ -6167,10 +6171,19 @@ Reactor3D.eventModelFootprint = function(character, spec, yaw) {
 
 Reactor3D.eventModelContains = function(character, foot, x, y) {
     const map = typeof $gameMap !== "undefined" ? $gameMap : null;
-    const dx = map && map.deltaX ? map.deltaX(x, character._x) : x - character._x;
-    const dy = map && map.deltaY ? map.deltaY(y, character._y) : y - character._y;
-    return Math.abs(dx) < foot.halfX + 0.5 - 1e-6
-        && Math.abs(dy) < foot.halfZ + 0.5 - 1e-6;
+    const contains = (cx, cy) => {
+        const dx = map && map.deltaX ? map.deltaX(x, cx) : x - cx;
+        const dy = map && map.deltaY ? map.deltaY(y, cy) : y - cy;
+        return Math.abs(dx) < foot.halfX + 0.5 - 1e-6
+            && Math.abs(dy) < foot.halfZ + 0.5 - 1e-6;
+    };
+    if (contains(character._x, character._y)) return true;
+    // While the event glides, _x/_y already sit on the destination tile but
+    // the body is still back at _realX/_realY. A long vehicle would otherwise
+    // free its trailing tiles the instant a step begins, and a character
+    // could walk into the middle of it from behind.
+    return (character._realX !== character._x || character._realY !== character._y)
+        && contains(character._realX, character._realY);
 };
 
 Reactor3D.eventModelCanFace = function(character, direction) {
@@ -6194,16 +6207,51 @@ Reactor3D.eventModelCanFace = function(character, direction) {
     return true;
 };
 
-Reactor3D.eventModelWouldOverlap = function(character, x, y, other) {
+Reactor3D.eventModelWouldOverlap = function(character, x, y, other, direction) {
     if (!character || !other) return false;
+    const spec = this.characterModelSpec(character);
+    if (!spec) return false;
+    // The body sweeps through both orientations during the step: the test
+    // yaw list carries the current facing and, when the move implies a turn,
+    // the facing the glide will visually snap to. Testing only the current
+    // one let a long vehicle rotate 90 degrees mid-step straight over a
+    // standing character.
+    const yaws = [this.characterModelYaw(character)];
+    if (direction) {
+        const moveYaw = this.dir8Yaw(direction);
+        if (moveYaw !== yaws[0]) yaws.push(moveYaw);
+    }
     const ox = character._x;
     const oy = character._y;
     character._x = x;
     character._y = y;
-    const hit = this.eventModelOccupies(character, other._x, other._y);
+    let hit = false;
+    for (const yaw of yaws) {
+        const foot = this.eventModelFootprint(character, spec, yaw);
+        if (this.eventModelContains(character, foot, other._x, other._y)) {
+            hit = true;
+            break;
+        }
+    }
     character._x = ox;
     character._y = oy;
     return hit;
+};
+
+/** Whether moving the model event's center to (x, y) would cover another solid event. */
+Reactor3D.eventModelWouldOverlapEvents = function(character, x, y, direction) {
+    if (!character) return false;
+    const map = typeof $gameMap !== "undefined" ? $gameMap : null;
+    const events = map && map.events ? map.events() : null;
+    if (!events) return false;
+    for (let i = 0; i < events.length; i++) {
+        const other = events[i];
+        if (!other || other === character) continue;
+        if (other.isThrough && other.isThrough()) continue;
+        if (other.isNormalPriority && !other.isNormalPriority()) continue;
+        if (this.eventModelWouldOverlap(character, x, y, other, direction)) return true;
+    }
+    return false;
 };
 
 Reactor3D.aimCharacterBillboard = function(object, camera) {
@@ -7055,6 +7103,24 @@ Reactor3D.MapScene.prototype.syncCharacterModels = function(characters) {
         );
         object.scale.setScalar(scale);
         Reactor3D.applyEventModelPose(object, spec, Reactor3D.characterModelDir8(character));
+        // Facing is discrete, so the pose above pivots a long model 90 degrees
+        // in one frame — the ends of a nine-tile vehicle teleport sideways.
+        // Ease the visible yaw toward the pose's target along the shortest
+        // arc; collision already accounts for both orientations of a turning
+        // step, so only the drawing needs the swing.
+        const targetYaw = object.rotation.y;
+        if (holder.smoothYaw === undefined) {
+            holder.smoothYaw = targetYaw;
+        } else {
+            const delta = Math.atan2(
+                Math.sin(targetYaw - holder.smoothYaw),
+                Math.cos(targetYaw - holder.smoothYaw));
+            const maxStep = Reactor3D.MODEL_TURN_SPEED;
+            holder.smoothYaw = Math.abs(delta) <= maxStep
+                ? targetYaw
+                : holder.smoothYaw + Math.sign(delta) * maxStep;
+        }
+        object.rotation.y = holder.smoothYaw;
         object.position.set(character._realX + 0.5, ground, character._realY + 0.5);
         object.visible = !(character.isTransparent && character.isTransparent());
     }
@@ -7090,7 +7156,9 @@ Reactor3D.MapScene.prototype.syncCharacterBillboards = function(sprites) {
         if (!holder) {
             const canvas = document.createElement("canvas");
             const texture = new THREE.CanvasTexture(canvas);
-            texture.flipY = false;
+            // Keep three's default flipY (true): PlaneGeometry's UVs put v=1
+            // at the top, so an unflipped canvas upload renders the character
+            // head-down. (flipY = false is a glTF convention; this is not one.)
             if (THREE.SRGBColorSpace) texture.colorSpace = THREE.SRGBColorSpace;
             const geometry = new THREE.PlaneGeometry(1, 1);
             geometry.translate(0, 0.5, 0);

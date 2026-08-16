@@ -341,3 +341,53 @@ test('the event Image section authors models into the sidecar', () => {
     const html = fs.readFileSync(path.join(repoRoot, 'editor', 'index.html'), 'utf8');
     assert.match(html, /src\/event\/ModelGraphicPicker\.js/);
 });
+
+test('character billboards keep the canvas texture upright', () => {
+    // PlaneGeometry's UVs put v=1 at the top of the texture; three's default
+    // flipY (true) for canvas uploads is what makes that the image's top.
+    // flipY = false is a glTF convention — applied here it rendered every
+    // character head-down on maps with event models.
+    const core3d = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_3d.js'), 'utf8');
+    const at = core3d.indexOf('syncCharacterBillboards = function');
+    assert.ok(at >= 0);
+    const body = core3d.slice(at, core3d.indexOf('_clearCharacterBillboards = function', at));
+    assert.match(body, /new THREE\.CanvasTexture\(canvas\)/);
+    assert.doesNotMatch(body, /texture\.flipY\s*=\s*false/);
+});
+
+test('a gliding model still occupies its trailing tiles', () => {
+    // _x/_y sit on the destination tile the moment a step begins; the body is
+    // still back at _realX/_realY. Without the union, a character could walk
+    // into the middle of a long vehicle from behind mid-step.
+    const character = { _x: 25, _y: 32, _realX: 24, _realY: 32 };
+    const foot = { halfX: 4.5, halfZ: 1.65 };
+    assert.ok(Reactor3D.eventModelContains(character, foot, 20, 32), 'trailing tile stays covered');
+    assert.ok(Reactor3D.eventModelContains(character, foot, 29, 32), 'leading tile is covered');
+    assert.ok(!Reactor3D.eventModelContains(character, foot, 19, 32), 'beyond the trailing body is free');
+});
+
+test('a moving step tests the footprint in both orientations', () => {
+    const core3d = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_3d.js'), 'utf8');
+    const at = core3d.indexOf('Reactor3D.eventModelWouldOverlap = function(character, x, y, other, direction)');
+    assert.ok(at >= 0, 'wouldOverlap accepts the movement direction');
+    const body = core3d.slice(at, core3d.indexOf('\n};', at));
+    assert.match(body, /dir8Yaw\(direction\)/, 'the implied facing joins the yaw list');
+    assert.ok(core3d.includes('Reactor3D.eventModelWouldOverlapEvents = function'),
+        'model events collide footprint-wide with other events');
+
+    const objects = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_objects.js'), 'utf8');
+    assert.match(objects, /eventModelWouldOverlapEvents\(this, x, y, this\._reactorMoveDirection\(x, y\)\)/,
+        'event-vs-event collision goes through the footprint');
+    assert.match(objects, /eventModelWouldOverlap\(this, x, y, \$gamePlayer, this\._reactorMoveDirection\(x, y\)\)/,
+        'event-vs-player collision passes the movement direction');
+});
+
+test('the rendered model turns at a paced rate instead of pivoting in one frame', () => {
+    const core3d = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_3d.js'), 'utf8');
+    assert.match(core3d, /Reactor3D\.MODEL_TURN_SPEED = /);
+    const at = core3d.indexOf('syncCharacterModels = function');
+    const body = core3d.slice(at, core3d.indexOf('syncCharacterBillboards = function', at));
+    assert.match(body, /holder\.smoothYaw/, 'yaw is eased per holder');
+    assert.match(body, /Math\.atan2\(\s*Math\.sin\(targetYaw - holder\.smoothYaw\),/,
+        'the swing takes the shortest arc');
+});

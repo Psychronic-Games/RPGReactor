@@ -10,7 +10,7 @@ Last updated 2026-08-16.
   READMEs, and `[Unreleased - 0.98.2]` sections in both changelogs.
 - The 0.98.1 Web 3D, renderer-lifecycle, PIXI filter, and camera-pan changes are
   preserved in the immutable `v0.98.1` tag. New reports belong to 0.98.2.
-- Current validation is **1,374 passing tests** with no failures, skips, or
+- Current validation is **1,378 passing tests** with no failures, skips, or
   TODOs. Syntax and `git diff --check` also pass.
 
 ## Event 3D Models (active, 2026-08-15)
@@ -49,10 +49,25 @@ the work to pick up first. Demo: Map001 event 22 ("Tank"), Buick at
   buffer can hide them when they stand north of it. PIXI character sprites
   are hidden on those maps.
 
+### Fixed 2026-08-16 (owner-reported, verified over CDP)
+
+- Character billboards drew upside down: `flipY = false` (a glTF convention)
+  on the CanvasTexture under PlaneGeometry UVs. Three's default is kept now.
+- The player could walk into the driving car. Two timing holes:
+  `eventModelContains` now covers both `_x/_y` and `_realX/_realY` (a gliding
+  body kept its trailing tiles), and `eventModelWouldOverlap` accepts the
+  movement direction so a turning step is tested in both body orientations.
+  `Game_Event.isCollidedWithEvents` also goes footprint-wide for model
+  events (the car could previously plow through single-tile NPCs).
+- The mesh pivoted 90° in one frame at route corners — a nine-tile car's
+  ends teleport ±4.5 tiles, seen as "flashing back to its original
+  position". `syncCharacterModels` eases the visible yaw along the shortest
+  arc at `MODEL_TURN_SPEED` (0.1 rad/frame); facing and collision stay
+  instant. Owner confirmed the smooth turn feels right.
+
 ### What is still off
 
-Playtest Demo Map001 and walk around the Buick. Collision and facing are close;
-depth is closer after the upright billboard change but the owner still finds
+Depth is closer after the upright billboard change but the owner still finds
 the player/car relationship "not quite right." Next session should stand in
 front of, beside, and behind the car, then while it drives its route, and
 adjust sort / billboard tilt / footprint vs visual mesh until the feet and
@@ -62,10 +77,10 @@ Open questions worth not re-fighting blindly:
 
 - Should the sort line be the event tile, the south edge of the footprint, or
   true GPU depth only?
-- A long vehicle that turns 90° grows sideways. Turns into the player are
-  blocked; standing in the sweep of a future turn is still allowed.
 - `size` 9 on the Buick is the longest-axis fit. The collision box after load
   uses the real aspect; before the GLB arrives it is a square of `size`.
+- The visual swing at corners briefly lags the discrete collision footprint;
+  acceptable now, worth revisiting if models get much longer.
 
 ### Key files
 
