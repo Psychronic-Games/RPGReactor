@@ -842,7 +842,9 @@ class ModelGraphicPicker {
                 this._raf = requestAnimationFrame(tick);
             }
             if (this._object && this._object.parent) this._object.parent.remove(this._object);
-            const model = template.clone(true);
+            const model = Reactor3D.cloneModelTemplate
+                ? Reactor3D.cloneModelTemplate(template)
+                : template.clone(true);
             const extent = template.userData.glbSize || { x: 1, y: 1, z: 1 };
             const span = Math.max(extent.x, extent.y, extent.z, 0.0001);
             model.scale.setScalar(1.6 / span);

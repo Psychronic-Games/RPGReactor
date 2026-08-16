@@ -879,7 +879,18 @@ test('animation rules turn a part about its pivot and reset when inactive', () =
 
 test('the sync loop binds instances, loads rules, and plays queued actions', () => {
     const source = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_3d.js'), 'utf8');
-    assert.match(source, /current\.binding = Reactor3D\.prepareModelInstance\(object\)/);
+    assert.match(source, /current\.binding = Reactor3D\.prepareModelInstance\(object, object\.__reactorClips\)/);
+    // Embedded clips: an animated GLB keeps its hierarchy (no flatten),
+    // skinned meshes ride a real Skeleton on the GPU, instances rebind to
+    // their own cloned bones, and "clip" rules play clips by name through
+    // the same trigger system.
+    assert.match(source, /buildAnimatedGlbTemplate/);
+    assert.match(source, /new THREE\.SkinnedMesh\(geometry, child\.material\)/);
+    assert.match(source, /skinned\.bind\(skeleton, node\.matrixWorld\.clone\(\)\)/);
+    assert.match(source, /Reactor3D\.cloneModelTemplate = function/);
+    assert.match(source, /const object = Reactor3D\.cloneModelTemplate\(template\)/, 'instances clone through the rebinder');
+    assert.match(source, /new THREE\.AnimationMixer\(inner\)/);
+    assert.match(source, /rule\.type === "clip"/);
     assert.match(source, /Reactor3D\.loadModelAnimations\(spec\.name\)\.then/);
     assert.match(source, /Reactor3D\.applyModelAnimation\(holder\.binding, holder\.rules/);
     // Part ancestry is stamped BEFORE the flatten bakes the hierarchy away.
@@ -901,4 +912,65 @@ test('the event editor round-trip keeps the model texture', () => {
         path.join(repoRoot, 'editor', 'src', 'event', 'EventEditor.js'), 'utf8');
     const carried = source.match(/texture: spec\.texture \|\| ''/g) || [];
     assert.equal(carried.length, 2, 'both stored-spec branches carry texture');
+});
+
+test('embedded clips build, clone, and play motion through clip rules', () => {
+    global.self = global;
+    global.window = global;
+    require(path.join(repoRoot, 'runtime', 'libs', 'three.js'));
+    const THREE = global.THREE;
+    // A minimal glTF: one triangle on a node, one clip turning it 90
+    // degrees about Y over one second.
+    const positions = new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]);
+    const times = new Float32Array([0, 1]);
+    const rotations = new Float32Array([0, 0, 0, 1, 0, Math.SQRT1_2, 0, Math.SQRT1_2]);
+    const bin = new Uint8Array(positions.byteLength + times.byteLength + rotations.byteLength);
+    bin.set(new Uint8Array(positions.buffer), 0);
+    bin.set(new Uint8Array(times.buffer), positions.byteLength);
+    bin.set(new Uint8Array(rotations.buffer), positions.byteLength + times.byteLength);
+    const json = {
+        asset: { version: '2.0' },
+        buffers: [{ byteLength: bin.byteLength }],
+        bufferViews: [
+            { buffer: 0, byteOffset: 0, byteLength: positions.byteLength },
+            { buffer: 0, byteOffset: positions.byteLength, byteLength: times.byteLength },
+            { buffer: 0, byteOffset: positions.byteLength + times.byteLength, byteLength: rotations.byteLength }
+        ],
+        accessors: [
+            { bufferView: 0, componentType: 5126, count: 3, type: 'VEC3', min: [0, 0, 0], max: [1, 1, 0] },
+            { bufferView: 1, componentType: 5126, count: 2, type: 'SCALAR', min: [0], max: [1] },
+            { bufferView: 2, componentType: 5126, count: 2, type: 'VEC4' }
+        ],
+        meshes: [{ primitives: [{ attributes: { POSITION: 0 } }] }],
+        nodes: [{ name: 'spinner', mesh: 0 }],
+        scenes: [{ nodes: [0] }],
+        scene: 0,
+        animations: [{
+            name: 'turn',
+            channels: [{ sampler: 0, target: { node: 0, path: 'rotation' } }],
+            samplers: [{ input: 1, output: 2 }]
+        }]
+    };
+    const template = Reactor3D.buildGlbTemplate(json, bin, '');
+    assert.equal(template.userData.animated, true, 'a clip-bearing GLB keeps its hierarchy');
+    assert.equal(template.__reactorClips.length, 1);
+    assert.equal(template.__reactorClips[0].name, 'turn');
+
+    const clone = Reactor3D.cloneModelTemplate(template);
+    assert.equal(clone.__reactorClips, template.__reactorClips, 'clips ride along to instances');
+    const binding = Reactor3D.prepareModelInstance(clone, clone.__reactorClips);
+    assert.ok(binding.mixer, 'clips get a mixer');
+    const rules = Reactor3D.readModelAnimationRules({ animations: [
+        { name: 'idle-turn', type: 'clip', clip: 'turn', trigger: 'always' }
+    ] });
+    assert.equal(Reactor3D.modelRuleDuration(rules[0], binding.clips), 60, 'clip rules last the clip length');
+
+    let spinner = null;
+    binding.root.traverse(node => { if (!spinner && node.name === 'spinner') spinner = node; });
+    const start = spinner.quaternion.clone();
+    for (let frame = 0; frame < 30; frame++) {
+        Reactor3D.applyModelAnimation(binding, rules, { frame, moving: false, distance: 0, scale: 1, action: null });
+    }
+    const angle = spinner.quaternion.angleTo(start) * 180 / Math.PI;
+    assert.ok(angle > 20 && angle < 70, 'half a second into the clip the node has visibly turned: ' + angle.toFixed(1));
 });

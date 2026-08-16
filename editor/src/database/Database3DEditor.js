@@ -33,8 +33,12 @@ class Database3DEditor {
         this._detail = detailEl;
         detailEl.innerHTML = `
             <div style="display:flex;flex-direction:row;gap:0;height:100%;min-height:0;">
-                <div style="width:200px;flex:0 0 200px;display:flex;flex-direction:column;border-right:1px solid var(--color-border);min-height:0;">
+                <div style="width:220px;flex:0 0 220px;display:flex;flex-direction:column;border-right:1px solid var(--color-border);min-height:0;">
                     <div style="padding:6px 10px;font-weight:bold;color:var(--color-text);border-bottom:1px solid var(--color-border);">${this._t('Models')}</div>
+                    <div style="padding:6px 8px;border-bottom:1px solid var(--color-border);">
+                        <input type="text" class="r3d-model-search" placeholder="${this._t('Search files...')}"
+                            style="width:100%;box-sizing:border-box;padding:5px 8px;background:var(--color-bg-input, var(--color-bg-surface));color:var(--color-text);border:1px solid var(--color-border-input);border-radius:3px;">
+                    </div>
                     <div class="r3d-model-list" style="flex:1;overflow-y:auto;min-height:0;"></div>
                 </div>
                 <div style="flex:1;min-width:0;display:flex;flex-direction:column;background:var(--color-bg-deep);min-height:0;">
@@ -52,6 +56,7 @@ class Database3DEditor {
                     <div class="r3d-status" style="padding:4px 10px;font-size:11px;color:var(--color-text-muted);min-height:20px;"></div>
                 </div>
             </div>`;
+        detailEl.querySelector('.r3d-model-search').addEventListener('input', () => this.renderModelList(true));
         detailEl.querySelector('.r3d-rule-add').addEventListener('click', () => this.addRule());
         detailEl.querySelector('.r3d-rule-delete').addEventListener('click', () => this.deleteRule());
         this._bindPreviewInput(detailEl.querySelector('.r3d-db-canvas'));
@@ -64,28 +69,36 @@ class Database3DEditor {
         return ModelGraphicPicker.listModels(project.path);
     }
 
-    renderModelList() {
+    renderModelList(fromSearch = false) {
         const list = this._detail.querySelector('.r3d-model-list');
+        const search = this._detail.querySelector('.r3d-model-search');
+        const needle = search ? search.value.trim().toLowerCase() : '';
         list.innerHTML = '';
         const models = this.listModels();
-        if (!models.length) {
+        const shown = needle
+            ? models.filter(m => m.name.toLowerCase().indexOf(needle) >= 0)
+            : models;
+        if (!shown.length) {
             list.innerHTML = `<div style="padding:10px;color:var(--color-text-muted);font-size:12px;">${this._t('No models in this project')}</div>`;
             return;
         }
-        for (const entry of models) {
+        for (const entry of shown) {
             const row = document.createElement('div');
+            row.className = 'database-list-item';
             row.textContent = entry.name;
             row.dataset.model = entry.name;
-            row.style.cssText = 'padding:5px 10px;cursor:pointer;color:var(--color-text);font-size:12px;';
             row.addEventListener('click', () => this.selectModel(entry));
             list.appendChild(row);
         }
-        this.selectModel(models.find(m => m.name === this.selectedName) || models[0]);
+        this.highlightModel();
+        if (!fromSearch) {
+            this.selectModel(models.find(m => m.name === this.selectedName) || models[0]);
+        }
     }
 
     highlightModel() {
-        this._detail.querySelectorAll('.r3d-model-list > div').forEach(row => {
-            row.style.background = row.dataset.model === this.selectedName ? 'var(--color-bg-active, #2a4)' : '';
+        this._detail.querySelectorAll('.r3d-model-list > .database-list-item').forEach(row => {
+            row.classList.toggle('selected', row.dataset.model === this.selectedName);
         });
     }
 
@@ -223,13 +236,15 @@ class Database3DEditor {
             const baseUrl = 'file://' + path.dirname(filePath).replace(/\\/g, '/') + '/';
             const template = Reactor3D.readModel(buffer, entry.ext || '.glb', baseUrl, entry.texture || '');
             if (gen !== this._gen || !canvas.isConnected) return;
-            const object = template.clone(true);
+            const object = Reactor3D.cloneModelTemplate
+                ? Reactor3D.cloneModelTemplate(template)
+                : template.clone(true);
             object.userData.glbSize = template.userData.glbSize;
             const extent = template.userData.glbSize || { x: 1, y: 1, z: 1 };
             const span = Math.max(extent.x, extent.y, extent.z, 0.0001);
             this._scale = 1.6 / span;
             object.scale.setScalar(this._scale);
-            this._binding = Reactor3D.prepareModelInstance(object);
+            this._binding = Reactor3D.prepareModelInstance(object, object.__reactorClips);
             // Scene-graph plumbing is not a part: exporters wrap models in
             // root/scene/rig nodes that match every mesh at once, and a rule
             // aimed there whirls the whole model about one corner.
@@ -375,7 +390,7 @@ class Database3DEditor {
                 this._sim.action = {
                     name: rule.name,
                     frame: this._simFrame || 0,
-                    until: Reactor3D.modelRuleDuration(rule)
+                    until: Reactor3D.modelRuleDuration(rule, this._binding ? this._binding.clips : null)
                 };
             });
             bar.appendChild(play);
@@ -383,12 +398,15 @@ class Database3DEditor {
     }
 
     ruleSummary(raw) {
-        const type = raw.type === 'swing' || raw.type === 'bob' ? raw.type : 'spin';
-        const label = type === 'swing' ? this._t('Swing') : type === 'bob' ? this._t('Bob') : this._t('Spin');
+        const type = raw.type === 'swing' || raw.type === 'bob' || raw.type === 'clip'
+            ? raw.type : 'spin';
+        const label = type === 'clip' ? this._t('Clip')
+            : type === 'swing' ? this._t('Swing') : type === 'bob' ? this._t('Bob') : this._t('Spin');
         const trigger = raw.trigger === 'idle' ? this._t('While idle')
             : raw.trigger === 'moving' ? this._t('While moving')
             : raw.trigger === 'action' ? this._t('On demand') : this._t('Always');
-        return `${raw.name || '?'} — ${label} · ${raw.part || this._t('Whole model')} · ${trigger}`;
+        const subject = type === 'clip' ? (raw.clip || '?') : (raw.part || this._t('Whole model'));
+        return `${raw.name || '?'} — ${label} · ${subject} · ${trigger}`;
     }
 
     renderRuleList() {
@@ -440,7 +458,8 @@ class Database3DEditor {
             form.innerHTML = '';
             return;
         }
-        const type = raw.type === 'swing' || raw.type === 'bob' ? raw.type : 'spin';
+        const type = raw.type === 'swing' || raw.type === 'bob' || raw.type === 'clip'
+            ? raw.type : 'spin';
         const field = (label, control) => `
             <label style="display:flex;align-items:center;gap:8px;margin-bottom:7px;font-size:12px;color:var(--color-text);">
                 <span style="flex:0 0 130px;">${label}</span>${control}
@@ -472,7 +491,15 @@ class Database3DEditor {
             return out;
         };
         let params = '';
-        if (type === 'spin') {
+        if (type === 'clip') {
+            const clips = this.embeddedClips || [];
+            const clipOptions = clips.map(name =>
+                `<option value="${escape(name)}"${name === raw.clip ? ' selected' : ''}>${escape(name)}</option>`).join('');
+            const stray = raw.clip && clips.indexOf(raw.clip) < 0
+                ? `<option value="${escape(raw.clip)}" selected>${escape(raw.clip)} ?</option>` : '';
+            params = field(this._t('Clip'),
+                `<select class="r3d-f" data-key="clip" ${input}>${clipOptions}${stray}</select>`);
+        } else if (type === 'spin') {
             params = field(this._t('Speed (degrees per second)'),
                 `<input type="number" class="r3d-f" data-key="speed" value="${Number(raw.speed) || 90}" ${input}>`)
                 + field(this._t('Degrees per tile travelled'),
@@ -498,7 +525,8 @@ class Database3DEditor {
             + field(this._t('Type'),
             `<select class="r3d-f" data-key="type" ${input}>${options([
                 ['spin', this._t('Spin')], ['swing', this._t('Swing')], ['bob', this._t('Bob')]
-            ], type)}</select>`)
+            ].concat((this.embeddedClips || []).length || type === 'clip'
+                ? [['clip', this._t('Clip')]] : []), type)}</select>`)
             + field(this._t('Axis'),
             `<select class="r3d-f" data-key="axis" ${input}>${options([
                 ['x', 'X'], ['y', 'Y'], ['z', 'Z']
@@ -523,6 +551,9 @@ class Database3DEditor {
                 const value = control.type === 'number' ? Number(control.value) : control.value;
                 if (control.type === 'number' && !Number.isFinite(value)) return;
                 raw[key] = value;
+                if (key === 'type' && value === 'clip' && !raw.clip && (this.embeddedClips || []).length) {
+                    raw.clip = this.embeddedClips[0];
+                }
                 this.saveRules();
                 this.renderRuleList();
                 matchCount();

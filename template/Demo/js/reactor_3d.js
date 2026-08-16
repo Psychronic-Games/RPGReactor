@@ -7295,6 +7295,9 @@ Reactor3D.buildGlbTemplate = function(json, bin, baseUrl) {
         if (node && !node.parent) root.add(node);
     }
     root.updateMatrixWorld(true);
+    if ((json.animations || []).length) {
+        return this.buildAnimatedGlbTemplate(json, bin, root, nodes, textures);
+    }
     this.applyRestSkins(json, bin, root, nodes);
     // Named ancestry must survive the flatten: each mesh keeps the chain
     // of named nodes above it with their world pivots, so an animation
@@ -7322,6 +7325,180 @@ Reactor3D.buildGlbTemplate = function(json, bin, baseUrl) {
     root.userData.glbSize = { x: size.x, y: size.y, z: size.z };
     root.userData.glbTextures = textures;
     return root;
+};
+
+/**
+ * A GLB with embedded animations keeps its node hierarchy live instead of
+ * being baked flat: joints stay real objects, skinned meshes become GPU
+ * SkinnedMesh bound to a Skeleton, and every clip is parsed into a
+ * THREE.AnimationClip playable by name through a model.json "clip" rule.
+ */
+Reactor3D.buildAnimatedGlbTemplate = function(json, bin, root, nodes, textures) {
+    // Track names bind by node name, so names must be unique and safe for
+    // three's property-path parser.
+    const used = new Set();
+    for (let i = 0; i < nodes.length; i++) {
+        let name = (nodes[i].name || "node").replace(/[^A-Za-z0-9_]/g, "_");
+        let unique = name;
+        let n = 1;
+        while (used.has(unique)) unique = name + "_" + n++;
+        used.add(unique);
+        nodes[i].name = unique;
+    }
+    const skeletons = new Map();
+    const skeletonFor = skin => {
+        if (skeletons.has(skin)) return skeletons.get(skin);
+        const bones = (skin.joints || []).map(j => nodes[j]).filter(Boolean);
+        const raw = skin.inverseBindMatrices != null
+            ? this._glbAccessor(json, bin, skin.inverseBindMatrices) : null;
+        const inverses = bones.map((bone, j) =>
+            raw && raw.length >= (j + 1) * 16
+                ? new THREE.Matrix4().fromArray(raw, j * 16)
+                : new THREE.Matrix4());
+        const skeleton = new THREE.Skeleton(bones, inverses);
+        skeletons.set(skin, skeleton);
+        return skeleton;
+    };
+    for (const node of nodes) {
+        const skin = node.userData.skin;
+        if (!skin) continue;
+        const skeleton = skeletonFor(skin);
+        for (const child of node.children.slice()) {
+            if (!child.isMesh || !child.geometry.userData.joints) continue;
+            const geometry = child.geometry;
+            if (!geometry.getAttribute("skinIndex")) {
+                const joints = geometry.userData.joints;
+                const weights = geometry.userData.weights;
+                let normalized = weights;
+                if (!(weights instanceof Float32Array)) {
+                    const scale = weights instanceof Uint8Array ? 255 : 65535;
+                    normalized = new Float32Array(weights.length);
+                    for (let i = 0; i < weights.length; i++) normalized[i] = weights[i] / scale;
+                }
+                geometry.setAttribute("skinIndex", new THREE.BufferAttribute(Uint16Array.from(joints), 4));
+                geometry.setAttribute("skinWeight", new THREE.BufferAttribute(normalized, 4));
+            }
+            const skinned = new THREE.SkinnedMesh(geometry, child.material);
+            skinned.name = child.name;
+            // Skinned bounds follow bones the culler cannot see.
+            skinned.frustumCulled = false;
+            node.remove(child);
+            node.add(skinned);
+            skinned.updateMatrixWorld(true);
+            skinned.bind(skeleton, node.matrixWorld.clone());
+        }
+    }
+    root.updateMatrixWorld(true);
+    // Recentre through a wrapper group: offsetting a SkinnedMesh itself
+    // would not move it — its vertices follow the bones.
+    const content = new THREE.Group();
+    content.name = "content";
+    for (const child of root.children.slice()) content.add(child);
+    root.add(content);
+    // Rest-pose bounds are measured by actually skinning a sample of
+    // vertices on the CPU — the only size that matches what renders.
+    // Guessing from bone positions undersized a Source-style rig whose
+    // armature scale hides inside the inverse binds (the model normalised
+    // down to a speck), and raw geometry boxes miss the rest pose's
+    // Z-up-to-Y-up turn.
+    const box = new THREE.Box3();
+    const temp = new THREE.Vector3();
+    root.traverse(child => {
+        if (!child.isMesh) return;
+        if (!child.isSkinnedMesh) {
+            box.expandByObject(child);
+            return;
+        }
+        child.skeleton.update();
+        const pos = child.geometry.getAttribute("position");
+        const step = Math.max(1, Math.floor(pos.count / 2000));
+        for (let i = 0; i < pos.count; i += step) {
+            temp.fromBufferAttribute(pos, i);
+            if (child.applyBoneTransform) child.applyBoneTransform(i, temp);
+            box.expandByPoint(temp.applyMatrix4(child.matrixWorld));
+        }
+    });
+    if (box.isEmpty()) box.setFromObject(root);
+    const size = box.getSize(new THREE.Vector3());
+    const center = box.getCenter(new THREE.Vector3());
+    content.position.set(-center.x, -box.min.y, -center.z);
+    root.updateMatrixWorld(true);
+    root.userData.glbSize = { x: size.x, y: size.y, z: size.z };
+    root.userData.glbTextures = textures;
+    root.userData.animated = true;
+    root.__reactorClips = this.readGlbClips(json, bin, nodes);
+    return root;
+};
+
+/** Parse glTF animation channels into THREE.AnimationClips. */
+Reactor3D.readGlbClips = function(json, bin, nodes) {
+    const clips = [];
+    (json.animations || []).forEach((anim, index) => {
+        const tracks = [];
+        for (const channel of anim.channels || []) {
+            const sampler = (anim.samplers || [])[channel.sampler];
+            if (!sampler || !channel.target || channel.target.node == null) continue;
+            const node = nodes[channel.target.node];
+            const path = channel.target.path;
+            if (!node || (path !== "translation" && path !== "rotation" && path !== "scale")) continue;
+            const times = this._glbAccessor(json, bin, sampler.input);
+            let values = this._glbAccessor(json, bin, sampler.output);
+            if (!times || !values || !times.length) continue;
+            const itemSize = path === "rotation" ? 4 : 3;
+            if (sampler.interpolation === "CUBICSPLINE") {
+                // Values come as [in-tangent, value, out-tangent] triplets;
+                // keep the value and play it linearly.
+                const picked = new Float32Array(times.length * itemSize);
+                for (let k = 0; k < times.length; k++) {
+                    for (let c = 0; c < itemSize; c++) {
+                        picked[k * itemSize + c] = values[(k * 3 + 1) * itemSize + c];
+                    }
+                }
+                values = picked;
+            }
+            const interpolation = sampler.interpolation === "STEP"
+                ? THREE.InterpolateDiscrete : THREE.InterpolateLinear;
+            const Track = path === "rotation" ? THREE.QuaternionKeyframeTrack : THREE.VectorKeyframeTrack;
+            const target = path === "rotation" ? ".quaternion" : path === "scale" ? ".scale" : ".position";
+            try {
+                tracks.push(new Track(node.name + target, Array.from(times), Array.from(values), interpolation));
+            } catch (error) {
+                // A malformed channel loses its track, not the whole clip.
+            }
+        }
+        if (tracks.length) clips.push(new THREE.AnimationClip(anim.name || "clip-" + index, -1, tracks));
+    });
+    return clips;
+};
+
+/**
+ * Clone a template for an instance. A flattened template clones plainly;
+ * an animated one must rebind each SkinnedMesh to ITS OWN cloned bones —
+ * a plain clone leaves the copy following the template's skeleton, which
+ * lives outside every scene and never moves.
+ */
+Reactor3D.cloneModelTemplate = function(template) {
+    const clone = template.clone(true);
+    clone.__reactorClips = template.__reactorClips;
+    if (!template.userData.animated) return clone;
+    const twins = new Map();
+    const walk = (source, copy) => {
+        twins.set(source, copy);
+        for (let i = 0; i < source.children.length; i++) walk(source.children[i], copy.children[i]);
+    };
+    walk(template, clone);
+    const pairs = [];
+    template.traverse(node => {
+        if (node.isSkinnedMesh) pairs.push(node);
+    });
+    for (const source of pairs) {
+        const copy = twins.get(source);
+        const bones = source.skeleton.bones.map(bone => twins.get(bone) || bone);
+        copy.bind(
+            new THREE.Skeleton(bones, source.skeleton.boneInverses.map(m => m.clone())),
+            source.bindMatrix.clone());
+    }
+    return clone;
 };
 
 Reactor3D.applyRestSkins = function(json, bin, root, nodes) {
@@ -7417,10 +7594,12 @@ Reactor3D.readModelAnimationRules = function(json) {
     const rules = [];
     for (let i = 0; i < list.length; i++) {
         const raw = list[i] || {};
-        const type = raw.type === "swing" || raw.type === "bob" ? raw.type : "spin";
+        const type = raw.type === "swing" || raw.type === "bob" || raw.type === "clip"
+            ? raw.type : "spin";
         rules.push({
             name: String(raw.name || raw.part || type + "-" + i),
             part: String(raw.part || ""),
+            clip: String(raw.clip || ""),
             type,
             axis: raw.axis === "x" || raw.axis === "z" ? raw.axis : "y",
             trigger: ["idle", "moving", "action"].indexOf(raw.trigger) >= 0 ? raw.trigger : "always",
@@ -7475,7 +7654,7 @@ Reactor3D.loadModelAnimations = function(name) {
  * rewrites each frame, and each part-carrying mesh records the transform
  * it stands at so rules compose against it and reset cleanly.
  */
-Reactor3D.prepareModelInstance = function(object) {
+Reactor3D.prepareModelInstance = function(object, clips) {
     if (typeof THREE === "undefined" || !object) return null;
     const inner = new THREE.Group();
     inner.name = "anim-root";
@@ -7492,7 +7671,17 @@ Reactor3D.prepareModelInstance = function(object) {
             acc: null
         });
     });
-    return { root: inner, meshes, angles: {} };
+    return {
+        root: inner,
+        meshes,
+        angles: {},
+        clips: clips || [],
+        mixer: clips && clips.length && THREE.AnimationMixer
+            ? new THREE.AnimationMixer(inner)
+            : null,
+        clipKey: null,
+        clipAction: null
+    };
 };
 
 Reactor3D.AXIS_VECTORS = {
@@ -7501,7 +7690,11 @@ Reactor3D.AXIS_VECTORS = {
     z: [0, 0, 1]
 };
 
-Reactor3D.modelRuleDuration = function(rule) {
+Reactor3D.modelRuleDuration = function(rule, clips) {
+    if (rule.type === "clip") {
+        const clip = (clips || []).find(c => c.name === rule.clip);
+        return clip ? Math.max(1, Math.round(clip.duration * 60)) : 60;
+    }
     return rule.period * rule.cycles;
 };
 
@@ -7520,6 +7713,7 @@ Reactor3D.applyModelAnimation = function(binding, rules, state) {
     };
     for (let i = 0; i < rules.length; i++) {
         const rule = rules[i];
+        if (rule.type === "clip") continue;
         let t = state.frame;
         if (rule.trigger === "idle" && state.moving) continue;
         // A movement-driven spin holds its angle when travel stops — a
@@ -7564,6 +7758,47 @@ Reactor3D.applyModelAnimation = function(binding, rules, state) {
             if (quat) entry.acc.multiply(pivotTurn(pivot, quat));
             if (slide) entry.acc.multiply(new THREE.Matrix4().makeTranslation(slide.x, slide.y, slide.z));
         }
+    }
+    if (binding.mixer) {
+        const clipRules = rules.filter(rule => rule.type === "clip");
+        let desired = null;
+        let once = false;
+        let key = "";
+        if (state.action) {
+            const rule = clipRules.find(r => r.trigger === "action" && r.name === state.action.name);
+            if (rule) {
+                desired = rule.clip;
+                once = true;
+                key = rule.clip + ":" + state.action.frame;
+            }
+        }
+        if (!desired) {
+            const pick = trigger => clipRules.find(r => r.trigger === trigger);
+            const rule = (state.moving ? pick("moving") : pick("idle")) || pick("always");
+            if (rule) {
+                desired = rule.clip;
+                key = rule.clip;
+            }
+        }
+        if (binding.clipKey !== key) {
+            binding.clipKey = key;
+            const previous = binding.clipAction;
+            let next = null;
+            if (desired) {
+                const clip = binding.clips.find(c => c.name === desired);
+                if (clip) {
+                    next = binding.mixer.clipAction(clip);
+                    next.reset();
+                    next.setLoop(once ? THREE.LoopOnce : THREE.LoopRepeat, once ? 1 : Infinity);
+                    next.clampWhenFinished = once;
+                    next.fadeIn(0.2);
+                    next.play();
+                }
+            }
+            if (previous && previous !== next) previous.fadeOut(0.2);
+            binding.clipAction = next;
+        }
+        binding.mixer.update(1 / 60);
     }
     const scratch = new THREE.Matrix4();
     const outPos = new THREE.Vector3();
@@ -7661,10 +7896,10 @@ Reactor3D.MapScene.prototype.syncCharacterModels = function(characters) {
                 if (!template || !this._modelsGroup) return;
                 const current = this._modelInstances.get(key);
                 if (!current || current.spec !== Reactor3D.modelCacheKey(spec.name, spec.ext, spec.file)) return;
-                const object = template.clone(true);
+                const object = Reactor3D.cloneModelTemplate(template);
                 object.userData.glbSize = template.userData.glbSize;
                 current.object = object;
-                current.binding = Reactor3D.prepareModelInstance(object);
+                current.binding = Reactor3D.prepareModelInstance(object, object.__reactorClips);
                 Reactor3D.loadModelAnimations(spec.name).then(rules => {
                     current.rules = rules;
                 });
@@ -7730,7 +7965,8 @@ Reactor3D.MapScene.prototype.syncCharacterModels = function(characters) {
                 let until = pending.frame;
                 for (const rule of holder.rules) {
                     if (rule.trigger !== "action" || rule.name !== pending.name) continue;
-                    until = Math.max(until, pending.frame + Reactor3D.modelRuleDuration(rule));
+                    until = Math.max(until,
+                        pending.frame + Reactor3D.modelRuleDuration(rule, holder.binding.clips));
                 }
                 holder.action = until > pending.frame
                     ? { name: pending.name, frame: pending.frame, until }

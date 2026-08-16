@@ -983,7 +983,9 @@ class EventPageEditor {
                     : '');
             const template = Reactor3D.readModel(buffer, model.ext || '.glb', baseUrl, texture);
             if (gen !== this._modelPreviewGen || !canvas.isConnected) return;
-            const mesh = template.clone(true);
+            const mesh = Reactor3D.cloneModelTemplate
+                ? Reactor3D.cloneModelTemplate(template)
+                : template.clone(true);
             const extent = template.userData.glbSize || { x: 1, y: 1, z: 1 };
             const span = Math.max(extent.x, extent.y, extent.z, 0.0001);
             mesh.scale.setScalar(1.4 / span);
