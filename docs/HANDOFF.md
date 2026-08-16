@@ -88,8 +88,20 @@ means hidden. Character billboards take the tile cut-outs' footward step so
 
 ### What is still off
 
-The player/car relationship may still want tuning; walk front, beside, and
-behind the car while it drives and judge feet vs body.
+- The player/car relationship may still want tuning; walk front, beside, and
+  behind the car while it drives and judge feet vs body.
+- **Diagonal struts as single planes** (measured 2026-08-16): the reactor's
+  legs merge with their foot pads, so the run roots at its southernmost row
+  (plane z=22.5 while the strut's art spans rows 13-20) — its entire art
+  therefore beats any character north of row 22, which reads as a head
+  clipped under a pylon while standing at the strut's mid-height. The
+  character push cannot fix this without also breaking genuinely-behind
+  cases, because the plane really is south of the player. The design answer
+  is per-column or per-cell depth for runs whose art descends across many
+  rows (split the strut run at its diagonal), in `uprightRuns`/the footing
+  merge. Facts: machine facade z=19.5 lift 0-6; console pedestal z=20.5;
+  leg/foot-pad run z=22.5. Character push samples the max facade plane over
+  the sprite's overlap cells (x±1, y and y-1), never south rows.
 
 Open questions worth not re-fighting blindly:
 

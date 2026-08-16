@@ -7475,14 +7475,34 @@ Reactor3D.MapScene.prototype._updateCharacterBillboard = function(holder, sprite
     let shiftX = 0;
     let shiftZ = 0;
     if (!snapped) {
-        const facade = Reactor3D.facadeAt(
-            Math.round(character._realX), Math.round(character._realY));
-        if (facade) {
+        // The nearest facade plane among the cells the sprite overlaps: the
+        // one underfoot, its east/west neighbours, and the head row. A large
+        // structure's facade splits into runs with different base rows, and
+        // clearing only the run underfoot left the head clipped by the
+        // neighbouring run's art one plane nearer. Cells south of the
+        // character are never sampled, so standing genuinely behind a wall
+        // still hides.
+        const rx = Math.round(character._realX);
+        const ry = Math.round(character._realY);
+        let planeZ = null;
+        for (let dy = -1; dy <= 0; dy++) {
+            for (let dx = -1; dx <= 1; dx++) {
+                const facade = Reactor3D.facadeAt(rx + dx, ry + dy);
+                if (facade && (planeZ === null || facade.z > planeZ)) {
+                    planeZ = facade.z;
+                }
+            }
+        }
+        if (planeZ !== null) {
             const towardX = footX * 2;
             const towardZ = footZ * 2;
-            const aheadZ = facade.z + footZ + towardZ * 0.35;
-            shiftX = towardX * 0.35;
-            shiftZ = aheadZ - baseZ;
+            const aheadZ = planeZ + footZ + towardZ * 0.35;
+            // Only ever push towards the camera: a plane already behind the
+            // character must not drag their depth backwards.
+            if (aheadZ - baseZ > 0) {
+                shiftX = towardX * 0.35;
+                shiftZ = aheadZ - baseZ;
+            }
         }
     }
     // Depth-test as part of the wall it sits on: the twin walks the lift
