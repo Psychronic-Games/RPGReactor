@@ -75,6 +75,50 @@ class MapEditor3D {
      * URL-addressable runtime. Loading on demand means an editor session that
      * never opens the 3D view never parses two megabytes of three.js.
      */
+    _t(text) {
+        return typeof window !== 'undefined' && window.I18n ? window.I18n.tText(text) : text;
+    }
+
+    /**
+     * Crash breadcrumbs. A native GPU/renderer crash kills the process
+     * before any JS handler runs, so each activation stage is written
+     * synchronously to localStorage — which survives the death. The next
+     * launch reads the leftover stage, knows the 3D view took the editor
+     * down, records which context strategy was in flight, and tries the
+     * other one. Context sharing with PIXI was itself the fix for one
+     * class of Windows GPU-process crashes, and a dedicated context is
+     * the escape from another; no single strategy survives every driver.
+     */
+    _stage(name) {
+        try {
+            localStorage.setItem('rrMap3DStage', name);
+        } catch (error) { /* private mode: fly blind */ }
+    }
+
+    _clearStage() {
+        try {
+            localStorage.removeItem('rrMap3DStage');
+        } catch (error) { /* nothing to clear */ }
+    }
+
+    _crashedStrategies() {
+        try {
+            return (localStorage.getItem('rrMap3DCrashedStrategies') || '')
+                .split(',').filter(Boolean);
+        } catch (error) {
+            return [];
+        }
+    }
+
+    _pickContextStrategy() {
+        const crashed = this._crashedStrategies();
+        const strategy = crashed.indexOf('shared') >= 0 ? 'separate' : 'shared';
+        try {
+            localStorage.setItem('rrMap3DStrategy', strategy);
+        } catch (error) { /* best effort */ }
+        return strategy;
+    }
+
     async ensureLibraries() {
         if (this.librariesLoaded) return true;
         if (typeof window !== 'undefined' && window.THREE && window.Reactor3D) {
@@ -203,21 +247,34 @@ class MapEditor3D {
 
     async activate(generation) {
         try {
+            const crashed = this._crashedStrategies();
+            if (crashed.indexOf('shared') >= 0 && crashed.indexOf('separate') >= 0) {
+                throw new Error(this._t('The 3D view keeps crashing on this system; it stays off to protect your work.'));
+            }
+            this._stage('libraries');
             if (!await this.ensureLibraries()) {
+                this._clearStage();
                 console.error(`3D view unavailable: ${this.lastError}`);
                 return false;
             }
-            if (!this.activationIsCurrent(generation)) return false;
+            if (!this.activationIsCurrent(generation)) {
+                this._clearStage();
+                return false;
+            }
 
             this.enabled = true;
+            this._stage('canvas');
             if (!this.createCanvas()) throw new Error('The 3D map container could not be found.');
             if (!this.activationIsCurrent(generation)) {
+                this._clearStage();
                 this.teardown();
                 return false;
             }
 
+            this._stage('build');
             const rebuilt = await this.rebuild();
             if (!this.activationIsCurrent(generation)) {
+                this._clearStage();
                 this.teardown();
                 return false;
             }
@@ -225,12 +282,15 @@ class MapEditor3D {
 
             // Draw once before committing the preference. Context, shader, and
             // first-frame errors therefore fail while durable state is still 2D.
+            this._stage('first-render');
             this.render(typeof performance !== 'undefined' ? performance.now() : 0);
             this.startLoop();
             this.listenForEdits();
             this.showPixi(false);
+            this._clearStage();
             return true;
         } catch (error) {
+            this._clearStage();
             if (generation === this._lifecycleGeneration) this.fail(error);
             else this.teardown();
             return false;
@@ -351,6 +411,10 @@ class MapEditor3D {
         if (this.inputSurface?.parentNode) {
             this.inputSurface.parentNode.removeChild(this.inputSurface);
         }
+        if (this._ownCanvas && this.canvas && this.canvas.parentNode) {
+            this.canvas.parentNode.removeChild(this.canvas);
+        }
+        this._ownCanvas = false;
         if (this.hint && this.hint.parentNode) {
             this.hint.parentNode.removeChild(this.hint);
         }
@@ -411,6 +475,37 @@ class MapEditor3D {
         if (this.renderer && this.canvas) return true;
 
         const app = this.projectController?.app;
+        this._contextStrategy = this._pickContextStrategy();
+        if (this._contextStrategy === 'separate') {
+            // A dedicated canvas and context: the escape hatch for drivers
+            // that crash on the PIXI/three shared-context handoff. PIXI is
+            // paused and hidden exactly as in the shared path.
+            this._pixiWasRunning = app?.ticker?.started === true;
+            app?.stop?.();
+            this.canvas = document.createElement('canvas');
+            this.canvas.id = 'map-3d-canvas';
+            this.canvas.style.cssText =
+                'position: absolute; inset: 0; width: 100%; height: 100%; display: block; z-index: 5;';
+            container.appendChild(this.canvas);
+            this._ownCanvas = true;
+            this.inputSurface = document.createElement('div');
+            this.inputSurface.id = 'map-3d-input';
+            this.inputSurface.style.cssText =
+                'position: absolute; inset: 0; width: 100%; height: 100%; display: block; z-index: 6;';
+            container.appendChild(this.inputSurface);
+            this.createHint(container);
+            this.renderer = new THREE.WebGLRenderer({
+                canvas: this.canvas,
+                antialias: false,
+                powerPreference: 'default'
+            });
+            this.renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+            if (THREE.SRGBColorSpace) this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+            this.camera = Reactor3D.createCamera({ fov: 40 });
+            this.resize();
+            this.attachInput();
+            return true;
+        }
         const pixiRenderer = app?.renderer;
         const context = pixiRenderer?.gl;
         if (!app?.canvas || !context) {

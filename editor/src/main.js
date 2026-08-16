@@ -336,6 +336,28 @@ class RPGReactor {
         // parsed until a viewport actually needs it.
         const map3DCheckbox = document.getElementById('map-3d-view');
         if (map3DCheckbox) map3DCheckbox.checked = this.optionsManager.getMap3DView();
+        // A leftover activation stage means the LAST session died mid-way
+        // through turning 3D on — a native GPU crash no JS handler can see.
+        // Record which context strategy was in flight so the next attempt
+        // takes the other path, and stop 3D from re-arming itself at boot.
+        try {
+            const stage = localStorage.getItem('rrMap3DStage');
+            if (stage) {
+                localStorage.removeItem('rrMap3DStage');
+                const strategy = localStorage.getItem('rrMap3DStrategy') || 'shared';
+                const crashed = (localStorage.getItem('rrMap3DCrashedStrategies') || '')
+                    .split(',').filter(Boolean);
+                if (crashed.indexOf(strategy) < 0) crashed.push(strategy);
+                localStorage.setItem('rrMap3DCrashedStrategies', crashed.join(','));
+                this.optionsManager.setMap3DView(false);
+                if (map3DCheckbox) map3DCheckbox.checked = false;
+                console.error('The 3D map view crashed the editor last session at stage "'
+                    + stage + '" using the ' + strategy + ' context strategy.');
+                const tt = text => window.I18n ? window.I18n.tText(text) : text;
+                this.uiManager.updateStatus(
+                    tt('The 3D view crashed the editor last time; a safer graphics path will be tried on the next attempt.'));
+            }
+        } catch (error) { /* localStorage unavailable */ }
 
         // The tile grid, in both views. It is a guide rather than a mode, so
         // it is a preference like the others and both canvases read the same
