@@ -1,0 +1,5 @@
+{
+  "animations": [
+    { "name": "wheels", "part": "DEF-Wheel", "type": "spin", "axis": "x", "trigger": "moving", "perTile": 220 }
+  ]
+}

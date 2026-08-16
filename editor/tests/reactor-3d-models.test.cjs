@@ -784,3 +784,110 @@ test('the picker poses through rings around the model', () => {
     assert.match(source, /this\.selectedYaw = this\._wrapAngle\(this\.selectedYaw \+ dx \* 0\.5\)/);
     assert.doesNotMatch(source, /premultiply/, 'no camera-axis quaternion posing');
 });
+
+test('model animation rules normalise and load from the sidecar shape', () => {
+    const rules = Reactor3D.readModelAnimationRules({
+        animations: [
+            { name: 'wheels', part: 'DEF-Wheel', type: 'spin', axis: 'x', trigger: 'moving', perTile: 360 },
+            { part: 'V_004', type: 'swing', axis: 'x', trigger: 'action', degrees: 25, period: 30, cycles: 3 },
+            { type: 'bob', trigger: 'idle', amount: 0.05, period: 90 },
+            { type: 'nonsense', axis: 'w', trigger: 'sometimes' }
+        ]
+    });
+    assert.equal(rules.length, 4);
+    assert.deepEqual(
+        rules.map(rule => [rule.type, rule.axis, rule.trigger]),
+        [['spin', 'x', 'moving'], ['swing', 'x', 'action'], ['bob', 'y', 'idle'], ['spin', 'y', 'always']]
+    );
+    assert.equal(rules[0].perTile, 360);
+    assert.equal(rules[1].name, 'V_004', 'a nameless rule answers to its part');
+    assert.equal(Reactor3D.modelRuleDuration(rules[1]), 90, 'cycles times period');
+    assert.equal(rules[2].part, '', 'no part means the whole model');
+    assert.equal(Reactor3D.modelAnimationUrl('monster-plant'), '3d/monster-plant/model.json');
+    assert.equal(Reactor3D.readModelAnimationRules(null).length, 0);
+});
+
+test('an OBJ with named groups splits into parts with pivots', () => {
+    const obj = [
+        'g body',
+        'v 0 0 0', 'v 1 0 0', 'v 0 1 0',
+        'f 1 2 3',
+        'g jaw',
+        'v 4 0 0', 'v 6 0 0', 'v 4 2 0',
+        'f 4 5 6'
+    ].join('\n');
+    const mesh = Reactor3D.readObj(new TextEncoder().encode(obj).buffer);
+    assert.ok(mesh.groups, 'two named groups split the mesh');
+    assert.deepEqual(mesh.groups.map(run => run.name), ['body', 'jaw']);
+
+    global.self = global;
+    global.window = global;
+    require(path.join(repoRoot, 'runtime', 'libs', 'three.js'));
+    const template = Reactor3D.buildMeshTemplate(mesh, '', '');
+    const jaw = template.children.find(child => child.name === 'jaw');
+    assert.ok(jaw, 'the jaw is its own mesh');
+    assert.equal(jaw.userData.parts.length, 1);
+    // Pivot is the group's own centre, in geometry space.
+    assert.deepEqual(jaw.userData.parts[0].pivot, [5, 1, 0]);
+});
+
+test('animation rules turn a part about its pivot and reset when inactive', () => {
+    global.self = global;
+    global.window = global;
+    require(path.join(repoRoot, 'runtime', 'libs', 'three.js'));
+    const THREE = global.THREE;
+    const object = new THREE.Group();
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array([4, 0, 0, 6, 0, 0, 5, 1, 0]), 3));
+    const wheel = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial());
+    wheel.name = 'wheel';
+    wheel.userData.parts = [{ name: 'DEF-Wheel.01', pivot: [5, 0, 0] }];
+    object.add(wheel);
+
+    const binding = Reactor3D.prepareModelInstance(object);
+    assert.equal(binding.root.name, 'anim-root');
+    assert.equal(binding.meshes.length, 1);
+
+    const rules = Reactor3D.readModelAnimationRules({ animations: [
+        { name: 'wheels', part: 'DEF-Wheel', type: 'spin', axis: 'z', trigger: 'moving', perTile: 90 },
+        { name: 'sway', part: '', type: 'swing', axis: 'z', trigger: 'idle', degrees: 30, period: 60 }
+    ] });
+
+    // One tile of travel at 90 deg/tile: a quarter turn about the axle at
+    // x=5, so the mesh origin swings to put the pivot back in place.
+    Reactor3D.applyModelAnimation(binding, rules, { frame: 10, moving: true, distance: 1, scale: 1, action: null });
+    const quarter = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), Math.PI / 2);
+    assert.ok(wheel.quaternion.angleTo(quarter) < 1e-6, 'quarter turn about z');
+    const pivotNow = new THREE.Vector3(5, 0, 0).applyQuaternion(wheel.quaternion).add(wheel.position);
+    assert.ok(pivotNow.distanceTo(new THREE.Vector3(5, 0, 0)) < 1e-6, 'the axle stays put');
+    assert.equal(binding.root.quaternion.w, 1, 'idle sway is off while moving');
+
+    // Standing still: the wheel resets to rest, the whole model sways.
+    Reactor3D.applyModelAnimation(binding, rules, { frame: 15, moving: false, distance: 0, scale: 1, action: null });
+    assert.ok(wheel.quaternion.angleTo(quarter) < 1e-6, 'a stopped wheel keeps its angle');
+    assert.ok(Math.abs(binding.root.quaternion.z) > 0.01, 'the whole model sways at rest');
+
+    // Actions play by name for period*cycles frames, then stop.
+    const bite = Reactor3D.readModelAnimationRules({ animations: [
+        { name: 'bite', part: 'DEF-Wheel', type: 'swing', axis: 'x', trigger: 'action', degrees: 20, period: 20, cycles: 2 }
+    ] });
+    Reactor3D.applyModelAnimation(binding, bite, { frame: 105, moving: false, distance: 0, scale: 1, action: { name: 'bite', frame: 100 } });
+    assert.ok(wheel.quaternion.angleTo(new THREE.Quaternion()) > 0.01, 'the bite is playing');
+    Reactor3D.applyModelAnimation(binding, bite, { frame: 150, moving: false, distance: 0, scale: 1, action: { name: 'bite', frame: 100 } });
+    assert.ok(wheel.quaternion.angleTo(new THREE.Quaternion()) < 1e-6, 'past its duration the bite has let go');
+});
+
+test('the sync loop binds instances, loads rules, and plays queued actions', () => {
+    const source = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_3d.js'), 'utf8');
+    assert.match(source, /current\.binding = Reactor3D\.prepareModelInstance\(object\)/);
+    assert.match(source, /Reactor3D\.loadModelAnimations\(spec\.name\)\.then/);
+    assert.match(source, /Reactor3D\.applyModelAnimation\(holder\.binding, holder\.rules/);
+    // Part ancestry is stamped BEFORE the flatten bakes the hierarchy away.
+    assert.ok(source.indexOf('child.userData.parts = chain') < source.indexOf('this.flattenModelWorld(root);'),
+        'ancestry recorded before flattening');
+    // The plugin command answers the Play Model Animation event command and
+    // is a silent no-op on a stock MZ runtime.
+    assert.match(source, /PluginManager\.registerCommand\("RPGReactor", "PlayModelAnimation"/);
+    assert.equal(Reactor3D.modelInstanceKey({ eventId: () => 7 }), 'e7');
+    assert.equal(Reactor3D.modelInstanceKey({}), 'p');
+});
