@@ -619,3 +619,28 @@ test('collision follows the mesh world yaw, not the facing alone', () => {
         else global.$dataMap = previousMap;
     }
 });
+
+test('a model file keeps whatever extension case it shipped with', () => {
+    // Exporters write Plant_001.OBJ; the lowercase-only listing rule (right
+    // for runtime-reconstructed .png/.ogg URLs) hid the file entirely, and
+    // the picker reported the folder as empty. Model files are addressed by
+    // the exact name the sidecar records, so the case is kept.
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'rr-obj-case-'));
+    try {
+        fs.mkdirSync(path.join(root, '3d', 'monster-plant', 'source'), { recursive: true });
+        fs.writeFileSync(path.join(root, '3d', 'monster-plant', 'source', 'Plant_001.OBJ'), 'o');
+        const models = ModelGraphicPicker.listModels(root);
+        assert.equal(models.length, 1);
+        assert.equal(models[0].name, 'monster-plant');
+        assert.equal(models[0].file, 'Plant_001');
+        assert.equal(models[0].ext, '.OBJ', 'the sidecar records the real extension');
+    } finally {
+        fs.rmSync(root, { recursive: true, force: true });
+    }
+
+    // And a note-based spec with no extension probes upper-case variants too.
+    const core3d = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_3d.js'), 'utf8');
+    const at = core3d.indexOf('Reactor3D.loadModel = function');
+    const body = core3d.slice(at, core3d.indexOf('\n};', at));
+    assert.match(body, /next\.toUpperCase\(\)/);
+});

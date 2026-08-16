@@ -6571,6 +6571,18 @@ Reactor3D.loadModel = function(name, ext, file) {
         const next = kinds[i];
         const urls = this.modelUrls(name, next, file);
         for (let u = 0; u < urls.length; u++) jobs.push({ url: urls[u], ext: next });
+        // A note-based spec names no extension, and files ship in whatever
+        // case they were exported with — Plant_001.OBJ — which a
+        // case-sensitive filesystem will not serve for the lowercase guess.
+        if (!ext) {
+            const upper = next.toUpperCase();
+            if (upper !== next) {
+                const upperUrls = this.modelUrls(name, upper, file);
+                for (let u = 0; u < upperUrls.length; u++) {
+                    jobs.push({ url: upperUrls[u], ext: next });
+                }
+            }
+        }
     }
     entry.promise = new Promise(resolve => {
         if (typeof XMLHttpRequest === "undefined") {

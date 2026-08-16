@@ -35,12 +35,17 @@ class ModelGraphicPicker {
         const seen = new Set();
         const pickFrom = (dir, folderName) => {
             if (!fs.existsSync(dir) || typeof RRAssetFiles === 'undefined') return;
-            const files = RRAssetFiles.list(dir, ModelGraphicPicker.EXTS);
+            // anyCase: a model file keeps whatever extension case it shipped
+            // with (Plant_001.OBJ), and the sidecar records the real name.
+            const files = RRAssetFiles.list(dir, ModelGraphicPicker.EXTS, { anyCase: true });
             if (!files.length) return;
             const match = files.find(file => file.name === folderName) || files[0];
             if (seen.has(folderName)) return;
             seen.add(folderName);
-            found.push({ name: folderName, file: match.name, ext: match.extension });
+            found.push({
+                name: folderName, file: match.name,
+                ext: match.sourceExtension || match.extension
+            });
         };
         const root = path.join(projectPath, '3d');
         if (!fs.existsSync(root)) return found;

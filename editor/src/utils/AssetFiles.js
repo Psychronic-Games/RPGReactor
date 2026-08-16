@@ -69,7 +69,11 @@
                     // RPG Maker reconstructs lowercase .png/.ogg/etc. URLs at
                     // runtime, so exposing uppercase variants would save a name
                     // that works on Windows but fails on Linux and the Web.
-                    if (allowedSet.size && sourceExtension !== extension) continue;
+                    // Callers whose files are addressed by their real recorded
+                    // name — 3D models, whose sidecar stores the exact
+                    // filename — opt out with `anyCase` and keep the case.
+                    if (allowedSet.size && sourceExtension !== extension
+                        && !options.anyCase) continue;
                 }
 
                 const relativePath = parts.concat(recordName).join('/');
@@ -77,7 +81,8 @@
                     name: extension ? relativePath.slice(0, -extension.length) : relativePath,
                     relativePath,
                     absolutePath: recordAbsolutePath,
-                    extension
+                    extension,
+                    sourceExtension
                 });
             }
         };
