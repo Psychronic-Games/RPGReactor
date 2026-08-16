@@ -1,0 +1,25 @@
+{
+  "animations": [
+    {
+      "name": "animation-1",
+      "part": "Mesh_0007.rip",
+      "type": "spin",
+      "axis": "z",
+      "trigger": "moving",
+      "degrees": 4,
+      "period": 120,
+      "perTile": 0,
+      "speed": 120
+    },
+    {
+      "name": "animation-2",
+      "part": "Mesh_0006.rip",
+      "type": "spin",
+      "axis": "z",
+      "trigger": "moving",
+      "degrees": 4,
+      "period": 120,
+      "speed": 120
+    }
+  ]
+}

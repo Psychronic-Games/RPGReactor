@@ -846,18 +846,7 @@
     "id": 16,
     "displayType": 0,
     "effectName": "ClawPhysical",
-    "flashTimings": [
-      {
-        "frame": 0,
-        "duration": 30,
-        "color": [
-          255,
-          255,
-          255,
-          255
-        ]
-      }
-    ],
+    "flashTimings": [],
     "name": "Claw Physical",
     "offsetX": 0,
     "offsetY": 0,
@@ -867,44 +856,14 @@
       "z": 0
     },
     "scale": 100,
-    "soundTimings": [
-      {
-        "frame": 0,
-        "se": {
-          "name": "Attack2",
-          "pan": 0,
-          "pitch": 150,
-          "volume": 90
-        }
-      },
-      {
-        "frame": 1,
-        "se": {
-          "name": "Slash2",
-          "pan": 0,
-          "pitch": 100,
-          "volume": 90
-        }
-      }
-    ],
+    "soundTimings": [],
     "speed": 100
   },
   {
     "id": 17,
     "displayType": 0,
     "effectName": "ClawEffect",
-    "flashTimings": [
-      {
-        "frame": 0,
-        "duration": 30,
-        "color": [
-          255,
-          255,
-          255,
-          255
-        ]
-      }
-    ],
+    "flashTimings": [],
     "name": "Claw Effect",
     "offsetX": 0,
     "offsetY": 0,
@@ -914,35 +873,7 @@
       "z": 0
     },
     "scale": 100,
-    "soundTimings": [
-      {
-        "frame": 0,
-        "se": {
-          "name": "Evasion2",
-          "pan": 0,
-          "pitch": 150,
-          "volume": 80
-        }
-      },
-      {
-        "frame": 1,
-        "se": {
-          "name": "Attack2",
-          "pan": 0,
-          "pitch": 150,
-          "volume": 90
-        }
-      },
-      {
-        "frame": 2,
-        "se": {
-          "name": "Powerup",
-          "pan": 0,
-          "pitch": 150,
-          "volume": 90
-        }
-      }
-    ],
+    "soundTimings": [],
     "speed": 100
   },
   {
@@ -7318,18 +7249,7 @@
     "id": 91,
     "displayType": 0,
     "effectName": "WindOne1",
-    "flashTimings": [
-      {
-        "frame": 9,
-        "duration": 30,
-        "color": [
-          255,
-          255,
-          255,
-          170
-        ]
-      }
-    ],
+    "flashTimings": [],
     "name": "Wind One 1",
     "offsetX": 0,
     "offsetY": 0,
@@ -7339,17 +7259,7 @@
       "z": 0
     },
     "scale": 100,
-    "soundTimings": [
-      {
-        "frame": 0,
-        "se": {
-          "name": "Wind5",
-          "pan": 0,
-          "pitch": 80,
-          "volume": 90
-        }
-      }
-    ],
+    "soundTimings": [],
     "speed": 100
   },
   {

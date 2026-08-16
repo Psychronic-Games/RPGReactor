@@ -68,3 +68,6 @@ INSPIRATION/
 
 # Local maintainer handoffs
 /docs/STATUS-*.md
+# Transient per-project state: open-project locks and playtest saves.
+.rpgreactor.lock
+template/*/save/
