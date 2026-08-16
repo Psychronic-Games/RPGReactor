@@ -692,3 +692,19 @@ test('merging across the seam yields the full sheet rectangle on F', () => {
         classes, { tile: 1024, w: 16, h: 16 }, 9);
     assert.deepEqual(selection.sheet, { col: 0, row: 0, w: 16, h: 16 });
 });
+
+test('the 3D preview fits its pane and turns with the drag', () => {
+    const source = fs.readFileSync(
+        path.join(editorRoot, 'src', 'database', 'DatabaseTilesetEditor.js'), 'utf8');
+    // The scale answers to pane width, ground depth, and slab height at once;
+    // a fixed ten-pixel floor let a sixteen-row object tower off the pane.
+    const at = source.indexOf('const cell = Math.max(4, Math.min(');
+    assert.ok(at >= 0, 'the preview cell size is fitted, not floored at ten');
+    const sizing = source.slice(at, at + 300);
+    assert.match(sizing, /horizon - 8\) \/ Math\.max\(1, object\.h\)/,
+        'the standing slab height constrains the scale');
+    // Standing art shears with the turning ground line instead of being drawn
+    // face-on at fixed screen coordinates, so dragging visibly turns it.
+    assert.match(source, /drawPreviewPieceSheared\(ctx, source, dc, dr, p0, p1, top, cell\)/);
+    assert.match(source, /drawPreviewPieceSheared\(ctx, source, dc, dr, p0, p1, top, cellHeight\)/);
+});

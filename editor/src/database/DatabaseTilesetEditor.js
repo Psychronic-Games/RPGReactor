@@ -2824,17 +2824,22 @@ class DatabaseTilesetEditor {
 
         const yaw = ((this._preview3dYaw || 0) * Math.PI) / 180;
         // Sized to the object rather than fixed, so a single tile is not a
-        // speck in the middle of a wide empty plane and a 4x4 still fits.
+        // speck in the middle of a wide empty plane — and sized to FIT: the
+        // scale answers to the pane's width, the ground's depth, and the
+        // standing slab's height at once. A ten-pixel floor used to win over
+        // all three, so a sixteen-row object towered off the top of the pane
+        // and its ground ran off the sides, which read as the whole preview
+        // sitting off-centre.
         const span = Math.max(object.w, object.h) + 2.4;
-        const cell = Math.max(10, Math.min(30, (canvas.width - 16) / span));
-        // A ground plane seen at a slant, turning under the object. The turn
-        // has to be legible on the ground, because the standing art cannot show
-        // it: a cut-out spins to face the camera, so its picture is the same
-        // from every side. That is why the object read as a static 2D drawing
-        // when the ground was one fixed parallelogram.
         const squash = 0.55;
         const centreX = canvas.width / 2;
         const horizon = canvas.height * 0.66;
+        const cell = Math.max(4, Math.min(
+            30,
+            (canvas.width - 16) / span,
+            (canvas.height - 6 - horizon) / (span / 2 * squash),
+            (horizon - 8) / Math.max(1, object.h)
+        ));
         const project = (gx, gz) => ({
             x: centreX + (gx * Math.cos(yaw) - gz * Math.sin(yaw)) * cell,
             y: horizon + (gx * Math.sin(yaw) + gz * Math.cos(yaw)) * cell * squash
@@ -2886,19 +2891,40 @@ class DatabaseTilesetEditor {
             }
         }
 
-        // Standing parts, face-on, anchored on the middle of the footprint —
-        // where the renderer anchors them, and the point they turn about. On
-        // the southern edge the axis sat at the front of the object and it
-        // swung around that instead of turning where it stands.
-        const base = project(0, 0);
+        // Standing parts, drawn as an upright plane through the middle of the
+        // footprint that turns WITH the ground: each column's base follows the
+        // projected line at gz = 0, so dragging visibly swings the object
+        // instead of only sliding a parallelogram underneath a fixed picture.
+        // The art is a flat cut-out, so turning it foreshortens it — held at a
+        // readable minimum rather than vanishing edge-on, which is also what
+        // the in-game billboard does by never being edge-on at all.
         for (let dr = object.h - 1; dr >= 0; dr--) {
             for (let dc = 0; dc < object.w; dc++) {
                 if (roles[dr * object.w + dc] === classes.FLAT) continue;
-                const x = base.x + (dc - object.w / 2) * cell;
-                const y = base.y - (object.h - dr) * cell;
-                this.drawPreviewPiece(ctx, source, dc, dr, x, y, cell, cell);
+                const p0 = project(-halfW + dc, 0);
+                const p1 = project(-halfW + dc + 1, 0);
+                const top = -(object.h - dr) * cell;
+                this.drawPreviewPieceSheared(ctx, source, dc, dr, p0, p1, top, cell);
             }
         }
+    }
+
+    /**
+     * One standing tile as a sheared quad: its bottom edge runs from `p0` to
+     * `p1` on the turning ground line, its sides stay screen-vertical, and the
+     * art shears with it. Clamping the base edge's horizontal reach keeps a
+     * face readable near edge-on instead of collapsing to a sliver.
+     */
+    drawPreviewPieceSheared(ctx, source, dc, dr, p0, p1, top, cellHeight) {
+        const size = (source && source.size) || this.tileSize;
+        let wx = p1.x - p0.x;
+        const wy = p1.y - p0.y;
+        const floor = cellHeight * 0.22;
+        if (Math.abs(wx) < floor) wx = (wx < 0 ? -1 : 1) * floor;
+        ctx.save();
+        ctx.transform(wx / size, wy / size, 0, cellHeight / size, p0.x, p0.y + top);
+        this.drawPreviewPiece(ctx, source, dc, dr, 0, 0, size, size);
+        ctx.restore();
     }
 
     /**
