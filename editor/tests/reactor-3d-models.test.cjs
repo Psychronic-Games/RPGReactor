@@ -734,10 +734,15 @@ test('the picker poses through rings around the model', () => {
     assert.match(source, /Math\.hypot\(sx - event\.clientX, sy - event\.clientY\)/);
     assert.match(source, /b\.camDist < a\.camDist/, 'crossings prefer the ring on top');
     assert.doesNotMatch(source, /poseAxis/, 'no grab tubes to raycast');
-    // An armed Front/Back/Left/Right lands on a stationary left click even
-    // though plain drags orbit; the old gate required the pre-orbit pose
-    // state, so once looking around stopped reposing, placement went dead.
-    assert.match(source, /const placed = dragging\s*\n\s*&& this\._placingFace\s*\n\s*&& e\.button === 0/);
+    // An armed Front/Back/Left/Right takes total priority: the dot lands
+    // the moment the button goes DOWN, on the pressed pixel — no drift
+    // window for the orbit to steal. A click-on-release gate kept losing
+    // to human hand wobble, which read as the rings interfering.
+    assert.match(source, /if \(this\._placingFace && e\.button === 0 && !e\.ctrlKey && !e\.metaKey\) \{\s*\n\s*this\._placeFaceAt\(e\)/);
+    // A drag that slips past the modal edge "clicks" the backdrop (click
+    // targets the common ancestor of press and release) and cancelled the
+    // whole picker, dots and all. Closing needs press AND release there.
+    assert.match(source, /if \(e\.target === modal && backdropPressed\) this\._close\(\)/);
     // A near miss still lands: sparse meshes let the ray slip between
     // triangles at spots the eye reads as on the model, and swallowing the
     // click kept the mode armed with the rings away — placement looked

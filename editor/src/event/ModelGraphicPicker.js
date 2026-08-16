@@ -211,8 +211,17 @@ class ModelGraphicPicker {
             }
             this._close();
         });
+        // A click's target is the common ancestor of press and release, so
+        // a drag that starts on the preview and slips past the modal edge
+        // "clicks" the backdrop — and cancelled the whole picker, dots and
+        // all. Only a press AND release both on the backdrop closes it.
+        let backdropPressed = false;
+        modal.addEventListener('pointerdown', e => {
+            backdropPressed = e.target === modal;
+        });
         modal.addEventListener('click', e => {
-            if (e.target === modal) this._close();
+            if (e.target === modal && backdropPressed) this._close();
+            backdropPressed = false;
         });
     }
 
@@ -308,6 +317,15 @@ class ModelGraphicPicker {
         let startY = 0;
         let ringGrab = null;
         const down = e => {
+            // An armed side takes total priority: the dot lands the moment
+            // the button goes down, on the exact pressed pixel — no drift
+            // window, no orbit, nothing else to fight through. Right- or
+            // Ctrl-drag still orbits while armed for lining up the far side.
+            if (this._placingFace && e.button === 0 && !e.ctrlKey && !e.metaKey) {
+                this._placeFaceAt(e);
+                e.preventDefault();
+                return;
+            }
             dragging = true;
             ringGrab = null;
             // A grab on a pose ring turns that axis — the rings around the
@@ -343,7 +361,7 @@ class ModelGraphicPicker {
                 this._emphasizePoseRing(ringGrab.axis, true);
                 return;
             }
-            if (orbit) {
+            if (orbit || this._placingFace) {
                 this._view.yaw -= dx * 0.4;
                 this._view.pitch = Math.min(72, Math.max(5, this._view.pitch - dy * 0.3));
                 this._applyCamera();
@@ -351,20 +369,11 @@ class ModelGraphicPicker {
             }
             this._nudgeRotation(dx, dy);
         };
-        const up = e => {
-            // An armed face lands on a stationary left click; a real drag
-            // still orbits the view to line the spot up first. (This used
-            // to require the pre-orbit "pose drag" state, so once plain
-            // drags became orbits an armed click could never place.)
-            const placed = dragging
-                && this._placingFace
-                && e.button === 0
-                && Math.hypot(e.clientX - startX, e.clientY - startY) < 8;
+        const up = () => {
             dragging = false;
             ringGrab = null;
             this._emphasizePoseRing('', false);
             this._refreshCursor();
-            if (placed) this._placeFaceAt(e);
         };
         const wheel = e => {
             e.preventDefault();
