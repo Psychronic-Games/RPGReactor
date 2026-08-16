@@ -27,24 +27,31 @@ class ModelGraphicPicker {
         return window.I18n ? window.I18n.tText(text) : text;
     }
 
+    /**
+     * The colour map for formats that do not embed one: a file in the
+     * model's textures/ folder, preferring names that say they are the
+     * colour pass over normal/emissive companions. Shared with the event
+     * editor's preview, which falls back to it for specs saved before the
+     * sidecar carried a texture.
+     */
+    static colorTextureIn(texDir) {
+        const fs = require('fs');
+        if (!texDir || !fs.existsSync(texDir)) return '';
+        const images = fs.readdirSync(texDir)
+            .filter(name => /\.(png|jpe?g|webp)$/i.test(name)).sort();
+        if (!images.length) return '';
+        return images.find(name => /clr|colou?r|diffuse|albedo|base/i.test(name))
+            || images[0];
+    }
+
     static listModels(projectPath) {
         if (!projectPath) return [];
         const fs = require('fs');
         const path = require('path');
         const found = [];
         const seen = new Set();
-        // The colour map for formats that do not embed one: a file in the
-        // sibling textures/ folder, preferring names that say they are the
-        // colour pass over normal/emissive companions.
-        const textureFrom = dir => {
-            const texDir = path.join(path.dirname(dir), 'textures');
-            if (!fs.existsSync(texDir)) return '';
-            const images = fs.readdirSync(texDir)
-                .filter(name => /\.(png|jpe?g|webp)$/i.test(name)).sort();
-            if (!images.length) return '';
-            return images.find(name => /clr|colou?r|diffuse|albedo|base/i.test(name))
-                || images[0];
-        };
+        const textureFrom = dir =>
+            ModelGraphicPicker.colorTextureIn(path.join(path.dirname(dir), 'textures'));
         const pickFrom = (dir, folderName) => {
             if (!fs.existsSync(dir) || typeof RRAssetFiles === 'undefined') return;
             // anyCase: a model file keeps whatever extension case it shipped

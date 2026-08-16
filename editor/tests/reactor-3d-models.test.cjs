@@ -673,6 +673,16 @@ test('an OBJ with texture coordinates keeps them, and the spec its texture', () 
         fs.writeFileSync(path.join(root, '3d', 'plant', 'textures', 'PLANT_CLR_002.jpg'), 'c');
         const model = ModelGraphicPicker.listModels(root)[0];
         assert.equal(model.texture, 'PLANT_CLR_002.jpg', 'the colour pass wins');
+        assert.equal(ModelGraphicPicker.colorTextureIn(
+            path.join(root, '3d', 'plant', 'textures')), 'PLANT_CLR_002.jpg');
+
+        // The event editor's preview hands the texture through too, falling
+        // back to the folder-derived choice for specs saved before the
+        // sidecar carried one.
+        const pageEditor = fs.readFileSync(
+            path.join(repoRoot, 'editor', 'src', 'event', 'EventPageEditor.js'), 'utf8');
+        assert.match(pageEditor, /readModel\(buffer, model\.ext \|\| '\.glb', baseUrl, texture\)/);
+        assert.match(pageEditor, /ModelGraphicPicker\.colorTextureIn/);
 
         const mapData = { reactor3d: { events: {} } };
         Reactor3D.setEventModelSpec(mapData, 7, 0,

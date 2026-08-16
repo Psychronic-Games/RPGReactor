@@ -974,7 +974,14 @@ class EventPageEditor {
             const data = fs.readFileSync(filePath);
             const buffer = data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength);
             const baseUrl = 'file://' + path.dirname(filePath).replace(/\\/g, '/') + '/';
-            const template = Reactor3D.readModel(buffer, model.ext || '.glb', baseUrl);
+            // The colour map the sidecar names — or, for a spec saved before
+            // it carried one, the same folder-derived choice the picker makes.
+            const texture = model.texture
+                || (typeof ModelGraphicPicker !== 'undefined' && ModelGraphicPicker.colorTextureIn
+                    ? ModelGraphicPicker.colorTextureIn(
+                        path.join(project.path, '3d', model.name, 'textures'))
+                    : '');
+            const template = Reactor3D.readModel(buffer, model.ext || '.glb', baseUrl, texture);
             if (gen !== this._modelPreviewGen || !canvas.isConnected) return;
             const mesh = template.clone(true);
             const extent = template.userData.glbSize || { x: 1, y: 1, z: 1 };
