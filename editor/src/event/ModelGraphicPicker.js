@@ -330,6 +330,7 @@ class ModelGraphicPicker {
                 if (e.target === canvas && this._rings && !this._placingFace) {
                     const over = this._pickPoseRing(e);
                     canvas.style.cursor = over ? 'pointer' : 'grab';
+                    this._emphasizePoseRing(over ? over.axis : '', false);
                 }
                 return;
             }
@@ -339,7 +340,7 @@ class ModelGraphicPicker {
             lastY = e.clientY;
             if (ringGrab) {
                 this._dragPoseRing(e, ringGrab);
-                this._emphasizePoseRing(ringGrab.axis);
+                this._emphasizePoseRing(ringGrab.axis, true);
                 return;
             }
             if (orbit) {
@@ -356,7 +357,7 @@ class ModelGraphicPicker {
                 && Math.hypot(e.clientX - startX, e.clientY - startY) < 5;
             dragging = false;
             ringGrab = null;
-            this._emphasizePoseRing('');
+            this._emphasizePoseRing('', false);
             this._refreshCursor();
             if (placed) this._placeFaceAt(e);
         };
@@ -414,6 +415,7 @@ class ModelGraphicPicker {
         this._placingFace = this._placingFace === face ? '' : face;
         this._refreshFaceButtons();
         this._refreshCursor();
+        this._syncPoseRingVisibility();
     }
 
     _refreshCursor() {
@@ -460,6 +462,7 @@ class ModelGraphicPicker {
         this._rebuildFaceMarkers();
         this._refreshFaceButtons();
         this._refreshCursor();
+        this._syncPoseRingVisibility();
     }
 
     _rebuildFaceMarkers() {
@@ -539,13 +542,13 @@ class ModelGraphicPicker {
             const solid = new THREE.Mesh(
                 new THREE.TorusGeometry(radius, 0.02, 8, 64),
                 new THREE.MeshBasicMaterial({
-                    color, transparent: true, opacity: 0.85, fog: false
+                    color, transparent: true, opacity: 0.3, fog: false
                 })
             );
             const ghost = new THREE.Mesh(
                 solid.geometry,
                 new THREE.MeshBasicMaterial({
-                    color, transparent: true, opacity: 0.12,
+                    color, transparent: true, opacity: 0.05,
                     depthTest: false, depthWrite: false, fog: false
                 })
             );
@@ -572,6 +575,7 @@ class ModelGraphicPicker {
         };
         this._scene.add(ringRoot);
         this._syncPoseRings();
+        this._syncPoseRingVisibility();
     }
 
     _disposePoseRings() {
@@ -594,14 +598,25 @@ class ModelGraphicPicker {
         this._rings.roll.group.rotation.set(pitch, yaw, 0);
     }
 
-    /** While one ring is held, the others fade so the turn reads clearly. */
-    _emphasizePoseRing(axis) {
+    /**
+     * Rings whisper until touched: dim at rest so they never compete with
+     * the model or the face dots, brighter under the pointer, full only
+     * while held — when the others fall away so the turn reads clearly.
+     */
+    _emphasizePoseRing(axis, held) {
         if (!this._rings) return;
         for (const key of ['yaw', 'pitch', 'roll']) {
-            const held = !axis || key === axis;
-            this._rings[key].solid.material.opacity = held ? 0.85 : 0.25;
-            this._rings[key].ghost.material.opacity = held ? 0.12 : 0.04;
+            const mine = key === axis;
+            this._rings[key].solid.material.opacity =
+                mine ? (held ? 0.9 : 0.6) : (held && axis ? 0.08 : 0.3);
+            this._rings[key].ghost.material.opacity =
+                mine ? (held ? 0.14 : 0.08) : (held && axis ? 0.02 : 0.05);
         }
+    }
+
+    /** Placing a face dot hides the rings — same palette, different job. */
+    _syncPoseRingVisibility() {
+        if (this._rings) this._rings.root.visible = !this._placingFace;
     }
 
     /** The pose ring under the pointer, with its rotation plane, or null. */

@@ -738,7 +738,13 @@ test('the picker poses through rings around the model', () => {
     assert.match(source, /this\._rings\.roll\.group\.rotation\.set\(pitch, yaw, 0\)/);
     // Depth honesty: the solid pass depth-tests (no depthTest:false on it);
     // only the faint ghost renders through the model.
-    assert.match(source, /opacity: 0\.12,\s*\n\s*depthTest: false, depthWrite: false/);
+    assert.match(source, /opacity: 0\.05,\s*\n\s*depthTest: false, depthWrite: false/);
+    // The rings whisper until touched — hover brightens one, holding it
+    // drops the others — and they leave entirely while a face dot is being
+    // placed, whose markers share the same palette.
+    assert.match(source, /_emphasizePoseRing\(over \? over\.axis : '', false\)/);
+    assert.match(source, /_emphasizePoseRing\(ringGrab\.axis, true\)/);
+    assert.match(source, /this\._rings\.root\.visible = !this\._placingFace/);
     // The rings die with the preview.
     assert.match(source, /_disposePreview\(\) \{\s*\n\s*this\._disposePoseRings\(\)/);
     // Turntable fallback for Ctrl/right drags: one axis per gesture, never
