@@ -128,6 +128,8 @@ class ModelGraphicPicker {
                                         style="width:64px;padding:3px 5px;background:var(--color-bg-surface);color:var(--color-text);border:1px solid var(--color-border-input);">
                                     Z <input type="number" class="model-angle-z" step="1" value="${Math.round(this.selectedRoll)}"
                                         style="width:64px;padding:3px 5px;background:var(--color-bg-surface);color:var(--color-text);border:1px solid var(--color-border-input);">
+                                    <button type="button" class="rr-btn-secondary model-angle-level" title="${this._t('Zero the X and Z tilt; keep the turn')}">${this._t('Upright')}</button>
+                                    <button type="button" class="rr-btn-secondary model-angle-reset" title="${this._t('Zero every angle')}">${this._t('Reset')}</button>
                                     ${this._t('Model size (tiles)')}
                                     <input type="number" class="model-size-input" min="0.25" max="32" step="0.25"
                                         value="${this.selectedSize}"
@@ -173,6 +175,20 @@ class ModelGraphicPicker {
         bindAngle('.model-angle-x', 'selectedPitch');
         bindAngle('.model-angle-y', 'selectedYaw');
         bindAngle('.model-angle-z', 'selectedRoll');
+        // One-click rescue for a pose that drifted: Level keeps the turn and
+        // stands the model up; Reset clears everything.
+        const setAngles = (pitch, yaw, roll) => {
+            this.selectedPitch = pitch;
+            this.selectedYaw = yaw;
+            this.selectedRoll = roll;
+            this._applyModelRotation();
+            if (this._gizmo) this._gizmo.setRotation(pitch, yaw, roll);
+            this._syncAngleInputs();
+        };
+        const level = content.querySelector('.model-angle-level');
+        if (level) level.addEventListener('click', () => setAngles(0, this.selectedYaw, 0));
+        const reset = content.querySelector('.model-angle-reset');
+        if (reset) reset.addEventListener('click', () => setAngles(0, 0, 0));
         content.querySelectorAll('.model-picker-cancel').forEach(btn => {
             btn.addEventListener('click', () => this._close());
         });
@@ -292,7 +308,13 @@ class ModelGraphicPicker {
         let startY = 0;
         const down = e => {
             dragging = true;
-            orbit = e.button === 2 || e.shiftKey;
+            // Left-drag orbits the view — looking around must never edit the
+            // pose. Orbiting used to be the modifier and plain drags rewrote
+            // the model's X/Y/Z about camera axes, so inspecting a model
+            // quietly baked an unrecoverable tilt into the spec that stood
+            // the thing crooked in game. Turning the model is deliberate:
+            // right-drag or Ctrl-drag.
+            orbit = !(e.button === 2 || e.ctrlKey || e.metaKey);
             lastX = startX = e.clientX;
             lastY = startY = e.clientY;
             canvas.style.cursor = 'grabbing';

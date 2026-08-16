@@ -10,7 +10,7 @@ Last updated 2026-08-16.
   READMEs, and `[Unreleased - 0.98.2]` sections in both changelogs.
 - The 0.98.1 Web 3D, renderer-lifecycle, PIXI filter, and camera-pan changes are
   preserved in the immutable `v0.98.1` tag. New reports belong to 0.98.2.
-- Current validation is **1,396 passing tests** with no failures, skips, or
+- Current validation is **1,397 passing tests** with no failures, skips, or
   TODOs. Syntax and `git diff --check` also pass.
 
 ## Event 3D Models (active, 2026-08-15)

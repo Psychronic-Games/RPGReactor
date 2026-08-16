@@ -699,3 +699,18 @@ test('an OBJ with texture coordinates keeps them, and the spec its texture', () 
         else global.RRAssetFiles = previousAssets;
     }
 });
+
+test('looking around the model picker never edits the pose', () => {
+    // Plain drag used to rotate the MODEL about camera axes — inspecting a
+    // model quietly baked pitch/roll into the spec and it stood crooked in
+    // game, which read as the face dots being angle-dependent. Left-drag
+    // orbits now; posing is deliberate (right- or Ctrl-drag), and Upright /
+    // Reset rescue a drifted pose.
+    const source = fs.readFileSync(
+        path.join(repoRoot, 'editor', 'src', 'event', 'ModelGraphicPicker.js'), 'utf8');
+    assert.match(source, /orbit = !\(e\.button === 2 \|\| e\.ctrlKey \|\| e\.metaKey\)/);
+    assert.match(source, /model-angle-level/);
+    assert.match(source, /model-angle-reset/);
+    assert.match(source, /setAngles\(0, this\.selectedYaw, 0\)/, 'Upright keeps the turn');
+    assert.match(source, /setAngles\(0, 0, 0\)/, 'Reset clears everything');
+});
