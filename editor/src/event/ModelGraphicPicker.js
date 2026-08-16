@@ -110,10 +110,10 @@ class ModelGraphicPicker {
                         <canvas class="model-preview-canvas"
                             style="display:block;width:100%;height:100%;cursor:grab;"></canvas>
                         <div class="model-preview-message" style="display:none;position:absolute;inset:0;align-items:center;justify-content:center;color:var(--color-text-muted);font-size:13px;pointer-events:none;"></div>
-                        <div style="position:absolute;left:10px;right:10px;bottom:10px;display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap;">
+                        <div style="position:absolute;left:10px;right:10px;bottom:10px;display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap;pointer-events:none;">
                             <canvas class="model-gizmo-canvas" width="84" height="84"
-                                style="width:84px;height:84px;background:rgba(0,0,0,0.35);border:1px solid var(--color-border);border-radius:4px;"></canvas>
-                            <div style="display:flex;flex-direction:column;gap:6px;background:rgba(0,0,0,0.35);padding:6px 8px;border-radius:4px;">
+                                style="width:84px;height:84px;background:rgba(0,0,0,0.35);border:1px solid var(--color-border);border-radius:4px;pointer-events:auto;"></canvas>
+                            <div class="model-preview-controls" style="display:flex;flex-direction:column;gap:6px;background:rgba(0,0,0,0.35);padding:6px 8px;border-radius:4px;pointer-events:auto;">
                                 <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--color-text);">
                                     ${this._t('This side is')}
                                     <button type="button" class="rr-btn-secondary model-face-btn" data-face="front">${this._t('Front')}</button>
@@ -439,6 +439,14 @@ class ModelGraphicPicker {
 
     _refreshFaceButtons() {
         if (!this._modal) return;
+        // The gizmo ball floats over the scene and reads as ring controls;
+        // while a side is armed it yields completely — a dot click near
+        // the model's base lands in the scene, not on the widget.
+        const gizmoCanvas = this._modal.querySelector('.model-gizmo-canvas');
+        if (gizmoCanvas) {
+            gizmoCanvas.style.pointerEvents = this._placingFace ? 'none' : 'auto';
+            gizmoCanvas.style.opacity = this._placingFace ? '0.25' : '';
+        }
         this._modal.querySelectorAll('.model-face-btn').forEach(btn => {
             const face = btn.dataset.face;
             const placed = !!(this.selectedFaces && this.selectedFaces[face]);

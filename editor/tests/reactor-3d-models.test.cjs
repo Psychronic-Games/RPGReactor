@@ -743,6 +743,12 @@ test('the picker poses through rings around the model', () => {
     // targets the common ancestor of press and release) and cancelled the
     // whole picker, dots and all. Closing needs press AND release there.
     assert.match(source, /if \(e\.target === modal && backdropPressed\) this\._close\(\)/);
+    // The overlay strip floats over the scene: its transparent flex gaps
+    // must not eat clicks, and the gizmo ball — which reads as a ring
+    // control — yields entirely while a side is armed, so a dot click on
+    // it lands in the scene. Unarmed, the gizmo works as before.
+    assert.match(source, /flex-wrap:wrap;pointer-events:none;/);
+    assert.match(source, /gizmoCanvas\.style\.pointerEvents = this\._placingFace \? 'none' : 'auto'/);
     // A near miss still lands: sparse meshes let the ray slip between
     // triangles at spots the eye reads as on the model, and swallowing the
     // click kept the mode armed with the rings away — placement looked
