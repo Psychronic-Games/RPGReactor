@@ -85,8 +85,18 @@ test('tilemap preparation runs once during update, never during PIXI render setu
         path.join(repoRoot, 'runtime', 'reactor_core.js'), 'utf8');
     const start = core.indexOf('Tilemap.prototype.update = function()');
     const body = core.slice(start, core.indexOf('\n};', start));
-    assert.ok(body.indexOf('this.updateTransform();') >= 0);
-    assert.ok(body.indexOf('this.updateTransform();') < body.indexOf('this._syncV8TileLayers();'),
+    assert.ok(body.indexOf('this._prepareV8Frame();') >= 0,
+        'the update tail drives the shared frame preparation');
+
+    // The preparation itself keeps the ordering this test has always
+    // guarded: the whole plugin-wrapped transform chain runs before any tile
+    // mesh is published. (Its frame stamp lets the Tilemap onRender fallback
+    // no-op when update already prepared this frame — see
+    // tilemap-update-replacement.test.cjs.)
+    const prepareAt = core.indexOf('Tilemap.prototype._prepareV8Frame = function()');
+    const prepare = core.slice(prepareAt, core.indexOf('\n};', prepareAt));
+    assert.ok(prepare.indexOf('this.updateTransform();') >= 0);
+    assert.ok(prepare.indexOf('this.updateTransform();') < prepare.indexOf('this._syncV8TileLayers();'),
         'all plugin wrappers finish before every tile mesh is published');
 });
 

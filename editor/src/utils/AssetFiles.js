@@ -17,6 +17,15 @@
         .replace(/^\.\//, '')
         .replace(/^\/+|\/+$/g, '');
 
+    // RPG Maker-encrypted files stand in for their plain counterparts. They
+    // are listed under the plain extension and a plain absolutePath; loading
+    // goes through RPGReactorAssetUrl, which decrypts on the fly.
+    const ENCRYPTED_TO_PLAIN = {
+        '.png_': '.png', '.rpgmvp': '.png',
+        '.ogg_': '.ogg', '.rpgmvo': '.ogg',
+        '.m4a_': '.m4a', '.rpgmvm': '.m4a'
+    };
+
     const list = (rootDir, extensions, options = {}) => {
         if (!rootDir) return [];
 
@@ -47,18 +56,27 @@
                 if (!entry.isFile()) continue;
 
                 const sourceExtension = path.extname(entry.name);
-                const extension = sourceExtension.toLowerCase();
-                if (allowedSet.size && !allowedSet.has(extension)) continue;
-                // RPG Maker reconstructs lowercase .png/.ogg/etc. URLs at
-                // runtime, so exposing uppercase variants would save a name
-                // that works on Windows but fails on Linux and the Web.
-                if (allowedSet.size && sourceExtension !== extension) continue;
+                let extension = sourceExtension.toLowerCase();
+                let recordAbsolutePath = absolutePath;
+                let recordName = entry.name;
+                const plainExtension = ENCRYPTED_TO_PLAIN[extension];
+                if (plainExtension && (!allowedSet.size || allowedSet.has(plainExtension))) {
+                    recordName = entry.name.slice(0, -sourceExtension.length) + plainExtension;
+                    recordAbsolutePath = absolutePath.slice(0, -sourceExtension.length) + plainExtension;
+                    extension = plainExtension;
+                } else {
+                    if (allowedSet.size && !allowedSet.has(extension)) continue;
+                    // RPG Maker reconstructs lowercase .png/.ogg/etc. URLs at
+                    // runtime, so exposing uppercase variants would save a name
+                    // that works on Windows but fails on Linux and the Web.
+                    if (allowedSet.size && sourceExtension !== extension) continue;
+                }
 
-                const relativePath = nextParts.join('/');
+                const relativePath = parts.concat(recordName).join('/');
                 files.push({
                     name: extension ? relativePath.slice(0, -extension.length) : relativePath,
                     relativePath,
-                    absolutePath,
+                    absolutePath: recordAbsolutePath,
                     extension
                 });
             }
@@ -95,6 +113,15 @@
             const absolutePath = path.resolve(rootDir, ...normalized.split('/')) + extension;
             if (absolutePath !== resolvedRoot && !absolutePath.startsWith(`${resolvedRoot}${path.sep}`)) continue;
             try {
+                if (!fs.existsSync(absolutePath)
+                    && root.RREncryptedAssets && root.RREncryptedAssets.assetExists(absolutePath)) {
+                    return {
+                        name: normalized,
+                        relativePath: `${normalized}${extension}`,
+                        absolutePath,
+                        extension
+                    };
+                }
                 if (fs.existsSync(absolutePath) && fs.statSync(absolutePath).isFile()) {
                     return {
                         name: normalized,

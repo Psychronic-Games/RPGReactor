@@ -1228,7 +1228,9 @@ class DatabaseEditorUI {
             const fs = require('fs');
             let battlerDir = null;
             for (const dir of ['enemies', 'sv_enemies', 'characters']) {
-                if (fs.existsSync(path.join(this.currentProject.path, 'img', dir, entry.battlerName + '.png'))) {
+                const battlerCandidate = path.join(this.currentProject.path, 'img', dir, entry.battlerName + '.png');
+                if (fs.existsSync(battlerCandidate)
+                    || (typeof window !== 'undefined' && window.RREncryptedAssets?.assetExists(battlerCandidate))) {
                     battlerDir = dir;
                     break;
                 }

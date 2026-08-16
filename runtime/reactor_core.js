@@ -471,6 +471,50 @@ Utils.hasEncryptedAudio = function() {
 };
 
 /**
+ * Resolves a relative asset URL against the real filename casing on disk.
+ *
+ * Games authored on Windows can request "bell3.ogg" for a file saved as
+ * "Bell3.ogg"; Windows serves it, a case-sensitive filesystem 404s with no
+ * console hint beyond the failed request. NW.js has the filesystem at hand,
+ * so each path segment is matched case-insensitively instead.
+ *
+ * @param {string} url - The relative URL that failed to load.
+ * @returns {?string} The corrected URL, or null if no distinct match exists.
+ */
+Utils.correctFileCase = function(url) {
+    if (!this.isNwjs()) return null;
+    try {
+        const fs = require("fs");
+        const path = require("path");
+        const base = path.dirname(process.mainModule.filename);
+        const clean = decodeURIComponent(String(url).split("?")[0]);
+        if (/^([a-z][a-z0-9+.-]*:|\/)/i.test(clean)) return null;
+        const segments = clean.split("/").filter(s => s && s !== ".");
+        if (segments.some(s => s === "..")) return null;
+        let dir = base;
+        const corrected = [];
+        for (const segment of segments) {
+            let entries;
+            try {
+                entries = fs.readdirSync(dir);
+            } catch (e) {
+                return null;
+            }
+            const match = entries.includes(segment)
+                ? segment
+                : entries.find(e => e.toLowerCase() === segment.toLowerCase());
+            if (!match) return null;
+            corrected.push(match);
+            dir = path.join(dir, match);
+        }
+        const result = corrected.join("/");
+        return result !== clean ? result : null;
+    } catch (e) {
+        return null;
+    }
+};
+
+/**
  * Decrypts encrypted data.
  *
  * @param {ArrayBuffer} source - The data to be decrypted.
@@ -2622,6 +2666,21 @@ Bitmap.prototype._callLoadListeners = function() {
 };
 
 Bitmap.prototype._onError = function() {
+    // One retry with the on-disk casing before giving up: Windows-authored
+    // projects freely mix filename case that Windows resolves and a
+    // case-sensitive filesystem does not.
+    if (!this._triedCaseCorrection) {
+        this._triedCaseCorrection = true;
+        const suffix = Utils.hasEncryptedImages() ? "_" : "";
+        const corrected = Utils.correctFileCase(this._url + suffix);
+        if (corrected) {
+            this._url = suffix && corrected.endsWith(suffix)
+                ? corrected.slice(0, -suffix.length)
+                : corrected;
+            this._startLoading();
+            return;
+        }
+    }
     this._loadingState = "error";
 };
 
@@ -3113,6 +3172,20 @@ Tilemap.prototype.initialize = function() {
 
     this._createLayers();
     this.refresh();
+
+    // v8: repaint runs from the update() tail, but a plugin is free to
+    // replace Tilemap.prototype.update with a copy of the stock MZ body
+    // (MultiTweaks' animation-speed tweak does), which on v5 was fine
+    // because PIXI itself invoked updateTransform during render. Self-heal
+    // from the per-frame render callback: if this frame's preparation has
+    // not happened by render time, do it here, exactly once.
+    if (PIXI.TextureSource) {
+        this.onRender = () => {
+            if (this._v8PreparedFrame !== Graphics.frameCount) {
+                this._prepareV8Frame();
+            }
+        };
+    }
 };
 
 /**
@@ -3199,16 +3272,23 @@ Tilemap.prototype.update = function() {
     // A second invocation from PIXI's render preparation can reposition and
     // rebuild independently sorted row layers after some render groups have
     // already been prepared, showing moving seams through tall objects.
+    // The frame stamp keeps the onRender fallback (see initialize) from
+    // running preparation a second time in the same frame.
+    if (PIXI.TextureSource) {
+        this._prepareV8Frame();
+    }
+};
+
+Tilemap.prototype._prepareV8Frame = function() {
+    this._v8PreparedFrame = Graphics.frameCount;
     // The try/catch matches the onRender bridge's semantics: plugin
     // updateTransform chains that end in the legacy no-args
     // PIXI.Container.updateTransform (UltraMode7 does) throw on v8 after
     // their real work is done, and that throw is expected and non-fatal.
-    if (PIXI.TextureSource) {
-        try {
-            this.updateTransform();
-        } catch (e) { /* legacy PIXI tail; repaint work already done */ }
-        this._syncV8TileLayers();
-    }
+    try {
+        this.updateTransform();
+    } catch (e) { /* legacy PIXI tail; repaint work already done */ }
+    this._syncV8TileLayers();
 };
 
 Tilemap.prototype._syncV8TileLayers = function() {
@@ -7005,6 +7085,21 @@ WebAudio.prototype._onFetch = function(response) {
 };
 
 WebAudio.prototype._onError = function() {
+    // One retry with the on-disk casing before giving up: Windows-authored
+    // projects freely mix filename case that Windows resolves and a
+    // case-sensitive filesystem does not.
+    if (!this._triedCaseCorrection) {
+        this._triedCaseCorrection = true;
+        const suffix = Utils.hasEncryptedAudio() ? "_" : "";
+        const corrected = Utils.correctFileCase(this._url + suffix);
+        if (corrected) {
+            this._url = suffix && corrected.endsWith(suffix)
+                ? corrected.slice(0, -suffix.length)
+                : corrected;
+            this._startLoading();
+            return;
+        }
+    }
     if (this._sourceNodes.length > 0) {
         this._stopSourceNode();
     }

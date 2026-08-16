@@ -1,6 +1,6 @@
 # Handoff - 0.98.2 In Progress
 
-Last updated 2026-08-15.
+Last updated 2026-08-16.
 
 ## Release State
 
@@ -10,7 +10,7 @@ Last updated 2026-08-15.
   READMEs, and `[Unreleased - 0.98.2]` sections in both changelogs.
 - The 0.98.1 Web 3D, renderer-lifecycle, PIXI filter, and camera-pan changes are
   preserved in the immutable `v0.98.1` tag. New reports belong to 0.98.2.
-- Current validation is **1,366 passing tests** with no failures, skips, or
+- Current validation is **1,374 passing tests** with no failures, skips, or
   TODOs. Syntax and `git diff --check` also pass.
 
 ## Event 3D Models (active, 2026-08-15)
@@ -77,6 +77,50 @@ Open questions worth not re-fighting blindly:
 - Sync copies with `node editor/build-scripts/sync-runtime.cjs`
 
 World axes: X = map x, Y = up, Z = map y. Event Down = +Z.
+
+## Encrypted-Project Support (2026-08-16)
+
+Sojourn Saga (`/home/doug/Desktop/SojournSaga`, MZ, VisuStella + heavy custom
+plugins) joined the compatibility test pile. It ships standard MZ encryption
+(`.png_`/`.ogg_`, key in `System.json`), which surfaced three editor defects:
+
+- `editor/src/utils/EncryptedAssets.js` (new) installs the desktop
+  `window.RPGReactorAssetUrl`: plain files pass through as `file://`, encrypted
+  counterparts decrypt to cached `data:` URLs, and lookups fall back to a
+  case-insensitive directory match. The key is read from `System.json` or
+  recovered from the constant 16-byte PNG header (Petschko's trick).
+  `AssetFiles.list/find` present encrypted files under their plain extension.
+- `TilesetPaletteViewer.cacheCurrentLayer` no longer throws on a 0x0 canvas
+  when every sheet of a layer failed to load.
+- The splash screen sets `pointer-events: none` when its fade starts; it used
+  to eat every map click while invisible.
+- Runtime: `Utils.correctFileCase` + one-shot retries in `Bitmap._onError` and
+  `WebAudio._onError` fix Windows-authored case mismatches (`bell3` vs
+  `Bell3.ogg_`) on case-sensitive filesystems. Synced to all templates and
+  copied into SojournSaga's `js/`.
+
+A fourth defect was in-game only: the tavern rendered fully black tile layers
+under moving characters. MultiTweaks' "Tilemap animation speed" option replaces
+`Tilemap.prototype.update` with the stock MZ body — legal on PIXI v5, where
+PIXI ran `updateTransform` during render, but fatal on the v8 runtime, whose
+repaint lives in the update tail. `Tilemap.initialize` now installs an
+`onRender` fallback driving the shared `_prepareV8Frame`; a
+`Graphics.frameCount` stamp keeps preparation once-per-frame (the Project3
+double-prep guarantee). See `tilemap-update-replacement.test.cjs`.
+
+Two reported symptoms are the game's own configuration, not Reactor bugs:
+VisuMZ CoreEngine ships `QoL > NewGameBoot: true`, which auto-starts a new
+game and skips the title **only in playtest** (`test` mode — RPG Maker's
+playtest does the same), and MultiTweaks' "Stop out-focus audio" pauses all
+audio while the window is unfocused.
+
+Verified over CDP against the real project: all 9 tavern tileset sheets render,
+palette populates, Event mode selects and double-click opens the editor, no
+console errors; in-game `new WebAudio('audio/se/bell3.ogg')` becomes ready and
+the tavern paints 2,623 lower-layer tile rects at 144 FPS.
+Harness gotcha: the splash hides ~2.5s after project load — a scripted click
+before that lands on the (visible) splash and reads as a false selection
+failure.
 
 ## Chinese Audience Usability Pass
 

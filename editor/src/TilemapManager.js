@@ -2223,7 +2223,8 @@ class TilemapManager {
         // Load parallax image
         const parallaxPath = this.path.join(this.projectPath, 'img', 'parallaxes', parallaxName + '.png');
 
-        if (!this.fs.existsSync(parallaxPath)) {
+        if (!this.fs.existsSync(parallaxPath)
+            && !(typeof window !== 'undefined' && window.RREncryptedAssets?.assetExists(parallaxPath))) {
             if (this.layers.parallax) {
                 this.layers.parallax.visible = false;
             }
@@ -3505,7 +3506,8 @@ class TilemapManager {
 
         const parallaxPath = this.path.join(this.projectPath, 'img', 'parallaxes', parallaxName + '.png');
 
-        if (!this.fs.existsSync(parallaxPath)) {
+        if (!this.fs.existsSync(parallaxPath)
+            && !(typeof window !== 'undefined' && window.RREncryptedAssets?.assetExists(parallaxPath))) {
             return; // Skip if image doesn't exist
         }
 

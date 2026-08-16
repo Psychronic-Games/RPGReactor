@@ -451,12 +451,16 @@ class TilesetPaletteViewer {
             const layerKey = this.getLayerKeyFromIndex(i);
             const imgPath = this.path.join(this.projectPath, 'img', 'tilesets', name + '.png');
 
-            if (this.fs.existsSync(imgPath)) {
+            const exists = this.fs.existsSync(imgPath)
+                || (typeof window !== 'undefined' && window.RREncryptedAssets?.assetExists(imgPath));
+            if (exists) {
                 // Load image using Image object
                 const img = new Image();
                 img.src = typeof window !== 'undefined' && window.RPGReactorHost?.assetUrl
                     ? window.RPGReactorHost.assetUrl(imgPath)
-                    : 'file://' + imgPath.replace(/\\/g, '/');
+                    : (typeof window !== 'undefined' && window.RPGReactorAssetUrl
+                        ? window.RPGReactorAssetUrl(imgPath)
+                        : 'file://' + imgPath.replace(/\\/g, '/'));
 
                 await new Promise((resolve) => {
                     img.onload = () => {
@@ -566,6 +570,9 @@ class TilesetPaletteViewer {
 
     // Cache the current canvas content for fast redraws
     cacheCurrentLayer(canvas) {
+        // A layer whose sheets all failed to load renders into a 0x0 canvas,
+        // and drawImage throws InvalidStateError on those instead of no-oping.
+        if (!canvas || !canvas.width || !canvas.height) return;
         if (!this.cachedLayerCanvas) {
             this.cachedLayerCanvas = document.createElement('canvas');
         }

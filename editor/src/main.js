@@ -425,6 +425,9 @@ class RPGReactor {
             if (splash) {
                 splash.style.transition = 'opacity 0.5s';
                 splash.style.opacity = '0';
+                // The fading splash still covers the window; without this it
+                // swallows every click on the map until display:none lands.
+                splash.style.pointerEvents = 'none';
                 setTimeout(() => {
                     splash.style.display = 'none';
                 }, 500);
