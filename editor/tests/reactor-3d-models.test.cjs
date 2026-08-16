@@ -526,4 +526,10 @@ test('character billboards take the same footward step as tile cut-outs', () => 
     assert.match(body, /\* 0\.5;/, 'half a cell, matching the shader footward');
     assert.match(body, /_realX \+ 0\.5 \+ footX/, 'applied to the anchor');
     assert.match(body, /_realY \+ 0\.5 \+ footZ/);
+    // A decoration whose cell was stood into a facade anchors on that wall's
+    // plane, lifted along the same leaning axis the wall's quads use — the
+    // registry the builder records for exactly this (facadeAt).
+    assert.match(body, /Reactor3D\.facadeAt\(/);
+    assert.match(body, /facade\.z \+ footZ/);
+    assert.match(body, /up\.(x|y|z) \* facade\.lift/);
 });

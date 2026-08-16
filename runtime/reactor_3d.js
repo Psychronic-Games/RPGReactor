@@ -7428,8 +7428,31 @@ Reactor3D.MapScene.prototype._updateCharacterBillboard = function(holder, sprite
             footZ = (e[10] / reach) * 0.5;
         }
     }
-    holder.object.position.set(
-        character._realX + 0.5 + footX, ground, character._realY + 0.5 + footZ);
+    let baseX = character._realX + 0.5 + footX;
+    let baseY = ground;
+    let baseZ = character._realY + 0.5 + footZ;
+    // A decoration drawn over the scene follows the art it decorates. If its
+    // cell was stood into a facade, the builder recorded where that wall's
+    // plane is and how far up it the cell sits (`facadeAt`); anchoring there,
+    // lifted along the same leaning up axis the wall's quads use, keeps a
+    // console screen glued to its tile-drawn pedestal from every camera
+    // position. Left at its own row it sat a tile nearer the camera than the
+    // art it belongs to and slid against it as the view crossed the map.
+    if (character._priorityType === 2) {
+        const facade = Reactor3D.facadeAt(
+            Math.round(character._realX), Math.round(character._realY));
+        if (facade) {
+            baseY = facade.height;
+            baseZ = facade.z + footZ;
+            const up = camera ? Reactor3D.billboardUp(camera) : null;
+            if (up && facade.lift) {
+                baseX += up.x * facade.lift;
+                baseY += up.y * facade.lift;
+                baseZ += up.z * facade.lift;
+            }
+        }
+    }
+    holder.object.position.set(baseX, baseY, baseZ);
     Reactor3D.aimCharacterBillboard(holder.object, camera);
 };
 
