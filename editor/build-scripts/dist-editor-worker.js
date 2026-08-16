@@ -1025,6 +1025,10 @@ function buildWeb(stageRoot, stagingDir) {
     createNwPackage(webRoot, outputPath);
     createdArtifacts.add(outputPath);
     logGood(`Created: ${archiveName} (${(fs.statSync(outputPath).size / 1048576).toFixed(1)} MB, ${outputFiles.length} files)`);
+    // File count is a storefront's rule, not the build's: warn, never block.
+    if (outputFiles.length > 1000) {
+        log(`Warning: ${outputFiles.length} files — some browser-game storefronts reject uploads over 1000 files.`, '#ffcc00');
+    }
 }
 
 // ── Main build ──────────────────────────────────────────────────────
