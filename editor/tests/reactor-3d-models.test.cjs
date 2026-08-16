@@ -452,3 +452,64 @@ test('a turning model must clear the disc its corners sweep', () => {
         else global.Graphics = previousGraphics;
     }
 });
+
+test('an above-characters event billboard rides the above pass', () => {
+    // MZ's priority 2 is z=5 — over characters and over the star tiles. In a
+    // 3D scene with event models the character billboards live inside the
+    // world's depth, so the console screen an author placed over a machine
+    // was buried inside it.
+    assert.equal(Reactor3D.mapHasAboveEvents({ events: [null, {
+        pages: [{ priorityType: 1 }, { priorityType: 2 }]
+    }] }), true, 'any page set Above characters counts');
+    assert.equal(Reactor3D.mapHasAboveEvents({ events: [{ pages: [{ priorityType: 1 }] }] }), false);
+    assert.equal(Reactor3D.mapHasAboveEvents(null), false);
+
+    // setPass keeps models to the ground pass and above-billboards to the
+    // above pass; untoggled, billboards re-rendered over the star tiles.
+    const stub = {
+        _belowGroup: { visible: true }, _aboveGroup: { visible: true },
+        _modelsGroup: { visible: true }, _aboveBillboardsGroup: { visible: true },
+        _lightGroup: { visible: true }
+    };
+    Reactor3D.MapScene.prototype.setPass.call(stub, 'above');
+    assert.equal(stub._modelsGroup.visible, false);
+    assert.equal(stub._aboveBillboardsGroup.visible, true);
+    Reactor3D.MapScene.prototype.setPass.call(stub, 'below');
+    assert.equal(stub._modelsGroup.visible, true);
+    assert.equal(stub._aboveBillboardsGroup.visible, false);
+    Reactor3D.MapScene.prototype.setPass.call(stub, 'all');
+    assert.equal(stub._modelsGroup.visible, true);
+    assert.equal(stub._aboveBillboardsGroup.visible, true);
+
+    // On a model map the star tiles join the characters under one depth
+    // buffer ("world") and the upper texture carries only the event overlay
+    // ("overlay") — split passes would stamp a structure's top flat over a
+    // character standing in front of it.
+    Reactor3D.MapScene.prototype.setPass.call(stub, 'world');
+    assert.equal(stub._belowGroup.visible, true);
+    assert.equal(stub._aboveGroup.visible, true);
+    assert.equal(stub._modelsGroup.visible, true);
+    assert.equal(stub._aboveBillboardsGroup.visible, false);
+    Reactor3D.MapScene.prototype.setPass.call(stub, 'overlay');
+    assert.equal(stub._belowGroup.visible, false);
+    assert.equal(stub._aboveGroup.visible, false);
+    assert.equal(stub._modelsGroup.visible, false);
+    assert.equal(stub._aboveBillboardsGroup.visible, true);
+
+    // The tail wrapper that re-clamped models to below/all silently overrode
+    // every pass the base method learned — the world pass rendered an empty
+    // models group and every character and vehicle vanished.
+    const core3dTail = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_3d.js'), 'utf8');
+    assert.doesNotMatch(core3dTail, /_reactorSetPassModels/,
+        'setPass owns model visibility itself');
+    assert.match(sprites, /modelsInWorld \? "world" : \(split \? "below" : "all"\)/,
+        'the sprite pass picker uses world on model maps');
+
+    const core3d = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_3d.js'), 'utf8');
+    const sync = core3d.slice(core3d.indexOf('syncCharacterBillboards = function'),
+        core3d.indexOf('_updateCharacterBillboard = function'));
+    assert.match(sync, /character\._priorityType === 2/, 'priority is read per character');
+    assert.match(sync, /aboveBillboardsGroup\(\)/, 'and routes to the above group');
+    assert.match(sync, /depthTest = !above/, 'depth-free over the star tiles');
+    assert.match(sprites, /mapHasAboveEvents/, 'the above pass exists for such maps');
+});

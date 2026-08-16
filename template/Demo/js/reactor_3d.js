@@ -4249,8 +4249,24 @@ Reactor3D.MapScene.prototype.hasAbove = function() {
  */
 Reactor3D.MapScene.prototype.setPass = function(which) {
     const all = which === "all";
-    if (this._belowGroup) this._belowGroup.visible = all || which === "below";
-    if (this._aboveGroup) this._aboveGroup.visible = all || which === "above";
+    // "world" is the model-map arrangement: characters live inside the scene
+    // as billboards, so the star-flagged tiles join them under one depth
+    // buffer — standing in front of a tall structure occludes its top, and
+    // standing behind it is hidden, per pixel. The split passes exist for
+    // maps where characters are PIXI sprites sandwiched *between* the two
+    // textures; there the star tiles keep their own pass.
+    const world = which === "world";
+    if (this._belowGroup) this._belowGroup.visible = all || world || which === "below";
+    if (this._aboveGroup) this._aboveGroup.visible = all || world || which === "above";
+    // Models and ordinary character billboards belong with the ground:
+    // they hang off the scene directly, and left untoggled they re-rendered
+    // over the star-flagged tiles in the above pass.
+    if (this._modelsGroup) this._modelsGroup.visible = all || world || which === "below";
+    // Above-characters events stay a composite overlay — MZ's z=5 draws over
+    // characters and star tiles alike, which no depth buffer can express.
+    if (this._aboveBillboardsGroup) {
+        this._aboveBillboardsGroup.visible = all || which === "above" || which === "overlay";
+    }
     // Never with the others: the light pass is composited by addition and the
     // rest by covering, so drawing them together would blend one as the other.
     if (this._lightGroup) this._lightGroup.visible = which === "lights";
@@ -7172,6 +7188,33 @@ Reactor3D.MapScene.prototype.modelsGroup = function() {
     return this._modelsGroup;
 };
 
+/** Billboards for above-characters events, rendered with the above pass. */
+Reactor3D.MapScene.prototype.aboveBillboardsGroup = function() {
+    if (!this._aboveBillboardsGroup) {
+        this._aboveBillboardsGroup = new THREE.Group();
+        this._aboveBillboardsGroup.name = "above-character-billboards";
+        this._scene.add(this._aboveBillboardsGroup);
+    }
+    return this._aboveBillboardsGroup;
+};
+
+/**
+ * Whether any event page on the map is set "Above characters". Read from the
+ * raw data — every page, not only the active ones — because the above render
+ * pass is created once at scene build and a page switch must not need it to
+ * appear later.
+ */
+Reactor3D.mapHasAboveEvents = function(mapData) {
+    const events = (mapData && mapData.events) || [];
+    for (const event of events) {
+        if (!event || !event.pages) continue;
+        for (const page of event.pages) {
+            if (page && page.priorityType === 2) return true;
+        }
+    }
+    return false;
+};
+
 Reactor3D.MapScene.prototype.syncCharacterModels = function(characters) {
     if (typeof THREE === "undefined") return;
     const group = this.modelsGroup();
@@ -7299,8 +7342,25 @@ Reactor3D.MapScene.prototype.syncCharacterBillboards = function(sprites) {
             Reactor3D.straightenBillboardDepth(material);
             const object = new THREE.Mesh(geometry, material);
             group.add(object);
-            holder = { canvas, texture, geometry, object, stamp: "" };
+            holder = { canvas, texture, geometry, object, stamp: "", above: false };
             this._billboards.set(key, holder);
+        }
+        // An above-characters event rides the above pass over the star tiles,
+        // as MZ's z=5 does, and ignores depth there: a console screen must
+        // not be buried inside the console it decorates. Priority can change
+        // with the event page, so the parent follows it.
+        const above = character._priorityType === 2;
+        if (holder.above !== above) {
+            holder.above = above;
+            const parent = above ? this.aboveBillboardsGroup() : group;
+            if (holder.object.parent !== parent) {
+                if (holder.object.parent) holder.object.parent.remove(holder.object);
+                parent.add(holder.object);
+            }
+            holder.object.material.depthTest = !above;
+            holder.object.material.depthWrite = !above;
+            holder.object.renderOrder = above ? 10 : 0;
+            holder.object.material.needsUpdate = true;
         }
         this._updateCharacterBillboard(holder, sprite, character);
     }
@@ -7378,17 +7438,17 @@ Reactor3D.MapScene.prototype.clear = function() {
         this._modelsGroup.parent.remove(this._modelsGroup);
     }
     this._modelsGroup = null;
+    if (this._aboveBillboardsGroup && this._aboveBillboardsGroup.parent) {
+        this._aboveBillboardsGroup.parent.remove(this._aboveBillboardsGroup);
+    }
+    this._aboveBillboardsGroup = null;
     return _reactorClearModels.apply(this, arguments);
 };
 
-const _reactorSetPassModels = Reactor3D.MapScene.prototype.setPass;
-Reactor3D.MapScene.prototype.setPass = function(which) {
-    const result = _reactorSetPassModels.apply(this, arguments);
-    if (this._modelsGroup) {
-        this._modelsGroup.visible = which === "below" || which === "all";
-    }
-    return result;
-};
+// Models' pass visibility lives in setPass itself now. A tail wrapper used to
+// re-clamp _modelsGroup to the below/all passes, which silently overrode any
+// new pass the base method learned — the "world" pass rendered an empty
+// models group and every character and vehicle vanished.
 
 if (typeof module !== "undefined" && module.exports) {
     module.exports = Reactor3D;

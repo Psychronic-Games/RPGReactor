@@ -453,9 +453,11 @@ test('the 3D ground is drawn into the PIXI scene, not behind it', () => {
     // canvas it came off.
     const update = sprites.slice(sprites.indexOf('Spriteset_Map.prototype.updateReactor3D = function'));
     const body = update.slice(0, update.indexOf('\n};'));
-    const belowDraw = body.indexOf('renderPass(state.scene, split ? "below" : "all")');
+    // Model maps render "world"/"overlay", legacy maps "below"/"above"; the
+    // draw-then-upload ordering is the invariant either way.
+    const belowDraw = body.indexOf('modelsInWorld ? "world" : (split ? "below" : "all")');
     const belowUp = body.indexOf('updateReactor3DTexture(this._reactor3dBelow');
-    const aboveDraw = body.indexOf('renderPass(state.scene, "above")');
+    const aboveDraw = body.indexOf('renderPass(state.scene, modelsInWorld ? "overlay" : "above")');
     const aboveUp = body.indexOf('updateReactor3DTexture(this._reactor3dAbove');
     assert.ok(belowDraw >= 0 && belowUp > belowDraw, 'the ground is drawn then taken');
     assert.ok(aboveDraw > belowUp, 'and only then is the canvas reused');

@@ -4386,7 +4386,12 @@ Spriteset_Map.prototype.createReactor3DSprite = function(viewport, scene) {
     // characters and below everything a plugin hangs off the spriteset. Made a
     // sibling of the tilemap instead, it floated over fog and weather that
     // ought to cover it.
-    this._reactor3dAbove = scene && scene.hasAbove && scene.hasAbove()
+    // The pass also exists when any event page is "Above characters": on a
+    // map with event models those events render as billboards in this pass,
+    // and it is created once here — a page switch must not need it later.
+    this._reactor3dAbove = scene && ((scene.hasAbove && scene.hasAbove())
+        || (typeof Reactor3D !== "undefined" && Reactor3D.mapHasAboveEvents
+            && Reactor3D.mapHasAboveEvents(typeof $dataMap !== "undefined" ? $dataMap : null)))
         ? make(this._tilemap, this._tilemap.children.length)
         : null;
     if (this._reactor3dAbove) {
@@ -4486,12 +4491,19 @@ Spriteset_Map.prototype.updateReactor3D = function() {
 
     // Ground first, then — if the map has anything the 2D tilemap would have
     // drawn over the characters — the upper pass. Both come off the same
-    // canvas, one after the other.
+    // canvas, one after the other. On a map with event models the characters
+    // are billboards inside the scene, so the star-flagged tiles render WITH
+    // them under one depth buffer ("world") and the upper texture carries
+    // only the above-characters event overlay; split passes there would
+    // stamp a structure's top flat over a character standing in front of it.
+    const modelsInWorld = typeof Reactor3D !== "undefined" && Reactor3D.hasEventModels
+        && typeof $dataMap !== "undefined" && Reactor3D.hasEventModels($dataMap);
     const split = this._reactor3dAbove || this._reactor3dLights;
-    state.viewport.renderPass(state.scene, split ? "below" : "all");
+    state.viewport.renderPass(state.scene,
+        modelsInWorld ? "world" : (split ? "below" : "all"));
     this.updateReactor3DTexture(this._reactor3dBelow, canvas);
     if (this._reactor3dAbove) {
-        state.viewport.renderPass(state.scene, "above");
+        state.viewport.renderPass(state.scene, modelsInWorld ? "overlay" : "above");
         this.updateReactor3DTexture(this._reactor3dAbove, canvas);
     }
     if (this._reactor3dLights) {
