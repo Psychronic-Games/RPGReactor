@@ -479,7 +479,12 @@ class DatabaseTilesetEditor {
                              sheet was already leaving empty, so nothing the
                              author was looking at moves to make room. -->
                         <div style="flex: 1; overflow: auto; padding: 16px; display: flex; align-items: flex-start; justify-content: center; gap: 16px;">
-                            <div id="flag-mode-key" style="flex: 0 0 168px; align-self: flex-start;"></div>
+                            <!-- Sticky, so the Key — and the tool palettes it
+                                 hosts — stay reachable while a tall sheet
+                                 scrolls; a sheet is up to 32 rows and the
+                                 brushes were a full scroll away from the tiles
+                                 being painted. -->
+                            <div id="flag-mode-key" style="flex: 0 0 168px; align-self: flex-start; position: sticky; top: 0; max-height: 100%; overflow-y: auto;"></div>
                             <div id="compact-tileset-canvas-container" style="max-width: 100%;">
                                 <p style="color: var(--color-text-muted); font-size: 10px;">${tt('Click a layer on the left to view')}</p>
                             </div>

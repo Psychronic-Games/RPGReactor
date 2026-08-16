@@ -74,3 +74,9 @@ test('the sheet canvases carry the brush drag and the click honors the brush', (
     assert.match(clickBody, /this\.passageBrush/,
         'a picked mark paints instead of cycling');
 });
+
+test('the Key and its tool palettes stay pinned while the sheet scrolls', () => {
+    // A sheet is up to 32 display rows; without stickiness the brushes were a
+    // full scroll away from the tiles being painted.
+    assert.match(source, /id="flag-mode-key"[^>]*position: sticky; top: 0/);
+});
