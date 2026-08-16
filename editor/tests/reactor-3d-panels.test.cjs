@@ -240,7 +240,8 @@ test('a prop split across the sheet seam can be declared as one object', () => {
     assert.match(source, /mergeTile3DObject\(existingTile, addedTile, addedW, addedH\)/);
     assert.match(source, /if \(origin\.setNumber !== added\.setNumber\) \{\n\s*return \{ error: 'That is on a different sheet/,
         'two different sheets can never be one object, and it says so');
-    assert.match(source, /extend: !!event\.shiftKey/, 'shift is what extends');
+    assert.match(source, /extend: !!\(event\.shiftKey \|\| event\.ctrlKey \|\| event\.metaKey\)/,
+        'shift, ctrl, and cmd all extend — which key a hand reaches for varies');
     assert.match(source, /Shift-drag another part to add it to this one\./,
         'and the author is told the shortcut exists');
 });

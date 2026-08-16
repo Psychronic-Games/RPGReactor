@@ -1853,18 +1853,42 @@ class DatabaseTilesetEditor {
         // as whichever of its four squares happened to be clicked.
         const chosen = this.selected3dRect;
         if (chosen && (chosen.imageIndex === undefined || chosen.imageIndex === imageIndex)) {
-            const left = chosen.x * this.tileSize, top = chosen.y * this.tileSize;
-            const wide = chosen.w * this.tileSize, high = chosen.h * this.tileSize;
+            // A selection stored in sheet coordinates belongs to a declared
+            // object, and an object wide enough to cross column eight is one
+            // rectangle on the sheet shown as two stacked pieces in the
+            // palette. Each piece gets the wash and the ring, so a reactor
+            // spanning both halves reads as one selected object instead of
+            // drawing one box at coordinates that exist on neither piece.
+            const pieces = [];
+            if (chosen.sheet) {
+                const s = chosen.sheet;
+                const leftWidth = Math.min(s.col + s.w, 8) - s.col;
+                if (leftWidth > 0) pieces.push({ x: s.col, y: s.row, w: leftWidth, h: s.h });
+                const rightStart = Math.max(s.col, 8);
+                if (s.col + s.w > rightStart) {
+                    pieces.push({
+                        x: rightStart - 8, y: s.row + 16,
+                        w: s.col + s.w - rightStart, h: s.h
+                    });
+                }
+            } else {
+                pieces.push(chosen);
+            }
             ctx.save();
-            // A declared object's own outline is suppressed while it is
-            // selected, so this ring is the only box drawn round it. The wash
-            // covers the whole rectangle, which is what says the selection is
-            // the object rather than the cell that was clicked.
-            ctx.fillStyle = 'rgba(90, 190, 255, 0.14)';
-            ctx.fillRect(left, top, wide, high);
-            ctx.strokeStyle = 'rgba(120, 205, 255, 0.98)';
-            ctx.lineWidth = 3;
-            ctx.strokeRect(left + 1.5, top + 1.5, wide - 3, high - 3);
+            for (const piece of pieces) {
+                const left = piece.x * this.tileSize, top = piece.y * this.tileSize;
+                const wide = piece.w * this.tileSize, high = piece.h * this.tileSize;
+                // A declared object's own outline is suppressed while it is
+                // selected, so this ring is the only box drawn round it. The
+                // wash covers the whole rectangle, which is what says the
+                // selection is the object rather than the cell that was
+                // clicked.
+                ctx.fillStyle = 'rgba(90, 190, 255, 0.14)';
+                ctx.fillRect(left, top, wide, high);
+                ctx.strokeStyle = 'rgba(120, 205, 255, 0.98)';
+                ctx.lineWidth = 3;
+                ctx.strokeRect(left + 1.5, top + 1.5, wide - 3, high - 3);
+            }
             ctx.restore();
         }
 
@@ -3047,7 +3071,13 @@ class DatabaseTilesetEditor {
             if (this.currentEditMode !== 'tile3d') return;
             event.preventDefault();
             const cell = cellAt(event);
-            this._tile3dDrag = { imageIndex, from: cell, to: cell, extend: !!event.shiftKey };
+            // Shift, Ctrl, or Cmd all mean "add to the object": which key a
+            // hand reaches for varies by habit and platform, and refusing two
+            // of the three read as the gesture not existing.
+            this._tile3dDrag = {
+                imageIndex, from: cell, to: cell,
+                extend: !!(event.shiftKey || event.ctrlKey || event.metaKey)
+            };
             canvas.setPointerCapture?.(event.pointerId);
             this.repaintClickedCanvas(canvas, imageIndex, isSplitSheet);
         });
@@ -3198,6 +3228,15 @@ class DatabaseTilesetEditor {
         this._tile3dCorner = null;
     }
 
+    /** A declared object's selection rectangle, in sheet coordinates. */
+    static sheetSelection(classes, object, imageIndex) {
+        const origin = classes.sheetCell(object.tile);
+        return {
+            sheet: { col: origin.col, row: origin.row, w: object.w, h: object.h },
+            imageIndex
+        };
+    }
+
     /** The rectangle a drag covers, in tile coordinates. */
     static dragBounds(drag) {
         return {
@@ -3237,9 +3276,11 @@ class DatabaseTilesetEditor {
         this._selected3dObject = member ? member.object : null;
         // Carries the sheet it was made on: every sheet draws this overlay, and
         // a rectangle with no sheet on it was drawn at the same coordinates on
-        // all of them.
+        // all of them. An object's selection is stored in *sheet* coordinates:
+        // subtracting dc/dr from the display cell put the box at coordinates
+        // that exist on neither half once the object crosses the palette seam.
         this.selected3dRect = member
-            ? { x: x0 - member.dc, y: y0 - member.dr, w: member.object.w, h: member.object.h, imageIndex }
+            ? DatabaseTilesetEditor.sheetSelection(classes, member.object, imageIndex)
             : { x: x0, y: y0, w: x1 - x0 + 1, h: y1 - y0 + 1, imageIndex };
 
         if (tool === 'select') return;
@@ -3353,12 +3394,15 @@ class DatabaseTilesetEditor {
                 classes.clearObject(store, tilesetId, joinTo);
                 classes.defineObject(store, tilesetId, merged.tile, merged.w, merged.h);
                 this._lastDeclaredObject = merged.tile;
-                // The piece just added stays outlined. Clearing the selection
-                // outright read as the gesture having done nothing, and the
-                // merged object cannot be drawn as one box anyway when it
-                // spans the seam the two halves of the sheet are split at.
-                this.selected3dRect = { x: x0, y: y0, w: width, h: height, imageIndex };
-                this._selected3dObject = classes.objectAt(store, tilesetId, merged.tile)?.object || null;
+                // The whole merged object stays highlighted — drawn as two
+                // pieces when it spans the palette seam — so the gesture's
+                // result is visible as one selected object, not as whichever
+                // piece was added last.
+                const wholeObject = classes.objectAt(store, tilesetId, merged.tile)?.object
+                    || { tile: merged.tile, w: merged.w, h: merged.h };
+                this.selected3dRect = DatabaseTilesetEditor.sheetSelection(
+                    classes, wholeObject, imageIndex);
+                this._selected3dObject = wholeObject;
                 this.noteTile3DRefusal(`Object extended to ${merged.w}x${merged.h}. `
                     + 'Shift-drag again to add more.');
                 this.saveTileset3DFile();

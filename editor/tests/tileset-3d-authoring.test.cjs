@@ -576,12 +576,14 @@ test('a stray click cannot undo an object', () => {
     editor.tile3dTool = 'select';
     editor.applyTile3DTool({ imageIndex: 5, from: { x: 2, y: 2 }, to: { x: 2, y: 2 } }, 5, 8);
     // Field by field: the editor is evaluated in its own context, so its
-    // object literals do not share a prototype with this file's.
+    // object literals do not share a prototype with this file's. An object's
+    // selection is stored in sheet coordinates so the palette can draw it as
+    // both display pieces when it crosses the seam.
     const rect = editor.selected3dRect;
-    assert.equal(rect.x, 1);
-    assert.equal(rect.y, 1);
-    assert.equal(rect.w, 2);
-    assert.equal(rect.h, 2);
+    assert.equal(rect.sheet.col, 1);
+    assert.equal(rect.sheet.row, 1);
+    assert.equal(rect.sheet.w, 2);
+    assert.equal(rect.sheet.h, 2);
 });
 
 test('A5 declares objects; only A1-A4 cannot', () => {
@@ -648,4 +650,45 @@ test('laying an object\'s rows flat is written to the file', () => {
         'and the top row still stands');
     assert.deepEqual(saves, [classes.FLAT],
         'saved once, after the change rather than before it');
+});
+
+test('an object crossing the palette seam extends and selects as one', () => {
+    const source = fs.readFileSync(
+        path.join(editorRoot, 'src', 'database', 'DatabaseTilesetEditor.js'), 'utf8');
+    // Shift, Ctrl, and Cmd all arm the extend gesture.
+    assert.match(source, /event\.shiftKey \|\| event\.ctrlKey \|\| event\.metaKey/);
+    // Object selections are stored in sheet coordinates and drawn as the
+    // display pieces the split palette shows, so a full-sheet prop reads as
+    // one selected object instead of a box at impossible coordinates.
+    assert.match(source, /static sheetSelection\(classes, object, imageIndex\)/);
+    assert.match(source, /sheetSelection\(classes, member\.object, imageIndex\)/);
+    assert.match(source, /sheetSelection\(\s*classes, wholeObject, imageIndex\)/);
+    const drawAt = source.indexOf('const chosen = this.selected3dRect;');
+    const draw = source.slice(drawAt, drawAt + 2000);
+    assert.match(draw, /chosen\.sheet/);
+    assert.match(draw, /s\.row \+ 16/, 'the right half draws sixteen rows down');
+});
+
+test('merging across the seam yields the full sheet rectangle on F', () => {
+    const DatabaseTilesetEditor = require(
+        path.join(editorRoot, 'src', 'database', 'DatabaseTilesetEditor.js'));
+    const classes = require(path.join(editorRoot, 'src', 'utils', 'Tileset3DClass.js'));
+    const editor = Object.create(DatabaseTilesetEditor.prototype);
+    editor.currentTileset = { id: 2 };
+    editor.tileset3DClasses = () => classes;
+    const store = classes.create ? classes.create() : { tilesets: {} };
+    classes.defineObject(store, 2, 1024, 8, 16); // F upper display half
+    editor.tileset3DStore = () => store;
+
+    // The lower display half starts at F's sheet column 8: tile 1024 + 128.
+    const merged = editor.mergeTile3DObject(1024, 1024 + 128, 8, 16);
+    assert.ok(merged && !merged.error, merged && merged.error);
+    assert.equal(merged.tile, 1024);
+    assert.equal(merged.w, 16);
+    assert.equal(merged.h, 16);
+
+    // And the selection for that object spans both display pieces.
+    const selection = DatabaseTilesetEditor.sheetSelection(
+        classes, { tile: 1024, w: 16, h: 16 }, 9);
+    assert.deepEqual(selection.sheet, { col: 0, row: 0, w: 16, h: 16 });
 });
