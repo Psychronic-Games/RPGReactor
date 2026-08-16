@@ -245,6 +245,12 @@ class EventCommandPicker {
                                 ]
                             }
                         ]
+                    },
+                    {
+                        // The second column keeps the tab on the same
+                        // two-column grid as the others; coming commands
+                        // (camera paths and friends) will fill it.
+                        sections: []
                     }
                 ]
             }
