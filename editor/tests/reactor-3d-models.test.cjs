@@ -547,3 +547,35 @@ test('character billboards take the same footward step as tile cut-outs', () => 
     assert.match(body, /facade\.z \+ footZ/);
     assert.match(body, /up\.(x|y|z) \* facade\.lift/);
 });
+
+test('an angled model collides as its rotated rectangle, not its box', () => {
+    // At 45 degrees a nine-tile car's axis-aligned box balloons to near
+    // square and a character was stopped tiles away from the visible body.
+    const previousMap = global.$dataMap;
+    const event = {
+        _x: 5, _y: 5, _realX: 5, _realY: 5, _pageIndex: 0,
+        event: () => ({ id: 1 }), eventId: () => 1, direction: () => 2,
+        _reactorDir8: 3
+    };
+    global.$dataMap = { reactor3d: { events: { 1: { 0: { name: 'Car', size: 4 } } } } };
+    const spec = Reactor3D.characterModelSpec(event);
+    const key = Reactor3D.modelCacheKey(spec.name, spec.ext, spec.file);
+    const previousEntry = Reactor3D._glbCache[key];
+    Reactor3D._glbCache[key] = { template: { userData: { glbSize: { x: 1, y: 1, z: 4 } } } };
+    try {
+        const foot = Reactor3D.eventModelFootprint(event, spec);
+        assert.equal(Number(foot.yaw.toFixed(4)), Number((Math.PI / 4).toFixed(4)));
+        // Along the diagonal body: inside.
+        assert.equal(Reactor3D.eventModelContains(event, foot, 6, 6), true);
+        assert.equal(Reactor3D.eventModelContains(event, foot, 4, 4), true);
+        // At the axis-aligned box's corner, off the rotated body: outside.
+        assert.equal(Reactor3D.eventModelContains(event, foot, 7, 5), false);
+        assert.equal(Reactor3D.eventModelContains(event, foot, 5, 8), false);
+        // A plain box still tests as a box (older callers and stubs).
+        assert.equal(Reactor3D.eventModelContains(event, { halfX: 2, halfZ: 2 }, 7, 5), true);
+    } finally {
+        Reactor3D._glbCache[key] = previousEntry;
+        if (previousMap === undefined) delete global.$dataMap;
+        else global.$dataMap = previousMap;
+    }
+});

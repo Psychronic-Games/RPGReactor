@@ -6263,16 +6263,36 @@ Reactor3D.eventModelFootprint = function(character, spec, yaw) {
     const cos = Math.abs(Math.cos(yaw));
     const sin = Math.abs(Math.sin(yaw));
     return {
+        // The axis-aligned bounds, for quick rejection and the sweep radius.
         halfX: halfX * cos + halfZ * sin,
-        halfZ: halfX * sin + halfZ * cos
+        halfZ: halfX * sin + halfZ * cos,
+        // The true rotated rectangle: at an angle the AABB of a long car
+        // balloons to near-square, and a character was stopped tiles away
+        // from the visible body at its corners. Containment rotates into
+        // this frame instead, so walking right up to the metal is allowed
+        // from every side at every angle.
+        rawX: halfX,
+        rawZ: halfZ,
+        yaw
     };
 };
 
 Reactor3D.eventModelContains = function(character, foot, x, y) {
     const map = typeof $gameMap !== "undefined" ? $gameMap : null;
+    // With the body's own frame available, containment is the true rotated
+    // rectangle; a plain { halfX, halfZ } falls back to the axis-aligned box.
+    const oriented = foot.yaw != null && foot.rawX != null;
+    const cos = oriented ? Math.cos(foot.yaw) : 1;
+    const sin = oriented ? Math.sin(foot.yaw) : 0;
     const contains = (cx, cy) => {
         const dx = map && map.deltaX ? map.deltaX(x, cx) : x - cx;
         const dy = map && map.deltaY ? map.deltaY(y, cy) : y - cy;
+        if (oriented) {
+            const localX = dx * cos - dy * sin;
+            const localZ = dx * sin + dy * cos;
+            return Math.abs(localX) < foot.rawX + 0.5 - 1e-6
+                && Math.abs(localZ) < foot.rawZ + 0.5 - 1e-6;
+        }
         return Math.abs(dx) < foot.halfX + 0.5 - 1e-6
             && Math.abs(dy) < foot.halfZ + 0.5 - 1e-6;
     };
