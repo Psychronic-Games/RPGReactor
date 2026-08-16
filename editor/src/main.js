@@ -341,14 +341,26 @@ class RPGReactor {
         // Record which context strategy was in flight so the next attempt
         // takes the other path, and stop 3D from re-arming itself at boot.
         try {
+            // Earlier builds blamed a context strategy for ANY 3D crash,
+            // including ones during library loading where no context had
+            // been touched; clear that verdict once so nobody is stuck on
+            // the fallback path over a since-fixed loader crash.
+            if (!localStorage.getItem('rrMap3DBlameReset1')) {
+                localStorage.setItem('rrMap3DBlameReset1', '1');
+                localStorage.removeItem('rrMap3DCrashedStrategies');
+            }
             const stage = localStorage.getItem('rrMap3DStage');
             if (stage) {
                 localStorage.removeItem('rrMap3DStage');
                 const strategy = localStorage.getItem('rrMap3DStrategy') || 'shared';
-                const crashed = (localStorage.getItem('rrMap3DCrashedStrategies') || '')
-                    .split(',').filter(Boolean);
-                if (crashed.indexOf(strategy) < 0) crashed.push(strategy);
-                localStorage.setItem('rrMap3DCrashedStrategies', crashed.join(','));
+                // A crash while loading libraries says nothing about the
+                // context strategy — no context existed yet.
+                if (stage !== 'libraries') {
+                    const crashed = (localStorage.getItem('rrMap3DCrashedStrategies') || '')
+                        .split(',').filter(Boolean);
+                    if (crashed.indexOf(strategy) < 0) crashed.push(strategy);
+                    localStorage.setItem('rrMap3DCrashedStrategies', crashed.join(','));
+                }
                 this.optionsManager.setMap3DView(false);
                 if (map3DCheckbox) map3DCheckbox.checked = false;
                 console.error('The 3D map view crashed the editor last session at stage "'

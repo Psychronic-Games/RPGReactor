@@ -187,16 +187,28 @@ class MapEditor3D {
     }
 
     injectScript(source, label) {
+        // A Blob URL, not element.textContent: inline script text parses
+        // synchronously on the main thread, and V8's recursive parser
+        // overflows the ~1MB Windows main-thread stack on a 2MB bundle —
+        // STATUS_ACCESS_VIOLATION, the whole editor gone, while Linux's 8MB
+        // stacks never noticed. External-script semantics compile off the
+        // main thread with room to breathe.
         return new Promise((resolve, reject) => {
+            const blob = new Blob([source + '\n//# sourceURL=' + label], { type: 'text/javascript' });
+            const url = URL.createObjectURL(blob);
             const element = document.createElement('script');
-            element.textContent = source;
+            element.src = url;
             element.dataset.rrSource = label;
-            try {
-                document.head.appendChild(element);
+            element.onload = () => {
+                URL.revokeObjectURL(url);
                 resolve();
-            } catch (error) {
-                reject(error);
-            }
+            };
+            element.onerror = () => {
+                URL.revokeObjectURL(url);
+                element.remove?.();
+                reject(new Error(`Could not load ${label}`));
+            };
+            document.head.appendChild(element);
         });
     }
 
