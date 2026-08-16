@@ -228,7 +228,16 @@ class EventCommandPicker {
                                     { name: 'Script', code: 355 },
                                     { name: 'Plugin Command', code: 356 }
                                 ]
-                            },
+                            }
+                        ]
+                    }
+                ]
+            },
+            tab4: {
+                name: 'Reactor',
+                columns: [
+                    {
+                        sections: [
                             {
                                 title: '3D',
                                 commands: [
@@ -353,7 +362,7 @@ class EventCommandPicker {
             padding: 4px;
         `;
 
-        const tabs = ['tab1', 'tab2', 'tab3'];
+        const tabs = ['tab1', 'tab2', 'tab3', 'tab4'];
         tabs.forEach((tabKey, index) => {
             const tab = document.createElement('button');
             tab.textContent = this._sectionName(this.commandData[tabKey].name);

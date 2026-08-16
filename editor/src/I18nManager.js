@@ -10662,6 +10662,7 @@ Object.assign(RR_EVENT_COMMAND_NAMES['zh-Hans'], {
     }
     for (const lang of Object.keys(RR_EVENT_SECTION_NAMES)) {
         RR_EVENT_SECTION_NAMES[lang]['3D'] = '3D';
+        RR_EVENT_SECTION_NAMES[lang]['Reactor'] = 'Reactor';
     }
 })();
 

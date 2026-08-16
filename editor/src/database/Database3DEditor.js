@@ -117,7 +117,45 @@ class Database3DEditor {
         this.playRules = typeof Reactor3D !== 'undefined'
             ? Reactor3D.readModelAnimationRules({ animations: this.rawAnimations })
             : [];
+        if (this._binding) this._binding.angles = {};
         this.renderSimBar();
+        this._refreshHighlight();
+    }
+
+    /** The meshes a part prefix would drive, by the runtime's own matcher. */
+    _matchedMeshes(part) {
+        if (!this._binding) return [];
+        if (!part) return this._binding.meshes.slice();
+        const partLower = part.toLowerCase();
+        return this._binding.meshes.filter(entry =>
+            entry.parts.some(p => p.name.toLowerCase().indexOf(partLower) === 0));
+    }
+
+    /**
+     * A box around what the selected rule drives, so the choice of part is
+     * visible before anything moves.
+     */
+    _refreshHighlight() {
+        if (!this._scene || typeof THREE === 'undefined') return;
+        if (this._highlight) {
+            this._scene.remove(this._highlight);
+            if (this._highlight.geometry) this._highlight.geometry.dispose();
+            if (this._highlight.material) this._highlight.material.dispose();
+            this._highlight = null;
+        }
+        const raw = this.rawAnimations[this.selectedRule];
+        if (!raw || !this._object) return;
+        const box = new THREE.Box3();
+        if (raw.part) {
+            for (const entry of this._matchedMeshes(raw.part)) {
+                box.expandByObject(entry.mesh);
+            }
+        } else {
+            box.setFromObject(this._object);
+        }
+        if (box.isEmpty()) return;
+        this._highlight = new THREE.Box3Helper(box, 0xffd15c);
+        this._scene.add(this._highlight);
     }
 
     async selectModel(entry) {
@@ -125,12 +163,44 @@ class Database3DEditor {
         this.selectedName = entry.name;
         this.selectedRule = -1;
         this._sim.action = null;
+        if (this._highlight && this._scene) {
+            this._scene.remove(this._highlight);
+            this._highlight = null;
+        }
         this.highlightModel();
         this.rawAnimations = this.loadRawAnimations();
+        this.embeddedClips = this._readEmbeddedClips(entry);
         await this._drawPreview(entry);
         this.rebuildPlayback();
         this.renderRuleList();
         this.renderRuleForm();
+        const status = this._detail.querySelector('.r3d-status');
+        if (status) {
+            status.textContent = this.embeddedClips.length
+                ? `${this._t('Embedded clips')}: ${this.embeddedClips.length}`
+                : '';
+        }
+    }
+
+    /**
+     * Clip names baked into a GLB's animation block. The engine cannot play
+     * skinned clips yet, but the section says they are there.
+     */
+    _readEmbeddedClips(entry) {
+        if ((entry.ext || '.glb').toLowerCase() !== '.glb' || typeof Reactor3D === 'undefined') return [];
+        try {
+            const fs = require('fs');
+            const path = require('path');
+            const project = this._project();
+            const file = (entry.file || entry.name) + (entry.ext || '.glb');
+            const next = path.join(project.path, '3d', entry.name, 'source', file);
+            const filePath = fs.existsSync(next) ? next : path.join(project.path, '3d', 'source', file);
+            const data = fs.readFileSync(filePath);
+            const parsed = Reactor3D.readGlb(data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength));
+            return (parsed.json.animations || []).map(clip => clip.name || '');
+        } catch (error) {
+            return [];
+        }
     }
 
     async _drawPreview(entry) {
@@ -160,15 +230,34 @@ class Database3DEditor {
             this._scale = 1.6 / span;
             object.scale.setScalar(this._scale);
             this._binding = Reactor3D.prepareModelInstance(object);
+            // Scene-graph plumbing is not a part: exporters wrap models in
+            // root/scene/rig nodes that match every mesh at once, and a rule
+            // aimed there whirls the whole model about one corner.
+            const plumbing = /^(GLTF_SceneRootNode|Sketchfab_model|RootNode|root([._-]?\d+)*$|Scene$|Armature)/i;
             this.partNames = [];
             const seen = new Set();
             for (const meshEntry of this._binding.meshes) {
                 for (const part of meshEntry.parts) {
-                    if (seen.has(part.name)) continue;
+                    if (seen.has(part.name) || plumbing.test(part.name)) continue;
                     seen.add(part.name);
                     this.partNames.push(part.name);
                 }
             }
+            this.partNames.sort();
+            // Families collapse numbered siblings (DEF-Wheel.002, .003 …)
+            // into one option that drives them all.
+            const families = new Map();
+            for (const name of this.partNames) {
+                const family = name.replace(/([._-]\d+)+$/, '');
+                // "Object" is what exporters call everything they didn't
+                // name; a family of it drives half the model at once.
+                if (!family || family === name || /^Object$/i.test(family)) continue;
+                families.set(family, (families.get(family) || 0) + 1);
+            }
+            this.partFamilies = Array.from(families.entries())
+                .filter(([, count]) => count >= 2)
+                .map(([name, count]) => ({ name, count }))
+                .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
             if (!this._renderer) {
                 this._scene = new THREE.Scene();
                 this._scene.background = new THREE.Color(0x1a1a1e);
@@ -296,7 +385,10 @@ class Database3DEditor {
     ruleSummary(raw) {
         const type = raw.type === 'swing' || raw.type === 'bob' ? raw.type : 'spin';
         const label = type === 'swing' ? this._t('Swing') : type === 'bob' ? this._t('Bob') : this._t('Spin');
-        return `${raw.name || '?'} — ${label} · ${raw.part || this._t('Whole model')}`;
+        const trigger = raw.trigger === 'idle' ? this._t('While idle')
+            : raw.trigger === 'moving' ? this._t('While moving')
+            : raw.trigger === 'action' ? this._t('On demand') : this._t('Always');
+        return `${raw.name || '?'} — ${label} · ${raw.part || this._t('Whole model')} · ${trigger}`;
     }
 
     renderRuleList() {
@@ -320,10 +412,11 @@ class Database3DEditor {
         this.rawAnimations.push({
             name: 'animation-' + (this.rawAnimations.length + 1),
             part: '',
-            type: 'spin',
-            axis: 'y',
+            type: 'swing',
+            axis: 'z',
             trigger: 'always',
-            speed: 90
+            degrees: 4,
+            period: 120
         });
         this.selectedRule = this.rawAnimations.length - 1;
         this.saveRules();
@@ -356,8 +449,28 @@ class Database3DEditor {
         const options = (pairs, current) => pairs
             .map(([value, label]) => `<option value="${value}"${value === current ? ' selected' : ''}>${label}</option>`)
             .join('');
-        const partOptions = [['', this._t('Whole model')]]
-            .concat(this.partNames.map(name => [name, name]));
+        const escape = value => String(value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+        const partChoice = current => {
+            const option = (value, label) =>
+                `<option value="${escape(value)}"${value === current ? ' selected' : ''}>${escape(label)}</option>`;
+            let out = option('', this._t('Whole model'));
+            if (this.partFamilies && this.partFamilies.length) {
+                out += `<optgroup label="${escape(this._t('Groups'))}">`
+                    + this.partFamilies.map(f => option(f.name, `${f.name} (${f.count})`)).join('')
+                    + '</optgroup>';
+            }
+            if (this.partNames.length) {
+                out += `<optgroup label="${escape(this._t('Parts'))}">`
+                    + this.partNames.map(name => option(name, name)).join('')
+                    + '</optgroup>';
+            }
+            // A saved part that no longer resolves still shows, marked.
+            if (current && this.partNames.indexOf(current) < 0
+                && !(this.partFamilies || []).some(f => f.name === current)) {
+                out += option(current, current + ' ?');
+            }
+            return out;
+        };
         let params = '';
         if (type === 'spin') {
             params = field(this._t('Speed (degrees per second)'),
@@ -380,7 +493,8 @@ class Database3DEditor {
         form.innerHTML = field(this._t('Name'),
             `<input type="text" class="r3d-f" data-key="name" value="${(raw.name || '').replace(/"/g, '&quot;')}" ${input}>`)
             + field(this._t('Part'),
-            `<select class="r3d-f" data-key="part" ${input}>${options(partOptions, raw.part || '')}</select>`)
+            `<select class="r3d-f" data-key="part" ${input}>${partChoice(raw.part || '')}</select>`)
+            + `<div class="r3d-match-count" style="margin:-3px 0 7px 138px;font-size:11px;color:var(--color-text-muted);"></div>`
             + field(this._t('Type'),
             `<select class="r3d-f" data-key="type" ${input}>${options([
                 ['spin', this._t('Spin')], ['swing', this._t('Swing')], ['bob', this._t('Bob')]
@@ -395,6 +509,14 @@ class Database3DEditor {
                 ['moving', this._t('While moving')], ['action', this._t('On demand')]
             ], ['idle', 'moving', 'action'].indexOf(raw.trigger) >= 0 ? raw.trigger : 'always')}</select>`)
             + params;
+        const matchCount = () => {
+            const line = form.querySelector('.r3d-match-count');
+            if (!line) return;
+            const n = raw.part ? this._matchedMeshes(raw.part).length : (this._binding ? 1 : 0);
+            line.textContent = `${this._t('Affected parts')}: ${raw.part ? n : this._t('Whole model')}`;
+        };
+        matchCount();
+        this._refreshHighlight();
         form.querySelectorAll('.r3d-f').forEach(control => {
             control.addEventListener('change', () => {
                 const key = control.dataset.key;
@@ -403,6 +525,7 @@ class Database3DEditor {
                 raw[key] = value;
                 this.saveRules();
                 this.renderRuleList();
+                matchCount();
                 if (key === 'type' || key === 'trigger') this.renderRuleForm();
             });
         });
