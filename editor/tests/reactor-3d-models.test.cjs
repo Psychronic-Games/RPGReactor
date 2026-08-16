@@ -726,8 +726,18 @@ test('the picker poses through rings around the model', () => {
     const source = fs.readFileSync(
         path.join(repoRoot, 'editor', 'src', 'event', 'ModelGraphicPicker.js'), 'utf8');
     assert.match(source, /_buildPoseRings\(\)/);
-    assert.match(source, /userData\.poseAxis = axis/, 'grips carry their axis');
     assert.match(source, /ringGrab = this\._pickPoseRing\(e\)/, 'pointer down grabs a ring');
+    // A grab lands on the line the eye sees: rings are picked by screen
+    // distance to the drawn circle, tie-broken at crossings by which ring
+    // is drawn on top. Ray-depth picking through fat invisible tubes sent
+    // a third of direct clicks to a ring visibly away from the pointer.
+    assert.match(source, /Math\.hypot\(sx - event\.clientX, sy - event\.clientY\)/);
+    assert.match(source, /b\.camDist < a\.camDist/, 'crossings prefer the ring on top');
+    assert.doesNotMatch(source, /poseAxis/, 'no grab tubes to raycast');
+    // An armed Front/Back/Left/Right lands on a stationary left click even
+    // though plain drags orbit; the old gate required the pre-orbit pose
+    // state, so once looking around stopped reposing, placement went dead.
+    assert.match(source, /const placed = dragging\s*\n\s*&& this\._placingFace\s*\n\s*&& e\.button === 0/);
     assert.match(source, /this\._dragPoseRing\(e, ringGrab\)/, 'drag follows the grabbed ring');
     // The turn is the signed pointer angle about the ring's own plane, so
     // exactly one euler moves per drag.

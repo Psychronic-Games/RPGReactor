@@ -352,8 +352,13 @@ class ModelGraphicPicker {
             this._nudgeRotation(dx, dy);
         };
         const up = e => {
-            const placed = this._placingFace
-                && !orbit
+            // An armed face lands on a stationary left click; a real drag
+            // still orbits the view to line the spot up first. (This used
+            // to require the pre-orbit "pose drag" state, so once plain
+            // drags became orbits an armed click could never place.)
+            const placed = dragging
+                && this._placingFace
+                && e.button === 0
                 && Math.hypot(e.clientX - startX, e.clientY - startY) < 5;
             dragging = false;
             ringGrab = null;
@@ -553,22 +558,16 @@ class ModelGraphicPicker {
                 })
             );
             ghost.renderOrder = 5;
-            const grip = new THREE.Mesh(
-                new THREE.TorusGeometry(radius, 0.14, 8, 32),
-                new THREE.MeshBasicMaterial({ visible: false })
-            );
-            grip.userData.poseAxis = axis;
             orient(solid);
             orient(ghost);
-            orient(grip);
             group.add(solid);
             group.add(ghost);
-            group.add(grip);
             ringRoot.add(group);
-            return { group, solid, ghost, grip };
+            return { group, solid, ghost };
         };
         this._rings = {
             root: ringRoot,
+            radius,
             yaw: makeRing('yaw', 0x3ddc84, mesh => mesh.rotation.x = Math.PI / 2),
             pitch: makeRing('pitch', 0xff5c5c, mesh => mesh.rotation.y = Math.PI / 2),
             roll: makeRing('roll', 0x5ca8ff, () => {})
@@ -619,22 +618,55 @@ class ModelGraphicPicker {
         if (this._rings) this._rings.root.visible = !this._placingFace;
     }
 
-    /** The pose ring under the pointer, with its rotation plane, or null. */
+    /**
+     * The pose ring under the pointer, with its rotation plane, or null.
+     * Chosen by SCREEN distance to each ring's drawn circle — a grab lands
+     * on the line the eye sees. Fat invisible grab tubes used to decide by
+     * ray depth instead, so near ring crossings a click on one ring seized
+     * whichever ring's tube sat closer to the camera: a third of direct
+     * clicks grabbed a ring visibly away from the pointer.
+     */
     _pickPoseRing(event) {
         if (!this._rings || !this._camera || typeof THREE === 'undefined') return null;
+        if (!this._rings.root.visible) return null;
         const canvas = this._modal && this._modal.querySelector('.model-preview-canvas');
         if (!canvas) return null;
         const rect = canvas.getBoundingClientRect();
-        const ndc = new THREE.Vector2(
-            ((event.clientX - rect.left) / rect.width) * 2 - 1,
-            -((event.clientY - rect.top) / rect.height) * 2 + 1
-        );
-        const caster = new THREE.Raycaster();
-        caster.setFromCamera(ndc, this._camera);
-        const grips = [this._rings.yaw.grip, this._rings.pitch.grip, this._rings.roll.grip];
-        const hits = caster.intersectObjects(grips, false);
-        if (!hits.length) return null;
-        const axis = hits[0].object.userData.poseAxis;
+        const radius = this._rings.radius;
+        const camPos = this._camera.getWorldPosition(new THREE.Vector3());
+        const nearest = {};
+        for (const key of ['yaw', 'pitch', 'roll']) {
+            const q = this._rings[key].group.getWorldQuaternion(new THREE.Quaternion());
+            let best = null;
+            for (let i = 0; i < 72; i++) {
+                const t = (i / 72) * Math.PI * 2;
+                const world = (key === 'yaw'
+                    ? new THREE.Vector3(radius * Math.cos(t), 0, radius * Math.sin(t))
+                    : key === 'pitch'
+                        ? new THREE.Vector3(0, radius * Math.cos(t), radius * Math.sin(t))
+                        : new THREE.Vector3(radius * Math.cos(t), radius * Math.sin(t), 0)
+                ).applyQuaternion(q);
+                const v = world.clone().project(this._camera);
+                if (v.z > 1) continue;
+                const sx = rect.left + (v.x + 1) / 2 * rect.width;
+                const sy = rect.top + (1 - v.y) / 2 * rect.height;
+                const d = Math.hypot(sx - event.clientX, sy - event.clientY);
+                if (!best || d < best.d) best = { d, camDist: world.distanceTo(camPos) };
+            }
+            if (best && best.d <= 12) nearest[key] = best;
+        }
+        let axis = null;
+        for (const key of Object.keys(nearest)) {
+            if (!axis) { axis = key; continue; }
+            const a = nearest[axis];
+            const b = nearest[key];
+            // At a crossing the circles coincide on screen; take the one
+            // drawn on top there — otherwise plain nearest wins.
+            axis = Math.abs(a.d - b.d) < 4
+                ? (b.camDist < a.camDist ? key : axis)
+                : (b.d < a.d ? key : axis);
+        }
+        if (!axis) return null;
         const ring = this._rings[axis];
         // The ring's rotation plane: normal is the ring group's local axis
         // the torus circles, taken to world space.
