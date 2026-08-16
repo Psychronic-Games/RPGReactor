@@ -74,13 +74,22 @@ the work to pick up first. Demo: Map001 event 22 ("Tank"), Buick at
   settles per pixel against any mesh with no sort rules. Verified south
   (fully in front) and north (correctly clear) of the parked Buick.
 
+### Depth model as of 2026-08-16 (owner-driven, iterated live)
+
+One rule: real per-pixel depth, with billboards depth-twinned vertical at
+their anchor. Star tiles render in the world buffer on model maps. A
+stationary event on a facade cell snaps to that wall's plane (facadeAt) with
+a coplanar polygon-offset pull; a walking character ON a facade's footprint
+gets its depth pushed just in front of that plane (rrDepthShift uniforms)
+while its drawn position stays put — pressed against the console or crossing
+the reactor's apron the player stays visible; off the footprint, behind
+means hidden. Character billboards take the tile cut-outs' footward step so
+2D-authored stacking holds from every camera position.
+
 ### What is still off
 
-Depth is closer after the upright billboard change but the owner still finds
-the player/car relationship "not quite right." Next session should stand in
-front of, beside, and behind the car, then while it drives its route, and
-adjust sort / billboard tilt / footprint vs visual mesh until the feet and
-the body agree.
+The player/car relationship may still want tuning; walk front, beside, and
+behind the car while it drives and judge feet vs body.
 
 Open questions worth not re-fighting blindly:
 

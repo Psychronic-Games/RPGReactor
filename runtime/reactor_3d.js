@@ -4421,11 +4421,21 @@ Reactor3D.straightenBillboardDepth = function(material) {
     // axis and up world-up instead, so the decoration depth-tests as part of
     // the wall it sits on rather than as a plane standing north of it.
     material.userData.rrDepthLift = { value: 0 };
+    // A world-space nudge for the twin's anchor alone: a walking character
+    // standing ON a facade's footprint has its depth pushed just in front of
+    // that wall's plane — the art on their cell draws under them, as it does
+    // in 2D — while their drawn position stays exactly where they stand.
+    material.userData.rrDepthShiftX = { value: 0 };
+    material.userData.rrDepthShiftZ = { value: 0 };
     const earlier = material.onBeforeCompile;
     material.onBeforeCompile = function(shader, renderer) {
         if (typeof earlier === "function") earlier.call(this, shader, renderer);
         shader.uniforms.rrDepthLift = material.userData.rrDepthLift;
-        shader.vertexShader = "uniform float rrDepthLift;\n" + shader.vertexShader.replace(
+        shader.uniforms.rrDepthShiftX = material.userData.rrDepthShiftX;
+        shader.uniforms.rrDepthShiftZ = material.userData.rrDepthShiftZ;
+        shader.vertexShader = "uniform float rrDepthLift;\n"
+            + "uniform float rrDepthShiftX;\nuniform float rrDepthShiftZ;\n"
+            + shader.vertexShader.replace(
             "#include <project_vertex>",
             `
             #include <project_vertex>
@@ -4434,7 +4444,8 @@ Reactor3D.straightenBillboardDepth = function(material) {
                 vec3 rrLeanUp = modelMatrix[1].xyz;
                 float rrHeight = length(rrLeanUp);
                 vec3 rrAnchor = modelMatrix[3].xyz
-                    - normalize(rrLeanUp) * rrDepthLift;
+                    - normalize(rrLeanUp) * rrDepthLift
+                    + vec3(rrDepthShiftX, 0.0, rrDepthShiftZ);
                 vec3 rrVertical = rrAnchor
                     + rrRight * position.x
                     + vec3(0.0, 1.0, 0.0) * (rrHeight * position.y + rrDepthLift);
@@ -7454,11 +7465,32 @@ Reactor3D.MapScene.prototype._updateCharacterBillboard = function(holder, sprite
             }
         }
     }
+    // A walking character standing on a facade's footprint wins against
+    // that wall: their cell's art draws under them in 2D, so their depth is
+    // pushed just in front of the wall's plane while their drawn position
+    // stays put. Off the footprint, real depth rules — genuinely behind the
+    // structure still means hidden. This is the bias that lets a player
+    // pressed right up against a console, or crossing a machine's apron
+    // rows, stay visible instead of sinking behind art rooted south of them.
+    let shiftX = 0;
+    let shiftZ = 0;
+    if (!snapped) {
+        const facade = Reactor3D.facadeAt(
+            Math.round(character._realX), Math.round(character._realY));
+        if (facade) {
+            const towardX = footX * 2;
+            const towardZ = footZ * 2;
+            const aheadZ = facade.z + footZ + towardZ * 0.35;
+            shiftX = towardX * 0.35;
+            shiftZ = aheadZ - baseZ;
+        }
+    }
     // Depth-test as part of the wall it sits on: the twin walks the lift
     // back to the facade base (see straightenBillboardDepth).
-    const liftUniform = holder.object.material.userData
-        && holder.object.material.userData.rrDepthLift;
-    if (liftUniform) liftUniform.value = depthLift;
+    const userData = holder.object.material.userData || {};
+    if (userData.rrDepthLift) userData.rrDepthLift.value = depthLift;
+    if (userData.rrDepthShiftX) userData.rrDepthShiftX.value = shiftX;
+    if (userData.rrDepthShiftZ) userData.rrDepthShiftZ.value = shiftZ;
     // Snapped onto a wall, the billboard is coplanar with the wall's own
     // quads; a depth bias pulls it just ahead of them — over its pedestal,
     // never over a genuinely nearer character, who wins by real depth.

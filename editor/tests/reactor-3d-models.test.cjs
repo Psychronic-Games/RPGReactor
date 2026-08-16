@@ -519,6 +519,12 @@ test('an above-characters event billboard rides the above pass', () => {
     assert.match(update, /snapped \|\| character\._priorityType === 2/,
         'the coplanar pull follows the snap or the authored priority');
     assert.match(update, /polygonOffsetFactor = biased \? -4 : 0/);
+    // A walking character ON a facade's footprint wins against that wall:
+    // their depth is pushed just in front of its plane while their drawn
+    // position stays put — pressed against a console or crossing a
+    // machine's apron rows, they stay visible.
+    assert.match(update, /rrDepthShiftX/);
+    assert.match(update, /aheadZ - baseZ/);
     assert.match(sprites, /mapHasAboveEvents/, 'the above pass exists for such maps');
 });
 
