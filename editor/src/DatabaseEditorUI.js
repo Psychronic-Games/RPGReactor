@@ -39,6 +39,7 @@ class DatabaseEditorUI {
         };
         this.troopEditor = new DatabaseTroopEditor(databaseManager, eventProjectManager, this.commonUI, this);
         this.tilesetEditor = new DatabaseTilesetEditor(databaseManager, { getCurrentProject: () => this.currentProject }, this.commonUI, this);
+        this.reactor3dEditor = new Database3DEditor(databaseManager, { getCurrentProject: () => this.currentProject });
         const system1ProjectManager = {
             getCurrentProject: () => this.currentProject,
             get tilemapManager() {
@@ -357,6 +358,12 @@ class DatabaseEditorUI {
                 data = this.databaseManager.getCommonEvents();
                 title = this._dbTitle(type, 'Common Events');
                 break;
+            case 'reactor3d': {
+                const { detailEl } = this.prepareDatabaseSection('reactor3d', this._dbTitle('reactor3d', '3D'), { showListPanel: false });
+                this.reactor3dEditor.projectController = { getCurrentProject: () => this.currentProject, mapEditor3D: this.callbacks.getMapEditor3D ? this.callbacks.getMapEditor3D() : (window.reactor && window.reactor.mapEditor3D) };
+                this.reactor3dEditor.show(detailEl);
+                return;
+            }
             case 'system':
                 this.openDatabase('system1');
                 return;
@@ -1119,6 +1126,7 @@ class DatabaseEditorUI {
             { name: 'States', type: 'states' },
             { name: 'Animations', type: 'animations' },
             { name: 'Tilesets', type: 'tilesets' },
+            { name: '3D', type: 'reactor3d' },
             { name: 'Common Events', type: 'commonEvents' },
             { name: 'System 1', type: 'system1' },
             { name: 'System 2', type: 'system2' },

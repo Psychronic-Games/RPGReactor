@@ -891,3 +891,14 @@ test('the sync loop binds instances, loads rules, and plays queued actions', () 
     assert.equal(Reactor3D.modelInstanceKey({ eventId: () => 7 }), 'e7');
     assert.equal(Reactor3D.modelInstanceKey({}), 'p');
 });
+
+test('the event editor round-trip keeps the model texture', () => {
+    // Opening an event rebuilds its model spec into pendingModels and OK
+    // writes them back; the rebuild dropped `texture`, so editing anything
+    // about an event — movement, a switch — silently stripped its model's
+    // colour map and it stood gray in game.
+    const source = fs.readFileSync(
+        path.join(repoRoot, 'editor', 'src', 'event', 'EventEditor.js'), 'utf8');
+    const carried = source.match(/texture: spec\.texture \|\| ''/g) || [];
+    assert.equal(carried.length, 2, 'both stored-spec branches carry texture');
+});

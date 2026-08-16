@@ -165,7 +165,8 @@ class EventEditor {
                 yaw: Math.round(spec.yaw * 180 / Math.PI),
                 pitch: Math.round((spec.pitch || 0) * 180 / Math.PI),
                 roll: Math.round((spec.roll || 0) * 180 / Math.PI),
-                faces: spec.faces ? JSON.parse(JSON.stringify(spec.faces)) : {}
+                faces: spec.faces ? JSON.parse(JSON.stringify(spec.faces)) : {},
+                texture: spec.texture || ''
             };
         }
         const raw = map && map.reactor3d && map.reactor3d.events
@@ -181,7 +182,8 @@ class EventEditor {
             yaw: Number(spec.yaw) || 0,
             pitch: Number(spec.pitch) || 0,
             roll: Number(spec.roll) || 0,
-            faces: spec.faces ? JSON.parse(JSON.stringify(spec.faces)) : {}
+            faces: spec.faces ? JSON.parse(JSON.stringify(spec.faces)) : {},
+            texture: spec.texture || ''
         };
     }
 

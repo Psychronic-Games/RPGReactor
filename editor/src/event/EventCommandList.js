@@ -22,6 +22,7 @@ class EventCommandList {
     constructor(eventEditor) {
         this.eventEditor = eventEditor;
         this.commandPicker = new EventCommandPicker();
+        this.playModelAnimationEditor = new PlayModelAnimationEditor();
         this.selectedIndices = [];
         this.clipboard = null;
         this.currentPage = null;
@@ -3139,6 +3140,19 @@ class EventCommandList {
                 return;
             }
 
+            // Reactor's own 3D command rides the plugin-command encoding but
+            // gets its purpose-built dialog.
+            if (command.reactor === 'PlayModelAnimation') {
+                this.playModelAnimationEditor.show(null, (built) => {
+                    if (built) {
+                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([built], baseIndent)[0]);
+                        this.selectedIndices = [insertIndex];
+                        this.refreshCommandList(page, pageIndex);
+                    }
+                });
+                return;
+            }
+
             // For plugin command, open the editor immediately
             if (code === 356 || code === 357) {
                 this.pluginCommandEditor.show(null, (command) => {
@@ -4507,6 +4521,15 @@ class EventCommandList {
         }
 
         // Plugin Command
+        if (code === 357 && command.parameters && command.parameters[0] === 'RPGReactor') {
+            this.playModelAnimationEditor.show(command, (editedCommand) => {
+                if (editedCommand) {
+                    replaceSingle(editedCommand);
+                    this.refreshCommandList(page, pageIndex);
+                }
+            });
+            return;
+        }
         if (code === 356 || code === 357) {
             this.pluginCommandEditor.show(command, (editedCommand) => {
                 if (editedCommand) {

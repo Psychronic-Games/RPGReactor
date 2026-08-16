@@ -228,6 +228,12 @@ class EventCommandPicker {
                                     { name: 'Script', code: 355 },
                                     { name: 'Plugin Command', code: 356 }
                                 ]
+                            },
+                            {
+                                title: '3D',
+                                commands: [
+                                    { name: 'Play Model Animation', code: 357, reactor: 'PlayModelAnimation' }
+                                ]
                             }
                         ]
                     }

@@ -10643,6 +10643,28 @@ Object.assign(RR_EVENT_COMMAND_NAMES['zh-Hans'], {
     'Plugin Command': '插件指令'
 });
 
+// Reactor-only event commands live outside the MZ table layout: one loop
+// keys them into every locale so the coverage audit holds.
+(function() {
+    const play = {
+        ja: 'モデルアニメーションの再生', es: 'Reproducir animación de modelo',
+        'zh-Hant': '播放模型動畫', 'zh-Hans': '播放模型动画',
+        ru: 'Воспроизвести Анимацию Модели', pt: 'Reproduzir animação do modelo',
+        de: 'Modellanimation abspielen', fr: 'Jouer une animation de modèle',
+        el: 'Αναπαραγωγή κίνησης μοντέλου', ko: '모델 애니메이션 재생',
+        ar: 'تشغيل حركة النموذج', it: 'Riproduci animazione del modello',
+        pl: 'Odtwórz animację modelu', id: 'Putar animasi model',
+        vi: 'Phát hoạt ảnh mô hình', th: 'เล่นแอนิเมชันโมเดล',
+        tr: 'Model animasyonunu oynat'
+    };
+    for (const lang of Object.keys(RR_EVENT_COMMAND_NAMES)) {
+        RR_EVENT_COMMAND_NAMES[lang]['Play Model Animation'] = play[lang] || 'Play Model Animation';
+    }
+    for (const lang of Object.keys(RR_EVENT_SECTION_NAMES)) {
+        RR_EVENT_SECTION_NAMES[lang]['3D'] = '3D';
+    }
+})();
+
 class I18nManager {
     constructor() {
         for (const table of Object.values(RR_I18N_STRINGS)) {

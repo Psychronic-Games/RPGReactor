@@ -305,6 +305,10 @@ class UIManager {
             click: () => this.callbacks.openDatabase('tilesets')
         }));
         databaseMenu.append(new nw.MenuItem({
+            label: '3D',
+            click: () => this.callbacks.openDatabase('reactor3d')
+        }));
+        databaseMenu.append(new nw.MenuItem({
             label: 'Common Events',
             click: () => this.callbacks.openDatabase('commonEvents')
         }));
