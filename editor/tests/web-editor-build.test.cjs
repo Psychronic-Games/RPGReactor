@@ -178,3 +178,15 @@ test('Web editor applies responsive layout without changing desktop sizing', () 
     assert.match(menuRule, /flex-wrap:\s*wrap/);
     assert.doesNotMatch(menuRule, /overflow-[xy]:/);
 });
+
+test('the web host is spared the desktop runtime-refresh probes', () => {
+    // refreshReactorRuntime probes project files with synchronous reads the
+    // browser host only allows for preloaded files; the web guard must come
+    // BEFORE the first read, or auto-load dies uncaught on the splash.
+    const source = fs.readFileSync(path.join(editorRoot, 'src', 'ProjectManager.js'), 'utf8');
+    const fn = source.slice(source.indexOf('async refreshReactorRuntime('));
+    const guard = fn.indexOf("RPGReactorHost?.mode === 'web'");
+    const firstRead = fn.indexOf('readFileSync');
+    assert.ok(guard > 0 && firstRead > 0 && guard < firstRead,
+        'web guard precedes the first synchronous read');
+});

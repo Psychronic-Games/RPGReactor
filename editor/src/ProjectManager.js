@@ -362,6 +362,14 @@ class ProjectManager {
             return { ok: true, updated: false };
         }
 
+        // The web bundle bakes the current runtime in at packaging time, and
+        // the browser host serves only preloaded files to synchronous reads —
+        // the version probes below would throw before any check ran, and an
+        // uncaught throw here left the web editor stuck on its splash screen.
+        if (typeof window !== 'undefined' && window.RPGReactorHost?.mode === 'web') {
+            return { ok: true, updated: false };
+        }
+
         const indexPath = this.path.join(projectPath, 'index.html');
         if (!this.fs.existsSync(indexPath) ||
             !/js\/reactor_main\.js/.test(this.fs.readFileSync(indexPath, 'utf8'))) {
