@@ -94,6 +94,18 @@ test('web distribution uses the bundled Demo, staged runtime, and current artifa
             'faces for defined actors survive the trim');
         assert.ok(!entries.some(line => line === 'project/img/battlehud/Face_286.png'),
             'faces for undefined actors are trimmed');
+        assert.ok(entries.some(line => line.startsWith('project/3d/free-buick-riviera-car/')),
+            'models the maps place survive the trim');
+        assert.ok(!entries.some(line => line.startsWith('project/3d/sas blue/')),
+            'models no map places are trimmed');
+        const bundleSource = execFileSync('unzip', ['-p', archive, 'web/editor.bundle.js'],
+            { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+        assert.ok(!bundleSource.includes('styles/looseleaf/'),
+            'the bulk style pack stays out of the web bundle');
+        assert.ok(bundleSource.includes('styles/psychronic/'),
+            'the compact style pack ships');
+        assert.ok(!entries.some(line => line.includes('.rpgreactor.lock')),
+            'no project lock ships');
         const notices = execFileSync('unzip', ['-p', archive, 'THIRD_PARTY_NOTICES.md'], { encoding: 'utf8' });
         assert.match(notices, /stb_vorbis Basis/);
         assert.match(notices, /Vitaly Puzrin and Andrei Tuputcyn/);

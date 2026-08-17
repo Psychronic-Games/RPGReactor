@@ -861,6 +861,32 @@ function trimWebProject(projectRoot, log) {
         return face ? actorIds.has(face[1]) : true;
     });
     trimDir('img/enemies', file => referenced(path.parse(file).name));
+    // 3D model folders the maps never place are library stock too — and by
+    // far the heaviest kind. Collect every model name the map sidecars
+    // reference and drop the rest of 3d/ from the web bundle.
+    const modelsRoot = path.join(projectRoot, '3d');
+    if (fs.existsSync(modelsRoot)) {
+        const usedModels = new Set();
+        for (const file of fs.readdirSync(dataRoot)) {
+            if (!file.endsWith('.r3d.json')) continue;
+            try {
+                const sidecar = JSON.parse(fs.readFileSync(path.join(dataRoot, file), 'utf8'));
+                const events = sidecar && sidecar.events;
+                for (const pages of Object.values(events || {})) {
+                    for (const spec of Object.values(pages || {})) {
+                        if (spec && spec.name) usedModels.add(String(spec.name));
+                    }
+                }
+            } catch (error) { /* an unreadable sidecar trims nothing */ }
+        }
+        for (const entry of fs.readdirSync(modelsRoot, { withFileTypes: true })) {
+            if (!entry.isDirectory() || entry.name === 'source' || entry.name === 'textures') continue;
+            if (usedModels.has(entry.name)) continue;
+            const folder = path.join(modelsRoot, entry.name);
+            removed += walkWebFiles(folder).filter(item => item.type === 'file').length;
+            fs.rmSync(folder, { recursive: true, force: true });
+        }
+    }
     log(`Trimmed ${removed} unreferenced library files from the bundled web project.`);
 }
 
@@ -967,8 +993,14 @@ function buildWeb(stageRoot, stagingDir) {
     const characterGeneratorIndex = sourceScripts.indexOf(characterGeneratorEntry);
     if (characterGeneratorIndex < 0) throw new Error('Character Generator entry point is missing from index.html.');
     const characterStyleRoot = path.join(stageRoot, 'src', 'forge', 'CharacterGenerator', 'styles');
+    // The bulk-imported looseleaf style pack is ~76MB of generated part
+    // data; on the web it multiplies both the archive and boot-time parse
+    // for a sandbox that ships the compact psychronic style. The registry
+    // is additive, so the Character Generator simply offers the styles
+    // that loaded.
     const characterStyleScripts = walkWebFiles(characterStyleRoot)
         .filter(entry => entry.type === 'file' && entry.path.endsWith('.js'))
+        .filter(entry => !entry.path.startsWith('looseleaf/'))
         .map(entry => `src/forge/CharacterGenerator/styles/${entry.path}`)
         .sort();
     sourceScripts.splice(characterGeneratorIndex, 0,
@@ -1025,9 +1057,17 @@ function buildWeb(stageRoot, stagingDir) {
     createNwPackage(webRoot, outputPath);
     createdArtifacts.add(outputPath);
     logGood(`Created: ${archiveName} (${(fs.statSync(outputPath).size / 1048576).toFixed(1)} MB, ${outputFiles.length} files)`);
-    // File count is a storefront's rule, not the build's: warn, never block.
+    // File count and extracted size are a storefront's rules, not the
+    // build's: warn, never block.
     if (outputFiles.length > 1000) {
         log(`Warning: ${outputFiles.length} files — some browser-game storefronts reject uploads over 1000 files.`, '#ffcc00');
+    }
+    const extractedBytes = outputFiles.reduce((sum, entry) =>
+        sum + fs.statSync(path.join(webRoot, entry.path)).size, 0);
+    const extractedMb = extractedBytes / 1048576;
+    logInfo(`Extracted size: ${extractedMb.toFixed(0)} MB`);
+    if (extractedMb > 500) {
+        log(`Warning: ${extractedMb.toFixed(0)} MB extracted — some browser-game storefronts reject uploads over 500 MB extracted.`, '#ffcc00');
     }
 }
 
@@ -1075,6 +1115,10 @@ function buildWeb(stageRoot, stagingDir) {
         const src = candidates.find(candidate => fs.existsSync(candidate));
         if (!src) throw new Error(`${dir}/ is required for distribution staging.`);
         copyDirRecursive(src, path.join(stageRoot, dir));
+        // A project open in the editor at build time leaves a lock file and
+        // playtest saves behind; neither belongs in a shipped template.
+        fs.rmSync(path.join(stageRoot, dir, '.rpgreactor.lock'), { force: true });
+        fs.rmSync(path.join(stageRoot, dir, 'save'), { recursive: true, force: true });
     }
 
     // Copy whitelisted top-level files
