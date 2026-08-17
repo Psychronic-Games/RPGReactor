@@ -252,3 +252,26 @@ test('the shared runtime atlas is destroyed only after its last layer releases i
     assert.equal(entry.texture.destroySource, true);
     assert.equal(Tilemap.Layer._v8AtlasCache.has(bitmaps), false);
 });
+
+test('tile UVs span the full texel rect so a panning camera cannot warble rows', () => {
+    const context = loadTileLayers();
+    const layer = meshLayer(context);
+    layer.addRect(1, 48, 96, 10, 20, 48, 48);
+    layer._syncV8Backend();
+    const uvs = Array.from(layer._v8Geometry.uvs.slice(0, 8));
+    const spanX = (uvs[2] - uvs[0]) * layer._v8Atlas.width;
+    const spanY = (uvs[5] - uvs[1]) * layer._v8Atlas.height;
+    // A half-texel inset compressed 48 texels into a 47-texel span: one
+    // duplicated or dropped texel row per tile whenever the tilemap sits at
+    // a fractional screen position or any zoom — crawling horizontal seams
+    // during camera pans. The span must cover the tile...
+    assert.ok(spanX > 47.9 && spanX < 48, `x span ${spanX}`);
+    assert.ok(spanY > 47.9 && spanY < 48, `y span ${spanY}`);
+    // ...while staying a whisker inside the boundary, so a quad edge can
+    // never sample the neighbouring atlas row.
+    const slot = context.Tilemap.Layer.V8_ATLAS_SLOT_SIZE;
+    const columns = context.Tilemap.Layer.V8_ATLAS_COLUMNS;
+    const offsetX = (1 % columns) * slot;
+    assert.ok(uvs[0] * layer._v8Atlas.width > offsetX + 48, 'left edge inset');
+    assert.ok(uvs[2] * layer._v8Atlas.width < offsetX + 96, 'right edge inset');
+});

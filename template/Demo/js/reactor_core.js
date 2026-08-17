@@ -4317,10 +4317,19 @@ Tilemap.Layer.prototype._syncV8Backend = function() {
                 if (setNumber >= 11) throw new Error(`tileset sheet ${setNumber} is outside the mesh atlas`);
                 const offsetX = (setNumber % columns) * slot;
                 const offsetY = Math.floor(setNumber / columns) * slot;
-                left = (offsetX + sx + 0.5) / atlas.width;
-                top = (offsetY + sy + 0.5) / atlas.height;
-                right = (offsetX + sx + w - 0.5) / atlas.width;
-                bottom = (offsetY + sy + h - 0.5) / atlas.height;
+                // Inset the UV rect by a hair, not half a texel. Interpolated
+                // fragment UVs stay strictly inside the vertex bounds, so a
+                // tiny inset is enough to keep a quad edge from ever sampling
+                // the neighbouring atlas row; a half-texel inset compresses w
+                // texels into a (w - 1) span, and the moment the tilemap sits
+                // at a fractional screen position or any zoom, one texel row
+                // per tile duplicates or drops — crawling horizontal seams
+                // whenever a camera pans or zooms.
+                const inset = 1 / 128;
+                left = (offsetX + sx + inset) / atlas.width;
+                top = (offsetY + sy + inset) / atlas.height;
+                right = (offsetX + sx + w - inset) / atlas.width;
+                bottom = (offsetY + sy + h - inset) / atlas.height;
             }
             uvs.set([left, top, right, top, right, bottom, left, bottom], vertexAt * 2);
             indices.set([
