@@ -148,3 +148,39 @@ test('effekseer effects sample the real scene as their background', () => {
     const draw = sprites.indexOf('Graphics.effekseer.beginDraw();', capture);
     assert.ok(capture > 0 && draw > capture, 'capture precedes the effect draw');
 });
+
+test('setting blur on a BlurFilter maps to strength with no deprecation notice', () => {
+    // VisuMZ_2_PictureEffects assigns `.blur` every frame; v8 kept the
+    // accessor only as a deprecation wrapper that prints a console warning.
+    // The compat block replaces it with a silent passthrough to `.strength`.
+    const vm = require('node:vm');
+    const start = compat.indexOf('if (PIXI.TextureSource && typeof PIXI.BlurFilter === "function")');
+    assert.ok(start >= 0);
+    const end = compat.indexOf('// ----', start);
+    assert.ok(end > start);
+    const block = compat.slice(start, end);
+
+    let deprecationNotices = 0;
+    class MockBlurFilter {
+        constructor(options) { this.options = options; }
+        get strength() { return this._strength; }
+        set strength(value) { this._strength = value; }
+        get blur() { deprecationNotices++; return this._strength; }
+        set blur(value) { deprecationNotices++; this._strength = value; }
+    }
+    const context = {
+        PIXI: { TextureSource: function() {}, BlurFilter: MockBlurFilter, filters: {} },
+        console
+    };
+    vm.runInNewContext(block, context);
+
+    // Positional v5-style construction converts to the options object.
+    const filter = new context.PIXI.BlurFilter(8, 4);
+    assert.equal(filter.options.strength, 8);
+    assert.equal(filter.options.quality, 4);
+    // The blur accessor now passes straight through to strength.
+    filter.blur = 5;
+    assert.equal(filter.strength, 5);
+    assert.equal(filter.blur, 5);
+    assert.equal(deprecationNotices, 0, 'the deprecation accessor never runs');
+});

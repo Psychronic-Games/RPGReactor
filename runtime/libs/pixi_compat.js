@@ -354,7 +354,9 @@
     // legacy branch that prints a deprecation warning on every construction.
     // Convert positional arguments to the options object before the v8
     // constructor sees them, so plugins constructing filters positionally
-    // stay warning-free.
+    // stay warning-free. The `.blur` accessor is likewise a deprecation
+    // wrapper around `.strength` in v8; plugins (VisuMZ_2_PictureEffects)
+    // set it every frame, so replace it with a silent passthrough.
     // -------------------------------------------------------------------------
     if (PIXI.TextureSource && typeof PIXI.BlurFilter === "function") {
         try {
@@ -372,6 +374,11 @@
                     }
                 }
             }
+            Object.defineProperty(V8BlurFilter.prototype, "blur", {
+                get() { return this.strength; },
+                set(value) { this.strength = value; },
+                configurable: true
+            });
             PIXI.BlurFilter = BlurFilterCompat;
             PIXI.filters.BlurFilter = BlurFilterCompat;
         } catch (e) {

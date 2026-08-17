@@ -181,3 +181,53 @@ test('shipped runtime contains the visual compatibility fixes', () => {
     assert.match(projectPixiCompat, /PIXI\.TilingSprite\.prototype, "allowChildren"/);
     assert.match(projectPixiCompat, /directSource === null \|\| directSource === ""/);
 });
+
+test('a menu background snapshot outlives the next snap for windows still showing it', () => {
+    // Menu-background plugins cache SceneManager.backgroundBitmap() into
+    // window sprites (Haven's Window_Background inside the savefile list).
+    // MZ destroys the old snapshot the moment a new snap is taken, killing
+    // the texture source under the live sprite — the background vanishes and
+    // the pixi_compat render guard logs a destroyed/orphan warning. The
+    // compat trail keeps the last three retired snapshots alive.
+    const compat = source('runtime/reactor_mv_compat.js');
+    const start = compat.indexOf('    function installBackgroundSnapCompatibility()');
+    const end = compat.indexOf('\n    function installMVApiGapFills()', start);
+    assert.ok(start >= 0 && end > start);
+
+    const SceneManager = {
+        _backgroundBitmap: null,
+        snap() {
+            return { destroyed: false, destroy() { this.destroyed = true; } };
+        },
+        snapForBackground() {
+            if (this._backgroundBitmap) {
+                this._backgroundBitmap.destroy();
+            }
+            this._backgroundBitmap = this.snap();
+        }
+    };
+    const context = { SceneManager };
+    context.global = context;
+    vm.runInNewContext(
+        compat.slice(start, end) + '\ninstallBackgroundSnapCompatibility();',
+        context
+    );
+
+    const snaps = [];
+    for (let i = 0; i < 5; i++) {
+        SceneManager.snapForBackground();
+        snaps.push(SceneManager._backgroundBitmap);
+    }
+    // The Haven case: the snapshot a plugin window may still display
+    // survives the snaps that follow it...
+    assert.equal(snaps[3].destroyed, false);
+    assert.equal(snaps[4].destroyed, false);
+    assert.equal(SceneManager._backgroundBitmap, snaps[4]);
+    // ...and memory stays bounded: only the oldest retired snapshot has
+    // been destroyed once three newer retirees exist.
+    assert.equal(snaps[0].destroyed, true);
+    assert.equal(snaps[1].destroyed, false);
+    assert.equal(snaps[2].destroyed, false);
+    // The install list registers the shim for every game.
+    assert.match(compat, /installBackgroundSnapCompatibility\(\);/);
+});

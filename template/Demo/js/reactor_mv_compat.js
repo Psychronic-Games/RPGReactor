@@ -1962,6 +1962,37 @@
         };
     }
 
+    function installBackgroundSnapCompatibility() {
+        if (!global.SceneManager || SceneManager.__snapTrailGuard) return;
+        SceneManager.__snapTrailGuard = true;
+
+        // MZ destroys the previous menu-background snapshot the moment it
+        // takes a new one. Menu-background plugins cache
+        // SceneManager.backgroundBitmap() into their own window sprites and
+        // keep displaying it across the next snap — safe on MV, which never
+        // destroyed old snaps. Destroying a bitmap a live sprite still
+        // displays kills the texture source under it, and the window's
+        // background drops out of the render (the pixi_compat SpritePipe
+        // guard skips it with a destroyed/orphan warning). Retire old
+        // snapshots through a short trail instead: a snapshot only dies
+        // after three newer ones exist, when no scene that could still
+        // display it survives. Memory stays bounded at three extra
+        // screen-sized bitmaps.
+        var trail = [];
+        var origSnapForBackground = SceneManager.snapForBackground;
+        SceneManager.snapForBackground = function() {
+            var previous = this._backgroundBitmap;
+            this._backgroundBitmap = null;
+            origSnapForBackground.call(this);
+            if (previous) {
+                trail.push(previous);
+                while (trail.length > 3) {
+                    trail.shift().destroy();
+                }
+            }
+        };
+    }
+
     // Gap-fills discovered by a static scan: MV corescript APIs missing
     // from the runtime that this project's ENABLED plugins actually
     // reference. Bodies ported from MV corescript (js/MV Corescript/),
@@ -4453,6 +4484,7 @@
     installInterpreterCompatibility();
     installWindowCompatibility();
     installSceneCompatibility();
+    installBackgroundSnapCompatibility();
     installBoxSizeCompatibility();
     installStaleEventGuard();
     installSpriteBaseCompatibility();
