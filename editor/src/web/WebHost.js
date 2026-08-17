@@ -359,7 +359,30 @@
             this.version = this.manifest.editorVersion || this.version;
             this.db = await openDatabase();
             this.fs = createFileSystem(this.manifest, this.db);
-            for (const record of await readStoredFiles(this.db)) this.fs._applyStored(record);
+            const storedRecords = await readStoredFiles(this.db);
+            for (const record of storedRecords) this.fs._applyStored(record);
+            // Browser-saved edits shadow the bundled project, so a player
+            // returning after an update keeps seeing the OLD Reactor One —
+            // and its new content looks broken or missing. The bundle is
+            // stamped by its manifest; when the stamp changes under stored
+            // edits, offer the new version up front instead of silently
+            // serving stale files.
+            let bundleStamp = this.version + ':';
+            {
+                const text = JSON.stringify(this.manifest);
+                let hash = 5381;
+                for (let i = 0; i < text.length; i++) hash = ((hash * 33) ^ text.charCodeAt(i)) >>> 0;
+                bundleStamp += hash.toString(36);
+            }
+            let previousStamp = null;
+            try { previousStamp = localStorage.getItem('rrWebBundleStamp'); } catch (error) { /* private mode */ }
+            if (storedRecords.length && previousStamp && previousStamp !== bundleStamp
+                && confirm(tt('This update ships a newer Reactor One than your browser-saved copy. Load the new version and discard your browser edits?'))) {
+                try { localStorage.setItem('rrWebBundleStamp', bundleStamp); } catch (error) { /* best effort */ }
+                await this.resetProject();
+                return;
+            }
+            try { localStorage.setItem('rrWebBundleStamp', bundleStamp); } catch (error) { /* best effort */ }
             window.RPGReactorHost = this;
             window.RPGReactorAssetUrl = filePath => this.assetUrl(filePath);
             installFileUrlBridge(this);
