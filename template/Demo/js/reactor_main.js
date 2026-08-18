@@ -1,6 +1,6 @@
 //=============================================================================
 // reactor_main.js v1.9.0 — RPG Reactor runtime entry point
-// RPG Reactor runtime version: 0.98.2
+// RPG Reactor runtime version: 0.98.3
 //=============================================================================
 
 const scriptUrls = [

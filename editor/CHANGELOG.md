@@ -5,6 +5,16 @@ All notable changes to RPG Reactor will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased - 0.98.3]
+
+### Fixed
+
+- **The tileset palette empties stale slots when the map's tileset changes.** `TilesetPaletteViewer.loadTilesetImages` skipped empty `tilesetNames` entries without clearing the per-slot texture cache, so creating or opening a map whose tileset leaves a slot blank (no A3, no C, ...) kept rendering the previous tileset's sheet in that slot. `loadTilesetForMap` now resets the cache and cached layer canvas on every load, clears the selection only when the tileset actually changed (map switches sharing a tileset keep the pick), and carries a load token so a slow superseded load can neither commit its sheets nor repaint the palette after a newer switch.
+
+- **Asset filename casing resolves before the request instead of in the error handler.** The 0.98.2 recovery lived in `Bitmap._onError`/`WebAudio._onError`, which plugins may replace without calling the original — CGMZ_Fallback does exactly that, so on case-sensitive filesystems a Windows-authored case mismatch (`npc_female2` vs `NPC_female2.png_`) became the fallback placeholder forever plus perpetual `ERR_FILE_NOT_FOUND` console spam. `Utils.resolveFileCase` now corrects the URL at every request point (plain bitmap, encrypted bitmap, audio) with a single `existsSync` gate keeping the exact-match fast path to one stat; the `_onError` retry remains as a backstop. Verified live in Haven: the three mismatched NPC sheets load their real 624×576 art with zero console errors.
+
+- **Legacy pixi-filters (v5 era) run on the PIXI 8 runtime.** Plugins bundling the old filter pack (Kawase blur, Godray, DropShadow, MultiColorReplace, SimpleLightmap, ...) override `Filter.apply` with multi-pass bodies that call v5 FilterSystem APIs, which black-screened Haven/Project3 the first time a scene enabled one. The mv_compat bridge now covers the whole surface: `_frame`/`filterFrame` aliases on textures (assignable, matching v5), `getFilterTexture`/`returnFilterTexture` mapped onto the v8 TexturePool and sized from the running filter pass, array uniforms with literal or `const int`/`#define` sizes carried into the uniform group, extra `sampler2D` uniforms routed to shader resources through non-enumerable accessors (a texture key the uniform-sync generator can see but not type crashes it), a rename for shaders that use `finalColor` as their own local before PIXI 8 claimed that name, and v5 `(callback, scope)` ObservablePoint construction. Verified in the live NW.js runtime: all 41 filter classes in Project3's bundled plugin construct and render with no errors.
+
 ## [0.98.2] - 2026-08-16
 
 ### Added

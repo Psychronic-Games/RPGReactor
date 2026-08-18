@@ -4,6 +4,16 @@ All notable changes to RPG Reactor will be documented in this file.
 
 This root changelog summarizes public release progress for GitHub; larger releases group their fixes by theme. The detailed editor changelog lives at [`editor/CHANGELOG.md`](editor/CHANGELOG.md).
 
+## [Unreleased - 0.98.3]
+
+### Fixed
+
+- **The tileset palette no longer shows another tileset's sheets after switching maps.** The palette's sheet cache is keyed by slot (A1–E), and a slot the new map's tileset leaves empty kept displaying whatever the previous tileset had loaded there. Switching maps now empties every slot before the new tileset fills its own, drops a selection made on the old sheets (its coordinates would paint unrelated tiles), and a slow superseded load can no longer repaint the palette after a newer map switch.
+
+- **Filename-case mismatches are corrected before the request, so fallback plugins can't hide the real art.** Windows-authored games freely request `npc_female2` for a file saved as `NPC_female2`; the runtime used to recover in its error handler, but a plugin that replaces that handler (Haven ships CGMZ_Fallback, which substitutes a placeholder file without calling the original) preempted the recovery — mismatched NPCs silently wore the fallback sprite and the console filled with failed requests on every map. Bitmap and audio loads now resolve the on-disk casing before issuing the request: the real art loads, nothing hits the console, and genuine missing files still reach the plugin's fallback exactly as authored.
+
+- **Games bundling v5-era pixi-filters no longer crash to a black screen when a screen effect starts.** Haven/Project3's "5 years later" chapter died the moment its filter plugin ran: those filters override `apply` with multi-pass bodies built on PIXI v5's API — the input texture's `_frame`/`filterFrame` rectangle, `getFilterTexture`/`returnFilterTexture` scratch textures, array uniforms sized by shader constants, extra sampler textures assigned as uniforms, `(callback, scope)` ObservablePoints, and shaders that use `finalColor` as their own local variable. PIXI 8 renamed or removed every one of those. The legacy filter bridge now maps them all onto their v8 equivalents; all 41 bundled filter classes construct and render clean in the live runtime.
+
 ## [0.98.2] - 2026-08-16
 
 ### Added

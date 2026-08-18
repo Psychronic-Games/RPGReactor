@@ -1,15 +1,16 @@
-# Handoff - 0.98.2 In Progress
+# Handoff - 0.98.3 In Progress
 
-Last updated 2026-08-16.
+Last updated 2026-08-17.
 
 ## Release State
 
-- 0.98.1 is tagged and published at
-  <https://github.com/Psychronic-Games/RPGReactor/releases/tag/v0.98.1>.
-- 0.98.2 is open in package metadata, application startup surfaces, both
-  READMEs, and `[Unreleased - 0.98.2]` sections in both changelogs.
-- The 0.98.1 Web 3D, renderer-lifecycle, PIXI filter, and camera-pan changes are
-  preserved in the immutable `v0.98.1` tag. New reports belong to 0.98.2.
+- 0.98.2 is tagged and published at
+  <https://github.com/Psychronic-Games/RPGReactor/releases/tag/v0.98.2>.
+- 0.98.3 is open in package metadata, application startup surfaces, both
+  READMEs, and `[Unreleased - 0.98.3]` sections in both changelogs.
+- The 0.98.2 event 3D models, encrypted-project, stale-runtime-refresh, and
+  database/event workflow changes are preserved in the immutable `v0.98.2`
+  tag. New reports belong to 0.98.3.
 - Current validation is **1,405 passing tests** with no failures, skips, or
   TODOs. Syntax and `git diff --check` also pass.
 
@@ -255,7 +256,7 @@ scene (10 sheets, 3 map meshes, and 63 events), disables 3D, and confirms PIXI's
 canvas and ticker are restored. The same test passes in native Linux NW.js and in
 the Windows NW.js binary under Wine.
 
-## Open 0.98.2 Reports
+## Open 0.98.3 Reports
 
 - Native Windows users still report that checking 3D can terminate the editor
   process immediately. The 0.98.1 shared-context path passed Linux and Wine but
