@@ -3234,18 +3234,73 @@
                     mat4: "mat4x4<f32>"
                 })[glslType];
             };
+            const resolveArraySize = function(sizeToken, shaderSource) {
+                if (/^\d+$/.test(sizeToken)) return parseInt(sizeToken, 10);
+                let constant = shaderSource.match(
+                    new RegExp("const\\s+int\\s+" + sizeToken + "\\s*=\\s*(\\d+)"));
+                if (!constant) {
+                    constant = shaderSource.match(
+                        new RegExp("#define\\s+" + sizeToken + "\\s+(\\d+)"));
+                }
+                return constant ? parseInt(constant[1], 10) : 0;
+            };
             const buildUniformStructures = function(shaderSource, uniforms) {
                 const structures = {};
-                const uniformRegex = /uniform\s+(?:(?:lowp|mediump|highp)\s+)?(float|int|bool|vec2|vec3|vec4|mat3|mat4)\s+(\w+)\s*;/g;
+                const uniformRegex = /uniform\s+(?:(?:lowp|mediump|highp)\s+)?(float|int|bool|vec2|vec3|vec4|mat3|mat4)\s+(\w+)\s*(?:\[\s*(\w+)\s*\])?\s*;/g;
                 let match;
                 while ((match = uniformRegex.exec(shaderSource))) {
                     const type = inferUniformType(match[1]);
                     const name = match[2];
                     if (type && name !== "filterArea" && !filterGlobalUniforms.has(name)) {
                         structures[name] = { value: uniforms && uniforms[name], type: type };
+                        // Array uniforms (`uniform vec3 colors[12];`, size
+                        // possibly a const int / #define) must carry their
+                        // size or the sync generator picks the wrong setter;
+                        // UniformGroup default-fills the value.
+                        if (match[3]) {
+                            const size = resolveArraySize(match[3], shaderSource);
+                            if (size > 0) structures[name].size = size;
+                        }
                     }
                 }
                 return structures;
+            };
+            // Extra sampler uniforms (`uniform sampler2D colorMap;`) can't
+            // live in a uniform group: v8 binds textures as named shader
+            // resources, and a texture key the sync generator finds in
+            // group.uniforms without a matching structure crashes it reading
+            // `.type` of undefined. Route them to shader resources instead.
+            const listExtraSamplers = function(fragmentSrc) {
+                const names = [];
+                const samplerRegex = /uniform\s+(?:(?:lowp|mediump|highp)\s+)?sampler2D\s+(\w+)\s*;/g;
+                let match;
+                while ((match = samplerRegex.exec(String(fragmentSrc || "")))) {
+                    if (match[1] !== "uTexture" && match[1] !== "uBackTexture") {
+                        names.push(match[1]);
+                    }
+                }
+                return names;
+            };
+            const toTextureSource = function(value) {
+                if (value) {
+                    if (value.source && value.source.uploadMethodId) return value.source;
+                    if (value.uploadMethodId) return value;
+                    if (value.baseTexture) return toTextureSource(value.baseTexture);
+                }
+                return PIXI.Texture.WHITE.source;
+            };
+            const routeSamplerUniform = function(inst, name, initialValue) {
+                let held = initialValue;
+                if (held !== undefined) inst.resources[name] = toTextureSource(held);
+                Object.defineProperty(inst.uniforms, name, {
+                    get: function() { return held; },
+                    set: function(value) {
+                        held = value;
+                        inst.resources[name] = toTextureSource(value);
+                    },
+                    enumerable: false,
+                    configurable: true
+                });
             };
             const defaultFilterVertex = "in vec2 aPosition;\n" +
                 "out vec2 vTextureCoord;\n" +
@@ -3267,6 +3322,11 @@
                 "}\n";
             const translateFragment = function(fragment) {
                 fragment = String(fragment || "");
+                // A legacy shader may use `finalColor` as its own local
+                // (SimpleLightmap does); PIXI 8's output variable of that
+                // name — and the WebGL1 `#define finalColor gl_FragColor` —
+                // collide with it. Rename the plugin's identifier first.
+                fragment = fragment.replace(/\bfinalColor\b/g, "rrPluginFinalColor");
                 fragment = fragment.replace(/varying\s+/g, "in ");
                 fragment = fragment.replace(/uniform\s+sampler2D\s+uSampler\s*;/g, "uniform sampler2D uTexture;");
                 fragment = fragment.replace(
@@ -3294,16 +3354,24 @@
                     fragmentSrc = translateFragment(fragmentSrc);
                     const shaderSource = defaultFilterVertex + "\n" + (fragmentSrc || "");
                     const filterUniforms = new PIXI.UniformGroup(buildUniformStructures(shaderSource, uniforms));
+                    const extraSamplers = listExtraSamplers(fragmentSrc);
+                    const resources = { filterUniforms: filterUniforms };
+                    for (const samplerName of extraSamplers) {
+                        resources[samplerName] = PIXI.Texture.WHITE.source;
+                    }
                     const inst = Reflect.construct(OriginalFilter, [{
                         glProgram: PIXI.GlProgram.from({
                             vertex: defaultFilterVertex,
                             fragment: fragmentSrc,
                             name: "mv-compat-filter"
                         }),
-                        resources: { filterUniforms: filterUniforms }
+                        resources: resources
                     }], newTarget);
                     inst.uniforms = filterUniforms.uniforms;
                     inst.__mvCompatUniformGroup = filterUniforms;
+                    for (const samplerName of extraSamplers) {
+                        routeSamplerUniform(inst, samplerName, uniforms && uniforms[samplerName]);
+                    }
                     return inst;
                 }
                 return Reflect.construct(OriginalFilter, [vertexSrc], newTarget);
@@ -3335,6 +3403,24 @@
             PIXI.Filter = MVCompatFilter;
             PIXI.Filter.__mvCompatWrapped = true;
         }
+        if (PIXI.ObservablePoint && !PIXI.ObservablePoint.__mvCompatWrapped) {
+            // v5 signature: (callback, scope, x, y). v8 wants an observer
+            // object exposing _onUpdate; a bare callback lands as the
+            // observer and every set() dies on _onUpdate not a function.
+            const OriginalObservablePoint = PIXI.ObservablePoint;
+            PIXI.ObservablePoint = class MVCompatObservablePoint extends OriginalObservablePoint {
+                constructor(observer, scopeOrX, xOrY, y) {
+                    if (typeof observer === "function") {
+                        const callback = observer;
+                        const scope = scopeOrX;
+                        super({ _onUpdate: function() { callback.call(scope); } }, xOrY, y);
+                    } else {
+                        super(observer, scopeOrX, xOrY);
+                    }
+                }
+            };
+            PIXI.ObservablePoint.__mvCompatWrapped = true;
+        }
         if (PIXI.Texture && PIXI.Texture.prototype &&
             !Object.getOwnPropertyDescriptor(PIXI.Texture.prototype, "frameBuffer")) {
             Object.defineProperty(PIXI.Texture.prototype, "frameBuffer", {
@@ -3348,6 +3434,58 @@
                 },
                 configurable: true
             });
+        }
+        // v5-era pixi-filters (KawaseBlur, Godray, DropShadow, Outline, ...)
+        // override Filter.apply with multi-pass bodies that read the input
+        // texture's `_frame`/`filterFrame` rectangle and borrow scratch
+        // textures through FilterSystem.getFilterTexture/returnFilterTexture.
+        // v8 kept applyFilter but moved the scratch pool to PIXI.TexturePool
+        // and dropped both texture aliases, so the first pass dies reading
+        // `.width` of undefined. v8 pool textures carry the pass bounds in
+        // `frame`, which is exactly what those overrides measured in v5.
+        if (PIXI.Texture && PIXI.Texture.prototype) {
+            for (const alias of ["_frame", "filterFrame"]) {
+                if (alias in PIXI.Texture.prototype) continue;
+                const store = "__mvCompat" + alias;
+                Object.defineProperty(PIXI.Texture.prototype, alias, {
+                    get: function() {
+                        return this[store] !== undefined ? this[store] : this.frame;
+                    },
+                    set: function(value) {
+                        this[store] = value;
+                    },
+                    configurable: true
+                });
+            }
+        }
+        if (PIXI.FilterSystem && PIXI.FilterSystem.prototype && PIXI.TexturePool) {
+            const filterSystemProto = PIXI.FilterSystem.prototype;
+            if (!filterSystemProto.getFilterTexture) {
+                // v5 accepted (input, resolution) but every bundled caller
+                // wants "a scratch texture matching the running pass"; some
+                // pass junk arguments (KawaseBlur's clones pass `true`).
+                filterSystemProto.getFilterTexture = function(input, resolution) {
+                    if (input && input.source && input.frame) {
+                        return PIXI.TexturePool.getOptimalTexture(
+                            input.frame.width, input.frame.height,
+                            resolution || input.source._resolution || 1, false);
+                    }
+                    const data = this._activeFilterData;
+                    if (data && data.bounds) {
+                        return PIXI.TexturePool.getOptimalTexture(
+                            data.bounds.width, data.bounds.height,
+                            resolution || data.resolution || 1, false);
+                    }
+                    const screen = this.renderer.screen;
+                    return PIXI.TexturePool.getOptimalTexture(
+                        screen.width, screen.height, resolution || 1, false);
+                };
+            }
+            if (!filterSystemProto.returnFilterTexture) {
+                filterSystemProto.returnFilterTexture = function(texture) {
+                    if (texture) PIXI.TexturePool.returnTexture(texture);
+                };
+            }
         }
         for (const RendererClass of [PIXI.Renderer, PIXI.WebGLRenderer, PIXI.WebGPURenderer]) {
             if (!RendererClass) continue;
