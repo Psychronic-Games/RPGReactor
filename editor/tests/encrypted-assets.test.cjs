@@ -156,3 +156,43 @@ test('bitmap and audio error paths retry with corrected casing once', () => {
         assert.match(body, /_startLoading\(\)/, `${owner} restarts the load`);
     }
 });
+
+test('casing resolves before the request so plugin error handlers cannot preempt it', () => {
+    // CGMZ_Fallback replaces Bitmap._onError without calling the original,
+    // so a mere case mismatch became its fallback image forever. Every
+    // request point must consult the on-disk casing up front instead.
+    const coreSource = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_core.js'), 'utf8');
+    const decrypting = coreSource.slice(
+        coreSource.indexOf('Bitmap.prototype._startDecrypting'),
+        coreSource.indexOf('Bitmap.prototype._onXhrLoad'));
+    assert.match(decrypting, /resolveFileCase\(this\._url, "_"\)/,
+        'the encrypted bitmap request pre-resolves its casing');
+    const plainLoad = coreSource.slice(
+        coreSource.indexOf('Bitmap.prototype._startLoading'),
+        coreSource.indexOf('Bitmap.prototype._startDecrypting'));
+    assert.match(plainLoad, /resolveFileCase\(this\._url, ""\)/,
+        'the plain bitmap request pre-resolves its casing');
+    const audioLoad = coreSource.slice(
+        coreSource.indexOf('WebAudio.prototype._startLoading'),
+        coreSource.indexOf('WebAudio.prototype._shouldUseDecoder'));
+    assert.match(audioLoad, /resolveFileCase\(\s*this\._url, Utils\.hasEncryptedAudio\(\) \? "_" : ""\)/,
+        'the audio request pre-resolves its casing');
+
+    // resolveFileCase strips the encrypted suffix from the corrected result.
+    const at = coreSource.indexOf('Utils.resolveFileCase = function(url, suffix) {');
+    assert.ok(at >= 0, 'resolveFileCase is present in the runtime');
+    const body = coreSource.slice(coreSource.indexOf('{', at) + 1, coreSource.indexOf('\n};', at));
+    const resolveFileCase = new Function('url', 'suffix', `
+        const self = { correctFileCase: (u) =>
+            u === 'img/characters/npc_a.png_' ? 'img/characters/NPC_a.png_'
+            : u === 'img/faces/npc_b.png' ? 'img/faces/NPC_b.png'
+            : null };
+        return (function(url, suffix) { const corrected = self.correctFileCase(url + suffix); ${
+            body.slice(body.indexOf('if (!corrected)'))} })(url, suffix);
+    `);
+    assert.equal(resolveFileCase('img/characters/npc_a.png', '_'), 'img/characters/NPC_a.png',
+        'the "_" suffix is stripped after correction');
+    assert.equal(resolveFileCase('img/faces/npc_b.png', ''), 'img/faces/NPC_b.png');
+    assert.equal(resolveFileCase('img/faces/exact.png', ''), 'img/faces/exact.png',
+        'an already-correct URL passes through unchanged');
+});

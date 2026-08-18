@@ -491,6 +491,9 @@ Utils.correctFileCase = function(url) {
         if (/^([a-z][a-z0-9+.-]*:|\/)/i.test(clean)) return null;
         const segments = clean.split("/").filter(s => s && s !== ".");
         if (segments.some(s => s === "..")) return null;
+        // One stat keeps the common exactly-cased case off the directory
+        // walk below, so this is cheap enough to run before every request.
+        if (fs.existsSync(path.join(base, ...segments))) return null;
         let dir = base;
         const corrected = [];
         for (const segment of segments) {
@@ -512,6 +515,27 @@ Utils.correctFileCase = function(url) {
     } catch (e) {
         return null;
     }
+};
+
+/**
+ * Corrects a request URL's filename casing before the request is issued.
+ *
+ * A failed request cannot be kept out of the console, and recovery inside
+ * _onError is not guaranteed to run: plugins may replace the error handler
+ * without calling the original (CGMZ_Fallback swaps in its fallback file
+ * there), which would turn a mere case mismatch into permanently wrong
+ * assets. Resolving the real casing up front avoids both.
+ *
+ * @param {string} url - The relative URL about to be requested (no suffix).
+ * @param {string} suffix - The encrypted-asset suffix, "_" or "".
+ * @returns {string} The URL with on-disk casing, without the suffix.
+ */
+Utils.resolveFileCase = function(url, suffix) {
+    const corrected = this.correctFileCase(url + suffix);
+    if (!corrected) return url;
+    return suffix && corrected.endsWith(suffix)
+        ? corrected.slice(0, -suffix.length)
+        : corrected;
 };
 
 /**
@@ -2702,6 +2726,7 @@ Bitmap.prototype._startLoading = function() {
     if (Utils.hasEncryptedImages()) {
         this._startDecrypting();
     } else {
+        this._url = Utils.resolveFileCase(this._url, "");
         this._image.src = this._url;
         if (this._image.width > 0) {
             this._image.onload = null;
@@ -2711,6 +2736,7 @@ Bitmap.prototype._startLoading = function() {
 };
 
 Bitmap.prototype._startDecrypting = function() {
+    this._url = Utils.resolveFileCase(this._url, "_");
     const xhr = new XMLHttpRequest();
     xhr.open("GET", this._url + "_");
     xhr.responseType = "arraybuffer";
@@ -7010,6 +7036,8 @@ WebAudio.prototype._startLoading = function() {
     }
     this._stallCheckTime = 0;
     if (WebAudio._context) {
+        this._url = Utils.resolveFileCase(
+            this._url, Utils.hasEncryptedAudio() ? "_" : "");
         const url = this._realUrl();
         if (Utils.isLocal()) {
             this._startXhrLoading(url);
