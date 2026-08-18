@@ -85,6 +85,7 @@ class TilesetPaletteViewer {
         this.currentTileset = null;
         this.selectedTiles = [];
         this.cachedLayerCanvas = null;
+        this._loadedTilesetId = null;
     }
 
     // Initialize the palette viewer UI in the sidebar
@@ -421,15 +422,42 @@ class TilesetPaletteViewer {
 
             const tilesets = JSON.parse(this.fs.readFileSync(tilesetsPath, 'utf8'));
             const tilesetId = mapData.tilesetId || 1;
+            const tilesetChanged = this._loadedTilesetId !== tilesetId;
             this.currentTileset = tilesets[tilesetId];
 
             if (!this.currentTileset) {
                 console.warn('Tileset not found:', tilesetId);
                 return;
             }
+            this._loadedTilesetId = tilesetId;
 
-            // Load all tileset images (wait for them to complete)
-            await this.loadTilesetImages();
+            // The texture cache is keyed by SLOT, not by tileset: a slot the
+            // new tileset leaves empty would keep showing the previous
+            // tileset's sheet forever. Every slot starts empty and only the
+            // new tileset's own sheets fill it back in.
+            this.tilesetTextures = {};
+            this.cachedLayerCanvas = null;
+
+            if (tilesetChanged) {
+                // A selection's coordinates name cells on the OLD tileset's
+                // sheets; painting them against the new tileset would place
+                // unrelated tiles.
+                this.selectedTiles = [];
+                this.mapEditor?.hideTilePreview?.();
+                const info = document.getElementById('selection-info');
+                if (info) {
+                    const tt = text => (typeof window !== 'undefined' && window.I18n)
+                        ? window.I18n.tText(text) : text;
+                    info.innerHTML = `<div>${tt('No tiles selected')}</div>`;
+                }
+            }
+
+            // Load all tileset images (wait for them to complete). The token
+            // keeps a slow older load from committing sheets, or repainting
+            // the palette, after a newer map switch has superseded it.
+            const token = this._tilesetLoadToken = (this._tilesetLoadToken || 0) + 1;
+            await this.loadTilesetImages(token);
+            if (token !== this._tilesetLoadToken) return;
 
             // Render the current layer (now that images are loaded)
             this.renderCurrentLayer();
@@ -438,7 +466,7 @@ class TilesetPaletteViewer {
         }
     }
 
-    async loadTilesetImages() {
+    async loadTilesetImages(token = null) {
         if (!this.currentTileset) return;
 
         const tilesetNames = this.currentTileset.tilesetNames;
@@ -464,7 +492,9 @@ class TilesetPaletteViewer {
 
                 await new Promise((resolve) => {
                     img.onload = () => {
-                        this.tilesetTextures[layerKey] = img;
+                        if (token === null || token === this._tilesetLoadToken) {
+                            this.tilesetTextures[layerKey] = img;
+                        }
                         resolve();
                     };
                     img.onerror = () => {
