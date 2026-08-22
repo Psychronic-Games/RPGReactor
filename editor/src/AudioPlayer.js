@@ -248,15 +248,9 @@ class AudioPlayer {
             this.switchAudioType(activeChannelType);
         }
 
-        // Update UI to show current track if one is playing in the current channel
+        // Update UI to show the current track (or the "no track" state)
         const currentChannel = this.getCurrentChannel();
-        if (currentChannel.currentTrack) {
-            const trackName = currentChannel.currentTrack.name;
-            const trackType = currentChannel.currentTrack.type;
-
-            // Show track type prefix
-            document.getElementById('current-track-name').textContent = `[${trackType.toUpperCase()}] ${trackName}`;
-        }
+        this.updateTrackHeader(currentChannel.currentTrack || null);
 
         // Load tracks for current type
         if (this.currentProject) {
@@ -385,6 +379,61 @@ class AudioPlayer {
         this.updateLoopButton();
     }
 
+    /** Set the header's track name and album art (null track = idle state). */
+    updateTrackHeader(track) {
+        const nameEl = document.getElementById('current-track-name');
+        if (nameEl) {
+            nameEl.textContent = track
+                ? `[${track.type.toUpperCase()}] ${track.name}`
+                : this._t('audio.noTrackSelected');
+        }
+
+        const artEl = document.getElementById('current-track-art');
+        if (!artEl) return;
+        const coverArt = window.RRAudioCoverArt;
+        if (!coverArt) return;
+        artEl.src = coverArt.placeholderFor(track ? track.name : null);
+        if (track && track.absolutePath) {
+            const expected = track.absolutePath;
+            artEl.dataset.artPath = expected;
+            this.getCoverArt(expected).then(url => {
+                // Another track may have been selected while the art loaded.
+                if (url && artEl.dataset.artPath === expected) {
+                    artEl.src = url;
+                }
+            });
+        } else {
+            delete artEl.dataset.artPath;
+        }
+    }
+
+    /**
+     * Embedded album art for a track file, cached per path.
+     * Resolves to a data: URL or null (placeholder territory).
+     */
+    getCoverArt(absolutePath) {
+        if (!absolutePath || !window.RRAudioCoverArt) return Promise.resolve(null);
+        if (!this._coverArtCache) this._coverArtCache = new Map();
+        let promise = this._coverArtCache.get(absolutePath);
+        if (!promise) {
+            promise = new Promise(resolve => {
+                // Off the scroll/click path; the read itself is a small
+                // synchronous prefix of the file.
+                setTimeout(() => {
+                    let url = null;
+                    try {
+                        url = window.RRAudioCoverArt.extractFromFile(absolutePath);
+                    } catch (error) {
+                        url = null;
+                    }
+                    resolve(url);
+                }, 0);
+            });
+            this._coverArtCache.set(absolutePath, promise);
+        }
+        return promise;
+    }
+
     updatePanValueLabel() {
         const panSlider = document.getElementById('pan-slider');
         const panValue = document.getElementById('pan-value');
@@ -456,7 +505,6 @@ class AudioPlayer {
     }
 
     switchAudioType(type) {
-        const tt = (text) => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
         this.audioPlayer.currentType = type;
 
         // Update tab UI
@@ -478,16 +526,9 @@ class AudioPlayer {
         // Update loop button UI
         this.updateLoopButton();
 
-        // Update the displayed track name for this channel
+        // Update the displayed track name and art for this channel
         const currentChannel = this.getCurrentChannel();
-        const trackNameEl = document.getElementById('current-track-name');
-        if (trackNameEl) {
-            if (currentChannel.currentTrack) {
-                trackNameEl.textContent = `[${currentChannel.currentTrack.type.toUpperCase()}] ${currentChannel.currentTrack.name}`;
-            } else {
-                trackNameEl.textContent = tt('No Track Selected');
-            }
-        }
+        this.updateTrackHeader(currentChannel.currentTrack || null);
 
         // Load tracks for this type
         if (this.currentProject) {
@@ -508,7 +549,7 @@ class AudioPlayer {
             return;
         }
 
-        const audioFiles = RRAssetFiles.listUnique(audioPath, ['.ogg']);
+        const audioFiles = RRAssetFiles.listUnique(audioPath, RRAssetFiles.AUDIO_EXTENSIONS);
 
         if (audioFiles.length === 0) {
             document.getElementById('audio-track-list').innerHTML = `<p style="color: var(--color-text-muted); padding: 20px; text-align: center;">${tt('No')} ${type.toUpperCase()} ${tt('files found')}</p>`;
@@ -525,6 +566,7 @@ class AudioPlayer {
             return {
                 name: file.relativePath,
                 path: this.toAudioSource(file.absolutePath),
+                absolutePath: file.absolutePath,
                 type: type,
                 section: this.getAudioSectionKey(file.relativePath)
             };
@@ -589,6 +631,19 @@ class AudioPlayer {
         const trackListEl = document.getElementById('audio-track-list');
         trackListEl.innerHTML = '';
 
+        // Album art loads lazily, only for rows that scroll into view.
+        if (this._artObserver) this._artObserver.disconnect();
+        this._artObserver = new IntersectionObserver(entries => {
+            for (const entry of entries) {
+                if (!entry.isIntersecting) continue;
+                const img = entry.target;
+                this._artObserver.unobserve(img);
+                this.getCoverArt(img.dataset.artPath).then(url => {
+                    if (url) img.src = url;
+                });
+            }
+        }, { root: trackListEl, rootMargin: '200px' });
+
         let currentLetter = null;
 
         for (const track of this.audioPlayer.tracks[type]) {
@@ -620,12 +675,27 @@ class AudioPlayer {
             trackItem.className = `audio-track-item ${isPlaying ? 'playing' : ''}`;
             trackItem.dataset.track = track.name;
             trackItem.dataset.type = type;
-            trackItem.textContent = track.name;
 
-            trackItem.addEventListener('click', (e) => {
-                const trackName = e.target.dataset.track;
-                const trackType = e.target.dataset.type;
-                this.selectAudioTrack(trackName, trackType);
+            if (window.RRAudioCoverArt) {
+                const art = document.createElement('img');
+                art.className = 'track-art track-art-small';
+                art.alt = '';
+                art.draggable = false;
+                art.src = window.RRAudioCoverArt.placeholderFor(track.name);
+                if (track.absolutePath) {
+                    art.dataset.artPath = track.absolutePath;
+                    this._artObserver.observe(art);
+                }
+                trackItem.appendChild(art);
+            }
+
+            const label = document.createElement('span');
+            label.className = 'track-label';
+            label.textContent = track.name;
+            trackItem.appendChild(label);
+
+            trackItem.addEventListener('click', () => {
+                this.selectAudioTrack(track.name, type);
             });
 
             trackListEl.appendChild(trackItem);
@@ -698,7 +768,7 @@ class AudioPlayer {
         currentChannel.currentTrack = track;
 
         // Update UI
-        document.getElementById('current-track-name').textContent = `[${track.type.toUpperCase()}] ${track.name}`;
+        this.updateTrackHeader(track);
         document.getElementById('track-time').textContent = '0:00 / 0:00';
 
         // Reset seek slider
@@ -888,13 +958,14 @@ class AudioPlayer {
             channel.currentTrack = {
                 name: filePath.split('/').pop().split('\\').pop(),
                 path: fileUrl,
+                absolutePath: /^(file|https?|data):/i.test(filePath) ? null : filePath,
                 type: audioType
             };
 
             // Update UI if modal is open AND this is the currently displayed channel
             const modal = document.getElementById('audio-player-modal');
             if (modal && modal.style.display === 'flex' && this.audioPlayer.currentType === audioType) {
-                document.getElementById('current-track-name').textContent = `[${audioType.toUpperCase()}] ${channel.currentTrack.name}`;
+                this.updateTrackHeader(channel.currentTrack);
 
                 // Update seek duration when metadata loads
                 channel.audio.addEventListener('loadedmetadata', () => {

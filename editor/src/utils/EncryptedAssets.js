@@ -39,9 +39,15 @@
     const ENCRYPTED_VARIANTS = {
         '.png': ['.png_', '.rpgmvp'],
         '.ogg': ['.ogg_', '.rpgmvo'],
-        '.m4a': ['.m4a_', '.rpgmvm']
+        '.m4a': ['.m4a_', '.rpgmvm'],
+        '.mp3': ['.mp3_'],
+        '.wav': ['.wav_'],
+        '.flac': ['.flac_']
     };
-    const MIME = { '.png': 'image/png', '.ogg': 'audio/ogg', '.m4a': 'audio/mp4' };
+    const MIME = {
+        '.png': 'image/png', '.ogg': 'audio/ogg', '.m4a': 'audio/mp4',
+        '.mp3': 'audio/mpeg', '.wav': 'audio/wav', '.flac': 'audio/flac'
+    };
 
     const keyByProject = new Map(); // project root -> Uint8Array | null
     const urlByFile = new Map();    // encrypted file path -> { mtimeMs, size, url }
@@ -212,6 +218,52 @@
         return fileUrl(filePath);
     }
 
+    function readPrefix(target, limit) {
+        const fd = fs.openSync(target, 'r');
+        try {
+            const size = fs.fstatSync(fd).size;
+            const length = Math.min(limit, size);
+            const out = Buffer.alloc(length);
+            fs.readSync(fd, out, 0, length, 0);
+            return new Uint8Array(out.buffer, out.byteOffset, length);
+        } finally {
+            fs.closeSync(fd);
+        }
+    }
+
+    function readEncryptedPrefix(target, limit) {
+        const projectRoot = projectRootFor(target);
+        const key = projectRoot ? keyFor(projectRoot) : null;
+        if (!key) return null;
+        // Only the first 16 bytes after the fake header are XORed, so a
+        // prefix decrypts without reading the rest of the file.
+        const raw = readPrefix(target, limit + HEADER_BYTES);
+        if (!raw || raw.length <= HEADER_BYTES) return null;
+        return decrypt(raw, key);
+    }
+
+    /**
+     * The first `maxBytes` decrypted bytes of an asset, for header and
+     * metadata sniffing without loading whole multi-megabyte files.
+     * Resolves plain, encrypted, and differently-cased files like
+     * resolveAssetUrl does. Returns a Uint8Array or null.
+     */
+    function readAssetBytes(filePath, maxBytes) {
+        const limit = Math.floor(Number(maxBytes));
+        if (!fs || !filePath || !(limit > 0)) return null;
+        try {
+            if (fs.existsSync(filePath)) return readPrefix(filePath, limit);
+            const encrypted = encryptedPathFor(filePath);
+            if (encrypted) return readEncryptedPrefix(encrypted, limit);
+            const match = caseInsensitivePath(filePath);
+            if (match && match.plain) return readPrefix(match.plain, limit);
+            if (match && match.encrypted) return readEncryptedPrefix(match.encrypted, limit);
+        } catch (error) {
+            // Unreadable file — callers treat null as "no metadata".
+        }
+        return null;
+    }
+
     /** Whether the asset exists in plain, encrypted, or differently-cased form. */
     function assetExists(filePath) {
         if (!fs || !filePath) return false;
@@ -224,7 +276,7 @@
         }
     }
 
-    const api = { resolveAssetUrl, assetExists };
+    const api = { resolveAssetUrl, assetExists, readAssetBytes };
     root.RREncryptedAssets = api;
 
     // WebHost overwrites this with its own resolver when the editor runs in a

@@ -23,8 +23,13 @@
     const ENCRYPTED_TO_PLAIN = {
         '.png_': '.png', '.rpgmvp': '.png',
         '.ogg_': '.ogg', '.rpgmvo': '.ogg',
-        '.m4a_': '.m4a', '.rpgmvm': '.m4a'
+        '.m4a_': '.m4a', '.rpgmvm': '.m4a',
+        '.mp3_': '.mp3', '.wav_': '.wav', '.flac_': '.flac'
     };
+
+    // Every format the runtime can play, in resolution priority order:
+    // when the same name exists in several formats, the earliest wins.
+    const AUDIO_EXTENSIONS = ['.ogg', '.mp3', '.wav', '.flac', '.m4a'];
 
     const list = (rootDir, extensions, options = {}) => {
         if (!rootDir) return [];
@@ -186,6 +191,7 @@
     };
 
     const api = {
+        AUDIO_EXTENSIONS,
         basename(name) {
             return normalizeRelative(name).split('/').pop() || '';
         },

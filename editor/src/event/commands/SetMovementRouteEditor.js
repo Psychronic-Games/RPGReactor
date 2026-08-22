@@ -959,7 +959,6 @@ class SetMovementRouteEditor {
     }
 
     _dlgPlaySE(existing, callback) {
-        const { content, okBtn, cancelBtn } = this._createDialog('Play SE', 400);
         const se = (existing && existing[0])
             ? existing[0]
             : { name: '', volume: 90, pitch: 100, pan: 0 };
@@ -975,36 +974,25 @@ class SetMovementRouteEditor {
             if (project && project.path) {
                 const sePath = pathMod.join(project.path, 'audio', 'se');
                 if (fs.existsSync(sePath)) {
-                    seFiles = RRAssetFiles.listNames(sePath, ['.ogg']);
+                    seFiles = RRAssetFiles.listUnique(sePath, RRAssetFiles.AUDIO_EXTENSIONS);
                 }
             }
         } catch (e) { /* no project or folder */ }
 
-        // File dropdown
-        const fileOptions = [{ value: '', text: '(None)' }]
-            .concat(seFiles.map(f => ({ value: f, text: f, i18n: false })));
-        content.appendChild(this._labeledSelect('File:', fileOptions, se.name, 'dlg-se-file'));
-
-        // Volume slider
-        content.appendChild(this._labeledRange('Volume:', 0, 100, se.volume, 'dlg-se-vol'));
-
-        // Pitch slider
-        content.appendChild(this._labeledRange('Pitch:', 50, 150, se.pitch, 'dlg-se-pitch'));
-
-        // Pan slider
-        content.appendChild(this._labeledRange('Pan:', -100, 100, se.pan, 'dlg-se-pan'));
-
-        okBtn.addEventListener('click', () => {
-            const result = {
-                name: content.querySelector('#dlg-se-file').value,
-                volume: parseInt(content.querySelector('#dlg-se-vol').value),
-                pitch: parseInt(content.querySelector('#dlg-se-pitch').value),
-                pan: parseInt(content.querySelector('#dlg-se-pan').value),
-            };
-            this._closeDialog();
-            callback([result]);
+        RRAudioPickerModal.open({
+            title: 'Play SE',
+            folderLabel: 'SE',
+            files: seFiles,
+            selected: se.name || '',
+            levels: {
+                volume: se.volume !== undefined ? se.volume : 90,
+                pitch: se.pitch !== undefined ? se.pitch : 100,
+                pan: se.pan !== undefined ? se.pan : 0
+            },
+            loopDefault: false,
+            zIndex: 10007,
+            onOk: result => callback([result])
         });
-        cancelBtn.addEventListener('click', () => this._closeDialog());
     }
 
     // ----------------------------------------------------------------

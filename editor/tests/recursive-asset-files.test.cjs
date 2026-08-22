@@ -80,14 +80,19 @@ test('audio commands discover and preserve nested RPG Maker names', () => {
         const bgmRoot = path.join(root, 'audio', 'bgm');
         fs.mkdirSync(path.join(bgmRoot, 'Boss'), { recursive: true });
         fs.writeFileSync(path.join(bgmRoot, 'Theme.ogg'), 'audio');
+        // An MV-style twin of the same track must not list twice.
+        fs.writeFileSync(path.join(bgmRoot, 'Theme.m4a'), 'audio');
         fs.writeFileSync(path.join(bgmRoot, 'Boss', 'Phase 2.ogg'), 'audio');
-        fs.writeFileSync(path.join(bgmRoot, 'Boss', 'Preview Only.mp3'), 'audio');
+        fs.writeFileSync(path.join(bgmRoot, 'Boss', 'Phase 3.mp3'), 'audio');
+        fs.writeFileSync(path.join(bgmRoot, 'Boss', 'Field Recording.wav'), 'audio');
         fs.writeFileSync(path.join(bgmRoot, 'Boss', 'Windows Only.OGG'), 'audio');
 
         const editor = new AudioCommandEditor({}, { currentProject: { path: root } });
         editor.commandType = { folder: 'bgm' };
-        assert.deepEqual(editor.getProjectAudioFiles(), ['Boss/Phase 2', 'Theme']);
+        assert.deepEqual(editor.getProjectAudioFiles(),
+            ['Boss/Field Recording', 'Boss/Phase 2', 'Boss/Phase 3', 'Theme']);
         assert.equal(editor.stripAudioExtension('Boss\\Phase 2.ogg'), 'Boss/Phase 2');
+        assert.equal(editor.stripAudioExtension('Boss/Phase 3.mp3'), 'Boss/Phase 3');
     } finally {
         fs.rmSync(root, { recursive: true, force: true });
     }

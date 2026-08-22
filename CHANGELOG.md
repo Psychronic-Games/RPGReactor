@@ -6,11 +6,27 @@ This root changelog summarizes public release progress for GitHub; larger releas
 
 ## [Unreleased - 0.98.3]
 
+### Added
+
+- **Audio can ship as MP3, WAV, or FLAC — not just OGG.** Drop any of those formats (plus M4A) into a project's BGM, BGS, ME, or SE folder and it plays in game and lists in every editor picker; nothing changes in the project data, which stays extensionless and MZ-compatible, so an OGG-only RPG Maker project behaves exactly as before and OGG still wins when the same track exists twice. Loop points come from each format's native convention — `LOOPSTART`/`LOOPLENGTH` comments in OGG and FLAC, the same pair as ID3 `TXXX` tags in MP3, and the sampler `smpl` chunk in WAV — and album art displays from MP3 and FLAC tags just like OGG's. Encrypted deployments cover the new formats too (`.mp3_`, `.wav_`, `.flac_`).
+
+- **Every audio picker looks and acts like the Audio Player.** Picking title, battle, or vehicle music, a system sound, audio in an event command, a movement route's SE, or a map's autoplay BGM/BGS now opens the same interface the Audio Player uses: album art beside the selected track, cover thumbnails on every row, the alphabet rail for jumping through long lists, and the styled playback row — with volume, pitch, and pan cards where the surface doesn't already have its own fields. Clicking a track previews it immediately; double-click confirms.
+
+- **The Audio Player shows album art.** A track's embedded cover (including in encrypted `.ogg_` files) appears beside its name in the header and in every track row; tracks without one get a stable per-track tile so the list still reads visually. The Demo's 65-track Psychronic soundtrack now ships with its album covers embedded, so the player shows real art out of the box. The current-track card sits near-black behind an accent border, audio lists scroll with a slim accent-pill scrollbar, and the BGM/BGS/ME/SE tabs render as outlined chips — all themed per palette. The playback buttons and the volume/pitch/pan sliders now share a single row, and the seek bar scrubs in fine steps instead of snapping to whole percents of the track.
+
+### Changed
+
+- **PixiJS updated to 8.20.0** across the editor and the game runtime, verified against the Demo (including 3D maps) and a plugin-heavy MV compatibility project.
+
 ### Fixed
+
+- **Light themes are readable everywhere.** A contrast audit across all seven palettes found light modes reusing accent colors tuned for dark backgrounds — gold text on white at 2:1, white button labels on pale accents. Every light palette's accents are darkened to meet the 4.5:1 accessibility bar for text, the toolbar's pixel-art icons tone down from neon to ink on light backgrounds, and dark themes are untouched. The About dialog now credits Three.js alongside NW.js and PixiJS v8.
 
 - **The tileset palette no longer shows another tileset's sheets after switching maps.** The palette's sheet cache is keyed by slot (A1–E), and a slot the new map's tileset leaves empty kept displaying whatever the previous tileset had loaded there. Switching maps now empties every slot before the new tileset fills its own, drops a selection made on the old sheets (its coordinates would paint unrelated tiles), and a slow superseded load can no longer repaint the palette after a newer map switch.
 
 - **Filename-case mismatches are corrected before the request, so fallback plugins can't hide the real art.** Windows-authored games freely request `npc_female2` for a file saved as `NPC_female2`; the runtime used to recover in its error handler, but a plugin that replaces that handler (Haven ships CGMZ_Fallback, which substitutes a placeholder file without calling the original) preempted the recovery — mismatched NPCs silently wore the fallback sprite and the console filled with failed requests on every map. Bitmap and audio loads now resolve the on-disk casing before issuing the request: the real art loads, nothing hits the console, and genuine missing files still reach the plugin's fallback exactly as authored.
+
+- **A 3D-tagged map whose elevation was never painted no longer logs a failed request each time it's entered.** A missing `Map###.r3d.json` sidecar means "render flat" by design, but probing the network for it put an unsuppressible `ERR_FILE_NOT_FOUND` in the console on every visit. The runtime now checks the disk first and only requests a sidecar that exists.
 
 - **Games bundling v5-era pixi-filters no longer crash to a black screen when a screen effect starts.** Haven/Project3's "5 years later" chapter died the moment its filter plugin ran: those filters override `apply` with multi-pass bodies built on PIXI v5's API — the input texture's `_frame`/`filterFrame` rectangle, `getFilterTexture`/`returnFilterTexture` scratch textures, array uniforms sized by shader constants, extra sampler textures assigned as uniforms, `(callback, scope)` ObservablePoints, and shaders that use `finalColor` as their own local variable. PIXI 8 renamed or removed every one of those. The legacy filter bridge now maps them all onto their v8 equivalents; all 41 bundled filter classes construct and render clean in the live runtime.
 

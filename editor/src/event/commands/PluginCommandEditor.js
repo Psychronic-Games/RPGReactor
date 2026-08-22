@@ -902,7 +902,7 @@ class PluginCommandEditor {
         }
 
         const files = RRAssetFiles.listNames(browseDir, [
-            '.png', '.jpg', '.jpeg', '.webp', '.bmp', '.ogg', '.m4a', '.wav', '.mp3'
+            '.png', '.jpg', '.jpeg', '.webp', '.bmp', ...RRAssetFiles.AUDIO_EXTENSIONS
         ], { recursive: Boolean(arg.dir) });
 
         if (files.length === 0) {

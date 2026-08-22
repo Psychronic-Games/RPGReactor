@@ -1835,7 +1835,7 @@ class DatabaseAnimationEditor {
 
             const path = require('path');
             const seFolder = path.join(currentProject.path, 'audio', 'se');
-            const audioFile = RRAssetFiles.find(seFolder, seName, ['.ogg']);
+            const audioFile = RRAssetFiles.find(seFolder, seName, RRAssetFiles.AUDIO_EXTENSIONS);
             if (!audioFile) return;
             previewAudio = new Audio(RRAssetFiles.toUrl(audioFile.absolutePath));
             // The volume slider is min="0" and 0 is a real setting, so a truthy
@@ -1868,7 +1868,7 @@ class DatabaseAnimationEditor {
 
             if (!fs.existsSync(seFolder)) { alert(tt('SE folder not found: audio/se')); return; }
 
-            const files = RRAssetFiles.listNames(seFolder, ['.ogg']);
+            const files = RRAssetFiles.listNames(seFolder, RRAssetFiles.AUDIO_EXTENSIONS);
 
             if (files.length === 0) { alert(tt('No audio files found in audio/se')); return; }
 
@@ -2023,7 +2023,7 @@ class DatabaseAnimationEditor {
         playBtn.addEventListener('click', () => {
             if (!selectedFile) return;
             stopAudio();
-            const audioFile = RRAssetFiles.find(seFolder, selectedFile, ['.ogg']);
+            const audioFile = RRAssetFiles.find(seFolder, selectedFile, RRAssetFiles.AUDIO_EXTENSIONS);
             if (!audioFile) return;
             pickerAudio = new Audio(RRAssetFiles.toUrl(audioFile.absolutePath));
             pickerAudio.volume = 0.9;
@@ -3066,7 +3066,7 @@ class DatabaseAnimationEditor {
 
                 const path = require('path');
                 const seFolder = path.join(currentProject.path, 'audio', 'se');
-                const audioFile = RRAssetFiles.find(seFolder, se.name, ['.ogg']);
+                const audioFile = RRAssetFiles.find(seFolder, se.name, RRAssetFiles.AUDIO_EXTENSIONS);
                 if (!audioFile) return;
 
                 const audio = new Audio(RRAssetFiles.toUrl(audioFile.absolutePath));
@@ -3825,7 +3825,7 @@ class DatabaseAnimationEditor {
 
                 const path = require('path');
                 const seFolder = path.join(currentProject.path, 'audio', 'se');
-                const audioFile = RRAssetFiles.find(seFolder, se.name, ['.ogg']);
+                const audioFile = RRAssetFiles.find(seFolder, se.name, RRAssetFiles.AUDIO_EXTENSIONS);
                 if (!audioFile) return;
 
                 const audio = new Audio(RRAssetFiles.toUrl(audioFile.absolutePath));

@@ -3811,7 +3811,7 @@ class PluginManager {
                 const dirPath = this.path.join(currentProject.path, metadata.dir);
                 if (this.fs.existsSync(dirPath)) {
                     const imageExts = ['.png', '.jpg', '.jpeg', '.webp', '.bmp'];
-                    const audioExts = ['.ogg', '.m4a', '.wav', '.mp3'];
+                    const audioExts = RRAssetFiles.AUDIO_EXTENSIONS;
                     const validExts = metadata.dir.includes('img') ? imageExts : audioExts;
                     const filtered = RRAssetFiles.listNames(dirPath, validExts);
                     for (const fileName of filtered) {

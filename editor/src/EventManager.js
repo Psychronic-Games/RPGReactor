@@ -1283,7 +1283,7 @@ class EventManager {
         const project = this.projectController.getCurrentProject?.() || this.projectController.currentProject;
         if (!project?.path || typeof RRAssetFiles === 'undefined') return null;
         const path = require('path');
-        const names = RRAssetFiles.listNames(path.join(project.path, 'audio', 'se'), ['.ogg', '.m4a', '.wav']);
+        const names = RRAssetFiles.listNames(path.join(project.path, 'audio', 'se'), RRAssetFiles.AUDIO_EXTENSIONS);
         const wanted = kind === 'door' ? /door|open/i : /treasure|chest|item|select|approve/i;
         const name = names.find(candidate => wanted.test(RRAssetFiles.basename(candidate)));
         return name ? { name, volume: 90, pitch: 100, pan: 0 } : null;

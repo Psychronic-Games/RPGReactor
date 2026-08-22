@@ -175,7 +175,11 @@ test('casing resolves before the request so plugin error handlers cannot preempt
     const audioLoad = coreSource.slice(
         coreSource.indexOf('WebAudio.prototype._startLoading'),
         coreSource.indexOf('WebAudio.prototype._shouldUseDecoder'));
-    assert.match(audioLoad, /resolveFileCase\(\s*this\._url, Utils\.hasEncryptedAudio\(\) \? "_" : ""\)/,
+    assert.match(audioLoad, /const suffix = Utils\.hasEncryptedAudio\(\) \? "_" : "";/,
+        'the audio request derives the encrypted suffix up front');
+    assert.match(audioLoad, /resolveAudioExtension\(this\._url, suffix\)/,
+        'the audio request pre-resolves its on-disk format');
+    assert.match(audioLoad, /resolveFileCase\(this\._url, suffix\)/,
         'the audio request pre-resolves its casing');
 
     // resolveFileCase strips the encrypted suffix from the corrected result.

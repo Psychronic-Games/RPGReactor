@@ -1,9 +1,9 @@
 {
   "name": "Reactor One",
-  "version": "0.98.2",
+  "version": "0.98.3",
   "engine": "RPG Reactor",
-  "engineVersion": "0.98.2",
+  "engineVersion": "0.98.3",
   "imported": true,
   "importedFrom": "RPG Maker MZ",
-  "modified": "2026-08-16T22:44:54.382Z"
+  "modified": "2026-08-21T21:32:37.667Z"
 }

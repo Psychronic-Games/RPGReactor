@@ -38,6 +38,7 @@ function contentType(pathname) {
         m4a: 'audio/mp4',
         mp3: 'audio/mpeg',
         wav: 'audio/wav',
+        flac: 'audio/flac',
         wasm: 'application/wasm',
     }[extension] || 'application/octet-stream';
 }

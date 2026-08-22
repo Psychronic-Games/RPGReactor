@@ -35,10 +35,14 @@ test('preview surfaces release capped resources and audio sections support Unico
     assert.match(pickerModal, /effekseer\.releaseContext\(fx\.ctx\)/);
     assert.match(pickerModal, /WEBGL_lose_context/);
 
-    const system1 = read('src', 'database', 'DatabaseSystem1Editor.js');
-    assert.match(system1, /audioContext\.close\(\)/);
+    // The shared audio picker modal serves System 1, the audio commands,
+    // movement-route SE, and map properties — the release lives there.
+    const audioPicker = read('src', 'utils', 'AudioPickerModal.js');
+    assert.match(audioPicker, /audioContext\.close\(\)/);
     // Every close path releases, not just stops.
-    assert.doesNotMatch(system1, /stopAudio\(\);\s*\n\s*document\.body\.removeChild\(overlay\)/);
+    assert.doesNotMatch(audioPicker, /stopAudio\(\);\s*\n\s*document\.body\.removeChild\(overlay\)/);
+    const system1 = read('src', 'database', 'DatabaseSystem1Editor.js');
+    assert.match(system1, /RRAudioPickerModal\.open\(/);
 
     const animEditor = read('src', 'database', 'DatabaseAnimationEditor.js');
     assert.match(animEditor, /_runDetailCleanups\(\)/);

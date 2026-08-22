@@ -104,6 +104,20 @@ test('only a 3D map asks for a sidecar', () => {
         'and it degrades if the namespace is somehow absent');
 });
 
+test('a 3D map with no painted sidecar issues no doomed request', () => {
+    // A <3d> map whose elevation was never painted has no sidecar file, and
+    // the request for it logs a network error the page cannot suppress —
+    // console noise on every entry to that map. Under NW.js the disk answers
+    // first and the request is skipped entirely.
+    const at = managersSource.indexOf('DataManager.loadMapSidecar = function');
+    const body = managersSource.slice(at, managersSource.indexOf('\n};', at));
+    assert.match(body, /Utils\.isNwjs\(\)/);
+    assert.match(body, /fs\.existsSync\(path\.join\(base, url\)\)/);
+    const check = body.indexOf('existsSync');
+    const send = body.indexOf('xhr.send');
+    assert.ok(check >= 0 && check < send, 'the disk check precedes the request');
+});
+
 test('a missing or broken sidecar does not block the map', () => {
     const at = managersSource.indexOf('DataManager.loadMapSidecar = function');
     const body = managersSource.slice(at, managersSource.indexOf('\n};', at));

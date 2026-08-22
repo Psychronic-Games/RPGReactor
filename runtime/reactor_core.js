@@ -539,6 +539,54 @@ Utils.resolveFileCase = function(url, suffix) {
 };
 
 /**
+ * Playable audio file extensions, in resolution priority order.
+ *
+ * @type string[]
+ */
+Utils.AUDIO_EXTENSIONS = [".ogg", ".mp3", ".wav", ".flac", ".m4a"];
+
+/**
+ * Resolves an audio URL's extension against what actually exists on disk.
+ *
+ * Audio references are stored extensionless and requested as ".ogg", but a
+ * project may ship the track as .mp3, .wav or .m4a instead. With the
+ * filesystem at hand the real extension is found before the request; on the
+ * web the load-error fallback chain covers the same ground.
+ *
+ * @param {string} url - The relative URL about to be requested (no suffix).
+ * @param {string} suffix - The encrypted-asset suffix, "_" or "".
+ * @returns {string} The URL with the on-disk extension, without the suffix.
+ */
+Utils.resolveAudioExtension = function(url, suffix) {
+    if (!this.isNwjs()) return url;
+    const match = /\.[a-z0-9]+$/i.exec(String(url));
+    const ext = match ? match[0].toLowerCase() : "";
+    if (!this.AUDIO_EXTENSIONS.includes(ext)) return url;
+    try {
+        const fs = require("fs");
+        const path = require("path");
+        const base = path.dirname(process.mainModule.filename);
+        const stem = url.slice(0, -ext.length);
+        const candidates = [ext].concat(
+            this.AUDIO_EXTENSIONS.filter(e => e !== ext));
+        for (const candidate of candidates) {
+            const candidateUrl = stem + candidate;
+            const clean = decodeURIComponent(candidateUrl.split("?")[0]) + suffix;
+            if (/^([a-z][a-z0-9+.-]*:|\/)/i.test(clean)) return url;
+            const segments = clean.split("/").filter(s => s && s !== ".");
+            if (segments.some(s => s === "..")) return url;
+            if (fs.existsSync(path.join(base, ...segments))
+                || this.correctFileCase(candidateUrl + suffix)) {
+                return candidateUrl;
+            }
+        }
+    } catch (e) {
+        // Resolution is best-effort; the request itself reports failures.
+    }
+    return url;
+};
+
+/**
  * Decrypts encrypted data.
  *
  * @param {ArrayBuffer} source - The data to be decrypted.
@@ -6749,6 +6797,8 @@ WebAudio.prototype.clear = function() {
     this._decoder = null;
     this._loadAttempts = 0;
     this._stallCheckTime = 0;
+    this._triedExtensions = null;
+    this._decodeGeneration = 0;
 };
 
 /**
@@ -7036,8 +7086,9 @@ WebAudio.prototype._startLoading = function() {
     }
     this._stallCheckTime = 0;
     if (WebAudio._context) {
-        this._url = Utils.resolveFileCase(
-            this._url, Utils.hasEncryptedAudio() ? "_" : "");
+        const suffix = Utils.hasEncryptedAudio() ? "_" : "";
+        this._url = Utils.resolveAudioExtension(this._url, suffix);
+        this._url = Utils.resolveFileCase(this._url, suffix);
         const url = this._realUrl();
         if (Utils.isLocal()) {
             this._startXhrLoading(url);
@@ -7127,7 +7178,13 @@ WebAudio.prototype._checkStalledLoad = function() {
 };
 
 WebAudio.prototype._shouldUseDecoder = function() {
-    return !Utils.canPlayOgg() && typeof VorbisDecoder === "function";
+    // The fallback decoder speaks Vorbis only; other formats decode
+    // natively everywhere.
+    return (
+        !Utils.canPlayOgg() &&
+        typeof VorbisDecoder === "function" &&
+        /\.ogg_?$/i.test(this._url || "")
+    );
 };
 
 WebAudio.prototype._createDecoder = function() {
@@ -7202,6 +7259,29 @@ WebAudio.prototype._onFetch = function(response) {
 };
 
 WebAudio.prototype._onError = function() {
+    // Without filesystem access the real extension can only be found by
+    // asking: when a request dies before any data arrives, walk the other
+    // audio extensions before treating the file as missing. (With NW.js
+    // the extension was already resolved up front and this never fires.)
+    const noData = this._fetchedSize === 0 && (!this._data || !this._data.length);
+    if (noData && !Utils.isNwjs()) {
+        const match = /\.[a-z0-9]+$/i.exec(this._url || "");
+        const ext = match ? match[0].toLowerCase() : "";
+        if (Utils.AUDIO_EXTENSIONS.includes(ext)) {
+            this._triedExtensions = this._triedExtensions || [ext];
+            const next = Utils.AUDIO_EXTENSIONS.find(
+                e => !this._triedExtensions.includes(e));
+            if (next) {
+                this._triedExtensions.push(next);
+                this._url = this._url.slice(0, -ext.length) + next;
+                this._startLoading();
+                return;
+            }
+            // Every extension 404ed: put the original URL back so retries,
+            // error messages and case correction speak of the file asked for.
+            this._url = this._url.slice(0, -ext.length) + this._triedExtensions[0];
+        }
+    }
     // One retry with the on-disk casing before giving up: Windows-authored
     // projects freely mix filename case that Windows resolves and a
     // case-sensitive filesystem does not.
@@ -7282,10 +7362,24 @@ WebAudio.prototype._decodeAudioData = function(arrayBuffer) {
     } else {
         // [Note] Make a temporary copy of arrayBuffer because
         //   decodeAudioData() detaches it.
+        // Streamed loads decode a growing prefix of the file repeatedly.
+        // A truncated prefix can fail to decode even though the finished
+        // file is fine (WAV in particular), so a failure only counts when
+        // it comes from the newest attempt on fully fetched data.
+        const generation = (this._decodeGeneration || 0) + 1;
+        this._decodeGeneration = generation;
         WebAudio._context
             .decodeAudioData(arrayBuffer.slice())
-            .then(buffer => this._onDecode(buffer))
-            .catch(() => this._onError());
+            .then(buffer => {
+                if (generation === this._decodeGeneration) {
+                    this._onDecode(buffer);
+                }
+            })
+            .catch(() => {
+                if (generation === this._decodeGeneration && this._isLoaded) {
+                    this._onError();
+                }
+            });
     }
 };
 
@@ -7490,6 +7584,71 @@ WebAudio.prototype._onLoad = function() {
 
 WebAudio.prototype._readLoopComments = function(arrayBuffer) {
     const view = new DataView(arrayBuffer);
+    const magic = this._readFourCharacters(view, 0);
+    if (magic === "RIFF") {
+        this._readWavLoopComments(view);
+    } else if (magic.slice(0, 3) === "ID3") {
+        this._readMp3LoopComments(view);
+    } else if (magic === "fLaC") {
+        this._readFlacLoopComments(view);
+    } else if (magic === "OggS") {
+        this._readOggLoopComments(view);
+    }
+};
+
+// FLAC carries the same vorbis comments as OGG, so LOOPSTART/LOOPLENGTH
+// work identically; the sample rate lives in the STREAMINFO block.
+WebAudio.prototype._readFlacLoopComments = function(view) {
+    let index = 4;
+    while (index + 4 <= view.byteLength) {
+        const blockHeader = view.getUint8(index);
+        const blockType = blockHeader & 0x7f;
+        const blockSize =
+            (view.getUint8(index + 1) << 16) |
+            (view.getUint8(index + 2) << 8) |
+            view.getUint8(index + 3);
+        const dataIndex = index + 4;
+        if (dataIndex + blockSize > view.byteLength) return;
+        if (blockType === 0 && blockSize >= 18) {
+            // STREAMINFO: the sample rate is 20 bits starting at byte 10.
+            this._sampleRate =
+                (view.getUint8(dataIndex + 10) << 12) |
+                (view.getUint8(dataIndex + 11) << 4) |
+                (view.getUint8(dataIndex + 12) >> 4);
+        } else if (blockType === 4) {
+            this._readFlacComments(view, dataIndex, blockSize);
+        }
+        if (blockHeader & 0x80) return; // last metadata block
+        index = dataIndex + blockSize;
+    }
+};
+
+WebAudio.prototype._readFlacComments = function(view, index, size) {
+    const end = index + size;
+    if (index + 4 > end) return;
+    let offset = index + 4 + view.getUint32(index, true); // vendor string
+    if (offset + 4 > end) return;
+    const count = view.getUint32(offset, true);
+    offset += 4;
+    for (let i = 0; i < count; i++) {
+        if (offset + 4 > end) return;
+        const length = view.getUint32(offset, true);
+        offset += 4;
+        if (offset + length > end) return;
+        let text = "";
+        for (let j = 0; j < length && j < 24; j++) {
+            text += String.fromCharCode(view.getUint8(offset + j));
+        }
+        if (text.match(/^LOOPSTART=([0-9]+)/i)) {
+            this._loopStart = parseInt(RegExp.$1);
+        } else if (text.match(/^LOOPLENGTH=([0-9]+)/i)) {
+            this._loopLength = parseInt(RegExp.$1);
+        }
+        offset += length;
+    }
+};
+
+WebAudio.prototype._readOggLoopComments = function(view) {
     let index = 0;
     while (index < view.byteLength - 30) {
         if (this._readFourCharacters(view, index) !== "OggS") {
@@ -7556,6 +7715,129 @@ WebAudio.prototype._readMetaData = function(view, index, size) {
                     this._loopLength = parseInt(text2);
                 }
             }
+        }
+    }
+};
+
+// Loop points for a WAV file come from the sampler ("smpl") chunk, the
+// format samplers and DAWs write them to. The sample rate comes from the
+// format chunk so loop samples convert to time exactly as for OGG.
+// Streamed loads pass a growing prefix, so every read is bounds-checked
+// and a truncated chunk simply leaves the defaults until the next pass.
+WebAudio.prototype._readWavLoopComments = function(view) {
+    if (view.byteLength < 12) return;
+    if (this._readFourCharacters(view, 8) !== "WAVE") return;
+    let index = 12;
+    while (index + 8 <= view.byteLength) {
+        const chunkId = this._readFourCharacters(view, index);
+        const chunkSize = view.getUint32(index + 4, true);
+        const dataIndex = index + 8;
+        if (chunkId === "fmt " && dataIndex + 8 <= view.byteLength) {
+            this._sampleRate = view.getUint32(dataIndex + 4, true);
+        } else if (chunkId === "smpl" && dataIndex + 52 <= view.byteLength) {
+            const numLoops = view.getUint32(dataIndex + 28, true);
+            if (numLoops > 0) {
+                const start = view.getUint32(dataIndex + 44, true);
+                const end = view.getUint32(dataIndex + 48, true);
+                if (end > start) {
+                    this._loopStart = start;
+                    this._loopLength = end - start;
+                }
+            }
+        }
+        // Chunks are word-aligned; odd sizes carry a pad byte.
+        index = dataIndex + chunkSize + (chunkSize % 2);
+    }
+};
+
+// Loop points for an MP3 come from ID3v2 TXXX frames named LOOPSTART and
+// LOOPLENGTH (the convention loop-tagging tools share with the OGG
+// comments). The sample rate comes from the first MPEG frame header after
+// the tag.
+WebAudio.prototype._readMp3LoopComments = function(view) {
+    if (view.byteLength < 10) return;
+    const major = view.getUint8(3);
+    const tagFlags = view.getUint8(5);
+    if (tagFlags & 0x80) return; // unsynchronised tags are not worth parsing
+    const syncsafe = at =>
+        ((view.getUint8(at) & 0x7f) << 21) |
+        ((view.getUint8(at + 1) & 0x7f) << 14) |
+        ((view.getUint8(at + 2) & 0x7f) << 7) |
+        (view.getUint8(at + 3) & 0x7f);
+    let tagEnd = 10 + syncsafe(6);
+    if (tagFlags & 0x10) tagEnd += 10; // footer
+    let index = 10;
+    if (tagFlags & 0x40 && index + 4 <= view.byteLength) {
+        index += major >= 4 ? syncsafe(index) : view.getUint32(index); // ext. header
+    }
+    const limit = Math.min(tagEnd, view.byteLength);
+    while (index + 10 <= limit) {
+        const frameId = this._readFourCharacters(view, index);
+        if (!/^[A-Z0-9]{4}$/.test(frameId)) break; // padding reached
+        const frameSize = major >= 4 ? syncsafe(index + 4) : view.getUint32(index + 4);
+        const frameEnd = index + 10 + frameSize;
+        if (frameSize <= 0 || frameEnd > limit) break;
+        if (frameId === "TXXX") {
+            const text = this._readMp3UserText(view, index + 10, frameSize);
+            if (text) {
+                if (text.name === "LOOPSTART") {
+                    this._loopStart = parseInt(text.value) || 0;
+                } else if (text.name === "LOOPLENGTH") {
+                    this._loopLength = parseInt(text.value) || 0;
+                }
+            }
+        }
+        index = frameEnd;
+    }
+    this._readMp3SampleRate(view, tagEnd);
+};
+
+WebAudio.prototype._readMp3UserText = function(view, index, size) {
+    const encoding = view.getUint8(index);
+    const wide = encoding === 1 || encoding === 2;
+    const bytes = [];
+    for (let i = index + 1; i < index + size; i++) {
+        bytes.push(view.getUint8(i));
+    }
+    // Split description and value on the encoding's null terminator; the
+    // loop tags are plain ASCII in every encoding, so non-ASCII bytes are
+    // simply dropped rather than decoded.
+    const step = wide ? 2 : 1;
+    let split = -1;
+    for (let i = 0; i + step <= bytes.length; i += step) {
+        if (bytes[i] === 0 && (!wide || bytes[i + 1] === 0)) {
+            split = i;
+            break;
+        }
+    }
+    if (split < 0) return null;
+    const asAscii = list => list
+        .filter(byte => byte >= 0x20 && byte < 0x7f)
+        .map(byte => String.fromCharCode(byte))
+        .join("");
+    return {
+        name: asAscii(bytes.slice(0, split)).toUpperCase(),
+        value: asAscii(bytes.slice(split + step))
+    };
+};
+
+WebAudio.prototype._readMp3SampleRate = function(view, start) {
+    const rates = {
+        3: [44100, 48000, 32000], // MPEG 1
+        2: [22050, 24000, 16000], // MPEG 2
+        0: [11025, 12000, 8000] // MPEG 2.5
+    };
+    const end = Math.min(view.byteLength - 4, start + 4096);
+    for (let i = Math.max(start, 0); i < end; i++) {
+        if (view.getUint8(i) !== 0xff || (view.getUint8(i + 1) & 0xe0) !== 0xe0) {
+            continue;
+        }
+        const version = (view.getUint8(i + 1) >> 3) & 0x03;
+        const rateIndex = (view.getUint8(i + 2) >> 2) & 0x03;
+        const table = rates[version];
+        if (table && rateIndex < 3) {
+            this._sampleRate = table[rateIndex];
+            return;
         }
     }
 };

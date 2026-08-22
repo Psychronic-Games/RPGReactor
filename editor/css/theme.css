@@ -155,9 +155,9 @@
  * --------------------------------------------------------------------------- */
 :root[data-theme="light"] {
     /* ---------- Brand accent (darker gold so it pops on light) ------------- */
-    --color-accent:               #a07b08;
+    --color-accent:               #7f6105;
     --color-accent-bright:        #b8860b;        /* deep goldenrod */
-    --color-accent-hover:         #d4a017;
+    --color-accent-hover:         #7a5c05;
     --color-accent-shadow:        #f4e8a1;        /* light gold tinted shadow */
     --color-accent-on:            #ffffff;        /* text on solid accent fill */
     --color-accent-tint-10:       rgba(184, 134, 11, 0.10);
@@ -170,7 +170,7 @@
     --color-accent-border-mid:    rgba(184, 134, 11, 0.70);
     --color-accent-border-strong: rgba(184, 134, 11, 0.85);
 
-    --color-accent-muted:         #c9a542;
+    --color-accent-muted:         #9c7a10;
     --color-accent-deep:          #7a5d05;        /* darker (active/pressed) */
 
     /* ---------- Link / blue palette (darker for light bg contrast) -------- */
@@ -224,7 +224,7 @@
     --color-text:                 #1f1f1f;
     --color-text-strong:          #000000;
     --color-text-muted:           #555555;
-    --color-text-dim:             #888888;
+    --color-text-dim:             #5f5f5f;
     /* --color-text-link inherits the same var() expression — resolves to
        the light-theme --color-accent-bright (#b8860b) automatically. */
 
@@ -357,7 +357,7 @@
     /* ---------- Brand accent (darker pink so it pops on light) ----------- */
     --color-accent:               #ad1457;
     --color-accent-bright:        #c2185b;
-    --color-accent-hover:         #d81b60;
+    --color-accent-hover:         #b0104c;
     --color-accent-shadow:        #fce4ec;
     --color-accent-on:            #ffffff;
     --color-accent-tint-10:       rgba(194, 24, 91, 0.10);
@@ -418,7 +418,7 @@
     --color-text:                 #1f1f1f;
     --color-text-strong:          #000000;
     --color-text-muted:           #555555;
-    --color-text-dim:             #888888;
+    --color-text-dim:             #5f5f5f;
 
     /* ---------- Semantic status colors (light tints) --------------------- */
     --color-success:              #d5ecd5;
@@ -492,9 +492,9 @@
  * --------------------------------------------------------------------------- */
 :root[data-theme="ocean-light"] {
     /* ---------- Brand accent (medium blue for light bg contrast) --------- */
-    --color-accent:               #2980b9;
+    --color-accent:               #1f6f9f;
     --color-accent-bright:        #2e86c1;
-    --color-accent-hover:         #1a5d8a;
+    --color-accent-hover:         #1a608a;
     --color-accent-shadow:        #d4e6f1;
     --color-accent-on:            #ffffff;
     --color-accent-tint-10:       rgba(46, 134, 193, 0.10);
@@ -555,7 +555,7 @@
     --color-text:                 #1f1f1f;
     --color-text-strong:          #000000;
     --color-text-muted:           #555555;
-    --color-text-dim:             #888888;
+    --color-text-dim:             #5f5f5f;
 
     /* ---------- Semantic status colors ----------------------------------- */
     --color-success:              #d5ecd5;
@@ -630,9 +630,9 @@
  * --------------------------------------------------------------------------- */
 :root[data-theme="cascadia-light"] {
     /* ---------- Brand accent (forest green, visible on light) ------------ */
-    --color-accent:               #228b22;
+    --color-accent:               #1e7d1e;
     --color-accent-bright:        #2e7d32;
-    --color-accent-hover:         #1b5e20;
+    --color-accent-hover:         #186818;
     --color-accent-shadow:        #d4e9d4;
     --color-accent-on:            #ffffff;
     --color-accent-tint-10:       rgba(46, 125, 50, 0.10);
@@ -693,7 +693,7 @@
     --color-text:                 #1f1f1f;
     --color-text-strong:          #000000;
     --color-text-muted:           #555555;
-    --color-text-dim:             #888888;
+    --color-text-dim:             #5f5f5f;
 
     /* ---------- Semantic status colors ----------------------------------- */
     --color-success:              #d5ecd5;
@@ -819,7 +819,7 @@
     --color-text:                 #1f1f1f;
     --color-text-strong:          #000000;
     --color-text-muted:           #555555;
-    --color-text-dim:             #888888;
+    --color-text-dim:             #5f5f5f;
 
     --color-success:              #d5ecd5;
     --color-success-border:       #5cb85c;
@@ -887,9 +887,9 @@
  * (the namesake: vanilla cream + tangerine).
  * --------------------------------------------------------------------------- */
 :root[data-theme="creamsicle-light"] {
-    --color-accent:               #e67e22;
+    --color-accent:               #b35c0e;
     --color-accent-bright:        #d35400;
-    --color-accent-hover:         #a04000;
+    --color-accent-hover:         #9c500c;
     --color-accent-shadow:        #ffe8d0;
     --color-accent-on:            #ffffff;
     --color-accent-tint-10:       rgba(211, 84, 0, 0.10);
@@ -944,7 +944,7 @@
     --color-text:                 #1f1f1f;
     --color-text-strong:          #000000;
     --color-text-muted:           #555555;
-    --color-text-dim:             #888888;
+    --color-text-dim:             #5f5f5f;
 
     --color-success:              #d5ecd5;
     --color-success-border:       #5cb85c;
@@ -1086,7 +1086,7 @@
     --color-text:                 #1f1f1f;
     --color-text-strong:          #000000;
     --color-text-muted:           #555555;
-    --color-text-dim:             #888888;
+    --color-text-dim:             #575757;
 
     /* ---------- Semantic status colors ----------------------------------- */
     --color-success:              #d5ecd5;

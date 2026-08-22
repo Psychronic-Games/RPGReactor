@@ -112,7 +112,7 @@ class AudioCommandEditor {
             return [];
         }
 
-        return RRAssetFiles.listNames(audioFolder, ['.ogg']);
+        return RRAssetFiles.listNames(audioFolder, RRAssetFiles.AUDIO_EXTENSIONS);
     }
 
     refreshInlineSelection(container, selectedFile) {
@@ -393,6 +393,7 @@ class AudioCommandEditor {
         seekSlider.type = 'range';
         seekSlider.min = 0;
         seekSlider.max = 100;
+        seekSlider.step = 0.1;
         seekSlider.value = 0;
         seekSlider.className = 'audio-seek-slider audio-control-slider';
         seekSlider.style.cssText = 'flex: 1; cursor: pointer;';
@@ -819,11 +820,10 @@ class AudioCommandEditor {
         `;
         browseBtn.addEventListener('click', () => {
             this.browseAudioFiles((filename) => {
-                if (filename) {
-                    this.command.parameters[0].name = filename;
-                    fileDisplay.value = filename;
-                    // Don't auto-play when selecting from browse - user must hit Play button
-                }
+                // '' means (None) was picked — clear the command's audio.
+                this.command.parameters[0].name = filename;
+                fileDisplay.value = filename || tt('(None)');
+                // Don't auto-play when selecting from browse - user must hit Play button
             });
         });
 
@@ -913,6 +913,7 @@ class AudioCommandEditor {
         seekSlider.type = 'range';
         seekSlider.min = 0;
         seekSlider.max = 100;
+        seekSlider.step = 0.1;
         seekSlider.value = 0;
         seekSlider.className = 'audio-seek-slider audio-control-slider';
         seekSlider.style.cssText = 'flex: 1;';
@@ -1125,7 +1126,7 @@ class AudioCommandEditor {
             return;
         }
 
-        const files = RRAssetFiles.listNames(audioFolder, ['.ogg']);
+        const files = RRAssetFiles.listUnique(audioFolder, RRAssetFiles.AUDIO_EXTENSIONS);
 
         if (files.length === 0) {
             alert(tt('No audio files found in folder'));
@@ -1140,461 +1141,32 @@ class AudioCommandEditor {
     }
 
     /**
-     * Show file picker dialog
+     * Show file picker dialog (the shared Audio Player-styled modal).
+     * `files` are RRAssetFiles records; the callback receives the chosen
+     * extensionless name ('' for none).
      */
     showFilePicker(files, currentSelection, callback) {
         const tt = text => window.I18n ? window.I18n.tText(text) : text;
-        let selectedFile = currentSelection;
-        const picker = document.createElement('div');
-        picker.style.cssText = `
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0, 0, 0, 0.8);
-            z-index: 10006;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-        `;
+        const folder = (this.commandType?.folder || 'se').toUpperCase();
+        const params = this.command.parameters[0] || {};
 
-        const container = document.createElement('div');
-        container.style.cssText = `
-            background-color: var(--color-bg-surface);
-            border: 1px solid var(--color-border);
-            border-radius: 6px;
-            width: 650px;
-            height: 85vh;
-            max-height: 850px;
-            display: flex;
-            flex-direction: column;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
-        `;
-
-        // Header
-        const header = document.createElement('div');
-        header.style.cssText = `
-            padding: 12px 16px;
-            background-color: var(--color-bg-panel);
-            border-bottom: 1px solid var(--color-border);
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-        `;
-
-        // Title row
-        const titleRow = document.createElement('div');
-        titleRow.style.cssText = `
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        `;
-        titleRow.innerHTML = `
-            <h3 style="margin: 0; color: var(--color-text-strong); font-size: 16px;">${tt('Select Audio File')}</h3>
-            <button class="close-picker" style="background: none; border: none; color: var(--color-text-strong); font-size: 20px; cursor: pointer;">×</button>
-        `;
-        header.appendChild(titleRow);
-
-        // Preview controls row
-        const previewRow = document.createElement('div');
-        previewRow.style.cssText = `
-            display: flex;
-            gap: 8px;
-            align-items: center;
-        `;
-
-        const playPreviewBtn = document.createElement('button');
-        playPreviewBtn.innerHTML = `<svg viewBox="0 0 24 24" width="14" height="14"><path d="M8 5v14l11-7z" fill="currentColor"/></svg> ${tt('Preview')}`;
-        playPreviewBtn.style.cssText = `
-            padding: 6px 16px;
-            background-color: var(--color-bg-panel);
-            color: var(--color-text);
-            border: 1px solid var(--color-border-input);
-            border-radius: 3px;
-            cursor: pointer;
-            font-size: 12px;
-            display: flex;
-            align-items: center;
-            gap: 4px;
-            transition: background-color 0.15s;
-        `;
-        playPreviewBtn.addEventListener('mouseenter', () => { playPreviewBtn.style.backgroundColor = 'var(--color-accent-tint-25)'; });
-        playPreviewBtn.addEventListener('mouseleave', () => { playPreviewBtn.style.backgroundColor = 'var(--color-bg-panel)'; });
-
-        const stopPreviewBtn = document.createElement('button');
-        stopPreviewBtn.innerHTML = `<svg viewBox="0 0 24 24" width="14" height="14"><path d="M6 6h12v12H6z" fill="currentColor"/></svg> ${tt('Stop')}`;
-        stopPreviewBtn.style.cssText = `
-            padding: 6px 16px;
-            background-color: var(--color-bg-panel);
-            color: var(--color-text);
-            border: 1px solid var(--color-border-input);
-            border-radius: 3px;
-            cursor: pointer;
-            font-size: 12px;
-            display: flex;
-            align-items: center;
-            gap: 4px;
-            transition: background-color 0.15s;
-        `;
-        stopPreviewBtn.addEventListener('mouseenter', () => { stopPreviewBtn.style.backgroundColor = 'var(--color-accent-tint-25)'; });
-        stopPreviewBtn.addEventListener('mouseleave', () => { stopPreviewBtn.style.backgroundColor = 'var(--color-bg-panel)'; });
-
-        const previewLabel = document.createElement('span');
-        previewLabel.className = 'preview-filename';
-        previewLabel.textContent = selectedFile ? selectedFile : tt('No file selected');
-        previewLabel.style.cssText = `
-            color: var(--color-text);
-            font-size: 12px;
-            flex: 1;
-        `;
-
-        previewRow.appendChild(playPreviewBtn);
-        previewRow.appendChild(stopPreviewBtn);
-        previewRow.appendChild(previewLabel);
-        header.appendChild(previewRow);
-
-        // Main content area with tabs and list
-        const mainContent = document.createElement('div');
-        mainContent.style.cssText = `
-            display: flex;
-            flex: 1;
-            overflow: hidden;
-        `;
-
-        // Sort files alphabetically
-        const sortedFiles = files.slice();
-
-        // Create alphabet tabs
-        const tabBar = document.createElement('div');
-        tabBar.className = 'alphabet-tabs';
-        tabBar.style.cssText = `
-            width: 60px;
-            background-color: var(--color-bg-list-item);
-            border-right: 1px solid var(--color-border);
-            display: flex;
-            flex-direction: column;
-            gap: 1px;
-            overflow-y: auto;
-            padding: 6px 4px;
-        `;
-
-        // Get first letters that exist in the file list
-        const firstLetters = new Set();
-        sortedFiles.forEach(name => {
-            const firstChar = name.charAt(0).toUpperCase();
-            if (/[A-Z]/.test(firstChar)) {
-                firstLetters.add(firstChar);
-            } else {
-                firstLetters.add('#'); // For numbers and special chars
-            }
+        // The command dialog owns the volume/pitch/pan fields, so the picker
+        // hides its level cards and just previews at the command's values.
+        RRAudioPickerModal.open({
+            title: `${tt('Select')} ${folder} ${tt('File')}`,
+            folderLabel: folder,
+            files,
+            selected: currentSelection || '',
+            levels: null,
+            previewLevels: {
+                volume: params.volume !== undefined ? params.volume : 90,
+                pitch: params.pitch !== undefined ? params.pitch : 100,
+                pan: params.pan !== undefined ? params.pan : 0
+            },
+            loopDefault: this.commandType?.folder !== 'se',
+            zIndex: 10006,
+            onOk: result => callback(result.name)
         });
-
-        const sortedLetters = Array.from(firstLetters).sort((a, b) => {
-            if (a === '#') return -1;
-            if (b === '#') return 1;
-            return a.localeCompare(b);
-        });
-
-        // Create tabs for available letters
-        sortedLetters.forEach(letter => {
-            const tab = document.createElement('button');
-            tab.textContent = letter;
-            tab.dataset.letter = letter;
-            tab.style.cssText = `
-                padding: 4px 6px;
-                background-color: var(--color-bg-input-alt);
-                color: var(--color-text-strong);
-                border: none;
-                border-radius: 3px;
-                cursor: pointer;
-                font-size: 11px;
-                transition: background-color 0.15s;
-                text-align: center;
-                min-height: 22px;
-                font-weight: bold;
-            `;
-
-            tab.addEventListener('click', () => {
-                this.scrollToLetter(fileList, letter);
-            });
-
-            tab.addEventListener('mouseenter', () => {
-                if (currentActiveTab !== letter) {
-                    tab.style.backgroundColor = 'var(--color-link)';
-                }
-            });
-
-            tab.addEventListener('mouseleave', () => {
-                if (currentActiveTab !== letter) {
-                    tab.style.backgroundColor = 'var(--color-bg-input-alt)';
-                }
-            });
-
-            tabBar.appendChild(tab);
-        });
-
-        mainContent.appendChild(tabBar);
-
-        // File list
-        const fileList = document.createElement('div');
-        fileList.className = 'audio-file-list';
-        fileList.style.cssText = `
-            flex: 1;
-            overflow-y: auto;
-            padding: 8px;
-            background-color: var(--color-bg-surface);
-        `;
-
-        // Group files by first letter
-        let currentLetter = null;
-
-        sortedFiles.forEach(displayName => {
-            const firstChar = displayName.charAt(0).toUpperCase();
-            const letter = /[A-Z]/.test(firstChar) ? firstChar : '#';
-
-            // Add letter header if it's a new letter
-            if (letter !== currentLetter) {
-                currentLetter = letter;
-                const letterHeader = document.createElement('div');
-                letterHeader.className = 'letter-section';
-                letterHeader.dataset.letter = letter;
-                letterHeader.textContent = letter;
-                letterHeader.style.cssText = `
-                    font-weight: bold;
-                    font-size: 14px;
-                    color: var(--color-link);
-                    margin-top: 12px;
-                    margin-bottom: 6px;
-                    padding-bottom: 4px;
-                    border-bottom: 1px solid var(--color-border);
-                `;
-                fileList.appendChild(letterHeader);
-            }
-
-            const fileBtn = document.createElement('button');
-            fileBtn.textContent = displayName;
-            fileBtn.dataset.filename = displayName;
-            fileBtn.className = 'audio-file-btn';
-
-            const isSelected = displayName === selectedFile;
-            fileBtn.style.cssText = `
-                width: 100%;
-                padding: 8px 12px;
-                margin-bottom: 4px;
-                background-color: ${isSelected ? 'var(--color-bg-selected)' : 'var(--color-bg-input)'};
-                color: var(--color-text);
-                border: 1px solid ${isSelected ? 'var(--color-link)' : 'var(--color-border-input)'};
-                border-radius: 3px;
-                cursor: pointer;
-                font-size: 12px;
-                text-align: left;
-                transition: background-color 0.15s;
-            `;
-
-            fileBtn.addEventListener('mouseenter', () => {
-                if (displayName !== selectedFile) {
-                    fileBtn.style.backgroundColor = 'var(--color-link)';
-                }
-            });
-
-            fileBtn.addEventListener('mouseleave', () => {
-                if (displayName !== selectedFile) {
-                    fileBtn.style.backgroundColor = 'var(--color-bg-input)';
-                }
-            });
-
-            fileBtn.addEventListener('click', () => {
-                // Update selection
-                selectedFile = displayName;
-                previewLabel.textContent = displayName;
-
-                // Update all file buttons
-                fileList.querySelectorAll('.audio-file-btn').forEach(btn => {
-                    const btnName = btn.dataset.filename;
-                    const isNowSelected = btnName === selectedFile;
-                    btn.style.backgroundColor = isNowSelected ? 'var(--color-bg-selected)' : 'var(--color-bg-input)';
-                    btn.style.borderColor = isNowSelected ? 'var(--color-link)' : 'var(--color-border-input)';
-                });
-            });
-
-            // Double-click to play preview
-            fileBtn.addEventListener('dblclick', () => {
-                selectedFile = displayName;
-                previewLabel.textContent = displayName;
-                loadPreviewFile(displayName);
-            });
-
-            fileList.appendChild(fileBtn);
-        });
-
-        // Scroll detection for active letter tab
-        let currentActiveTab = null;
-        fileList.addEventListener('scroll', () => {
-            const sections = fileList.querySelectorAll('.letter-section');
-            const scrollTop = fileList.scrollTop;
-            const containerTop = fileList.getBoundingClientRect().top;
-
-            let activeTabLetter = null;
-            sections.forEach(section => {
-                const sectionTop = section.getBoundingClientRect().top;
-                if (sectionTop - containerTop <= 100) {
-                    activeTabLetter = section.dataset.letter;
-                }
-            });
-
-            if (activeTabLetter && activeTabLetter !== currentActiveTab) {
-                currentActiveTab = activeTabLetter;
-                // Update tab highlighting
-                tabBar.querySelectorAll('button').forEach(tab => {
-                    if (tab.dataset.letter === activeTabLetter) {
-                        tab.style.backgroundColor = 'var(--color-link)';
-                    } else {
-                        tab.style.backgroundColor = 'var(--color-bg-input-alt)';
-                    }
-                });
-            }
-        });
-
-        mainContent.appendChild(fileList);
-
-        // Footer with OK/Cancel buttons
-        const footer = document.createElement('div');
-        footer.style.cssText = `
-            padding: 12px 16px;
-            border-top: 1px solid var(--color-border);
-            background-color: var(--color-bg-panel);
-            display: flex;
-            justify-content: flex-end;
-            gap: 8px;
-        `;
-
-        const cancelBtn = document.createElement('button');
-        cancelBtn.textContent = tt('Cancel');
-        cancelBtn.className = 'rr-btn-secondary';
-
-        const okBtn = document.createElement('button');
-        okBtn.textContent = tt('OK');
-        okBtn.style.cssText = `
-            padding: 6px 20px;
-            background-color: var(--color-accent);
-            color: var(--color-bg-deep);
-            border: 1px solid var(--color-accent);
-            border-radius: 3px;
-            cursor: pointer;
-            font-size: 12px;
-            font-weight: bold;
-            transition: background-color 0.15s;
-        `;
-        okBtn.addEventListener('mouseenter', () => { okBtn.style.backgroundColor = 'var(--color-accent-tint-25)'; });
-        okBtn.addEventListener('mouseleave', () => { okBtn.style.backgroundColor = 'var(--color-accent)'; });
-
-        footer.appendChild(cancelBtn);
-        footer.appendChild(okBtn);
-
-        container.appendChild(header);
-        container.appendChild(mainContent);
-        container.appendChild(footer);
-        picker.appendChild(container);
-
-        // Preview functionality
-        const loadPreviewFile = (filename) => {
-            if (!filename) return;
-
-            const currentProject = this.projectController.getCurrentProject ?
-                this.projectController.getCurrentProject() :
-                this.projectController.currentProject;
-
-            if (!currentProject) return;
-
-            const path = require('path');
-            const audioFolder = path.join(currentProject.path, 'audio', this.commandType.folder);
-
-            const audioFile = RRAssetFiles.find(audioFolder, filename, ['.ogg']);
-
-            if (audioFile) {
-                const player = this.getAudioPlayer();
-                if (player) {
-                    const fileUrl = RRAssetFiles.toUrl(audioFile.absolutePath);
-                    // SE shouldn't loop by default in preview
-                    const shouldLoop = (this.commandType.folder !== 'se');
-                    player.playExternal(fileUrl, {
-                        volume: 90,
-                        pitch: 100,
-                        pan: 0,
-                        loop: shouldLoop,
-                        audioType: this.commandType.folder // bgm, bgs, me, or se
-                    });
-                }
-            }
-        };
-
-        playPreviewBtn.addEventListener('click', () => {
-            if (selectedFile) {
-                loadPreviewFile(selectedFile);
-            } else {
-                alert(tt('Please select a file to preview'));
-            }
-        });
-
-        stopPreviewBtn.addEventListener('click', () => {
-            const player = this.getAudioPlayer();
-            if (player) {
-                player.stopExternal();
-            }
-        });
-
-        // OK button
-        okBtn.addEventListener('click', () => {
-            // Don't stop audio - let it continue playing
-            if (selectedFile) {
-                callback(selectedFile);
-            }
-            document.body.removeChild(picker);
-        });
-
-        // Cancel button
-        cancelBtn.addEventListener('click', () => {
-            // Don't stop audio when canceling
-            document.body.removeChild(picker);
-        });
-
-        // Close button
-        titleRow.querySelector('.close-picker').addEventListener('click', () => {
-            // Don't stop audio when closing
-            document.body.removeChild(picker);
-        });
-
-        // Close on background click
-        picker.addEventListener('click', (e) => {
-            if (e.target === picker) {
-                // Don't stop audio when closing
-                document.body.removeChild(picker);
-            }
-        });
-
-        document.body.appendChild(picker);
-
-        // Auto-scroll to selected file if one exists
-        if (selectedFile) {
-            setTimeout(() => {
-                const selectedBtn = Array.from(fileList.querySelectorAll('.audio-file-btn'))
-                    .find(button => button.dataset.filename === selectedFile);
-                if (selectedBtn) {
-                    selectedBtn.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                }
-            }, 100);
-        }
-    }
-
-    /**
-     * Scroll to specific letter section in file list
-     */
-    scrollToLetter(fileList, letter) {
-        const letterSection = fileList.querySelector(`.letter-section[data-letter="${letter}"]`);
-        if (letterSection) {
-            letterSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        }
     }
 
     /**
@@ -1612,7 +1184,7 @@ class AudioCommandEditor {
         const path = require('path');
         const audioFolder = path.join(currentProject.path, 'audio', this.commandType.folder);
 
-        const audioFile = RRAssetFiles.find(audioFolder, filename, ['.ogg']);
+        const audioFile = RRAssetFiles.find(audioFolder, filename, RRAssetFiles.AUDIO_EXTENSIONS);
 
         if (audioFile) {
             const player = this.getAudioPlayer();

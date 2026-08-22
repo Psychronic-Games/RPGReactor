@@ -1826,6 +1826,7 @@ class ProjectController {
         bgmPicker.style.display = bgmCheckbox.checked ? 'block' : 'none';
 
         this.populateAudioDropdown('map-bgm-select', 'bgm');
+        this.attachMapAudioBrowse('bgm');
         const bgmSelect = document.getElementById('map-bgm-select');
         const bgmName = mapData.bgm?.name || '';
         bgmSelect.value = bgmName;
@@ -1851,6 +1852,7 @@ class ProjectController {
         bgsPicker.style.display = bgsCheckbox.checked ? 'block' : 'none';
 
         this.populateAudioDropdown('map-bgs-select', 'bgs');
+        this.attachMapAudioBrowse('bgs');
         const bgsSelect = document.getElementById('map-bgs-select');
         const bgsName = mapData.bgs?.name || '';
         bgsSelect.value = bgsName;
@@ -1962,6 +1964,58 @@ class ProjectController {
         return select.value;
     }
 
+    /**
+     * The map properties "…" button beside a BGM/BGS dropdown opens the
+     * shared Audio Player-styled picker; OK writes the choice back into the
+     * dropdown and the volume/pitch/pan fields.
+     */
+    attachMapAudioBrowse(type) {
+        const button = document.getElementById(`map-${type}-browse-btn`);
+        if (!button) return;
+        button.onclick = () => {
+            if (!this.currentProject?.path || !window.RRAudioPickerModal) return;
+            const path = require('path');
+            const folder = path.join(this.currentProject.path, 'audio', type);
+            const select = document.getElementById(`map-${type}-select`);
+            const readNumber = (id, fallback) => {
+                const value = parseInt(document.getElementById(id)?.value, 10);
+                return Number.isFinite(value) ? value : fallback;
+            };
+            const label = type.toUpperCase();
+
+            RRAudioPickerModal.open({
+                title: `${this._tt('Select')} ${label} ${this._tt('File')}`,
+                folderLabel: label,
+                files: RRAssetFiles.listUnique(folder, RRAssetFiles.AUDIO_EXTENSIONS),
+                selected: select?.value || '',
+                levels: {
+                    volume: readNumber(`map-${type}-volume`, type === 'bgs' ? 80 : 100),
+                    pitch: readNumber(`map-${type}-pitch`, 100),
+                    pan: readNumber(`map-${type}-pan`, 0)
+                },
+                loopDefault: true,
+                zIndex: 10010,
+                onOk: result => {
+                    if (select) {
+                        select.value = result.name;
+                        // A track missing from the dropdown (fresh file, or
+                        // none) still needs to stick as the value.
+                        if (select.value !== result.name) {
+                            const option = document.createElement('option');
+                            option.value = result.name;
+                            option.textContent = result.name;
+                            select.appendChild(option);
+                            select.value = result.name;
+                        }
+                    }
+                    document.getElementById(`map-${type}-volume`).value = result.volume;
+                    document.getElementById(`map-${type}-pitch`).value = result.pitch;
+                    document.getElementById(`map-${type}-pan`).value = result.pan;
+                }
+            });
+        };
+    }
+
     populateAudioDropdown(selectId, type) {
         const select = document.getElementById(selectId);
         select.innerHTML = `<option value="">${this._t('common.none')}</option>`;
@@ -1979,7 +2033,7 @@ class ProjectController {
             return;
         }
 
-        const files = RRAssetFiles.listNames(audioFolder, ['.ogg']);
+        const files = RRAssetFiles.listNames(audioFolder, RRAssetFiles.AUDIO_EXTENSIONS);
 
         // RPG Maker stores extensionless relative names with forward slashes.
         files.forEach(file => {
@@ -1997,7 +2051,7 @@ class ProjectController {
         const fs = require('fs');
         const path = require('path');
         const audioFolder = path.join(this.currentProject.path, 'audio', type);
-        const file = RRAssetFiles.find(audioFolder, name, ['.ogg']);
+        const file = RRAssetFiles.find(audioFolder, name, RRAssetFiles.AUDIO_EXTENSIONS);
         return file ? RRAssetFiles.toUrl(file.absolutePath) : null;
     }
 

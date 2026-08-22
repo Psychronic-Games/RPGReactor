@@ -235,6 +235,15 @@ DataManager.loadMapSidecar = function(mapData) {
 
     const filename = this._lastMapSrc.replace(/\.json$/, Reactor3D.SIDECAR_SUFFIX);
     const url = "data/" + filename;
+    // A <3d> map with no painted sidecar is a normal state, but the request
+    // for the absent file would log a network error the page cannot suppress.
+    // When the disk is reachable, ask it instead of the network.
+    if (Utils.isNwjs()) {
+        const fs = require("fs");
+        const path = require("path");
+        const base = path.dirname(process.mainModule.filename);
+        if (!fs.existsSync(path.join(base, url))) return;
+    }
     const xhr = new XMLHttpRequest();
     this._mapSidecarPending = true;
     xhr.open("GET", url);
