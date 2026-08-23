@@ -891,7 +891,7 @@ test('the sync loop binds instances, loads rules, and plays queued actions', () 
     assert.match(source, /const object = Reactor3D\.cloneModelTemplate\(template\)/, 'instances clone through the rebinder');
     assert.match(source, /new THREE\.AnimationMixer\(inner\)/);
     assert.match(source, /rule\.type === "clip"/);
-    assert.match(source, /Reactor3D\.loadModelAnimations\(spec\.name\)\.then/);
+    assert.match(source, /Reactor3D\.loadModelSidecar\(spec\.name\)/);
     assert.match(source, /Reactor3D\.applyModelAnimation\(holder\.binding, holder\.rules/);
     // Part ancestry is stamped BEFORE the flatten bakes the hierarchy away.
     assert.ok(source.indexOf('child.userData.parts = chain') < source.indexOf('this.flattenModelWorld(root);'),

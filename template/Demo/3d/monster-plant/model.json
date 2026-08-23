@@ -28,5 +28,12 @@
       "period": 22,
       "cycles": 3
     }
+  ],
+  "parts": [
+    {
+      "name": "Lower-Jaw",
+      "pivot": null,
+      "meshes": {}
+    }
   ]
 }

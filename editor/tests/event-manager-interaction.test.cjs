@@ -297,3 +297,59 @@ test('leaving event mode preserves unrelated map and panning handlers', () => {
     assert.equal(listeners.get('pointerdown').has(mapPaintHandler), true);
     assert.equal(listeners.get('pointerdown').has(panHandler), true);
 });
+
+test('an event clone carries its 3D model sidecar entry through every operation', async () => {
+    const EventManager = loadEventManager();
+    const manager = Object.create(EventManager.prototype);
+    const model = { '0': { name: 'Tank', file: '', ext: '.glb', size: 9, scale: 1, yaw: 0, pitch: 0, roll: 0 } };
+    manager.currentMap = {
+        width: 10, height: 8,
+        events: [null, { id: 1, name: 'EV001', x: 2, y: 2, pages: [{}] }],
+        reactor3d: { version: 1, mode: '3d', events: { '1': JSON.parse(JSON.stringify(model)) } }
+    };
+    manager.undoStack = [];
+    manager.redoStack = [];
+    manager.maxUndoSteps = 50;
+    manager.selectedEvent = null;
+    manager.notifyUndoStateChange = () => {};
+    manager.renderEvents = () => {};
+    manager.selectEvent = () => {};
+
+    // Copy carries the entry; paste re-keys it under the clone's id.
+    manager.copyEvent(manager.currentMap.events[1]);
+    const sameAsModel = value => assert.equal(JSON.stringify(value), JSON.stringify(model));
+    sameAsModel(manager.clipboardModels);
+    await manager.pasteEvent(5, 5);
+    const clone = manager.currentMap.events.find(e => e && e.x === 5 && e.y === 5);
+    assert.ok(clone, 'the clone exists');
+    sameAsModel(manager.currentMap.reactor3d.events[String(clone.id)]);
+    sameAsModel(manager.currentMap.reactor3d.events['1']);
+
+    // Deleting an event purges its entry — ids are reused, and a stale
+    // entry would hand this model to a future unrelated event.
+    manager.deleteEvent(clone);
+    assert.equal(manager.currentMap.reactor3d.events[String(clone.id)], undefined);
+
+    // Undo restores the event AND its model entry together.
+    manager.undo();
+    assert.ok(manager.currentMap.events.find(e => e && e.id === clone.id), 'undo restores the clone');
+    sameAsModel(manager.currentMap.reactor3d.events[String(clone.id)]);
+    manager.redo();
+    assert.equal(manager.currentMap.reactor3d.events[String(clone.id)], undefined,
+        'redo removes the model entry again');
+
+    // Cut = copy + delete: the entry travels and the source is purged.
+    manager.cutEvent(manager.currentMap.events[1]);
+    sameAsModel(manager.clipboardModels);
+    assert.equal(manager.currentMap.reactor3d.events, undefined, 'last entry removed cleans the container');
+    await manager.pasteEvent(7, 7);
+    const moved = manager.currentMap.events.find(e => e && e.x === 7 && e.y === 7);
+    sameAsModel(manager.currentMap.reactor3d.events[String(moved.id)]);
+
+    // A model-less event pastes without inventing sidecar scaffolding.
+    delete manager.currentMap.reactor3d;
+    manager.clipboard = { id: 9, name: 'EV009', x: 1, y: 1, pages: [{}] };
+    manager.clipboardModels = null;
+    await manager.pasteEvent(1, 1);
+    assert.equal(manager.currentMap.reactor3d, undefined, 'no sidecar appears from nowhere');
+});

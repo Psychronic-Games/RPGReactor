@@ -7480,6 +7480,27 @@ Reactor3D.readGlbClips = function(json, bin, nodes) {
 Reactor3D.cloneModelTemplate = function(template) {
     const clone = template.clone(true);
     clone.__reactorClips = template.__reactorClips;
+    // Materials are per instance (textures stay shared) so a model flash
+    // tints one tank, not every clone of it. Material.clone drops custom
+    // properties, so the model marker is carried by hand.
+    const instanceMaterial = mat => {
+        const cloned = mat.clone();
+        cloned.__reactorModel = mat.__reactorModel;
+        // Material.clone copies userData through JSON, which degrades a
+        // stored base colour to its hex number; rebuild it as a Colour or
+        // every later read of .r comes back undefined.
+        if (cloned.userData && cloned.userData.baseColor != null
+            && !cloned.userData.baseColor.isColor) {
+            cloned.userData.baseColor = new THREE.Color(cloned.userData.baseColor);
+        }
+        return cloned;
+    };
+    clone.traverse(child => {
+        if (!child.isMesh || !child.material) return;
+        child.material = Array.isArray(child.material)
+            ? child.material.map(instanceMaterial)
+            : instanceMaterial(child.material);
+    });
     if (!template.userData.animated) return clone;
     const twins = new Map();
     const walk = (source, copy) => {
@@ -7580,22 +7601,67 @@ Reactor3D.flattenModelWorld = function(root) {
 
 /**
  * Procedural model animation. A model folder may carry `model.json`:
- *   { "animations": [ { name, part, type, axis, trigger, ... }, ... ] }
+ *   { "animations": [ { name, part, type, axis, trigger, ... }, ... ],
+ *     "parts": [ { name, pivot, meshes }, ... ] }
  * type: "spin" (speed deg/sec, or perTile deg per tile travelled),
  *       "swing" (degrees amplitude, period frames, cycles for actions),
- *       "bob" (amount in tiles, period frames).
+ *       "bob" (amount in tiles, period frames),
+ *       "pose" (rotate [x,y,z] degrees and move [x,y,z] tiles: ease to
+ *       that end pose while the trigger holds and back to rest when it
+ *       releases; an action pose plays in and out over its period).
  * trigger: "always", "idle", "moving", or "action" — actions play on
  * demand by name (the Play Model Animation event command).
  * part: prefix of a named part recorded by the readers ("" = whole model);
- * rules turn parts about their own recorded pivots.
+ * rules turn parts about their own recorded pivots. "parts" entries carve
+ * regions the source file never named into parts of their own — see
+ * readModelParts/carveModelParts below.
  */
 Reactor3D.readModelAnimationRules = function(json) {
     const list = json && Array.isArray(json.animations) ? json.animations : [];
     const rules = [];
+    const vec3 = (value, fallback) => {
+        const raw = Array.isArray(value) ? value : [];
+        return [0, 1, 2].map(i => Number.isFinite(Number(raw[i])) ? Number(raw[i]) : (fallback || 0));
+    };
+    // Timed effects along an on-demand play: at a fraction of the
+    // animation, play an SE, request a database animation (2D or
+    // Effekseer alike — the stock pipeline shows it on the event), or
+    // flash the screen or the model itself.
+    const readEffects = value => {
+        if (!Array.isArray(value)) return [];
+        const effects = [];
+        for (const raw of value) {
+            if (!raw || typeof raw !== "object") continue;
+            const at = Math.min(1, Math.max(0, Number(raw.at) || 0));
+            if (raw.se && raw.se.name) {
+                effects.push({ at, se: {
+                    name: String(raw.se.name),
+                    volume: Number.isFinite(Number(raw.se.volume)) ? Number(raw.se.volume) : 90,
+                    pitch: Number.isFinite(Number(raw.se.pitch)) ? Number(raw.se.pitch) : 100,
+                    pan: Number.isFinite(Number(raw.se.pan)) ? Number(raw.se.pan) : 0
+                } });
+            } else if (Number(raw.animation) > 0) {
+                effects.push({ at, animation: Math.floor(Number(raw.animation)) });
+            } else if (raw.flash) {
+                const color = Array.isArray(raw.flash.color) ? raw.flash.color : [];
+                effects.push({ at, flash: {
+                    target: raw.flash.target === "model" ? "model" : "screen",
+                    color: [0, 1, 2, 3].map(i => {
+                        const channel = Number(color[i]);
+                        return Number.isFinite(channel)
+                            ? Math.min(255, Math.max(0, Math.floor(channel)))
+                            : (i === 3 ? 180 : 255);
+                    }),
+                    duration: Number(raw.flash.duration) > 0 ? Math.floor(Number(raw.flash.duration)) : 20
+                } });
+            }
+        }
+        return effects;
+    };
     for (let i = 0; i < list.length; i++) {
         const raw = list[i] || {};
         const type = raw.type === "swing" || raw.type === "bob" || raw.type === "clip"
-            ? raw.type : "spin";
+            || raw.type === "pose" ? raw.type : "spin";
         rules.push({
             name: String(raw.name || raw.part || type + "-" + i),
             part: String(raw.part || ""),
@@ -7608,44 +7674,299 @@ Reactor3D.readModelAnimationRules = function(json) {
             degrees: Number(raw.degrees) > 0 ? Number(raw.degrees) : 15,
             amount: Number(raw.amount) > 0 ? Number(raw.amount) : 0.1,
             period: Number(raw.period) > 0 ? Number(raw.period) : 60,
-            cycles: Number(raw.cycles) > 0 ? Number(raw.cycles) : 1
+            cycles: Number(raw.cycles) > 0 ? Number(raw.cycles) : 1,
+            rotate: vec3(raw.rotate),
+            move: vec3(raw.move),
+            resize: vec3(raw.resize, 1),
+            hold: !!raw.hold,
+            effects: readEffects(raw.effects)
         });
     }
     return rules;
+};
+
+/**
+ * Carved parts: a model.json "parts" list names regions of the model's
+ * geometry, selected in the Database 3D section by dragging a box over
+ * the mesh. Each entry is
+ *   { name, pivot: [x,y,z], meshes: { "<meshIndex>": [[tri,count], ...] } }
+ * with triangle runs against the source geometry's triangle order and the
+ * pivot in model space. carveModelParts splits those triangles into
+ * meshes of their own, registered exactly like reader-named parts, so
+ * every animation rule can hinge a jaw or wave a branch the source file
+ * shipped as one anonymous mesh.
+ */
+Reactor3D.readModelParts = function(json) {
+    const list = json && Array.isArray(json.parts) ? json.parts : [];
+    const parts = [];
+    for (const raw of list) {
+        if (!raw || !raw.name || !raw.meshes) continue;
+        const pivotRaw = Array.isArray(raw.pivot) ? raw.pivot : [];
+        const pivot = [0, 1, 2].map(i =>
+            Number.isFinite(Number(pivotRaw[i])) ? Number(pivotRaw[i]) : 0);
+        const meshes = {};
+        let any = false;
+        for (const key of Object.keys(raw.meshes)) {
+            const index = Number(key);
+            if (!Number.isInteger(index) || index < 0) continue;
+            const ranges = [];
+            for (const pair of Array.isArray(raw.meshes[key]) ? raw.meshes[key] : []) {
+                const start = Array.isArray(pair) ? Math.floor(Number(pair[0])) : NaN;
+                const count = Array.isArray(pair) ? Math.floor(Number(pair[1])) : NaN;
+                if (!(start >= 0) || !(count > 0)) continue;
+                ranges.push([start, count]);
+                any = true;
+            }
+            if (ranges.length) meshes[index] = ranges;
+        }
+        if (any) parts.push({ name: String(raw.name), pivot, meshes });
+    }
+    return parts;
+};
+
+/**
+ * Pivot overrides: model.json may carry `pivots: { "<partName>": [x,y,z] }`
+ * in model space, moving the point a part hinges about — a turret turns
+ * from its ring, not the centre the exporter happened to record. Keys
+ * match part names exactly; carved and reader-named parts alike.
+ */
+Reactor3D.readModelPivots = function(json) {
+    const raw = json && json.pivots && typeof json.pivots === "object"
+        && !Array.isArray(json.pivots) ? json.pivots : {};
+    const pivots = {};
+    for (const name of Object.keys(raw)) {
+        const value = Array.isArray(raw[name]) ? raw[name] : [];
+        const pivot = [0, 1, 2].map(i => Number(value[i]));
+        if (name && pivot.every(Number.isFinite)) pivots[name] = pivot;
+    }
+    return pivots;
+};
+
+/**
+ * Rewrite the recorded pivots of every part an override names, converting
+ * the model-space point into each mesh's local space. Runs on a clone,
+ * after carving, before the binding is prepared.
+ */
+Reactor3D.applyPivotOverrides = function(root, pivots) {
+    if (typeof THREE === "undefined" || !root || !pivots) return;
+    if (!Object.keys(pivots).length) return;
+    for (const mesh of this.carveTargetMeshes(root)) {
+        const parts = mesh.userData.parts;
+        if (!parts || !parts.length) continue;
+        let inverse = null;
+        for (const part of parts) {
+            const pivot = pivots[part.name];
+            if (!pivot) continue;
+            if (!inverse) {
+                const relative = new THREE.Matrix4();
+                for (let node = mesh; node && node !== root; node = node.parent) {
+                    node.updateMatrix();
+                    relative.premultiply(node.matrix);
+                }
+                inverse = relative.invert();
+            }
+            const local = new THREE.Vector3(pivot[0], pivot[1], pivot[2]).applyMatrix4(inverse);
+            part.pivot = [local.x, local.y, local.z];
+        }
+    }
+};
+
+/** Sorted triangle ids -> compact [start,count] runs. Duplicates collapse. */
+Reactor3D.compressTriRanges = function(ids) {
+    const sorted = Array.from(ids).sort((a, b) => a - b);
+    const ranges = [];
+    for (const id of sorted) {
+        const last = ranges[ranges.length - 1];
+        if (last && id < last[0] + last[1]) continue;
+        if (last && id === last[0] + last[1]) last[1]++;
+        else ranges.push([id, 1]);
+    }
+    return ranges;
+};
+
+Reactor3D.expandTriRanges = function(ranges) {
+    const ids = [];
+    for (const [start, count] of ranges || []) {
+        for (let t = start; t < start + count; t++) ids.push(t);
+    }
+    return ids;
+};
+
+/**
+ * The meshes carve indices count over: every plain mesh in traversal
+ * order. Skinned meshes follow bones, not carve rules, and are skipped —
+ * as are the editor's selection-highlight overlays, which live as
+ * children of the real meshes and must never shift this numbering.
+ * The editor's selection and the runtime's carve share this enumeration.
+ */
+Reactor3D.carveTargetMeshes = function(root) {
+    const meshes = [];
+    root.traverse(child => {
+        if (child.isMesh && !child.isSkinnedMesh && !child.userData.__reactorOverlay) {
+            meshes.push(child);
+        }
+    });
+    return meshes;
+};
+
+/**
+ * Partition one mesh's triangles among carve definitions. Pure index
+ * work: returns { remainder, groups: [{ defs, ids }] } where ids are
+ * vertex indices ready for a BufferGeometry index. A triangle may belong
+ * to several definitions — a cannon shaft selected inside a full turret —
+ * so triangles are grouped by the exact set of definitions claiming them
+ * and every group becomes one piece carrying ALL of its names: the
+ * turret's rule carries the cannon, the cannon's rule moves only itself.
+ * Out-of-range runs are clamped. At most 32 definitions per mesh.
+ */
+Reactor3D.partitionCarveIndex = function(triCount, defs, vertexAt) {
+    const at = vertexAt || (n => n);
+    const masks = new Uint32Array(triCount);
+    defs.slice(0, 32).forEach((def, bit) => {
+        for (const [start, count] of def.ranges) {
+            const end = Math.min(start + count, triCount);
+            for (let t = Math.max(0, start); t < end; t++) masks[t] |= (1 << bit);
+        }
+    });
+    const byMask = new Map();
+    const remainder = [];
+    for (let t = 0; t < triCount; t++) {
+        if (!masks[t]) {
+            remainder.push(at(t * 3), at(t * 3 + 1), at(t * 3 + 2));
+            continue;
+        }
+        let ids = byMask.get(masks[t]);
+        if (!ids) byMask.set(masks[t], ids = []);
+        ids.push(at(t * 3), at(t * 3 + 1), at(t * 3 + 2));
+    }
+    const groups = [];
+    for (const [mask, ids] of byMask) {
+        groups.push({ defs: defs.filter((def, bit) => mask & (1 << bit)), ids });
+    }
+    return { remainder, groups };
+};
+
+/**
+ * Split a model instance's geometry along its carved part definitions.
+ * Runs on a clone, never the template: the original meshes get a fresh
+ * geometry holding the remaining triangles (attributes stay shared), and
+ * each carved region becomes a sibling mesh carrying the part name and
+ * its pivot in mesh-local space, plus the source mesh's named ancestry so
+ * rules aimed at either still match.
+ */
+Reactor3D.carveModelParts = function(root, parts) {
+    if (typeof THREE === "undefined" || !root || !parts || !parts.length) return;
+    const meshes = this.carveTargetMeshes(root);
+    // A part's overall triangle count orders nested names: the smaller
+    // selection is the more specific one — the cannon before the turret
+    // it sits inside — so a piece answers to its own pivot first.
+    const sizeOf = new Map(parts.map(part => [part, Object.values(part.meshes)
+        .reduce((sum, runs) => sum + runs.reduce((n, [, count]) => n + count, 0), 0)]));
+    meshes.forEach((mesh, meshIndex) => {
+        const defs = parts
+            .map(part => ({ part, ranges: part.meshes[meshIndex] }))
+            .filter(entry => entry.ranges && entry.ranges.length);
+        if (!defs.length) return;
+        const geometry = mesh.geometry;
+        const position = geometry.getAttribute("position");
+        if (!position) return;
+        const source = geometry.getIndex();
+        const indices = source ? source.array : null;
+        const triCount = Math.floor((indices ? indices.length : position.count) / 3);
+        const { remainder, groups } = this.partitionCarveIndex(
+            triCount, defs, indices ? (n => indices[n]) : null);
+        if (!groups.length) return;
+        const subGeometry = ids => {
+            const sub = new THREE.BufferGeometry();
+            for (const name of Object.keys(geometry.attributes)) {
+                sub.setAttribute(name, geometry.attributes[name]);
+            }
+            sub.setIndex(new THREE.BufferAttribute(Uint32Array.from(ids), 1));
+            if (!geometry.getAttribute("normal")) sub.computeVertexNormals();
+            return sub;
+        };
+        // The pivot is authored in model space; the mesh may sit offset
+        // under the root (recentring), so convert through the chain.
+        const relative = new THREE.Matrix4();
+        for (let node = mesh; node && node !== root; node = node.parent) {
+            node.updateMatrix();
+            relative.premultiply(node.matrix);
+        }
+        const inverse = relative.clone().invert();
+        const material = Array.isArray(mesh.material) ? mesh.material[0] : mesh.material;
+        for (const { defs: members, ids } of groups) {
+            const ordered = members.slice().sort((a, b) =>
+                sizeOf.get(a.part) - sizeOf.get(b.part));
+            const piece = new THREE.Mesh(subGeometry(ids), material);
+            piece.name = ordered[0].part.name;
+            piece.userData.parts = ordered.map(member => {
+                const pivot = new THREE.Vector3(
+                    member.part.pivot[0], member.part.pivot[1], member.part.pivot[2])
+                    .applyMatrix4(inverse);
+                return { name: member.part.name, pivot: [pivot.x, pivot.y, pivot.z] };
+            }).concat(mesh.userData.parts || []);
+            piece.position.copy(mesh.position);
+            piece.quaternion.copy(mesh.quaternion);
+            piece.scale.copy(mesh.scale);
+            mesh.parent.add(piece);
+        }
+        mesh.geometry = subGeometry(remainder);
+    });
 };
 
 Reactor3D.modelAnimationUrl = function(name) {
     return "3d/" + name + "/model.json";
 };
 
-Reactor3D.loadModelAnimations = function(name) {
-    if (!this._animationCache) this._animationCache = {};
-    const cached = this._animationCache[name];
+/**
+ * The raw model.json, cached per model: animation rules and carved parts
+ * both come from it. A missing sidecar is a normal state — when the disk
+ * is reachable it is checked first so the absent file never logs a
+ * network error the page cannot suppress.
+ */
+Reactor3D.loadModelSidecar = function(name) {
+    if (!this._sidecarCache) this._sidecarCache = {};
+    const cached = this._sidecarCache[name];
     if (cached) return cached;
-    this._animationCache[name] = new Promise(resolve => {
+    this._sidecarCache[name] = new Promise(resolve => {
         if (typeof XMLHttpRequest === "undefined" || !name) {
-            resolve([]);
+            resolve(null);
             return;
         }
+        const url = this.modelAnimationUrl(name);
+        if (typeof Utils !== "undefined" && Utils.isNwjs && Utils.isNwjs()) {
+            const fs = require("fs");
+            const path = require("path");
+            const base = path.dirname(process.mainModule.filename);
+            if (!fs.existsSync(path.join(base, url))) {
+                resolve(null);
+                return;
+            }
+        }
         const xhr = new XMLHttpRequest();
-        xhr.open("GET", this.modelAnimationUrl(name));
+        xhr.open("GET", url);
         xhr.responseType = "text";
         xhr.onload = () => {
             if (xhr.status >= 400 || !xhr.responseText) {
-                resolve([]);
+                resolve(null);
                 return;
             }
             try {
-                resolve(this.readModelAnimationRules(JSON.parse(xhr.responseText)));
+                resolve(JSON.parse(xhr.responseText));
             } catch (error) {
                 console.error("Reactor3D: " + name + "/model.json could not be read.", error);
-                resolve([]);
+                resolve(null);
             }
         };
-        xhr.onerror = () => resolve([]);
+        xhr.onerror = () => resolve(null);
         xhr.send();
     });
-    return this._animationCache[name];
+    return this._sidecarCache[name];
+};
+
+Reactor3D.loadModelAnimations = function(name) {
+    return this.loadModelSidecar(name).then(json =>
+        json ? this.readModelAnimationRules(json) : []);
 };
 
 /**
@@ -7668,6 +7989,7 @@ Reactor3D.prepareModelInstance = function(object, clips) {
             parts: child.userData.parts,
             basePosition: child.position.clone(),
             baseQuaternion: child.quaternion.clone(),
+            baseScale: child.scale.clone(),
             acc: null
         });
     });
@@ -7695,7 +8017,17 @@ Reactor3D.modelRuleDuration = function(rule, clips) {
         const clip = (clips || []).find(c => c.name === rule.clip);
         return clip ? Math.max(1, Math.round(clip.duration * 60)) : 60;
     }
+    // A pose goes there and back: in over one period, out over another —
+    // unless it holds, in which case the action only needs the way in and
+    // the latch keeps it there.
+    if (rule.type === "pose") return rule.hold ? rule.period : rule.period * 2 * rule.cycles;
     return rule.period * rule.cycles;
+};
+
+/** Smoothstep: pose blends accelerate in and settle out. */
+Reactor3D.poseEase = function(blend) {
+    const b = Math.min(1, Math.max(0, blend));
+    return b * b * (3 - 2 * b);
 };
 
 /** Drive one instance's rules for this frame. */
@@ -7703,6 +8035,7 @@ Reactor3D.applyModelAnimation = function(binding, rules, state) {
     if (typeof THREE === "undefined" || !binding || !rules || !rules.length) return;
     binding.root.position.set(0, 0, 0);
     binding.root.quaternion.identity();
+    binding.root.scale.set(1, 1, 1);
     for (const entry of binding.meshes) entry.acc = null;
     const axisOf = rule => new THREE.Vector3().fromArray(this.AXIS_VECTORS[rule.axis]);
     const pivotTurn = (pivot, quat) => {
@@ -7711,52 +8044,146 @@ Reactor3D.applyModelAnimation = function(binding, rules, state) {
         m.setPosition(p.clone().sub(p.clone().applyQuaternion(quat)));
         return m;
     };
+    const pivotGrow = (pivot, size) => {
+        const p = new THREE.Vector3().fromArray(pivot);
+        const m = new THREE.Matrix4().makeScale(size.x, size.y, size.z);
+        m.setPosition(p.clone().sub(p.clone().multiply(size)));
+        return m;
+    };
+    const partActions = [];
     for (let i = 0; i < rules.length; i++) {
         const rule = rules[i];
         if (rule.type === "clip") continue;
-        let t = state.frame;
-        if (rule.trigger === "idle" && state.moving) continue;
-        // A movement-driven spin holds its angle when travel stops — a
-        // wheel does not snap back to rest — it simply stops gaining.
-        if (rule.trigger === "moving" && !state.moving && rule.type !== "spin") continue;
-        if (rule.trigger === "action") {
-            if (!state.action || state.action.name !== rule.name) continue;
-            t = state.frame - state.action.frame;
-            if (t >= this.modelRuleDuration(rule)) continue;
-        }
         let quat = null;
         let slide = null;
-        if (rule.type === "spin") {
-            const gain = rule.perTile
-                ? state.distance * rule.perTile
-                : (rule.trigger === "moving" && !state.moving ? 0 : rule.speed / 60);
-            binding.angles[i] = (binding.angles[i] || 0) + gain;
-            quat = new THREE.Quaternion().setFromAxisAngle(axisOf(rule), binding.angles[i] * Math.PI / 180);
-        } else if (rule.type === "swing") {
-            const angle = rule.degrees * Math.sin(2 * Math.PI * t / rule.period);
-            quat = new THREE.Quaternion().setFromAxisAngle(axisOf(rule), angle * Math.PI / 180);
+        let grow = null;
+        if (rule.type === "pose") {
+            // The pose blend persists across frames (in binding.angles) so
+            // a released trigger eases back to rest instead of snapping —
+            // which is why an inactive pose cannot simply be skipped.
+            let blend;
+            if (rule.trigger === "action") {
+                const fired = state.action && state.action.name === rule.name;
+                if (rule.hold) {
+                    // A held pose latches on its action and stays — a tank
+                    // keeps its cannon raised — until another held pose
+                    // claims the same part, which eases this one home.
+                    if (!binding.latch) binding.latch = {};
+                    if (fired) {
+                        binding.latch[i] = true;
+                        for (let k = 0; k < rules.length; k++) {
+                            if (k !== i && rules[k].type === "pose" && rules[k].hold
+                                && rules[k].part === rule.part) {
+                                binding.latch[k] = false;
+                            }
+                        }
+                    }
+                    const step = 1 / Math.max(1, rule.period);
+                    blend = Math.min(1, Math.max(0,
+                        (binding.angles[i] || 0) + (binding.latch[i] ? step : -step)));
+                } else if (!fired) {
+                    blend = 0;
+                } else {
+                    const t = state.frame - state.action.frame;
+                    if (t >= this.modelRuleDuration(rule)) {
+                        blend = 0;
+                    } else {
+                        const phase = (t % (rule.period * 2)) / rule.period;
+                        blend = phase < 1 ? phase : 2 - phase;
+                    }
+                }
+            } else {
+                const active = rule.trigger === "always"
+                    || (rule.trigger === "idle" && !state.moving)
+                    || (rule.trigger === "moving" && state.moving);
+                const step = 1 / Math.max(1, rule.period);
+                blend = Math.min(1, Math.max(0,
+                    (binding.angles[i] || 0) + (active ? step : -step)));
+            }
+            binding.angles[i] = blend;
+            if (!blend) continue;
+            const eased = this.poseEase(blend);
+            const toRad = Math.PI / 180;
+            quat = new THREE.Quaternion().setFromEuler(new THREE.Euler(
+                rule.rotate[0] * eased * toRad,
+                rule.rotate[1] * eased * toRad,
+                rule.rotate[2] * eased * toRad, "XYZ"));
+            if (rule.move[0] || rule.move[1] || rule.move[2]) {
+                slide = new THREE.Vector3(rule.move[0], rule.move[1], rule.move[2])
+                    .multiplyScalar(eased / (state.scale || 1));
+            }
+            if (rule.resize[0] !== 1 || rule.resize[1] !== 1 || rule.resize[2] !== 1) {
+                grow = new THREE.Vector3(
+                    1 + (rule.resize[0] - 1) * eased,
+                    1 + (rule.resize[1] - 1) * eased,
+                    1 + (rule.resize[2] - 1) * eased);
+            }
         } else {
-            const offset = rule.amount * Math.sin(2 * Math.PI * t / rule.period) / (state.scale || 1);
-            slide = axisOf(rule).multiplyScalar(offset);
+            let t = state.frame;
+            if (rule.trigger === "idle" && state.moving) continue;
+            // A movement-driven spin holds its angle when travel stops — a
+            // wheel does not snap back to rest — it simply stops gaining.
+            if (rule.trigger === "moving" && !state.moving && rule.type !== "spin") continue;
+            if (rule.trigger === "action") {
+                if (!state.action || state.action.name !== rule.name) continue;
+                t = state.frame - state.action.frame;
+                if (t >= this.modelRuleDuration(rule)) continue;
+            }
+            if (rule.type === "spin") {
+                const gain = rule.perTile
+                    ? state.distance * rule.perTile
+                    : (rule.trigger === "moving" && !state.moving ? 0 : rule.speed / 60);
+                binding.angles[i] = (binding.angles[i] || 0) + gain;
+                quat = new THREE.Quaternion().setFromAxisAngle(axisOf(rule), binding.angles[i] * Math.PI / 180);
+            } else if (rule.type === "swing") {
+                const angle = rule.degrees * Math.sin(2 * Math.PI * t / rule.period);
+                quat = new THREE.Quaternion().setFromAxisAngle(axisOf(rule), angle * Math.PI / 180);
+            } else {
+                const offset = rule.amount * Math.sin(2 * Math.PI * t / rule.period) / (state.scale || 1);
+                slide = axisOf(rule).multiplyScalar(offset);
+            }
         }
         if (!rule.part) {
             if (quat) binding.root.quaternion.premultiply(quat);
             if (slide) binding.root.position.add(slide);
+            if (grow) binding.root.scale.multiply(grow);
             continue;
         }
-        const partLower = rule.part.toLowerCase();
-        for (const entry of binding.meshes) {
+        if (quat || slide || grow) {
+            partActions.push({ order: partActions.length, partLower: rule.part.toLowerCase(), quat, slide, grow });
+        }
+    }
+    // Per mesh, contributions compose by ANCESTRY, not authoring order: a
+    // part's chain lists its own name first and its parents after, so the
+    // turret's turn applies before the cannon's recoil and the recoil
+    // slides along the turned barrel — whichever rule was written or
+    // edited first. Same-depth contributions keep their rule order.
+    for (const entry of binding.meshes) {
+        let matched = null;
+        for (const action of partActions) {
+            let depth = -1;
             let pivot = null;
-            for (const part of entry.parts) {
-                if (part.name.toLowerCase().indexOf(partLower) === 0) {
-                    pivot = part.pivot;
+            for (let d = 0; d < entry.parts.length; d++) {
+                if (entry.parts[d].name.toLowerCase().indexOf(action.partLower) === 0) {
+                    depth = d;
+                    pivot = entry.parts[d].pivot;
                     break;
                 }
             }
-            if (!pivot) continue;
-            if (!entry.acc) entry.acc = new THREE.Matrix4();
-            if (quat) entry.acc.multiply(pivotTurn(pivot, quat));
-            if (slide) entry.acc.multiply(new THREE.Matrix4().makeTranslation(slide.x, slide.y, slide.z));
+            if (depth < 0) continue;
+            if (!matched) matched = [];
+            matched.push({ action, depth, pivot });
+        }
+        if (!matched) continue;
+        matched.sort((a, b) => b.depth - a.depth || a.action.order - b.action.order);
+        entry.acc = new THREE.Matrix4();
+        for (const { action, pivot } of matched) {
+            if (action.quat) entry.acc.multiply(pivotTurn(pivot, action.quat));
+            if (action.slide) {
+                entry.acc.multiply(new THREE.Matrix4().makeTranslation(
+                    action.slide.x, action.slide.y, action.slide.z));
+            }
+            if (action.grow) entry.acc.multiply(pivotGrow(pivot, action.grow));
         }
     }
     if (binding.mixer) {
@@ -7808,14 +8235,103 @@ Reactor3D.applyModelAnimation = function(binding, rules, state) {
         if (!entry.acc) {
             entry.mesh.position.copy(entry.basePosition);
             entry.mesh.quaternion.copy(entry.baseQuaternion);
+            if (entry.baseScale) entry.mesh.scale.copy(entry.baseScale);
             continue;
         }
-        scratch.compose(entry.basePosition, entry.baseQuaternion, entry.mesh.scale);
+        scratch.compose(entry.basePosition, entry.baseQuaternion, entry.baseScale || entry.mesh.scale);
         scratch.multiply(entry.acc);
         scratch.decompose(outPos, outQuat, outScale);
         entry.mesh.position.copy(outPos);
         entry.mesh.quaternion.copy(outQuat);
+        entry.mesh.scale.copy(outScale);
     }
+};
+
+/**
+ * Which of a rule's timed effects fire as the action clock moves from
+ * previousT (exclusive) to t (inclusive). Pure, so the window logic is
+ * testable; each effect fires exactly once per play.
+ */
+Reactor3D.modelEffectsToFire = function(rule, duration, previousT, t) {
+    if (!rule.effects || !rule.effects.length) return [];
+    const fired = [];
+    for (const effect of rule.effects) {
+        const fireAt = Math.min(Math.max(1, duration) - 1, Math.round(effect.at * duration));
+        if (fireAt > previousT && fireAt <= t) fired.push(effect);
+    }
+    return fired;
+};
+
+/** Deliver one fired effect into the running game. */
+Reactor3D.fireModelEffect = function(effect, character, holder) {
+    if (effect.se) {
+        if (typeof AudioManager !== "undefined") {
+            AudioManager.playSe({
+                name: effect.se.name, volume: effect.se.volume,
+                pitch: effect.se.pitch, pan: effect.se.pan
+            });
+        }
+    } else if (effect.animation) {
+        // A database animation — MV sprite sheet or Effekseer alike —
+        // through the stock request pipeline, shown on the character.
+        if (typeof $gameTemp !== "undefined" && $gameTemp.requestAnimation && character) {
+            $gameTemp.requestAnimation([character], effect.animation);
+        }
+    } else if (effect.flash) {
+        if (effect.flash.target === "screen") {
+            if (typeof $gameScreen !== "undefined") {
+                $gameScreen.startFlash(effect.flash.color.slice(), effect.flash.duration);
+            }
+        } else if (holder) {
+            holder.flash = { color: effect.flash.color, duration: effect.flash.duration, t: 0 };
+        }
+    }
+};
+
+/**
+ * Tint an instance's materials toward the flash colour, fading over the
+ * duration. Materials are cloned per instance, so only this model
+ * flashes. Returns true on the frame the flash ends, so the caller can
+ * hand the materials back to the ambient tint.
+ */
+Reactor3D.updateModelFlash = function(holder) {
+    if (!holder || !holder.flash || !holder.object) return false;
+    const flash = holder.flash;
+    const strength = (flash.color[3] / 255) * Math.max(0, 1 - flash.t / flash.duration);
+    holder.object.traverse(child => {
+        const mats = child.material
+            ? (Array.isArray(child.material) ? child.material : [child.material])
+            : [];
+        for (const mat of mats) {
+            if (!mat.color) continue;
+            // A JSON-degraded base colour (a bare hex number) reads as
+            // undefined channels; recapture it as a real Colour.
+            if (!mat.userData.baseColor || !mat.userData.baseColor.isColor) {
+                mat.userData.baseColor = mat.color.clone();
+            }
+            const base = mat.userData.baseColor;
+            mat.color.setRGB(
+                base.r + (flash.color[0] / 255 - base.r) * strength,
+                base.g + (flash.color[1] / 255 - base.g) * strength,
+                base.b + (flash.color[2] / 255 - base.b) * strength);
+        }
+    });
+    flash.t++;
+    if (flash.t > flash.duration) {
+        holder.flash = null;
+        holder.object.traverse(child => {
+            const mats = child.material
+                ? (Array.isArray(child.material) ? child.material : [child.material])
+                : [];
+            for (const mat of mats) {
+                if (mat.color && mat.userData.baseColor && mat.userData.baseColor.isColor) {
+                    mat.color.copy(mat.userData.baseColor);
+                }
+            }
+        });
+        return true;
+    }
+    return false;
 };
 
 Reactor3D.modelInstanceKey = function(character) {
@@ -7892,17 +8408,22 @@ Reactor3D.MapScene.prototype.syncCharacterModels = function(characters) {
         if (!holder) {
             holder = { spec: Reactor3D.modelCacheKey(spec.name, spec.ext, spec.file), object: null };
             this._modelInstances.set(key, holder);
-            Reactor3D.loadModel(spec.name, spec.ext, spec.file, spec.texture).then(template => {
+            Promise.all([
+                Reactor3D.loadModel(spec.name, spec.ext, spec.file, spec.texture),
+                Reactor3D.loadModelSidecar(spec.name)
+            ]).then(([template, sidecar]) => {
                 if (!template || !this._modelsGroup) return;
                 const current = this._modelInstances.get(key);
                 if (!current || current.spec !== Reactor3D.modelCacheKey(spec.name, spec.ext, spec.file)) return;
                 const object = Reactor3D.cloneModelTemplate(template);
                 object.userData.glbSize = template.userData.glbSize;
+                // Carved parts must exist before the binding is prepared, or
+                // the new meshes would be invisible to every rule.
+                Reactor3D.carveModelParts(object, Reactor3D.readModelParts(sidecar));
+                Reactor3D.applyPivotOverrides(object, Reactor3D.readModelPivots(sidecar));
                 current.object = object;
                 current.binding = Reactor3D.prepareModelInstance(object, object.__reactorClips);
-                Reactor3D.loadModelAnimations(spec.name).then(rules => {
-                    current.rules = rules;
-                });
+                current.rules = sidecar ? Reactor3D.readModelAnimationRules(sidecar) : [];
                 group.add(object);
                 object.traverse(child => {
                     const mats = child.material
@@ -7973,6 +8494,24 @@ Reactor3D.MapScene.prototype.syncCharacterModels = function(characters) {
                     : null;
             }
             if (holder.action && frame >= holder.action.until) holder.action = null;
+            // Timed effects ride the action clock, each firing once.
+            const fxKey = holder.action ? holder.action.name + ":" + holder.action.frame : "";
+            if (holder.fxKey !== fxKey) {
+                holder.fxKey = fxKey;
+                holder.fxT = -1;
+            }
+            if (holder.action) {
+                const fxNow = frame - holder.action.frame;
+                for (const rule of holder.rules) {
+                    if (rule.trigger !== "action" || rule.name !== holder.action.name) continue;
+                    const duration = Reactor3D.modelRuleDuration(rule, holder.binding.clips);
+                    for (const effect of Reactor3D.modelEffectsToFire(rule, duration, holder.fxT, fxNow)) {
+                        Reactor3D.fireModelEffect(effect, character, holder);
+                    }
+                }
+                holder.fxT = fxNow;
+            }
+            if (Reactor3D.updateModelFlash(holder)) this._ambientLevel = undefined;
             Reactor3D.applyModelAnimation(holder.binding, holder.rules, {
                 frame,
                 moving: !!(character.isMoving && character.isMoving()) || distance > 0.0001,

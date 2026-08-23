@@ -1,6 +1,6 @@
 # Handoff - 0.98.3 In Progress
 
-Last updated 2026-08-17.
+Last updated 2026-08-22.
 
 ## Release State
 
@@ -11,8 +11,16 @@ Last updated 2026-08-17.
 - The 0.98.2 event 3D models, encrypted-project, stale-runtime-refresh, and
   database/event workflow changes are preserved in the immutable `v0.98.2`
   tag. New reports belong to 0.98.3.
-- Current validation is **1,405 passing tests** with no failures, skips, or
+- Current validation is **1,464 passing tests** with no failures, skips, or
   TODOs. Syntax and `git diff --check` also pass.
+- Picking up (2026-08-23): the Database 3D part/animation system is
+  feature-complete through timed effects and owner-tested on the tank
+  (Oth97_CNO_Consul) and monster-plant; the live rigs are
+  `scratchpad/db3d-canon.mjs` (targeted, runs against the owner's real
+  sidecar), `db3d-card.mjs` (full card flow), `db3d-monkey.mjs` (seeded
+  random-order UI actions, MONKEY_MODEL/SEED/STEPS), and
+  `db3d-two-parts.mjs` (two-part independence). Demo content now carries
+  the owner's turret/cannon parts and animations.
 
 ## Event 3D Models (active, 2026-08-15)
 
@@ -128,6 +136,129 @@ Open questions worth not re-fighting blindly:
 - Sync copies with `node editor/build-scripts/sync-runtime.cjs`
 
 World axes: X = map x, Y = up, Z = map y. Event Down = +Z.
+
+## Database 3D Part Carving & Pose Card (2026-08-22)
+
+Database > 3D carves arbitrary mesh regions into named parts (box-select,
+touch-anywhere marquee — `triangleTouchesRect`) and authors EVERY animation
+on one always-docked GalCiv-style card: click a part in the viewport (hover
+highlights) or pick from the card's target dropdown (Whole model included),
+choose the motion (Pose slider tabs / Swing / Spin / Bob / Clip), sliders
+move the model live while every other ambient rule freezes so nothing fights
+the hand. Logarithmic Duration 0.1–10 s, Play when trigger, At the end picks
+Return to rest vs Stay posed (`hold` — latches in the runtime until another
+held pose claims the part; tank-cannon semantics), Preview plays it once as
+in game, one button saves/updates. Per-target working state (reselect
+resumes the sliders) with per-target undo/redo (Ctrl+Z/Y, header arrows);
+Escape releases; × folds the card to a button. The right panel is lists
+only — the numeric rule form is gone. A fresh card defaults to On demand
+(never inherits the previous rule's trigger — that stickiness shipped a
+silent Always once in live testing). Built for "close the monster plant's
+jaw" — models whose source ships as one anonymous mesh. No keyframes by
+design: pose + duration + trigger + hold covers jaws/doors/lids/turrets;
+sequencing would come later as chained animations if ever needed.
+Quality pass (owner-tested on Oth97_CNO_Consul): marquee occlusion-aware by
+default (screen-space depth grid + `triangleDepthAt`; Through toggle for
+far-side), per-drag selection undo (Ctrl+Z / bar arrow, Escape cancels),
+overlays excluded from carve numbering (`__reactorOverlay`), rule
+suppression in place (never filter — index-keyed blends/latches scramble),
+edited rule's sim Play routes to card Preview, card Reset clears latches.
+Pivot pass (turret-ring request): `pivots` override map in model.json
+(model space; `readModelPivots`/`applyPivotOverrides` convert to mesh-local
+after carve, editor and game sync alike), card Pivot row (presets + ✛
+toggles the Pivot tool), axes gizmo draggable in the camera plane, live
+re-hinge. Card target dropdown retargets the edited animation (values
+intact, dead targets shown `?`); canvas click no longer pins an open
+dropdown (preventDefault was blocking light-dismiss).
+Animation picker from the card: pass this.projectController (the
+DatabaseEditorUI shim), NOT window.reactor.projectManager — wrong shape,
+null project, startPlayback bails to black for both animation kinds.
+Picker list has audio-scroll pill; footer bg-panel. Effekseer preview
+verified by caption ("Effekseer: <name>"), not pixels — its GL canvas
+reads back black without preserveDrawingBuffer.
+Timed effects: on-demand rules carry effects[{at, se|animation|flash}];
+fired once per play by the sync loop as the action clock crosses at×
+duration (modelEffectsToFire pure helper). animation = database Animation
+id via $gameTemp.requestAnimation (2D + Effekseer both). Model flash
+tints per-instance materials — cloneModelTemplate clones materials AND
+rebuilds userData.baseColor as a Colour (Material.clone JSON-degrades it
+to a hex number; undefined channels poisoned the flash — found live on
+the tank, guarded in updateModelFlash too). Card: Effects section with
+timing sliders + shared pickers; editor preview plays SE/flashes.
+Ancestry composition: per-mesh rule contributions sort by part-chain
+depth (ancestors first, stable within a depth) before multiplying into
+the accumulator — turn-then-fire recoils along the TURNED barrel in any
+rule order. Authoring-order composition broke the moment the fire rule
+preceded the turn or was the card's end-of-chain working copy. Proven
+unit-level both orders and live on the tank (turnedDot 1.00 vs
+originalDot 0.05, `db3d-canon.mjs` turn-then-fire block).
+Event clipboard: 3D model entries (map.reactor3d.events[id]) now travel
+with copy/cut/paste (payload field `models`, re-keyed to the new id),
+delete purges the entry (ids are REUSED — stale entries haunted future
+events), and event undo/redo snapshots {events, models} together.
+Flow pass (owner's click orders): Animations-list highlight mirrors the
+card (selectedRule syncs in editRule/select/deselect/＋/Add); card-filling
+actions un-collapse the card; panel Add = neutral motionless new
+animation (old swing default rocked the whole model while collapsed); ＋
+labeled "＋ New"; latch release (card paths AND sim Reset pose) cancels a
+matching in-flight _sim.action — long-window holds re-latched next frame.
+Fulcrum anchoring: the pivot marker re-rides its OWNING mesh (parts[0]
+match preferred — a nested child also carries the name but its own rules
+would drag the marker) every frame via updateWorldMatrix+localToWorld;
+one-shot placement read stale matrices post-rebuild (unscaled teleport)
+and froze mid-pose. Verified spread 0.0000 across reselects on the real
+tank. Probe lesson recorded twice now: Turn-Turret-Right is period 600 +
+hold — its RELEASE also eases for 10 s, so quiet the stage
+(rebuildPlayback) before measuring anything near it.
+Fire-return fix: previewing a return-to-rest pose suppresses the card's
+held working pose (`_workSuppressed`, cleared by `_syncWorkRule` on any
+edit) so the preview ENDS at rest — the held pose easing back in read as
+a second shot / "rests at the end". Hold poses keep the seamless
+handover; swings stay live. Verified read-only on the owner's Fire Canon
+(`db3d-canon.mjs`; note Turn-Turret-Right is a 600-frame hold — settle it
+before measuring anything near it).
+Feel pass (owner-tested, turret flow): Preview zeroes its blend slot +
+releases same-part latches → visibly plays from rest while the card holds
+the pose; editRule releases the rule's latch (no pop on deselect); card
+button = Clear (sliders only); ＋ forks a second animation per part; pivot
+gizmo bigger, depthTest off, draggable from any tool; addPart cancels a
+running selection session; highlight boxes refit per frame. Test rigs:
+`scratchpad/db3d-monkey.mjs` (seeded random-order UI actions vs invariants,
+run it with MONKEY_MODEL/MONKEY_SEED/MONKEY_STEPS; clean on monster-plant
+and Oth97_CNO_Consul) and `db3d-two-parts.mjs` (two-part independence:
+play/resume/update/delete isolated).
+
+- Runtime: `readModelParts`, `carveModelParts`, `partitionCarveIndex`,
+  `compressTriRanges`/`expandTriRanges`, `loadModelSidecar` (disk-stat first),
+  pose branch in `applyModelAnimation` (rotate + move + per-axis `resize`
+  about the pivot; mesh base scale recorded in the binding) in
+  `runtime/reactor_3d.js`; instance path carves the clone before
+  `prepareModelInstance`.
+- Editor: `editor/src/database/Database3DEditor.js` — tool strip (orbit /
+  select / pivot), viewport hover+click part picking, marquee selection on
+  the uncarved clone, pivot presets + raycast placement, the edit card
+  (synthetic always-pose rule for live posing; timed `__preview` action rule
+  for Preview; editing a saved rule filters it from playback).
+- Sidecar shape: `parts: [{ name, pivot, meshes: { meshIndex: [[tri,count]] } }]`,
+  pivot in model space, converted to mesh-local at carve. Overlapping
+  definitions NEST: triangles group by the set of claiming parts, pieces
+  carry all names as ancestry (fewest-triangles first, own pivot each) —
+  cannon-inside-turret rides turret rules, answers its own. (First-wins
+  used to zero out nested parts; caught on the real tank's Canon Shaft,
+  verified read-only against the owner's own sidecar in
+  `scratchpad/db3d-canon.mjs`.) Pose rules carry `rotate`/`move`/`resize`.
+- Tests: `editor/tests/reactor-3d-carved-parts.test.cjs` (behavioral, real
+  three.js). Suite at 1,450 passing. All UI phrases curated in 17 locales.
+  Runtime synced to all templates.
+- Live-verified over CDP (`scratchpad/db3d-card.mjs`, restores the Demo
+  sidecar): carve → sliders move the mesh → preview timing → save → sim-bar
+  replay → viewport pick → undo/redo → reselect-resume → 10 s duration →
+  held pose latching past its action and easing home from the sim bar's
+  Reset. Gotcha found there: a part with zero applied triangles poses
+  nothing — the card now says so (that state, a "Lower-Jaw" part with 0
+  triangles, was exactly the owner's first-session complaint). Closing the
+  card eases the part home over one period rather than snapping — that is
+  the blend slot handing over, and it reads as polish, not a bug.
 
 ## Encrypted-Project Support (2026-08-16)
 
@@ -258,11 +389,16 @@ the Windows NW.js binary under Wine.
 
 ## Open 0.98.3 Reports
 
-- Native Windows users still report that checking 3D can terminate the editor
-  process immediately. The 0.98.1 shared-context path passed Linux and Wine but
-  has not contained every physical Windows ANGLE/driver failure. Treat this as
-  unresolved; JavaScript rollback prevents a restart loop but cannot catch a
-  native renderer-process exit.
+- **RESOLVED (confirmed on native Windows, 2026-08-22):** checking 3D no
+  longer terminates the editor process. The 0.98.1 shared-context work was
+  chasing the wrong layer — the actual killer was injecting the 2MB three.js
+  bundle as *inline* script text: V8's recursive parser overflows Windows'
+  1MB main-thread stack (STATUS_ACCESS_VIOLATION), which Linux and Wine never
+  hit with their 8MB stacks. Fixed in 0.98.2 by loading 3D libraries through
+  Blob URLs with external-script semantics (`f3f87cc`), backed by
+  crash-surviving breadcrumbs that name the stage that died and auto-switch
+  context strategies, refusing to arm rather than crash a third time
+  (`97e0457`). Both in `editor/src/MapEditor3D.js`.
 
 ## Stale Project Runtime Fix
 
@@ -353,8 +489,9 @@ once (or clear the site's service worker/cache) before testing the checkbox.
 - Open the rebuilt Web package over HTTPS or localhost and confirm the 3D
   checkbox stays checked, the canvas appears, and switching back restores the
   2D map.
-- On physical Windows, open Reactor One, enable 3D, orbit the map, disable and
-  re-enable 3D, and confirm the editor process and 2D map remain intact.
+- ~~On physical Windows, open Reactor One, enable 3D, orbit the map, disable
+  and re-enable 3D, and confirm the editor process and 2D map remain intact.~~
+  Confirmed working on native Windows, 2026-08-22.
 - Run Windows launch and Authenticode checks on Windows with release credentials.
 - Run macOS launch, signing, notarization, stapling, and Gatekeeper checks on
   macOS with release credentials.

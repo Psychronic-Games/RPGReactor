@@ -62,11 +62,68 @@ class EventManager {
     }
 
     // Undo/Redo system methods
+    // An event's 3D models live in the map sidecar (map.reactor3d.events),
+    // keyed by event id — not in the event itself. Copy, paste, delete,
+    // and undo must all carry that entry along or models silently detach.
+    _eventModelStore(create = false) {
+        const map = this.currentMap;
+        if (!map) return null;
+        if (!map.reactor3d || typeof map.reactor3d !== 'object') {
+            if (!create) return null;
+            map.reactor3d = { version: 1, mode: '3d' };
+        }
+        if (!map.reactor3d.events || typeof map.reactor3d.events !== 'object') {
+            if (!create) return null;
+            map.reactor3d.events = {};
+        }
+        return map.reactor3d.events;
+    }
+
+    _eventModels(eventId) {
+        const store = this._eventModelStore();
+        const entry = store && store[String(eventId)];
+        return entry ? JSON.parse(JSON.stringify(entry)) : null;
+    }
+
+    _setEventModels(eventId, models) {
+        const key = String(eventId);
+        if (models && Object.keys(models).length) {
+            this._eventModelStore(true)[key] = JSON.parse(JSON.stringify(models));
+            return;
+        }
+        const store = this._eventModelStore();
+        if (!store) return;
+        delete store[key];
+        if (!Object.keys(store).length) delete this.currentMap.reactor3d.events;
+    }
+
+    _eventModelsSnapshot() {
+        const store = this._eventModelStore();
+        return store ? JSON.parse(JSON.stringify(store)) : null;
+    }
+
+    _restoreEventModels(models) {
+        const map = this.currentMap;
+        if (!map) return;
+        if (models && Object.keys(models).length) {
+            if (!map.reactor3d || typeof map.reactor3d !== 'object') {
+                map.reactor3d = { version: 1, mode: '3d' };
+            }
+            map.reactor3d.events = JSON.parse(JSON.stringify(models));
+        } else if (map.reactor3d) {
+            delete map.reactor3d.events;
+        }
+    }
+
     saveState() {
         if (!this.currentMap) return;
 
-        // Save a deep copy of the current events array
-        const eventsData = JSON.parse(JSON.stringify(this.currentMap.events || []));
+        // Save a deep copy of the current events array, with the sidecar
+        // model entries that belong to those events.
+        const eventsData = {
+            events: JSON.parse(JSON.stringify(this.currentMap.events || [])),
+            models: this._eventModelsSnapshot()
+        };
         this.undoStack.push(eventsData);
 
         // Clear redo stack on new action
@@ -85,12 +142,18 @@ class EventManager {
         if (this.undoStack.length === 0) return;
 
         // Save current state to redo stack
-        const currentData = JSON.parse(JSON.stringify(this.currentMap.events || []));
-        this.redoStack.push(currentData);
+        this.redoStack.push({
+            events: JSON.parse(JSON.stringify(this.currentMap.events || [])),
+            models: this._eventModelsSnapshot()
+        });
 
         // Restore previous state
-        const previousData = this.undoStack.pop();
-        this.currentMap.events = previousData;
+        const popped = this.undoStack.pop();
+        const previousData = Array.isArray(popped)
+            ? { events: popped, models: this._eventModelsSnapshot() }
+            : popped;
+        this.currentMap.events = previousData.events;
+        this._restoreEventModels(previousData.models);
 
         // Clear selection if the selected event no longer exists
         if (this.selectedEvent) {
@@ -113,12 +176,18 @@ class EventManager {
         if (this.redoStack.length === 0) return;
 
         // Save current state to undo stack
-        const currentData = JSON.parse(JSON.stringify(this.currentMap.events || []));
-        this.undoStack.push(currentData);
+        this.undoStack.push({
+            events: JSON.parse(JSON.stringify(this.currentMap.events || [])),
+            models: this._eventModelsSnapshot()
+        });
 
         // Restore next state
-        const nextData = this.redoStack.pop();
-        this.currentMap.events = nextData;
+        const popped = this.redoStack.pop();
+        const nextData = Array.isArray(popped)
+            ? { events: popped, models: this._eventModelsSnapshot() }
+            : popped;
+        this.currentMap.events = nextData.events;
+        this._restoreEventModels(nextData.models);
 
         // Clear selection if the selected event no longer exists
         if (this.selectedEvent) {
@@ -1701,8 +1770,9 @@ class EventManager {
 
         this.clipboard = JSON.parse(JSON.stringify(event));
         this.clipboard.cut = true;
+        this.clipboardModels = this._eventModels(event.id);
         if (typeof ReactorClipboard !== 'undefined') {
-            ReactorClipboard.write('event', { event: this.clipboard, cut: true });
+            ReactorClipboard.write('event', { event: this.clipboard, cut: true, models: this.clipboardModels });
         }
         this.deleteEvent(event);
         console.log('Event cut to clipboard');
@@ -1714,8 +1784,9 @@ class EventManager {
 
         this.clipboard = JSON.parse(JSON.stringify(event));
         this.clipboard.cut = false;
+        this.clipboardModels = this._eventModels(event.id);
         if (typeof ReactorClipboard !== 'undefined') {
-            ReactorClipboard.write('event', { event: this.clipboard, cut: false });
+            ReactorClipboard.write('event', { event: this.clipboard, cut: false, models: this.clipboardModels });
         }
         console.log('Event copied to clipboard');
     }
@@ -1729,11 +1800,14 @@ class EventManager {
         const targetMap = this.currentMap;
 
         let eventData = null;
+        let eventModels = null;
         if (typeof ReactorClipboard !== 'undefined') {
             const clipboardData = await ReactorClipboard.read('event');
             eventData = clipboardData?.payload?.event || null;
+            eventModels = clipboardData?.payload?.models || null;
         } else {
             eventData = this.clipboard;
+            eventModels = this.clipboardModels || null;
         }
         if (this.currentMap !== targetMap) return;
 
@@ -1763,6 +1837,8 @@ class EventManager {
 
         // Add to map
         this.currentMap.events[nextId] = newEvent;
+        // The clone keeps its 3D models, under its own id.
+        if (eventModels) this._setEventModels(nextId, eventModels);
 
         // Clear clipboard if it was a cut operation
         if (this.clipboard && this.clipboard.cut) {
@@ -1790,6 +1866,7 @@ class EventManager {
             let eventIndex = events.indexOf(event);
             if (eventIndex < 0) eventIndex = events.findIndex(entry => entry && entry.id === event.id);
             if (eventIndex >= 0) events[eventIndex] = null;
+            this._setEventModels(event.id, null);
 
             if (this.selectedEvent === event) {
                 this.selectedEvent = null;

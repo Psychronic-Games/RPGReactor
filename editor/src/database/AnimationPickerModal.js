@@ -85,7 +85,7 @@ class AnimationPickerModal {
                 <div style="display: flex; flex-direction: column; border-right: 1px solid var(--color-border); min-height: 0;">
                     <input type="text" class="anim-picker-search database-field-value" placeholder="${tt('Search...')}"
                            style="margin: 8px; flex: 0 0 auto;">
-                    <div class="anim-picker-list" style="flex: 1; overflow-y: auto; min-height: 0;"></div>
+                    <div class="anim-picker-list audio-scroll" style="flex: 1; overflow-y: auto; min-height: 0;"></div>
                 </div>
                 <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 12px; min-height: 0;">
                     <canvas class="anim-picker-canvas" width="384" height="384"
@@ -95,7 +95,7 @@ class AnimationPickerModal {
                     <div class="anim-picker-caption" style="font-size: 12px; color: var(--color-text-muted); min-height: 16px;"></div>
                 </div>
             </div>
-            <div style="padding: 10px 14px; border-top: 1px solid var(--color-border); display: flex; justify-content: flex-end; gap: 8px;">
+            <div style="padding: 10px 14px; background: var(--color-bg-panel); border-top: 1px solid var(--color-border); display: flex; justify-content: flex-end; gap: 8px;">
                 <button type="button" class="anim-picker-cancel tool-button" style="padding: 6px 18px;">${tt('Cancel')}</button>
                 <button type="button" class="anim-picker-ok tool-button" style="padding: 6px 18px; border-color: var(--color-accent-bright);">${tt('OK')}</button>
             </div>
