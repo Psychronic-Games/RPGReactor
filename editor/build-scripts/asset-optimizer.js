@@ -372,6 +372,35 @@ function verifyLoopTags(buffer, ext, required) {
     return required.filter(tag => !present.has(tag));
 }
 
+// An Ogg file's clock: the last page's granule position over the Vorbis
+// sample rate. A remux once shipped pages with a stray 2^32 added to the
+// granule, and every player then believed a four-minute song was 24 hours
+// long — seeking anywhere landed "past the end" and looped or stopped.
+function oggDurationSeconds(buffer) {
+    let rate = 0;
+    const id = buffer.indexOf('\x01vorbis', 0, 'latin1');
+    if (id >= 0 && id + 16 <= buffer.length) rate = buffer.readUInt32LE(id + 12);
+    if (!rate) return null;
+    for (let i = buffer.length - 27; i >= 0; i--) {
+        if (buffer[i] === 0x4f && buffer[i + 1] === 0x67 &&
+            buffer[i + 2] === 0x67 && buffer[i + 3] === 0x53) {
+            const lo = buffer.readUInt32LE(i + 6);
+            const hi = buffer.readUInt32LE(i + 10);
+            return (hi * 4294967296 + lo) / rate;
+        }
+    }
+    return null;
+}
+
+function verifyOggDuration(original, optimized) {
+    const before = oggDurationSeconds(original);
+    const after = oggDurationSeconds(optimized);
+    if (before == null || after == null) return;
+    if (Math.abs(after - before) > Math.max(1, before * 0.02)) {
+        throw new Error(`FFmpeg produced a corrupt duration: ${Math.round(before)}s in, ${Math.round(after)}s out.`);
+    }
+}
+
 function verifyAudioHeader(buffer, ext) {
     if (buffer.length < 12) return false;
     if (ext === '.ogg') return buffer.subarray(0, 4).toString('ascii') === 'OggS';
@@ -427,6 +456,7 @@ async function reencodeAudioFile(filePath, quality, ffmpegPath, execute = runFfm
         }
         const missing = verifyLoopTags(optimized, ext, required);
         if (missing.length) throw new Error(`FFmpeg did not preserve loop metadata: ${missing.join(', ')}`);
+        if (ext === '.ogg') verifyOggDuration(original, optimized);
         if (optimized.length >= original.length) return { before: original.length, after: original.length, changed: false };
         fs.chmodSync(temp, originalStat.mode);
         fs.utimesSync(temp, originalStat.atime, originalStat.mtime);
@@ -627,6 +657,8 @@ module.exports = {
     mp3LoopTags,
     optimizeOggFile,
     flacPictureComment,
+    oggDurationSeconds,
+    verifyOggDuration,
     optimizeAudioFile,
     optimizeStagedAssets,
 };

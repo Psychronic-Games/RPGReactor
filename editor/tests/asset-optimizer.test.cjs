@@ -241,3 +241,26 @@ test('every audio format compresses with its own encoder settings', async () => 
         fs.rmSync(root, { recursive: true, force: true });
     }
 });
+
+test('OGG optimization rejects a corrupt duration clock', () => {
+    // A remux once shipped pages with a stray 2^32 added to the granule
+    // position; players then read a four-minute song as 24 hours and every
+    // seek landed "past the end". The verifier compares the Ogg clock of
+    // input and output and refuses the result.
+    const makeOgg = (granuleLo, granuleHi) => {
+        const buffer = Buffer.alloc(120);
+        buffer.write('OggS', 0, 'ascii');
+        buffer.write('\x01vorbis', 30, 'latin1');
+        buffer.writeUInt32LE(48000, 30 + 12);
+        buffer.write('OggS', 80, 'ascii');
+        buffer.writeUInt32LE(granuleLo, 86);
+        buffer.writeUInt32LE(granuleHi, 90);
+        return buffer;
+    };
+    const original = makeOgg(48000 * 240, 0);           // four minutes
+    const same = makeOgg(48000 * 239, 0);               // re-encode drift, fine
+    const corrupt = makeOgg(48000 * 240, 1);            // +2^32 samples
+    assert.equal(Math.round(optimizer.oggDurationSeconds(original)), 240);
+    optimizer.verifyOggDuration(original, same);
+    assert.throws(() => optimizer.verifyOggDuration(original, corrupt), /corrupt duration/);
+});
