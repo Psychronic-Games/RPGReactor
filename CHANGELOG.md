@@ -8,6 +8,7 @@ This root changelog summarizes public release progress for GitHub; larger releas
 
 ### Fixed
 
+- **PIXI 8's new `origin` accessor no longer hijacks engine bookkeeping.** Tilemap, windows, weather, and weather plugins store scroll offsets in a plain `.origin` point; newer PIXI routes that assignment into a live transform input and warns "Setting both a pivot and origin" per sprite. The accessor is removed before the engine loads, restoring plain-property behavior.
 - **Benign window-chrome churn no longer warns every playtest.** Plugins that destroy and rebuild a drawn canvas bitmap in one pass (selectable-window gradients, for one) tripped the render guard's warning each session even though the skip covers the frame and nothing stays wrong on screen. That case now reports on the debug channel; destroyed sprites and dead file textures still warn.
 - **The Database 3D panel behaves on first open.** A fresh editor showed a model's clip animations as unresolved until the model was visited a second time, and the Animations header's Delete button spilled past the dialog edge on rigged models. Embedded clips now read after the 3D libraries load, and Motions… sits on its own full-width row styled like every other button.
 - **The web editor loads 3D.** Model previews in the database rendered black in the browser (the game itself was fine) because editor previews read model files through synchronous file access the web build didn't serve; bundled files now fetch on demand.

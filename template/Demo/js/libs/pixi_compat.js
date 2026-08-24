@@ -84,17 +84,28 @@
     }
 
     if (PIXI.Container && PIXI.Container.prototype) {
-        const nameDesc = Object.getOwnPropertyDescriptor(
-            PIXI.Container.prototype, "name"
-        );
-        if (nameDesc && (nameDesc.get || nameDesc.set)) {
+        // MZ code and plugins assign plain data to properties that newer v8
+        // Containers claim as accessors: `name`, and `origin` (Tilemap,
+        // TilingSprite, Window, Weather, MOG_Weather_EX all store scroll
+        // bookkeeping Points there). Routing those through v8's setters
+        // hijacks the assignment — origin becomes a live transform input
+        // (harmless unrotated, wrong the moment something rotates or
+        // scales) and warns "Setting both a pivot and origin" per sprite.
+        // Delete the accessors so assignments become plain instance
+        // properties with MZ semantics; pixi's own transform keeps reading
+        // its untouched internal default.
+        for (const prop of ["name", "origin"]) {
+            const desc = Object.getOwnPropertyDescriptor(
+                PIXI.Container.prototype, prop
+            );
+            if (!desc || (!desc.get && !desc.set)) continue;
             try {
-                delete PIXI.Container.prototype.name;
+                delete PIXI.Container.prototype[prop];
             } catch (e) {
                 // Non-configurable; try to neutralize instead.
                 try {
                     Object.defineProperty(
-                        PIXI.Container.prototype, "name",
+                        PIXI.Container.prototype, prop,
                         { value: undefined, writable: true, configurable: true }
                     );
                 } catch (e2) {}
