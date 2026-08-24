@@ -14,6 +14,8 @@ This root changelog summarizes public release progress for GitHub; larger releas
 - **The MV-compat stale-event guard no longer eats plugin-spawned events.** Action plugins (item drops, template events) add runtime events at ids beyond the authored map; the guard mistook them for stale save artifacts and deleted them at every map refresh. It now asks the event itself for its data, so plugin events live and genuine stale events still drop.
 - **Tilemap teardown no longer warns "[BindGroup] textureSource destroyed while still bound".** The tile atlas unbinds from the mesh pipe's shared shader before it is destroyed on map transfer.
 
+- **Render-guard warnings now say which resource died.** The once-per-class "skipped destroyed/orphan display" diagnostic names the exact reason (destroyed, GPU data nulled, or a destroyed texture source) and every bitmap's GPU texture carries its file path as a label, so a leak report points straight at the offending image.
+
 ## [0.98.3] - 2026-08-24
 
 ### Added

@@ -1725,11 +1725,12 @@
         return !obj || obj.destroyed === true;
     };
     // SpritePipe specifically needs `_gpuData` to be present; check both the
-    // canonical flag and the field it actually dereferences.
-    const _isDeadSprite = (sprite) => {
-        if (!sprite || sprite.destroyed === true || sprite._gpuData == null) {
-            return true;
-        }
+    // canonical flag and the field it actually dereferences. Returns a
+    // reason string (for the diagnostic) or null for a healthy sprite.
+    const _deadSpriteReason = (sprite) => {
+        if (!sprite) return "null";
+        if (sprite.destroyed === true) return "destroyed";
+        if (sprite._gpuData == null) return "gpuData nulled by destroy()";
         // A LIVE sprite whose texture source was destroyed (a shared bitmap
         // destroyed while other sprites still reference it) crashes
         // GlTextureSystem.bind reading the nulled style -> the whole render
@@ -1737,10 +1738,12 @@
         // warning surface the offender.
         const tex = sprite.texture;
         if (tex && (!tex.source || tex.source.destroyed === true || !tex.source.style)) {
-            return true;
+            const label = (tex.source && tex.source.label) || tex.label || "(unlabeled)";
+            return "texture source destroyed [" + label + "]";
         }
-        return false;
+        return null;
     };
+    const _isDeadSprite = (sprite) => _deadSpriteReason(sprite) != null;
     const _warnedDestroyKeys = Object.create(null);
     const _describeDisplay = (obj) => {
         if (!obj) return "(null)";
@@ -1758,15 +1761,15 @@
         }
         return chain.length ? chain.join(" < ") : "(no parent)";
     };
-    const _warnDestroyedOnce = (obj, fnName) => {
+    const _warnDestroyedOnce = (obj, fnName, reason) => {
         const ctor = _describeDisplay(obj);
         const key = fnName + ":" + ctor;
         if (_warnedDestroyKeys[key]) return;
         _warnedDestroyKeys[key] = true;
         console.warn("pixi_compat: " + fnName +
             " skipped destroyed/orphan display (class=" + ctor +
+            ", reason=" + (reason || "destroyed") +
             ", parents=" + _describeParentChain(obj) +
-            ", destroyed=" + !!obj.destroyed +
             "). Suppressing further warnings for this class. " +
             "Root cause is a destroy() leak in plugin/MZ code.");
     };
@@ -1776,22 +1779,25 @@
         const origUpdate = PIXI.SpritePipe.prototype.updateRenderable;
         const origValidate = PIXI.SpritePipe.prototype.validateRenderable;
         PIXI.SpritePipe.prototype.addRenderable = function(sprite, instructionSet) {
-            if (_isDeadSprite(sprite)) {
-                _warnDestroyedOnce(sprite, "SpritePipe.addRenderable");
+            const deadReason = _deadSpriteReason(sprite);
+            if (deadReason) {
+                _warnDestroyedOnce(sprite, "SpritePipe.addRenderable", deadReason);
                 return;
             }
             return origAdd.call(this, sprite, instructionSet);
         };
         PIXI.SpritePipe.prototype.updateRenderable = function(sprite) {
-            if (_isDeadSprite(sprite)) {
-                _warnDestroyedOnce(sprite, "SpritePipe.updateRenderable");
+            const deadReason = _deadSpriteReason(sprite);
+            if (deadReason) {
+                _warnDestroyedOnce(sprite, "SpritePipe.updateRenderable", deadReason);
                 return;
             }
             return origUpdate.call(this, sprite);
         };
         PIXI.SpritePipe.prototype.validateRenderable = function(sprite) {
-            if (_isDeadSprite(sprite)) {
-                _warnDestroyedOnce(sprite, "SpritePipe.validateRenderable");
+            const deadReason = _deadSpriteReason(sprite);
+            if (deadReason) {
+                _warnDestroyedOnce(sprite, "SpritePipe.validateRenderable", deadReason);
                 return true;
             }
             return origValidate.call(this, sprite);

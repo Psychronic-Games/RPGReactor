@@ -2744,6 +2744,14 @@ Bitmap.prototype._createBaseTexture = function(source) {
     this._baseTexture.mipmap = false;
     this._baseTexture.width = source.width;
     this._baseTexture.height = source.height;
+    // Name the GPU-side source after the file (or canvas size) so
+    // destroyed-while-referenced diagnostics can say which bitmap died.
+    try {
+        const inner = this._baseTexture.source || this._baseTexture;
+        if (inner && "label" in inner) {
+            inner.label = this._url || `canvas ${source.width}x${source.height}`;
+        }
+    } catch (e) { /* labeling is best-effort */ }
     this._updateScaleMode();
 };
 
