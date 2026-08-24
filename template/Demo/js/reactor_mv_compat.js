@@ -1468,7 +1468,21 @@
             let removed = 0;
             for (let i = 0; i < events.length; i++) {
                 const ev = events[i];
-                if (ev && ev._eventId != null && !$dataMap.events[ev._eventId]) {
+                if (!ev || ev._eventId == null) continue;
+                // Ask the event itself for its data, not $dataMap directly:
+                // action/spawner plugins (Hendrix, template events, item
+                // drops) add runtime events at ids beyond the authored map
+                // and override event() to serve their own data. Those are
+                // alive; only an event whose own event() comes back empty
+                // (or throws on the missing data) is a stale save artifact.
+                let data = null;
+                try {
+                    data = typeof ev.event === "function"
+                        ? ev.event() : $dataMap.events[ev._eventId];
+                } catch (error) {
+                    data = null;
+                }
+                if (!data) {
                     events[i] = null;
                     removed++;
                 }

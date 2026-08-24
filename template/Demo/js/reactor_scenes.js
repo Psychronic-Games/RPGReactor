@@ -3652,3 +3652,17 @@ Scene_Map.prototype.start = function() {
         Reactor3D.warmLoadedTemplates();
     }
 };
+
+// The database sidecar decides which actors render as models instead of
+// walking sheets. On NW.js it reads synchronously; in a browser it is an
+// async fetch — hold the boot scene until the answer is in, or the first
+// frames would request 2D sheets that 3D-bound actors no longer ship.
+// The fetch always settles (onload or onerror), so this cannot hang.
+const _reactorSceneBootIsReady = Scene_Boot.prototype.isReady;
+Scene_Boot.prototype.isReady = function() {
+    if (typeof Reactor3D !== "undefined" && Reactor3D.isDatabaseSidecarReady
+        && !Reactor3D.isDatabaseSidecarReady()) {
+        return false;
+    }
+    return _reactorSceneBootIsReady.call(this);
+};

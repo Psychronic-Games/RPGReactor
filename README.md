@@ -1,10 +1,10 @@
 # RPG Reactor
 
-RPG Reactor 0.98.3 is an open-source, cross-platform RPG game editor and runtime for RPG Maker MV/MZ-compatible projects. RPG Reactor provides its own modern PIXI 8-based runtime while preserving compatibility with RPG Maker project data and targeting backwards compatibility with both RPG Maker MZ and MV plugins, including mixing plugins from both engines within a single project through complementary MZ and MV compatibility layers.
+RPG Reactor 0.98.4 is an open-source, cross-platform RPG game editor and runtime for RPG Maker MV/MZ-compatible projects. RPG Reactor provides its own modern PIXI 8-based runtime while preserving compatibility with RPG Maker project data and targeting backwards compatibility with both RPG Maker MZ and MV plugins, including mixing plugins from both engines within a single project through complementary MZ and MV compatibility layers.
 
 Use RPG Reactor to create, edit, playtest, and package 2D RPGs with familiar RPG Maker-style maps, events, database records, plugins, and deployment workflows, without depending on the original RPG Maker runtime or editor.
 
-Pre-built download binaries are available at <https://psychronic.itch.io/rpg-reactor>. The latest tagged source release is [0.98.3](https://github.com/Psychronic-Games/RPGReactor/releases/tag/v0.98.3).
+Pre-built download binaries are available at <https://psychronic.itch.io/rpg-reactor>. The current development version is 0.98.4 and is not published yet; the latest tagged source release is [0.98.3](https://github.com/Psychronic-Games/RPGReactor/releases/tag/v0.98.3).
 
 ## Repository Layout
 
@@ -149,17 +149,17 @@ for third-party files or user/project content.
 ## Cutting a Source Release
 
 `cut-release.cjs` is the canonical source-release path. Run it from a clean
-`main` worktree after all 0.98.3 changes have been committed:
+`main` worktree after all 0.98.4 changes have been committed:
 
 ```bash
-node editor/build-scripts/cut-release.cjs 0.98.3 --dry-run
-node editor/build-scripts/cut-release.cjs 0.98.3
+node editor/build-scripts/cut-release.cjs 0.98.4 --dry-run
+node editor/build-scripts/cut-release.cjs 0.98.4
 ```
 
 The command runs the complete editor test suite, finalizes both changelog
 headings with the release date, updates the package/README version surfaces and
 test count, creates a release commit when those surfaces changed, creates an
-annotated `v0.98.3` tag, and pushes the branch and tag. The tag push starts
+annotated `v0.98.4` tag, and pushes the branch and tag. The tag push starts
 `publish-release.yml`, which creates or updates the GitHub source release using
 that version's root changelog section. `--no-push` stops after creating the tag.
 

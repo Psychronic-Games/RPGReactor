@@ -2744,6 +2744,14 @@ Bitmap.prototype._createBaseTexture = function(source) {
     this._baseTexture.mipmap = false;
     this._baseTexture.width = source.width;
     this._baseTexture.height = source.height;
+    // Name the GPU-side source after the file (or canvas size) so
+    // destroyed-while-referenced diagnostics can say which bitmap died.
+    try {
+        const inner = this._baseTexture.source || this._baseTexture;
+        if (inner && "label" in inner) {
+            inner.label = this._url || `canvas ${source.width}x${source.height}`;
+        }
+    } catch (e) { /* labeling is best-effort */ }
     this._updateScaleMode();
 };
 
@@ -4177,7 +4185,34 @@ Tilemap.Layer._acquireV8Atlas = function(bitmaps) {
 Tilemap.Layer._releaseV8Atlas = function(entry) {
     if (!entry || --entry.refs > 0) return;
     this._v8AtlasCache.delete(entry.bitmaps);
-    if (entry.texture && !entry.texture.destroyed) entry.texture.destroy(true);
+    if (entry.texture && !entry.texture.destroyed) {
+        Tilemap.Layer._unbindV8AtlasSource(entry.source);
+        entry.texture.destroy(true);
+    }
+};
+
+// The mesh pipe's shared shader keeps the last-drawn texture source in
+// its resources (uTexture/uSampler) after the final draw, so destroying
+// the atlas source while it is still bound makes every map transfer warn
+// "[BindGroup] a 'textureSource' was destroyed while still bound to a
+// shader". Point those slots at the empty texture first. Every access is
+// guarded: on a renderer without this shape nothing happens and the
+// warning stays cosmetic (PIXI nulls the dead slot itself).
+Tilemap.Layer._unbindV8AtlasSource = function(source) {
+    try {
+        if (!source) return;
+        const app = typeof Graphics !== "undefined" ? Graphics.app : null;
+        const pipes = app && app.renderer && app.renderer.renderPipes;
+        const adaptor = pipes && pipes.mesh && pipes.mesh._adaptor;
+        const resources = adaptor && adaptor._shader && adaptor._shader.resources;
+        if (!resources) return;
+        const empty = PIXI.Texture && PIXI.Texture.EMPTY;
+        if (!empty || !empty.source) return;
+        if (resources.uTexture === source) resources.uTexture = empty.source;
+        if (resources.uSampler === source.style) resources.uSampler = empty.source.style;
+    } catch (error) {
+        // Cosmetic only — the warning self-heals.
+    }
 };
 
 // v8 tile textures register on their (session-cached) source's resize
