@@ -84,6 +84,7 @@ This root changelog summarizes public release progress for GitHub; larger releas
 - **Tilemap teardown no longer warns "[BindGroup] textureSource destroyed while still bound".** The tile atlas unbinds from the mesh pipe's shared shader before it is destroyed on map transfer.
 
 - **Render-guard warnings now say which resource died.** The once-per-class "skipped destroyed/orphan display" diagnostic names the exact reason (destroyed, GPU data nulled, or a destroyed texture source) and every bitmap's GPU texture carries its file path as a label, so a leak report points straight at the offending image.
+- **Album art shows in the web editor too.** A browser has no synchronous file access, so the Audio Player's cover-art reader came back empty on itch.io and every track wore its placeholder tile. The reader now falls back to ranged fetches of the served track (capped, so a cover costs kilobytes, not the whole song) and the art appears exactly as it does on desktop.
 
 ## [0.98.2] - 2026-08-16
 

@@ -329,20 +329,75 @@
     }
 
     /**
+     * The first `size` bytes of a served asset. Asks for a Range, but a
+     * server free to ignore it streams instead — the reader cancels at the
+     * cap so a multi-megabyte track never downloads whole for a 13KB cover.
+     */
+    async function fetchPrefix(url, size) {
+        try {
+            const response = await fetch(url, { headers: { Range: `bytes=0-${size - 1}` } });
+            if (!response.ok) return null;
+            if (!response.body) {
+                const whole = new Uint8Array(await response.arrayBuffer());
+                return whole.length > size ? whole.subarray(0, size) : whole;
+            }
+            const reader = response.body.getReader();
+            const chunks = [];
+            let total = 0;
+            while (total < size) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                chunks.push(value);
+                total += value.length;
+            }
+            reader.cancel().catch(() => {});
+            const out = concat(chunks);
+            return out.length > size ? out.subarray(0, size) : out;
+        } catch (error) {
+            return null;
+        }
+    }
+
+    async function extractFromUrl(url) {
+        for (const size of READ_STEPS) {
+            const bytes = await fetchPrefix(url, size);
+            if (!bytes || !bytes.length) return null;
+            const { url: art, needMore } = extractFromBytes(bytes);
+            if (art) return art;
+            if (!needMore || bytes.length < size) return null;
+        }
+        return null;
+    }
+
+    /**
      * Embedded art of an on-disk (possibly encrypted) .ogg, as a data: URL,
-     * or null. Synchronous; reads only as much of the file as needed.
+     * or null. Synchronous on desktop, reading only as much of the file as
+     * needed. In the browser there is no synchronous byte access to a
+     * bundled track, so the same prefix walk runs over ranged fetches and a
+     * Promise comes back instead — both callers resolve() the return value,
+     * which adopts either shape.
      */
     function extractFromFile(filePath) {
+        if (!filePath) return null;
         const assets = root.RREncryptedAssets;
-        if (!assets || !assets.readAssetBytes || !filePath) return null;
-        for (const size of READ_STEPS) {
-            const bytes = assets.readAssetBytes(filePath, size);
-            if (!bytes) return null;
-            const { url, needMore } = extractFromBytes(bytes);
-            if (url) return url;
-            // A short read means the whole file is in hand — nothing more
-            // to fetch no matter what the parser still wanted.
-            if (!needMore || bytes.length < size) return null;
+        if (assets && assets.readAssetBytes) {
+            for (const size of READ_STEPS) {
+                const bytes = assets.readAssetBytes(filePath, size);
+                if (!bytes) break;
+                const { url, needMore } = extractFromBytes(bytes);
+                if (url) return url;
+                // A short read means the whole file is in hand — nothing more
+                // to fetch no matter what the parser still wanted.
+                if (!needMore || bytes.length < size) return null;
+            }
+        }
+        const host = typeof window !== "undefined" ? window.RPGReactorWebHost : null;
+        if (host && host.mode === "web" && typeof window.RPGReactorAssetUrl === "function") {
+            try {
+                return extractFromUrl(window.RPGReactorAssetUrl(filePath));
+            } catch (error) {
+                return null;
+            }
         }
         return null;
     }

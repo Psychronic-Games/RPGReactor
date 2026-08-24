@@ -265,3 +265,51 @@ test('readAssetBytes serves plain and encrypted prefixes; extractFromFile rides 
         fs.rmSync(projectRoot, { recursive: true, force: true });
     }
 });
+
+test('web mode extracts art over ranged fetch and caps the download', async () => {
+    // No synchronous byte access in a browser: the same prefix walk must run
+    // over fetches. The fake server ignores the Range header on purpose and
+    // streams the whole 5MB track in 16KB chunks, so the byte cap has to
+    // come from the reader cancelling — the exact itch.io-hosting shape.
+    const track = path.join(editorRoot, '..', 'template', 'Demo', 'audio', 'bgm',
+        'Psychronic - Darkstream Epoch.ogg');
+    const whole = fs.readFileSync(track);
+    let requestedRange = null;
+    let served = 0;
+    global.window = {
+        RPGReactorWebHost: { mode: 'web' },
+        RPGReactorAssetUrl: filePath => 'served://' + path.basename(filePath),
+    };
+    global.fetch = async (url, options) => {
+        requestedRange = options && options.headers && options.headers.Range;
+        let offset = 0;
+        return {
+            ok: true,
+            body: {
+                getReader() {
+                    return {
+                        async read() {
+                            if (offset >= whole.length) return { done: true };
+                            const chunk = new Uint8Array(whole.subarray(offset, offset + 16384));
+                            offset += chunk.length;
+                            served = offset;
+                            return { done: false, value: chunk };
+                        },
+                        cancel: async () => {},
+                    };
+                },
+            },
+        };
+    };
+    try {
+        const result = CoverArt.extractFromFile('/not/on/any/disk/Darkstream.ogg');
+        assert.ok(result && typeof result.then === 'function', 'web mode returns a promise');
+        const url = await result;
+        assert.ok(url && url.startsWith('data:image/'), 'art extracted over fetch');
+        assert.ok(served <= 131072 + 16384, `download capped at the first read step (served ${served})`);
+        assert.match(String(requestedRange), /^bytes=0-/);
+    } finally {
+        delete global.window;
+        delete global.fetch;
+    }
+});
