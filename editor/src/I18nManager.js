@@ -37,7 +37,7 @@ function normalizeI18nLanguage(language) {
     return RR_LANGUAGES.find(candidate => candidate.id.toLowerCase() === normalized)?.id || 'en';
 }
 
-const RR_APP_VERSION = '0.98.3';
+const RR_APP_VERSION = '0.98.4';
 
 const RR_DB_TYPE_KEYS = {
     actors: 'menu.actors', classes: 'menu.classes', skills: 'menu.skills', items: 'menu.items',

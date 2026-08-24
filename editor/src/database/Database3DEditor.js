@@ -107,9 +107,11 @@ class Database3DEditor {
                     <div class="r3d-part-form" style="flex:0 0 auto;padding:0 10px;border-bottom:1px solid var(--color-border);"></div>
                     <div style="display:flex;align-items:center;padding:6px 10px;border-bottom:1px solid var(--color-border);">
                         <span style="font-weight:bold;color:var(--color-text);flex:1;">${this._t('Animations')}</span>
-                        <button type="button" class="rr-btn-chip r3d-motions" style="display:none;margin-right:6px;">${this._t('Motions…')}</button>
                         <button type="button" class="rr-btn-secondary r3d-rule-add">${this._t('Add')}</button>
                         <button type="button" class="rr-btn-secondary r3d-rule-delete" style="margin-left:6px;">${this._t('Delete')}</button>
+                    </div>
+                    <div class="r3d-motions-row" style="display:none;padding:6px 10px;border-bottom:1px solid var(--color-border);">
+                        <button type="button" class="rr-btn-secondary r3d-motions" style="width:100%;">${this._t('Motions…')}</button>
                     </div>
                     <div class="r3d-rule-list" style="flex:1;overflow-y:auto;min-height:0;"></div>
                     <div class="r3d-rule-note" style="padding:6px 10px;font-size:11px;color:var(--color-text-muted);border-top:1px solid var(--color-border);">${this._t('Adjust this pose with the sliders in the preview.')}</div>
@@ -569,8 +571,12 @@ class Database3DEditor {
         }
         this.highlightModel();
         this.loadSidecar();
-        this.embeddedClips = this._readEmbeddedClips(entry);
         await this._drawPreview(entry);
+        // After the preview: _readEmbeddedClips needs Reactor3D, which on a
+        // fresh editor only loads inside _drawPreview's ensureLibraries —
+        // reading before it left every clip rule marked unresolved until the
+        // model was visited a second time.
+        this.embeddedClips = this._readEmbeddedClips(entry);
         this.rebuildPlayback();
         this.renderPartList();
         this.renderPartForm();
@@ -3240,11 +3246,11 @@ class Database3DEditor {
 
     /** The Motions library applies to rigged models only. */
     _refreshMotionsButton() {
-        const button = this._detail ? this._detail.querySelector('.r3d-motions') : null;
-        if (!button) return;
+        const row = this._detail ? this._detail.querySelector('.r3d-motions-row') : null;
+        if (!row) return;
         const available = this.customRig && typeof RigMotionPresets !== 'undefined'
             && RigMotionPresets.forTemplate((this.customRig && this.customRig.template) || 'humanoid').length > 0;
-        button.style.display = available ? '' : 'none';
+        row.style.display = available ? '' : 'none';
     }
 
     /**

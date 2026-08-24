@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased - 0.98.4]
 
+### Fixed
+
+- **The Database 3D panel behaves on first open.** On a fresh editor, `_readEmbeddedClips` ran before the 3D libraries had ever loaded — `Reactor3D` was still undefined, so a model's embedded clips came back empty and every clip rule looked unresolved until the model was visited a second time (the libraries load inside the preview draw; the clips now read after it). And on rigged models the Animations header packed a differently-styled Motions… chip beside Add and Delete into the fixed-width panel, pushing Delete past the dialog edge where it clipped; Motions… now sits on its own full-width row below the header, styled like every other button.
+- **The web editor renders 3D.** Database model previews were black in the browser — the running game was fine — because editor previews read model bytes, sidecars, and rig binaries through synchronous `fs` calls the web build only honored for preloaded data files. The web filesystem shim now fetches any bundled file on demand through a synchronous request (cached after first read), which lights up the Database 3D section, the actor/item mini previews, and the model picker with no call-site changes.
+
 ## [0.98.3] - 2026-08-24
 
 ### Added

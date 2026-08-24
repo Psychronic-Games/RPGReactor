@@ -145,7 +145,27 @@
             readFileSync(filePath, encoding) {
                 const relativePath = projectRelative(filePath);
                 if (!contents.has(relativePath)) {
-                    throw new Error(tt('Web project file is not preloaded for synchronous access: {relativePath}', { relativePath }));
+                    const entry = entries.get(relativePath);
+                    if (!entry || entry.type !== 'file') {
+                        throw new Error(tt('Web project file is not preloaded for synchronous access: {relativePath}', { relativePath }));
+                    }
+                    // Bundled but not preloaded — model files, sidecars, rig
+                    // binaries. A synchronous caller in a browser has exactly
+                    // one byte source: sync XHR. The charset trick keeps the
+                    // bytes unmangled, and the result is cached so each file
+                    // downloads once (the service worker serves repeats).
+                    const url = new URL(`project/${relativePath.split('/').map(encodeURIComponent).join('/')}`, document.baseURI).href;
+                    const xhr = new XMLHttpRequest();
+                    xhr.open('GET', url, false);
+                    xhr.overrideMimeType('text/plain; charset=x-user-defined');
+                    xhr.send();
+                    if (xhr.status < 200 || xhr.status >= 300) {
+                        throw new Error(tt('Web project file could not be fetched: {relativePath}', { relativePath }));
+                    }
+                    const text = xhr.responseText;
+                    const bytes = new Uint8Array(text.length);
+                    for (let i = 0; i < text.length; i++) bytes[i] = text.charCodeAt(i) & 0xff;
+                    contents.set(relativePath, bytes);
                 }
                 const data = contents.get(relativePath);
                 if (encoding || typeof data === 'string') return typeof data === 'string' ? data : new TextDecoder().decode(data);
