@@ -8,6 +8,7 @@ This root changelog summarizes public release progress for GitHub; larger releas
 
 ### Fixed
 
+- **The web editor's 3D suite works: previews render, clips list, rigs bind.** The 3D libraries never loaded in a browser (a one-word global-name bug), model bytes now fetch asynchronously instead of relying on file access browsers don't have, a Buffer polyfill unblocks every binary writer (rig binaries, PNG and zip exports, the Forge generators), and binding a rig writes and persists its weights exactly as on desktop.
 - **Two more PIXI 8 compat gaps closed from live plugin reports.** `PIXI.utils.string2hex` (and the other v5 color helpers) are back for plugins that tint with them, and a destroyed texture reaching the GL bind path now draws the empty texture instead of crashing the render pass.
 - **Loading a save from a map-based title no longer risks a soft lock.** A spriteset now freezes once $gameMap has moved to another map, so plugin sprites keyed per map (layer graphics and the like) stop reading the wrong map's data during the fade — the per-frame error storm that could stall the transition and soft-lock the next battle is gone.
 - **A quieter console.** The v5 Graphics deprecation nags (beginFill, drawRect...) are burned off at load — MZ plugins use that API forever and the shims work — and leftover Effekseer/animation debug diagnostics no longer print during play.

@@ -16,6 +16,125 @@
         ), translated);
     }
 
+    // Editor code writes binary data through Node's Buffer — rig binaries,
+    // zip and PNG exports, base64 decodes across the Forge generators. A
+    // browser has none of it, so every such feature threw at the first
+    // Buffer.from. This covers exactly the API surface the editor uses;
+    // instances are real Uint8Arrays, which the fs shim and every consumer
+    // already accept.
+    if (typeof window.Buffer === 'undefined') {
+        class WebBuffer extends Uint8Array {
+            static from(value, encoding) {
+                if (typeof value === 'string') {
+                    const enc = String(encoding || 'utf8').toLowerCase();
+                    if (enc === 'base64') {
+                        const bin = atob(value);
+                        const out = new WebBuffer(bin.length);
+                        for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+                        return out;
+                    }
+                    if (enc === 'hex') {
+                        const out = new WebBuffer(value.length >> 1);
+                        for (let i = 0; i < out.length; i++) out[i] = parseInt(value.substr(i * 2, 2), 16) || 0;
+                        return out;
+                    }
+                    if (enc === 'latin1' || enc === 'binary' || enc === 'ascii') {
+                        const out = new WebBuffer(value.length);
+                        for (let i = 0; i < value.length; i++) out[i] = value.charCodeAt(i) & 0xff;
+                        return out;
+                    }
+                    const bytes = new TextEncoder().encode(value);
+                    const utf = new WebBuffer(bytes.length);
+                    utf.set(bytes);
+                    return utf;
+                }
+                if (value instanceof ArrayBuffer) {
+                    const out = new WebBuffer(value.byteLength);
+                    out.set(new Uint8Array(value));
+                    return out;
+                }
+                if (ArrayBuffer.isView(value)) {
+                    const out = new WebBuffer(value.byteLength);
+                    out.set(new Uint8Array(value.buffer, value.byteOffset, value.byteLength));
+                    return out;
+                }
+                return new WebBuffer(Uint8Array.from(value || []));
+            }
+            static alloc(size, fill) {
+                const out = new WebBuffer(size);
+                if (fill) out.fill(typeof fill === 'number' ? fill : 0);
+                return out;
+            }
+            static allocUnsafe(size) { return new WebBuffer(size); }
+            static concat(list, totalLength) {
+                let total = totalLength;
+                if (total === undefined) {
+                    total = 0;
+                    for (const item of list) total += item.length;
+                }
+                const out = new WebBuffer(total);
+                let offset = 0;
+                for (const item of list) {
+                    if (offset >= total) break;
+                    const chunk = item.length > total - offset ? item.subarray(0, total - offset) : item;
+                    out.set(chunk, offset);
+                    offset += chunk.length;
+                }
+                return out;
+            }
+            static isBuffer(value) { return value instanceof WebBuffer; }
+            static byteLength(value, encoding) { return WebBuffer.from(value, encoding).length; }
+            _view() { return new DataView(this.buffer, this.byteOffset, this.byteLength); }
+            writeUInt8(v, o = 0) { this[o] = v & 0xff; return o + 1; }
+            writeUInt16LE(v, o = 0) { this._view().setUint16(o, v, true); return o + 2; }
+            writeUInt16BE(v, o = 0) { this._view().setUint16(o, v, false); return o + 2; }
+            writeUInt32LE(v, o = 0) { this._view().setUint32(o, v >>> 0, true); return o + 4; }
+            writeUInt32BE(v, o = 0) { this._view().setUint32(o, v >>> 0, false); return o + 4; }
+            readUInt8(o = 0) { return this[o]; }
+            readUInt16LE(o = 0) { return this._view().getUint16(o, true); }
+            readUInt16BE(o = 0) { return this._view().getUint16(o, false); }
+            readUInt32LE(o = 0) { return this._view().getUint32(o, true); }
+            readUInt32BE(o = 0) { return this._view().getUint32(o, false); }
+            write(string, offset, encoding) {
+                const start = typeof offset === 'number' ? offset : 0;
+                const enc = typeof offset === 'string' ? offset : encoding;
+                const bytes = WebBuffer.from(string, enc);
+                const length = Math.min(bytes.length, this.length - start);
+                this.set(bytes.subarray(0, length), start);
+                return length;
+            }
+            copy(target, targetStart = 0, sourceStart = 0, sourceEnd = this.length) {
+                const chunk = this.subarray(sourceStart, sourceEnd);
+                target.set(chunk, targetStart);
+                return chunk.length;
+            }
+            slice(start, end) { return this.subarray(start, end); }
+            equals(other) {
+                if (!other || other.length !== this.length) return false;
+                for (let i = 0; i < this.length; i++) if (this[i] !== other[i]) return false;
+                return true;
+            }
+            toString(encoding, start = 0, end = this.length) {
+                const sub = this.subarray(start, end);
+                const enc = String(encoding || 'utf8').toLowerCase();
+                if (enc === 'base64' || enc === 'latin1' || enc === 'binary' || enc === 'ascii') {
+                    let bin = '';
+                    for (let i = 0; i < sub.length; i += 0x8000) {
+                        bin += String.fromCharCode.apply(null, sub.subarray(i, i + 0x8000));
+                    }
+                    return enc === 'base64' ? btoa(bin) : bin;
+                }
+                if (enc === 'hex') {
+                    let out = '';
+                    for (let i = 0; i < sub.length; i++) out += sub[i].toString(16).padStart(2, '0');
+                    return out;
+                }
+                return new TextDecoder('utf-8').decode(sub);
+            }
+        }
+        window.Buffer = WebBuffer;
+    }
+
     function normalizePath(value) {
         const absolute = String(value || '').replace(/\\/g, '/').startsWith('/');
         const parts = [];
@@ -145,31 +264,32 @@
             readFileSync(filePath, encoding) {
                 const relativePath = projectRelative(filePath);
                 if (!contents.has(relativePath)) {
-                    const entry = entries.get(relativePath);
-                    if (!entry || entry.type !== 'file') {
-                        throw new Error(tt('Web project file is not preloaded for synchronous access: {relativePath}', { relativePath }));
-                    }
-                    // Bundled but not preloaded — model files, sidecars, rig
-                    // binaries. A synchronous caller in a browser has exactly
-                    // one byte source: sync XHR. The charset trick keeps the
-                    // bytes unmangled, and the result is cached so each file
-                    // downloads once (the service worker serves repeats).
-                    const url = new URL(`project/${relativePath.split('/').map(encodeURIComponent).join('/')}`, document.baseURI).href;
-                    const xhr = new XMLHttpRequest();
-                    xhr.open('GET', url, false);
-                    xhr.overrideMimeType('text/plain; charset=x-user-defined');
-                    xhr.send();
-                    if (xhr.status < 200 || xhr.status >= 300) {
-                        throw new Error(tt('Web project file could not be fetched: {relativePath}', { relativePath }));
-                    }
-                    const text = xhr.responseText;
-                    const bytes = new Uint8Array(text.length);
-                    for (let i = 0; i < text.length; i++) bytes[i] = text.charCodeAt(i) & 0xff;
-                    contents.set(relativePath, bytes);
+                    // No synchronous byte source exists here: a sync XHR
+                    // deadlocks against the service worker (it reads the same
+                    // IndexedDB store the page writes; a blocked main thread
+                    // can never finish its transaction). Binary consumers use
+                    // readFileAsync; small sidecar JSON is preloaded.
+                    throw new Error(tt('Web project file is not preloaded for synchronous access: {relativePath}', { relativePath }));
                 }
                 const data = contents.get(relativePath);
                 if (encoding || typeof data === 'string') return typeof data === 'string' ? data : new TextDecoder().decode(data);
                 return data;
+            },
+            async readFileAsync(filePath, encoding) {
+                const relativePath = projectRelative(filePath);
+                if (contents.has(relativePath)) return this.readFileSync(filePath, encoding);
+                const entry = entries.get(relativePath);
+                if (!entry || entry.type !== 'file') {
+                    throw new Error(tt('File not found: {filePath}', { filePath }));
+                }
+                // The service worker overlays browser-saved edits, so this
+                // fetch sees the same file a reload would.
+                const url = new URL(`project/${relativePath.split('/').map(encodeURIComponent).join('/')}`, document.baseURI).href;
+                const response = await fetch(url);
+                if (!response.ok) throw new Error(tt('File not found: {filePath}', { filePath }));
+                const bytes = new Uint8Array(await response.arrayBuffer());
+                if (encoding) return new TextDecoder().decode(bytes);
+                return bytes;
             },
             writeFileSync(filePath, data) {
                 const relativePath = projectRelative(filePath);

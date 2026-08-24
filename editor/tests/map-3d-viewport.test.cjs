@@ -46,7 +46,7 @@ function webViewport({ fail = '' } = {}) {
             return `https://example.test${filePath}`;
         }
     };
-    browserWindow.RPGReactorHost = host;
+    browserWindow.RPGReactorWebHost = host;
     const document = {
         addEventListener() {},
         removeEventListener() {},

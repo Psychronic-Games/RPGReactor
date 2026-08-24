@@ -276,7 +276,27 @@
         }
     }
 
-    const api = { resolveAssetUrl, assetExists, readAssetBytes };
+    /**
+     * The whole asset as bytes, asynchronously: the synchronous reader on
+     * desktop, a fetch of the served file in the browser (where sync byte
+     * access does not exist). Returns a Uint8Array or null.
+     */
+    async function readAssetBytesAsync(filePath) {
+        const sync = readAssetBytes(filePath, Number.MAX_SAFE_INTEGER);
+        if (sync) return sync;
+        const host = typeof window !== 'undefined' ? window.RPGReactorWebHost : null;
+        if (host && host.fs && typeof host.fs.readFileAsync === 'function' && filePath) {
+            try {
+                const bytes = await host.fs.readFileAsync(filePath);
+                return bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+            } catch (error) {
+                return null;
+            }
+        }
+        return null;
+    }
+
+    const api = { resolveAssetUrl, assetExists, readAssetBytes, readAssetBytesAsync };
     root.RREncryptedAssets = api;
 
     // WebHost overwrites this with its own resolver when the editor runs in a

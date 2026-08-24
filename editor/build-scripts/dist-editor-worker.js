@@ -1065,7 +1065,7 @@ function buildWeb(stageRoot, stagingDir) {
     const mutable = {};
     for (const entry of projectFiles) {
         if (entry.type !== 'file') continue;
-        if (/^(?:data\/.*\.json|project\.rpgreactor|package\.json|js\/(?:reactor_plugins|plugins)\.js)$/.test(entry.path)) {
+        if (/^(?:data\/.*\.json|3d\/.*\.json|project\.rpgreactor|package\.json|js\/(?:reactor_plugins|plugins)\.js)$/.test(entry.path)) {
             mutable[entry.path] = fs.readFileSync(path.join(projectRoot, entry.path), 'utf8');
         }
     }

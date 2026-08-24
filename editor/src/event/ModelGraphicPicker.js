@@ -898,7 +898,10 @@ class ModelGraphicPicker {
             return;
         }
         try {
-            const data = fs.readFileSync(filePath);
+            const data = (typeof RREncryptedAssets !== 'undefined' && RREncryptedAssets.readAssetBytesAsync)
+                ? await RREncryptedAssets.readAssetBytesAsync(filePath)
+                : fs.readFileSync(filePath);
+            if (!data) { this._setMessage(this._t('None')); return; }
             const buffer = data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength);
             const path = require('path');
             const baseUrl = 'file://' + path.dirname(filePath).replace(/\\/g, '/') + '/';

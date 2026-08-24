@@ -373,7 +373,12 @@ class Database3DEditor {
         const filePath = fs.existsSync(next) ? next : path.join(project.path, '3d', 'source', file);
         if (!fs.existsSync(filePath)) return null;
         try {
-            const data = fs.readFileSync(filePath);
+            // Bytes come through the asset reader: synchronous on desktop, a
+            // fetch of the served file in the browser (no sync byte access).
+            const data = (typeof RREncryptedAssets !== 'undefined' && RREncryptedAssets.readAssetBytesAsync)
+                ? await RREncryptedAssets.readAssetBytesAsync(filePath)
+                : fs.readFileSync(filePath);
+            if (!data) return null;
             const buffer = data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength);
             const baseUrl = 'file://' + path.dirname(filePath).replace(/\\/g, '/') + '/';
             // The same worker the game uses: container split, JSON parse,
@@ -408,18 +413,33 @@ class Database3DEditor {
             && !Array.isArray(parsed.rig) ? parsed.rig : null;
         this._rigBinary = null;
         if (this.customRig && this.customRig.weightsFile && !this.customRig.weights) {
-            try {
-                const path = require('path');
-                const file = String(this.customRig.weightsFile);
-                if (!/[\\/]/.test(file) && file.indexOf('..') < 0) {
-                    const data = fs.readFileSync(path.join(path.dirname(this.rulesPath()), file));
+            const path = require('path');
+            const file = String(this.customRig.weightsFile);
+            if (!/[\\/]/.test(file) && file.indexOf('..') < 0) {
+                const binPath = path.join(path.dirname(this.rulesPath()), file);
+                const rig = this.customRig;
+                const attach = data => {
                     const buffer = data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength);
                     this._rigBinary = buffer;
-                    this.customRig.weightsBin = typeof ModelRigger !== 'undefined'
+                    rig.weightsBin = typeof ModelRigger !== 'undefined'
                         ? ModelRigger.decodeWeightsBinary(buffer)
                         : Reactor3D.decodeRigWeightsBinary(buffer);
+                };
+                try {
+                    attach(fs.readFileSync(binPath));
+                } catch (error) {
+                    // No sync byte access on web: fetch the weights and
+                    // re-skin when they land. Until then the rig previews
+                    // unskinned, exactly like a rig missing its binary.
+                    if (typeof RREncryptedAssets !== 'undefined' && RREncryptedAssets.readAssetBytesAsync) {
+                        RREncryptedAssets.readAssetBytesAsync(binPath).then(data => {
+                            if (!data || this.customRig !== rig || rig.weightsBin) return;
+                            attach(data);
+                            if (this.rebuildPlayback) this.rebuildPlayback();
+                        }).catch(() => {});
+                    }
                 }
-            } catch (error) { /* a rig without weights previews unskinned */ }
+            }
         }
     }
 
@@ -576,7 +596,7 @@ class Database3DEditor {
         // fresh editor only loads inside _drawPreview's ensureLibraries —
         // reading before it left every clip rule marked unresolved until the
         // model was visited a second time.
-        this.embeddedClips = this._readEmbeddedClips(entry);
+        this.embeddedClips = await this._readEmbeddedClips(entry);
         this.rebuildPlayback();
         this.renderPartList();
         this.renderPartForm();
@@ -596,7 +616,7 @@ class Database3DEditor {
      * Clip names baked into a GLB's animation block, surfaced so a "clip"
      * rule can choose among them.
      */
-    _readEmbeddedClips(entry) {
+    async _readEmbeddedClips(entry) {
         if ((entry.ext || '.glb').toLowerCase() !== '.glb' || typeof Reactor3D === 'undefined') return [];
         try {
             const fs = require('fs');
@@ -605,7 +625,10 @@ class Database3DEditor {
             const file = (entry.file || entry.name) + (entry.ext || '.glb');
             const next = path.join(project.path, '3d', entry.name, 'source', file);
             const filePath = fs.existsSync(next) ? next : path.join(project.path, '3d', 'source', file);
-            const data = fs.readFileSync(filePath);
+            const data = (typeof RREncryptedAssets !== 'undefined' && RREncryptedAssets.readAssetBytesAsync)
+                ? await RREncryptedAssets.readAssetBytesAsync(filePath)
+                : fs.readFileSync(filePath);
+            if (!data) return [];
             const parsed = Reactor3D.readGlb(data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength));
             return (parsed.json.animations || []).map(clip => clip.name || '');
         } catch (error) {

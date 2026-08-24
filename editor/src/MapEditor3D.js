@@ -134,11 +134,12 @@ class MapEditor3D {
     }
 
     async loadLibraries() {
-        const host = typeof window !== 'undefined' ? window.RPGReactorHost : null;
+        const host = typeof window !== 'undefined' ? window.RPGReactorWebHost : null;
         if (host?.mode === 'web' && host.projectRoot && typeof host.assetUrl === 'function') {
+            const root = String(host.projectRoot).replace(/\/+$/, '');
             const files = [
-                this.path.join(host.projectRoot, 'js', 'libs', 'three.js'),
-                this.path.join(host.projectRoot, 'js', 'reactor_3d.js')
+                `${root}/js/libs/three.js`,
+                `${root}/js/reactor_3d.js`
             ];
             try {
                 for (const file of files) {
