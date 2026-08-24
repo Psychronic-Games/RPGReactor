@@ -113,6 +113,31 @@
         }
     }
 
+    // v8 still ships the v5 Graphics drawing API (beginFill, drawRect, ...)
+    // as working shims, but nags a one-shot deprecation warning per method.
+    // MZ plugins use that API forever and nobody can act on the nag, so burn
+    // the one-shots at load with warn muted; real warnings stay untouched.
+    if (PIXI.Graphics && PIXI.Graphics.prototype && PIXI.Graphics.prototype.beginFill) {
+        try {
+            const scratch = new PIXI.Graphics();
+            const realWarn = console.warn;
+            console.warn = function() {};
+            try {
+                scratch.beginFill(0);
+                if (scratch.lineStyle) scratch.lineStyle(1, 0);
+                if (scratch.drawRect) scratch.drawRect(0, 0, 1, 1);
+                if (scratch.drawCircle) scratch.drawCircle(0, 0, 1);
+                if (scratch.drawRoundedRect) scratch.drawRoundedRect(0, 0, 1, 1, 1);
+                if (scratch.drawEllipse) scratch.drawEllipse(0, 0, 1, 1);
+                if (scratch.drawPolygon) scratch.drawPolygon([0, 0, 1, 0, 1, 1]);
+                if (scratch.endFill) scratch.endFill();
+            } finally {
+                console.warn = realWarn;
+                scratch.destroy(true);
+            }
+        } catch (e) { /* the nags simply stay */ }
+    }
+
     // -------------------------------------------------------------------------
     // v8 split PIXI.Renderer into PIXI.WebGLRenderer and PIXI.WebGPURenderer
     // and no longer exposes a generic Renderer class. Legacy plugins still

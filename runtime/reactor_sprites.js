@@ -1409,18 +1409,6 @@ Sprite_Animation.prototype.update = function() {
                 if (this._effect.isLoaded) {
                     this._handle = Graphics.effekseer.play(this._effect);
                     this._started = true;
-                    // Lifecycle log: tells us Effekseer.play() actually ran for
-                    // this Sprite_Animation instance. If you trigger an attack
-                    // and never see this log, the animation isn't reaching the
-                    // Effekseer pipeline at all (maybe it's a sprite-frame
-                    // animation, not an Effekseer effect). If you DO see this
-                    // log but no [EffekseerDiag] block follows, the handle
-                    // exists but _render/_doEffekseerDraw never run.
-                    console.log("[EffekseerLifecycle] play() called for effect:",
-                        this._animation && this._animation.effectName,
-                        " handle:", !!this._handle,
-                        " handle.exists:", this._handle && this._handle.exists,
-                        " targets:", this._targets.length);
                 } else {
                     EffectManager.checkErrors();
                 }
@@ -1627,8 +1615,6 @@ Sprite_Animation.prototype._render = function(renderer) {
 // One-shot overlay diagnostic. Fires the first time _doEffekseerDraw runs after
 // page-load. Confirms the overlay canvas exists in the DOM, that we have its
 // WebGL1 context, and that Effekseer actually writes pixels to it. Reset via
-// window.__effekseerOverlayDiagDone = false in the console to re-arm.
-window.__effekseerOverlayDiagDone = window.__effekseerOverlayDiagDone || false;
 
 Sprite_Animation.prototype._doEffekseerDraw = function(renderer, composited) {
     // Draws to the Effekseer overlay canvas's WebGL1 context (Graphics._effekseerGL).
@@ -1640,35 +1626,8 @@ Sprite_Animation.prototype._doEffekseerDraw = function(renderer, composited) {
     if (!(this._targets.length > 0 && this._handle && this._handle.exists)) {
         return;
     }
-    const diag = !window.__effekseerOverlayDiagDone;
-    let efxGL = Graphics._effekseerGL;
-    let overlay = Graphics._effekseerCanvas;
-    let preFrame = null;
-    if (diag && efxGL && overlay) {
-        const cs = window.getComputedStyle(overlay);
-        preFrame = new Uint8Array(overlay.width * overlay.height * 4);
-        try {
-            efxGL.readPixels(0, 0, overlay.width, overlay.height,
-                efxGL.RGBA, efxGL.UNSIGNED_BYTE, preFrame);
-        } catch (e) { preFrame = null; }
-        console.log("[EffekseerOverlay] PRE _doEffekseerDraw\n" +
-            "  overlay in DOM: " + (document.getElementById("effekseerOverlay") ? "YES" : "NO") + "\n" +
-            "  overlay size:   " + overlay.width + " x " + overlay.height + "\n" +
-            "  overlay style:  position=" + cs.position +
-                              "  zIndex=" + cs.zIndex +
-                              "  width="  + cs.width +
-                              "  height=" + cs.height +
-                              "  display="+ cs.display +
-                              "  visibility=" + cs.visibility +
-                              "  opacity=" + cs.opacity + "\n" +
-            "  efxGL exists:   " + !!efxGL + "  isWebGL1: " +
-                (efxGL.constructor && efxGL.constructor.name) + "\n" +
-            "  efxGL viewport: [" + Array.from(efxGL.getParameter(efxGL.VIEWPORT)).join(",") + "]\n" +
-            "  efxGL error:    " + efxGL.getError() + "\n" +
-            "  Graphics.effekseer === init'd: " + !!Graphics.effekseer + "\n" +
-            "  pre-frame readback: " + (preFrame ? "ok (" + preFrame.length + " bytes)" : "FAILED")
-        );
-    }
+    const efxGL = Graphics._effekseerGL;
+    const overlay = Graphics._effekseerCanvas;
     // Distortion layers additionally sample a captured backdrop; with the
     // scene composited into the framebuffer the capture takes it from
     // there, covering this effect's own square viewport — Effekseer maps
@@ -1686,37 +1645,6 @@ Sprite_Animation.prototype._doEffekseerDraw = function(renderer, composited) {
     Graphics.effekseer.drawHandle(this._handle);
     Graphics.effekseer.endDraw();
     this.resetViewport(renderer);
-    if (diag && efxGL && overlay && preFrame) {
-        const postFrame = new Uint8Array(overlay.width * overlay.height * 4);
-        let changed = 0, firstChangeX = -1, firstChangeY = -1, beforePixel = null, afterPixel = null;
-        try {
-            efxGL.readPixels(0, 0, overlay.width, overlay.height,
-                efxGL.RGBA, efxGL.UNSIGNED_BYTE, postFrame);
-            for (let i = 0; i < postFrame.length; i += 4) {
-                if (postFrame[i]   !== preFrame[i]   ||
-                    postFrame[i+1] !== preFrame[i+1] ||
-                    postFrame[i+2] !== preFrame[i+2] ||
-                    postFrame[i+3] !== preFrame[i+3]) {
-                    if (firstChangeX === -1) {
-                        const p = i >> 2;
-                        firstChangeX = p % overlay.width;
-                        firstChangeY = (p / overlay.width) | 0;
-                        beforePixel = [preFrame[i], preFrame[i+1], preFrame[i+2], preFrame[i+3]];
-                        afterPixel  = [postFrame[i], postFrame[i+1], postFrame[i+2], postFrame[i+3]];
-                    }
-                    changed++;
-                }
-            }
-        } catch (e) {}
-        console.log("[EffekseerOverlay] POST _doEffekseerDraw\n" +
-            "  pixels changed on overlay: " + changed + " / " + (overlay.width * overlay.height) + "\n" +
-            "  first change: " + (firstChangeX === -1 ? "(none)" :
-                "(" + firstChangeX + ", " + firstChangeY + ") " +
-                JSON.stringify(beforePixel) + " -> " + JSON.stringify(afterPixel)) + "\n" +
-            "  efxGL error:  " + efxGL.getError()
-        );
-        window.__effekseerOverlayDiagDone = true;
-    }
 };
 
 // Square per-effect viewport side. Distortion is zero at the viewport
@@ -1809,20 +1737,6 @@ Sprite_Animation.prototype.targetSpritePosition = function(sprite) {
     // effects ~h/2 too high. If a future animation explicitly needs center-
     // anchor, restore the conditional later.
     const point = new Point(0, 0);
-    // One-shot diagnostic so we can see what sprite.height returns + computed
-    // target position. If sprite.height is 0 or unexpectedly small, that
-    // explains why anchor changes don't move the effect.
-    if (!window.__targetPosDiagDone) {
-        window.__targetPosDiagDone = true;
-        try {
-            console.log("[targetSpritePosition diag]",
-                "sprite.constructor:", sprite.constructor && sprite.constructor.name,
-                "sprite.x/y:", sprite.x, sprite.y,
-                "sprite.width/height:", sprite.width, sprite.height,
-                "anchor:", sprite.anchor && [sprite.anchor.x, sprite.anchor.y],
-                "alignBottom raw:", this._animation && this._animation.alignBottom);
-        } catch (e) {}
-    }
     // v5/6/7: sprite.updateTransform() forced an immediate worldTransform
     // recompute. v8 repurposed updateTransform as an opts-setter (no-args
     // throws). Skip the call on v8 -- v8's transform system has already
@@ -5106,3 +5020,25 @@ Sprite_Enemy.prototype.updateBitmap = function() {
 };
 
 //-----------------------------------------------------------------------------
+
+// A live map scene can outlast its world: loading a save from a map-based
+// title screen replaces $gameMap while the old scene still updates through
+// its fade-out frames, and every plugin sprite keyed by map id (layer
+// graphics, parallax stores) then reads the wrong map's data — a per-frame
+// TypeError storm that stalls the scene transition. A spriteset serves
+// exactly the map it was built for; once $gameMap moves on, it holds still
+// until the new scene replaces it.
+const _reactorSpritesetMapInitialize = Spriteset_Map.prototype.initialize;
+Spriteset_Map.prototype.initialize = function() {
+    this._reactorBuiltForMapId = typeof $gameMap !== "undefined" && $gameMap ? $gameMap.mapId() : 0;
+    _reactorSpritesetMapInitialize.apply(this, arguments);
+};
+
+const _reactorSpritesetMapStaleUpdate = Spriteset_Map.prototype.update;
+Spriteset_Map.prototype.update = function() {
+    if (this._reactorBuiltForMapId && typeof $gameMap !== "undefined" && $gameMap
+        && $gameMap.mapId() !== this._reactorBuiltForMapId) {
+        return;
+    }
+    _reactorSpritesetMapStaleUpdate.apply(this, arguments);
+};
