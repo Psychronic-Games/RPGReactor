@@ -8,6 +8,7 @@ This root changelog summarizes public release progress for GitHub; larger releas
 
 ### Fixed
 
+- **Two more PIXI 8 compat gaps closed from live plugin reports.** `PIXI.utils.string2hex` (and the other v5 color helpers) are back for plugins that tint with them, and a destroyed texture reaching the GL bind path now draws the empty texture instead of crashing the render pass.
 - **Loading a save from a map-based title no longer risks a soft lock.** A spriteset now freezes once $gameMap has moved to another map, so plugin sprites keyed per map (layer graphics and the like) stop reading the wrong map's data during the fade — the per-frame error storm that could stall the transition and soft-lock the next battle is gone.
 - **A quieter console.** The v5 Graphics deprecation nags (beginFill, drawRect...) are burned off at load — MZ plugins use that API forever and the shims work — and leftover Effekseer/animation debug diagnostics no longer print during play.
 - **PIXI 8's new `origin` accessor no longer hijacks engine bookkeeping.** Tilemap, windows, weather, and weather plugins store scroll offsets in a plain `.origin` point; newer PIXI routes that assignment into a live transform input and warns "Setting both a pivot and origin" per sprite. The accessor is removed before the engine loads, restoring plain-property behavior.

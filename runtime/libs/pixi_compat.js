@@ -683,6 +683,64 @@
             return indices;
         };
     }
+    // The v5 color helpers plugins lean on (Hendrix_Animation_Solution calls
+    // string2hex for its bloom tint). v5 semantics, attached only if absent.
+    if (!PIXI.utils.string2hex) {
+        PIXI.utils.string2hex = function(string) {
+            if (typeof string === "string") {
+                if (string[0] === "#") string = string.slice(1);
+                if (string.length === 3) {
+                    string = string[0] + string[0] + string[1] + string[1] + string[2] + string[2];
+                }
+            }
+            return parseInt(string, 16) || 0;
+        };
+    }
+    if (!PIXI.utils.hex2string) {
+        PIXI.utils.hex2string = function(hex) {
+            let out = (hex >>> 0).toString(16);
+            while (out.length < 6) out = "0" + out;
+            return "#" + out;
+        };
+    }
+    if (!PIXI.utils.hex2rgb) {
+        PIXI.utils.hex2rgb = function(hex, out) {
+            out = out || [];
+            out[0] = ((hex >> 16) & 0xff) / 255;
+            out[1] = ((hex >> 8) & 0xff) / 255;
+            out[2] = (hex & 0xff) / 255;
+            return out;
+        };
+    }
+    if (!PIXI.utils.rgb2hex) {
+        PIXI.utils.rgb2hex = function(rgb) {
+            return ((rgb[0] * 255) << 16) + ((rgb[1] * 255) << 8) + (rgb[2] * 255 | 0);
+        };
+    }
+
+    // The last line of defense under every render pipe: binding a texture
+    // whose source was destroyed reaches GlTextureSystem with style=null and
+    // crashes the GL pass ("reading 'addressModeU'"). The SpritePipe guard
+    // covers sprites; meshes, tiling sprites, and particles can still slip a
+    // dead source through (plugins destroy bitmaps mid-animation). Substitute
+    // the empty texture instead of crashing — the next frame rebinds live.
+    if (PIXI.GlTextureSystem && PIXI.GlTextureSystem.prototype
+        && !PIXI.GlTextureSystem.prototype.__reactorDeadSourceGuard) {
+        const origGlBind = PIXI.GlTextureSystem.prototype.bind;
+        const origGlBindSource = PIXI.GlTextureSystem.prototype.bindSource;
+        const deadSource = source => !source || source.destroyed === true || !source.style;
+        PIXI.GlTextureSystem.prototype.bind = function(texture, location) {
+            if (!texture || deadSource(texture.source)) {
+                return origGlBind.call(this, PIXI.Texture.EMPTY, location);
+            }
+            return origGlBind.call(this, texture, location);
+        };
+        PIXI.GlTextureSystem.prototype.bindSource = function(source, location) {
+            if (source && deadSource(source)) source = PIXI.Texture.EMPTY.source;
+            return origGlBindSource.call(this, source, location);
+        };
+        PIXI.GlTextureSystem.prototype.__reactorDeadSourceGuard = true;
+    }
 
     // -------------------------------------------------------------------------
     // v8 removed PIXI.ObjectRenderer (the entire renderer-plugin system was
