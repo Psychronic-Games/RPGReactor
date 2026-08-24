@@ -9,10 +9,10 @@ class CharacterGraphicPicker {
         this.currentProject = projectController.getCurrentProject ? projectController.getCurrentProject() : projectController.currentProject;
         this.onSelect = null; // Callback when a graphic is selected
 
-        console.log('CharacterGraphicPicker initialized');
-        console.log('ProjectController:', projectController);
-        console.log('Current Project:', this.currentProject);
-        console.log('Project Path:', this.currentProject?.path);
+        console.debug('CharacterGraphicPicker initialized');
+        console.debug('ProjectController:', projectController);
+        console.debug('Current Project:', this.currentProject);
+        console.debug('Project Path:', this.currentProject?.path);
     }
 
     _t(text) {
@@ -144,7 +144,7 @@ class CharacterGraphicPicker {
      */
     async loadCharacterFiles(fileList, previewArea, currentCharacterName, currentSelection = null) {
         const projectPath = this.currentProject?.path;
-        console.log('Loading character files from project:', projectPath);
+        console.debug('Loading character files from project:', projectPath);
 
         if (!projectPath) {
             fileList.innerHTML = `<div style="color: var(--color-text-muted); padding: 12px;">${this._t('No project loaded')}</div>`;
@@ -153,7 +153,7 @@ class CharacterGraphicPicker {
         }
 
         const charactersPath = `${projectPath}/img/characters`;
-        console.log('Characters path:', charactersPath);
+        console.debug('Characters path:', charactersPath);
 
         try {
             const fs = require('fs');
@@ -165,7 +165,7 @@ class CharacterGraphicPicker {
                 return;
             }
 
-            console.log('Characters folder exists, reading files...');
+            console.debug('Characters folder exists, reading files...');
 
             const files = RRAssetFiles.listUnique(charactersPath, ['.png'])
                 .map(file => ({
@@ -173,7 +173,7 @@ class CharacterGraphicPicker {
                     baseName: file.name
                 }));
 
-            console.log('Found character files:', files);
+            console.debug('Found character files:', files);
 
             fileList.innerHTML = '';
             fileList.style.overflow = 'hidden';
@@ -236,7 +236,7 @@ class CharacterGraphicPicker {
         const path = require('path');
         const imagePath = RRAssetFiles.toUrl(path.join(projectPath, 'img', 'characters', fullFilename));
 
-        console.log('Loading character sprite:', imagePath);
+        console.debug('Loading character sprite:', imagePath);
 
         previewArea.innerHTML = '';
         previewArea.dataset.selectedFile = baseName;  // Store base name without extension
@@ -249,7 +249,7 @@ class CharacterGraphicPicker {
         const img = new Image();
         img.onload = () => {
             if (this._previewGeneration !== previewGeneration || previewArea.dataset.selectedFile !== baseName) return;
-            console.log('Character sprite loaded successfully:', fullFilename);
+            console.debug('Character sprite loaded successfully:', fullFilename);
             const spriteWidth = img.width;
             const spriteHeight = img.height;
 

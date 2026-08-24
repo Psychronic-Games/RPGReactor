@@ -6,8 +6,13 @@ This root changelog summarizes public release progress for GitHub; larger releas
 
 ## [Unreleased - 0.98.4]
 
+### Added
+
+- **The FPS counter names its renderer.** The F2 counter reads `144 FPS` with the renderer mode centred beneath it — WebGL, WebGPU, or Canvas, the way RPG Maker's meter did — read from whichever PIXI the game is running on. The box now sizes to its content, so a three-digit frame rate no longer collides with the label, and a project's stock `css/game.css` can no longer push the pieces on top of each other.
+
 ### Fixed
 
+- **Actor face icons show in the database list on Windows.** The list built the icon URL with the project path's backslashes still in it and then percent-encoded them, so every Windows machine got `ERR_INVALID_URL` and a blank icon. The editor's own progress chatter (tileset editor clicks, database opens, event container setup, map-list saves) also moves to the console's Verbose channel, and the runtime's 3D "scene built" line joins it.
 - **Three Demo tracks no longer jump to the start when you seek.** The cover-art restoration remux corrupted the Ogg duration clock on Battle Of The Abyss, Darkstream Runner, and Pixel Party (a stray 2^32 samples made a four-minute song read as 24 hours, so any seek landed "past the end"). The tracks are regenerated cleanly and the audio optimizer now verifies the duration clock on every re-encode.
 - **The web editor's 3D suite works: previews render, clips list, rigs bind.** The 3D libraries never loaded in a browser (a one-word global-name bug), model bytes now fetch asynchronously instead of relying on file access browsers don't have, a Buffer polyfill unblocks every binary writer (rig binaries, PNG and zip exports, the Forge generators), and binding a rig writes and persists its weights exactly as on desktop.
 - **Two more PIXI 8 compat gaps closed from live plugin reports.** `PIXI.utils.string2hex` (and the other v5 color helpers) are back for plugins that tint with them, and a destroyed texture reaching the GL bind path now draws the empty texture instead of crashing the render pass.

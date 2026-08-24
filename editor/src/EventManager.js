@@ -267,7 +267,7 @@ class EventManager {
             this.eventContainer = new PIXI.Container();
             this.eventContainer.label = 'events';
             tilemapManager.container.addChild(this.eventContainer);
-            console.log('Event container created');
+            console.debug('Event container created');
         }
 
         // Create hover highlight graphics for the cell under the event cursor.
@@ -323,7 +323,7 @@ class EventManager {
     // Enable/disable event mode
     setEventMode(enabled) {
         this.eventMode = enabled;
-        console.log(`Event mode: ${enabled ? 'enabled' : 'disabled'}`);
+        console.debug(`Event mode: ${enabled ? 'enabled' : 'disabled'}`);
 
         if (enabled) {
             this.setupEventInteraction();
@@ -719,18 +719,18 @@ class EventManager {
 
         // Check if tiles are selected from palette for creating tileset events
         const createEventAction = () => {
-            console.log('createEventAction called!');
-            console.log('tilesetPaletteViewer exists?', !!this.tilesetPaletteViewer);
+            console.debug('createEventAction called!');
+            console.debug('tilesetPaletteViewer exists?', !!this.tilesetPaletteViewer);
 
             // Check if tiles are selected from palette
             if (this.tilesetPaletteViewer) {
                 const selectedTiles = this.tilesetPaletteViewer.getSelectedTiles();
-                console.log('Context menu - Selected tiles from palette:', selectedTiles);
+                console.debug('Context menu - Selected tiles from palette:', selectedTiles);
                 if (selectedTiles && selectedTiles.length > 0) {
                     const tile = selectedTiles[0];
-                    console.log('Context menu - First selected tile:', tile);
+                    console.debug('Context menu - First selected tile:', tile);
                     const tileId = this.convertToTileId(tile.layer, tile.x, tile.y);
-                    console.log('Context menu - Converted tileId:', tileId);
+                    console.debug('Context menu - Converted tileId:', tileId);
                     if (tileId > 0) {
                         this.createNewEventWithTileset(tileX, tileY, tileId);
                         // Clear selection after creating event to prevent creating multiple
@@ -1041,7 +1041,7 @@ class EventManager {
             this.tilemapManager.container.cursor = 'grabbing';
         }
 
-        console.log(`Started dragging event ${event.name} from (${event.x}, ${event.y})`);
+        console.debug(`Started dragging event ${event.name} from (${event.x}, ${event.y})`);
     }
 
     // Update drag position
@@ -1100,7 +1100,7 @@ class EventManager {
     finishDragging(pointerEvent) {
         if (!this.isDragging || !this.draggedEvent) return;
 
-        console.log(`Finished dragging event ${this.draggedEvent.name} to (${this.draggedEvent.x}, ${this.draggedEvent.y})`);
+        console.debug(`Finished dragging event ${this.draggedEvent.name} to (${this.draggedEvent.x}, ${this.draggedEvent.y})`);
 
         // Reset cursor
         if (this.tilemapManager.container) {
@@ -1531,7 +1531,7 @@ class EventManager {
     }
 
     createNewEventWithTileset(x, y, tileId) {
-        console.log(`createNewEventWithTileset called: position (${x}, ${y}), tileId: ${tileId}`);
+        console.debug(`createNewEventWithTileset called: position (${x}, ${y}), tileId: ${tileId}`);
 
         if (!this.currentMap) {
             console.warn('No map loaded');
@@ -1594,9 +1594,9 @@ class EventManager {
             y: y
         };
 
-        console.log('Created event with image data:', JSON.stringify(newEvent.pages[0].image, null, 2));
+        console.debug('Created event with image data:', JSON.stringify(newEvent.pages[0].image, null, 2));
 
-        console.log(`Created new tileset event ${newEvent.name} at (${x}, ${y}) with tileId ${tileId}`);
+        console.debug(`Created new tileset event ${newEvent.name} at (${x}, ${y}) with tileId ${tileId}`);
 
         // Show edit dialog
         this.editEvent(newEvent, { isNew: true, map: this.currentMap });
@@ -1664,7 +1664,7 @@ class EventManager {
             y: y
         };
 
-        console.log(`Created new event ${newEvent.name} at (${x}, ${y})`);
+        console.debug(`Created new event ${newEvent.name} at (${x}, ${y})`);
 
         // Show edit dialog
         this.editEvent(newEvent, { isNew: true, map: this.currentMap });
@@ -1756,7 +1756,7 @@ class EventManager {
         // Display the modal
         modal.style.display = 'flex';
 
-        console.log('Event editor opened for:', event.name);
+        console.debug('Event editor opened for:', event.name);
     }
 
     _replaceEventData(target, source) {
@@ -1775,7 +1775,7 @@ class EventManager {
             ReactorClipboard.write('event', { event: this.clipboard, cut: true, models: this.clipboardModels });
         }
         this.deleteEvent(event);
-        console.log('Event cut to clipboard');
+        console.debug('Event cut to clipboard');
     }
 
     // Copy event
@@ -1788,7 +1788,7 @@ class EventManager {
         if (typeof ReactorClipboard !== 'undefined') {
             ReactorClipboard.write('event', { event: this.clipboard, cut: false, models: this.clipboardModels });
         }
-        console.log('Event copied to clipboard');
+        console.debug('Event copied to clipboard');
     }
 
     // Paste event
@@ -1847,7 +1847,7 @@ class EventManager {
 
         this.renderEvents();
         this.selectEvent(newEvent);
-        console.log(`Event pasted at (${x}, ${y})`);
+        console.debug(`Event pasted at (${x}, ${y})`);
     }
 
     // Delete event
@@ -1873,7 +1873,7 @@ class EventManager {
             }
 
             this.renderEvents();
-            console.log(`Event ${event.name} deleted`);
+            console.debug(`Event ${event.name} deleted`);
         }
     }
 
@@ -1978,7 +1978,7 @@ class EventManager {
         if (this.currentSearchResults.length > 0) {
             this.selectEvent(this.currentSearchResults[0]);
             this.centerOnEvent(this.currentSearchResults[0]);
-            console.log(`Found ${this.currentSearchResults.length} events matching "${query}"`);
+            console.debug(`Found ${this.currentSearchResults.length} events matching "${query}"`);
         } else {
             const tt = (text) => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
             alert(`${tt('No events found matching')} "${query}"`);
@@ -2051,7 +2051,7 @@ class EventManager {
                 systemData.startMapId = mapId;
                 systemData.startX = x;
                 systemData.startY = y;
-                console.log(`Player starting position set to (${x}, ${y}) on map ${mapId}`);
+                console.debug(`Player starting position set to (${x}, ${y}) on map ${mapId}`);
                 alert(`${tt('Player')} ${tt('starting position set to')} (${x}, ${y}) ${tt('on Map')} ${mapId}`);
                 break;
             case 'boat':
@@ -2068,7 +2068,7 @@ class EventManager {
                 systemData.boat.startMapId = mapId;
                 systemData.boat.startX = x;
                 systemData.boat.startY = y;
-                console.log(`Boat starting position set to (${x}, ${y}) on map ${mapId}`);
+                console.debug(`Boat starting position set to (${x}, ${y}) on map ${mapId}`);
                 alert(`${tt('Boat')} ${tt('starting position set to')} (${x}, ${y}) ${tt('on Map')} ${mapId}`);
                 break;
             case 'ship':
@@ -2085,7 +2085,7 @@ class EventManager {
                 systemData.ship.startMapId = mapId;
                 systemData.ship.startX = x;
                 systemData.ship.startY = y;
-                console.log(`Ship starting position set to (${x}, ${y}) on map ${mapId}`);
+                console.debug(`Ship starting position set to (${x}, ${y}) on map ${mapId}`);
                 alert(`${tt('Ship')} ${tt('starting position set to')} (${x}, ${y}) ${tt('on Map')} ${mapId}`);
                 break;
             case 'airship':
@@ -2102,7 +2102,7 @@ class EventManager {
                 systemData.airship.startMapId = mapId;
                 systemData.airship.startX = x;
                 systemData.airship.startY = y;
-                console.log(`Airship starting position set to (${x}, ${y}) on map ${mapId}`);
+                console.debug(`Airship starting position set to (${x}, ${y}) on map ${mapId}`);
                 alert(`${tt('Airship')} ${tt('starting position set to')} (${x}, ${y}) ${tt('on Map')} ${mapId}`);
                 break;
         }
@@ -2111,7 +2111,7 @@ class EventManager {
         try {
             const projectPath = currentProject.path;
             await this.databaseManager.saveJSON(projectPath, 'System.json', systemData);
-            console.log('System.json saved with new starting position');
+            console.debug('System.json saved with new starting position');
         } catch (error) {
             console.error('Error saving System.json:', error);
             alert(tt('Error saving starting position. Check console for details.'));
@@ -2304,12 +2304,12 @@ class EventManager {
         if (!systemData) return;
 
         const mapId = this.currentMap.id;
-        console.log(`Rendering starting positions for map ${mapId}`);
-        console.log(`Player start is on map ${systemData.startMapId} at (${systemData.startX}, ${systemData.startY})`);
+        console.debug(`Rendering starting positions for map ${mapId}`);
+        console.debug(`Player start is on map ${systemData.startMapId} at (${systemData.startX}, ${systemData.startY})`);
 
         // Render player starting position
         if (systemData.startMapId === mapId) {
-            console.log(`Rendering player starting position marker at (${systemData.startX}, ${systemData.startY})`);
+            console.debug(`Rendering player starting position marker at (${systemData.startX}, ${systemData.startY})`);
             this.createStartingPositionMarker(systemData.startX, systemData.startY, tt('Player'), 0x00ff00);
         }
 

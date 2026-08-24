@@ -299,7 +299,7 @@ class DatabaseEditorUI {
             this.animationEditor._currentEffekseerStop = null;
         }
 
-        console.log('Opening database:', type);
+        console.debug('Opening database:', type);
         this.cleanupDatabaseListChrome();
 
         // Editors before 0.96.0 stored deletions as null slots in any top-level
@@ -1210,9 +1210,13 @@ class DatabaseEditorUI {
         const isWeb = !!window.RPGReactorHost;
         if ((typeof nw === 'undefined' && !isWeb) || !this.currentProject) return;
         const path = require('path');
+        // Backslashes must become slashes BEFORE encoding: encodeURI turns
+        // them into %5C, which Chromium cannot read as a path separator, and
+        // file:///E:/%5CGame%20Dev%5C... is ERR_INVALID_URL on every Windows
+        // machine (the actor list showed no face icons there at all).
         const imageUrl = p => isWeb && window.RPGReactorAssetUrl
             ? window.RPGReactorAssetUrl(p)
-            : encodeURI('file://' + p);
+            : encodeURI('file://' + String(p).replace(/\\/g, '/')).replace(/#/g, '%23');
         const SIZE = 20;
         if (type === 'actors') {
             if (!entry.faceName) return;
@@ -1605,7 +1609,7 @@ class DatabaseEditorUI {
                 const filename = entry.characterName.endsWith('.png') ? entry.characterName : entry.characterName + '.png';
                 const imgPath = 'file://' + path.join(this.currentProject.path, 'img', 'characters', filename).replace(/\\/g, '/');
 
-                console.log('Loading character sprite:', imgPath);
+                console.debug('Loading character sprite:', imgPath);
 
                 img.onload = () => {
                 // Check if this is a big character ($ or !$ prefix)
@@ -1744,7 +1748,7 @@ class DatabaseEditorUI {
                 const path = require('path');
                 const faceImgPath = 'file://' + path.join(this.currentProject.path, 'img', 'faces', entry.faceName + '.png').replace(/\\/g, '/');
 
-                console.log('Loading face graphic:', faceImgPath);
+                console.debug('Loading face graphic:', faceImgPath);
 
                 faceImg.onload = () => {
                     const source = RRFaceSheet.sourceRect(entry.faceIndex || 0, faceImg);
@@ -1813,7 +1817,7 @@ class DatabaseEditorUI {
                 const path = require('path');
                 const svImgPath = 'file://' + path.join(this.currentProject.path, 'img', 'sv_actors', entry.battlerName + '.png').replace(/\\/g, '/');
 
-                console.log('Loading SV battler:', svImgPath);
+                console.debug('Loading SV battler:', svImgPath);
 
                 svImg.onload = () => {
                     // SV battlers are 9 frames (3x3) x 6 motions, each frame is typically 64x64

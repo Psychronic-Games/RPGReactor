@@ -225,17 +225,17 @@ class DatabaseArmorEditor {
         if (fieldName === 'params' && paramIndex !== null) {
             if (!armor.params) armor.params = [0,0,0,0,0,0,0,0];
             armor.params[parseInt(paramIndex)] = parseInt(value) || 0;
-            console.log(`Updated armor ${armorId} param[${paramIndex}] to:`, value);
+            console.debug(`Updated armor ${armorId} param[${paramIndex}] to:`, value);
         }
         // Handle numeric fields
         else if (fieldName === 'price' || fieldName === 'atypeId' || fieldName === 'etypeId') {
             armor[fieldName] = parseInt(value) || 0;
-            console.log(`Updated armor ${armorId} field ${fieldName} to:`, value);
+            console.debug(`Updated armor ${armorId} field ${fieldName} to:`, value);
         }
         // Handle string fields
         else {
             armor[fieldName] = value;
-            console.log(`Updated armor ${armorId} field ${fieldName} to:`, value);
+            console.debug(`Updated armor ${armorId} field ${fieldName} to:`, value);
         }
 
         this.databaseManager.updateArmor(armorId, armor);
@@ -457,24 +457,24 @@ class DatabaseArmorEditor {
     }
 
     addTrait(armor) {
-        console.log('DatabaseArmorEditor.addTrait - Adding new trait to armor:', armor.id);
-        console.log('DatabaseArmorEditor.addTrait - Current traits:', armor.traits);
+        console.debug('DatabaseArmorEditor.addTrait - Adding new trait to armor:', armor.id);
+        console.debug('DatabaseArmorEditor.addTrait - Current traits:', armor.traits);
 
         // Initialize traits array if needed
         if (!armor.traits) armor.traits = [];
 
         // Open trait editor for a new trait (index -1)
-        console.log('DatabaseArmorEditor.addTrait - Opening editor for new trait');
+        console.debug('DatabaseArmorEditor.addTrait - Opening editor for new trait');
 
         this.traitEditor.showTraitEditorModal(armor, -1, (updatedEntry) => {
-            console.log('DatabaseArmorEditor.addTrait - Callback received entry:', updatedEntry);
-            console.log('DatabaseArmorEditor.addTrait - Entry traits:', updatedEntry.traits);
+            console.debug('DatabaseArmorEditor.addTrait - Callback received entry:', updatedEntry);
+            console.debug('DatabaseArmorEditor.addTrait - Entry traits:', updatedEntry.traits);
 
             this.databaseManager.updateArmor(updatedEntry.id, updatedEntry);
-            console.log('DatabaseArmorEditor.addTrait - Updated armor in database');
+            console.debug('DatabaseArmorEditor.addTrait - Updated armor in database');
 
             this.refreshArmorDetail(updatedEntry);
-            console.log('DatabaseArmorEditor.addTrait - Refreshed armor detail');
+            console.debug('DatabaseArmorEditor.addTrait - Refreshed armor detail');
         });
     }
 
@@ -528,19 +528,19 @@ class DatabaseArmorEditor {
     }
 
     selectAllTraits(armor) {
-        console.log('Select all traits');
+        console.debug('Select all traits');
     }
 
     refreshArmorDetail(armor) {
-        console.log('DatabaseArmorEditor.refreshArmorDetail - Refreshing armor:', armor.id);
-        console.log('DatabaseArmorEditor.refreshArmorDetail - Armor traits:', armor.traits);
+        console.debug('DatabaseArmorEditor.refreshArmorDetail - Refreshing armor:', armor.id);
+        console.debug('DatabaseArmorEditor.refreshArmorDetail - Armor traits:', armor.traits);
 
         const container = document.getElementById('database-detail');
         if (container) {
-            console.log('DatabaseArmorEditor.refreshArmorDetail - Found container, clearing and rebuilding');
+            console.debug('DatabaseArmorEditor.refreshArmorDetail - Found container, clearing and rebuilding');
             container.innerHTML = '';
             this.showArmorDetail(container, armor);
-            console.log('DatabaseArmorEditor.refreshArmorDetail - Detail rebuilt');
+            console.debug('DatabaseArmorEditor.refreshArmorDetail - Detail rebuilt');
         } else {
             console.warn('DatabaseArmorEditor.refreshArmorDetail - Could not find detail panel container!');
         }

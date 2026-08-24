@@ -1521,14 +1521,14 @@ class DatabaseAnimationEditor {
                 animation.flashTimings = animation.flashTimings.filter(ft => ft.frame !== frameToRemove);
             }
 
-            console.log('Removed timing at frame', frameToRemove);
+            console.debug('Removed timing at frame', frameToRemove);
         } else {
             // For sprite-based, remove from timings array
             if (animation.timings && index < animation.timings.length) {
                 animation.timings.splice(index, 1);
             }
 
-            console.log('Removed timing at index', index);
+            console.debug('Removed timing at index', index);
         }
     }
 
@@ -1807,7 +1807,7 @@ class DatabaseAnimationEditor {
             this.databaseManager?.updateAnimation?.(animation.id, animation);
             this.populateTimingsList(animation);
 
-            console.log(isEditMode ? 'Updated timing:' : 'Added timing:', { frame, seName, flashType, color: [red, green, blue, intensity], duration });
+            console.debug(isEditMode ? 'Updated timing:' : 'Added timing:', { frame, seName, flashType, color: [red, green, blue, intensity], duration });
             closeModal();
         });
 
@@ -2457,7 +2457,7 @@ class DatabaseAnimationEditor {
                     window.currentAnimationRenderFrame(frameIndex);
                 }
 
-                console.log('Added tileset frame', pattern, 'to animation frame', frameIndex);
+                console.debug('Added tileset frame', pattern, 'to animation frame', frameIndex);
             });
 
             // Drag from sprite sheet
@@ -2512,7 +2512,7 @@ class DatabaseAnimationEditor {
                                 window.currentAnimationRenderFrame(frameIndex);
                             }
 
-                            console.log('Dropped tileset frame', draggedPattern, 'at position', relativeX, relativeY);
+                            console.debug('Dropped tileset frame', draggedPattern, 'at position', relativeX, relativeY);
                         }
                     }
 
@@ -3497,9 +3497,9 @@ class DatabaseAnimationEditor {
         const tt = text => window.I18n ? window.I18n.tText(text) : text;
 
         // Check if Effekseer is available and initialized
-        console.log('[Effekseer Preview] Checking status...');
-        console.log('[Effekseer Preview] typeof effekseer:', typeof effekseer);
-        console.log('[Effekseer Preview] window._effekseerReady:', window._effekseerReady);
+        console.debug('[Effekseer Preview] Checking status...');
+        console.debug('[Effekseer Preview] typeof effekseer:', typeof effekseer);
+        console.debug('[Effekseer Preview] window._effekseerReady:', window._effekseerReady);
 
         if (typeof effekseer === 'undefined' || !window._effekseerReady) {
             const ctx = canvasContainer.getContext('2d');
@@ -3511,12 +3511,12 @@ class DatabaseAnimationEditor {
                     tt('Effekseer library not loaded') :
                     tt('Effekseer initializing... Please wait');
                 ctx.fillText(msg, canvasContainer.width / 2, canvasContainer.height / 2);
-                console.log('[Effekseer Preview] Showing message:', msg);
+                console.debug('[Effekseer Preview] Showing message:', msg);
             }
 
             // If Effekseer is loading, retry with polling
             if (typeof effekseer !== 'undefined' && !window._effekseerReady) {
-                console.log('[Effekseer Preview] Effekseer found but not ready, setting up retry...');
+                console.debug('[Effekseer Preview] Effekseer found but not ready, setting up retry...');
 
                 // Store retry info to avoid multiple retries
                 if (!this._effekseerRetryCount) {
@@ -3525,11 +3525,11 @@ class DatabaseAnimationEditor {
 
                 if (this._effekseerRetryCount < 20) { // Try for up to 10 seconds
                     this._effekseerRetryCount++;
-                    console.log(`[Effekseer Preview] Retry attempt ${this._effekseerRetryCount}/20`);
+                    console.debug(`[Effekseer Preview] Retry attempt ${this._effekseerRetryCount}/20`);
 
                     setTimeout(() => {
                         if (window._effekseerReady) {
-                            console.log('[Effekseer Preview] Effekseer now ready! Retrying setup...');
+                            console.debug('[Effekseer Preview] Effekseer now ready! Retrying setup...');
                             // Clear the "initializing" message first
                             const oldCanvas = document.getElementById('animation-preview-canvas');
                             if (oldCanvas) {
@@ -3560,7 +3560,7 @@ class DatabaseAnimationEditor {
             return;
         }
 
-        console.log('[Effekseer Preview] Effekseer ready, proceeding with setup...');
+        console.debug('[Effekseer Preview] Effekseer ready, proceeding with setup...');
 
         // Reference to this for closures
         const editorSelf = this;
@@ -3629,7 +3629,7 @@ class DatabaseAnimationEditor {
                 effekseerContext.init(gl);
                 effekseerContext.setRestorationOfStatesFlag(false);
 
-                console.log('Effekseer context initialized for preview');
+                console.debug('Effekseer context initialized for preview');
                 return true;
             } catch (e) {
                 console.error('Effekseer initialization error:', e);
@@ -3653,11 +3653,11 @@ class DatabaseAnimationEditor {
                 return;
             }
 
-            console.log('Loading Effekseer effect:', effectPath);
+            console.debug('Loading Effekseer effect:', effectPath);
 
             // Load effect with Effekseer
             const onLoad = () => {
-                console.log('Effekseer effect loaded successfully');
+                console.debug('Effekseer effect loaded successfully');
                 playBtn.disabled = false;
                 playBtn.style.opacity = '1';
             };
@@ -3685,7 +3685,7 @@ class DatabaseAnimationEditor {
 
         const render = () => {
             if (!isPlaying || !effekseerContext || !gl) {
-                console.log('[Effekseer Render] Stopped - isPlaying:', isPlaying, 'effekseerContext:', !!effekseerContext, 'gl:', !!gl);
+                console.debug('[Effekseer Render] Stopped - isPlaying:', isPlaying, 'effekseerContext:', !!effekseerContext, 'gl:', !!gl);
                 return;
             }
 
@@ -3713,10 +3713,10 @@ class DatabaseAnimationEditor {
 
             renderFrameCount++;
             if (renderFrameCount === 1) {
-                console.log('[Effekseer Render] First frame rendering...');
-                console.log('[Effekseer Render] Canvas size:', canvas.width, 'x', canvas.height);
-                console.log('[Effekseer Render] Handle exists:', handle && handle.exists);
-                console.log('[Effekseer Render] Fixed timestep: 60 FPS');
+                console.debug('[Effekseer Render] First frame rendering...');
+                console.debug('[Effekseer Render] Canvas size:', canvas.width, 'x', canvas.height);
+                console.debug('[Effekseer Render] Handle exists:', handle && handle.exists);
+                console.debug('[Effekseer Render] Fixed timestep: 60 FPS');
             }
 
             // Update frame counter
@@ -3752,17 +3752,17 @@ class DatabaseAnimationEditor {
             ]);
 
             if (renderFrameCount === 1) {
-                console.log('[Effekseer Render] Projection p value:', p);
-                console.log('[Effekseer Render] Viewport size:', viewportSize);
-                console.log('[Effekseer Render] Matrices set as arrays');
+                console.debug('[Effekseer Render] Projection p value:', p);
+                console.debug('[Effekseer Render] Viewport size:', viewportSize);
+                console.debug('[Effekseer Render] Matrices set as arrays');
             }
 
             // Draw effects
             effekseerContext.beginDraw();
             if (handle && handle.exists) {
                 if (renderFrameCount === 1) {
-                    console.log('[Effekseer Render] Drawing handle...');
-                    console.log('[Effekseer Render] Handle location:',
+                    console.debug('[Effekseer Render] Drawing handle...');
+                    console.debug('[Effekseer Render] Handle location:',
                         handle.location ? handle.location : 'not available');
                 }
                 effekseerContext.drawHandle(handle);
@@ -3775,15 +3775,15 @@ class DatabaseAnimationEditor {
             } else {
                 // Handle no longer exists - effect has finished
                 if (renderFrameCount > 1) {
-                    console.log('[Effekseer Render] Effect finished');
+                    console.debug('[Effekseer Render] Effect finished');
                     // Check if repeat is enabled
                     if (repeatCheckbox && repeatCheckbox.checked) {
-                        console.log('[Effekseer Render] Repeat enabled, restarting...');
+                        console.debug('[Effekseer Render] Repeat enabled, restarting...');
                         // Restart the effect
                         stop();
                         setTimeout(() => play(), 100); // Small delay to ensure clean restart
                     } else {
-                        console.log('[Effekseer Render] Auto-stopping');
+                        console.debug('[Effekseer Render] Auto-stopping');
                         stop();
                     }
                     return;
@@ -3792,7 +3792,7 @@ class DatabaseAnimationEditor {
             effekseerContext.endDraw();
 
             if (renderFrameCount === 1) {
-                console.log('[Effekseer Render] First frame rendered successfully');
+                console.debug('[Effekseer Render] First frame rendered successfully');
             }
 
             animationFrameId = requestAnimationFrame(render);
@@ -3859,7 +3859,7 @@ class DatabaseAnimationEditor {
                 handle.setScale(scale, scale, scale);
                 handle.setSpeed(speed);
 
-                console.log('Playing Effekseer effect with params:', { scale, speed, rotation, offsetX, offsetY });
+                console.debug('Playing Effekseer effect with params:', { scale, speed, rotation, offsetX, offsetY });
             }
 
             playBtn.disabled = true;
@@ -4001,7 +4001,7 @@ class DatabaseAnimationEditor {
                     handle.setSpeed(speed);
                 }
 
-                console.log('Updated Effekseer animation parameters:', animation);
+                console.debug('Updated Effekseer animation parameters:', animation);
             };
 
             scaleInput?.addEventListener('change', updateAnimation);

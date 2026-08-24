@@ -127,7 +127,7 @@ class DatabaseSystem1Editor {
                     const value = e.target.checked;
                     if (field) {
                         system[field] = value;
-                        console.log(`Updated ${field} to:`, value);
+                        console.debug(`Updated ${field} to:`, value);
                     }
                 });
             });
@@ -147,7 +147,7 @@ class DatabaseSystem1Editor {
                         } else {
                             system[field] = parseInt(value);
                         }
-                        console.log(`Updated ${field} to:`, system[field]);
+                        console.debug(`Updated ${field} to:`, system[field]);
                     }
                 });
             });
@@ -192,7 +192,7 @@ class DatabaseSystem1Editor {
                         if (sysField === 'gameTitle' && window.reactor?.projectController?.updateWindowTitle) {
                             window.reactor.projectController.updateWindowTitle();
                         }
-                        console.log(`Updated system.${sysField} to:`, e.target.value);
+                        console.debug(`Updated system.${sysField} to:`, e.target.value);
                     }
                 });
             });
@@ -254,12 +254,12 @@ class DatabaseSystem1Editor {
                         const prop = parts[1];        // "startMapId", "startX", "startY"
                         if (system[vehicleKey]) {
                             system[vehicleKey][prop] = val;
-                            console.log(`Updated system.${vehicleKey}.${prop} to:`, val);
+                            console.debug(`Updated system.${vehicleKey}.${prop} to:`, val);
                         }
                     } else {
                         // Top-level: e.g. "startMapId", "startX", "startY"
                         system[target] = val;
-                        console.log(`Updated system.${target} to:`, val);
+                        console.debug(`Updated system.${target} to:`, val);
                     }
                 });
             });
@@ -823,7 +823,7 @@ class DatabaseSystem1Editor {
             tcw.background = parseInt(modal.querySelector('#cmd-win-bg').value);
             tcw.offsetX = parseInt(modal.querySelector('#cmd-win-ox').value) || 0;
             tcw.offsetY = parseInt(modal.querySelector('#cmd-win-oy').value) || 0;
-            console.log('Updated titleCommandWindow:', tcw);
+            console.debug('Updated titleCommandWindow:', tcw);
             close();
         });
 
@@ -836,7 +836,7 @@ class DatabaseSystem1Editor {
         if (!system) return;
 
         system[fieldName] = value;
-        console.log(`Updated system field ${fieldName} to:`, value);
+        console.debug(`Updated system field ${fieldName} to:`, value);
     }
 
     showTitleImagePicker(system) {
@@ -1007,7 +1007,7 @@ class DatabaseSystem1Editor {
                 this.showSystem1Detail(detailEl);
             }
 
-            console.log('Updated title1Name to:', selectedFile);
+            console.debug('Updated title1Name to:', selectedFile);
         };
 
         footer.appendChild(cancelBtn);

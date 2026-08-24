@@ -10,7 +10,7 @@ const editorRoot = path.resolve(__dirname, '..');
 function loadBrowserClass(relativePath, className, globals = {}) {
     const source = fs.readFileSync(path.join(editorRoot, relativePath), 'utf8');
     return vm.runInNewContext(`${source}\n${className};`, {
-        console: { log() {}, warn() {}, error() {} },
+        console: { log() {}, debug() {}, warn() {}, error() {} },
         alert() {},
         ...globals
     });
@@ -19,7 +19,7 @@ function loadBrowserClass(relativePath, className, globals = {}) {
 function loadClipboard(storage = new Map()) {
     const source = fs.readFileSync(path.join(editorRoot, 'src', 'ReactorClipboard.js'), 'utf8');
     const sandbox = {
-        console: { warn() {} },
+        console: { warn() {}, debug() {} },
         require,
         localStorage: {
             getItem(key) { return storage.get(key) || null; },

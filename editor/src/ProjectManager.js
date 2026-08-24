@@ -86,7 +86,7 @@ class ProjectManager {
             }
             const resolvedTarget = this.path.resolve(targetPath);
 
-            console.log(`Creating new project: ${projectName} at ${targetPath}`);
+            console.debug(`Creating new project: ${projectName} at ${targetPath}`);
 
             const engineVersion = this.getEngineVersion();
             const templatePath = this.getTemplateProjectPath();
@@ -122,7 +122,7 @@ class ProjectManager {
                 this.writeProjectMetadata(targetPath, projectName, engineVersion);
             }
 
-            console.log('Project created successfully!');
+            console.debug('Project created successfully!');
             return true;
         } catch (error) {
             console.error('Error creating project:', error);
@@ -967,7 +967,7 @@ class ProjectManager {
                 }
             }
 
-            console.log('Project saved successfully!');
+            console.debug('Project saved successfully!');
             return true;
         } catch (error) {
             console.error('Error saving project:', error);
@@ -984,7 +984,7 @@ class ProjectManager {
         try {
             const mapInfosPath = this.path.join(projectPath, 'data', 'MapInfos.json');
             this._writeFileAtomic(this.fs, mapInfosPath, JSON.stringify(mapsData, null, 0)); // No formatting for RPG Maker compatibility
-            console.log('MapInfos.json saved successfully!');
+            console.debug('MapInfos.json saved successfully!');
             return true;
         } catch (error) {
             console.error('Error saving MapInfos.json:', error);

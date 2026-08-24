@@ -4239,12 +4239,11 @@ Spriteset_Map.prototype.createReactor3D = function() {
         // was rendered from the map's corner looking off the edge.
         this.updateReactor3DCamera();
 
-        // Said once per map, because an empty 3D view has several causes that
-        // look identical on screen and none of them throw.
-        // One line, because an empty 3D view has several causes that look
-        // identical on screen and none of them throw. `bounds` against
-        // `camera` is what tells "nothing was built" from "nothing is in view".
-        console.log("Reactor3D: 3D scene built.", Object.assign(scene.report(), {
+        // One line per map on the debug (Verbose) channel, because an empty
+        // 3D view has several causes that look identical on screen and none
+        // of them throw. `bounds` against `camera` is what tells "nothing was
+        // built" from "nothing is in view".
+        console.debug("Reactor3D: 3D scene built.", Object.assign(scene.report(), {
             bounds: scene.extent ? scene.extent() : "n/a",
             camera: [camera.position.x, camera.position.y, camera.position.z]
                 .map(n => Math.round(n * 10) / 10).join(", ")

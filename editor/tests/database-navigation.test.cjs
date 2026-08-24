@@ -10,7 +10,7 @@ const repoRoot = path.resolve(__dirname, '..');
 function loadBrowserClass(filePath, className, globals = {}) {
     const source = fs.readFileSync(filePath, 'utf8');
     return vm.runInNewContext(`${source}\n${className};`, {
-        console: { log: () => {}, warn: () => {}, error: () => {} },
+        console: { log: () => {}, debug: () => {}, warn: () => {}, error: () => {} },
         alert: () => {},
         ...globals
     });

@@ -5540,7 +5540,7 @@ class EventCommandList {
         if (typeof ReactorClipboard !== 'undefined') {
             return ReactorClipboard.write('eventCommands', { commands: this.clipboard });
         }
-        console.log('Copied', this.clipboard.length, 'commands:', this.clipboard.map(c => `${c.code}(${c.parameters})`).join(', '));
+        console.debug('Copied', this.clipboard.length, 'commands:', this.clipboard.map(c => `${c.code}(${c.parameters})`).join(', '));
         return Promise.resolve(true);
     }
 
@@ -5626,7 +5626,7 @@ class EventCommandList {
         }).join('\n');
 
         navigator.clipboard.writeText(text);
-        console.log('Copied as text');
+        console.debug('Copied as text');
     }
 
     copyAsHTML(page) {
@@ -5639,17 +5639,17 @@ class EventCommandList {
         }).join('\n') + '</pre>';
 
         navigator.clipboard.writeText(html);
-        console.log('Copied as HTML');
+        console.debug('Copied as HTML');
     }
 
     toggleSkip(page, pageIndex) {
         // TODO: Implement skip flag
-        console.log('Toggle skip for selected commands');
+        console.debug('Toggle skip for selected commands');
     }
 
     testEvent(page, pageIndex) {
         // TODO: Implement event testing
-        console.log('Test event from this point');
+        console.debug('Test event from this point');
     }
 
     /**
@@ -5732,7 +5732,7 @@ class EventCommandList {
                 i = orphanStart + 1 + ins;
 
                 repaired = true;
-                console.log(`Repaired ${moveCommands.length} orphaned 505 entries at index ${orphanStart} by inserting synthetic 205`);
+                console.debug(`Repaired ${moveCommands.length} orphaned 505 entries at index ${orphanStart} by inserting synthetic 205`);
                 continue;
             }
 

@@ -227,17 +227,17 @@ class DatabaseWeaponEditor {
         if (fieldName === 'params' && paramIndex !== null) {
             if (!weapon.params) weapon.params = [0,0,0,0,0,0,0,0];
             weapon.params[parseInt(paramIndex)] = parseInt(value) || 0;
-            console.log(`Updated weapon ${weaponId} param[${paramIndex}] to:`, value);
+            console.debug(`Updated weapon ${weaponId} param[${paramIndex}] to:`, value);
         }
         // Handle numeric fields
         else if (fieldName === 'price' || fieldName === 'wtypeId' || fieldName === 'animationId') {
             weapon[fieldName] = parseInt(value) || 0;
-            console.log(`Updated weapon ${weaponId} field ${fieldName} to:`, value);
+            console.debug(`Updated weapon ${weaponId} field ${fieldName} to:`, value);
         }
         // Handle string fields
         else {
             weapon[fieldName] = value;
-            console.log(`Updated weapon ${weaponId} field ${fieldName} to:`, value);
+            console.debug(`Updated weapon ${weaponId} field ${fieldName} to:`, value);
         }
 
         this.databaseManager.updateWeapon(weaponId, weapon);
@@ -459,24 +459,24 @@ class DatabaseWeaponEditor {
     }
 
     addTrait(weapon) {
-        console.log('DatabaseWeaponEditor.addTrait - Adding new trait to weapon:', weapon.id);
-        console.log('DatabaseWeaponEditor.addTrait - Current traits:', weapon.traits);
+        console.debug('DatabaseWeaponEditor.addTrait - Adding new trait to weapon:', weapon.id);
+        console.debug('DatabaseWeaponEditor.addTrait - Current traits:', weapon.traits);
 
         // Initialize traits array if needed
         if (!weapon.traits) weapon.traits = [];
 
         // Open trait editor for a new trait (index -1)
-        console.log('DatabaseWeaponEditor.addTrait - Opening editor for new trait');
+        console.debug('DatabaseWeaponEditor.addTrait - Opening editor for new trait');
 
         this.traitEditor.showTraitEditorModal(weapon, -1, (updatedEntry) => {
-            console.log('DatabaseWeaponEditor.addTrait - Callback received entry:', updatedEntry);
-            console.log('DatabaseWeaponEditor.addTrait - Entry traits:', updatedEntry.traits);
+            console.debug('DatabaseWeaponEditor.addTrait - Callback received entry:', updatedEntry);
+            console.debug('DatabaseWeaponEditor.addTrait - Entry traits:', updatedEntry.traits);
 
             this.databaseManager.updateWeapon(updatedEntry.id, updatedEntry);
-            console.log('DatabaseWeaponEditor.addTrait - Updated weapon in database');
+            console.debug('DatabaseWeaponEditor.addTrait - Updated weapon in database');
 
             this.refreshWeaponDetail(updatedEntry);
-            console.log('DatabaseWeaponEditor.addTrait - Refreshed weapon detail');
+            console.debug('DatabaseWeaponEditor.addTrait - Refreshed weapon detail');
         });
     }
 
@@ -530,19 +530,19 @@ class DatabaseWeaponEditor {
     }
 
     selectAllTraits(weapon) {
-        console.log('Select all traits');
+        console.debug('Select all traits');
     }
 
     refreshWeaponDetail(weapon) {
-        console.log('DatabaseWeaponEditor.refreshWeaponDetail - Refreshing weapon:', weapon.id);
-        console.log('DatabaseWeaponEditor.refreshWeaponDetail - Weapon traits:', weapon.traits);
+        console.debug('DatabaseWeaponEditor.refreshWeaponDetail - Refreshing weapon:', weapon.id);
+        console.debug('DatabaseWeaponEditor.refreshWeaponDetail - Weapon traits:', weapon.traits);
 
         const container = document.getElementById('database-detail');
         if (container) {
-            console.log('DatabaseWeaponEditor.refreshWeaponDetail - Found container, clearing and rebuilding');
+            console.debug('DatabaseWeaponEditor.refreshWeaponDetail - Found container, clearing and rebuilding');
             container.innerHTML = '';
             this.showWeaponDetail(container, weapon);
-            console.log('DatabaseWeaponEditor.refreshWeaponDetail - Detail rebuilt');
+            console.debug('DatabaseWeaponEditor.refreshWeaponDetail - Detail rebuilt');
         } else {
             console.warn('DatabaseWeaponEditor.refreshWeaponDetail - Could not find detail panel container!');
         }

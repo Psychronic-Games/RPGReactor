@@ -188,12 +188,12 @@ class DatabaseTilesetEditor {
 
         // Update status
         this.updateStatus(`${tt('Tileset saved:')} ${this.currentTileset.name}`);
-        console.log('Tileset saved:', this.currentTileset.name);
+        console.debug('Tileset saved:', this.currentTileset.name);
     }
 
     saveAfterLoad() {
         const tt = text => window.I18n ? window.I18n.tText(text) : text;
-        console.log('saveAfterLoad - tilesetList length:', this.tilesetList.length);
+        console.debug('saveAfterLoad - tilesetList length:', this.tilesetList.length);
 
         // Update the current tileset in the list
         if (this.currentTileset && this.currentTileset.id) {
@@ -208,7 +208,7 @@ class DatabaseTilesetEditor {
 
         // Update status
         this.updateStatus(`${tt('Tileset saved:')} ${this.currentTileset.name}`);
-        console.log('Tileset saved:', this.currentTileset.name);
+        console.debug('Tileset saved:', this.currentTileset.name);
     }
 
     notifyTilesetSaved() {
@@ -322,14 +322,14 @@ class DatabaseTilesetEditor {
             return;
         }
 
-        console.log('Saving tilesets...');
-        console.log('Project path:', projectPath);
-        console.log('Tileset list length:', this.tilesetList.length);
-        console.log('Current tileset:', this.currentTileset);
+        console.debug('Saving tilesets...');
+        console.debug('Project path:', projectPath);
+        console.debug('Tileset list length:', this.tilesetList.length);
+        console.debug('Current tileset:', this.currentTileset);
 
         try {
             const tilesetsPath = this.path.join(projectPath, 'data', 'Tilesets.json');
-            console.log('Full path:', tilesetsPath);
+            console.debug('Full path:', tilesetsPath);
 
             // Use RPG Maker's compact JSON format (each tileset on one line)
             // This keeps file size small by not pretty-printing the large flags arrays
@@ -345,7 +345,7 @@ class DatabaseTilesetEditor {
 
             this._writeFileAtomic(this.fs, tilesetsPath, compactJson);
             this.saveTileset3DFile();
-            console.log('Tilesets.json saved successfully');
+            console.debug('Tilesets.json saved successfully');
         } catch (error) {
             console.error('Error saving Tilesets.json:', error);
             alert(`${tt('Error saving tilesets:')} ${error.message}`);
@@ -362,11 +362,11 @@ class DatabaseTilesetEditor {
         this.clearTile3DSelection();
 
         // Debug: Log initialization details
-        console.log('=== Initializing Compact Tileset UI ===');
-        console.log('Tileset:', tileset.name, '(ID:', tileset.id + ')');
-        console.log('Project path:', this.getProjectPath());
-        console.log('fs available:', !!this.fs);
-        console.log('path available:', !!this.path);
+        console.debug('=== Initializing Compact Tileset UI ===');
+        console.debug('Tileset:', tileset.name, '(ID:', tileset.id + ')');
+        console.debug('Project path:', this.getProjectPath());
+        console.debug('fs available:', !!this.fs);
+        console.debug('path available:', !!this.path);
 
         container.innerHTML = `
             <div style="display: flex; flex-direction: column; height: 100%; overflow: hidden;">
@@ -888,7 +888,7 @@ class DatabaseTilesetEditor {
         this.notifyTilesetSaved();
 
         const shown = baseName || (window.I18n ? window.I18n.t('common.none') : '(None)');
-        console.log(`Tileset ${shown} assigned to ${layerName} (index ${layerIndex})`);
+        console.debug(`Tileset ${shown} assigned to ${layerName} (index ${layerIndex})`);
         this.updateStatus(`${layerName}: ${shown}`);
     }
 
@@ -896,7 +896,7 @@ class DatabaseTilesetEditor {
     switchTab(tab) {
         this.currentTab = tab;
         this.currentCanvas = null; // Clear current canvas when switching tabs
-        console.log('Switching to tab:', tab);
+        console.debug('Switching to tab:', tab);
 
         // Update tab button styles
         document.querySelectorAll('.compact-layer-tab').forEach(btn => {
@@ -1085,7 +1085,7 @@ class DatabaseTilesetEditor {
 
                 loadedCount++;
                 if (loadedCount === totalImages) {
-                    console.log(`Tab ${tab}: Loaded ${loadedCount} layers`);
+                    console.debug(`Tab ${tab}: Loaded ${loadedCount} layers`);
                     container.innerHTML = '';
                     container.appendChild(wrapper);
                 }
@@ -1160,7 +1160,7 @@ class DatabaseTilesetEditor {
             btn.addEventListener('click', () => {
                 const mode = btn.dataset.mode;
 
-                console.log('Flag button clicked:', mode);
+                console.debug('Flag button clicked:', mode);
 
                 // Remove active state from all flag buttons
                 document.querySelectorAll('.compact-flag-btn').forEach(b => {
@@ -1184,7 +1184,7 @@ class DatabaseTilesetEditor {
                 if (was3D !== (mode === 'tile3d')) this.refreshOverlays();
                 this.refreshFlagKey();
                 this.refreshTile3DPreview();
-                console.log(`Edit mode: ${mode}`);
+                console.debug(`Edit mode: ${mode}`);
             });
         });
     }
@@ -1357,7 +1357,7 @@ class DatabaseTilesetEditor {
         // Normalize fileName to include .png extension (must match how it was cached)
         const cacheKey = this.baseCacheKey(imageIndex, fileName);
 
-        console.log(`Attempting to redraw overlay for imageIndex ${imageIndex}, fileName: ${fileName}, cacheKey: ${cacheKey}`);
+        console.debug(`Attempting to redraw overlay for imageIndex ${imageIndex}, fileName: ${fileName}, cacheKey: ${cacheKey}`);
 
         const baseCanvas = this.imageCache.get(cacheKey);
 
@@ -1367,7 +1367,7 @@ class DatabaseTilesetEditor {
             return;
         }
 
-        console.log('Found base canvas, redrawing overlay');
+        console.debug('Found base canvas, redrawing overlay');
 
         // Clear and redraw from base
         ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -2144,7 +2144,7 @@ class DatabaseTilesetEditor {
         const oldFlag = this.currentTileset.flags[tileIndex] || 0;
         let currentFlag = oldFlag;
 
-        console.log(`Clicked canvas (${x}, ${y}) at index ${tileIndex}, current flag: ${oldFlag} (0x${oldFlag.toString(16)}), mode: ${this.currentEditMode}`);
+        console.debug(`Clicked canvas (${x}, ${y}) at index ${tileIndex}, current flag: ${oldFlag} (0x${oldFlag.toString(16)}), mode: ${this.currentEditMode}`);
 
         // Store selected tile for highlighting
         this.selectedTile = { x, y };
@@ -2257,7 +2257,7 @@ class DatabaseTilesetEditor {
                     this.currentTileset.flags[tileIndex + s] = currentFlag;
                 }
             }
-            console.log(`Flag changed: ${oldFlag} (0x${oldFlag.toString(16)}) -> ${currentFlag} (0x${currentFlag.toString(16)})`);
+            console.debug(`Flag changed: ${oldFlag} (0x${oldFlag.toString(16)}) -> ${currentFlag} (0x${currentFlag.toString(16)})`);
             this.repaintClickedCanvas(canvas, imageIndex, isSplitSheet);
             // Announce it. The map canvas holds the tileset it captured when
             // the map opened, so a passability or star change edited here
@@ -2266,7 +2266,7 @@ class DatabaseTilesetEditor {
             // clicking produces.
             this.notifyTilesetSaved();
         } else {
-            console.log('Flag unchanged');
+            console.debug('Flag unchanged');
         }
     }
 
@@ -2309,11 +2309,11 @@ class DatabaseTilesetEditor {
         if (!this._tile3dCorner) {
             if (classes.objectAt(store, tilesetId, tileIndex)) {
                 classes.clearObject(store, tilesetId, tileIndex);
-                console.log(`3D object cleared at tile ${tileIndex}`);
+                console.debug(`3D object cleared at tile ${tileIndex}`);
                 return;
             }
             this._tile3dCorner = tileIndex;
-            console.log('3D object: shift-click the opposite corner');
+            console.debug('3D object: shift-click the opposite corner');
             return;
         }
 
@@ -2326,7 +2326,7 @@ class DatabaseTilesetEditor {
         const height = Math.abs(from.row - to.row) + 1;
         classes.defineObject(store, tilesetId,
             classes.tileAtCell(from.setNumber, col, row), width, height);
-        console.log(`3D object declared: ${width}x${height} from tile ` +
+        console.debug(`3D object declared: ${width}x${height} from tile ` +
             `${classes.tileAtCell(from.setNumber, col, row)}`);
     }
 
@@ -3516,7 +3516,7 @@ class DatabaseTilesetEditor {
             [classes.UPRIGHT]: 'upright', [classes.SCENERY]: 'scenery',
             [classes.FOLIAGE]: 'foliage', [classes.PANEL]: 'panel'
         };
-        console.log(`3D class for tile ${tileIndex}: ${names[next]}`);
+        console.debug(`3D class for tile ${tileIndex}: ${names[next]}`);
         this.saveTileset3DFile();
     }
 
@@ -3544,9 +3544,9 @@ class DatabaseTilesetEditor {
         container.style.flexDirection = 'column';
 
         // Debug: Log current project state
-        console.log('=== showTilesetEditorDetail ===');
-        console.log('Current project:', this.projectManager ? this.projectManager.getCurrentProject() : 'NO PROJECT MANAGER');
-        console.log('Current project path:', this.projectManager && this.projectManager.getCurrentProject() ? this.projectManager.getCurrentProject().path : 'NO PROJECT');
+        console.debug('=== showTilesetEditorDetail ===');
+        console.debug('Current project:', this.projectManager ? this.projectManager.getCurrentProject() : 'NO PROJECT MANAGER');
+        console.debug('Current project path:', this.projectManager && this.projectManager.getCurrentProject() ? this.projectManager.getCurrentProject().path : 'NO PROJECT');
 
         // Create tileset editor container within the detail panel
         const editorContainer = document.createElement('div');
@@ -3558,7 +3558,7 @@ class DatabaseTilesetEditor {
         // Initialize tileset editor if not already done
         const currentProject = this.projectManager ? this.projectManager.getCurrentProject() : null;
         if (!this.tilesetEditor && currentProject) {
-            console.log('Creating new DatabaseTilesetEditor with project path:', currentProject.path);
+            console.debug('Creating new DatabaseTilesetEditor with project path:', currentProject.path);
             this.tilesetEditor = new DatabaseTilesetEditor(
                 this.databaseManager,
                 this.projectManager,
@@ -3567,7 +3567,7 @@ class DatabaseTilesetEditor {
             );
         } else {
             if (this.tilesetEditor) {
-                console.log('Reusing existing DatabaseTilesetEditor, current projectPath:', this.tilesetEditor.projectPath);
+                console.debug('Reusing existing DatabaseTilesetEditor, current projectPath:', this.tilesetEditor.projectPath);
             }
         }
 

@@ -293,7 +293,7 @@ class DatabaseSystem2Editor {
                 const idx = parseInt(e.target.dataset.idx);
                 if (!system.menuCommands) system.menuCommands = [true, true, true, true, true, true];
                 system.menuCommands[idx] = e.target.checked;
-                console.log(`Updated menuCommands[${idx}] to:`, e.target.checked);
+                console.debug(`Updated menuCommands[${idx}] to:`, e.target.checked);
             });
         });
 
@@ -303,7 +303,7 @@ class DatabaseSystem2Editor {
                 const idx = parseInt(e.target.dataset.idx);
                 if (!system.itemCategories) system.itemCategories = [true, true, true, true];
                 system.itemCategories[idx] = e.target.checked;
-                console.log(`Updated itemCategories[${idx}] to:`, e.target.checked);
+                console.debug(`Updated itemCategories[${idx}] to:`, e.target.checked);
             });
         });
 
@@ -363,7 +363,7 @@ class DatabaseSystem2Editor {
         container.querySelectorAll('.sys2-tile-size').forEach(radio => {
             radio.addEventListener('change', (e) => {
                 system.tileSize = parseInt(e.target.value);
-                console.log('Updated tileSize to:', system.tileSize);
+                console.debug('Updated tileSize to:', system.tileSize);
                 // Every surface that draws tiles measures in this, and each
                 // reads it once when a project loads. Without telling them, the
                 // open map keeps drawing at the old size until a reload, which
@@ -378,7 +378,7 @@ class DatabaseSystem2Editor {
         container.querySelectorAll('.sys2-icon-size').forEach(radio => {
             radio.addEventListener('change', (e) => {
                 system.iconSize = parseInt(e.target.value);
-                console.log('Updated iconSize to:', system.iconSize);
+                console.debug('Updated iconSize to:', system.iconSize);
             });
         });
 
@@ -386,7 +386,7 @@ class DatabaseSystem2Editor {
         container.querySelectorAll('.sys2-face-size').forEach(radio => {
             radio.addEventListener('change', (e) => {
                 system.faceSize = parseInt(e.target.value);
-                console.log('Updated faceSize to:', system.faceSize);
+                console.debug('Updated faceSize to:', system.faceSize);
             });
         });
 
@@ -397,7 +397,7 @@ class DatabaseSystem2Editor {
                 if (editorField) {
                     if (!system.editor) system.editor = {};
                     system.editor[editorField] = parseFloat(e.target.value);
-                    console.log(`Updated editor.${editorField} to:`, system.editor[editorField]);
+                    console.debug(`Updated editor.${editorField} to:`, system.editor[editorField]);
                 }
             });
         });
@@ -478,7 +478,7 @@ class DatabaseSystem2Editor {
             const newType = parseInt(modal.querySelector('#atk-motion-type').value);
             const newImage = parseInt(modal.querySelector('#atk-weapon-image').value);
             system.attackMotions[index] = { type: newType, weaponImageId: newImage };
-            console.log(`Updated attackMotions[${index}]:`, system.attackMotions[index]);
+            console.debug(`Updated attackMotions[${index}]:`, system.attackMotions[index]);
             close();
 
             // Refresh the System 2 display

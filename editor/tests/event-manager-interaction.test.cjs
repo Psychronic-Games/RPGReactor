@@ -9,7 +9,7 @@ const editorRoot = path.resolve(__dirname, '..');
 function loadEventManager(overrides = {}) {
     const source = fs.readFileSync(path.join(editorRoot, 'src', 'EventManager.js'), 'utf8');
     return vm.runInNewContext(`${source}\nEventManager;`, {
-        console: { log() {}, warn() {}, error() {} },
+        console: { log() {}, debug() {}, warn() {}, error() {} },
         ...overrides
     });
 }

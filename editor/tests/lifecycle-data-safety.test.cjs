@@ -10,7 +10,7 @@ const editorRoot = path.resolve(__dirname, '..');
 function loadClass(relativePath, className, globals = {}) {
     const source = fs.readFileSync(path.join(editorRoot, 'src', relativePath), 'utf8');
     return vm.runInNewContext(`${source}\n${className};`, {
-        console: { log() {}, warn() {}, error() {} },
+        console: { log() {}, debug() {}, warn() {}, error() {} },
         process,
         require,
         ...globals
