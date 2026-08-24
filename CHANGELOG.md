@@ -11,6 +11,9 @@ This root changelog summarizes public release progress for GitHub; larger releas
 - **Web builds no longer crash on a 3D-bound actor's retired sprite.** `Database.r3d.json` reads instantly from disk in the desktop player but arrives by network fetch in a browser, so the first web frames didn't yet know an actor was 3D and asked for the 2D walking sheet the project no longer ships — "Failed to load img/characters/...". Boot now waits for that one fetch (it always settles, so boot cannot hang), and the party's sprites never commit to a sheet before the answer is in.
 - **Deploy audio compression keeps embedded cover art.** FFmpeg surfaces a track's embedded art as a picture stream and deletes the tag it came from, so every re-encode silently shipped artless music. The optimizer now extracts the picture first and writes it back — into the Ogg comment header, or as the MP3/M4A attached picture — falling back to an art-less encode rather than failing a deploy. The Demo soundtrack's art, dropped by the 0.98.3 size pass, was restored losslessly.
 
+- **The MV-compat stale-event guard no longer eats plugin-spawned events.** Action plugins (item drops, template events) add runtime events at ids beyond the authored map; the guard mistook them for stale save artifacts and deleted them at every map refresh. It now asks the event itself for its data, so plugin events live and genuine stale events still drop.
+- **Tilemap teardown no longer warns "[BindGroup] textureSource destroyed while still bound".** The tile atlas unbinds from the mesh pipe's shared shader before it is destroyed on map transfer.
+
 ## [0.98.3] - 2026-08-24
 
 ### Added
