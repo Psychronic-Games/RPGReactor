@@ -5025,13 +5025,27 @@ Sprite_Enemy.prototype.update = function() {
 const _reactorSpriteCharacterUpdateBitmap = Sprite_Character.prototype.updateBitmap;
 Sprite_Character.prototype.updateBitmap = function() {
     if (typeof Reactor3D !== "undefined" && Reactor3D.characterModelSpec && this._character
-        && !this._character.tileId() && Reactor3D.characterModelSpec(this._character)) {
-        this._tilesetId = $gameMap.tilesetId();
-        this._tileId = 0;
-        this._characterName = this._character.characterName();
-        this._characterIndex = this._character.characterIndex();
-        if (!this.bitmap) this.bitmap = new Bitmap(1, 1);
-        return;
+        && !this._character.tileId()) {
+        // Whether the party is 2D or 3D comes from the async database
+        // sidecar; until it answers, don't commit the player or a
+        // follower to a sheet that may not exist. Leaving the tracked
+        // names untouched keeps isImageChanged true, so this retries
+        // every frame until the answer arrives.
+        const isPartySprite =
+            (typeof Game_Player !== "undefined" && this._character instanceof Game_Player)
+            || (typeof Game_Follower !== "undefined" && this._character instanceof Game_Follower);
+        if (isPartySprite && Reactor3D.isDatabaseSidecarReady && !Reactor3D.isDatabaseSidecarReady()) {
+            if (!this.bitmap) this.bitmap = new Bitmap(1, 1);
+            return;
+        }
+        if (Reactor3D.characterModelSpec(this._character)) {
+            this._tilesetId = $gameMap.tilesetId();
+            this._tileId = 0;
+            this._characterName = this._character.characterName();
+            this._characterIndex = this._character.characterIndex();
+            if (!this.bitmap) this.bitmap = new Bitmap(1, 1);
+            return;
+        }
     }
     _reactorSpriteCharacterUpdateBitmap.call(this);
 };

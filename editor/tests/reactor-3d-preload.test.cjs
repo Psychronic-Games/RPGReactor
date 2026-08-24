@@ -122,3 +122,19 @@ test('the Scene_Map preload gate is wired after the class bodies', () => {
     const sprites = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_sprites.js'), 'utf8');
     assert.match(sprites, /Reactor3D\.warmLoadedTemplates\(\)/, 'late loads warm from the sync loop too');
 });
+
+test('the boot scene waits for the async database sidecar', () => {
+    // In a browser the sidecar is an async fetch; without this gate the
+    // first frames commit 3D-bound actors to 2D sheets that no longer
+    // exist on disk (the web-only "Failed to load img/characters" crash).
+    const scenes = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_scenes.js'), 'utf8');
+    const bootGateAt = scenes.indexOf('_reactorSceneBootIsReady');
+    const lastClassAt = scenes.lastIndexOf('Scene_Gameover.prototype');
+    assert.ok(bootGateAt > lastClassAt, 'the boot gate lives after every prototype replacement');
+    assert.match(scenes, /!Reactor3D\.isDatabaseSidecarReady\(\)/);
+    const r3d = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_3d.js'), 'utf8');
+    assert.match(r3d, /_databaseSidecarState !== "loading"/, 'readiness reads the load state');
+    const sprites = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_sprites.js'), 'utf8');
+    assert.match(sprites, /isPartySprite && Reactor3D\.isDatabaseSidecarReady/,
+        'party sprites never commit to a sheet before the sidecar answers');
+});

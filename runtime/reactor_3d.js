@@ -6255,6 +6255,14 @@ Reactor3D.loadDatabaseSidecar = function() {
     xhr.send();
 };
 
+// True once the sidecar has answered — instantly on NW.js, after one
+// fetch in a browser. Callers that would fall back to 2D art must not
+// commit while this is false: the fallback sheet may no longer exist.
+Reactor3D.isDatabaseSidecarReady = function() {
+    this.loadDatabaseSidecar();
+    return this._databaseSidecarState !== "loading";
+};
+
 Reactor3D.databaseModelSpec = function(section, id) {
     this.loadDatabaseSidecar();
     const sidecar = this._databaseSidecar;
