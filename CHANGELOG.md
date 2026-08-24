@@ -4,18 +4,6 @@ All notable changes to RPG Reactor will be documented in this file.
 
 This root changelog summarizes public release progress for GitHub; larger releases group their fixes by theme. The detailed editor changelog lives at [`editor/CHANGELOG.md`](editor/CHANGELOG.md).
 
-## [Unreleased]
-
-### Fixed
-
-- **Web builds no longer crash on a 3D-bound actor's retired sprite.** `Database.r3d.json` reads instantly from disk in the desktop player but arrives by network fetch in a browser, so the first web frames didn't yet know an actor was 3D and asked for the 2D walking sheet the project no longer ships — "Failed to load img/characters/...". Boot now waits for that one fetch (it always settles, so boot cannot hang), and the party's sprites never commit to a sheet before the answer is in.
-- **Deploy audio compression keeps embedded cover art.** FFmpeg surfaces a track's embedded art as a picture stream and deletes the tag it came from, so every re-encode silently shipped artless music. The optimizer now extracts the picture first and writes it back — into the Ogg comment header, or as the MP3/M4A attached picture — falling back to an art-less encode rather than failing a deploy. The Demo soundtrack's art, dropped by the 0.98.3 size pass, was restored losslessly.
-
-- **The MV-compat stale-event guard no longer eats plugin-spawned events.** Action plugins (item drops, template events) add runtime events at ids beyond the authored map; the guard mistook them for stale save artifacts and deleted them at every map refresh. It now asks the event itself for its data, so plugin events live and genuine stale events still drop.
-- **Tilemap teardown no longer warns "[BindGroup] textureSource destroyed while still bound".** The tile atlas unbinds from the mesh pipe's shared shader before it is destroyed on map transfer.
-
-- **Render-guard warnings now say which resource died.** The once-per-class "skipped destroyed/orphan display" diagnostic names the exact reason (destroyed, GPU data nulled, or a destroyed texture source) and every bitmap's GPU texture carries its file path as a label, so a leak report points straight at the offending image.
-
 ## [0.98.3] - 2026-08-24
 
 ### Added
@@ -89,6 +77,13 @@ This root changelog summarizes public release progress for GitHub; larger releas
 - **A UX consistency and responsiveness pass across the editor.** Every modal confirm button — 65 event-command dialogs, the Effect and enemy Action Pattern editors, the plugin manager, pickers, and System pages — uses the one shared primary-button style; the Effect and Action Pattern editors wear the standard modal chrome with fields aligned on the shared grid; dialogs cap their widths to the window and scroll their bodies so small screens work; the Actors and Classes pages collapse to one column in a narrow pane; and paired database cards fill their height (the Profile field absorbs leftover space, list buttons pin to the card's bottom edge) instead of leaving awkward voids. A second sweep put all ~85 event command dialogs, the Troops page's enemy picker, Conditions, raw-parameter, and Battle Test dialogs, and the Animation editor's pickers on that same standard chrome, retiring the last hand-rolled headers, footers, and hard-coded dark colors.
 
 - **Games bundling v5-era pixi-filters no longer crash to a black screen when a screen effect starts.** Haven/Project3's "5 years later" chapter died the moment its filter plugin ran: those filters override `apply` with multi-pass bodies built on PIXI v5's API — the input texture's `_frame`/`filterFrame` rectangle, `getFilterTexture`/`returnFilterTexture` scratch textures, array uniforms sized by shader constants, extra sampler textures assigned as uniforms, `(callback, scope)` ObservablePoints, and shaders that use `finalColor` as their own local variable. PIXI 8 renamed or removed every one of those. The legacy filter bridge now maps them all onto their v8 equivalents; all 41 bundled filter classes construct and render clean in the live runtime.
+- **Web builds no longer crash on a 3D-bound actor's retired sprite.** `Database.r3d.json` reads instantly from disk in the desktop player but arrives by network fetch in a browser, so the first web frames didn't yet know an actor was 3D and asked for the 2D walking sheet the project no longer ships — "Failed to load img/characters/...". Boot now waits for that one fetch (it always settles, so boot cannot hang), and the party's sprites never commit to a sheet before the answer is in.
+- **Deploy audio compression keeps embedded cover art.** FFmpeg surfaces a track's embedded art as a picture stream and deletes the tag it came from, so every re-encode silently shipped artless music. The optimizer now extracts the picture first and writes it back — into the Ogg comment header, or as the MP3/M4A attached picture — falling back to an art-less encode rather than failing a deploy. The Demo soundtrack's art, dropped by the 0.98.3 size pass, was restored losslessly.
+
+- **The MV-compat stale-event guard no longer eats plugin-spawned events.** Action plugins (item drops, template events) add runtime events at ids beyond the authored map; the guard mistook them for stale save artifacts and deleted them at every map refresh. It now asks the event itself for its data, so plugin events live and genuine stale events still drop.
+- **Tilemap teardown no longer warns "[BindGroup] textureSource destroyed while still bound".** The tile atlas unbinds from the mesh pipe's shared shader before it is destroyed on map transfer.
+
+- **Render-guard warnings now say which resource died.** The once-per-class "skipped destroyed/orphan display" diagnostic names the exact reason (destroyed, GPU data nulled, or a destroyed texture source) and every bitmap's GPU texture carries its file path as a label, so a leak report points straight at the offending image.
 
 ## [0.98.2] - 2026-08-16
 
