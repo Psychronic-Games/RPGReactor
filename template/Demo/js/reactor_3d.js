@@ -6005,16 +6005,22 @@ Reactor3D.MODEL_EXTS = [".glb", ".obj", ".fbx", ".stl", ".usdz", ".3mf", ".dxf",
 Reactor3D._glbCache = Object.create(null);
 
 Reactor3D.splitModelRef = function(named) {
-    let raw = String(named || "").trim();
-    if (!raw || /[\\/]/.test(raw) || raw === "." || raw === "..") return null;
+    // Models organize into folders (3d/Weapons/long-sword/source/…), so a
+    // name may carry forward-slash segments — but never an empty, ".", or
+    // ".." segment: names come from map notes and sidecars, and a crafted
+    // ref must not walk out of the 3d directory.
+    let raw = String(named || "").trim().replace(/\\/g, "/");
+    if (!raw) return null;
     let ext = "";
     const match = raw.match(/(\.[a-z0-9]+)$/i);
     if (match && this.MODEL_EXTS.indexOf(match[1].toLowerCase()) >= 0) {
         ext = match[1].toLowerCase();
         raw = raw.slice(0, -ext.length);
     }
-    if (!raw || /[\\/]/.test(raw)) return null;
-    return { name: raw, ext };
+    if (!raw) return null;
+    const segments = raw.split("/");
+    if (segments.some(part => !part || part === "." || part === "..")) return null;
+    return { name: segments.join("/"), ext };
 };
 
 Reactor3D.modelSpecFromNote = function(note) {
@@ -6075,6 +6081,11 @@ Reactor3D.eventModelSpec = function(mapData, eventId, pageIndex) {
         && mapData.reactor3d.events[String(eventId)];
     if (!pages || typeof pages !== "object") return null;
     const spec = pages[String(pageIndex == null ? 0 : pageIndex)] || pages[pageIndex];
+    return this.normalizeModelSpec(spec);
+};
+
+/** One raw sidecar entry → the validated spec every consumer shares. */
+Reactor3D.normalizeModelSpec = function(spec) {
     if (!spec || !spec.name) return null;
     const ref = this.splitModelRef(spec.name);
     if (!ref) return null;
@@ -6099,7 +6110,14 @@ Reactor3D.eventModelSpec = function(mapData, eventId, pageIndex) {
         pitch: Number.isFinite(pitch) ? pitch * Math.PI / 180 : 0,
         roll: Number.isFinite(roll) ? roll * Math.PI / 180 : 0,
         faces: this.readModelFaces(spec.faces),
-        texture: spec.texture ? String(spec.texture) : ""
+        texture: spec.texture ? String(spec.texture) : "",
+        // Face-slot framing: how far in and how high up the camera looks.
+        view: spec.view && typeof spec.view === "object"
+            ? {
+                zoom: Math.min(10, Math.max(1, Number(spec.view.zoom) || 3)),
+                y: Math.min(1, Math.max(0, Number(spec.view.y) || 0.82))
+            }
+            : null
     };
 };
 
@@ -6169,15 +6187,187 @@ Reactor3D.hasEventModels = function(mapData) {
 };
 
 Reactor3D.characterModelSpec = function(character) {
-    if (!character || typeof character.event !== "function") return null;
-    const data = character.event();
-    const pageIndex = character._pageIndex != null ? character._pageIndex : 0;
-    const fromSidecar = this.eventModelSpec(
-        typeof $dataMap !== "undefined" ? $dataMap : null,
-        character.eventId ? character.eventId() : data && data.id,
-        pageIndex
-    );
-    return fromSidecar || this.modelSpecFromNote(data && data.note);
+    if (!character) return null;
+    if (typeof character.event === "function") {
+        const data = character.event();
+        const pageIndex = character._pageIndex != null ? character._pageIndex : 0;
+        const fromSidecar = this.eventModelSpec(
+            typeof $dataMap !== "undefined" ? $dataMap : null,
+            character.eventId ? character.eventId() : data && data.id,
+            pageIndex
+        );
+        return fromSidecar || this.modelSpecFromNote(data && data.note);
+    }
+    // The player and followers carry the model of the actor they show:
+    // an actor entry in the database sidecar puts the whole party in 3D.
+    if (typeof Game_Player !== "undefined" && character instanceof Game_Player) {
+        const leader = typeof $gameParty !== "undefined" && $gameParty ? $gameParty.leader() : null;
+        return leader ? this.databaseModelSpec("actors", leader.actorId()) : null;
+    }
+    if (typeof Game_Follower !== "undefined" && character instanceof Game_Follower) {
+        const actor = character.actor ? character.actor() : null;
+        return actor ? this.databaseModelSpec("actors", actor.actorId()) : null;
+    }
+    return null;
+};
+
+/**
+ * Database-wide 3D bindings: `data/Database.r3d.json` maps database ids
+ * to model specs, exactly the shape a map sidecar's event entries use —
+ * and kept out of the MZ database files so an RPG Maker editor never
+ * sees an unfamiliar field.
+ *   { "actors": { "<id>": spec }, "enemies": {...}, "weapons": {...},
+ *     "armors": {...}, "items": {...} }
+ */
+Reactor3D.DATABASE_SIDECAR_URL = "data/Database.r3d.json";
+
+Reactor3D.loadDatabaseSidecar = function() {
+    if (this._databaseSidecarState) return;
+    this._databaseSidecarState = "loading";
+    const finish = parsed => {
+        this._databaseSidecar = parsed && typeof parsed === "object" ? parsed : null;
+        this._databaseSidecarState = "done";
+    };
+    // The absent file is the normal state for most projects; ask the disk
+    // first so it never logs an unsuppressible network error.
+    if (typeof Utils !== "undefined" && Utils.isNwjs()) {
+        try {
+            const fs = require("fs");
+            const path = require("path");
+            const full = path.join(path.dirname(process.mainModule.filename), this.DATABASE_SIDECAR_URL);
+            if (!fs.existsSync(full)) return finish(null);
+            return finish(JSON.parse(fs.readFileSync(full, "utf8")));
+        } catch (error) {
+            return finish(null);
+        }
+    }
+    const xhr = new XMLHttpRequest();
+    xhr.open("GET", this.DATABASE_SIDECAR_URL);
+    xhr.overrideMimeType("application/json");
+    xhr.onload = () => {
+        try {
+            finish(xhr.status < 400 ? JSON.parse(xhr.responseText) : null);
+        } catch (error) {
+            finish(null);
+        }
+    };
+    xhr.onerror = () => finish(null);
+    xhr.send();
+};
+
+Reactor3D.databaseModelSpec = function(section, id) {
+    this.loadDatabaseSidecar();
+    const sidecar = this._databaseSidecar;
+    let entry = sidecar && sidecar[section] && sidecar[section][String(id)];
+    // An actor binds per surface: character (map model), face, battler.
+    // A flat legacy entry is its character slot.
+    if (section === "actors") entry = this.actorEntrySlots(entry).character;
+    return this.normalizeModelSpec(entry);
+};
+
+Reactor3D.actorEntrySlots = function(entry) {
+    if (!entry || typeof entry !== "object") return {};
+    if (entry.name) return { character: entry };
+    return {
+        character: entry.character || null,
+        face: entry.face || null,
+        battler: entry.battler || null
+    };
+};
+
+Reactor3D.actorSlotSpec = function(actorId, slot) {
+    this.loadDatabaseSidecar();
+    const sidecar = this._databaseSidecar;
+    const entry = sidecar && sidecar.actors && sidecar.actors[String(actorId)];
+    return this.normalizeModelSpec(this.actorEntrySlots(entry)[slot]);
+};
+
+/**
+ * Every model a map can possibly show, before its first frame: the map
+ * sidecar's event specs plus each actor's character-slot binding (the
+ * player and any follower). Deduped by cache key.
+ */
+Reactor3D.collectMapModelSpecs = function(mapData) {
+    // The map's own intent, not the runtime gates: on a cold boot THREE
+    // is not loaded yet — preloading is exactly what loads it.
+    if (!this.isMap3D(mapData)) return [];
+    const specs = [];
+    const seen = new Set();
+    const note = raw => {
+        const spec = this.normalizeModelSpec(raw);
+        if (!spec) return;
+        const key = this.modelCacheKey(spec.name, spec.ext, spec.file);
+        if (seen.has(key)) return;
+        seen.add(key);
+        specs.push(spec);
+    };
+    const events = (mapData && mapData.reactor3d && mapData.reactor3d.events) || {};
+    for (const pages of Object.values(events)) {
+        for (const raw of Object.values(pages || {})) note(raw);
+    }
+    this.loadDatabaseSidecar();
+    const actors = (this._databaseSidecar && this._databaseSidecar.actors) || {};
+    for (const entry of Object.values(actors)) {
+        note(this.actorEntrySlots(entry).character);
+    }
+    return specs;
+};
+
+/**
+ * Load every model the map references while its loading fade still hides
+ * the work, so nothing loads — or hitches — mid-play. Memoized per call
+ * site; safe to call for maps with nothing to load.
+ */
+Reactor3D.preloadMapModels = function(mapData) {
+    const specs = this.collectMapModelSpecs(mapData);
+    if (!specs.length) return Promise.resolve([]);
+    return this.ensureLoaded().then(ok => {
+        if (!ok) return [];
+        return Promise.all(specs.map(spec => Promise.all([
+            this.loadModel(spec.name, spec.ext, spec.file, spec.texture),
+            this.loadModelSidecar(spec.name)
+        ])));
+    });
+};
+
+/**
+ * Shader compilation and texture upload happen on a model's first visible
+ * frame unless something asks earlier — this asks earlier. Every cached
+ * template not yet warmed joins a throwaway scene for one compile pass,
+ * and its textures upload, while the loading fade still covers the cost.
+ */
+Reactor3D.warmLoadedTemplates = function() {
+    const viewport = this._viewport;
+    const renderer = viewport && viewport._renderer;
+    if (!renderer || typeof THREE === "undefined") return;
+    if (!this._warmedTemplates) this._warmedTemplates = new Set();
+    const scene = new THREE.Scene();
+    const pending = [];
+    for (const key of Object.keys(this._glbCache)) {
+        const template = this._glbCache[key].template;
+        if (!template || this._warmedTemplates.has(key)) continue;
+        this._warmedTemplates.add(key);
+        pending.push(template);
+        scene.add(template);
+    }
+    if (!pending.length) return;
+    try {
+        const camera = this.createCamera({ fov: 40 });
+        camera.position.set(0, 2, 6);
+        camera.lookAt(0, 1, 0);
+        renderer.compile(scene, camera);
+        for (const template of pending) {
+            for (const texture of template.userData.glbTextures || []) {
+                if (texture && texture.image && renderer.initTexture) {
+                    renderer.initTexture(texture);
+                }
+            }
+        }
+    } catch (error) {
+        console.error("Reactor3D: warm-up pass failed.", error);
+    }
+    // Templates live outside any scene; hand them back.
+    for (const template of pending) scene.remove(template);
 };
 
 Reactor3D.hasCharacterModel = function(character) {
@@ -6292,7 +6482,10 @@ Reactor3D.eventModelFootprint = function(character, spec, yaw) {
     let halfX = size * extra / 2;
     let halfZ = halfX;
     if (extent) {
-        const span = Math.max(extent.x, extent.z, 0.0001);
+        // Size is the model's LARGEST dimension in tiles: characters size
+        // by their height, vehicles and props by their footprint — a slim
+        // character no longer balloons to fill two tiles of width.
+        const span = Math.max(extent.x, extent.y, extent.z, 0.0001);
         const scale = size / span * extra;
         halfX = extent.x * scale / 2;
         halfZ = extent.z * scale / 2;
@@ -6610,15 +6803,34 @@ Reactor3D.loadModel = function(name, ext, file, texture) {
                     tryAt(index + 1);
                     return;
                 }
-                try {
-                    const baseUrl = job.url.replace(/[^/]+$/, "");
-                    entry.template = this.readModel(xhr.response, job.ext, baseUrl, texture);
-                    resolve(entry.template);
-                } catch (error) {
-                    entry.failed = true;
-                    console.error("Reactor3D: " + name + job.ext + " could not be built.", error);
-                    resolve(null);
+                const baseUrl = job.url.replace(/[^/]+$/, "");
+                const buildFrom = builder => {
+                    try {
+                        entry.template = builder();
+                        resolve(entry.template);
+                    } catch (error) {
+                        entry.failed = true;
+                        console.error("Reactor3D: " + name + job.ext + " could not be built.", error);
+                        resolve(null);
+                    }
+                };
+                if (job.ext === ".glb") {
+                    // The container split, JSON parse, and texture decode
+                    // run off-thread; the buffer travels there and back.
+                    // A failed or absent worker hands the bytes back to the
+                    // synchronous parser.
+                    this.parseGlbAsync(xhr.response).then(parsed => {
+                        if (parsed && parsed.json) {
+                            buildFrom(() => this.buildGlbTemplate(
+                                parsed.json, parsed.bin, baseUrl, parsed.bitmaps));
+                        } else {
+                            const buffer = (parsed && parsed.buffer) || xhr.response;
+                            buildFrom(() => this.readModel(buffer, job.ext, baseUrl, texture));
+                        }
+                    });
+                    return;
                 }
+                buildFrom(() => this.readModel(xhr.response, job.ext, baseUrl, texture));
             };
             xhr.onerror = () => tryAt(index + 1);
             xhr.send();
@@ -6626,6 +6838,167 @@ Reactor3D.loadModel = function(name, ext, file, texture) {
         tryAt(0);
     });
     return entry.promise;
+};
+
+/**
+ * Off-thread GLB parsing: a worker splits the container, parses the JSON
+ * chunk, and decodes embedded textures to ImageBitmaps, transferring the
+ * file buffer there and back. The worker's source is assembled from the
+ * two functions below and spawned from a Blob URL, so the runtime stays
+ * one module and the same worker serves the game and the editor alike.
+ * Any failure hands the buffer back and the caller parses synchronously.
+ */
+function reactorSplitGlb(buffer) {
+    const view = new DataView(buffer);
+    if (view.byteLength < 20 || view.getUint32(0, true) !== 0x46546C67) {
+        throw new Error("not a GLB");
+    }
+    let offset = 12;
+    let json = null;
+    let bin = { offset: 0, length: 0 };
+    while (offset + 8 <= view.byteLength) {
+        const length = view.getUint32(offset, true);
+        const type = view.getUint32(offset + 4, true);
+        const start = offset + 8;
+        if (type === 0x4E4F534A) {
+            json = JSON.parse(new TextDecoder("utf-8").decode(
+                new Uint8Array(buffer, start, length)));
+        } else if (type === 0x004E4942) {
+            bin = { offset: start, length };
+        }
+        offset = start + length;
+    }
+    if (!json) throw new Error("GLB carries no JSON chunk");
+    return { json, bin };
+}
+
+function reactorDecodeGlbImages(json, buffer, binOffset) {
+    if (typeof createImageBitmap === "undefined") return Promise.resolve({});
+    const jobs = [];
+    (json.images || []).forEach((image, index) => {
+        if (image.uri || image.bufferView == null) return;
+        const view = (json.bufferViews || [])[image.bufferView];
+        if (!view) return;
+        const bytes = new Uint8Array(buffer,
+            binOffset + (view.byteOffset || 0), view.byteLength);
+        const blob = new Blob([bytes], { type: image.mimeType || "image/png" });
+        // glTF textures are unflipped and unpremultiplied; match what the
+        // synchronous TextureLoader path produces.
+        jobs.push(createImageBitmap(blob, {
+            imageOrientation: "none",
+            premultiplyAlpha: "none"
+        }).then(bitmap => [index, bitmap], () => null));
+    });
+    return Promise.all(jobs).then(pairs => {
+        const bitmaps = {};
+        for (const pair of pairs) {
+            if (pair) bitmaps[pair[0]] = pair[1];
+        }
+        return bitmaps;
+    });
+}
+
+// Exposed for tests: the worker runs exactly these functions.
+Reactor3D._workerParts = { splitGlb: reactorSplitGlb, decodeImages: reactorDecodeGlbImages };
+
+Reactor3D._glbWorkerSource = function() {
+    return reactorSplitGlb.toString() + "\n"
+        + reactorDecodeGlbImages.toString() + "\n"
+        + "self.onmessage = function(event) {\n"
+        + "    var data = event.data || {};\n"
+        + "    var buffer = data.buffer;\n"
+        + "    Promise.resolve().then(function() {\n"
+        + "        var parsed = reactorSplitGlb(buffer);\n"
+        + "        return reactorDecodeGlbImages(parsed.json, buffer, parsed.bin.offset)\n"
+        + "            .then(function(bitmaps) {\n"
+        + "                var transfers = [buffer];\n"
+        + "                for (var key in bitmaps) transfers.push(bitmaps[key]);\n"
+        + "                self.postMessage({ id: data.id, json: parsed.json,\n"
+        + "                    binOffset: parsed.bin.offset, binLength: parsed.bin.length,\n"
+        + "                    buffer: buffer, bitmaps: bitmaps }, transfers);\n"
+        + "            });\n"
+        + "    }).catch(function(error) {\n"
+        + "        self.postMessage({ id: data.id,\n"
+        + "            error: String(error && error.message || error),\n"
+        + "            buffer: buffer }, [buffer]);\n"
+        + "    });\n"
+        + "};\n";
+};
+
+Reactor3D._ensureParseWorker = function() {
+    if (this._parseWorker !== undefined) return this._parseWorker;
+    this._parseWorker = null;
+    try {
+        if (typeof Worker !== "undefined" && typeof Blob !== "undefined"
+            && typeof URL !== "undefined" && URL.createObjectURL) {
+            const blob = new Blob([this._glbWorkerSource()], { type: "text/javascript" });
+            const worker = new Worker(URL.createObjectURL(blob));
+            this._parsePending = new Map();
+            worker.onmessage = event => {
+                const data = event.data || {};
+                const resolve = this._parsePending.get(data.id);
+                if (!resolve) return;
+                this._parsePending.delete(data.id);
+                resolve(data);
+            };
+            worker.onerror = () => {
+                for (const resolve of this._parsePending.values()) {
+                    resolve({ error: "worker failed" });
+                }
+                this._parsePending.clear();
+                this._parseWorker = null;
+            };
+            this._parseWorker = worker;
+        }
+    } catch (error) {
+        this._parseWorker = null;
+    }
+    return this._parseWorker;
+};
+
+Reactor3D.parseGlbAsync = function(buffer) {
+    const worker = this._ensureParseWorker();
+    if (!worker) return Promise.resolve(null);
+    this._parseId = (this._parseId || 0) + 1;
+    const id = this._parseId;
+    return new Promise(resolve => {
+        this._parsePending.set(id, data => {
+            if (data.error || !data.json) {
+                resolve({ error: data.error || "parse failed", buffer: data.buffer || null });
+                return;
+            }
+            resolve({
+                json: data.json,
+                bin: new Uint8Array(data.buffer, data.binOffset, data.binLength),
+                bitmaps: data.bitmaps || {}
+            });
+        });
+        try {
+            worker.postMessage({ id, buffer }, [buffer]);
+        } catch (error) {
+            this._parsePending.delete(id);
+            resolve(null);
+        }
+    });
+};
+
+/**
+ * readModel with the GLB half off-thread: the worker splits, parses, and
+ * decodes textures, and the template is assembled from the transferred
+ * buffers. Every other format — and any worker failure — resolves through
+ * the synchronous reader unchanged.
+ */
+Reactor3D.readModelAsync = function(buffer, ext, baseUrl, texture) {
+    const kind = String(ext || ".glb").toLowerCase();
+    if (kind === ".glb") {
+        return this.parseGlbAsync(buffer).then(parsed => {
+            if (parsed && parsed.json) {
+                return this.buildGlbTemplate(parsed.json, parsed.bin, baseUrl, parsed.bitmaps);
+            }
+            return this.readModel((parsed && parsed.buffer) || buffer, kind, baseUrl, texture);
+        });
+    }
+    return Promise.resolve(this.readModel(buffer, ext, baseUrl, texture));
 };
 
 Reactor3D.readModel = function(buffer, ext, baseUrl, texture) {
@@ -7155,12 +7528,21 @@ Reactor3D._glbImageUrl = function(json, bin, image, baseUrl) {
     return URL.createObjectURL(blob);
 };
 
-Reactor3D._loadGlbTexture = function(json, bin, texInfo, baseUrl, textures) {
+Reactor3D._loadGlbTexture = function(json, bin, texInfo, baseUrl, textures, bitmaps) {
     if (!texInfo || !json.textures || !json.images) return null;
     const textureDef = json.textures[texInfo.index];
     if (!textureDef) return null;
     const image = json.images[textureDef.source];
     if (!image) return null;
+    // The worker already decoded this image off-thread.
+    if (bitmaps && bitmaps[textureDef.source]) {
+        const decoded = new THREE.Texture(bitmaps[textureDef.source]);
+        decoded.flipY = false;
+        if (THREE.SRGBColorSpace) decoded.colorSpace = THREE.SRGBColorSpace;
+        decoded.needsUpdate = true;
+        textures.push(decoded);
+        return decoded;
+    }
     const map = new THREE.Texture();
     map.flipY = false;
     if (THREE.SRGBColorSpace) map.colorSpace = THREE.SRGBColorSpace;
@@ -7192,7 +7574,7 @@ Reactor3D._loadGlbTexture = function(json, bin, texInfo, baseUrl, textures) {
     return map;
 };
 
-Reactor3D.buildGlbTemplate = function(json, bin, baseUrl) {
+Reactor3D.buildGlbTemplate = function(json, bin, baseUrl, bitmaps) {
     if (typeof THREE === "undefined") throw new Error("three.js is not loaded");
     const root = new THREE.Group();
     root.name = "glb";
@@ -7214,7 +7596,7 @@ Reactor3D.buildGlbTemplate = function(json, bin, baseUrl) {
         mat.__reactorModel = true;
         mat.userData.baseColor = mat.color.clone();
         const texInfo = pbr.baseColorTexture || (specgloss && specgloss.diffuseTexture);
-        const map = this._loadGlbTexture(json, bin, texInfo, baseUrl, textures);
+        const map = this._loadGlbTexture(json, bin, texInfo, baseUrl, textures, bitmaps);
         if (map) mat.map = map;
         const metallic = pbr.metallicFactor != null ? pbr.metallicFactor : 1;
         const roughness = pbr.roughnessFactor != null ? pbr.roughnessFactor : 1;
@@ -7385,7 +7767,14 @@ Reactor3D.buildAnimatedGlbTemplate = function(json, bin, root, nodes, textures) 
             node.remove(child);
             node.add(skinned);
             skinned.updateMatrixWorld(true);
-            skinned.bind(skeleton, node.matrixWorld.clone());
+            // Identity bind: three applies boneWorld · IBM · bindMatrix to
+            // each vertex, and glTF's inverse binds already map mesh space
+            // to joint space — any extra bindMatrix mixes the mesh node's
+            // transform (an Armature's 0.01 cm-scale, typically) into the
+            // skinning. At rest that error hides as a uniform shrink the
+            // camera framing absorbs; the first animated frame shreds the
+            // mesh.
+            skinned.bind(skeleton, new THREE.Matrix4());
         }
     }
     root.updateMatrixWorld(true);
@@ -7658,27 +8047,56 @@ Reactor3D.readModelAnimationRules = function(json) {
         }
         return effects;
     };
+    // A pose may carry a keyframe timeline: sorted stops the action (or a
+    // looping ambient trigger) interpolates through, starting from rest
+    // and returning to rest unless the last key sits at 1. Keys make the
+    // scalar in-out blend (and hold) irrelevant for that rule.
+    const readKeys = value => {
+        if (!Array.isArray(value)) return [];
+        const keys = [];
+        for (const raw of value) {
+            if (!raw || typeof raw !== "object") continue;
+            keys.push({
+                at: Math.min(1, Math.max(0, Number(raw.at) || 0)),
+                rotate: vec3(raw.rotate),
+                move: vec3(raw.move),
+                resize: vec3(raw.resize, 1)
+            });
+        }
+        keys.sort((a, b) => a.at - b.at);
+        return keys;
+    };
     for (let i = 0; i < list.length; i++) {
         const raw = list[i] || {};
         const type = raw.type === "swing" || raw.type === "bob" || raw.type === "clip"
             || raw.type === "pose" ? raw.type : "spin";
+        const keys = readKeys(raw.keys);
         rules.push({
             name: String(raw.name || raw.part || type + "-" + i),
             part: String(raw.part || ""),
             clip: String(raw.clip || ""),
+            // Playback-rate multiplier for embedded clips (1 = authored speed).
+            rate: Number(raw.rate) > 0 ? Number(raw.rate) : 1,
             type,
             axis: raw.axis === "x" || raw.axis === "z" ? raw.axis : "y",
-            trigger: ["idle", "moving", "action"].indexOf(raw.trigger) >= 0 ? raw.trigger : "always",
+            trigger: ["idle", "moving", "walking", "dashing", "action"].indexOf(raw.trigger) >= 0
+                ? raw.trigger : "always",
             speed: Number(raw.speed) > 0 ? Number(raw.speed) : 90,
             perTile: Number(raw.perTile) > 0 ? Number(raw.perTile) : 0,
             degrees: Number(raw.degrees) > 0 ? Number(raw.degrees) : 15,
             amount: Number(raw.amount) > 0 ? Number(raw.amount) : 0.1,
             period: Number(raw.period) > 0 ? Number(raw.period) : 60,
             cycles: Number(raw.cycles) > 0 ? Number(raw.cycles) : 1,
+            // Phase offsets a swing or bob within its period — the whole
+            // of a walk cycle is swings sharing a period at 0/0.5 phases.
+            phase: Math.min(1, Math.max(0, Number(raw.phase) || 0)),
             rotate: vec3(raw.rotate),
             move: vec3(raw.move),
             resize: vec3(raw.resize, 1),
-            hold: !!raw.hold,
+            // A keyed timeline owns its whole shape; hold belongs to the
+            // scalar blend and would desync the action duration.
+            hold: keys.length ? false : !!raw.hold,
+            keys,
             effects: readEffects(raw.effects)
         });
     }
@@ -7914,6 +8332,143 @@ Reactor3D.carveModelParts = function(root, parts) {
     });
 };
 
+/**
+ * A rig authored in the editor: a bone skeleton fitted to a static model
+ * plus per-vertex skin weights, stored in model.json as
+ *   rig: { bones: [{ name, parent, head, tail }],
+ *          weights: { "<meshIndex>": { count, indices, weights } } }
+ * with positions in model space and weights base64 bytes (4 influences
+ * per vertex, indices Uint8, weights Uint8 summing 255). Mesh indices
+ * count over carveTargetMeshes' enumeration of the UNRIGGED model, which
+ * is also why a model carries a rig OR carved parts, never both.
+ */
+Reactor3D.decodeRigBytes = function(text) {
+    const clean = String(text || "").replace(/[^A-Za-z0-9+/]/g, "");
+    const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    const out = new Uint8Array(Math.floor(clean.length * 3 / 4));
+    let o = 0;
+    for (let i = 0; i + 1 < clean.length; i += 4) {
+        const a = alphabet.indexOf(clean[i]);
+        const b = alphabet.indexOf(clean[i + 1]);
+        const c = i + 2 < clean.length ? alphabet.indexOf(clean[i + 2]) : -1;
+        const d = i + 3 < clean.length ? alphabet.indexOf(clean[i + 3]) : -1;
+        out[o++] = (a << 2) | (b >> 4);
+        if (c >= 0) out[o++] = ((b & 15) << 4) | (c >> 2);
+        if (d >= 0) out[o++] = ((c & 3) << 6) | d;
+    }
+    return out;
+};
+
+Reactor3D.readModelRig = function(json) {
+    const raw = json && json.rig;
+    if (!raw || typeof raw !== "object" || !Array.isArray(raw.bones) || !raw.bones.length) return null;
+    const vec3 = value => {
+        const list = Array.isArray(value) ? value : [];
+        return [0, 1, 2].map(i => Number.isFinite(Number(list[i])) ? Number(list[i]) : 0);
+    };
+    const bones = [];
+    for (const entry of raw.bones) {
+        if (!entry || !entry.name) return null;
+        const parent = Number.isInteger(entry.parent) && entry.parent >= 0
+            && entry.parent < bones.length ? entry.parent : -1;
+        bones.push({
+            name: String(entry.name),
+            parent,
+            head: vec3(entry.head),
+            tail: vec3(entry.tail)
+        });
+    }
+    const weights = {};
+    // Weights arrive either decoded from the binary sidecar (weightsBin,
+    // attached by loadModelSidecar or the editor) or as the legacy base64
+    // blocks inside the JSON itself.
+    const rawWeights = raw.weightsBin && typeof raw.weightsBin === "object"
+        ? raw.weightsBin
+        : (raw.weights && typeof raw.weights === "object" ? raw.weights : {});
+    const binary = rawWeights === raw.weightsBin;
+    for (const key of Object.keys(rawWeights)) {
+        const meshIndex = Number(key);
+        const entry = rawWeights[key];
+        if (!Number.isInteger(meshIndex) || meshIndex < 0 || !entry) continue;
+        const count = Math.floor(Number(entry.count) || 0);
+        if (count <= 0) continue;
+        const indices = binary ? entry.indices : this.decodeRigBytes(entry.indices);
+        const values = binary ? entry.weights : this.decodeRigBytes(entry.weights);
+        if (!indices || !values || indices.length < count * 4 || values.length < count * 4) continue;
+        weights[meshIndex] = { count, indices, weights: values };
+    }
+    return {
+        template: typeof raw.template === "string" ? raw.template : "humanoid",
+        bones,
+        weights
+    };
+};
+
+/**
+ * Grow the skeleton inside a model instance and bind its weighted meshes
+ * as GPU-skinned meshes. Runs on a clone, never the template — the same
+ * contract as carveModelParts. Each bone registers as a part with pivot
+ * [0,0,0]: a rule rotation composed into the bone's local transform IS
+ * forward kinematics, and the scene graph carries parent motion to the
+ * children, so the whole pose card drives bones with no new rule types.
+ */
+Reactor3D.applyModelRig = function(root, rig) {
+    if (typeof THREE === "undefined" || !root || !rig || !rig.bones.length) return;
+    const meshes = this.carveTargetMeshes(root);
+    const bones = rig.bones.map(def => {
+        const bone = new THREE.Bone();
+        bone.name = def.name;
+        bone.userData.parts = [{ name: def.name, pivot: [0, 0, 0] }];
+        bone.userData.__reactorRigBone = true;
+        bone.userData.__reactorBoneTail = def.tail.slice();
+        return bone;
+    });
+    rig.bones.forEach((def, i) => {
+        const parentHead = def.parent >= 0 ? rig.bones[def.parent].head : [0, 0, 0];
+        bones[i].position.set(
+            def.head[0] - parentHead[0],
+            def.head[1] - parentHead[1],
+            def.head[2] - parentHead[2]);
+        if (def.parent >= 0) bones[def.parent].add(bones[i]);
+    });
+    const rootBones = bones.filter((bone, i) => rig.bones[i].parent < 0);
+    // Bones join the same frame the carve authors pivots in: root's local
+    // space. Weighted meshes may sit offset under recentring wrappers, so
+    // each binds through its own world matrix — the skeleton and the mesh
+    // agree on world space no matter how either is parented.
+    for (const bone of rootBones) root.add(bone);
+    root.updateMatrixWorld(true);
+    const skeleton = new THREE.Skeleton(bones);
+    for (const key of Object.keys(rig.weights)) {
+        const mesh = meshes[Number(key)];
+        const data = rig.weights[key];
+        if (!mesh || !mesh.geometry) continue;
+        const geometry = mesh.geometry;
+        const position = geometry.getAttribute("position");
+        if (!position || position.count !== data.count) continue;
+        const weightScale = 1 / 255;
+        const skinWeights = new Float32Array(data.count * 4);
+        for (let i = 0; i < data.count * 4; i++) skinWeights[i] = data.weights[i] * weightScale;
+        geometry.setAttribute("skinIndex",
+            new THREE.BufferAttribute(Uint16Array.from(data.indices), 4));
+        geometry.setAttribute("skinWeight", new THREE.BufferAttribute(skinWeights, 4));
+        const skinned = new THREE.SkinnedMesh(geometry, mesh.material);
+        skinned.name = mesh.name;
+        skinned.userData.parts = mesh.userData.parts;
+        // Skinned bounds follow bones the culler cannot see.
+        skinned.frustumCulled = false;
+        skinned.position.copy(mesh.position);
+        skinned.quaternion.copy(mesh.quaternion);
+        skinned.scale.copy(mesh.scale);
+        const parent = mesh.parent;
+        parent.remove(mesh);
+        parent.add(skinned);
+        skinned.updateMatrixWorld(true);
+        skinned.bind(skeleton, skinned.matrixWorld.clone());
+    }
+    root.userData.rigged = true;
+};
+
 Reactor3D.modelAnimationUrl = function(name) {
     return "3d/" + name + "/model.json";
 };
@@ -7924,6 +8479,34 @@ Reactor3D.modelAnimationUrl = function(name) {
  * is reachable it is checked first so the absent file never logs a
  * network error the page cannot suppress.
  */
+/**
+ * Decode the model.rig.bin weight container — the runtime mirror of
+ * ModelRigger.decodeWeightsBinary, parity-pinned by tests.
+ */
+Reactor3D.decodeRigWeightsBinary = function(buffer) {
+    const view = new DataView(buffer);
+    if (view.byteLength < 12 || view.getUint32(0, true) !== 0x42575252) return null;
+    if (view.getUint32(4, true) !== 1) return null;
+    const meshCount = view.getUint32(8, true);
+    const out = {};
+    let at = 12;
+    for (let i = 0; i < meshCount; i++) {
+        if (at + 8 > view.byteLength) return null;
+        const meshIndex = view.getUint32(at, true);
+        const count = view.getUint32(at + 4, true);
+        at += 8;
+        const span = count * 4;
+        if (at + span * 2 > view.byteLength) return null;
+        out[String(meshIndex)] = {
+            count,
+            indices: new Uint8Array(buffer, at, span).slice(),
+            weights: new Uint8Array(buffer, at + span, span).slice()
+        };
+        at += span * 2;
+    }
+    return out;
+};
+
 Reactor3D.loadModelSidecar = function(name) {
     if (!this._sidecarCache) this._sidecarCache = {};
     const cached = this._sidecarCache[name];
@@ -7943,6 +8526,34 @@ Reactor3D.loadModelSidecar = function(name) {
                 return;
             }
         }
+        // A rig that keeps its weights in the binary sidecar needs that
+        // file fetched and attached before consumers see the JSON.
+        const finish = parsed => {
+            const rig = parsed && parsed.rig;
+            if (!rig || !rig.weightsFile || rig.weights) {
+                resolve(parsed);
+                return;
+            }
+            // The pointer is a bare filename inside the model's folder;
+            // anything path-like is refused.
+            const file = String(rig.weightsFile);
+            if (/[\\/]/.test(file) || file.indexOf("..") >= 0) {
+                resolve(parsed);
+                return;
+            }
+            const binUrl = "3d/" + name + "/" + file;
+            const binXhr = new XMLHttpRequest();
+            binXhr.open("GET", binUrl);
+            binXhr.responseType = "arraybuffer";
+            binXhr.onload = () => {
+                if (binXhr.status < 400 && binXhr.response) {
+                    rig.weightsBin = Reactor3D.decodeRigWeightsBinary(binXhr.response);
+                }
+                resolve(parsed);
+            };
+            binXhr.onerror = () => resolve(parsed);
+            binXhr.send();
+        };
         const xhr = new XMLHttpRequest();
         xhr.open("GET", url);
         xhr.responseType = "text";
@@ -7952,7 +8563,7 @@ Reactor3D.loadModelSidecar = function(name) {
                 return;
             }
             try {
-                resolve(JSON.parse(xhr.responseText));
+                finish(JSON.parse(xhr.responseText));
             } catch (error) {
                 console.error("Reactor3D: " + name + "/model.json could not be read.", error);
                 resolve(null);
@@ -7983,7 +8594,11 @@ Reactor3D.prepareModelInstance = function(object, clips) {
     object.add(inner);
     const meshes = [];
     inner.traverse(child => {
-        if (!child.isMesh || !child.userData.parts || !child.userData.parts.length) return;
+        // Rig bones register as parts too: rotating a bone's local
+        // transform about its own origin is bone FK, and the bone
+        // hierarchy carries parent motion to children on its own.
+        if (!(child.isMesh || child.isBone) || !child.userData.parts
+            || !child.userData.parts.length) return;
         meshes.push({
             mesh: child,
             parts: child.userData.parts,
@@ -8012,10 +8627,22 @@ Reactor3D.AXIS_VECTORS = {
     z: [0, 0, 1]
 };
 
+/**
+ * Movement triggers by specificity: "moving" is any travel, "walking" is
+ * travel without dashing, "dashing" is travel while dashing. Returns
+ * true/false for those triggers and null for every other trigger.
+ */
+Reactor3D.moveTriggerActive = function(trigger, state) {
+    if (trigger === "moving") return !!state.moving;
+    if (trigger === "walking") return !!state.moving && !state.dashing;
+    if (trigger === "dashing") return !!(state.moving && state.dashing);
+    return null;
+};
+
 Reactor3D.modelRuleDuration = function(rule, clips) {
     if (rule.type === "clip") {
         const clip = (clips || []).find(c => c.name === rule.clip);
-        return clip ? Math.max(1, Math.round(clip.duration * 60)) : 60;
+        return clip ? Math.max(1, Math.round(clip.duration * 60 / (rule.rate || 1))) : 60;
     }
     // A pose goes there and back: in over one period, out over another —
     // unless it holds, in which case the action only needs the way in and
@@ -8028,6 +8655,33 @@ Reactor3D.modelRuleDuration = function(rule, clips) {
 Reactor3D.poseEase = function(blend) {
     const b = Math.min(1, Math.max(0, blend));
     return b * b * (3 - 2 * b);
+};
+
+/**
+ * Sample a keyed pose timeline at progress p (0..1). The timeline starts
+ * at rest, eases smoothly between the authored stops, and returns to
+ * rest at the end unless the final key sits at 1. Rotations interpolate
+ * per-euler-component — authored stops, not arbitrary orientations, so
+ * component lerp reads exactly as the author dragged the sliders.
+ */
+Reactor3D.sampleModelKeys = function(rule, p) {
+    const rest = { at: 0, rotate: [0, 0, 0], move: [0, 0, 0], resize: [1, 1, 1] };
+    const stops = [rest].concat(rule.keys);
+    const last = rule.keys[rule.keys.length - 1];
+    if (!last || last.at < 1) stops.push({ at: 1, rotate: [0, 0, 0], move: [0, 0, 0], resize: [1, 1, 1] });
+    let a = stops[0];
+    let b = stops[stops.length - 1];
+    for (let k = 0; k + 1 < stops.length; k++) {
+        if (p >= stops[k].at && p <= stops[k + 1].at) {
+            a = stops[k];
+            b = stops[k + 1];
+            break;
+        }
+    }
+    const span = b.at - a.at;
+    const s = this.poseEase(span > 0 ? (p - a.at) / span : 1);
+    const mix = (from, to) => [0, 1, 2].map(i => from[i] + (to[i] - from[i]) * s);
+    return { rotate: mix(a.rotate, b.rotate), move: mix(a.move, b.move), resize: mix(a.resize, b.resize) };
 };
 
 /** Drive one instance's rules for this frame. */
@@ -8057,7 +8711,38 @@ Reactor3D.applyModelAnimation = function(binding, rules, state) {
         let quat = null;
         let slide = null;
         let grow = null;
-        if (rule.type === "pose") {
+        if (rule.type === "pose" && rule.keys.length) {
+            // A keyed pose plays its timeline rather than blending one
+            // target in and out: once through on an action, looping on an
+            // ambient trigger. The timeline owns easing, so a cancelled
+            // action simply rests.
+            let progress = null;
+            const duration = Math.max(1, rule.period * 2 * rule.cycles);
+            if (rule.trigger === "action") {
+                if (state.action && state.action.name === rule.name) {
+                    const t = state.frame - state.action.frame;
+                    if (t < duration) progress = t / duration;
+                }
+            } else {
+                const active = rule.trigger === "always"
+                    || (rule.trigger === "idle" && !state.moving)
+                    || (rule.trigger === "moving" && state.moving);
+                if (active) progress = (state.frame % duration) / duration;
+            }
+            binding.angles[i] = 0;
+            if (progress === null) continue;
+            const sampled = this.sampleModelKeys(rule, progress);
+            const toRad = Math.PI / 180;
+            quat = new THREE.Quaternion().setFromEuler(new THREE.Euler(
+                sampled.rotate[0] * toRad, sampled.rotate[1] * toRad, sampled.rotate[2] * toRad, "XYZ"));
+            if (sampled.move[0] || sampled.move[1] || sampled.move[2]) {
+                slide = new THREE.Vector3(sampled.move[0], sampled.move[1], sampled.move[2])
+                    .multiplyScalar(1 / (state.scale || 1));
+            }
+            if (sampled.resize[0] !== 1 || sampled.resize[1] !== 1 || sampled.resize[2] !== 1) {
+                grow = new THREE.Vector3(sampled.resize[0], sampled.resize[1], sampled.resize[2]);
+            }
+        } else if (rule.type === "pose") {
             // The pose blend persists across frames (in binding.angles) so
             // a released trigger eases back to rest instead of snapping —
             // which is why an inactive pose cannot simply be skipped.
@@ -8093,9 +8778,10 @@ Reactor3D.applyModelAnimation = function(binding, rules, state) {
                     }
                 }
             } else {
+                const gate = Reactor3D.moveTriggerActive(rule.trigger, state);
                 const active = rule.trigger === "always"
                     || (rule.trigger === "idle" && !state.moving)
-                    || (rule.trigger === "moving" && state.moving);
+                    || gate === true;
                 const step = 1 / Math.max(1, rule.period);
                 blend = Math.min(1, Math.max(0,
                     (binding.angles[i] || 0) + (active ? step : -step)));
@@ -8120,10 +8806,11 @@ Reactor3D.applyModelAnimation = function(binding, rules, state) {
             }
         } else {
             let t = state.frame;
+            const gate = Reactor3D.moveTriggerActive(rule.trigger, state);
             if (rule.trigger === "idle" && state.moving) continue;
             // A movement-driven spin holds its angle when travel stops — a
             // wheel does not snap back to rest — it simply stops gaining.
-            if (rule.trigger === "moving" && !state.moving && rule.type !== "spin") continue;
+            if (gate === false && rule.type !== "spin") continue;
             if (rule.trigger === "action") {
                 if (!state.action || state.action.name !== rule.name) continue;
                 t = state.frame - state.action.frame;
@@ -8132,14 +8819,14 @@ Reactor3D.applyModelAnimation = function(binding, rules, state) {
             if (rule.type === "spin") {
                 const gain = rule.perTile
                     ? state.distance * rule.perTile
-                    : (rule.trigger === "moving" && !state.moving ? 0 : rule.speed / 60);
+                    : (gate === false ? 0 : rule.speed / 60);
                 binding.angles[i] = (binding.angles[i] || 0) + gain;
                 quat = new THREE.Quaternion().setFromAxisAngle(axisOf(rule), binding.angles[i] * Math.PI / 180);
             } else if (rule.type === "swing") {
-                const angle = rule.degrees * Math.sin(2 * Math.PI * t / rule.period);
+                const angle = rule.degrees * Math.sin(2 * Math.PI * (t / rule.period + rule.phase));
                 quat = new THREE.Quaternion().setFromAxisAngle(axisOf(rule), angle * Math.PI / 180);
             } else {
-                const offset = rule.amount * Math.sin(2 * Math.PI * t / rule.period) / (state.scale || 1);
+                const offset = rule.amount * Math.sin(2 * Math.PI * (t / rule.period + rule.phase)) / (state.scale || 1);
                 slide = axisOf(rule).multiplyScalar(offset);
             }
         }
@@ -8191,20 +8878,28 @@ Reactor3D.applyModelAnimation = function(binding, rules, state) {
         let desired = null;
         let once = false;
         let key = "";
+        let rate = 1;
         if (state.action) {
             const rule = clipRules.find(r => r.trigger === "action" && r.name === state.action.name);
             if (rule) {
                 desired = rule.clip;
                 once = true;
                 key = rule.clip + ":" + state.action.frame;
+                rate = rule.rate || 1;
             }
         }
         if (!desired) {
+            // The most specific movement clip wins: a dashing character
+            // prefers "dashing" over plain "moving"; two clips on the same
+            // trigger never fight — the first in the list plays.
             const pick = trigger => clipRules.find(r => r.trigger === trigger);
-            const rule = (state.moving ? pick("moving") : pick("idle")) || pick("always");
+            const rule = (state.moving
+                ? (state.dashing ? pick("dashing") : pick("walking")) || pick("moving")
+                : pick("idle")) || pick("always");
             if (rule) {
                 desired = rule.clip;
                 key = rule.clip;
+                rate = rule.rate || 1;
             }
         }
         if (binding.clipKey !== key) {
@@ -8225,7 +8920,15 @@ Reactor3D.applyModelAnimation = function(binding, rules, state) {
             if (previous && previous !== next) previous.fadeOut(0.2);
             binding.clipAction = next;
         }
-        binding.mixer.update(1 / 60);
+        if (binding.clipAction) binding.clipAction.timeScale = rate;
+        // The mixer follows the caller's frame clock, not the call rate:
+        // the editor's preview loop runs at the display's refresh, and a
+        // fixed 1/60 step there played every clip at 120Hz-monitor speed.
+        const step = binding.clipFrame == null
+            ? 1
+            : Math.max(0, Math.min(10, state.frame - binding.clipFrame));
+        binding.clipFrame = state.frame;
+        binding.mixer.update(step / 60);
     }
     const scratch = new THREE.Matrix4();
     const outPos = new THREE.Vector3();
@@ -8335,7 +9038,329 @@ Reactor3D.updateModelFlash = function(holder) {
 };
 
 Reactor3D.modelInstanceKey = function(character) {
-    return character && character.eventId ? "e" + character.eventId() : "p";
+    if (!character) return "p";
+    if (character.eventId) return "e" + character.eventId();
+    if (typeof Game_Follower !== "undefined" && character instanceof Game_Follower) {
+        return "f" + (character._memberIndex != null ? character._memberIndex : 0);
+    }
+    return "p";
+};
+
+/**
+ * 3D enemy battlers, without touching the battle renderer: an enemy
+ * bound to a model in the database sidecar gets its battler bitmap from
+ * a live offscreen Three render, refreshed every frame. The battle
+ * scene keeps compositing ordinary sprites — appear, collapse, flashes
+ * and plugin effects all still apply — while the bitmap underneath is a
+ * breathing, animated model driven by the same rule engine as the map.
+ */
+Reactor3D.updateEnemyModelSprite = function(sprite) {
+    if (!sprite || !sprite._enemy || typeof sprite._enemy.enemyId !== "function") return;
+    const enemyId = sprite._enemy.enemyId();
+    const spec = this.databaseModelSpec("enemies", enemyId);
+    let state = sprite._reactorBattler;
+    if (!spec) {
+        if (state) {
+            sprite._reactorBattler = null;
+            // Reload the stock battler art the model had replaced.
+            sprite._battlerName = "";
+        }
+        return;
+    }
+    this.ensureLoaded();
+    if (!this.isLoaded()) return;
+    if (state && state.enemyId !== enemyId) {
+        // Enemy Transform: rebuild for the new enemy.
+        sprite._reactorBattler = state = null;
+    }
+    if (!state) {
+        state = sprite._reactorBattler = { enemyId, frame: 0, ready: false, building: true };
+        const size = Math.max(48, Math.min(480, Math.round(spec.size * 96 * spec.scale)));
+        Promise.all([
+            this.loadModel(spec.name, spec.ext, spec.file, spec.texture),
+            this.loadModelSidecar(spec.name)
+        ]).then(([template, sidecar]) => {
+            if (sprite._reactorBattler !== state || !template) return;
+            const object = this.cloneModelTemplate(template);
+            const rig = this.readModelRig(sidecar);
+            if (rig) {
+                this.applyModelRig(object, rig);
+            } else {
+                this.carveModelParts(object, this.readModelParts(sidecar));
+                this.applyPivotOverrides(object, this.readModelPivots(sidecar));
+            }
+            const extent = template.userData.glbSize || { x: 1, y: 1, z: 1 };
+            const span = Math.max(extent.x, extent.y, extent.z, 0.0001);
+            const scale = 1.6 / span;
+            object.scale.setScalar(scale);
+            this.applyEventModelPose(object, {
+                pitch: spec.pitch, yaw: spec.yaw, roll: spec.roll, faces: spec.faces
+            }, 2, { preview: true, faceYaw: 0 });
+            const scene = new THREE.Scene();
+            scene.add(object);
+            scene.add(new THREE.HemisphereLight(0xffffff, 0x445566, 1.1));
+            const sun = new THREE.DirectionalLight(0xffffff, 0.9);
+            sun.position.set(1.4, 2.2, 1.8);
+            scene.add(sun);
+            const height = Math.max(0.2, extent.y * scale);
+            const camera = new THREE.PerspectiveCamera(35, 1, 0.05, 50);
+            const distance = (height / (2 * Math.tan(17.5 * Math.PI / 180))) * 1.25;
+            camera.position.set(0, height * 0.52, Math.max(distance, 0.8));
+            camera.lookAt(0, height * 0.48, 0);
+            state.object = object;
+            state.scene = scene;
+            state.camera = camera;
+            state.scale = scale;
+            state.binding = this.prepareModelInstance(object, object.__reactorClips);
+            state.rules = sidecar ? this.readModelAnimationRules(sidecar) : [];
+            state.size = size;
+            state.bitmap = new Bitmap(size, size);
+            state.ready = true;
+        }).catch(() => {
+            state.building = false;
+        });
+        return;
+    }
+    if (!state.ready) return;
+    if (sprite.bitmap !== state.bitmap) {
+        sprite.bitmap = state.bitmap;
+    }
+    state.frame++;
+    const pending = this._modelActions && this._modelActions["b" + enemyId];
+    if (pending) {
+        delete this._modelActions["b" + enemyId];
+        state.action = { name: pending.name, frame: state.frame };
+    }
+    if (state.action && state.frame - state.action.frame
+        >= Math.max(...state.rules.map(rule => this.modelRuleDuration(rule, state.binding.clips)), 1)) {
+        state.action = null;
+    }
+    if (state.binding && state.rules.length) {
+        this.applyModelAnimation(state.binding, state.rules, {
+            frame: state.frame,
+            moving: false,
+            distance: 0,
+            scale: state.scale,
+            action: state.action ? { name: state.action.name, frame: state.action.frame } : null
+        });
+    }
+    const renderer = this._battlerRenderer || (this._battlerRenderer =
+        new THREE.WebGLRenderer({ antialias: true, alpha: true }));
+    renderer.setSize(state.size, state.size, false);
+    renderer.setClearColor(0x000000, 0);
+    renderer.render(state.scene, state.camera);
+    const context = state.bitmap.context;
+    context.clearRect(0, 0, state.size, state.size);
+    context.drawImage(renderer.domElement, 0, 0, state.size, state.size);
+    state.bitmap.baseTexture.update();
+};
+
+/**
+ * A face-slot binding renders the model's head into a 144×144 face
+ * bitmap, framed by the spec's view (zoom, height fraction). The render
+ * is a still: it happens once when the model finishes loading, and any
+ * window that asked before then is refreshed after.
+ */
+Reactor3D.actorFaceState = function(actorId) {
+    if (!this._faceStates) this._faceStates = {};
+    let state = this._faceStates[actorId];
+    if (state) return state;
+    const spec = this.actorSlotSpec(actorId, "face");
+    if (!spec) return null;
+    const size = 144;
+    state = this._faceStates[actorId] = {
+        ready: false,
+        bitmap: new Bitmap(size, size),
+        waiters: []
+    };
+    this.ensureLoaded();
+    Promise.all([
+        this.loadModel(spec.name, spec.ext, spec.file, spec.texture),
+        this.loadModelSidecar(spec.name)
+    ]).then(([template, sidecar]) => {
+        if (!template || !this.isLoaded()) return;
+        const object = this.cloneModelTemplate(template);
+        const rig = this.readModelRig(sidecar);
+        if (rig) {
+            this.applyModelRig(object, rig);
+        } else {
+            this.carveModelParts(object, this.readModelParts(sidecar));
+            this.applyPivotOverrides(object, this.readModelPivots(sidecar));
+        }
+        const extent = template.userData.glbSize || { x: 1, y: 1, z: 1 };
+        const span = Math.max(extent.x, extent.y, extent.z, 0.0001);
+        const scale = 1.6 / span;
+        object.scale.setScalar(scale);
+        this.applyEventModelPose(object, {
+            pitch: spec.pitch, yaw: spec.yaw, roll: spec.roll, faces: spec.faces
+        }, 2, { preview: true, faceYaw: 0 });
+        const scene = new THREE.Scene();
+        scene.add(object);
+        scene.add(new THREE.HemisphereLight(0xffffff, 0x445566, 1.35));
+        const view = spec.view || { zoom: 3, y: 0.82 };
+        const height = Math.max(0.2, extent.y * scale);
+        const camera = new THREE.PerspectiveCamera(35, 1, 0.05, 50);
+        const visible = height / view.zoom;
+        const distance = Math.max(0.3, (visible / (2 * Math.tan(17.5 * Math.PI / 180))) * 1.1);
+        camera.position.set(0, height * view.y, distance);
+        camera.lookAt(0, height * view.y, 0);
+        // A close-up lights from beside the camera, not from overhead —
+        // an overhead sun leaves the face itself in its own shadow side.
+        const sun = new THREE.DirectionalLight(0xffffff, 1.1);
+        sun.position.set(distance * 0.6, height * view.y + distance * 0.5, distance * 1.4);
+        scene.add(sun);
+        const paint = () => {
+            const renderer = this._battlerRenderer || (this._battlerRenderer =
+                new THREE.WebGLRenderer({ antialias: true, alpha: true }));
+            renderer.setSize(size, size, false);
+            renderer.setClearColor(0x000000, 0);
+            renderer.render(scene, camera);
+            const context = state.bitmap.context;
+            context.clearRect(0, 0, size, size);
+            context.drawImage(renderer.domElement, 0, 0, size, size);
+            state.bitmap.baseTexture.update();
+            state.ready = true;
+            for (const waiter of state.waiters.slice()) {
+                if (waiter && typeof waiter.refresh === "function" && !waiter._destroyed) {
+                    waiter.refresh();
+                }
+            }
+        };
+        paint();
+        // Embedded textures decode after the model resolves; a single
+        // early render bakes an untextured silhouette. Paint again once
+        // they have settled, then let the scene go.
+        setTimeout(paint, 700);
+        setTimeout(() => {
+            paint();
+            state.waiters.length = 0;
+        }, 2500);
+    }).catch(error => {
+        console.error("Reactor3D: face render failed.", error);
+    });
+    return state;
+};
+
+/**
+ * A battler-slot binding shows the actor as a live 3D render in
+ * side-view battles, exactly the way a bound enemy renders. The stock
+ * motion cells do not apply: ambient rules and named actions drive it.
+ */
+Reactor3D.updateActorModelSprite = function(sprite) {
+    if (!sprite || !sprite._actor || typeof sprite._actor.actorId !== "function") return;
+    const actorId = sprite._actor.actorId();
+    const spec = this.actorSlotSpec(actorId, "battler");
+    const main = sprite._mainSprite;
+    let state = sprite._reactorBattler;
+    if (!spec || !main) {
+        if (state) {
+            sprite._reactorBattler = null;
+            sprite._battlerName = "";
+        }
+        return;
+    }
+    this.ensureLoaded();
+    if (!this.isLoaded()) return;
+    if (state && state.actorId !== actorId) {
+        sprite._reactorBattler = state = null;
+    }
+    if (!state) {
+        state = sprite._reactorBattler = { actorId, frame: 0, ready: false, building: true };
+        const size = Math.max(48, Math.min(480, Math.round(spec.size * 96 * spec.scale)));
+        Promise.all([
+            this.loadModel(spec.name, spec.ext, spec.file, spec.texture),
+            this.loadModelSidecar(spec.name)
+        ]).then(([template, sidecar]) => {
+            if (sprite._reactorBattler !== state || !template) return;
+            const object = this.cloneModelTemplate(template);
+            const rig = this.readModelRig(sidecar);
+            if (rig) {
+                this.applyModelRig(object, rig);
+            } else {
+                this.carveModelParts(object, this.readModelParts(sidecar));
+                this.applyPivotOverrides(object, this.readModelPivots(sidecar));
+            }
+            const extent = template.userData.glbSize || { x: 1, y: 1, z: 1 };
+            const span = Math.max(extent.x, extent.y, extent.z, 0.0001);
+            const scale = 1.6 / span;
+            object.scale.setScalar(scale);
+            // Side view faces the enemies: the model looks left.
+            this.applyEventModelPose(object, {
+                pitch: spec.pitch, yaw: spec.yaw, roll: spec.roll, faces: spec.faces
+            }, 4, { preview: true, faceYaw: 0 });
+            const scene = new THREE.Scene();
+            scene.add(object);
+            scene.add(new THREE.HemisphereLight(0xffffff, 0x445566, 1.1));
+            const sun = new THREE.DirectionalLight(0xffffff, 0.9);
+            sun.position.set(1.4, 2.2, 1.8);
+            scene.add(sun);
+            const height = Math.max(0.2, extent.y * scale);
+            const camera = new THREE.PerspectiveCamera(35, 1, 0.05, 50);
+            const distance = (height / (2 * Math.tan(17.5 * Math.PI / 180))) * 1.25;
+            camera.position.set(0, height * 0.52, Math.max(distance, 0.8));
+            camera.lookAt(0, height * 0.48, 0);
+            state.object = object;
+            state.scene = scene;
+            state.camera = camera;
+            state.scale = scale;
+            state.binding = this.prepareModelInstance(object, object.__reactorClips);
+            state.rules = sidecar ? this.readModelAnimationRules(sidecar) : [];
+            state.size = size;
+            state.bitmap = new Bitmap(size, size);
+            state.ready = true;
+        }).catch(() => {
+            state.building = false;
+        });
+        return;
+    }
+    if (!state.ready) return;
+    if (main.bitmap !== state.bitmap) {
+        main.bitmap = state.bitmap;
+    }
+    main.setFrame(0, 0, state.size, state.size);
+    state.frame++;
+    const pending = this._modelActions && this._modelActions["a" + actorId];
+    if (pending) {
+        delete this._modelActions["a" + actorId];
+        state.action = { name: pending.name, frame: state.frame };
+    }
+    if (state.action && state.frame - state.action.frame
+        >= Math.max(...state.rules.map(rule => this.modelRuleDuration(rule, state.binding.clips)), 1)) {
+        state.action = null;
+    }
+    if (state.binding && state.rules.length) {
+        this.applyModelAnimation(state.binding, state.rules, {
+            frame: state.frame,
+            moving: false,
+            distance: 0,
+            scale: state.scale,
+            action: state.action ? { name: state.action.name, frame: state.action.frame } : null
+        });
+    }
+    const renderer = this._battlerRenderer || (this._battlerRenderer =
+        new THREE.WebGLRenderer({ antialias: true, alpha: true }));
+    renderer.setSize(state.size, state.size, false);
+    renderer.setClearColor(0x000000, 0);
+    renderer.render(state.scene, state.camera);
+    const context = state.bitmap.context;
+    context.clearRect(0, 0, state.size, state.size);
+    context.drawImage(renderer.domElement, 0, 0, state.size, state.size);
+    state.bitmap.baseTexture.update();
+};
+
+/** Queue a named action on a 3D actor battler. */
+Reactor3D.playActorBattlerAnimation = function(actorId, name) {
+    if (!name) return;
+    if (!this._modelActions) this._modelActions = {};
+    this._modelActions["a" + actorId] = { name: String(name), frame: 0 };
+};
+
+/** Queue a named action on a 3D enemy battler, by troop member index. */
+Reactor3D.playBattlerAnimation = function(enemyId, name) {
+    if (!name) return;
+    if (!this._modelActions) this._modelActions = {};
+    // The frame stamps on pickup: each battler runs its own clock.
+    this._modelActions["b" + enemyId] = { name: String(name), frame: 0 };
 };
 
 /** Queue a named action animation on a character's model. */
@@ -8402,7 +9427,7 @@ Reactor3D.MapScene.prototype.syncCharacterModels = function(characters) {
     for (const character of characters || []) {
         const spec = Reactor3D.characterModelSpec(character);
         if (!spec) continue;
-        const key = character.eventId ? "e" + character.eventId() : "p";
+        const key = Reactor3D.modelInstanceKey(character);
         live.add(key);
         let holder = this._modelInstances.get(key);
         if (!holder) {
@@ -8417,10 +9442,17 @@ Reactor3D.MapScene.prototype.syncCharacterModels = function(characters) {
                 if (!current || current.spec !== Reactor3D.modelCacheKey(spec.name, spec.ext, spec.file)) return;
                 const object = Reactor3D.cloneModelTemplate(template);
                 object.userData.glbSize = template.userData.glbSize;
-                // Carved parts must exist before the binding is prepared, or
-                // the new meshes would be invisible to every rule.
-                Reactor3D.carveModelParts(object, Reactor3D.readModelParts(sidecar));
-                Reactor3D.applyPivotOverrides(object, Reactor3D.readModelPivots(sidecar));
+                // Carved parts (or the rig's bones) must exist before the
+                // binding is prepared, or the new pieces would be invisible
+                // to every rule. A rig and carved parts are exclusive: both
+                // count mesh indices over the uncarved model.
+                const rig = Reactor3D.readModelRig(sidecar);
+                if (rig) {
+                    Reactor3D.applyModelRig(object, rig);
+                } else {
+                    Reactor3D.carveModelParts(object, Reactor3D.readModelParts(sidecar));
+                    Reactor3D.applyPivotOverrides(object, Reactor3D.readModelPivots(sidecar));
+                }
                 current.object = object;
                 current.binding = Reactor3D.prepareModelInstance(object, object.__reactorClips);
                 current.rules = sidecar ? Reactor3D.readModelAnimationRules(sidecar) : [];
@@ -8442,7 +9474,8 @@ Reactor3D.MapScene.prototype.syncCharacterModels = function(characters) {
         const object = holder.object;
         if (!object) continue;
         const extent = object.userData.glbSize || { x: 1, y: 1, z: 1 };
-        const span = Math.max(extent.x, extent.z, 0.0001);
+        // Largest dimension, matching the collision footprint's rule.
+        const span = Math.max(extent.x, extent.y, extent.z, 0.0001);
         const fit = (spec.size > 0 ? spec.size : 2) / span;
         const scale = fit * (spec.scale > 0 ? spec.scale : 1);
         const ground = Reactor3D.elevationAt(
@@ -8515,6 +9548,11 @@ Reactor3D.MapScene.prototype.syncCharacterModels = function(characters) {
             Reactor3D.applyModelAnimation(holder.binding, holder.rules, {
                 frame,
                 moving: !!(character.isMoving && character.isMoving()) || distance > 0.0001,
+                // Followers keep the party leader's gait: their own
+                // isDashing is the CharacterBase stub and never true.
+                dashing: typeof Game_Follower !== "undefined" && character instanceof Game_Follower
+                    ? $gamePlayer.isDashing()
+                    : !!(character.isDashing && character.isDashing()),
                 distance,
                 scale,
                 action: holder.action || null

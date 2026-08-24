@@ -613,7 +613,10 @@ class TilemapManager {
             const at = y * this.TILE_HEIGHT;
             graphics.moveTo(0, at).lineTo(width, at);
         }
-        graphics.stroke({ width: 1, color: 0xffffff, alpha: 0.16 });
+        // pixelLine keeps the stroke one device pixel at every zoom. A plain
+        // width-1 stroke lives in world space: zoomed out it goes sub-pixel
+        // and lines alias away, zoomed in it fattens.
+        graphics.stroke({ width: 1, color: 0xffffff, alpha: 0.16, pixelLine: true });
         graphics.eventMode = "none";
         graphics.visible = this.gridVisible === true;
 

@@ -1830,7 +1830,17 @@ Sprite_Animation.prototype.targetSpritePosition = function(sprite) {
     if (!PIXI.TextureSource) {
         sprite.updateTransform();
     }
-    return sprite.worldTransform.apply(point);
+    const out = sprite.worldTransform.apply(point);
+    // A hidden sprite never reaches v8's render pass, so its
+    // worldTransform is stale — a 3D model event's stand-in sprite is
+    // exactly that, and an animation anchored through it landed wherever
+    // the transform last froze. Compose its local position through the
+    // parent, whose transform stays live.
+    if ((!sprite.visible || !Number.isFinite(out.x) || !Number.isFinite(out.y))
+        && sprite.parent && sprite.parent.worldTransform) {
+        return sprite.parent.worldTransform.apply(new Point(sprite.x, sprite.y));
+    }
+    return out;
 };
 
 Sprite_Animation.prototype.resetViewport = function(renderer) {
@@ -4498,8 +4508,22 @@ Spriteset_Map.prototype.updateReactor3D = function() {
     // stepping a whole tile at a time.
     this.updateReactor3DCamera();
     this.updateReactor3DLights(state);
+    // Warm any template that landed after the scene started (the pass
+    // marks each template once, so steady-state this is a no-op scan).
+    if (Reactor3D.warmLoadedTemplates) Reactor3D.warmLoadedTemplates();
     if (state.scene.syncCharacterModels && typeof $gameMap !== "undefined" && $gameMap) {
-        state.scene.syncCharacterModels($gameMap.events().filter(Boolean));
+        // The player and visible followers ride the same instance pool as
+        // events: an actor bound to a model in the database sidecar walks
+        // the map as that model.
+        const characters = $gameMap.events().filter(Boolean);
+        if (typeof $gamePlayer !== "undefined" && $gamePlayer) {
+            characters.push($gamePlayer);
+            const followers = $gamePlayer.followers && $gamePlayer.followers();
+            if (followers && followers.visibleFollowers) {
+                for (const follower of followers.visibleFollowers()) characters.push(follower);
+            }
+        }
+        state.scene.syncCharacterModels(characters);
     }
     if (state.scene.syncCharacterBillboards) {
         state.scene.syncCharacterBillboards(this._characterSprites);
@@ -4982,6 +5006,89 @@ Spriteset_Battle.prototype.isAnyoneMoving = function() {
 
 Spriteset_Battle.prototype.isBusy = function() {
     return this.isAnimationPlaying() || this.isAnyoneMoving();
+};
+
+// A database-sidecar enemy renders as a live 3D model: its battler bitmap
+// is an offscreen Three render refreshed here every frame. Wrapped after
+// the class body above so the assignment lands on the final prototype.
+const _reactorSpriteEnemyUpdate = Sprite_Enemy.prototype.update;
+Sprite_Enemy.prototype.update = function() {
+    _reactorSpriteEnemyUpdate.call(this);
+    if (typeof Reactor3D !== "undefined" && Reactor3D.updateEnemyModelSprite) {
+        Reactor3D.updateEnemyModelSprite(this);
+    }
+};
+
+// A character shown as a 3D model needs no walking sheet on disk: the
+// stale 2D characterName an actor kept from before going 3D would 404
+// the map. Track the names so isImageChanged stays quiet, load nothing.
+const _reactorSpriteCharacterUpdateBitmap = Sprite_Character.prototype.updateBitmap;
+Sprite_Character.prototype.updateBitmap = function() {
+    if (typeof Reactor3D !== "undefined" && Reactor3D.characterModelSpec && this._character
+        && !this._character.tileId() && Reactor3D.characterModelSpec(this._character)) {
+        this._tilesetId = $gameMap.tilesetId();
+        this._tileId = 0;
+        this._characterName = this._character.characterName();
+        this._characterIndex = this._character.characterIndex();
+        if (!this.bitmap) this.bitmap = new Bitmap(1, 1);
+        return;
+    }
+    _reactorSpriteCharacterUpdateBitmap.call(this);
+};
+
+// A battler-slot actor binding renders the actor as a live 3D model in
+// side view, the same way a bound enemy renders. The wrappers sit here,
+// after every class body, for the same prototype-replacement reason.
+const _reactorSpriteActorUpdate = Sprite_Actor.prototype.update;
+Sprite_Actor.prototype.update = function() {
+    _reactorSpriteActorUpdate.call(this);
+    if (typeof Reactor3D !== "undefined" && Reactor3D.updateActorModelSprite) {
+        Reactor3D.updateActorModelSprite(this);
+    }
+};
+
+const _reactorSpriteActorUpdateBitmap = Sprite_Actor.prototype.updateBitmap;
+Sprite_Actor.prototype.updateBitmap = function() {
+    if (typeof Reactor3D !== "undefined" && Reactor3D.actorSlotSpec && this._actor
+        && Reactor3D.actorSlotSpec(this._actor.actorId(), "battler")) {
+        if (this._mainSprite && !this._mainSprite.bitmap) {
+            this._mainSprite.bitmap = new Bitmap(1, 1);
+        }
+        return;
+    }
+    _reactorSpriteActorUpdateBitmap.call(this);
+};
+
+const _reactorSpriteActorUpdateFrame = Sprite_Actor.prototype.updateFrame;
+Sprite_Actor.prototype.updateFrame = function() {
+    const state = this._reactorBattler;
+    if (state && state.ready) {
+        // The model render is one full-bitmap frame, never motion cells.
+        Sprite_Battler.prototype.updateFrame.call(this);
+        this._mainSprite.setFrame(0, 0, state.size, state.size);
+        this.setFrame(0, 0, state.size, state.size);
+        return;
+    }
+    _reactorSpriteActorUpdateFrame.call(this);
+};
+
+// A bound enemy needs no battler art on disk: the model render owns the
+// sprite's bitmap, so skip the stock image load entirely rather than
+// fetch (or crash on) a file the project never shipped.
+const _reactorSpriteEnemyUpdateBitmap = Sprite_Enemy.prototype.updateBitmap;
+Sprite_Enemy.prototype.updateBitmap = function() {
+    if (typeof Reactor3D !== "undefined" && Reactor3D.databaseModelSpec && this._enemy
+        && Reactor3D.databaseModelSpec("enemies", this._enemy.enemyId())) {
+        // Plugins freely read this.bitmap (state icon placement, overlays),
+        // so hold an empty one until the model render replaces it.
+        if (!this.bitmap) this.bitmap = new Bitmap(1, 1);
+        if (!this._reactorVisibilityInit) {
+            this._reactorVisibilityInit = true;
+            this.initVisibility();
+        }
+        return;
+    }
+    _reactorSpriteEnemyUpdateBitmap.call(this);
 };
 
 //-----------------------------------------------------------------------------

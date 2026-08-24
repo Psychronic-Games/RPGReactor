@@ -249,12 +249,12 @@ class DatabaseStateEditor {
                         `<tr><td style="width: 3px; padding: 0; border: none; background: transparent;"></td><td colspan="2" style="text-align: center; color: var(--color-text-muted); font-style: italic; padding: 12px;">${tt('No traits (right-click to add)')}</td></tr>`}
                 </tbody>
             </table>
-            <div class="trait-action-buttons" style="display: flex; gap: 6px; margin-top: 8px;">
-                <button class="trait-btn-add" style="padding: 4px 12px; background: var(--color-border-subtle); border: 1px solid var(--color-border-input); color: var(--color-text-strong); border-radius: 4px; cursor: pointer; font-size: 12px;">${tt('Add')}</button>
-                <button class="trait-btn-edit" style="padding: 4px 12px; background: var(--color-border-subtle); border: 1px solid var(--color-border-input); color: var(--color-text-dim); border-radius: 4px; cursor: default; font-size: 12px;" disabled>${tt('Edit')}</button>
-                <button class="trait-btn-copy" style="padding: 4px 12px; background: var(--color-border-subtle); border: 1px solid var(--color-border-input); color: var(--color-text-dim); border-radius: 4px; cursor: default; font-size: 12px;" disabled>${tt('Copy')}</button>
-                <button class="trait-btn-paste" style="padding: 4px 12px; background: var(--color-border-subtle); border: 1px solid var(--color-border-input); color: var(--color-text-strong); border-radius: 4px; cursor: pointer; font-size: 12px;">${tt('Paste')}</button>
-                <button class="trait-btn-delete" style="padding: 4px 12px; background: var(--color-border-subtle); border: 1px solid var(--color-border-input); color: var(--color-text-dim); border-radius: 4px; cursor: default; font-size: 12px;" disabled>${tt('Delete')}</button>
+            <div class="trait-action-buttons">
+                <button class="trait-btn-add rr-btn-chip">${tt('Add')}</button>
+                <button class="trait-btn-edit rr-btn-chip" disabled>${tt('Edit')}</button>
+                <button class="trait-btn-copy rr-btn-chip" disabled>${tt('Copy')}</button>
+                <button class="trait-btn-paste rr-btn-chip">${tt('Paste')}</button>
+                <button class="trait-btn-delete rr-btn-chip" disabled>${tt('Delete')}</button>
             </div>
         `;
     }
@@ -373,14 +373,6 @@ class DatabaseStateEditor {
         const btnPaste = section.querySelector('.trait-btn-paste');
         const btnDelete = section.querySelector('.trait-btn-delete');
 
-        [btnAdd, btnEdit, btnCopy, btnPaste, btnDelete].forEach(btn => {
-            btn.addEventListener('mouseenter', () => {
-                if (!btn.disabled) btn.style.background = 'var(--color-accent-tint-25)';
-            });
-            btn.addEventListener('mouseleave', () => {
-                if (!btn.disabled) btn.style.background = 'var(--color-border-subtle)';
-            });
-        });
 
         btnAdd.addEventListener('click', () => this.addTrait(entry));
         btnEdit.addEventListener('click', () => {
@@ -416,8 +408,6 @@ class DatabaseStateEditor {
         const setBtn = (btn, enabled) => {
             if (!btn) return;
             btn.disabled = !enabled;
-            btn.style.color = enabled ? 'var(--color-text-strong)' : 'var(--color-text-dim)';
-            btn.style.cursor = enabled ? 'pointer' : 'default';
         };
 
         setBtn(section.querySelector('.trait-btn-edit'), hasSelection);

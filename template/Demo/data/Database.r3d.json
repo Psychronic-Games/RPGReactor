@@ -1,0 +1,71 @@
+{
+  "actors": {
+    "1": {
+      "character": {
+        "name": "Actors/Fleagus",
+        "file": "Fleagus",
+        "ext": ".glb",
+        "size": 3,
+        "scale": 1,
+        "yaw": 0,
+        "pitch": 0,
+        "roll": 0,
+        "faces": {},
+        "texture": ""
+      },
+      "battler": {
+        "name": "Actors/Fleagus",
+        "file": "Fleagus",
+        "ext": ".glb",
+        "size": 2,
+        "scale": 1,
+        "yaw": 0,
+        "pitch": 0,
+        "roll": 0,
+        "faces": {},
+        "texture": ""
+      }
+    },
+    "2": {
+      "character": {
+        "name": "Actors/Captain_Carol_Everson_Reduced",
+        "file": "Captain_Carol_Everson_Reduced",
+        "ext": ".glb",
+        "size": 3,
+        "scale": 1,
+        "yaw": 0,
+        "pitch": 0,
+        "roll": 0,
+        "faces": {},
+        "texture": ""
+      },
+      "battler": {
+        "name": "Actors/Captain_Carol_Everson_Reduced",
+        "file": "Captain_Carol_Everson_Reduced",
+        "ext": ".glb",
+        "size": 2,
+        "scale": 1,
+        "yaw": 0,
+        "pitch": 0,
+        "roll": 0,
+        "faces": {},
+        "texture": ""
+      }
+    }
+  },
+  "version": 1,
+  "weapons": {
+    "1": {
+      "name": "Weapons/Sword_Fleagus",
+      "file": "Sword_Fleagus",
+      "ext": ".glb",
+      "size": 2,
+      "scale": 1,
+      "yaw": 0,
+      "pitch": 0,
+      "roll": 0,
+      "faces": {},
+      "texture": ""
+    }
+  }
+}

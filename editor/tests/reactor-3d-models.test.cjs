@@ -17,10 +17,13 @@ test('a model note is ignored unless it names a file', () => {
     assert.equal(Reactor3D.modelSpecFromNote('<r3d>scale(2)</r3d>'), null);
 });
 
-test('a model note refuses path traversal', () => {
+test('a model note refuses path traversal but accepts folder names', () => {
     assert.equal(Reactor3D.modelSpecFromNote('<r3d>model(../secret)</r3d>'), null);
-    assert.equal(Reactor3D.modelSpecFromNote('<r3d>model(a/b)</r3d>'), null);
     assert.equal(Reactor3D.modelSpecFromNote('<r3d:model:..\\x>'), null);
+    assert.equal(Reactor3D.modelSpecFromNote('<r3d>model(a/../b)</r3d>'), null);
+    // Models organize into folders: a slashed name is a 3d/ subpath.
+    assert.equal(Reactor3D.modelSpecFromNote('<r3d>model(Weapons/sword)</r3d>').name,
+        'Weapons/sword');
 });
 
 test('a model note reads name, size, scale and yaw', () => {
@@ -886,7 +889,10 @@ test('the sync loop binds instances, loads rules, and plays queued actions', () 
     // the same trigger system.
     assert.match(source, /buildAnimatedGlbTemplate/);
     assert.match(source, /new THREE\.SkinnedMesh\(geometry, child\.material\)/);
-    assert.match(source, /skinned\.bind\(skeleton, node\.matrixWorld\.clone\(\)\)/);
+    // Identity bind: glTF inverse binds already map mesh space to joint
+    // space, and a mesh-world bindMatrix mixed an Armature's cm-scale into
+    // the skinning (rest hid it as a uniform shrink; motion shredded).
+    assert.match(source, /skinned\.bind\(skeleton, new THREE\.Matrix4\(\)\)/);
     assert.match(source, /Reactor3D\.cloneModelTemplate = function/);
     assert.match(source, /const object = Reactor3D\.cloneModelTemplate\(template\)/, 'instances clone through the rebinder');
     assert.match(source, /new THREE\.AnimationMixer\(inner\)/);
@@ -973,4 +979,87 @@ test('embedded clips build, clone, and play motion through clip rules', () => {
     }
     const angle = spinner.quaternion.angleTo(start) * 180 / Math.PI;
     assert.ok(angle > 20 && angle < 70, 'half a second into the clip the node has visibly turned: ' + angle.toFixed(1));
+});
+
+test('a skinned clip under a centimetre-scaled armature moves sanely', () => {
+    global.self = global;
+    global.window = global;
+    require(path.join(repoRoot, 'runtime', 'libs', 'three.js'));
+    const THREE = global.THREE;
+    // The Meshy/Mixamo shape: an Armature scaled 0.01 holding one bone at
+    // y=100cm and a skinned triangle in centimetres. The clip lifts the
+    // bone 10cm. A mesh-world bindMatrix used to mix the 0.01 into the
+    // skinning — rest hid it as a uniform shrink (the model measured 100×
+    // too small), the first animated frame shredded the mesh.
+    const positions = new Float32Array([0, 0, 0, 10, 0, 0, 0, 170, 0]);
+    const joints = new Uint8Array([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+    const weights = new Float32Array([1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0]);
+    const ibm = new THREE.Matrix4().makeTranslation(0, -100, 0).toArray();
+    const ibmArr = new Float32Array(ibm);
+    const times = new Float32Array([0, 1]);
+    const lift = new Float32Array([0, 100, 0, 0, 110, 0]);
+    const parts = [positions, joints, weights, ibmArr, times, lift];
+    const bin = new Uint8Array(parts.reduce((n, p) => n + p.byteLength, 0));
+    const offsets = [];
+    let at = 0;
+    for (const part of parts) {
+        offsets.push(at);
+        bin.set(new Uint8Array(part.buffer), at);
+        at += part.byteLength;
+    }
+    const json = {
+        asset: { version: '2.0' },
+        buffers: [{ byteLength: bin.byteLength }],
+        bufferViews: parts.map((part, i) => ({ buffer: 0, byteOffset: offsets[i], byteLength: part.byteLength })),
+        accessors: [
+            { bufferView: 0, componentType: 5126, count: 3, type: 'VEC3', min: [0, 0, 0], max: [10, 170, 0] },
+            { bufferView: 1, componentType: 5121, count: 3, type: 'VEC4' },
+            { bufferView: 2, componentType: 5126, count: 3, type: 'VEC4' },
+            { bufferView: 3, componentType: 5126, count: 1, type: 'MAT4' },
+            { bufferView: 4, componentType: 5126, count: 2, type: 'SCALAR', min: [0], max: [1] },
+            { bufferView: 5, componentType: 5126, count: 2, type: 'VEC3' }
+        ],
+        meshes: [{ primitives: [{ attributes: { POSITION: 0, JOINTS_0: 1, WEIGHTS_0: 2 } }] }],
+        skins: [{ joints: [1], inverseBindMatrices: 3 }],
+        nodes: [
+            { name: 'Armature', scale: [0.01, 0.01, 0.01], children: [1, 2] },
+            { name: 'Hips', translation: [0, 100, 0] },
+            { name: 'char', mesh: 0, skin: 0 }
+        ],
+        scenes: [{ nodes: [0] }],
+        scene: 0,
+        animations: [{
+            name: 'lift',
+            channels: [{ sampler: 0, target: { node: 1, path: 'translation' } }],
+            samplers: [{ input: 4, output: 5 }]
+        }]
+    };
+    const template = Reactor3D.buildGlbTemplate(json, bin, '');
+    assert.ok(template.userData.glbSize.y > 1 && template.userData.glbSize.y < 3,
+        'the armature scale reaches the measured size once, not twice: ' + template.userData.glbSize.y.toFixed(4));
+
+    const clone = Reactor3D.cloneModelTemplate(template);
+    const binding = Reactor3D.prepareModelInstance(clone, clone.__reactorClips);
+    const rules = Reactor3D.readModelAnimationRules({ animations: [
+        { name: 'idle-lift', type: 'clip', clip: 'lift', trigger: 'always' }
+    ] });
+    let skinned = null;
+    clone.traverse(node => { if (!skinned && node.isSkinnedMesh) skinned = node; });
+    const worldOf = index => {
+        clone.updateMatrixWorld(true);
+        skinned.skeleton.update();
+        const p = new THREE.Vector3().fromBufferAttribute(skinned.geometry.getAttribute('position'), index);
+        skinned.applyBoneTransform(index, p);
+        return p.applyMatrix4(skinned.matrixWorld);
+    };
+    Reactor3D.applyModelAnimation(binding, rules, { frame: 0, moving: false, distance: 0, scale: 1, action: null });
+    const rest = worldOf(0);
+    for (let frame = 1; frame <= 30; frame++) {
+        Reactor3D.applyModelAnimation(binding, rules, { frame, moving: false, distance: 0, scale: 1, action: null });
+    }
+    const lifted = worldOf(0);
+    const rise = lifted.y - rest.y;
+    assert.ok(rise > 0.03 && rise < 0.08,
+        'a 10cm bone lift, sampled mid-clip, moves the vertex ~0.05 world units, not 100× that: ' + rise.toFixed(4));
+    assert.ok(Math.abs(lifted.x - rest.x) < 0.01, 'the lift stays vertical');
 });

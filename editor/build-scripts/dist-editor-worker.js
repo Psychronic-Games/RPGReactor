@@ -867,25 +867,51 @@ function trimWebProject(projectRoot, log) {
     const modelsRoot = path.join(projectRoot, '3d');
     if (fs.existsSync(modelsRoot)) {
         const usedModels = new Set();
+        const noteSpec = spec => {
+            if (spec && spec.name) usedModels.add(String(spec.name));
+        };
         for (const file of fs.readdirSync(dataRoot)) {
             if (!file.endsWith('.r3d.json')) continue;
             try {
                 const sidecar = JSON.parse(fs.readFileSync(path.join(dataRoot, file), 'utf8'));
-                const events = sidecar && sidecar.events;
-                for (const pages of Object.values(events || {})) {
-                    for (const spec of Object.values(pages || {})) {
-                        if (spec && spec.name) usedModels.add(String(spec.name));
+                for (const pages of Object.values(sidecar && sidecar.events || {})) {
+                    for (const spec of Object.values(pages || {})) noteSpec(spec);
+                }
+                // Database bindings place models too: actors bind per
+                // slot (character/face/battler), the other sections flat.
+                for (const section of ['actors', 'enemies', 'weapons', 'armors', 'items']) {
+                    for (const entry of Object.values(sidecar && sidecar[section] || {})) {
+                        if (!entry || typeof entry !== 'object') continue;
+                        if (entry.name) noteSpec(entry);
+                        else for (const slot of Object.values(entry)) noteSpec(slot);
                     }
                 }
             } catch (error) { /* an unreadable sidecar trims nothing */ }
         }
-        for (const entry of fs.readdirSync(modelsRoot, { withFileTypes: true })) {
-            if (!entry.isDirectory() || entry.name === 'source' || entry.name === 'textures') continue;
-            if (usedModels.has(entry.name)) continue;
-            const folder = path.join(modelsRoot, entry.name);
-            removed += walkWebFiles(folder).filter(item => item.type === 'file').length;
-            fs.rmSync(folder, { recursive: true, force: true });
-        }
+        // Models nest in organization folders: a directory holding a
+        // source/ subfolder is a model, named by its path under 3d/.
+        // Unreferenced models go; folders that still hold a referenced
+        // model stay.
+        const trimModels = (dir, relative, depth) => {
+            if (depth > 6) return;
+            for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+                if (!entry.isDirectory() || entry.name === 'source' || entry.name === 'textures') continue;
+                const child = path.join(dir, entry.name);
+                const name = relative ? relative + '/' + entry.name : entry.name;
+                const isModel = fs.existsSync(path.join(child, 'source'));
+                if (isModel && !usedModels.has(name)) {
+                    removed += walkWebFiles(child).filter(item => item.type === 'file').length;
+                    fs.rmSync(child, { recursive: true, force: true });
+                    continue;
+                }
+                trimModels(child, name, depth + 1);
+                // An organization folder emptied by the trim goes too.
+                if (!isModel && !fs.readdirSync(child).length) {
+                    fs.rmSync(child, { recursive: true, force: true });
+                }
+            }
+        };
+        trimModels(modelsRoot, '', 0);
     }
     log(`Trimmed ${removed} unreferenced library files from the bundled web project.`);
 }

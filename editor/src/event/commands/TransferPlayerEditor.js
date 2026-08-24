@@ -85,16 +85,8 @@ class TransferPlayerEditor {
         `;
 
         const container = document.createElement('div');
-        container.className = 'transfer-player-container';
-        container.style.cssText = `
-            background-color: var(--color-bg-surface);
-            border: 1px solid var(--color-border);
-            border-radius: 6px;
-            width: 500px;
-            display: flex;
-            flex-direction: column;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
-        `;
+        container.className = 'transfer-player-container rr-modal';
+        container.style.cssText = `width: min(500px, calc(100vw - 24px)); max-height: 92vh;`;
 
         this.modal.appendChild(container);
 
@@ -117,19 +109,10 @@ class TransferPlayerEditor {
 
         // Header
         const header = document.createElement('div');
-        header.style.cssText = `
-            padding: 12px 16px;
-            background-color: var(--color-bg-panel);
-            border-bottom: 1px solid var(--color-border);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            border-top-left-radius: 6px;
-            border-top-right-radius: 6px;
-        `;
+        header.className = 'rr-modal-header';
         header.innerHTML = `
-            <h3 style="margin: 0; color: var(--color-text-strong); font-size: 16px;">${t('Transfer Player')}</h3>
-            <button class="close-btn" style="background: none; border: none; color: var(--color-text-strong); font-size: 20px; cursor: pointer; padding: 0; width: 24px; height: 24px;">×</button>
+            <div class="rr-modal-title">${t('Transfer Player')}</div>
+            <button class="rr-modal-close close-btn" type="button">×</button>
         `;
         container.appendChild(header);
 
@@ -142,6 +125,8 @@ class TransferPlayerEditor {
             display: flex;
             flex-direction: column;
             gap: 12px;
+            overflow-y: auto;
+            min-height: 0;
         `;
 
         // Map ID with Browse button
@@ -332,16 +317,7 @@ class TransferPlayerEditor {
 
         // Footer
         const footer = document.createElement('div');
-        footer.style.cssText = `
-            padding: 12px 16px;
-            background-color: var(--color-bg-panel);
-            border-top: 1px solid var(--color-border);
-            display: flex;
-            justify-content: flex-end;
-            gap: 8px;
-            border-bottom-left-radius: 6px;
-            border-bottom-right-radius: 6px;
-        `;
+        footer.className = 'rr-modal-footer';
 
         const cancelBtn = document.createElement('button');
         cancelBtn.textContent = t('Cancel');
@@ -350,16 +326,7 @@ class TransferPlayerEditor {
 
         const okBtn = document.createElement('button');
         okBtn.textContent = t('OK');
-        okBtn.style.cssText = `
-            padding: 6px 20px;
-            background-color: var(--color-accent);
-            color: var(--color-bg-deep);
-            border: none;
-            border-radius: 3px;
-            cursor: pointer;
-            font-size: 12px;
-            font-weight: bold;
-        `;
+        okBtn.className = 'rr-button-primary';
         okBtn.addEventListener('click', () => this.save());
 
         footer.appendChild(cancelBtn);
@@ -401,30 +368,14 @@ class TransferPlayerEditor {
         `;
 
         const container = document.createElement('div');
-        container.style.cssText = `
-            background-color: var(--color-bg-surface);
-            border: 1px solid var(--color-border);
-            border-radius: 6px;
-            width: 95%;
-            max-width: 1400px;
-            max-height: 95vh;
-            display: flex;
-            flex-direction: column;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
-        `;
+        container.className = 'rr-modal';
+        container.style.cssText = `width: min(1400px, calc(100vw - 24px)); max-height: 95vh;`;
 
         // Header
         const header = document.createElement('div');
-        header.style.cssText = `
-            padding: 12px 16px;
-            background-color: var(--color-bg-panel);
-            border-bottom: 1px solid var(--color-border);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        `;
+        header.className = 'rr-modal-header';
         header.innerHTML = `
-            <h3 style="margin: 0; color: var(--color-text-strong); font-size: 16px;">${options.title || tt('Select Map & Position')}</h3>
+            <div class="rr-modal-title">${options.title || tt('Select Map & Position')}</div>
             <button class="close-picker" style="background: none; border: none; color: var(--color-text-strong); font-size: 20px; cursor: pointer;">×</button>
         `;
 
@@ -685,16 +636,7 @@ class TransferPlayerEditor {
 
         // Footer
         const footer = document.createElement('div');
-        footer.style.cssText = `
-            padding: 12px 16px;
-            background-color: var(--color-bg-panel);
-            border-top: 1px solid var(--color-border);
-            display: flex;
-            justify-content: flex-end;
-            gap: 8px;
-            border-bottom-left-radius: 6px;
-            border-bottom-right-radius: 6px;
-        `;
+        footer.className = 'rr-modal-footer';
 
         const cancelBtn = document.createElement('button');
         cancelBtn.textContent = tt('Cancel');
@@ -704,16 +646,7 @@ class TransferPlayerEditor {
 
         const okBtn = document.createElement('button');
         okBtn.textContent = tt('OK');
-        okBtn.style.cssText = `
-            padding: 6px 20px;
-            background-color: var(--color-accent);
-            color: var(--color-bg-deep);
-            border: none;
-            border-radius: 3px;
-            cursor: pointer;
-            font-size: 12px;
-            font-weight: bold;
-        `;
+        okBtn.className = 'rr-button-primary';
         okBtn.addEventListener('click', () => {
             const confirmedLocation = { ...selection };
             if (options.onConfirm) {

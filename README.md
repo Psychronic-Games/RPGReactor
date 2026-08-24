@@ -45,16 +45,18 @@ RPGReactor/
 - **Build & deploy**: one-click isolated playtests; cross-platform game packaging for Windows, macOS, Linux, and Web; optional Linux AppImages for games and the editor; configurable NW.js releases and runtime locales; optional staged PNG/OGG optimization; and an editor distribution builder with SHA-256 checksums.
 - **Source-audited 18-language localization** across editor-generated interface text, with locale-key and placeholder validation, Arabic right-to-left direction, and project-authored game content deliberately left untouched; plus a theme system with multiple color palettes in light and dark modes.
 
-## What's New in 0.98.2
+## What's New in 0.98.3
 
 The full list for this release cycle is in the [changelog](CHANGELOG.md).
 
-- **Existing projects use the runtime fixes shipped by the current editor.** Opening an older Reactor project refreshes its versioned engine files before loading game data while preserving its own plugin list, preventing stale corescripts from reproducing already-fixed shader failures.
-- **Database editing is more direct.** Learnable Skills, Effects, and Enemy Action Patterns have visible controls, double-click editing, and keyboard actions instead of relying on hidden context menus.
-- **Extended face sheets and MV animations are authorable.** Four-column face sheets may have additional 144px rows, and switching an Animation to Sprite-based now produces a valid editable MV-format record.
-- **Chinese localization and layout are safer.** Reviewed Simplified Chinese terms override machine-assisted guesses, common locale aliases work, and database forms reflow according to their actual available width.
-- **Quick Event Creation covers common map interactions.** Right-click an empty cell in Event mode to generate a Transfer, Door, Treasure, or Inn event through guided project-aware controls.
-- **Events can use a 3D model.** The Event editor Image section can pick a mesh from `3d/<name>/source`, mark Front/Back/Left/Right, and store the pose in the map's `.r3d.json` sidecar. In playtest the model follows the event and blocks the tiles it covers.
+- **Models rig inside the editor.** The Database 3D section fits a skeleton to any static model with draggable joint markers — Humanoid, Quadruped, Plant/Tree, and Vehicle templates — computes skin weights on the spot, and every bone becomes a poseable part. A plug-and-play motion library (walks, runs, jumps, swims, melee swings, held aiming stances and more) drops editable animation rules onto any rigged model, and on-demand poses can carry keyframe timelines.
+- **Anything in the database can be 3D.** Actors bind a model per surface — map character, face portrait, and side-view battler each independently 2D or 3D — while enemies render as live 3D battlers in battle and weapons, armor, and items carry bindings of their own. Everything lives in `data/Database.r3d.json` beside the MZ files, so RPG Maker tooling never sees an unfamiliar field.
+- **A GLB's baked animation clips just work.** Embedded clips are listed, playable, and adoptable as ordinary animations with a speed control; a skinning fix makes Meshy- and Mixamo-style centimetre-rigged exports play undistorted; and models exported facing forward need no facing marks at all.
+- **The 3D library organizes into folders.** `3d/Weapons/long-sword/…` nests freely, model lists show collapsible folders, and every path stays traversal-safe.
+- **Models load fast and play smooth.** Everything a map references preloads behind the loading fade with shaders and textures warmed before the first frame, GLB parsing and texture decoding run in a background worker (editor previews included), and rig weights moved out of `model.json` into a compact binary sidecar.
+- **Audio can ship as MP3, WAV, or FLAC — not just OGG** — with per-format loop tags and album art, every audio picker rebuilt in the Audio Player's interface, and deployment compressing all formats through one checkbox and quality choice.
+- **Editor quality-of-life.** Class curves author the full 1–999 level range, an app-wide modal and responsiveness pass, event editor polish, image pickers gained a (None) choice, deploy dialogs follow the editor language, and the map grid stays complete at every zoom.
+- **PixiJS updated to 8.20** across the editor and runtime, verified against plugin-heavy MV-compat projects.
 
 ## Development Launchers
 

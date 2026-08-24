@@ -62,6 +62,11 @@
     const createBrowser = options => {
         const files = options.files || [];
         let selectedName = options.selectedName || '';
+        const openFolders = new Set();
+        // The folder holding the current selection starts open.
+        if (selectedName.indexOf('/') > 0) {
+            openFolders.add(selectedName.slice(0, selectedName.indexOf('/')));
+        }
 
         const element = document.createElement('div');
         element.className = 'rr-picker-browser';
@@ -118,17 +123,115 @@
             });
         };
 
+        const makeItem = (name, displayText, indented) => {
+            const item = document.createElement('div');
+            item.className = `rr-picker-file-item${options.itemClass ? ` ${options.itemClass}` : ''}`;
+            item.dataset.fileName = name;
+            item.textContent = displayText;
+            item.tabIndex = 0;
+            item.setAttribute('role', 'option');
+            item.style.cssText = `padding:7px 10px 7px ${indented ? 24 : 10}px;cursor:pointer;`
+                + 'border-bottom:1px solid var(--color-bg-menubar);font-size:12px;color:var(--color-text);';
+            item.addEventListener('mouseenter', () => {
+                if (item.dataset.fileName !== selectedName) item.style.backgroundColor = 'var(--color-bg-button)';
+            });
+            item.addEventListener('mouseleave', () => {
+                if (item.dataset.fileName !== selectedName) item.style.backgroundColor = '';
+            });
+            item.addEventListener('click', () => {
+                setSelected(name);
+                if (options.onSelect) options.onSelect(name, item);
+            });
+            item.addEventListener('keydown', event => {
+                if (event.key !== 'Enter' && event.key !== ' ') return;
+                event.preventDefault();
+                item.click();
+            });
+            return item;
+        };
+
         const render = () => {
             rail.innerHTML = '';
             list.innerHTML = '';
-            const sections = group(files, searchInput.value);
 
-            if (!sections.length && options.emptyText) {
+            // Folder mode: slashed names group under their first segment
+            // as collapsible folders, listed ahead of the loose files.
+            let rootFiles = files;
+            let folderGroups = [];
+            if (options.folders) {
+                const map = new Map();
+                rootFiles = [];
+                for (const name of files) {
+                    const cut = name.indexOf('/');
+                    if (cut < 0) {
+                        rootFiles.push(name);
+                        continue;
+                    }
+                    const folder = name.slice(0, cut);
+                    if (!map.has(folder)) map.set(folder, []);
+                    map.get(folder).push(name);
+                }
+                const query = searchInput.value;
+                folderGroups = Array.from(map.entries())
+                    .map(([folder, names]) => [folder, names.filter(name => matches(name, query)).sort(compareNames)])
+                    .filter(([, names]) => names.length)
+                    .sort((a, b) => a[0].localeCompare(b[0], undefined, { sensitivity: 'base' }));
+            }
+
+            const sections = group(rootFiles, searchInput.value);
+
+            // An action row pinned to the top of the list — "(None)" and
+            // friends — rendered ahead of the files, search or no search.
+            if (options.leadingItem) {
+                const lead = document.createElement('div');
+                lead.className = 'rr-picker-file-item rr-picker-leading';
+                lead.textContent = options.leadingItem.label;
+                lead.tabIndex = 0;
+                lead.setAttribute('role', 'option');
+                lead.style.cssText = 'padding:7px 10px;cursor:pointer;font-size:12px;'
+                    + 'color:var(--color-text-muted);font-style:italic;'
+                    + 'border-bottom:1px solid var(--color-border);';
+                lead.addEventListener('mouseenter', () => { lead.style.backgroundColor = 'var(--color-bg-button)'; });
+                lead.addEventListener('mouseleave', () => { lead.style.backgroundColor = ''; });
+                lead.addEventListener('click', () => options.leadingItem.onClick());
+                lead.addEventListener('keydown', event => {
+                    if (event.key !== 'Enter' && event.key !== ' ') return;
+                    event.preventDefault();
+                    lead.click();
+                });
+                list.appendChild(lead);
+            }
+
+            if (!sections.length && !folderGroups.length && !options.leadingItem && options.emptyText) {
                 const empty = document.createElement('div');
                 empty.style.cssText = 'padding:16px;color:var(--color-text-muted);font-size:12px;text-align:center;';
                 empty.textContent = options.emptyText;
                 list.appendChild(empty);
                 return;
+            }
+
+            for (const [folder, names] of folderGroups) {
+                // A search reveals everything it matched.
+                const open = !!searchInput.value || openFolders.has(folder);
+                const header = document.createElement('div');
+                header.className = 'rr-picker-section folder-section';
+                header.dataset.folder = folder;
+                header.setAttribute('data-rr-i18n-skip', '1');
+                header.textContent = `${open ? '▾' : '▸'} ${folder} (${names.length})`;
+                header.style.cssText = 'padding:6px 10px;background:var(--color-bg-panel);'
+                    + 'color:var(--color-accent-hover);border-bottom:1px solid var(--color-border);'
+                    + 'font-size:11px;font-weight:bold;cursor:pointer;';
+                header.addEventListener('click', () => {
+                    if (openFolders.has(folder)) openFolders.delete(folder);
+                    else openFolders.add(folder);
+                    render();
+                });
+                list.appendChild(header);
+                if (open) {
+                    for (const name of names) {
+                        list.appendChild(makeItem(name, name.slice(folder.length + 1), true));
+                    }
+                }
             }
 
             sections.forEach(section => {
@@ -158,29 +261,7 @@
                 list.appendChild(header);
 
                 section.names.forEach(name => {
-                    const item = document.createElement('div');
-                    item.className = `rr-picker-file-item${options.itemClass ? ` ${options.itemClass}` : ''}`;
-                    item.dataset.fileName = name;
-                    item.textContent = name;
-                    item.tabIndex = 0;
-                    item.setAttribute('role', 'option');
-                    item.style.cssText = 'padding:7px 10px;cursor:pointer;border-bottom:1px solid var(--color-bg-menubar);font-size:12px;color:var(--color-text);';
-                    item.addEventListener('mouseenter', () => {
-                        if (item.dataset.fileName !== selectedName) item.style.backgroundColor = 'var(--color-bg-button)';
-                    });
-                    item.addEventListener('mouseleave', () => {
-                        if (item.dataset.fileName !== selectedName) item.style.backgroundColor = '';
-                    });
-                    item.addEventListener('click', () => {
-                        setSelected(name);
-                        if (options.onSelect) options.onSelect(name, item);
-                    });
-                    item.addEventListener('keydown', event => {
-                        if (event.key !== 'Enter' && event.key !== ' ') return;
-                        event.preventDefault();
-                        item.click();
-                    });
-                    list.appendChild(item);
+                    list.appendChild(makeItem(name, name, false));
                 });
             });
 

@@ -2,16 +2,17 @@ class DeploymentAssetPreferences {
     static get STORAGE_KEY() { return 'rpg-reactor.deployAssetOptimization'; }
 
     static normalize(value) {
-        const quality = value && value.oggQuality !== '' && value.oggQuality != null
-            ? Number(value.oggQuality)
-            : NaN;
+        const rawQuality = value && (value.audioQuality ?? value.oggQuality);
+        const quality = rawQuality !== '' && rawQuality != null ? Number(rawQuality) : NaN;
         const boundedQuality = Number.isFinite(quality) ? Math.max(0, Math.min(10, Math.round(quality))) : 5;
-        const qualityChoices = [3, 5, 7, 10];
+        const qualityChoices = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
         return {
             png: !!(value && value.png),
             pngLevel: 3,
-            ogg: !!(value && value.ogg),
-            oggQuality: qualityChoices.reduce((closest, choice) =>
+            // Accepts the pre-multi-format keys (ogg/oggQuality) so an old
+            // saved preference keeps its quality choice.
+            audio: !!(value && (value.audio ?? value.ogg)),
+            audioQuality: qualityChoices.reduce((closest, choice) =>
                 Math.abs(choice - boundedQuality) < Math.abs(closest - boundedQuality) ? choice : closest, 5),
         };
     }

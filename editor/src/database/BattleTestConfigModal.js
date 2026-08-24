@@ -74,19 +74,22 @@ class BattleTestConfigModal {
         `;
 
         const dialog = document.createElement('div');
-        dialog.style.cssText = `
-            background-color: var(--color-bg-surface); border: 1px solid var(--color-border-input); border-radius: 8px;
-            width: 560px; max-width: 90vw; max-height: 85vh;
-            display: flex; flex-direction: column; overflow: hidden; box-shadow: var(--shadow-modal);
-        `;
+        dialog.className = 'rr-modal';
+        dialog.style.cssText = 'width: min(560px, calc(100vw - 24px)); max-height: 85vh; overflow: hidden;';
 
         const header = document.createElement('div');
-        header.className = 'battle-test-config-header';
-        header.style.cssText = 'padding:12px 16px;background-color:var(--color-bg-toolbar);border-bottom:1px solid var(--color-border);flex-shrink:0;';
-        const title = document.createElement('h3');
+        header.className = 'rr-modal-header battle-test-config-header';
+        header.style.flexShrink = '0';
+        const title = document.createElement('div');
+        title.className = 'rr-modal-title';
         title.textContent = this._t('Battle Test Configuration');
-        title.style.cssText = 'margin:0;color:var(--color-text-strong);font-size:15px;';
         header.appendChild(title);
+        const closeX = document.createElement('button');
+        closeX.type = 'button';
+        closeX.className = 'rr-modal-close';
+        closeX.textContent = '×';
+        closeX.onclick = () => this.close();
+        header.appendChild(closeX);
         dialog.appendChild(header);
 
         const body = document.createElement('div');
@@ -108,8 +111,8 @@ class BattleTestConfigModal {
 
         // Buttons
         const btnRow = document.createElement('div');
-        btnRow.className = 'battle-test-config-footer';
-        btnRow.style.cssText = 'display:flex;justify-content:flex-end;gap:8px;padding:12px 16px;background-color:var(--color-bg-panel);border-top:1px solid var(--color-border);flex-shrink:0;';
+        btnRow.className = 'rr-modal-footer battle-test-config-footer';
+        btnRow.style.flexShrink = '0';
 
         const cancelBtn = this.createButton('Cancel', () => this.close());
         cancelBtn.style.backgroundColor = 'var(--color-bg-button)';
@@ -118,9 +121,7 @@ class BattleTestConfigModal {
 
         const okBtn = document.createElement('button');
         okBtn.textContent = this._t('OK');
-        okBtn.style.cssText = 'padding: 8px 16px; background-color: var(--color-accent); color: var(--color-bg-deep); border: 1px solid var(--color-accent); border-radius: 4px; cursor: pointer; font-weight: bold;';
-        okBtn.onmouseenter = () => { okBtn.style.backgroundColor = 'var(--color-accent-muted)'; };
-        okBtn.onmouseleave = () => { okBtn.style.backgroundColor = 'var(--color-accent)'; };
+        okBtn.className = 'rr-button-primary';
         okBtn.onclick = () => this.launch();
 
         btnRow.appendChild(cancelBtn);
@@ -145,9 +146,7 @@ class BattleTestConfigModal {
     createButton(label, onclick) {
         const btn = document.createElement('button');
         btn.textContent = this._t(label);
-        btn.style.cssText = 'padding: 8px 16px; background-color: var(--color-bg-panel); color: var(--color-text-strong); border: 1px solid var(--color-text-dim); border-radius: 4px; cursor: pointer;';
-        btn.onmouseenter = () => { btn.style.backgroundColor = 'var(--color-accent-tint-35)'; btn.style.borderColor = 'var(--color-bg-deep)'; };
-        btn.onmouseleave = () => { btn.style.backgroundColor = 'var(--color-bg-panel)'; btn.style.borderColor = 'var(--color-text-dim)'; };
+        btn.className = 'rr-btn-secondary';
         btn.onclick = onclick;
         return btn;
     }

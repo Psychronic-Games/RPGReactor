@@ -311,7 +311,7 @@ class EventCommandPicker {
             background-color: var(--color-bg-surface);
             border: 1px solid var(--color-border);
             border-radius: 6px;
-            width: 850px;
+            width: min(850px, calc(100vw - 24px));
             height: 90vh;
             max-height: 900px;
             display: flex;
@@ -340,19 +340,10 @@ class EventCommandPicker {
 
         // Header
         const header = document.createElement('div');
-        header.style.cssText = `
-            padding: 12px 16px;
-            background-color: var(--color-bg-panel);
-            border-bottom: 1px solid var(--color-border);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            border-top-left-radius: 6px;
-            border-top-right-radius: 6px;
-        `;
+        header.className = 'rr-modal-header';
         header.innerHTML = `
-            <h3 style="margin: 0; color: var(--color-text-strong); font-size: 16px;">${this._t('event.selectCommand')}</h3>
-            <button class="close-btn" style="background: none; border: none; color: var(--color-text-strong); font-size: 20px; cursor: pointer; padding: 0; width: 24px; height: 24px;">×</button>
+            <div class="rr-modal-title">${this._t('event.selectCommand')}</div>
+            <button class="rr-modal-close close-btn" type="button">×</button>
         `;
         container.appendChild(header);
 

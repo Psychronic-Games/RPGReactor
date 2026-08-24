@@ -4,7 +4,7 @@
   "events": {
     "22": {
       "0": {
-        "name": "free-buick-riviera-car",
+        "name": "Vehicles/free-buick-riviera-car",
         "file": "free-buick-riviera-car",
         "ext": ".glb",
         "size": 9,
@@ -38,7 +38,7 @@
     },
     "24": {
       "0": {
-        "name": "kawashaki_ninja_h2",
+        "name": "Vehicles/kawashaki_ninja_h2",
         "file": "kawashaki_ninja_h2",
         "ext": ".glb",
         "size": 5,
@@ -72,7 +72,7 @@
     },
     "25": {
       "0": {
-        "name": "monster-plant",
+        "name": "Enemies/monster-plant",
         "file": "Plant_001",
         "ext": ".OBJ",
         "size": 5,

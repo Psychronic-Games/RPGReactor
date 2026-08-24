@@ -86,6 +86,14 @@ class DatabaseEnemyEditor {
         `;
         topRow.appendChild(generalSection);
 
+        if (typeof RRDatabase3DBindings !== 'undefined') {
+            RRDatabase3DBindings.attachRow(generalSection.querySelector('.database-section-content'), {
+                projectManager: this.projectManager,
+                section: 'enemies',
+                id: enemy.id
+            });
+        }
+
         // Parameters Section
         const params = enemy.params || [0, 0, 0, 0, 0, 0, 0, 0];
         const paramNames = ['Max HP', 'Max MP', 'Attack', 'Defense', 'M.Attack', 'M.Defense', 'Agility', 'Luck'].map(name => tt(name));
@@ -201,7 +209,7 @@ class DatabaseEnemyEditor {
                         ${this.buildActionsHTML(enemy)}
                     </tbody>
                 </table>
-                <div class="action-action-buttons" style="display: flex; gap: 6px; margin-top: 8px;">
+                <div class="action-action-buttons">
                     <button class="action-btn-add rr-btn-chip">${tt('Add')}</button>
                     <button class="action-btn-edit rr-btn-chip" disabled>${tt('Edit')}</button>
                     <button class="action-btn-delete rr-btn-chip" disabled>${tt('Delete')}</button>
@@ -257,12 +265,12 @@ class DatabaseEnemyEditor {
                             `<tr><td style="width: 3px; padding: 0; border: none; background: transparent;"></td><td colspan="2" style="text-align: center; color: var(--color-text-muted); font-style: italic; padding: 12px;">${tt('No traits')}</td></tr>`}
                     </tbody>
                 </table>
-                <div class="trait-action-buttons" style="display: flex; gap: 6px; margin-top: 8px;">
-                    <button class="trait-btn-add" style="padding: 4px 12px; background: var(--color-border-subtle); border: 1px solid var(--color-border-input); color: var(--color-text-strong); border-radius: 4px; cursor: pointer; font-size: 12px;">${tt('Add')}</button>
-                    <button class="trait-btn-edit" style="padding: 4px 12px; background: var(--color-border-subtle); border: 1px solid var(--color-border-input); color: var(--color-text-dim); border-radius: 4px; cursor: default; font-size: 12px;" disabled>${tt('Edit')}</button>
-                    <button class="trait-btn-copy" style="padding: 4px 12px; background: var(--color-border-subtle); border: 1px solid var(--color-border-input); color: var(--color-text-dim); border-radius: 4px; cursor: default; font-size: 12px;" disabled>${tt('Copy')}</button>
-                    <button class="trait-btn-paste" style="padding: 4px 12px; background: var(--color-border-subtle); border: 1px solid var(--color-border-input); color: var(--color-text-strong); border-radius: 4px; cursor: pointer; font-size: 12px;">${tt('Paste')}</button>
-                    <button class="trait-btn-delete" style="padding: 4px 12px; background: var(--color-border-subtle); border: 1px solid var(--color-border-input); color: var(--color-text-dim); border-radius: 4px; cursor: default; font-size: 12px;" disabled>${tt('Delete')}</button>
+                <div class="trait-action-buttons">
+                    <button class="trait-btn-add rr-btn-chip">${tt('Add')}</button>
+                    <button class="trait-btn-edit rr-btn-chip" disabled>${tt('Edit')}</button>
+                    <button class="trait-btn-copy rr-btn-chip" disabled>${tt('Copy')}</button>
+                    <button class="trait-btn-paste rr-btn-chip">${tt('Paste')}</button>
+                    <button class="trait-btn-delete rr-btn-chip" disabled>${tt('Delete')}</button>
                 </div>
             </div>
         `;
@@ -652,18 +660,12 @@ class DatabaseEnemyEditor {
         const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const draft = { ...action };
         const overlay = document.createElement('div');
-        overlay.style.cssText = `
-            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-            background: rgba(0, 0, 0, 0.7);
-            display: flex; align-items: center; justify-content: center;
-            z-index: 10001;
-        `;
+        overlay.className = 'rr-modal-overlay';
+        overlay.style.zIndex = '10001';
 
         const modal = document.createElement('div');
-        modal.style.cssText = `
-            background: var(--color-bg-surface); border: 1px solid var(--color-border); border-radius: 8px;
-            padding: 20px; width: 450px; max-width: 90vw;
-        `;
+        modal.className = 'rr-modal';
+        modal.style.cssText = 'width: min(450px, calc(100vw - 24px));';
 
         const skills = this.databaseManager.getSkills() || [];
         const skillOptions = skills
@@ -679,8 +681,11 @@ class DatabaseEnemyEditor {
         const inputStyle = 'width: 100%; padding: 6px; background: var(--color-bg-menubar); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 3px; font-size: 12px; box-sizing: border-box;';
 
         modal.innerHTML = `
-            <h3 style="margin: 0 0 16px 0; color: var(--color-text-strong); font-size: 15px;">${tt(actionIndex >= 0 ? 'Edit Action Pattern' : 'Add Action Pattern')}</h3>
-            <div style="display: flex; flex-direction: column; gap: 12px;">
+            <div class="rr-modal-header">
+                <div class="rr-modal-title">${tt(actionIndex >= 0 ? 'Edit Action Pattern' : 'Add Action Pattern')}</div>
+                <button class="rr-modal-close action-edit-close" type="button">&times;</button>
+            </div>
+            <div class="rr-modal-body">
                 <div>
                     <label class="database-field-label" style="display: block; margin-bottom: 4px;">${tt('Skill:')}</label>
                     <select id="action-edit-skill" style="${inputStyle}">${skillOptions}</select>
@@ -707,7 +712,7 @@ class DatabaseEnemyEditor {
         `;
 
         const btnRow = document.createElement('div');
-        btnRow.style.cssText = 'display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px;';
+        btnRow.className = 'rr-modal-footer';
 
         const cancelBtn = document.createElement('button');
         cancelBtn.textContent = tt('Cancel');
@@ -716,7 +721,7 @@ class DatabaseEnemyEditor {
 
         const okBtn = document.createElement('button');
         okBtn.textContent = tt('OK');
-        okBtn.style.cssText = 'padding: 8px 16px; background: var(--color-accent); border: 1px solid var(--color-accent); color: var(--color-bg-deep); border-radius: 4px; cursor: pointer; font-weight: bold;';
+        okBtn.className = 'rr-button-primary';
         okBtn.addEventListener('click', () => {
             draft.skillId = parseInt(modal.querySelector('#action-edit-skill').value) || 1;
             draft.conditionType = parseInt(modal.querySelector('#action-edit-condType').value) || 0;
@@ -740,6 +745,7 @@ class DatabaseEnemyEditor {
         btnRow.appendChild(okBtn);
         modal.appendChild(btnRow);
         overlay.appendChild(modal);
+        modal.querySelector('.action-edit-close')?.addEventListener('click', () => overlay.remove());
         overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
         document.body.appendChild(overlay);
     }
@@ -813,14 +819,6 @@ class DatabaseEnemyEditor {
         const btnPaste = section.querySelector('.trait-btn-paste');
         const btnDelete = section.querySelector('.trait-btn-delete');
 
-        [btnAdd, btnEdit, btnCopy, btnPaste, btnDelete].forEach(btn => {
-            btn.addEventListener('mouseenter', () => {
-                if (!btn.disabled) btn.style.background = 'var(--color-accent-tint-25)';
-            });
-            btn.addEventListener('mouseleave', () => {
-                if (!btn.disabled) btn.style.background = 'var(--color-border-subtle)';
-            });
-        });
 
         btnAdd.addEventListener('click', () => this.addTrait(entry));
         btnEdit.addEventListener('click', () => {
@@ -856,8 +854,6 @@ class DatabaseEnemyEditor {
         const setBtn = (btn, enabled) => {
             if (!btn) return;
             btn.disabled = !enabled;
-            btn.style.color = enabled ? 'var(--color-text-strong)' : 'var(--color-text-dim)';
-            btn.style.cursor = enabled ? 'pointer' : 'default';
         };
 
         setBtn(section.querySelector('.trait-btn-edit'), hasSelection);
@@ -1204,20 +1200,16 @@ class DatabaseEnemyEditor {
 
         const files = Array.from(fileMap.keys()).sort();
 
-        if (files.length === 0) {
-            alert(tt('No enemy battler images found in img/enemies, sv_enemies, or characters folders'));
-            return;
-        }
-
         this.parentEditor.showImagePicker(tt('Select Enemy Battler'), files, (selectedFile) => {
             enemy.battlerName = selectedFile;
             this.databaseManager.updateEnemy(enemy.id, enemy);
             this.parentEditor?.updateStatus?.(tt('Enemy battler updated'));
             this.refreshEnemyDetail(enemy);
+            this.parentEditor?.refreshListIcon?.(enemy, 'enemies');
         }, (fileName) => {
             const file = fileMap.get(fileName);
             return file ? RRAssetFiles.toUrl(file.absolutePath) : '';
-        }, enemy.battlerName);
+        }, enemy.battlerName, { allowNone: true });
     }
 
     // ==========================================

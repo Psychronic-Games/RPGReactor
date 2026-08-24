@@ -20,7 +20,11 @@ class ModelGraphicPicker {
         this.selectedSize = 2;
         this.selectedFaces = {};
         this._placingFace = '';
-        this._view = { yaw: 25, pitch: 22, distance: 4 };
+        // Head-on by default: an angled default camera reads as 'the model
+        // is crooked' and users bake a counter-yaw that only shows in game.
+        this._view = { yaw: 0, pitch: 18, distance: 4 };
+        // Inputs steer the goal; the camera eases toward it per frame.
+        this._viewGoal = { yaw: 0, pitch: 18, distance: 4 };
     }
 
     _t(text) {
@@ -58,7 +62,8 @@ class ModelGraphicPicker {
             // with (Plant_001.OBJ), and the sidecar records the real name.
             const files = RRAssetFiles.list(dir, ModelGraphicPicker.EXTS, { anyCase: true });
             if (!files.length) return;
-            const match = files.find(file => file.name === folderName) || files[0];
+            const base = folderName.split('/').pop();
+            const match = files.find(file => file.name === base) || files[0];
             if (seen.has(folderName)) return;
             seen.add(folderName);
             found.push({
@@ -69,16 +74,35 @@ class ModelGraphicPicker {
         };
         const root = path.join(projectPath, '3d');
         if (!fs.existsSync(root)) return found;
-        for (const entry of fs.readdirSync(root, { withFileTypes: true })) {
-            if (!entry.isDirectory() || entry.name === 'source' || entry.name === 'textures') continue;
-            pickFrom(path.join(root, entry.name, 'source'), entry.name);
-        }
+        // Models organize into folders: any directory holding a source/
+        // subfolder is a model, named by its path under 3d/ with forward
+        // slashes (Weapons/long-sword). Parent folders are organization.
+        const walk = (dir, relative, depth) => {
+            if (depth > 6) return;
+            for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+                if (!entry.isDirectory() || entry.name === 'source' || entry.name === 'textures') continue;
+                const child = path.join(dir, entry.name);
+                const name = relative ? relative + '/' + entry.name : entry.name;
+                pickFrom(path.join(child, 'source'), name);
+                walk(child, name, depth + 1);
+            }
+        };
+        walk(root, '', 0);
         pickFrom(path.join(root, 'source'), '');
+        found.sort((a, b) => a.name.localeCompare(b.name));
         return found.filter(entry => entry.name);
     }
 
-    show(current, callback) {
+    show(current, callback, options) {
+        ModelGraphicPicker._last = this;
         this.onSelect = callback;
+        // Face framing: extra Zoom and Height controls that pick which
+        // part of the model a rendered face bitmap shows.
+        this._framing = !!(options && options.framing);
+        this.selectedView = {
+            zoom: Math.min(10, Math.max(1, Number(current && current.view && current.view.zoom) || 3)),
+            y: Math.min(1, Math.max(0, Number(current && current.view && current.view.y) || 0.82))
+        };
         this.selectedName = (current && current.name) || '';
         this.selectedFile = (current && current.file) || '';
         this.selectedExt = (current && current.ext) || '';
@@ -120,7 +144,9 @@ class ModelGraphicPicker {
                                     <button type="button" class="rr-btn-secondary model-face-btn" data-face="back">${this._t('Back')}</button>
                                     <button type="button" class="rr-btn-secondary model-face-btn" data-face="left">${this._t('Left')}</button>
                                     <button type="button" class="rr-btn-secondary model-face-btn" data-face="right">${this._t('Right')}</button>
+                                    <button type="button" class="rr-btn-secondary model-face-clear">${this._t('Clear marks')}</button>
                                 </div>
+                                <div class="model-face-status" style="font-size:11px;color:var(--color-text-muted);"></div>
                                 <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--color-text);">
                                     X <input type="number" class="model-angle-x" step="1" value="${Math.round(this.selectedPitch)}"
                                         style="width:64px;padding:3px 5px;background:var(--color-bg-surface);color:var(--color-text);border:1px solid var(--color-border-input);">
@@ -135,6 +161,15 @@ class ModelGraphicPicker {
                                         value="${this.selectedSize}"
                                         style="width:64px;padding:3px 5px;background:var(--color-bg-surface);color:var(--color-text);border:1px solid var(--color-border-input);">
                                 </div>
+                                ${this._framing ? `
+                                <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--color-text);">
+                                    ${this._t('Zoom')}
+                                    <input type="range" class="model-view-zoom" min="1" max="10" step="0.25"
+                                        value="${this.selectedView.zoom}" style="flex:1;min-width:60px;accent-color:var(--color-accent-bright);">
+                                    ${this._t('Height')}
+                                    <input type="range" class="model-view-y" min="0" max="100" step="1"
+                                        value="${Math.round(this.selectedView.y * 100)}" style="flex:1;min-width:60px;accent-color:var(--color-accent-bright);">
+                                </div>` : ''}
                             </div>
                         </div>
                     </div>
@@ -158,9 +193,33 @@ class ModelGraphicPicker {
             const value = Number(e.target.value);
             if (Number.isFinite(value) && value > 0) this.selectedSize = value;
         });
+        const zoomSlider = content.querySelector('.model-view-zoom');
+        if (zoomSlider) {
+            zoomSlider.addEventListener('input', e => {
+                this.selectedView.zoom = Number(e.target.value) || 3;
+                this._applyFraming();
+            });
+        }
+        const heightSlider = content.querySelector('.model-view-y');
+        if (heightSlider) {
+            heightSlider.addEventListener('input', e => {
+                this.selectedView.y = (Number(e.target.value) || 0) / 100;
+                this._applyFraming();
+            });
+        }
         content.querySelectorAll('.model-face-btn').forEach(btn => {
             btn.addEventListener('click', () => this._beginPlaceFace(btn.dataset.face));
         });
+        const faceClear = content.querySelector('.model-face-clear');
+        if (faceClear) {
+            faceClear.addEventListener('click', () => {
+                this.selectedFaces = {};
+                this._placingFace = '';
+                this._refreshFaceButtons();
+                this._rebuildFaceMarkers();
+                this._refreshCursor();
+            });
+        }
         const bindAngle = (selector, key) => {
             const input = content.querySelector(selector);
             if (!input) return;
@@ -205,7 +264,10 @@ class ModelGraphicPicker {
                         pitch: this.selectedPitch,
                         roll: this.selectedRoll,
                         faces: Object.assign({}, this.selectedFaces),
-                        texture: this.selectedTexture || ''
+                        texture: this.selectedTexture || '',
+                        ...(this._framing
+                            ? { view: { zoom: this.selectedView.zoom, y: this.selectedView.y } }
+                            : {})
                     }
                     : null);
             }
@@ -250,6 +312,7 @@ class ModelGraphicPicker {
         const browser = RRPickerIndex.createBrowser({
             files: labels,
             selectedName: this.selectedName,
+            folders: true,
             itemClass: 'model-file-item',
             searchPlaceholder: this._t('Search files...'),
             emptyText: this._t('None'),
@@ -362,9 +425,8 @@ class ModelGraphicPicker {
                 return;
             }
             if (orbit || this._placingFace) {
-                this._view.yaw -= dx * 0.4;
-                this._view.pitch = Math.min(72, Math.max(5, this._view.pitch - dy * 0.3));
-                this._applyCamera();
+                this._viewGoal.yaw -= dx * 0.4;
+                this._viewGoal.pitch = Math.min(72, Math.max(5, this._viewGoal.pitch - dy * 0.3));
                 return;
             }
             this._nudgeRotation(dx, dy);
@@ -377,8 +439,7 @@ class ModelGraphicPicker {
         };
         const wheel = e => {
             e.preventDefault();
-            this._view.distance = Math.min(20, Math.max(1.2, this._view.distance * (e.deltaY > 0 ? 1.1 : 1 / 1.1)));
-            this._applyCamera();
+            this._viewGoal.distance = Math.min(20, Math.max(1.2, this._viewGoal.distance * (e.deltaY > 0 ? 1.15 : 1 / 1.15)));
         };
         const menu = e => e.preventDefault();
         canvas.addEventListener('pointerdown', down);
@@ -455,6 +516,17 @@ class ModelGraphicPicker {
                 : 'rr-btn-secondary model-face-btn';
             btn.style.outline = placed ? '1px solid ' + (face === 'front' ? '#3ddc84' : face === 'back' ? '#ff5c5c' : face === 'left' ? '#5ca8ff' : '#ffd15c') : '';
         });
+        // Marks are the manual override: without them the engine turns the
+        // model by its export convention (front toward the camera at rest).
+        const anyMarks = !!(this.selectedFaces && Object.keys(this.selectedFaces).length);
+        const clear = this._modal.querySelector('.model-face-clear');
+        if (clear) clear.style.display = anyMarks ? '' : 'none';
+        const status = this._modal.querySelector('.model-face-status');
+        if (status) {
+            status.textContent = anyMarks
+                ? this._t('Custom facing marks are set.')
+                : this._t('Optional — a properly exported model already faces the right way.');
+        }
     }
 
     _placeFaceAt(event) {
@@ -553,7 +625,22 @@ class ModelGraphicPicker {
 
     _applyCamera() {
         if (!this._camera || typeof Reactor3D === 'undefined') return;
-        Reactor3D.aimCamera(this._camera, { x: -0.5, y: 0, z: -0.5 }, this._view);
+        // aimCamera adds +0.5 to x/z (map-cell centres): -0.5 here means
+        // the camera looks at the true origin, where the model is centred.
+        Reactor3D.aimCamera(this._camera, { x: -0.5, y: this._viewTargetY || 0, z: -0.5 }, this._view);
+    }
+
+    /** Steer the preview to show exactly what the face render will crop. */
+    _applyFraming() {
+        if (!this._framing || !this._object || typeof THREE === 'undefined') return;
+        const height = Math.max(0.2, this._modelHeight || 1.6);
+        // The preview centres the model on the origin; the height fraction
+        // counts from its feet at -height/2.
+        this._viewTargetY = -height / 2 + height * this.selectedView.y;
+        const visible = height / this.selectedView.zoom;
+        const fov = (this._camera ? this._camera.fov : 40) * Math.PI / 360;
+        this._viewGoal.pitch = 8;
+        this._viewGoal.distance = Math.max(0.4, (visible / (2 * Math.tan(fov))) * 1.1);
     }
 
     _applyModelRotation() {
@@ -815,8 +902,9 @@ class ModelGraphicPicker {
             const buffer = data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength);
             const path = require('path');
             const baseUrl = 'file://' + path.dirname(filePath).replace(/\\/g, '/') + '/';
-            const template = Reactor3D.readModel(
-                buffer, this.selectedExt, baseUrl, this.selectedTexture);
+            const template = Reactor3D.readModelAsync
+                ? await Reactor3D.readModelAsync(buffer, this.selectedExt, baseUrl, this.selectedTexture)
+                : Reactor3D.readModel(buffer, this.selectedExt, baseUrl, this.selectedTexture);
             if (gen !== this._previewGen || !this._modal) return;
             if (!this._renderer) {
                 this._scene = new THREE.Scene();
@@ -835,6 +923,15 @@ class ModelGraphicPicker {
                         this._camera.aspect = width / height;
                         this._camera.updateProjectionMatrix();
                     }
+                    {
+                        const now = performance.now();
+                        const dt = Math.min(0.1, (now - (this._viewEaseAt || now)) / 1000);
+                        this._viewEaseAt = now;
+                        const k = 1 - Math.exp(-dt / 0.07);
+                        this._view.yaw += (this._viewGoal.yaw - this._view.yaw) * k;
+                        this._view.pitch += (this._viewGoal.pitch - this._view.pitch) * k;
+                        this._view.distance += (this._viewGoal.distance - this._view.distance) * k;
+                    }
                     this._applyCamera();
                     this._renderer.render(this._scene, this._camera);
                     this._raf = requestAnimationFrame(tick);
@@ -847,10 +944,14 @@ class ModelGraphicPicker {
                 : template.clone(true);
             const extent = template.userData.glbSize || { x: 1, y: 1, z: 1 };
             const span = Math.max(extent.x, extent.y, extent.z, 0.0001);
-            model.scale.setScalar(1.6 / span);
-            const box = new THREE.Box3().setFromObject(model);
-            const center = box.getCenter(new THREE.Vector3());
-            model.position.sub(center);
+            const previewScale = 1.6 / span;
+            model.scale.setScalar(previewScale);
+            // Templates stand feet-at-origin, x/z centred. Centre by the
+            // template's measured size: a skinned model's vertices follow
+            // bones Box3 cannot see, so measuring the object reads empty
+            // and a box-centre left animated models towering off-frame.
+            this._modelHeight = extent.y * previewScale;
+            model.position.set(0, -this._modelHeight / 2, 0);
             this._object = new THREE.Group();
             this._object.add(model);
             this._buildPoseRings();
@@ -858,6 +959,7 @@ class ModelGraphicPicker {
             this._rebuildFaceMarkers();
             this._scene.add(this._object);
             this._applyCamera();
+            this._applyFraming();
             this._setMessage('');
         } catch (error) {
             console.error('Reactor3D preview failed.', error);

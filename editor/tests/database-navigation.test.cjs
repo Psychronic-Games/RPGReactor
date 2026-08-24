@@ -353,10 +353,9 @@ test('level 999 extrapolates finite class parameters without expanding class dat
     assert.equal(filteredBattleTest.calculateStats({ actorId: 1, level: 1, equips: [1, 2, 1, 2, 0] })[0], 19);
     assert.match(battleSource, /scrollbar-gutter:stable/);
     assert.match(battleSource, /grid-template-columns:96px minmax\(0,1fr\)/);
-    assert.match(battleSource, /className = 'battle-test-config-header'/);
+    assert.match(battleSource, /className = 'rr-modal-header battle-test-config-header'/);
     assert.match(battleSource, /className = 'battle-test-config-body'/);
-    assert.match(battleSource, /className = 'battle-test-config-footer'/);
-    assert.match(battleSource, /background-color:var\(--color-bg-toolbar\)/);
+    assert.match(battleSource, /className = 'rr-modal-footer battle-test-config-footer'/);
     assert.match(battleSource, /slot\.compatibleItems\.length > 0 \|\| slot\.currentEquipId > 0/);
     assert.match(battleSource, /RREquipSlots\.resolveInitialBindings/);
     assert.doesNotMatch(battleSource, /emptyHint\.textContent = this\._t\('\(no compatible items\)'\)/);
@@ -456,8 +455,8 @@ test('database viewer owns the viewport while child panes own scrolling', () => 
     assert.match(troopSource, /database-section rr-troop-preview-section/);
     assert.match(troopSource, /className = 'troop-conditions-modal'/);
     assert.match(troopSource, /grid-template-columns:\$\{columns\[index\]\}/);
-    assert.match(troopSource, /background-color:var\(--color-bg-toolbar\)/);
-    assert.match(troopSource, /className = 'troop-conditions-footer'/);
+    assert.match(troopSource, /className = 'rr-modal-header'/);
+    assert.match(troopSource, /className = 'rr-modal-footer troop-conditions-footer'/);
     assert.doesNotMatch(troopSource, /height: 100%; overflow-y: auto; padding: 16px/);
     assert.deepEqual({ ...troopCanvasPoint }, { x: 636, y: 328 });
     assert.deepEqual({ ...troopBattlePoint }, { x: 400, y: 300 });

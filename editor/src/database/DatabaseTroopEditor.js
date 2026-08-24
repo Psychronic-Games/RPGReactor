@@ -112,13 +112,7 @@ class DatabaseTroopEditor {
         // Keep the primary action at the top of the sidebar.
         const battleTestBtn = document.createElement('button');
         battleTestBtn.textContent = tt('Battle Test...');
-        battleTestBtn.style.cssText = `
-            padding: 6px 12px; background-color: var(--color-bg-panel); color: var(--color-text-strong); border: 1px solid var(--color-text-dim);
-            border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 500;
-            transition: background-color 0.2s, border-color 0.2s;
-        `;
-        battleTestBtn.onmouseenter = () => { battleTestBtn.style.backgroundColor = 'var(--color-accent-tint-35)'; battleTestBtn.style.borderColor = 'var(--color-bg-deep)'; };
-        battleTestBtn.onmouseleave = () => { battleTestBtn.style.backgroundColor = 'var(--color-bg-panel)'; battleTestBtn.style.borderColor = 'var(--color-text-dim)'; };
+        battleTestBtn.className = 'rr-btn-secondary';
         battleTestBtn.onclick = () => this.openBattleTestConfig();
         bar.appendChild(battleTestBtn);
 
@@ -340,26 +334,19 @@ class DatabaseTroopEditor {
         `;
 
         const dialog = document.createElement('div');
-        dialog.style.cssText = `
-            background: var(--color-bg-surface); border: 1px solid var(--color-border); border-radius: 8px;
-            width:min(900px,94vw);height:min(660px,86vh);
-            display: flex; flex-direction: column; box-shadow: 0 4px 20px rgba(0,0,0,0.5);
-        `;
+        dialog.className = 'rr-modal';
+        dialog.style.cssText = 'width:min(900px,94vw);height:min(660px,86vh);';
 
         // Header
         const header = document.createElement('div');
-        header.style.cssText = `
-            background: var(--color-bg-panel); padding: 14px 20px; border-bottom: 1px solid var(--color-border);
-            display: flex; justify-content: space-between; align-items: center;
-            border-radius: 8px 8px 0 0;
-        `;
-        const title = document.createElement('h3');
-        title.style.cssText = 'margin:0;color:var(--color-text);font-size:15px;';
+        header.className = 'rr-modal-header';
+        const title = document.createElement('div');
+        title.className = 'rr-modal-title';
         title.textContent = replacing ? tt('Replace Enemy') : `${tt('Select')} ${tt('Enemy')}`;
         const closeBtn = document.createElement('button');
         closeBtn.type = 'button';
         closeBtn.textContent = '\u00d7';
-        closeBtn.style.cssText = 'width:28px;height:28px;padding:0;background:none;border:0;color:var(--color-text);font-size:24px;cursor:pointer;line-height:1;';
+        closeBtn.className = 'rr-modal-close';
         header.appendChild(title);
         header.appendChild(closeBtn);
         dialog.appendChild(header);
@@ -438,7 +425,8 @@ class DatabaseTroopEditor {
 
         // Footer buttons
         const footer = document.createElement('div');
-        footer.style.cssText = 'padding: 12px 16px; display: flex; justify-content: flex-end; gap: 8px; border-top: 1px solid var(--color-border); flex-shrink: 0; background-color: var(--color-bg-panel);';
+        footer.className = 'rr-modal-footer';
+        footer.style.flexShrink = '0';
 
         const cancelBtn = this.createButton('Cancel', () => close());
         const okBtn = this.createButton('OK', () => confirmAndClose());
@@ -1544,18 +1532,26 @@ class DatabaseTroopEditor {
         modal.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(0,0,0,0.8); display: flex; align-items: center; justify-content: center; z-index: 10005;';
 
         const dialog = document.createElement('div');
-        dialog.style.cssText = 'background-color: var(--color-bg-surface); border: 1px solid var(--color-border); border-radius: 8px; padding: 20px; width: 500px; max-width: 90vw; max-height: 80vh; overflow-y: auto;';
+        dialog.className = 'rr-modal';
+        dialog.style.cssText = 'width: min(500px, calc(100vw - 24px));';
 
         const info = this.getCommandDisplay(cmd);
-        dialog.innerHTML = `<h3 style="margin: 0 0 12px 0; color: var(--color-text-strong); font-size: 14px;">${this.escapeHTML(info.name)} (${tt('Code')} ${cmd.code})</h3>`;
+        dialog.innerHTML = `
+            <div class="rr-modal-header">
+                <div class="rr-modal-title">${this.escapeHTML(info.name)} (${tt('Code')} ${cmd.code})</div>
+                <button class="rr-modal-close raw-cmd-close" type="button">&times;</button>
+            </div>`;
 
+        const body = document.createElement('div');
+        body.className = 'rr-modal-body';
         const textarea = document.createElement('textarea');
         textarea.value = JSON.stringify(cmd.parameters, null, 2);
         textarea.style.cssText = 'width: 100%; height: 200px; background: var(--color-bg-panel); border: 1px solid var(--color-border-input); color: var(--color-text); font-family: monospace; font-size: 12px; padding: 8px; border-radius: 4px; box-sizing: border-box; resize: vertical;';
-        dialog.appendChild(textarea);
+        body.appendChild(textarea);
+        dialog.appendChild(body);
 
         const btnRow = document.createElement('div');
-        btnRow.style.cssText = 'display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px;';
+        btnRow.className = 'rr-modal-footer';
 
         const cancelBtn = this.createButton('Cancel', () => document.body.removeChild(modal));
         const okBtn = this.createButton('OK', () => {
@@ -1573,6 +1569,7 @@ class DatabaseTroopEditor {
         btnRow.appendChild(cancelBtn);
         btnRow.appendChild(okBtn);
         dialog.appendChild(btnRow);
+        dialog.querySelector('.raw-cmd-close').addEventListener('click', () => document.body.removeChild(modal));
         modal.appendChild(dialog);
         modal.onclick = (e) => { if (e.target === modal) document.body.removeChild(modal); };
         document.body.appendChild(modal);
@@ -1860,11 +1857,16 @@ class DatabaseTroopEditor {
         modal.style.cssText = 'position:fixed;inset:0;background-color:rgba(0,0,0,0.82);display:flex;align-items:center;justify-content:center;z-index:10001;';
 
         const dialog = document.createElement('div');
-        dialog.style.cssText = 'width:min(560px,calc(100vw - 32px));max-height:min(680px,calc(100vh - 32px));display:flex;flex-direction:column;overflow:hidden;background-color:var(--color-bg-surface);border:1px solid var(--color-border-input);border-radius:8px;box-shadow:var(--shadow-modal);';
+        dialog.className = 'rr-modal';
+        dialog.style.cssText = 'width:min(560px,calc(100vw - 32px));max-height:min(680px,calc(100vh - 32px));overflow:hidden;';
 
         const header = document.createElement('div');
-        header.style.cssText = 'padding:12px 16px;background-color:var(--color-bg-toolbar);border-bottom:1px solid var(--color-border);flex-shrink:0;';
-        header.innerHTML = `<h3 style="margin:0;color:var(--color-text-strong);font-size:15px;">${tt('Conditions')}</h3>`;
+        header.className = 'rr-modal-header';
+        header.style.flexShrink = '0';
+        header.innerHTML = `
+            <div class="rr-modal-title">${tt('Conditions')}</div>
+            <button class="rr-modal-close troop-cond-close" type="button">&times;</button>
+        `;
         dialog.appendChild(header);
 
         const members = this.currentTroop.members || [];
@@ -1957,8 +1959,8 @@ class DatabaseTroopEditor {
         dialog.appendChild(body);
 
         const btnRow = document.createElement('div');
-        btnRow.className = 'troop-conditions-footer';
-        btnRow.style.cssText = 'display:flex;justify-content:flex-end;gap:8px;padding:12px 16px;background-color:var(--color-bg-panel);border-top:1px solid var(--color-border);flex-shrink:0;';
+        btnRow.className = 'rr-modal-footer troop-conditions-footer';
+        btnRow.style.flexShrink = '0';
         btnRow.appendChild(this.createButton('Cancel', () => document.body.removeChild(modal)));
         btnRow.appendChild(this.createButton('OK', () => {
             page.conditions = {
@@ -1981,6 +1983,7 @@ class DatabaseTroopEditor {
         }));
         dialog.appendChild(btnRow);
 
+        header.querySelector('.troop-cond-close').addEventListener('click', () => document.body.removeChild(modal));
         modal.appendChild(dialog);
         modal.onclick = (e) => { if (e.target === modal) document.body.removeChild(modal); };
         document.body.appendChild(modal);
@@ -2035,9 +2038,7 @@ class DatabaseTroopEditor {
         const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const btn = document.createElement('button');
         btn.textContent = tt(label);
-        btn.style.cssText = 'padding: 3px 10px; background-color: var(--color-bg-menubar); color: var(--color-text); border: 1px solid var(--color-border-input); border-radius: 3px; cursor: pointer; font-size: 11px; transition: background-color 0.2s; white-space: nowrap;';
-        btn.onmouseenter = () => { btn.style.backgroundColor = 'var(--color-accent-tint-25)'; };
-        btn.onmouseleave = () => { btn.style.backgroundColor = 'var(--color-bg-menubar)'; };
+        btn.className = 'rr-btn-chip';
         btn.onclick = onclick;
         return btn;
     }
@@ -2046,15 +2047,7 @@ class DatabaseTroopEditor {
         const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const btn = document.createElement('button');
         btn.textContent = tt(label);
-        if (label === 'OK') {
-            btn.style.cssText = 'padding: 8px 16px; background-color: var(--color-accent); color: var(--color-bg-deep); border: 1px solid var(--color-accent); border-radius: 4px; cursor: pointer; font-weight: bold;';
-            btn.onmouseenter = () => { btn.style.backgroundColor = 'var(--color-accent-muted)'; };
-            btn.onmouseleave = () => { btn.style.backgroundColor = 'var(--color-accent)'; };
-        } else {
-            btn.style.cssText = 'padding: 8px 16px; background-color: var(--color-bg-button); color: var(--color-text-strong); border: 1px solid var(--color-border-input); border-radius: 4px; cursor: pointer;';
-            btn.onmouseenter = () => { btn.style.backgroundColor = 'var(--color-accent-tint-25)'; btn.style.borderColor = 'var(--color-accent)'; };
-            btn.onmouseleave = () => { btn.style.backgroundColor = 'var(--color-bg-button)'; btn.style.borderColor = 'var(--color-border-input)'; };
-        }
+        btn.className = label === 'OK' ? 'rr-button-primary' : 'rr-btn-secondary';
         btn.onclick = onclick;
         return btn;
     }

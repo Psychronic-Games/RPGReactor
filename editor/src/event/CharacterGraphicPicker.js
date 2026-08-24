@@ -113,8 +113,8 @@ class CharacterGraphicPicker {
             gap: 8px;
         `;
         footer.innerHTML = `
-            <button id="char-picker-clear" style="padding: 8px 16px; background: var(--color-bg-button); color: var(--color-text); border: 1px solid var(--color-border-input); border-radius: 3px; cursor: pointer; transition: background-color 0.15s;">${this._t('Clear')}</button>
-            <button id="char-picker-ok" style="padding: 8px 16px; background: var(--color-accent); color: var(--color-bg-deep); border: 1px solid var(--color-accent); border-radius: 3px; cursor: pointer; transition: background-color 0.15s; font-weight: bold;">${this._t('OK')}</button>
+            <button id="char-picker-clear" class="rr-btn-secondary">${this._t('Clear')}</button>
+            <button id="char-picker-ok" class="rr-button-primary">${this._t('OK')}</button>
             <button id="char-picker-cancel" class="rr-btn-secondary">${this._t('Cancel')}</button>
         `;
 

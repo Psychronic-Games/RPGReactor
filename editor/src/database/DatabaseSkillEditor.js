@@ -251,7 +251,7 @@ class DatabaseSkillEditor {
                             `<tr><td style="width: 3px; padding: 0; border: none; background: transparent;"></td><td colspan="2" style="text-align: center; color: var(--color-text-muted); font-style: italic; padding: 12px;">${tt('No effects')}</td></tr>`}
                     </tbody>
                 </table>
-                <div class="effect-action-buttons" style="display: flex; gap: 6px; margin-top: 8px;">
+                <div class="effect-action-buttons">
                     <button class="effect-btn-add rr-btn-chip">${tt('Add')}</button>
                     <button class="effect-btn-edit rr-btn-chip" disabled>${tt('Edit')}</button>
                     <button class="effect-btn-delete rr-btn-chip" disabled>${tt('Delete')}</button>

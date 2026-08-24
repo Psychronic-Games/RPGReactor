@@ -118,17 +118,8 @@ class SetMovementRouteEditor {
         `;
 
         const container = document.createElement('div');
-        container.className = 'set-movement-route-container';
-        container.style.cssText = `
-            background-color: var(--color-bg-surface);
-            border: 1px solid var(--color-border);
-            border-radius: 6px;
-            width: 950px;
-            max-height: 90vh;
-            display: flex;
-            flex-direction: column;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
-        `;
+        container.className = 'set-movement-route-container rr-modal';
+        container.style.cssText = `width: min(950px, calc(100vw - 24px)); max-height: 90vh;`;
 
         this.modal.appendChild(container);
 
@@ -175,18 +166,10 @@ class SetMovementRouteEditor {
 
         // ---- Header ----
         const header = document.createElement('div');
-        header.style.cssText = `
-            padding: 12px 16px;
-            background-color: var(--color-bg-panel);
-            border-bottom: 1px solid var(--color-border);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            border-radius: 6px 6px 0 0;
-        `;
+        header.className = 'rr-modal-header';
         header.innerHTML = `
-            <h3 style="margin: 0; color: var(--color-text-strong); font-size: 16px;">${this._t('Set Movement Route')}</h3>
-            <button class="close-btn" style="background: none; border: none; color: var(--color-text-strong); font-size: 20px; cursor: pointer; padding: 0; width: 24px; height: 24px;">&#215;</button>
+            <div class="rr-modal-title">${this._t('Set Movement Route')}</div>
+            <button class="rr-modal-close close-btn" type="button">&#215;</button>
         `;
         header.querySelector('.close-btn').addEventListener('click', () => this.close());
         container.appendChild(header);
@@ -205,22 +188,16 @@ class SetMovementRouteEditor {
 
         // ---- Footer ----
         const footer = document.createElement('div');
-        footer.style.cssText = `
-            padding: 12px 16px;
-            border-top: 1px solid var(--color-border);
-            background-color: var(--color-bg-panel);
-            display: flex;
-            justify-content: flex-end;
-            gap: 8px;
-        `;
+        footer.className = 'rr-modal-footer';
 
-        const cancelBtn = this._btn('Cancel', 'var(--color-bg-button)', 'var(--color-text)', '1px solid var(--color-border-input)');
-        cancelBtn.addEventListener('mouseenter', () => { cancelBtn.style.backgroundColor = 'var(--color-accent-tint-25)'; cancelBtn.style.borderColor = 'var(--color-accent)'; });
-        cancelBtn.addEventListener('mouseleave', () => { cancelBtn.style.backgroundColor = 'var(--color-bg-button)'; cancelBtn.style.borderColor = 'var(--color-border-input)'; });
+        const cancelBtn = document.createElement('button');
+        cancelBtn.textContent = window.I18n ? window.I18n.tText('Cancel') : 'Cancel';
+        cancelBtn.className = 'rr-btn-secondary';
         cancelBtn.addEventListener('click', () => this.close());
 
-        const okBtn = this._btn('OK', 'var(--color-accent)', 'var(--color-bg-deep)', 'none');
-        okBtn.style.fontWeight = 'bold';
+        const okBtn = document.createElement('button');
+        okBtn.textContent = window.I18n ? window.I18n.tText('OK') : 'OK';
+        okBtn.className = 'rr-button-primary';
         okBtn.addEventListener('click', () => this.save());
 
         footer.appendChild(cancelBtn);
@@ -737,11 +714,8 @@ class SetMovementRouteEditor {
         `;
 
         const dialog = document.createElement('div');
-        dialog.style.cssText = `
-            background: var(--color-bg-surface); border: 1px solid var(--color-border); border-radius: 6px;
-            width: ${width}px; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
-            display: flex; flex-direction: column;
-        `;
+        dialog.className = 'rr-modal';
+        dialog.style.cssText = `width: min(500px, calc(100vw - 24px)); max-height: 92vh;`;
 
         // Title bar
         const titleBar = document.createElement('div');
@@ -759,16 +733,13 @@ class SetMovementRouteEditor {
 
         // Footer
         const footer = document.createElement('div');
-        footer.style.cssText = `
-            padding: 10px 14px; border-top: 1px solid var(--color-border);
-            background-color: var(--color-bg-panel);
-            display: flex; justify-content: flex-end; gap: 8px;
-        `;
-        const cancelBtn = this._btn('Cancel', 'var(--color-bg-button)', 'var(--color-text)', '1px solid var(--color-border-input)');
-        cancelBtn.addEventListener('mouseenter', () => { cancelBtn.style.backgroundColor = 'var(--color-accent-tint-25)'; cancelBtn.style.borderColor = 'var(--color-accent)'; });
-        cancelBtn.addEventListener('mouseleave', () => { cancelBtn.style.backgroundColor = 'var(--color-bg-button)'; cancelBtn.style.borderColor = 'var(--color-border-input)'; });
-        const okBtn = this._btn('OK', 'var(--color-accent)', 'var(--color-bg-deep)', 'none');
-        okBtn.style.fontWeight = 'bold';
+        footer.className = 'rr-modal-footer';
+        const cancelBtn = document.createElement('button');
+        cancelBtn.textContent = window.I18n ? window.I18n.tText('Cancel') : 'Cancel';
+        cancelBtn.className = 'rr-btn-secondary';
+        const okBtn = document.createElement('button');
+        okBtn.textContent = window.I18n ? window.I18n.tText('OK') : 'OK';
+        okBtn.className = 'rr-button-primary';
         footer.appendChild(cancelBtn);
         footer.appendChild(okBtn);
         dialog.appendChild(footer);

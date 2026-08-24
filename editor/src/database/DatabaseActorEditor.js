@@ -26,7 +26,6 @@ class DatabaseActorEditor {
         // ROW 1: General Settings (left) + Images (right)
         const topRow = document.createElement('div');
         topRow.className = 'database-actor-pair';
-        topRow.style.cssText = 'display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px;';
 
         // General Settings Section
         const generalSection = this.createGeneralSettingsSection(actor);
@@ -41,7 +40,7 @@ class DatabaseActorEditor {
         // ROW 2: Traits (left) + Equipment (right)
         const middleRow = document.createElement('div');
         middleRow.className = 'database-actor-pair';
-        middleRow.style.cssText = 'display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-top: 16px;';
+        middleRow.style.marginTop = '16px';
 
         // Traits Section
         const traitsSection = this.createTraitsSection(actor);
@@ -84,6 +83,30 @@ class DatabaseActorEditor {
 
         // Add previews (delegates to parent editor)
         this.parentEditor.addDatabasePreview(imagesContent, actor, 'actors');
+
+        // Each graphic goes 3D on its own: a game can mix a 2D face with a
+        // 3D map sprite and a 3D side-view battler, or any other blend.
+        if (typeof RRDatabase3DBindings !== 'undefined') {
+            const boxes = imagesContent.querySelectorAll('.graphic-preview-box');
+            const thumbnail = spec => RRDatabase3DBindings.modelThumbnail(
+                this.parentEditor.reactor3dEditor, spec);
+            const slots = [
+                { slot: 'character', label: 'Character Model' },
+                { slot: 'face', label: 'Face Model', framing: true },
+                { slot: 'battler', label: 'Battler Model' }
+            ];
+            slots.forEach((entry, index) => {
+                if (!boxes[index]) return;
+                RRDatabase3DBindings.decorateSlot(boxes[index], {
+                    projectManager: this.projectManager,
+                    id: actor.id,
+                    slot: entry.slot,
+                    label: entry.label,
+                    framing: entry.framing,
+                    thumbnail
+                });
+            });
+        }
 
         return imagesSection;
     }
@@ -334,12 +357,12 @@ class DatabaseActorEditor {
                         ${traitsHTML}
                     </tbody>
                 </table>
-                <div class="trait-action-buttons" style="display: flex; gap: 6px; margin-top: 8px;">
-                    <button class="trait-btn-add" style="padding: 4px 12px; background: var(--color-border-subtle); border: 1px solid var(--color-border-input); color: var(--color-text-strong); border-radius: 4px; cursor: pointer; font-size: 12px;">${tt('Add')}</button>
-                    <button class="trait-btn-edit" style="padding: 4px 12px; background: var(--color-border-subtle); border: 1px solid var(--color-border-input); color: var(--color-text-dim); border-radius: 4px; cursor: default; font-size: 12px;" disabled>${tt('Edit')}</button>
-                    <button class="trait-btn-copy" style="padding: 4px 12px; background: var(--color-border-subtle); border: 1px solid var(--color-border-input); color: var(--color-text-dim); border-radius: 4px; cursor: default; font-size: 12px;" disabled>${tt('Copy')}</button>
-                    <button class="trait-btn-paste" style="padding: 4px 12px; background: var(--color-border-subtle); border: 1px solid var(--color-border-input); color: var(--color-text-strong); border-radius: 4px; cursor: pointer; font-size: 12px;">${tt('Paste')}</button>
-                    <button class="trait-btn-delete" style="padding: 4px 12px; background: var(--color-border-subtle); border: 1px solid var(--color-border-input); color: var(--color-text-dim); border-radius: 4px; cursor: default; font-size: 12px;" disabled>${tt('Delete')}</button>
+                <div class="trait-action-buttons">
+                    <button class="trait-btn-add rr-btn-chip">${tt('Add')}</button>
+                    <button class="trait-btn-edit rr-btn-chip" disabled>${tt('Edit')}</button>
+                    <button class="trait-btn-copy rr-btn-chip" disabled>${tt('Copy')}</button>
+                    <button class="trait-btn-paste rr-btn-chip">${tt('Paste')}</button>
+                    <button class="trait-btn-delete rr-btn-chip" disabled>${tt('Delete')}</button>
                 </div>
             </div>
         `;
@@ -442,14 +465,6 @@ class DatabaseActorEditor {
         const btnDelete = section.querySelector('.trait-btn-delete');
 
         // Hover styling for enabled buttons
-        [btnAdd, btnEdit, btnCopy, btnPaste, btnDelete].forEach(btn => {
-            btn.addEventListener('mouseenter', () => {
-                if (!btn.disabled) btn.style.background = 'var(--color-accent-tint-25)';
-            });
-            btn.addEventListener('mouseleave', () => {
-                if (!btn.disabled) btn.style.background = 'var(--color-border-subtle)';
-            });
-        });
 
         btnAdd.addEventListener('click', () => this.addTrait(actor));
 
@@ -496,8 +511,6 @@ class DatabaseActorEditor {
         const setBtn = (btn, enabled) => {
             if (!btn) return;
             btn.disabled = !enabled;
-            btn.style.color = enabled ? 'var(--color-text-strong)' : 'var(--color-text-dim)';
-            btn.style.cursor = enabled ? 'pointer' : 'default';
         };
 
         setBtn(section.querySelector('.trait-btn-edit'), hasSelection);

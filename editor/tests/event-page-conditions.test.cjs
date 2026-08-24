@@ -100,7 +100,7 @@ test('a page set to Custom movement can say what the route is', () => {
      */
     const source = fs.readFileSync(
         path.join(__dirname, '..', 'src', 'event', 'EventPageEditor.js'), 'utf8');
-    assert.match(source, /class="movement-route-btn"/, 'the button exists');
+    assert.match(source, /class="movement-route-btn rr-btn-chip"/, 'the button exists, in app chrome');
     assert.match(source, /page\.moveType === 3 \? '' : 'disabled'/,
         'and only a custom route has a route to edit');
     // The choice and the button stay in step, rather than the button sitting

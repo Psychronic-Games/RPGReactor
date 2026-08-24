@@ -460,7 +460,7 @@ class DatabaseSystem2Editor {
             </div>
             <div style="padding: 12px 16px; border-top: 1px solid var(--color-border); display: flex; justify-content: flex-end; gap: 8px; background-color: var(--color-bg-panel);">
                 <button class="atk-modal-cancel rr-btn-secondary">${tt('Cancel')}</button>
-                <button class="atk-modal-ok" style="padding: 8px 16px; background: var(--color-accent); color: var(--color-bg-deep); border: 1px solid var(--color-accent); border-radius: 4px; cursor: pointer; font-weight: bold;">${tt('OK')}</button>
+                <button class="atk-modal-ok rr-button-primary">${tt('OK')}</button>
             </div>
         `;
 

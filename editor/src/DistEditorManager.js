@@ -9,17 +9,21 @@ class DistEditorManager {
 
     setupModal() {
         const tt = text => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
+        // Rebuilt whenever the language changed since the bake.
+        const existing = document.getElementById('dist-editor-modal');
+        if (existing) existing.remove();
+        this._builtLanguage = (typeof window !== 'undefined' && window.I18n) ? window.I18n.language : 'en';
         const modalHTML = `
             <div id="dist-editor-modal" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.8); display: none; justify-content: center; align-items: center; z-index: 10001;">
-                <div style="background-color: var(--color-bg-surface); border: 1px solid var(--color-border); border-radius: 8px; width: 90%; max-width: 1100px; height: 80vh; max-height: 700px; display: flex; flex-direction: column; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);">
-                    <div style="background-color: var(--color-bg-panel); padding: 12px 16px; border-bottom: 1px solid var(--color-border); display: flex; justify-content: space-between; align-items: center; border-radius: 8px 8px 0 0;">
-                        <div style="font-size: 16px; font-weight: 600; color: var(--color-text);">${tt('Deploy Editor')}</div>
-                        <button id="dist-editor-close-btn" style="background: none; border: none; color: var(--color-text-muted); font-size: 24px; cursor: pointer; padding: 0; width: 30px; height: 30px; line-height: 1;">×</button>
+                <div class="rr-modal" style="width: 90%; max-width: 1100px; height: 80vh; max-height: 700px;">
+                    <div class="rr-modal-header">
+                        <div class="rr-modal-title">${tt('Deploy Editor')}</div>
+                        <button id="dist-editor-close-btn" class="rr-modal-close" type="button">×</button>
                     </div>
 
                     <div style="flex: 1; display: flex; gap: 20px; padding: 20px; overflow: hidden; min-height: 0;">
                         <!-- Left Column: Build Options -->
-                        <div style="flex: 0 0 392px; overflow-y: auto; padding-right: 12px; scrollbar-gutter: stable;">
+                        <div class="audio-scroll" style="flex: 0 0 392px; overflow-y: auto; padding-right: 12px; scrollbar-gutter: stable;">
                             <!-- Package Type -->
                             <div style="margin-bottom: 20px;">
                                 <h3 style="color: var(--color-text); margin-bottom: 10px; font-size: 15px;">${tt('Package Type')}</h3>
@@ -151,23 +155,18 @@ class DistEditorManager {
                             </div>
 
                             <!-- Build Log -->
-                            <div style="flex: 1; display: flex; flex-direction: column; min-height: 0; margin-bottom: 16px;">
+                            <div style="flex: 1; display: flex; flex-direction: column; min-height: 0;">
                                 <h3 style="color: var(--color-text); margin-bottom: 10px; font-size: 15px;">${tt('Build Log')}</h3>
-                                <div id="dist-log" style="flex: 1; background: var(--color-bg-panel); border: 1px solid var(--color-border); border-radius: 4px; padding: 12px; overflow-y: auto; font-family: 'Consolas', 'Monaco', monospace; font-size: 12px; color: var(--color-text); white-space: pre-wrap; word-wrap: break-word;">
+                                <div id="dist-log" class="audio-scroll" style="flex: 1; background: var(--color-bg-panel); border: 1px solid var(--color-border); border-radius: 4px; padding: 12px; overflow-y: auto; font-family: 'Consolas', 'Monaco', monospace; font-size: 12px; color: var(--color-text); white-space: pre-wrap; word-wrap: break-word;">
                                     <div style="color: var(--color-text-muted);">${tt('Ready. Select options and click "Start Build".')}</div>
                                 </div>
                             </div>
-
-                            <!-- Buttons -->
-                            <div style="display: flex; gap: 12px; justify-content: flex-end; flex-shrink: 0;">
-                                <button id="dist-start-btn" style="padding: 8px 20px; background: var(--color-bg-deep); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 4px; font-size: 13px; cursor: pointer; font-weight: 500; transition: all 0.2s; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">
-                                    ${tt('Start Build')}
-                                </button>
-                                <button id="dist-cancel-btn" style="padding: 8px 20px; background: var(--color-bg-deep); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 4px; font-size: 13px; cursor: pointer; font-weight: 500; transition: all 0.2s; box-shadow: 0 2px 4px rgba(0,0,0,0.2); display: none;">
-                                    ${tt('Cancel Build')}
-                                </button>
-                            </div>
                         </div>
+                    </div>
+
+                    <div class="rr-modal-footer" style="flex-shrink: 0;">
+                        <button id="dist-cancel-btn" class="rr-btn-secondary" style="display: none;">${tt('Cancel Build')}</button>
+                        <button id="dist-start-btn" class="rr-button-primary">${tt('Start Build')}</button>
                     </div>
                 </div>
             </div>
@@ -223,19 +222,6 @@ class DistEditorManager {
             });
         });
 
-        // Button hover effects (gold theme)
-        [startBtn, cancelBtn].forEach(btn => {
-            btn.addEventListener('mouseenter', () => {
-                btn.style.background = 'var(--color-accent-tint-15)';
-                btn.style.borderColor = 'var(--color-accent-border-strong)';
-                btn.style.boxShadow = '0 3px 6px var(--color-accent-tint-30)';
-            });
-            btn.addEventListener('mouseleave', () => {
-                btn.style.background = 'var(--color-bg-deep)';
-                btn.style.borderColor = 'var(--color-border-input)';
-                btn.style.boxShadow = '0 2px 4px rgba(0,0,0,0.2)';
-            });
-        });
     }
 
     updatePlatformVisibility() {
@@ -268,6 +254,10 @@ class DistEditorManager {
 
     open() {
         const tt = text => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
+        if (typeof window !== 'undefined' && window.I18n
+            && this._builtLanguage !== window.I18n.language && !this.worker) {
+            this.setupModal();
+        }
         this.modal.style.display = 'flex';
         this.clearLog();
         this.resetProgress();

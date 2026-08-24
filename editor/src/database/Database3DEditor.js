@@ -28,6 +28,9 @@ class Database3DEditor {
         // The card's target: null = nothing chosen, '' = whole model.
         this.selectedPartName = null;
         this._view = { yaw: 30, pitch: 20, distance: 4 };
+        // Inputs steer the goal; the camera eases toward it every frame,
+        // so wheel notches and pointer deltas glide instead of snapping.
+        this._viewGoal = { yaw: 30, pitch: 20, distance: 4 };
         this._sim = { walking: false, action: null };
         this._tool = 'orbit';
         this._selectMode = false;
@@ -55,8 +58,8 @@ class Database3DEditor {
         return {
             name: '', motion: 'pose', axis: 'z',
             rotate: [0, 0, 0], move: [0, 0, 0], resize: [1, 1, 1],
-            degrees: 15, speed: 90, perTile: 0, amount: 0.1, clip: '',
-            period: 30, trigger: 'action', hold: false, effects: []
+            degrees: 15, speed: 90, perTile: 0, amount: 0.1, clip: '', rate: 1,
+            period: 30, trigger: 'action', hold: false, effects: [], keys: []
         };
     }
 
@@ -88,6 +91,7 @@ class Database3DEditor {
                         <div class="r3d-toolbar" style="position:absolute;top:8px;left:8px;display:flex;flex-direction:column;gap:4px;"></div>
                         <div class="r3d-hint" style="position:absolute;top:10px;left:50%;transform:translateX(-50%);padding:3px 10px;background:color-mix(in srgb, var(--color-bg-panel) 80%, transparent);border-radius:10px;font-size:11px;color:var(--color-text-muted);pointer-events:none;display:none;"></div>
                         <div class="r3d-select-bar" style="position:absolute;top:8px;left:50%;transform:translateX(-50%);display:none;align-items:center;gap:8px;padding:4px 10px;background:var(--color-bg-panel);border:1px solid var(--color-accent);border-radius:4px;font-size:12px;color:var(--color-text);"></div>
+                        <div class="r3d-rig-bar" style="position:absolute;top:8px;left:50%;transform:translateX(-50%);display:none;align-items:center;gap:8px;padding:4px 10px;background:var(--color-bg-panel);border:1px solid var(--color-accent);border-radius:4px;font-size:12px;color:var(--color-text);"></div>
                         <div class="r3d-marquee" style="position:absolute;display:none;border:1px dashed var(--color-accent);background:color-mix(in srgb, var(--color-accent) 15%, transparent);pointer-events:none;"></div>
                         <div class="r3d-card" style="position:absolute;right:10px;bottom:10px;width:280px;display:none;background:var(--color-bg-panel);border:1px solid var(--color-border);border-radius:6px;padding:10px 12px;box-shadow:0 4px 18px rgba(0,0,0,0.35);"></div>
                     </div>
@@ -103,6 +107,7 @@ class Database3DEditor {
                     <div class="r3d-part-form" style="flex:0 0 auto;padding:0 10px;border-bottom:1px solid var(--color-border);"></div>
                     <div style="display:flex;align-items:center;padding:6px 10px;border-bottom:1px solid var(--color-border);">
                         <span style="font-weight:bold;color:var(--color-text);flex:1;">${this._t('Animations')}</span>
+                        <button type="button" class="rr-btn-chip r3d-motions" style="display:none;margin-right:6px;">${this._t('Motions…')}</button>
                         <button type="button" class="rr-btn-secondary r3d-rule-add">${this._t('Add')}</button>
                         <button type="button" class="rr-btn-secondary r3d-rule-delete" style="margin-left:6px;">${this._t('Delete')}</button>
                     </div>
@@ -120,6 +125,7 @@ class Database3DEditor {
         search.addEventListener('blur', () => {
             search.style.borderColor = 'var(--color-border-input)';
         });
+        detailEl.querySelector('.r3d-motions').addEventListener('click', () => this.showMotionPresets());
         detailEl.querySelector('.r3d-rule-add').addEventListener('click', () => this.addRule());
         detailEl.querySelector('.r3d-rule-delete').addEventListener('click', () => this.deleteRule());
         detailEl.querySelector('.r3d-part-add').addEventListener('click', () => this.addPart());
@@ -194,26 +200,80 @@ class Database3DEditor {
             list.innerHTML = `<div style="padding:10px;color:var(--color-text-muted);font-size:12px;">${this._t('No models in this project')}</div>`;
             return;
         }
-        for (const entry of shown) {
+        if (!this._openFolders) this._openFolders = new Set();
+        // Resolve the auto-selection BEFORE painting: its folder must show
+        // open on this very render, or the header's glyph disagrees with
+        // the state and the first click appears to do nothing.
+        const initial = fromSearch
+            ? null
+            : (models.find(m => m.name === this.selectedName) || models[0]);
+        if (initial && initial.name.indexOf('/') > 0) {
+            this._openFolders.add(initial.name.slice(0, initial.name.indexOf('/')));
+        }
+        const addRow = (entry, indented) => {
             const row = document.createElement('div');
             row.className = 'database-list-item';
             row.dataset.model = entry.name;
+            if (indented) row.style.paddingLeft = '22px';
             const icon = document.createElement('span');
             icon.className = 'database-list-icon';
             icon.style.cssText = 'flex:0 0 22px;width:22px;height:22px;margin-right:8px;background-size:contain;background-position:center;background-repeat:no-repeat;border-radius:3px;background-color:var(--color-bg-deep);border:1px solid var(--color-border);';
             const name = document.createElement('span');
             name.className = 'database-list-name';
-            name.textContent = entry.name;
+            name.textContent = indented ? entry.name.slice(entry.name.indexOf('/') + 1) : entry.name;
+            name.setAttribute('data-rr-i18n-skip', '1');
             name.style.cssText = 'flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
             row.appendChild(icon);
             row.appendChild(name);
             row.addEventListener('click', () => this.selectModel(entry));
             list.appendChild(row);
+        };
+        // Folders first, collapsed until opened — a search or the current
+        // selection reveals what they hold.
+        const folders = new Map();
+        const roots = [];
+        for (const entry of shown) {
+            const cut = entry.name.indexOf('/');
+            if (cut < 0) {
+                roots.push(entry);
+                continue;
+            }
+            const folder = entry.name.slice(0, cut);
+            if (!folders.has(folder)) folders.set(folder, []);
+            folders.get(folder).push(entry);
+        }
+        const visible = [];
+        for (const [folder, entries] of [...folders.entries()]
+            .sort((a, b) => a[0].localeCompare(b[0], undefined, { sensitivity: 'base' }))) {
+            const open = !!needle || this._openFolders.has(folder);
+            const head = document.createElement('div');
+            head.className = 'database-list-item';
+            head.setAttribute('data-rr-i18n-skip', '1');
+            head.textContent = `${open ? '▾' : '▸'} ${folder} (${entries.length})`;
+            head.style.fontWeight = 'bold';
+            head.addEventListener('click', () => {
+                if (this._openFolders.has(folder)) this._openFolders.delete(folder);
+                else this._openFolders.add(folder);
+                this.renderModelList(true);
+            });
+            list.appendChild(head);
+            if (open) {
+                for (const entry of entries) {
+                    addRow(entry, true);
+                    visible.push(entry);
+                }
+            }
+        }
+        for (const entry of roots) {
+            addRow(entry, false);
+            visible.push(entry);
         }
         this.highlightModel();
-        this._fillThumbnails(shown);
+        // After the paint: thumbnail work must never sit between the
+        // toggle click and the rows appearing.
+        setTimeout(() => this._fillThumbnails(visible), 0);
         if (!fromSearch) {
-            this.selectModel(models.find(m => m.name === this.selectedName) || models[0]);
+            this.selectModel(initial);
         }
     }
 
@@ -238,6 +298,10 @@ class Database3DEditor {
                 if (icon) icon.style.backgroundImage = `url("${cached}")`;
                 continue;
             }
+            // An uncached thumbnail loads and renders the whole model in
+            // one main-thread chunk; yield first so the click that opened
+            // a folder paints and the next click still lands.
+            await new Promise(resolve => setTimeout(resolve, 0));
             const url = await this._renderThumbnail(entry);
             if (!url) continue;
             this._thumbs[entry.name] = url;
@@ -272,9 +336,13 @@ class Database3DEditor {
             : template.clone(true);
         const extent = template.userData.glbSize || { x: 1, y: 1, z: 1 };
         const span = Math.max(extent.x, extent.y, extent.z, 0.0001);
-        object.scale.setScalar(1.6 / span);
+        const scale = 1.6 / span;
+        object.scale.setScalar(scale);
         this._thumbScene.add(object);
-        Reactor3D.aimCamera(this._thumbCamera, { x: -0.5, y: 0.3, z: -0.5 }, { yaw: 35, pitch: 18, distance: 2.6 });
+        // Templates stand feet-at-origin: aim mid-height, dead centre
+        // (aimCamera adds +0.5 to x/z, so -0.5 targets the true origin).
+        Reactor3D.aimCamera(this._thumbCamera,
+            { x: -0.5, y: (extent.y * scale) / 2, z: -0.5 }, { yaw: 35, pitch: 18, distance: 2.6 });
         this._thumbCamera.aspect = 1;
         this._thumbCamera.updateProjectionMatrix();
         this._thumbRenderer.render(this._thumbScene, this._thumbCamera);
@@ -306,7 +374,11 @@ class Database3DEditor {
             const data = fs.readFileSync(filePath);
             const buffer = data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength);
             const baseUrl = 'file://' + path.dirname(filePath).replace(/\\/g, '/') + '/';
-            this._templates[entry.name] = Reactor3D.readModel(buffer, entry.ext || '.glb', baseUrl, entry.texture || '');
+            // The same worker the game uses: container split, JSON parse,
+            // and embedded-texture decode off the editor's main thread.
+            this._templates[entry.name] = Reactor3D.readModelAsync
+                ? await Reactor3D.readModelAsync(buffer, entry.ext || '.glb', baseUrl, entry.texture || '')
+                : Reactor3D.readModel(buffer, entry.ext || '.glb', baseUrl, entry.texture || '');
             return this._templates[entry.name];
         } catch (error) {
             return null;
@@ -330,6 +402,23 @@ class Database3DEditor {
         this.customParts = Array.isArray(parsed.parts) ? parsed.parts : [];
         this.customPivots = parsed.pivots && typeof parsed.pivots === 'object'
             && !Array.isArray(parsed.pivots) ? parsed.pivots : {};
+        this.customRig = parsed.rig && typeof parsed.rig === 'object'
+            && !Array.isArray(parsed.rig) ? parsed.rig : null;
+        this._rigBinary = null;
+        if (this.customRig && this.customRig.weightsFile && !this.customRig.weights) {
+            try {
+                const path = require('path');
+                const file = String(this.customRig.weightsFile);
+                if (!/[\\/]/.test(file) && file.indexOf('..') < 0) {
+                    const data = fs.readFileSync(path.join(path.dirname(this.rulesPath()), file));
+                    const buffer = data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength);
+                    this._rigBinary = buffer;
+                    this.customRig.weightsBin = typeof ModelRigger !== 'undefined'
+                        ? ModelRigger.decodeWeightsBinary(buffer)
+                        : Reactor3D.decodeRigWeightsBinary(buffer);
+                }
+            } catch (error) { /* a rig without weights previews unskinned */ }
+        }
     }
 
     /**
@@ -407,7 +496,7 @@ class Database3DEditor {
         const box = new THREE.Box3();
         if (raw.part) {
             for (const entry of this._matchedMeshes(raw.part)) {
-                box.expandByObject(entry.mesh);
+                this._expandEntry(box, entry);
             }
         } else {
             box.setFromObject(this._object);
@@ -429,7 +518,7 @@ class Database3DEditor {
             if (!helper) return;
             helper.box.makeEmpty();
             if (whole) helper.box.setFromObject(this._object);
-            else for (const entry of meshes) helper.box.expandByObject(entry.mesh);
+            else for (const entry of meshes) this._expandEntry(helper.box, entry);
         };
         if (this._highlight && this._object) {
             const raw = this._highlight.userData.__reactorRule;
@@ -454,11 +543,21 @@ class Database3DEditor {
     async selectModel(entry) {
         if (!entry) return;
         this.selectedName = entry.name;
+        // Keep the selection visible: its folder stays open in the list.
+        if (entry.name.indexOf('/') > 0) {
+            if (!this._openFolders) this._openFolders = new Set();
+            this._openFolders.add(entry.name.slice(0, entry.name.indexOf('/')));
+        }
         this.selectedRule = -1;
         this.selectedPart = -1;
         this.selectedPartName = null;
         this._sim.action = null;
         this._selectMode = false;
+        if (this._rigMode) {
+            this.exitRigMode();
+            this._tool = 'orbit';
+            this.renderToolbar();
+        }
         this._selection = new Map();
         this._editingRule = -1;
         this._poses = {};
@@ -478,6 +577,7 @@ class Database3DEditor {
         this.renderRuleList();
         this.renderSelectBar();
         this.renderEditCard();
+        this._refreshMotionsButton();
         const status = this._detail.querySelector('.r3d-status');
         if (status) {
             status.textContent = this.embeddedClips.length
@@ -524,13 +624,17 @@ class Database3DEditor {
             this._renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
             this._renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
             if (THREE.SRGBColorSpace) this._renderer.outputColorSpace = THREE.SRGBColorSpace;
+            // The animation clock counts 60ths of a second of real time,
+            // not rAF ticks — a 120Hz display used to run every rule and
+            // clip at double speed.
             let frame = 0;
+            const startedAt = performance.now();
             const tick = () => {
                 if (!this._renderer || !canvas.isConnected) {
                     this._disposePreview();
                     return;
                 }
-                frame++;
+                frame = Math.round((performance.now() - startedAt) * 0.06);
                 const rect = canvas.getBoundingClientRect();
                 const width = Math.max(1, Math.round(rect.width));
                 const height = Math.max(1, Math.round(rect.height));
@@ -570,11 +674,16 @@ class Database3DEditor {
                 if (extra) rules = rules.concat([extra]);
                 // A moving model would slide out from under the marquee, so
                 // rules freeze while a selection is being drawn.
-                if (this._binding && rules.length && !this._selectMode && typeof Reactor3D !== 'undefined') {
+                // Once per animation frame, not per display refresh: spin
+                // and walk-distance gains accumulate per call.
+                if (this._binding && rules.length && !this._selectMode && typeof Reactor3D !== 'undefined'
+                    && frame !== this._lastAnimFrame) {
+                    this._lastAnimFrame = frame;
                     Reactor3D.applyModelAnimation(this._binding, rules, {
                         frame,
                         moving: this._sim.walking,
-                        distance: this._sim.walking ? 1 / 16 : 0,
+                        dashing: this._sim.dashing,
+                        distance: this._sim.walking ? (this._sim.dashing ? 1 / 8 : 1 / 16) : 0,
                         scale: this._scale,
                         action: this._sim.action
                             ? { name: this._sim.action.name, frame: this._sim.action.frame }
@@ -585,7 +694,19 @@ class Database3DEditor {
                 this._updatePreviewFx(frame, rules);
                 this._updateHover();
                 this._updateBoxes();
-                Reactor3D.aimCamera(this._camera, { x: -0.5, y: 0, z: -0.5 }, this._view);
+                {
+                    // Exponential ease toward the input goal (~70ms time
+                    // constant, frame-rate independent).
+                    const now = performance.now();
+                    const dt = Math.min(0.1, (now - (this._viewEaseAt || now)) / 1000);
+                    this._viewEaseAt = now;
+                    const k = 1 - Math.exp(-dt / 0.07);
+                    this._view.yaw += (this._viewGoal.yaw - this._view.yaw) * k;
+                    this._view.pitch += (this._viewGoal.pitch - this._view.pitch) * k;
+                    this._view.distance += (this._viewGoal.distance - this._view.distance) * k;
+                }
+                Reactor3D.aimCamera(this._camera,
+                    this._viewCenter || { x: -0.5, y: 0, z: -0.5 }, this._view);
                 this._renderer.render(this._scene, this._camera);
                 this._raf = requestAnimationFrame(tick);
             };
@@ -608,7 +729,13 @@ class Database3DEditor {
             ? Reactor3D.cloneModelTemplate(template)
             : template.clone(true);
         object.userData.glbSize = template.userData.glbSize;
-        if (!this._selectMode && Reactor3D.carveModelParts && Reactor3D.readModelParts) {
+        // A rig replaces the carve: both count meshes and triangles over
+        // the uncarved model, so a model carries one or the other.
+        const rig = !this._selectMode && this.customRig && Reactor3D.readModelRig
+            ? Reactor3D.readModelRig({ rig: this.customRig }) : null;
+        if (rig) {
+            Reactor3D.applyModelRig(object, rig);
+        } else if (!this._selectMode && Reactor3D.carveModelParts && Reactor3D.readModelParts) {
             Reactor3D.carveModelParts(object, Reactor3D.readModelParts({ parts: this.customParts }));
             if (Reactor3D.applyPivotOverrides) {
                 Reactor3D.applyPivotOverrides(object,
@@ -618,6 +745,9 @@ class Database3DEditor {
         const extent = template.userData.glbSize || { x: 1, y: 1, z: 1 };
         const span = Math.max(extent.x, extent.y, extent.z, 0.0001);
         this._scale = 1.6 / span;
+        // Orbit around the model's mid-height, not the ground plane: a
+        // tall character aimed at its feet crops its head out of frame.
+        this._viewCenter = { x: -0.5, y: (extent.y * this._scale) / 2, z: -0.5 };
         object.scale.setScalar(this._scale);
         this._binding = Reactor3D.prepareModelInstance(object, object.__reactorClips);
         // Scene-graph plumbing is not a part: exporters wrap models in
@@ -655,7 +785,29 @@ class Database3DEditor {
             .map(([name, count]) => ({ name, count }))
             .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
         this._object = object;
+        let triangles = 0;
+        object.traverse(child => {
+            if (!child.isMesh && !child.isSkinnedMesh) return;
+            const index = child.geometry.getIndex();
+            const position = child.geometry.getAttribute('position');
+            triangles += Math.floor((index ? index.count : position ? position.count : 0) / 3);
+        });
+        this._triangleCount = triangles;
         this._scene.add(object);
+        // Shader compilation and texture upload land here, in the load
+        // gap, instead of trickling through the first seconds of orbiting
+        // as one-frame hitches.
+        if (this._renderer && this._camera) {
+            try {
+                this._renderer.compile(this._scene, this._camera);
+                for (const texture of (template.userData.glbTextures || [])) {
+                    if (texture && texture.image && this._renderer.initTexture) {
+                        this._renderer.initTexture(texture);
+                    }
+                }
+            } catch (error) { /* a warm-up failure costs only smoothness */ }
+        }
+        if (this._rigMode) this._buildRigVisuals();
         this._refreshHighlight();
         this._refreshSelectionOverlay();
         this._refreshPartVisuals();
@@ -689,7 +841,9 @@ class Database3DEditor {
             { id: 'select', title: this._t('Select part (drag a box; Alt removes)'), icon:
                 '<rect x="2.5" y="2.5" width="11" height="11" fill="none" stroke-dasharray="2.5 2"/>' },
             { id: 'pivot', title: this._t('Place pivot (click the model)'), icon:
-                '<circle cx="8" cy="8" r="2.2" fill="none"/><path d="M8 1.5v3M8 11.5v3M1.5 8h3M11.5 8h3" fill="none"/>' }
+                '<circle cx="8" cy="8" r="2.2" fill="none"/><path d="M8 1.5v3M8 11.5v3M1.5 8h3M11.5 8h3" fill="none"/>' },
+            { id: 'rig', title: this._t('Rig (fit a skeleton, then Bind)'), icon:
+                '<circle cx="8" cy="3" r="1.6" fill="none"/><path d="M8 4.6v4M8 6l-3.4 2M8 6l3.4 2M8 8.6l-2.4 4.4M8 8.6l2.4 4.4" fill="none"/>' }
         ];
     }
 
@@ -719,6 +873,11 @@ class Database3DEditor {
         } else if (this._selectMode) {
             this.cancelSelectMode();
         }
+        if (tool === 'rig') {
+            if (!this._rigMode && !this.enterRigMode()) return;
+        } else if (this._rigMode) {
+            this.exitRigMode();
+        }
         this._tool = tool;
         const canvas = this._detail.querySelector('.r3d-db-canvas');
         if (canvas) {
@@ -732,7 +891,7 @@ class Database3DEditor {
     _refreshHint() {
         const hint = this._detail ? this._detail.querySelector('.r3d-hint') : null;
         if (!hint) return;
-        if (this._selectMode) {
+        if (this._selectMode || this._rigMode) {
             hint.style.display = 'none';
             return;
         }
@@ -759,9 +918,15 @@ class Database3DEditor {
 
     addPart() {
         if (this._selectMode) this.cancelSelectMode();
+        if (this.customRig) {
+            const status = this._detail.querySelector('.r3d-status');
+            if (status) status.textContent = this._t('This model is rigged — remove the rig to carve parts.');
+            return;
+        }
         let n = this.customParts.length + 1;
         while (this.customParts.some(p => p.name === 'part-' + n)) n++;
-        this.customParts.push({ name: 'part-' + n, pivot: null, meshes: {} });
+        const partName = 'part-' + n;
+        this.customParts.push({ name: partName, pivot: null, meshes: {} });
         this.selectedPart = this.customParts.length - 1;
         this.renderPartList();
         this.renderPartForm();
@@ -784,6 +949,11 @@ class Database3DEditor {
     /** Selection is drawn against the uncarved mesh, seeded from the part. */
     enterSelectMode() {
         if (typeof Reactor3D === 'undefined' || !this._object) return;
+        if (this.customRig) {
+            const status = this._detail.querySelector('.r3d-status');
+            if (status) status.textContent = this._t('This model is rigged — remove the rig to carve parts.');
+            return;
+        }
         const part = this._selectedPartDef();
         if (!part) {
             this.addPart();
@@ -1293,6 +1463,7 @@ class Database3DEditor {
             perTile: this._work.perTile,
             amount: this._work.amount,
             clip: this._work.clip,
+            rate: this._work.rate,
             period: this._work.period,
             trigger: this._work.trigger,
             hold: this._work.hold,
@@ -1314,6 +1485,7 @@ class Database3DEditor {
             perTile: snapshot.perTile,
             amount: snapshot.amount,
             clip: snapshot.clip,
+            rate: snapshot.rate || 1,
             period: snapshot.period,
             trigger: snapshot.trigger,
             hold: snapshot.hold,
@@ -1399,6 +1571,12 @@ class Database3DEditor {
             values.resize = work.resize.slice();
             values.period = work.period;
             values.hold = values.trigger === 'action' ? work.hold : false;
+            // Keys ride only the real action: the live always-rule keeps
+            // showing the sliders' current pose while the hand moves them.
+            if (values.trigger === 'action' && (work.keys || []).length) {
+                values.keys = JSON.parse(JSON.stringify(work.keys));
+                values.hold = false;
+            }
         } else if (work.motion === 'swing') {
             values.axis = work.axis;
             values.degrees = work.degrees;
@@ -1413,6 +1591,7 @@ class Database3DEditor {
             values.period = work.period;
         } else if (work.motion === 'clip') {
             values.clip = work.clip;
+            if (work.rate && work.rate !== 1) values.rate = work.rate;
         }
         if (values.trigger === 'action' && (work.effects || []).length) {
             values.effects = JSON.parse(JSON.stringify(work.effects));
@@ -1425,7 +1604,7 @@ class Database3DEditor {
         const work = this._work;
         if (work.motion === 'pose') {
             return work.rotate.some(v => v) || work.move.some(v => v)
-                || work.resize.some(v => v !== 1);
+                || work.resize.some(v => v !== 1) || (work.keys || []).length > 0;
         }
         if (work.motion === 'swing') return work.degrees > 0;
         if (work.motion === 'spin') return work.speed > 0 || work.perTile > 0;
@@ -1449,9 +1628,9 @@ class Database3DEditor {
         const values = this._workValues('always');
         // An always-pose with a short period holds the pose while editing.
         if (values.type === 'pose') values.period = 8;
-        this._workRule = Reactor3D.readModelAnimationRules({
-            animations: [{ name: '__manual', ...values }]
-        })[0];
+        const manual = { ...values };
+        manual.name = '__manual';
+        this._workRule = Reactor3D.readModelAnimationRules({ animations: [manual] })[0];
     }
 
     /**
@@ -1490,13 +1669,13 @@ class Database3DEditor {
         // stands down until the next slider touch. Held poses hand over
         // seamlessly instead, and continuous motions keep playing.
         this._workSuppressed = this._work.motion === 'pose' && !this._work.hold;
-        this._previewRule = Reactor3D.readModelAnimationRules({
-            animations: [{ name: '__preview', ...this._workValues('action') }]
-        })[0];
+        const previewValues = this._workValues('action');
+        previewValues.name = '__preview';
+        this._previewRule = Reactor3D.readModelAnimationRules({ animations: [previewValues] })[0];
         const duration = Reactor3D.modelRuleDuration(
             this._previewRule, this._binding ? this._binding.clips : null);
         this._sim.action = {
-            name: '__preview',
+            name: previewValues.name,
             frame: this._simFrame || 0,
             until: this._work.motion === 'pose' && this._work.hold
                 ? duration + 30
@@ -1510,6 +1689,8 @@ class Database3DEditor {
         if (this._editingRule >= 0 && this.rawAnimations[this._editingRule]) {
             if (this._work.name.trim()) values.name = this._work.name.trim();
             if (!values.effects) delete this.rawAnimations[this._editingRule].effects;
+            if (!values.keys) delete this.rawAnimations[this._editingRule].keys;
+            if (!values.rate) delete this.rawAnimations[this._editingRule].rate;
             Object.assign(this.rawAnimations[this._editingRule], values);
             this.selectedRule = this._editingRule;
         } else {
@@ -1555,10 +1736,12 @@ class Database3DEditor {
             perTile: rule.perTile,
             amount: rule.amount,
             clip: rule.clip,
+            rate: rule.rate || 1,
             period: rule.period,
             trigger: rule.trigger,
             hold: rule.hold,
-            effects: JSON.parse(JSON.stringify(raw.effects || []))
+            effects: JSON.parse(JSON.stringify(raw.effects || [])),
+            keys: JSON.parse(JSON.stringify(raw.keys || []))
         };
         this._pendingUndo = null;
         const custom = this.customParts.findIndex(part => part.name === rule.part);
@@ -1598,7 +1781,11 @@ class Database3DEditor {
     renderEditCard() {
         const card = this._detail ? this._detail.querySelector('.r3d-card') : null;
         if (!card) return;
-        const hasParts = (this._binding && this._binding.meshes.length > 0) || this.customParts.length > 0;
+        // A clip-only GLB has no parts, but its adopted clip rules still
+        // edit on the card (clip choice, speed, trigger, effects).
+        const hasParts = (this._binding && this._binding.meshes.length > 0)
+            || this.customParts.length > 0
+            || (this.embeddedClips || []).length > 0;
         if (this._selectMode || !hasParts) {
             card.style.display = 'none';
             return;
@@ -1728,7 +1915,9 @@ class Database3DEditor {
                 `<option value="${escape(name)}"${name === work.clip ? ' selected' : ''}>${escape(name)}</option>`).join('');
             const stray = work.clip && clips.indexOf(work.clip) < 0
                 ? `<option value="${escape(work.clip)}" selected>${escape(work.clip)} ?</option>` : '';
-            body = row(this._t('Clip'), `<select class="r3d-card-clip" ${selectStyle}>${clipOptions}${stray}</select>`);
+            body = row(this._t('Clip'), `<select class="r3d-card-clip" ${selectStyle}>${clipOptions}${stray}</select>`)
+                + sliderRow('r3d-card-rate', '', this._t('Speed'),
+                    25, 300, 5, Math.round((work.rate || 1) * 100), Math.round((work.rate || 1) * 100) + '%');
         }
         const editable = this.selectedPartName === ''
             || this._matchedMeshes(this.selectedPartName).length > 0;
@@ -1750,10 +1939,15 @@ class Database3DEditor {
                 `<select class="r3d-card-trigger" ${selectStyle}>
                     <option value="action"${work.trigger === 'action' ? ' selected' : ''}>${this._t('On demand')}</option>
                     <option value="moving"${work.trigger === 'moving' ? ' selected' : ''}>${this._t('While moving')}</option>
+                    <option value="walking"${work.trigger === 'walking' ? ' selected' : ''}>${this._t('While walking')}</option>
+                    <option value="dashing"${work.trigger === 'dashing' ? ' selected' : ''}>${this._t('While dashing')}</option>
                     <option value="idle"${work.trigger === 'idle' ? ' selected' : ''}>${this._t('While idle')}</option>
                     <option value="always"${work.trigger === 'always' ? ' selected' : ''}>${this._t('Always')}</option>
                 </select>`)
-            + (this.selectedPartName ? row(this._t('Pivot'),
+            // A bone hinges about its own head; pivot presets act on
+            // carved parts only and would silently do nothing here.
+            + (this.selectedPartName && !this._isRigBoneName(this.selectedPartName)
+                ? row(this._t('Pivot'),
                 `<select class="r3d-card-pivot" ${selectStyle}>
                     <option value="">${this._t('Pivot preset…')}</option>
                     <option value="center">${this._t('Center')}</option>
@@ -1766,11 +1960,13 @@ class Database3DEditor {
                 </select>
                 <button type="button" class="r3d-card-pivot-place" title="${this._t('Place pivot (click the model)')}"
                     style="width:26px;height:26px;border:1px solid ${this._tool === 'pivot' ? 'var(--color-accent)' : 'var(--color-border)'};border-radius:4px;cursor:pointer;background:${this._tool === 'pivot' ? 'var(--color-accent)' : 'var(--color-bg-surface)'};color:${this._tool === 'pivot' ? 'var(--color-bg-deep)' : 'var(--color-text)'};font-size:13px;line-height:1;">✛</button>`) : '')
-            + (work.motion === 'pose' && work.trigger === 'action' ? row(this._t('At the end'),
+            + (work.motion === 'pose' && work.trigger === 'action' && !(work.keys || []).length
+                ? row(this._t('At the end'),
                 `<select class="r3d-card-hold" ${selectStyle}>
                     <option value="return"${work.hold ? '' : ' selected'}>${this._t('Return to rest')}</option>
                     <option value="hold"${work.hold ? ' selected' : ''}>${this._t('Stay posed')}</option>
                 </select>`) : '')
+            + (work.motion === 'pose' && work.trigger === 'action' ? this._keysHtml() : '')
             + (work.trigger === 'action' ? this._effectsHtml() : '')
             + `<div style="display:flex;gap:6px;margin-top:9px;">
                 <button type="button" class="rr-btn-secondary r3d-card-preview" style="flex:1;" title="${this._t('Play this animation from rest')}">${this._t('Preview')}</button>
@@ -1843,6 +2039,85 @@ class Database3DEditor {
                 ${addButton('r3d-fx-add-anim', this._t('Animation'))}
                 ${addButton('r3d-fx-add-flash', this._t('Flash'))}
             </div>`;
+    }
+
+    /**
+     * The keyframe timeline of an on-demand pose: each stop is a captured
+     * set of slider values at a percent of the play. With keys present the
+     * animation interpolates rest → stops → rest instead of the single
+     * in-and-out blend, so a wind-up-then-strike lives on one card.
+     */
+    _keysHtml() {
+        const keys = this._work.keys || [];
+        const rows = keys.map((stop, index) => {
+            const at = Math.round((Number(stop.at) || 0) * 100);
+            return `
+                <div style="display:flex;align-items:center;gap:6px;margin:3px 0;">
+                    <input type="range" class="r3d-key-at" data-i="${index}" min="1" max="99" step="1" value="${at}"
+                        title="${this._t('When (percent of the animation)')}" style="flex:0 0 74px;accent-color:var(--color-accent);">
+                    <span class="r3d-key-label" data-i="${index}" style="flex:1;min-width:0;font-size:11px;color:var(--color-text);">${at}% · ${this._t('Pose')}</span>
+                    <button type="button" class="r3d-key-set" data-i="${index}" title="${this._t('Capture the sliders into this key')}"
+                        style="padding:1px 8px;font-size:10px;border-radius:4px;cursor:pointer;border:1px solid var(--color-border);background:var(--color-bg-surface);color:var(--color-text);">${this._t('set')}</button>
+                    <button type="button" class="r3d-key-delete" data-i="${index}" title="${this._t('Delete')}"
+                        style="width:18px;height:18px;border:none;background:none;color:var(--color-text-muted);cursor:pointer;font-size:12px;line-height:1;">×</button>
+                </div>`;
+        }).join('');
+        return `
+            <div style="border-top:1px solid var(--color-border);margin:8px 0;"></div>
+            <div style="font-size:12px;color:var(--color-text);margin:4px 0;">${this._t('Keyframes')}</div>
+            ${rows}
+            <div style="display:flex;gap:4px;margin:4px 0;">
+                <button type="button" class="r3d-key-add"
+                    style="flex:1;padding:3px 0;font-size:11px;border-radius:4px;cursor:pointer;border:1px solid var(--color-border);background:var(--color-bg-surface);color:var(--color-text);">＋ ${this._t('Key from sliders')}</button>
+            </div>`;
+    }
+
+    _bindKeys(card) {
+        const keys = () => this._work.keys || (this._work.keys = []);
+        const addButton = card.querySelector('.r3d-key-add');
+        if (addButton) {
+            addButton.addEventListener('click', () => {
+                const list = keys();
+                const last = list.length ? list[list.length - 1].at : 0;
+                list.push({
+                    at: Math.min(0.9, Math.round((last + 0.25) * 20) / 20),
+                    rotate: this._work.rotate.slice(),
+                    move: this._work.move.slice(),
+                    resize: this._work.resize.slice()
+                });
+                list.sort((a, b) => a.at - b.at);
+                this.renderEditCard();
+            });
+        }
+        card.querySelectorAll('.r3d-key-at').forEach(input => {
+            input.addEventListener('input', event => {
+                const index = Number(event.target.dataset.i);
+                if (!keys()[index]) return;
+                keys()[index].at = Number(event.target.value) / 100;
+                const label = card.querySelector(`.r3d-key-label[data-i="${index}"]`);
+                if (label) label.textContent = `${event.target.value}% · ${this._t('Pose')}`;
+            });
+            input.addEventListener('change', () => {
+                keys().sort((a, b) => a.at - b.at);
+                this.renderEditCard();
+            });
+        });
+        card.querySelectorAll('.r3d-key-set').forEach(button => {
+            button.addEventListener('click', event => {
+                const index = Number(event.target.dataset.i);
+                if (!keys()[index]) return;
+                keys()[index].rotate = this._work.rotate.slice();
+                keys()[index].move = this._work.move.slice();
+                keys()[index].resize = this._work.resize.slice();
+            });
+        });
+        card.querySelectorAll('.r3d-key-delete').forEach(button => {
+            button.addEventListener('click', event => {
+                const index = Number(event.target.dataset.i);
+                keys().splice(index, 1);
+                this.renderEditCard();
+            });
+        });
     }
 
     _bindEditCard(card, spec) {
@@ -1925,6 +2200,7 @@ class Database3DEditor {
         bindSlider('r3d-card-spinspeed', v => { this._work.speed = v; }, v => Math.round(v) + '°/s');
         bindSlider('r3d-card-pertile', v => { this._work.perTile = v; }, v => Math.round(v) + '°');
         bindSlider('r3d-card-amount', v => { this._work.amount = v; }, v => v.toFixed(2));
+        bindSlider('r3d-card-rate', v => { this._work.rate = v / 100; }, v => Math.round(v) + '%');
         const clip = card.querySelector('.r3d-card-clip');
         if (clip) {
             clip.addEventListener('change', event => {
@@ -1975,6 +2251,7 @@ class Database3DEditor {
             });
         }
         this._bindEffects(card);
+        this._bindKeys(card);
         card.querySelector('.r3d-card-preview').addEventListener('click', () => this.previewPose());
         card.querySelector('.r3d-card-reset').addEventListener('click', () => {
             this._stashUndo();
@@ -2241,7 +2518,10 @@ class Database3DEditor {
                 active.blur();
                 return;
             }
-            const orbit = this._tool === 'orbit' || event.button === 2 || event.ctrlKey;
+            // The rig tool only claims presses that land on a marker (the
+            // branch below); anywhere else the drag orbits as usual.
+            const orbit = this._tool === 'orbit' || this._tool === 'rig'
+                || event.button === 2 || event.ctrlKey;
             lastX = downX = event.clientX;
             lastY = downY = event.clientY;
             // The pivot gizmo is drag-and-drop from any tool: a press on
@@ -2254,6 +2534,18 @@ class Database3DEditor {
                 event.preventDefault();
                 return;
             }
+            // Rig markers drag the same way, mirrored to their twin.
+            if (event.button === 0 && !event.ctrlKey && this._rigMode) {
+                const markerKey = this._rigMarkerUnderPointer(event.clientX, event.clientY);
+                if (markerKey) {
+                    mode = 'rigdrag';
+                    this._rigDragKey = markerKey;
+                    canvas.style.cursor = 'move';
+                    event.preventDefault();
+                    return;
+                }
+            }
+            this._dragging = true;
             if (orbit) {
                 mode = 'orbit';
                 canvas.style.cursor = 'grabbing';
@@ -2279,8 +2571,8 @@ class Database3DEditor {
         window.addEventListener('pointermove', event => {
             if (!mode) return;
             if (mode === 'orbit') {
-                this._view.yaw -= (event.clientX - lastX) * 0.4;
-                this._view.pitch = Math.min(72, Math.max(5, this._view.pitch - (event.clientY - lastY) * 0.3));
+                this._viewGoal.yaw -= (event.clientX - lastX) * 0.4;
+                this._viewGoal.pitch = Math.min(72, Math.max(5, this._viewGoal.pitch - (event.clientY - lastY) * 0.3));
             } else if (mode === 'select') {
                 const rect = canvas.getBoundingClientRect();
                 const x = event.clientX - rect.left;
@@ -2292,6 +2584,8 @@ class Database3DEditor {
             } else if (mode === 'pivotdrag' && this._pivotMarker) {
                 const point = this._pivotPlanePoint(event.clientX, event.clientY);
                 if (point) this._pivotMarker.position.copy(point);
+            } else if (mode === 'rigdrag' && this._rigDragKey) {
+                this._dragRigMarker(this._rigDragKey, event.clientX, event.clientY);
             }
             lastX = event.clientX;
             lastY = event.clientY;
@@ -2315,17 +2609,20 @@ class Database3DEditor {
                     const local = this._object.worldToLocal(this._pivotMarker.position.clone());
                     this._setPivot(name, [local.x, local.y, local.z]);
                 }
+            } else if (mode === 'rigdrag') {
+                this._rigDragKey = null;
             } else if (mode === 'pivot' && stationary) {
                 this._placePivot(event);
             } else if (mode === 'orbit' && stationary && event.button !== 2 && this._tool === 'orbit') {
                 this._pickPart(event);
             }
             mode = null;
+            this._dragging = false;
             canvas.style.cursor = this._tool === 'orbit' ? 'grab' : 'crosshair';
         });
         canvas.addEventListener('wheel', event => {
             event.preventDefault();
-            this._view.distance = Math.min(20, Math.max(1.2, this._view.distance * (event.deltaY > 0 ? 1.1 : 1 / 1.1)));
+            this._viewGoal.distance = Math.min(20, Math.max(1.2, this._viewGoal.distance * (event.deltaY > 0 ? 1.15 : 1 / 1.15)));
         }, { passive: false });
     }
 
@@ -2345,6 +2642,13 @@ class Database3DEditor {
     _partUnderPointer(clientX, clientY) {
         const hits = this._raycastPointer(clientX, clientY) || [];
         for (const hit of hits) {
+            if (hit.object.userData && hit.object.userData.__reactorOverlay) continue;
+            // On a rigged model the poseable thing under the pointer is
+            // the bone that owns the face's skin, not the whole mesh.
+            if (hit.object.isSkinnedMesh && hit.face) {
+                const bone = this._dominantBoneName(hit.object, hit.face);
+                if (bone) return { name: bone, hit };
+            }
             const parts = hit.object.userData && hit.object.userData.parts;
             if (parts && parts.length) return { name: parts[0].name, hit };
         }
@@ -2363,8 +2667,13 @@ class Database3DEditor {
     /** Hover highlight: run from the frame loop, throttled by time. */
     _updateHover() {
         if (this._selectMode || this._tool !== 'orbit' || !this._pointer || !this._object) return;
+        if (this._dragging) return;
         const now = Date.now();
-        if (this._hoverAt && now - this._hoverAt < 90) return;
+        const interval = 90 + Math.min(600, Math.floor((this._triangleCount || 0) / 2500));
+        if (this._hoverAt && now - this._hoverAt < interval) return;
+        const last = this._hoverPointerAt;
+        if (last && last.x === this._pointer.x && last.y === this._pointer.y) return;
+        this._hoverPointerAt = { x: this._pointer.x, y: this._pointer.y };
         this._hoverAt = now;
         const canvas = this._detail.querySelector('.r3d-db-canvas');
         const rect = canvas.getBoundingClientRect();
@@ -2589,6 +2898,11 @@ class Database3DEditor {
 
     /** Where the pointer ray crosses the camera-parallel plane through the pivot. */
     _pivotPlanePoint(clientX, clientY) {
+        return this._cameraPlanePoint(clientX, clientY, this._pivotMarker.position);
+    }
+
+    /** Where the pointer ray crosses the camera-parallel plane through a point. */
+    _cameraPlanePoint(clientX, clientY, anchorWorld) {
         const canvas = this._detail.querySelector('.r3d-db-canvas');
         const rect = canvas.getBoundingClientRect();
         const pointer = new THREE.Vector2(
@@ -2598,10 +2912,477 @@ class Database3DEditor {
         raycaster.setFromCamera(pointer, this._camera);
         const normal = new THREE.Vector3();
         this._camera.getWorldDirection(normal);
-        const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(
-            normal, this._pivotMarker.position);
+        const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(normal, anchorWorld);
         const point = new THREE.Vector3();
         return raycaster.ray.intersectPlane(plane, point) ? point : null;
+    }
+
+    // ------------------------------------------------------------------
+    // Rigging: fit the humanoid skeleton with draggable joint markers,
+    // then Bind computes skin weights and the bones become card parts.
+    // A rig and carved parts are exclusive — both count mesh indices and
+    // triangles over the uncarved model.
+
+    enterRigMode() {
+        if (typeof ModelRigger === 'undefined' || !this._object || !this._template) return false;
+        const status = this._detail.querySelector('.r3d-status');
+        if (this.customParts.length) {
+            if (status) status.textContent = this._t('Remove carved parts before rigging.');
+            return false;
+        }
+        this._rigMode = true;
+        this.deselectPart();
+        this._rigTemplate = (this.customRig && ModelRigger.TEMPLATES[this.customRig.template])
+            ? this.customRig.template : (this._rigTemplate || 'humanoid');
+        const saved = this.customRig && this.customRig.markers;
+        const complete = saved && ModelRigger.markersFor(this._rigTemplate).every(marker =>
+            Array.isArray(saved[marker.key]) && saved[marker.key].length === 3);
+        this._rigMarkers = complete
+            ? JSON.parse(JSON.stringify(saved))
+            : ModelRigger.defaultMarkers(
+                this._template.userData.glbSize || { x: 1, y: 1.8, z: 1 }, this._rigTemplate);
+        this._buildRigVisuals();
+        this.renderRigBar();
+        return true;
+    }
+
+    exitRigMode() {
+        this._rigMode = false;
+        this._rigDragKey = null;
+        this._disposeRigVisuals();
+        this.renderRigBar();
+    }
+
+    _disposeRigVisuals() {
+        if (this._rigGroup && this._rigGroup.parent) this._rigGroup.parent.remove(this._rigGroup);
+        this._rigGroup = null;
+        this._rigMarkerMeshes = null;
+        this._rigBoneLines = null;
+    }
+
+    /** Marker spheres and the derived bone lines, in model space. */
+    _buildRigVisuals() {
+        if (typeof THREE === 'undefined' || !this._object) return;
+        this._disposeRigVisuals();
+        const size = this._template.userData.glbSize || { x: 1, y: 1.8, z: 1 };
+        const radius = Math.max(size.x, size.y, size.z) * 0.022;
+        const group = new THREE.Group();
+        group.name = 'rig-markers';
+        group.userData.__reactorOverlay = true;
+        this._rigMarkerMeshes = {};
+        for (const marker of ModelRigger.markersFor(this._rigTemplate)) {
+            const side = /L$/.test(marker.key) ? 'L' : (/R$/.test(marker.key) ? 'R' : '');
+            const color = side === 'L' ? 0x5aa9ff : side === 'R' ? 0xff6a6a : 0xffd15c;
+            const sphere = new THREE.Mesh(
+                new THREE.SphereGeometry(radius, 12, 10),
+                new THREE.MeshBasicMaterial({ color, depthTest: false, transparent: true, opacity: 0.9 }));
+            sphere.renderOrder = 30;
+            sphere.userData.__reactorOverlay = true;
+            sphere.position.fromArray(this._rigMarkers[marker.key]);
+            group.add(sphere);
+            this._rigMarkerMeshes[marker.key] = sphere;
+        }
+        const lines = new THREE.LineSegments(
+            new THREE.BufferGeometry(),
+            new THREE.LineBasicMaterial({ color: 0xffd15c, depthTest: false, transparent: true, opacity: 0.75 }));
+        lines.renderOrder = 29;
+        lines.userData.__reactorOverlay = true;
+        group.add(lines);
+        this._rigBoneLines = lines;
+        // Each marker names its joint right in the viewport — a bare dot
+        // gives no clue whether it wants the elbow or the wrist.
+        this._rigMarkerLabels = {};
+        const labelHeight = Math.max(size.x, size.y, size.z) * 0.05;
+        for (const marker of ModelRigger.markersFor(this._rigTemplate)) {
+            const sprite = this._makeMarkerLabel(this._t(marker.label));
+            sprite.scale.set(labelHeight * 5, labelHeight, 1);
+            sprite.position.fromArray(this._rigMarkers[marker.key]);
+            sprite.position.y += radius * 2.6;
+            group.add(sprite);
+            this._rigMarkerLabels[marker.key] = sprite;
+        }
+        this._object.add(group);
+        this._rigGroup = group;
+        this._refreshRigBones();
+    }
+
+    /** A floating text label for one rig marker. */
+    _makeMarkerLabel(text) {
+        const canvas = document.createElement('canvas');
+        canvas.width = 320;
+        canvas.height = 64;
+        const context = canvas.getContext('2d');
+        context.font = 'bold 30px sans-serif';
+        context.textAlign = 'center';
+        context.textBaseline = 'middle';
+        context.lineWidth = 6;
+        context.strokeStyle = 'rgba(0,0,0,0.85)';
+        context.strokeText(text, 160, 32);
+        context.fillStyle = '#ffffff';
+        context.fillText(text, 160, 32);
+        const texture = new THREE.CanvasTexture(canvas);
+        const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
+            map: texture, depthTest: false, transparent: true, opacity: 0.95
+        }));
+        sprite.renderOrder = 31;
+        sprite.userData.__reactorOverlay = true;
+        return sprite;
+    }
+
+    /** Rebuild the bone preview lines from the current markers. */
+    _refreshRigBones() {
+        if (!this._rigBoneLines || typeof ModelRigger === 'undefined') return;
+        const bones = ModelRigger.bonesFromMarkers(this._rigMarkers, this._rigTemplate);
+        const positions = new Float32Array(bones.length * 6);
+        bones.forEach((bone, i) => {
+            positions.set(bone.head, i * 6);
+            positions.set(bone.tail, i * 6 + 3);
+        });
+        this._rigBoneLines.geometry.dispose();
+        this._rigBoneLines.geometry = new THREE.BufferGeometry();
+        this._rigBoneLines.geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    }
+
+    /** The marker under the pointer, by projected screen distance. */
+    _rigMarkerUnderPointer(clientX, clientY) {
+        if (!this._rigMarkerMeshes || !this._camera) return null;
+        const canvas = this._detail.querySelector('.r3d-db-canvas');
+        const rect = canvas.getBoundingClientRect();
+        let best = null;
+        let bestDistance = 18;
+        for (const key of Object.keys(this._rigMarkerMeshes)) {
+            const world = new THREE.Vector3();
+            this._rigMarkerMeshes[key].getWorldPosition(world);
+            const at = world.project(this._camera);
+            const sx = rect.left + (at.x * 0.5 + 0.5) * rect.width;
+            const sy = rect.top + (-at.y * 0.5 + 0.5) * rect.height;
+            const distance = Math.hypot(clientX - sx, clientY - sy);
+            if (distance < bestDistance) {
+                bestDistance = distance;
+                best = key;
+            }
+        }
+        return best;
+    }
+
+    /** Drag a marker in the camera plane; its mirror twin follows reflected. */
+    _dragRigMarker(key, clientX, clientY) {
+        const sphere = this._rigMarkerMeshes && this._rigMarkerMeshes[key];
+        if (!sphere || !this._object) return;
+        const anchor = new THREE.Vector3();
+        sphere.getWorldPosition(anchor);
+        const point = this._cameraPlanePoint(clientX, clientY, anchor);
+        if (!point) return;
+        const local = this._rigGroup.worldToLocal(point.clone());
+        this._rigMarkers[key] = [local.x, local.y, local.z];
+        sphere.position.copy(local);
+        const lift = sphere.geometry.parameters.radius * 2.6;
+        const label = this._rigMarkerLabels && this._rigMarkerLabels[key];
+        if (label) label.position.set(local.x, local.y + lift, local.z);
+        const marker = ModelRigger.markersFor(this._rigTemplate).find(entry => entry.key === key);
+        if (marker && marker.mirror) {
+            this._rigMarkers[marker.mirror] = [-local.x, local.y, local.z];
+            this._rigMarkerMeshes[marker.mirror].position.set(-local.x, local.y, local.z);
+            const twin = this._rigMarkerLabels && this._rigMarkerLabels[marker.mirror];
+            if (twin) twin.position.set(-local.x, local.y + lift, local.z);
+        }
+        this._refreshRigBones();
+    }
+
+    renderRigBar() {
+        const bar = this._detail ? this._detail.querySelector('.r3d-rig-bar') : null;
+        if (!bar) return;
+        if (!this._rigMode) {
+            bar.style.display = 'none';
+            return;
+        }
+        bar.style.display = 'flex';
+        bar.innerHTML = '';
+        const label = document.createElement('span');
+        label.style.fontWeight = 'bold';
+        label.textContent = this._t('Rig');
+        bar.appendChild(label);
+        const templatePick = document.createElement('select');
+        templatePick.style.cssText = 'padding:2px 6px;background:var(--color-bg-surface);color:var(--color-text);border:1px solid var(--color-border-input);border-radius:3px;font-size:12px;';
+        for (const entry of ModelRigger.templates()) {
+            const option = document.createElement('option');
+            option.value = entry.id;
+            option.textContent = this._t(entry.label);
+            option.selected = entry.id === this._rigTemplate;
+            templatePick.appendChild(option);
+        }
+        templatePick.addEventListener('change', () => {
+            this._rigTemplate = templatePick.value;
+            this._rigMarkers = ModelRigger.defaultMarkers(
+                this._template.userData.glbSize || { x: 1, y: 1.8, z: 1 }, this._rigTemplate);
+            this._buildRigVisuals();
+        });
+        bar.appendChild(templatePick);
+        const bind = document.createElement('button');
+        bind.type = 'button';
+        bind.className = 'rr-button-primary';
+        bind.style.padding = '3px 12px';
+        bind.textContent = this._t('Bind rig');
+        bind.addEventListener('click', () => this.bindRig());
+        bar.appendChild(bind);
+        const reset = document.createElement('button');
+        reset.type = 'button';
+        reset.className = 'rr-btn-chip';
+        reset.textContent = this._t('Reset markers');
+        reset.addEventListener('click', () => {
+            this._rigMarkers = ModelRigger.defaultMarkers(
+                this._template.userData.glbSize || { x: 1, y: 1.8, z: 1 }, this._rigTemplate);
+            this._buildRigVisuals();
+        });
+        bar.appendChild(reset);
+        if (this.customRig) {
+            const remove = document.createElement('button');
+            remove.type = 'button';
+            remove.className = 'rr-btn-chip-danger';
+            remove.textContent = this._t('Remove rig');
+            remove.addEventListener('click', () => this.removeRig());
+            bar.appendChild(remove);
+        }
+        const hint = document.createElement('span');
+        hint.style.cssText = 'color:var(--color-text-muted);';
+        hint.textContent = this._t('Drag the markers onto the joints; sides mirror.');
+        bar.appendChild(hint);
+    }
+
+    /**
+     * Solve skin weights against the template's meshes and persist the
+     * rig. The solve runs on model-space vertices — the same frame carve
+     * pivots use — so the runtime's bind reproduces the preview exactly.
+     */
+    bindRig() {
+        if (typeof ModelRigger === 'undefined' || typeof Reactor3D === 'undefined'
+            || !this._template) return;
+        const status = this._detail.querySelector('.r3d-status');
+        if (status) status.textContent = this._t('Binding rig…');
+        setTimeout(() => {
+            const template = this._template;
+            template.updateMatrixWorld(true);
+            const targets = Reactor3D.carveTargetMeshes(template);
+            const meshes = targets.map(mesh => {
+                const relative = new THREE.Matrix4();
+                for (let node = mesh; node && node !== template; node = node.parent) {
+                    node.updateMatrix();
+                    relative.premultiply(node.matrix);
+                }
+                const attribute = mesh.geometry.getAttribute('position');
+                const positions = new Float32Array(attribute.count * 3);
+                const point = new THREE.Vector3();
+                for (let v = 0; v < attribute.count; v++) {
+                    point.fromBufferAttribute(attribute, v).applyMatrix4(relative);
+                    positions[v * 3] = point.x;
+                    positions[v * 3 + 1] = point.y;
+                    positions[v * 3 + 2] = point.z;
+                }
+                const index = mesh.geometry.getIndex();
+                return { positions, index: index ? index.array : null };
+            });
+            const bones = ModelRigger.bonesFromMarkers(this._rigMarkers, this._rigTemplate);
+            const size = template.userData.glbSize || { y: 1 };
+            const results = ModelRigger.computeWeights(meshes, bones, { height: size.y });
+            const built = ModelRigger.buildRigBinary(
+                JSON.parse(JSON.stringify(this._rigMarkers)), bones, results, this._rigTemplate);
+            this.customRig = built.rig;
+            // The preview reads decoded weights straight off the rig; the
+            // file write happens in saveRig. weightsBin never reaches JSON.
+            this.customRig.weightsBin = ModelRigger.decodeWeightsBinary(built.binary);
+            this._rigBinary = built.binary;
+            this.saveRig();
+            this._rebuildInstance();
+            this.renderRigBar();
+            this._refreshMotionsButton();
+            if (status) {
+                const total = meshes.reduce((sum, mesh) => sum + mesh.positions.length / 3, 0);
+                status.textContent = `${this._t('Rig bound')} — ${bones.length} bones, ${total} vertices`;
+            }
+        }, 30);
+    }
+
+    removeRig() {
+        this.customRig = null;
+        this._rigBinary = null;
+        this.saveRig();
+        this._rebuildInstance();
+        this.renderRigBar();
+        this._refreshMotionsButton();
+        const status = this._detail.querySelector('.r3d-status');
+        if (status) status.textContent = this._t('Rig removed.');
+    }
+
+    /** The rig writes its own sidecar key; mergeSidecar leaves it alone. */
+    saveRig() {
+        const fs = require('fs');
+        let json = {};
+        try {
+            const parsed = JSON.parse(fs.readFileSync(this.rulesPath(), 'utf8'));
+            if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) json = parsed;
+        } catch (error) {
+            json = {};
+        }
+        if (this.customRig) json.rig = this.customRig;
+        else delete json.rig;
+        // weightsBin is the in-memory decode; the bytes live in their own
+        // file beside the JSON, never inside it.
+        fs.writeFileSync(this.rulesPath(),
+            JSON.stringify(json, (key, value) => key === 'weightsBin' ? undefined : value, 2) + '\n');
+        const path = require('path');
+        const binPath = path.join(path.dirname(this.rulesPath()), 'model.rig.bin');
+        if (this.customRig && this._rigBinary) {
+            fs.writeFileSync(binPath, Buffer.from(this._rigBinary));
+        } else if (!this.customRig && fs.existsSync(binPath)) {
+            fs.rmSync(binPath, { force: true });
+        }
+    }
+
+    /** The Motions library applies to rigged models only. */
+    _refreshMotionsButton() {
+        const button = this._detail ? this._detail.querySelector('.r3d-motions') : null;
+        if (!button) return;
+        const available = this.customRig && typeof RigMotionPresets !== 'undefined'
+            && RigMotionPresets.forTemplate((this.customRig && this.customRig.template) || 'humanoid').length > 0;
+        button.style.display = available ? '' : 'none';
+    }
+
+    /**
+     * Preset Motions: the plug-and-play library for the rig's template.
+     * Applying one drops its rules into the Animations list as ordinary,
+     * fully editable animations — reapplying replaces that preset's rules.
+     */
+    showMotionPresets() {
+        if (!this.customRig || typeof RigMotionPresets === 'undefined') return;
+        const template = ModelRigger.TEMPLATES[this.customRig.template]
+            ? this.customRig.template : 'humanoid';
+        const presets = RigMotionPresets.forTemplate(template);
+        if (!presets.length) return;
+
+        const overlay = document.createElement('div');
+        overlay.className = 'rr-modal-overlay';
+        const modal = document.createElement('div');
+        modal.className = 'rr-modal';
+        modal.style.cssText = 'width: min(560px, calc(100vw - 24px));';
+        modal.innerHTML = `
+            <div class="rr-modal-header">
+                <div class="rr-modal-title">${this._t('Preset Motions')}</div>
+                <button class="rr-modal-close r3d-presets-close" type="button">×</button>
+            </div>
+            <div class="rr-modal-body">
+                <div style="font-size:11px;color:var(--color-text-muted);">${this._t('Starting points — every rule lands in the Animations list, editable like any other.')}</div>
+                <div class="r3d-preset-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;"></div>
+            </div>
+            <div class="rr-modal-footer">
+                <button class="rr-btn-secondary r3d-presets-done">${this._t('Close')}</button>
+            </div>`;
+        overlay.appendChild(modal);
+        document.body.appendChild(overlay);
+        const close = () => overlay.remove();
+        modal.querySelector('.r3d-presets-close').addEventListener('click', close);
+        modal.querySelector('.r3d-presets-done').addEventListener('click', close);
+        overlay.addEventListener('click', event => { if (event.target === overlay) close(); });
+
+        const grid = modal.querySelector('.r3d-preset-grid');
+        for (const preset of presets) {
+            const triggers = [...new Set(preset.rules.map(rule => rule.trigger || 'always'))];
+            const applied = () => this.rawAnimations.some(raw => raw.name === preset.name);
+            const card = document.createElement('div');
+            card.style.cssText = 'border:1px solid var(--color-border);border-radius:6px;'
+                + 'padding:8px 10px;background:var(--color-bg-panel);display:flex;flex-direction:column;gap:4px;';
+            const title = document.createElement('div');
+            title.style.cssText = 'font-weight:bold;font-size:12px;color:var(--color-text);';
+            title.textContent = this._t(preset.name);
+            const detail = document.createElement('div');
+            detail.style.cssText = 'font-size:10px;color:var(--color-text-muted);';
+            detail.textContent = `${preset.rules.length} × · ${triggers.map(t => this._t(
+                t === 'moving' ? 'While moving' : t === 'walking' ? 'While walking'
+                    : t === 'dashing' ? 'While dashing' : t === 'idle' ? 'While idle'
+                    : t === 'action' ? 'On demand' : 'Always')).join(', ')}`;
+            const apply = document.createElement('button');
+            apply.type = 'button';
+            apply.className = 'rr-btn-chip';
+            // The i18n observer reverts programmatic label changes on
+            // translated buttons; this label is dynamic by design.
+            apply.setAttribute('data-rr-i18n-skip', '1');
+            const refreshLabel = () => {
+                apply.textContent = applied() ? `✓ ${this._t('Applied')}` : this._t('Apply');
+            };
+            refreshLabel();
+            apply.addEventListener('click', () => {
+                this.applyMotionPreset(preset);
+                refreshLabel();
+            });
+            card.appendChild(title);
+            card.appendChild(detail);
+            card.appendChild(apply);
+            grid.appendChild(card);
+        }
+    }
+
+    applyMotionPreset(preset) {
+        // Reapplying replaces the preset's own rules; hand-authored ones
+        // (different names) are untouched.
+        this.rawAnimations = this.rawAnimations.filter(raw => raw.name !== preset.name);
+        for (const rule of preset.rules) {
+            this.rawAnimations.push(JSON.parse(JSON.stringify(rule)));
+        }
+        this.saveRules();
+        this.renderRuleList();
+        const status = this._detail.querySelector('.r3d-status');
+        if (status) status.textContent = `${this._t(preset.name)} — ${this._t('Applied')}`;
+    }
+
+    /** Whether a part name belongs to the rig's skeleton. */
+    _isRigBoneName(name) {
+        return !!(this.customRig && Array.isArray(this.customRig.bones)
+            && this.customRig.bones.some(bone => bone.name === name));
+    }
+
+    /** The dominant bone under a face of a skinned mesh, for click-to-pose. */
+    _dominantBoneName(mesh, face) {
+        const skinIndex = mesh.geometry.getAttribute('skinIndex');
+        const skinWeight = mesh.geometry.getAttribute('skinWeight');
+        if (!skinIndex || !skinWeight || !mesh.skeleton) return null;
+        const totals = new Map();
+        for (const vertex of [face.a, face.b, face.c]) {
+            for (let k = 0; k < 4; k++) {
+                const bone = skinIndex.getComponent(vertex, k);
+                const weight = skinWeight.getComponent(vertex, k);
+                totals.set(bone, (totals.get(bone) || 0) + weight);
+            }
+        }
+        let best = -1;
+        let bestWeight = 0;
+        for (const [bone, weight] of totals) {
+            if (weight > bestWeight) { bestWeight = weight; best = bone; }
+        }
+        const boneObject = best >= 0 ? mesh.skeleton.bones[best] : null;
+        return boneObject ? boneObject.name : null;
+    }
+
+    /** Bounds of a binding entry: geometry for meshes, the segment for bones. */
+    _expandEntry(box, entry) {
+        const mesh = entry.mesh;
+        if (!mesh.isBone) {
+            box.expandByObject(mesh);
+            return;
+        }
+        mesh.updateWorldMatrix(true, false);
+        const head = new THREE.Vector3().setFromMatrixPosition(mesh.matrixWorld);
+        box.expandByPoint(head);
+        let leaf = true;
+        for (const child of mesh.children) {
+            if (!child.isBone) continue;
+            leaf = false;
+            child.updateWorldMatrix(true, false);
+            box.expandByPoint(new THREE.Vector3().setFromMatrixPosition(child.matrixWorld));
+        }
+        const tail = mesh.userData.__reactorBoneTail;
+        if (leaf && tail && this._object) {
+            box.expandByPoint(this._object.localToWorld(new THREE.Vector3().fromArray(tail)));
+        }
+        box.expandByScalar(0.05);
     }
 
     // ------------------------------------------------------------------
@@ -2617,11 +3398,27 @@ class Database3DEditor {
         walk.textContent = this._t('Walk');
         walk.addEventListener('click', () => {
             this._sim.walking = !this._sim.walking;
+            if (!this._sim.walking) this._sim.dashing = false;
             this.renderSimBar();
         });
         bar.appendChild(walk);
+        const dash = document.createElement('button');
+        dash.type = 'button';
+        dash.className = this._sim.dashing ? 'rr-button-primary' : 'rr-btn-secondary';
+        dash.textContent = this._t('Dash');
+        dash.addEventListener('click', () => {
+            this._sim.dashing = !this._sim.dashing;
+            if (this._sim.dashing) this._sim.walking = true;
+            this.renderSimBar();
+        });
+        bar.appendChild(dash);
+        // Multi-bone actions share one name and fire together, so one
+        // Play button per NAME — a preset's six rules are one motion.
+        const seenActions = new Set();
         this.playRules.forEach((rule, index) => {
             if (rule.trigger !== 'action') return;
+            if (seenActions.has(rule.name) && index !== this._editingRule) return;
+            seenActions.add(rule.name);
             const play = document.createElement('button');
             play.type = 'button';
             play.className = 'rr-btn-secondary';
@@ -2663,6 +3460,8 @@ class Database3DEditor {
             : type === 'swing' ? this._t('Swing') : type === 'bob' ? this._t('Bob') : this._t('Spin');
         const trigger = raw.trigger === 'idle' ? this._t('While idle')
             : raw.trigger === 'moving' ? this._t('While moving')
+            : raw.trigger === 'walking' ? this._t('While walking')
+            : raw.trigger === 'dashing' ? this._t('While dashing')
             : raw.trigger === 'action' ? this._t('On demand') : this._t('Always');
         const subject = type === 'clip' ? (raw.clip || '?') : (raw.part || this._t('Whole model'));
         return `${raw.name || '?'} — ${label} · ${subject} · ${trigger}`;
@@ -2685,6 +3484,77 @@ class Database3DEditor {
             });
             list.appendChild(row);
         });
+        this._renderEmbeddedClipRows(list);
+    }
+
+    /**
+     * A GLB's baked animation clips, listed under the saved rules so they
+     * are playable (and adoptable as on-demand animations) without first
+     * authoring a Clip rule on the card.
+     */
+    _renderEmbeddedClipRows(list) {
+        const clips = this.embeddedClips || [];
+        if (!clips.length) return;
+        const header = document.createElement('div');
+        header.textContent = this._t('Embedded clips');
+        header.style.cssText = 'padding:8px 10px 2px;font-size:11px;font-weight:bold;'
+            + 'color:var(--color-text-muted);border-top:1px solid var(--color-border);margin-top:6px;';
+        list.appendChild(header);
+        for (const clipName of clips) {
+            const row = document.createElement('div');
+            row.style.cssText = 'display:flex;align-items:center;gap:6px;padding:2px 10px;'
+                + 'font-size:12px;color:var(--color-text);';
+            const label = document.createElement('span');
+            label.textContent = clipName;
+            label.setAttribute('data-rr-i18n-skip', '1');
+            label.style.cssText = 'flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+            const play = document.createElement('button');
+            play.type = 'button';
+            play.className = 'rr-btn-chip';
+            play.textContent = '▶';
+            play.title = this._t('Play');
+            play.setAttribute('data-rr-i18n-skip', '1');
+            play.addEventListener('click', () => this.playEmbeddedClip(clipName));
+            const added = this.rawAnimations.some(raw => raw.type === 'clip' && raw.clip === clipName);
+            const add = document.createElement('button');
+            add.type = 'button';
+            add.className = 'rr-btn-chip';
+            add.textContent = added ? '✓' : '＋';
+            add.title = this._t('Add');
+            add.setAttribute('data-rr-i18n-skip', '1');
+            add.disabled = added;
+            if (!added) add.addEventListener('click', () => this.addEmbeddedClipRule(clipName));
+            row.appendChild(label);
+            row.appendChild(play);
+            row.appendChild(add);
+            list.appendChild(row);
+        }
+    }
+
+    /** Play a baked clip straight from the list, no rule required. */
+    playEmbeddedClip(clipName) {
+        if (typeof Reactor3D === 'undefined' || !this._binding) return;
+        const values = { type: 'clip', trigger: 'action' };
+        values.name = '__preview';
+        values.clip = clipName;
+        this._previewRule = Reactor3D.readModelAnimationRules({ animations: [values] })[0];
+        this._workSuppressed = false;
+        this._sim.action = {
+            name: values.name,
+            frame: this._simFrame || 0,
+            until: Reactor3D.modelRuleDuration(this._previewRule, this._binding.clips)
+        };
+    }
+
+    /** Adopt a baked clip as a saved on-demand animation named after it. */
+    addEmbeddedClipRule(clipName) {
+        const values = { type: 'clip', trigger: 'action' };
+        values.name = clipName;
+        values.clip = clipName;
+        this.rawAnimations.push(values);
+        this.saveRules();
+        this.rebuildPlayback();
+        this.renderRuleList();
     }
 
     /** Add opens the card on a fresh, motionless animation. */

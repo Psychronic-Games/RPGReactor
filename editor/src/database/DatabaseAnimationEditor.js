@@ -1892,25 +1892,19 @@ class DatabaseAnimationEditor {
         `;
 
         const container = document.createElement('div');
-        container.style.cssText = `
-            background-color: var(--color-bg-surface); border: 1px solid var(--color-border); border-radius: 6px;
-            width: 500px; height: 70vh; display: flex; flex-direction: column;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
-        `;
+        container.className = 'rr-modal';
+        container.style.cssText = 'width: min(500px, calc(100vw - 24px)); height: 70vh;';
 
         // Header
         const header = document.createElement('div');
-        header.style.cssText = `
-            padding: 12px 16px; background-color: var(--color-bg-panel);
-            border-bottom: 1px solid var(--color-border); display: flex; flex-direction: column; gap: 8px;
-            border-radius: 6px 6px 0 0; flex-shrink: 0;
-        `;
+        header.className = 'rr-modal-header';
+        header.style.cssText = 'flex-direction: column; align-items: stretch; gap: 8px; flex-shrink: 0;';
 
         const titleRow = document.createElement('div');
         titleRow.style.cssText = 'display: flex; justify-content: space-between; align-items: center;';
         titleRow.innerHTML = `
-            <h3 style="margin: 0; color: var(--color-text-strong); font-size: 16px;">${tt('Select Sound Effect')}</h3>
-            <button style="background: none; border: none; color: var(--color-text-strong); font-size: 20px; cursor: pointer; padding: 0; width: 24px; height: 24px;">×</button>
+            <div class="rr-modal-title">${tt('Select Sound Effect')}</div>
+            <button class="rr-modal-close" type="button">×</button>
         `;
         header.appendChild(titleRow);
 
@@ -1920,15 +1914,11 @@ class DatabaseAnimationEditor {
 
         const playBtn = document.createElement('button');
         playBtn.innerHTML = `&#9654; ${tt('Preview')}`;
-        playBtn.style.cssText = 'padding: 5px 12px; background: var(--color-bg-panel); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 3px; cursor: pointer; font-size: 11px;';
-        playBtn.addEventListener('mouseenter', () => { playBtn.style.backgroundColor = 'var(--color-accent-tint-25)'; playBtn.style.borderColor = 'var(--color-accent)'; });
-        playBtn.addEventListener('mouseleave', () => { playBtn.style.backgroundColor = 'var(--color-bg-panel)'; playBtn.style.borderColor = 'var(--color-border-input)'; });
+        playBtn.className = 'rr-btn-chip';
 
         const stopBtn = document.createElement('button');
         stopBtn.innerHTML = `&#9632; ${tt('Stop')}`;
-        stopBtn.style.cssText = 'padding: 5px 12px; background: var(--color-bg-panel); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 3px; cursor: pointer; font-size: 11px;';
-        stopBtn.addEventListener('mouseenter', () => { stopBtn.style.backgroundColor = 'var(--color-accent-tint-25)'; stopBtn.style.borderColor = 'var(--color-accent)'; });
-        stopBtn.addEventListener('mouseleave', () => { stopBtn.style.backgroundColor = 'var(--color-bg-panel)'; stopBtn.style.borderColor = 'var(--color-border-input)'; });
+        stopBtn.className = 'rr-btn-chip';
 
         previewRow.appendChild(playBtn);
         previewRow.appendChild(stopBtn);
@@ -1996,11 +1986,8 @@ class DatabaseAnimationEditor {
 
         // Footer
         const footer = document.createElement('div');
-        footer.style.cssText = `
-            padding: 12px 16px; background-color: var(--color-bg-panel); border-top: 1px solid var(--color-border);
-            display: flex; justify-content: flex-end; gap: 8px;
-            border-radius: 0 0 6px 6px; flex-shrink: 0;
-        `;
+        footer.className = 'rr-modal-footer';
+        footer.style.flexShrink = '0';
 
         const cancelBtn = document.createElement('button');
         cancelBtn.textContent = tt('Cancel');
@@ -2008,9 +1995,7 @@ class DatabaseAnimationEditor {
 
         const okBtn = document.createElement('button');
         okBtn.textContent = tt('OK');
-        okBtn.style.cssText = 'padding: 6px 20px; background: var(--color-accent); color: var(--color-bg-deep); border: none; border-radius: 3px; cursor: pointer; font-size: 12px; font-weight: bold;';
-        okBtn.addEventListener('mouseenter', () => { okBtn.style.backgroundColor = 'var(--color-accent-muted)'; });
-        okBtn.addEventListener('mouseleave', () => { okBtn.style.backgroundColor = 'var(--color-accent)'; });
+        okBtn.className = 'rr-button-primary';
 
         footer.appendChild(cancelBtn);
         footer.appendChild(okBtn);
@@ -2908,7 +2893,7 @@ class DatabaseAnimationEditor {
 
                     if (item.enabled) {
                         menuItem.addEventListener('mouseenter', () => {
-                            menuItem.style.background = '#3a3a3a';
+                            menuItem.style.background = 'var(--color-bg-list-item)';
                         });
                         menuItem.addEventListener('mouseleave', () => {
                             menuItem.style.background = 'transparent';
@@ -4426,13 +4411,13 @@ class DatabaseAnimationEditor {
 
         const modalHTML = `
             <div id="effect-picker-modal" style="display: flex; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); z-index: 10000; align-items: center; justify-content: center;">
-                <div style="background: var(--color-bg-surface); border: 1px solid var(--color-border); border-radius: 8px; width: 800px; max-height: 80vh; display: flex; flex-direction: column; padding: 20px;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                        <div style="font-size: 16px; font-weight: 600; color: var(--color-text-strong);">${tt('Select Effect File')}</div>
-                        <button id="effect-picker-close" style="background: none; border: none; color: var(--color-text-muted); font-size: 24px; cursor: pointer; padding: 0; line-height: 1;">×</button>
+                <div class="rr-modal" style="width: min(800px, calc(100vw - 24px)); max-height: 80vh;">
+                    <div class="rr-modal-header">
+                        <div class="rr-modal-title">${tt('Select Effect File')}</div>
+                        <button id="effect-picker-close" class="rr-modal-close" type="button">×</button>
                     </div>
 
-                    <div style="display: flex; gap: 16px; flex: 1; min-height: 0;">
+                    <div style="display: flex; gap: 16px; flex: 1; min-height: 0; padding: 16px;">
                         <!-- Left: Effect list -->
                         <div style="flex: 1; display: flex; flex-direction: column; min-width: 250px;">
                             <div style="margin-bottom: 12px;">
@@ -4458,9 +4443,9 @@ class DatabaseAnimationEditor {
                         </div>
                     </div>
 
-                    <div style="display: flex; gap: 10px; margin-top: 20px; justify-content: flex-end;">
+                    <div class="rr-modal-footer">
                         <button id="effect-picker-cancel" class="rr-btn-secondary">${tt('Cancel')}</button>
-                        <button id="effect-picker-ok" style="padding: 8px 16px; background: var(--color-accent); border: 1px solid var(--color-accent); color: var(--color-bg-deep); border-radius: 3px; cursor: pointer; font-size: 12px; font-weight: bold;">${tt('OK')}</button>
+                        <button id="effect-picker-ok" class="rr-button-primary">${tt('OK')}</button>
                     </div>
                 </div>
             </div>

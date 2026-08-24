@@ -1903,7 +1903,7 @@ class EventManager {
         `;
 
         this.findDialog.innerHTML = `
-            <h3 style="margin-top: 0; color: var(--color-text);" data-i18n="eventFind.title">Find Event</h3>
+            <h3 style="margin-top: 0; color: var(--color-text-strong); font-size: 16px;" data-i18n="eventFind.title">Find Event</h3>
             <div style="margin-bottom: 16px;">
                 <label style="display: block; color: var(--color-text-muted); margin-bottom: 4px;" data-i18n="eventFind.searchBy">Search by name or ID:</label>
                 <input type="text" id="event-search-input" style="
@@ -1918,14 +1918,7 @@ class EventManager {
             </div>
             <div style="display: flex; gap: 8px; justify-content: flex-end;">
                 <button id="event-search-cancel" class="rr-btn-secondary" data-i18n="common.cancel">Cancel</button>
-                <button id="event-search-find" style="
-                    background-color: var(--color-link);
-                    border: none;
-                    color: white;
-                    padding: 8px 16px;
-                    cursor: pointer;
-                    border-radius: 3px;
-                " data-i18n="eventFind.find">Find</button>
+                <button id="event-search-find" class="rr-button-primary" data-i18n="eventFind.find">Find</button>
             </div>
         `;
 

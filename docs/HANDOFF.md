@@ -1,6 +1,491 @@
 # Handoff - 0.98.3 In Progress
 
-Last updated 2026-08-22.
+Last updated 2026-08-23.
+
+## In-Editor Rigging (2026-08-23, stage 1 SHIPPED)
+
+Owner's direction: build rigging INTO Reactor rather than sending users to
+Mixamo. Stage 1 (fit + bind + pose-on-bones) is done and verified live in
+both the editor and the running game.
+
+- **Solver**: `editor/src/database/ModelRigger.js` (pure, dual-export,
+  headless-testable). 13 markers → `bonesFromMarkers` → 17-bone humanoid
+  (Hips root; Spine/Chest/Neck/Head; per side UpperArm/LowerArm/Hand,
+  UpperLeg/LowerLeg/Foot). `computeWeights`: d⁻⁴ segment falloff, side
+  gate (sign of bone head+tail x vs vertex x, margin 3% of height),
+  position-weld (UV-seam twins share weights — poses would crack seams
+  otherwise), 6 Laplacian passes over mesh edges, top-4 quantized to
+  Uint8 summing 255. 218 ms for the 30,940-vertex engineer.
+- **Runtime**: `readModelRig` / `applyModelRig` / `decodeRigBytes` in
+  reactor_3d.js. Bones are THREE.Bone with `userData.parts =
+  [{name, pivot:[0,0,0]}]`; `prepareModelInstance` collects `isBone`
+  entries, and the EXISTING rule engine drives them — local rotation
+  about pivot [0,0,0] composed into base transform IS bone FK, hierarchy
+  carries parents. SkinnedMesh binds through matrixWorld with auto
+  inverses; skinned meshes are frustumCulled=false and excluded from
+  carveTargetMeshes (which is why rig XOR carve: both count mesh indices
+  and triangles over the uncarved model — the sync path and the editor
+  both branch `rig ? applyModelRig : carve+pivots`).
+- **Sidecar**: `model.json` `rig: { markers, bones:[{name,parent,head,
+  tail}], weights: { "<meshIndex>": {count, indices, weights} } }` —
+  base64 Uint8, positions in MODEL space (the carve-pivot frame).
+  `mergeSidecar` preserves `rig` untouched; `saveRig()` read-modify-writes.
+- **Editor UI**: Rig tool in the strip → marker spheres (L blue/R red/
+  center gold, mirrored dragging in the camera plane) + live bone lines +
+  rig bar (Bind/Reset/Remove). Click-to-pose resolves the dominant bone
+  from skinIndex/skinWeight under the hit face. Bone highlight boxes via
+  `_expandEntry` (bone head + child heads + leaf tails). The card hides
+  its Pivot row for bones (bone pivots are their heads). Guards both
+  directions between rig and carve, with status messages, 17 locales.
+- **Verified live** (`scratchpad/rig-check.mjs`, editor; `rig-ingame.mjs`,
+  game — both restore all files): bind → bones as card targets → pose
+  moves skinned vertices → save → the RUNNING GAME loads the rig, plays
+  Raise-Arm via `Reactor3D.playModelAnimation`, vertex swings 11.5 units
+  and returns to rest exactly. Tests: `reactor-3d-rig.test.cjs` (real
+  three.js, includes the FK bend + release-to-rest).
+- **Harness gotchas**: `Reactor3D.viewport().scene` is a METHOD; in-game
+  the instances live at `SceneManager._scene._spriteset._reactor3d.scene
+  ._modelInstances` (keys "e<id>"/"p"). The i18n audit requires every
+  `_t()` literal in RR_TEXT_TRANSLATIONS — DB3D phrases are curated in
+  I18nManager.js `Object.assign` blocks (NOT I18nDeepTranslations).
+- **Stage 2 (next)**: procedural walk/idle for the standard skeleton,
+  driven by the existing moving/idle triggers, so any rigged character
+  walks with zero authoring. Sketch: gait phase from state.distance,
+  sinusoid hip/knee/arm swings per side offset by half a period —
+  composable as generated pose rules or a dedicated rule type.
+- **Stage 3**: keyframed clip authoring on the card (timeline), export
+  as sidecar clips playable through the existing "clip" rule type.
+- Known limits (v1, deliberate): no per-vertex weight painting —
+  deformation quality rides on the d⁻⁴ falloff + smoothing, so elbows
+  and knees read fine but extreme twists will candy-wrapper.
+
+## Rig Templates, Preset Motions, Keyframes (2026-08-23, stages 2+3 SHIPPED)
+
+- **Templates** (ModelRigger.TEMPLATES): humanoid (17), quadruped (18:
+  spine chain + Tail + 4×3 legs, names Left/RightFront/RearUpperLeg…),
+  plant (Base/Trunk/Crown), vehicle (Body + 4 point-like wheel bones —
+  head==tail claims a sphere around the hub). Rig bar has the template
+  picker; customRig.template persists. Solver gate generalized to TWO
+  axes (x and z) with thresholds at 12% of the SKELETON's own spread per
+  axis (margin 6%) — separates quadruped front/rear legs AND fixed the
+  latent humanoid bug where an off-centre spine marker gated the torso.
+- **Phase** on swing/bob rules (`sin(2π(t/period + phase))`) — a walk is
+  just phase-offset swings sharing a period. **Keys** on pose rules:
+  sorted [{at, rotate, move, resize}], action plays rest→stops→rest
+  (looping on ambient triggers), per-segment smoothstep, euler-component
+  lerp; keys force hold=false (duration would desync). Card gains a
+  Keyframes section (capture-the-sliders stops) on on-demand poses.
+- **Preset Motions** (`RigMotionPresets.js`, data-only): humanoid Walk/
+  Run/Breathe/Wave/Take a Bow/Nod/Shake Head/Sit/Overhead Strike;
+  quadruped Walk/Idle Sway/Pounce; plant Wind Sway/Rustle; vehicle Roll/
+  Bounce. Multi-bone actions share one rule name (the engine fires every
+  rule matching state.action.name). "Motions…" chip in the Animations
+  header (rigged models only) → rr-modal grid; Apply replaces that
+  preset's own rules, hand-authored ones untouched. Preset "Bow" was
+  renamed "Take a Bow" — the deep catalog translates "Bow" as the weapon.
+- **Verified live**: engineer Walk = legs counter-phase through 61°,
+  keyframed Wave peaks at its authored 140° and returns to rest exactly
+  (scratchpad/preset-check.mjs). Meshy stress test (Captain_Carol_
+  Everson, 135MB GLB, 1,625,270 vertices): preview in 3 s, bind 6.0 s,
+  walk at 185 fps (carol-check.mjs). **Flag: her weights make a 16.5 MB
+  model.json** — works, but a future pass should move weights to a
+  binary side file or gzip them (and Meshy models deserve decimation
+  guidance).
+- Preview camera now orbits the model's MID-HEIGHT (`_viewCenter`, from
+  extent.y × scale / 2) — it aimed at the ground plane, which cropped
+  tall characters' heads (owner-reported).
+- Gotchas hit: the i18n MutationObserver reverts programmatic button
+  labels — dynamic-label buttons need `data-rr-i18n-skip` (Preset
+  Motions' Apply/✓ Applied). The i18n audit follows `_t(x.name)` into
+  `name:` object literals in src/database/ — internal rule names
+  (__manual/__preview/part-N) must be assigned via `obj.name =`, not
+  object-literal properties.
+- **Round 2 same day (owner asks)**: Jump (keyed ROOT MOTION on part ''
+  — root dips, rises 0.5 tiles, lands; unit test pins it), Swim + Float
+  (whole-model prone pose on moving/idle + stroke swings; Walk XOR Swim
+  per model on the moving trigger), Slash/Thrust (keyed torso-coil
+  combos), and HELD stances Aim Rifle / Aim Pistol / Dual Wield / Guard
+  with **Lower Arms** as the universal release (an all-zero held pose on
+  the same bones — the latch handover IS the release mechanism). Sim bar
+  dedupes Play buttons by action name (six-rule stances were six
+  buttons). All live-verified on the engineer: jump arc −5→+64.6→0 in
+  model units, swim pitch exactly −80° with 107.6° strokes, aim latched
+  at −70° past its window, Guard forearms −100° held, Lower Arms → 0.
+- **Next**: weight painting brush; ~~weights out of model.json~~ DONE
+  2026-08-23 — binary sidecar model.rig.bin (see its own section);
+  camera-relative preset mirroring (poses assume +Z facing); death/
+  knockback presets; bird/fish templates; retarget clips between
+  same-template rigs; a terrain-driven rule-set switch (walk on land,
+  swim in water) would make Swim automatic instead of per-model.
+
+## Size Rule + Camera Easing (2026-08-23, owner-reported)
+
+- Model size (tiles) = LARGEST dimension now, in the sync scale AND the
+  collision footprint (reactor_3d.js, two sites — keep them agreeing).
+  Footprint-only normalization made slim characters taller: same-height
+  models diverged by shoulder width. Wide models (car/plant) unchanged.
+- Preview "jitter" during orbit/zoom was NOT frame drops (probe: worst
+  7ms gap at 596k tris) — it was discrete camera stepping. DB3D editor
+  and the picker ease `_view` toward `_viewGoal` per frame
+  (1-exp(-dt/0.07)); all input handlers write the goal, `_applyFraming`
+  included. Probe pattern for future "jitter" reports: rAF gap
+  histogram idle vs interacting before touching anything.
+
+## Binary Weights Sidecar (2026-08-23, owner asks)
+
+- `model.rig.bin`: RRWB u32 magic + version 1 + meshCount; per mesh
+  meshIndex u32 + vertexCount u32 + count×4 Uint8 indices + count×4
+  Uint8 weights. Encode in ModelRigger (buildRigBinary → {rig, binary});
+  decode mirrored in Reactor3D.decodeRigWeightsBinary (parity test in
+  reactor-3d-rig.test.cjs).
+- JSON carries `rig.weightsFile` (bare filename only — slashes/.. are
+  refused on BOTH read paths); the decoded map rides `rig.weightsBin`
+  in memory and a JSON.stringify replacer keeps it out of model.json.
+  readModelRig prefers weightsBin, falls back to legacy base64
+  `weights` — old rigs load unchanged, migrate on next bindRig.
+- Editor: bindRig sets customRig + _rigBinary; saveRig writes the bin
+  (deletes it when the rig is removed); loadSidecar reads it back.
+  Runtime: loadModelSidecar fetches the bin (XHR arraybuffer) and
+  attaches weightsBin before resolving, so every consumer (sync loop,
+  battlers, faces, editor) stays untouched.
+- Engineer: model.json 330KB→7KB + 242KB bin; a Carol-scale rig drops
+  16.5MB of JSON parse. Live-verified editor bind → disk reload → game
+  skinning through the binary path.
+
+## Editor Worker Previews + Folder Toggle Fix (2026-08-23, owner-reported)
+
+- `Reactor3D.readModelAsync` = the worker-or-sync wrapper; used by the
+  DB3D _loadTemplate, the model picker preview, and the event editor
+  preview (all async already, all generation-guarded). DB3D
+  _rebuildInstance warms (compile + initTexture) right after attach —
+  first-seconds orbit hitches were trickling GPU uploads.
+- FOLDER TOGGLE BUG: renderModelList auto-selected AFTER painting, so
+  selectModel's _openFolders seed landed post-paint — glyph said ▸,
+  state said open, first click "did nothing" (it closed the open
+  state). Resolve the initial selection and seed the folder BEFORE
+  painting rows. Lesson: anything that mutates render state from a
+  post-render hook will desync glyphs; seed first, paint second.
+
+## Deploy Dialog i18n + Quality Range (2026-08-23, owner-reported)
+
+- The deploy modals bake tt() at CONSTRUCTION — translations existed
+  (I18nDeepTranslations covers all 88 phrases; the audit scans all of
+  src/ and passed correctly) but a language switch never re-baked.
+  Fix: setupModal is idempotent + stamps `_builtLanguage`; open()
+  rebuilds when the language changed and `!this.worker`. Pattern to
+  reuse for any construction-baked dialog.
+- Audio quality select: full 1–10 (anchors at 3/5/7/10, bare digits
+  otherwise — digit-only labels need no translation);
+  DeploymentAssetPreferences qualityChoices widened to match. The
+  optimizer always clamped 0–10 continuously.
+
+## Model Preload + Worker Parse + GPU Warm-up (2026-08-23, owner asks)
+
+- `collectMapModelSpecs` (isMap3D-gated — NOT shouldRender3D: cold boot
+  hasn't loaded THREE, preload is what loads it) → `preloadMapModels` →
+  Scene_Map isReady gate (END-of-file wrappers, 8s fail-open).
+- `warmLoadedTemplates`: renderer.compile + initTexture on unwarmed
+  cached templates (Set-guarded), at Scene_Map.start + per sync tick.
+- GLB worker: `reactorSplitGlb`/`reactorDecodeGlbImages` in
+  reactor_3d.js, assembled via toString() into a Blob-URL worker
+  (`_glbWorkerSource`) — the architecture tests forbid new runtime
+  files (one-module rule + boot manifest) and a Blob worker satisfies
+  both AND works in the editor. Buffer transferred in and back; error →
+  sync fallback with the returned buffer; bitmaps decoded with
+  imageOrientation 'none' + premultiplyAlpha 'none' (three ignores
+  flipY for ImageBitmap — decode orientation is the contract).
+  `buildGlbTemplate(json, bin, baseUrl, bitmaps)`; `_workerParts`
+  exposed for parity tests. Non-GLB formats untouched.
+- Verified live: gate holds, worker live, 5/5 instances attached ~1s
+  after map-ready (was 10–15s of pop-in), OBJ sync path intact.
+
+## Facing Camera, Animation Anchor, Thumb Deferral (2026-08-23)
+
+- Picker default view yaw 25 → 0: users straighten models against the
+  preview camera, baking a counter-yaw that only shows in game (owner's
+  Fleagus stored yaw −27.27° ≈ the camera angle; data corrected, per-
+  frame trace pinned it: dir8 resolved 2 everywhere, yaw constant).
+- targetSpritePosition: hidden sprites never reach v8's render pass →
+  stale worldTransform → animations on 3D model events anchored at a
+  frozen point. Fallback: parent.worldTransform.apply(sprite.x/y) when
+  the sprite is invisible or apply() returns non-finite. The stand-in
+  sprite's x/y IS the 3D projection, so this is the right anchor.
+- DB3D _fillThumbnails: deferred past the paint + setTimeout(0) yield
+  before each uncached render — first-time model loads ate folder
+  clicks ("click twice" reports).
+- docs/demo-missing-se.md: 120 SE names animations reference but the
+  Demo no longer ships (owner replacing stock audio as found).
+- Owner asked about WebGPU: three's WebGPURenderer is a different
+  bundle + material/TSL surface; our pipeline (offscreen renderers,
+  drawImage to Bitmap, PIXI interop) is portable in principle but it is
+  NOT a drop-in swap; NW.js Chromium supports WebGPU. Parked.
+
+## Mini Previews, In-List (None), Stale-Sprite Skip (2026-08-23)
+
+- attachRow `previewHost`+`thumbnail` → 96px cached model render under
+  the icon; row hosted in `.db-form` (aligned with fields) for weapons/
+  armors/items. `modelThumbnail` is the shared cached provider on
+  RRDatabase3DBindings — GOTCHA: it initially wasn't exported and the
+  synchronous throw inside sync() blanked the entire weapon detail;
+  thumbnail calls are now `Promise.resolve().then(...)`-wrapped.
+- RRPickerIndex `leadingItem` = pinned action row atop the file list;
+  showImagePicker's (None) uses it. Face/enemy callbacks call
+  refreshListIcon (applyListIcon already clears on empty names).
+- Runtime: Sprite_Character.updateBitmap skips the 2D sheet when the
+  character resolves a model (stale characterName from before going 3D
+  404'd the map); tracks name/index so isImageChanged stays quiet;
+  tileId characters exempt. END-of-file wrapper rule as always.
+
+## Actor-Page Perf, (None) Graphics, Trim (2026-08-23, owner-reported)
+
+- Slot thumbnails cache in `reactor3dEditor._thumbs` (data URLs by model
+  name; refresh once at 1.8s for texture decode) — per-render clone+
+  render of big models was the lag when clicking 3D-bound actors or
+  typing. `showImagePicker` `options.allowNone` adds a (None) row
+  (returns ''); character/face/SV/enemy pickers opt in and their
+  empty-folder alerts are removed. Box labels pad both sides (centred).
+- WEB TRIM: dist-editor-worker collects used models from event sidecars
+  AND Database.r3d.json (flat + actor slots), and trims RECURSIVELY —
+  the flat walk would have deleted all of Vehicles/ over one unused
+  member, and DB-bound models were never counted as used. Demo now
+  ships 3d/ organized as Actors/Enemies/Vehicles/Weapons; map sidecar
+  refs remapped. Facing marks are now explicitly OPTIONAL: the
+  markless default (dir8Yaw + authored yaw) IS the glTF convention
+  (front toward +Z / the camera at rest) — contract test in
+  database-3d-bindings.test.cjs — and the picker shows a status line +
+  Clear marks button (visible only when marks exist). The 3D slot
+  checkbox lives in a flex row beside the graphic's change button (no
+  label padding; single-line titles).
+
+## Nested Model Folders (2026-08-23, owner asks)
+
+- Any folder under `3d/` holding a `source/` subfolder is a model, named
+  by its path with forward slashes (`Weapons/Sword_Fleagus`). Lister:
+  recursive walk in `ModelGraphicPicker.listModels` (skips source/
+  textures dirs, depth cap 6, sorted); source-file match uses the LAST
+  path segment. `splitModelRef` allows slashed segments (backslash →
+  slash) but rejects empty/`.`/`..` — the traversal jail for note- and
+  sidecar-sourced names. All path/URL builders concatenate `3d/<name>/…`
+  so nothing else changed. Tests in database-3d-bindings.test.cjs; the
+  old `model(a/b)` rejection pin in reactor-3d-models was updated to
+  accept folders while keeping `../` refusals. UI: folders render as
+  collapsible groups in the DB 3D Models list (`_openFolders` Set,
+  selection's folder auto-opens via selectModel, search expands) and in
+  `RRPickerIndex.createBrowser` behind an opt-in `folders: true`
+  (model picker only; the item factory refactor is shared by all
+  pickers).
+
+## Per-Slot Actor 3D + Gait Triggers (2026-08-23, owner asks)
+
+- **Slots**: Database.r3d.json actors."id" = { character, face, battler }
+  (legacy flat spec = character slot, migrates on next slot write).
+  Editor `Database3DBindings.get/set(…, slot)`, runtime
+  `actorSlotSpec(id, slot)`; `databaseModelSpec('actors')` stays the
+  character slot (map player/followers).
+- **UI**: `decorateSlot` puts a corner 3D checkbox on each of the actor
+  page's three `.graphic-preview-box`es; bound → retitle (Character/Face/
+  Battler Model), 140px thumbnail (rendered TWICE — first render can
+  precede embedded-texture decode → black silhouette), button opens the
+  picker via a capture-phase listener; unbound → original 2D flow.
+- **Face**: picker `show(current, cb, {framing:true})` adds Zoom/Height
+  sliders → `spec.view {zoom 1-10, y 0-1}`; preview steers to the crop.
+  Runtime `actorFaceState(actorId)`: 144² portrait, camera-side key
+  light, repaints at 0/0.7/2.5 s (texture decode), waiters list refreshes
+  windows that drew early. Wrapper on Window_StatusBase.drawActorFace at
+  the END of reactor_windows.js (prototype-replacement rule).
+- **Battler**: `updateActorModelSprite` renders into Sprite_Actor's
+  _mainSprite (full-bitmap frame, motion cells bypassed via updateFrame
+  wrapper, SV sheet load skipped — no art needed);
+  `playActorBattlerAnimation(actorId, name)`. Wrappers at END of
+  reactor_sprites.js. Stock MZ motions are NOT mapped to model actions
+  yet — backlog.
+- **Triggers**: `walking`/`dashing` join the set. `moveTriggerActive`
+  grades them; clips pick most-specific-first (dashing→walking→moving;
+  two clips on one trigger: FIRST in list wins, by design); rules
+  compose as ever; spin gain + pose blends share the gate; map sync
+  passes isDashing (followers mirror $gamePlayer); sim bar Dash toggle.
+- **Picker centring gotchas**: Box3.setFromObject reads ~EMPTY on
+  skinned meshes (vertices live on bones) — centre by
+  userData.glbSize, never by measuring; `aimCamera` ADDS +0.5 to x/z
+  (map cell centres) — pass −0.5 to aim the true origin.
+- Windows check done: every editor 3D surface loads three.js through
+  MapEditor3D.injectScript's Blob-URL path (the 1MB-stack rule).
+
+## Preview Clock, Rig Orbit, Clip Rate (2026-08-23, owner-reported)
+
+- The DB3D preview's `frame` was rAF-tick-counted — 120Hz monitors ran
+  everything 2×. Now `frame = (performance.now() - start) * 0.06` and
+  applyModelAnimation runs once per animation frame (`_lastAnimFrame`
+  guard) because spin/perTile gains accumulate PER CALL. Runtime side,
+  the clip mixer steps by frame delta (`binding.clipFrame`, capped 10),
+  never a fixed 1/60 per call — correct at any caller rate.
+- Rig tool: `'rig'` joined the orbit predicate in pointerdown — a press
+  that misses every marker orbits; marker hits still start rigdrag.
+- Clip rules: `rate` (0.25–3, omitted at 1) → `clipAction.timeScale` +
+  scaled `modelRuleDuration`; Speed % slider on the card, threaded
+  through defaultWork/_poseSnapshot/_applySnapshot/editRule/_workValues/
+  savePose (stale-key delete). GOTCHA: `renderEditCard`'s hasParts gate
+  hid the card on clip-only GLBs (no parts, no rig) — embedded clips now
+  count, which is what "adopted clips have no settings" really was.
+- Backlog (owner asks): cloth/limb interpenetration (long coat vs legs)
+  — real fix is authoring-side skinning; possible engine-side mitigations
+  are per-part depth bias or a "bake clip → keyed pose rules" pass, which
+  would also need animated-GLB bones registered as parts. Bake-to-JSON of
+  embedded clips = same prerequisite (bones-as-parts on the animated
+  path) + sampling tracks into `keys` timelines; clean feature seam.
+
+## Embedded Clips + Skinned GLB Bind Fix (2026-08-23, owner-reported)
+
+- **Animations panel lists a GLB's baked clips** (`_renderEmbeddedClipRows`
+  in Database3DEditor): ▶ plays through the sim's `__preview` action with
+  a transient clip rule (`playEmbeddedClip`), ＋ adopts it as a saved
+  on-demand clip rule named after the clip (`addEmbeddedClipRule`) — the
+  sim bar and playModelAnimation/playBattlerAnimation pick it up by name.
+  Adopted clips show ✓ / disabled. i18n gotcha again: the audit flags
+  `name:` OBJECT-LITERAL keys even in `_sim.action = {name: '__preview'}`
+  — use `name: someVar` or property assignment.
+- **THE BIND FIX** (`buildAnimatedGlbTemplate`): skinned meshes bind with
+  an IDENTITY bindMatrix, not `node.matrixWorld`. Three applies
+  `boneWorld · IBM · bindMatrix` per vertex; glTF IBMs already map mesh
+  space → joint space, so a mesh-world bind mixed the armature transform
+  in twice. Meshy/Mixamo exports (cm rig under a 0.01-scale Armature)
+  looked PERFECT at rest — the error is a uniform (0.01)² shrink the
+  camera framing absorbs (glbSize measured 100× small, editor scale ~94)
+  — and shredded on the first animated frame while every bone local/world
+  stayed numerically correct. Diagnosis path worth remembering: bones
+  sane + tracks all bound + render exploded ⇒ suspect the bind, and A/B
+  raw-mixer vs rule-engine to clear the engine. Regression test: the
+  synthetic cm-armature skinned clip in reactor-3d-models.test.cjs.
+  Verified live on Captain_Carol_Everson_Reduced's six clips.
+
+## Database 3D Bindings — Actors/Enemies/Weapons/Armors/Items (2026-08-23)
+
+- **Sidecar**: `data/Database.r3d.json` — `{ version, actors: {id: spec},
+  enemies/weapons/armors/items: … }`, spec identical to a map sidecar
+  event entry (name/file/ext/size/scale/yaw°/pitch°/roll°/faces/texture).
+  Editor side: `Database3DBindings.js` (dual-export; `set()` deletes the
+  file when the last binding clears). Runtime: `loadDatabaseSidecar`
+  (one-shot, NW disk-stat first so absence never logs) +
+  `databaseModelSpec(section, id)` → `normalizeModelSpec` (extracted from
+  eventModelSpec — single raw→validated path, degrees→radians).
+- **Editor UI**: `RRDatabase3DBindings.attachRow(host, {projectManager,
+  section, id})` renders checkbox + name + Change Model on all five
+  detail pages. ModelGraphicPicker duck-types projectManager, but
+  attachRow must hand it a shim carrying mapEditor3D (from
+  window.reactor.projectController) — the DB editors' bare
+  {getCurrentProject} shim can't load three.js and the preview stays
+  black. The picker's CANCEL never calls back — the row MutationObserves for
+  `#model-picker-modal` leaving the DOM and resyncs from the sidecar.
+- **Map**: `characterModelSpec` answers for Game_Player (party leader's
+  actor binding) and Game_Follower (its own actor); sync list includes
+  $gamePlayer + visibleFollowers; instance keys `p` / `f<memberIndex>`.
+- **Battle**: `Sprite_Enemy.update` wrapper → `updateEnemyModelSprite`:
+  per-sprite `_reactorBattler` state, shared offscreen `_battlerRenderer`
+  (alpha), model framed to its height, ambient rules on the battler's own
+  frame clock, `playBattlerAnimation(enemyId, name)` queues actions
+  (`_modelActions["b"+id]`), enemyId change (Enemy Transform) rebuilds.
+  A bound enemy needs no battler art: `updateBitmap` skips the stock
+  image load, holds an empty placeholder Bitmap (plugins read
+  this.bitmap.height for state-icon placement — null crashed the update
+  loop under PSYCHRONIC_BattleEngineMZ), and still runs initVisibility
+  once. **GOTCHA**: reactor_sprites.js REDEFINES Sprite_Enemy's prototype
+  wholesale (`prototype = Object.create(...)` mid-file) — the wrapper
+  MUST sit at the end of the file; an early wrapper binds to the
+  discarded prototype and silently never runs (function hoisting makes it
+  load without error). Weapons/armors/items store bindings only for now.
+- **Verified live** (`scratchpad/db-actors-check.mjs` + `battle-only-
+  check.mjs`, restore files): row on all five pages, picker open/cancel/
+  resync, binding round-trip, player walks the map as the rigged
+  engineer (17 bones, Walk rules, position tracks), and troop 1's two
+  goblins render as ready 3D battlers at 60 fps with opaque pixels in
+  the bitmap — under the Demo's full 44-plugin stack. Tests:
+  `database-3d-bindings.test.cjs` (roundtrip, file deletion, runtime
+  normalize). Marker labels + orbit perf verified (`label-perf-check
+  .mjs`: 13 labels, Carol 3.1M tris at ~6 ms/frame). The Demo is still
+  missing some replaced MZ stock art (owner adding originals as found):
+  img/characters/Actor1, sv_actors Actor1_2..8 + Actor2_2, sv_enemies
+  Crow/Gnome/Goblin/Hi_monster/Treant, MOG icon-background.
+
+## Classes UX Pass (2026-08-23, owner-reported)
+
+- Parameter curves now author and plot the full 1..999 domain
+  (`RR_LIMITS.ACTOR_LEVEL`). Graphs draw the runtime's exact series —
+  stored values, then linear extrapolation dashed past a divider. The
+  Generate Curve modal's second slider is the **Level 999 value**; Apply
+  writes a 1000-entry per-level array. The runtime reads exact values
+  first (`classParamAtLevel`), so no runtime change; legacy 100-entry MZ
+  arrays keep extrapolating.
+- Learnable Skill, Trait, Generate Curve, and EXP Curve dialogs converted
+  to the rr-modal chrome (secondary Cancel + primary OK). Trait tabs
+  rebuilt on the `.rr-trait-row` six-column grid (theme.css) — note the
+  dropdown shim wraps selects in `.rr-shim-wrapper`, which must also get
+  `width: 100%` or selects collapse to their shortest option.
+- Trait strips in all six editors use `rr-btn-chip` (matching the
+  Learnable/Effects/Action strips; the delete chip stays plain, the
+  suite pins that).
+- Tests: `class-curves-and-trait-ui-20260823.test.cjs`; live rig
+  `scratchpad/class-ui-check.mjs` (restores Demo Classes.json). Suite at
+  1,480. Gotcha for rigs: a hidden `#event-editor-modal.rr-modal-overlay`
+  always exists — don't select modals by bare `.rr-modal-overlay`.
+
+## App-wide UX/Responsiveness Pass (2026-08-23, owner-reported)
+
+- All inline accent OK/Save/Apply buttons → `rr-button-primary` (65
+  event-command dialogs via scripted sweep, Effect/Action editors,
+  PluginManager, pickers, System1, movement route, the Troop/CommonEvent
+  `createButton` factory). Stale JS hover handlers that overwrote
+  backgroundColor were removed wherever a button got the class — inline
+  hover writes beat CSS classes and freeze the wrong color.
+- DatabaseEffectEditor rebuilt on the trait modal's chrome + `.rr-trait-row`
+  grid; enemy Action Pattern modal on rr-modal chrome. Dropdown-less rows
+  (Attack Speed etc.) put their number in the control column
+  (`.rr-trait-lone-value`) — was the owner's red-boxed gap.
+- Responsiveness: `.rr-modal` gets a global viewport max-width; the 65
+  command dialogs got `width: min(Npx, calc(100vw-24px))` + max-height +
+  scrolling body via scripted sweep (predicate: cssText with bg-surface +
+  flex column + box-shadow + width≥300).
+- Actors/Classes page layout moved from inline grid styles to
+  `.database-actor-pair`/`.database-class-columns` CSS so the EXISTING
+  `@container database-detail` query collapses them — the repo reflows the
+  DB detail by CONTAINER query, never viewport @media (a test enforces
+  this; my 1100px @media was rejected by the suite).
+- Card fill: the fill chain now covers `.database-actor-pair`; the
+  critical fix was `align-items: stretch` on `.db-form.db-fill >
+  .db-row-grow` (`.db-row-cols`' `align-items: end` pinned the grown
+  Profile field to the row bottom — looked like a missing field). Action
+  strips (`*-action-buttons`) are CSS classes; in filled cards they pin
+  bottom via `margin-top: auto`.
+- Tests: `ux-pass-20260823.test.cjs`; live rig `scratchpad/ux-pass-check.mjs`.
+- Round 2 (same day): ALL ~85 event-command dialog chromes converted by
+  scripted pattern (84 h3 titles, 81 close buttons, 141 header/footer
+  bars — they were near-byte-identical); Troop enemy picker / Conditions /
+  raw-parameter dialog (+ Common Events twin) / BattleTestConfigModal on
+  rr-modal chrome; troop `createSmallButton` → rr-btn-chip, Battle Test
+  launcher → rr-btn-secondary; Animation editor SE picker + effect picker
+  converted, `#3a3a3a` menu hover → token. `database-navigation.test.cjs`
+  pinned the OLD chrome strings (bg-toolbar headers, footer class names) —
+  updated to pin the new ones. Verified live: troop pickers, conditions,
+  battle test, and a directly-instantiated ChangeGoldEditor all carry the
+  chrome (`scratchpad/troop-cmd-check.mjs`). Dist/Build wizard h3s are
+  content section headings, not modal chrome — left alone. Selection blue
+  `--color-selection-deep` is a deliberate per-palette token used across
+  all list surfaces — not slop, do not accent-ify piecemeal.
+- A new completeness test fails loudly if tracked Demo assets go missing
+  from disk, so intentional Demo asset removals must be staged with git rm.
+- Deploy Game audio: one "Compress audio (lossy)" checkbox + quality tier,
+  per-format in `asset-optimizer.js` (`optimizeAudioFile`): OGG→libvorbis
+  -q, MP3→libmp3lame VBR (scale inverted via `lameQuality`), M4A→aac by
+  bitrate, WAV/FLAC→convert to OGG (runtime prefers OGG for a shared
+  name; skipped when a same-named OGG exists). WAV `smpl` loops are
+  parsed with the runtime's exact semantics (LOOPSTART=start,
+  LOOPLENGTH=end-start, first loop) and injected as vorbis comments;
+  MP3 TXXX loops verified via `NAME\0digits`. Loop verification failure
+  or a non-smaller result leaves the file untouched. Prefs migrated
+  ogg/oggQuality→audio/audioQuality (legacy keys read); the checkbox is
+  NEVER restored checked (per-deploy opt-in). The translation generator
+  (`generate-deep-translations.cjs`) is broken — Microsoft's edge auth
+  endpoint 404s — the three new phrases were hand-authored into all 17
+  locales in `I18nDeepTranslations.js`.
 
 ## Release State
 

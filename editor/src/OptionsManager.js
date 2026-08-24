@@ -232,7 +232,7 @@ class OptionsManager {
         const currentPaletteSwatches = swatchesHtml(currentPaletteMeta);
 
         this.modal.innerHTML = `
-            <div class="rr-modal" style="width: 520px; max-height: 80vh; background: var(--color-bg-surface); border: 1px solid var(--color-border); border-radius: 6px; display: flex; flex-direction: column; box-shadow: var(--shadow-modal);">
+            <div class="rr-modal" style="width: min(520px, calc(100vw - 24px)); max-height: 80vh; background: var(--color-bg-surface); border: 1px solid var(--color-border); border-radius: 6px; display: flex; flex-direction: column; box-shadow: var(--shadow-modal);">
                 <div class="rr-modal-header" style="padding: 14px 18px; border-bottom: 1px solid var(--color-border-subtle); display: flex; justify-content: space-between; align-items: center; background: var(--color-bg-panel);">
                     <div class="rr-modal-title" style="font-size: 16px; font-weight: 600; color: var(--color-text-strong);">${t('options.title')}</div>
                     <button class="rr-modal-close" style="background: none; border: none; color: var(--color-text-muted); font-size: 22px; cursor: pointer; line-height: 1; padding: 0 4px;">&times;</button>

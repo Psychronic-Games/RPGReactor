@@ -6649,3 +6649,33 @@ Window_DebugEdit.prototype.deltaForVariable = function() {
 };
 
 //-----------------------------------------------------------------------------
+
+// A face-slot actor binding draws a rendered 3D face instead of face-sheet
+// art. Appended after every class body: window prototypes are replaced
+// wholesale mid-file, and an early wrapper dies with the old prototype.
+const _reactorDrawActorFace = Window_StatusBase.prototype.drawActorFace;
+Window_StatusBase.prototype.drawActorFace = function(actor, x, y, width, height) {
+    if (typeof Reactor3D !== "undefined" && Reactor3D.actorFaceState && actor
+        && Reactor3D.actorSlotSpec && Reactor3D.actorSlotSpec(actor.actorId(), "face")) {
+        const state = Reactor3D.actorFaceState(actor.actorId());
+        if (state) {
+            width = width || ImageManager.faceWidth;
+            height = height || ImageManager.faceHeight;
+            const size = state.bitmap.width;
+            const sw = Math.min(width, size);
+            const sh = Math.min(height, size);
+            const dx = Math.floor(x + Math.max(width - size, 0) / 2);
+            const dy = Math.floor(y + Math.max(height - size, 0) / 2);
+            const sx = Math.floor((size - sw) / 2);
+            const sy = Math.floor((size - sh) / 2);
+            if (state.ready) {
+                this.contents.blt(state.bitmap, sx, sy, sw, sh, dx, dy);
+            } else if (state.waiters.indexOf(this) < 0) {
+                // The render lands after the model loads; redraw then.
+                state.waiters.push(this);
+            }
+            return;
+        }
+    }
+    _reactorDrawActorFace.call(this, actor, x, y, width, height);
+};

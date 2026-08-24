@@ -109,6 +109,19 @@ class DatabaseItemEditor {
             }
         }, 0);
 
+        if (typeof RRDatabase3DBindings !== 'undefined') {
+            // The row sits with the form fields; the mini model preview
+            // sits under the icon.
+            RRDatabase3DBindings.attachRow(generalSection.querySelector('.db-form'), {
+                projectManager: this.projectManager,
+                section: 'items',
+                id: item.id,
+                previewHost: generalSection.querySelector('.db-general-grid > div'),
+                thumbnail: spec => RRDatabase3DBindings.modelThumbnail(
+                    this.parentEditor.reactor3dEditor, spec)
+            });
+        }
+
         // Grid wrapper for all sections
         const gridWrapper = document.createElement('div');
         gridWrapper.className = 'database-sections-grid';
@@ -219,7 +232,7 @@ class DatabaseItemEditor {
                             `<tr><td style="width: 3px; padding: 0; border: none; background: transparent;"></td><td colspan="2" style="text-align: center; color: var(--color-text-muted); font-style: italic; padding: 12px;">${tt('No effects')}</td></tr>`}
                     </tbody>
                 </table>
-                <div class="effect-action-buttons" style="display: flex; gap: 6px; margin-top: 8px;">
+                <div class="effect-action-buttons">
                     <button class="effect-btn-add rr-btn-chip">${tt('Add')}</button>
                     <button class="effect-btn-edit rr-btn-chip" disabled>${tt('Edit')}</button>
                     <button class="effect-btn-delete rr-btn-chip" disabled>${tt('Delete')}</button>

@@ -1780,6 +1780,54 @@ input[type="radio"]:disabled,
     border-color: var(--color-border-input);
 }
 
+/* Trait editor rows -- one shared grid (radio | label | control | prefix |
+ * value | unit) so every tab's columns land on the same vertical lines
+ * whatever mix of selects and numbers a row carries. */
+.rr-trait-row {
+    display: grid;
+    grid-template-columns: 16px 118px minmax(0, 1fr) 14px 84px 24px;
+    gap: 10px;
+    align-items: center;
+}
+.rr-trait-row + .rr-trait-row {
+    margin-top: 12px;
+}
+.rr-trait-row .rr-trait-label {
+    color: var(--color-text-strong);
+    font-size: var(--font-size-base);
+}
+/* The dropdown shim wraps each select in .rr-shim-wrapper; both the wrapper
+ * and the select must fill the control column or long state/skill names
+ * collapse the field to its shortest option. */
+.rr-trait-row .rr-trait-control > select,
+.rr-trait-row .rr-trait-control .rr-shim-wrapper,
+.rr-trait-row .rr-trait-control .rr-shim-wrapper > select,
+.rr-trait-row .rr-trait-value > input {
+    width: 100%;
+    box-sizing: border-box;
+}
+.rr-trait-row .rr-trait-prefix,
+.rr-trait-row .rr-trait-unit {
+    color: var(--color-text-muted);
+    text-align: center;
+}
+/* A dropdown-less row's number sits in the control column at value width. */
+.rr-trait-row .rr-trait-lone-value {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.rr-trait-row .rr-trait-lone-value > input {
+    width: 84px;
+    box-sizing: border-box;
+}
+@media (max-width: 540px) {
+    .rr-trait-row {
+        grid-template-columns: 16px 88px minmax(0, 1fr) 10px 64px 20px;
+        gap: 6px;
+    }
+}
+
 /* ---------- Modal ---------------------------------------------------------- */
 
 .rr-modal-overlay {
@@ -1799,6 +1847,8 @@ input[type="radio"]:disabled,
     flex-direction: column;
     box-shadow: var(--shadow-modal);
     max-height: 88vh;
+    /* Inline widths (width: 600px etc.) stay honest on narrow windows. */
+    max-width: calc(100vw - 16px);
 }
 .rr-modal-header {
     background: var(--color-bg-deep);
@@ -1843,6 +1893,14 @@ input[type="radio"]:disabled,
     display: flex;
     gap: 10px;
     justify-content: flex-end;
+}
+@media (max-width: 700px) {
+    .rr-modal {
+        max-height: calc(100vh - 16px);
+    }
+    .rr-modal-body {
+        padding: var(--space-3);
+    }
 }
 
 /* ---------- Event command forms ------------------------------------------ */

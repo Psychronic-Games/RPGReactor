@@ -1969,10 +1969,6 @@ class DatabaseEditorUI {
         try {
             const files = RRAssetFiles.listNames(charactersPath, ['.png']);
 
-            if (files.length === 0) {
-                alert(tt('No character images found in img/characters folder'));
-                return;
-            }
 
             this.showImagePicker(tt('Select Character Sprite'), files, (selectedFile, selectedIndex) => {
                 actor.characterName = selectedFile;
@@ -1986,7 +1982,8 @@ class DatabaseEditorUI {
             }, actor.characterName, {
                 sheetType: 'character',
                 currentIndex: actor.characterIndex || 0,
-                selectButtonLabel: tt('Select Sprite')
+                selectButtonLabel: tt('Select Sprite'),
+                allowNone: true
             });
         } catch (error) {
             console.error('Error reading characters folder:', error);
@@ -2008,23 +2005,21 @@ class DatabaseEditorUI {
         try {
             const files = RRAssetFiles.listNames(facesPath, ['.png']);
 
-            if (files.length === 0) {
-                alert(tt('No face images found in img/faces folder'));
-                return;
-            }
 
             this.showImagePicker(tt('Select Face Graphic'), files, (selectedFile, selectedIndex) => {
                 actor.faceName = selectedFile;
                 actor.faceIndex = selectedIndex;
 
                 this.showDatabaseDetail(actor, 'actors');
+                this.refreshListIcon(actor, 'actors');
                 this.updateStatus(tt('Face graphic updated'));
             }, (fileName) => {
                 return RRAssetFiles.urlFor(facesPath, fileName, ['.png']);
             }, actor.faceName, {
                 sheetType: 'face',
                 currentIndex: actor.faceIndex || 0,
-                selectButtonLabel: tt('Select Face')
+                selectButtonLabel: tt('Select Face'),
+                allowNone: true
             });
         } catch (error) {
             console.error('Error reading faces folder:', error);
@@ -2046,10 +2041,6 @@ class DatabaseEditorUI {
         try {
             const files = RRAssetFiles.listNames(svActorsPath, ['.png']);
 
-            if (files.length === 0) {
-                alert(tt('No SV battler images found in img/sv_actors folder'));
-                return;
-            }
 
             this.showImagePicker(tt('Select SV Battler'), files, (selectedFile) => {
                 actor.battlerName = selectedFile;
@@ -2058,7 +2049,7 @@ class DatabaseEditorUI {
                 this.updateStatus(tt('SV battler updated'));
             }, (fileName) => {
                 return RRAssetFiles.urlFor(svActorsPath, fileName, ['.png']);
-            });
+            }, actor.battlerName, { allowNone: true });
         } catch (error) {
             console.error('Error reading sv_actors folder:', error);
             alert(tt('Error reading sv_actors folder'));
@@ -2186,7 +2177,7 @@ class DatabaseEditorUI {
 
         const okBtn = document.createElement('button');
         okBtn.textContent = tt('OK');
-        okBtn.style.cssText = 'padding: 8px 16px; background-color: var(--color-accent); color: var(--color-bg-deep); border: 1px solid var(--color-accent); border-radius: 4px; cursor: pointer; font-weight: bold; transition: background-color 0.2s;';
+        okBtn.className = 'rr-button-primary';
         okBtn.onmouseenter = () => {
             okBtn.style.backgroundColor = 'var(--color-accent-muted)';
         };
@@ -2380,7 +2371,7 @@ class DatabaseEditorUI {
 
         const okBtn = document.createElement('button');
         okBtn.textContent = tt('OK');
-        okBtn.style.cssText = 'padding: 8px 16px; background: var(--color-accent); color: var(--color-bg-deep); border: 1px solid var(--color-accent); border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: bold;';
+        okBtn.className = 'rr-button-primary';
         okBtn.onmouseenter = () => { okBtn.style.backgroundColor = 'var(--color-accent-muted)'; };
         okBtn.onmouseleave = () => { okBtn.style.backgroundColor = 'var(--color-accent)'; };
 
@@ -2554,7 +2545,7 @@ class DatabaseEditorUI {
                 const selectBtn = document.createElement('button');
                 selectBtn.id = 'image-picker-select-btn';
                 selectBtn.textContent = options.selectButtonLabel || tt('Select This Image');
-                selectBtn.style.cssText = 'background: var(--color-accent); border: 1px solid var(--color-accent); color: var(--color-bg-deep); padding: 10px 24px; border-radius: 4px; cursor: pointer; font-size: 14px; font-weight: bold;';
+                selectBtn.className = 'rr-button-primary';
                 buttonRow.appendChild(selectBtn);
 
                 const openFolderBtn = document.createElement('button');
@@ -2592,7 +2583,15 @@ class DatabaseEditorUI {
             files,
             selectedName: currentFile,
             searchPlaceholder: tt('Search files...'),
-            onSelect: showPreview
+            onSelect: showPreview,
+            // The graphic is optional: (None) leads the file list.
+            leadingItem: options.allowNone ? {
+                label: tt('(None)'),
+                onClick: () => {
+                    modal.style.display = 'none';
+                    onSelectCallback('', 0);
+                }
+            } : null
         });
         listEl.appendChild(browser.element);
 

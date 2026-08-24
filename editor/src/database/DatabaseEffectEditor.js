@@ -67,6 +67,37 @@ class DatabaseEffectEditor {
         }
     }
 
+    /**
+     * One row of an effect tab, on the shared trait-row grid (radio | label |
+     * control | prefix | value | unit) so every tab's columns align. A row
+     * with no dropdown shows its number(s) in the control column instead of
+     * leaving it empty.
+     */
+    _rowHTML(effect, { code, label, control = '', prefix = '', value = '', unit = '' }) {
+        if (!control && value) {
+            control = `<span class="rr-trait-lone-value">${value}<span class="rr-trait-unit">${unit}</span></span>`;
+            value = '';
+            unit = '';
+        }
+        return `
+            <div class="effect-option rr-trait-row">
+                <input type="radio" name="effect-type" value="${code}" ${effect.code === code ? 'checked' : ''}>
+                <span class="rr-trait-label">${label}</span>
+                <span class="rr-trait-control">${control}</span>
+                <span class="rr-trait-prefix">${prefix}</span>
+                <span class="rr-trait-value">${value}</span>
+                <span class="rr-trait-unit">${unit}</span>
+            </div>`;
+    }
+
+    _selectHTML(code, optionsHTML) {
+        return `<select class="effect-sel database-field-value" data-code="${code}">${optionsHTML}</select>`;
+    }
+
+    _numberHTML(code, field, value, extra = '') {
+        return `<input type="number" class="effect-val database-field-value" data-code="${code}" data-field="${field}" value="${value}" ${extra}>`;
+    }
+
     showEffectEditorModal(entry, effectIndex = -1, onSave = null) {
         const tt = text => window.I18n ? window.I18n.tText(text) : text;
         this.currentEntry = entry;
@@ -78,32 +109,21 @@ class DatabaseEffectEditor {
             : { code: 11, dataId: 0, value1: 0, value2: 0 };
 
         const overlay = document.createElement('div');
-        overlay.className = 'modal-overlay';
-        overlay.style.cssText = `
-            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-            background: rgba(0, 0, 0, 0.7); display: flex;
-            align-items: center; justify-content: center; z-index: 10000;
-        `;
+        overlay.className = 'rr-modal-overlay';
 
         const modal = document.createElement('div');
-        modal.style.cssText = `
-            background: var(--color-bg-surface); border: 1px solid var(--color-border-subtle); border-radius: 8px;
-            width: 600px; max-height: 80vh; display: flex; flex-direction: column;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
-        `;
+        modal.className = 'rr-modal effect-editor-modal';
+        modal.style.cssText = 'width: 620px; max-width: 92vw;';
 
         const header = document.createElement('div');
-        header.style.cssText = `
-            padding: 16px; border-bottom: 1px solid var(--color-border-subtle);
-            display: flex; justify-content: space-between; align-items: center; background: var(--color-bg-panel);
-        `;
+        header.className = 'rr-modal-header';
         header.innerHTML = `
-            <h3 style="margin: 0; color: var(--color-text-strong);">${tt('Edit Effect')}</h3>
-            <button class="close-btn" style="background: none; border: none; color: var(--color-text-muted); font-size: 24px; cursor: pointer; padding: 0; width: 30px; height: 30px;">&times;</button>
+            <div class="rr-modal-title">${tt(effectIndex >= 0 ? 'Edit Effect' : 'Add Effect')}</div>
+            <button class="rr-modal-close close-btn" type="button">&times;</button>
         `;
 
         const tabBar = document.createElement('div');
-        tabBar.style.cssText = 'display: flex; border-bottom: 1px solid var(--color-border-subtle); background: #252525;';
+        tabBar.style.cssText = 'display: flex; border-bottom: 1px solid var(--color-border-subtle); background: var(--color-bg-panel);';
 
         const tabs = [
             { id: 'recovery', label: 'Recovery', codes: [11, 12, 13] },
@@ -118,7 +138,8 @@ class DatabaseEffectEditor {
         }
 
         const tabContent = document.createElement('div');
-        tabContent.style.cssText = 'flex: 1; padding: 20px; overflow-y: auto;';
+        tabContent.className = 'rr-modal-body';
+        tabContent.style.cssText = 'flex: 1; min-height: 0;';
 
         tabs.forEach(tab => {
             const tabBtn = document.createElement('button');
@@ -143,10 +164,10 @@ class DatabaseEffectEditor {
         });
 
         const footer = document.createElement('div');
-        footer.style.cssText = 'padding: 16px; border-top: 1px solid var(--color-border-subtle); display: flex; justify-content: flex-end; gap: 8px;';
+        footer.className = 'rr-modal-footer';
         footer.innerHTML = `
             <button class="cancel-btn rr-btn-secondary">${tt('Cancel')}</button>
-            <button class="ok-btn" style="padding: 8px 16px; background: var(--color-accent-bright); border: none; color: var(--color-bg-deep); border-radius: 4px; cursor: pointer; font-weight: bold;">${tt('OK')}</button>
+            <button class="ok-btn rr-button-primary">${tt('OK')}</button>
         `;
 
         modal.appendChild(header);
@@ -168,118 +189,102 @@ class DatabaseEffectEditor {
 
     loadEffectTabContent(tabId, container, effect) {
         container.innerHTML = '';
-        const optStyle = 'display: flex; align-items: center; gap: 12px; margin-bottom: 12px;';
-        const selStyle = 'flex: 1; padding: 6px 10px; background: var(--color-bg-panel); border: 1px solid var(--color-accent-border); color: var(--color-text-strong); border-radius: 3px; font-weight: 600;';
-        const numStyle = 'width: 80px; padding: 5px 10px; background: var(--color-bg-panel); border: 1px solid var(--color-accent-border); color: var(--color-text-strong); border-radius: 3px; font-weight: 600;';
 
         switch (tabId) {
             case 'recovery':
-                this.createRecoveryTab(container, effect, optStyle, selStyle, numStyle);
+                this.createRecoveryTab(container, effect);
                 break;
             case 'state':
-                this.createStateTab(container, effect, optStyle, selStyle, numStyle);
+                this.createStateTab(container, effect);
                 break;
             case 'buff':
-                this.createBuffTab(container, effect, optStyle, selStyle, numStyle);
+                this.createBuffTab(container, effect);
                 break;
             case 'special':
-                this.createSpecialTab(container, effect, optStyle, selStyle, numStyle);
+                this.createSpecialTab(container, effect);
                 break;
         }
         if (window.I18n) window.I18n.applyText(container);
     }
 
-    createRecoveryTab(container, effect, optStyle, selStyle, numStyle) {
+    createRecoveryTab(container, effect) {
         const tt = text => window.I18n ? window.I18n.tText(text) : text;
-        container.innerHTML = `
-            <div class="effect-option" style="${optStyle}">
-                <input type="radio" name="effect-type" value="11" ${effect.code === 11 ? 'checked' : ''}>
-                <span style="color: var(--color-text-strong); min-width: 100px;">${tt('HP Recovery')}</span>
-                <input type="number" class="effect-val" data-code="11" data-field="value1" value="${effect.code === 11 ? Math.round(effect.value1 * 100) : 0}" style="${numStyle}">
-                <span style="color: var(--color-text-muted);">%</span>
-                <span style="color: var(--color-text-muted);">+</span>
-                <input type="number" class="effect-val" data-code="11" data-field="value2" value="${rrEscapeHtml(effect.code === 11 ? effect.value2 : 0)}" style="${numStyle}">
-            </div>
-            <div class="effect-option" style="${optStyle}">
-                <input type="radio" name="effect-type" value="12" ${effect.code === 12 ? 'checked' : ''}>
-                <span style="color: var(--color-text-strong); min-width: 100px;">${tt('MP Recovery')}</span>
-                <input type="number" class="effect-val" data-code="12" data-field="value1" value="${effect.code === 12 ? Math.round(effect.value1 * 100) : 0}" style="${numStyle}">
-                <span style="color: var(--color-text-muted);">%</span>
-                <span style="color: var(--color-text-muted);">+</span>
-                <input type="number" class="effect-val" data-code="12" data-field="value2" value="${rrEscapeHtml(effect.code === 12 ? effect.value2 : 0)}" style="${numStyle}">
-            </div>
-            <div class="effect-option" style="${optStyle}">
-                <input type="radio" name="effect-type" value="13" ${effect.code === 13 ? 'checked' : ''}>
-                <span style="color: var(--color-text-strong); min-width: 100px;">${tt('TP Gain')}</span>
-                <input type="number" class="effect-val" data-code="13" data-field="value1" value="${rrEscapeHtml(effect.code === 13 ? effect.value1 : 0)}" style="${numStyle}">
-            </div>
-        `;
+        const recoveryGroup = code => `
+            <span class="rr-trait-lone-value">
+                ${this._numberHTML(code, 'value1', effect.code === code ? Math.round(effect.value1 * 100) : 0)}
+                <span class="rr-trait-unit">%</span>
+                <span class="rr-trait-prefix">+</span>
+                ${this._numberHTML(code, 'value2', rrEscapeHtml(effect.code === code ? effect.value2 : 0))}
+            </span>`;
+
+        container.innerHTML = [
+            this._rowHTML(effect, { code: 11, label: tt('HP Recovery'), control: recoveryGroup(11) }),
+            this._rowHTML(effect, { code: 12, label: tt('MP Recovery'), control: recoveryGroup(12) }),
+            this._rowHTML(effect, {
+                code: 13, label: tt('TP Gain'),
+                value: this._numberHTML(13, 'value1', rrEscapeHtml(effect.code === 13 ? effect.value1 : 0))
+            })
+        ].join('');
         this.setupEffectRadioInputs(container, effect);
     }
 
-    createStateTab(container, effect, optStyle, selStyle, numStyle) {
+    createStateTab(container, effect) {
         const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const states = this.databaseManager.getStates() || [];
         const stateOpts = states.filter(s => s && s.id > 0).map(s =>
             `<option value="${s.id}" ${effect.dataId === s.id ? 'selected' : ''}>${rrEscapeHtml(s.name)}</option>`
         ).join('');
 
-        container.innerHTML = `
-            <div class="effect-option" style="${optStyle}">
-                <input type="radio" name="effect-type" value="21" ${effect.code === 21 ? 'checked' : ''}>
-                <span style="color: var(--color-text-strong); min-width: 110px;">${tt('Add State')}</span>
-                <select class="effect-sel" data-code="21" style="${selStyle}">${stateOpts}</select>
-                <input type="number" class="effect-val" data-code="21" data-field="value1" value="${effect.code === 21 ? Math.round(effect.value1 * 100) : 100}" style="${numStyle}">
-                <span style="color: var(--color-text-muted);">%</span>
-            </div>
-            <div class="effect-option" style="${optStyle}">
-                <input type="radio" name="effect-type" value="22" ${effect.code === 22 ? 'checked' : ''}>
-                <span style="color: var(--color-text-strong); min-width: 110px;">${tt('Remove State')}</span>
-                <select class="effect-sel" data-code="22" style="${selStyle}">${stateOpts}</select>
-                <input type="number" class="effect-val" data-code="22" data-field="value1" value="${effect.code === 22 ? Math.round(effect.value1 * 100) : 100}" style="${numStyle}">
-                <span style="color: var(--color-text-muted);">%</span>
-            </div>
-        `;
+        container.innerHTML = [
+            this._rowHTML(effect, {
+                code: 21, label: tt('Add State'),
+                control: this._selectHTML(21, stateOpts),
+                value: this._numberHTML(21, 'value1', effect.code === 21 ? Math.round(effect.value1 * 100) : 100),
+                unit: '%'
+            }),
+            this._rowHTML(effect, {
+                code: 22, label: tt('Remove State'),
+                control: this._selectHTML(22, stateOpts),
+                value: this._numberHTML(22, 'value1', effect.code === 22 ? Math.round(effect.value1 * 100) : 100),
+                unit: '%'
+            })
+        ].join('');
         this.setupEffectRadioInputs(container, effect);
     }
 
-    createBuffTab(container, effect, optStyle, selStyle, numStyle) {
+    createBuffTab(container, effect) {
         const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const paramNames = ['Max HP', 'Max MP', 'Attack', 'Defense', 'M.Attack', 'M.Defense', 'Agility', 'Luck'].map(tt);
         const paramOpts = paramNames.map((name, idx) =>
             `<option value="${idx}" ${effect.dataId === idx ? 'selected' : ''}>${name}</option>`
         ).join('');
 
-        container.innerHTML = `
-            <div class="effect-option" style="${optStyle}">
-                <input type="radio" name="effect-type" value="31" ${effect.code === 31 ? 'checked' : ''}>
-                <span style="color: var(--color-text-strong); min-width: 110px;">${tt('Add Buff')}</span>
-                <select class="effect-sel" data-code="31" style="${selStyle}">${paramOpts}</select>
-                <input type="number" class="effect-val" data-code="31" data-field="value1" value="${rrEscapeHtml(effect.code === 31 ? effect.value1 : 5)}" min="1" style="${numStyle}">
-                <span style="color: var(--color-text-muted);">${tt('turns')}</span>
-            </div>
-            <div class="effect-option" style="${optStyle}">
-                <input type="radio" name="effect-type" value="32" ${effect.code === 32 ? 'checked' : ''}>
-                <span style="color: var(--color-text-strong); min-width: 110px;">${tt('Add Debuff')}</span>
-                <select class="effect-sel" data-code="32" style="${selStyle}">${paramOpts}</select>
-                <input type="number" class="effect-val" data-code="32" data-field="value1" value="${rrEscapeHtml(effect.code === 32 ? effect.value1 : 5)}" min="1" style="${numStyle}">
-                <span style="color: var(--color-text-muted);">${tt('turns')}</span>
-            </div>
-            <div class="effect-option" style="${optStyle}">
-                <input type="radio" name="effect-type" value="33" ${effect.code === 33 ? 'checked' : ''}>
-                <span style="color: var(--color-text-strong); min-width: 110px;">${tt('Remove Buff')}</span>
-                <select class="effect-sel" data-code="33" style="${selStyle}">${paramOpts}</select>
-            </div>
-            <div class="effect-option" style="${optStyle}">
-                <input type="radio" name="effect-type" value="34" ${effect.code === 34 ? 'checked' : ''}>
-                <span style="color: var(--color-text-strong); min-width: 110px;">${tt('Remove Debuff')}</span>
-                <select class="effect-sel" data-code="34" style="${selStyle}">${paramOpts}</select>
-            </div>
-        `;
+        container.innerHTML = [
+            this._rowHTML(effect, {
+                code: 31, label: tt('Add Buff'),
+                control: this._selectHTML(31, paramOpts),
+                value: this._numberHTML(31, 'value1', rrEscapeHtml(effect.code === 31 ? effect.value1 : 5), 'min="1"'),
+                unit: tt('turns')
+            }),
+            this._rowHTML(effect, {
+                code: 32, label: tt('Add Debuff'),
+                control: this._selectHTML(32, paramOpts),
+                value: this._numberHTML(32, 'value1', rrEscapeHtml(effect.code === 32 ? effect.value1 : 5), 'min="1"'),
+                unit: tt('turns')
+            }),
+            this._rowHTML(effect, {
+                code: 33, label: tt('Remove Buff'),
+                control: this._selectHTML(33, paramOpts)
+            }),
+            this._rowHTML(effect, {
+                code: 34, label: tt('Remove Debuff'),
+                control: this._selectHTML(34, paramOpts)
+            })
+        ].join('');
         this.setupEffectRadioInputs(container, effect);
     }
 
-    createSpecialTab(container, effect, optStyle, selStyle, numStyle) {
+    createSpecialTab(container, effect) {
         const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const paramNames = ['Max HP', 'Max MP', 'Attack', 'Defense', 'M.Attack', 'M.Defense', 'Agility', 'Luck'].map(tt);
         const paramOpts = paramNames.map((name, idx) =>
@@ -296,31 +301,25 @@ class DatabaseEffectEditor {
             `<option value="${ce.id}" ${effect.code === 44 && effect.dataId === ce.id ? 'selected' : ''}>${rrEscapeHtml(ce.name)}</option>`
         ).join('');
 
-        container.innerHTML = `
-            <div class="effect-option" style="${optStyle}">
-                <input type="radio" name="effect-type" value="41" ${effect.code === 41 ? 'checked' : ''}>
-                <span style="color: var(--color-text-strong); min-width: 110px;">${tt('Special Effect')}</span>
-                <select class="effect-sel" data-code="41" style="${selStyle}">
-                    <option value="0" ${effect.code === 41 && effect.dataId === 0 ? 'selected' : ''}>${tt('Escape')}</option>
-                </select>
-            </div>
-            <div class="effect-option" style="${optStyle}">
-                <input type="radio" name="effect-type" value="42" ${effect.code === 42 ? 'checked' : ''}>
-                <span style="color: var(--color-text-strong); min-width: 110px;">${tt('Grow')}</span>
-                <select class="effect-sel" data-code="42" style="${selStyle}">${paramOpts}</select>
-                <input type="number" class="effect-val" data-code="42" data-field="value1" value="${rrEscapeHtml(effect.code === 42 ? effect.value1 : 1)}" style="${numStyle}">
-            </div>
-            <div class="effect-option" style="${optStyle}">
-                <input type="radio" name="effect-type" value="43" ${effect.code === 43 ? 'checked' : ''}>
-                <span style="color: var(--color-text-strong); min-width: 110px;">${tt('Learn Skill')}</span>
-                <select class="effect-sel" data-code="43" style="${selStyle}">${skillOpts}</select>
-            </div>
-            <div class="effect-option" style="${optStyle}">
-                <input type="radio" name="effect-type" value="44" ${effect.code === 44 ? 'checked' : ''}>
-                <span style="color: var(--color-text-strong); min-width: 110px;">${tt('Common Event')}</span>
-                <select class="effect-sel" data-code="44" style="${selStyle}">${ceOpts}</select>
-            </div>
-        `;
+        container.innerHTML = [
+            this._rowHTML(effect, {
+                code: 41, label: tt('Special Effect'),
+                control: this._selectHTML(41, `<option value="0" ${effect.code === 41 && effect.dataId === 0 ? 'selected' : ''}>${tt('Escape')}</option>`)
+            }),
+            this._rowHTML(effect, {
+                code: 42, label: tt('Grow'),
+                control: this._selectHTML(42, paramOpts),
+                value: this._numberHTML(42, 'value1', rrEscapeHtml(effect.code === 42 ? effect.value1 : 1))
+            }),
+            this._rowHTML(effect, {
+                code: 43, label: tt('Learn Skill'),
+                control: this._selectHTML(43, skillOpts)
+            }),
+            this._rowHTML(effect, {
+                code: 44, label: tt('Common Event'),
+                control: this._selectHTML(44, ceOpts)
+            })
+        ].join('');
         this.setupEffectRadioInputs(container, effect);
     }
 

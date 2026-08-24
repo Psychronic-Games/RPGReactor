@@ -3617,3 +3617,38 @@ Scene_Gameover.prototype.gotoTitle = function() {
 };
 
 //-----------------------------------------------------------------------------
+
+// Model preloading: every model the map references loads during the
+// loading fade, and the renderer warms shaders and textures before the
+// first gameplay frame. Appended after every class body — scene
+// prototypes are replaced wholesale mid-file and an early wrapper dies
+// with the old prototype. The gate fails open on a timer: a broken model
+// can slow a map down, never hold it hostage.
+const _reactorSceneMapOnMapLoaded = Scene_Map.prototype.onMapLoaded;
+Scene_Map.prototype.onMapLoaded = function() {
+    _reactorSceneMapOnMapLoaded.call(this);
+    this._reactorPreloadDone = true;
+    if (typeof Reactor3D !== "undefined" && Reactor3D.preloadMapModels
+        && typeof $dataMap !== "undefined" && $dataMap) {
+        const specs = Reactor3D.collectMapModelSpecs($dataMap);
+        if (specs.length) {
+            this._reactorPreloadDone = false;
+            const done = () => { this._reactorPreloadDone = true; };
+            Reactor3D.preloadMapModels($dataMap).then(done, done);
+            setTimeout(done, 8000);
+        }
+    }
+};
+
+const _reactorSceneMapIsReady = Scene_Map.prototype.isReady;
+Scene_Map.prototype.isReady = function() {
+    return _reactorSceneMapIsReady.call(this) && this._reactorPreloadDone !== false;
+};
+
+const _reactorSceneMapStart = Scene_Map.prototype.start;
+Scene_Map.prototype.start = function() {
+    _reactorSceneMapStart.call(this);
+    if (typeof Reactor3D !== "undefined" && Reactor3D.warmLoadedTemplates) {
+        Reactor3D.warmLoadedTemplates();
+    }
+};

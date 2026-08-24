@@ -1604,21 +1604,60 @@
             box-sizing: border-box;
         }
 
+        /* Two-column page rows (Actors' section pairs, Classes' columns).
+         * Defined here rather than inline so the database-detail container
+         * query can collapse them to one column when the pane narrows. */
+        .database-actor-pair {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 16px;
+        }
+        .database-class-columns {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 16px;
+            overflow-y: auto;
+        }
+
         /* Paired sections stretch to equal heights; the section content
          * fills the card so flexible fields (description/note textareas)
          * can absorb the leftover space instead of leaving a void. */
-        .database-sections-grid > .database-section {
+        .database-sections-grid > .database-section,
+        .database-actor-pair > .database-section {
             display: flex;
             flex-direction: column;
         }
-        .database-sections-grid > .database-section > .database-section-content {
+        .database-sections-grid > .database-section > .database-section-content,
+        .database-actor-pair > .database-section > .database-section-content {
             flex: 1 1 auto;
             display: flex;
             flex-direction: column;
         }
-        .database-sections-grid > .database-section > .database-section-content > textarea.database-field-value {
+        .database-sections-grid > .database-section > .database-section-content > textarea.database-field-value,
+        .database-actor-pair > .database-section > .database-section-content > textarea.database-field-value {
             flex: 1 1 auto;
             min-height: 60px;
+        }
+
+        /* List cards (traits, learnable skills, effects, action patterns):
+         * inside a filled card the action strip pins to the bottom edge, so
+         * a shorter list reads as free list area rather than a void under
+         * the buttons. Outside a filled card the strip hugs its table. */
+        .trait-action-buttons,
+        .learning-action-buttons,
+        .effect-action-buttons,
+        .action-action-buttons {
+            display: flex;
+            gap: 6px;
+            margin-top: 8px;
+        }
+        .database-sections-grid .trait-action-buttons,
+        .database-actor-pair .trait-action-buttons,
+        .database-sections-grid .learning-action-buttons,
+        .database-sections-grid .effect-action-buttons,
+        .database-sections-grid .action-action-buttons {
+            margin-top: auto;
+            padding-top: 8px;
         }
 
         .database-section.full-width {
@@ -1680,6 +1719,9 @@
         .db-form.db-fill > .db-row-grow {
             flex: 1 1 auto;
             display: flex;
+            /* Beat .db-row-cols's align-items: end, which would pin the
+             * column to the bottom of the grown row instead of filling it. */
+            align-items: stretch;
         }
         .db-form.db-fill > .db-row-grow > .db-col {
             flex: 1;

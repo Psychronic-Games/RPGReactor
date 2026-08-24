@@ -1186,18 +1186,26 @@ class DatabaseCommonEventEditor {
         modal.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(0,0,0,0.8); display: flex; align-items: center; justify-content: center; z-index: 10005;';
 
         const dialog = document.createElement('div');
-        dialog.style.cssText = 'background-color: var(--color-bg-surface); border: 1px solid var(--color-border); border-radius: 8px; padding: 20px; width: 500px; max-width: 90vw; max-height: 80vh; overflow-y: auto;';
+        dialog.className = 'rr-modal';
+        dialog.style.cssText = 'width: min(500px, calc(100vw - 24px));';
 
         const info = this.getCommandDisplay(cmd);
-        dialog.innerHTML = `<h3 style="margin: 0 0 12px 0; color: var(--color-text-strong); font-size: 14px;">${this.escapeHTML(tt(info.name))} (${tt('Code')} ${cmd.code})</h3>`;
+        dialog.innerHTML = `
+            <div class="rr-modal-header">
+                <div class="rr-modal-title">${this.escapeHTML(tt(info.name))} (${tt('Code')} ${cmd.code})</div>
+                <button class="rr-modal-close raw-cmd-close" type="button">&times;</button>
+            </div>`;
 
+        const body = document.createElement('div');
+        body.className = 'rr-modal-body';
         const textarea = document.createElement('textarea');
         textarea.value = JSON.stringify(cmd.parameters, null, 2);
         textarea.style.cssText = 'width: 100%; height: 200px; background: var(--color-bg-panel); border: 1px solid var(--color-border-input); color: var(--color-text); font-family: monospace; font-size: 12px; padding: 8px; border-radius: 4px; box-sizing: border-box; resize: vertical;';
-        dialog.appendChild(textarea);
+        body.appendChild(textarea);
+        dialog.appendChild(body);
 
         const btnRow = document.createElement('div');
-        btnRow.style.cssText = 'display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px;';
+        btnRow.className = 'rr-modal-footer';
 
         const cancelBtn = this.createButton('Cancel', () => document.body.removeChild(modal));
         const okBtn = this.createButton('OK', () => {
@@ -1215,6 +1223,7 @@ class DatabaseCommonEventEditor {
         btnRow.appendChild(cancelBtn);
         btnRow.appendChild(okBtn);
         dialog.appendChild(btnRow);
+        dialog.querySelector('.raw-cmd-close').addEventListener('click', () => document.body.removeChild(modal));
         modal.appendChild(dialog);
         modal.onclick = (e) => { if (e.target === modal) document.body.removeChild(modal); };
         document.body.appendChild(modal);
@@ -1503,15 +1512,7 @@ class DatabaseCommonEventEditor {
         const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const btn = document.createElement('button');
         btn.textContent = tt(label);
-        if (label === 'OK') {
-            btn.style.cssText = 'padding: 8px 16px; background-color: var(--color-accent); color: var(--color-bg-deep); border: 1px solid var(--color-accent); border-radius: 4px; cursor: pointer; font-weight: bold;';
-            btn.onmouseenter = () => { btn.style.backgroundColor = 'var(--color-accent-muted)'; };
-            btn.onmouseleave = () => { btn.style.backgroundColor = 'var(--color-accent)'; };
-        } else {
-            btn.style.cssText = 'padding: 8px 16px; background-color: var(--color-bg-button); color: var(--color-text-strong); border: 1px solid var(--color-border-input); border-radius: 4px; cursor: pointer;';
-            btn.onmouseenter = () => { btn.style.backgroundColor = 'var(--color-accent-tint-25)'; btn.style.borderColor = 'var(--color-accent)'; };
-            btn.onmouseleave = () => { btn.style.backgroundColor = 'var(--color-bg-button)'; btn.style.borderColor = 'var(--color-border-input)'; };
-        }
+        btn.className = label === 'OK' ? 'rr-button-primary' : 'rr-btn-secondary';
         btn.onclick = onclick;
         return btn;
     }

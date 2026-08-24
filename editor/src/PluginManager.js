@@ -81,13 +81,14 @@ class PluginManager {
                 top: ${defaultY}px;
                 width: ${defaultW}px;
                 height: ${defaultH}px;
-                min-width: 700px;
+                min-width: min(700px, calc(100vw - 24px));
                 min-height: 400px;
                 background-color: var(--color-bg-surface);
                 border: 1px solid var(--color-border-input);
                 border-radius: 6px;
                 display: flex;
                 flex-direction: column;
+            max-height: 92vh;
                 box-shadow: 0 8px 32px rgba(0, 0, 0, 0.7);
                 overflow: hidden;
             `;
@@ -636,16 +637,7 @@ class PluginManager {
 
         const saveBtn = document.createElement('button');
         saveBtn.textContent = this._tt('OK');
-        saveBtn.style.cssText = `
-            padding: 6px 16px;
-            background-color: var(--color-accent);
-            color: var(--color-bg-deep);
-            border: 1px solid var(--color-accent);
-            border-radius: 3px;
-            cursor: pointer;
-            font-size: 12px;
-            font-weight: bold;
-        `;
+        saveBtn.className = 'rr-button-primary';
         saveBtn.addEventListener('mouseenter', () => { saveBtn.style.backgroundColor = 'var(--color-accent-muted)'; });
         saveBtn.addEventListener('mouseleave', () => { saveBtn.style.backgroundColor = 'var(--color-accent)'; });
         saveBtn.addEventListener('click', () => {
@@ -856,16 +848,7 @@ class PluginManager {
 
         const saveBtn = document.createElement('button');
         saveBtn.textContent = this._tt('OK');
-        saveBtn.style.cssText = `
-            padding: 6px 16px;
-            background-color: var(--color-accent);
-            color: var(--color-bg-deep);
-            border: 1px solid var(--color-accent);
-            border-radius: 3px;
-            cursor: pointer;
-            font-size: 12px;
-            font-weight: bold;
-        `;
+        saveBtn.className = 'rr-button-primary';
         saveBtn.addEventListener('mouseenter', () => { saveBtn.style.backgroundColor = 'var(--color-accent-muted)'; });
         saveBtn.addEventListener('mouseleave', () => { saveBtn.style.backgroundColor = 'var(--color-accent)'; });
         saveBtn.addEventListener('click', () => {
@@ -1512,7 +1495,7 @@ class PluginManager {
             background-color: var(--color-bg-surface);
             border: 1px solid var(--color-border);
             border-radius: 6px;
-            width: 600px;
+            width: min(600px, calc(100vw - 24px));
             max-height: 70vh;
             display: flex;
             flex-direction: column;
@@ -1611,16 +1594,7 @@ class PluginManager {
 
         const okBtn = document.createElement('button');
         okBtn.textContent = this._tt('OK');
-        okBtn.style.cssText = `
-            padding: 6px 16px;
-            background-color: var(--color-accent);
-            color: var(--color-bg-deep);
-            border: 1px solid var(--color-accent);
-            border-radius: 3px;
-            cursor: pointer;
-            font-size: 12px;
-            font-weight: bold;
-        `;
+        okBtn.className = 'rr-button-primary';
         okBtn.addEventListener('mouseenter', () => { okBtn.style.backgroundColor = 'var(--color-accent-muted)'; });
         okBtn.addEventListener('mouseleave', () => { okBtn.style.backgroundColor = 'var(--color-accent)'; });
         okBtn.addEventListener('click', () => {
@@ -1866,16 +1840,7 @@ class PluginManager {
         const saveChangesBtn = document.createElement('button');
         saveChangesBtn.type = 'button';
         saveChangesBtn.textContent = this._tt('Save Changes');
-        saveChangesBtn.style.cssText = `
-            padding: 6px 16px;
-            background-color: var(--color-accent);
-            color: var(--color-bg-deep);
-            border: 1px solid var(--color-accent);
-            border-radius: 3px;
-            cursor: pointer;
-            font-size: 13px;
-            font-weight: bold;
-        `;
+        saveChangesBtn.className = 'rr-button-primary';
         saveChangesBtn.addEventListener('mouseenter', () => { saveChangesBtn.style.backgroundColor = 'var(--color-accent-muted)'; });
         saveChangesBtn.addEventListener('mouseleave', () => { saveChangesBtn.style.backgroundColor = 'var(--color-accent)'; });
         saveChangesBtn.addEventListener('click', () => this.savePlugins());

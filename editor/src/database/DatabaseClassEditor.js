@@ -22,7 +22,6 @@ class DatabaseClassEditor {
         // Two-column layout
         const columnsWrapper = document.createElement('div');
         columnsWrapper.className = 'database-class-columns';
-        columnsWrapper.style.cssText = 'display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; overflow-y: auto;';
 
         // FIRST COLUMN
         const leftColumn = document.createElement('div');
@@ -172,12 +171,17 @@ class DatabaseClassEditor {
     }
 
     /**
-     * Generate-Curve modal for a single parameter (MZ-style):
-     * user picks Lv1 value, Lv99 value, and a curve shape (exponent), and the
-     * editor recomputes all 100 levels. Apply writes back to classEntry.params[paramIdx].
+     * Generate-Curve modal for a single parameter: user picks the Lv1 value,
+     * the value at the level cap (999), and a curve shape (exponent), and the
+     * editor recomputes every level in the 1..cap domain. Apply writes the
+     * full per-level array back to classEntry.params[paramIdx]. Legacy
+     * 100-entry MZ arrays seed the cap value from the runtime's linear
+     * extrapolation, so opening and applying without touching anything keeps
+     * the curve the game was already playing.
      */
     showParameterCurveModal(classEntry, paramIdx, paramName, color) {
         const tt = text => window.I18n ? window.I18n.tText(text) : text;
+        const capLevel = globalThis.RR_LIMITS?.ACTOR_LEVEL || 999;
         if (!classEntry.params) classEntry.params = [];
         if (!Array.isArray(classEntry.params[paramIdx]) || classEntry.params[paramIdx].length < 100) {
             const source = classEntry.params[paramIdx] || [];
@@ -187,53 +191,36 @@ class DatabaseClassEditor {
         const current = classEntry.params[paramIdx];
 
         // Param-specific sane bounds. HP/MP go high; other stats stay smaller.
-        const maxAllowed = (paramIdx === 0) ? 9999 : (paramIdx === 1) ? 9999 : 999;
+        const maxAllowed = (paramIdx === 0) ? 99999 : (paramIdx === 1) ? 99999 : 9999;
         const initialLv1 = Number.isFinite(Number(current[1])) ? Number(current[1]) : 1;
-        const initialLv99 = Number.isFinite(Number(current[99])) ? Number(current[99]) : initialLv1;
+        const initialLvMax = globalThis.rrClassParamAtLevel?.(current, capLevel) ?? initialLv1;
         // Best-fit exponent from existing curve so the slider starts where the curve already lives.
-        const initialExponent = this._inferCurveExponent(current.slice(0, 100));
+        const initialExponent = this._inferCurveExponent(current);
 
         let lv1 = initialLv1;
-        let lv99 = initialLv99;
+        let lvMax = Math.max(1, Math.min(maxAllowed, initialLvMax));
         let exponent = initialExponent;
         let workingValues = current.slice();
 
         const recompute = () => {
-            const generated = this._generateParamCurve(lv1, lv99, exponent, 100);
-            workingValues = current.length > 100 ? current.slice() : generated;
-            generated.forEach((value, index) => { workingValues[index] = value; });
+            workingValues = this._generateParamCurve(lv1, lvMax, exponent, capLevel + 1);
             redraw();
         };
 
         const overlay = document.createElement('div');
-        overlay.className = 'modal-overlay';
-        overlay.style.cssText = `
-            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-            background: rgba(0, 0, 0, 0.7);
-            display: flex; align-items: center; justify-content: center;
-            z-index: 10000;
-        `;
+        overlay.className = 'rr-modal-overlay';
 
         const modal = document.createElement('div');
-        modal.className = 'param-curve-modal';
-        modal.style.cssText = `
-            background: var(--color-bg-surface);
-            border: 1px solid var(--color-border-subtle);
-            border-radius: 8px;
-            width: 560px;
-            max-height: 90vh;
-            display: flex;
-            flex-direction: column;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
-        `;
+        modal.className = 'rr-modal param-curve-modal';
+        modal.style.cssText = 'width: 560px; max-width: 92vw;';
 
         modal.innerHTML = `
-            <div style="padding: 14px 18px; border-bottom: 1px solid var(--color-border-subtle); display: flex; justify-content: space-between; align-items: center; background: var(--color-bg-panel);">
-                <h3 style="margin: 0; color: var(--color-text-strong); font-size: 16px;">${tt('Generate Curve')} &mdash; <span style="color: ${color};">${paramName}</span></h3>
-                <button class="rr-param-curve-close" style="background: none; border: none; color: var(--color-text-muted); font-size: 24px; cursor: pointer; padding: 0; width: 30px; height: 30px; line-height: 1;">&times;</button>
+            <div class="rr-modal-header">
+                <div class="rr-modal-title">${tt('Generate Curve')} &mdash; <span style="color: ${color};">${paramName}</span></div>
+                <button class="rr-modal-close rr-param-curve-close" type="button">&times;</button>
             </div>
 
-            <div style="padding: 18px; display: flex; flex-direction: column; gap: 16px;">
+            <div class="rr-modal-body">
                 <div style="display: grid; grid-template-columns: 110px 1fr 80px; gap: 12px; align-items: center;">
                     <label style="font-size: 12px; color: var(--color-text-muted);">${tt('Level 1 value')}</label>
                     <input type="range" class="rr-pc-lv1-slider rr-range" min="1" max="${maxAllowed}" value="${lv1}">
@@ -241,9 +228,9 @@ class DatabaseClassEditor {
                 </div>
 
                 <div style="display: grid; grid-template-columns: 110px 1fr 80px; gap: 12px; align-items: center;">
-                    <label style="font-size: 12px; color: var(--color-text-muted);">${tt('Level 99 value')}</label>
-                    <input type="range" class="rr-pc-lv99-slider rr-range" min="1" max="${maxAllowed}" value="${lv99}">
-                    <input type="number" class="rr-pc-lv99-input rr-input" min="1" max="${maxAllowed}" value="${lv99}">
+                    <label style="font-size: 12px; color: var(--color-text-muted);">${tt('Level 999 value')}</label>
+                    <input type="range" class="rr-pc-lvmax-slider rr-range" min="1" max="${maxAllowed}" value="${lvMax}">
+                    <input type="number" class="rr-pc-lvmax-input rr-input" min="1" max="${maxAllowed}" value="${lvMax}">
                 </div>
 
                 <div style="display: grid; grid-template-columns: 110px 1fr 80px; gap: 12px; align-items: center;">
@@ -266,9 +253,9 @@ class DatabaseClassEditor {
                 </div>
             </div>
 
-            <div style="padding: 12px 18px; border-top: 1px solid var(--color-border-subtle); display: flex; justify-content: flex-end; gap: 8px; background: var(--color-bg-panel);">
-                <button class="rr-pc-cancel rr-btn-chip" style="padding: 6px 16px;">${tt('Cancel')}</button>
-                <button class="rr-pc-apply rr-btn-chip" style="padding: 6px 16px; color: var(--color-accent-bright);">${tt('Apply')}</button>
+            <div class="rr-modal-footer">
+                <button class="rr-pc-cancel rr-btn-secondary">${tt('Cancel')}</button>
+                <button class="rr-pc-apply rr-button-primary">${tt('Apply')}</button>
             </div>
         `;
 
@@ -282,30 +269,29 @@ class DatabaseClassEditor {
         const redraw = () => {
             // Fixed Y-axis anchored at 0 so the visual scale stays absolute
             // (auto-fit would mirror rising vs falling curves of the same shape).
-            const yMax = Math.max(lv1, lv99, 1);
+            const yMax = Math.max(lv1, lvMax, 1);
             this.drawParameterCurve(previewCanvas, workingValues, color, { min: 0, max: yMax });
-            const mid = workingValues[50] || 0;
             const level = tt('Lv');
-            const level999 = globalThis.rrClassParamAtLevel?.(workingValues, 999) ?? workingValues[99];
-            readout.textContent = `${level}1: ${workingValues[1]}  ${level}50: ${mid}  ${level}99: ${workingValues[99]}  ${level}999: ${level999}`;
+            const at = lvl => globalThis.rrClassParamAtLevel?.(workingValues, lvl) ?? workingValues[Math.min(lvl, workingValues.length - 1)];
+            readout.textContent = `${level}1: ${at(1)}  ${level}99: ${at(99)}  ${level}500: ${at(500)}  ${level}${capLevel}: ${at(capLevel)}`;
             shapeLabel.textContent = exponent === 1 ? tt('Linear') : exponent.toFixed(2);
         };
 
         // Wire up inputs
         const lv1Slider = modal.querySelector('.rr-pc-lv1-slider');
         const lv1Input  = modal.querySelector('.rr-pc-lv1-input');
-        const lv99Slider = modal.querySelector('.rr-pc-lv99-slider');
-        const lv99Input  = modal.querySelector('.rr-pc-lv99-input');
+        const lvMaxSlider = modal.querySelector('.rr-pc-lvmax-slider');
+        const lvMaxInput  = modal.querySelector('.rr-pc-lvmax-input');
         const shapeSlider = modal.querySelector('.rr-pc-shape-slider');
 
         const syncLv1 = (v) => { lv1 = Math.max(1, Math.min(maxAllowed, parseInt(v) || 1)); lv1Slider.value = lv1; lv1Input.value = lv1; recompute(); };
-        const syncLv99 = (v) => { lv99 = Math.max(1, Math.min(maxAllowed, parseInt(v) || 1)); lv99Slider.value = lv99; lv99Input.value = lv99; recompute(); };
+        const syncLvMax = (v) => { lvMax = Math.max(1, Math.min(maxAllowed, parseInt(v) || 1)); lvMaxSlider.value = lvMax; lvMaxInput.value = lvMax; recompute(); };
         const syncShape = (v) => { exponent = (parseInt(v) || 100) / 100; recompute(); };
 
         lv1Slider.addEventListener('input', e => syncLv1(e.target.value));
         lv1Input.addEventListener('input', e => syncLv1(e.target.value));
-        lv99Slider.addEventListener('input', e => syncLv99(e.target.value));
-        lv99Input.addEventListener('input', e => syncLv99(e.target.value));
+        lvMaxSlider.addEventListener('input', e => syncLvMax(e.target.value));
+        lvMaxInput.addEventListener('input', e => syncLvMax(e.target.value));
         shapeSlider.addEventListener('input', e => syncShape(e.target.value));
 
         const close = () => overlay.remove();
@@ -319,12 +305,12 @@ class DatabaseClassEditor {
             // Redraw the mini curve in the section
             const mini = document.getElementById(`param-curve-${classEntry.id}-${paramIdx}`);
             if (mini) this.drawParameterCurve(mini, classEntry.params[paramIdx], color);
-            // Refresh the Lv1/Lv99 readout span next to the param name
+            // Refresh the Lv1/Lv99/Lv999 readout span next to the param name
             const cell = mini ? mini.closest('.param-curve-cell') : null;
             const readoutSpan = cell ? cell.querySelector('span') : null;
             if (readoutSpan) {
-                const level999 = globalThis.rrClassParamAtLevel?.(workingValues, 999) ?? workingValues[99];
-                readoutSpan.textContent = `${tt('Lv')}1: ${workingValues[1]} → ${tt('Lv')}99: ${workingValues[99]} → ${tt('Lv')}999: ${level999}`;
+                const at = lvl => globalThis.rrClassParamAtLevel?.(workingValues, lvl) ?? workingValues[Math.min(lvl, workingValues.length - 1)];
+                readoutSpan.textContent = `${tt('Lv')}1: ${at(1)} → ${tt('Lv')}99: ${at(99)} → ${tt('Lv')}${capLevel}: ${at(capLevel)}`;
             }
         });
         overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
@@ -333,19 +319,20 @@ class DatabaseClassEditor {
     }
 
     /**
-     * Generate a length-`count` parameter curve from lv1 -> lv99 using
-     * value(t) = lv1 + (lv99 - lv1) * t^exponent, with t = (level-1)/(count-2).
-     * Exponent < 1 = fast early growth, = 1 linear, > 1 slow early / fast late.
+     * Generate a length-`count` parameter curve from the Lv1 value to the
+     * final-level value using value(t) = lv1 + (lvEnd - lv1) * t^exponent,
+     * with t = (level-1)/(lastLevel-1). Exponent < 1 = fast early growth,
+     * = 1 linear, > 1 slow early / fast late.
      */
-    _generateParamCurve(lv1, lv99, exponent, count) {
-        // MZ params arrays are indexed BY LEVEL: [level] for level 1..99,
+    _generateParamCurve(lv1, lvEnd, exponent, count) {
+        // Params arrays are indexed BY LEVEL: [level] for level 1..lastLevel,
         // with [0] an unread placeholder. The old 0-based mapping put the
         // Lv1 value in the placeholder and read every level one step low.
         const out = new Array(count);
-        const lastLevel = Math.max(2, count - 1); // 99 for the standard 100-entry array
+        const lastLevel = Math.max(2, count - 1);
         for (let level = 1; level < count; level++) {
             const t = Math.min(1, (level - 1) / (lastLevel - 1));
-            const v = lv1 + (lv99 - lv1) * Math.pow(t, exponent);
+            const v = lv1 + (lvEnd - lv1) * Math.pow(t, exponent);
             out[level] = Math.max(1, Math.round(v));
         }
         out[0] = out[1]; // placeholder mirrors Lv1, like MZ writes it
@@ -354,22 +341,33 @@ class DatabaseClassEditor {
 
     /**
      * Reverse-fit an exponent from an existing curve so the modal opens with a
-     * slider position that roughly matches the saved shape. Uses the midpoint.
+     * slider position that roughly matches the saved shape. Uses the midpoint
+     * of whatever domain the array actually stores (100-entry MZ arrays and
+     * full 1000-entry Reactor arrays alike).
      */
     _inferCurveExponent(values) {
         if (!values || values.length < 3) return 1;
-        const lv1 = values[1];
-        const lv99 = values[Math.min(99, values.length - 1)];
-        if (lv99 === lv1) return 1;
-        const mid = values[Math.min(50, values.length - 1)];
-        // mid = lv1 + (lv99 - lv1) * 0.5^exponent  =>  0.5^exponent = (mid-lv1)/(lv99-lv1)
-        const ratio = (mid - lv1) / (lv99 - lv1);
+        const capLevel = globalThis.RR_LIMITS?.ACTOR_LEVEL || 999;
+        const lastLevel = Math.min(values.length - 1, capLevel);
+        const lv1 = Number(values[1]);
+        const lvEnd = Number(values[lastLevel]);
+        if (!Number.isFinite(lv1) || !Number.isFinite(lvEnd) || lvEnd === lv1) return 1;
+        const mid = Number(values[Math.round((1 + lastLevel) / 2)]);
+        if (!Number.isFinite(mid)) return 1;
+        // mid = lv1 + (lvEnd - lv1) * 0.5^exponent  =>  0.5^exponent = (mid-lv1)/(lvEnd-lv1)
+        const ratio = (mid - lv1) / (lvEnd - lv1);
         if (ratio <= 0 || ratio >= 1) return 1;
         const exp = Math.log(ratio) / Math.log(0.5);
         return Math.max(0.3, Math.min(3.0, exp));
     }
 
     /**
+     * Plot the parameter across the full 1..999 level domain — the same
+     * series the game computes: stored values where the array has them,
+     * linear extrapolation at the final slope beyond. The authored region
+     * draws solid; an extrapolated tail (legacy 100-entry MZ arrays) draws
+     * dashed and dimmer past a faint divider so it reads as "projected".
+     *
      * @param {Object} [bounds] - { min, max } to lock the Y-axis (used by the
      *   Generate Curve preview so the visual scale stays absolute and curves
      *   don't appear "mirrored" between rising vs falling configs). When omitted,
@@ -384,13 +382,26 @@ class DatabaseClassEditor {
         ctx.clearRect(0, 0, width, height);
 
         if (!values || values.length === 0) return;
-        const plotValues = values.slice(1).map(value => Number(value)).filter(Number.isFinite);
-        if (plotValues.length === 0) return;
+
+        const capLevel = globalThis.RR_LIMITS?.ACTOR_LEVEL || 999;
+        let authoredLevel = Math.min(values.length - 1, capLevel);
+        while (authoredLevel > 1 && !Number.isFinite(Number(values[authoredLevel]))) authoredLevel--;
+        if (!Number.isFinite(Number(values[authoredLevel]))) return;
+
+        const series = new Array(capLevel);
+        for (let level = 1; level <= capLevel; level++) {
+            series[level - 1] = globalThis.rrClassParamAtLevel
+                ? globalThis.rrClassParamAtLevel(values, level)
+                : Number(values[Math.min(level, authoredLevel)]) || 0;
+        }
+        const splitIndex = authoredLevel - 1;
 
         // Find min/max for scaling
-        const min = bounds ? bounds.min : Math.min(...plotValues);
-        const max = bounds ? bounds.max : Math.max(...plotValues);
+        const min = bounds ? bounds.min : Math.min(...series);
+        const max = bounds ? bounds.max : Math.max(...series);
         const range = max - min || 1;
+        const xAt = index => (index / Math.max(1, capLevel - 1)) * width;
+        const yAt = value => height - ((value - min) / range) * (height - 6) - 3;
 
         // Draw gradient fill under curve
         const gradient = ctx.createLinearGradient(0, 0, 0, height);
@@ -400,36 +411,48 @@ class DatabaseClassEditor {
         ctx.fillStyle = gradient;
         ctx.beginPath();
         ctx.moveTo(0, height);
-
-        plotValues.forEach((value, index) => {
-            const x = (index / Math.max(1, plotValues.length - 1)) * width;
-            const y = height - ((value - min) / range) * (height - 6) - 3;
-            ctx.lineTo(x, y);
-        });
-
+        series.forEach((value, index) => ctx.lineTo(xAt(index), yAt(value)));
         ctx.lineTo(width, height);
         ctx.closePath();
         ctx.fill();
 
-        // Draw bright curve line
+        // Authored region: bright solid curve
         ctx.strokeStyle = color;
         ctx.lineWidth = 3;
         ctx.shadowColor = color;
         ctx.shadowBlur = 8;
         ctx.beginPath();
-
-        plotValues.forEach((value, index) => {
-            const x = (index / Math.max(1, plotValues.length - 1)) * width;
-            const y = height - ((value - min) / range) * (height - 6) - 3;
-
-            if (index === 0) {
-                ctx.moveTo(x, y);
-            } else {
-                ctx.lineTo(x, y);
-            }
-        });
-
+        for (let index = 0; index <= splitIndex; index++) {
+            if (index === 0) ctx.moveTo(xAt(index), yAt(series[index]));
+            else ctx.lineTo(xAt(index), yAt(series[index]));
+        }
         ctx.stroke();
+
+        // Extrapolated tail: dashed, dimmer, behind a faint divider tick
+        if (splitIndex < capLevel - 1) {
+            const splitX = xAt(splitIndex);
+            ctx.shadowBlur = 0;
+            ctx.save();
+            ctx.strokeStyle = color + '55';
+            ctx.lineWidth = 1;
+            ctx.setLineDash([]);
+            ctx.beginPath();
+            ctx.moveTo(splitX, 0);
+            ctx.lineTo(splitX, height);
+            ctx.stroke();
+
+            ctx.globalAlpha = 0.65;
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 2;
+            ctx.setLineDash([5, 4]);
+            ctx.beginPath();
+            for (let index = splitIndex; index < capLevel; index++) {
+                if (index === splitIndex) ctx.moveTo(xAt(index), yAt(series[index]));
+                else ctx.lineTo(xAt(index), yAt(series[index]));
+            }
+            ctx.stroke();
+            ctx.restore();
+        }
 
         // Reset shadow
         ctx.shadowBlur = 0;
@@ -474,7 +497,7 @@ class DatabaseClassEditor {
                         ${learningsHTML}
                     </tbody>
                 </table>
-                <div class="learning-action-buttons" style="display: flex; gap: 6px; margin-top: 8px;">
+                <div class="learning-action-buttons">
                     <button class="learning-btn-add rr-btn-chip">${tt('Add')}</button>
                     <button class="learning-btn-edit rr-btn-chip" disabled>${tt('Edit')}</button>
                     <button class="learning-btn-delete rr-btn-chip" disabled>${tt('Delete')}</button>
@@ -582,29 +605,35 @@ class DatabaseClassEditor {
         ).join('');
 
         const overlay = document.createElement('div');
-        overlay.className = 'modal-overlay';
-        overlay.style.cssText = 'position: fixed; inset: 0; background: rgba(0, 0, 0, 0.7); display: flex; align-items: center; justify-content: center; z-index: 10000;';
+        overlay.className = 'rr-modal-overlay';
         const modal = document.createElement('div');
-        modal.style.cssText = 'background: var(--color-bg-surface); border: 1px solid var(--color-border-subtle); border-radius: 8px; width: 440px; max-width: 90vw; padding: 20px;';
+        modal.className = 'rr-modal';
+        modal.style.cssText = 'width: 440px; max-width: 90vw;';
         modal.innerHTML = `
-            <h3 style="margin: 0 0 16px; color: var(--color-text-strong);">${tt(existing ? 'Edit Learnable Skill' : 'Add Learnable Skill')}</h3>
-            <div class="db-form">
-                <label>${tt('Level')}</label>
-                <input class="database-field-value learning-edit-level" type="number" min="1" max="${globalThis.RR_LIMITS?.ACTOR_LEVEL || 999}" value="${draft.level}">
-                <label>${tt('Skill')}</label>
-                <select class="database-field-value learning-edit-skill">${skillOptions}</select>
-                <label>${tt('Note')}</label>
-                <textarea class="database-field-value learning-edit-note" rows="3">${rrEscapeHtml(draft.note)}</textarea>
+            <div class="rr-modal-header">
+                <div class="rr-modal-title">${tt(existing ? 'Edit Learnable Skill' : 'Add Learnable Skill')}</div>
+                <button class="rr-modal-close learning-edit-close" type="button">&times;</button>
             </div>
-            <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px;">
+            <div class="rr-modal-body">
+                <div class="db-form">
+                    <label>${tt('Level')}</label>
+                    <input class="database-field-value learning-edit-level" type="number" min="1" max="${globalThis.RR_LIMITS?.ACTOR_LEVEL || 999}" value="${draft.level}">
+                    <label>${tt('Skill')}</label>
+                    <select class="database-field-value learning-edit-skill">${skillOptions}</select>
+                    <label>${tt('Note')}</label>
+                    <textarea class="database-field-value learning-edit-note" rows="3">${rrEscapeHtml(draft.note)}</textarea>
+                </div>
+            </div>
+            <div class="rr-modal-footer">
                 <button class="learning-edit-cancel rr-btn-secondary">${tt('Cancel')}</button>
-                <button class="learning-edit-ok rr-btn-chip">${tt('OK')}</button>
+                <button class="learning-edit-ok rr-button-primary">${tt('OK')}</button>
             </div>
         `;
         overlay.appendChild(modal);
         document.body.appendChild(overlay);
 
         const close = () => overlay.remove();
+        modal.querySelector('.learning-edit-close').addEventListener('click', close);
         modal.querySelector('.learning-edit-cancel').addEventListener('click', close);
         overlay.addEventListener('click', event => { if (event.target === overlay) close(); });
         modal.querySelector('.learning-edit-ok').addEventListener('click', () => {
@@ -655,12 +684,12 @@ class DatabaseClassEditor {
                         ${traitsHTML}
                     </tbody>
                 </table>
-                <div class="trait-action-buttons" style="display: flex; gap: 6px; margin-top: 8px;">
-                    <button class="trait-btn-add" style="padding: 4px 12px; background: var(--color-border-subtle); border: 1px solid var(--color-border-input); color: var(--color-text-strong); border-radius: 4px; cursor: pointer; font-size: 12px;">${tt('Add')}</button>
-                    <button class="trait-btn-edit" style="padding: 4px 12px; background: var(--color-border-subtle); border: 1px solid var(--color-border-input); color: var(--color-text-dim); border-radius: 4px; cursor: default; font-size: 12px;" disabled>${tt('Edit')}</button>
-                    <button class="trait-btn-copy" style="padding: 4px 12px; background: var(--color-border-subtle); border: 1px solid var(--color-border-input); color: var(--color-text-dim); border-radius: 4px; cursor: default; font-size: 12px;" disabled>${tt('Copy')}</button>
-                    <button class="trait-btn-paste" style="padding: 4px 12px; background: var(--color-border-subtle); border: 1px solid var(--color-border-input); color: var(--color-text-strong); border-radius: 4px; cursor: pointer; font-size: 12px;">${tt('Paste')}</button>
-                    <button class="trait-btn-delete" style="padding: 4px 12px; background: var(--color-border-subtle); border: 1px solid var(--color-border-input); color: var(--color-text-dim); border-radius: 4px; cursor: default; font-size: 12px;" disabled>${tt('Delete')}</button>
+                <div class="trait-action-buttons">
+                    <button class="trait-btn-add rr-btn-chip">${tt('Add')}</button>
+                    <button class="trait-btn-edit rr-btn-chip" disabled>${tt('Edit')}</button>
+                    <button class="trait-btn-copy rr-btn-chip" disabled>${tt('Copy')}</button>
+                    <button class="trait-btn-paste rr-btn-chip">${tt('Paste')}</button>
+                    <button class="trait-btn-delete rr-btn-chip" disabled>${tt('Delete')}</button>
                 </div>
             </div>
         `;
@@ -767,15 +796,6 @@ class DatabaseClassEditor {
         const btnPaste = section.querySelector('.trait-btn-paste');
         const btnDelete = section.querySelector('.trait-btn-delete');
 
-        [btnAdd, btnEdit, btnCopy, btnPaste, btnDelete].forEach(btn => {
-            btn.addEventListener('mouseenter', () => {
-                if (!btn.disabled) btn.style.background = 'var(--color-accent-tint-25)';
-            });
-            btn.addEventListener('mouseleave', () => {
-                if (!btn.disabled) btn.style.background = 'var(--color-border-subtle)';
-            });
-        });
-
         btnAdd.addEventListener('click', () => this.addTrait(entry));
         btnEdit.addEventListener('click', () => {
             const idx = this.getSelectedTraitIndex(table);
@@ -809,10 +829,7 @@ class DatabaseClassEditor {
         const hasSelection = table && table.querySelector('.trait-row.trait-selected');
 
         const setBtn = (btn, enabled) => {
-            if (!btn) return;
-            btn.disabled = !enabled;
-            btn.style.color = enabled ? 'var(--color-text-strong)' : 'var(--color-text-dim)';
-            btn.style.cursor = enabled ? 'pointer' : 'default';
+            if (btn) btn.disabled = !enabled;
         };
 
         setBtn(section.querySelector('.trait-btn-edit'), hasSelection);
@@ -1070,47 +1087,19 @@ class DatabaseClassEditor {
 
         // Create modal overlay
         const overlay = document.createElement('div');
-        overlay.className = 'modal-overlay';
-        overlay.style.cssText = `
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(0, 0, 0, 0.7);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 10000;
-        `;
+        overlay.className = 'rr-modal-overlay';
 
         // Create modal
         const modal = document.createElement('div');
-        modal.className = 'exp-curve-modal';
-        modal.style.cssText = `
-            background: var(--color-bg-surface);
-            border: 1px solid var(--color-border-subtle);
-            border-radius: 8px;
-            width: 600px;
-            max-height: 90vh;
-            display: flex;
-            flex-direction: column;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
-        `;
+        modal.className = 'rr-modal exp-curve-modal';
+        modal.style.cssText = 'width: 600px; max-width: 92vw;';
 
         // Header
         const header = document.createElement('div');
-        header.style.cssText = `
-            padding: 16px;
-            border-bottom: 1px solid var(--color-border-subtle);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            background: var(--color-bg-panel);
-        `;
+        header.className = 'rr-modal-header';
         header.innerHTML = `
-            <h3 style="margin: 0; color: var(--color-text-strong);">${tt('EXP Curve')}</h3>
-            <button class="close-btn" style="background: none; border: none; color: var(--color-text-muted); font-size: 24px; cursor: pointer; padding: 0; width: 30px; height: 30px;">&times;</button>
+            <div class="rr-modal-title">${tt('EXP Curve')}</div>
+            <button class="rr-modal-close close-btn" type="button">&times;</button>
         `;
 
         // Tab bar
@@ -1118,7 +1107,7 @@ class DatabaseClassEditor {
         tabBar.style.cssText = `
             display: flex;
             border-bottom: 1px solid var(--color-border-subtle);
-            background: #252525;
+            background: var(--color-bg-panel);
         `;
 
         const tabs = [
@@ -1190,16 +1179,10 @@ class DatabaseClassEditor {
 
         // Footer with buttons
         const footer = document.createElement('div');
-        footer.style.cssText = `
-            padding: 16px;
-            border-top: 1px solid var(--color-border-subtle);
-            display: flex;
-            justify-content: flex-end;
-            gap: 8px;
-        `;
+        footer.className = 'rr-modal-footer';
         footer.innerHTML = `
             <button class="cancel-btn rr-btn-secondary">${tt('Cancel')}</button>
-            <button class="ok-btn" style="padding: 8px 16px; background: var(--color-accent-bright); border: none; color: var(--color-bg-deep); border-radius: 4px; cursor: pointer; font-weight: bold;">${tt('OK')}</button>
+            <button class="ok-btn rr-button-primary">${tt('OK')}</button>
         `;
 
         const calculateTotalExp = (level, basis, extra, accelA, accelB) => {

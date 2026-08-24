@@ -586,23 +586,8 @@
 
         const okBtn = document.createElement('button');
         okBtn.textContent = tt('OK');
-        okBtn.style.cssText = `
-            padding: 8px 16px;
-            background-color: var(--color-accent);
-            color: var(--color-bg-deep);
-            border: 1px solid var(--color-accent);
-            border-radius: 4px;
-            cursor: pointer;
-            font-weight: bold;
-            transition: background-color 0.2s;
-        `;
+        okBtn.className = 'rr-button-primary';
         okBtn.onclick = confirm;
-        okBtn.onmouseenter = () => {
-            okBtn.style.backgroundColor = 'var(--color-accent-muted)';
-        };
-        okBtn.onmouseleave = () => {
-            okBtn.style.backgroundColor = 'var(--color-accent)';
-        };
 
         footer.appendChild(cancelBtn);
         footer.appendChild(okBtn);

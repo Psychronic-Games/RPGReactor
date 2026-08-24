@@ -94,8 +94,8 @@ test('web distribution uses the bundled Demo, staged runtime, and current artifa
             'faces for defined actors survive the trim');
         assert.ok(!entries.some(line => line === 'project/img/battlehud/Face_286.png'),
             'faces for undefined actors are trimmed');
-        assert.ok(entries.some(line => line.startsWith('project/3d/free-buick-riviera-car/')),
-            'models the maps place survive the trim');
+        assert.ok(entries.some(line => line.startsWith('project/3d/Vehicles/free-buick-riviera-car/')),
+            'models the maps place survive the trim, inside their folders');
         assert.ok(!entries.some(line => line.startsWith('project/3d/sas blue/')),
             'models no map places are trimmed');
         const bundleSource = execFileSync('unzip', ['-p', archive, 'web/editor.bundle.js'],

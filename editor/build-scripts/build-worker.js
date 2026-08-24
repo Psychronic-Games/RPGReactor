@@ -448,7 +448,7 @@ async function installProprietaryCodec(platform, runtimeRoot, runtimeVersion, pr
     logInfo(`Runtime source: ${runtimeSource}`);
     logInfo(`Third-party proprietary codec: ${includeProprietaryCodecs ? 'enabled' : 'disabled'}`);
     logInfo(`NW.js runtime locales: ${runtimeLocales ? runtimeLocales.join(', ') : 'all'}`);
-    logInfo(`Asset optimization: PNG ${assetOptimization.png ? 'enabled' : 'disabled'}, OGG ${assetOptimization.ogg ? `quality ${assetOptimization.oggQuality}` : 'disabled'}`);
+    logInfo(`Asset optimization: PNG ${assetOptimization.png ? 'enabled' : 'disabled'}, audio ${assetOptimization.audio ? `quality ${assetOptimization.audioQuality}` : 'disabled'}`);
     logInfo(`Linux AppImage: ${createLinuxAppImage ? 'enabled' : 'disabled'}`);
     logInfo('');
 
@@ -469,7 +469,7 @@ async function installProprietaryCodec(platform, runtimeRoot, runtimeVersion, pr
     validateProjectRuntime(projectPath);
     copyDirFiltered(projectPath, stagingDir, '');
     normalizeStagedPackage(stagingDir, gameTitle);
-    if (assetOptimization.png || assetOptimization.ogg) {
+    if (assetOptimization.png || assetOptimization.audio) {
         logInfo('Optimizing staged assets...');
         progress(6, 'Optimizing staged assets...');
         const summary = await assetOptimizer.optimizeStagedAssets(stagingDir, assetOptimization, {
@@ -489,7 +489,8 @@ async function installProprietaryCodec(platform, runtimeRoot, runtimeVersion, pr
             },
         });
         const saved = Math.max(0, summary.before - summary.after);
-        logGood(`Asset optimization complete: ${summary.png} PNG, ${summary.ogg} OGG updated; ${(saved / 1024 / 1024).toFixed(2)} MiB saved.`);
+        const convertedNote = summary.converted ? ` (${summary.converted} converted to OGG)` : '';
+        logGood(`Asset optimization complete: ${summary.png} PNG, ${summary.audio} audio updated${convertedNote}; ${(saved / 1024 / 1024).toFixed(2)} MiB saved.`);
     }
     logGood('Staging complete.');
     progress(10, 'Staging complete');

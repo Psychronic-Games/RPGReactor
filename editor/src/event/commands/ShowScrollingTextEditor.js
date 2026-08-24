@@ -60,16 +60,8 @@ class ShowScrollingTextEditor {
         `;
 
         const container = document.createElement('div');
-        container.className = 'show-scrolling-text-container';
-        container.style.cssText = `
-            background-color: var(--color-bg-surface);
-            border: 1px solid var(--color-border);
-            border-radius: 6px;
-            width: 450px;
-            display: flex;
-            flex-direction: column;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
-        `;
+        container.className = 'show-scrolling-text-container rr-modal';
+        container.style.cssText = `width: min(450px, calc(100vw - 24px)); max-height: 92vh;`;
 
         this.modal.appendChild(container);
 
@@ -92,19 +84,10 @@ class ShowScrollingTextEditor {
 
         // Header
         const header = document.createElement('div');
-        header.style.cssText = `
-            padding: 12px 16px;
-            background-color: var(--color-bg-panel);
-            border-bottom: 1px solid var(--color-border);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            border-top-left-radius: 6px;
-            border-top-right-radius: 6px;
-        `;
+        header.className = 'rr-modal-header';
         header.innerHTML = `
-            <h3 style="margin: 0; color: var(--color-text-strong); font-size: 16px;">${tt('Show Scrolling Text')}</h3>
-            <button class="close-btn" style="background: none; border: none; color: var(--color-text-strong); font-size: 20px; cursor: pointer; padding: 0; width: 24px; height: 24px;">\u00d7</button>
+            <div class="rr-modal-title">${tt('Show Scrolling Text')}</div>
+            <button class="rr-modal-close close-btn" type="button">\u00d7</button>
         `;
         container.appendChild(header);
 
@@ -117,6 +100,8 @@ class ShowScrollingTextEditor {
             display: flex;
             flex-direction: column;
             gap: 12px;
+            overflow-y: auto;
+            min-height: 0;
         `;
 
         // Speed row
@@ -199,14 +184,7 @@ class ShowScrollingTextEditor {
 
         // Footer
         const footer = document.createElement('div');
-        footer.style.cssText = `
-            padding: 12px 16px;
-            border-top: 1px solid var(--color-border);
-            background-color: var(--color-bg-panel);
-            display: flex;
-            justify-content: flex-end;
-            gap: 8px;
-        `;
+        footer.className = 'rr-modal-footer';
 
         const cancelBtn = document.createElement('button');
         cancelBtn.textContent = tt('Cancel');
@@ -215,16 +193,7 @@ class ShowScrollingTextEditor {
 
         const okBtn = document.createElement('button');
         okBtn.textContent = tt('OK');
-        okBtn.style.cssText = `
-            padding: 6px 20px;
-            background-color: var(--color-accent);
-            color: var(--color-bg-deep);
-            border: none;
-            border-radius: 3px;
-            cursor: pointer;
-            font-size: 12px;
-            font-weight: bold;
-        `;
+        okBtn.className = 'rr-button-primary';
         okBtn.addEventListener('click', () => this.save());
 
         footer.appendChild(cancelBtn);

@@ -17,6 +17,38 @@ class DatabaseTraitEditor {
     }
 
     /**
+     * One row of a trait tab. Every row shares the same grid columns
+     * (radio | label | control | prefix | value | unit) so the tabs stay
+     * symmetrical whatever mix of selects and numbers a row carries.
+     * A row with no dropdown puts its number (and unit) where the dropdown
+     * would sit, so the control column never yawns empty.
+     */
+    _rowHTML(trait, { code, label, control = '', prefix = '', value = '', unit = '' }) {
+        if (!control && value) {
+            control = `<span class="rr-trait-lone-value">${value}<span class="rr-trait-unit">${unit}</span></span>`;
+            value = '';
+            unit = '';
+        }
+        return `
+            <div class="trait-option rr-trait-row">
+                <input type="radio" name="trait-type" value="${code}" ${trait.code === code ? 'checked' : ''}>
+                <span class="rr-trait-label">${label}</span>
+                <span class="rr-trait-control">${control}</span>
+                <span class="rr-trait-prefix">${prefix}</span>
+                <span class="rr-trait-value">${value}</span>
+                <span class="rr-trait-unit">${unit}</span>
+            </div>`;
+    }
+
+    _selectHTML(cssClass, code, optionsHTML) {
+        return `<select class="${cssClass} database-field-value" data-code="${code}">${optionsHTML}</select>`;
+    }
+
+    _numberHTML(cssClass, code, value, extra = '') {
+        return `<input type="number" class="${cssClass} database-field-value" data-code="${code}" value="${value}" ${extra}>`;
+    }
+
+    /**
      * Show trait editor modal
      * @param {Object} entry - The database entry (class, weapon, armor, state, or actor)
      * @param {Number} traitIndex - Index of trait to edit (-1 for new trait)
@@ -32,47 +64,19 @@ class DatabaseTraitEditor {
 
         // Create modal overlay
         const overlay = document.createElement('div');
-        overlay.className = 'modal-overlay';
-        overlay.style.cssText = `
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(0, 0, 0, 0.7);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 10000;
-        `;
+        overlay.className = 'rr-modal-overlay';
 
         // Create modal
         const modal = document.createElement('div');
-        modal.className = 'trait-editor-modal';
-        modal.style.cssText = `
-            background: var(--color-bg-surface);
-            border: 1px solid var(--color-border-subtle);
-            border-radius: 8px;
-            width: 600px;
-            max-height: 80vh;
-            display: flex;
-            flex-direction: column;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
-        `;
+        modal.className = 'rr-modal trait-editor-modal';
+        modal.style.cssText = 'width: 620px; max-width: 92vw;';
 
         // Header
         const header = document.createElement('div');
-        header.style.cssText = `
-            padding: 16px;
-            border-bottom: 1px solid var(--color-border-subtle);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            background: var(--color-bg-panel);
-        `;
+        header.className = 'rr-modal-header';
         header.innerHTML = `
-            <h3 style="margin: 0; color: var(--color-text-strong);">${this._t('Edit Trait')}</h3>
-            <button class="close-btn" style="background: none; border: none; color: var(--color-text-muted); font-size: 24px; cursor: pointer; padding: 0; width: 30px; height: 30px;">&times;</button>
+            <div class="rr-modal-title">${this._t(traitIndex >= 0 ? 'Edit Trait' : 'Add Trait')}</div>
+            <button class="rr-modal-close close-btn" type="button">&times;</button>
         `;
 
         // Tab bar
@@ -80,7 +84,7 @@ class DatabaseTraitEditor {
         tabBar.style.cssText = `
             display: flex;
             border-bottom: 1px solid var(--color-border-subtle);
-            background: #252525;
+            background: var(--color-bg-panel);
         `;
 
         const tabs = [
@@ -123,24 +127,15 @@ class DatabaseTraitEditor {
 
         // Tab content container
         const tabContent = document.createElement('div');
-        tabContent.style.cssText = `
-            flex: 1;
-            padding: 20px;
-            overflow-y: auto;
-        `;
+        tabContent.className = 'rr-modal-body';
+        tabContent.style.cssText = 'flex: 1; min-height: 0;';
 
         // Footer with buttons
         const footer = document.createElement('div');
-        footer.style.cssText = `
-            padding: 16px;
-            border-top: 1px solid var(--color-border-subtle);
-            display: flex;
-            justify-content: flex-end;
-            gap: 8px;
-        `;
+        footer.className = 'rr-modal-footer';
         footer.innerHTML = `
             <button class="cancel-btn rr-btn-secondary">${this._t('Cancel')}</button>
-            <button class="ok-btn" style="padding: 8px 16px; background: var(--color-accent-bright); border: none; color: var(--color-bg-deep); border-radius: 4px; cursor: pointer; font-weight: bold;">${this._t('OK')}</button>
+            <button class="ok-btn rr-button-primary">${this._t('OK')}</button>
         `;
 
         // Assemble modal
@@ -164,7 +159,6 @@ class DatabaseTraitEditor {
         });
 
         // Load initial tab content
-        const activeTabBtn = tabBar.querySelector(`[data-tab="${activeTab}"]`);
         this.loadTabContent(activeTab, tabContent, trait);
 
         document.body.appendChild(overlay);
@@ -211,321 +205,218 @@ class DatabaseTraitEditor {
         if (window.I18n) window.I18n.applyText(container);
     }
 
+    _paramOptions(code, trait) {
+        return ['Max HP', 'Max MP', 'Attack', 'Defense', 'M.Attack', 'M.Defense', 'Agility', 'Luck']
+            .map(param => this._t(param))
+            .map((param, idx) => `<option value="${idx}" ${trait.code === code && trait.dataId === idx ? 'selected' : ''}>${param}</option>`)
+            .join('');
+    }
+
+    _stateOptions(code, trait) {
+        const states = this.databaseManager.getStates() || [];
+        return states.filter(s => s && s.id > 0).map(state =>
+            `<option value="${state.id}" ${trait.code === code && trait.dataId === state.id ? 'selected' : ''}>${rrEscapeHtml(state.name)}</option>`
+        ).join('');
+    }
+
+    _skillOptions(code, trait) {
+        const skills = this.databaseManager.getSkills() || [];
+        return skills.filter(s => s && s.id > 0).map(skill =>
+            `<option value="${skill.id}" ${trait.code === code && trait.dataId === skill.id ? 'selected' : ''}>${rrEscapeHtml(skill.name)}</option>`
+        ).join('');
+    }
+
     createRatesTab(container, trait) {
         const elements = this.databaseManager.getSystem()?.elements || [];
-        const states = this.databaseManager.getStates() || [];
+        const elementOptions = code => (elements || []).filter((e, i) => i > 0 && e).map((elem, idx) =>
+            `<option value="${idx + 1}" ${trait.code === code && trait.dataId === idx + 1 ? 'selected' : ''}>${rrEscapeHtml(elem)}</option>`
+        ).join('');
 
-        container.innerHTML = `
-            <div class="trait-option" style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
-                <input type="radio" name="trait-type" value="11" ${trait.code === 11 ? 'checked' : ''}>
-                <span style="color: var(--color-text-strong); min-width: 100px;">${this._t('Element Rate')}</span>
-                <select class="element-select" data-code="11" style="flex: 1; padding: 6px; background: var(--color-bg-button); border: 1px solid var(--color-bg-button-hover); color: var(--color-text-strong); border-radius: 4px;">
-                    ${(elements || []).filter((e, i) => i > 0 && e).map((elem, idx) =>
-                        `<option value="${idx + 1}" ${trait.code === 11 && trait.dataId === idx + 1 ? 'selected' : ''}>${rrEscapeHtml(elem)}</option>`
-                    ).join('')}
-                </select>
-                <input type="number" class="rate-value" data-code="11" value="${trait.code === 11 ? Math.round(trait.value * 100) : 100}"
-                       style="width: 80px; padding: 6px; background: var(--color-bg-button); border: 1px solid var(--color-bg-button-hover); color: var(--color-text-strong); border-radius: 4px;">
-                <span style="color: var(--color-text-muted);">%</span>
-            </div>
-
-            <div class="trait-option" style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
-                <input type="radio" name="trait-type" value="12" ${trait.code === 12 ? 'checked' : ''}>
-                <span style="color: var(--color-text-strong); min-width: 100px;">${this._t('Debuff Rate')}</span>
-                <select class="debuff-select" data-code="12" style="flex: 1; padding: 6px; background: var(--color-bg-button); border: 1px solid var(--color-bg-button-hover); color: var(--color-text-strong); border-radius: 4px;">
-                    ${['Max HP', 'Max MP', 'Attack', 'Defense', 'M.Attack', 'M.Defense', 'Agility', 'Luck'].map(param => this._t(param)).map((param, idx) =>
-                        `<option value="${idx}" ${trait.code === 12 && trait.dataId === idx ? 'selected' : ''}>${param}</option>`
-                    ).join('')}
-                </select>
-                <input type="number" class="rate-value" data-code="12" value="${trait.code === 12 ? Math.round(trait.value * 100) : 100}"
-                       style="width: 80px; padding: 6px; background: var(--color-bg-button); border: 1px solid var(--color-bg-button-hover); color: var(--color-text-strong); border-radius: 4px;">
-                <span style="color: var(--color-text-muted);">%</span>
-            </div>
-
-            <div class="trait-option" style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
-                <input type="radio" name="trait-type" value="13" ${trait.code === 13 ? 'checked' : ''}>
-                <span style="color: var(--color-text-strong); min-width: 100px;">${this._t('State Rate')}</span>
-                <select class="state-select" data-code="13" style="flex: 1; padding: 6px; background: var(--color-bg-button); border: 1px solid var(--color-bg-button-hover); color: var(--color-text-strong); border-radius: 4px;">
-                    ${(states || []).filter(s => s && s.id > 0).map(state =>
-                        `<option value="${state.id}" ${trait.code === 13 && trait.dataId === state.id ? 'selected' : ''}>${rrEscapeHtml(state.name)}</option>`
-                    ).join('')}
-                </select>
-                <input type="number" class="rate-value" data-code="13" value="${trait.code === 13 ? Math.round(trait.value * 100) : 100}"
-                       style="width: 80px; padding: 6px; background: var(--color-bg-button); border: 1px solid var(--color-bg-button-hover); color: var(--color-text-strong); border-radius: 4px;">
-                <span style="color: var(--color-text-muted);">%</span>
-            </div>
-
-            <div class="trait-option" style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
-                <input type="radio" name="trait-type" value="14" ${trait.code === 14 ? 'checked' : ''}>
-                <span style="color: var(--color-text-strong); min-width: 100px;">${this._t('State Resist')}</span>
-                <select class="state-select" data-code="14" style="flex: 1; padding: 6px; background: var(--color-bg-button); border: 1px solid var(--color-bg-button-hover); color: var(--color-text-strong); border-radius: 4px;">
-                    ${(states || []).filter(s => s && s.id > 0).map(state =>
-                        `<option value="${state.id}" ${trait.code === 14 && trait.dataId === state.id ? 'selected' : ''}>${rrEscapeHtml(state.name)}</option>`
-                    ).join('')}
-                </select>
-            </div>
-        `;
+        container.innerHTML = [
+            this._rowHTML(trait, {
+                code: 11, label: this._t('Element Rate'),
+                control: this._selectHTML('element-select', 11, elementOptions(11)),
+                value: this._numberHTML('rate-value', 11, trait.code === 11 ? Math.round(trait.value * 100) : 100),
+                unit: '%'
+            }),
+            this._rowHTML(trait, {
+                code: 12, label: this._t('Debuff Rate'),
+                control: this._selectHTML('debuff-select', 12, this._paramOptions(12, trait)),
+                value: this._numberHTML('rate-value', 12, trait.code === 12 ? Math.round(trait.value * 100) : 100),
+                unit: '%'
+            }),
+            this._rowHTML(trait, {
+                code: 13, label: this._t('State Rate'),
+                control: this._selectHTML('state-select', 13, this._stateOptions(13, trait)),
+                value: this._numberHTML('rate-value', 13, trait.code === 13 ? Math.round(trait.value * 100) : 100),
+                unit: '%'
+            }),
+            this._rowHTML(trait, {
+                code: 14, label: this._t('State Resist'),
+                control: this._selectHTML('state-select', 14, this._stateOptions(14, trait))
+            })
+        ].join('');
 
         this.setupRadioInputs(container, trait);
     }
 
     createParamTab(container, trait) {
-        container.innerHTML = `
-            <div class="trait-option" style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
-                <input type="radio" name="trait-type" value="21" ${trait.code === 21 ? 'checked' : ''}>
-                <span style="color: var(--color-text-strong); min-width: 100px;">${this._t('Parameter')}</span>
-                <select class="param-select" data-code="21" style="flex: 1; padding: 6px; background: var(--color-bg-button); border: 1px solid var(--color-bg-button-hover); color: var(--color-text-strong); border-radius: 4px;">
-                    ${['Max HP', 'Max MP', 'Attack', 'Defense', 'M.Attack', 'M.Defense', 'Agility', 'Luck'].map(param => this._t(param)).map((param, idx) =>
-                        `<option value="${idx}" ${trait.code === 21 && trait.dataId === idx ? 'selected' : ''}>${param}</option>`
-                    ).join('')}
-                </select>
-                <input type="number" class="rate-value" data-code="21" value="${trait.code === 21 ? Math.round(trait.value * 100) : 100}"
-                       style="width: 80px; padding: 6px; background: var(--color-bg-button); border: 1px solid var(--color-bg-button-hover); color: var(--color-text-strong); border-radius: 4px;">
-                <span style="color: var(--color-text-muted);">%</span>
-            </div>
+        const exParams = ['Hit Rate', 'Evasion Rate', 'Critical Rate', 'Critical Evasion', 'Magic Evasion', 'Magic Reflection', 'Counter Attack', 'HP Regeneration', 'MP Regeneration', 'TP Regeneration']
+            .map(param => this._t(param))
+            .map((param, idx) => `<option value="${idx}" ${trait.code === 22 && trait.dataId === idx ? 'selected' : ''}>${param}</option>`)
+            .join('');
+        const spParams = ['Target Rate', 'Guard Effect', 'Recovery Effect', 'Pharmacology', 'MP Cost Rate', 'TP Charge Rate', 'Physical Damage', 'Magical Damage', 'Floor Damage', 'Experience']
+            .map(param => this._t(param))
+            .map((param, idx) => `<option value="${idx}" ${trait.code === 23 && trait.dataId === idx ? 'selected' : ''}>${param}</option>`)
+            .join('');
 
-            <div class="trait-option" style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
-                <input type="radio" name="trait-type" value="22" ${trait.code === 22 ? 'checked' : ''}>
-                <span style="color: var(--color-text-strong); min-width: 100px;">${this._t('Ex-Parameter')}</span>
-                <select class="exparam-select" data-code="22" style="flex: 1; padding: 6px; background: var(--color-bg-button); border: 1px solid var(--color-bg-button-hover); color: var(--color-text-strong); border-radius: 4px;">
-                    ${['Hit Rate', 'Evasion Rate', 'Critical Rate', 'Critical Evasion', 'Magic Evasion', 'Magic Reflection', 'Counter Attack', 'HP Regeneration', 'MP Regeneration', 'TP Regeneration'].map(param => this._t(param)).map((param, idx) =>
-                        `<option value="${idx}" ${trait.code === 22 && trait.dataId === idx ? 'selected' : ''}>${param}</option>`
-                    ).join('')}
-                </select>
-                <span style="color: var(--color-text-muted);">+</span>
-                <input type="number" class="rate-value" data-code="22" value="${trait.code === 22 ? Math.round(trait.value * 100) : 0}" step="0.01"
-                       style="width: 80px; padding: 6px; background: var(--color-bg-button); border: 1px solid var(--color-bg-button-hover); color: var(--color-text-strong); border-radius: 4px;">
-                <span style="color: var(--color-text-muted);">%</span>
-            </div>
-
-            <div class="trait-option" style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
-                <input type="radio" name="trait-type" value="23" ${trait.code === 23 ? 'checked' : ''}>
-                <span style="color: var(--color-text-strong); min-width: 100px;">${this._t('Sp-Parameter')}</span>
-                <select class="spparam-select" data-code="23" style="flex: 1; padding: 6px; background: var(--color-bg-button); border: 1px solid var(--color-bg-button-hover); color: var(--color-text-strong); border-radius: 4px;">
-                    ${['Target Rate', 'Guard Effect', 'Recovery Effect', 'Pharmacology', 'MP Cost Rate', 'TP Charge Rate', 'Physical Damage', 'Magical Damage', 'Floor Damage', 'Experience'].map(param => this._t(param)).map((param, idx) =>
-                        `<option value="${idx}" ${trait.code === 23 && trait.dataId === idx ? 'selected' : ''}>${param}</option>`
-                    ).join('')}
-                </select>
-                <input type="number" class="rate-value" data-code="23" value="${trait.code === 23 ? Math.round(trait.value * 100) : 100}"
-                       style="width: 80px; padding: 6px; background: var(--color-bg-button); border: 1px solid var(--color-bg-button-hover); color: var(--color-text-strong); border-radius: 4px;">
-                <span style="color: var(--color-text-muted);">%</span>
-            </div>
-        `;
+        container.innerHTML = [
+            this._rowHTML(trait, {
+                code: 21, label: this._t('Parameter'),
+                control: this._selectHTML('param-select', 21, this._paramOptions(21, trait)),
+                value: this._numberHTML('rate-value', 21, trait.code === 21 ? Math.round(trait.value * 100) : 100),
+                unit: '%'
+            }),
+            this._rowHTML(trait, {
+                code: 22, label: this._t('Ex-Parameter'),
+                control: this._selectHTML('exparam-select', 22, exParams),
+                prefix: '+',
+                value: this._numberHTML('rate-value', 22, trait.code === 22 ? Math.round(trait.value * 100) : 0, 'step="0.01"'),
+                unit: '%'
+            }),
+            this._rowHTML(trait, {
+                code: 23, label: this._t('Sp-Parameter'),
+                control: this._selectHTML('spparam-select', 23, spParams),
+                value: this._numberHTML('rate-value', 23, trait.code === 23 ? Math.round(trait.value * 100) : 100),
+                unit: '%'
+            })
+        ].join('');
 
         this.setupRadioInputs(container, trait);
     }
 
     createAttackTab(container, trait) {
         const elements = this.databaseManager.getSystem()?.elements || [];
-        const states = this.databaseManager.getStates() || [];
-        const skills = this.databaseManager.getSkills() || [];
+        const attackElementOptions = (elements || []).map((elem, idx) =>
+            elem ? `<option value="${idx}" ${trait.code === 31 && trait.dataId === idx ? 'selected' : ''}>${rrEscapeHtml(elem)}</option>` : ''
+        ).join('');
 
-        container.innerHTML = `
-            <div class="trait-option" style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
-                <input type="radio" name="trait-type" value="31" ${trait.code === 31 ? 'checked' : ''}>
-                <span style="color: var(--color-text-strong); min-width: 110px;">${this._t('Attack Element')}</span>
-                <select class="element-select" data-code="31" style="flex: 1; padding: 6px; background: var(--color-bg-button); border: 1px solid var(--color-bg-button-hover); color: var(--color-text-strong); border-radius: 4px;">
-                    ${(elements || []).map((elem, idx) =>
-                        elem ? `<option value="${idx}" ${trait.code === 31 && trait.dataId === idx ? 'selected' : ''}>${rrEscapeHtml(elem)}</option>` : ''
-                    ).join('')}
-                </select>
-            </div>
-
-            <div class="trait-option" style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
-                <input type="radio" name="trait-type" value="32" ${trait.code === 32 ? 'checked' : ''}>
-                <span style="color: var(--color-text-strong); min-width: 110px;">${this._t('Attack State')}</span>
-                <select class="state-select" data-code="32" style="flex: 1; padding: 6px; background: var(--color-bg-button); border: 1px solid var(--color-bg-button-hover); color: var(--color-text-strong); border-radius: 4px;">
-                    ${(states || []).filter(s => s && s.id > 0).map(state =>
-                        `<option value="${state.id}" ${trait.code === 32 && trait.dataId === state.id ? 'selected' : ''}>${rrEscapeHtml(state.name)}</option>`
-                    ).join('')}
-                </select>
-                <span style="color: var(--color-text-muted);">+</span>
-                <input type="number" class="rate-value" data-code="32" value="${trait.code === 32 ? Math.round(trait.value * 100) : 100}"
-                       style="width: 80px; padding: 6px; background: var(--color-bg-button); border: 1px solid var(--color-bg-button-hover); color: var(--color-text-strong); border-radius: 4px;">
-                <span style="color: var(--color-text-muted);">%</span>
-            </div>
-
-            <div class="trait-option" style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
-                <input type="radio" name="trait-type" value="33" ${trait.code === 33 ? 'checked' : ''}>
-                <span style="color: var(--color-text-strong); min-width: 110px;">${this._t('Attack Speed')}</span>
-                <input type="number" class="speed-value" data-code="33" value="${trait.code === 33 ? trait.value : 0}" min="0" max="1000"
-                       style="width: 100px; padding: 6px; background: var(--color-bg-button); border: 1px solid var(--color-bg-button-hover); color: var(--color-text-strong); border-radius: 4px;">
-            </div>
-
-            <div class="trait-option" style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
-                <input type="radio" name="trait-type" value="34" ${trait.code === 34 ? 'checked' : ''}>
-                <span style="color: var(--color-text-strong); min-width: 110px;">${this._t('Attack Times+')}</span>
-                <input type="number" class="times-value" data-code="34" value="${trait.code === 34 ? trait.value : 0}" min="0" max="${globalThis.RR_LIMITS?.ACTION_REPEATS || 100}"
-                       style="width: 80px; padding: 6px; background: var(--color-bg-button); border: 1px solid var(--color-bg-button-hover); color: var(--color-text-strong); border-radius: 4px;">
-            </div>
-
-            <div class="trait-option" style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
-                <input type="radio" name="trait-type" value="35" ${trait.code === 35 ? 'checked' : ''}>
-                <span style="color: var(--color-text-strong); min-width: 110px;">${this._t('Attack Skill')}</span>
-                <select class="skill-select" data-code="35" style="flex: 1; padding: 6px; background: var(--color-bg-button); border: 1px solid var(--color-bg-button-hover); color: var(--color-text-strong); border-radius: 4px;">
-                    ${(skills || []).filter(s => s && s.id > 0).map(skill =>
-                        `<option value="${skill.id}" ${trait.code === 35 && trait.dataId === skill.id ? 'selected' : ''}>${rrEscapeHtml(skill.name)}</option>`
-                    ).join('')}
-                </select>
-            </div>
-        `;
+        container.innerHTML = [
+            this._rowHTML(trait, {
+                code: 31, label: this._t('Attack Element'),
+                control: this._selectHTML('element-select', 31, attackElementOptions)
+            }),
+            this._rowHTML(trait, {
+                code: 32, label: this._t('Attack State'),
+                control: this._selectHTML('state-select', 32, this._stateOptions(32, trait)),
+                prefix: '+',
+                value: this._numberHTML('rate-value', 32, trait.code === 32 ? Math.round(trait.value * 100) : 100),
+                unit: '%'
+            }),
+            this._rowHTML(trait, {
+                code: 33, label: this._t('Attack Speed'),
+                value: this._numberHTML('speed-value', 33, trait.code === 33 ? trait.value : 0, 'min="0" max="1000"')
+            }),
+            this._rowHTML(trait, {
+                code: 34, label: this._t('Attack Times+'),
+                value: this._numberHTML('times-value', 34, trait.code === 34 ? trait.value : 0, `min="0" max="${globalThis.RR_LIMITS?.ACTION_REPEATS || 100}"`)
+            }),
+            this._rowHTML(trait, {
+                code: 35, label: this._t('Attack Skill'),
+                control: this._selectHTML('skill-select', 35, this._skillOptions(35, trait))
+            })
+        ].join('');
 
         this.setupRadioInputs(container, trait);
     }
 
     createSkillTab(container, trait) {
         const skillTypes = this.databaseManager.getSystem()?.skillTypes || [];
-        const skills = this.databaseManager.getSkills() || [];
+        const skillTypeOptions = code => (skillTypes || []).filter((st, i) => i > 0 && st).map((type, idx) =>
+            `<option value="${idx + 1}" ${trait.code === code && trait.dataId === idx + 1 ? 'selected' : ''}>${rrEscapeHtml(type)}</option>`
+        ).join('');
 
-        container.innerHTML = `
-            <div class="trait-option" style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
-                <input type="radio" name="trait-type" value="41" ${trait.code === 41 ? 'checked' : ''}>
-                <span style="color: var(--color-text-strong); min-width: 110px;">${this._t('Add Skill Type')}</span>
-                <select class="skilltype-select" data-code="41" style="flex: 1; padding: 6px; background: var(--color-bg-button); border: 1px solid var(--color-bg-button-hover); color: var(--color-text-strong); border-radius: 4px;">
-                    ${(skillTypes || []).filter((st, i) => i > 0 && st).map((type, idx) =>
-                        `<option value="${idx + 1}" ${trait.code === 41 && trait.dataId === idx + 1 ? 'selected' : ''}>${rrEscapeHtml(type)}</option>`
-                    ).join('')}
-                </select>
-            </div>
-
-            <div class="trait-option" style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
-                <input type="radio" name="trait-type" value="42" ${trait.code === 42 ? 'checked' : ''}>
-                <span style="color: var(--color-text-strong); min-width: 110px;">${this._t('Seal Skill Type')}</span>
-                <select class="skilltype-select" data-code="42" style="flex: 1; padding: 6px; background: var(--color-bg-button); border: 1px solid var(--color-bg-button-hover); color: var(--color-text-strong); border-radius: 4px;">
-                    ${(skillTypes || []).filter((st, i) => i > 0 && st).map((type, idx) =>
-                        `<option value="${idx + 1}" ${trait.code === 42 && trait.dataId === idx + 1 ? 'selected' : ''}>${rrEscapeHtml(type)}</option>`
-                    ).join('')}
-                </select>
-            </div>
-
-            <div class="trait-option" style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
-                <input type="radio" name="trait-type" value="43" ${trait.code === 43 ? 'checked' : ''}>
-                <span style="color: var(--color-text-strong); min-width: 110px;">${this._t('Add Skill')}</span>
-                <select class="skill-select" data-code="43" style="flex: 1; padding: 6px; background: var(--color-bg-button); border: 1px solid var(--color-bg-button-hover); color: var(--color-text-strong); border-radius: 4px;">
-                    ${(skills || []).filter(s => s && s.id > 0).map(skill =>
-                        `<option value="${skill.id}" ${trait.code === 43 && trait.dataId === skill.id ? 'selected' : ''}>${rrEscapeHtml(skill.name)}</option>`
-                    ).join('')}
-                </select>
-            </div>
-
-            <div class="trait-option" style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
-                <input type="radio" name="trait-type" value="44" ${trait.code === 44 ? 'checked' : ''}>
-                <span style="color: var(--color-text-strong); min-width: 110px;">${this._t('Seal Skill')}</span>
-                <select class="skill-select" data-code="44" style="flex: 1; padding: 6px; background: var(--color-bg-button); border: 1px solid var(--color-bg-button-hover); color: var(--color-text-strong); border-radius: 4px;">
-                    ${(skills || []).filter(s => s && s.id > 0).map(skill =>
-                        `<option value="${skill.id}" ${trait.code === 44 && trait.dataId === skill.id ? 'selected' : ''}>${rrEscapeHtml(skill.name)}</option>`
-                    ).join('')}
-                </select>
-            </div>
-        `;
+        container.innerHTML = [
+            this._rowHTML(trait, {
+                code: 41, label: this._t('Add Skill Type'),
+                control: this._selectHTML('skilltype-select', 41, skillTypeOptions(41))
+            }),
+            this._rowHTML(trait, {
+                code: 42, label: this._t('Seal Skill Type'),
+                control: this._selectHTML('skilltype-select', 42, skillTypeOptions(42))
+            }),
+            this._rowHTML(trait, {
+                code: 43, label: this._t('Add Skill'),
+                control: this._selectHTML('skill-select', 43, this._skillOptions(43, trait))
+            }),
+            this._rowHTML(trait, {
+                code: 44, label: this._t('Seal Skill'),
+                control: this._selectHTML('skill-select', 44, this._skillOptions(44, trait))
+            })
+        ].join('');
 
         this.setupRadioInputs(container, trait);
     }
 
     createEquipTab(container, trait) {
-        const weaponTypes = this.databaseManager.getSystem().weaponTypes;
-        const armorTypes = this.databaseManager.getSystem().armorTypes;
-        const equipTypes = this.databaseManager.getSystem().equipTypes;
+        const system = this.databaseManager.getSystem();
+        const typeOptions = (types, code) => types.map((type, id) => ({ type, id })).filter(entry => entry.id > 0 && entry.type).map(entry =>
+            `<option value="${entry.id}" ${trait.code === code && trait.dataId === entry.id ? 'selected' : ''}>${rrEscapeHtml(entry.type)}</option>`
+        ).join('');
+        const fixedOptions = (pairs, code) => pairs.map(([value, label]) =>
+            `<option value="${value}" ${trait.code === code && trait.dataId === value ? 'selected' : ''}>${this._t(label)}</option>`
+        ).join('');
 
-        container.innerHTML = `
-            <div class="trait-option" style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
-                <input type="radio" name="trait-type" value="51" ${trait.code === 51 ? 'checked' : ''}>
-                <span style="color: var(--color-text-strong); min-width: 100px;">${this._t('Equip Weapon')}</span>
-                <select class="weapontype-select" data-code="51" style="flex: 1; padding: 6px; background: var(--color-bg-button); border: 1px solid var(--color-bg-button-hover); color: var(--color-text-strong); border-radius: 4px;">
-                    ${weaponTypes.map((type, id) => ({ type, id })).filter(entry => entry.id > 0 && entry.type).map(entry =>
-                        `<option value="${entry.id}" ${trait.code === 51 && trait.dataId === entry.id ? 'selected' : ''}>${rrEscapeHtml(entry.type)}</option>`
-                    ).join('')}
-                </select>
-            </div>
-
-            <div class="trait-option" style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
-                <input type="radio" name="trait-type" value="52" ${trait.code === 52 ? 'checked' : ''}>
-                <span style="color: var(--color-text-strong); min-width: 100px;">${this._t('Equip Armor')}</span>
-                <select class="armortype-select" data-code="52" style="flex: 1; padding: 6px; background: var(--color-bg-button); border: 1px solid var(--color-bg-button-hover); color: var(--color-text-strong); border-radius: 4px;">
-                    ${armorTypes.map((type, id) => ({ type, id })).filter(entry => entry.id > 0 && entry.type).map(entry =>
-                        `<option value="${entry.id}" ${trait.code === 52 && trait.dataId === entry.id ? 'selected' : ''}>${rrEscapeHtml(entry.type)}</option>`
-                    ).join('')}
-                </select>
-            </div>
-
-            <div class="trait-option" style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
-                <input type="radio" name="trait-type" value="53" ${trait.code === 53 ? 'checked' : ''}>
-                <span style="color: var(--color-text-strong); min-width: 100px;">${this._t('Lock Equip')}</span>
-                <select class="equiptype-select" data-code="53" style="flex: 1; padding: 6px; background: var(--color-bg-button); border: 1px solid var(--color-bg-button-hover); color: var(--color-text-strong); border-radius: 4px;">
-                    ${equipTypes.map((type, id) => ({ type, id })).filter(entry => entry.id > 0 && entry.type).map(entry =>
-                        `<option value="${entry.id}" ${trait.code === 53 && trait.dataId === entry.id ? 'selected' : ''}>${rrEscapeHtml(entry.type)}</option>`
-                    ).join('')}
-                </select>
-            </div>
-
-            <div class="trait-option" style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
-                <input type="radio" name="trait-type" value="54" ${trait.code === 54 ? 'checked' : ''}>
-                <span style="color: var(--color-text-strong); min-width: 100px;">${this._t('Seal Equip')}</span>
-                <select class="equiptype-select" data-code="54" style="flex: 1; padding: 6px; background: var(--color-bg-button); border: 1px solid var(--color-bg-button-hover); color: var(--color-text-strong); border-radius: 4px;">
-                    ${equipTypes.map((type, id) => ({ type, id })).filter(entry => entry.id > 0 && entry.type).map(entry =>
-                        `<option value="${entry.id}" ${trait.code === 54 && trait.dataId === entry.id ? 'selected' : ''}>${rrEscapeHtml(entry.type)}</option>`
-                    ).join('')}
-                </select>
-            </div>
-
-            <div class="trait-option" style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
-                <input type="radio" name="trait-type" value="55" ${trait.code === 55 ? 'checked' : ''}>
-                <span style="color: var(--color-text-strong); min-width: 100px;">${this._t('Slot Type')}</span>
-                <select class="slottype-select" data-code="55" style="flex: 1; padding: 6px; background: var(--color-bg-button); border: 1px solid var(--color-bg-button-hover); color: var(--color-text-strong); border-radius: 4px;">
-                    <option value="0" ${trait.code === 55 && trait.dataId === 0 ? 'selected' : ''}>${this._t('Normal')}</option>
-                    <option value="1" ${trait.code === 55 && trait.dataId === 1 ? 'selected' : ''}>${this._t('Dual Wield')}</option>
-                </select>
-            </div>
-        `;
+        container.innerHTML = [
+            this._rowHTML(trait, {
+                code: 51, label: this._t('Equip Weapon'),
+                control: this._selectHTML('weapontype-select', 51, typeOptions(system.weaponTypes, 51))
+            }),
+            this._rowHTML(trait, {
+                code: 52, label: this._t('Equip Armor'),
+                control: this._selectHTML('armortype-select', 52, typeOptions(system.armorTypes, 52))
+            }),
+            this._rowHTML(trait, {
+                code: 53, label: this._t('Lock Equip'),
+                control: this._selectHTML('equiptype-select', 53, typeOptions(system.equipTypes, 53))
+            }),
+            this._rowHTML(trait, {
+                code: 54, label: this._t('Seal Equip'),
+                control: this._selectHTML('equiptype-select', 54, typeOptions(system.equipTypes, 54))
+            }),
+            this._rowHTML(trait, {
+                code: 55, label: this._t('Slot Type'),
+                control: this._selectHTML('slottype-select', 55, fixedOptions([[0, 'Normal'], [1, 'Dual Wield']], 55))
+            })
+        ].join('');
 
         this.setupRadioInputs(container, trait);
     }
 
     createOtherTab(container, trait) {
-        container.innerHTML = `
-            <div class="trait-option" style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
-                <input type="radio" name="trait-type" value="61" ${trait.code === 61 ? 'checked' : ''}>
-                <span style="color: var(--color-text-strong); min-width: 110px;">${this._t('Action Times+')}</span>
-                <input type="number" class="times-value" data-code="61" value="${trait.code === 61 ? Math.round(trait.value * 100) : 0}" step="0.01"
-                       style="width: 100px; padding: 6px; background: var(--color-bg-button); border: 1px solid var(--color-bg-button-hover); color: var(--color-text-strong); border-radius: 4px;">
-                <span style="color: var(--color-text-muted);">%</span>
-            </div>
+        const fixedOptions = (pairs, code) => pairs.map(([value, label]) =>
+            `<option value="${value}" ${trait.code === code && trait.dataId === value ? 'selected' : ''}>${this._t(label)}</option>`
+        ).join('');
 
-            <div class="trait-option" style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
-                <input type="radio" name="trait-type" value="62" ${trait.code === 62 ? 'checked' : ''}>
-                <span style="color: var(--color-text-strong); min-width: 110px;">${this._t('Special Flag')}</span>
-                <select class="specialflag-select" data-code="62" style="flex: 1; padding: 6px; background: var(--color-bg-button); border: 1px solid var(--color-bg-button-hover); color: var(--color-text-strong); border-radius: 4px;">
-                    <option value="0" ${trait.code === 62 && trait.dataId === 0 ? 'selected' : ''}>${this._t('Auto Battle')}</option>
-                    <option value="1" ${trait.code === 62 && trait.dataId === 1 ? 'selected' : ''}>${this._t('Guard')}</option>
-                    <option value="2" ${trait.code === 62 && trait.dataId === 2 ? 'selected' : ''}>${this._t('Substitute')}</option>
-                    <option value="3" ${trait.code === 62 && trait.dataId === 3 ? 'selected' : ''}>${this._t('Preserve TP')}</option>
-                </select>
-            </div>
-
-            <div class="trait-option" style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
-                <input type="radio" name="trait-type" value="63" ${trait.code === 63 ? 'checked' : ''}>
-                <span style="color: var(--color-text-strong); min-width: 110px;">${this._t('Collapse Effect')}</span>
-                <select class="collapse-select" data-code="63" style="flex: 1; padding: 6px; background: var(--color-bg-button); border: 1px solid var(--color-bg-button-hover); color: var(--color-text-strong); border-radius: 4px;">
-                    <option value="0" ${trait.code === 63 && trait.dataId === 0 ? 'selected' : ''}>${this._t('Normal')}</option>
-                    <option value="1" ${trait.code === 63 && trait.dataId === 1 ? 'selected' : ''}>${this._t('Boss')}</option>
-                    <option value="2" ${trait.code === 63 && trait.dataId === 2 ? 'selected' : ''}>${this._t('Instant')}</option>
-                    <option value="3" ${trait.code === 63 && trait.dataId === 3 ? 'selected' : ''}>${this._t('No Disappear')}</option>
-                </select>
-            </div>
-
-            <div class="trait-option" style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
-                <input type="radio" name="trait-type" value="64" ${trait.code === 64 ? 'checked' : ''}>
-                <span style="color: var(--color-text-strong); min-width: 110px;">${this._t('Party Ability')}</span>
-                <select class="party-select" data-code="64" style="flex: 1; padding: 6px; background: var(--color-bg-button); border: 1px solid var(--color-bg-button-hover); color: var(--color-text-strong); border-radius: 4px;">
-                    <option value="0" ${trait.code === 64 && trait.dataId === 0 ? 'selected' : ''}>${this._t('Encounter Half')}</option>
-                    <option value="1" ${trait.code === 64 && trait.dataId === 1 ? 'selected' : ''}>${this._t('Encounter None')}</option>
-                    <option value="2" ${trait.code === 64 && trait.dataId === 2 ? 'selected' : ''}>${this._t('Cancel Surprise')}</option>
-                    <option value="3" ${trait.code === 64 && trait.dataId === 3 ? 'selected' : ''}>${this._t('Raise Preemptive')}</option>
-                    <option value="4" ${trait.code === 64 && trait.dataId === 4 ? 'selected' : ''}>${this._t('Gold Double')}</option>
-                    <option value="5" ${trait.code === 64 && trait.dataId === 5 ? 'selected' : ''}>${this._t('Drop Item Double')}</option>
-                </select>
-            </div>
-        `;
+        container.innerHTML = [
+            this._rowHTML(trait, {
+                code: 61, label: this._t('Action Times+'),
+                value: this._numberHTML('times-value', 61, trait.code === 61 ? Math.round(trait.value * 100) : 0, 'step="0.01"'),
+                unit: '%'
+            }),
+            this._rowHTML(trait, {
+                code: 62, label: this._t('Special Flag'),
+                control: this._selectHTML('specialflag-select', 62, fixedOptions([[0, 'Auto Battle'], [1, 'Guard'], [2, 'Substitute'], [3, 'Preserve TP']], 62))
+            }),
+            this._rowHTML(trait, {
+                code: 63, label: this._t('Collapse Effect'),
+                control: this._selectHTML('collapse-select', 63, fixedOptions([[0, 'Normal'], [1, 'Boss'], [2, 'Instant'], [3, 'No Disappear']], 63))
+            }),
+            this._rowHTML(trait, {
+                code: 64, label: this._t('Party Ability'),
+                control: this._selectHTML('party-select', 64, fixedOptions([[0, 'Encounter Half'], [1, 'Encounter None'], [2, 'Cancel Surprise'], [3, 'Raise Preemptive'], [4, 'Gold Double'], [5, 'Drop Item Double']], 64))
+            })
+        ].join('');
 
         this.setupRadioInputs(container, trait);
     }
@@ -593,7 +484,6 @@ class DatabaseTraitEditor {
         // Setup change listeners for selects
         container.querySelectorAll('select').forEach(select => {
             select.addEventListener('change', (e) => {
-                const code = parseInt(e.target.closest('.trait-option').querySelector('input[type="radio"]').value);
                 // Only update if this select's radio is checked
                 const radio = e.target.closest('.trait-option').querySelector('input[type="radio"]');
                 if (radio && radio.checked) {
@@ -628,36 +518,24 @@ class DatabaseTraitEditor {
     saveTrait(trait) {
         // Validate that a trait type is selected
         if (!trait.code) {
-            console.warn('DatabaseTraitEditor.saveTrait - Cannot save trait without a type selected');
             alert(this._t('Please select a trait type before saving.'));
             return false;
         }
 
-        console.log('DatabaseTraitEditor.saveTrait - Saving trait:', trait);
-        console.log('DatabaseTraitEditor.saveTrait - Current entry ID:', this.currentEntry?.id);
-        console.log('DatabaseTraitEditor.saveTrait - Trait index:', this.currentTraitIndex);
-
         if (this.currentTraitIndex >= 0) {
             // Update existing trait
             this.currentEntry.traits[this.currentTraitIndex] = trait;
-            console.log('DatabaseTraitEditor.saveTrait - Updated existing trait at index', this.currentTraitIndex);
         } else {
             // Add new trait
             if (!this.currentEntry.traits) {
                 this.currentEntry.traits = [];
             }
             this.currentEntry.traits.push(trait);
-            console.log('DatabaseTraitEditor.saveTrait - Added new trait, total traits now:', this.currentEntry.traits.length);
         }
-
-        console.log('DatabaseTraitEditor.saveTrait - All traits after save:', this.currentEntry.traits);
 
         // Call save callback if provided
         if (this.onSaveCallback) {
-            console.log('DatabaseTraitEditor.saveTrait - Calling save callback with entry:', this.currentEntry);
             this.onSaveCallback(this.currentEntry);
-        } else {
-            console.warn('DatabaseTraitEditor.saveTrait - No save callback registered!');
         }
 
         return true;

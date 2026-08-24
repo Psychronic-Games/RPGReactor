@@ -93,3 +93,14 @@ test('the editor distribution bundles the Demo, which is what makes this ship', 
         path.join(repoRoot, 'editor', 'build-scripts', 'dist-editor-worker.js'), 'utf8');
     assert.match(worker, /INCLUDE_REPOSITORY_DIRS = \[path\.join\('template', 'Demo'\)\]/);
 });
+
+test('every tracked Demo asset is present on disk', () => {
+    // A tracked asset missing locally ships as a hole in the next build.
+    // Intentional removals must be staged with git rm so the tracked set
+    // and the disk agree; this catches the accidental kind.
+    const missing = [];
+    for (const relative of trackedUnder(path.join('template', 'Demo'))) {
+        if (!fs.existsSync(path.join(repoRoot, relative))) missing.push(relative);
+    }
+    assert.deepEqual(missing, [], `tracked Demo files missing on disk: ${missing.slice(0, 5).join(', ')}`);
+});

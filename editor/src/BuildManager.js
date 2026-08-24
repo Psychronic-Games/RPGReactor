@@ -9,18 +9,23 @@ class BuildManager {
 
     setupModal() {
         const tt = text => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
+        // The markup bakes tt() at build time; rebuilding replaces it, and
+        // open() rebuilds whenever the language changed since the bake.
+        const existing = document.getElementById('build-modal');
+        if (existing) existing.remove();
+        this._builtLanguage = (typeof window !== 'undefined' && window.I18n) ? window.I18n.language : 'en';
         // Create build modal HTML
         const modalHTML = `
             <div id="build-modal" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.8); display: none; justify-content: center; align-items: center; z-index: 10001;">
-                <div style="background-color: var(--color-bg-surface); border: 1px solid var(--color-border); border-radius: 8px; width: 90%; max-width: 1100px; height: 80vh; max-height: 700px; display: flex; flex-direction: column; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);">
-                    <div style="background-color: var(--color-bg-panel); padding: 12px 16px; border-bottom: 1px solid var(--color-border); display: flex; justify-content: space-between; align-items: center; border-radius: 8px 8px 0 0;">
-                        <div style="font-size: 16px; font-weight: 600; color: var(--color-text);">${tt('Deploy Game')}</div>
-                        <button id="build-modal-close-btn" style="background: none; border: none; color: var(--color-text-muted); font-size: 24px; cursor: pointer; padding: 0; width: 30px; height: 30px; line-height: 1;">×</button>
+                <div class="rr-modal" style="width: 90%; max-width: 1100px; height: 80vh; max-height: 700px;">
+                    <div class="rr-modal-header">
+                        <div class="rr-modal-title">${tt('Deploy Game')}</div>
+                        <button id="build-modal-close-btn" class="rr-modal-close" type="button">×</button>
                     </div>
 
                     <div style="flex: 1; display: flex; gap: 20px; padding: 20px; overflow: hidden; min-height: 0;">
                         <!-- Left Column: Build Options -->
-                        <div style="flex: 0 0 380px; overflow-y: auto;">
+                        <div class="audio-scroll" style="flex: 0 0 380px; overflow-y: auto; padding-right: 12px; scrollbar-gutter: stable;">
                             <div style="margin-bottom: 20px;">
                                 <h3 style="color: var(--color-text); margin-bottom: 10px; font-size: 15px;">${tt('Select Platform(s)')}</h3>
                                 <div style="display: flex; flex-direction: column; gap: 6px;">
@@ -113,7 +118,7 @@ class BuildManager {
                                         <button id="build-locales-all" type="button" class="graphic-selector-button" style="padding: 4px 8px; font-size: 10px;">${tt('Select All')}</button>
                                         <button id="build-locales-english" type="button" class="graphic-selector-button" style="padding: 4px 8px; font-size: 10px;">${tt('English Only')}</button>
                                     </div>
-                                    <div id="build-locale-list" style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 3px 8px; max-height: 170px; overflow-y: auto; padding-right: 4px;"></div>
+                                    <div id="build-locale-list" class="audio-scroll" style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 3px 8px; max-height: 170px; overflow-y: auto; padding-right: 8px;"></div>
                                     <div style="color: var(--color-text-muted); font-size: 10px; line-height: 1.35; margin-top: 6px;">${tt('English (US) is always included as fallback. Desktop builds only.')}</div>
                                 </div>
                             </div>
@@ -126,20 +131,26 @@ class BuildManager {
                                         <span style="color: var(--color-text); font-weight: 600; font-size: 12px;">${tt('Losslessly optimize PNG files (Oxipng)')}</span>
                                     </label>
                                     <label style="display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: var(--color-bg-panel); border: 1px solid var(--color-border); border-radius: 4px; cursor: pointer;">
-                                        <input id="build-optimize-ogg" type="checkbox" class="system-checkbox" style="width: 16px; height: 16px; min-width: 16px; min-height: 16px; max-width: 16px; max-height: 16px; flex: 0 0 16px; margin: 0;">
-                                        <span style="color: var(--color-text); font-weight: 600; font-size: 12px;">${tt('Re-encode OGG audio (lossy)')}</span>
+                                        <input id="build-optimize-audio" type="checkbox" class="system-checkbox" style="width: 16px; height: 16px; min-width: 16px; min-height: 16px; max-width: 16px; max-height: 16px; flex: 0 0 16px; margin: 0;">
+                                        <span style="color: var(--color-text); font-weight: 600; font-size: 12px;">${tt('Compress audio (lossy)')}</span>
                                     </label>
                                 </div>
                                 <div style="margin-top: 8px; display: grid; grid-template-columns: 130px minmax(0, 1fr); gap: 8px; align-items: center;">
-                                    <label for="build-ogg-quality" style="color: var(--color-text-muted); font-size: 11px;">${tt('OGG quality')}</label>
-                                    <select id="build-ogg-quality" class="rr-select" style="font-size: 12px; padding: 5px 7px;">
+                                    <label for="build-audio-quality" style="color: var(--color-text-muted); font-size: 11px;">${tt('Audio quality')}</label>
+                                    <select id="build-audio-quality" class="rr-select" style="font-size: 12px; padding: 5px 7px;">
+                                        <option value="1">1</option>
+                                        <option value="2">2</option>
                                         <option value="3">${tt('3 - Standard / Smaller')}</option>
+                                        <option value="4">4</option>
                                         <option value="5" selected>${tt('5 - High')}</option>
+                                        <option value="6">6</option>
                                         <option value="7">${tt('7 - Very High')}</option>
+                                        <option value="8">8</option>
+                                        <option value="9">9</option>
                                         <option value="10">${tt('10 - Maximum')}</option>
                                     </select>
                                 </div>
-                                <div style="color: var(--color-text-muted); font-size: 10px; line-height: 1.35; margin-top: 6px;">${tt('Only smaller validated results replace staged assets.')}</div>
+                                <div style="color: var(--color-text-muted); font-size: 10px; line-height: 1.35; margin-top: 6px;">${tt('Only smaller validated results replace staged assets.')} ${tt('OGG, MP3, and M4A re-encode in place; WAV and FLAC convert to OGG; loop points carry over.')}</div>
                             </div>
                         </div>
 
@@ -166,23 +177,18 @@ class BuildManager {
                             </div>
 
                             <!-- Build Log -->
-                            <div style="flex: 1; display: flex; flex-direction: column; min-height: 0; margin-bottom: 16px;">
+                            <div style="flex: 1; display: flex; flex-direction: column; min-height: 0;">
                                 <h3 style="color: var(--color-text); margin-bottom: 10px; font-size: 15px;">${tt('Build Log')}</h3>
-                                <div id="build-log" style="flex: 1; background: var(--color-bg-panel); border: 1px solid var(--color-border); border-radius: 4px; padding: 12px; overflow-y: auto; font-family: 'Consolas', 'Monaco', monospace; font-size: 12px; color: var(--color-text); white-space: pre-wrap; word-wrap: break-word;">
+                                <div id="build-log" class="audio-scroll" style="flex: 1; background: var(--color-bg-panel); border: 1px solid var(--color-border); border-radius: 4px; padding: 12px; overflow-y: auto; font-family: 'Consolas', 'Monaco', monospace; font-size: 12px; color: var(--color-text); white-space: pre-wrap; word-wrap: break-word;">
                                     <div style="color: var(--color-text-muted);">${tt('Ready to build. Select platforms and click "Start Build".')}</div>
                                 </div>
                             </div>
-
-                            <!-- Buttons -->
-                            <div style="display: flex; gap: 12px; justify-content: flex-end; flex-shrink: 0;">
-                                <button id="build-start-btn" style="padding: 8px 20px; background: var(--color-bg-deep); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 4px; font-size: 13px; cursor: pointer; font-weight: 500; transition: all 0.2s; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">
-                                    ${tt('Start Build')}
-                                </button>
-                                <button id="build-cancel-btn" style="padding: 8px 20px; background: var(--color-bg-deep); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 4px; font-size: 13px; cursor: pointer; font-weight: 500; transition: all 0.2s; box-shadow: 0 2px 4px rgba(0,0,0,0.2); display: none;">
-                                    ${tt('Cancel Build')}
-                                </button>
-                            </div>
                         </div>
+                    </div>
+
+                    <div class="rr-modal-footer" style="flex-shrink: 0;">
+                        <button id="build-cancel-btn" class="rr-btn-secondary" style="display: none;">${tt('Cancel Build')}</button>
+                        <button id="build-start-btn" class="rr-button-primary">${tt('Start Build')}</button>
                     </div>
                 </div>
             </div>
@@ -276,26 +282,29 @@ class BuildManager {
     setupAssetOptimizationOptions() {
         const preference = DeploymentAssetPreferences.load();
         const png = document.getElementById('build-optimize-png');
-        const ogg = document.getElementById('build-optimize-ogg');
-        const quality = document.getElementById('build-ogg-quality');
+        const audio = document.getElementById('build-optimize-audio');
+        const quality = document.getElementById('build-audio-quality');
         png.checked = preference.png;
-        ogg.checked = preference.ogg;
-        quality.value = String(preference.oggQuality);
-        quality.disabled = !ogg.checked;
+        // Lossy compression is opt-in per deploy: a checkbox left on from an
+        // earlier build would silently degrade audio on every later one. The
+        // quality choice stays remembered for when it is re-enabled.
+        audio.checked = false;
+        quality.value = String(preference.audioQuality);
+        quality.disabled = !audio.checked;
         const save = () => {
-            quality.disabled = !ogg.checked;
+            quality.disabled = !audio.checked;
             DeploymentAssetPreferences.save(this.assetOptimizationSettings());
         };
         png.addEventListener('change', save);
-        ogg.addEventListener('change', save);
+        audio.addEventListener('change', save);
         quality.addEventListener('change', save);
     }
 
     assetOptimizationSettings() {
         return DeploymentAssetPreferences.normalize({
             png: document.getElementById('build-optimize-png').checked,
-            ogg: document.getElementById('build-optimize-ogg').checked,
-            oggQuality: document.getElementById('build-ogg-quality').value,
+            audio: document.getElementById('build-optimize-audio').checked,
+            audioQuality: document.getElementById('build-audio-quality').value,
         });
     }
 
@@ -335,19 +344,6 @@ class BuildManager {
             });
         });
 
-        // Button hover effects (gold theme)
-        [startBtn, cancelBtn].forEach(btn => {
-            btn.addEventListener('mouseenter', () => {
-                btn.style.background = 'var(--color-accent-tint-15)';
-                btn.style.borderColor = 'var(--color-accent-border-strong)';
-                btn.style.boxShadow = '0 3px 6px var(--color-accent-tint-30)';
-            });
-            btn.addEventListener('mouseleave', () => {
-                btn.style.background = 'var(--color-bg-deep)';
-                btn.style.borderColor = 'var(--color-border-input)';
-                btn.style.boxShadow = '0 2px 4px rgba(0,0,0,0.2)';
-            });
-        });
     }
 
     updateAppImageAvailability() {
@@ -369,6 +365,10 @@ class BuildManager {
 
     open() {
         const tt = text => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
+        if (typeof window !== 'undefined' && window.I18n
+            && this._builtLanguage !== window.I18n.language && !this.worker) {
+            this.setupModal();
+        }
         this.modal.style.display = 'flex';
         this.clearLog();
         this.resetProgress();

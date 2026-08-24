@@ -141,7 +141,7 @@ class EventPageEditor {
                        data-field="variableValid"
                        data-page-index="${pageIndex}"
                        ${conditions.variableValid ? 'checked' : ''}>
-                <label style="min-width: 70px; flex-shrink: 0; font-size: 12px;">${this._t('event.variable')}</label>
+                <label style="min-width: 70px; flex-shrink: 0; font-size: 12px;">${tt('Variable')}</label>
                 <button class="variable-picker-btn"
                         data-field="variableId"
                         data-page-index="${pageIndex}"
@@ -149,12 +149,15 @@ class EventPageEditor {
                         ${!conditions.variableValid ? 'disabled' : ''}>
                     #${String(conditions.variableId || 1).padStart(4, '0')}: ${rrEscapeHtml(variables.find(v => v.id === (conditions.variableId || 1))?.name || `${tt('Variable')} 0001`)}
                 </button>
+                <span style="flex-shrink: 0; font-size: 12px; color: var(--color-text-muted);" data-rr-i18n-skip>&ge;</span>
                 <input type="number"
                        class="condition-input"
                        data-field="variableValue"
                        data-page-index="${pageIndex}"
                        value="${conditions.variableValue || 0}"
-                       style="width: 70px; flex-shrink: 0; padding: 3px; font-size: 11px;"
+                       style="width: 70px; flex-shrink: 0; padding: 4px 6px; font-size: 11px;
+                              background: var(--color-bg-surface); color: var(--color-text);
+                              border: 1px solid var(--color-border-input); border-radius: 3px;"
                        ${!conditions.variableValid ? 'disabled' : ''}>
             </div>
 
@@ -696,14 +699,11 @@ class EventPageEditor {
                         <option value="2" ${page.moveType === 2 ? 'selected' : ''}>${this._t('event.approach')}</option>
                         <option value="3" ${page.moveType === 3 ? 'selected' : ''}>${this._t('event.custom')}</option>
                     </select>
-                    <button class="movement-route-btn"
+                    <button class="movement-route-btn rr-btn-chip"
                             data-page-index="${pageIndex}"
                             title="${this._tt('Set the route this event follows on its own')}"
                             ${page.moveType === 3 ? '' : 'disabled'}
-                            style="flex-shrink: 0; padding: 3px 8px; font-size: 11px;
-                                   background-color: var(--color-bg-menubar); color: var(--color-text);
-                                   border: 1px solid var(--color-border-input); border-radius: 3px;
-                                   cursor: pointer;">${this._tt('Route...')}</button>
+                            style="flex-shrink: 0;">${this._tt('Route...')}</button>
                 </div>
 
                 <div style="display: flex; align-items: center; gap: 6px; min-width: 0;">
@@ -981,7 +981,9 @@ class EventPageEditor {
                     ? ModelGraphicPicker.colorTextureIn(
                         path.join(project.path, '3d', model.name, 'textures'))
                     : '');
-            const template = Reactor3D.readModel(buffer, model.ext || '.glb', baseUrl, texture);
+            const template = Reactor3D.readModelAsync
+                ? await Reactor3D.readModelAsync(buffer, model.ext || '.glb', baseUrl, texture)
+                : Reactor3D.readModel(buffer, model.ext || '.glb', baseUrl, texture);
             if (gen !== this._modelPreviewGen || !canvas.isConnected) return;
             const mesh = Reactor3D.cloneModelTemplate
                 ? Reactor3D.cloneModelTemplate(template)

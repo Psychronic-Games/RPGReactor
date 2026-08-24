@@ -805,7 +805,7 @@ class DatabaseSystem1Editor {
             </div>
             <div style="padding: 12px 16px; border-top: 1px solid var(--color-border); display: flex; justify-content: flex-end; gap: 8px; background-color: var(--color-bg-panel);">
                 <button class="cmd-modal-cancel rr-btn-secondary">${tt('Cancel')}</button>
-                <button class="cmd-modal-ok" style="padding: 8px 16px; background: var(--color-accent); color: var(--color-bg-deep); border: 1px solid var(--color-accent); border-radius: 4px; cursor: pointer; font-weight: bold;">${tt('OK')}</button>
+                <button class="cmd-modal-ok rr-button-primary">${tt('OK')}</button>
             </div>
         `;
 
@@ -996,16 +996,7 @@ class DatabaseSystem1Editor {
 
         const okBtn = document.createElement('button');
         okBtn.textContent = tt('OK');
-        okBtn.style.cssText = `
-            padding: 8px 16px;
-            background-color: var(--color-accent);
-            color: var(--color-bg-deep);
-            border: 1px solid var(--color-accent);
-            border-radius: 4px;
-            cursor: pointer;
-            font-weight: bold;
-            transition: background-color 0.2s;
-        `;
+        okBtn.className = 'rr-button-primary';
         okBtn.onclick = () => {
             system.title1Name = selectedFile;
             close();
@@ -1017,12 +1008,6 @@ class DatabaseSystem1Editor {
             }
 
             console.log('Updated title1Name to:', selectedFile);
-        };
-        okBtn.onmouseenter = () => {
-            okBtn.style.backgroundColor = 'var(--color-accent-muted)';
-        };
-        okBtn.onmouseleave = () => {
-            okBtn.style.backgroundColor = 'var(--color-accent)';
         };
 
         footer.appendChild(cancelBtn);

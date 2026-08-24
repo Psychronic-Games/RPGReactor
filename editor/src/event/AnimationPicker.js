@@ -71,28 +71,20 @@ class AnimationPicker {
             background-color: var(--color-bg-surface);
             border: 1px solid var(--color-border);
             border-radius: 6px;
-            width: 900px;
+            width: min(900px, calc(100vw - 24px));
             height: 80vh;
             display: flex;
             flex-direction: column;
+            max-height: 92vh;
             box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
         `;
 
         // Header
         const header = document.createElement('div');
-        header.style.cssText = `
-            padding: 12px 16px;
-            background-color: var(--color-bg-panel);
-            border-bottom: 1px solid var(--color-border);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            border-radius: 6px 6px 0 0;
-            flex-shrink: 0;
-        `;
+        header.className = 'rr-modal-header';
         header.innerHTML = `
-            <h3 style="margin: 0; color: var(--color-text-strong); font-size: 16px;">${this._t('Select Animation')}</h3>
-            <button style="background: none; border: none; color: var(--color-text-strong); font-size: 20px; cursor: pointer; padding: 0; width: 24px; height: 24px;">×</button>
+            <div class="rr-modal-title">${this._t('Select Animation')}</div>
+            <button class="rr-modal-close" type="button">×</button>
         `;
         header.querySelector('button').addEventListener('click', () => this._close());
         container.appendChild(header);
@@ -179,16 +171,7 @@ class AnimationPicker {
 
         const okBtn = document.createElement('button');
         okBtn.textContent = this._t('OK');
-        okBtn.style.cssText = `
-            padding: 6px 20px;
-            background-color: var(--color-accent);
-            color: var(--color-bg-deep);
-            border: none;
-            border-radius: 3px;
-            cursor: pointer;
-            font-size: 12px;
-            font-weight: bold;
-        `;
+        okBtn.className = 'rr-button-primary';
         okBtn.addEventListener('mouseenter', () => { okBtn.style.backgroundColor = 'var(--color-accent-muted)'; });
         okBtn.addEventListener('mouseleave', () => { okBtn.style.backgroundColor = 'var(--color-accent)'; });
         okBtn.addEventListener('click', () => this._confirm());

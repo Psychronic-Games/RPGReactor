@@ -1,0 +1,125 @@
+# Demo: animation sounds not on disk
+
+Every SE name the animation database references that audio/se no longer holds.
+Replace or re-pick these to keep animations from stopping the game.
+
+- Absorb2 — used by 63 Confusion
+- Attack2 — used by 18 Claw Fire, 19 Claw Ice, 20 Claw Thunder, 28 Claw Special
+- Attack3 — used by 28 Claw Special, 29 Arrow Special
+- Battle3 — used by 29 Arrow Special
+- Blind — used by 35 Fog, 56 Power down 3, 60 Blind, 104 Darkness All 2, 105 Darkness All 3
+- Blow1 — used by 1 Hit Physical, 3 Hit Fire, 4 Hit Ice, 21 Hit Special 1, 22 Hit Special 2
+- Blow2 — used by 22 Hit Special 2, 38 Sweep
+- Blow3 — used by 5 Hit Thunder, 21 Hit Special 1, 22 Hit Special 2, 39 Bodyslam
+- Break — used by 86 Earth One 1
+- Crash — used by 71 Ice One 1, 75 Ice All 3, 113 Shoot All
+- Crossbow — used by 29 Arrow Special
+- Damage2 — used by 22 Hit Special 2, 30 General Special 1
+- Damage4 — used by 2 Hit Effect
+- Darkness1 — used by 57 Bind, 58 Absorb, 64 Paralyze, 101 Darkness One 1, 102 Darkness One 2, 106 Neutral One 1
+- Darkness2 — used by 60 Blind
+- Darkness3 — used by 33 Pollen, 102 Darkness One 2
+- Darkness4 — used by 33 Pollen, 57 Bind, 103 Darkness All 1, 105 Darkness All 3, 117 Light Pillar 1, 118 Light Pillar 2
+- Darkness5 — used by 65 Death
+- Darkness7 — used by 56 Power down 3
+- Darkness8 — used by 56 Power down 3
+- Dive — used by 82 Water One 2
+- Down2 — used by 54 Power down 1
+- Earth1 — used by 73 Ice All 1, 86 Earth One 1, 88 Earth All 1, 89 Earth All 2, 90 Earth All 3
+- Earth2 — used by 55 Power down 2, 90 Earth All 3
+- Earth3 — used by 88 Earth All 1
+- Earth4 — used by 89 Earth All 2, 90 Earth All 3
+- Earth5 — used by 87 Earth One 2, 89 Earth All 2
+- Evasion1 — used by 25 Slash Special 3
+- Evasion2 — used by 2 Hit Effect, 7 Slash Effect, 12 Pierce Effect, 23 Slash Special 1, 44 Heal All 2, 115 Laser One
+- Explosion1 — used by 99 Light All 2
+- Explosion2 — used by 107 Neutral One 2, 114 Shoot Special
+- Explosion4 — used by 99 Light All 2
+- Fire1 — used by 3 Hit Fire, 8 Slash Fire, 13 Pierce Fire, 18 Claw Fire, 88 Earth All 1
+- Fire2 — used by 114 Shoot Special
+- Fire3 — used by 32 Breath, 87 Earth One 2, 88 Earth All 1, 116 Laser All
+- Fire6 — used by 116 Laser All
+- Fire7 — used by 110 Neutral All 3
+- Fire8 — used by 66 Fire One 1, 68 Fire All 1, 69 Fire All 2, 70 Fire All 3, 110 Neutral All 3
+- Fire9 — used by 67 Fire One 2, 103 Darkness All 1, 109 Neutral All 2
+- Flash1 — used by 61 Silence
+- Flash2 — used by 40 Flash, 44 Heal All 2, 73 Ice All 1, 120 Radiation
+- Float1 — used by 118 Light Pillar 2
+- Float2 — used by 104 Darkness All 2
+- Gun1 — used by 111 Shoot Normal, 113 Shoot All
+- Gun2 — used by 112 Shoot Barrage
+- Gun3 — used by 113 Shoot All
+- Heal1 — used by 43 Heal All 1
+- Heal3 — used by 41 Heal One 1, 47 Cure All 1
+- Ice1 — used by 44 Heal All 2, 45 Cure One 1, 46 Cure One 2, 47 Cure All 1
+- Ice10 — used by 74 Ice All 2, 75 Ice All 3
+- Ice11 — used by 71 Ice One 1, 73 Ice All 1
+- Ice3 — used by 4 Hit Ice, 9 Slash Ice, 14 Pierce Ice, 19 Claw Ice, 24 Slash Special 2, 97 Light One 2, …
+- Ice4 — used by 36 Song, 43 Heal All 1, 44 Heal All 2, 45 Cure One 1, 46 Cure One 2, 47 Cure All 1, …
+- Ice5 — used by 43 Heal All 1, 73 Ice All 1, 75 Ice All 3, 98 Light All 1
+- Laser1 — used by 115 Laser One
+- Magic1 — used by 49 Revive 1, 51 Power up 1, 75 Ice All 3, 80 Thunder All 3, 85 Water All 3, 90 Earth All 3, …
+- Magic10 — used by 105 Darkness All 3
+- Magic12 — used by 100 Light All 3
+- Magic2 — used by 50 Revive 2, 54 Power down 1, 117 Light Pillar 1, 118 Light Pillar 2
+- Magic4 — used by 52 Power up 2, 117 Light Pillar 1
+- Magic5 — used by 106 Neutral One 1
+- Monster1 — used by 37 Shout
+- Paralyze1 — used by 78 Thunder All 1, 80 Thunder All 3
+- Paralyze2 — used by 115 Laser One
+- Paralyze3 — used by 64 Paralyze
+- Particles1 — used by 58 Absorb, 106 Neutral One 1, 107 Neutral One 2, 119 Balls of Light
+- Particles4 — used by 108 Neutral All 1, 110 Neutral All 3
+- Phone — used by 114 Shoot Special
+- Poison — used by 59 Poison
+- Powerup — used by 2 Hit Effect, 7 Slash Effect, 12 Pierce Effect, 52 Power up 2, 116 Laser All
+- Raise2 — used by 63 Confusion
+- Recovery — used by 45 Cure One 1
+- Reflection — used by 96 Light One 1
+- Saint2 — used by 41 Heal One 1, 42 Heal One 2
+- Saint4 — used by 43 Heal All 1, 48 Cure All 2, 97 Light One 2, 99 Light All 2
+- Sand — used by 35 Fog, 88 Earth All 1, 89 Earth All 2, 93 Wind All 1, 94 Wind All 2
+- Silence — used by 61 Silence
+- Skill1 — used by 49 Revive 1, 95 Wind All 3, 99 Light All 2, 114 Shoot Special
+- Skill2 — used by 95 Wind All 3, 114 Shoot Special
+- Skill3 — used by 100 Light All 3
+- Slash1 — used by 6 Slash Physical, 7 Slash Effect, 9 Slash Ice, 10 Slash Thunder, 23 Slash Special 1, 24 Slash Special 2, …
+- Slash2 — used by 18 Claw Fire, 19 Claw Ice, 20 Claw Thunder, 24 Slash Special 2, 25 Slash Special 3, 26 Pierce Special 1, …
+- Slash3 — used by 23 Slash Special 1, 25 Slash Special 3, 28 Claw Special, 31 General Special 2
+- Slash4 — used by 23 Slash Special 1, 30 General Special 1
+- Slash5 — used by 30 General Special 1
+- Slash8 — used by 24 Slash Special 2
+- Sleep — used by 62 Sleep
+- Sound2 — used by 61 Silence
+- Sound3 — used by 34 SonicWave
+- Stare — used by 55 Power down 2, 65 Death
+- Starlight — used by 42 Heal One 2, 47 Cure All 1, 49 Revive 1, 71 Ice One 1, 98 Light All 1
+- Sword1 — used by 40 Flash
+- Sword2 — used by 71 Ice One 1, 98 Light All 1
+- Sword4 — used by 24 Slash Special 2, 26 Pierce Special 1, 27 Pierce Special 2, 96 Light One 1
+- Sword5 — used by 8 Slash Fire, 11 Pierce Physical, 13 Pierce Fire, 14 Pierce Ice, 15 Pierce Thunder, 26 Pierce Special 1, …
+- Teleport — used by 104 Darkness All 2, 119 Balls of Light
+- Thunder1 — used by 8 Slash Fire, 11 Pierce Physical, 13 Pierce Fire, 14 Pierce Ice, 15 Pierce Thunder, 32 Breath, …
+- Thunder10 — used by 79 Thunder All 2
+- Thunder2 — used by 39 Bodyslam, 87 Earth One 2
+- Thunder3 — used by 31 General Special 2, 77 Thunder One 2, 103 Darkness All 1
+- Thunder4 — used by 12 Pierce Effect, 73 Ice All 1
+- Thunder5 — used by 21 Hit Special 1
+- Thunder6 — used by 74 Ice All 2, 76 Thunder One 1
+- Thunder8 — used by 5 Hit Thunder, 10 Slash Thunder, 15 Pierce Thunder, 20 Claw Thunder, 39 Bodyslam, 77 Thunder One 2
+- Thunder9 — used by 79 Thunder All 2, 80 Thunder All 3
+- Twine — used by 58 Absorb
+- Up1 — used by 53 Power up 3, 62 Sleep, 98 Light All 1
+- Up3 — used by 50 Revive 2, 96 Light One 1, 117 Light Pillar 1, 118 Light Pillar 2
+- Up4 — used by 51 Power up 1
+- Water1 — used by 82 Water One 2, 83 Water All 1, 84 Water All 2, 85 Water All 3
+- Water2 — used by 81 Water One 1, 85 Water All 3
+- Water4 — used by 83 Water All 1
+- Water5 — used by 81 Water One 1, 83 Water All 1
+- Wind1 — used by 71 Ice One 1, 85 Water All 3
+- Wind2 — used by 75 Ice All 3, 80 Thunder All 3, 85 Water All 3, 90 Earth All 3, 93 Wind All 1, 95 Wind All 3, …
+- Wind3 — used by 92 Wind One 2, 95 Wind All 3
+- Wind4 — used by 24 Slash Special 2
+- Wind5 — used by 27 Pierce Special 2, 57 Bind, 92 Wind One 2, 93 Wind All 1, 94 Wind All 2
+- Wind6 — used by 26 Pierce Special 1, 29 Arrow Special, 74 Ice All 2, 114 Shoot Special
+- Wind7 — used by 38 Sweep

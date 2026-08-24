@@ -226,6 +226,159 @@ function loopComments(buffer) {
     return [...new Set(comments.map(comment => comment.toUpperCase()))];
 }
 
+const AUDIO_EXTENSIONS = ['.ogg', '.mp3', '.wav', '.flac', '.m4a'];
+
+// The shared 0-10 quality scale is Vorbis's (higher is better). LAME's VBR
+// -q:a runs the other way, 0 (best) to 9.
+function lameQuality(quality) {
+    return Math.max(0, Math.min(9, Math.round((10 - quality) * 0.9)));
+}
+
+// FFmpeg's native AAC encoder is bitrate-driven; map the tiers onto the
+// bitrates those tiers mean for stereo AAC.
+function aacBitrate(quality) {
+    return `${Math.max(64, Math.min(256, Math.round(64 + quality * 19.2)))}k`;
+}
+
+// A WAV's loop lives in the sampler ("smpl") chunk. Mirrors the runtime's
+// reader exactly: first loop, LOOPSTART = start, LOOPLENGTH = end - start.
+function wavSamplerLoop(buffer) {
+    if (buffer.length < 12 || buffer.toString('ascii', 0, 4) !== 'RIFF' ||
+        buffer.toString('ascii', 8, 12) !== 'WAVE') return null;
+    let index = 12;
+    while (index + 8 <= buffer.length) {
+        const chunkId = buffer.toString('ascii', index, index + 4);
+        const chunkSize = buffer.readUInt32LE(index + 4);
+        const dataIndex = index + 8;
+        if (chunkId === 'smpl' && dataIndex + 52 <= buffer.length) {
+            const numLoops = buffer.readUInt32LE(dataIndex + 28);
+            if (numLoops > 0) {
+                const start = buffer.readUInt32LE(dataIndex + 44);
+                const end = buffer.readUInt32LE(dataIndex + 48);
+                if (end > start) return { start, length: end - start };
+            }
+        }
+        index = dataIndex + chunkSize + (chunkSize % 2);
+    }
+    return null;
+}
+
+// ID3v2 TXXX loop frames hold "LOOPSTART\0<value>" (latin1/utf8 text keeps
+// the ASCII digits contiguous); the runtime reads the same convention.
+function mp3LoopTags(buffer) {
+    const text = buffer.toString('latin1');
+    const tags = [];
+    for (const name of ['LOOPSTART', 'LOOPLENGTH']) {
+        const match = text.match(new RegExp(`${name}\\x00(\\d+)`));
+        if (match) tags.push(`${name}=${match[1]}`);
+    }
+    return tags;
+}
+
+function requiredLoopTags(buffer, ext) {
+    if (ext === '.wav') {
+        const loop = wavSamplerLoop(buffer);
+        return loop ? [`LOOPSTART=${loop.start}`, `LOOPLENGTH=${loop.length}`] : [];
+    }
+    if (ext === '.mp3') return mp3LoopTags(buffer);
+    if (ext === '.m4a') return []; // no loop-tag convention for M4A
+    return loopComments(buffer); // OGG and FLAC share vorbis comments
+}
+
+function verifyLoopTags(buffer, ext, required) {
+    if (!required.length) return [];
+    const present = new Set(ext === '.mp3' ? mp3LoopTags(buffer) : loopComments(buffer));
+    return required.filter(tag => !present.has(tag));
+}
+
+function verifyAudioHeader(buffer, ext) {
+    if (buffer.length < 12) return false;
+    if (ext === '.ogg') return buffer.subarray(0, 4).toString('ascii') === 'OggS';
+    if (ext === '.mp3') {
+        return buffer.subarray(0, 3).toString('ascii') === 'ID3' ||
+            (buffer[0] === 0xff && (buffer[1] & 0xe0) === 0xe0);
+    }
+    if (ext === '.m4a') return buffer.toString('ascii', 4, 8) === 'ftyp';
+    return false;
+}
+
+// Re-encode an audio file in place (OGG, MP3, M4A keep their container).
+async function reencodeAudioFile(filePath, quality, ffmpegPath, execute = runFfmpeg) {
+    const ext = path.extname(filePath).toLowerCase();
+    const original = fs.readFileSync(filePath);
+    const originalStat = fs.statSync(filePath);
+    const required = requiredLoopTags(original, ext);
+    const codecArgs = ext === '.ogg' ? ['-c:a', 'libvorbis', '-q:a', String(quality)]
+        : ext === '.mp3' ? ['-c:a', 'libmp3lame', '-q:a', String(lameQuality(quality))]
+        : ['-c:a', 'aac', '-b:a', aacBitrate(quality)];
+    const temp = `${filePath}.${process.pid}.${Date.now()}.part${ext}`;
+    try {
+        await execute(ffmpegPath, [
+            '-y', '-hide_banner', '-loglevel', 'error', '-i', filePath,
+            '-map_metadata', '0', '-vn', ...codecArgs, temp,
+        ]);
+        const optimized = fs.readFileSync(temp);
+        if (!verifyAudioHeader(optimized, ext)) {
+            throw new Error(`FFmpeg produced an invalid ${ext.slice(1).toUpperCase()} file.`);
+        }
+        const missing = verifyLoopTags(optimized, ext, required);
+        if (missing.length) throw new Error(`FFmpeg did not preserve loop metadata: ${missing.join(', ')}`);
+        if (optimized.length >= original.length) return { before: original.length, after: original.length, changed: false };
+        fs.chmodSync(temp, originalStat.mode);
+        fs.utimesSync(temp, originalStat.atime, originalStat.mtime);
+        replaceFile(temp, filePath);
+        return { before: original.length, after: optimized.length, changed: true };
+    } finally {
+        fs.rmSync(temp, { force: true });
+    }
+}
+
+// WAV and FLAC compress by becoming OGG Vorbis — the format the runtime
+// prefers when several carry one name, resolved from the same extensionless
+// data. A WAV's smpl loop is written out as the LOOPSTART/LOOPLENGTH
+// comments; FLAC's vorbis comments carry over through -map_metadata.
+async function convertAudioToOgg(filePath, quality, ffmpegPath, execute = runFfmpeg) {
+    const ext = path.extname(filePath).toLowerCase();
+    const oggPath = filePath.slice(0, -ext.length) + '.ogg';
+    if (fs.existsSync(oggPath)) {
+        // A same-named OGG already shadows this file at runtime; converting
+        // would overwrite it.
+        return { before: 0, after: 0, changed: false, skipped: 'an OGG with this name already exists' };
+    }
+    const original = fs.readFileSync(filePath);
+    const required = requiredLoopTags(original, ext);
+    const loopArgs = ext === '.wav'
+        ? required.flatMap(tag => ['-metadata', tag])
+        : [];
+    const temp = `${oggPath}.${process.pid}.${Date.now()}.part.ogg`;
+    try {
+        await execute(ffmpegPath, [
+            '-y', '-hide_banner', '-loglevel', 'error', '-i', filePath,
+            '-map_metadata', '0', ...loopArgs, '-vn', '-c:a', 'libvorbis', '-q:a', String(quality), temp,
+        ]);
+        const optimized = fs.readFileSync(temp);
+        if (!verifyAudioHeader(optimized, '.ogg')) {
+            throw new Error('FFmpeg produced an invalid OGG file.');
+        }
+        const missing = verifyLoopTags(optimized, '.ogg', required);
+        if (missing.length) throw new Error(`FFmpeg did not preserve loop metadata: ${missing.join(', ')}`);
+        if (optimized.length >= original.length) return { before: original.length, after: original.length, changed: false };
+        fs.renameSync(temp, oggPath);
+        fs.rmSync(filePath, { force: true });
+        return { before: original.length, after: optimized.length, changed: true, converted: true };
+    } finally {
+        fs.rmSync(temp, { force: true });
+    }
+}
+
+// One entry point for every supported audio format: OGG, MP3, and M4A
+// re-encode in place; WAV and FLAC convert to OGG.
+function optimizeAudioFile(filePath, quality, ffmpegPath, execute = runFfmpeg) {
+    const ext = path.extname(filePath).toLowerCase();
+    if (ext === '.wav' || ext === '.flac') return convertAudioToOgg(filePath, quality, ffmpegPath, execute);
+    return reencodeAudioFile(filePath, quality, ffmpegPath, execute);
+}
+
 function runFfmpeg(executable, args) {
     return new Promise((resolve, reject) => {
         execFile(executable, args, {
@@ -282,7 +435,7 @@ async function forEachConcurrent(items, limit, callback) {
 }
 
 async function optimizeStagedAssets(stagingRoot, settings, options) {
-    const summary = { png: 0, ogg: 0, before: 0, after: 0, warnings: [] };
+    const summary = { png: 0, audio: 0, converted: 0, before: 0, after: 0, warnings: [] };
     const onWarning = options.onWarning || (() => {});
     const onStatus = options.onStatus || (() => {});
     const onFile = options.onFile || (() => {});
@@ -306,41 +459,59 @@ async function optimizeStagedAssets(stagingRoot, settings, options) {
             onProgress('PNG', index + 1, pngFiles.length);
         }
     }
-    if (settings.ogg) {
-        onStatus('Preparing OGG encoder...');
-        const ffmpegPath = await acquireFfmpeg(options);
-        const encoders = execFileSync(ffmpegPath, ['-hide_banner', '-encoders'], { encoding: 'utf8', windowsHide: true });
-        if (!/\blibvorbis\b/.test(encoders)) throw new Error('The verified FFmpeg build does not include the libvorbis encoder.');
+    if (settings.audio ?? settings.ogg) {
         const audioRoot = path.join(stagingRoot, 'audio');
-        const oggFiles = collectFiles(audioRoot, file => path.extname(file).toLowerCase() === '.ogg');
-        const quality = Math.max(0, Math.min(10, Number(settings.oggQuality) || 5));
-        const concurrency = Math.max(1, Math.min(4,
-            typeof os.availableParallelism === 'function' ? os.availableParallelism() - 1 : os.cpus().length - 1));
-        const activeWorkers = Math.min(concurrency, oggFiles.length);
-        onStatus(oggFiles.length
-            ? `Re-encoding ${oggFiles.length} OGG file${oggFiles.length === 1 ? '' : 's'} with ${activeWorkers} parallel worker${activeWorkers === 1 ? '' : 's'}...`
-            : 'No OGG files found to optimize.');
-        let completed = 0;
-        await forEachConcurrent(oggFiles, concurrency, async (filePath, index) => {
-            onFile('OGG', filePath, index + 1, oggFiles.length);
-            try {
-                const result = await optimizeOggFile(filePath, quality, ffmpegPath, options.executeFfmpeg);
-                summary.before += result.before;
-                summary.after += result.after;
-                if (result.changed) summary.ogg++;
-            } catch (error) {
-                const warning = `OGG optimization skipped ${path.relative(stagingRoot, filePath)}: ${error.message}`;
-                summary.warnings.push(warning);
-                onWarning(warning);
+        const audioFiles = collectFiles(audioRoot,
+            file => AUDIO_EXTENSIONS.includes(path.extname(file).toLowerCase()));
+        const presentExtensions = new Set(audioFiles.map(file => path.extname(file).toLowerCase()));
+        const quality = Math.max(0, Math.min(10, Number(settings.audioQuality ?? settings.oggQuality) || 5));
+        if (audioFiles.length) {
+            onStatus('Preparing audio encoder...');
+            const ffmpegPath = await acquireFfmpeg(options);
+            const encoders = execFileSync(ffmpegPath, ['-hide_banner', '-encoders'], { encoding: 'utf8', windowsHide: true });
+            if (!/\blibvorbis\b/.test(encoders)) throw new Error('The verified FFmpeg build does not include the libvorbis encoder.');
+            if (presentExtensions.has('.mp3') && !/\blibmp3lame\b/.test(encoders)) {
+                throw new Error('The verified FFmpeg build does not include the libmp3lame encoder.');
             }
-            completed++;
-            onProgress('OGG', completed, oggFiles.length);
-        });
+            if (presentExtensions.has('.m4a') && !/\baac\b/.test(encoders)) {
+                throw new Error('The verified FFmpeg build does not include the aac encoder.');
+            }
+            const concurrency = Math.max(1, Math.min(4,
+                typeof os.availableParallelism === 'function' ? os.availableParallelism() - 1 : os.cpus().length - 1));
+            const activeWorkers = Math.min(concurrency, audioFiles.length);
+            onStatus(`Compressing ${audioFiles.length} audio file${audioFiles.length === 1 ? '' : 's'} with ${activeWorkers} parallel worker${activeWorkers === 1 ? '' : 's'}...`);
+            let completed = 0;
+            await forEachConcurrent(audioFiles, concurrency, async (filePath, index) => {
+                const label = path.extname(filePath).slice(1).toUpperCase();
+                onFile(label, filePath, index + 1, audioFiles.length);
+                try {
+                    const result = await optimizeAudioFile(filePath, quality, ffmpegPath, options.executeFfmpeg);
+                    summary.before += result.before;
+                    summary.after += result.after;
+                    if (result.changed) summary.audio++;
+                    if (result.converted) summary.converted++;
+                    if (result.skipped) {
+                        const warning = `Audio compression skipped ${path.relative(stagingRoot, filePath)}: ${result.skipped}.`;
+                        summary.warnings.push(warning);
+                        onWarning(warning);
+                    }
+                } catch (error) {
+                    const warning = `Audio compression skipped ${path.relative(stagingRoot, filePath)}: ${error.message}`;
+                    summary.warnings.push(warning);
+                    onWarning(warning);
+                }
+                completed++;
+                onProgress('Audio', completed, audioFiles.length);
+            });
+        } else {
+            onStatus('No audio files found to compress.');
+        }
     }
     return summary;
 }
 
 module.exports = {
+    AUDIO_EXTENSIONS,
     FFMPEG_RELEASE,
     TRUSTED_FFMPEG,
     cacheDirectories,
@@ -349,6 +520,11 @@ module.exports = {
     pngDimensions,
     optimizePngFile,
     loopComments,
+    lameQuality,
+    aacBitrate,
+    wavSamplerLoop,
+    mp3LoopTags,
     optimizeOggFile,
+    optimizeAudioFile,
     optimizeStagedAssets,
 };

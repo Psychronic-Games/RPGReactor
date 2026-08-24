@@ -448,7 +448,7 @@ test('the 3D section carries the tool strip, part picking, and the edit card', (
     assert.match(source, /r3d-card-speed/);
     assert.match(source, /_durationLabel\(work\.period\)/);
     assert.match(source, /previewPose\(\)/);
-    assert.match(source, /name: '__preview'/);
+    assert.match(source, /previewValues\.name = '__preview'/);
     // Selection is drawn against the uncarved mesh so triangle indices
     // count over the source geometry, and rules freeze while selecting.
     assert.match(source, /if \(!this\._selectMode && Reactor3D\.carveModelParts/);
@@ -548,7 +548,7 @@ test('the runtime latch lives in the sync path the game runs', () => {
     const source = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_3d.js'), 'utf8');
     assert.match(source, /binding\.latch\[i\] = true;/);
     assert.match(source, /rules\[k\]\.hold\s*\n?\s*&& rules\[k\]\.part === rule\.part/);
-    assert.match(source, /hold: !!raw\.hold/);
+    assert.match(source, /hold: keys\.length \? false : !!raw\.hold/);
 });
 
 test('selection overlays never join the carve-target numbering', () => {

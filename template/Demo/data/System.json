@@ -177,7 +177,8 @@
   "optSlipDeath": false,
   "optTransparent": false,
   "partyMembers": [
-    1
+    1,
+    2
   ],
   "ship": {
     "bgm": {
@@ -561,7 +562,7 @@
     "",
     ""
   ],
-  "versionId": 1117312,
+  "versionId": 51800332,
   "victoryMe": {
     "name": "Victory1",
     "pan": 0,
