@@ -77,6 +77,44 @@ test('OGG optimization passes explicit quality and preserves loop comments', asy
     }
 });
 
+test('OGG optimization carries embedded cover art through the re-encode', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'rpg-reactor-ogg-art-'));
+    const target = path.join(root, 'Theme.ogg');
+    let encodeArgs = null;
+    try {
+        fs.writeFileSync(target, Buffer.from(`OggS${'x'.repeat(500)}`));
+        // A tiny valid PNG header: the extraction sniff accepts it as art.
+        const png = Buffer.concat([
+            Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+            Buffer.from([0, 0, 0, 13]), Buffer.from('IHDR'),
+            Buffer.from([0, 0, 1, 104, 0, 0, 1, 104, 8, 6, 0, 0, 0]),
+        ]);
+        const result = await optimizer.optimizeAudioFile(target, 5, '/mock/ffmpeg', async (_executable, nextArgs) => {
+            const output = nextArgs.at(-1);
+            if (nextArgs.includes('image2')) {
+                fs.writeFileSync(output, png);
+                return;
+            }
+            encodeArgs = nextArgs;
+            fs.writeFileSync(output, Buffer.from(`OggS${'y'.repeat(20)}METADATA_BLOCK_PICTURE=stub`));
+        });
+        assert.equal(result.changed, true);
+        const metaIndex = encodeArgs.indexOf('ffmetadata');
+        assert.ok(metaIndex > 0, 'the encode reads an ffmetadata input, never argv');
+        const metaFile = encodeArgs[metaIndex + 2];
+        assert.ok(!fs.existsSync(metaFile), 'the metadata temp file is cleaned up');
+        assert.match(fs.readFileSync(target, 'latin1'), /METADATA_BLOCK_PICTURE/);
+        // The comment holds a FLAC PICTURE block with the real dimensions.
+        const block = optimizer.flacPictureComment({ bytes: png, mime: 'image/png' });
+        const decoded = Buffer.from(block, 'base64');
+        assert.equal(decoded.readUInt32BE(0), 3, 'front cover type');
+        const widthOffset = 4 + 4 + 'image/png'.length + 4;
+        assert.equal(decoded.readUInt32BE(widthOffset), 360, 'width parsed from the image');
+    } finally {
+        fs.rmSync(root, { recursive: true, force: true });
+    }
+});
+
 test('FFmpeg acquisition downloads pinned release URLs directly and rejects tampered archives', async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'rpg-reactor-ffmpeg-cache-'));
     const requested = [];

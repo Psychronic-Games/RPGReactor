@@ -275,6 +275,87 @@ function mp3LoopTags(buffer) {
     return tags;
 }
 
+// FFmpeg's demuxers surface embedded cover art (an Ogg METADATA_BLOCK_PICTURE
+// comment, an ID3 APIC frame, a FLAC PICTURE block) as an attached picture
+// stream and delete the tag it came from — so a plain audio re-encode
+// silently drops the art. Extract the picture first so each encode path can
+// put it back.
+async function extractCoverImage(filePath, ffmpegPath, execute) {
+    const temp = `${filePath}.${process.pid}.${Date.now()}.cover.bin`;
+    try {
+        await execute(ffmpegPath, [
+            '-y', '-hide_banner', '-loglevel', 'error', '-i', filePath,
+            '-map', '0:v:0', '-frames:v', '1', '-c', 'copy', '-f', 'image2', temp,
+        ]);
+        const bytes = fs.readFileSync(temp);
+        if (bytes.length >= 4 && bytes[0] === 0xff && bytes[1] === 0xd8) {
+            return { bytes, mime: 'image/jpeg' };
+        }
+        if (bytes.length >= 8 && bytes.readUInt32BE(0) === 0x89504e47) {
+            return { bytes, mime: 'image/png' };
+        }
+        return null;
+    } catch (error) {
+        return null; // no attached picture — the normal case
+    } finally {
+        fs.rmSync(temp, { force: true });
+    }
+}
+
+function imageDimensions(image) {
+    const { bytes, mime } = image;
+    try {
+        if (mime === 'image/png' && bytes.length >= 24) {
+            return { width: bytes.readUInt32BE(16), height: bytes.readUInt32BE(20) };
+        }
+        // JPEG: scan markers for the SOF segment carrying the frame size.
+        let offset = 2;
+        while (offset + 9 < bytes.length && bytes[offset] === 0xff) {
+            const marker = bytes[offset + 1];
+            const size = bytes.readUInt16BE(offset + 2);
+            if (marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc) {
+                return { width: bytes.readUInt16BE(offset + 7), height: bytes.readUInt16BE(offset + 5) };
+            }
+            offset += 2 + size;
+        }
+    } catch (error) { /* fall through */ }
+    return { width: 0, height: 0 };
+}
+
+// The base64 FLAC PICTURE block a METADATA_BLOCK_PICTURE comment holds:
+// type 3 (front cover), mime, empty description, dimensions, image bytes.
+function flacPictureComment(image) {
+    const mime = Buffer.from(image.mime, 'ascii');
+    const { width, height } = imageDimensions(image);
+    const block = Buffer.alloc(4 + 4 + mime.length + 4 + 16 + 4 + image.bytes.length);
+    let offset = 0;
+    block.writeUInt32BE(3, offset); offset += 4;
+    block.writeUInt32BE(mime.length, offset); offset += 4;
+    mime.copy(block, offset); offset += mime.length;
+    block.writeUInt32BE(0, offset); offset += 4;
+    block.writeUInt32BE(width, offset); offset += 4;
+    block.writeUInt32BE(height, offset); offset += 4;
+    block.writeUInt32BE(24, offset); offset += 4;
+    block.writeUInt32BE(0, offset); offset += 4;
+    block.writeUInt32BE(image.bytes.length, offset); offset += 4;
+    image.bytes.copy(block, offset);
+    return block.toString('base64');
+}
+
+// Extra FFmpeg inputs that write the picture back into an Ogg output's
+// comment header. The comment goes through an ffmetadata file, never argv:
+// Windows caps a whole command line at 32K characters and art is bigger.
+function writeCoverMetadataFile(image, metaPath) {
+    const escaped = flacPictureComment(image).replace(/[\\=;#]/g, ch => `\\${ch}`);
+    fs.writeFileSync(metaPath, `;FFMETADATA1\nMETADATA_BLOCK_PICTURE=${escaped}\n`);
+    return ['-f', 'ffmetadata', '-i', metaPath, '-map_metadata:g', '1:g'];
+}
+
+function verifyCoverComment(buffer, image) {
+    if (!image) return true;
+    return buffer.toString('latin1').includes('METADATA_BLOCK_PICTURE');
+}
+
 function requiredLoopTags(buffer, ext) {
     if (ext === '.wav') {
         const loop = wavSamplerLoop(buffer);
@@ -303,6 +384,9 @@ function verifyAudioHeader(buffer, ext) {
 }
 
 // Re-encode an audio file in place (OGG, MP3, M4A keep their container).
+// Embedded cover art rides along: back into the comment header for Ogg,
+// as a copied attached-picture stream for MP3 and M4A. Art must never
+// break a deploy, so a failed with-art encode retries without it.
 async function reencodeAudioFile(filePath, quality, ffmpegPath, execute = runFfmpeg) {
     const ext = path.extname(filePath).toLowerCase();
     const original = fs.readFileSync(filePath);
@@ -312,14 +396,34 @@ async function reencodeAudioFile(filePath, quality, ffmpegPath, execute = runFfm
         : ext === '.mp3' ? ['-c:a', 'libmp3lame', '-q:a', String(lameQuality(quality))]
         : ['-c:a', 'aac', '-b:a', aacBitrate(quality)];
     const temp = `${filePath}.${process.pid}.${Date.now()}.part${ext}`;
+    const metaPath = `${temp}.meta.txt`;
+    const cover = await extractCoverImage(filePath, ffmpegPath, execute);
+    const attempts = [];
+    if (cover && ext === '.ogg') {
+        attempts.push(['-i', filePath, ...writeCoverMetadataFile(cover, metaPath),
+            '-map_metadata', '0', '-vn', ...codecArgs, temp]);
+    } else if (cover) {
+        attempts.push(['-i', filePath, '-map_metadata', '0', '-map', '0:a:0',
+            '-map', '0:v:0', '-c:v', 'copy', '-disposition:v:0', 'attached_pic', ...codecArgs, temp]);
+    }
+    attempts.push(['-i', filePath, '-map_metadata', '0', '-vn', ...codecArgs, temp]);
     try {
-        await execute(ffmpegPath, [
-            '-y', '-hide_banner', '-loglevel', 'error', '-i', filePath,
-            '-map_metadata', '0', '-vn', ...codecArgs, temp,
-        ]);
-        const optimized = fs.readFileSync(temp);
-        if (!verifyAudioHeader(optimized, ext)) {
-            throw new Error(`FFmpeg produced an invalid ${ext.slice(1).toUpperCase()} file.`);
+        let optimized = null;
+        for (let i = 0; i < attempts.length; i++) {
+            try {
+                await execute(ffmpegPath, ['-y', '-hide_banner', '-loglevel', 'error', ...attempts[i]]);
+                const out = fs.readFileSync(temp);
+                if (!verifyAudioHeader(out, ext)) {
+                    throw new Error(`FFmpeg produced an invalid ${ext.slice(1).toUpperCase()} file.`);
+                }
+                if (i < attempts.length - 1 && ext === '.ogg' && !verifyCoverComment(out, cover)) {
+                    throw new Error('FFmpeg dropped the cover comment.');
+                }
+                optimized = out;
+                break;
+            } catch (error) {
+                if (i === attempts.length - 1) throw error;
+            }
         }
         const missing = verifyLoopTags(optimized, ext, required);
         if (missing.length) throw new Error(`FFmpeg did not preserve loop metadata: ${missing.join(', ')}`);
@@ -330,6 +434,7 @@ async function reencodeAudioFile(filePath, quality, ffmpegPath, execute = runFfm
         return { before: original.length, after: optimized.length, changed: true };
     } finally {
         fs.rmSync(temp, { force: true });
+        fs.rmSync(metaPath, { force: true });
     }
 }
 
@@ -351,14 +456,32 @@ async function convertAudioToOgg(filePath, quality, ffmpegPath, execute = runFfm
         ? required.flatMap(tag => ['-metadata', tag])
         : [];
     const temp = `${oggPath}.${process.pid}.${Date.now()}.part.ogg`;
+    const metaPath = `${temp}.meta.txt`;
+    const cover = ext === '.flac' ? await extractCoverImage(filePath, ffmpegPath, execute) : null;
+    const attempts = [];
+    if (cover) {
+        attempts.push(['-i', filePath, ...writeCoverMetadataFile(cover, metaPath),
+            '-map_metadata', '0', ...loopArgs, '-vn', '-c:a', 'libvorbis', '-q:a', String(quality), temp]);
+    }
+    attempts.push(['-i', filePath,
+        '-map_metadata', '0', ...loopArgs, '-vn', '-c:a', 'libvorbis', '-q:a', String(quality), temp]);
     try {
-        await execute(ffmpegPath, [
-            '-y', '-hide_banner', '-loglevel', 'error', '-i', filePath,
-            '-map_metadata', '0', ...loopArgs, '-vn', '-c:a', 'libvorbis', '-q:a', String(quality), temp,
-        ]);
-        const optimized = fs.readFileSync(temp);
-        if (!verifyAudioHeader(optimized, '.ogg')) {
-            throw new Error('FFmpeg produced an invalid OGG file.');
+        let optimized = null;
+        for (let i = 0; i < attempts.length; i++) {
+            try {
+                await execute(ffmpegPath, ['-y', '-hide_banner', '-loglevel', 'error', ...attempts[i]]);
+                const out = fs.readFileSync(temp);
+                if (!verifyAudioHeader(out, '.ogg')) {
+                    throw new Error('FFmpeg produced an invalid OGG file.');
+                }
+                if (i < attempts.length - 1 && !verifyCoverComment(out, cover)) {
+                    throw new Error('FFmpeg dropped the cover comment.');
+                }
+                optimized = out;
+                break;
+            } catch (error) {
+                if (i === attempts.length - 1) throw error;
+            }
         }
         const missing = verifyLoopTags(optimized, '.ogg', required);
         if (missing.length) throw new Error(`FFmpeg did not preserve loop metadata: ${missing.join(', ')}`);
@@ -368,6 +491,7 @@ async function convertAudioToOgg(filePath, quality, ffmpegPath, execute = runFfm
         return { before: original.length, after: optimized.length, changed: true, converted: true };
     } finally {
         fs.rmSync(temp, { force: true });
+        fs.rmSync(metaPath, { force: true });
     }
 }
 
@@ -396,31 +520,8 @@ function runFfmpeg(executable, args) {
     });
 }
 
-async function optimizeOggFile(filePath, quality, ffmpegPath, execute = runFfmpeg) {
-    const original = fs.readFileSync(filePath);
-    const originalStat = fs.statSync(filePath);
-    const requiredComments = loopComments(original);
-    const temp = `${filePath}.${process.pid}.${Date.now()}.part.ogg`;
-    try {
-        await execute(ffmpegPath, [
-            '-y', '-hide_banner', '-loglevel', 'error', '-i', filePath,
-            '-map_metadata', '0', '-vn', '-c:a', 'libvorbis', '-q:a', String(quality), temp,
-        ]);
-        const optimized = fs.readFileSync(temp);
-        if (optimized.length < 4 || optimized.subarray(0, 4).toString('ascii') !== 'OggS') {
-            throw new Error('FFmpeg produced an invalid OGG file.');
-        }
-        const optimizedComments = new Set(loopComments(optimized));
-        const missing = requiredComments.filter(comment => !optimizedComments.has(comment));
-        if (missing.length) throw new Error(`FFmpeg did not preserve loop metadata: ${missing.join(', ')}`);
-        if (optimized.length >= original.length) return { before: original.length, after: original.length, changed: false };
-        fs.chmodSync(temp, originalStat.mode);
-        fs.utimesSync(temp, originalStat.atime, originalStat.mtime);
-        replaceFile(temp, filePath);
-        return { before: original.length, after: optimized.length, changed: true };
-    } finally {
-        fs.rmSync(temp, { force: true });
-    }
+function optimizeOggFile(filePath, quality, ffmpegPath, execute = runFfmpeg) {
+    return reencodeAudioFile(filePath, quality, ffmpegPath, execute);
 }
 
 async function forEachConcurrent(items, limit, callback) {
@@ -525,6 +626,7 @@ module.exports = {
     wavSamplerLoop,
     mp3LoopTags,
     optimizeOggFile,
+    flacPictureComment,
     optimizeAudioFile,
     optimizeStagedAssets,
 };

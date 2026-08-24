@@ -4,6 +4,13 @@ All notable changes to RPG Reactor will be documented in this file.
 
 This root changelog summarizes public release progress for GitHub; larger releases group their fixes by theme. The detailed editor changelog lives at [`editor/CHANGELOG.md`](editor/CHANGELOG.md).
 
+## [Unreleased]
+
+### Fixed
+
+- **Web builds no longer crash on a 3D-bound actor's retired sprite.** `Database.r3d.json` reads instantly from disk in the desktop player but arrives by network fetch in a browser, so the first web frames didn't yet know an actor was 3D and asked for the 2D walking sheet the project no longer ships — "Failed to load img/characters/...". Boot now waits for that one fetch (it always settles, so boot cannot hang), and the party's sprites never commit to a sheet before the answer is in.
+- **Deploy audio compression keeps embedded cover art.** FFmpeg surfaces a track's embedded art as a picture stream and deletes the tag it came from, so every re-encode silently shipped artless music. The optimizer now extracts the picture first and writes it back — into the Ogg comment header, or as the MP3/M4A attached picture — falling back to an art-less encode rather than failing a deploy. The Demo soundtrack's art, dropped by the 0.98.3 size pass, was restored losslessly.
+
 ## [0.98.3] - 2026-08-24
 
 ### Added

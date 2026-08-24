@@ -5,6 +5,13 @@ All notable changes to RPG Reactor will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **Web builds no longer crash on a 3D-bound actor's retired sprite sheet.** `Database.r3d.json` reads synchronously on NW.js but is an async fetch in a browser, so the first web frames didn't yet know an actor was 3D and requested the 2D walking sheet the project no longer ships — "Failed to load img/characters/...". `Scene_Boot` now waits for the sidecar answer (the fetch always settles with success or failure, so boot cannot hang), and a player or follower sprite never commits to a sheet while the answer is pending — it retries the next frame instead. Verified by booting the Demo with the sidecar artificially delayed two seconds: boot held, the stale sheet was never requested, and both bound actors reached the map as models.
+- **Deploy audio compression keeps embedded cover art.** FFmpeg's demuxers surface embedded art (an Ogg `METADATA_BLOCK_PICTURE` comment, an ID3 `APIC` frame, a FLAC `PICTURE` block) as an attached picture stream and delete the tag it came from, so every audio re-encode shipped artless music while faithfully preserving loop tags. The optimizer now extracts the picture before encoding and writes it back — rebuilt as a `METADATA_BLOCK_PICTURE` comment for Ogg outputs (through an ffmetadata file, never argv, which Windows caps at 32K characters), or as a copied attached-picture stream for MP3 and M4A. A failed with-art encode retries without art rather than failing the deploy. The Demo soundtrack's art, dropped by the 0.98.3 size pass, was restored losslessly from the pre-compression files (66 of 68 tracks; the other two never had art).
+
 ## [0.98.3] - 2026-08-24
 
 ### Added
