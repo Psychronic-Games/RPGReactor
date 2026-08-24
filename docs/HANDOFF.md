@@ -1,6 +1,93 @@
-# Handoff - 0.98.3 In Progress
+# Handoff - 0.98.4 In Progress
 
-Last updated 2026-08-23.
+Last updated 2026-08-24.
+
+## Current State
+
+- **0.98.3** is tagged and published at
+  <https://github.com/Psychronic-Games/RPGReactor/releases/tag/v0.98.3>
+  (2026-08-24): in-editor rigging, rig templates and preset motions,
+  database 3D bindings, MP3/WAV/FLAC/M4A audio, PixiJS 8.20.0.
+- **0.98.4** is open in `editor/package.json`, both READMEs, and the
+  `[Unreleased - 0.98.4]` sections of both changelogs. Nine fixes are queued
+  there already (seek-broken Demo tracks, the web editor's 3D suite, two
+  PIXI 8 compat gaps, the map-title load soft lock, console quieting, the
+  v8 `origin` accessor, render-guard noise, DB3D first-open glitches).
+- Validation: **1,517 passing tests**, no failures, skips, or TODOs
+  (`cd editor && npm test`, ~19 s). Syntax and `git diff --check` pass.
+- `template/Demo` is the only git-tracked template. The other folders under
+  `template/` are local compatibility-corpus projects (Star Shift
+  Freelancers / Origins / Rebellion, Project2/3, MZ3D, Parallax, Hendrix,
+  Barebones) and are ignored; tests must not depend on them.
+
+## Open Threads (pick up from here)
+
+Feature work, in the order the owner has been asking:
+
+- **Rigging backlog** (see the rigging sections below): weight-painting
+  brush; camera-relative preset mirroring (poses assume +Z facing);
+  death/knockback presets; bird/fish templates; retargeting clips between
+  same-template rigs; a terrain-driven rule-set switch so Swim is automatic;
+  decimation guidance for Meshy-scale models.
+- **Stock MZ battler motions are not mapped to model actions** — a 3D
+  battler plays its ambient rules and named actions, but walk/attack/damage
+  motion cells do not yet trigger model animations.
+- **Embedded-clip follow-ups**: bake clip → keyed pose rules (needs
+  animated-GLB bones registered as parts); cloth/limb interpenetration
+  mitigations (per-part depth bias) — authoring-side skinning is the real
+  fix.
+- **Weapons/armors/items** store 3D bindings only; nothing draws them yet.
+- **3D world massing** — `DESIGN-3D-WORLDS.md` phases 5–7 (Block shape,
+  structures, direct manipulation) are still a plan; the character/model
+  side sprinted ahead of the tileset-inferred world.
+- **Diagonal strut runs as single planes** (measured 2026-08-16, under
+  *Event 3D Models* below): a run whose art descends across many rows needs
+  per-column depth. Design answer known, not built.
+- **WebGPU**: parked. Three's WebGPURenderer is a different bundle and
+  material surface; our offscreen-renderer → Bitmap → PIXI pipeline is
+  portable in principle but not a drop-in swap.
+
+Content and tooling:
+
+- **Demo art gaps** (owner replacing stock assets as originals are made):
+  `img/characters/Actor1` (actors 2–8), `sv_actors/Actor1_2..8` and
+  `Actor2_2`, all five enemies have no battler art on disk, and
+  `docs/demo-missing-se.md` lists the 120 SE names animations still
+  reference. Intentional Demo removals must be staged with `git rm` or the
+  completeness test fails.
+- **`generate-deep-translations.cjs` is broken** (Microsoft edge auth
+  endpoint 404s). New phrases are hand-authored into all 17 non-English
+  locales in `I18nDeepTranslations.js` / the curated `I18nManager.js`
+  blocks.
+- **Audit backlog** (`AUDIT-BACKLOG-2026-07-25.md`) still awaits owner
+  decisions on three authored-data items; nothing there is a code defect.
+
+## Manual Release Gates
+
+Not runnable from this Linux checkout; do them on the release hardware.
+
+- Open the rebuilt Web package over HTTPS or localhost and confirm the 3D
+  checkbox stays checked, the canvas appears, model previews render in the
+  database (fixed in the 0.98.4 cycle), and switching back restores the 2D
+  map.
+- Run Windows launch and Authenticode checks on Windows with release
+  credentials.
+- Run macOS launch, signing, notarization, stapling, and Gatekeeper checks
+  on macOS with release credentials.
+- Region and object-designation overlays remain absent from the 3D
+  viewport; an existing editor affordance gap, not a bug.
+
+Windows 3D-checkbox crash: **resolved and confirmed on native Windows
+2026-08-22** (inline three.js injection overflowed the 1MB main-thread stack;
+Blob-URL loading fixed it in 0.98.2 — `f3f87cc`, `97e0457`).
+
+---
+
+# Cycle Notes (newest first)
+
+Engineering notes and gotchas from each piece of work, kept because the
+suite and the next session both lean on them. Shipped-cycle narrative starts
+at *History* below.
 
 ## In-Editor Rigging (2026-08-23, stage 1 SHIPPED)
 
@@ -487,141 +574,6 @@ both the editor and the running game.
   endpoint 404s — the three new phrases were hand-authored into all 17
   locales in `I18nDeepTranslations.js`.
 
-## Release State
-
-- 0.98.2 is tagged and published at
-  <https://github.com/Psychronic-Games/RPGReactor/releases/tag/v0.98.2>.
-- 0.98.3 is open in package metadata, application startup surfaces, both
-  READMEs, and `[Unreleased - 0.98.3]` sections in both changelogs.
-- The 0.98.2 event 3D models, encrypted-project, stale-runtime-refresh, and
-  database/event workflow changes are preserved in the immutable `v0.98.2`
-  tag. New reports belong to 0.98.3.
-- Current validation is **1,464 passing tests** with no failures, skips, or
-  TODOs. Syntax and `git diff --check` also pass.
-- Picking up (2026-08-23): the Database 3D part/animation system is
-  feature-complete through timed effects and owner-tested on the tank
-  (Oth97_CNO_Consul) and monster-plant; the live rigs are
-  `scratchpad/db3d-canon.mjs` (targeted, runs against the owner's real
-  sidecar), `db3d-card.mjs` (full card flow), `db3d-monkey.mjs` (seeded
-  random-order UI actions, MONKEY_MODEL/SEED/STEPS), and
-  `db3d-two-parts.mjs` (two-part independence). Demo content now carries
-  the owner's turret/cannon parts and animations.
-
-## Event 3D Models (active, 2026-08-15)
-
-Events can now carry a GLB/OBJ/FBX/… mesh instead of a walking sheet. This is
-the work to pick up first. Demo: Map001 event 22 ("Tank"), Buick at
-`template/Demo/3d/free-buick-riviera-car/source/`, sidecar
-`template/Demo/data/Map001.r3d.json`.
-
-### What is built
-
-- **Sidecar, not notes.** `map.reactor3d.events[eventId][pageIndex] = { name,
-  file, ext, size, scale, yaw, pitch, roll, faces? }`. Degrees in the file,
-  radians at runtime. `characterModelSpec` prefers the sidecar, then `<r3d>`
-  notes. `MapElevation.save` keeps `events` even on a flat map.
-- **Folders.** `3d/<folder>/source` + `3d/<folder>/textures`. Legacy
-  `3d/source/<file>` is still probed. The picker lists folder names.
-- **Picker** (`editor/src/event/ModelGraphicPicker.js`). Orbit preview, gizmo,
-  X/Y/Z, size in tiles. Front/Back/Left/Right are placeable colored dots
-  parented to the mesh (not snap-yaw buttons). Dots persist as
-  `faces: { front: [x,y,z], … }` in object-local space.
-- **Event editor.** 3D checkbox, title "3D Model", live WebGL thumbnail, Down /
-  Left / Right / Up buttons. Image preview (2D and 3D) flex-fills the leftover
-  left column with no scrollbar. Specs reload from the sidecar even when
-  `Reactor3D` is not loaded yet. Picker OK writes the map immediately; Event
-  Editor Cancel restores the baseline; project save flushes pending models.
-- **Runtime pose.** In-game the Front mark aims at the event facing
-  (`characterModelDir8`, including 1/3/7/9). Preview aims the matching face
-  mark at the camera. A turn that would swing the footprint onto the player or
-  another solid event is refused.
-- **Collision.** `size` is the ground footprint. After the GLB loads, the
-  actual XZ AABB is used and rotated with facing. `Game_Event.pos` occupies
-  every overlapping tile; the event does not collide with itself.
-- **Depth.** On a map with event models, other characters become upright
-  (not `THREE.Sprite`) billboards in the 3D below pass so the car's depth
-  buffer can hide them when they stand north of it. PIXI character sprites
-  are hidden on those maps.
-
-### Fixed 2026-08-16 (owner-reported, verified over CDP)
-
-- Character billboards drew upside down: `flipY = false` (a glTF convention)
-  on the CanvasTexture under PlaneGeometry UVs. Three's default is kept now.
-- The player could walk into the driving car. Two timing holes:
-  `eventModelContains` now covers both `_x/_y` and `_realX/_realY` (a gliding
-  body kept its trailing tiles), and `eventModelWouldOverlap` accepts the
-  movement direction so a turning step is tested in both body orientations.
-  `Game_Event.isCollidedWithEvents` also goes footprint-wide for model
-  events (the car could previously plow through single-tile NPCs).
-- The mesh pivoted 90° in one frame at route corners — a nine-tile car's
-  ends teleport ±4.5 tiles, seen as "flashing back to its original
-  position". `syncCharacterModels` eases the visible yaw along the shortest
-  arc at `MODEL_TURN_SPEED` (0.1 rad/frame); facing and collision stay
-  instant. Owner confirmed the smooth turn feels right.
-- A sprite in front of the car lost its head to the car's depth buffer: the
-  billboard lean (a drawing device against foreshortening) tips a quad's
-  upper half into the mesh behind it, and per-pixel depth honestly buried
-  it. `straightenBillboardDepth` writes each vertex's depth from a vertical
-  twin at the anchor — screen shape keeps the lean, depth is the upright
-  quad — applied to character billboards and the tile cut-out material.
-  Rays cross a vertical plane in true near/far order, so in front / behind
-  settles per pixel against any mesh with no sort rules. Verified south
-  (fully in front) and north (correctly clear) of the parked Buick.
-
-### Depth model as of 2026-08-16 (owner-driven, iterated live)
-
-One rule: real per-pixel depth, with billboards depth-twinned vertical at
-their anchor. Star tiles render in the world buffer on model maps. A
-stationary event on a facade cell snaps to that wall's plane (facadeAt) with
-a coplanar polygon-offset pull; a walking character ON a facade's footprint
-gets its depth pushed just in front of that plane (rrDepthShift uniforms)
-while its drawn position stays put — pressed against the console or crossing
-the reactor's apron the player stays visible; off the footprint, behind
-means hidden. Character billboards take the tile cut-outs' footward step so
-2D-authored stacking holds from every camera position.
-
-### What is still off
-
-- The player/car relationship may still want tuning; walk front, beside, and
-  behind the car while it drives and judge feet vs body.
-- **Diagonal struts as single planes** (measured 2026-08-16): the reactor's
-  legs merge with their foot pads, so the run roots at its southernmost row
-  (plane z=22.5 while the strut's art spans rows 13-20) — its entire art
-  therefore beats any character north of row 22, which reads as a head
-  clipped under a pylon while standing at the strut's mid-height. The
-  character push cannot fix this without also breaking genuinely-behind
-  cases, because the plane really is south of the player. The design answer
-  is per-column or per-cell depth for runs whose art descends across many
-  rows (split the strut run at its diagonal), in `uprightRuns`/the footing
-  merge. Facts: machine facade z=19.5 lift 0-6; console pedestal z=20.5;
-  leg/foot-pad run z=22.5. Character push samples the max facade plane over
-  the sprite's overlap cells (x±1, y and y-1), never south rows.
-
-Open questions worth not re-fighting blindly:
-
-- Should the sort line be the event tile, the south edge of the footprint, or
-  true GPU depth only?
-- `size` 9 on the Buick is the longest-axis fit. The collision box after load
-  uses the real aspect; before the GLB arrives it is a square of `size`.
-- Turn collision now covers the swing: a turning step and a turn in place
-  must clear the sweep disc (`eventModelSweepRadius`, corner diagonal) in
-  both swing directions, and `eventModelOccupies` keeps the arc solid for
-  `MODEL_TURN_SWEEP_FRAMES` after a facing change so nothing steps into a
-  playing swing. Verified live: a diagonal bystander outside both end
-  rectangles blocks the turn either way, the turn frees when clear, and
-  mid-swing entry is blocked then released.
-
-### Key files
-
-- `runtime/reactor_3d.js` — load, pose, footprint, billboards
-- `runtime/reactor_objects.js` — `Game_Event.pos`, self-exclusion, can-face
-- `runtime/reactor_sprites.js` — hide PIXI sprites, sync billboards
-- `editor/src/event/ModelGraphicPicker.js`, `EventPageEditor.js`, `EventEditor.js`
-- `editor/tests/reactor-3d-models.test.cjs`
-- Sync copies with `node editor/build-scripts/sync-runtime.cjs`
-
-World axes: X = map x, Y = up, Z = map y. Event Down = +Z.
-
 ## Database 3D Part Carving & Pose Card (2026-08-22)
 
 Database > 3D carves arbitrary mesh regions into named parts (box-select,
@@ -744,6 +696,127 @@ play/resume/update/delete isolated).
   triangles, was exactly the owner's first-session complaint). Closing the
   card eases the part home over one period rather than snapping — that is
   the blend slot handing over, and it reads as polish, not a bug.
+
+## Event 3D Models (2026-08-15, shipped in 0.98.2)
+
+Events can carry a GLB/OBJ/FBX/… mesh instead of a walking sheet. Demo: Map001 event 22 ("Tank"), Buick at
+`template/Demo/3d/free-buick-riviera-car/source/`, sidecar
+`template/Demo/data/Map001.r3d.json`.
+
+### What is built
+
+- **Sidecar, not notes.** `map.reactor3d.events[eventId][pageIndex] = { name,
+  file, ext, size, scale, yaw, pitch, roll, faces? }`. Degrees in the file,
+  radians at runtime. `characterModelSpec` prefers the sidecar, then `<r3d>`
+  notes. `MapElevation.save` keeps `events` even on a flat map.
+- **Folders.** `3d/<folder>/source` + `3d/<folder>/textures`. Legacy
+  `3d/source/<file>` is still probed. The picker lists folder names.
+- **Picker** (`editor/src/event/ModelGraphicPicker.js`). Orbit preview, gizmo,
+  X/Y/Z, size in tiles. Front/Back/Left/Right are placeable colored dots
+  parented to the mesh (not snap-yaw buttons). Dots persist as
+  `faces: { front: [x,y,z], … }` in object-local space.
+- **Event editor.** 3D checkbox, title "3D Model", live WebGL thumbnail, Down /
+  Left / Right / Up buttons. Image preview (2D and 3D) flex-fills the leftover
+  left column with no scrollbar. Specs reload from the sidecar even when
+  `Reactor3D` is not loaded yet. Picker OK writes the map immediately; Event
+  Editor Cancel restores the baseline; project save flushes pending models.
+- **Runtime pose.** In-game the Front mark aims at the event facing
+  (`characterModelDir8`, including 1/3/7/9). Preview aims the matching face
+  mark at the camera. A turn that would swing the footprint onto the player or
+  another solid event is refused.
+- **Collision.** `size` is the ground footprint. After the GLB loads, the
+  actual XZ AABB is used and rotated with facing. `Game_Event.pos` occupies
+  every overlapping tile; the event does not collide with itself.
+- **Depth.** On a map with event models, other characters become upright
+  (not `THREE.Sprite`) billboards in the 3D below pass so the car's depth
+  buffer can hide them when they stand north of it. PIXI character sprites
+  are hidden on those maps.
+
+### Fixed 2026-08-16 (owner-reported, verified over CDP)
+
+- Character billboards drew upside down: `flipY = false` (a glTF convention)
+  on the CanvasTexture under PlaneGeometry UVs. Three's default is kept now.
+- The player could walk into the driving car. Two timing holes:
+  `eventModelContains` now covers both `_x/_y` and `_realX/_realY` (a gliding
+  body kept its trailing tiles), and `eventModelWouldOverlap` accepts the
+  movement direction so a turning step is tested in both body orientations.
+  `Game_Event.isCollidedWithEvents` also goes footprint-wide for model
+  events (the car could previously plow through single-tile NPCs).
+- The mesh pivoted 90° in one frame at route corners — a nine-tile car's
+  ends teleport ±4.5 tiles, seen as "flashing back to its original
+  position". `syncCharacterModels` eases the visible yaw along the shortest
+  arc at `MODEL_TURN_SPEED` (0.1 rad/frame); facing and collision stay
+  instant. Owner confirmed the smooth turn feels right.
+- A sprite in front of the car lost its head to the car's depth buffer: the
+  billboard lean (a drawing device against foreshortening) tips a quad's
+  upper half into the mesh behind it, and per-pixel depth honestly buried
+  it. `straightenBillboardDepth` writes each vertex's depth from a vertical
+  twin at the anchor — screen shape keeps the lean, depth is the upright
+  quad — applied to character billboards and the tile cut-out material.
+  Rays cross a vertical plane in true near/far order, so in front / behind
+  settles per pixel against any mesh with no sort rules. Verified south
+  (fully in front) and north (correctly clear) of the parked Buick.
+
+### Depth model as of 2026-08-16 (owner-driven, iterated live)
+
+One rule: real per-pixel depth, with billboards depth-twinned vertical at
+their anchor. Star tiles render in the world buffer on model maps. A
+stationary event on a facade cell snaps to that wall's plane (facadeAt) with
+a coplanar polygon-offset pull; a walking character ON a facade's footprint
+gets its depth pushed just in front of that plane (rrDepthShift uniforms)
+while its drawn position stays put — pressed against the console or crossing
+the reactor's apron the player stays visible; off the footprint, behind
+means hidden. Character billboards take the tile cut-outs' footward step so
+2D-authored stacking holds from every camera position.
+
+### What is still off
+
+- The player/car relationship may still want tuning; walk front, beside, and
+  behind the car while it drives and judge feet vs body.
+- **Diagonal struts as single planes** (measured 2026-08-16): the reactor's
+  legs merge with their foot pads, so the run roots at its southernmost row
+  (plane z=22.5 while the strut's art spans rows 13-20) — its entire art
+  therefore beats any character north of row 22, which reads as a head
+  clipped under a pylon while standing at the strut's mid-height. The
+  character push cannot fix this without also breaking genuinely-behind
+  cases, because the plane really is south of the player. The design answer
+  is per-column or per-cell depth for runs whose art descends across many
+  rows (split the strut run at its diagonal), in `uprightRuns`/the footing
+  merge. Facts: machine facade z=19.5 lift 0-6; console pedestal z=20.5;
+  leg/foot-pad run z=22.5. Character push samples the max facade plane over
+  the sprite's overlap cells (x±1, y and y-1), never south rows.
+
+Open questions worth not re-fighting blindly:
+
+- Should the sort line be the event tile, the south edge of the footprint, or
+  true GPU depth only?
+- `size` 9 on the Buick is the longest-axis fit. The collision box after load
+  uses the real aspect; before the GLB arrives it is a square of `size`.
+- Turn collision now covers the swing: a turning step and a turn in place
+  must clear the sweep disc (`eventModelSweepRadius`, corner diagonal) in
+  both swing directions, and `eventModelOccupies` keeps the arc solid for
+  `MODEL_TURN_SWEEP_FRAMES` after a facing change so nothing steps into a
+  playing swing. Verified live: a diagonal bystander outside both end
+  rectangles blocks the turn either way, the turn frees when clear, and
+  mid-swing entry is blocked then released.
+
+### Key files
+
+- `runtime/reactor_3d.js` — load, pose, footprint, billboards
+- `runtime/reactor_objects.js` — `Game_Event.pos`, self-exclusion, can-face
+- `runtime/reactor_sprites.js` — hide PIXI sprites, sync billboards
+- `editor/src/event/ModelGraphicPicker.js`, `EventPageEditor.js`, `EventEditor.js`
+- `editor/tests/reactor-3d-models.test.cjs`
+- Sync copies with `node editor/build-scripts/sync-runtime.cjs`
+
+World axes: X = map x, Y = up, Z = map y. Event Down = +Z.
+
+---
+
+# History (shipped cycles 0.98.0–0.98.2)
+
+Narrative for fixes that shipped in earlier cycles. The public changelogs are
+the authoritative record; these stay for the reasoning.
 
 ## Encrypted-Project Support (2026-08-16)
 
@@ -872,19 +945,6 @@ scene (10 sheets, 3 map meshes, and 63 events), disables 3D, and confirms PIXI's
 canvas and ticker are restored. The same test passes in native Linux NW.js and in
 the Windows NW.js binary under Wine.
 
-## Open 0.98.3 Reports
-
-- **RESOLVED (confirmed on native Windows, 2026-08-22):** checking 3D no
-  longer terminates the editor process. The 0.98.1 shared-context work was
-  chasing the wrong layer — the actual killer was injecting the 2MB three.js
-  bundle as *inline* script text: V8's recursive parser overflows Windows'
-  1MB main-thread stack (STATUS_ACCESS_VIOLATION), which Linux and Wine never
-  hit with their 8MB stacks. Fixed in 0.98.2 by loading 3D libraries through
-  Blob URLs with external-script semantics (`f3f87cc`), backed by
-  crash-surviving breadcrumbs that name the stage that died and auto-switch
-  context strategies, refusing to arm rather than crash a third time
-  (`97e0457`). Both in `editor/src/MapEditor3D.js`.
-
 ## Stale Project Runtime Fix
 
 The repeated `filterArea.zw` screenshot identifies the 0.98.0 translator, not a
@@ -961,24 +1021,3 @@ exactly once from `Tilemap.update()` before rendering; Window and TilingSprite
 retain their required render hooks. A rebuilt Project3 smoke test drove 23 mesh
 layers through a 360-frame diagonal out-and-back pan with one preparation per
 frame and no hidden, dirty, fallback, or missing-layer frame.
-
-## Deployment Note
-
-Publishing the 0.98.2 source will not modify the 0.98.1 Web ZIP or an itch.io Web
-channel. Build and deploy a new 0.98.2 Web artifact from the patch tag. Browsers
-may retain an older service worker briefly; after deployment, reload the page
-once (or clear the site's service worker/cache) before testing the checkbox.
-
-## Remaining Manual Gates
-
-- Open the rebuilt Web package over HTTPS or localhost and confirm the 3D
-  checkbox stays checked, the canvas appears, and switching back restores the
-  2D map.
-- ~~On physical Windows, open Reactor One, enable 3D, orbit the map, disable
-  and re-enable 3D, and confirm the editor process and 2D map remain intact.~~
-  Confirmed working on native Windows, 2026-08-22.
-- Run Windows launch and Authenticode checks on Windows with release credentials.
-- Run macOS launch, signing, notarization, stapling, and Gatekeeper checks on
-  macOS with release credentials.
-- Region and object-designation overlays remain absent from the 3D viewport;
-  this is an existing editor affordance gap, not part of the Web loading bug.

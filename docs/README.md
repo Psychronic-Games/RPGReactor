@@ -2,15 +2,19 @@
 
 This folder contains release notes, audit history, and maintainer workflows that are not required for normal RPG Reactor editor use.
 
-- [Deep Audit Backlog — 2026-07-25](AUDIT-BACKLOG-2026-07-25.md): open items from the 0.96.0 file-by-file correctness audit that need a project-owner decision rather than a code change.
+- [Handoff](HANDOFF.md): current cycle state, open threads, manual release gates, and the engineering notes behind recent work.
+- [Deep Audit Backlog — 2026-07-25](AUDIT-BACKLOG-2026-07-25.md): three authored-data items from the 0.96.0 file-by-file correctness audit that need a project-owner decision rather than a code change (re-verified 2026-08-24, all still open).
+- [Demo: assets not on disk](demo-missing-se.md): SE names and character/battler art the bundled Demo references but no longer ships, kept current while stock assets are replaced.
 - [Deep Audit Backlog — 2026-07-13](AUDIT-BACKLOG-2026-07-13.md): cleared historical record of the seven-subsystem audit findings and their 0.95.0 disposition.
 - [Release Checklist](RELEASE-CHECKLIST.md): clean validation, signed candidate production, artifact inspection, GitHub/itch publication, rollback, and post-release checks.
-- [Building 3D worlds from 2D tilesets](DESIGN-3D-WORLDS.md): replacing the 0.96.0 renderer's inference with an authored shape/material/structure model — why billboards fail for gates, where facing can be derived rather than authored, and a phased order of work. Four of its eight phases are built (faces from autotile shape, per-face materials and roof pairing, the Panel shape, and 3D lighting); the rest is still a plan. It also records what was *tried and rejected* — five merge rules for where one structure ends, and why a point light per light does not survive a real map — so those are not re-fought.
+- [Building 3D worlds from 2D tilesets](DESIGN-3D-WORLDS.md): replacing the 0.96.0 renderer's inference with an authored shape/material/structure model — why billboards fail for gates, where facing can be derived rather than authored, and a phased order of work. Phases 1–3 and 8 are built (faces from autotile shape, per-face materials and roof pairing, the Panel shape, and 3D lighting), phase 4 was built and dropped, and 5–7 (Block shape, structures, direct manipulation) are still a plan; event and database models shipped separately as sidecars. It also records what was *tried and rejected* — five merge rules for where one structure ends, and why a point light per light does not survive a real map — so those are not re-fought.
 
 Release progress for GitHub visitors is tracked in the root [`CHANGELOG.md`](../CHANGELOG.md). Detailed editor/runtime change history is tracked in [`editor/CHANGELOG.md`](../editor/CHANGELOG.md).
 
 Published release explanations (one devlog per release):
 
+- [RPG Reactor 0.98.3: Rig It Yourself](devlogs/2026-08-23-rpg-reactor-0.98.3.md)
+- [3D objects on the map](devlogs/2026-08-02-3d-objects-on-the-map.md) (mid-cycle note, 0.97)
 - [RPG Reactor 0.96.0: A Deep Correctness Audit](devlogs/2026-07-25-rpg-reactor-0.96.0.md)
 - [RPG Reactor 0.95.0: A More Complete Editor](devlogs/2026-07-18-rpg-reactor-0.95.0.md)
 - [RPG Reactor 0.94.8: Big Maps Without the Wait](devlogs/2026-07-13-rpg-reactor-0.94.8.md)

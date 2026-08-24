@@ -9,14 +9,20 @@ the cycle — see the [root changelog](../CHANGELOG.md), the detailed
 
 **Status: OPEN — awaiting a project-owner decision.** Nothing here blocked the
 release: 0.96.0 was tagged and published on 2026-07-27 with these items still
-open, and they carry forward. Validation stood at 777 passing Node tests at the
-time of the audit; it is 984 as of the 0.97.0 cycle.
+open, and they carry forward through 0.98.3. Re-verified against the local
+projects on 2026-08-24: all three items stand exactly as described. Validation
+stood at 777 passing Node tests at the time of the audit; it is 1,517 as of the
+0.98.4 cycle.
+
+The projects named below are local compatibility-corpus copies under
+`template/`, not tracked files; only `template/Demo` is in git.
 
 ## Authored data in the bundled projects
 
 ### Three animations exceed the engine's 16-cell frame limit
 
-`template/Complex/data/Animations.json` ids **386** (`moonlight burn`), **387**
+`template/Star Shift Freelancers/data/Animations.json` (formerly `template/Complex`)
+ids **386** (`moonlight burn`), **387**
 and **388** (both `darklight lightning big`) have frames containing 18 cells.
 `Sprite_Animation` bounds its loops on `this._cellSprites.length`, which is 16,
 so the last two layers of those frames never render.

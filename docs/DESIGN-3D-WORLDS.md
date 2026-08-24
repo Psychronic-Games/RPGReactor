@@ -1,6 +1,8 @@
 # Building 3D worlds from 2D tilesets
 
-Written 2026-08-01. **Phases 1-4 are implemented**; 5-7 are still a plan. The
+Written 2026-08-01; status current as of 2026-08-24. **Phases 1–3 and 8 are
+built**, 4 was built and dropped, and 5–7 are still a plan. Models on events and
+database records (the last row of the table) shipped separately in 0.98.2–0.98.3. The
 diagnosis below is kept in the past tense where it has been fixed, because it
 is the reasoning the implementation rests on.
 
@@ -198,7 +200,7 @@ Ordered by payoff per unit of work, not by dependency. Each step is shippable.
 | 6 | **Structures: define, stamp, place** | Building a world becomes fast rather than possible. See *Where one structure ends* below. | Open |
 | 7 | **Direct manipulation in the 3D view** | Comfort. Everything above is usable without it. | Open |
 | 8 | **Lights as 3D lights** | A lantern becomes a sphere, a torch a cone. | **Done** |
-| — | **Event meshes** (sidecar, not a tileset class) | An event can stand a GLB/OBJ/… from `3d/<folder>/source` instead of a sheet. Pose and facing marks live in `Map###.r3d.json`. Collision and character depth are in progress. | **In 0.98.2** |
+| — | **Event and database meshes** (sidecar, not a tileset class) | An event, actor, enemy, weapon, armor, or item can carry a GLB/OBJ/… from `3d/<folder>/source`. Pose and facing live in `Map###.r3d.json` / `Database.r3d.json`; parts, pivots, rigs, and animations in the model's own `model.json`. Footprint collision, turn sweeps, and per-pixel character depth are done. | **Done (0.98.2–0.98.3)** |
 
 Steps 1–3 are corrections to what exists and touch the runtime almost
 exclusively. Steps 4–7 are new authoring surface and are mostly editor work.
@@ -314,7 +316,8 @@ further into the plugin than hiding a container.
 
 - **Sloped or curved geometry.** Everything is axis-aligned boxes and quads.
   Ramps are stepped. This is an HD-2D diorama, not a modelling package.
-- **3D battles.** Battles stay 2D, as now.
-- **Per-vertex authored meshes.** If a project needs a genuine model, the answer
-  is a model, not a tileset.
-- **Lighting.** Out of scope until the geometry is right.
+- **3D battles.** The battle scene stays 2D. A bound enemy or actor renders as
+  a live 3D battler on its sprite (0.98.3), but there is no 3D battlefield.
+- **Per-vertex authored meshes from tiles.** If a project needs a genuine model,
+  the answer is a model — now supported through the event and database
+  bindings above — not a tileset.

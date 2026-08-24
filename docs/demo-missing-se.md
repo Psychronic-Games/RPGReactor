@@ -1,4 +1,21 @@
-# Demo: animation sounds not on disk
+# Demo: assets not on disk
+
+Re-verified 2026-08-24 against `template/Demo`: 120 SE names missing, 75 SE
+files on disk. The owner is replacing stock assets with originals as they are
+made; keep this list current rather than restoring stock files.
+
+## Character and battler art
+
+- `img/characters/Actor1` — actors 2–8 (Carol Everson, Chase, Karen, Herbert,
+  Katie, Elija, Rosanna)
+- `img/sv_actors/Actor1_2` … `Actor1_8` — actors 2–8; `Actor2_2` — actor 1
+  (Fleagus Gustafario)
+- All five enemies have no battler art in `img/enemies` or `img/sv_enemies`
+
+Actors 1–2 carry `Database.r3d.json` model bindings, so their map sprites are
+3D regardless; the remaining references only matter where a 2D sprite is drawn.
+
+## Animation sounds
 
 Every SE name the animation database references that audio/se no longer holds.
 Replace or re-pick these to keep animations from stopping the game.

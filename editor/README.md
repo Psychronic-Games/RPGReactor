@@ -54,13 +54,13 @@ Comprehensive editors for all game data in a near-full-viewport workspace with f
 
 | Editor | Purpose |
 |--------|---------|
-| **Actors** | Create player characters with stats, equipment, traits, and clickable character/face sheet cell selection |
+| **Actors** | Create player characters with stats, equipment, traits, and clickable character/face sheet cell selection; the character, face, and side-view battler each independently switch to a 3D model |
 | **Classes** | Define jobs with responsive parameter curves, directly editable learnable skills, and EXP formulas |
 | **Skills** | Design abilities with damage formulas, MP/TP costs, visible button/double-click effects CRUD, required weapon types, and invocation settings including an animation picker |
 | **Items** | Create consumables with damage formulas, TP gain, visible button/double-click effects CRUD, usage restrictions, and an animation picker |
 | **Weapons** | Configure weapons with parameters, elements, traits, and an attack animation picker |
 | **Armors** | Set up defensive equipment with parameters, resistances, and full trait editing |
-| **Enemies** | Build enemies with visual battler preview (charset-aware), hue slider with live preview, parameters, drop items, directly editable action patterns, and traits |
+| **Enemies** | Build enemies with visual battler preview (charset-aware), hue slider with live preview, parameters, drop items, directly editable action patterns, traits, and an optional 3D battler model |
 | **Troops** | Compose enemy groups in a two-column workspace with a runtime-aligned preview on the left, stacked Battle Test/Members/Battleback/Note controls on the right, class-filtered Battle Test equipment, aligned Conditions dialog, and full-width event page scripting below |
 | **States** | Define status effects with auto-removal and parameter changes |
 | **Animations** | Create Effekseer or MV-style sprite battle animations in a dense responsive workspace with scaled 960x540 preview editing, compact sprite sheets/properties, locally scrolling frames/effect controls, and timing SE stored in recursive subfolders |
@@ -70,9 +70,11 @@ Comprehensive editors for all game data in a near-full-viewport workspace with f
 | **System 2** | Menu commands, item categories, attack motions, editor settings, asset sizes, advanced options, and an ordered fillable Magic Skills list of Skill Type IDs controlling side-view casting motion |
 | **Types** | Five simultaneous ID-preserving lists for Elements, Skill Types, Weapon Types, Armor Types, and Equipment Types, with multiselect, keyboard and context-menu Cut/Copy/Paste, bulk clear, Add, and confirmed Change Maximum |
 | **Terms** | One compact workspace for Basic Statuses, Parameters, Commands, and the complete grouped Messages schema with text clipboard context menus |
+| **3D** | Browse the project's `3d/` model library in folders, carve any mesh region into a named part, rig static models with Humanoid/Quadruped/Plant/Vehicle skeletons, apply preset motions, and author every pose, swing, spin, bob, clip, keyframe timeline, and timed effect on one slider card with live preview. Bindings live in `data/Database.r3d.json` and per-model `model.json` / `model.rig.bin` sidecars |
 
 ### Audio Player
 - **Multi-channel playback**: BGM, BGS, ME, and SE tracks
+- **Formats**: OGG, MP3, WAV, FLAC, and M4A, with per-format loop tags (`LOOPSTART`/`LOOPLENGTH` comments, ID3 `TXXX`, WAV `smpl`) and embedded album art shown beside each track; the same interface backs every audio picker in the editor
 - **Playback controls**: Volume, pitch, pan, and seek
 - **Loop configuration**: Set custom loop points
 - **Real-time preview**: Test audio while editing events, system audio, and map autoplay BGM/BGS settings
@@ -399,7 +401,7 @@ Database shortcuts are scoped to the active database section. The Types workspac
 ## Technical Details
 
 - **Runtime**: NW.js; deployment defaults to the latest stable release and also supports pinning a specific version or matching the editor runtime
-- **Rendering**: PixiJS 8.14.0, with compatibility shims and bundled PIXI 7-era library support for imported RPG Maker projects/plugins
+- **Rendering**: PixiJS 8.20.0, with compatibility shims and bundled PIXI 7-era library support for imported RPG Maker projects/plugins
 - **Animation Effects**: Effekseer
 - **Data Format**: RPG Maker MZ-compatible JSON plus stock MV-compatible LZString saves. The MV compatibility layer supports synchronous YEP-style local/browser save APIs, including custom directory, filename, and web-storage key contracts
 - **Tile Size**: RPG Maker MZ-compatible 48, 32, 24, or 16 pixels
@@ -408,7 +410,7 @@ Database shortcuts are scoped to the active database section. The Types workspac
 
 ### Tests
 
-The Node test suite covers project creation/import and version metadata, generated-project validity, runtime manifests, local Markdown links, all 18 localization dictionaries and no-fallback labels, cross-instance map/database/event clipboard transport, database batch/scroll behavior and trait/effect reference remapping, persisted A1 animation control, exact Shift autotile placement, database limits and Types/Terms behavior, complete Conditional Branch and nested-structure round trips, advanced Control Variables and Game Data operands, stock Loop insertion, dynamic event calls, extended input conditions, dynamic/extended Picture commands, transactional event creation/editing and all four Quick Event generators, visual start locations, Magic Skills, searchable Plugin Help, nested plugin-parameter serialization, MV saves and visual compatibility, recursive/Unicode assets, project lock and atomic-write safety, package preflights, preview cleanup, deployment/runtime acquisition, release policy/signing gates, Forge generation, editor/Web distribution, Effekseer format/model round trips, all 106 recipes at default/extreme/swept values, composition, and real-WASM playback. Two sweeps also run every invocation against shapes derived from the bundled RPG Maker-authored projects (vendored in `tests/helpers/authored-data-shapes.json`): each command editor's emitted parameter count versus the highest `params[n]` the matching `Game_Interpreter.commandNNN` reads, and each new-record template versus the fields authored records always carry. Current validation is 1,366 passing tests with no failures.
+The Node test suite covers project creation/import and version metadata, generated-project validity, runtime manifests, local Markdown links, all 18 localization dictionaries and no-fallback labels, cross-instance map/database/event clipboard transport, database batch/scroll behavior and trait/effect reference remapping, persisted A1 animation control, exact Shift autotile placement, database limits and Types/Terms behavior, complete Conditional Branch and nested-structure round trips, advanced Control Variables and Game Data operands, stock Loop insertion, dynamic event calls, extended input conditions, dynamic/extended Picture commands, transactional event creation/editing and all four Quick Event generators, visual start locations, Magic Skills, searchable Plugin Help, nested plugin-parameter serialization, MV saves and visual compatibility, recursive/Unicode assets, project lock and atomic-write safety, package preflights, preview cleanup, deployment/runtime acquisition, release policy/signing gates, Forge generation, editor/Web distribution, Effekseer format/model round trips, all 106 recipes at default/extreme/swept values, composition, and real-WASM playback. Two sweeps also run every invocation against shapes derived from the bundled RPG Maker-authored projects (vendored in `tests/helpers/authored-data-shapes.json`): each command editor's emitted parameter count versus the highest `params[n]` the matching `Game_Interpreter.commandNNN` reads, and each new-record template versus the fields authored records always carry. Current validation is 1,517 passing tests with no failures.
 
 ```bash
 cd editor
