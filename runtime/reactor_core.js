@@ -1985,7 +1985,7 @@ Graphics.FPSCounter.prototype.endTick = function() {
 
 Graphics.FPSCounter.prototype.switchMode = function() {
     if (this._boxDiv.style.display === "none") {
-        this._boxDiv.style.display = "block";
+        this._boxDiv.style.display = "flex";
         this._showFps = true;
     } else if (this._showFps) {
         this._showFps = false;
@@ -1997,30 +1997,57 @@ Graphics.FPSCounter.prototype.switchMode = function() {
 
 Graphics.FPSCounter.prototype._createElements = function() {
     this._boxDiv = document.createElement("div");
+    this._rowDiv = document.createElement("div");
     this._labelDiv = document.createElement("div");
+    this._modeDiv = document.createElement("div");
     this._numberDiv = document.createElement("div");
     this._boxDiv.id = "fpsCounterBox";
     this._labelDiv.id = "fpsCounterLabel";
+    this._modeDiv.id = "fpsCounterMode";
     this._numberDiv.id = "fpsCounterNumber";
-    // RPG Maker MZ ships the counter's CSS in its stock index.html <style>
-    // block; Reactor's generated index.html has no style block, so the
-    // styling must live here or the counter renders unpositioned behind the
-    // absolutely-positioned game canvas (z-index 1) and Effekseer overlay
-    // (z-index 2).
+    // RPG Maker MZ ships the counter's CSS in its stock css/game.css, and
+    // projects created from MZ carry that file. Its #fpsCounterBox/Label/
+    // Number rules position the pieces absolutely with paddings and fixed
+    // heights, so every property those rules set is reset inline here —
+    // an inline declaration beats an id selector; an unset one is lost to it.
+    // Reactor's own generated index.html has no such sheet, and the inline
+    // styles also stop the counter rendering unpositioned behind the game
+    // canvas (z-index 1) and Effekseer overlay (z-index 2).
+    //
+    // Laid out with flex so the box sizes to its content and every line
+    // shares one right edge: the number and its unit sit on a common
+    // baseline ("144 FPS"), the renderer mode on its own line beneath.
+    const reset =
+        "position:static; top:auto; left:auto; right:auto; bottom:auto;" +
+        "width:auto; height:auto; margin:0; padding:0; opacity:1;" +
+        "text-align:left; text-shadow:none; white-space:nowrap;" +
+        "font-family:rmmz-numberfont,monospace;";
     this._boxDiv.style.cssText =
-        "position:absolute; top:8px; left:8px; width:90px; height:40px;" +
+        reset +
+        "position:absolute; top:8px; left:8px; box-sizing:border-box;" +
+        "min-width:90px; padding:6px 10px;" +
+        "display:none; flex-direction:column; align-items:flex-end;" +
         "background:rgba(16,16,24,0.72); border-radius:8px;" +
         "box-shadow:0 1px 4px rgba(0,0,0,0.4); z-index:2147483647;" +
-        "display:none; pointer-events:none;";
-    this._labelDiv.style.cssText =
-        "position:absolute; top:4px; left:8px; font-size:11px;" +
-        "letter-spacing:1px; color:rgba(255,255,255,0.7);" +
-        "font-family:rmmz-numberfont,monospace;";
+        "pointer-events:none;";
+    this._rowDiv.style.cssText =
+        reset + "display:flex; align-items:baseline; column-gap:5px;";
     this._numberDiv.style.cssText =
-        "position:absolute; bottom:4px; right:8px; font-size:22px;" +
-        "color:#fff; font-family:rmmz-numberfont,monospace;";
-    this._boxDiv.appendChild(this._labelDiv);
-    this._boxDiv.appendChild(this._numberDiv);
+        reset + "font-size:22px; line-height:24px; color:#fff;" +
+        "font-variant-numeric:tabular-nums;";
+    this._labelDiv.style.cssText =
+        reset + "font-size:11px; line-height:12px; letter-spacing:1px;" +
+        "color:rgba(255,255,255,0.7);";
+    // Renderer mode on its own line under the number, the way RPG Maker's
+    // meter reported "WebGL mode" / "Canvas mode".
+    this._modeDiv.style.cssText =
+        reset + "align-self:stretch; text-align:center; margin-top:2px;" +
+        "font-size:9px; line-height:11px; letter-spacing:1px;" +
+        "color:rgba(255,255,255,0.55);";
+    this._rowDiv.appendChild(this._numberDiv);
+    this._rowDiv.appendChild(this._labelDiv);
+    this._boxDiv.appendChild(this._rowDiv);
+    this._boxDiv.appendChild(this._modeDiv);
     document.body.appendChild(this._boxDiv);
 };
 
@@ -2028,6 +2055,47 @@ Graphics.FPSCounter.prototype._update = function() {
     const count = this._showFps ? this.fps : this.duration;
     this._labelDiv.textContent = this._showFps ? "FPS" : "ms";
     this._numberDiv.textContent = count.toFixed(0);
+    // The PIXI app initializes asynchronously, so the mode is read here
+    // (every 15 ticks) rather than once at creation. Blank until known.
+    const app = Graphics.app;
+    const mode = app && app.renderer ? Graphics.rendererModeName(app.renderer) : "";
+    if (this._modeDiv.textContent !== mode) this._modeDiv.textContent = mode;
+};
+
+/**
+ * "WebGL", "WebGPU", or "Canvas" for a PIXI renderer, or "" when it cannot
+ * be told. Polymorphic across PIXI versions: v8 renderers carry a `name`
+ * ("webgl"/"webgpu") and `RendererType` (1 WebGL, 2 WebGPU, 4 Canvas), v5-v7
+ * use `PIXI.RENDERER_TYPE` (1 WebGL, 2 Canvas) — the numbers collide, so the
+ * string is preferred and the enum is read from whichever PIXI is loaded.
+ */
+Graphics.rendererModeName = function(renderer) {
+    if (!renderer) return "";
+    const names = { webgl: "WebGL", webgpu: "WebGPU", canvas: "Canvas" };
+    if (typeof renderer.name === "string" && names[renderer.name.toLowerCase()]) {
+        return names[renderer.name.toLowerCase()];
+    }
+    const pixi = typeof PIXI !== "undefined" ? PIXI : null;
+    const type = renderer.type;
+    if (typeof type === "number") {
+        const v8 = pixi && pixi.RendererType;
+        const legacy = pixi && pixi.RENDERER_TYPE;
+        if (v8) {
+            if (type === v8.WEBGPU) return "WebGPU";
+            if (type === v8.WEBGL) return "WebGL";
+            if (type === v8.CANVAS) return "Canvas";
+        } else if (legacy) {
+            if (type === legacy.WEBGL) return "WebGL";
+            if (type === legacy.CANVAS) return "Canvas";
+        }
+    }
+    if (renderer.gl || renderer.context instanceof WebGLRenderingContext ||
+        (typeof WebGL2RenderingContext !== "undefined" &&
+            renderer.context instanceof WebGL2RenderingContext)) {
+        return "WebGL";
+    }
+    if (renderer.context && typeof renderer.context.fillRect === "function") return "Canvas";
+    return "";
 };
 
 //-----------------------------------------------------------------------------

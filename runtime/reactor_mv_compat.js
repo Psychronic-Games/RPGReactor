@@ -404,7 +404,7 @@
         // gap-filling here.
         Graphics.showFps = Graphics.showFps || function() {
             if (this._fpsCounter && this._fpsCounter._boxDiv) {
-                this._fpsCounter._boxDiv.style.display = "block";
+                this._fpsCounter._boxDiv.style.display = "flex";
                 this._fpsCounter._showFps = true;
                 this._fpsCounter._update();
             }
