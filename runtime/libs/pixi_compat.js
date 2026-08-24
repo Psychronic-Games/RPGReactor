@@ -1766,11 +1766,18 @@
         const key = fnName + ":" + ctor;
         if (_warnedDestroyKeys[key]) return;
         _warnedDestroyKeys[key] = true;
-        console.warn("pixi_compat: " + fnName +
+        // A destroyed CANVAS source is the window-chrome churn pattern:
+        // plugins destroy and recreate a drawn bitmap in one pass, and the
+        // part sprites hold the dead canvas for a frame before they are
+        // reassigned. The skip covers it and nothing stays wrong on screen,
+        // so it reports on the debug channel; a destroyed sprite, nulled GPU
+        // data, or a dead file texture is a real leak and stays a warning.
+        const benign = /^texture source destroyed \[canvas /.test(reason || "");
+        (benign ? console.debug : console.warn)("pixi_compat: " + fnName +
             " skipped destroyed/orphan display (class=" + ctor +
             ", reason=" + (reason || "destroyed") +
             ", parents=" + _describeParentChain(obj) +
-            "). Suppressing further warnings for this class. " +
+            "). Suppressing further reports for this class. " +
             "Root cause is a destroy() leak in plugin/MZ code.");
     };
     if (PIXI.SpritePipe && PIXI.SpritePipe.prototype &&
