@@ -1555,6 +1555,7 @@ Sprite_Animation.prototype.setRotation = function(x, y, z) {
 // Graphics._onTick after _app.render() so Effekseer draws on TOP of the v8
 // scene instead of being overwritten by v8's later batch draws.
 Sprite_Animation._pendingRenders = [];
+Sprite_Animation._effekseerDrawWarned = false;
 
 Sprite_Animation.renderActive = function(renderer) {
     // Clear the Effekseer overlay canvas EVERY frame, regardless of whether
@@ -1581,7 +1582,18 @@ Sprite_Animation.renderActive = function(renderer) {
     // pixel-identical to what it covers, so it is invisible in itself.
     const composited = !!(Graphics.blitSceneBehindEffects && Graphics.blitSceneBehindEffects());
     for (const inst of list) {
-        try { inst._doEffekseerDraw(renderer, composited); } catch (e) {}
+        try {
+            inst._doEffekseerDraw(renderer, composited);
+        } catch (e) {
+            // The draw runs every frame, so a throw here is reported once.
+            // Swallowing it outright hid every effect in a game while the
+            // animation's sounds and flashes kept playing.
+            if (!Sprite_Animation._effekseerDrawWarned) {
+                Sprite_Animation._effekseerDrawWarned = true;
+                console.warn("[Sprite_Animation] Effekseer draw threw; effects " +
+                    "will not render until this is fixed:", e);
+            }
+        }
     }
     list.length = 0;
 };

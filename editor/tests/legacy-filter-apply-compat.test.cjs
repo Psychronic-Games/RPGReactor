@@ -31,6 +31,17 @@ function makePixi() {
     class UniformGroup {
         constructor(structures) {
             captured.structures = structures;
+            captured.rawSizes = Object.fromEntries(Object.entries(structures)
+                .map(([name, entry]) => [name, entry.size]));
+            // v8 normalises the structures in place: every entry gains
+            // `size: 1` and an undefined vec2 becomes a Float32Array(2).
+            for (const [name, entry] of Object.entries(structures)) {
+                entry.name = name;
+                entry.size = entry.size || 1;
+                if (entry.value === undefined && entry.type === 'vec2<f32>' && entry.size === 1) {
+                    entry.value = new Float32Array(2);
+                }
+            }
             this.uniforms = Object.fromEntries(Object.entries(structures)
                 .map(([name, entry]) => [name, entry.value]));
         }
@@ -92,7 +103,7 @@ test('array uniforms carry literal and const int sizes into the uniform group', 
     assert.equal(captured.structures.matrix.type, 'f32');
     assert.equal(captured.structures.originalColors.size, 4);
     assert.equal(captured.structures.originalColors.type, 'vec3<f32>');
-    assert.equal('size' in captured.structures.plainPair, false,
+    assert.equal(captured.rawSizes.plainPair, undefined,
         'scalar uniforms keep UniformGroup\'s default size');
 });
 
@@ -188,4 +199,123 @@ test('v5 ObservablePoint callback signatures observe through v8', () => {
     assert.equal(modern._x, 3);
     modern.set(9);
     assert.equal(observerHits, 1);
+});
+
+test('unset scalar array and int uniforms are seeded, since UniformGroup will not', () => {
+    // UniformGroup's default for `f32` is the number 0 whatever the size and
+    // `i32` has none, so an unset `float sourceX[10]` reached gl.uniform1fv as
+    // 0 and threw on every draw (DA_HeatDistortion in Global mode).
+    const { PIXI, captured } = makePixi();
+    install(PIXI);
+    const fragment = `
+        varying vec2 vTextureCoord;
+        uniform sampler2D uSampler;
+        uniform float sourceX[10];
+        const int FLAGS = 3;
+        uniform int flags[FLAGS];
+        uniform int mode;
+        uniform float strength;
+        uniform vec3 tints[2];
+        void main(void) { gl_FragColor = texture2D(uSampler, vTextureCoord); }
+    `;
+    new PIXI.Filter('', fragment, { strength: 0.5 });
+    // The shim runs in its own vm realm, so compare by name, not instanceof.
+    assert.equal(captured.structures.sourceX.value.constructor.name, 'Float32Array');
+    assert.equal(captured.structures.sourceX.value.length, 10);
+    assert.equal(captured.structures.flags.value.constructor.name, 'Int32Array');
+    assert.equal(captured.structures.flags.value.length, 3);
+    assert.equal(captured.structures.mode.value, 0, 'a lone int seeds 0, not null');
+    assert.equal(captured.structures.strength.value, 0.5,
+        'a value the plugin supplied is kept');
+    assert.equal(captured.structures.tints.value, undefined,
+        'vector arrays are left to UniformGroup, which sizes them correctly');
+});
+
+function vec2Filter(PIXI, uniforms) {
+    const fragment = `
+        varying vec2 vTextureCoord;
+        uniform sampler2D uSampler;
+        uniform vec2 uCenter;
+        uniform vec2 uOffsets[3];
+        uniform float strength;
+        void main(void) { gl_FragColor = texture2D(uSampler, vTextureCoord + uCenter); }
+    `;
+    return new PIXI.Filter('', fragment, uniforms);
+}
+const views = v => [v[0], v[1], v.x, v.y];
+
+test('a vec2 uniform reads the same through .x/.y and [0]/[1] whatever shape a plugin writes', () => {
+    const { PIXI } = makePixi();
+    install(PIXI);
+    const filter = vec2Filter(PIXI, {});
+    // The seeded default is a typed array; components alias onto it.
+    assert.equal(filter.uniforms.uCenter.constructor.name, 'Float32Array');
+    filter.uniforms.uCenter.x = 408;
+    filter.uniforms.uCenter.y = 312;
+    assert.deepEqual(views(filter.uniforms.uCenter), [408, 312, 408, 312]);
+
+    // pixi-filters v5 ctor: `this.center = [0, 0]`, then VisuStella `.center.x = ...`.
+    filter.uniforms.uCenter = [0, 0];
+    filter.uniforms.uCenter.x = 100;
+    filter.uniforms.uCenter.y = 200;
+    assert.deepEqual(views(filter.uniforms.uCenter), [100, 200, 100, 200]);
+    assert.equal(JSON.stringify(filter.uniforms.uCenter), '[100,200]', 'arrays still serialise as arrays');
+    assert.equal(filter.uniforms.uCenter.length, 2);
+
+    filter.uniforms.uCenter = { x: 11, y: 22 };
+    assert.deepEqual(views(filter.uniforms.uCenter), [11, 22, 11, 22]);
+    filter.uniforms.uCenter[0] = 9;
+    assert.equal(filter.uniforms.uCenter.x, 9, 'index writes reach the component');
+
+    const held = { x: 1, y: 2 };
+    filter.uniforms.uCenter = held;
+    assert.equal(filter.uniforms.uCenter, held, 'the caller keeps its own object');
+    held.x = 700;
+    assert.deepEqual(views(filter.uniforms.uCenter), [700, 2, 700, 2], 'a held reference propagates like v5');
+
+    // Twirl: `offset = {}` then components; the bare object must not wipe the value.
+    filter.uniforms.uCenter = {};
+    assert.deepEqual(views(filter.uniforms.uCenter), [700, 2, 700, 2]);
+    filter.uniforms.uCenter.x = 5;
+    assert.deepEqual(views(filter.uniforms.uCenter), [5, 2, 5, 2]);
+
+    filter.uniforms.uCenter = 4;
+    assert.deepEqual(views(filter.uniforms.uCenter), [4, 4, 4, 4], 'PixelateFilter.size = 4');
+    filter.uniforms.uCenter = null;
+    assert.deepEqual(views(filter.uniforms.uCenter), [4, 4, 4, 4], 'null keeps the value');
+
+    // An expando written before the object was adopted is what v5 uploaded.
+    const early = [0, 0];
+    early.x = 33; early.y = 44;
+    filter.uniforms.uCenter = early;
+    assert.deepEqual(views(filter.uniforms.uCenter), [33, 44, 33, 44]);
+});
+
+test('vec2 views leave arrays, scalars, points, and frozen values alone', () => {
+    const { PIXI } = makePixi();
+    install(PIXI);
+    const filter = vec2Filter(PIXI, { uCenter: [55, 66], strength: 0.5 });
+    assert.deepEqual(views(filter.uniforms.uCenter), [55, 66, 55, 66], 'a ctor-supplied array is adopted');
+    assert.equal(filter.uniforms.strength, 0.5);
+    assert.equal(Object.getOwnPropertyDescriptor(filter.uniforms, 'uOffsets').get, undefined,
+        'array uniforms are untouched');
+    assert.ok(Object.keys(filter.uniforms).includes('uCenter'), 'the key stays enumerable for the sync generator');
+
+    class ObservablePoint {
+        constructor(x, y) { this._x = x; this._y = y; }
+        get x() { return this._x; }
+        set x(v) { this._x = v; }
+        get y() { return this._y; }
+        set y(v) { this._y = v; }
+    }
+    const point = new ObservablePoint(7, 8);
+    filter.uniforms.uCenter = point;
+    assert.deepEqual(views(filter.uniforms.uCenter), [7, 8, 7, 8], 'accessor components are read, not replaced');
+    point.x = 70;
+    assert.equal(filter.uniforms.uCenter[0], 70);
+
+    const frozen = Object.freeze([1, 2]);
+    assert.doesNotThrow(() => { filter.uniforms.uCenter = frozen; });
+    assert.equal(filter.uniforms.uCenter, frozen);
+    assert.deepEqual([frozen[0], frozen[1]], [1, 2]);
 });

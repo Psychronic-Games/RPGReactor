@@ -3269,11 +3269,25 @@
                         structures[name] = { value: uniforms && uniforms[name], type: type };
                         // Array uniforms (`uniform vec3 colors[12];`, size
                         // possibly a const int / #define) must carry their
-                        // size or the sync generator picks the wrong setter;
-                        // UniformGroup default-fills the value.
+                        // size or the sync generator picks the wrong setter.
                         if (match[3]) {
                             const size = resolveArraySize(match[3], shaderSource);
                             if (size > 0) structures[name].size = size;
+                        }
+                        // UniformGroup default-fills only vector and matrix
+                        // types. Its scalar float default is the number 0
+                        // whatever the array size, and an int has no default
+                        // at all, so a plugin that leaves `float weights[N]`
+                        // unset until a later mode (DA_HeatDistortion's
+                        // radius arrays in Global mode) handed gl.uniform1fv
+                        // the number 0 and threw on every draw. Seed scalars.
+                        if (structures[name].value === undefined) {
+                            const size = structures[name].size || 0;
+                            if (type === "f32" && size > 0) {
+                                structures[name].value = new Float32Array(size);
+                            } else if (type === "i32") {
+                                structures[name].value = size > 0 ? new Int32Array(size) : 0;
+                            }
                         }
                     }
                 }
@@ -3363,11 +3377,109 @@
                 fragment = fragment.replace(/\bgl_FragColor\b/g, "finalColor");
                 return fragment;
             };
+            // A v5 vec2 uniform could be written two ways and both uploaded:
+            // by index (`uCenter = [x, y]`) or by component (`uCenter.x = ...`
+            // on whatever object sat there, plain arrays included). v8 decides
+            // once per filter class which of the two it will read: the sync
+            // code generator tests the group's construction-time value for a
+            // `.x` (libs/pixi.js `uniformParsers`, "uploading a pixi point as
+            // a vec2") and caches the generated function per group signature
+            // and program. A v5 pixi-filters class calls super() with no
+            // uniforms, so that value is the seeded default typed array, the
+            // point parser never fires, and every component write a plugin
+            // makes afterwards (VisuStella's encounter Warp/Spiral/Twirl/
+            // Glitch/Pixel, ActSeqImpact's zoom focus) lands on an expando
+            // nothing reads. The fix keeps `.x/.y` and `[0]/[1]` as two views
+            // of the same two slots on whatever object the uniform holds, so
+            // either generated path reads the right numbers, and the uniform
+            // keeps the caller's own object so a reference held past the
+            // assignment still propagates as it did on v5.
+            const isTypedArray = function(value) {
+                return ArrayBuffer.isView(value) && !(value instanceof DataView);
+            };
+            const defineVecAlias = function(target, key, slot) {
+                // Never replace an access path the value already provides
+                // (an ObservablePoint's x/y, a filter that exposes both).
+                if (key in target) return;
+                try {
+                    Object.defineProperty(target, key, {
+                        get: function() { return this[slot]; },
+                        set: function(value) { this[slot] = value; },
+                        enumerable: false,
+                        configurable: true
+                    });
+                } catch (e) {
+                    // Frozen or sealed targets, and integer keys on typed
+                    // arrays, keep the access path they already had.
+                }
+            };
+            const readVec2 = function(value, index, component) {
+                if (!value || typeof value !== "object") return 0;
+                const byIndex = value[index];
+                if (typeof byIndex === "number") return byIndex;
+                const byComponent = value[component];
+                return typeof byComponent === "number" ? byComponent : 0;
+            };
+            const adoptVec2 = function(value, previous) {
+                if (value === null || value === undefined) return previous;
+                if (typeof value === "number") value = [value, value];
+                if (typeof value !== "object") return value;
+                const hasIndices = isTypedArray(value) || 0 in value;
+                if (hasIndices) {
+                    // An expando `.x` written before adoption is what v5
+                    // would have uploaded; fold it into the slot.
+                    for (const [key, slot] of [["x", 0], ["y", 1]]) {
+                        const own = Object.getOwnPropertyDescriptor(value, key);
+                        if (own && "value" in own && own.configurable) {
+                            delete value[key];
+                            value[slot] = own.value;
+                        }
+                    }
+                    defineVecAlias(value, "x", 0);
+                    defineVecAlias(value, "y", 1);
+                    return value;
+                }
+                if (!("x" in value) && !("y" in value)) {
+                    // A bare `{}` written before its components (VisuStella's
+                    // Twirl does `offset = {}` then `.x = `) must not wipe the
+                    // value it replaces.
+                    value.x = readVec2(previous, 0, "x");
+                    value.y = readVec2(previous, 1, "y");
+                }
+                defineVecAlias(value, 0, "x");
+                defineVecAlias(value, 1, "y");
+                if (!("length" in value)) {
+                    try {
+                        Object.defineProperty(value, "length", {
+                            value: 2, enumerable: false, configurable: true, writable: true
+                        });
+                    } catch (e) { /* keep the plain object */ }
+                }
+                return value;
+            };
+            const installVec2Compat = function(group, structures) {
+                // UniformGroup normalises `structures` in place (every entry
+                // gains `size: 1`), so "scalar" means size 1, not no size.
+                for (const name of Object.keys(structures)) {
+                    const structure = structures[name];
+                    if (!structure || structure.type !== "vec2<f32>" ||
+                        (structure.size || 1) > 1) continue;
+                    let current = adoptVec2(group.uniforms[name], undefined);
+                    Object.defineProperty(group.uniforms, name, {
+                        get: function() { return current; },
+                        set: function(value) { current = adoptVec2(value, current); },
+                        enumerable: true,
+                        configurable: true
+                    });
+                }
+            };
             const constructCompatFilter = function(vertexSrc, fragmentSrc, uniforms, newTarget) {
                 if (typeof vertexSrc === "string" || typeof fragmentSrc === "string") {
                     fragmentSrc = translateFragment(fragmentSrc);
                     const shaderSource = defaultFilterVertex + "\n" + (fragmentSrc || "");
-                    const filterUniforms = new PIXI.UniformGroup(buildUniformStructures(shaderSource, uniforms));
+                    const uniformStructures = buildUniformStructures(shaderSource, uniforms);
+                    const filterUniforms = new PIXI.UniformGroup(uniformStructures);
+                    installVec2Compat(filterUniforms, uniformStructures);
                     const extraSamplers = listExtraSamplers(fragmentSrc);
                     const resources = { filterUniforms: filterUniforms };
                     for (const samplerName of extraSamplers) {

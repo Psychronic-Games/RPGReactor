@@ -49,15 +49,115 @@
     // any corescript that defines `.name` methods on Sprite descendants.
     // -------------------------------------------------------------------------
     // -------------------------------------------------------------------------
-    // (Removed) Container.prototype.updateTransform no-args wrap.
-    // Letting the v8 setter throw on no-args calls preserves a useful side
-    // effect: Window.updateTransform's `_updateFilterArea` -- which depends
-    // on a worldTransform value v8 hasn't always computed by render time --
-    // is skipped via the try/catch in our onRender patch, so window contents
-    // aren't clipped to a stale filterArea. If a future use-case needs the
-    // no-args call to succeed, reintroduce the wrap and find another way to
-    // skip _updateFilterArea on v8.
+    // v5's `sprite.updateTransform()` forced a worldTransform recompute; v8
+    // reuses the name for a property setter `updateTransform(opts)` that reads
+    // `opts.x` and throws on no arguments. Plugins still use the v5 idiom to
+    // project a sprite into screen space (VisuStella CoreEngine does it for
+    // every battler animation target), and when the throw lands inside a
+    // per-frame try/catch the symptom is silent: every Effekseer animation
+    // invisible while its sounds and flashes keep playing.
+    //
+    // The wrap goes on PIXI.Sprite.prototype, deliberately not Container.
+    // Nothing calls a sprite's updateTransform per frame on v8 (the hook is
+    // gone), so only explicit legacy calls change. Container and Window
+    // subclasses keep the throwing setter: plugin chains that wrap
+    // updateTransform on windows and tilemaps (UltraMode7 among them) have
+    // their post-super work skipped by that throw today, and Tilemap's
+    // _prepareV8Frame relies on it staying non-fatal. Window itself no longer
+    // needs the throw; its updateTransform branches on v8 and clips through
+    // _updateFilterArea directly.
+    //
+    // The no-args body refreshes the local transform and returns. It does
+    // not recompute worldTransform: on v8 that is a getter derived from
+    // render-group state on every read, so the value is already current once
+    // the frame has rendered, which is when these callers run.
     // -------------------------------------------------------------------------
+    if (PIXI.TextureSource && PIXI.Sprite && PIXI.Sprite.prototype &&
+        PIXI.Container && PIXI.Container.prototype &&
+        typeof PIXI.Container.prototype.updateTransform === "function" &&
+        !PIXI.Sprite.prototype.__reactorNoArgsUpdateTransform) {
+        const v8UpdateTransform = PIXI.Container.prototype.updateTransform;
+        PIXI.Sprite.prototype.updateTransform = function(opts) {
+            if (opts && typeof opts === "object") {
+                return v8UpdateTransform.call(this, opts);
+            }
+            if (typeof this.updateLocalTransform === "function") {
+                this.updateLocalTransform();
+            }
+            return this;
+        };
+        PIXI.Sprite.prototype.__reactorNoArgsUpdateTransform = true;
+    }
+
+    // -------------------------------------------------------------------------
+    // v5's TexturePool handed a full-screen filter a texture of exactly the
+    // screen size (FilterSystem called setScreenSize, and getOptimalTexture
+    // skipped the power-of-two rounding for that one size). v8 rounds every
+    // request up to a power of two, and the filter vertex shader computes
+    // vTextureCoord = aPosition * (uOutputFrame.zw * uInputSize.zw), frame
+    // over source, so a full-screen filter's uv now spans 0..0.8 x 0..0.6 at
+    // 816x624 instead of 0..1. Every hand-written MV/MZ shader that hardcodes
+    // 0.5 as the screen centre (encounter irises, shatters, wipes) lands down
+    // and to the right. Shaders that normalise by filterArea/uInputSize are
+    // unaffected either way. Restore the v5 rule at the pool: a request that
+    // matches the canvas backing store gets an exactly sized texture; every
+    // other size takes v8's native path. Non-power-of-two render textures are
+    // unconditional on WebGL2 and WebGPU, v8's only backends.
+    //
+    // Graphics does not exist when this file loads (pixi_compat runs before
+    // the corescript), so the screen size is read lazily per call; without a
+    // Graphics canvas (the editor) nothing changes. Full-screen textures use
+    // negative pool keys, which v8's non-negative key formula can never
+    // produce; returnTexture and clear() look keys up by texture uid and
+    // iterate the pool with for..in, so they round-trip. A pooled texture
+    // whose backing no longer matches the screen (the canvas was resized) is
+    // destroyed instead of reused.
+    // -------------------------------------------------------------------------
+    if (PIXI.TextureSource && PIXI.TexturePool &&
+        typeof PIXI.TexturePool.getOptimalTexture === "function" &&
+        typeof PIXI.TexturePool.createTexture === "function" &&
+        !PIXI.TexturePool.__reactorFullScreenTextures) {
+        const nativeGetOptimalTexture = PIXI.TexturePool.getOptimalTexture;
+        const screenPixels = function() {
+            const graphics = window.Graphics;
+            const canvas = graphics && graphics._canvas;
+            if (!canvas || !(canvas.width > 0) || !(canvas.height > 0)) return null;
+            return { width: canvas.width, height: canvas.height };
+        };
+        PIXI.TexturePool.getOptimalTexture = function(frameWidth, frameHeight, resolution, antialias, autoGenerateMipmaps) {
+            if (resolution === undefined) resolution = 1;
+            const screen = screenPixels();
+            const pixelWidth = Math.ceil(frameWidth * resolution - 1e-6);
+            const pixelHeight = Math.ceil(frameHeight * resolution - 1e-6);
+            if (!screen || pixelWidth !== screen.width || pixelHeight !== screen.height) {
+                return nativeGetOptimalTexture.call(this, frameWidth, frameHeight, resolution, antialias, !!autoGenerateMipmaps);
+            }
+            const key = -1 - ((autoGenerateMipmaps ? 1 : 0) << 1) - (antialias ? 1 : 0);
+            if (!this._texturePool[key]) this._texturePool[key] = [];
+            let texture = this._texturePool[key].pop();
+            if (texture && (texture.source.pixelWidth !== pixelWidth ||
+                            texture.source.pixelHeight !== pixelHeight)) {
+                try { texture.destroy(true); } catch (e) { /* already gone */ }
+                texture = null;
+            }
+            if (!texture) {
+                texture = this.createTexture(pixelWidth, pixelHeight, antialias, !!autoGenerateMipmaps);
+            }
+            texture.source._resolution = resolution;
+            texture.source.width = pixelWidth / resolution;
+            texture.source.height = pixelHeight / resolution;
+            texture.source.pixelWidth = pixelWidth;
+            texture.source.pixelHeight = pixelHeight;
+            texture.frame.x = 0;
+            texture.frame.y = 0;
+            texture.frame.width = frameWidth;
+            texture.frame.height = frameHeight;
+            texture.updateUvs();
+            this._poolKeyHash[texture.uid] = key;
+            return texture;
+        };
+        PIXI.TexturePool.__reactorFullScreenTextures = true;
+    }
 
     /**
      * Whether this class is a window layer, whose MZ render must not run here.
