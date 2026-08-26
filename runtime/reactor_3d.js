@@ -6996,17 +6996,24 @@ Reactor3D.parseGlbAsync = function(buffer) {
  * buffers. Every other format — and any worker failure — resolves through
  * the synchronous reader unchanged.
  */
-Reactor3D.readModelAsync = function(buffer, ext, baseUrl, texture) {
+// options.beforeBuild: awaited between the worker parse and the main-thread
+// template build, so a caller can hold the build until the thread is free
+// (the editor's thumbnail pass waits for the preview to sit idle).
+Reactor3D.readModelAsync = function(buffer, ext, baseUrl, texture, options) {
     const kind = String(ext || ".glb").toLowerCase();
+    const beforeBuild = options && typeof options.beforeBuild === "function"
+        ? options.beforeBuild : () => null;
     if (kind === ".glb") {
-        return this.parseGlbAsync(buffer).then(parsed => {
-            if (parsed && parsed.json) {
-                return this.buildGlbTemplate(parsed.json, parsed.bin, baseUrl, parsed.bitmaps);
-            }
-            return this.readModel((parsed && parsed.buffer) || buffer, kind, baseUrl, texture);
-        });
+        return this.parseGlbAsync(buffer)
+            .then(parsed => Promise.resolve(beforeBuild()).then(() => parsed))
+            .then(parsed => {
+                if (parsed && parsed.json) {
+                    return this.buildGlbTemplate(parsed.json, parsed.bin, baseUrl, parsed.bitmaps);
+                }
+                return this.readModel((parsed && parsed.buffer) || buffer, kind, baseUrl, texture);
+            });
     }
-    return Promise.resolve(this.readModel(buffer, ext, baseUrl, texture));
+    return Promise.resolve(beforeBuild()).then(() => this.readModel(buffer, ext, baseUrl, texture));
 };
 
 Reactor3D.readModel = function(buffer, ext, baseUrl, texture) {

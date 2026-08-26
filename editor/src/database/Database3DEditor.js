@@ -15,6 +15,59 @@
  * model's ambient animations stand still so nothing fights the hand.
  */
 class Database3DEditor {
+    /**
+     * Hover highlighting raycasts the whole mesh on the main thread, with
+     * no BVH: roughly 0.6 ms per thousand triangles, so a 600k-triangle
+     * character costs ~350 ms per pick. Above this budget the highlight
+     * waits for a click; below it, a pick only runs once the pointer has
+     * rested and the camera has settled, so it never lands mid-orbit.
+     */
+    static get HOVER_TRIANGLE_BUDGET() { return 150000; }
+
+    static shouldRaycastHover({ now, movedAt, inputAt, dragging, triangles, restMs = 150, settleMs = 250 }) {
+        if (dragging) return false;
+        if (!Number.isFinite(movedAt)) return false;
+        if (now - movedAt < restMs) return false;
+        if (Number.isFinite(inputAt) && now - inputAt < settleMs) return false;
+        if ((triangles || 0) > Database3DEditor.HOVER_TRIANGLE_BUDGET) return false;
+        return true;
+    }
+
+    /** Every texture already holds decoded pixels (worker ImageBitmaps or a complete image). */
+    static texturesDecoded(textures) {
+        for (const texture of textures || []) {
+            const image = texture && texture.image;
+            if (!image) continue;
+            if (typeof image.complete === 'boolean') {
+                if (!image.complete || !(image.naturalWidth > 0)) return false;
+            } else if (!(image.width > 0)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /** Per-machine thumbnail cache directory, beside the editor profiles. */
+    static thumbnailCacheRoot(proc, pathMod, osMod) {
+        if (proc.platform === 'win32') {
+            const localAppData = proc.env.LOCALAPPDATA || pathMod.join(osMod.homedir(), 'AppData', 'Local');
+            return pathMod.join(localAppData, 'RPGReactor', 'ModelThumbnails');
+        }
+        if (proc.platform === 'darwin') {
+            return pathMod.join(osMod.homedir(), 'Library', 'Application Support', 'RPGReactor', 'ModelThumbnails');
+        }
+        const cacheRoot = proc.env.XDG_CACHE_HOME || pathMod.join(osMod.homedir(), '.cache');
+        return pathMod.join(cacheRoot, 'rpg-reactor', 'model-thumbnails');
+    }
+
+    /** Cache file name keyed by the source file's identity and contents stamp. */
+    static thumbnailCacheName(sourcePath, size, mtimeMs) {
+        const crypto = require('crypto');
+        return crypto.createHash('sha1')
+            .update(`${sourcePath}|${size}|${Math.round(mtimeMs)}`)
+            .digest('hex') + '.png';
+    }
+
     constructor(databaseManager, projectController) {
         this.databaseManager = databaseManager;
         this.projectController = projectController;
@@ -293,36 +346,121 @@ class Database3DEditor {
 
     async _fillThumbnails(entries) {
         if (!this._thumbs) this._thumbs = {};
+        const apply = (name, url) => {
+            const icon = this._thumbRow(name);
+            if (icon) icon.style.backgroundImage = `url("${url}")`;
+        };
         for (const entry of entries) {
-            const cached = this._thumbs[entry.name];
+            const cached = this._thumbs[entry.name] || this._readCachedThumbnail(entry);
             if (cached) {
-                const icon = this._thumbRow(entry.name);
-                if (icon) icon.style.backgroundImage = `url("${cached}")`;
+                this._thumbs[entry.name] = cached;
+                apply(entry.name, cached);
                 continue;
             }
             // An uncached thumbnail loads and renders the whole model in
-            // one main-thread chunk; yield first so the click that opened
-            // a folder paints and the next click still lands.
+            // one main-thread chunk. It waits for the list to paint and
+            // for the preview to be idle: rendering it under an orbit or
+            // a zoom was the stutter people felt in the first seconds.
             await new Promise(resolve => setTimeout(resolve, 0));
+            await this._whenPreviewIdle();
+            if (!this._detail || !this._detail.isConnected) return;
             const url = await this._renderThumbnail(entry);
             if (!url) continue;
             this._thumbs[entry.name] = url;
-            const icon = this._thumbRow(entry.name);
-            if (icon) icon.style.backgroundImage = `url("${url}")`;
-            // Textures decode after the first draw; one late re-render
-            // trades a moment of gray silhouette for the coloured icon.
+            apply(entry.name, url);
+            const template = this._templates && this._templates[entry.name];
+            const decoded = Database3DEditor.texturesDecoded(template && template.userData.glbTextures);
+            if (decoded) {
+                this._writeCachedThumbnail(entry, url);
+                continue;
+            }
+            // Textures still decoding after the first draw: one late
+            // re-render trades a moment of gray silhouette for the
+            // coloured icon, and the coloured one is what gets cached.
             setTimeout(async () => {
+                await this._whenPreviewIdle();
+                if (!this._detail || !this._detail.isConnected) return;
                 const again = await this._renderThumbnail(entry);
                 if (!again) return;
                 this._thumbs[entry.name] = again;
-                const late = this._thumbRow(entry.name);
-                if (late) late.style.backgroundImage = `url("${again}")`;
+                apply(entry.name, again);
+                this._writeCachedThumbnail(entry, again);
             }, 1600);
         }
     }
 
+    /**
+     * Resolves once nothing is competing for the frame: no model loading
+     * into the preview, no drag in progress, no orbit or zoom input in the
+     * last 600 ms, and no pointer motion over the canvas in the last 300 ms
+     * (a hand moving toward a drag). Thumbnail work is the only caller.
+     */
+    _whenPreviewIdle() {
+        return new Promise(resolve => {
+            const check = () => {
+                if (!this._detail || !this._detail.isConnected) return resolve();
+                const now = performance.now();
+                const busy = this._loadingPreview || this._dragging
+                    || (Number.isFinite(this._lastInputAt) && now - this._lastInputAt < 600)
+                    || (Number.isFinite(this._pointerMovedAt) && now - this._pointerMovedAt < 300);
+                if (busy) setTimeout(check, 120);
+                else resolve();
+            };
+            check();
+        });
+    }
+
+    /** Desktop only: the source file's path, size, and mtime name the cache entry. */
+    _thumbnailCachePath(entry) {
+        if (typeof require !== 'function' || typeof process === 'undefined') return null;
+        try {
+            const fs = require('fs');
+            const path = require('path');
+            const project = this._project();
+            if (!project || !project.path) return null;
+            const file = (entry.file || entry.name) + (entry.ext || '.glb');
+            const next = path.join(project.path, '3d', entry.name, 'source', file);
+            const sourcePath = fs.existsSync(next) ? next : path.join(project.path, '3d', 'source', file);
+            const stat = fs.statSync(sourcePath);
+            const root = Database3DEditor.thumbnailCacheRoot(process, path, require('os'));
+            return path.join(root, Database3DEditor.thumbnailCacheName(sourcePath, stat.size, stat.mtimeMs));
+        } catch (error) {
+            return null;
+        }
+    }
+
+    _readCachedThumbnail(entry) {
+        const cachePath = this._thumbnailCachePath(entry);
+        if (!cachePath) return null;
+        try {
+            const fs = require('fs');
+            if (!fs.existsSync(cachePath)) return null;
+            return 'data:image/png;base64,' + fs.readFileSync(cachePath).toString('base64');
+        } catch (error) {
+            return null;
+        }
+    }
+
+    _writeCachedThumbnail(entry, dataUrl) {
+        const cachePath = this._thumbnailCachePath(entry);
+        if (!cachePath || typeof dataUrl !== 'string') return;
+        const comma = dataUrl.indexOf(',');
+        if (!dataUrl.startsWith('data:image/png;base64,') || comma < 0) return;
+        try {
+            const fs = require('fs');
+            const path = require('path');
+            fs.mkdirSync(path.dirname(cachePath), { recursive: true });
+            fs.writeFileSync(cachePath, Buffer.from(dataUrl.slice(comma + 1), 'base64'));
+        } catch (error) {
+            // The cache is a convenience; a read-only home just renders again next time.
+        }
+    }
+
     async _renderThumbnail(entry) {
-        const template = await this._loadTemplate(entry);
+        // The worker parse runs whenever; the build and the draw wait for
+        // an idle preview.
+        const template = await this._loadTemplate(entry, { beforeBuild: () => this._whenPreviewIdle() });
+        await this._whenPreviewIdle();
         if (!template || typeof THREE === 'undefined') return null;
         if (!this._thumbRenderer) {
             const canvas = document.createElement('canvas');
@@ -357,7 +495,7 @@ class Database3DEditor {
     }
 
     /** Templates cached per model: the preview and the thumbnails share them. */
-    async _loadTemplate(entry) {
+    async _loadTemplate(entry, options = {}) {
         if (!this._templates) this._templates = {};
         if (this._templates[entry.name]) return this._templates[entry.name];
         const ready = (typeof window !== 'undefined' && window.THREE && window.Reactor3D)
@@ -383,8 +521,12 @@ class Database3DEditor {
             const baseUrl = 'file://' + path.dirname(filePath).replace(/\\/g, '/') + '/';
             // The same worker the game uses: container split, JSON parse,
             // and embedded-texture decode off the editor's main thread.
+            // beforeBuild holds the main-thread half of the load (scene
+            // graph, geometry, materials) until the caller says the thread
+            // is free; the worker parse itself never touches it.
             this._templates[entry.name] = Reactor3D.readModelAsync
-                ? await Reactor3D.readModelAsync(buffer, entry.ext || '.glb', baseUrl, entry.texture || '')
+                ? await Reactor3D.readModelAsync(buffer, entry.ext || '.glb', baseUrl, entry.texture || '',
+                    { beforeBuild: options.beforeBuild })
                 : Reactor3D.readModel(buffer, entry.ext || '.glb', baseUrl, entry.texture || '');
             return this._templates[entry.name];
         } catch (error) {
@@ -637,6 +779,15 @@ class Database3DEditor {
     }
 
     async _drawPreview(entry) {
+        this._loadingPreview = true;
+        try {
+            return await this._drawPreviewNow(entry);
+        } finally {
+            this._loadingPreview = false;
+        }
+    }
+
+    async _drawPreviewNow(entry) {
         const gen = ++this._gen;
         const canvas = this._detail.querySelector('.r3d-db-canvas');
         const ready = (typeof window !== 'undefined' && window.THREE && window.Reactor3D)
@@ -2575,6 +2726,7 @@ class Database3DEditor {
                 }
             }
             this._dragging = true;
+            this._lastInputAt = performance.now();
             if (orbit) {
                 mode = 'orbit';
                 canvas.style.cursor = 'grabbing';
@@ -2596,9 +2748,11 @@ class Database3DEditor {
         });
         canvas.addEventListener('pointermove', event => {
             this._pointer = { x: event.clientX, y: event.clientY };
+            this._pointerMovedAt = performance.now();
         });
         window.addEventListener('pointermove', event => {
             if (!mode) return;
+            this._lastInputAt = performance.now();
             if (mode === 'orbit') {
                 this._viewGoal.yaw -= (event.clientX - lastX) * 0.4;
                 this._viewGoal.pitch = Math.min(72, Math.max(5, this._viewGoal.pitch - (event.clientY - lastY) * 0.3));
@@ -2651,6 +2805,7 @@ class Database3DEditor {
         });
         canvas.addEventListener('wheel', event => {
             event.preventDefault();
+            this._lastInputAt = performance.now();
             this._viewGoal.distance = Math.min(20, Math.max(1.2, this._viewGoal.distance * (event.deltaY > 0 ? 1.15 : 1 / 1.15)));
         }, { passive: false });
     }
@@ -2696,14 +2851,17 @@ class Database3DEditor {
     /** Hover highlight: run from the frame loop, throttled by time. */
     _updateHover() {
         if (this._selectMode || this._tool !== 'orbit' || !this._pointer || !this._object) return;
-        if (this._dragging) return;
-        const now = Date.now();
-        const interval = 90 + Math.min(600, Math.floor((this._triangleCount || 0) / 2500));
-        if (this._hoverAt && now - this._hoverAt < interval) return;
+        const now = performance.now();
+        if (!Database3DEditor.shouldRaycastHover({
+            now,
+            movedAt: this._pointerMovedAt,
+            inputAt: this._lastInputAt,
+            dragging: this._dragging,
+            triangles: this._triangleCount
+        })) return;
         const last = this._hoverPointerAt;
         if (last && last.x === this._pointer.x && last.y === this._pointer.y) return;
         this._hoverPointerAt = { x: this._pointer.x, y: this._pointer.y };
-        this._hoverAt = now;
         const canvas = this._detail.querySelector('.r3d-db-canvas');
         const rect = canvas.getBoundingClientRect();
         const inside = this._pointer.x >= rect.left && this._pointer.x <= rect.right
