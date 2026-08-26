@@ -9,7 +9,7 @@ Last updated 2026-08-25.
   (2026-08-24): in-editor rigging, rig templates and preset motions,
   database 3D bindings, MP3/WAV/FLAC/M4A audio, PixiJS 8.20.0.
 - **0.98.4** is open in `editor/package.json`, both READMEs, and the
-  `[Unreleased - 0.98.4]` sections of both changelogs. One feature (custom user interfaces, phase 1) and twenty-one fixes are queued
+  `[Unreleased - 0.98.4]` sections of both changelogs. Two features (custom user interfaces phase 1, interface capture) and twenty-one fixes are queued
   there already (VisuStella Effekseer/heat-distortion draw failures and
   off-centre transition shaders from user reports, Audio Player loop points, the Enemies note resize,
   seek-broken Demo tracks, the web editor's 3D suite, two PIXI 8 compat
@@ -31,10 +31,11 @@ Feature work, in the order the owner has been asking:
   death/knockback presets; bird/fish templates; retargeting clips between
   same-template rigs; a terrain-driven rule-set switch so Swim is automatic;
   decimation guidance for Meshy-scale models.
-- **Custom user interfaces** — phase 1 of `DESIGN-USER-INTERFACES.md` shipped
-  in this cycle (see the cycle note below). Next: List and Gauge nodes with
-  data sources, overlay/HUD mode, focus-order overrides (phase 2); styling
-  depth (3); title/menu replacement settings (4); standalone MZ plugin (5).
+- **Custom user interfaces** — phase 1 and capture-from-game shipped in
+  this cycle (cycle notes below). Next: List and Gauge nodes with data
+  sources, overlay/HUD mode, focus-order overrides (phase 2); stock
+  interface importers and capture-to-nodes (2½); styling depth (3);
+  title/menu replacement settings (4); standalone MZ plugin (5).
 - **Stock MZ battler motions are not mapped to model actions** — a 3D
   battler plays its ambient rules and named actions, but walk/attack/damage
   motion cells do not yet trigger model animations.
@@ -103,6 +104,29 @@ Blob-URL loading fixed it in 0.98.2 — `f3f87cc`, `97e0457`).
 Engineering notes and gotchas from each piece of work, kept because the
 suite and the next session both lean on them. Shipped-cycle narrative starts
 at *History* below.
+
+## Interface Capture from Game (2026-08-25, owner: "see the current menus, with plugins")
+
+- The only faithful source is the running game, so the tab launches the
+  playtest process with `test&rrcapture=<scene>&rrcapturedir=<dir>`; the
+  runtime writes and exits (Demo main menu: 1.4 s). Windows path caveat:
+  the mode token rides in the profile path on win32 (`optionToken`), and
+  `encodeURIComponent` output (`%`) is valid there; untested on Windows.
+- Capture folder: `RREditorCache.dir('InterfaceCaptures', projectPath, scene)`
+  → `~/.cache/rpg-reactor/interface-captures/<sha1-16>/<scene>/`
+  (`%LOCALAPPDATA%\RPGReactor\InterfaceCaptures\…` on Windows). The tab
+  reopens the last captured scene per project (localStorage
+  `rrui.lastCapture.<key>`).
+- `collectWindows` accumulates parent x/y down the tree (windows sit in
+  `_windowLayer`, itself offset); scale/rotation are ignored.
+- The web build cannot write files: `capture()` reports "Capture needs the
+  desktop editor." rather than launching.
+- Live drive: `ui-capture-tab.mjs` (session scratchpad) opens the tab,
+  selects a record (the detail does not render until one is), presses
+  Capture, and reads the list; `capture-run.mjs` exercises the runtime
+  alone from the launch line.
+- Next in the design: stock importers generated from System.json, then
+  capture-to-nodes off a draw-primitive log.
 
 ## GPU-Side Pass: Window Stencil Clip, Shared Billboard Sheets, Frozen World, Texture Cap (2026-08-25)
 

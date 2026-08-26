@@ -25,6 +25,13 @@
     ReactorUI.PLUGIN_NAME = "RPGReactor";
     ReactorUI.COMMAND_NAME = "CallUserInterface";
     ReactorUI.BOOT_OPTION = "rrui";
+    ReactorUI.CAPTURE_OPTION = "rrcapture";
+    /** Scenes the editor can capture, by key; the values are class names. */
+    ReactorUI.CAPTURE_SCENES = {
+        title: "Scene_Title", menu: "Scene_Menu", item: "Scene_Item", skill: "Scene_Skill",
+        equip: "Scene_Equip", status: "Scene_Status", options: "Scene_Options", save: "Scene_Save",
+        load: "Scene_Load", shop: "Scene_Shop", gameEnd: "Scene_GameEnd", battle: "Scene_Battle"
+    };
     ReactorUI.MAX_NESTING = 16;
     // "Fit text to size" never shrinks a font below this many pixels.
     ReactorUI.MIN_FONT_SIZE = 8;
@@ -370,6 +377,184 @@
             }
         }
         return id;
+    };
+
+    //-------------------------------------------------------------------------
+    // Capturing a stock scene for the editor
+    //
+    // `test&rrcapture=menu&rrcapturedir=<encoded dir>` on the launch line: the
+    // game boots, opens that scene with the project's plugins in place, waits
+    // for its windows to open, and writes what is on screen for the editor's
+    // reference layer. The only faithful answer to "what does my menu look
+    // like" is the running game; this asks it and leaves.
+
+    /** Every `&`-delimited launch-line token, from the URL and NW's argv. */
+    ReactorUI.launchTokens = function() {
+        const tokens = [];
+        const add = arg => { for (const token of String(arg || "").split("&")) if (token) tokens.push(token); };
+        try { add(location.search.slice(1)); } catch (e) { /* no location */ }
+        if (typeof Utils !== "undefined" && Utils.isNwjs() && typeof nw !== "undefined" && nw.App) {
+            for (const arg of nw.App.argv || []) add(arg);
+        }
+        return tokens;
+    };
+
+    /** The capture request on the launch line, or null. */
+    ReactorUI.captureRequest = function(tokens) {
+        let scene = "";
+        let dir = "";
+        for (const token of tokens || this.launchTokens()) {
+            const eq = token.indexOf("=");
+            if (eq < 0) continue;
+            const key = token.slice(0, eq);
+            const value = token.slice(eq + 1);
+            if (key === this.CAPTURE_OPTION) scene = value;
+            else if (key === "rrcapturedir") {
+                try { dir = decodeURIComponent(value); } catch (e) { dir = value; }
+            }
+        }
+        if (!scene || !this.CAPTURE_SCENES[scene]) return null;
+        return { scene, dir, sceneClass: this.CAPTURE_SCENES[scene] };
+    };
+
+    ReactorUI._capture = null;
+
+    /** Open the requested scene the way the game would. */
+    ReactorUI.beginCapture = function(request) {
+        const sceneClass = window[request.sceneClass];
+        if (typeof sceneClass !== "function") return false;
+        this._capture = { request, frames: 0, sceneClass, done: false };
+        if (request.scene === "title") {
+            SceneManager.goto(sceneClass);
+            return true;
+        }
+        DataManager.setupNewGame();
+        if (request.scene === "battle") {
+            const troopId = ($dataTroops || []).findIndex((troop, index) => index > 0 && troop);
+            BattleManager.setup(troopId > 0 ? troopId : 1, true, true);
+            SceneManager.goto(sceneClass);
+            return true;
+        }
+        if (request.scene === "menu") Window_MenuCommand.initCommandPosition();
+        SceneManager.goto(sceneClass);
+        if (request.scene === "shop") {
+            const goods = [];
+            for (let id = 1; id < ($dataItems || []).length && goods.length < 6; id++) {
+                if ($dataItems[id] && $dataItems[id].name) goods.push([0, id, 0, 0]);
+            }
+            SceneManager.prepareNextScene(goods, false);
+        }
+        return true;
+    };
+
+    /** Every window in the scene tree with its screen rect. */
+    ReactorUI.collectWindows = function(scene) {
+        const out = [];
+        const walk = (node, ox, oy) => {
+            if (!node) return;
+            const x = ox + (Number(node.x) || 0);
+            const y = oy + (Number(node.y) || 0);
+            if (typeof Window_Base !== "undefined" && node instanceof Window_Base) {
+                const cursor = node._cursorRect || { x: 0, y: 0, width: 0, height: 0 };
+                out.push({
+                    window: node,
+                    className: (node.constructor && node.constructor.name) || "Window",
+                    x, y,
+                    width: node.width, height: node.height,
+                    padding: node.padding,
+                    opacity: node.opacity, backOpacity: node.backOpacity, contentsOpacity: node.contentsOpacity,
+                    openness: node.openness, visible: !!node.visible, active: !!node.active,
+                    cursorRect: { x: cursor.x, y: cursor.y, width: cursor.width, height: cursor.height },
+                    windowskinName: node.windowskin && (node.windowskin.url || node.windowskin._url || "")
+                });
+            }
+            for (const child of node.children || []) walk(child, x, y);
+        };
+        walk(scene, 0, 0);
+        return out;
+    };
+
+    ReactorUI._pngBytes = function(dataUrl) {
+        const comma = dataUrl.indexOf(",");
+        return Buffer.from(dataUrl.slice(comma + 1), "base64");
+    };
+
+    ReactorUI.screenshotDataUrl = function() {
+        const app = Graphics._app;
+        if (!app || !app.renderer || !app.renderer.extract) return null;
+        const extract = app.renderer.extract;
+        const canvas = PIXI.TextureSource
+            ? extract.canvas({ target: app.stage })
+            : extract.canvas(app.stage);
+        return canvas && canvas.toDataURL ? canvas.toDataURL("image/png") : null;
+    };
+
+    /** Write the scene to the request's directory; true when written. */
+    ReactorUI.performCapture = function() {
+        const capture = this._capture;
+        if (!capture || capture.done) return false;
+        capture.done = true;
+        const request = capture.request;
+        if (!request.dir || typeof require !== "function") return false;
+        const fs = require("fs");
+        const path = require("path");
+        try {
+            fs.mkdirSync(request.dir, { recursive: true });
+            const scene = SceneManager._scene;
+            const windows = this.collectWindows(scene);
+            const entries = windows.map((entry, index) => {
+                const record = Object.assign({}, entry);
+                delete record.window;
+                const contents = entry.window.contents;
+                const canvas = contents && (contents.canvas || contents._canvas);
+                if (canvas && canvas.toDataURL && canvas.width > 0 && canvas.height > 0) {
+                    const file = "window-" + index + ".png";
+                    fs.writeFileSync(path.join(request.dir, file), this._pngBytes(canvas.toDataURL("image/png")));
+                    record.contentsFile = file;
+                    record.contentsWidth = canvas.width;
+                    record.contentsHeight = canvas.height;
+                }
+                return record;
+            });
+            const shot = this.screenshotDataUrl();
+            if (shot) fs.writeFileSync(path.join(request.dir, "screen.png"), this._pngBytes(shot));
+            const plugins = (typeof $plugins !== "undefined" ? $plugins : [])
+                .filter(plugin => plugin && plugin.status).map(plugin => plugin.name);
+            fs.writeFileSync(path.join(request.dir, "capture.json"), JSON.stringify({
+                scene: request.scene,
+                sceneClass: scene && scene.constructor ? scene.constructor.name : request.sceneClass,
+                width: Graphics.width, height: Graphics.height,
+                capturedAt: new Date().toISOString(),
+                screenFile: shot ? "screen.png" : null,
+                plugins,
+                windows: entries
+            }, null, 1));
+            return true;
+        } catch (error) {
+            console.error("ReactorUI: capture failed.", error);
+            try { fs.writeFileSync(path.join(request.dir, "capture.json"), JSON.stringify({ error: String(error && error.message || error) })); } catch (e) { /* nothing to do */ }
+            return false;
+        }
+    };
+
+    /**
+     * Once per frame while a capture is pending: wait for the scene to be
+     * the requested one, started, settled, and its windows fully open
+     * (or 3 seconds, whichever comes first), then capture and exit.
+     */
+    ReactorUI.updateCapture = function() {
+        const capture = this._capture;
+        if (!capture || capture.done) return;
+        const scene = SceneManager._scene;
+        if (!(scene instanceof capture.sceneClass) || !scene.isStarted || !scene.isStarted()) return;
+        if (SceneManager.isSceneChanging && SceneManager.isSceneChanging()) return;
+        capture.frames++;
+        const windows = this.collectWindows(scene);
+        const settled = windows.every(entry => !entry.visible || entry.openness >= 255 || !entry.window.isOpening || !entry.window.isOpening());
+        if ((settled && capture.frames >= 20) || capture.frames >= 180) {
+            this.performCapture();
+            SceneManager.exit();
+        }
     };
 
     //-------------------------------------------------------------------------
@@ -1145,6 +1330,16 @@
     // is the first scene, over black, and closing it ends the playtest.
     const _Scene_Boot_start = Scene_Boot.prototype.start;
     Scene_Boot.prototype.start = function() {
+        const request = ReactorUI.captureRequest();
+        if (request && !DataManager.isBattleTest() && !DataManager.isEventTest()) {
+            Scene_Base.prototype.start.call(this);
+            SoundManager.preloadImportantSounds();
+            if (ReactorUI.beginCapture(request)) {
+                this.resizeScreen();
+                this.updateDocumentTitle();
+                return;
+            }
+        }
         const id = ReactorUI.bootInterfaceId();
         if (!(id > 0) || DataManager.isBattleTest() || DataManager.isEventTest()) {
             return _Scene_Boot_start.apply(this, arguments);
@@ -1157,5 +1352,11 @@
         SceneManager.prepareNextScene(id);
         this.resizeScreen();
         this.updateDocumentTitle();
+    };
+
+    const _SceneManager_updateScene = SceneManager.updateScene;
+    SceneManager.updateScene = function() {
+        _SceneManager_updateScene.apply(this, arguments);
+        if (ReactorUI._capture) ReactorUI.updateCapture();
     };
 })();

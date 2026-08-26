@@ -171,6 +171,14 @@ class DatabaseUserInterfaceEditor {
                                 <label>&nbsp;</label>
                                 <button type="button" class="rr-button-primary rr-ui-playtest">${tt('Playtest Interface')}</button>
                             </div>
+                            <div class="db-col">
+                                <label>${tt('Capture from Game')}</label>
+                                <div class="rr-ui-capture-row">
+                                    <select class="database-field-value rr-ui-capture-scene">${this.captureSceneOptions()}</select>
+                                    <button type="button" class="rr-btn-chip rr-ui-capture">${tt('Capture')}</button>
+                                </div>
+                                <div class="rr-ui-capture-status"></div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -186,6 +194,7 @@ class DatabaseUserInterfaceEditor {
                             <button type="button" class="rr-btn-chip" data-add="button">${tt('Button')}</button>
                         </div>
                         <div class="rr-ui-tree"></div>
+                        <div class="rr-ui-capture-list"></div>
                         <div class="rr-ui-tree-buttons">
                             <button type="button" class="rr-btn-chip rr-ui-node-up" title="${tt('Send backward')}">&#9650;</button>
                             <button type="button" class="rr-btn-chip rr-ui-node-down" title="${tt('Bring forward')}">&#9660;</button>
@@ -200,6 +209,8 @@ class DatabaseUserInterfaceEditor {
                         <span class="rr-ui-canvas-tools">
                             <label><input type="checkbox" class="rr-ui-snap" checked> ${tt('Snap')}</label>
                             <label><input type="checkbox" class="rr-ui-grid" checked> ${tt('Grid')}</label>
+                            <label class="rr-ui-reference-tools"><input type="checkbox" class="rr-ui-reference" checked> ${tt('Reference')}
+                                <input type="range" class="rr-ui-reference-opacity" min="10" max="100" value="60" title="${tt('Reference opacity')}"></label>
                             <button type="button" class="rr-btn-chip rr-ui-undo" title="Ctrl+Z">${tt('Undo')}</button>
                             <button type="button" class="rr-btn-chip rr-ui-redo" title="Ctrl+Y">${tt('Redo')}</button>
                             <span class="rr-ui-size"></span>
@@ -226,6 +237,11 @@ class DatabaseUserInterfaceEditor {
         this.ctx = this.canvas.getContext('2d');
 
         wrapper.querySelector('.rr-ui-background').value = entry.background;
+        this.reference = null;
+        this.showReference = true;
+        this.referenceOpacity = 0.6;
+        this.capturedSelection = -1;
+        this.loadLastCapture();
         this.renderCancelAction();
         this.refreshFirstFocus();
         this.renderTree();
@@ -932,6 +948,35 @@ class DatabaseUserInterfaceEditor {
             this.touch();
         });
         q('.rr-ui-playtest').addEventListener('click', () => this.playtest());
+        q('.rr-ui-capture').addEventListener('click', () => this.capture());
+        q('.rr-ui-capture-scene').addEventListener('change', event => {
+            if (!this.loadCapture(event.target.value)) {
+                this.reference = null;
+                this.captureStatus(this._t('No capture yet'));
+                this.renderCaptureList();
+                this.scheduleRender();
+            }
+        });
+        q('.rr-ui-reference').addEventListener('change', event => {
+            this.showReference = event.target.checked;
+            this.scheduleRender();
+        });
+        q('.rr-ui-reference-opacity').addEventListener('input', event => {
+            this.referenceOpacity = Number(event.target.value) / 100;
+            this.scheduleRender();
+        });
+        q('.rr-ui-capture-list').addEventListener('click', event => {
+            const row = event.target.closest('.rr-ui-capture-row-item');
+            if (!row) return;
+            const index = Number(row.dataset.index);
+            if (event.target.closest('.rr-ui-capture-add')) {
+                this.addBoxFromCapture(index);
+                return;
+            }
+            this.capturedSelection = this.capturedSelection === index ? -1 : index;
+            this.renderCaptureList();
+            this.scheduleRender();
+        });
 
         wrapper.querySelectorAll('[data-add]').forEach(button => {
             button.addEventListener('click', () => this.addNode(button.dataset.add));
@@ -1225,6 +1270,192 @@ class DatabaseUserInterfaceEditor {
                 this.renderProperties();
             }
         });
+    }
+
+    // ------------------------------------------------------------------
+    // Capture from game: the live scene as a reference layer.
+
+    static get CAPTURE_SCENES() {
+        return [
+            ['menu', 'Main Menu'], ['title', 'Title Screen'], ['item', 'Items'], ['skill', 'Skills'],
+            ['equip', 'Equipment'], ['status', 'Status'], ['options', 'Options'], ['save', 'Save'],
+            ['load', 'Load'], ['shop', 'Shop'], ['gameEnd', 'Game End'], ['battle', 'Battle']
+        ];
+    }
+
+    captureSceneOptions() {
+        return DatabaseUserInterfaceEditor.CAPTURE_SCENES
+            .map(([key, label]) => `<option value="${key}">${this.escapeHTML(this._t(label))}</option>`).join('');
+    }
+
+    /** Where a project's capture of `sceneKey` lives: the editor's cache, never the project. */
+    captureDir(sceneKey) {
+        const project = this.project();
+        if (!project || !project.path || typeof RREditorCache === 'undefined') return null;
+        return RREditorCache.dir('InterfaceCaptures', project.path, String(sceneKey).replace(/[^a-zA-Z0-9]/g, ''));
+    }
+
+    captureStatus(text) {
+        const status = this.wrapper && this.wrapper.querySelector('.rr-ui-capture-status');
+        if (status) status.textContent = text || '';
+    }
+
+    async capture() {
+        const scene = this.wrapper.querySelector('.rr-ui-capture-scene').value;
+        const dir = this.captureDir(scene);
+        const project = this.project();
+        const manager = this.parentEditor && this.parentEditor.playtestManager;
+        if (!dir || !project || !manager || typeof manager.captureScene !== 'function') {
+            this.captureStatus(this._t('Capture needs the desktop editor.'));
+            return;
+        }
+        if (this.captureInFlight) return;
+        try {
+            if (this.parentEditor && typeof this.parentEditor.saveProject === 'function') await this.parentEditor.saveProject();
+        } catch (error) {
+            console.error('Could not save before the capture:', error);
+        }
+        const fs = require('fs');
+        const path = require('path');
+        try {
+            fs.mkdirSync(dir, { recursive: true });
+            for (const file of fs.readdirSync(dir)) fs.unlinkSync(path.join(dir, file));
+        } catch (error) { /* a fresh folder next */ }
+        if (!manager.captureScene(project.path, scene, dir)) {
+            this.captureStatus(this._t('Capture failed'));
+            return;
+        }
+        this.captureInFlight = true;
+        this.captureStatus(this._t('Capturing…'));
+        const started = Date.now();
+        const poll = () => {
+            if (!this.wrapper || !this.wrapper.isConnected) { this.captureInFlight = false; return; }
+            const file = path.join(dir, 'capture.json');
+            if (fs.existsSync(file)) {
+                this.captureInFlight = false;
+                this.loadCapture(scene);
+                return;
+            }
+            if (Date.now() - started > 120000) {
+                this.captureInFlight = false;
+                this.captureStatus(this._t('Capture failed'));
+                return;
+            }
+            setTimeout(poll, 500);
+        };
+        setTimeout(poll, 1500);
+    }
+
+    /** Read a capture off disk into the reference layer. */
+    loadCapture(sceneKey) {
+        const dir = this.captureDir(sceneKey);
+        if (!dir) return false;
+        const fs = require('fs');
+        const path = require('path');
+        const file = path.join(dir, 'capture.json');
+        if (!fs.existsSync(file)) return false;
+        let data = null;
+        try {
+            data = JSON.parse(fs.readFileSync(file, 'utf8'));
+        } catch (error) {
+            this.captureStatus(this._t('Capture failed'));
+            return false;
+        }
+        if (!data || data.error) {
+            this.captureStatus(this._t('Capture failed') + (data && data.error ? ': ' + data.error : ''));
+            return false;
+        }
+        const reference = { scene: sceneKey, dir, data, image: null };
+        if (data.screenFile) {
+            const image = new Image();
+            image.onload = () => this.scheduleRender();
+            image.src = 'data:image/png;base64,' + fs.readFileSync(path.join(dir, data.screenFile)).toString('base64');
+            reference.image = image;
+        }
+        this.reference = reference;
+        this.capturedSelection = -1;
+        try {
+            const project = this.project();
+            if (project && project.path && typeof RREditorCache !== 'undefined') {
+                localStorage.setItem('rrui.lastCapture.' + RREditorCache.projectKey(project.path), sceneKey);
+            }
+        } catch (error) { /* no storage */ }
+        const label = (DatabaseUserInterfaceEditor.CAPTURE_SCENES.find(([key]) => key === sceneKey) || [sceneKey, sceneKey])[1];
+        const when = data.capturedAt ? new Date(data.capturedAt) : null;
+        this.captureStatus(`${this._t(label)} · ${data.windows ? data.windows.length : 0} ${this._t('windows')}`
+            + (when ? ` · ${when.toLocaleTimeString()}` : ''));
+        const select = this.wrapper && this.wrapper.querySelector('.rr-ui-capture-scene');
+        if (select) select.value = sceneKey;
+        this.renderCaptureList();
+        this.scheduleRender();
+        return true;
+    }
+
+    /** The project's last capture comes back when the tab opens. */
+    loadLastCapture() {
+        try {
+            const project = this.project();
+            if (!project || !project.path || typeof RREditorCache === 'undefined') return;
+            const scene = localStorage.getItem('rrui.lastCapture.' + RREditorCache.projectKey(project.path));
+            if (scene) this.loadCapture(scene);
+        } catch (error) { /* nothing to restore */ }
+    }
+
+    renderCaptureList() {
+        const host = this.wrapper && this.wrapper.querySelector('.rr-ui-capture-list');
+        if (!host) return;
+        host.innerHTML = '';
+        const data = this.reference && this.reference.data;
+        if (!data || !data.windows || !data.windows.length) return;
+        const head = document.createElement('div');
+        head.className = 'rr-ui-capture-head';
+        head.textContent = this._t('Captured windows');
+        host.appendChild(head);
+        data.windows.forEach((entry, index) => {
+            const row = document.createElement('div');
+            row.className = 'rr-ui-tree-row rr-ui-capture-row-item' + (index === this.capturedSelection ? ' selected' : '');
+            row.dataset.index = String(index);
+            const label = document.createElement('span');
+            label.className = 'rr-ui-tree-label';
+            label.textContent = `${entry.className}  ${Math.round(entry.x)},${Math.round(entry.y)}  ${Math.round(entry.width)}×${Math.round(entry.height)}`;
+            label.title = entry.windowskinName || '';
+            const add = document.createElement('button');
+            add.type = 'button';
+            add.className = 'rr-btn-chip rr-ui-capture-add';
+            add.textContent = this._t('Add Box');
+            add.title = this._t('Start a Box node from this window');
+            row.appendChild(label);
+            row.appendChild(add);
+            host.appendChild(row);
+        });
+        if (data.plugins && data.plugins.length) {
+            const note = document.createElement('div');
+            note.className = 'rr-ui-capture-plugins';
+            note.textContent = `${this._t('Plugins active in the capture:')} ${data.plugins.length}`;
+            note.title = data.plugins.join('\n');
+            host.appendChild(note);
+        }
+    }
+
+    /** A Box node over a captured window's rect, skinned like it. */
+    addBoxFromCapture(index) {
+        const entry = this.reference && this.reference.data && this.reference.data.windows[index];
+        if (!entry) return;
+        this.pushUndo();
+        const node = this.addNode('box');
+        if (!node) return;
+        node.name = entry.className;
+        node.x = Math.round(entry.x);
+        node.y = Math.round(entry.y);
+        node.width = Math.round(entry.width);
+        node.height = Math.round(entry.height);
+        node.anchor = 'topLeft';
+        node.parent = 0;
+        if (Number.isFinite(entry.backOpacity)) node.opacity = Math.max(0, Math.min(255, Math.round(entry.opacity)));
+        this.touch();
+        this.renderTree();
+        this.renderProperties();
+        this.scheduleRender();
     }
 
     async playtest() {
@@ -1707,6 +1938,23 @@ class DatabaseUserInterfaceEditor {
             for (let x = step; x < screen.width; x += step) { ctx.moveTo(x + 0.5, 0); ctx.lineTo(x + 0.5, screen.height); }
             for (let y = step; y < screen.height; y += step) { ctx.moveTo(0, y + 0.5); ctx.lineTo(screen.width, y + 0.5); }
             ctx.stroke();
+        }
+        // The captured game underneath, locked: what the project shows today.
+        const reference = this.showReference ? this.reference : null;
+        if (reference && reference.image && reference.image.complete && reference.image.naturalWidth > 0) {
+            ctx.globalAlpha = this.referenceOpacity;
+            ctx.drawImage(reference.image, 0, 0, screen.width, screen.height);
+            ctx.globalAlpha = 1;
+        }
+        const captured = reference && reference.data && reference.data.windows
+            ? reference.data.windows[this.capturedSelection] : null;
+        if (captured) {
+            ctx.save();
+            ctx.strokeStyle = '#ffb648';
+            ctx.lineWidth = 2 / this.scale;
+            ctx.setLineDash([4 / this.scale, 3 / this.scale]);
+            ctx.strokeRect(captured.x, captured.y, captured.width, captured.height);
+            ctx.restore();
         }
         const opacities = new Map();
         const opacityOf = (node, trail) => {

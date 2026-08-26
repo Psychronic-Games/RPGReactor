@@ -51,6 +51,25 @@ class PlaytestManager {
         return false;
     }
 
+    /**
+     * Boot the game into a stock scene and have it write what is on screen
+     * to `dir` for the User Interfaces tab's reference layer, then exit.
+     * The runtime reads `rrcapture` / `rrcapturedir` off the launch line.
+     */
+    captureScene(projectPath, sceneKey, dir) {
+        if (!projectPath || !sceneKey || !dir) return false;
+        const mode = PlaytestManager.captureMode(sceneKey, dir);
+        if (typeof nw !== 'undefined') {
+            return this.launchPlaytestWindow(projectPath, mode);
+        }
+        console.error('NW.js not available - cannot capture a scene');
+        return false;
+    }
+
+    static captureMode(sceneKey, dir) {
+        return `test&rrcapture=${encodeURIComponent(sceneKey)}&rrcapturedir=${encodeURIComponent(dir)}`;
+    }
+
     battleTest(projectPath) {
         if (!projectPath) {
             console.error('No project loaded');

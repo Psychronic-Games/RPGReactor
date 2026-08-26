@@ -110,6 +110,44 @@ almost nothing to build.
 Every label is a locale key across all 17 non-English locales, hand-authored
 (the translation generator is broken); budget for it.
 
+## Seeing the interfaces a project already has
+
+Creators want to see the menus their project *currently* shows, plugins and
+all, and edit from there. Only the running game can answer what a plugin does
+to a menu, so the tab reads from the game rather than guessing.
+
+**1. Capture from game (built in the 0.98.4 cycle).** A **Capture from Game**
+button launches the playtest process with `test&rrcapture=<scene>&rrcapturedir=<dir>`
+on the launch line. The runtime boots, sets the game up, opens that scene
+(title, menu, item, skill, equip, status, options, save, load, shop, gameEnd,
+battle), waits for every window to finish opening, and writes to `<dir>`: a
+screenshot, `capture.json` (the active plugin list and every `Window_Base` on
+screen: class, rect, padding, opacities, openness, cursor rect), and each
+window's contents bitmap as a PNG. Then it exits. Captures live in the
+editor's per-machine cache, never in the project. The tab shows the
+screenshot as a locked **reference layer** under the nodes (toggle and
+opacity in the Layout header) and lists the captured windows; a row
+highlights its rect on the canvas, and **Add Box** starts a node from it.
+
+**2. Baseline stock interfaces.** MZ's stock layouts are functions of screen
+size, UI area and font, so **Import stock: Main Menu** (and the other stock
+scenes) can generate an ordinary interface record from the project's
+System.json: Box nodes with the skin, Buttons wired to `scene(...)`, Text for
+gold. Party status, item lists and gauges need phase 2's List and Gauge nodes.
+
+**3. Convert a capture to nodes.** With the draw primitives every window uses
+(`drawText`, `drawIcon`, `drawFace`, `drawGauge`, `drawItemName`) logged during
+capture, a captured window becomes Box + Text + Image + Gauge nodes at the
+recorded positions: an editable copy of the *look* of even a plugin-modified
+menu. The plugin's behaviour does not come with it; commands are re-wired as
+actions.
+
+Nothing changes for a project that does not opt in: stock scenes run as they
+always did until a System setting binds an interface to one (phase 4), and a
+plugin that replaces a scene keeps doing so until the creator binds their own.
+The tab names the plugins a captured scene's windows came from, so that is
+never a surprise.
+
 ## Compatibility
 
 | Runtime | Result |
@@ -127,7 +165,9 @@ Saves: an open `scene` interface is not saved (menus never are); an
 | # | Work | Buys |
 |---|---|---|
 | 1 | `UserInterfaces.json`, `reactor_ui.js` scene mode with Box / Image / Text / Button and the action set, `Call User Interface` on the Reactor tab, the database tab with tree + property panel + drag/resize canvas | A working custom menu end to end. Everything after is depth. **Done.** |
+| 1½ | Capture from game: the live scene as a reference layer plus its window list | Seeing the current menus, with plugins. **Done.** |
 | 2 | List and Gauge with data sources, overlay mode, focus-order overrides | HUDs, inventories, party screens |
+| 2½ | Import stock interfaces generated from the project's settings; convert a capture to nodes | Editable baselines and editable copies of modded menus |
 | 3 | Styling depth: gradients, 9-slice, per-node fonts, highlight colours, open/close transitions | The "make it mine" pass |
 | 4 | System settings: use interface *n* as title screen / main menu / pause menu | The actual headline feature; wants 1–3 solid first |
 | 5 | `ReactorUI.js` standalone plugin for stock MZ | Reach beyond Reactor projects |
