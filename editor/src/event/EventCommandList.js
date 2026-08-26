@@ -23,6 +23,7 @@ class EventCommandList {
         this.eventEditor = eventEditor;
         this.commandPicker = new EventCommandPicker();
         this.playModelAnimationEditor = new PlayModelAnimationEditor();
+        this.callUserInterfaceEditor = new CallUserInterfaceEditor();
         this.selectedIndices = [];
         this.clipboard = null;
         this.currentPage = null;
@@ -371,6 +372,13 @@ class EventCommandList {
         if (typeof window !== 'undefined') window.addEventListener('rr-language-changed', () => {
             if (this.currentPage) this.refreshCommandList(this.currentPage, this.currentPageIndex);
         });
+    }
+
+    /** The dialog for a Reactor plugin command, by its command name. */
+    _reactorCommandEditor(name) {
+        if (name === 'PlayModelAnimation') return this.playModelAnimationEditor;
+        if (name === 'CallUserInterface') return this.callUserInterfaceEditor;
+        return null;
     }
 
     _t(key, params = {}) {
@@ -3140,10 +3148,11 @@ class EventCommandList {
                 return;
             }
 
-            // Reactor's own 3D command rides the plugin-command encoding but
-            // gets its purpose-built dialog.
-            if (command.reactor === 'PlayModelAnimation') {
-                this.playModelAnimationEditor.show(null, (built) => {
+            // Reactor's own commands ride the plugin-command encoding but
+            // get their purpose-built dialogs.
+            const reactorEditor = this._reactorCommandEditor(command.reactor);
+            if (reactorEditor) {
+                reactorEditor.show(null, (built) => {
                     if (built) {
                         page.list.splice(insertIndex, 0, this._rebaseInsertIndent([built], baseIndent)[0]);
                         this.selectedIndices = [insertIndex];
@@ -4521,8 +4530,10 @@ class EventCommandList {
         }
 
         // Plugin Command
-        if (code === 357 && command.parameters && command.parameters[0] === 'RPGReactor') {
-            this.playModelAnimationEditor.show(command, (editedCommand) => {
+        const reactorEditor = code === 357 && command.parameters && command.parameters[0] === 'RPGReactor'
+            ? this._reactorCommandEditor(command.parameters[1]) : null;
+        if (reactorEditor) {
+            reactorEditor.show(command, (editedCommand) => {
                 if (editedCommand) {
                     replaceSingle(editedCommand);
                     this.refreshCommandList(page, pageIndex);

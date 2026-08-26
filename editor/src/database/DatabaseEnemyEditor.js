@@ -286,7 +286,7 @@ class DatabaseEnemyEditor {
         noteSection.innerHTML = `
             <div class="database-section-header">${tt('Note')}</div>
             <div class="database-section-content" style="flex: 1; display: flex; flex-direction: column;">
-                <textarea class="database-field-value" style="width: 100%; flex: 1; min-height: 60px; resize: vertical;" data-field="note" data-enemy-id="${enemy.id}">${this.escapeHTML(enemy.note || '')}</textarea>
+                <textarea class="database-field-value" style="width: 100%; flex: 1 1 auto; min-height: 60px; resize: vertical;" data-field="note" data-enemy-id="${enemy.id}">${this.escapeHTML(enemy.note || '')}</textarea>
             </div>
         `;
         traitsNoteRow.appendChild(noteSection);

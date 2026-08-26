@@ -43,6 +43,7 @@ const RR_DB_TYPE_KEYS = {
     actors: 'menu.actors', classes: 'menu.classes', skills: 'menu.skills', items: 'menu.items',
     weapons: 'menu.weapons', armors: 'menu.armors', enemies: 'menu.enemies', troops: 'menu.troops',
     states: 'menu.states', animations: 'menu.animations', tilesets: 'menu.tilesets', commonEvents: 'menu.commonEvents',
+    userInterfaces: 'menu.userInterfaces',
     system: 'menu.system', system1: 'db.system1', system2: 'db.system2', types: 'menu.types', terms: 'menu.terms'
 };
 
@@ -10986,6 +10987,54 @@ Object.assign(RR_EVENT_COMMAND_NAMES['zh-Hans'], {
     for (const lang of Object.keys(RR_EVENT_SECTION_NAMES)) {
         RR_EVENT_SECTION_NAMES[lang]['3D'] = '3D';
         RR_EVENT_SECTION_NAMES[lang]['Reactor'] = 'Reactor';
+    }
+})();
+
+// Database > User Interfaces: tab title in every locale, and the Reactor
+// event command that opens one.
+Object.assign(RR_I18N_STRINGS.en, { 'menu.userInterfaces': 'User Interfaces' });
+Object.assign(RR_I18N_STRINGS.ja, { 'menu.userInterfaces': 'ユーザーインターフェース' });
+Object.assign(RR_I18N_STRINGS.es, { 'menu.userInterfaces': 'Interfaces de usuario' });
+Object.assign(RR_I18N_STRINGS['zh-Hant'], { 'menu.userInterfaces': '使用者介面' });
+Object.assign(RR_I18N_STRINGS['zh-Hans'], { 'menu.userInterfaces': '用户界面' });
+Object.assign(RR_I18N_STRINGS.ru, { 'menu.userInterfaces': 'Интерфейсы' });
+Object.assign(RR_I18N_STRINGS.pt, { 'menu.userInterfaces': 'Interfaces de usuário' });
+Object.assign(RR_I18N_STRINGS.de, { 'menu.userInterfaces': 'Benutzeroberflächen' });
+Object.assign(RR_I18N_STRINGS.fr, { 'menu.userInterfaces': 'Interfaces utilisateur' });
+Object.assign(RR_I18N_STRINGS.el, { 'menu.userInterfaces': 'Διεπαφές χρήστη' });
+Object.assign(RR_I18N_STRINGS.ko, { 'menu.userInterfaces': '사용자 인터페이스' });
+Object.assign(RR_I18N_STRINGS.ar, { 'menu.userInterfaces': 'واجهات المستخدم' });
+Object.assign(RR_I18N_STRINGS.it, { 'menu.userInterfaces': 'Interfacce utente' });
+Object.assign(RR_I18N_STRINGS.pl, { 'menu.userInterfaces': 'Interfejsy użytkownika' });
+Object.assign(RR_I18N_STRINGS.id, { 'menu.userInterfaces': 'Antarmuka pengguna' });
+Object.assign(RR_I18N_STRINGS.vi, { 'menu.userInterfaces': 'Giao diện người dùng' });
+Object.assign(RR_I18N_STRINGS.th, { 'menu.userInterfaces': 'ส่วนติดต่อผู้ใช้' });
+Object.assign(RR_I18N_STRINGS.tr, { 'menu.userInterfaces': 'Kullanıcı arayüzleri' });
+(function() {
+    const call = {
+        ja: 'ユーザーインターフェースの呼び出し', es: 'Llamar interfaz de usuario',
+        'zh-Hant': '呼叫使用者介面', 'zh-Hans': '调用用户界面',
+        ru: 'Вызвать Интерфейс', pt: 'Chamar interface de usuário',
+        de: 'Benutzeroberfläche aufrufen', fr: 'Appeler une interface utilisateur',
+        el: 'Κλήση διεπαφής χρήστη', ko: '사용자 인터페이스 호출',
+        ar: 'استدعاء واجهة المستخدم', it: 'Richiama interfaccia utente',
+        pl: 'Wywołaj interfejs użytkownika', id: 'Panggil antarmuka pengguna',
+        vi: 'Gọi giao diện người dùng', th: 'เรียกส่วนติดต่อผู้ใช้',
+        tr: 'Kullanıcı arayüzünü çağır'
+    };
+    const section = {
+        ja: 'ユーザーインターフェース', es: 'Interfaces de usuario',
+        'zh-Hant': '使用者介面', 'zh-Hans': '用户界面', ru: 'Интерфейсы',
+        pt: 'Interfaces de usuário', de: 'Benutzeroberflächen', fr: 'Interfaces utilisateur',
+        el: 'Διεπαφές χρήστη', ko: '사용자 인터페이스', ar: 'واجهات المستخدم',
+        it: 'Interfacce utente', pl: 'Interfejsy użytkownika', id: 'Antarmuka pengguna',
+        vi: 'Giao diện người dùng', th: 'ส่วนติดต่อผู้ใช้', tr: 'Kullanıcı arayüzleri'
+    };
+    for (const lang of Object.keys(RR_EVENT_COMMAND_NAMES)) {
+        RR_EVENT_COMMAND_NAMES[lang]['Call User Interface'] = call[lang] || 'Call User Interface';
+    }
+    for (const lang of Object.keys(RR_EVENT_SECTION_NAMES)) {
+        RR_EVENT_SECTION_NAMES[lang]['User Interfaces'] = section[lang] || 'User Interfaces';
     }
 })();
 

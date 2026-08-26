@@ -30,6 +30,27 @@ class PlaytestManager {
         }
     }
 
+    /**
+     * Previews one user interface: the mode token carries `rrui=<id>` beside
+     * `test`, which the runtime reads the same way it reads `test` itself,
+     * and boots the interface over a black screen with no title or map;
+     * closing it ends the playtest.
+     */
+    playtestInterface(projectPath, interfaceId) {
+        const id = Math.floor(Number(interfaceId));
+        if (!projectPath || !(id > 0)) return false;
+        const mode = `test&rrui=${id}`;
+        if (typeof window !== 'undefined' && window.RPGReactorHost?.mode === 'web') {
+            window.RPGReactorHost.openPlaytest(mode);
+            return true;
+        }
+        if (typeof nw !== 'undefined') {
+            return this.launchPlaytestWindow(projectPath, mode);
+        }
+        console.error('NW.js not available - cannot launch playtest window');
+        return false;
+    }
+
     battleTest(projectPath) {
         if (!projectPath) {
             console.error('No project loaded');

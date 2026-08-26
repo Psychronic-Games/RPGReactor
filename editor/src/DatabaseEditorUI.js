@@ -49,6 +49,7 @@ class DatabaseEditorUI {
         this.system1Editor = new DatabaseSystem1Editor(databaseManager, system1ProjectManager, this.commonUI, this);
         this.system2Editor = new DatabaseSystem2Editor(databaseManager, { getCurrentProject: () => this.currentProject }, this.commonUI, this);
         this.commonEventEditor = new DatabaseCommonEventEditor(databaseManager, eventProjectManager, this.commonUI, this);
+        this.userInterfaceEditor = new DatabaseUserInterfaceEditor(databaseManager, { getCurrentProject: () => this.currentProject }, this.commonUI, this);
 
         if (typeof window !== 'undefined') {
             window.addEventListener('rr-language-changed', () => {
@@ -357,6 +358,10 @@ class DatabaseEditorUI {
             case 'commonEvents':
                 data = this.databaseManager.getCommonEvents();
                 title = this._dbTitle(type, 'Common Events');
+                break;
+            case 'userInterfaces':
+                data = this.databaseManager.getUserInterfaces();
+                title = this._dbTitle(type, 'User Interfaces');
                 break;
             case 'reactor3d': {
                 const { detailEl } = this.prepareDatabaseSection('reactor3d', this._dbTitle('reactor3d', '3D'), { showListPanel: false });
@@ -1128,6 +1133,7 @@ class DatabaseEditorUI {
             { name: 'Tilesets', type: 'tilesets' },
             { name: '3D', type: 'reactor3d' },
             { name: 'Common Events', type: 'commonEvents' },
+            { name: 'User Interfaces', type: 'userInterfaces' },
             { name: 'System 1', type: 'system1' },
             { name: 'System 2', type: 'system2' },
             { name: 'Types', type: 'types' },
@@ -1183,6 +1189,8 @@ class DatabaseEditorUI {
             this.animationEditor.showAnimationDetail(detailEl, entry);
         } else if (type === 'commonEvents') {
             this.commonEventEditor.showCommonEventDetail(detailEl, entry);
+        } else if (type === 'userInterfaces') {
+            this.userInterfaceEditor.showUserInterfaceDetail(detailEl, entry);
         } else {
             // Generic display for other types
             this.showGenericDetail(detailEl, entry, type);
@@ -1342,7 +1350,10 @@ class DatabaseEditorUI {
             // into an immediately editable stock MV sprite animation.
             animations: { name: 'New Animation', flashTimings: [], soundTimings: [], effectName: '', displayType: 0, offsetX: 0, offsetY: 0, rotation: { x: 0, y: 0, z: 0 }, scale: 100, speed: 100 },
             tilesets: { name: 'New Tileset', mode: 0, tilesetNames: ['', '', '', '', '', '', '', '', ''], flags: new Array(8192).fill(0), note: '' },
-            commonEvents: { name: 'New Common Event', trigger: 0, switchId: 1, list: [{code:0,indent:0,parameters:[]}] }
+            commonEvents: { name: 'New Common Event', trigger: 0, switchId: 1, list: [{code:0,indent:0,parameters:[]}] },
+            // Reactor section; the runtime (reactor_ui.js) fills in any field an
+            // older record lacks, so this is the whole shape.
+            userInterfaces: { name: 'New Interface', mode: 'scene', background: 'blur', cancel: { type: 'close' }, firstFocus: 0, nodes: [], note: '' }
         };
     }
 
@@ -1353,7 +1364,7 @@ class DatabaseEditorUI {
             actors: 9999, classes: 9999, skills: 9999, items: 9999,
             weapons: 9999, armors: 9999, enemies: 9999, troops: 9999,
             states: 9999, animations: 1000, tilesets: 1000, commonEvents: 9999,
-            elements: 512, skillTypes: 128, weaponTypes: 256,
+            userInterfaces: 9999, elements: 512, skillTypes: 128, weaponTypes: 256,
             armorTypes: 256, equipTypes: 128
         }[type] || 0;
     }

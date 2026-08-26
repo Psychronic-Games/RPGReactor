@@ -1,6 +1,6 @@
 # Handoff - 0.98.4 In Progress
 
-Last updated 2026-08-24.
+Last updated 2026-08-25.
 
 ## Current State
 
@@ -9,11 +9,13 @@ Last updated 2026-08-24.
   (2026-08-24): in-editor rigging, rig templates and preset motions,
   database 3D bindings, MP3/WAV/FLAC/M4A audio, PixiJS 8.20.0.
 - **0.98.4** is open in `editor/package.json`, both READMEs, and the
-  `[Unreleased - 0.98.4]` sections of both changelogs. Nine fixes are queued
-  there already (seek-broken Demo tracks, the web editor's 3D suite, two
-  PIXI 8 compat gaps, the map-title load soft lock, console quieting, the
-  v8 `origin` accessor, render-guard noise, DB3D first-open glitches).
-- Validation: **1,517 passing tests**, no failures, skips, or TODOs
+  `[Unreleased - 0.98.4]` sections of both changelogs. One feature (custom user interfaces, phase 1) and thirteen fixes are queued
+  there already (VisuStella Effekseer/heat-distortion draw failures and
+  off-centre transition shaders from user reports, Audio Player loop points, the Enemies note resize,
+  seek-broken Demo tracks, the web editor's 3D suite, two PIXI 8 compat
+  gaps, the map-title load soft lock, console quieting, the v8 `origin`
+  accessor, render-guard noise, DB3D first-open glitches).
+- Validation: **1,560 passing tests**, no failures, skips, or TODOs
   (`cd editor && npm test`, ~19 s). Syntax and `git diff --check` pass.
 - `template/Demo` is the only git-tracked template. The other folders under
   `template/` are local compatibility-corpus projects (Star Shift
@@ -29,6 +31,10 @@ Feature work, in the order the owner has been asking:
   death/knockback presets; bird/fish templates; retargeting clips between
   same-template rigs; a terrain-driven rule-set switch so Swim is automatic;
   decimation guidance for Meshy-scale models.
+- **Custom user interfaces** — phase 1 of `DESIGN-USER-INTERFACES.md` shipped
+  in this cycle (see the cycle note below). Next: List and Gauge nodes with
+  data sources, overlay/HUD mode, focus-order overrides (phase 2); styling
+  depth (3); title/menu replacement settings (4); standalone MZ plugin (5).
 - **Stock MZ battler motions are not mapped to model actions** — a 3D
   battler plays its ambient rules and named actions, but walk/attack/damage
   motion cells do not yet trigger model animations.
@@ -88,6 +94,163 @@ Blob-URL loading fixed it in 0.98.2 — `f3f87cc`, `97e0457`).
 Engineering notes and gotchas from each piece of work, kept because the
 suite and the next session both lean on them. Shipped-cycle narrative starts
 at *History* below.
+
+## vec2 Uniform Views + Full-Screen Filter Textures (2026-08-25, user-reported)
+
+- Same reporter as the Effekseer pair; both records checked against the tree.
+- vec2: v8 still has the "pixi point as vec2" parser (`libs/pixi.js`
+  `uniformParsers`, test `data.value.x !== void 0`), but
+  `generateUniformsSync` runs it against `group.uniformStructures[i].value`,
+  the construction-time value, and caches per `group._signature` +
+  `program._key`. Under our compat a pixi-filters v5 class constructs with
+  no uniforms, so that value is the seeded `Float32Array(2)` and the point
+  path never generates. `installVec2Compat` (mv_compat, above
+  `constructCompatFilter`) makes `.x/.y` and `[0]/[1]` two views of one
+  value so either generated path reads right. `UniformGroup` normalises the
+  structures in place (`size: 1` on scalars), so "scalar" is `size <= 1`.
+  vec4-as-rectangle and mat3-as-matrix parsers have the same hazard; no
+  corpus plugin hits them, deliberately not covered.
+- Full-screen textures: v8 `TexturePool.getOptimalTexture` always rounds
+  to a power of two (`enableFullScreen` is vestigial); the filter vertex
+  shader's `vTextureCoord = aPosition * (uOutputFrame.zw * uInputSize.zw)`
+  then spans frame/source, not 0..1. `pixi_compat.js` wraps the pool
+  instance (the module singleton every FilterSystem call goes through) for
+  the one request matching `Graphics._canvas`; negative keys, lazy Graphics
+  lookup, stale-size destroy on resize.
+- Live pixel check (`filter-uv-probe.mjs`, session scratchpad): a v5-style
+  filter on the Demo spriteset at 1280×720 drawing a disc at uv 0.5 centres
+  at (639.5, 359.5) with the pool holding 1280×720 textures under key −1; a
+  disc at `uCenter` in `filterArea.xy` pixels lands within 0.5 px for
+  `[0,0]`+`.x/.y`, `{}`+`.x/.y`, array assignment, and a held point mutated
+  after assignment.
+
+## VisuStella Effekseer + Heat Distortion Draw Failures (2026-08-25, user-reported)
+
+- Ported from a GitHub user's debug log against their VisuStella project;
+  both diagnoses checked against our tree before porting.
+- `PIXI.Sprite.prototype.updateTransform` is wrapped on v8 (no-args →
+  `updateLocalTransform()` + return; `(opts)` passes through). Sprite-only:
+  Container/Window/Tilemap plugin `updateTransform` chains have their
+  post-super work skipped by the v8 throw today and `Tilemap._prepareV8Frame`
+  expects it non-fatal. `Window.updateTransform` has branched on v8 since
+  `2a4cb5a` (2026-08-06), so the June note that "removing the wrap keeps
+  `_updateFilterArea` skipped" was stale and is rewritten.
+- Our own `Sprite_Animation.targetSpritePosition` already skipped the call on
+  v8, but VisuStella BattleCore replaces it with CoreEngine's projection, so
+  the guard never ran in those projects. The per-frame
+  `_doEffekseerDraw` catch now warns once (`_effekseerDrawWarned`).
+- `buildUniformStructures` seeds scalar array uniforms; `UniformGroup`'s
+  `getDefaultUniformValue` (`libs/pixi.js`) returns `0` for `f32` regardless
+  of `size` and has no `i32` case. Vector/matrix defaults were always right.
+- Corpus gap: Project3's animations are all MV-style (no `effectName`), so
+  the VisuStella + Effekseer path has no local repro; the reporter's
+  positioning after the fix is reasoned (worldTransform is a render-group
+  getter, read after `_app.render()`), and a Demo-battle probe confirms the
+  no-args call on a live battler leaves the projected position unchanged.
+- Found in passing by the reporter, not addressed: no `webglcontextlost`
+  handler anywhere in the runtime (PIXI, Effekseer overlay, three).
+
+## Custom User Interfaces, Phase 1 (2026-08-24)
+
+- Files: `runtime/reactor_ui.js` (runtime), `editor/src/database/
+  DatabaseUserInterfaceEditor.js` (tab), `editor/src/event/commands/
+  CallUserInterfaceEditor.js` (357 dialog), `data/UserInterfaces.json`
+  (records, MZ-shaped, optional). Node/action/condition shapes are
+  duplicated between the editor's `defaultNode` and the runtime's
+  `normalizeNode`; a test pins the anchor/type/action lists equal.
+- Runtime traps hit: (1) SceneManager rebuilds a popped-back-to scene from
+  its class with no `prepare`, so `ReactorUI._resumeIds` carries the
+  interface id across a pushed stock scene or sub-interface; (2) the file
+  must stay out of `DataManager._databaseFiles` (missing ⇒ boot stalls) and
+  out of `reactor_managers.js` entirely (`project-scaffold.test` regexes
+  that file for `src: "*.json"`); (3) load order before `reactor_mv_compat`
+  or `Window_ReactorUINode` misses the MV `(x,y,w,h)` wrapper snapshot.
+- Editor traps hit: the record-templates test parses `getDefaultTemplates()`
+  with a quote-aware brace scanner, so no apostrophes in comments inside
+  that literal; list getters must `filter(null)` like the others or
+  `populateList` dereferences the null slot; `canvas.focus()` inside
+  mousedown scrolled the canvas and broke the drag's coordinates (now
+  `focus({ preventScroll: true })` after measuring); `display:flex` on a
+  block beats the `hidden` attribute (scoped `[hidden] { display: none
+  !important }`).
+- Live rigs in the session scratchpad: `ui-runtime-check.mjs` (boots the
+  Demo with `test&rrui=1`, drives focus/actions through the scene's methods)
+  and `ui-editor-check.mjs` / `ui-drag-probe.mjs` (open the tab, add/edit
+  nodes, synthetic mouse drag and resize, the 357 dialog), and
+  `ui-sweep.mjs` (viewport sweep 1280→2560 via
+  `Emulation.setDeviceMetricsOverride`, unfolded action/condition states,
+  empty record, light themes; one screenshot per state). All use the repo
+  `scratchpad/cdp.mjs`. Layout rules that came out of the sweep: the
+  properties panel is one 4-track grid (label|field|label|field) that
+  collapses pairs below 340px; the workspace stacks below 1300px of detail
+  width because three columns starve the canvas before that; sections in
+  the editor column never flex-shrink; the settings line wraps by column.
+- The canvas preview loads the project's `mainFontFilename` through
+  `FontFace` and uses MZ's line metrics (line = fontSize + (36 − main size),
+  baseline at half line + 0.35·size), so text measures as the game draws it.
+  `ui-kinds-check.mjs` / `ui-kinds-editor.mjs` in the session scratchpad
+  write a title screen, a yes/no dialog, and a HUD-style panel into the Demo
+  file, drive them in the runtime (left/right focus, switch action with
+  and-close, switch-driven visibility, the cancel soft-lock guard), and
+  screenshot the same three in the editor for a fidelity comparison.
+- Runtime guards: condition scripts compile once (`ReactorUI.compileScript`
+  cache), and cancel closes an interface whose cancel is "Nothing" when no
+  enabled button is on screen.
+- From the "Character Sheet" pass (`ui-sheet-check.mjs` / `ui-sheet-editor.mjs`
+  in the session scratchpad): Text nodes gain `wrap` (greedy word wrap
+  measured through `textSizeEx` in the runtime, through the same font on
+  the canvas); Image nodes can parent; a parent's opacity multiplies down
+  its subtree; nodes always draw parents-first (`ReactorUI.orderNodes` and
+  the editor's `orderNodes`, applied on load and after every reorder, so a
+  box moved past its children never covers them); ▲/▼ swap *siblings* and
+  carry the subtree; directional wrap-around prefers the same row/column
+  (the sign on the sideways penalty was inverted); the tree marks
+  conditionally visible nodes with ◐.
+- Owner pass 2026-08-25 (Windows): **Playtest Interface is a preview**, not
+  a game. `Scene_Boot.start` wrapper (end of reactor_ui.js) → `setupNewGame`
+  + `goto(Scene_ReactorUI)`; `ReactorUI._preview` = black `ScreenSprite`
+  background, and `Scene_ReactorUI.close` on the preview root
+  (`SceneManager._stack` empty) calls `ReactorUI.endPreview()` →
+  `SceneManager.exit()` (battle test's exit; the playtest is a separate NW
+  process, so `nw.App.quit` never touches the editor). The old
+  `isTitleSkip` + `Scene_Map.start` hooks are gone. **Fit text to size**
+  (`fitText` on text and button nodes): runtime `applyFit` bisects
+  `_uiFontScale` against `textSizeEx` of the re-wrapped label, floor
+  `MIN_FONT_SIZE` 8 px on both sides; editor `layoutText` mirrors it over
+  `parseText(node, scale)`. Two phrases added to all 17 locales by a
+  scratchpad script keyed off the "Wraps at the node width…" line.
+  Live-verified on Windows NW.js (`ui-preview-check.mjs` in the session
+  scratchpad — a Windows port of `scratchpad/cdp.mjs`, which hardcodes
+  `/mnt/sda1` + `nwjs-linux`): first scene Scene_ReactorUI, stack 0,
+  ScreenSprite background, `$gameMap.mapId()` 0, `close()` exits the
+  process; fit probe 585 px → 8 px floor, wrapped 200×60 → 10 px/2 lines.
+  Rig gotcha: pass the ABSOLUTE project path as the app argument — `.`
+  with `cwd` set raised NW's "manifest file" dialog from Git Bash.
+- Known gaps (design phases 2+): no List/Gauge nodes, no overlay mode, no
+  per-node focus order, no open/close transitions, no marquee or
+  multi-select on the canvas.
+
+## Audio Player Loop Points + Enemies Note Resize (2026-08-24, user-reported)
+
+- `src/utils/AudioLoopTags.js` is the editor-side twin of the runtime's
+  `WebAudio._read*LoopComments`; keep the two in step when a format gains
+  loop tags (M4A has none in either). `loopPointsFromFile` returns a Promise
+  on every host; desktop reads a 128K/1M/4M prefix and only reads a WAV
+  whole when its `smpl` chunk trails the data.
+- `AudioPlayer` channels: `loopWanted` is the switch, `loopPoints` the
+  track's own points, `loopArmed` false after a seek past the end. Set the
+  element's `loop` only through `setChannelLoop` (a test enforces this);
+  with loop points present the element never loops itself.
+- Live check recipe (scratchpad `loopfix/`): ffmpeg `-metadata LOOPSTART=
+  -metadata LOOPLENGTH=` sine fixture, an NW.js page loading
+  EncryptedAssets/AudioLoopTags/AudioPlayer with
+  `--autoplay-policy=no-user-gesture-required`, `playExternal` on the `bgs`
+  channel (the UI channel's `timeupdate` handler expects the modal DOM),
+  sample `currentTime` at 40 ms.
+- Flexbox trap behind the Enemies note: `flex: 1` is basis `0%`; in a
+  definite-height column the resize handle's inline `height` is then
+  ignored. The other note fields use `flex: 1 1 auto`. Measured in NW.js,
+  not reasoned.
 
 ## In-Editor Rigging (2026-08-23, stage 1 SHIPPED)
 

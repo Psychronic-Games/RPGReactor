@@ -34,11 +34,15 @@ class AudioPlayer {
 
         this.audioPlayer = {
             // Separate audio channels for each type
+            // loopWanted is the loop switch; loopPoints ({start, end} in
+            // seconds) is the track's own LOOPSTART/LOOPLENGTH, and when
+            // present the player wraps there itself instead of letting the
+            // media element loop the whole file.
             channels: {
-                bgm: { audio: new Audio(), gainNode: null, panNode: null, sourceNode: null, currentTrack: null, playing: false },
-                bgs: { audio: new Audio(), gainNode: null, panNode: null, sourceNode: null, currentTrack: null, playing: false },
-                me: { audio: new Audio(), gainNode: null, panNode: null, sourceNode: null, currentTrack: null, playing: false },
-                se: { audio: new Audio(), gainNode: null, panNode: null, sourceNode: null, currentTrack: null, playing: false }
+                bgm: { audio: new Audio(), gainNode: null, panNode: null, sourceNode: null, currentTrack: null, playing: false, loopWanted: true, loopPoints: null, loopArmed: true },
+                bgs: { audio: new Audio(), gainNode: null, panNode: null, sourceNode: null, currentTrack: null, playing: false, loopWanted: true, loopPoints: null, loopArmed: true },
+                me: { audio: new Audio(), gainNode: null, panNode: null, sourceNode: null, currentTrack: null, playing: false, loopWanted: true, loopPoints: null, loopArmed: true },
+                se: { audio: new Audio(), gainNode: null, panNode: null, sourceNode: null, currentTrack: null, playing: false, loopWanted: false, loopPoints: null, loopArmed: true }
             },
             audioContext: null,
             currentType: 'bgm',
@@ -96,12 +100,29 @@ class AudioPlayer {
             });
 
             channel.audio.addEventListener('ended', () => {
-                // Don't manually loop - let the browser handle it via audio.loop property
-                // Just update playing status when audio ends (if not looping)
+                // A track with loop points whose loop runs to the end of the
+                // file, or whose tail was auditioned past the loop end,
+                // reaches here; wrap to the loop start like the game does.
+                if (channel.loopWanted && channel.loopPoints) {
+                    channel.audio.currentTime = channel.loopPoints.start;
+                    channel.loopArmed = true;
+                    this.playChannel(channel, channel.currentTrack ? channel.currentTrack.name : 'audio');
+                    return;
+                }
+                // Otherwise the media element loops the whole file itself.
                 if (!channel.audio.loop) {
                     channel.playing = false;
                 }
             });
+
+            // A seek past the loop end plays the tail out instead of snapping
+            // straight back; the loop re-arms once playback is before the
+            // end again (a wrap, a seek, or a fresh track).
+            channel.audio.addEventListener('seeked', () => {
+                channel.loopArmed = !channel.loopPoints
+                    || channel.audio.currentTime < channel.loopPoints.end;
+            });
+            channel.audio.addEventListener('play', () => this.watchLoopPoints(channel));
 
             channel.audio.addEventListener('error', () => {
                 channel.playing = false;
@@ -489,8 +510,75 @@ class AudioPlayer {
         // The flag only reached a media element when a track started, so
         // toggling mid-playback restyled the button and changed nothing.
         const channel = this.getCurrentChannel();
-        if (channel && channel.audio) channel.audio.loop = this.audioPlayer.loop;
+        if (channel && channel.audio) this.setChannelLoop(channel, this.audioPlayer.loop);
         this.updateLoopButton();
+    }
+
+    /**
+     * Turn looping on or off for a channel. The media element only loops
+     * the whole file when the track carries no loop points of its own;
+     * with loop points, watchLoopPoints does the wrapping.
+     */
+    setChannelLoop(channel, wanted) {
+        channel.loopWanted = !!wanted;
+        channel.audio.loop = channel.loopWanted && !channel.loopPoints;
+    }
+
+    /**
+     * Read the track's loop points off the disk and, once known, hand the
+     * channel's looping over to them. The read is asynchronous and the
+     * track may have changed by the time it answers, so the result is
+     * only applied to the track it was read for.
+     */
+    loadLoopPoints(channel, track) {
+        channel.loopPoints = null;
+        channel.loopArmed = true;
+        this.setChannelLoop(channel, channel.loopWanted);
+        const tags = typeof window !== 'undefined' ? window.RRAudioLoopTags : null;
+        if (!tags || !track || !track.absolutePath) return;
+        if (!this._loopPointsCache) this._loopPointsCache = new Map();
+        let promise = this._loopPointsCache.get(track.absolutePath);
+        if (!promise) {
+            promise = Promise.resolve()
+                .then(() => tags.loopPointsFromFile(track.absolutePath))
+                .catch(() => null);
+            this._loopPointsCache.set(track.absolutePath, promise);
+        }
+        promise.then(points => {
+            if (channel.currentTrack !== track) return;
+            channel.loopPoints = points && points.end > points.start ? points : null;
+            channel.loopArmed = !channel.loopPoints || channel.audio.currentTime < channel.loopPoints.end;
+            this.setChannelLoop(channel, channel.loopWanted);
+            this.watchLoopPoints(channel);
+        });
+    }
+
+    /**
+     * Per-frame watch that wraps playback from the loop end back to the
+     * loop start, keeping the overshoot so the phase stays exact. Runs only
+     * while the channel is playing and has loop points.
+     */
+    watchLoopPoints(channel) {
+        if (channel.loopWatch) return;
+        const raf = typeof requestAnimationFrame === 'function'
+            ? requestAnimationFrame : callback => setTimeout(callback, 16);
+        const tick = () => {
+            channel.loopWatch = 0;
+            const audio = channel.audio;
+            const points = channel.loopPoints;
+            if (!points || audio.paused || audio.ended) return;
+            if (channel.loopWanted) {
+                const time = audio.currentTime;
+                if (time < points.end) {
+                    channel.loopArmed = true;
+                } else if (channel.loopArmed) {
+                    const length = points.end - points.start;
+                    audio.currentTime = points.start + ((time - points.end) % length);
+                }
+            }
+            channel.loopWatch = raf(tick);
+        };
+        channel.loopWatch = raf(tick);
     }
 
     updateLoopButton() {
@@ -766,6 +854,8 @@ class AudioPlayer {
         // Load new track
         currentChannel.audio.src = this.toAudioSource(track.path);
         currentChannel.currentTrack = track;
+        currentChannel.loopWanted = this.audioPlayer.loop;
+        this.loadLoopPoints(currentChannel, track);
 
         // Update UI
         this.updateTrackHeader(track);
@@ -821,7 +911,7 @@ class AudioPlayer {
         }
 
         // Apply loop setting
-        currentChannel.audio.loop = this.audioPlayer.loop;
+        this.setChannelLoop(currentChannel, this.audioPlayer.loop);
 
         // Auto-play
         this.playAudio();
@@ -961,6 +1051,8 @@ class AudioPlayer {
                 absolutePath: /^(file|https?|data):/i.test(filePath) ? null : filePath,
                 type: audioType
             };
+            channel.loopWanted = params.loop !== undefined ? !!params.loop : audioType !== 'se';
+            this.loadLoopPoints(channel, channel.currentTrack);
 
             // Update UI if modal is open AND this is the currently displayed channel
             const modal = document.getElementById('audio-player-modal');
@@ -992,12 +1084,8 @@ class AudioPlayer {
             channel.panNode.pan.value = params.pan / 100;
         }
 
-        if (params.loop !== undefined) {
-            channel.audio.loop = params.loop;
-        } else {
-            // Default loop behavior: SE doesn't loop, others do
-            channel.audio.loop = (audioType !== 'se');
-        }
+        // Default loop behavior: SE doesn't loop, others do
+        this.setChannelLoop(channel, params.loop !== undefined ? params.loop : audioType !== 'se');
 
         // Resume audio context if it's suspended (required by browsers)
         if (this.audioPlayer.audioContext && this.audioPlayer.audioContext.state === 'suspended') {

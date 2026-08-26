@@ -312,6 +312,10 @@ class UIManager {
             label: 'Common Events',
             click: () => this.callbacks.openDatabase('commonEvents')
         }));
+        databaseMenu.append(new nw.MenuItem({
+            label: 'User Interfaces',
+            click: () => this.callbacks.openDatabase('userInterfaces')
+        }));
         databaseMenu.append(new nw.MenuItem({ type: 'separator' }));
         databaseMenu.append(new nw.MenuItem({
             label: 'System 1',

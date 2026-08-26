@@ -636,6 +636,7 @@ class ProjectManager {
             'States.json': [null],
             'Tilesets.json': [null, this.getStarterTileset()],
             'Troops.json': [null],
+            'UserInterfaces.json': [null],
             'Weapons.json': [null],
             'MapInfos.json': [null, {
                 id: 1,

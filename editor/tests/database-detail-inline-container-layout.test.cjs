@@ -37,3 +37,13 @@ test('specialized actor, class, and enemy layouts participate in detail reflow',
     assert.match(classSource, /database-class-parameter-grid/);
     assert.match(classSource, /repeat\(auto-fit, minmax\(140px, 1fr\)\)/);
 });
+
+test('the Enemies note textarea keeps the height its resize handle sets', () => {
+    const enemySource = fs.readFileSync(path.join(editorRoot, 'src', 'database', 'DatabaseEnemyEditor.js'), 'utf8');
+    const textarea = enemySource.match(/<textarea class="database-field-value" style="([^"]*)" data-field="note" data-enemy-id=/);
+    assert.ok(textarea, 'enemy note textarea exists');
+    // `flex: 1` is flex-basis 0%, which makes the flex algorithm discard the
+    // inline height a drag on the resize handle writes; an auto basis keeps it.
+    assert.match(textarea[1], /flex:\s*1 1 auto/);
+    assert.doesNotMatch(textarea[1], /flex:\s*1\s*;/);
+});

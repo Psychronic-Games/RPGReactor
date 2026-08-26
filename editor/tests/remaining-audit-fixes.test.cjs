@@ -80,7 +80,7 @@ test('the loop toggle reaches the element that is playing', () => {
     const source = read('src/AudioPlayer.js');
     const at = source.indexOf('toggleLoop() {');
     const body = source.slice(at, source.indexOf('\n    }', at));
-    assert.match(body, /channel\.audio\.loop = this\.audioPlayer\.loop/);
+    assert.match(body, /this\.setChannelLoop\(channel, this\.audioPlayer\.loop\)/);
 });
 
 test('saved sidebar sizes are re-applied once sections become visible', () => {

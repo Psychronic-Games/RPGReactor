@@ -22,6 +22,7 @@ const scriptUrls = [
     "js/reactor_sprites.js",
     "js/reactor_picture_extensions.js",
     "js/reactor_windows.js",
+    "js/reactor_ui.js",
     "js/reactor_mv_compat.js",
     "js/reactor_plugins.js"
 ];

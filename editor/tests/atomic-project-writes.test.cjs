@@ -11,7 +11,7 @@ const srcRoot = path.join(editorRoot, 'src');
 const CRITICAL = [
     'System.json', 'MapInfos.json', 'Tilesets.json', 'Actors.json', 'Classes.json',
     'Skills.json', 'Items.json', 'Weapons.json', 'Armors.json', 'Enemies.json',
-    'Troops.json', 'States.json', 'Animations.json', 'CommonEvents.json',
+    'Troops.json', 'States.json', 'Animations.json', 'CommonEvents.json', 'UserInterfaces.json',
     'project.rpgreactor', 'plugins.js', 'reactor_plugins.js'
 ];
 const CRITICAL_PATTERNS = [

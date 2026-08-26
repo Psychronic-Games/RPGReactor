@@ -2960,3 +2960,350 @@
         .map-3d-hint.is-fading {
             opacity: 0;
         }
+
+        /* Database > User Interfaces: node tree | layout canvas | properties. */
+        .rr-ui-editor [hidden] {
+            display: none !important;
+        }
+        .rr-ui-editor {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            padding: 16px;
+            height: 100%;
+            overflow-y: auto;
+            box-sizing: border-box;
+        }
+        /* Sections keep their height; the editor column scrolls instead of
+         * squeezing a section until its content spills under the next. */
+        .rr-ui-editor > * {
+            flex-shrink: 0;
+        }
+        /* The settings line wraps column by column instead of squeezing:
+         * five 150px+ columns where they fit, fewer per line where not. */
+        .rr-ui-general .db-form > .db-row-cols {
+            grid-auto-flow: row;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            align-items: start;
+        }
+        .rr-ui-general-buttons > button {
+            width: 100%;
+            height: 30px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .rr-ui-general .rr-ui-cancel-action {
+            width: 100%;
+        }
+        /* The workspace row fits the window; each panel scrolls inside it. */
+        .rr-ui-workspace {
+            display: grid;
+            grid-template-columns: minmax(180px, 220px) minmax(0, 1fr) minmax(320px, 400px);
+            grid-auto-rows: clamp(420px, calc(100vh - 360px), 960px);
+            gap: 12px;
+            align-items: stretch;
+        }
+        @container database-detail (max-width: 1300px) {
+            .rr-ui-workspace {
+                grid-template-columns: minmax(0, 1fr);
+                grid-auto-rows: auto;
+            }
+            .rr-ui-canvas-panel {
+                order: -1;
+            }
+            .rr-ui-tree {
+                max-height: 220px;
+            }
+            .rr-ui-workspace > .database-section > .database-section-content.rr-ui-props {
+                max-height: 480px;
+            }
+        }
+        .rr-ui-workspace > .database-section {
+            display: flex;
+            flex-direction: column;
+            margin-bottom: 0;
+            min-width: 0;
+            min-height: 0;
+            overflow: hidden;
+        }
+        .rr-ui-workspace > .database-section > .database-section-content {
+            flex: 1 1 auto;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            min-height: 0;
+        }
+        .rr-ui-add-buttons,
+        .rr-ui-tree-buttons {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 6px;
+        }
+        .rr-ui-add-buttons > button,
+        .rr-ui-tree-buttons > button {
+            width: 100%;
+        }
+        .rr-ui-tree {
+            flex: 1 1 auto;
+            min-height: 120px;
+            overflow-y: auto;
+            background-color: var(--color-bg-panel);
+            border: 1px solid var(--color-accent-border);
+            border-radius: 3px;
+        }
+        .rr-ui-tree-empty,
+        .rr-ui-hint {
+            color: var(--color-text-muted);
+            font-size: 12px;
+            font-style: italic;
+            padding: 8px;
+        }
+        .rr-ui-tree-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 5px 8px;
+            cursor: pointer;
+            font-size: 13px;
+            color: var(--color-text-strong);
+            white-space: nowrap;
+            overflow: hidden;
+        }
+        .rr-ui-tree-row:hover {
+            background-color: var(--color-bg-surface);
+        }
+        .rr-ui-tree-row.selected {
+            background-color: var(--color-accent-deep);
+            color: var(--color-text-strong);
+        }
+        .rr-ui-tree-type {
+            flex: 0 0 auto;
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            padding: 1px 5px;
+            border-radius: 3px;
+            background-color: var(--color-bg-surface);
+            color: var(--color-accent-bright);
+        }
+        .rr-ui-tree-label {
+            flex: 1 1 auto;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .rr-ui-tree-flag {
+            flex: 0 0 auto;
+            color: var(--color-text-muted);
+            font-size: 11px;
+        }
+        .rr-ui-canvas-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+        }
+        .rr-ui-canvas-tools {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 12px;
+            font-weight: 500;
+            color: var(--color-text-muted);
+        }
+        .rr-ui-canvas-tools label {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            cursor: pointer;
+        }
+        .rr-ui-canvas-host {
+            align-items: center;
+            justify-content: center;
+            overflow: auto;
+        }
+        .rr-ui-canvas {
+            display: block;
+            background-color: #1e2430;
+            border: 1px solid var(--color-accent-border);
+            outline: none;
+            max-width: 100%;
+        }
+        .rr-ui-canvas:focus {
+            border-color: var(--color-accent-bright);
+        }
+        /* One grid for the whole panel: label | field | label | field. A
+         * single row spans the last three tracks, a pair fills all four, so
+         * every field starts on the same left edge and ends on the same
+         * right edge whatever the row. Rows are `display: contents`
+         * wrappers only where a block must hide as one. */
+        .rr-ui-props-panel {
+            container-type: inline-size;
+            container-name: rr-ui-props;
+        }
+        .rr-ui-workspace > .database-section > .database-section-content.rr-ui-props {
+            display: grid;
+            grid-template-columns: 68px minmax(0, 1fr) 48px minmax(0, 1fr);
+            gap: 8px 8px;
+            align-items: center;
+            align-content: start;
+            overflow-y: auto;
+            min-height: 0;
+        }
+        .rr-ui-props > .rr-ui-sub,
+        .rr-ui-props .rr-ui-sub > .rr-ui-sub {
+            display: contents;
+        }
+        .rr-ui-props .rr-ui-hidden {
+            display: none !important;
+        }
+        .rr-ui-props .rr-ui-l,
+        .rr-ui-props .rr-ui-l2 {
+            color: var(--color-text-muted);
+            font-size: 12px;
+            font-weight: 600;
+            text-align: right;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .rr-ui-props .rr-ui-l { grid-column: 1; }
+        .rr-ui-props .rr-ui-f { grid-column: 2 / -1; min-width: 0; }
+        .rr-ui-props .rr-ui-f1 { grid-column: 2; min-width: 0; }
+        .rr-ui-props .rr-ui-l2 { grid-column: 3; }
+        .rr-ui-props .rr-ui-f2 { grid-column: 4; min-width: 0; }
+        .rr-ui-props .rr-ui-prop-title {
+            grid-column: 1 / -1;
+            font-weight: 700;
+            font-size: 13px;
+            color: var(--color-accent-bright);
+            padding-bottom: 6px;
+            border-bottom: 1px solid var(--color-accent-border);
+        }
+        .rr-ui-props .rr-ui-group {
+            grid-column: 1 / -1;
+            margin-top: 6px;
+            padding-bottom: 4px;
+            border-bottom: 1px solid var(--color-accent-border);
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--color-text-muted);
+        }
+        .rr-ui-props .rr-ui-hint,
+        .rr-ui-props .rr-ui-hint-row {
+            font-size: 11px;
+            line-height: 1.35;
+            color: var(--color-text-muted);
+            font-style: normal;
+            padding: 0;
+        }
+        .rr-ui-props .rr-ui-hint { margin-top: 4px; }
+        .rr-ui-props .rr-ui-hint-row { grid-column: 2 / -1; margin-top: -2px; }
+        .rr-ui-props .rr-ui-empty { grid-column: 1 / -1; padding: 8px; }
+        .rr-ui-props input[type="text"],
+        .rr-ui-props input[type="number"],
+        .rr-ui-props select,
+        .rr-ui-props textarea {
+            width: 100%;
+            box-sizing: border-box;
+            min-width: 0;
+            height: 30px;
+        }
+        .rr-ui-props textarea {
+            height: auto;
+            resize: vertical;
+            font-family: var(--font-mono);
+        }
+        /* The select shim wraps each <select>; the wrapper must stretch too,
+         * or selects hug their text while inputs beside them fill the row. */
+        .rr-ui-props .rr-shim-wrapper,
+        .rr-ui-props .rr-shim-wrapper > select {
+            width: 100%;
+            max-width: none;
+            display: block;
+        }
+        /* A pair whose second half is hidden reads as a single row. */
+        .rr-ui-props .rr-ui-f1:has(+ .rr-ui-sub.rr-ui-hidden) {
+            grid-column: 2 / -1;
+        }
+        /* Narrow panel: a pair becomes two single rows so no field is ever
+         * squeezed below its number. */
+        @container rr-ui-props (max-width: 340px) {
+            .rr-ui-workspace > .database-section > .database-section-content.rr-ui-props {
+                grid-template-columns: 68px minmax(0, 1fr);
+            }
+            .rr-ui-props .rr-ui-f1,
+            .rr-ui-props .rr-ui-f2 {
+                grid-column: 2 / -1;
+            }
+            .rr-ui-props .rr-ui-l2 {
+                grid-column: 1;
+            }
+        }
+        .rr-ui-props input[type="number"] {
+            padding-left: 8px;
+            padding-right: 4px;
+        }
+        /* A label beside a tall field (textarea, or an action/condition
+         * that unfolds into rows) sits at the top of it, not mid-block. */
+        .rr-ui-props .rr-ui-l:has(+ .rr-ui-f > textarea),
+        .rr-ui-props .rr-ui-l:has(+ .rr-ui-f > .rr-ui-action),
+        .rr-ui-props .rr-ui-l:has(+ .rr-ui-f > .rr-ui-condition) {
+            align-self: start;
+            padding-top: 7px;
+        }
+        .rr-ui-props .rr-ui-color {
+            padding: 2px;
+        }
+        .rr-ui-color {
+            width: 100%;
+            height: 30px;
+            padding: 0;
+            border: 1px solid var(--color-accent-border);
+            border-radius: 3px;
+            background: transparent;
+            cursor: pointer;
+        }
+        .rr-ui-check {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 12px;
+            color: var(--color-text);
+        }
+        .rr-ui-condition,
+        .rr-ui-action {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            min-width: 0;
+        }
+        .rr-ui-condition > div,
+        .rr-ui-action > div {
+            display: flex;
+            gap: 4px;
+            min-width: 0;
+        }
+        .rr-ui-condition > div > *,
+        .rr-ui-action > div > * {
+            flex: 1 1 0;
+            min-width: 0;
+        }
+        .rr-ui-action > .rr-ui-action-pluginCommand,
+        .rr-ui-action > .rr-ui-action-script,
+        .rr-ui-condition > .rr-ui-condition-script {
+            flex-direction: column;
+        }
+        .rr-ui-file-row {
+            display: flex;
+            gap: 4px;
+        }
+        .rr-ui-file-row > input {
+            flex: 1 1 auto;
+        }
+        .rr-ui-file-row > button {
+            flex: 0 0 auto;
+        }

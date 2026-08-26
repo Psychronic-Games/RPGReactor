@@ -16,6 +16,7 @@ class DatabaseManager {
             animations: 1000,
             tilesets: 1000,
             commonEvents: 9999,
+            userInterfaces: 9999,
             elements: 512,
             skillTypes: 128,
             weaponTypes: 256,
@@ -63,6 +64,7 @@ class DatabaseManager {
             ['animations', 'Animations.json'],
             ['tilesets', 'Tilesets.json'],
             ['commonEvents', 'CommonEvents.json'],
+            ['userInterfaces', 'UserInterfaces.json'],
             ['system', 'System.json']
         ];
 
@@ -80,6 +82,9 @@ class DatabaseManager {
             animations: [],
             tilesets: [],
             commonEvents: [],
+            // Reactor's own database section, stored beside the MZ files;
+            // absent in projects that never authored an interface.
+            userInterfaces: [],
             system: null,
             mapInfos: [],
             // Per-tile 3D classification. Not one of the dataFiles: those are
@@ -122,6 +127,11 @@ class DatabaseManager {
                 loaded[key] = await this.loadJSON(dataPath, filename);
             }
             loaded.tileset3d = await this.loadTileset3D(projectPath);
+            // An absent file reads as []; records start at id 1 behind the
+            // null slot every other database file keeps.
+            if (!Array.isArray(loaded.userInterfaces) || loaded.userInterfaces.length === 0) {
+                loaded.userInterfaces = [null];
+            }
             Object.assign(this.data, loaded);
             this.projectPath = projectPath;
             this.dataGeneration++;
@@ -375,6 +385,19 @@ class DatabaseManager {
         return this.data.tilesets[id] || null;
     }
 
+    getUserInterfaces() {
+        return this.data.userInterfaces.filter(entry => entry !== null);
+    }
+
+    getUserInterface(id) {
+        return this.data.userInterfaces[id];
+    }
+
+    hasUserInterfaces() {
+        const list = this.data.userInterfaces;
+        return Array.isArray(list) && list.some(entry => entry && typeof entry === 'object');
+    }
+
     getCommonEvents() {
         return this.data.commonEvents.filter(c => c !== null);
     }
@@ -522,6 +545,11 @@ class DatabaseManager {
 
         const failed = [];
         for (const [key, filename] of this.dataFiles) {
+            // A project that never authored an interface gains no file.
+            if (key === 'userInterfaces' && !this.hasUserInterfaces()
+                && !this.fs.existsSync(this.path.join(projectPath, 'data', filename))) {
+                continue;
+            }
             // System.json is part of dataFiles and gets its own fresh
             // versionId when its turn comes — skip the companion rewrite
             // that would otherwise re-save it after every other file.
