@@ -797,7 +797,7 @@ class DatabaseUserInterfaceEditor {
         if (isLabel) {
             html += this.group(node.type === 'button' ? tt('Label') : tt('Text'));
             html += this.row(tt('Text'), `<textarea class="database-field-value p-text" rows="3">${this.escapeHTML(node.text)}</textarea>`,
-                tt('Escape codes work: \\V[n], \\N[n], \\C[n], \\I[n], \\G'));
+                tt('Escape codes work: \\V[n], \\N[n], \\C[n], \\I[n], \\G') + ' ' + tt('Party codes: \\GOLD, \\PLV[n], \\PCLASS[n], \\PHP[n], \\PMHP[n], \\PMP[n], \\PMMP[n], \\PTP[n] (n = party slot)'));
             html += this.row(tt('Align'), this.selectControl('p-align', node.align, [['left', tt('Left')], ['center', tt('Center')], ['right', tt('Right')]]));
             html += this.pair(tt('Size'), this.numberControl('p-fontSize', node.fontSize, 0, 200), tt('Color'), this.numberControl('p-textColor', typeof node.textColor === 'number' ? node.textColor : 0, 0, 31));
             html += this.hintRow(tt('Font size 0 uses the game default; color is a window skin index.'));
@@ -807,11 +807,11 @@ class DatabaseUserInterfaceEditor {
         }
         if (node.type === 'image') {
             html += this.group(tt('Image'));
-            html += this.row(tt('Source'), this.selectControl('p-source', node.source, [['picture', tt('Picture')], ['system', tt('System')], ['face', tt('Face')], ['character', tt('Character')], ['icon', tt('Icon')]]));
-            html += `<div class="rr-ui-sub rr-ui-image-file"${node.source === 'icon' ? ' hidden' : ''}>`;
+            html += this.row(tt('Source'), this.selectControl('p-source', node.source, [['picture', tt('Picture')], ['system', tt('System')], ['face', tt('Face')], ['character', tt('Character')], ['icon', tt('Icon')], ['partyFace', tt('Party face')]]));
+            html += `<div class="rr-ui-sub rr-ui-image-file"${node.source === 'icon' || node.source === 'partyFace' ? ' hidden' : ''}>`;
             html += this.row(tt('File'), `<div class="rr-ui-file-row">${this.textControl('p-file', node.file)}<button type="button" class="rr-btn-chip p-browse">…</button></div>`);
             html += `</div>`;
-            html += `<div class="rr-ui-sub rr-ui-image-index"${node.source === 'face' || node.source === 'character' || node.source === 'icon' ? '' : ' hidden'}>`;
+            html += `<div class="rr-ui-sub rr-ui-image-index"${node.source === 'face' || node.source === 'character' || node.source === 'icon' || node.source === 'partyFace' ? '' : ' hidden'}>`;
             html += this.row(tt('Index'), this.numberControl('p-index', node.index, 0, 9999));
             html += `</div>`;
             html += this.row(tt('Fit'), this.selectControl('p-fit', node.fit, [['none', tt('Actual size')], ['stretch', tt('Stretch')], ['contain', tt('Fit inside')]]));
@@ -894,8 +894,8 @@ class DatabaseUserInterfaceEditor {
             node.file = q('p-file').value.trim();
             node.index = num('p-index', 0, 9999, node.index);
             node.fit = q('p-fit').value;
-            panel.querySelector('.rr-ui-image-file').hidden = node.source === 'icon';
-            panel.querySelector('.rr-ui-image-index').hidden = !(node.source === 'face' || node.source === 'character' || node.source === 'icon');
+            panel.querySelector('.rr-ui-image-file').hidden = node.source === 'icon' || node.source === 'partyFace';
+            panel.querySelector('.rr-ui-image-index').hidden = !(node.source === 'face' || node.source === 'character' || node.source === 'icon' || node.source === 'partyFace');
         }
         if (node.type === 'button') {
             this.readAction(panel, 'p-action', node.action);
@@ -1607,6 +1607,33 @@ class DatabaseUserInterfaceEditor {
         return (system && system.advanced && Number(system.advanced.fontSize)) || 26;
     }
 
+    /** The actor in a starting-party slot (System > Starting Party), the editor's stand-in for the play-time party. */
+    startingMember(slot) {
+        const data = this.databaseManager && this.databaseManager.data;
+        if (!data) return null;
+        const ids = Array.isArray(data.system && data.system.partyMembers) ? data.system.partyMembers : [];
+        const id = ids[Math.max(0, Math.floor(slot))];
+        return (id && data.actors && data.actors[id]) || null;
+    }
+
+    /** Preview value of a party code for a starting-party slot: level and class from the actor, HP/MP from the class at that level. */
+    startingStat(code, slot) {
+        const member = this.startingMember(slot);
+        if (!member) return '';
+        const data = this.databaseManager.data;
+        const level = Number(member.initialLevel) || 1;
+        const klass = data.classes && data.classes[member.classId];
+        const param = index => (klass && klass.params && klass.params[index] && klass.params[index][level]) || 0;
+        switch (code) {
+            case 'PLV': return String(level);
+            case 'PCLASS': return klass ? klass.name : '';
+            case 'PHP': case 'PMHP': return String(param(0));
+            case 'PMP': case 'PMMP': return String(param(1));
+            case 'PTP': return '0';
+            default: return '';
+        }
+    }
+
     /** Splits text into drawable runs: {text, color, size, icon}. `scale` shrinks the base font (Fit text to size). */
     parseText(node, scale = 1) {
         const ctx = this.ctx;
@@ -1618,8 +1645,10 @@ class DatabaseUserInterfaceEditor {
         text = text.replace(/\\\\/g, '\u0000');
         text = text.replace(/\\V\[(\d+)\]/gi, (m, n) => (system.variables && system.variables[Number(n)]) ? '{' + system.variables[Number(n)] + '}' : '0');
         text = text.replace(/\\N\[(\d+)\]/gi, (m, n) => (actors[Number(n)] && actors[Number(n)].name) || '');
-        text = text.replace(/\\P\[(\d+)\]/gi, (m, n) => (actors[Number(n)] && actors[Number(n)].name) || '');
+        text = text.replace(/\\P\[(\d+)\]/gi, (m, n) => { const member = this.startingMember(Number(n) - 1); return member ? member.name : ''; });
         text = text.replace(/\\G/gi, system.currencyUnit || 'G');
+        text = text.replace(/\\GOLD/gi, '0');
+        text = text.replace(/\\(PLV|PCLASS|PHP|PMHP|PMP|PMMP|PTP)\[(\d+)\]/gi, (m, code, n) => this.startingStat(code.toUpperCase(), Number(n) - 1));
         text = text.replace(/\u0000/g, '\\');
         const lines = [];
         let color = baseColor;
@@ -1884,8 +1913,10 @@ class DatabaseUserInterfaceEditor {
 
     drawImageNode(node, rect) {
         const ctx = this.ctx;
-        const folder = { picture: 'pictures', system: 'system', face: 'faces', character: 'characters', icon: 'system' }[node.source];
-        const name = node.source === 'icon' ? 'IconSet' : node.file;
+        const folder = { picture: 'pictures', system: 'system', face: 'faces', character: 'characters', icon: 'system', partyFace: 'faces' }[node.source];
+        const member = node.source === 'partyFace' ? this.startingMember(node.index) : null;
+        const name = node.source === 'icon' ? 'IconSet' : node.source === 'partyFace' ? (member ? member.faceName : '') : node.file;
+        const faceIndex = member ? member.faceIndex : node.index;
         const entry = name ? this.image(folder, name) : null;
         ctx.save();
         ctx.beginPath();
@@ -1902,7 +1933,7 @@ class DatabaseUserInterfaceEditor {
         }
         const image = entry.image;
         let sx = 0, sy = 0, sw = image.width, sh = image.height;
-        if (node.source === 'face') { sw = 144; sh = 144; sx = (node.index % 4) * sw; sy = Math.floor(node.index / 4) * sh; }
+        if (node.source === 'face' || node.source === 'partyFace') { sw = 144; sh = 144; sx = (faceIndex % 4) * sw; sy = Math.floor(faceIndex / 4) * sh; }
         else if (node.source === 'character') {
             const big = /^\$/.test(node.file) || /\$/.test(node.file);
             sw = image.width / (big ? 3 : 12); sh = image.height / (big ? 4 : 8);

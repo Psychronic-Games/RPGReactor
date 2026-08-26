@@ -199,7 +199,7 @@ test('Fit text to size shrinks the font on both sides until the label fits, neve
 test('the editor owns UserInterfaces.json as a database file that older projects may lack', () => {
     const manager = read('editor/src/DatabaseManager.js');
     assert.match(manager, /\['userInterfaces', 'UserInterfaces\.json'\]/);
-    assert.match(manager, /loaded\.userInterfaces = \[null\]/, 'an absent file reads as the null-slot array');
+    assert.match(manager, /loaded\.userInterfaces = \[null, \.\.\.stock\]/, 'an absent file reads as the null slot plus the stock baselines');
     assert.match(manager, /key === 'userInterfaces' && !this\.hasUserInterfaces\(\)/, 'no file is written for a project without interfaces');
     assert.match(read('editor/src/utils/DataLimits.js'), /userInterfaces: 9999/);
     assert.match(read('editor/src/ProjectManager.js'), /'UserInterfaces\.json': \[null\]/);

@@ -129,11 +129,18 @@ screenshot as a locked **reference layer** under the nodes (toggle and
 opacity in the Layout header) and lists the captured windows; a row
 highlights its rect on the canvas, and **Add Box** starts a node from it.
 
-**2. Baseline stock interfaces.** MZ's stock layouts are functions of screen
-size, UI area and font, so **Import stock: Main Menu** (and the other stock
-scenes) can generate an ordinary interface record from the project's
-System.json: Box nodes with the skin, Buttons wired to `scene(...)`, Text for
-gold. Party status, item lists and gauges need phase 2's List and Gauge nodes.
+**2. Baseline stock interfaces (built in the 0.98.4 cycle).** MZ's stock
+layouts are functions of screen size, UI area and font, so a project that
+has never authored an interface opens the section on records generated from
+its System.json by `editor/src/utils/StockInterfaces.js`: Title Screen, Main
+Menu and Game End, Box nodes with the skin, Buttons named from Terms and
+wired to the stock actions, Text for gold, the party area from party faces
+(`partyFace` image source) and party codes (`\GOLD`, `\PLV[n]`, `\PCLASS[n]`,
+`\PHP[n]`/`\PMHP[n]`, `\PMP[n]`/`\PMMP[n]`, `\PTP[n]`). They are written
+with the next save and carry `stock: "<kind>"`. The game keeps its stock
+scenes until a record is called or set as the boot interface. Item, skill,
+equip, status, save/load and shop baselines wait for the List and Gauge
+nodes (phase 2).
 
 **3. Convert a capture to nodes.** With the draw primitives every window uses
 (`drawText`, `drawIcon`, `drawFace`, `drawGauge`, `drawItemName`) logged during
@@ -167,7 +174,8 @@ Saves: an open `scene` interface is not saved (menus never are); an
 | 1 | `UserInterfaces.json`, `reactor_ui.js` scene mode with Box / Image / Text / Button and the action set, `Call User Interface` on the Reactor tab, the database tab with tree + property panel + drag/resize canvas | A working custom menu end to end. Everything after is depth. **Done.** |
 | 1½ | Capture from game: the live scene as a reference layer plus its window list | Seeing the current menus, with plugins. **Done.** |
 | 2 | List and Gauge with data sources, overlay mode, focus-order overrides | HUDs, inventories, party screens |
-| 2½ | Import stock interfaces generated from the project's settings; convert a capture to nodes | Editable baselines and editable copies of modded menus |
+| 2½ | Stock baselines generated from the project's settings (Title, Main Menu, Game End) seed an empty section | Editable baselines. **Done.** |
+| 2¾ | Convert a capture to nodes; baselines for the list-driven scenes once List exists | Editable copies of modded menus |
 | 3 | Styling depth: gradients, 9-slice, per-node fonts, highlight colours, open/close transitions | The "make it mine" pass |
 | 4 | System settings: use interface *n* as title screen / main menu / pause menu | The actual headline feature; wants 1–3 solid first |
 | 5 | `ReactorUI.js` standalone plugin for stock MZ | Reach beyond Reactor projects |

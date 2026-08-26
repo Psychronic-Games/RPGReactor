@@ -128,9 +128,13 @@ class DatabaseManager {
             }
             loaded.tileset3d = await this.loadTileset3D(projectPath);
             // An absent file reads as []; records start at id 1 behind the
-            // null slot every other database file keeps.
+            // null slot every other database file keeps. A project that has
+            // never authored an interface opens on baselines of its stock
+            // scenes (they are written with the next save; the game keeps
+            // its stock scenes until one is called).
             if (!Array.isArray(loaded.userInterfaces) || loaded.userInterfaces.length === 0) {
-                loaded.userInterfaces = [null];
+                const stock = typeof RRStockInterfaces !== 'undefined' ? RRStockInterfaces.build(loaded) : [];
+                loaded.userInterfaces = [null, ...stock];
             }
             Object.assign(this.data, loaded);
             this.projectPath = projectPath;

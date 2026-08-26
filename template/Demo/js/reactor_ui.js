@@ -238,7 +238,7 @@
                 : clamp(Math.round(finite(source.textColor, 0)), 0, 31),
             outline: source.outline !== false,
             // Image
-            source: oneOf(source.source, ["picture", "system", "face", "character", "icon"], "picture"),
+            source: oneOf(source.source, ["picture", "system", "face", "character", "icon", "partyFace"], "picture"),
             file: text(source.file, ""),
             index: Math.max(0, Math.floor(finite(source.index, 0))),
             fit: oneOf(source.fit, ["none", "stretch", "contain"], "none"),
@@ -747,7 +747,36 @@
     Window_ReactorUINode.prototype.currentText = function() {
         const node = this._uiNode;
         if (node.type !== "text" && node.type !== "button") return "";
-        return this.convertEscapeCharacters(node.text);
+        return this.convertEscapeCharacters(ReactorUI.convertPartyCodes(node.text));
+    };
+
+    /** The party member in a 0-based slot, or null past the party's end. */
+    ReactorUI.partyMember = function(slot) {
+        const party = typeof $gameParty !== "undefined" && $gameParty;
+        if (!party) return null;
+        const members = party.members();
+        return members[Math.max(0, Math.floor(slot))] || null;
+    };
+
+    // Party codes are slot-based like \P[n] and resolve before the stock
+    // escape codes: \GOLD, and per member \PLV[n] level, \PCLASS[n] class,
+    // \PHP[n] \PMHP[n] \PMP[n] \PMMP[n] \PTP[n]. An empty slot reads as "".
+    ReactorUI.PARTY_CODES = {
+        PLV: actor => actor.level, PCLASS: actor => actor.currentClass().name,
+        PHP: actor => actor.hp, PMHP: actor => actor.mhp, PMP: actor => actor.mp,
+        PMMP: actor => actor.mmp, PTP: actor => actor.tp
+    };
+
+    ReactorUI.convertPartyCodes = function(text) {
+        let out = String(text == null ? "" : text);
+        if (out.indexOf("\\") < 0) return out;
+        out = out.replace(/\\\\/g, "\u0000");
+        out = out.replace(/\\GOLD/gi, () => typeof $gameParty !== "undefined" && $gameParty ? String($gameParty.gold()) : "0");
+        out = out.replace(/\\(PLV|PCLASS|PHP|PMHP|PMP|PMMP|PTP)\[(\d+)\]/gi, (match, code, n) => {
+            const member = this.partyMember(Number(n) - 1);
+            return member ? String(this.PARTY_CODES[code.toUpperCase()](member)) : "";
+        });
+        return out.replace(/\u0000/g, "\\\\");
     };
 
     /** Natural size of an auto-sized text node. */
@@ -830,6 +859,11 @@
             case "face": bitmap = node.file ? ImageManager.loadFace(node.file) : null; break;
             case "character": bitmap = node.file ? ImageManager.loadCharacter(node.file) : null; break;
             case "icon": bitmap = ImageManager.loadSystem("IconSet"); break;
+            case "partyFace": {
+                const member = ReactorUI.partyMember(node.index);
+                bitmap = member ? ImageManager.loadFace(member.faceName()) : null;
+                break;
+            }
         }
         this._uiBitmap = bitmap;
         if (bitmap && !bitmap.isReady()) bitmap.addLoadListener(() => this.refresh());
@@ -908,10 +942,12 @@
         const bitmap = this._uiBitmap;
         if (!bitmap || !bitmap.isReady()) return;
         let sx = 0, sy = 0, sw = bitmap.width, sh = bitmap.height;
-        if (node.source === "face") {
+        if (node.source === "face" || node.source === "partyFace") {
+            const member = node.source === "partyFace" ? ReactorUI.partyMember(node.index) : null;
+            const index = member ? member.faceIndex() : node.index;
             const pw = ImageManager.faceWidth, ph = ImageManager.faceHeight;
-            sx = (node.index % 4) * pw;
-            sy = Math.floor(node.index / 4) * ph;
+            sx = (index % 4) * pw;
+            sy = Math.floor(index / 4) * ph;
             sw = pw;
             sh = ph;
         } else if (node.source === "character") {

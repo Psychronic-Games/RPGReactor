@@ -123,10 +123,14 @@ at *History* below.
   other plugins will assume the same. The capture tick is hooked at boot
   (`beginCapture` wraps `SceneManager.updateMain`); a wrapper installed
   when reactor_ui.js loads was replaced under the MV layer and never ran.
-- "I see nothing in User Interfaces" on an older project = an empty
-  list (no `UserInterfaces.json`); the section now shows a first-run
-  panel with Create Interface. The detail only renders once a record is
-  selected, which is also what the harnesses must do.
+- "I see nothing in User Interfaces" on an older project = no
+  `UserInterfaces.json`. `DatabaseManager.loadProject` now seeds
+  `RRStockInterfaces.build(data)` (Title / Main Menu / Game End, `stock`
+  key on each) into that case; a file holding `[null]` stays empty and
+  shows the first-run panel. The baselines use the Scene_* rect math with
+  `isRightInputMode() === true` (commands on the right). Runtime:
+  `partyFace` image source and party codes (`ReactorUI.convertPartyCodes`).
+  List-driven scenes get baselines once the List node exists.
 - The title also needs `setupNewGame` first (title plugins read game
   objects); `extract.canvas` must be given the screen `frame`, or a stage
   whose bounds include an off-screen sprite asks for a texture too large
