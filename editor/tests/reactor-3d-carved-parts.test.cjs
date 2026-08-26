@@ -709,3 +709,43 @@ test('a model flash survives the JSON-degraded base colour a material clone leav
     Reactor3D.updateModelFlash(holder);
     assert.ok(Number.isFinite(cloned.color.g), 'no undefined channels ever reach the colour');
 });
+
+test('cloning a template neither serialises its textures nor leaves skinned meshes frustum culled', () => {
+    global.self = global;
+    global.window = global;
+    require(path.join(repoRoot, 'runtime', 'libs', 'three.js'));
+    const THREE = global.THREE;
+    // Object3D.copy duplicates userData through JSON; a THREE.Texture's
+    // toJSON serialises its image to a data URL, so a template carrying
+    // its textures in userData cost hundreds of milliseconds per clone.
+    const texture = new THREE.Texture();
+    let serialised = 0;
+    texture.toJSON = () => { serialised++; return {}; };
+    const template = new THREE.Group();
+    template.userData.glbTextures = [texture];
+    template.userData.glbSize = { x: 1, y: 2, z: 1 };
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(9), 3));
+    g.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(new Uint16Array(12), 4));
+    g.setAttribute('skinWeight', new THREE.BufferAttribute(new Float32Array(12), 4));
+    const bone = new THREE.Bone();
+    const skinned = new THREE.SkinnedMesh(g, new THREE.MeshBasicMaterial());
+    skinned.add(bone);
+    skinned.bind(new THREE.Skeleton([bone]));
+    template.add(skinned);
+    template.add(new THREE.Mesh(g.clone(), new THREE.MeshBasicMaterial()));
+    template.userData.animated = true;
+
+    const instance = Reactor3D.cloneModelTemplate(template);
+    assert.equal(serialised, 0, 'textures are never run through JSON');
+    assert.equal(instance.userData.glbTextures[0], texture, 'the instance shares the template textures by reference');
+    assert.equal(template.userData.glbTextures[0], texture, 'the template keeps them too');
+    assert.deepEqual(instance.userData.glbSize, { x: 1, y: 2, z: 1 }, 'plain userData still copies');
+    const skinnedClone = instance.children.find(c => c.isSkinnedMesh);
+    assert.equal(skinnedClone.frustumCulled, false, 'one character is never worth culling');
+    assert.ok(skinnedClone.boundingSphere, 'the bounding sphere is preset, so three never skins every vertex for it');
+    assert.equal(skinnedClone.boundingSphere.radius, g.boundingSphere.radius, 'it is the shared rest geometry sphere');
+    // three's renderer computes the skinned sphere only while it is null.
+    assert.notEqual(skinnedClone.boundingSphere, null);
+    assert.equal(instance.children.find(c => c.isMesh && !c.isSkinnedMesh).frustumCulled, true, 'ordinary meshes keep culling');
+});

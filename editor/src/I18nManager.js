@@ -10720,6 +10720,25 @@ Object.assign(RR_TEXT_TRANSLATIONS.vi, { 'Adjust this pose with the sliders in t
 Object.assign(RR_TEXT_TRANSLATIONS.th, { 'Adjust this pose with the sliders in the preview.': 'ปรับท่าทางนี้ด้วยแถบเลื่อนในตัวอย่าง', 'Click a part of the model to pose it.': 'คลิกชิ้นส่วนของโมเดลเพื่อจัดท่า', 'Click the model to place the pivot.': 'คลิกที่โมเดลเพื่อวางจุดหมุน', 'Double-click to reset': 'ดับเบิลคลิกเพื่อรีเซ็ต', 'Offset': 'ระยะเลื่อน', 'Orbit (drag to look around, click a part to pose it)': 'หมุนมุมมอง (ลากเพื่อมองรอบ ๆ คลิกชิ้นส่วนเพื่อจัดท่า)', 'Play when': 'เล่นเมื่อ', 'Rotate': 'หมุน', 'This part has no triangles yet — use Reselect triangles.': 'ชิ้นส่วนนี้ยังไม่มีสามเหลี่ยม — ใช้เลือกสามเหลี่ยมใหม่', 'Update animation': 'อัปเดตแอนิเมชัน' });
 Object.assign(RR_TEXT_TRANSLATIONS.tr, { 'Adjust this pose with the sliders in the preview.': 'Bu pozu önizlemedeki kaydırıcılarla ayarlayın.', 'Click a part of the model to pose it.': 'Poz vermek için modelin bir parçasına tıklayın.', 'Click the model to place the pivot.': 'Pivotu yerleştirmek için modele tıklayın.', 'Double-click to reset': 'Sıfırlamak için çift tıklayın', 'Offset': 'Kaydırma', 'Orbit (drag to look around, click a part to pose it)': 'Yörünge (bakınmak için sürükleyin; poz için parçaya tıklayın)', 'Play when': 'Ne zaman oynasın', 'Rotate': 'Döndür', 'This part has no triangles yet — use Reselect triangles.': 'Bu parçanın henüz üçgeni yok — Üçgenleri yeniden seç kullanın.', 'Update animation': 'Animasyonu güncelle' });
 
+// Database 3D section: the preview while a model builds.
+Object.assign(RR_TEXT_TRANSLATIONS.ja, { 'Loading model…': 'モデルを読み込み中…' });
+Object.assign(RR_TEXT_TRANSLATIONS.es, { 'Loading model…': 'Cargando modelo…' });
+Object.assign(RR_TEXT_TRANSLATIONS['zh-Hant'], { 'Loading model…': '正在載入模型…' });
+Object.assign(RR_TEXT_TRANSLATIONS['zh-Hans'], { 'Loading model…': '正在加载模型…' });
+Object.assign(RR_TEXT_TRANSLATIONS.ru, { 'Loading model…': 'Загрузка модели…' });
+Object.assign(RR_TEXT_TRANSLATIONS.pt, { 'Loading model…': 'Carregando modelo…' });
+Object.assign(RR_TEXT_TRANSLATIONS.de, { 'Loading model…': 'Modell wird geladen…' });
+Object.assign(RR_TEXT_TRANSLATIONS.fr, { 'Loading model…': 'Chargement du modèle…' });
+Object.assign(RR_TEXT_TRANSLATIONS.el, { 'Loading model…': 'Φόρτωση μοντέλου…' });
+Object.assign(RR_TEXT_TRANSLATIONS.ko, { 'Loading model…': '모델 불러오는 중…' });
+Object.assign(RR_TEXT_TRANSLATIONS.ar, { 'Loading model…': 'جارٍ تحميل النموذج…' });
+Object.assign(RR_TEXT_TRANSLATIONS.it, { 'Loading model…': 'Caricamento del modello…' });
+Object.assign(RR_TEXT_TRANSLATIONS.pl, { 'Loading model…': 'Wczytywanie modelu…' });
+Object.assign(RR_TEXT_TRANSLATIONS.id, { 'Loading model…': 'Memuat model…' });
+Object.assign(RR_TEXT_TRANSLATIONS.vi, { 'Loading model…': 'Đang tải mô hình…' });
+Object.assign(RR_TEXT_TRANSLATIONS.th, { 'Loading model…': 'กำลังโหลดโมเดล…' });
+Object.assign(RR_TEXT_TRANSLATIONS.tr, { 'Loading model…': 'Model yükleniyor…' });
+
 // Database 3D section: what a pose does when its action ends.
 Object.assign(RR_TEXT_TRANSLATIONS.ja, { 'At the end': '終了時', 'Return to rest': '元に戻る', 'Stay posed': 'そのまま保つ' });
 Object.assign(RR_TEXT_TRANSLATIONS.es, { 'At the end': 'Al final', 'Return to rest': 'Volver al reposo', 'Stay posed': 'Mantener la pose' });

@@ -540,13 +540,21 @@
         // wrap), v8's super already ran. Skip to avoid overwriting state.
         if (instance && instance.__pixiInitialized) return instance;
         args = args || [];
-        try {
-            return PixiClass.apply(instance, args);
-        } catch (e) {
-            if (
-                e instanceof TypeError &&
-                /class constructor/i.test(e.message)
-            ) {
+        // Whether a class can be applied is a property of the class, not the
+        // call: learn it once. Discovering it by throwing on every
+        // `new Point()` and `new Rectangle()` cost half a second of every
+        // eight walking (exception, message regex, and the copy below, per
+        // construction, hundreds of times a frame).
+        if (!PixiClass.__rrEs6Class) {
+            try {
+                return PixiClass.apply(instance, args);
+            } catch (e) {
+                if (!(e instanceof TypeError) || !/class constructor/i.test(e.message)) throw e;
+                PixiClass.__rrEs6Class = true;
+            }
+        }
+        {
+            {
                 const tmp = Reflect.construct(PixiClass, args);
                 for (const key of Reflect.ownKeys(tmp)) {
                     Object.defineProperty(
@@ -582,7 +590,6 @@
                 replaceRefs(instance, 0);
                 return instance;
             }
-            throw e;
         }
     };
 

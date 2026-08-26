@@ -88,6 +88,7 @@ test('the frame loop and thumbnail pass are wired to the gates', () => {
     assert.match(source, /addEventListener\('wheel', event => \{\s*event\.preventDefault\(\);\s*this\._lastInputAt = performance\.now\(\);/);
     assert.match(source, /this\._dragging = true;\s*this\._lastInputAt = performance\.now\(\);/);
     assert.match(source, /async _fillThumbnails\(entries\) \{[\s\S]*?this\._thumbs\[entry\.name\] \|\| this\._readCachedThumbnail\(entry\)[\s\S]*?await this\._whenPreviewIdle\(\);[\s\S]*?const decoded = Database3DEditor\.texturesDecoded\(/);
-    assert.match(source, /async _drawPreview\(entry\) \{\s*this\._loadingPreview = true;\s*try \{\s*return await this\._drawPreviewNow\(entry\);\s*\} finally \{\s*this\._loadingPreview = false;/);
+    assert.match(source, /async _drawPreview\(entry\) \{\s*this\._loadingPreview = true;\s*this\._refreshHint\(\);\s*try \{\s*return await this\._drawPreviewNow\(entry\);\s*\} finally \{\s*this\._loadingPreview = false;\s*this\._refreshHint\(\);/);
+    assert.match(source, /if \(this\._loadingPreview\) \{\s*hint\.textContent = this\._t\('Loading model…'\);/);
     assert.match(source, /const busy = this\._loadingPreview \|\| this\._dragging\s*\|\| \(Number\.isFinite\(this\._lastInputAt\) && now - this\._lastInputAt < 600\)\s*\|\| \(Number\.isFinite\(this\._pointerMovedAt\) && now - this\._pointerMovedAt < 300\)/);
 });

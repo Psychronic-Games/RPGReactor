@@ -9,7 +9,7 @@ Last updated 2026-08-25.
   (2026-08-24): in-editor rigging, rig templates and preset motions,
   database 3D bindings, MP3/WAV/FLAC/M4A audio, PixiJS 8.20.0.
 - **0.98.4** is open in `editor/package.json`, both READMEs, and the
-  `[Unreleased - 0.98.4]` sections of both changelogs. One feature (custom user interfaces, phase 1) and sixteen fixes are queued
+  `[Unreleased - 0.98.4]` sections of both changelogs. One feature (custom user interfaces, phase 1) and seventeen fixes are queued
   there already (VisuStella Effekseer/heat-distortion draw failures and
   off-centre transition shaders from user reports, Audio Player loop points, the Enemies note resize,
   seek-broken Demo tracks, the web editor's 3D suite, two PIXI 8 compat
@@ -104,6 +104,34 @@ Engineering notes and gotchas from each piece of work, kept because the
 suite and the next session both lean on them. Shipped-cycle narrative starts
 at *History* below.
 
+## Runtime 3D Instance Stalls (2026-08-25, owner asked "is the game affected too?")
+
+- Yes, differently. `game-perf.mjs` + `game-profile.mjs` (session
+  scratchpad; CDP `Profiler.start/stop`, aggregate self/total and caller
+  chains per window). Before, walking 8 s: 3 gaps / 1,531 ms, max 1,167;
+  battle first 3 s: 4 gaps / 1,133 ms, max 712. After: 300 ms / max 200 and
+  133 ms / max 61. Load-fade preload untouched (~260 ms behind the fade).
+- Three causes, all per new instance, none visible in the wrapped
+  `Reactor3D` methods until the sampler named them:
+  1. `cloneModelTemplate` → `Object3D.copy` JSON-copies `userData`, and the
+     root carries `glbTextures` (THREE.Texture, whose `toJSON` encodes the
+     image to a data URL): 1,338 ms across 7 clones → 2 ms.
+  2. three r185 `projectObject` (`libs/three.js:77878`) calls
+     `SkinnedMesh.computeBoundingSphere` while `boundingSphere === null`
+     for `sortObjects`, independent of `frustumCulled`, and that walks every
+     vertex through the bones: ~330 ms per 600k-vertex instance. Fix:
+     `presetSkinnedBounds` (geometry sphere, computed once per shared
+     geometry) in `cloneModelTemplate` and at the end of `applyModelRig`.
+     `frustumCulled = false` alone did NOT fix it.
+  3. `PIXISuper` (`pixi_compat.js`) threw a TypeError per ES5-style
+     construction to learn a class is ES6; 489 ms self per 8 s of walking
+     from `Point`/`Rectangle`. Memoised per class (`__rrEs6Class`).
+- What is left and known: `texSubImage2D` ~40 ms/s (the 3D canvas →
+  Bitmap → PIXI upload every frame; the pipeline, not a bug; a shared GL
+  context or render-to-texture would remove it) and ~200 ms once when a
+  new instance first draws (its material clones initialise; programs are
+  cached). Potato-PC work would start there.
+
 ## Database 3D Preview Stutter (2026-08-25, owner-reported)
 
 - Measured, not guessed: `db3d-perf.mjs` (session scratchpad) wraps
@@ -129,8 +157,8 @@ at *History* below.
   would wait on it (deadlock). The rare double parse is the price.
 - Thumbnail cache lives outside the project (Dropbox/git noise otherwise);
   keyed by source path + size + mtime, so re-exports refresh.
-- Not done: a "Loading model…" hint during the selected model's own ~1 s
-  load (needs keyed DB3D phrases in `I18nManager.js`, 17 locales).
+- "Loading model…" hint added (keyed DB3D phrase block in `I18nManager.js`,
+  17 locales) via `_refreshHint` while `_loadingPreview`.
 
 ## Plugin Manager Icon + Audio Pickers (2026-08-25, GitHub report)
 

@@ -7882,8 +7882,23 @@ Reactor3D.readGlbClips = function(json, bin, nodes) {
  * lives outside every scene and never moves.
  */
 Reactor3D.cloneModelTemplate = function(template) {
-    const clone = template.clone(true);
+    // Object3D.copy duplicates userData through JSON, and the root's
+    // glbTextures are THREE.Texture objects whose toJSON serialises every
+    // image to a data URL: hundreds of milliseconds per clone, on the main
+    // thread, as each character or battler appeared. Textures are shared
+    // between instances by design, so they step out of the copy and come
+    // back by reference.
+    const textures = template.userData.glbTextures;
+    if (textures) delete template.userData.glbTextures;
+    let clone;
+    try {
+        clone = template.clone(true);
+    } finally {
+        if (textures) template.userData.glbTextures = textures;
+    }
+    if (textures) clone.userData.glbTextures = textures;
     clone.__reactorClips = template.__reactorClips;
+    this.presetSkinnedBounds(clone);
     // Materials are per instance (textures stay shared) so a model flash
     // tints one tank, not every clone of it. Material.clone drops custom
     // properties, so the model marker is carried by hand.
@@ -7924,6 +7939,28 @@ Reactor3D.cloneModelTemplate = function(template) {
             source.bindMatrix.clone());
     }
     return clone;
+};
+
+/**
+ * Give every skinned mesh under `object` its bounds up front. three's
+ * renderer wants a skinned mesh's bounding sphere before its first draw
+ * (for depth sorting, culling or not), and SkinnedMesh.computeBoundingSphere
+ * runs every vertex through its bones on the CPU: a third of a second for
+ * a 600k-vertex character, once per instance, exactly as it steps into
+ * view or a battle opens. The rest geometry's sphere is a plain vertex
+ * pass, computed once per template because the geometry is shared, and
+ * it sorts and culls a character just as well. One character is never
+ * worth frustum culling either.
+ */
+Reactor3D.presetSkinnedBounds = function(object) {
+    object.traverse(child => {
+        if (!child.isSkinnedMesh || !child.geometry) return;
+        child.frustumCulled = false;
+        const geometry = child.geometry;
+        if (!geometry.boundingSphere) geometry.computeBoundingSphere();
+        if (geometry.boundingSphere) child.boundingSphere = geometry.boundingSphere.clone();
+    });
+    return object;
 };
 
 Reactor3D.applyRestSkins = function(json, bin, root, nodes) {
@@ -8482,6 +8519,7 @@ Reactor3D.applyModelRig = function(root, rig) {
         skinned.bind(skeleton, skinned.matrixWorld.clone());
     }
     root.userData.rigged = true;
+    this.presetSkinnedBounds(root);
 };
 
 Reactor3D.modelAnimationUrl = function(name) {

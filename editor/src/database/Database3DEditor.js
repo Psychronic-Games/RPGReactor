@@ -780,10 +780,12 @@ class Database3DEditor {
 
     async _drawPreview(entry) {
         this._loadingPreview = true;
+        this._refreshHint();
         try {
             return await this._drawPreviewNow(entry);
         } finally {
             this._loadingPreview = false;
+            this._refreshHint();
         }
     }
 
@@ -1071,6 +1073,13 @@ class Database3DEditor {
     _refreshHint() {
         const hint = this._detail ? this._detail.querySelector('.r3d-hint') : null;
         if (!hint) return;
+        // A large model takes a second or more to build after its worker
+        // parse; say so rather than leave the last model on screen.
+        if (this._loadingPreview) {
+            hint.textContent = this._t('Loading model…');
+            hint.style.display = 'block';
+            return;
+        }
         if (this._selectMode || this._rigMode) {
             hint.style.display = 'none';
             return;
