@@ -419,24 +419,76 @@
 
     ReactorUI._capture = null;
 
-    /** Open the requested scene the way the game would. */
+    /**
+     * Open the requested scene the way the game would: every menu opens
+     * over the map (plugins snapshot it for the menu background and assume
+     * it is there), a battle starts from the map, and the title stands on
+     * its own. So a new game is set up, the map starts, and only then is
+     * the scene pushed.
+     */
     ReactorUI.beginCapture = function(request) {
         const sceneClass = window[request.sceneClass];
         if (typeof sceneClass !== "function") return false;
-        this._capture = { request, frames: 0, sceneClass, done: false };
+        this._capture = { request, frames: 0, waited: 0, sceneClass, done: false, stage: "map", mapFrames: 0 };
+        // The capture window opens behind the editor; an unfocused game
+        // pauses its scene updates, and windows only open while updated.
+        SceneManager.isGameActive = function() { return true; };
+        // The per-frame check is hooked here, at boot, after every plugin
+        // and compatibility layer has had its say about SceneManager: a
+        // wrapper installed at load time was replaced under MV projects.
+        if (!SceneManager.__reactorCaptureHooked) {
+            SceneManager.__reactorCaptureHooked = true;
+            const _updateMain = SceneManager.updateMain;
+            SceneManager.updateMain = function() {
+                _updateMain.apply(this, arguments);
+                if (ReactorUI._capture) ReactorUI.updateCapture();
+            };
+        }
+        // A crash anywhere in the scene must not leave the editor waiting:
+        // it is written as the capture's result, and the game exits.
+        const _catchException = SceneManager.catchException;
+        SceneManager.catchException = function(error) {
+            const capture = ReactorUI._capture;
+            if (capture && !capture.done && request.dir && typeof require === "function") {
+                capture.done = true;
+                try {
+                    const fs = require("fs");
+                    fs.mkdirSync(request.dir, { recursive: true });
+                    fs.writeFileSync(require("path").join(request.dir, "capture.json"),
+                        JSON.stringify({ error: String(error && error.message || error) }));
+                } catch (e) { /* nothing more to do */ }
+                setTimeout(() => SceneManager.exit(), 300);
+            }
+            return _catchException.apply(this, arguments);
+        };
+        // Game objects exist before the title too: Scene_Boot sets up a new
+        // game on the way there, and title plugins read them.
+        DataManager.setupNewGame();
         if (request.scene === "title") {
+            this._capture.stage = "scene";
+            Window_TitleCommand.initCommandPosition();
             SceneManager.goto(sceneClass);
             return true;
         }
-        DataManager.setupNewGame();
+        SceneManager.goto(Scene_Map);
+        return true;
+    };
+
+    /** From a running map, open the requested scene as the game would. */
+    ReactorUI.openCaptureScene = function() {
+        const capture = this._capture;
+        const request = capture.request;
+        const sceneClass = capture.sceneClass;
+        capture.stage = "scene";
         if (request.scene === "battle") {
             const troopId = ($dataTroops || []).findIndex((troop, index) => index > 0 && troop);
             BattleManager.setup(troopId > 0 ? troopId : 1, true, true);
-            SceneManager.goto(sceneClass);
-            return true;
+            SceneManager.push(sceneClass);
+            return;
         }
+        SceneManager.snapForBackground();
         if (request.scene === "menu") Window_MenuCommand.initCommandPosition();
-        SceneManager.goto(sceneClass);
+        SceneManager.push(sceneClass);
         if (request.scene === "shop") {
             const goods = [];
             for (let id = 1; id < ($dataItems || []).length && goods.length < 6; id++) {
@@ -444,7 +496,6 @@
             }
             SceneManager.prepareNextScene(goods, false);
         }
-        return true;
     };
 
     /** Every window in the scene tree with its screen rect. */
@@ -483,9 +534,13 @@
         const app = Graphics._app;
         if (!app || !app.renderer || !app.renderer.extract) return null;
         const extract = app.renderer.extract;
+        // The screen, not the stage's bounds: an off-screen sprite (a 3D
+        // pass, an effect overlay) can stretch those to a texture too big
+        // to allocate.
+        const frame = new PIXI.Rectangle(0, 0, Graphics.width, Graphics.height);
         const canvas = PIXI.TextureSource
-            ? extract.canvas({ target: app.stage })
-            : extract.canvas(app.stage);
+            ? extract.canvas({ target: app.stage, frame, resolution: 1 })
+            : extract.canvas(app.stage, frame);
         return canvas && canvas.toDataURL ? canvas.toDataURL("image/png") : null;
     };
 
@@ -546,8 +601,30 @@
         const capture = this._capture;
         if (!capture || capture.done) return;
         const scene = SceneManager._scene;
-        if (!(scene instanceof capture.sceneClass) || !scene.isStarted || !scene.isStarted()) return;
-        if (SceneManager.isSceneChanging && SceneManager.isSceneChanging()) return;
+        // MZ marks the scene started; an MV-compatible project marks the
+        // manager instead. Either counts, and a scene that never starts
+        // within ten seconds is captured as it stands rather than never.
+        const started = !!scene && (
+            (typeof scene.isStarted === "function" && scene.isStarted())
+            || SceneManager._sceneStarted === true
+            || (typeof SceneManager.isCurrentSceneStarted === "function" && SceneManager.isCurrentSceneStarted()));
+        const changing = SceneManager.isSceneChanging && SceneManager.isSceneChanging();
+        if (capture.stage === "map") {
+            // Let the map run a moment (fade-in, autorun events settling)
+            // before the scene opens over it.
+            const onMap = typeof Scene_Map !== "undefined" && scene instanceof Scene_Map && started && !changing
+                && !(typeof $gamePlayer !== "undefined" && $gamePlayer && $gamePlayer.isTransferring());
+            if (onMap) capture.mapFrames++;
+            if (capture.mapFrames >= 30 || ++capture.waited >= 900) this.openCaptureScene();
+            return;
+        }
+        if (!(scene instanceof capture.sceneClass) || !started || changing) {
+            if (++capture.waited >= 600) {
+                this.performCapture();
+                SceneManager.exit();
+            }
+            return;
+        }
         capture.frames++;
         const windows = this.collectWindows(scene);
         const settled = windows.every(entry => !entry.visible || entry.openness >= 255 || !entry.window.isOpening || !entry.window.isOpening());
@@ -1354,9 +1431,4 @@
         this.updateDocumentTitle();
     };
 
-    const _SceneManager_updateScene = SceneManager.updateScene;
-    SceneManager.updateScene = function() {
-        _SceneManager_updateScene.apply(this, arguments);
-        if (ReactorUI._capture) ReactorUI.updateCapture();
-    };
 })();

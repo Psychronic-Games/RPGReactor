@@ -3179,6 +3179,27 @@
             padding: 1px 6px;
             font-size: 10px;
         }
+        .rr-ui-first-run {
+            max-width: 520px;
+            margin: 80px auto 0;
+            padding: 20px 24px;
+            color: var(--color-text-muted);
+            font-size: 13px;
+            line-height: 1.5;
+            text-align: center;
+        }
+        .rr-ui-first-run-title {
+            color: var(--color-text-strong);
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 10px;
+        }
+        .rr-ui-first-run p {
+            margin: 0 0 10px;
+        }
+        .rr-ui-first-run-create {
+            margin-top: 8px;
+        }
         .rr-ui-capture-plugins {
             padding: 4px 8px 6px;
             color: var(--color-text-muted);

@@ -73,7 +73,19 @@ class DatabaseEditorUI {
         return typeof window !== 'undefined' && window.I18n?.tDbType ? window.I18n.tDbType(type, fallback) : fallback;
     }
 
-    _selectEntryMarkup() {
+    _selectEntryMarkup(type) {
+        if (type === 'userInterfaces' && this.databaseManager && this.databaseManager.data
+            && !(this.databaseManager.data.userInterfaces || []).some(Boolean)) {
+            // A project from before the section existed opens on an empty
+            // list; say what the section is for and offer the first record.
+            const tt = text => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
+            return `<div class="rr-ui-first-run">
+                <div class="rr-ui-first-run-title">${tt('No interfaces yet')}</div>
+                <p>${tt("Lay out menus, dialogs, and HUD panels on a canvas at the game's screen size, and open them from a Call User Interface event command.")}</p>
+                <p>${tt('Capture from Game shows the menus your project has today, plugins included, as a reference layer to build on.')}</p>
+                <button type="button" class="rr-button-primary rr-ui-first-run-create">${tt('Create Interface')}</button>
+            </div>`;
+        }
         return `<p style="color: var(--color-text-muted); text-align: center; margin-top: 100px;">${this._t('db.selectEntry')}</p>`;
     }
 
@@ -445,7 +457,22 @@ class DatabaseEditorUI {
         detailEl.style.overflow = '';
         detailEl.style.overflowY = 'auto';
         if (listPanelEl) listPanelEl.style.display = '';
-        detailEl.innerHTML = this._selectEntryMarkup();
+        detailEl.innerHTML = this._selectEntryMarkup(type);
+        if (!detailEl.__rrFirstRunBound) {
+            detailEl.__rrFirstRunBound = true;
+            detailEl.addEventListener('click', event => {
+                if (!event.target.closest('.rr-ui-first-run-create')) return;
+                const add = listEl.parentNode.querySelector('.database-add-btn');
+                if (!add) return;
+                add.click();
+                // New selects the record; open it too, so the first thing
+                // seen after "Create Interface" is its editor.
+                setTimeout(() => {
+                    const item = listEl.querySelector('.database-list-item.selected') || listEl.querySelector('.database-list-item');
+                    if (item) item.click();
+                }, 0);
+            });
+        }
 
         listEl.parentNode.querySelector('.database-button-bar')?.remove();
         listEl.parentNode.querySelector('.database-search-container')?.remove();
@@ -486,7 +513,7 @@ class DatabaseEditorUI {
             if (!showDetail) return;
             const focusedEntry = data.find(entry => entry?.id === focusedId);
             if (focusedEntry) this.showDatabaseDetail(focusedEntry, type);
-            else detailEl.innerHTML = this._selectEntryMarkup();
+            else detailEl.innerHTML = this._selectEntryMarkup(type);
         };
         const selectRange = (toId) => {
             const anchorIndex = filteredData.findIndex(entry => entry.id === selectionAnchorId);
@@ -567,7 +594,7 @@ class DatabaseEditorUI {
                     applySelection();
                     const focusedEntry = this.databaseManager.data[type]?.[focusedId];
                     if (focusedEntry) this.showDatabaseDetail(focusedEntry, type);
-                    else detailEl.innerHTML = this._selectEntryMarkup();
+                    else detailEl.innerHTML = this._selectEntryMarkup(type);
                 });
                 item.addEventListener('contextmenu', event => {
                     event.preventDefault();

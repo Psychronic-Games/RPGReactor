@@ -55,7 +55,7 @@ test('every window in the scene tree is collected with its screen rect', () => {
 test('the runtime waits for the scene to settle, writes, and exits; the editor never asks a web build', () => {
     assert.match(runtime, /const request = ReactorUI\.captureRequest\(\);\s*if \(request && !DataManager\.isBattleTest\(\) && !DataManager\.isEventTest\(\)\) \{/);
     assert.match(runtime, /if \(\(settled && capture\.frames >= 20\) \|\| capture\.frames >= 180\) \{\s*this\.performCapture\(\);\s*SceneManager\.exit\(\);/);
-    assert.match(runtime, /SceneManager\.updateScene = function\(\) \{[\s\S]*?if \(ReactorUI\._capture\) ReactorUI\.updateCapture\(\);/);
+    assert.match(runtime, /SceneManager\.updateMain = function\(\) \{[\s\S]*?if \(ReactorUI\._capture\) ReactorUI\.updateCapture\(\);/);
     assert.match(runtime, /"capture\.json"/);
     assert.match(runtime, /plugins,\s*windows: entries/);
     assert.match(playtest, /captureMode\(sceneKey, dir\) \{\s*return `test&rrcapture=\$\{encodeURIComponent\(sceneKey\)\}&rrcapturedir=\$\{encodeURIComponent\(dir\)\}`;/);

@@ -117,6 +117,21 @@ at *History* below.
   (`%LOCALAPPDATA%\RPGReactor\InterfaceCaptures\…` on Windows). The tab
   reopens the last captured scene per project (localStorage
   `rrui.lastCapture.<key>`).
+- Menus are captured OVER A RUNNING MAP (new game → Scene_Map → 30 frames
+  → snapForBackground → push). Booting straight into Scene_Menu crashed
+  SSR's `Irina_PerformanceUpgrade` on the missing background snapshot;
+  other plugins will assume the same. The capture tick is hooked at boot
+  (`beginCapture` wraps `SceneManager.updateMain`); a wrapper installed
+  when reactor_ui.js loads was replaced under the MV layer and never ran.
+- "I see nothing in User Interfaces" on an older project = an empty
+  list (no `UserInterfaces.json`); the section now shows a first-run
+  panel with Create Interface. The detail only renders once a record is
+  selected, which is also what the harnesses must do.
+- The title also needs `setupNewGame` first (title plugins read game
+  objects); `extract.canvas` must be given the screen `frame`, or a stage
+  whose bounds include an off-screen sprite asks for a texture too large
+  ("Array buffer allocation failed" in the Demo battle). A crash inside
+  the captured scene is reported through `capture.json` `{ error }`.
 - `collectWindows` accumulates parent x/y down the tree (windows sit in
   `_windowLayer`, itself offset); scale/rotation are ignored.
 - The web build cannot write files: `capture()` reports "Capture needs the
