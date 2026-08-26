@@ -4299,17 +4299,27 @@ Spriteset_Map.prototype.createReactor3D = function() {
  */
 Spriteset_Map.prototype.createReactor3DSprite = function(viewport, scene) {
     this.destroyReactor3DSprite();
+    const shared = !!(viewport.isShared && viewport.isShared());
     const canvas = viewport.canvas ? viewport.canvas() : null;
-    if (!canvas || typeof PIXI === "undefined") return;
+    if ((!canvas && !shared) || typeof PIXI === "undefined") return;
 
     viewport.detachFromPage();
 
     // Two sprites, sandwiching the characters, mirroring what the 2D tilemap
     // does with its lower and upper layers: the ground goes below them and the
     // star-flagged tiles above, so a character can walk behind a tree or
-    // through a doorway here as well. Each takes its own copy of the canvas,
-    // because both are read from it in the same frame.
-    const make = (holder, index) => {
+    // through a doorway here as well. On a shared context each shows the
+    // render target its pass draws into; on the canvas path each takes its
+    // own copy of the canvas, because both are read from it in the same frame.
+    const make = (holder, index, slot) => {
+        if (shared) {
+            const texture = viewport.passTexture(slot);
+            const sprite = new PIXI.Sprite(texture);
+            sprite.width = Graphics.width;
+            sprite.height = Graphics.height;
+            holder.addChildAt(sprite, Math.min(index, holder.children.length));
+            return { sprite, texture, shared: true, generation: viewport.generation() };
+        }
         const surface = document.createElement("canvas");
         surface.width = canvas.width;
         surface.height = canvas.height;
@@ -4339,7 +4349,7 @@ Spriteset_Map.prototype.createReactor3DSprite = function(viewport, scene) {
      * exactly this — is still behind it, so a starfield or a warp-speed streak
      * shows around and beneath the world instead of being turned off with it.
      */
-    this._reactor3dBelow = make(this._tilemap, 0);
+    this._reactor3dBelow = make(this._tilemap, 0, "below");
     this._reactor3dBelow.sprite.z = 0;
     // The upper pass goes *inside* the tilemap, as its last child — which is
     // exactly the place the tilemap's own upper layer occupied, above the
@@ -4352,7 +4362,7 @@ Spriteset_Map.prototype.createReactor3DSprite = function(viewport, scene) {
     this._reactor3dAbove = scene && ((scene.hasAbove && scene.hasAbove())
         || (typeof Reactor3D !== "undefined" && Reactor3D.mapHasAboveEvents
             && Reactor3D.mapHasAboveEvents(typeof $dataMap !== "undefined" ? $dataMap : null)))
-        ? make(this._tilemap, this._tilemap.children.length)
+        ? make(this._tilemap, this._tilemap.children.length, "above")
         : null;
     if (this._reactor3dAbove) {
         // The tilemap re-sorts its children by `z` every frame, so the index
@@ -4368,7 +4378,7 @@ Spriteset_Map.prototype.createReactor3DSprite = function(viewport, scene) {
     // On the spriteset itself rather than the base sprite, so the screen tone
     // does not dim the lights along with the world.
     this._reactor3dLights = Reactor3D.wantsLights3D($dataMap)
-        ? make(this, this.children.length)
+        ? make(this, this.children.length, "lights")
         : null;
     if (this._reactor3dLights) {
         const sprite = this._reactor3dLights.sprite;
@@ -4384,7 +4394,9 @@ Spriteset_Map.prototype.destroyReactor3DSprite = function() {
         if (!pass) continue;
         if (pass.sprite.parent) pass.sprite.parent.removeChild(pass.sprite);
         pass.sprite.destroy({ texture: false, baseTexture: false });
-        pass.texture.destroy(false);
+        // A shared pass texture belongs to the viewport, which reuses it for
+        // the next map; only the canvas path owns its copies.
+        if (!pass.shared) pass.texture.destroy(false);
         this[key] = null;
     }
 };
@@ -4396,7 +4408,8 @@ Spriteset_Map.prototype.destroyReactor3DSprite = function() {
  * v8 keeps that on `source`, v5-v7 on `baseTexture`.
  */
 Spriteset_Map.prototype.updateReactor3DTexture = function(pass, from) {
-    if (!pass) return;
+    // A shared pass is already where PIXI reads it.
+    if (!pass || pass.shared) return;
     // Copied off the three canvas rather than pointed at it: the second pass
     // overwrites the first on that canvas within the same frame, so each needs
     // its own surface to hold.
@@ -4472,16 +4485,21 @@ Spriteset_Map.prototype.updateReactor3D = function() {
     // stamp a structure's top flat over a character standing in front of it.
     const modelsInWorld = typeof Reactor3D !== "undefined" && Reactor3D.hasEventModels
         && typeof $dataMap !== "undefined" && Reactor3D.hasEventModels($dataMap);
+    // A resize replaced the shared pass textures; the sprites follow.
+    if (this._reactor3dBelow && this._reactor3dBelow.shared && state.viewport.generation
+        && this._reactor3dBelow.generation !== state.viewport.generation()) {
+        this.createReactor3DSprite(state.viewport, state.scene);
+    }
     const split = this._reactor3dAbove || this._reactor3dLights;
     state.viewport.renderPass(state.scene,
-        modelsInWorld ? "world" : (split ? "below" : "all"));
+        modelsInWorld ? "world" : (split ? "below" : "all"), "below");
     this.updateReactor3DTexture(this._reactor3dBelow, canvas);
     if (this._reactor3dAbove) {
-        state.viewport.renderPass(state.scene, modelsInWorld ? "overlay" : "above");
+        state.viewport.renderPass(state.scene, modelsInWorld ? "overlay" : "above", "above");
         this.updateReactor3DTexture(this._reactor3dAbove, canvas);
     }
     if (this._reactor3dLights) {
-        state.viewport.renderPass(state.scene, "lights");
+        state.viewport.renderPass(state.scene, "lights", "lights");
         this.updateReactor3DTexture(this._reactor3dLights, canvas);
         this.keepReactor3DLightsOnTop();
     }

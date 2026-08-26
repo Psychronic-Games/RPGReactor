@@ -9,7 +9,7 @@ Last updated 2026-08-25.
   (2026-08-24): in-editor rigging, rig templates and preset motions,
   database 3D bindings, MP3/WAV/FLAC/M4A audio, PixiJS 8.20.0.
 - **0.98.4** is open in `editor/package.json`, both READMEs, and the
-  `[Unreleased - 0.98.4]` sections of both changelogs. One feature (custom user interfaces, phase 1) and seventeen fixes are queued
+  `[Unreleased - 0.98.4]` sections of both changelogs. One feature (custom user interfaces, phase 1) and eighteen fixes are queued
   there already (VisuStella Effekseer/heat-distortion draw failures and
   off-centre transition shaders from user reports, Audio Player loop points, the Enemies note resize,
   seek-broken Demo tracks, the web editor's 3D suite, two PIXI 8 compat
@@ -103,6 +103,33 @@ Blob-URL loading fixed it in 0.98.2 — `f3f87cc`, `97e0457`).
 Engineering notes and gotchas from each piece of work, kept because the
 suite and the next session both lean on them. Shipped-cycle narrative starts
 at *History* below.
+
+## Shared-Context 3D Rendering (2026-08-25, owner: "refactor the per-frame copy")
+
+- Map passes render into `WebGLRenderTarget`s on PIXI's GL context; PIXI
+  samples the GL textures through seeded `_gpuData`. Pixel-identical to
+  the copy path (`shared-ab.mjs`, mean diff 0.00 over 921,600 px).
+- Traps: (1) `isXRRenderTarget = true` is what makes three encode sRGB
+  in-shader for a target (else output is linear); (2) with it, three
+  forces RGBA8 on the multisample renderbuffer but still allocates the
+  texture SRGB8_ALPHA8 → `glBlitFramebuffer` INVALID_OPERATION; naming
+  `texture.internalFormat = "RGBA8"` bypasses both; (3) PIXI's
+  `resetState` marks EMPTY bound on every unit, so null the cache after;
+  (4) never let PIXI `destroy` a source whose `_gpuData` points at three's
+  texture (it would `deleteTexture` it); drop the entry first; (5) a
+  one-off `gl.getError() === 1282` shows after the very first shared
+  render with no observable effect and no console error; a per-call GL
+  tracer could not reproduce it.
+- What this did NOT change on this machine: CPU profile `texSubImage2D`
+  ~310 ms per 8 s of walking is **PSYCHRONIC_RaveLighting.js**
+  (`updateToneOverlay`, ~L3114) clearing and redrawing a 1280×720 tone
+  overlay bitmap so PIXI re-uploads it ~20×/s. That is the Demo's own
+  plugin, not the engine; a dirty check (tone + light set unchanged →
+  skip) or drawing lights as PIXI sprites would remove it.
+- Next: battler sprites (`updateEnemyModelSprite` / `updateActorModelSprite`)
+  still render per frame on a private `_battlerRenderer` and copy through
+  `drawImage` + `baseTexture.update()`; same treatment, adopt the target
+  into the Bitmap's source and flip the sprite texture.
 
 ## Runtime 3D Instance Stalls (2026-08-25, owner asked "is the game affected too?")
 

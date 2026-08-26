@@ -345,7 +345,207 @@ Reactor3D.Viewport = function() {
     this.initialize(...arguments);
 };
 
+/**
+ * Two ways to get the 3D picture into the game.
+ *
+ * Shared context (the default): three renders with PIXI's own WebGL context
+ * into render targets, and PIXI samples those textures directly. Nothing is
+ * copied and nothing is uploaded; a frame costs the draws and no more.
+ *
+ * Canvas copy (the fallback, and the old way): three owns a second canvas,
+ * and every pass is copied through a 2D canvas and uploaded to PIXI as a
+ * full-screen texture, up to three times a frame. It stays for PIXI builds
+ * without a WebGL2 context, and as a kill switch: `?r3dcopy` on the URL or
+ * `Reactor3D.useSharedContext = false` before the first map.
+ */
 Reactor3D.Viewport.prototype.initialize = function() {
+    this._scene = null;
+    this._camera = null;
+    this._shared = false;
+    this._generation = 0;
+    if (Reactor3D.sharedContextAvailable()) {
+        try {
+            this._initializeShared();
+        } catch (error) {
+            console.warn("Reactor3D: shared-context viewport unavailable, drawing through a canvas copy instead:", error);
+            this._teardownShared();
+        }
+    }
+    if (!this._shared) this._initializeCanvas();
+};
+
+Reactor3D.useSharedContext = true;
+/** MSAA samples for the shared-context targets; the canvas path used the context's own antialiasing. */
+Reactor3D.renderTargetSamples = 4;
+
+/** Whether the running PIXI can lend three its context and sample the result. */
+Reactor3D.sharedContextAvailable = function() {
+    if (this.useSharedContext === false) return false;
+    try {
+        if (typeof location !== "undefined" && /[?&]r3dcopy\b/.test(location.search || "")) return false;
+    } catch (e) { /* no location */ }
+    if (typeof PIXI === "undefined" || !PIXI.TextureSource || !PIXI.Texture || !PIXI.groupD8) return false;
+    if (typeof THREE === "undefined" || !THREE.WebGLRenderTarget) return false;
+    const app = typeof Graphics !== "undefined" && Graphics._app;
+    const renderer = app && app.renderer;
+    if (!renderer || !renderer.gl || !renderer.context || renderer.context.webGLVersion !== 2) return false;
+    if (typeof renderer.resetState !== "function" || !renderer.texture) return false;
+    return true;
+};
+
+Reactor3D.Viewport.prototype._initializeShared = function() {
+    const pixi = Graphics._app.renderer;
+    this._pixi = pixi;
+    this._canvas = null;
+    this._targets = Object.create(null);
+    this._passTextures = Object.create(null);
+    this._width = 0;
+    this._height = 0;
+    this._renderer = new THREE.WebGLRenderer({
+        canvas: pixi.canvas || Graphics._canvas,
+        context: pixi.gl,
+        // The targets carry the multisampling; the context's own setting is
+        // PIXI's business.
+        antialias: false,
+        alpha: true,
+        premultipliedAlpha: true
+    });
+    this._renderer.setPixelRatio(1);
+    this._renderer.setClearColor(0x000000, 0);
+    // three's constructor set the context to its own defaults behind PIXI's
+    // back; PIXI's state cache must not believe otherwise.
+    this._resetPixi();
+    this.resize();
+    this._shared = true;
+};
+
+Reactor3D.Viewport.prototype._teardownShared = function() {
+    this._disposeTargets();
+    if (this._renderer) {
+        try { this._renderer.dispose(); } catch (e) { /* nothing to do */ }
+    }
+    this._renderer = null;
+    this._pixi = null;
+    this._shared = false;
+};
+
+Reactor3D.Viewport.prototype.isShared = function() {
+    return !!this._shared;
+};
+
+/** Bumps whenever the pass textures are replaced (a resize); sprites holding an older one rebuild. */
+Reactor3D.Viewport.prototype.generation = function() {
+    return this._generation || 0;
+};
+
+Reactor3D.Viewport.prototype._disposeTargets = function() {
+    for (const slot of Object.keys(this._targets || {})) {
+        try { this._targets[slot].dispose(); } catch (e) { /* already gone */ }
+    }
+    this._targets = Object.create(null);
+    for (const slot of Object.keys(this._passTextures || {})) {
+        const entry = this._passTextures[slot];
+        // PIXI never created the GL texture, so it must not delete it either:
+        // the entry is dropped before the source is destroyed.
+        if (entry && entry.source && this._pixi) delete entry.source._gpuData[this._pixi.uid];
+        try { entry.texture.destroy(true); } catch (e) { /* already gone */ }
+    }
+    this._passTextures = Object.create(null);
+};
+
+Reactor3D.Viewport.prototype._target = function(slot) {
+    const existing = this._targets[slot];
+    if (existing) return existing;
+    const gl = this._pixi.gl;
+    let samples = Math.max(0, Math.floor(Reactor3D.renderTargetSamples || 0));
+    try { samples = Math.min(samples, gl.getParameter(gl.MAX_SAMPLES) || 0); } catch (e) { samples = 0; }
+    const target = new THREE.WebGLRenderTarget(this._width, this._height, {
+        samples,
+        depthBuffer: true,
+        stencilBuffer: false,
+        colorSpace: THREE.SRGBColorSpace,
+        minFilter: THREE.LinearFilter,
+        magFilter: THREE.LinearFilter,
+        generateMipmaps: false
+    });
+    // three encodes to sRGB in the shader only for the canvas and for an XR
+    // target; that gives exactly the bytes the canvas used to hold, which is
+    // what PIXI expects to sample. Tone mapping follows the same rule. The
+    // storage is named outright: left to the colour space, the texture would
+    // be allocated SRGB8_ALPHA8 while the XR flag forces the multisample
+    // renderbuffer to RGBA8, and the resolve blit between them fails.
+    target.isXRRenderTarget = true;
+    target.texture.internalFormat = "RGBA8";
+    this._renderer.initRenderTarget(target);
+    this._targets[slot] = target;
+    return target;
+};
+
+/**
+ * The PIXI texture that shows one pass. PIXI's texture system is handed the
+ * GL texture three renders into; it binds it like any other and never
+ * uploads to it. Flipped vertically: a framebuffer's first row is its bottom.
+ */
+Reactor3D.Viewport.prototype.passTexture = function(slot) {
+    const cached = this._passTextures[slot];
+    if (cached && cached.generation === this._generation) return cached.texture;
+    const target = this._target(slot);
+    const handle = this._renderer.properties.get(target.texture).__webglTexture;
+    if (!handle) throw new Error("Reactor3D: render target " + slot + " has no GL texture");
+    const source = new PIXI.TextureSource({
+        width: this._width,
+        height: this._height,
+        resolution: 1,
+        alphaMode: "premultiplied-alpha",
+        autoGarbageCollect: false,
+        label: "reactor3d-" + slot
+    });
+    Reactor3D.adoptGlTexture(this._pixi, source, handle);
+    const texture = new PIXI.Texture({
+        source,
+        rotate: PIXI.groupD8.MIRROR_VERTICAL,
+        label: "reactor3d-" + slot
+    });
+    this._passTextures[slot] = { texture, source, generation: this._generation };
+    return texture;
+};
+
+/**
+ * Point a PIXI texture source at a GL texture PIXI did not create. Seeding
+ * the source's GPU record is what stops PIXI allocating its own; with no
+ * upload method the source has nothing to send, and update() is disarmed
+ * so nothing can ask it to.
+ */
+Reactor3D.adoptGlTexture = function(renderer, source, handle) {
+    const gl = renderer.gl;
+    const glTexture = PIXI.GlTexture ? new PIXI.GlTexture(handle) : {
+        _layerInitMask: 0, texture: handle, samplerType: 0, destroy() {}
+    };
+    glTexture.target = gl.TEXTURE_2D;
+    glTexture.width = source.pixelWidth;
+    glTexture.height = source.pixelHeight;
+    glTexture.type = gl.UNSIGNED_BYTE;
+    glTexture.internalFormat = gl.RGBA8 || gl.RGBA;
+    glTexture.format = gl.RGBA;
+    source._gpuData[renderer.uid] = glTexture;
+    source.uploadMethodId = "external";
+    source.update = function() {};
+    source.__reactorExternal = true;
+    return glTexture;
+};
+
+/** PIXI's caches after three has driven the context. */
+Reactor3D.Viewport.prototype._resetPixi = function() {
+    const pixi = this._pixi;
+    if (!pixi) return;
+    pixi.resetState();
+    // resetState believes the empty texture is bound everywhere; three left
+    // its own there. Nulls force a real bind on the next use.
+    const textures = pixi.texture;
+    if (textures && Array.isArray(textures._boundTextures)) textures._boundTextures.fill(null);
+};
+
+Reactor3D.Viewport.prototype._initializeCanvas = function() {
     this._canvas = document.createElement("canvas");
     this._canvas.id = "reactor3dCanvas";
     // Below the game canvas (z-index 1) so PIXI keeps drawing every window,
@@ -389,12 +589,23 @@ Reactor3D.Viewport.prototype.initialize = function() {
 Reactor3D.Viewport.prototype.resize = function() {
     const width = Graphics.width;
     const height = Graphics.height;
-    this._canvas.width = width;
-    this._canvas.height = height;
-    this._renderer.setSize(width, height, false);
-    // Reuse the engine's own centring so the two canvases cannot drift apart
-    // when the window is resized or the game is scaled.
-    Graphics._centerElement(this._canvas);
+    if (this._shared || (!this._canvas && this._pixi)) {
+        // The targets are the canvas here; a new size means new ones, and
+        // the sprites showing them rebuild off the generation.
+        if (width !== this._width || height !== this._height) {
+            this._width = width;
+            this._height = height;
+            this._disposeTargets();
+            this._generation++;
+        }
+    } else {
+        this._canvas.width = width;
+        this._canvas.height = height;
+        this._renderer.setSize(width, height, false);
+        // Reuse the engine's own centring so the two canvases cannot drift apart
+        // when the window is resized or the game is scaled.
+        Graphics._centerElement(this._canvas);
+    }
     if (this._camera && this._camera.isPerspectiveCamera) {
         this._camera.aspect = width / height;
         this._camera.updateProjectionMatrix();
@@ -431,6 +642,7 @@ Reactor3D.Viewport.prototype.probe = function() {
 
     // A grid of samples rather than one: a single point can legitimately be
     // sky. `readPixels` reads the buffer as it stands after the last draw.
+    if (!this._canvas) return Object.assign(report, { shared: true, generation: this._generation });
     const width = this._canvas.width, height = this._canvas.height;
     const pixel = new Uint8Array(4);
     let lit = 0, sampled = 0;
@@ -468,10 +680,21 @@ Reactor3D.Viewport.prototype.probe = function() {
     return report;
 };
 
-Reactor3D.Viewport.prototype.render = function() {
+Reactor3D.Viewport.prototype.render = function(slot) {
     if (!this._scene || !this._camera) return;
     this._renderCount = (this._renderCount || 0) + 1;
+    if (!this._shared) {
+        this._renderer.render(this._scene, this._camera);
+        return;
+    }
+    // Each side forgets what the other did to the context: three before it
+    // draws, PIXI once three is done.
+    const target = this._target(slot || "below");
+    this._renderer.resetState();
+    this._renderer.setRenderTarget(target);
     this._renderer.render(this._scene, this._camera);
+    this._renderer.setRenderTarget(null);
+    this._resetPixi();
 };
 
 /**
@@ -482,14 +705,15 @@ Reactor3D.Viewport.prototype.render = function() {
  * off the same canvas, one after the other, so this costs a second draw and a
  * second upload rather than a second WebGL context.
  */
-Reactor3D.Viewport.prototype.renderPass = function(mapScene, which) {
-    if (!mapScene || !mapScene.setPass) return this.render();
+Reactor3D.Viewport.prototype.renderPass = function(mapScene, which, slot) {
+    if (!mapScene || !mapScene.setPass) return this.render(slot);
     mapScene.setPass(which);
-    this.render();
+    this.render(slot);
     mapScene.setPass("all");
 };
 
 Reactor3D.Viewport.prototype.setVisible = function(visible) {
+    if (!this._canvas) return;
     this._canvas.style.display = visible ? "block" : "none";
 };
 
@@ -507,7 +731,7 @@ Reactor3D.Viewport.prototype.setVisible = function(visible) {
  * into its buffer whether or not the element is laid out.
  */
 Reactor3D.Viewport.prototype.detachFromPage = function() {
-    this._canvas.style.display = "none";
+    if (this._canvas) this._canvas.style.display = "none";
     this._detached = true;
 };
 
@@ -516,10 +740,13 @@ Reactor3D.Viewport.prototype.isDetached = function() {
 };
 
 Reactor3D.Viewport.prototype.destroy = function() {
+    if (this._shared) this._disposeTargets();
     if (this._renderer) {
         this._renderer.dispose();
         this._renderer = null;
     }
+    this._pixi = null;
+    this._shared = false;
     if (this._canvas && this._canvas.parentNode) {
         this._canvas.parentNode.removeChild(this._canvas);
     }

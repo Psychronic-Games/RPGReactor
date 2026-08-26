@@ -140,7 +140,8 @@ test('the scene waits for the sidecar before choosing a renderer', () => {
 test('the 3D canvas sits under the game canvas and takes no input', () => {
     // PIXI keeps drawing every window, picture and plugin sprite on top; the
     // pattern matches the Effekseer overlay the runtime already ships.
-    const at = moduleSource.indexOf('Reactor3D.Viewport.prototype.initialize');
+    // The canvas path; on a shared context there is no second canvas at all.
+    const at = moduleSource.indexOf('Reactor3D.Viewport.prototype._initializeCanvas');
     const body = moduleSource.slice(at, moduleSource.indexOf('\n};', at));
     assert.match(body, /style\.zIndex = 0;/);
     assert.match(body, /style\.pointerEvents = "none";/);

@@ -447,11 +447,11 @@ test('light is added to the scene, not painted over it', () => {
         path.join(repoRoot, 'runtime', 'reactor_sprites.js'), 'utf8');
     assert.match(sprites, /sprite\.blendMode = modes && modes\.ADD !== undefined \? modes\.ADD : "add"/,
         'and it is composited additively');
-    assert.match(sprites, /renderPass\(state\.scene, "lights"\)/);
+    assert.match(sprites, /renderPass\(state\.scene, "lights", "lights"\)/);
 
     // Drawn last, over everything else.
     const below = sprites.indexOf('this.updateReactor3DTexture(this._reactor3dBelow');
-    const lights = sprites.indexOf('renderPass(state.scene, "lights")');
+    const lights = sprites.indexOf('renderPass(state.scene, "lights", "lights")');
     assert.ok(lights > below, 'after the ground');
 
     // And only built when the map is lit: an additive full-screen sprite is
@@ -478,7 +478,7 @@ test('the star pass replaces the tilemap layer it stands in for', () => {
     // over fog and weather that ought to cover it.
     const sprites = fs.readFileSync(
         path.join(repoRoot, 'runtime', 'reactor_sprites.js'), 'utf8');
-    assert.match(sprites, /make\(this\._tilemap, this\._tilemap\.children\.length\)/);
+    assert.match(sprites, /make\(this\._tilemap, this\._tilemap\.children\.length, "above"\)/);
 });
 
 test('lights stay the last thing drawn, however late a plugin adds a layer', () => {
@@ -492,7 +492,7 @@ test('lights stay the last thing drawn, however late a plugin adds a layer', () 
         'and only moved when something got above it');
     // On the spriteset, not the base sprite: the screen tone must not dim the
     // lights along with the world.
-    assert.match(sprites, /make\(this, this\.children\.length\)/);
+    assert.match(sprites, /make\(this, this\.children\.length, "lights"\)/);
 });
 
 test('a colour keeps its hue however bright the light is', () => {

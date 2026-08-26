@@ -349,9 +349,12 @@ test('the viewport is not leaked when it cannot be built', () => {
     assert.match(body, /if \(this\._viewportFailed\) return null;/, 'one attempt only');
     assert.match(body, /built\.destroy\(\)/, 'and a half-built one is disposed');
 
-    const init = source.slice(source.indexOf('Reactor3D.Viewport.prototype.initialize'));
+    const init = source.slice(source.indexOf('Reactor3D.Viewport.prototype._initializeCanvas'));
     assert.match(init.slice(0, init.indexOf('\n};')), /this\._renderer\.dispose\(\)/,
         'the context is given back if the rest of the constructor dies');
+    const shared = source.slice(source.indexOf('Reactor3D.Viewport.prototype.initialize = function'));
+    assert.match(shared.slice(0, shared.indexOf('\n};')), /catch \(error\) \{[\s\S]*?this\._teardownShared\(\);/,
+        'a shared-context viewport that dies half-built is torn down before the canvas path takes over');
 });
 
 test('the 3D scene waits for the tileset sheets it draws with', () => {
@@ -438,7 +441,7 @@ test('the 3D ground is drawn into the PIXI scene, not behind it', () => {
     // while the star-flagged pass, sorted to `z` 4, came through untouched.
     // The symptom is oddly specific and reads as a Reactor bug with no cause:
     // tiles marked `*` appear in 3D and tiles marked `X` or `O` do not.
-    assert.match(sprites, /this\._reactor3dBelow = make\(this\._tilemap, 0\);/,
+    assert.match(sprites, /this\._reactor3dBelow = make\(this\._tilemap, 0, "below"\);/,
         'the ground goes where the tilemap ground was');
     assert.match(sprites, /this\._reactor3dBelow\.sprite\.z = 0;/,
         'sorted to the lower layer, since the tilemap re-sorts by z every frame');
@@ -457,7 +460,7 @@ test('the 3D ground is drawn into the PIXI scene, not behind it', () => {
     // draw-then-upload ordering is the invariant either way.
     const belowDraw = body.indexOf('modelsInWorld ? "world" : (split ? "below" : "all")');
     const belowUp = body.indexOf('updateReactor3DTexture(this._reactor3dBelow');
-    const aboveDraw = body.indexOf('renderPass(state.scene, modelsInWorld ? "overlay" : "above")');
+    const aboveDraw = body.indexOf('renderPass(state.scene, modelsInWorld ? "overlay" : "above", "above")');
     const aboveUp = body.indexOf('updateReactor3DTexture(this._reactor3dAbove');
     assert.ok(belowDraw >= 0 && belowUp > belowDraw, 'the ground is drawn then taken');
     assert.ok(aboveDraw > belowUp, 'and only then is the canvas reused');
