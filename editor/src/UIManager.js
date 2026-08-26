@@ -933,6 +933,167 @@ class UIManager {
         });
     }
 
+    /**
+     * Themed New Project dialog: a project name and a template choice.
+     * Resolves { name, blank } or null when cancelled. `validate(name)` returns
+     * an error message to show inline, or an empty string when the name is
+     * acceptable; the dialog stays open on an error. The folder chooser that
+     * follows is the platform's own.
+     */
+    showNewProjectDialog({ defaultName = 'Reactor One', hasTemplate = true, validate = null } = {}) {
+        const tt = text => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
+        const previouslyFocused = document.activeElement;
+        const overlay = document.createElement('div');
+        overlay.id = 'rr-new-project-dialog';
+        overlay.className = 'rr-modal-overlay';
+
+        const modal = document.createElement('div');
+        modal.className = 'rr-modal';
+        modal.style.width = 'min(560px, 92vw)';
+        modal.setAttribute('role', 'dialog');
+        modal.setAttribute('aria-modal', 'true');
+        modal.setAttribute('aria-labelledby', 'rr-new-project-title');
+
+        const header = document.createElement('div');
+        header.className = 'rr-modal-header';
+        const titleEl = document.createElement('div');
+        titleEl.id = 'rr-new-project-title';
+        titleEl.className = 'rr-modal-title';
+        titleEl.textContent = tt('New Project');
+        const closeButton = document.createElement('button');
+        closeButton.type = 'button';
+        closeButton.id = 'rr-new-project-close';
+        closeButton.className = 'rr-modal-close';
+        closeButton.setAttribute('aria-label', tt('Cancel'));
+        closeButton.textContent = '\u00d7';
+        header.append(titleEl, closeButton);
+
+        const body = document.createElement('div');
+        body.className = 'rr-modal-body';
+
+        const nameLabel = document.createElement('label');
+        nameLabel.setAttribute('for', 'rr-new-project-name');
+        nameLabel.style.cssText = 'color:var(--color-text);font-size:13px;';
+        nameLabel.textContent = tt('Project name');
+        const nameInput = document.createElement('input');
+        nameInput.type = 'text';
+        nameInput.id = 'rr-new-project-name';
+        nameInput.value = defaultName;
+        nameInput.setAttribute('autocomplete', 'off');
+        nameInput.setAttribute('spellcheck', 'false');
+        nameInput.style.cssText = 'width:100%;box-sizing:border-box;padding:8px 10px;font-size:14px;' +
+            'color:var(--color-text);background:var(--color-bg-input, var(--color-bg-deep));' +
+            'border:1px solid var(--color-border);border-radius:var(--radius-sm, 4px);';
+        const errorEl = document.createElement('div');
+        errorEl.id = 'rr-new-project-error';
+        errorEl.setAttribute('role', 'alert');
+        errorEl.style.cssText = 'color:var(--color-danger, #e5484d);font-size:12px;min-height:1.2em;';
+
+        const templateLabel = document.createElement('div');
+        templateLabel.style.cssText = 'color:var(--color-text);font-size:13px;margin-top:4px;';
+        templateLabel.textContent = tt('Template');
+        const choices = document.createElement('div');
+        choices.id = 'rr-new-project-templates';
+        choices.setAttribute('role', 'radiogroup');
+        choices.style.cssText = 'display:flex;flex-direction:column;gap:6px;';
+        const radios = [];
+        const addChoice = (id, value, label, detail, checked, enabled) => {
+            const row = document.createElement('label');
+            row.className = 'rr-new-project-choice';
+            row.style.cssText = 'display:grid;grid-template-columns:auto 1fr;column-gap:10px;align-items:start;' +
+                'padding:8px 10px;border:1px solid var(--color-border);border-radius:var(--radius-sm, 4px);' +
+                `cursor:${enabled ? 'pointer' : 'default'};opacity:${enabled ? '1' : '0.5'};`;
+            const radio = document.createElement('input');
+            radio.type = 'radio';
+            radio.name = 'rr-new-project-template';
+            radio.id = id;
+            radio.value = value;
+            radio.checked = checked;
+            radio.disabled = !enabled;
+            radio.style.cssText = 'margin-top:3px;';
+            const text = document.createElement('div');
+            const strong = document.createElement('div');
+            strong.style.cssText = 'color:var(--color-text-strong, var(--color-text));font-size:13px;';
+            strong.textContent = label;
+            const small = document.createElement('div');
+            small.style.cssText = 'color:var(--color-text-muted);font-size:12px;';
+            small.textContent = detail;
+            text.append(strong, small);
+            row.append(radio, text);
+            choices.appendChild(row);
+            radios.push(radio);
+        };
+        addChoice('rr-new-project-template-demo', 'demo', tt('Reactor One demo'),
+            tt('Sample maps, database, and assets to explore and reuse.'), hasTemplate, hasTemplate);
+        addChoice('rr-new-project-template-blank', 'blank', tt('Blank project'),
+            tt('An empty database and one map. Start from nothing.'), !hasTemplate, true);
+        body.append(nameLabel, nameInput, errorEl, templateLabel, choices);
+
+        const footer = document.createElement('div');
+        footer.className = 'rr-modal-footer';
+        const cancelButton = document.createElement('button');
+        cancelButton.type = 'button';
+        cancelButton.id = 'rr-new-project-cancel';
+        cancelButton.className = 'rr-btn-secondary';
+        cancelButton.textContent = tt('Cancel');
+        const okButton = document.createElement('button');
+        okButton.type = 'button';
+        okButton.id = 'rr-new-project-create';
+        okButton.className = 'rr-button-primary';
+        okButton.textContent = tt('Create');
+        footer.append(cancelButton, okButton);
+        modal.append(header, body, footer);
+        overlay.appendChild(modal);
+
+        return new Promise(resolve => {
+            let settled = false;
+            const finish = value => {
+                if (settled) return;
+                settled = true;
+                document.removeEventListener('keydown', handleKeyDown, true);
+                overlay.remove();
+                if (previouslyFocused && previouslyFocused.isConnected !== false &&
+                    typeof previouslyFocused.focus === 'function') {
+                    previouslyFocused.focus();
+                }
+                resolve(value);
+            };
+            const submit = () => {
+                const name = String(nameInput.value || '').trim();
+                const error = name
+                    ? (typeof validate === 'function' ? (validate(name) || '') : '')
+                    : tt('Project name must be a safe single folder name.');
+                if (error) {
+                    errorEl.textContent = error;
+                    nameInput.focus();
+                    return;
+                }
+                const picked = radios.find(radio => radio.checked && !radio.disabled);
+                finish({ name, blank: !picked || picked.value === 'blank' });
+            };
+            const handleKeyDown = event => {
+                if (event.key === 'Escape') {
+                    event.preventDefault();
+                    finish(null);
+                } else if (event.key === 'Enter' && event.target === nameInput) {
+                    event.preventDefault();
+                    submit();
+                }
+            };
+            nameInput.addEventListener('input', () => { errorEl.textContent = ''; });
+            closeButton.addEventListener('click', () => finish(null));
+            cancelButton.addEventListener('click', () => finish(null));
+            okButton.addEventListener('click', submit);
+            overlay.addEventListener('click', event => {
+                if (event.target === overlay) finish(null);
+            });
+            document.addEventListener('keydown', handleKeyDown, true);
+            document.body.appendChild(overlay);
+            nameInput.focus();
+            if (typeof nameInput.select === 'function') nameInput.select();
+        });
+    }
+
     openThemedDialog({ title, message, okLabel, cancelLabel }) {
         const tt = text => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
         const previouslyFocused = document.activeElement;

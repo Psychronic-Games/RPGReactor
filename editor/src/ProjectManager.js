@@ -72,7 +72,12 @@ class ProjectManager {
         }
     }
 
-    async createNewProject(targetPath, projectName) {
+    /**
+     * Create a project at targetPath. By default the bundled Demo template is
+     * copied; `options.blank` writes the starter scaffold instead (an empty
+     * database and one map).
+     */
+    async createNewProject(targetPath, projectName, options = {}) {
         this.lastCreateError = null;
         if (!this.fs || !this.path) {
             console.error('File system not available');
@@ -89,7 +94,7 @@ class ProjectManager {
             console.debug(`Creating new project: ${projectName} at ${targetPath}`);
 
             const engineVersion = this.getEngineVersion();
-            const templatePath = this.getTemplateProjectPath();
+            const templatePath = options.blank ? null : this.getTemplateProjectPath();
             const runtimePath = this.getRuntimePath();
 
             if (this.fs.existsSync(resolvedTarget)) {

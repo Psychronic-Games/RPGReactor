@@ -29,12 +29,10 @@
 // outline style with rounded joins; uses `currentColor` so the icon inherits
 // the surrounding text color (typically var(--color-accent-bright)).
 const FORGE_ICONS = {
-    // Hammer-and-sickle, scaled directly from the canonical Soviet flag
-    // emblem geometry. Combined bbox (57,20)→(521,522) in 550-canvas units
-    // mapped to 22×22 with offset (+1.84, +1.00) — scale factor 0.0438.
-    // Both shapes are filled silhouettes (currentColor); the sickle's coiled
-    // grip detail is simplified to a stroke since it isn't visible at icon size.
-    forge: (size) => `<svg width="${size}" height="${size}" viewBox="0 0 24 24" style="display: block;" aria-hidden="true"><path d="M 11 3 C 16 3, 21 7, 21 12 C 21 16, 18 20, 14 20 C 12 20, 10 19, 10 17 C 13 17, 16 16, 17 13 C 18 9, 15 5, 11 3 Z" fill="#ffd700"/><path d="M 11 18 L 8 22 L 6 21 L 10 17 Z" fill="#ffd700"/><ellipse cx="6" cy="21.5" rx="2" ry="1.3" fill="#ffd700"/><path d="M 7.03 4.43 L 6.29 5.18 L 4.31 7.16 L 1.83 9.64 L 4.55 12.36 L 7.03 9.88 L 20.16 23.01 A 1.40 1.40 0 0 0 22.15 23.01 A 1.40 1.40 0 0 0 22.15 21.03 L 9.01 7.90 L 9.76 7.16 L 12.00 4.93 Z" fill="#ffd700"/><path d="M 2.5 -0.5 Q 3.0 2.0 5.5 2.5 Q 3.0 3.0 2.5 5.5 Q 2.0 3.0 -0.5 2.5 Q 2.0 2.0 2.5 -0.5 Z" fill="#fff066"/></svg>`,
+    // Anvil: horn to the left, flat face, waist, flared base, with a
+    // spark off the face. A filled silhouette reads at 22px; the previous
+    // emblem read as a flag, not a forge.
+    forge: (size) => `<svg width="${size}" height="${size}" viewBox="0 0 24 24" style="display: block;" aria-hidden="true"><path d="M 22 5 H 9 C 6.2 5, 3.6 6.3, 2 8.6 C 4 9.6, 6.4 10, 9 10 H 10 V 14 H 7 L 5.5 18 H 18.5 L 17 14 H 14 V 10 H 20 C 21.1 10, 22 9.1, 22 8 Z" fill="#ffd700"/><path d="M 19.5 0.5 Q 20 2.5 22 3 Q 20 3.5 19.5 5.5 Q 19 3.5 17 3 Q 19 2.5 19.5 0.5 Z" fill="#fff066"/></svg>`,
 
     // Person silhouette (head + shoulders).
     characterGenerator: (size) => `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="display: block;" aria-hidden="true"><circle cx="12" cy="7.5" r="4"/><path d="M4.5 21v-1a6 6 0 0 1 6-6h3a6 6 0 0 1 6 6v1"/></svg>`,

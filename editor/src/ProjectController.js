@@ -422,14 +422,18 @@ class ProjectController {
     async newProject() {
         if (!await this.confirmUnsavedChanges()) return;
         if (typeof nw !== 'undefined') {
-            // First, ask for project name
-            const projectName = prompt(this._tt('Enter project name:'), 'Reactor One');
-            if (!projectName) return;
-            if (!this.projectManager.isSafeProjectName(projectName)) {
-                alert('Project name must be a safe single folder name.');
-                this.uiManager.updateStatus('Invalid project name');
-                return;
-            }
+            // Name and template first, in the editor's own dialog; the
+            // folder chooser that follows is the platform's.
+            const choice = await this.uiManager.showNewProjectDialog({
+                defaultName: 'Reactor One',
+                hasTemplate: !!this.projectManager.getTemplateProjectPath(),
+                validate: name => this.projectManager.isSafeProjectName(name)
+                    ? ''
+                    : this._tt('Project name must be a safe single folder name.')
+            });
+            if (!choice) return;
+            const projectName = choice.name;
+            const createOptions = { blank: !!choice.blank };
 
             // Use NW.js chooser for directory selection
             const chooser = document.createElement('input');
@@ -447,7 +451,7 @@ class ProjectController {
                     const projectPath = path.join(basePath, projectName);
 
                     // Use ProjectManager to create the project
-                    const success = await this.projectManager.createNewProject(projectPath, projectName);
+                    const success = await this.projectManager.createNewProject(projectPath, projectName, createOptions);
 
                     if (success) {
                         // Load the newly created project
@@ -778,6 +782,23 @@ class ProjectController {
         const quickAccessList = document.getElementById('quick-access-list');
 
         if (!mapTreeTab || !quickAccessTab || !mapsList || !quickAccessList) return;
+
+        // Right-clicking the empty part of either list used to fall through
+        // to NW.js's own page menu (Reload App, Inspect...). Map rows keep
+        // their menu; the space around them gets one of its own.
+        if (!mapsList.__rrContextMenuBound) {
+            mapsList.__rrContextMenuBound = true;
+            mapsList.addEventListener('contextmenu', (e) => {
+                if (e.target.closest && e.target.closest('[data-map-id]')) return;
+                e.preventDefault();
+                this.showMapListContextMenu(e.pageX, e.pageY);
+            });
+            quickAccessList.addEventListener('contextmenu', (e) => {
+                if (e.target.closest && e.target.closest('[data-map-id]')) return;
+                e.preventDefault();
+                this.showQuickAccessContextMenu(e.pageX, e.pageY);
+            });
+        }
 
         mapTreeTab.addEventListener('click', () => {
             mapTreeTab.classList.add('active');
@@ -1521,24 +1542,27 @@ class ProjectController {
     }
 
     // Show context menu for map
+    /** Menu for the empty part of the map tree: a new root-level map, or paste. */
+    showMapListContextMenu(x, y) {
+        this.showContextMenuItems(x, y, [
+            { label: this._t('mapCtx.newMap'), action: () => this.createNewMap(null) },
+            { label: this._t('mapCtx.pasteMap'), action: () => this.pasteMap() }
+        ]);
+    }
+
+    /** Menu for the empty part of Quick Access: toggles the open map. */
+    showQuickAccessContextMenu(x, y) {
+        const currentId = this.tilemapManager?.currentMap?.id ?? null;
+        const map = currentId ? (this.currentProject?.maps || [])[currentId] : null;
+        const inQuick = !!(map && map.quick === true);
+        this.showContextMenuItems(x, y, [{
+            label: this._tt(inQuick ? 'Remove current map from Quick Access' : 'Add current map to Quick Access'),
+            action: () => this.toggleQuickAccess(currentId),
+            enabled: !!map
+        }]);
+    }
+
     showMapContextMenu(x, y, mapId) {
-        // Remove any existing context menu
-        this.hideMapContextMenu();
-
-        const contextMenu = document.createElement('div');
-        contextMenu.id = 'map-context-menu';
-        contextMenu.style.cssText = `
-            position: fixed;
-            background-color: var(--color-bg-menubar);
-            border: 1px solid var(--color-border);
-            border-radius: 4px;
-            padding: 4px 0;
-            z-index: 10001;
-            min-width: 200px;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
-            visibility: hidden;
-        `;
-
         // Check if map is already in quick access
         const map = this.currentProject.maps[mapId];
         const isInQuickAccess = map && map.quick === true;
@@ -1565,6 +1589,28 @@ class ProjectController {
             { label: this._t('mapCtx.generateDungeon'), action: () => this.generateDungeon(mapId), enabled: false },
             { label: this._t('mapCtx.saveImage'), action: () => this.saveMapAsImage(mapId), enabled: !!map && typeof nw !== 'undefined' }
         ];
+
+        this.showContextMenuItems(x, y, menuItems);
+    }
+
+    /** Show a themed context menu of {label, action, enabled} / {separator} items at page coordinates. */
+    showContextMenuItems(x, y, menuItems) {
+        // Remove any existing context menu
+        this.hideMapContextMenu();
+
+        const contextMenu = document.createElement('div');
+        contextMenu.id = 'map-context-menu';
+        contextMenu.style.cssText = `
+            position: fixed;
+            background-color: var(--color-bg-menubar);
+            border: 1px solid var(--color-border);
+            border-radius: 4px;
+            padding: 4px 0;
+            z-index: 10001;
+            min-width: 200px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+            visibility: hidden;
+        `;
 
         menuItems.forEach(item => {
             if (item.separator) {

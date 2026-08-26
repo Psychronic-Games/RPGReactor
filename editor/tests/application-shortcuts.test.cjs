@@ -346,3 +346,69 @@ test('F11 toggles native fullscreen without repeating while held', () => {
     handler(event());
     assert.equal(harness.getFullscreenToggles(), 2, 'a later F11 exits fullscreen');
 });
+
+test('New Project asks for a name and template in editor modal chrome, validating inline', async () => {
+    const harness = loadUIManager();
+    const manager = new harness.UIManager({});
+    const validate = name => /^[A-Za-z0-9 _-]+$/.test(name) ? '' : 'Project name must be a safe single folder name.';
+
+    const created = manager.showNewProjectDialog({ defaultName: 'Reactor One', hasTemplate: true, validate });
+    const overlay = harness.getElementById('rr-new-project-dialog');
+    assert.equal(overlay.className, 'rr-modal-overlay');
+    assert.equal(harness.getElementById('rr-new-project-title').textContent, 'New Project');
+    assert.equal(harness.getElementById('rr-new-project-create').className, 'rr-button-primary');
+    assert.equal(harness.getElementById('rr-new-project-cancel').className, 'rr-btn-secondary');
+    const nameInput = harness.getElementById('rr-new-project-name');
+    assert.equal(nameInput.value, 'Reactor One');
+    assert.equal(harness.getElementById('rr-new-project-template-demo').checked, true, 'the demo is the default template');
+
+    nameInput.value = 'bad/name';
+    harness.getElementById('rr-new-project-create').dispatch('click');
+    assert.equal(harness.getElementById('rr-new-project-error').textContent,
+        'Project name must be a safe single folder name.');
+    assert.notEqual(harness.getElementById('rr-new-project-dialog'), null, 'an invalid name keeps the dialog open');
+
+    nameInput.value = '  My Game  ';
+    nameInput.dispatch('input');
+    assert.equal(harness.getElementById('rr-new-project-error').textContent, '', 'typing clears the error');
+    harness.getElementById('rr-new-project-template-blank').checked = true;
+    harness.getElementById('rr-new-project-template-demo').checked = false;
+    harness.getElementById('rr-new-project-create').dispatch('click');
+    const result = await created;
+    assert.equal(result.name, 'My Game');
+    assert.equal(result.blank, true);
+    assert.equal(harness.getElementById('rr-new-project-dialog'), null);
+
+    const cancelled = manager.showNewProjectDialog({ hasTemplate: true, validate });
+    harness.dispatchDocumentKey('Escape');
+    assert.equal(await cancelled, null);
+
+    const noTemplate = manager.showNewProjectDialog({ hasTemplate: false, validate });
+    assert.equal(harness.getElementById('rr-new-project-template-demo').disabled, true);
+    assert.equal(harness.getElementById('rr-new-project-template-blank').checked, true,
+        'without a bundled demo the blank project is preselected');
+    harness.getElementById('rr-new-project-create').dispatch('click');
+    const fallback = await noTemplate;
+    assert.equal(fallback.name, 'Reactor One');
+    assert.equal(fallback.blank, true);
+});
+
+test('the New Project flow and list context menus no longer reach window dialogs or the NW.js page menu', () => {
+    const controller = fs.readFileSync(path.join(editorRoot, 'src', 'ProjectController.js'), 'utf8');
+    assert.doesNotMatch(controller, /prompt\(this\._tt\('Enter project name:'\)/,
+        'the project name comes from the themed dialog');
+    assert.match(controller, /showNewProjectDialog\(\{/);
+    assert.match(controller, /createNewProject\(projectPath, projectName, createOptions\)/);
+    // Empty-area right-clicks on both map lists open an editor menu instead of
+    // falling through to NW.js's Reload App / Inspect menu.
+    assert.match(controller, /mapsList\.addEventListener\('contextmenu'[\s\S]*?closest\('\[data-map-id\]'\)\) return;[\s\S]*?showMapListContextMenu\(e\.pageX, e\.pageY\)/);
+    assert.match(controller, /quickAccessList\.addEventListener\('contextmenu'[\s\S]*?closest\('\[data-map-id\]'\)\) return;[\s\S]*?showQuickAccessContextMenu\(e\.pageX, e\.pageY\)/);
+    assert.match(controller, /showMapListContextMenu\(x, y\) \{[\s\S]*?createNewMap\(null\)[\s\S]*?pasteMap\(\)/,
+        'the tree menu offers a root-level new map and paste');
+    assert.match(controller, /showQuickAccessContextMenu\(x, y\) \{[\s\S]*?toggleQuickAccess\(currentId\)/);
+    const forge = fs.readFileSync(path.join(editorRoot, 'src', 'forge', 'ForgeManager.js'), 'utf8');
+    const html = fs.readFileSync(path.join(editorRoot, 'index.html'), 'utf8');
+    assert.doesNotMatch(forge, /sickle/i, 'the Forge icon is an anvil, not a flag emblem');
+    const anvil = forge.match(/forge: \(size\) => `<svg[^`]*<path d="([^"]+)"/)[1];
+    assert.ok(html.includes(`<path d="${anvil}"`), 'the toolbar and the launcher share the anvil path');
+});

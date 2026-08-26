@@ -506,3 +506,27 @@ test('ProjectManager imports RPG Maker projects with current engine metadata', a
         fs.rmSync(tempRoot, { recursive: true, force: true });
     }
 });
+
+test('ProjectManager can create a blank project beside the Demo template', async () => {
+    const ProjectManager = loadBrowserClass(path.join(repoRoot, 'src', 'ProjectManager.js'), 'ProjectManager');
+    const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'rpg-reactor-test-'));
+    const targetPath = path.join(tempRoot, 'Blank RPG');
+    const previousCwd = process.cwd();
+    process.chdir(repoRoot);
+    try {
+        const manager = new ProjectManager();
+        assert.ok(manager.getTemplateProjectPath(), 'the Demo template is available, so blank is a real choice');
+        assert.equal(await manager.createNewProject(targetPath, 'Blank RPG', { blank: true }), true);
+        assert.equal(fs.existsSync(path.join(targetPath, 'index.html')), true);
+        assert.equal(fs.existsSync(path.join(targetPath, 'js', 'libs', 'pixi.js')), true);
+        assert.equal(fs.existsSync(path.join(targetPath, 'data', 'Map001.json')), true);
+        assert.equal(fs.existsSync(path.join(targetPath, 'data', 'Map002.json')), false, 'no Demo maps were copied');
+        const mapInfos = readJson(path.join(targetPath, 'data', 'MapInfos.json')).filter(Boolean);
+        assert.equal(mapInfos.length, 1, 'a blank project starts with one map');
+        const system = readJson(path.join(targetPath, 'data', 'System.json'));
+        assert.equal(system.gameTitle, 'Blank RPG');
+    } finally {
+        process.chdir(previousCwd);
+        fs.rmSync(tempRoot, { recursive: true, force: true });
+    }
+});

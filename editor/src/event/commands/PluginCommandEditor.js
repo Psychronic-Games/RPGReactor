@@ -753,6 +753,28 @@ class PluginCommandEditor {
                 });
                 break;
 
+            case 'icon': {
+                const project = this.projectController && this.projectController.getCurrentProject
+                    ? this.projectController.getCurrentProject() : null;
+                const iconSetPath = project && project.path && window.RRIconPicker
+                    ? window.RRIconPicker.iconSetPathFor(project.path) : null;
+                if (!window.RRIconPicker) {
+                    input = document.createElement('input');
+                    input.type = 'text';
+                    input.value = currentValue || '';
+                    input.addEventListener('input', (e) => { this.args[arg.name] = e.target.value; });
+                    break;
+                }
+                section.appendChild(window.RRIconPicker.createField({
+                    value: currentValue,
+                    iconSetPath,
+                    onChange: newValue => { this.args[arg.name] = newValue; },
+                    inputStyle: 'padding:6px 10px;background-color:var(--color-bg-input);color:var(--color-text);border:1px solid var(--color-border-input);border-radius:3px;font-size:12px;',
+                    zIndex: 10010
+                }));
+                return section;
+            }
+
             case 'file': {
                 // File picker with browse button
                 const fileRow = document.createElement('div');
@@ -778,7 +800,7 @@ class PluginCommandEditor {
                 browseBtn.textContent = tt('Browse...');
                 browseBtn.className = 'rr-btn-browse';
                 browseBtn.addEventListener('click', () => {
-                    this.showFilePicker(arg, input);
+                    if (!this.showAudioPicker(arg, input)) this.showFilePicker(arg, input);
                 });
 
                 fileRow.appendChild(input);
@@ -820,6 +842,43 @@ class PluginCommandEditor {
             return value === 'true' || value === true ? 'true' : 'false';
         }
         return String(value || '');
+    }
+
+    /**
+     * `@type file` under `@dir audio/...` opens the shared audio picker so
+     * the argument can be auditioned. Returns false when the argument is
+     * not an audio one, so the generic file picker handles it.
+     */
+    showAudioPicker(arg, inputElement) {
+        if (typeof RRAudioPickerModal === 'undefined') return false;
+        if (!/^\.?[\\/]?audio([\\/]|$)/i.test(String(arg.dir || '').trim())) return false;
+        const currentProject = this.projectController.getCurrentProject();
+        if (!currentProject || !currentProject.path) return false;
+        let files = [];
+        try {
+            const browseDir = this.path.join(currentProject.path, arg.dir);
+            if (this.fs.existsSync(browseDir)) {
+                files = RRAssetFiles.listUnique(browseDir, RRAssetFiles.AUDIO_EXTENSIONS);
+            }
+        } catch (e) {
+            console.warn('Could not scan directory:', arg.dir, e);
+        }
+        const folder = String(arg.dir).match(/audio[\\/]+([A-Za-z]+)/);
+        RRAudioPickerModal.open({
+            title: 'Select Audio File',
+            folderLabel: folder ? folder[1].toUpperCase() : '',
+            files,
+            selected: inputElement.value || '',
+            levels: null,
+            previewLevels: { volume: 90, pitch: 100, pan: 0 },
+            loopDefault: false,
+            zIndex: 10010,
+            onOk: result => {
+                inputElement.value = result.name;
+                this.args[arg.name] = result.name;
+            }
+        });
+        return true;
     }
 
     /**

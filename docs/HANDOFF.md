@@ -9,7 +9,7 @@ Last updated 2026-08-25.
   (2026-08-24): in-editor rigging, rig templates and preset motions,
   database 3D bindings, MP3/WAV/FLAC/M4A audio, PixiJS 8.20.0.
 - **0.98.4** is open in `editor/package.json`, both READMEs, and the
-  `[Unreleased - 0.98.4]` sections of both changelogs. One feature (custom user interfaces, phase 1) and thirteen fixes are queued
+  `[Unreleased - 0.98.4]` sections of both changelogs. One feature (custom user interfaces, phase 1) and sixteen fixes are queued
   there already (VisuStella Effekseer/heat-distortion draw failures and
   off-centre transition shaders from user reports, Audio Player loop points, the Enemies note resize,
   seek-broken Demo tracks, the web editor's 3D suite, two PIXI 8 compat
@@ -61,10 +61,19 @@ Content and tooling:
   `docs/demo-missing-se.md` lists the 120 SE names animations still
   reference. Intentional Demo removals must be staged with `git rm` or the
   completeness test fails.
-- **`generate-deep-translations.cjs` is broken** (Microsoft edge auth
-  endpoint 404s). New phrases are hand-authored into all 17 non-English
+- **Translations are hand-authored, by decision (2026-08-25).** The owner
+  does not want the app depending on an online translation engine;
+  `generate-deep-translations.cjs` (Microsoft edge endpoint, now 404) is
+  retired rather than repaired. New phrases go into all 17 non-English
   locales in `I18nDeepTranslations.js` / the curated `I18nManager.js`
-  blocks.
+  blocks by hand; `i18n.test.cjs` fails on any locale missing a phrase. The
+  shipped editor never needed the network: the file is static.
+- **GitHub feedback round-up, open items** (the closed ones are in the
+  cycle note below): documentation/wiki and a compatible-plugin list;
+  Android APK and ARM64 (RG34xx-class) game deploys; a plugin boilerplate
+  generator in the Forge or Plugin Manager; an action battle system under
+  System 1. Gamepad and touch already work in games (stock `Input` /
+  `TouchInput`).
 - **Audit backlog** (`AUDIT-BACKLOG-2026-07-25.md`) still awaits owner
   decisions on three authored-data items; nothing there is a code defect.
 
@@ -94,6 +103,75 @@ Blob-URL loading fixed it in 0.98.2 — `f3f87cc`, `97e0457`).
 Engineering notes and gotchas from each piece of work, kept because the
 suite and the next session both lean on them. Shipped-cycle narrative starts
 at *History* below.
+
+## Database 3D Preview Stutter (2026-08-25, owner-reported)
+
+- Measured, not guessed: `db3d-perf.mjs` (session scratchpad) wraps
+  `_renderThumbnail/_loadTemplate/_partUnderPointer/...` on the prototype,
+  logs rAF gaps >24 ms with the active wrapper, and a `longtask`
+  PerformanceObserver, then drives hover sweeps, wheel zooms, and orbit
+  drags for 8 s right after clicking the 596k-triangle Carol. Before: 30+
+  long tasks of ~350 ms back to back (`_partUnderPointer` 20 calls / 4.0 s,
+  `_renderThumbnail` 24 calls / 8.2 s incl. 59 `toDataURL`s); the gesture
+  loop starved. After: 0 rAF gaps during the gesture, cold or warm cache;
+  the only long tasks left are the selected model's own load at the click
+  (4 / 463 ms). Pointer motion over the canvas counts as busy for the
+  idle gate (300 ms) or a deferred build lands as the hand reaches the
+  drag; `_loadTemplate` wall-clock in the harness includes that wait.
+- Hover: three.js raycasts without a BVH cost ~0.6 ms per 1k triangles.
+  Over `HOVER_TRIANGLE_BUDGET` (150k) hover highlight is off; a click
+  still runs the full pick once. GPU picking (render part ids to a 1×1
+  target) would restore hover on huge meshes; not built.
+- `Reactor3D.readModelAsync(buffer, ext, baseUrl, texture, { beforeBuild })`
+  is the seam between worker parse and main-thread build. Do not share an
+  in-flight thumbnail template promise with the preview: the thumbnail's
+  `beforeBuild` waits for `_loadingPreview` to clear, and the preview
+  would wait on it (deadlock). The rare double parse is the price.
+- Thumbnail cache lives outside the project (Dropbox/git noise otherwise);
+  keyed by source path + size + mtime, so re-exports refresh.
+- Not done: a "Loading model…" hint during the selected model's own ~1 s
+  load (needs keyed DB3D phrases in `I18nManager.js`, 17 locales).
+
+## Plugin Manager Icon + Audio Pickers (2026-08-25, GitHub report)
+
+- Report anchors (0.98.3 line numbers) matched the tree exactly; nothing
+  was in place. The parser already carried `@type icon` and `@dir`; only
+  the renderers were missing.
+- `RRIconPicker` is the one IconSet picker; `DatabaseEditorUI.showIconPicker`
+  is a delegate. Picker overlays inside the Plugin Manager need z-index
+  10010 (its child modals sit at 10002+; the command editor's own file
+  picker uses 10008).
+- `RRAudioPickerModal` is the global (not `RRAudioPicker`); `levels: null`
+  hides the level cards and `onOk` still returns `{name,...}`. `title` is
+  translated inside the modal, so it must be a phrase in the locale tables
+  ("Select Audio File" is).
+- Fixture rig `picker-check.mjs` + `picker-demo/` (session scratchpad): a
+  Demo copy with `PickerFixture.js` registered in `js/reactor_plugins.js`
+  and an SE under `audio/se/battle/hits/`. `page.eval` bodies cannot
+  `await`; split multi-step DOM drives into separate evals.
+- Deliberately not built: vec4-rectangle/mat3 style parsers (unrelated),
+  and a generic searchable picker for non-audio `file[]` elements (they get
+  the dropdown).
+
+## New Project Dialog, Anvil, List Menus (2026-08-25, GitHub feedback)
+
+- `UIManager.showNewProjectDialog` follows `openThemedDialog`'s shape (ids
+  `rr-new-project-*`, Escape cancels, Enter in the name field submits,
+  focus restored). The FakeElement harness in
+  `application-shortcuts.test.cjs` has no `classList`/`closest`/`select`,
+  so the dialog uses `className` and guards `select()`. Cross-realm: a vm
+  object fails strict `deepEqual` against a literal; compare fields.
+- Blank project = the pre-existing `createStarterProject` fallback made a
+  first-class choice (`options.blank`). It has one map and an empty
+  database; "no assets" is literal.
+- Empty-area `contextmenu` on the two lists skips targets inside
+  `[data-map-id]` because row handlers don't stop propagation; the flag
+  `__rrContextMenuBound` keeps `setupMapTabs` idempotent.
+- Live rig `feedback-ui-check.mjs` (session scratchpad): loads the Demo by
+  writing `localStorage.lastProjectPath` then `checkAutoLoadProject()`; the
+  DevTools target changes during project load, so re-attach each poll.
+  `pkill -f nwjs-linux/nw` kills the calling shell (its own command line
+  matches); use `pkill -x nw`.
 
 ## vec2 Uniform Views + Full-Screen Filter Textures (2026-08-25, user-reported)
 

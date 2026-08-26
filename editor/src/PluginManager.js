@@ -1075,6 +1075,15 @@ class PluginManager {
         addButton.addEventListener('mouseenter', () => { addButton.style.backgroundColor = 'var(--color-accent-muted)'; });
         addButton.addEventListener('mouseleave', () => { addButton.style.backgroundColor = 'var(--color-accent)'; });
         addButton.addEventListener('click', () => {
+            // An audio file[] adds straight from the picker: one click, not add-then-edit.
+            if (!structType && metadata && metadata.type === 'file[]' && metadata.dir && this.isAudioDir(metadata.dir)) {
+                const opened = this.openAudioPicker(metadata.dir, '', name => {
+                    if (!name) return; // (None) adds nothing
+                    arrayData.push(name);
+                    refresh();
+                });
+                if (opened) return;
+            }
             // Add new element
             const newElement = structType ? this.createDefaultStructValue(structSchema, allStructDefinitions) : '';
             arrayData.push(newElement);
@@ -1216,6 +1225,150 @@ class PluginManager {
     /**
      * Create input field for a struct field based on its schema
      */
+    /** Absolute path of the open project's IconSet.png, or null without a project. */
+    iconSetPath() {
+        const project = this.projectController && typeof this.projectController.getCurrentProject === 'function'
+            ? this.projectController.getCurrentProject() : null;
+        return project && project.path && window.RRIconPicker
+            ? window.RRIconPicker.iconSetPathFor(project.path) : null;
+    }
+
+    /**
+     * Field for an `@type icon` value: preview, index, and a Change... button
+     * that opens the shared IconSet picker. `onChange` receives the index as
+     * a string, the shape every other parameter input writes.
+     */
+    createIconInput(value, onChange, inputStyle) {
+        if (!window.RRIconPicker) {
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.value = String(value ?? '');
+            input.style.cssText = inputStyle || '';
+            input.addEventListener('change', e => onChange(e.target.value));
+            return input;
+        }
+        return window.RRIconPicker.createField({
+            value,
+            iconSetPath: this.iconSetPath(),
+            onChange,
+            inputStyle,
+            zIndex: 10010
+        });
+    }
+
+    /** `@dir audio/...` (any slash style, optional trailing slash). */
+    isAudioDir(dir) {
+        return /^\.?[\\/]?audio([\\/]|$)/i.test(String(dir || '').trim());
+    }
+
+    /** 'SE' for audio/se/, 'BGM' for audio/bgm, '' for audio itself. */
+    audioFolderLabel(dir) {
+        const match = String(dir || '').match(/audio[\\/]+([A-Za-z]+)/);
+        return match ? match[1].toUpperCase() : '';
+    }
+
+    /**
+     * Open the shared audio picker over the project's `dir`; `onPick`
+     * receives the extensionless name with any subfolder prefix
+     * (`battle/hits/sword1`), which is what the runtime resolves.
+     */
+    openAudioPicker(dir, currentValue, onPick) {
+        if (typeof RRAudioPickerModal === 'undefined') return false;
+        const project = this.projectController.getCurrentProject();
+        if (!project || !project.path) return false;
+        let files = [];
+        try {
+            const dirPath = this.path.join(project.path, dir);
+            if (this.fs.existsSync(dirPath)) {
+                files = RRAssetFiles.listUnique(dirPath, RRAssetFiles.AUDIO_EXTENSIONS);
+            }
+        } catch (e) {
+            console.warn('Could not scan directory:', dir, e);
+        }
+        RRAudioPickerModal.open({
+            title: 'Select Audio File',
+            folderLabel: this.audioFolderLabel(dir),
+            files,
+            selected: currentValue || '',
+            levels: null,
+            previewLevels: { volume: 90, pitch: 100, pan: 0 },
+            loopDefault: false,
+            zIndex: 10010,
+            onOk: result => onPick(result.name)
+        });
+        return true;
+    }
+
+    /**
+     * Field for an `@type file` value under `dir`. Audio folders get a name
+     * box with a Browse... button that opens the audio picker (audition
+     * included); other folders get a dropdown of the files found there.
+     */
+    createFileInput(value, dir, onChange, inputStyle) {
+        const current = value == null ? '' : String(value);
+        if (this.isAudioDir(dir) && typeof RRAudioPickerModal !== 'undefined') {
+            const row = document.createElement('div');
+            row.className = 'rr-file-field';
+            row.style.cssText = 'display:flex;gap:6px;align-items:center;min-width:0;';
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.value = current;
+            input.placeholder = dir;
+            input.style.cssText = (inputStyle || '') + 'flex:1;min-width:0;';
+            input.addEventListener('change', e => onChange(e.target.value));
+            const browse = document.createElement('button');
+            browse.type = 'button';
+            browse.textContent = this._tt('Browse...');
+            browse.className = 'rr-btn-browse';
+            browse.addEventListener('click', () => {
+                this.openAudioPicker(dir, input.value, name => {
+                    input.value = name;
+                    onChange(name);
+                });
+            });
+            row.appendChild(input);
+            row.appendChild(browse);
+            return row;
+        }
+
+        const select = document.createElement('select');
+        select.style.cssText = inputStyle || '';
+        const noneOpt = document.createElement('option');
+        noneOpt.value = '';
+        noneOpt.textContent = this._tt('(none)');
+        noneOpt.selected = !current;
+        select.appendChild(noneOpt);
+        let listed = false;
+        try {
+            const project = this.projectController.getCurrentProject();
+            const dirPath = this.path.join(project.path, dir);
+            if (this.fs.existsSync(dirPath)) {
+                const imageExts = ['.png', '.jpg', '.jpeg', '.webp', '.bmp'];
+                const validExts = String(dir).includes('img') ? imageExts : RRAssetFiles.AUDIO_EXTENSIONS;
+                for (const fileName of RRAssetFiles.listNames(dirPath, validExts)) {
+                    const opt = document.createElement('option');
+                    opt.value = fileName;
+                    opt.textContent = fileName;
+                    opt.selected = current === fileName;
+                    if (opt.selected) listed = true;
+                    select.appendChild(opt);
+                }
+            }
+        } catch (e) {
+            console.warn('Could not scan directory:', dir, e);
+        }
+        if (current && !listed) {
+            // A saved name the folder no longer holds stays visible and selected.
+            const opt = document.createElement('option');
+            opt.value = current;
+            opt.textContent = current;
+            opt.selected = true;
+            select.appendChild(opt);
+        }
+        select.addEventListener('change', e => onChange(e.target.value));
+        return select;
+    }
+
     createStructFieldInput(fieldName, value, fieldSchema, structData, allStructDefinitions = {}) {
         const type = fieldSchema.type;
 
@@ -1361,6 +1514,23 @@ class PluginManager {
                 structData[fieldName] = event.target.value;
             });
             return textarea;
+        }
+
+        const structInputStyle = `
+            width: 100%;
+            padding: 4px 8px;
+            background-color: var(--color-border);
+            color: var(--color-text);
+            border: 1px solid var(--color-border-input);
+            border-radius: 3px;
+            box-sizing: border-box;
+            font-size: 11px;
+        `;
+        if (type === 'icon') {
+            return this.createIconInput(value, newValue => { structData[fieldName] = newValue; }, structInputStyle);
+        }
+        if (type === 'file' && fieldSchema.dir) {
+            return this.createFileInput(value, fieldSchema.dir, newValue => { structData[fieldName] = newValue; }, structInputStyle);
         }
 
         // Default: text input
@@ -1556,6 +1726,18 @@ class PluginManager {
         if (typeof element === 'object' && !Array.isArray(element)) {
             // Render struct fields with schema
             this.renderStructStructureEditor(content, element, {}, structSchema, allStructDefinitions);
+        } else if (parentMetadata && parentMetadata.type === 'icon[]') {
+            const style = 'padding:6px 8px;background-color:var(--color-border);color:var(--color-text);border:1px solid var(--color-border-input);border-radius:3px;font-size:12px;box-sizing:border-box;';
+            content.appendChild(this.createIconInput(element, newValue => {
+                this.setSimpleArrayElement(arrayData, index, newValue);
+            }, style));
+        } else if (parentMetadata && typeof parentMetadata.type === 'string'
+            && parentMetadata.type.startsWith('file') && parentMetadata.dir) {
+            // A file[] element is a filename; offer the folder's picker, not a textarea.
+            const style = 'width:100%;padding:6px 8px;background-color:var(--color-border);color:var(--color-text);border:1px solid var(--color-border-input);border-radius:3px;font-size:12px;box-sizing:border-box;';
+            content.appendChild(this.createFileInput(element, parentMetadata.dir, newValue => {
+                this.setSimpleArrayElement(arrayData, index, newValue);
+            }, style));
         } else {
             // Simple value editor
             const input = document.createElement('textarea');
@@ -3758,45 +3940,20 @@ class PluginManager {
             return container;
         }
 
-        // Handle file type - scan directory and show dropdown
+        if (metadata.type === 'icon') {
+            inputWrapper.appendChild(this.createIconInput(value, newValue => {
+                plugin.parameters[key] = newValue;
+            }, inputStyle));
+            container.appendChild(inputWrapper);
+            return container;
+        }
+
+        // File under a declared folder: audio folders open the audio picker,
+        // other folders list their files.
         if (metadata.type && metadata.type === 'file' && metadata.dir) {
-            const select = document.createElement('select');
-            select.style.cssText = inputStyle;
-
-            // Add empty/none option
-            const noneOpt = document.createElement('option');
-            noneOpt.value = '';
-            noneOpt.textContent = this._tt('(none)');
-            noneOpt.selected = !value;
-            select.appendChild(noneOpt);
-
-            // Scan the directory for files
-            try {
-                const currentProject = this.projectController.getCurrentProject();
-                const dirPath = this.path.join(currentProject.path, metadata.dir);
-                if (this.fs.existsSync(dirPath)) {
-                    const imageExts = ['.png', '.jpg', '.jpeg', '.webp', '.bmp'];
-                    const audioExts = RRAssetFiles.AUDIO_EXTENSIONS;
-                    const validExts = metadata.dir.includes('img') ? imageExts : audioExts;
-                    const filtered = RRAssetFiles.listNames(dirPath, validExts);
-                    for (const fileName of filtered) {
-                        const opt = document.createElement('option');
-                        opt.value = fileName;
-                        opt.textContent = fileName;
-                        opt.selected = value === fileName;
-                        select.appendChild(opt);
-                    }
-                }
-            } catch (e) {
-                // Fallback: if directory scan fails, allow text input
-                console.warn('Could not scan directory:', metadata.dir, e);
-            }
-
-            select.addEventListener('change', (e) => {
-                plugin.parameters[key] = e.target.value;
-            });
-
-            inputWrapper.appendChild(select);
+            inputWrapper.appendChild(this.createFileInput(value, metadata.dir, newValue => {
+                plugin.parameters[key] = newValue;
+            }, inputStyle));
             container.appendChild(inputWrapper);
             return container;
         }
