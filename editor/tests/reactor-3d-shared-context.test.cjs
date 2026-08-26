@@ -68,13 +68,14 @@ test('an adopted GL texture is bound by PIXI but never uploaded to or deleted by
 });
 
 test('three renders into targets that hold the same bytes the canvas did, and both sides reset the context', () => {
-    const body = r3d.slice(r3d.indexOf('Reactor3D.Viewport.prototype._target = function'), r3d.indexOf('Reactor3D.Viewport.prototype.passTexture'));
+    const body = r3d.slice(r3d.indexOf('Reactor3D.Viewport.prototype.createTarget = function'), r3d.indexOf('Reactor3D.Viewport.prototype.passTexture'));
     assert.match(body, /colorSpace: THREE\.SRGBColorSpace/);
     assert.match(body, /target\.isXRRenderTarget = true;\s*target\.texture\.internalFormat = "RGBA8";/, 'sRGB encoded in the shader into plain RGBA8, like the canvas, for the texture and the multisample buffer alike');
     assert.match(body, /samples,/);
     assert.match(body, /this\._renderer\.initRenderTarget\(target\)/, 'allocated up front so the GL handle exists to adopt');
-    const render = r3d.slice(r3d.indexOf('Reactor3D.Viewport.prototype.render = function(slot)'), r3d.indexOf('Reactor3D.Viewport.prototype.renderPass'));
-    assert.match(render, /this\._renderer\.resetState\(\);\s*this\._renderer\.setRenderTarget\(target\);\s*this\._renderer\.render\(this\._scene, this\._camera\);\s*this\._renderer\.setRenderTarget\(null\);\s*this\._resetPixi\(\);/);
+    const render = r3d.slice(r3d.indexOf('Reactor3D.Viewport.prototype.renderInto = function'), r3d.indexOf('Reactor3D.Viewport.prototype.createTarget'));
+    assert.match(render, /this\._renderer\.resetState\(\);\s*this\._renderer\.setRenderTarget\(target\);\s*this\._renderer\.render\(scene, camera\);\s*this\._renderer\.setRenderTarget\(null\);\s*this\._resetPixi\(\);/);
+    assert.match(r3d, /Reactor3D\.Viewport\.prototype\.render = function\(slot\) \{[\s\S]*?this\.renderInto\(this\._target\(slot \|\| "below"\), this\._scene, this\._camera\);/);
     const pass = r3d.slice(r3d.indexOf('Reactor3D.Viewport.prototype.passTexture'), r3d.indexOf('Reactor3D.adoptGlTexture = function'));
     assert.match(pass, /rotate: PIXI\.groupD8\.MIRROR_VERTICAL/, 'a framebuffer\'s first row is its bottom');
     assert.match(pass, /alphaMode: "premultiplied-alpha"/);
@@ -92,4 +93,37 @@ test('a shared pass is never copied, uploaded, or destroyed by the spriteset', (
     for (const slot of ['below', 'above', 'lights']) {
         assert.ok(new RegExp(`renderPass\\(state\\.scene,\\s*[^;]*"${slot}"\\)`).test(sprites), `the ${slot} pass names its target`);
     }
+});
+
+test('battlers render into an adopted target on the shared context and release it with the sprite', () => {
+    const paint = r3d.slice(r3d.indexOf('Reactor3D.paintBattlerFrame = function'), r3d.indexOf('Reactor3D.releaseBattlerState = function'));
+    assert.match(paint, /if \(this\.sharedContextAvailable\(\)\) \{\s*const viewport = this\.acquireViewport\(\);\s*if \(viewport && viewport\.isShared\(\) && this\._paintBattlerShared\(viewport, state, sprite\)\) return;/);
+    assert.match(paint, /context\.drawImage\(renderer\.domElement/, 'the copy path survives as the fallback');
+    assert.match(paint, /state\.target = viewport\.createTarget\(state\.size, state\.size\);/);
+    assert.match(paint, /this\.adoptGlTexture\(viewport\.pixi\(\), source, handle\);/);
+    assert.match(paint, /texture\.rotate = PIXI\.groupD8\.MIRROR_VERTICAL;/);
+    assert.match(paint, /viewport\.renderInto\(state\.target, state\.scene, state\.camera\);/);
+    // Both per-frame sites go through it; no other per-frame drawImage remains.
+    const after = r3d.slice(r3d.indexOf('Reactor3D.updateEnemyModelSprite = function'));
+    assert.equal((after.match(/this\.paintBattlerFrame\(state, (sprite|main)\);/g) || []).length, 2);
+    assert.equal((after.match(/context\.drawImage\(renderer\.domElement/g) || []).length, 1, 'only the one-off face paint still copies');
+    assert.match(r3d, /this\.releaseBattlerState\(state\);\s*sprite\._reactorBattler = state = null;/, 'an id change releases the target');
+    assert.match(sprites, /Sprite_Battler\.prototype\.destroy = function\(\) \{[\s\S]*?Reactor3D\.releaseBattlerState\(this\._reactorBattler\);[\s\S]*?Reactor3D\.releaseBattlerState\(this\._mainSprite\._reactorBattler\);/);
+    assert.ok(sprites.lastIndexOf('Sprite_Battler.prototype.destroy = function') > sprites.lastIndexOf('Sprite_Enemy.prototype = '), 'the wrapper follows the prototype replacement');
+});
+
+test('adopting a source PIXI already uploaded frees the texture PIXI made', () => {
+    const deleted = [];
+    const gl = { TEXTURE_2D: 1, UNSIGNED_BYTE: 2, RGBA: 3, RGBA8: 4, deleteTexture(t) { deleted.push(t); } };
+    const renderer = { gl, uid: 3 };
+    const pixiMade = { id: 'pixi' };
+    const source = { _gpuData: { 3: { texture: pixiMade } }, pixelWidth: 96, pixelHeight: 96, update() {} };
+    withGlobals({ PIXI: {} }, () => {
+        const handle = { id: 'three' };
+        Reactor3D.adoptGlTexture(renderer, source, handle);
+        assert.deepEqual(deleted, [pixiMade]);
+        assert.equal(source.alphaMode, 'premultiplied-alpha');
+        Reactor3D.adoptGlTexture(renderer, source, handle);
+        assert.deepEqual(deleted, [pixiMade], 'adopting again never deletes three\'s texture');
+    });
 });

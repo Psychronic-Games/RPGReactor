@@ -126,10 +126,18 @@ at *History* below.
   overlay bitmap so PIXI re-uploads it ~20×/s. That is the Demo's own
   plugin, not the engine; a dirty check (tone + light set unchanged →
   skip) or drawing lights as PIXI sprites would remove it.
-- Next: battler sprites (`updateEnemyModelSprite` / `updateActorModelSprite`)
-  still render per frame on a private `_battlerRenderer` and copy through
-  `drawImage` + `baseTexture.update()`; same treatment, adopt the target
-  into the Bitmap's source and flip the sprite texture.
+- Battlers done the same way (`paintBattlerFrame` → `_paintBattlerShared`):
+  a target per battler state adopted into `bitmap.baseTexture.source`
+  (v8: `baseTexture` is a Texture, its `.source` the TextureSource); the
+  sprite texture is rebuilt by `_refresh` on frame change, so the vertical
+  flip is re-asserted per frame; targets are disposed on id change and in
+  a `Sprite_Battler.prototype.destroy` wrapper (end of reactor_sprites.js,
+  after the Sprite_Enemy prototype replacement). The face paint (one-off)
+  keeps the copy path. Battle profile: `texSubImage2D` 52 → 29 ms per 3 s,
+  the rest is HUD/window bitmaps.
+- Still per frame, by design of the plugins: `PSYCHRONIC_RaveLighting`'s
+  tone overlay (above). Editor previews (`MapEditor3D`, DB3D) keep their
+  own three renderers; they are not composited through PIXI.
 
 ## Runtime 3D Instance Stalls (2026-08-25, owner asked "is the game affected too?")
 

@@ -456,10 +456,36 @@ Reactor3D.Viewport.prototype._disposeTargets = function() {
 Reactor3D.Viewport.prototype._target = function(slot) {
     const existing = this._targets[slot];
     if (existing) return existing;
+    const target = this.createTarget(this._width, this._height);
+    this._targets[slot] = target;
+    return target;
+};
+
+Reactor3D.Viewport.prototype.pixi = function() {
+    return this._pixi || null;
+};
+
+/** The GL texture three renders `target` into, once it has been allocated. */
+Reactor3D.Viewport.prototype.targetHandle = function(target) {
+    const props = this._renderer && this._renderer.properties.get(target.texture);
+    return (props && props.__webglTexture) || null;
+};
+
+/** Draw a scene into a target, each side forgetting what the other did to the context. */
+Reactor3D.Viewport.prototype.renderInto = function(target, scene, camera) {
+    this._renderer.resetState();
+    this._renderer.setRenderTarget(target);
+    this._renderer.render(scene, camera);
+    this._renderer.setRenderTarget(null);
+    this._resetPixi();
+};
+
+/** A render target PIXI can sample as if it were an uploaded canvas. */
+Reactor3D.Viewport.prototype.createTarget = function(width, height) {
     const gl = this._pixi.gl;
     let samples = Math.max(0, Math.floor(Reactor3D.renderTargetSamples || 0));
     try { samples = Math.min(samples, gl.getParameter(gl.MAX_SAMPLES) || 0); } catch (e) { samples = 0; }
-    const target = new THREE.WebGLRenderTarget(this._width, this._height, {
+    const target = new THREE.WebGLRenderTarget(width, height, {
         samples,
         depthBuffer: true,
         stencilBuffer: false,
@@ -477,7 +503,6 @@ Reactor3D.Viewport.prototype._target = function(slot) {
     target.isXRRenderTarget = true;
     target.texture.internalFormat = "RGBA8";
     this._renderer.initRenderTarget(target);
-    this._targets[slot] = target;
     return target;
 };
 
@@ -490,7 +515,7 @@ Reactor3D.Viewport.prototype.passTexture = function(slot) {
     const cached = this._passTextures[slot];
     if (cached && cached.generation === this._generation) return cached.texture;
     const target = this._target(slot);
-    const handle = this._renderer.properties.get(target.texture).__webglTexture;
+    const handle = this.targetHandle(target);
     if (!handle) throw new Error("Reactor3D: render target " + slot + " has no GL texture");
     const source = new PIXI.TextureSource({
         width: this._width,
@@ -518,9 +543,17 @@ Reactor3D.Viewport.prototype.passTexture = function(slot) {
  */
 Reactor3D.adoptGlTexture = function(renderer, source, handle) {
     const gl = renderer.gl;
+    // A source PIXI had already uploaded (a battler's bitmap that drew a
+    // frame or two through the copy path) owns a GL texture of PIXI's
+    // making; nothing else will free it.
+    const previous = source._gpuData[renderer.uid];
+    if (previous && previous.texture && previous.texture !== handle && !previous.__reactorExternal) {
+        try { gl.deleteTexture(previous.texture); } catch (e) { /* already gone */ }
+    }
     const glTexture = PIXI.GlTexture ? new PIXI.GlTexture(handle) : {
         _layerInitMask: 0, texture: handle, samplerType: 0, destroy() {}
     };
+    glTexture.__reactorExternal = true;
     glTexture.target = gl.TEXTURE_2D;
     glTexture.width = source.pixelWidth;
     glTexture.height = source.pixelHeight;
@@ -529,9 +562,70 @@ Reactor3D.adoptGlTexture = function(renderer, source, handle) {
     glTexture.format = gl.RGBA;
     source._gpuData[renderer.uid] = glTexture;
     source.uploadMethodId = "external";
+    // three writes the target premultiplied, as the canvas was.
+    source.alphaMode = "premultiplied-alpha";
     source.update = function() {};
     source.__reactorExternal = true;
     return glTexture;
+};
+
+/**
+ * Draw a battler's scene for this frame into its sprite. On a shared
+ * context the scene renders straight into a target the sprite's texture
+ * has been pointed at, no copy; otherwise it renders on the private battler
+ * renderer and is copied through the bitmap and uploaded, as it always was.
+ */
+Reactor3D.paintBattlerFrame = function(state, sprite) {
+    if (this.sharedContextAvailable()) {
+        const viewport = this.acquireViewport();
+        if (viewport && viewport.isShared() && this._paintBattlerShared(viewport, state, sprite)) return;
+    }
+    const renderer = this._battlerRenderer || (this._battlerRenderer =
+        new THREE.WebGLRenderer({ antialias: true, alpha: true }));
+    renderer.setSize(state.size, state.size, false);
+    renderer.setClearColor(0x000000, 0);
+    renderer.render(state.scene, state.camera);
+    const context = state.bitmap.context;
+    context.clearRect(0, 0, state.size, state.size);
+    context.drawImage(renderer.domElement, 0, 0, state.size, state.size);
+    state.bitmap.baseTexture.update();
+};
+
+Reactor3D._paintBattlerShared = function(viewport, state, sprite) {
+    const base = state.bitmap && state.bitmap.baseTexture;
+    const source = base && base.source;
+    if (!source || typeof PIXI === "undefined" || !PIXI.groupD8) return false;
+    if (!state.target || state.targetSize !== state.size) {
+        if (state.target) {
+            try { state.target.dispose(); } catch (e) { /* already gone */ }
+        }
+        state.target = viewport.createTarget(state.size, state.size);
+        state.targetSize = state.size;
+        state.adoptedSource = null;
+    }
+    if (state.adoptedSource !== source) {
+        const handle = viewport.targetHandle(state.target);
+        if (!handle) return false;
+        this.adoptGlTexture(viewport.pixi(), source, handle);
+        state.adoptedSource = source;
+    }
+    // A framebuffer's first row is its bottom. The sprite's texture is
+    // rebuilt whenever its frame changes, so the flip is re-asserted here.
+    const texture = sprite.texture;
+    if (texture && texture.source === source && texture.rotate !== PIXI.groupD8.MIRROR_VERTICAL) {
+        texture.rotate = PIXI.groupD8.MIRROR_VERTICAL;
+        if (typeof texture.updateUvs === "function") texture.updateUvs();
+    }
+    viewport.renderInto(state.target, state.scene, state.camera);
+    return true;
+};
+
+/** A battler's target is GPU memory; it goes with the state that owned it. */
+Reactor3D.releaseBattlerState = function(state) {
+    if (!state || !state.target) return;
+    try { state.target.dispose(); } catch (e) { /* already gone */ }
+    state.target = null;
+    state.adoptedSource = null;
 };
 
 /** PIXI's caches after three has driven the context. */
@@ -687,14 +781,7 @@ Reactor3D.Viewport.prototype.render = function(slot) {
         this._renderer.render(this._scene, this._camera);
         return;
     }
-    // Each side forgets what the other did to the context: three before it
-    // draws, PIXI once three is done.
-    const target = this._target(slot || "below");
-    this._renderer.resetState();
-    this._renderer.setRenderTarget(target);
-    this._renderer.render(this._scene, this._camera);
-    this._renderer.setRenderTarget(null);
-    this._resetPixi();
+    this.renderInto(this._target(slot || "below"), this._scene, this._camera);
 };
 
 /**
@@ -9351,6 +9438,7 @@ Reactor3D.updateEnemyModelSprite = function(sprite) {
     if (!this.isLoaded()) return;
     if (state && state.enemyId !== enemyId) {
         // Enemy Transform: rebuild for the new enemy.
+        this.releaseBattlerState(state);
         sprite._reactorBattler = state = null;
     }
     if (!state) {
@@ -9424,15 +9512,7 @@ Reactor3D.updateEnemyModelSprite = function(sprite) {
             action: state.action ? { name: state.action.name, frame: state.action.frame } : null
         });
     }
-    const renderer = this._battlerRenderer || (this._battlerRenderer =
-        new THREE.WebGLRenderer({ antialias: true, alpha: true }));
-    renderer.setSize(state.size, state.size, false);
-    renderer.setClearColor(0x000000, 0);
-    renderer.render(state.scene, state.camera);
-    const context = state.bitmap.context;
-    context.clearRect(0, 0, state.size, state.size);
-    context.drawImage(renderer.domElement, 0, 0, state.size, state.size);
-    state.bitmap.baseTexture.update();
+    this.paintBattlerFrame(state, sprite);
 };
 
 /**
@@ -9542,6 +9622,7 @@ Reactor3D.updateActorModelSprite = function(sprite) {
     this.ensureLoaded();
     if (!this.isLoaded()) return;
     if (state && state.actorId !== actorId) {
+        this.releaseBattlerState(state);
         sprite._reactorBattler = state = null;
     }
     if (!state) {
@@ -9617,15 +9698,7 @@ Reactor3D.updateActorModelSprite = function(sprite) {
             action: state.action ? { name: state.action.name, frame: state.action.frame } : null
         });
     }
-    const renderer = this._battlerRenderer || (this._battlerRenderer =
-        new THREE.WebGLRenderer({ antialias: true, alpha: true }));
-    renderer.setSize(state.size, state.size, false);
-    renderer.setClearColor(0x000000, 0);
-    renderer.render(state.scene, state.camera);
-    const context = state.bitmap.context;
-    context.clearRect(0, 0, state.size, state.size);
-    context.drawImage(renderer.domElement, 0, 0, state.size, state.size);
-    state.bitmap.baseTexture.update();
+    this.paintBattlerFrame(state, main);
 };
 
 /** Queue a named action on a 3D actor battler. */

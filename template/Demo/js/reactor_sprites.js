@@ -5071,3 +5071,20 @@ Spriteset_Map.prototype.update = function() {
     }
     _reactorSpritesetMapStaleUpdate.apply(this, arguments);
 };
+
+//-----------------------------------------------------------------------------
+// A 3D battler's render target is GPU memory; it goes with its sprite. Kept at
+// the end of the file: Sprite_Enemy's prototype is replaced above, and a
+// wrapper installed earlier would wrap the wrong object.
+
+(function() {
+    if (typeof Sprite_Battler === "undefined") return;
+    const _destroy = Sprite_Battler.prototype.destroy;
+    Sprite_Battler.prototype.destroy = function() {
+        if (typeof Reactor3D !== "undefined" && Reactor3D.releaseBattlerState) {
+            Reactor3D.releaseBattlerState(this._reactorBattler);
+            if (this._mainSprite) Reactor3D.releaseBattlerState(this._mainSprite._reactorBattler);
+        }
+        return _destroy.apply(this, arguments);
+    };
+})();
