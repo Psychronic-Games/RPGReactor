@@ -4595,6 +4595,10 @@ Reactor3D.MapScene.prototype.addParallaxGround = function(bitmap, tileSize, inde
         transparent: true,
         alphaTest: 0.01,
         side: THREE.DoubleSide,
+        // Flat quads: one pass. three renders a double-sided transparent
+        // material twice a frame otherwise, toggling needsUpdate each time,
+        // which rebuilds its shader parameters every frame.
+        forceSinglePass: true,
         depthWrite: true,
         // A layer the author faded stays faded.
         opacity: opacity === undefined ? 1 : Math.max(0, Math.min(1, opacity / 255))
@@ -4931,6 +4935,10 @@ Reactor3D.billboardMaterial = function(texture, edgeHinged) {
         depthWrite: false,
         alphaTest: 0,
         side: THREE.DoubleSide,
+        // Flat quads: one pass. three renders a double-sided transparent
+        // material twice a frame otherwise, toggling needsUpdate each time,
+        // which rebuilds its shader parameters every frame.
+        forceSinglePass: true,
         // Lying flat under an overhead camera puts a cut-out in the same plane
         // as the ground it stands on, and coplanar surfaces flicker against
         // each other. A depth bias settles it from every angle, where nudging
@@ -5185,7 +5193,11 @@ Reactor3D.MapScene.prototype.build = function(mapData, bitmaps, options) {
                 // Upright panels are seen from either side as the camera turns,
                 // and double-siding also means ground winding cannot silently
                 // hide a whole sheet.
-                side: THREE.DoubleSide
+                side: THREE.DoubleSide,
+                // Flat quads: one pass. three renders a double-sided transparent
+                // material twice a frame otherwise, toggling needsUpdate each time,
+                // which rebuilds its shader parameters every frame.
+                forceSinglePass: true
             });
         // Every material now takes the ambient level, not just the cut-outs.
         material.opacity = group.underlay ? 0.6 : 1;
@@ -5396,7 +5408,11 @@ Reactor3D.MapScene.prototype.lightPool = function(kind) {
         // rather than behind them. It removes the coplanar flicker the pool
         // used to need a polygon offset to avoid, too.
         depthTest: false,
-        side: THREE.DoubleSide
+        side: THREE.DoubleSide,
+        // NOT forceSinglePass, unlike the other flat quads: additive light
+        // drawn back face then front adds itself twice, and every authored
+        // intensity was tuned against that. One pass halves every light.
+        forceSinglePass: false
     });
 
     const mesh = new THREE.Mesh(geometry, material);
@@ -5711,7 +5727,9 @@ Reactor3D.aimCamera = function(camera, focus, settings) {
  */
 Reactor3D.projectToScreen = function(camera, x, y, z) {
     if (!camera || !THREE.Vector3) return null;
-    const vector = new THREE.Vector3(x, y, z);
+    // Once per sprite per frame; a scratch vector, not a fresh one.
+    const vector = this._projectScratch || (this._projectScratch = new THREE.Vector3());
+    vector.set(x, y, z);
     vector.project(camera);
     return {
         x: (vector.x * 0.5 + 0.5) * Graphics.width,
@@ -5756,7 +5774,7 @@ Reactor3D.standScaleAt = function(camera, x, y, z, wide, tall) {
     if (!camera || !THREE.Vector3) return null;
 
     // The same two axes the billboard shader uses, in world space.
-    const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
+    const right = (this._standRightScratch || (this._standRightScratch = new THREE.Vector3())).set(1, 0, 0).applyQuaternion(camera.quaternion);
     const up = this.billboardUp(camera);
 
     // Measured across the thing's *own* size, not across one tile and
@@ -6442,6 +6460,16 @@ Reactor3D.splitModelRef = function(named) {
 
 Reactor3D.modelSpecFromNote = function(note) {
     if (typeof note !== "string" || !note) return null;
+    // Asked for every character every frame; a note parses once.
+    const cache = this._noteSpecCache || (this._noteSpecCache = new Map());
+    if (cache.has(note)) return cache.get(note);
+    const spec = this._parseModelSpecFromNote(note);
+    if (cache.size > 2000) cache.clear();
+    cache.set(note, spec);
+    return spec;
+};
+
+Reactor3D._parseModelSpecFromNote = function(note) {
     const block = note.match(/<\s*r3d\s*>([\s\S]*?)<\s*\/\s*r3d\s*>/i);
     const body = block ? block[1] : "";
     const named = (body.match(/model\s*\(\s*([^)\s]+)\s*\)/i)
@@ -6503,6 +6531,18 @@ Reactor3D.eventModelSpec = function(mapData, eventId, pageIndex) {
 
 /** One raw sidecar entry → the validated spec every consumer shares. */
 Reactor3D.normalizeModelSpec = function(spec) {
+    if (!spec || !spec.name) return null;
+    // Sidecar entries are stable objects asked about every frame per
+    // character; the validated form is kept beside them.
+    const cache = this._normalizedSpecs || (this._normalizedSpecs = new WeakMap());
+    const known = cache.get(spec);
+    if (known && known.forName === spec.name && known.forExt === spec.ext) return known.value;
+    const value = this._normalizeModelSpecNow(spec);
+    cache.set(spec, { forName: spec.name, forExt: spec.ext, value });
+    return value;
+};
+
+Reactor3D._normalizeModelSpecNow = function(spec) {
     if (!spec || !spec.name) return null;
     const ref = this.splitModelRef(spec.name);
     if (!ref) return null;
@@ -6594,6 +6634,17 @@ Reactor3D.setEventModelSpec = function(mapData, eventId, pageIndex, spec) {
 };
 
 Reactor3D.hasEventModels = function(mapData) {
+    // Asked per character sprite per frame; a map's answer never changes
+    // while it is loaded.
+    if (!mapData || typeof mapData !== "object") return this._hasEventModelsNow(mapData);
+    const cache = this._hasEventModelsCache || (this._hasEventModelsCache = new WeakMap());
+    if (cache.has(mapData)) return cache.get(mapData);
+    const value = this._hasEventModelsNow(mapData);
+    cache.set(mapData, value);
+    return value;
+};
+
+Reactor3D._hasEventModelsNow = function(mapData) {
     const events = mapData && mapData.reactor3d && mapData.reactor3d.events;
     if (!events || typeof events !== "object") return false;
     return Object.keys(events).some(id => {
@@ -9308,7 +9359,11 @@ Reactor3D.applyModelAnimation = function(binding, rules, state) {
             continue;
         }
         if (quat || slide || grow) {
-            partActions.push({ order: partActions.length, partLower: rule.part.toLowerCase(), quat, slide, grow });
+            if (rule._partLowerOf !== rule.part) {
+                rule._partLower = String(rule.part).toLowerCase();
+                rule._partLowerOf = rule.part;
+            }
+            partActions.push({ order: partActions.length, partLower: rule._partLower, quat, slide, grow });
         }
     }
     // Per mesh, contributions compose by ANCESTRY, not authoring order: a
@@ -9322,7 +9377,12 @@ Reactor3D.applyModelAnimation = function(binding, rules, state) {
             let depth = -1;
             let pivot = null;
             for (let d = 0; d < entry.parts.length; d++) {
-                if (entry.parts[d].name.toLowerCase().indexOf(action.partLower) === 0) {
+                const part = entry.parts[d];
+                if (part.nameLower === undefined || part.nameLowerOf !== part.name) {
+                    part.nameLower = String(part.name).toLowerCase();
+                    part.nameLowerOf = part.name;
+                }
+                if (part.nameLower.indexOf(action.partLower) === 0) {
                     depth = d;
                     pivot = entry.parts[d].pivot;
                     break;
@@ -10061,6 +10121,10 @@ Reactor3D.MapScene.prototype.syncCharacterBillboards = function(sprites) {
                 depthWrite: true,
                 alphaTest: 0.35,
                 side: THREE.DoubleSide,
+                // Flat quads: one pass. three renders a double-sided transparent
+                // material twice a frame otherwise, toggling needsUpdate each time,
+                // which rebuilds its shader parameters every frame.
+                forceSinglePass: true,
                 fog: false
             });
             // The quad is leaned towards the camera, which tips its upper half

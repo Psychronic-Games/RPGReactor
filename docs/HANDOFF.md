@@ -9,7 +9,7 @@ Last updated 2026-08-25.
   (2026-08-24): in-editor rigging, rig templates and preset motions,
   database 3D bindings, MP3/WAV/FLAC/M4A audio, PixiJS 8.20.0.
 - **0.98.4** is open in `editor/package.json`, both READMEs, and the
-  `[Unreleased - 0.98.4]` sections of both changelogs. One feature (custom user interfaces, phase 1) and nineteen fixes are queued
+  `[Unreleased - 0.98.4]` sections of both changelogs. One feature (custom user interfaces, phase 1) and twenty fixes are queued
   there already (VisuStella Effekseer/heat-distortion draw failures and
   off-centre transition shaders from user reports, Audio Player loop points, the Enemies note resize,
   seek-broken Demo tracks, the web editor's 3D suite, two PIXI 8 compat
@@ -103,6 +103,27 @@ Blob-URL loading fixed it in 0.98.2 — `f3f87cc`, `97e0457`).
 Engineering notes and gotchas from each piece of work, kept because the
 suite and the next session both lean on them. Shipped-cycle narrative starts
 at *History* below.
+
+## Per-Frame Churn Pass (2026-08-25, owner: "destroy-and-recreate each frame")
+
+- Measure with `alloc-profile.mjs` (HeapProfiler sampling, 2 KB interval,
+  walk 8.5 s + battle 8 s). Walking: 250 → 167 MB. Battle: 151 → 110 MB.
+- Findings and fixes are in the editor changelog. Traps: three renders a
+  `DoubleSide` + `transparent` material twice with `needsUpdate` toggled
+  per pass (`libs/three.js` ~78118); `forceSinglePass` is the switch, and
+  it is NOT safe for additive blending (double contribution is baked into
+  the authored intensities: the lights material keeps two passes).
+- What is left, by size per 8.5 s of walking: three `getParameters`
+  16 MB (glTF model materials with `doubleSided` + BLEND still two-pass;
+  single-pass there risks sorting artefacts on hair cards, not taken);
+  three `updateMatrixWorld` 12 MB (internal); the Demo's own
+  `PSYCHRONIC_EventCustomizerMZ.js:2572` `filter()` per event per frame
+  8 MB (owner's plugin); `applyModelAnimation` Vector3/Quaternion/Euler
+  per rule per frame 11 MB (poolable, ~250 lines of vector math);
+  `Sprite._refresh` creating a new `PIXI.Texture` on every frame change
+  (walk cycles, window cursor/pause sign) ~6 MB, a v8 bounds-invalidation
+  workaround worth revisiting with `texture.update()`; `projectToScreen`
+  return objects 4 MB.
 
 ## Potato-PC Pass: Adaptive Resolution, Overlay Discipline, Idle Previews (2026-08-25)
 

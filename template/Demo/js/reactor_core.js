@@ -2115,6 +2115,14 @@ Point.prototype = Object.create(PIXI.Point.prototype);
 Point.prototype.constructor = Point;
 
 Point.prototype.initialize = function(x, y) {
+    // v8's Point is two fields. Going through the ES5-to-ES6 bridge built a
+    // throwaway instance and copied it, for every point the engine makes
+    // every frame; the fields are set here directly.
+    if (PIXI.TextureSource) {
+        this.x = x || 0;
+        this.y = y || 0;
+        return;
+    }
     PIXISuper(PIXI.Point, this, [x, y]);
 };
 
@@ -2137,6 +2145,15 @@ Rectangle.prototype = Object.create(PIXI.Rectangle.prototype);
 Rectangle.prototype.constructor = Rectangle;
 
 Rectangle.prototype.initialize = function(x, y, width, height) {
+    // As for Point: v8's Rectangle is four numbers and a type tag.
+    if (PIXI.TextureSource) {
+        this.type = "rectangle";
+        this.x = Number(x) || 0;
+        this.y = Number(y) || 0;
+        this.width = Number(width) || 0;
+        this.height = Number(height) || 0;
+        return;
+    }
     PIXISuper(PIXI.Rectangle, this, [x, y, width, height]);
 };
 
@@ -3572,11 +3589,16 @@ Tilemap.prototype.updateTransform = function() {
     this._lowerLayer.y = startY * this.tileHeight - oy;
     this._upperLayer.x = startX * this.tileWidth - ox;
     this._upperLayer.y = startY * this.tileHeight - oy;
+    // Both layers hidden means a 3D map is standing in for them: painting
+    // tiles nobody draws, every time the view crosses a tile, cost a mesh
+    // rebuild per layer for nothing. The repaint waits until they show.
+    const hidden = this._lowerLayer.visible === false && this._upperLayer.visible === false;
     if (
+        !hidden && (
         this._needsRepaint ||
         this._lastAnimationFrame !== this.animationFrame ||
         this._lastStartX !== startX ||
-        this._lastStartY !== startY
+        this._lastStartY !== startY)
     ) {
         this._lastAnimationFrame = this.animationFrame;
         this._lastStartX = startX;
@@ -5931,7 +5953,14 @@ Window.prototype._clampedCursorRect = function() {
     const y = Math.max(cr.y, 0);
     const w = Math.max(0, Math.min(cr.width - (x - cr.x), innerW - x));
     const h = Math.max(0, Math.min(cr.height - (y - cr.y), innerH - y));
-    return new Rectangle(x, y, w, h);
+    // Asked every frame by the cursor refresh; one rectangle per window,
+    // reused. Callers read it immediately and never keep it.
+    const rect = this._clampedCursorScratch || (this._clampedCursorScratch = new Rectangle(0, 0, 0, 0));
+    rect.x = x;
+    rect.y = y;
+    rect.width = w;
+    rect.height = h;
+    return rect;
 };
 
 Window.prototype._refreshCursor = function() {
@@ -6109,7 +6138,13 @@ Window.prototype._updateFilterArea = function() {
     // directly, and it is what every plugin replacing this method writes.
     // _localizeFilterArea() below converts it for v8 afterwards, so a plugin's
     // version needs no cooperation to land in the right place.
-    const pos = this._clientArea.worldTransform.apply(new Point(0, 0));
+    // Measured every frame; the origin read and the result written go
+    // through two points the window keeps, not two fresh ones.
+    if (!this._filterOriginScratch) {
+        this._filterOriginScratch = new Point(0, 0);
+        this._filterPosScratch = new Point(0, 0);
+    }
+    const pos = this._clientArea.worldTransform.apply(this._filterOriginScratch, this._filterPosScratch);
     const filterArea = this._clientArea.filterArea;
     filterArea.x = pos.x + this.origin.x;
     filterArea.y = pos.y + this.origin.y;

@@ -258,7 +258,7 @@ test('a sprite is scaled onto the quad a 3D object would occupy', () => {
     const three = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_3d.js'), 'utf8');
     const at = three.indexOf('Reactor3D.standScaleAt = function');
     const body = three.slice(at, three.indexOf('\n};', at));
-    assert.match(body, /new THREE\.Vector3\(1, 0, 0\)\.applyQuaternion\(camera\.quaternion\)/,
+    assert.match(body, /\.set\(1, 0, 0\)\.applyQuaternion\(camera\.quaternion\)/,
         "the camera's right axis, as the shader uses");
     assert.match(body, /const up = this\.billboardUp\(camera\);/,
         'and the same up axis the geometry is stacked on');
