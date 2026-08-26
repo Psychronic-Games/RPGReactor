@@ -1,6 +1,6 @@
 # Custom user interfaces
 
-Written 2026-08-24; **phase 1 built the same day** (0.98.4 cycle), phases 2–5 open. Owner's ask: a **User
+Written 2026-08-24; **phase 1 built the same day** (0.98.4 cycle), capture from game and the stock baselines (1½, 2½) built 2026-08-25, phases 2–5 open. Owner's ask: a **User
 Interfaces** database section where a creator lays out boxes, text, images,
 and buttons by dragging, wires each button to an event, plugin command, game
 scene, or another interface, and calls the result from an event command on
