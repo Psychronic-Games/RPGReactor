@@ -206,7 +206,7 @@ test('a character stands on the ground, not on what was built there', () => {
     // because the lift runs along the billboard's up axis rather than the
     // world's and nothing may work that out for itself.
     assert.match(sprites, /Reactor3D\.pointOf\(camera, gx \+ 0\.5, stand\)/);
-    assert.match(sprites, /projectToScreen\(camera, at\.x, at\.y, at\.z\)/);
+    assert.match(sprites, /projectToScreen\(camera, at\.x, at\.y, at\.z,/);
     // And where the sprite is drawn is where `screenX`/`screenY` say it is,
     // or every plugin that places an overlay on a character draws it somewhere
     // the character is not.

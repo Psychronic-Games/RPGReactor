@@ -107,7 +107,11 @@ at *History* below.
 ## Per-Frame Churn Pass (2026-08-25, owner: "destroy-and-recreate each frame")
 
 - Measure with `alloc-profile.mjs` (HeapProfiler sampling, 2 KB interval,
-  walk 8.5 s + battle 8 s). Walking: 250 → 167 MB. Battle: 151 → 110 MB.
+  walk 8.5 s + battle 8 s). Walking: 250 → 146 MB. Battle: 151 → 110 MB.
+- Standing rule from the owner (2026-08-25): anything that helps weak
+  hardware without losing functionality is the default methodology;
+  per-frame destroy-and-recreate is the pattern to hunt, in the runtime,
+  the editor, and the PSYCHRONIC_* plugins alike.
 - Findings and fixes are in the editor changelog. Traps: three renders a
   `DoubleSide` + `transparent` material twice with `needsUpdate` toggled
   per pass (`libs/three.js` ~78118); `forceSinglePass` is the switch, and
@@ -116,14 +120,15 @@ at *History* below.
 - What is left, by size per 8.5 s of walking: three `getParameters`
   16 MB (glTF model materials with `doubleSided` + BLEND still two-pass;
   single-pass there risks sorting artefacts on hair cards, not taken);
-  three `updateMatrixWorld` 12 MB (internal); the Demo's own
-  `PSYCHRONIC_EventCustomizerMZ.js:2572` `filter()` per event per frame
-  8 MB (owner's plugin); `applyModelAnimation` Vector3/Quaternion/Euler
-  per rule per frame 11 MB (poolable, ~250 lines of vector math);
-  `Sprite._refresh` creating a new `PIXI.Texture` on every frame change
-  (walk cycles, window cursor/pause sign) ~6 MB, a v8 bounds-invalidation
-  workaround worth revisiting with `texture.update()`; `projectToScreen`
-  return objects 4 MB.
+  three `updateMatrixWorld` 12 MB (internal); `applyModelAnimation`
+  iterator `next` 5 MB (for-of over pooled arrays; indexed loops would
+  finish it); `Sprite._refresh` under `Window.updateTransform` 2.8 MB
+  (window contents sprites on the mutate path; what remains is the
+  `update()` emit); `reactor_objects.js:7242` `projectToScreen` 2 MB (the
+  one caller that returns the record to others, so it allocates).
+- `Sprite._refresh` v8 path: textures the sprite makes are `dynamic: true`
+  so PIXI's Sprite subscribes to `update`; the earlier "mutation leaves
+  bounds at the 1x1 stub" note was true only without that flag.
 
 ## Potato-PC Pass: Adaptive Resolution, Overlay Discipline, Idle Previews (2026-08-25)
 

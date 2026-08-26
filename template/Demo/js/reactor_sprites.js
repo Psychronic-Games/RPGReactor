@@ -456,7 +456,8 @@ Sprite_Character.prototype.updateReactor3DPosition = function() {
     // a sign hanging on it has to move with it.
     const stand = Reactor3D.standingPlaceFor(character);
     const at = Reactor3D.pointOf(camera, gx + 0.5, stand);
-    const point = Reactor3D.projectToScreen(camera, at.x, at.y, at.z);
+    const point = Reactor3D.projectToScreen(camera, at.x, at.y, at.z,
+        this._reactor3dPoint || (this._reactor3dPoint = {}));
     if (!point) return false;
 
     this.x = point.x;

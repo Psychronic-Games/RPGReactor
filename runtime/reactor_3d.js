@@ -5725,19 +5725,20 @@ Reactor3D.aimCamera = function(camera, focus, settings) {
  * their screen positions come from projecting through the same camera rather
  * than from the 2D scroll.
  */
-Reactor3D.projectToScreen = function(camera, x, y, z) {
+Reactor3D.projectToScreen = function(camera, x, y, z, out) {
     if (!camera || !THREE.Vector3) return null;
-    // Once per sprite per frame; a scratch vector, not a fresh one.
+    // Once per sprite per frame; a scratch vector, not a fresh one, and a
+    // caller that runs every frame passes the record it wants filled.
     const vector = this._projectScratch || (this._projectScratch = new THREE.Vector3());
     vector.set(x, y, z);
     vector.project(camera);
-    return {
-        x: (vector.x * 0.5 + 0.5) * Graphics.width,
-        y: (-vector.y * 0.5 + 0.5) * Graphics.height,
-        // Behind the camera; the caller hides the sprite rather than drawing it
-        // mirrored in front.
-        visible: vector.z < 1
-    };
+    const point = out || {};
+    point.x = (vector.x * 0.5 + 0.5) * Graphics.width;
+    point.y = (-vector.y * 0.5 + 0.5) * Graphics.height;
+    // Behind the camera; the caller hides the sprite rather than drawing it
+    // mirrored in front.
+    point.visible = vector.z < 1;
+    return point;
 };
 
 /**
@@ -5789,11 +5790,12 @@ Reactor3D.standScaleAt = function(camera, x, y, z, wide, tall) {
     const spanU = wide > 0 ? wide : 1;
     const spanV = tall > 0 ? tall : 1;
 
-    const base = this.projectToScreen(camera, x, y, z);
+    const outs = this._standOuts || (this._standOuts = [{}, {}, {}]);
+    const base = this.projectToScreen(camera, x, y, z, outs[0]);
     const across = this.projectToScreen(camera,
-        x + right.x * spanU, y + right.y * spanU, z + right.z * spanU);
+        x + right.x * spanU, y + right.y * spanU, z + right.z * spanU, outs[1]);
     const above = this.projectToScreen(camera,
-        x + up.x * spanV, y + up.y * spanV, z + up.z * spanV);
+        x + up.x * spanV, y + up.y * spanV, z + up.z * spanV, outs[2]);
     if (!base || !across || !above) return null;
 
     const tileWidth = typeof $gameMap !== "undefined" && $gameMap.tileWidth
@@ -9213,20 +9215,37 @@ Reactor3D.applyModelAnimation = function(binding, rules, state) {
     binding.root.quaternion.identity();
     binding.root.scale.set(1, 1, 1);
     for (const entry of binding.meshes) entry.acc = null;
-    const axisOf = rule => new THREE.Vector3().fromArray(this.AXIS_VECTORS[rule.axis]);
+    // Runs every frame for every animated instance; every vector, matrix
+    // and record it needs comes from a pool that is reset per call, so a
+    // walking character allocates nothing. Nothing handed out here outlives
+    // the call: results are copied into the root and the per-entry matrix.
+    const pool = this._animPool || (this._animPool = {
+        vec: [], quat: [], mat: [], match: [], action: [], actions: [],
+        euler: new THREE.Euler(), scratch: new THREE.Matrix4(),
+        outPos: new THREE.Vector3(), outQuat: new THREE.Quaternion(), outScale: new THREE.Vector3()
+    });
+    let vecAt = 0, quatAt = 0, matAt = 0, matchAt = 0, actionAt = 0;
+    const takeVec = () => pool.vec[vecAt] || (pool.vec[vecAt] = new THREE.Vector3()), nextVec = () => { const v = takeVec(); vecAt++; return v; };
+    const nextQuat = () => { const q = pool.quat[quatAt] || (pool.quat[quatAt] = new THREE.Quaternion()); quatAt++; return q; };
+    const nextMat = () => { const m = pool.mat[matAt] || (pool.mat[matAt] = new THREE.Matrix4()); matAt++; return m; };
+    const euler = pool.euler;
+    const axisOf = rule => nextVec().fromArray(this.AXIS_VECTORS[rule.axis]);
     const pivotTurn = (pivot, quat) => {
-        const p = new THREE.Vector3().fromArray(pivot);
-        const m = new THREE.Matrix4().makeRotationFromQuaternion(quat);
-        m.setPosition(p.clone().sub(p.clone().applyQuaternion(quat)));
+        const p = nextVec().fromArray(pivot);
+        const m = nextMat().makeRotationFromQuaternion(quat);
+        const turned = nextVec().copy(p).applyQuaternion(quat);
+        m.setPosition(p.sub(turned));
         return m;
     };
     const pivotGrow = (pivot, size) => {
-        const p = new THREE.Vector3().fromArray(pivot);
-        const m = new THREE.Matrix4().makeScale(size.x, size.y, size.z);
-        m.setPosition(p.clone().sub(p.clone().multiply(size)));
+        const p = nextVec().fromArray(pivot);
+        const m = nextMat().makeScale(size.x, size.y, size.z);
+        const grown = nextVec().copy(p).multiply(size);
+        m.setPosition(p.sub(grown));
         return m;
     };
-    const partActions = [];
+    const partActions = pool.actions;
+    partActions.length = 0;
     for (let i = 0; i < rules.length; i++) {
         const rule = rules[i];
         if (rule.type === "clip") continue;
@@ -9255,14 +9274,14 @@ Reactor3D.applyModelAnimation = function(binding, rules, state) {
             if (progress === null) continue;
             const sampled = this.sampleModelKeys(rule, progress);
             const toRad = Math.PI / 180;
-            quat = new THREE.Quaternion().setFromEuler(new THREE.Euler(
+            quat = nextQuat().setFromEuler(euler.set(
                 sampled.rotate[0] * toRad, sampled.rotate[1] * toRad, sampled.rotate[2] * toRad, "XYZ"));
             if (sampled.move[0] || sampled.move[1] || sampled.move[2]) {
-                slide = new THREE.Vector3(sampled.move[0], sampled.move[1], sampled.move[2])
+                slide = nextVec().set(sampled.move[0], sampled.move[1], sampled.move[2])
                     .multiplyScalar(1 / (state.scale || 1));
             }
             if (sampled.resize[0] !== 1 || sampled.resize[1] !== 1 || sampled.resize[2] !== 1) {
-                grow = new THREE.Vector3(sampled.resize[0], sampled.resize[1], sampled.resize[2]);
+                grow = nextVec().set(sampled.resize[0], sampled.resize[1], sampled.resize[2]);
             }
         } else if (rule.type === "pose") {
             // The pose blend persists across frames (in binding.angles) so
@@ -9312,16 +9331,16 @@ Reactor3D.applyModelAnimation = function(binding, rules, state) {
             if (!blend) continue;
             const eased = this.poseEase(blend);
             const toRad = Math.PI / 180;
-            quat = new THREE.Quaternion().setFromEuler(new THREE.Euler(
+            quat = nextQuat().setFromEuler(euler.set(
                 rule.rotate[0] * eased * toRad,
                 rule.rotate[1] * eased * toRad,
                 rule.rotate[2] * eased * toRad, "XYZ"));
             if (rule.move[0] || rule.move[1] || rule.move[2]) {
-                slide = new THREE.Vector3(rule.move[0], rule.move[1], rule.move[2])
+                slide = nextVec().set(rule.move[0], rule.move[1], rule.move[2])
                     .multiplyScalar(eased / (state.scale || 1));
             }
             if (rule.resize[0] !== 1 || rule.resize[1] !== 1 || rule.resize[2] !== 1) {
-                grow = new THREE.Vector3(
+                grow = nextVec().set(
                     1 + (rule.resize[0] - 1) * eased,
                     1 + (rule.resize[1] - 1) * eased,
                     1 + (rule.resize[2] - 1) * eased);
@@ -9343,10 +9362,10 @@ Reactor3D.applyModelAnimation = function(binding, rules, state) {
                     ? state.distance * rule.perTile
                     : (gate === false ? 0 : rule.speed / 60);
                 binding.angles[i] = (binding.angles[i] || 0) + gain;
-                quat = new THREE.Quaternion().setFromAxisAngle(axisOf(rule), binding.angles[i] * Math.PI / 180);
+                quat = nextQuat().setFromAxisAngle(axisOf(rule), binding.angles[i] * Math.PI / 180);
             } else if (rule.type === "swing") {
                 const angle = rule.degrees * Math.sin(2 * Math.PI * (t / rule.period + rule.phase));
-                quat = new THREE.Quaternion().setFromAxisAngle(axisOf(rule), angle * Math.PI / 180);
+                quat = nextQuat().setFromAxisAngle(axisOf(rule), angle * Math.PI / 180);
             } else {
                 const offset = rule.amount * Math.sin(2 * Math.PI * (t / rule.period + rule.phase)) / (state.scale || 1);
                 slide = axisOf(rule).multiplyScalar(offset);
@@ -9363,7 +9382,14 @@ Reactor3D.applyModelAnimation = function(binding, rules, state) {
                 rule._partLower = String(rule.part).toLowerCase();
                 rule._partLowerOf = rule.part;
             }
-            partActions.push({ order: partActions.length, partLower: rule._partLower, quat, slide, grow });
+            const action = pool.action[actionAt] || (pool.action[actionAt] = {});
+            actionAt++;
+            action.order = partActions.length;
+            action.partLower = rule._partLower;
+            action.quat = quat;
+            action.slide = slide;
+            action.grow = grow;
+            partActions.push(action);
         }
     }
     // Per mesh, contributions compose by ANCESTRY, not authoring order: a
@@ -9389,23 +9415,38 @@ Reactor3D.applyModelAnimation = function(binding, rules, state) {
                 }
             }
             if (depth < 0) continue;
-            if (!matched) matched = [];
-            matched.push({ action, depth, pivot });
+            if (!matched) {
+                matched = entry.matched || (entry.matched = []);
+                matched.length = 0;
+            }
+            const hit = pool.match[matchAt] || (pool.match[matchAt] = {});
+            matchAt++;
+            hit.action = action;
+            hit.depth = depth;
+            hit.pivot = pivot;
+            matched.push(hit);
         }
         if (!matched) continue;
         matched.sort((a, b) => b.depth - a.depth || a.action.order - b.action.order);
-        entry.acc = new THREE.Matrix4();
-        for (const { action, pivot } of matched) {
+        entry.acc = (entry.accMatrix || (entry.accMatrix = new THREE.Matrix4())).identity();
+        for (let m = 0; m < matched.length; m++) {
+            const action = matched[m].action;
+            const pivot = matched[m].pivot;
             if (action.quat) entry.acc.multiply(pivotTurn(pivot, action.quat));
             if (action.slide) {
-                entry.acc.multiply(new THREE.Matrix4().makeTranslation(
+                entry.acc.multiply(nextMat().makeTranslation(
                     action.slide.x, action.slide.y, action.slide.z));
             }
             if (action.grow) entry.acc.multiply(pivotGrow(pivot, action.grow));
         }
     }
     if (binding.mixer) {
-        const clipRules = rules.filter(rule => rule.type === "clip");
+        // The same rules array asks every frame; filter it once per array.
+        if (binding._clipRulesFor !== rules) {
+            binding._clipRules = rules.filter(rule => rule.type === "clip");
+            binding._clipRulesFor = rules;
+        }
+        const clipRules = binding._clipRules;
         let desired = null;
         let once = false;
         let key = "";
@@ -9461,10 +9502,10 @@ Reactor3D.applyModelAnimation = function(binding, rules, state) {
         binding.clipFrame = state.frame;
         binding.mixer.update(step / 60);
     }
-    const scratch = new THREE.Matrix4();
-    const outPos = new THREE.Vector3();
-    const outQuat = new THREE.Quaternion();
-    const outScale = new THREE.Vector3();
+    const scratch = pool.scratch;
+    const outPos = pool.outPos;
+    const outQuat = pool.outQuat;
+    const outScale = pool.outScale;
     for (const entry of binding.meshes) {
         if (!entry.acc) {
             entry.mesh.position.copy(entry.basePosition);

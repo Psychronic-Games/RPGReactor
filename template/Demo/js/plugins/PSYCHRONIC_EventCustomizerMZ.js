@@ -2568,12 +2568,26 @@
         }
     };
 
+    // $gameMap.isEventRunning() filters the whole event list every call, and
+    // this wrapper asked it twice per event per frame: a map of N events did
+    // N² array builds a frame. One answer per frame serves every event.
+    let eventRunningFrame = -1;
+    let eventRunningCached = false;
+    const isEventRunningThisFrame = () => {
+        const frame = Graphics.frameCount;
+        if (eventRunningFrame !== frame) {
+            eventRunningFrame = frame;
+            eventRunningCached = $gameMap.isEventRunning();
+        }
+        return eventRunningCached;
+    };
+
     const _Game_Event_update = Game_Event.prototype.update;
     Game_Event.prototype.update = function() {
         _Game_Event_update.call(this);
 
         // Don't process detector if event is running
-        if (this.isStarting() || $gameMap.isEventRunning()) {
+        if (this.isStarting() || isEventRunningThisFrame()) {
             return;
         }
 
@@ -2590,7 +2604,7 @@
         }
 
         // Reset triggered flag when not running and not near player anymore
-        if (!this.isStarting() && !$gameMap.isEventRunning() && state && state.hasTriggered) {
+        if (!this.isStarting() && !isEventRunningThisFrame() && state && state.hasTriggered) {
             if (!checkDetectorCollision(this)) {
                 state.hasTriggered = false;
             }

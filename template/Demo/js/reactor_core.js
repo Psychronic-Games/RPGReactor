@@ -3294,21 +3294,36 @@ Sprite.prototype._refresh = function() {
                     this.texture.frame.y !== realY ||
                     this.texture.frame.width !== realW ||
                     this.texture.frame.height !== realH) {
-                    // The replaced texture must be destroyed: the v8 Texture
-                    // constructor subscribes to the (session-lived) source's
-                    // resize event, so every orphaned texture is retained by
-                    // the source forever — walk cycles and blinking pause
-                    // signs leaked thousands of textures per minute. Only
-                    // destroy textures this path created itself (flagged);
-                    // the initial texture may be shared.
-                    const old = this.texture;
-                    this.texture = new PIXI.Texture({
-                        source: baseTexture.source,
-                        frame: new Rectangle(realX, realY, realW, realH)
-                    });
-                    this.texture.__rrSpriteOwned = true;
-                    if (old && old.__rrSpriteOwned && !old.destroyed) {
-                        old.destroy();
+                    if (this.texture.__rrSpriteOwned && this.texture.source === baseTexture.source
+                        && !this.texture.destroyed) {
+                        // The sprite's own texture on the same source: move
+                        // its frame. A dynamic texture tells its sprite on
+                        // update(), which is what refreshes the bounds that a
+                        // silent mutation once left at the 1x1 stub. Walk
+                        // cycles and blinking pause signs used to build a
+                        // texture per frame change here.
+                        const frame = this.texture.frame;
+                        frame.x = realX;
+                        frame.y = realY;
+                        frame.width = realW;
+                        frame.height = realH;
+                        this.texture.update();
+                    } else {
+                        // A new source (or the shared initial texture): the
+                        // sprite gets a texture of its own. The replaced one
+                        // must be destroyed when this path made it: the v8
+                        // Texture constructor subscribes to the session-lived
+                        // source's resize event and would be retained forever.
+                        const old = this.texture;
+                        this.texture = new PIXI.Texture({
+                            source: baseTexture.source,
+                            frame: new Rectangle(realX, realY, realW, realH),
+                            dynamic: true
+                        });
+                        this.texture.__rrSpriteOwned = true;
+                        if (old && old.__rrSpriteOwned && !old.destroyed) {
+                            old.destroy();
+                        }
                     }
                 }
             } else {
