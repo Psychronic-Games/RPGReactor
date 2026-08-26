@@ -354,8 +354,13 @@ test('character billboards keep the canvas texture upright', () => {
     const at = core3d.indexOf('syncCharacterBillboards = function');
     assert.ok(at >= 0);
     const body = core3d.slice(at, core3d.indexOf('_clearCharacterBillboards = function', at));
-    assert.match(body, /new THREE\.CanvasTexture\(canvas\)/);
-    assert.doesNotMatch(body, /texture\.flipY\s*=\s*false/);
+    // Billboards now read a shared sheet texture through offset/repeat; the
+    // sheet keeps three's default flipY, and the frame's v is measured from
+    // the bottom accordingly.
+    assert.match(body, /Reactor3D\.sheetTextureFor\(bitmap\)/);
+    assert.match(body, /view\.offset\.set\(mirrored \? u0 \+ uw : u0, 1 - \(frame\.y \+ frame\.height\) \/ H\);/);
+    assert.doesNotMatch(core3d.slice(core3d.indexOf('Reactor3D.sheetTextureFor = function'), at), /flipY\s*=\s*false/);
+    assert.doesNotMatch(body, /drawImage\(/, 'no per-frame pixel copies for billboards');
 });
 
 test('a gliding model still occupies its trailing tiles', () => {

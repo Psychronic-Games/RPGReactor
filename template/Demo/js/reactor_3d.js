@@ -5252,6 +5252,22 @@ Reactor3D.MapScene.prototype.build = function(mapData, bitmaps, options) {
         this._meshes.push(mesh);
         this._materials.push(material);
     }
+    this.freezeStaticMeshes();
+};
+
+/**
+ * The world never moves once built: tiles, structures, and parallax grounds
+ * stay where the map put them. three recomposes every object's matrix every
+ * frame unless told the object is still; telling it saves that work for all
+ * of them, per frame, for the life of the map. Anything that does move
+ * (characters, billboards, lights) lives in other groups.
+ */
+Reactor3D.MapScene.prototype.freezeStaticMeshes = function() {
+    for (const mesh of this._meshes) {
+        if (!mesh || mesh.matrixAutoUpdate === false) continue;
+        mesh.updateMatrix();
+        mesh.matrixAutoUpdate = false;
+    }
 };
 
 /**
@@ -7366,7 +7382,7 @@ function reactorDecodeGlbImages(json, buffer, binOffset) {
         jobs.push(createImageBitmap(blob, {
             imageOrientation: "none",
             premultiplyAlpha: "none"
-        }).then(bitmap => [index, bitmap], () => null));
+        }).then(bitmap => Reactor3D.capBitmapSize(bitmap)).then(bitmap => [index, bitmap], () => null));
     });
     return Promise.all(jobs).then(pairs => {
         const bitmaps = {};
@@ -7470,6 +7486,51 @@ Reactor3D.parseGlbAsync = function(buffer) {
 // options.beforeBuild: awaited between the worker parse and the main-thread
 // template build, so a caller can hold the build until the thread is free
 // (the editor's thumbnail pass waits for the preview to sit idle).
+/**
+ * The largest side a model texture keeps. Exporters ship 4K sheets for a
+ * character that is 200 pixels tall on screen; on a weak GPU that is video
+ * memory and bandwidth for nothing visible. Decoded bitmaps over the cap
+ * are resampled down in the worker before they are ever uploaded.
+ */
+Reactor3D.maxTextureSize = 2048;
+
+/** The main-thread twin of capBitmapSize for images decoded by the browser: a canvas at the capped size. */
+Reactor3D.capImage = function(image) {
+    const cap = Math.max(64, Math.floor(this.maxTextureSize || 0));
+    const width = image && (image.naturalWidth || image.width);
+    const height = image && (image.naturalHeight || image.height);
+    if (!image || !(width > cap || height > cap) || typeof document === "undefined") return image;
+    const scale = cap / Math.max(width, height);
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(width * scale));
+    canvas.height = Math.max(1, Math.round(height * scale));
+    const context = canvas.getContext("2d");
+    context.imageSmoothingEnabled = true;
+    context.imageSmoothingQuality = "high";
+    context.drawImage(image, 0, 0, canvas.width, canvas.height);
+    return canvas;
+};
+
+Reactor3D.capBitmapSize = function(bitmap) {
+    const cap = Math.max(64, Math.floor(this.maxTextureSize || 0));
+    if (!bitmap || !(bitmap.width > cap || bitmap.height > cap) || typeof createImageBitmap !== "function") {
+        return bitmap;
+    }
+    const scale = cap / Math.max(bitmap.width, bitmap.height);
+    const width = Math.max(1, Math.round(bitmap.width * scale));
+    const height = Math.max(1, Math.round(bitmap.height * scale));
+    return createImageBitmap(bitmap, {
+        resizeWidth: width,
+        resizeHeight: height,
+        resizeQuality: "high",
+        imageOrientation: "none",
+        premultiplyAlpha: "none"
+    }).then(smaller => {
+        if (bitmap.close) bitmap.close();
+        return smaller;
+    }, () => bitmap);
+};
+
 Reactor3D.readModelAsync = function(buffer, ext, baseUrl, texture, options) {
     const kind = String(ext || ".glb").toLowerCase();
     const beforeBuild = options && typeof options.beforeBuild === "function"
@@ -8034,7 +8095,10 @@ Reactor3D._loadGlbTexture = function(json, bin, texInfo, baseUrl, textures, bitm
     if (THREE.SRGBColorSpace) map.colorSpace = THREE.SRGBColorSpace;
     const primary = this._glbImageUrl(json, bin, image, baseUrl);
     if (/^(blob:|data:)/i.test(primary)) {
-        const embedded = new THREE.TextureLoader().load(primary);
+        const embedded = new THREE.TextureLoader().load(primary, loaded => {
+            loaded.image = Reactor3D.capImage(loaded.image);
+            loaded.needsUpdate = true;
+        });
         embedded.flipY = false;
         if (THREE.SRGBColorSpace) embedded.colorSpace = THREE.SRGBColorSpace;
         textures.push(embedded);
@@ -8049,7 +8113,7 @@ Reactor3D._loadGlbTexture = function(json, bin, texInfo, baseUrl, textures, bitm
         if (index >= candidates.length) return;
         const img = new Image();
         img.onload = () => {
-            map.image = img;
+            map.image = Reactor3D.capImage(img);
             map.needsUpdate = true;
         };
         img.onerror = () => tryAt(index + 1);
@@ -10147,11 +10211,11 @@ Reactor3D.MapScene.prototype.syncCharacterBillboards = function(sprites) {
         live.add(key);
         let holder = this._billboards.get(key);
         if (!holder) {
-            const canvas = document.createElement("canvas");
-            const texture = new THREE.CanvasTexture(canvas);
-            // Keep three's default flipY (true): PlaneGeometry's UVs put v=1
-            // at the top, so an unflipped canvas upload renders the character
-            // head-down. (flipY = false is a glTF convention; this is not one.)
+            // The material starts on an empty texture and is pointed at the
+            // character's sheet on the first update; every character on the
+            // same sheet shares that one upload, and a frame change moves
+            // the texture's offset/repeat instead of copying pixels.
+            const texture = new THREE.Texture();
             if (THREE.SRGBColorSpace) texture.colorSpace = THREE.SRGBColorSpace;
             const geometry = new THREE.PlaneGeometry(1, 1);
             geometry.translate(0, 0.5, 0);
@@ -10178,7 +10242,7 @@ Reactor3D.MapScene.prototype.syncCharacterBillboards = function(sprites) {
             Reactor3D.straightenBillboardDepth(material);
             const object = new THREE.Mesh(geometry, material);
             group.add(object);
-            holder = { canvas, texture, geometry, object, stamp: "", above: false };
+            holder = { texture, geometry, object, stamp: "", view: null, above: false };
             this._billboards.set(key, holder);
         }
         this._updateCharacterBillboard(holder, sprite, character);
@@ -10186,11 +10250,57 @@ Reactor3D.MapScene.prototype.syncCharacterBillboards = function(sprites) {
     for (const [key, holder] of this._billboards) {
         if (live.has(key)) continue;
         if (holder.object && holder.object.parent) holder.object.parent.remove(holder.object);
-        if (holder.texture) holder.texture.dispose();
+        // Sheet textures are shared and cached; a billboard's own view of one is disposed with it.
+        if (holder.view) holder.view.dispose();
+        else if (holder.texture && !holder.texture.__reactorSheet) holder.texture.dispose();
         if (holder.geometry) holder.geometry.dispose();
         if (holder.object && holder.object.material) holder.object.material.dispose();
         this._billboards.delete(key);
     }
+};
+
+/**
+ * One three texture per character sheet, uploaded once. Keyed by the
+ * bitmap; a sheet whose pixels are replaced (it finished loading) gets a
+ * fresh texture.
+ */
+Reactor3D.sheetTextureFor = function(bitmap) {
+    const src = bitmap && (bitmap.canvas || bitmap._canvas || bitmap._image);
+    if (!src) return null;
+    const cache = this._sheetTextures || (this._sheetTextures = new WeakMap());
+    let entry = cache.get(bitmap);
+    if (!entry || entry.src !== src) {
+        const texture = new THREE.Texture(src);
+        if (THREE.SRGBColorSpace) texture.colorSpace = THREE.SRGBColorSpace;
+        texture.needsUpdate = true;
+        texture.__reactorSheet = true;
+        entry = { src, texture };
+        cache.set(bitmap, entry);
+    }
+    return entry.texture;
+};
+
+/**
+ * A billboard's frame lives in its texture's offset/repeat, and the sheet
+ * is shared, so each billboard reads the sheet through a clone that
+ * shares the sheet's image. three keys GL uploads by the image's source,
+ * so the clones cost one upload between them; a frame change is two
+ * uniforms.
+ */
+Reactor3D.billboardView = function(holder, sheet) {
+    let view = holder.view;
+    if (!view || view.image !== sheet.image) {
+        if (view) view.dispose();
+        view = sheet.clone();
+        view.__reactorSheet = false;
+        view.needsUpdate = true;
+        holder.view = view;
+        holder.texture = view;
+        const material = holder.object.material;
+        material.map = view;
+        material.needsUpdate = true;
+    }
+    return view;
 };
 
 Reactor3D.MapScene.prototype._updateCharacterBillboard = function(holder, sprite, character) {
@@ -10201,23 +10311,27 @@ Reactor3D.MapScene.prototype._updateCharacterBillboard = function(holder, sprite
     const hidden = character.isTransparent && character.isTransparent();
     holder.object.visible = !!(ready && !hidden);
     if (!ready) return;
+    const mirrored = !!(sprite.scale && sprite.scale.x < 0);
     const stamp = [
         bitmap.url || bitmap._url || "",
         frame.x, frame.y, frame.width, frame.height,
-        sprite.scale && sprite.scale.x < 0 ? 1 : 0
+        mirrored ? 1 : 0
     ].join(":");
     if (holder.stamp !== stamp) {
         holder.stamp = stamp;
-        holder.canvas.width = Math.max(1, Math.round(frame.width));
-        holder.canvas.height = Math.max(1, Math.round(frame.height));
-        const ctx = holder.canvas.getContext("2d");
-        ctx.clearRect(0, 0, holder.canvas.width, holder.canvas.height);
-        const src = bitmap.canvas || bitmap._canvas || bitmap._image;
-        if (src) {
-            ctx.drawImage(src, frame.x, frame.y, frame.width, frame.height,
-                0, 0, holder.canvas.width, holder.canvas.height);
+        const sheet = Reactor3D.sheetTextureFor(bitmap);
+        if (sheet && sheet.image) {
+            const view = Reactor3D.billboardView(holder, sheet);
+            // flipY textures count v from the bottom: the frame's top row is
+            // 1 - (y + h) / H up. A mirrored sprite reads its columns right
+            // to left with a negative repeat.
+            const W = sheet.image.width || 1;
+            const H = sheet.image.height || 1;
+            const u0 = frame.x / W;
+            const uw = frame.width / W;
+            view.repeat.set(mirrored ? -uw : uw, frame.height / H);
+            view.offset.set(mirrored ? u0 + uw : u0, 1 - (frame.y + frame.height) / H);
         }
-        holder.texture.needsUpdate = true;
     }
     const map = typeof $gameMap !== "undefined" ? $gameMap : null;
     const tw = map && map.tileWidth ? map.tileWidth() : 48;
@@ -10348,7 +10462,9 @@ Reactor3D.MapScene.prototype._clearCharacterBillboards = function() {
     if (!this._billboards) return;
     for (const holder of this._billboards.values()) {
         if (holder.object && holder.object.parent) holder.object.parent.remove(holder.object);
-        if (holder.texture) holder.texture.dispose();
+        // Sheet textures are shared and cached; a billboard's own view of one is disposed with it.
+        if (holder.view) holder.view.dispose();
+        else if (holder.texture && !holder.texture.__reactorSheet) holder.texture.dispose();
         if (holder.geometry) holder.geometry.dispose();
         if (holder.object && holder.object.material) holder.object.material.dispose();
     }

@@ -9,7 +9,7 @@ Last updated 2026-08-25.
   (2026-08-24): in-editor rigging, rig templates and preset motions,
   database 3D bindings, MP3/WAV/FLAC/M4A audio, PixiJS 8.20.0.
 - **0.98.4** is open in `editor/package.json`, both READMEs, and the
-  `[Unreleased - 0.98.4]` sections of both changelogs. One feature (custom user interfaces, phase 1) and twenty fixes are queued
+  `[Unreleased - 0.98.4]` sections of both changelogs. One feature (custom user interfaces, phase 1) and twenty-one fixes are queued
   there already (VisuStella Effekseer/heat-distortion draw failures and
   off-centre transition shaders from user reports, Audio Player loop points, the Enemies note resize,
   seek-broken Demo tracks, the web editor's 3D suite, two PIXI 8 compat
@@ -103,6 +103,30 @@ Blob-URL loading fixed it in 0.98.2 — `f3f87cc`, `97e0457`).
 Engineering notes and gotchas from each piece of work, kept because the
 suite and the next session both lean on them. Shipped-cycle narrative starts
 at *History* below.
+
+## GPU-Side Pass: Window Stencil Clip, Shared Billboard Sheets, Frozen World, Texture Cap (2026-08-25)
+
+- Measured with `EXT_disjoint_timer_query_webgl2` (`gpu-probe.mjs`,
+  `window-mask-check.mjs`): on the RTX the 3D passes are ~0.5 ms and PIXI
+  ~0.9 ms per frame, so PIXI's own pass is the bigger GPU cost; MSAA 4/2/0
+  and scale 1/0.75/0.5 are within noise here. Weak-GPU work is therefore
+  about passes and bandwidth, not shader cost: MZ's AlphaFilter window clip
+  (a render-to-texture pass per window per frame) is the standout.
+- `Window.clipWithMask`: stencil rect (`StencilMask`; PIXI 8 has no scissor
+  fast path for Graphics masks, `ScissorMask` is exported but never chosen).
+  Never set `renderable = false` on a mask yourself. Item screen A/B
+  pixel-equivalent; 2.12 → 1.96 ms/frame PIXI GPU here.
+- Map-frame A/B is NOT deterministic on the Demo (a vehicle event drives,
+  lights animate): two frames 1.5 s apart differ by mean 33. Freeze the
+  world or compare a still map before reading a "regression" into a diff.
+- Billboards: `sheetTextureFor` + `billboardView`; three keys GL uploads by
+  image source so the per-billboard clones share one upload. Verified by
+  teleporting next to EV023 (`!$Computer-Console-017`, screen 640,241).
+- Texture cap applies in three places (worker bitmaps, TextureLoader data
+  URIs, Image files); `Reactor3D.maxTextureSize` is the knob.
+- Not done: RaveLighting on the GPU (PIXI erase blend into a render
+  texture), three's two-pass double-sided model materials, and the
+  remaining `updateMatrixWorld` allocation inside three.
 
 ## Per-Frame Churn Pass (2026-08-25, owner: "destroy-and-recreate each frame")
 

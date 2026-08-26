@@ -5324,6 +5324,9 @@ function Window() {
     this.initialize(...arguments);
 }
 
+/** PIXI 8 windows clip their contents with a stencil mask rather than a filter pass. */
+Window.clipWithMask = true;
+
 Window.prototype = Object.create(PIXI.Container.prototype);
 Window.prototype.constructor = Window;
 
@@ -5802,7 +5805,24 @@ Window.prototype.updateTransform = function() {
     } else {
         this._updateFilterArea();
         this._localizeFilterArea();
+        if (this._clipMask) this._updateClipMask();
     }
+};
+
+/** Clip mask over the visible client rect, rebuilt only when that rect changes. */
+Window.prototype._updateClipMask = function() {
+    const rect = this._clipRect;
+    const x = this.origin.x;
+    const y = this.origin.y;
+    const width = Math.max(0, this.innerWidth);
+    const height = Math.max(0, this.innerHeight);
+    if (rect.x === x && rect.y === y && rect.width === width && rect.height === height) return;
+    rect.x = x;
+    rect.y = y;
+    rect.width = width;
+    rect.height = height;
+    this._clipMask.clear();
+    if (width > 0 && height > 0) this._clipMask.rect(x, y, width, height).fill(0xffffff);
 };
 
 /**
@@ -5868,8 +5888,26 @@ Window.prototype._createFrameSprite = function() {
 
 Window.prototype._createClientArea = function() {
     this._clientArea = new PIXI.Container();
-    this._clientArea.filters = [new PIXI.AlphaFilter()];
-    this._clientArea.filterArea = new Rectangle();
+    if (Window.clipWithMask && PIXI.TextureSource) {
+        // PIXI 8: clip with a stencil mask. An AlphaFilter clips too, but a
+        // filter is a render-to-texture pass per window per frame, and a
+        // scene with eight windows paid for eight of them; a stencil rect
+        // costs a handful of triangles. filterArea is still kept up to date
+        // for anything that reads it, and the filter list stays an array.
+        this._clientArea.filters = [];
+        this._clientArea.filterArea = new Rectangle();
+        this._clipMask = new PIXI.Graphics();
+        this._clipMask.rect(0, 0, 1, 1).fill(0xffffff);
+        // PIXI's mask effect manages the mask's renderable/measurable flags;
+        // a mask set non-renderable by hand collects no geometry and clips
+        // everything out.
+        this._clientArea.addChild(this._clipMask);
+        this._clientArea.mask = this._clipMask;
+        this._clipRect = { x: -1, y: -1, width: -1, height: -1 };
+    } else {
+        this._clientArea.filters = [new PIXI.AlphaFilter()];
+        this._clientArea.filterArea = new Rectangle();
+    }
     this._clientArea.move(this._padding, this._padding);
     this.addChild(this._clientArea);
 };
