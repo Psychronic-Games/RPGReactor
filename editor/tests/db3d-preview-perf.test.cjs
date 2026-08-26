@@ -92,3 +92,33 @@ test('the frame loop and thumbnail pass are wired to the gates', () => {
     assert.match(source, /if \(this\._loadingPreview\) \{\s*hint\.textContent = this\._t\('Loading model…'\);/);
     assert.match(source, /const busy = this\._loadingPreview \|\| this\._dragging\s*\|\| \(Number\.isFinite\(this\._lastInputAt\) && now - this\._lastInputAt < 600\)\s*\|\| \(Number\.isFinite\(this\._pointerMovedAt\) && now - this\._pointerMovedAt < 300\)/);
 });
+
+test('idle previews repaint ten times a second; anything active keeps the refresh rate', () => {
+    const MapEditor3D = require(path.join(repoRoot, 'src', 'MapEditor3D.js'));
+    for (const should of [Database3DEditor.shouldRenderPreview, MapEditor3D.shouldRender]) {
+        assert.equal(should({ now: 1000, active: false, lastRenderAt: 0 }), true, 'the first frame always draws');
+        assert.equal(should({ now: 1050, active: false, lastRenderAt: 1000 }), false, 'idle: 50 ms after a draw, skip');
+        assert.equal(should({ now: 1100, active: false, lastRenderAt: 1000 }), true, 'idle: 100 ms after a draw, draw');
+        assert.equal(should({ now: 1001, active: true, lastRenderAt: 1000 }), true, 'active: every frame');
+    }
+    const db3d = source;
+    assert.match(db3d, /const animating = rules\.some\(rule => rule && rule\.trigger !== 'action'\)/, 'ambient rules keep animating models live');
+    assert.match(db3d, /if \(!Database3DEditor\.shouldRenderPreview\(\{ now, active, lastRenderAt: this\._lastRenderAt \}\)\) \{\s*this\._raf = requestAnimationFrame\(tick\);\s*return;/);
+    const picker = fs.readFileSync(path.join(repoRoot, 'src', 'event', 'ModelGraphicPicker.js'), 'utf8');
+    assert.match(picker, /if \(!active && this\._lastRenderAt > 0 && now - this\._lastRenderAt < 100\) \{\s*this\._raf = requestAnimationFrame\(tick\);\s*return;/);
+    const map = fs.readFileSync(path.join(repoRoot, 'src', 'MapEditor3D.js'), 'utf8');
+    assert.match(map, /this\.stepFly\(now\);\s*if \(MapEditor3D\.shouldRender\(\{ now, active: this\.previewActive\(now\), lastRenderAt: this\._lastRenderAt \}\)\) \{/);
+    for (const name of ['_onPointerDown', '_onPointerMove', '_onPointerUp', '_onWheel', '_onFlyDown']) {
+        assert.match(map, new RegExp(`this\\.${name} = event => \\{\\s*this\\._lastActiveAt = performance\\.now\\(\\);`), `${name} marks activity`);
+    }
+    const editor = Object.create(MapEditor3D.prototype);
+    editor.flying = () => false;
+    editor.camera = { position: { x: 0, y: 1, z: 2 }, quaternion: { x: 0, y: 0, z: 0, w: 1 } };
+    editor.hoverCell = null;
+    assert.equal(editor.previewActive(5000), true, 'a first look is a change');
+    assert.equal(editor.previewActive(6500), false, 'a still camera goes idle after a second');
+    editor.camera.position.x = 0.5;
+    assert.equal(editor.previewActive(6600), true, 'moving the camera is activity');
+    editor.flying = () => true;
+    assert.equal(editor.previewActive(9000), true, 'a flight is activity');
+});

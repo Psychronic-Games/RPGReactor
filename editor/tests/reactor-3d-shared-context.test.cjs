@@ -99,7 +99,7 @@ test('battlers render into an adopted target on the shared context and release i
     const paint = r3d.slice(r3d.indexOf('Reactor3D.paintBattlerFrame = function'), r3d.indexOf('Reactor3D.releaseBattlerState = function'));
     assert.match(paint, /if \(this\.sharedContextAvailable\(\)\) \{\s*const viewport = this\.acquireViewport\(\);\s*if \(viewport && viewport\.isShared\(\) && this\._paintBattlerShared\(viewport, state, sprite\)\) return;/);
     assert.match(paint, /context\.drawImage\(renderer\.domElement/, 'the copy path survives as the fallback');
-    assert.match(paint, /state\.target = viewport\.createTarget\(state\.size, state\.size\);/);
+    assert.match(paint, /state\.target = viewport\.createTarget\(pixels, pixels, scale\);/);
     assert.match(paint, /this\.adoptGlTexture\(viewport\.pixi\(\), source, handle\);/);
     assert.match(paint, /texture\.rotate = PIXI\.groupD8\.MIRROR_VERTICAL;/);
     assert.match(paint, /viewport\.renderInto\(state\.target, state\.scene, state\.camera\);/);
@@ -126,4 +126,27 @@ test('adopting a source PIXI already uploaded frees the texture PIXI made', () =
         Reactor3D.adoptGlTexture(renderer, source, handle);
         assert.deepEqual(deleted, [pixiMade], 'adopting again never deletes three\'s texture');
     });
+});
+
+test('the passes render at an adaptive scale: drop fast when the game cannot hold its refresh, climb back slowly', () => {
+    const step = (ema, current, ceiling = 1, floor = 0.5) => Reactor3D.adaptScale({ ema }, current, ceiling, floor);
+    assert.equal(step(16.7, 1), 1, 'holding 60 stays put');
+    assert.equal(step(7, 1), 1, 'a 144 Hz display running 144 stays put');
+    assert.equal(step(25, 1), 0.75, 'a 40 fps average drops a quarter');
+    assert.equal(step(25, 0.75), 0.5);
+    assert.equal(step(25, 0.5), 0.5, 'never below the floor');
+    assert.equal(step(17, 0.5), 0.75, 'comfortable again: one step back up');
+    assert.equal(step(20, 0.5), 0.5, '50 fps is neither slow enough to drop nor calm enough to climb');
+    assert.equal(step(17, 1), 1, 'never above the ceiling');
+    assert.equal(step(17, 0.75, 0.75), 0.75, 'a lower ceiling holds');
+    assert.equal(step(0, 1), 1, 'no data, no change');
+    assert.equal(Reactor3D.samplesForScale(1), 4);
+    assert.equal(Reactor3D.samplesForScale(0.75), 2);
+    assert.equal(Reactor3D.samplesForScale(0.5), 0);
+    const viewport = r3d.slice(r3d.indexOf('Reactor3D.Viewport.prototype._trackFrame'), r3d.indexOf('Reactor3D.Viewport.prototype._disposeTargets'));
+    assert.match(viewport, /if \(next < this\._scale \|\| \(next > this\._scale && stats\.since >= 300\)\)/, 'climbing back needs five calm seconds');
+    assert.match(r3d, /Reactor3D\.Viewport\.prototype\.render = function\(slot\) \{[\s\S]*?this\._trackFrame\(\);\s*this\.renderInto/);
+    assert.match(r3d, /const pixels = Math\.max\(16, Math\.round\(state\.size \* scale\)\);[\s\S]*?state\.target = viewport\.createTarget\(pixels, pixels, scale\);/, 'battler targets follow the scale');
+    const warm = r3d.slice(r3d.indexOf('Reactor3D.warmLoadedTemplates = function'), r3d.indexOf('Templates live outside any scene'));
+    assert.ok(warm.indexOf('if (!pending.length) return;') < warm.indexOf('new THREE.Scene()'), 'the per-frame warm scan allocates nothing on the steady state');
 });

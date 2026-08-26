@@ -1535,6 +1535,15 @@ PsychronicRaveLighting.customLightTypes = {};
     });
 })();
 
+/** Overlay bitmap resolution relative to the screen (0.5 = quarter the bytes per upload). */
+PsychronicRaveLighting.overlayScale = 0.5;
+
+/** Light types whose look changes frame to frame; the rest only move with the map. */
+PsychronicRaveLighting.ANIMATED_LIGHT_TYPES = ['pulsate', 'flicker', 'fire', 'flashlight', 'beam', 'phase'];
+
+/** Game frames between redraws while an animated light is on screen (2 = 30 Hz; nobody sees a torch flicker faster). */
+PsychronicRaveLighting.animatedRedrawInterval = 2;
+
 PsychronicRaveLighting._flickerPatterns = [
     0.25, 0.35, 0.20, 0.40, 0.30, 0.45, 0.15, 0.38, 0.28, 0.33,
 0.22, 0.37, 0.18, 0.42, 0.32, 0.24, 0.17, 0.40, 0.27, 0.35,
@@ -2968,8 +2977,17 @@ PsychronicRaveLighting.parseLightTokens = function(tokens) {
     Spriteset_Map.prototype.createLowerLayer = function() {
         _Spriteset_Map_createLowerLayer.call(this);
 
-        this._toneBitmap = new Bitmap(Graphics.width, Graphics.height);
+        // The overlay is soft gradients and a flat tint: drawn at half
+        // resolution and scaled up it reads the same, and every redraw sends
+        // a quarter of the bytes to the GPU.
+        const overlayScale = PsychronicRaveLighting.overlayScale;
+        this._toneScale = overlayScale;
+        this._toneBitmap = new Bitmap(
+            Math.max(1, Math.ceil(Graphics.width * overlayScale)),
+            Math.max(1, Math.ceil(Graphics.height * overlayScale)));
         this._toneSprite = new Sprite(this._toneBitmap);
+        this._toneSprite.scale.set(1 / overlayScale, 1 / overlayScale);
+        this._toneSignature = null;
         // Plain alpha-blended overlay (no MULTIPLY). The tone bitmap is drawn
         // with its color = tint color, alpha = tint magnitude. Light shapes
         // are punched out with destination-out so they reveal the unscathed
@@ -3085,14 +3103,56 @@ PsychronicRaveLighting.parseLightTokens = function(tokens) {
         this.updateToneOverlay();
     };
 
+    /**
+     * What the overlay would be drawn from this frame, as a string, or null
+     * when a light on screen animates on its own and must be redrawn anyway.
+     * Static lights only move when their sprite moves, so a map at rest costs
+     * no redraw at all, and no upload.
+     */
+    Spriteset_Map.prototype.toneOverlaySignature = function() {
+        if (ConfigManager.lightingEffects === false) return 'off';
+        const parts = [$gameScreen.tone().join(',')];
+        const sprites = this._characterSprites;
+        if (sprites) {
+            for (const spr of sprites) {
+                const ch = spr._character;
+                if (!ch || !ch._lights || ch._lights.length === 0) continue;
+                for (const cfg of ch._lights) {
+                    if (!$gameSystem.isLightOn(cfg._lightId)) continue;
+                    if (PsychronicRaveLighting.ANIMATED_LIGHT_TYPES.indexOf(cfg._lightType) >= 0) return null;
+                    parts.push(cfg._lightType, cfg._lightRadius, cfg._lightOffsetX, cfg._lightOffsetY,
+                        Math.round(spr.x), Math.round(spr.y));
+                }
+            }
+        }
+        return parts.join('|');
+    };
+
     Spriteset_Map.prototype.updateToneOverlay = function() {
+        // Nothing changed since the last redraw: the texture on the GPU is
+        // already right, so neither the canvas nor the upload is touched.
+        const signature = this.toneOverlaySignature();
+        if (signature !== null && signature === this._toneSignature) return;
+        if (signature === null) {
+            // Animated lights: redraw on a cadence the eye cannot tell from
+            // every frame, at half the uploads.
+            const interval = Math.max(1, PsychronicRaveLighting.animatedRedrawInterval | 0);
+            this._toneAnimatedTick = ((this._toneAnimatedTick || 0) + 1) % interval;
+            if (this._toneAnimatedTick !== 0) return;
+        }
+        this._toneSignature = signature;
+
+        // Drawing code below works in screen pixels; the bitmap is smaller.
+        const overlayScale = this._toneScale || 1;
+        this._toneBitmap.context.setTransform(overlayScale, 0, 0, overlayScale, 0, 0);
+
         // Check if lighting effects are explicitly disabled in options
         // If false, clear the overlay completely (no darkness, no lights)
         // If undefined or true, proceed with lighting system
         if (ConfigManager.lightingEffects === false) {
             const ctx = this._toneBitmap.context;
-            const width = this._toneBitmap.width;
-            const height = this._toneBitmap.height;
+            const width = Graphics.width;
+            const height = Graphics.height;
 
             // Clear the entire overlay - this makes it transparent
             // So the map shows through normally without any lighting system
@@ -3109,8 +3169,8 @@ PsychronicRaveLighting.parseLightTokens = function(tokens) {
         // exactly as before, so they reveal the unscathed scene through the tint.
         const tone = $gameScreen.tone();
         const ctx = this._toneBitmap.context;
-        const width = this._toneBitmap.width;
-        const height = this._toneBitmap.height;
+        const width = Graphics.width;
+        const height = Graphics.height;
         ctx.clearRect(0, 0, width, height);
 
         // Lights cutting holes through the overlay only makes sense as a

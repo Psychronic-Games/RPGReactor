@@ -936,12 +936,32 @@ class ModelGraphicPicker {
                         this._view.distance += (this._viewGoal.distance - this._view.distance) * k;
                     }
                     this._applyCamera();
+                    {
+                        // A still preview repaints ten times a second; orbit,
+                        // zoom, and a fresh model keep the full rate.
+                        const now = performance.now();
+                        const goalKey = `${this._viewGoal.yaw}|${this._viewGoal.pitch}|${this._viewGoal.distance}`;
+                        if (goalKey !== this._lastGoalKey) {
+                            this._lastGoalKey = goalKey;
+                            this._lastInputAt = now;
+                        }
+                        const easing = Math.abs(this._viewGoal.yaw - this._view.yaw) > 0.01
+                            || Math.abs(this._viewGoal.pitch - this._view.pitch) > 0.01
+                            || Math.abs(this._viewGoal.distance - this._view.distance) > 0.001;
+                        const active = easing || (Number.isFinite(this._lastInputAt) && now - this._lastInputAt < 1000);
+                        if (!active && this._lastRenderAt > 0 && now - this._lastRenderAt < 100) {
+                            this._raf = requestAnimationFrame(tick);
+                            return;
+                        }
+                        this._lastRenderAt = now;
+                    }
                     this._renderer.render(this._scene, this._camera);
                     this._raf = requestAnimationFrame(tick);
                 };
                 this._raf = requestAnimationFrame(tick);
             }
             if (this._object && this._object.parent) this._object.parent.remove(this._object);
+            this._lastInputAt = performance.now();
             const model = Reactor3D.cloneModelTemplate
                 ? Reactor3D.cloneModelTemplate(template)
                 : template.clone(true);

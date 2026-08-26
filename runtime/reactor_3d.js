@@ -375,8 +375,43 @@ Reactor3D.Viewport.prototype.initialize = function() {
 };
 
 Reactor3D.useSharedContext = true;
-/** MSAA samples for the shared-context targets; the canvas path used the context's own antialiasing. */
+/** MSAA samples for the shared-context targets at full scale; fewer as the scale drops. */
 Reactor3D.renderTargetSamples = 4;
+/**
+ * Resolution of the 3D passes relative to the screen, 1 = native. The
+ * ceiling the adaptive controller works under; set it lower for a fixed
+ * saving (a script call or plugin can), or turn the controller off and
+ * hold a scale with `Reactor3D.adaptiveResolution = false`.
+ */
+Reactor3D.renderScale = 1;
+Reactor3D.adaptiveResolution = true;
+Reactor3D.minRenderScale = 0.5;
+
+/** MSAA for a given scale: a half-size target has nothing left to smooth. */
+Reactor3D.samplesForScale = function(scale) {
+    const base = Math.max(0, Math.floor(this.renderTargetSamples || 0));
+    if (scale >= 1) return base;
+    if (scale >= 0.75) return Math.min(base, 2);
+    return 0;
+};
+
+/**
+ * The adaptive controller, as a pure step: the recent average frame
+ * interval in, the scale to render at next out. The game runs its logic at
+ * 60, so 60 is the bar whatever the display does: a game averaging under
+ * 45 fps drops a quarter step; one holding 57 or better climbs back toward
+ * the ceiling. (Measuring the display's own period from the fastest
+ * interval seen was tried first: a catch-up burst after one long frame
+ * read as a 240 Hz display, and everything looked slow against it.)
+ */
+Reactor3D.TARGET_FRAME_MS = 1000 / 60;
+Reactor3D.adaptScale = function(stats, current, ceiling, floor) {
+    if (!stats || !(stats.ema > 0)) return current;
+    const step = value => Math.round(value * 100) / 100;
+    if (stats.ema > Reactor3D.TARGET_FRAME_MS * 1.35 && current > floor) return Math.max(floor, step(current - 0.25));
+    if (stats.ema < Reactor3D.TARGET_FRAME_MS * 1.05 && current < ceiling) return Math.min(ceiling, step(current + 0.25));
+    return current;
+};
 
 /** Whether the running PIXI can lend three its context and sample the result. */
 Reactor3D.sharedContextAvailable = function() {
@@ -401,6 +436,7 @@ Reactor3D.Viewport.prototype._initializeShared = function() {
     this._passTextures = Object.create(null);
     this._width = 0;
     this._height = 0;
+    this._scale = Math.min(1, Math.max(0.25, Reactor3D.renderScale || 1));
     this._renderer = new THREE.WebGLRenderer({
         canvas: pixi.canvas || Graphics._canvas,
         context: pixi.gl,
@@ -433,6 +469,68 @@ Reactor3D.Viewport.prototype.isShared = function() {
     return !!this._shared;
 };
 
+/** The resolution the passes render at, relative to the screen. */
+Reactor3D.Viewport.prototype.scale = function() {
+    return this._scale || 1;
+};
+
+/** Change the pass resolution; the targets and their sprites rebuild. */
+Reactor3D.Viewport.prototype.setRenderScale = function(scale) {
+    const next = Math.min(1, Math.max(0.25, Number(scale) || 1));
+    if (!this._shared || Math.abs(next - this._scale) < 0.001) return;
+    this._scale = next;
+    this._disposeTargets();
+    this._generation++;
+};
+
+/** Target pixel size for the passes at the current scale. */
+Reactor3D.Viewport.prototype.targetSize = function() {
+    return {
+        width: Math.max(1, Math.round(this._width * this._scale)),
+        height: Math.max(1, Math.round(this._height * this._scale))
+    };
+};
+
+/**
+ * Once per game frame: measure the interval since the last frame and let
+ * the controller move the scale. A manual scale (controller off) is applied
+ * here too, so a script can set `Reactor3D.renderScale` at any time.
+ */
+Reactor3D.Viewport.prototype._trackFrame = function() {
+    const frame = typeof Graphics !== "undefined" && Number.isFinite(Graphics.frameCount)
+        ? Graphics.frameCount : this._renderCount;
+    if (frame === this._trackedFrame) return;
+    this._trackedFrame = frame;
+    if (!Reactor3D.adaptiveResolution) {
+        this.setRenderScale(Reactor3D.renderScale);
+        return;
+    }
+    const now = performance.now();
+    const stats = this._stats || (this._stats = { last: 0, ema: 0, since: 0, cooldown: 0 });
+    if (stats.last) {
+        const interval = now - stats.last;
+        // A frame that took over a second is a stall, not a frame rate.
+        if (interval > 1 && interval < 1000) {
+            stats.ema = stats.ema ? stats.ema * 0.9 + interval * 0.1 : interval;
+            stats.since++;
+        }
+    }
+    stats.last = now;
+    if (stats.cooldown > 0) {
+        stats.cooldown--;
+        return;
+    }
+    if (stats.since < 60) return;
+    const ceiling = Math.min(1, Math.max(Reactor3D.minRenderScale, Reactor3D.renderScale || 1));
+    const next = Reactor3D.adaptScale(stats, this._scale, ceiling, Reactor3D.minRenderScale);
+    // Dropping acts within a second; climbing back wants five calm ones.
+    if (next < this._scale || (next > this._scale && stats.since >= 300)) {
+        this.setRenderScale(next);
+        stats.cooldown = 120;
+        stats.since = 0;
+    }
+};
+
 /** Bumps whenever the pass textures are replaced (a resize); sprites holding an older one rebuild. */
 Reactor3D.Viewport.prototype.generation = function() {
     return this._generation || 0;
@@ -456,7 +554,8 @@ Reactor3D.Viewport.prototype._disposeTargets = function() {
 Reactor3D.Viewport.prototype._target = function(slot) {
     const existing = this._targets[slot];
     if (existing) return existing;
-    const target = this.createTarget(this._width, this._height);
+    const size = this.targetSize();
+    const target = this.createTarget(size.width, size.height, this._scale);
     this._targets[slot] = target;
     return target;
 };
@@ -481,9 +580,9 @@ Reactor3D.Viewport.prototype.renderInto = function(target, scene, camera) {
 };
 
 /** A render target PIXI can sample as if it were an uploaded canvas. */
-Reactor3D.Viewport.prototype.createTarget = function(width, height) {
+Reactor3D.Viewport.prototype.createTarget = function(width, height, scale) {
     const gl = this._pixi.gl;
-    let samples = Math.max(0, Math.floor(Reactor3D.renderTargetSamples || 0));
+    let samples = Reactor3D.samplesForScale(scale === undefined ? 1 : scale);
     try { samples = Math.min(samples, gl.getParameter(gl.MAX_SAMPLES) || 0); } catch (e) { samples = 0; }
     const target = new THREE.WebGLRenderTarget(width, height, {
         samples,
@@ -517,9 +616,10 @@ Reactor3D.Viewport.prototype.passTexture = function(slot) {
     const target = this._target(slot);
     const handle = this.targetHandle(target);
     if (!handle) throw new Error("Reactor3D: render target " + slot + " has no GL texture");
+    const size = this.targetSize();
     const source = new PIXI.TextureSource({
-        width: this._width,
-        height: this._height,
+        width: size.width,
+        height: size.height,
         resolution: 1,
         alphaMode: "premultiplied-alpha",
         autoGarbageCollect: false,
@@ -595,12 +695,14 @@ Reactor3D._paintBattlerShared = function(viewport, state, sprite) {
     const base = state.bitmap && state.bitmap.baseTexture;
     const source = base && base.source;
     if (!source || typeof PIXI === "undefined" || !PIXI.groupD8) return false;
-    if (!state.target || state.targetSize !== state.size) {
+    const scale = viewport.scale();
+    const pixels = Math.max(16, Math.round(state.size * scale));
+    if (!state.target || state.targetPixels !== pixels) {
         if (state.target) {
             try { state.target.dispose(); } catch (e) { /* already gone */ }
         }
-        state.target = viewport.createTarget(state.size, state.size);
-        state.targetSize = state.size;
+        state.target = viewport.createTarget(pixels, pixels, scale);
+        state.targetPixels = pixels;
         state.adoptedSource = null;
     }
     if (state.adoptedSource !== source) {
@@ -781,6 +883,7 @@ Reactor3D.Viewport.prototype.render = function(slot) {
         this._renderer.render(this._scene, this._camera);
         return;
     }
+    this._trackFrame();
     this.renderInto(this._target(slot || "below"), this._scene, this._camera);
 };
 
@@ -6663,16 +6766,17 @@ Reactor3D.warmLoadedTemplates = function() {
     const renderer = viewport && viewport._renderer;
     if (!renderer || typeof THREE === "undefined") return;
     if (!this._warmedTemplates) this._warmedTemplates = new Set();
-    const scene = new THREE.Scene();
+    // Runs every frame; on the steady state it must allocate nothing.
     const pending = [];
-    for (const key of Object.keys(this._glbCache)) {
+    for (const key in this._glbCache) {
         const template = this._glbCache[key].template;
         if (!template || this._warmedTemplates.has(key)) continue;
         this._warmedTemplates.add(key);
         pending.push(template);
-        scene.add(template);
     }
     if (!pending.length) return;
+    const scene = new THREE.Scene();
+    for (const template of pending) scene.add(template);
     try {
         const camera = this.createCamera({ fov: 40 });
         camera.position.set(0, 2, 6);

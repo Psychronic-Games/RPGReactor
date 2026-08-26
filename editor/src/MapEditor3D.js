@@ -1511,6 +1511,7 @@ class MapEditor3D {
         const input = this.inputSurface || this.canvas;
         if (!input) return;
         this._onPointerDown = event => {
+            this._lastActiveAt = performance.now();
             this.pointer = {
                 x: event.clientX,
                 y: event.clientY,
@@ -1551,6 +1552,7 @@ class MapEditor3D {
             }
         };
         this._onPointerMove = event => {
+            this._lastActiveAt = performance.now();
             if (!this.pointer) {
                 // One raycast answers both questions.
                 const tile = this.tileAt(event.clientX, event.clientY);
@@ -1585,6 +1587,7 @@ class MapEditor3D {
             }
         };
         this._onPointerUp = event => {
+            this._lastActiveAt = performance.now();
             const drag = this.pointer;
             this.pointer = null;
             input.releasePointerCapture?.(event.pointerId);
@@ -1625,6 +1628,7 @@ class MapEditor3D {
             }
         };
         this._onWheel = event => {
+            this._lastActiveAt = performance.now();
             event.preventDefault();
             // The 3D canvas lives inside #canvas-container, which carries
             // TilemapManager's own wheel-zoom handler. Without this the same
@@ -1994,6 +1998,7 @@ class MapEditor3D {
         this.flyKeys = new Set();
         const directions = MapEditor3D.FLY_KEYS();
         this._onFlyDown = event => {
+            this._lastActiveAt = performance.now();
             const way = directions[String(event.key).toLowerCase()];
             if (!way || !this.acceptsFlyKey(event)) return;
             event.preventDefault();
@@ -2108,7 +2113,10 @@ class MapEditor3D {
             this.frame = null;
             try {
                 this.stepFly(now);
-                this.render(now);
+                if (MapEditor3D.shouldRender({ now, active: this.previewActive(now), lastRenderAt: this._lastRenderAt })) {
+                    this._lastRenderAt = now;
+                    this.render(now);
+                }
             } catch (error) {
                 this.fail(error);
                 return;
@@ -2121,6 +2129,36 @@ class MapEditor3D {
     stopLoop() {
         if (this.frame !== null) cancelAnimationFrame(this.frame);
         this.frame = null;
+    }
+
+    /**
+     * Whether an idle view should draw this frame: anything moving keeps the
+     * refresh rate, a still view repaints ten times a second. That cadence
+     * also carries the water animation (a frame every 500 ms) and any change
+     * the activity checks do not know about, within a tenth of a second.
+     */
+    static shouldRender({ now, active, lastRenderAt, idleInterval = 100 }) {
+        if (active) return true;
+        if (!(lastRenderAt > 0)) return true;
+        return now - lastRenderAt >= idleInterval;
+    }
+
+    /** The camera moved, the hover moved, a key or pointer was used in the last second, or a flight is on. */
+    previewActive(now) {
+        if (this.flying()) return true;
+        const camera = this.camera;
+        const cameraKey = camera
+            ? `${camera.position.x.toFixed(4)}|${camera.position.y.toFixed(4)}|${camera.position.z.toFixed(4)}|`
+                + `${camera.quaternion.x.toFixed(5)}|${camera.quaternion.y.toFixed(5)}|${camera.quaternion.z.toFixed(5)}|${camera.quaternion.w.toFixed(5)}`
+            : '';
+        const hover = this.hoverCell;
+        const hoverKey = hover ? `${hover.visible}|${hover.position.x}|${hover.position.y}|${hover.position.z}` : '';
+        const key = cameraKey + '#' + hoverKey;
+        if (key !== this._activityKey) {
+            this._activityKey = key;
+            this._lastActiveAt = now;
+        }
+        return Number.isFinite(this._lastActiveAt) && now - this._lastActiveAt < 1000;
     }
 
     render(now) {

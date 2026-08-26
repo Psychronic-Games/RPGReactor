@@ -9,7 +9,7 @@ Last updated 2026-08-25.
   (2026-08-24): in-editor rigging, rig templates and preset motions,
   database 3D bindings, MP3/WAV/FLAC/M4A audio, PixiJS 8.20.0.
 - **0.98.4** is open in `editor/package.json`, both READMEs, and the
-  `[Unreleased - 0.98.4]` sections of both changelogs. One feature (custom user interfaces, phase 1) and eighteen fixes are queued
+  `[Unreleased - 0.98.4]` sections of both changelogs. One feature (custom user interfaces, phase 1) and nineteen fixes are queued
   there already (VisuStella Effekseer/heat-distortion draw failures and
   off-centre transition shaders from user reports, Audio Player loop points, the Enemies note resize,
   seek-broken Demo tracks, the web editor's 3D suite, two PIXI 8 compat
@@ -103,6 +103,33 @@ Blob-URL loading fixed it in 0.98.2 — `f3f87cc`, `97e0457`).
 Engineering notes and gotchas from each piece of work, kept because the
 suite and the next session both lean on them. Shipped-cycle narrative starts
 at *History* below.
+
+## Potato-PC Pass: Adaptive Resolution, Overlay Discipline, Idle Previews (2026-08-25)
+
+- Levers that were already right: unlit `MeshBasicMaterial` for the world,
+  no shadow maps, pixel ratio 1. What was left: fill rate of the passes,
+  a plugin overlay re-uploaded every frame, and editor previews rendering
+  at the display rate while still.
+- Adaptive resolution lives in the viewport (`_trackFrame` → `adaptScale`);
+  the target is a fixed 60 fps frame, NOT the display period (see the
+  changelog note on the 240 Hz mistake). Verified live: a 26 ms per-frame
+  burn takes the scale 1 → 0.75 → 0.5 within seconds; removing it climbs
+  back at ~5 s per step. A forced 0.5 measures mean diff ~26 against
+  native (blur, expected); the controller never gets there on a machine
+  that holds 60.
+- `Reactor3D.renderScale` is a script-level knob; no Options-menu row was
+  added (that would change every game's options menu). A System-1
+  "3D quality" setting is the natural home if the owner wants one.
+- RaveLighting on the Demo map: 20 lights, three animated types, so the
+  signature skip never fires there; the half-res bitmap and 30 Hz cadence
+  are what save it (60 → 30 uploads/s at a quarter of the bytes). A map
+  with only static lights uploads nothing while the map is still.
+- Editor previews idle at 10 fps by cadence, not by dirty flags: any
+  missed trigger shows within 100 ms. Ambient animation rules keep the DB3D
+  preview at full rate by design (it is animating).
+- Not done: draw-call/overdraw work in the map scene (unmeasured on a real
+  weak GPU); a GPU-side RaveLighting (PIXI erase blend into a render
+  texture) would remove its uploads entirely.
 
 ## Shared-Context 3D Rendering (2026-08-25, owner: "refactor the per-frame copy")
 

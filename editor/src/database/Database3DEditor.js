@@ -60,6 +60,18 @@ class Database3DEditor {
         return pathMod.join(cacheRoot, 'rpg-reactor', 'model-thumbnails');
     }
 
+    /**
+     * Whether an idle preview should draw this frame. Anything active keeps
+     * the full refresh rate; a still model repaints ten times a second, which
+     * is enough to show any change the activity checks missed and cheap
+     * enough to leave open on a laptop.
+     */
+    static shouldRenderPreview({ now, active, lastRenderAt, idleInterval = 100 }) {
+        if (active) return true;
+        if (!(lastRenderAt > 0)) return true;
+        return now - lastRenderAt >= idleInterval;
+    }
+
     /** Cache file name keyed by the source file's identity and contents stamp. */
     static thumbnailCacheName(sourcePath, size, mtimeMs) {
         const crypto = require('crypto');
@@ -889,6 +901,28 @@ class Database3DEditor {
                 }
                 Reactor3D.aimCamera(this._camera,
                     this._viewCenter || { x: -0.5, y: 0, z: -0.5 }, this._view);
+                {
+                    const now = performance.now();
+                    const goalKey = `${this._viewGoal.yaw}|${this._viewGoal.pitch}|${this._viewGoal.distance}`;
+                    if (goalKey !== this._lastGoalKey) {
+                        this._lastGoalKey = goalKey;
+                        this._lastInputAt = now;
+                    }
+                    const easing = Math.abs(this._viewGoal.yaw - this._view.yaw) > 0.01
+                        || Math.abs(this._viewGoal.pitch - this._view.pitch) > 0.01
+                        || Math.abs(this._viewGoal.distance - this._view.distance) > 0.001;
+                    const animating = rules.some(rule => rule && rule.trigger !== 'action')
+                        || !!this._sim.action || !!this._sim.walking || !!this._workRule || !!this._previewRule;
+                    const active = animating || easing || this._dragging || this._loadingPreview
+                        || this._selectMode || this._rigMode || this._editingRule >= 0 || this.selectedPartName !== null
+                        || (Number.isFinite(this._lastInputAt) && now - this._lastInputAt < 1000)
+                        || (Number.isFinite(this._pointerMovedAt) && now - this._pointerMovedAt < 300);
+                    if (!Database3DEditor.shouldRenderPreview({ now, active, lastRenderAt: this._lastRenderAt })) {
+                        this._raf = requestAnimationFrame(tick);
+                        return;
+                    }
+                    this._lastRenderAt = now;
+                }
                 this._renderer.render(this._scene, this._camera);
                 this._raf = requestAnimationFrame(tick);
             };
@@ -967,6 +1001,7 @@ class Database3DEditor {
             .map(([name, count]) => ({ name, count }))
             .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
         this._object = object;
+        this._lastInputAt = performance.now();
         let triangles = 0;
         object.traverse(child => {
             if (!child.isMesh && !child.isSkinnedMesh) return;
