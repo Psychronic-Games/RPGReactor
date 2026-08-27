@@ -27,6 +27,7 @@ class TilemapManager {
         this.fs = null;
         this.path = null;
         this._mapLoadGeneration = 0;
+        this.unreadableMapSidecars = new Set();
 
         const host = typeof window !== 'undefined' ? window.RPGReactorHost : null;
         if (host?.fs && host?.path) {
@@ -3183,16 +3184,22 @@ class TilemapManager {
         const file = `Map${String(mapData.id).padStart(3, '0')}${suffix}`;
         const filePath = this.path.join(this.projectPath, 'data', file);
         try {
-            if (!this.fs.existsSync(filePath)) return false;
+            if (!this.fs.existsSync(filePath)) {
+                this.unreadableMapSidecars.delete(filePath);
+                return false;
+            }
             const sidecar = JSON.parse(this.fs.readFileSync(filePath, 'utf8'));
-            if (sidecar && typeof sidecar === 'object') {
+            if (sidecar && typeof sidecar === 'object' && !Array.isArray(sidecar)) {
                 mapData.reactor3d = sidecar;
+                this.unreadableMapSidecars.delete(filePath);
                 return true;
             }
+            throw new Error(`${file} must contain a JSON object`);
         } catch (error) {
             // A corrupt sidecar must not stop the map opening: the map is the
             // work, and its 3D notes are recoverable by repainting.
             console.error(`${file} could not be read.`, error);
+            this.unreadableMapSidecars.add(filePath);
         }
         return false;
     }
@@ -3211,7 +3218,14 @@ class TilemapManager {
      */
     saveMapSidecar() {
         const elevation = this.mapElevation();
-        if (!elevation || !this.currentMap || !this.fs || !this.path) return false;
+        if (!this.currentMap || !this.fs || !this.path) return false;
+        if (!elevation) return true;
+        const filePath = this.path.join(this.projectPath, 'data',
+            `Map${String(this.currentMap.id).padStart(3, '0')}${elevation.SUFFIX}`);
+        if (this.unreadableMapSidecars.has(filePath)) {
+            console.error(`Refusing to overwrite unreadable ${this.path.basename(filePath)}.`);
+            return false;
+        }
         try {
             return elevation.save(this.fs, this.path, this.projectPath, this.currentMap, {
                 writeFileAtomicSync: this._writeFileAtomic
@@ -3276,7 +3290,7 @@ class TilemapManager {
                 ? RRMapJson.stringify(mapDataToSave)
                 : JSON.stringify(mapDataToSave, null, 2);
             this._writeFileAtomic(this.fs, mapPath, json, 'utf8');
-            this.saveMapSidecar();
+            if (!this.saveMapSidecar()) return false;
             this.captureSavedMapState();
             this.bumpVersionId();
 

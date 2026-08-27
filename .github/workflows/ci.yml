@@ -36,3 +36,41 @@ jobs:
         run: |
           git diff --exit-code
           test -z "$(git status --porcelain=v1 --untracked-files=all)"
+
+  gui-smokes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      NWJS_VERSION: 0.107.0
+      NWJS_SHA256: 454c1257445ed834dc126848aea5e72a72dfc2a910fd3eafed376bb4b8fbe9b7
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: editor/package-lock.json
+      - name: Install exact dependencies without lifecycle scripts
+        working-directory: editor
+        run: npm ci --ignore-scripts
+      - name: Download and verify pinned NW.js SDK
+        shell: bash
+        run: |
+          archive="$RUNNER_TEMP/nwjs-sdk.tar.gz"
+          sdk_root="$RUNNER_TEMP/nwjs-sdk"
+          curl --fail --location --retry 3 --output "$archive" \
+            "https://dl.nwjs.io/v${NWJS_VERSION}/nwjs-sdk-v${NWJS_VERSION}-linux-x64.tar.gz"
+          printf '%s  %s\n' "$NWJS_SHA256" "$archive" | sha256sum --check --strict
+          mkdir "$sdk_root"
+          tar --extract --gzip --file "$archive" --directory "$sdk_root" --strip-components=1
+          printf 'NWJS_SDK_ROOT=%s\n' "$sdk_root" >> "$GITHUB_ENV"
+      - name: Run real Web editor persistence smoke
+        working-directory: editor
+        run: xvfb-run --auto-servernum npm run smoke:web
+      - name: Run real NW.js editor save smoke
+        working-directory: editor
+        run: xvfb-run --auto-servernum npm run smoke:nw -- --nw-root="$NWJS_SDK_ROOT"
+      - name: Clean up NW.js SDK
+        if: always()
+        shell: bash
+        run: rm -rf "$RUNNER_TEMP/nwjs-sdk" "$RUNNER_TEMP/nwjs-sdk.tar.gz"

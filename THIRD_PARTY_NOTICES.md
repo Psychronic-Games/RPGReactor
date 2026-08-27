@@ -5,13 +5,21 @@ following credits and license details cover bundled third-party components.
 
 ## PixiJS
 
-- Component: PixiJS 8.14.0
+- Component: PixiJS 8.20.0
 - Bundled file: `runtime/libs/pixi.js`
 - Header: "PixiJS is licensed under the MIT License."
 - Upstream license URL in header: <http://www.opensource.org/licenses/mit-license>
 
-The same bundle identifies `tiny-lru` 11.4.5, copyright 2025 Jason Mulligan,
+The same bundle identifies `tiny-lru` 11.4.7, copyright 2026 Jason Mulligan,
 under BSD-3-Clause.
+
+## Three.js
+
+- Component: Three.js 0.185.1 (r185.1)
+- Bundled file: `runtime/libs/three.js`
+- Copyright: 2010-2026 Three.js Authors
+- License: MIT
+- Upstream: <https://github.com/mrdoob/three.js>
 
 ## Effekseer for WebGL
 

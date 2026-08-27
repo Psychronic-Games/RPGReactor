@@ -106,6 +106,8 @@ The test suite statically rejects hard dependencies on ignored local projects.
 The distribution worker copies the tracked Reactor One project from
 `template/Demo`, preserves its authored content and plugin configuration, and
 refreshes its Reactor runtime files from the staged runtime.
+The current 0.98.4 baseline is **1,666 passing Node tests with no failures**;
+retain older counts only where a document clearly labels a historical release.
 
 When the optional authored-project compatibility corpus is present locally,
 also verify that every project carries the candidate runtime:
@@ -113,6 +115,25 @@ also verify that every project carries the candidate runtime:
 ```bash
 node editor/build-scripts/sync-runtime.cjs --check
 ```
+
+Run the real editor smokes with matching browser and SDK drivers before the
+candidate is cut. CI performs the persistence checks in its `gui-smokes` job;
+the UI-layout smoke remains a local release gate:
+
+```bash
+cd editor
+npm run smoke:web
+npm run smoke:nw -- --nw-root="/path/to/nwjs-sdk-v0.107.0"
+npm run smoke:nw-ui -- --nw-root="/path/to/nwjs-sdk-v0.107.0"
+```
+
+The Web smoke proves Save waits for IndexedDB and survives reload. The NW.js
+smoke launches the actual editor and verifies a native project save without
+initializing map rendering. The read-only NW.js UI smoke opens the tracked Demo
+without saving, verifies the closed contained Inspector drawer at 1280x720, and
+checks the three-column layouts at 1600x900, 1920x1080, and 2560x1440. The first
+two smokes run in CI's `gui-smokes` job; `smoke:nw-ui` is currently a local
+release gate.
 
 For Haven (`template/Project3`), clear the playtest console, enter a battle that
 uses its encounter Pixelate filter, and confirm battle-background capture

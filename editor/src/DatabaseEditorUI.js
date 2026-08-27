@@ -732,6 +732,10 @@ class DatabaseEditorUI {
             if (!viewer.classList.contains('active') || this._activeDatabaseList !== listSession) return;
             const tag = document.activeElement?.tagName;
             if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || document.activeElement?.isContentEditable) return;
+            // Keys pressed inside the detail pane belong to the detail (a
+            // node canvas, a tree row, a button): Delete there must not
+            // clear the record.
+            if (event.target instanceof Node && event.target !== detailEl && detailEl.contains(event.target)) return;
             const key = event.key.toLowerCase();
             if (key === 'arrowup' || key === 'arrowdown') {
                 if (filteredData.length === 0) return;
@@ -1380,7 +1384,7 @@ class DatabaseEditorUI {
             commonEvents: { name: 'New Common Event', trigger: 0, switchId: 1, list: [{code:0,indent:0,parameters:[]}] },
             // Reactor section; the runtime (reactor_ui.js) fills in any field an
             // older record lacks, so this is the whole shape.
-            userInterfaces: { name: 'New Interface', mode: 'scene', background: 'blur', cancel: { type: 'close' }, firstFocus: 0, nodes: [], note: '' }
+            userInterfaces: { name: 'New Interface', mode: 'scene', background: 'blur', visible: { type: 'always' }, cancel: { type: 'close' }, firstFocus: 0, coordinateSpace: 'screen', nodes: [], note: '' }
         };
     }
 

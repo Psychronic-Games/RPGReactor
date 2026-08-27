@@ -2961,63 +2961,195 @@
             opacity: 0;
         }
 
-        /* Database > User Interfaces: node tree | layout canvas | properties. */
+        /* Database > User Interfaces: layers | primary canvas | inspector. */
         .rr-ui-editor [hidden] {
             display: none !important;
         }
         .rr-ui-editor {
             display: flex;
             flex-direction: column;
-            gap: 12px;
-            padding: 16px;
+            gap: 10px;
+            padding: 10px 12px;
             height: 100%;
-            overflow-y: auto;
+            min-height: 0;
+            overflow: hidden;
             box-sizing: border-box;
         }
-        /* Sections keep their height; the editor column scrolls instead of
-         * squeezing a section until its content spills under the next. */
-        .rr-ui-editor > * {
-            flex-shrink: 0;
+        .rr-ui-editor > .rr-ui-workspace {
+            flex: 1 1 auto;
+            min-height: 0;
         }
-        /* The settings line wraps column by column instead of squeezing:
-         * five 150px+ columns where they fit, fewer per line where not. */
-        .rr-ui-general .db-form > .db-row-cols {
-            grid-auto-flow: row;
-            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-            align-items: start;
+        .rr-ui-toolbar {
+            position: relative;
+            z-index: 10;
+            flex: 0 0 auto;
+            display: grid;
+            grid-template-columns: minmax(170px, 1fr) minmax(190px, .9fr) minmax(220px, 1fr) auto auto;
+            align-items: center;
+            gap: 8px;
+            min-width: 0;
+            padding: 7px 8px;
+            box-sizing: border-box;
+            border: 1px solid var(--color-accent-border);
+            border-radius: 4px;
+            background: var(--color-bg-panel);
+            overflow: visible;
         }
-        .rr-ui-general-buttons > button {
-            width: 100%;
-            height: 30px;
+        .rr-ui-toolbar-field {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            min-width: 0;
+            color: var(--color-text-muted);
+            font-size: 11px;
+            font-weight: 600;
             white-space: nowrap;
+        }
+        .rr-ui-toolbar-field > span { flex: 0 0 auto; }
+        .rr-ui-toolbar-field > input,
+        .rr-ui-toolbar-field > select,
+        .rr-ui-toolbar-field > .rr-ui-replacement-controls {
+            flex: 1 1 auto;
+            min-width: 0;
+        }
+        .rr-ui-toolbar input,
+        .rr-ui-toolbar select,
+        .rr-ui-toolbar button {
+            height: 30px;
+            min-height: 32px;
+            box-sizing: border-box;
+        }
+        .rr-ui-toolbar > button {
+            padding-inline: 12px;
+            white-space: nowrap;
+        }
+        .rr-ui-role-combobox {
+            position: relative;
+            min-width: 0;
+        }
+        .rr-ui-role-trigger {
+            width: 100%;
+            min-height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            padding: 4px 8px;
+            border: 1px solid var(--color-border-input);
+            border-radius: 3px;
+            color: var(--color-text-strong);
+            background: var(--color-bg-panel);
+            font-size: 12px;
+            cursor: pointer;
+        }
+        .rr-ui-role-trigger:focus-visible {
+            outline: 1px solid var(--color-accent-bright);
+            outline-offset: 1px;
+        }
+        .rr-ui-role-value {
             overflow: hidden;
+            white-space: nowrap;
             text-overflow: ellipsis;
         }
-        .rr-ui-general .rr-ui-cancel-action {
-            width: 100%;
+        .rr-ui-role-popup {
+            position: absolute;
+            z-index: 30;
+            top: calc(100% + 3px);
+            left: 0;
+            width: max(220px, 100%);
+            padding: 6px;
+            border: 1px solid var(--color-accent-border);
+            border-radius: 4px;
+            background: var(--color-bg-deep);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, .45);
         }
-        /* The workspace row fits the window; each panel scrolls inside it. */
+        .rr-ui-role-search {
+            width: 100%;
+            min-height: 32px;
+            box-sizing: border-box;
+            margin-bottom: 5px;
+        }
+        .rr-ui-role-list {
+            max-height: 230px;
+            overflow-y: auto;
+        }
+        .rr-ui-role-option {
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            min-height: 30px;
+            padding: 3px 6px;
+            border-radius: 3px;
+            color: var(--color-text);
+            cursor: pointer;
+        }
+        .rr-ui-role-option:hover,
+        .rr-ui-role-option.is-active {
+            background: var(--color-bg-surface);
+        }
+        .rr-ui-role-option[aria-selected="true"] {
+            border-color: var(--color-accent);
+            background: var(--color-accent-tint-20);
+        }
+        .rr-ui-role-option[aria-disabled="true"] {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .rr-ui-role-check { width: 14px; color: var(--color-accent-bright); font-weight: 700; }
+        .rr-ui-role-note { padding: 6px 4px 1px; color: var(--color-text-muted); font-size: 10px; line-height: 1.3; }
+        /* Every responsive form keeps a bounded workspace. At intermediate
+         * widths the inspector overlays that workspace instead of adding a
+         * second row to the document. */
         .rr-ui-workspace {
+            --rr-ui-fit: both;
+            position: relative;
             display: grid;
-            grid-template-columns: minmax(180px, 220px) minmax(0, 1fr) minmax(320px, 400px);
-            grid-auto-rows: clamp(420px, calc(100vh - 360px), 960px);
+            grid-template-columns: minmax(190px, 220px) minmax(0, 1fr) minmax(320px, 370px);
+            grid-template-rows: minmax(0, 1fr);
             gap: 12px;
             align-items: stretch;
+            min-height: 0;
+            overflow: hidden;
         }
-        @container database-detail (max-width: 1300px) {
-            .rr-ui-workspace {
+        @container database-detail (max-width: 1050px) {
+            .rr-ui-toolbar {
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+                grid-template-rows: 28px 28px;
+                gap: 4px 8px;
+                padding: 4px 7px;
+            }
+            .rr-ui-toolbar input,
+            .rr-ui-toolbar select,
+            .rr-ui-toolbar button,
+            .rr-ui-role-trigger { height: 28px; min-height: 28px; }
+            .rr-ui-interface-settings { grid-column: 1 / 3; }
+            .rr-ui-editor > .rr-ui-workspace {
+                grid-template-columns: minmax(190px, 230px) minmax(0, 1fr);
+                grid-template-rows: minmax(0, 1fr);
+            }
+            .rr-ui-workspace > .database-section.rr-ui-props-panel {
+                display: none;
+                position: absolute;
+                z-index: 8;
+                top: 0;
+                right: 0;
+                bottom: 0;
+                width: min(390px, calc(100% - 42px));
+                box-sizing: border-box;
+                box-shadow: -10px 0 28px rgba(0, 0, 0, .45);
+            }
+            .rr-ui-workspace > .database-section.rr-ui-props-panel.is-open {
+                display: flex;
+            }
+            .rr-ui-inspector-close { display: block; }
+        }
+        @container database-detail (max-width: 620px) {
+            .rr-ui-editor > .rr-ui-workspace {
                 grid-template-columns: minmax(0, 1fr);
-                grid-auto-rows: auto;
+                grid-template-rows: repeat(2, minmax(0, 1fr));
             }
-            .rr-ui-canvas-panel {
-                order: -1;
-            }
-            .rr-ui-tree {
-                max-height: 220px;
-            }
-            .rr-ui-workspace > .database-section > .database-section-content.rr-ui-props {
-                max-height: 480px;
-            }
+            .rr-ui-canvas-panel { order: -1; }
+            .rr-ui-props-panel { width: calc(100% - 24px); }
         }
         .rr-ui-workspace > .database-section {
             display: flex;
@@ -3034,16 +3166,39 @@
             gap: 8px;
             min-height: 0;
         }
-        .rr-ui-add-buttons,
+        .rr-ui-inspector-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+        .rr-ui-inspector-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .rr-ui-inspector-close {
+            display: none;
+            flex: 0 0 28px;
+            width: 28px;
+            height: 28px;
+            padding: 0;
+            border: 0;
+            color: var(--color-text-muted);
+            background: transparent;
+            font-size: 19px;
+            cursor: pointer;
+        }
         .rr-ui-tree-buttons {
             display: grid;
             grid-template-columns: repeat(2, minmax(0, 1fr));
             gap: 6px;
         }
-        .rr-ui-add-buttons > button,
         .rr-ui-tree-buttons > button {
             width: 100%;
+            min-height: 30px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
         }
+        .rr-ui-add-menu { position: relative; flex: 0 0 auto; }
+        .rr-ui-add-menu > summary { display: block; min-height: 30px; box-sizing: border-box; text-align: center; list-style: none; cursor: pointer; }
+        .rr-ui-add-menu > summary::-webkit-details-marker { display: none; }
+        .rr-ui-add-menu-items { position: absolute; z-index: 20; top: calc(100% + 3px); left: 0; right: 0; display: grid; grid-template-columns: repeat(2, 1fr); gap: 3px; padding: 5px; border: 1px solid var(--color-accent-border); background: var(--color-bg-deep); box-shadow: 0 8px 20px rgba(0,0,0,.4); }
+        .rr-ui-add-menu-items > button { min-height: 30px; text-align: left; }
+        .rr-ui-layer-endpoint { color: var(--color-text-muted); font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+        .rr-ui-layer-front { text-align: right; }
         .rr-ui-tree {
             flex: 1 1 auto;
             min-height: 120px;
@@ -3062,8 +3217,9 @@
         .rr-ui-tree-row {
             display: flex;
             align-items: center;
-            gap: 8px;
-            padding: 5px 8px;
+            gap: 6px;
+            min-height: 30px;
+            padding: 3px 6px;
             cursor: pointer;
             font-size: 13px;
             color: var(--color-text-strong);
@@ -3077,6 +3233,14 @@
             background-color: var(--color-accent-deep);
             color: var(--color-text-strong);
         }
+        .rr-ui-tree-ordinal { flex: 0 0 20px; color: var(--color-text-muted); font-family: var(--font-mono); font-size: 10px; text-align: right; }
+        .rr-ui-tree-handle { flex: 0 0 auto; color: var(--color-text-muted); cursor: grab; }
+        .rr-ui-tree-lock { color: var(--color-text-muted); }
+        .rr-ui-reference-layer { cursor: default; opacity: .8; border-bottom: 1px solid var(--color-accent-border); }
+        .rr-ui-tree-row.is-dragging { opacity: .35; }
+        .rr-ui-tree-row.is-drop-before { box-shadow: inset 0 2px 0 var(--color-accent-bright); }
+        .rr-ui-tree-row.is-drop-after { box-shadow: inset 0 -2px 0 var(--color-accent-bright); }
+        .rr-ui-tree-row.is-drop-inside { outline: 1px solid var(--color-accent-bright); outline-offset: -2px; }
         .rr-ui-tree-type {
             flex: 0 0 auto;
             font-size: 10px;
@@ -3106,6 +3270,8 @@
         }
         .rr-ui-canvas-tools {
             display: flex;
+            flex-wrap: wrap;
+            justify-content: flex-end;
             align-items: center;
             gap: 10px;
             font-size: 12px;
@@ -3118,10 +3284,20 @@
             gap: 4px;
             cursor: pointer;
         }
+        .rr-ui-canvas-tools button,
+        .rr-ui-capture-row button,
+        .rr-ui-capture-head button,
+        .rr-ui-capture-row-item button { min-height: 28px; }
         .rr-ui-canvas-host {
             align-items: center;
             justify-content: center;
-            overflow: auto;
+            overflow: hidden;
+        }
+        .rr-ui-tree-row:focus {
+            outline: none;
+        }
+        .rr-ui-tree-row:focus-visible {
+            box-shadow: inset 0 0 0 1px var(--color-accent-bright);
         }
         .rr-ui-capture-row {
             display: flex;
@@ -3142,8 +3318,22 @@
             width: 70px;
             margin: 0;
         }
+        .rr-ui-reference-tools { white-space: nowrap; }
+        .rr-ui-game-reference { flex: 0 0 auto; border-top: 1px solid var(--color-accent-border); padding-top: 4px; }
+        .rr-ui-game-reference > summary {
+            display: flex;
+            align-items: center;
+            width: fit-content;
+            min-height: 30px;
+            box-sizing: border-box;
+            color: var(--color-text-muted);
+            font-size: 11px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .rr-ui-game-reference[open] > summary { margin-bottom: 7px; }
         .rr-ui-capture-list {
-            max-height: 180px;
+            max-height: 210px;
             overflow-y: auto;
             background-color: var(--color-bg-panel);
             border: 1px solid var(--color-accent-border);
@@ -3151,6 +3341,24 @@
         }
         .rr-ui-capture-list:empty {
             display: none;
+        }
+        .rr-ui-tree-hint {
+            color: var(--color-text-muted);
+            font-size: 11px;
+            line-height: 1.35;
+            padding: 0 2px;
+        }
+        .rr-ui-capture-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 6px;
+        }
+        .rr-ui-capture-head > button {
+            padding: 1px 6px;
+            font-size: 10px;
+            text-transform: none;
+            letter-spacing: 0;
         }
         .rr-ui-capture-head {
             padding: 6px 8px 2px;

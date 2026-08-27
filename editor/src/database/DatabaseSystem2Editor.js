@@ -54,6 +54,7 @@ class DatabaseSystem2Editor {
         // Col 1: Menu Commands, Item Categories, Magic Skills
         const col1 = document.createElement('div');
         col1.style.cssText = 'display: flex; flex-direction: column; gap: 16px;';
+        col1.appendChild(this.createCustomInterfacesSection(system));
         col1.appendChild(this.createMenuCommandsSection(system));
         col1.appendChild(this.createItemCategoriesSection(system));
         col1.appendChild(this.createMagicSkillsSection(system));
@@ -96,6 +97,43 @@ class DatabaseSystem2Editor {
         });
         html += '</div>';
         return this.createSection(tt('Menu Commands'), html);
+    }
+
+    createCustomInterfacesSection(system) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
+        const rows = [
+            ['reactorMenuInterfaceId', 'Main Menu', 'menu'],
+            ['reactorStatusInterfaceId', 'Status', 'status'],
+            ['reactorGameEndInterfaceId', 'Game End', 'gameEnd'],
+            ['reactorOptionsInterfaceId', 'Options', 'options'],
+            ['reactorSaveInterfaceId', 'Save', 'save'],
+            ['reactorLoadInterfaceId', 'Load', 'load']
+        ];
+        const html = rows.map(([field, label, role]) => `<div style="margin-bottom: 8px;">
+            <label class="database-field-label">${tt(label)}</label>
+            <select class="database-field-value sys2-interface" data-system-field="${field}" style="width: 100%;">${this.userInterfaceOptions(system[field], role)}</select>
+        </div>`).join('') + `<div class="sys2-magic-skills-hint">${tt('Only matching scene roles are routed; stock remains the safe fallback.')}</div>`;
+        return this.createSection(tt('Custom Interfaces'), html);
+    }
+
+    userInterfaceOptions(selectedId, role) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
+        const selected = Math.max(0, Math.floor(Number(selectedId) || 0));
+        let html = `<option value="0"${selected === 0 ? ' selected' : ''}>${tt('Stock (default)')}</option>`;
+        const records = this.databaseManager.getUserInterfaces ? this.databaseManager.getUserInterfaces() : [];
+        for (const entry of records || []) {
+            const id = Math.floor(Number(entry && entry.id) || 0);
+            const roles = Array.isArray(entry && entry.roles) ? entry.roles : entry && entry.stock ? [entry.stock] : [];
+            if (!entry || !(id > 0) || entry.mode === 'overlay' || (role && !roles.includes(role))) continue;
+            html += `<option value="${id}"${id === selected ? ' selected' : ''}>${String(id).padStart(4, '0')}: ${rrEscapeHtml(entry.name || tt('(Unnamed)'))}</option>`;
+        }
+        if (selected > 0 && !(records || []).some(entry => {
+            const roles = Array.isArray(entry && entry.roles) ? entry.roles : entry && entry.stock ? [entry.stock] : [];
+            return entry && Number(entry.id) === selected && entry.mode !== 'overlay' && (!role || roles.includes(role));
+        })) {
+            html += `<option value="${selected}" selected>${tt('(Missing)')} / ${tt('(incompatible)')} #${selected}</option>`;
+        }
+        return html;
     }
 
     createItemCategoriesSection(system) {
@@ -287,6 +325,16 @@ class DatabaseSystem2Editor {
     }
 
     wireEventListeners(container, system) {
+        container.querySelectorAll('.sys2-interface').forEach(select => {
+            select.addEventListener('change', event => {
+                const field = event.target.dataset.systemField;
+                if (!['reactorMenuInterfaceId', 'reactorStatusInterfaceId', 'reactorGameEndInterfaceId',
+                    'reactorOptionsInterfaceId', 'reactorSaveInterfaceId', 'reactorLoadInterfaceId'].includes(field)) return;
+                system[field] = Math.max(0, Math.floor(Number(event.target.value) || 0));
+                this.databaseManager.mutationGeneration = (this.databaseManager.mutationGeneration || 0) + 1;
+            });
+        });
+
         // Menu Commands checkboxes
         container.querySelectorAll('.sys2-menu-cmd').forEach(cb => {
             cb.addEventListener('change', (e) => {
@@ -493,3 +541,5 @@ class DatabaseSystem2Editor {
         document.body.appendChild(overlay);
     }
 }
+
+if (typeof module !== 'undefined' && module.exports) module.exports = DatabaseSystem2Editor;

@@ -49,6 +49,31 @@ test('clearing the last binding removes the sidecar file entirely', () => {
     fs.rmSync(project, { recursive: true, force: true });
 });
 
+test('binding writes are atomic and never replace malformed Database.r3d.json', () => {
+    const project = tempProject();
+    const file = path.join(project, 'data', 'Database.r3d.json');
+    const writeAtomic = require(path.join(repoRoot, 'editor', 'src', 'utils', 'FsAtomic.js'));
+    const previousAtomic = global.RRWriteFileAtomicSync;
+    let atomicWrites = 0;
+    global.RRWriteFileAtomicSync = (...args) => {
+        atomicWrites++;
+        return writeAtomic(...args);
+    };
+    try {
+        Bindings.set(project, 'actors', 1, { name: 'Hero' });
+        assert.equal(atomicWrites, 1);
+        fs.writeFileSync(file, '{ malformed');
+        assert.throws(() => Bindings.set(project, 'actors', 2, { name: 'Other' }), /JSON/);
+        assert.throws(() => Bindings.set(project, 'actors', 1, null), /JSON/);
+        assert.equal(fs.readFileSync(file, 'utf8'), '{ malformed');
+        assert.equal(atomicWrites, 1);
+    } finally {
+        if (previousAtomic === undefined) delete global.RRWriteFileAtomicSync;
+        else global.RRWriteFileAtomicSync = previousAtomic;
+        fs.rmSync(project, { recursive: true, force: true });
+    }
+});
+
 test('the runtime reads editor-written bindings as normalized specs', () => {
     const project = tempProject();
     Bindings.set(project, 'actors', 3, { name: 'Carol', ext: '.glb', size: 2.5, yaw: 90 });

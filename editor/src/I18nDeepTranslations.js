@@ -774,6 +774,22 @@ globalThis.RR_DEEP_TEXT_TRANSLATIONS = {
     "Captured windows": "キャプチャしたウィンドウ",
     "Capturing…": "キャプチャ中…",
     "No capture yet": "まだキャプチャがありません",
+    "Save this window's contents as a picture and add it as an Image node": "このウィンドウの内容をピクチャとして保存し、画像ノードとして追加",
+    "Gauge": "ゲージ",
+    "Party slot": "パーティ枠",
+    "Variable ID": "変数ID",
+    "Max value": "最大値",
+    "Show label": "ラベルを表示",
+    "Show value": "数値を表示",
+    "Add All": "すべて追加",
+    "Title background 1": "タイトル背景1",
+    "Title background 2": "タイトル背景2",
+    "nodes added": "個のノードを追加しました",
+    "Add this as nodes": "これをノードとして追加",
+    "Add every captured window and its contents as nodes": "キャプチャしたすべてのウィンドウと内容をノードとして追加",
+    "The list is the draw order: the top draws first, the bottom draws on top. ▲ sends a node back, ▼ brings it forward.": "リストは描画順です。上が先に、下が上に描かれます。▲で背面へ、▼で前面へ。",
+    "Unsaved changes are not in the capture.": "未保存の変更はキャプチャに含まれません。",
+    "Remove the reference layer": "参照レイヤーを削除",
     "Plugins active in the capture:": "キャプチャ時に有効なプラグイン:",
     "Start a Box node from this window": "このウィンドウからボックスノードを作成",
     "windows": "ウィンドウ",
@@ -3355,6 +3371,22 @@ globalThis.RR_DEEP_TEXT_TRANSLATIONS = {
     "Captured windows": "Ventanas capturadas",
     "Capturing…": "Capturando…",
     "No capture yet": "Aún no hay captura",
+    "Save this window's contents as a picture and add it as an Image node": "Guardar el contenido de esta ventana como imagen y añadirlo como nodo de imagen",
+    "Gauge": "Medidor",
+    "Party slot": "Puesto del grupo",
+    "Variable ID": "ID de variable",
+    "Max value": "Valor máximo",
+    "Show label": "Mostrar etiqueta",
+    "Show value": "Mostrar valor",
+    "Add All": "Añadir todo",
+    "Title background 1": "Fondo de título 1",
+    "Title background 2": "Fondo de título 2",
+    "nodes added": "nodos añadidos",
+    "Add this as nodes": "Añadir esto como nodos",
+    "Add every captured window and its contents as nodes": "Añadir cada ventana capturada y su contenido como nodos",
+    "The list is the draw order: the top draws first, the bottom draws on top. ▲ sends a node back, ▼ brings it forward.": "La lista es el orden de dibujo: lo de arriba se dibuja primero, lo de abajo queda encima. ▲ envía un nodo atrás, ▼ lo trae adelante.",
+    "Unsaved changes are not in the capture.": "Los cambios sin guardar no están en la captura.",
+    "Remove the reference layer": "Quitar la capa de referencia",
     "Plugins active in the capture:": "Plugins activos en la captura:",
     "Start a Box node from this window": "Crear un nodo de caja a partir de esta ventana",
     "windows": "ventanas",
@@ -5936,6 +5968,22 @@ globalThis.RR_DEEP_TEXT_TRANSLATIONS = {
     "Captured windows": "擷取的視窗",
     "Capturing…": "擷取中…",
     "No capture yet": "尚未擷取",
+    "Save this window's contents as a picture and add it as an Image node": "將此視窗內容儲存為圖片並加入為影像節點",
+    "Gauge": "量表",
+    "Party slot": "隊伍位置",
+    "Variable ID": "變數 ID",
+    "Max value": "最大值",
+    "Show label": "顯示標籤",
+    "Show value": "顯示數值",
+    "Add All": "全部加入",
+    "Title background 1": "標題背景 1",
+    "Title background 2": "標題背景 2",
+    "nodes added": "個節點已加入",
+    "Add this as nodes": "將此加入為節點",
+    "Add every captured window and its contents as nodes": "將每個擷取的視窗及其內容加入為節點",
+    "The list is the draw order: the top draws first, the bottom draws on top. ▲ sends a node back, ▼ brings it forward.": "清單即繪製順序：頂端先繪製，底端繪在最上層。▲ 將節點往後移，▼ 往前移。",
+    "Unsaved changes are not in the capture.": "未儲存的變更不包含在擷取中。",
+    "Remove the reference layer": "移除參考圖層",
     "Plugins active in the capture:": "擷取時啟用的外掛：",
     "Start a Box node from this window": "從此視窗建立方塊節點",
     "windows": "個視窗",
@@ -8517,6 +8565,22 @@ globalThis.RR_DEEP_TEXT_TRANSLATIONS = {
     "Captured windows": "捕获的窗口",
     "Capturing…": "正在捕获…",
     "No capture yet": "尚未捕获",
+    "Save this window's contents as a picture and add it as an Image node": "将此窗口内容保存为图片并添加为图像节点",
+    "Gauge": "量表",
+    "Party slot": "队伍位置",
+    "Variable ID": "变量 ID",
+    "Max value": "最大值",
+    "Show label": "显示标签",
+    "Show value": "显示数值",
+    "Add All": "全部添加",
+    "Title background 1": "标题背景 1",
+    "Title background 2": "标题背景 2",
+    "nodes added": "个节点已添加",
+    "Add this as nodes": "将此添加为节点",
+    "Add every captured window and its contents as nodes": "将每个捕获的窗口及其内容添加为节点",
+    "The list is the draw order: the top draws first, the bottom draws on top. ▲ sends a node back, ▼ brings it forward.": "列表即绘制顺序：顶部先绘制，底部绘制在最上层。▲ 将节点后移，▼ 前移。",
+    "Unsaved changes are not in the capture.": "未保存的更改不包含在捕获中。",
+    "Remove the reference layer": "移除参考图层",
     "Plugins active in the capture:": "捕获时启用的插件：",
     "Start a Box node from this window": "从此窗口创建方框节点",
     "windows": "个窗口",
@@ -11098,6 +11162,22 @@ globalThis.RR_DEEP_TEXT_TRANSLATIONS = {
     "Captured windows": "Захваченные окна",
     "Capturing…": "Захват…",
     "No capture yet": "Захвата ещё нет",
+    "Save this window's contents as a picture and add it as an Image node": "Сохранить содержимое окна как картинку и добавить узлом-изображением",
+    "Gauge": "Шкала",
+    "Party slot": "Место в группе",
+    "Variable ID": "ID переменной",
+    "Max value": "Максимум",
+    "Show label": "Показывать подпись",
+    "Show value": "Показывать значение",
+    "Add All": "Добавить всё",
+    "Title background 1": "Фон заставки 1",
+    "Title background 2": "Фон заставки 2",
+    "nodes added": "узлов добавлено",
+    "Add this as nodes": "Добавить как узлы",
+    "Add every captured window and its contents as nodes": "Добавить каждое захваченное окно и его содержимое как узлы",
+    "The list is the draw order: the top draws first, the bottom draws on top. ▲ sends a node back, ▼ brings it forward.": "Список задаёт порядок отрисовки: верх рисуется первым, низ — поверх. ▲ отправляет узел назад, ▼ выводит вперёд.",
+    "Unsaved changes are not in the capture.": "Несохранённые изменения не попали в захват.",
+    "Remove the reference layer": "Убрать опорный слой",
     "Plugins active in the capture:": "Плагины, активные при захвате:",
     "Start a Box node from this window": "Создать узел-блок из этого окна",
     "windows": "окон",
@@ -13679,6 +13759,22 @@ globalThis.RR_DEEP_TEXT_TRANSLATIONS = {
     "Captured windows": "Janelas capturadas",
     "Capturing…": "Capturando…",
     "No capture yet": "Ainda não há captura",
+    "Save this window's contents as a picture and add it as an Image node": "Salvar o conteúdo desta janela como imagem e adicioná-lo como nó de imagem",
+    "Gauge": "Medidor",
+    "Party slot": "Posição no grupo",
+    "Variable ID": "ID da variável",
+    "Max value": "Valor máximo",
+    "Show label": "Mostrar rótulo",
+    "Show value": "Mostrar valor",
+    "Add All": "Adicionar tudo",
+    "Title background 1": "Fundo do título 1",
+    "Title background 2": "Fundo do título 2",
+    "nodes added": "nós adicionados",
+    "Add this as nodes": "Adicionar isto como nós",
+    "Add every captured window and its contents as nodes": "Adicionar cada janela capturada e seu conteúdo como nós",
+    "The list is the draw order: the top draws first, the bottom draws on top. ▲ sends a node back, ▼ brings it forward.": "A lista é a ordem de desenho: o topo desenha primeiro, o fundo fica por cima. ▲ envia um nó para trás, ▼ traz para a frente.",
+    "Unsaved changes are not in the capture.": "Alterações não salvas não estão na captura.",
+    "Remove the reference layer": "Remover a camada de referência",
     "Plugins active in the capture:": "Plugins ativos na captura:",
     "Start a Box node from this window": "Criar um nó de caixa a partir desta janela",
     "windows": "janelas",
@@ -16260,6 +16356,22 @@ globalThis.RR_DEEP_TEXT_TRANSLATIONS = {
     "Captured windows": "Aufgenommene Fenster",
     "Capturing…": "Wird aufgenommen…",
     "No capture yet": "Noch keine Aufnahme",
+    "Save this window's contents as a picture and add it as an Image node": "Den Inhalt dieses Fensters als Bild speichern und als Bildknoten hinzufügen",
+    "Gauge": "Anzeige",
+    "Party slot": "Gruppenplatz",
+    "Variable ID": "Variablen-ID",
+    "Max value": "Maximalwert",
+    "Show label": "Beschriftung anzeigen",
+    "Show value": "Wert anzeigen",
+    "Add All": "Alle hinzufügen",
+    "Title background 1": "Titelhintergrund 1",
+    "Title background 2": "Titelhintergrund 2",
+    "nodes added": "Knoten hinzugefügt",
+    "Add this as nodes": "Als Knoten hinzufügen",
+    "Add every captured window and its contents as nodes": "Jedes aufgenommene Fenster samt Inhalt als Knoten hinzufügen",
+    "The list is the draw order: the top draws first, the bottom draws on top. ▲ sends a node back, ▼ brings it forward.": "Die Liste ist die Zeichenreihenfolge: oben wird zuerst gezeichnet, unten liegt obenauf. ▲ schickt einen Knoten nach hinten, ▼ holt ihn nach vorn.",
+    "Unsaved changes are not in the capture.": "Ungespeicherte Änderungen sind nicht in der Aufnahme.",
+    "Remove the reference layer": "Referenzebene entfernen",
     "Plugins active in the capture:": "Bei der Aufnahme aktive Plugins:",
     "Start a Box node from this window": "Aus diesem Fenster einen Box-Knoten anlegen",
     "windows": "Fenster",
@@ -18841,6 +18953,22 @@ globalThis.RR_DEEP_TEXT_TRANSLATIONS = {
     "Captured windows": "Fenêtres capturées",
     "Capturing…": "Capture…",
     "No capture yet": "Pas encore de capture",
+    "Save this window's contents as a picture and add it as an Image node": "Enregistrer le contenu de cette fenêtre comme image et l’ajouter en nœud Image",
+    "Gauge": "Jauge",
+    "Party slot": "Place dans le groupe",
+    "Variable ID": "ID de variable",
+    "Max value": "Valeur maximale",
+    "Show label": "Afficher le libellé",
+    "Show value": "Afficher la valeur",
+    "Add All": "Tout ajouter",
+    "Title background 1": "Fond de titre 1",
+    "Title background 2": "Fond de titre 2",
+    "nodes added": "nœuds ajoutés",
+    "Add this as nodes": "Ajouter ceci comme nœuds",
+    "Add every captured window and its contents as nodes": "Ajouter chaque fenêtre capturée et son contenu comme nœuds",
+    "The list is the draw order: the top draws first, the bottom draws on top. ▲ sends a node back, ▼ brings it forward.": "La liste est l’ordre de dessin : le haut se dessine en premier, le bas par-dessus. ▲ envoie un nœud en arrière, ▼ le ramène devant.",
+    "Unsaved changes are not in the capture.": "Les modifications non enregistrées ne sont pas dans la capture.",
+    "Remove the reference layer": "Retirer le calque de référence",
     "Plugins active in the capture:": "Plugins actifs lors de la capture :",
     "Start a Box node from this window": "Créer un nœud boîte à partir de cette fenêtre",
     "windows": "fenêtres",
@@ -21422,6 +21550,22 @@ globalThis.RR_DEEP_TEXT_TRANSLATIONS = {
     "Captured windows": "Καταγεγραμμένα παράθυρα",
     "Capturing…": "Καταγραφή…",
     "No capture yet": "Δεν υπάρχει καταγραφή ακόμη",
+    "Save this window's contents as a picture and add it as an Image node": "Αποθήκευση του περιεχομένου του παραθύρου ως εικόνα και προσθήκη ως κόμβος εικόνας",
+    "Gauge": "Μετρητής",
+    "Party slot": "Θέση ομάδας",
+    "Variable ID": "ID μεταβλητής",
+    "Max value": "Μέγιστη τιμή",
+    "Show label": "Εμφάνιση ετικέτας",
+    "Show value": "Εμφάνιση τιμής",
+    "Add All": "Προσθήκη όλων",
+    "Title background 1": "Φόντο τίτλου 1",
+    "Title background 2": "Φόντο τίτλου 2",
+    "nodes added": "κόμβοι προστέθηκαν",
+    "Add this as nodes": "Προσθήκη ως κόμβοι",
+    "Add every captured window and its contents as nodes": "Προσθήκη κάθε καταγεγραμμένου παραθύρου και του περιεχομένου του ως κόμβοι",
+    "The list is the draw order: the top draws first, the bottom draws on top. ▲ sends a node back, ▼ brings it forward.": "Η λίστα είναι η σειρά σχεδίασης: το πάνω σχεδιάζεται πρώτο, το κάτω από πάνω. ▲ στέλνει έναν κόμβο πίσω, ▼ τον φέρνει μπροστά.",
+    "Unsaved changes are not in the capture.": "Οι μη αποθηκευμένες αλλαγές δεν περιλαμβάνονται στην καταγραφή.",
+    "Remove the reference layer": "Αφαίρεση επιπέδου αναφοράς",
     "Plugins active in the capture:": "Ενεργά πρόσθετα στην καταγραφή:",
     "Start a Box node from this window": "Δημιουργία κόμβου πλαισίου από αυτό το παράθυρο",
     "windows": "παράθυρα",
@@ -24003,6 +24147,22 @@ globalThis.RR_DEEP_TEXT_TRANSLATIONS = {
     "Captured windows": "캡처된 창",
     "Capturing…": "캡처 중…",
     "No capture yet": "아직 캡처 없음",
+    "Save this window's contents as a picture and add it as an Image node": "이 창의 내용을 그림으로 저장하고 이미지 노드로 추가",
+    "Gauge": "게이지",
+    "Party slot": "파티 슬롯",
+    "Variable ID": "변수 ID",
+    "Max value": "최대값",
+    "Show label": "라벨 표시",
+    "Show value": "값 표시",
+    "Add All": "모두 추가",
+    "Title background 1": "타이틀 배경 1",
+    "Title background 2": "타이틀 배경 2",
+    "nodes added": "개 노드 추가됨",
+    "Add this as nodes": "노드로 추가",
+    "Add every captured window and its contents as nodes": "캡처된 모든 창과 내용을 노드로 추가",
+    "The list is the draw order: the top draws first, the bottom draws on top. ▲ sends a node back, ▼ brings it forward.": "목록이 그리기 순서입니다. 위가 먼저, 아래가 맨 위에 그려집니다. ▲는 노드를 뒤로, ▼는 앞으로 보냅니다.",
+    "Unsaved changes are not in the capture.": "저장하지 않은 변경 사항은 캡처에 포함되지 않습니다.",
+    "Remove the reference layer": "참조 레이어 제거",
     "Plugins active in the capture:": "캡처 시 활성 플러그인:",
     "Start a Box node from this window": "이 창에서 박스 노드 만들기",
     "windows": "개 창",
@@ -26584,6 +26744,22 @@ globalThis.RR_DEEP_TEXT_TRANSLATIONS = {
     "Captured windows": "النوافذ الملتقطة",
     "Capturing…": "جارٍ الالتقاط…",
     "No capture yet": "لا يوجد التقاط بعد",
+    "Save this window's contents as a picture and add it as an Image node": "حفظ محتوى هذه النافذة كصورة وإضافته كعقدة صورة",
+    "Gauge": "مقياس",
+    "Party slot": "خانة الفريق",
+    "Variable ID": "معرّف المتغير",
+    "Max value": "القيمة القصوى",
+    "Show label": "إظهار التسمية",
+    "Show value": "إظهار القيمة",
+    "Add All": "إضافة الكل",
+    "Title background 1": "خلفية العنوان 1",
+    "Title background 2": "خلفية العنوان 2",
+    "nodes added": "عقدة أُضيفت",
+    "Add this as nodes": "إضافة هذا كعقد",
+    "Add every captured window and its contents as nodes": "إضافة كل نافذة ملتقطة ومحتوياتها كعقد",
+    "The list is the draw order: the top draws first, the bottom draws on top. ▲ sends a node back, ▼ brings it forward.": "القائمة هي ترتيب الرسم: الأعلى يُرسم أولاً والأسفل فوقه. ▲ يرسل العقدة للخلف، ▼ يقدّمها للأمام.",
+    "Unsaved changes are not in the capture.": "التغييرات غير المحفوظة ليست ضمن الالتقاط.",
+    "Remove the reference layer": "إزالة طبقة المرجع",
     "Plugins active in the capture:": "الإضافات النشطة في الالتقاط:",
     "Start a Box node from this window": "إنشاء عقدة مربع من هذه النافذة",
     "windows": "نوافذ",
@@ -29165,6 +29341,22 @@ globalThis.RR_DEEP_TEXT_TRANSLATIONS = {
     "Captured windows": "Finestre catturate",
     "Capturing…": "Cattura in corso…",
     "No capture yet": "Nessuna cattura ancora",
+    "Save this window's contents as a picture and add it as an Image node": "Salva il contenuto di questa finestra come immagine e aggiungilo come nodo Immagine",
+    "Gauge": "Indicatore",
+    "Party slot": "Posto nel gruppo",
+    "Variable ID": "ID variabile",
+    "Max value": "Valore massimo",
+    "Show label": "Mostra etichetta",
+    "Show value": "Mostra valore",
+    "Add All": "Aggiungi tutto",
+    "Title background 1": "Sfondo del titolo 1",
+    "Title background 2": "Sfondo del titolo 2",
+    "nodes added": "nodi aggiunti",
+    "Add this as nodes": "Aggiungi come nodi",
+    "Add every captured window and its contents as nodes": "Aggiungi ogni finestra catturata e il suo contenuto come nodi",
+    "The list is the draw order: the top draws first, the bottom draws on top. ▲ sends a node back, ▼ brings it forward.": "L’elenco è l’ordine di disegno: in alto si disegna prima, in basso sopra. ▲ manda un nodo indietro, ▼ lo porta avanti.",
+    "Unsaved changes are not in the capture.": "Le modifiche non salvate non sono nella cattura.",
+    "Remove the reference layer": "Rimuovi il livello di riferimento",
     "Plugins active in the capture:": "Plugin attivi nella cattura:",
     "Start a Box node from this window": "Crea un nodo riquadro da questa finestra",
     "windows": "finestre",
@@ -31746,6 +31938,22 @@ globalThis.RR_DEEP_TEXT_TRANSLATIONS = {
     "Captured windows": "Przechwycone okna",
     "Capturing…": "Przechwytywanie…",
     "No capture yet": "Brak przechwycenia",
+    "Save this window's contents as a picture and add it as an Image node": "Zapisz zawartość tego okna jako obraz i dodaj jako węzeł obrazu",
+    "Gauge": "Wskaźnik",
+    "Party slot": "Miejsce w drużynie",
+    "Variable ID": "ID zmiennej",
+    "Max value": "Wartość maksymalna",
+    "Show label": "Pokaż etykietę",
+    "Show value": "Pokaż wartość",
+    "Add All": "Dodaj wszystko",
+    "Title background 1": "Tło tytułu 1",
+    "Title background 2": "Tło tytułu 2",
+    "nodes added": "węzłów dodano",
+    "Add this as nodes": "Dodaj jako węzły",
+    "Add every captured window and its contents as nodes": "Dodaj każde przechwycone okno i jego zawartość jako węzły",
+    "The list is the draw order: the top draws first, the bottom draws on top. ▲ sends a node back, ▼ brings it forward.": "Lista to kolejność rysowania: góra rysuje się pierwsza, dół na wierzchu. ▲ przenosi węzeł w tył, ▼ na przód.",
+    "Unsaved changes are not in the capture.": "Niezapisane zmiany nie są uwzględnione w przechwyceniu.",
+    "Remove the reference layer": "Usuń warstwę odniesienia",
     "Plugins active in the capture:": "Wtyczki aktywne podczas przechwycenia:",
     "Start a Box node from this window": "Utwórz węzeł ramki z tego okna",
     "windows": "okien",
@@ -34327,6 +34535,22 @@ globalThis.RR_DEEP_TEXT_TRANSLATIONS = {
     "Captured windows": "Jendela yang diambil",
     "Capturing…": "Mengambil…",
     "No capture yet": "Belum ada pengambilan",
+    "Save this window's contents as a picture and add it as an Image node": "Simpan isi jendela ini sebagai gambar dan tambahkan sebagai node Gambar",
+    "Gauge": "Pengukur",
+    "Party slot": "Slot party",
+    "Variable ID": "ID variabel",
+    "Max value": "Nilai maksimum",
+    "Show label": "Tampilkan label",
+    "Show value": "Tampilkan nilai",
+    "Add All": "Tambah semua",
+    "Title background 1": "Latar judul 1",
+    "Title background 2": "Latar judul 2",
+    "nodes added": "node ditambahkan",
+    "Add this as nodes": "Tambahkan ini sebagai node",
+    "Add every captured window and its contents as nodes": "Tambahkan setiap jendela yang diambil beserta isinya sebagai node",
+    "The list is the draw order: the top draws first, the bottom draws on top. ▲ sends a node back, ▼ brings it forward.": "Daftar adalah urutan gambar: atas digambar dulu, bawah di paling atas. ▲ mengirim node ke belakang, ▼ membawanya ke depan.",
+    "Unsaved changes are not in the capture.": "Perubahan yang belum disimpan tidak termasuk dalam pengambilan.",
+    "Remove the reference layer": "Hapus lapisan referensi",
     "Plugins active in the capture:": "Plugin aktif saat pengambilan:",
     "Start a Box node from this window": "Buat simpul Kotak dari jendela ini",
     "windows": "jendela",
@@ -36908,6 +37132,22 @@ globalThis.RR_DEEP_TEXT_TRANSLATIONS = {
     "Captured windows": "Cửa sổ đã chụp",
     "Capturing…": "Đang chụp…",
     "No capture yet": "Chưa có ảnh chụp",
+    "Save this window's contents as a picture and add it as an Image node": "Lưu nội dung cửa sổ này thành ảnh và thêm dưới dạng nút Hình ảnh",
+    "Gauge": "Thanh đo",
+    "Party slot": "Vị trí tổ đội",
+    "Variable ID": "ID biến",
+    "Max value": "Giá trị tối đa",
+    "Show label": "Hiện nhãn",
+    "Show value": "Hiện giá trị",
+    "Add All": "Thêm tất cả",
+    "Title background 1": "Nền tiêu đề 1",
+    "Title background 2": "Nền tiêu đề 2",
+    "nodes added": "nút đã thêm",
+    "Add this as nodes": "Thêm mục này dưới dạng nút",
+    "Add every captured window and its contents as nodes": "Thêm mọi cửa sổ đã chụp và nội dung của nó dưới dạng nút",
+    "The list is the draw order: the top draws first, the bottom draws on top. ▲ sends a node back, ▼ brings it forward.": "Danh sách là thứ tự vẽ: trên vẽ trước, dưới vẽ đè lên. ▲ đưa nút ra sau, ▼ đưa lên trước.",
+    "Unsaved changes are not in the capture.": "Các thay đổi chưa lưu không có trong ảnh chụp.",
+    "Remove the reference layer": "Xóa lớp tham chiếu",
     "Plugins active in the capture:": "Plugin hoạt động khi chụp:",
     "Start a Box node from this window": "Tạo nút hộp từ cửa sổ này",
     "windows": "cửa sổ",
@@ -39489,6 +39729,22 @@ globalThis.RR_DEEP_TEXT_TRANSLATIONS = {
     "Captured windows": "หน้าต่างที่จับภาพ",
     "Capturing…": "กำลังจับภาพ…",
     "No capture yet": "ยังไม่มีการจับภาพ",
+    "Save this window's contents as a picture and add it as an Image node": "บันทึกเนื้อหาของหน้าต่างนี้เป็นรูปภาพและเพิ่มเป็นโหนดรูปภาพ",
+    "Gauge": "เกจ",
+    "Party slot": "ช่องปาร์ตี้",
+    "Variable ID": "ID ตัวแปร",
+    "Max value": "ค่าสูงสุด",
+    "Show label": "แสดงป้ายชื่อ",
+    "Show value": "แสดงค่า",
+    "Add All": "เพิ่มทั้งหมด",
+    "Title background 1": "พื้นหลังไตเติล 1",
+    "Title background 2": "พื้นหลังไตเติล 2",
+    "nodes added": "โหนดถูกเพิ่ม",
+    "Add this as nodes": "เพิ่มสิ่งนี้เป็นโหนด",
+    "Add every captured window and its contents as nodes": "เพิ่มทุกหน้าต่างที่จับภาพและเนื้อหาเป็นโหนด",
+    "The list is the draw order: the top draws first, the bottom draws on top. ▲ sends a node back, ▼ brings it forward.": "รายการคือลำดับการวาด: ด้านบนวาดก่อน ด้านล่างวาดทับ ▲ ส่งโหนดไปด้านหลัง ▼ นำมาด้านหน้า",
+    "Unsaved changes are not in the capture.": "การเปลี่ยนแปลงที่ยังไม่บันทึกไม่อยู่ในการจับภาพ",
+    "Remove the reference layer": "นำเลเยอร์อ้างอิงออก",
     "Plugins active in the capture:": "ปลั๊กอินที่ใช้งานในการจับภาพ:",
     "Start a Box node from this window": "สร้างโหนดกล่องจากหน้าต่างนี้",
     "windows": "หน้าต่าง",
@@ -42070,6 +42326,22 @@ globalThis.RR_DEEP_TEXT_TRANSLATIONS = {
     "Captured windows": "Yakalanan pencereler",
     "Capturing…": "Yakalanıyor…",
     "No capture yet": "Henüz yakalama yok",
+    "Save this window's contents as a picture and add it as an Image node": "Bu pencerenin içeriğini resim olarak kaydet ve Görsel düğümü olarak ekle",
+    "Gauge": "Gösterge",
+    "Party slot": "Ekip yuvası",
+    "Variable ID": "Değişken kimliği",
+    "Max value": "En yüksek değer",
+    "Show label": "Etiketi göster",
+    "Show value": "Değeri göster",
+    "Add All": "Tümünü ekle",
+    "Title background 1": "Başlık arka planı 1",
+    "Title background 2": "Başlık arka planı 2",
+    "nodes added": "düğüm eklendi",
+    "Add this as nodes": "Bunu düğüm olarak ekle",
+    "Add every captured window and its contents as nodes": "Yakalanan her pencereyi ve içeriğini düğüm olarak ekle",
+    "The list is the draw order: the top draws first, the bottom draws on top. ▲ sends a node back, ▼ brings it forward.": "Liste çizim sırasıdır: üst önce, alt en üste çizilir. ▲ düğümü arkaya gönderir, ▼ öne getirir.",
+    "Unsaved changes are not in the capture.": "Kaydedilmemiş değişiklikler yakalamada yer almaz.",
+    "Remove the reference layer": "Referans katmanını kaldır",
     "Plugins active in the capture:": "Yakalamada etkin eklentiler:",
     "Start a Box node from this window": "Bu pencereden bir Kutu düğümü başlat",
     "windows": "pencere",
@@ -43879,3 +44151,342 @@ globalThis.RR_DEEP_TEXT_TRANSLATIONS = {
     "New object": "Yeni nesne",
   }
 };
+
+// User Interfaces: Lists, overlays, and stock-scene replacement settings.
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.ja, { "Add a box, image, text, button, or list to start.": "ボックス、画像、テキスト、ボタン、またはリストを追加して始めましょう。", "Custom main / pause menu:": "カスタムメイン / ポーズメニュー:", "Custom title interface:": "カスタムタイトルインターフェース:", "First control": "最初のコントロール", "Stock (default)": "標準（デフォルト）", "Stock menu is used when no scene interface is selected or the record is unavailable.": "シーンインターフェースが選択されていないか、レコードを利用できない場合は標準メニューが使用されます。", "Stock title screen is used when no scene interface is selected or the record is unavailable.": "シーンインターフェースが選択されていないか、レコードを利用できない場合は標準タイトル画面が使用されます。", "The project could not be saved to browser storage.": "プロジェクトをブラウザーストレージに保存できませんでした。" });
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.es, { "Add a box, image, text, button, or list to start.": "Agrega un cuadro, imagen, texto, botón o lista para comenzar.", "Custom main / pause menu:": "Menú principal / de pausa personalizado:", "Custom title interface:": "Interfaz de título personalizada:", "First control": "Primer control", "Stock (default)": "Estándar (predeterminado)", "Stock menu is used when no scene interface is selected or the record is unavailable.": "Se usa el menú estándar cuando no se selecciona una interfaz de escena o el registro no está disponible.", "Stock title screen is used when no scene interface is selected or the record is unavailable.": "Se usa la pantalla de título estándar cuando no se selecciona una interfaz de escena o el registro no está disponible.", "The project could not be saved to browser storage.": "No se pudo guardar el proyecto en el almacenamiento del navegador." });
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS['zh-Hant'], { "Add a box, image, text, button, or list to start.": "新增方框、圖片、文字、按鈕或清單以開始。", "Custom main / pause menu:": "自訂主選單 / 暫停選單:", "Custom title interface:": "自訂標題介面:", "First control": "第一個控制項", "Stock (default)": "標準（預設）", "Stock menu is used when no scene interface is selected or the record is unavailable.": "未選取場景介面或記錄無法使用時，將使用標準選單。", "Stock title screen is used when no scene interface is selected or the record is unavailable.": "未選取場景介面或記錄無法使用時，將使用標準標題畫面。", "The project could not be saved to browser storage.": "無法將專案儲存到瀏覽器儲存空間。" });
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS['zh-Hans'], { "Add a box, image, text, button, or list to start.": "添加方框、图片、文本、按钮或列表以开始。", "Custom main / pause menu:": "自定义主菜单 / 暂停菜单:", "Custom title interface:": "自定义标题界面:", "First control": "第一个控件", "Stock (default)": "标准（默认）", "Stock menu is used when no scene interface is selected or the record is unavailable.": "未选择场景界面或记录不可用时，将使用标准菜单。", "Stock title screen is used when no scene interface is selected or the record is unavailable.": "未选择场景界面或记录不可用时，将使用标准标题画面。", "The project could not be saved to browser storage.": "无法将项目保存到浏览器存储空间。" });
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.ru, { "Add a box, image, text, button, or list to start.": "Добавьте блок, изображение, текст, кнопку или список, чтобы начать.", "Custom main / pause menu:": "Собственное главное меню / меню паузы:", "Custom title interface:": "Собственный интерфейс заставки:", "First control": "Первый элемент управления", "Stock (default)": "Стандартный (по умолчанию)", "Stock menu is used when no scene interface is selected or the record is unavailable.": "Если интерфейс сцены не выбран или запись недоступна, используется стандартное меню.", "Stock title screen is used when no scene interface is selected or the record is unavailable.": "Если интерфейс сцены не выбран или запись недоступна, используется стандартная заставка.", "The project could not be saved to browser storage.": "Не удалось сохранить проект в хранилище браузера." });
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.pt, { "Add a box, image, text, button, or list to start.": "Adicione uma caixa, imagem, texto, botão ou lista para começar.", "Custom main / pause menu:": "Menu principal / de pausa personalizado:", "Custom title interface:": "Interface de título personalizada:", "First control": "Primeiro controle", "Stock (default)": "Padrão (predefinido)", "Stock menu is used when no scene interface is selected or the record is unavailable.": "O menu padrão é usado quando nenhuma interface de cena é selecionada ou o registro está indisponível.", "Stock title screen is used when no scene interface is selected or the record is unavailable.": "A tela de título padrão é usada quando nenhuma interface de cena é selecionada ou o registro está indisponível.", "The project could not be saved to browser storage.": "Não foi possível salvar o projeto no armazenamento do navegador." });
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.de, { "Add a box, image, text, button, or list to start.": "Füge zum Start einen Kasten, ein Bild, Text, eine Schaltfläche oder eine Liste hinzu.", "Custom main / pause menu:": "Eigenes Haupt- / Pausenmenü:", "Custom title interface:": "Eigene Titeloberfläche:", "First control": "Erstes Steuerelement", "Stock (default)": "Standard (Vorgabe)", "Stock menu is used when no scene interface is selected or the record is unavailable.": "Wenn keine Szenenoberfläche gewählt oder der Datensatz nicht verfügbar ist, wird das Standardmenü verwendet.", "Stock title screen is used when no scene interface is selected or the record is unavailable.": "Wenn keine Szenenoberfläche gewählt oder der Datensatz nicht verfügbar ist, wird der Standardtitelbildschirm verwendet.", "The project could not be saved to browser storage.": "Das Projekt konnte nicht im Browserspeicher gespeichert werden." });
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.fr, { "Add a box, image, text, button, or list to start.": "Ajoutez une boîte, une image, du texte, un bouton ou une liste pour commencer.", "Custom main / pause menu:": "Menu principal / pause personnalisé:", "Custom title interface:": "Interface de titre personnalisée:", "First control": "Premier contrôle", "Stock (default)": "Standard (par défaut)", "Stock menu is used when no scene interface is selected or the record is unavailable.": "Le menu standard est utilisé si aucune interface de scène n'est sélectionnée ou si l'enregistrement est indisponible.", "Stock title screen is used when no scene interface is selected or the record is unavailable.": "L'écran titre standard est utilisé si aucune interface de scène n'est sélectionnée ou si l'enregistrement est indisponible.", "The project could not be saved to browser storage.": "Le projet n'a pas pu être enregistré dans le stockage du navigateur." });
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.el, { "Add a box, image, text, button, or list to start.": "Προσθέστε πλαίσιο, εικόνα, κείμενο, κουμπί ή λίστα για να ξεκινήσετε.", "Custom main / pause menu:": "Προσαρμοσμένο κύριο μενού / μενού παύσης:", "Custom title interface:": "Προσαρμοσμένη διεπαφή τίτλου:", "First control": "Πρώτο στοιχείο ελέγχου", "Stock (default)": "Τυπικό (προεπιλογή)", "Stock menu is used when no scene interface is selected or the record is unavailable.": "Χρησιμοποιείται το τυπικό μενού όταν δεν έχει επιλεγεί διεπαφή σκηνής ή η εγγραφή δεν είναι διαθέσιμη.", "Stock title screen is used when no scene interface is selected or the record is unavailable.": "Χρησιμοποιείται η τυπική οθόνη τίτλου όταν δεν έχει επιλεγεί διεπαφή σκηνής ή η εγγραφή δεν είναι διαθέσιμη.", "The project could not be saved to browser storage.": "Δεν ήταν δυνατή η αποθήκευση του έργου στον χώρο αποθήκευσης του προγράμματος περιήγησης." });
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.ko, { "Add a box, image, text, button, or list to start.": "상자, 이미지, 텍스트, 버튼 또는 목록을 추가하여 시작하세요.", "Custom main / pause menu:": "사용자 지정 메인 / 일시정지 메뉴:", "Custom title interface:": "사용자 지정 타이틀 인터페이스:", "First control": "첫 번째 컨트롤", "Stock (default)": "기본 제공(기본값)", "Stock menu is used when no scene interface is selected or the record is unavailable.": "장면 인터페이스를 선택하지 않았거나 레코드를 사용할 수 없으면 기본 메뉴를 사용합니다.", "Stock title screen is used when no scene interface is selected or the record is unavailable.": "장면 인터페이스를 선택하지 않았거나 레코드를 사용할 수 없으면 기본 타이틀 화면을 사용합니다.", "The project could not be saved to browser storage.": "프로젝트를 브라우저 저장소에 저장할 수 없습니다." });
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.ar, { "Add a box, image, text, button, or list to start.": "أضف مربعًا أو صورة أو نصًا أو زرًا أو قائمة للبدء.", "Custom main / pause menu:": "قائمة رئيسية / إيقاف مؤقت مخصصة:", "Custom title interface:": "واجهة عنوان مخصصة:", "First control": "عنصر التحكم الأول", "Stock (default)": "الافتراضي (المعياري)", "Stock menu is used when no scene interface is selected or the record is unavailable.": "تُستخدم القائمة المعيارية عند عدم اختيار واجهة مشهد أو عند عدم توفر السجل.", "Stock title screen is used when no scene interface is selected or the record is unavailable.": "تُستخدم شاشة العنوان المعيارية عند عدم اختيار واجهة مشهد أو عند عدم توفر السجل.", "The project could not be saved to browser storage.": "تعذر حفظ المشروع في مساحة تخزين المتصفح." });
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.it, { "Add a box, image, text, button, or list to start.": "Aggiungi un riquadro, un'immagine, del testo, un pulsante o un elenco per iniziare.", "Custom main / pause menu:": "Menu principale / pausa personalizzato:", "Custom title interface:": "Interfaccia del titolo personalizzata:", "First control": "Primo controllo", "Stock (default)": "Standard (predefinito)", "Stock menu is used when no scene interface is selected or the record is unavailable.": "Viene usato il menu standard quando non è selezionata un'interfaccia di scena o il record non è disponibile.", "Stock title screen is used when no scene interface is selected or the record is unavailable.": "Viene usata la schermata del titolo standard quando non è selezionata un'interfaccia di scena o il record non è disponibile.", "The project could not be saved to browser storage.": "Non è stato possibile salvare il progetto nell'archivio del browser." });
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.pl, { "Add a box, image, text, button, or list to start.": "Dodaj pole, obraz, tekst, przycisk lub listę, aby rozpocząć.", "Custom main / pause menu:": "Własne menu główne / pauzy:", "Custom title interface:": "Własny interfejs tytułowy:", "First control": "Pierwszy element sterujący", "Stock (default)": "Standardowe (domyślne)", "Stock menu is used when no scene interface is selected or the record is unavailable.": "Gdy nie wybrano interfejsu sceny lub rekord jest niedostępny, używane jest standardowe menu.", "Stock title screen is used when no scene interface is selected or the record is unavailable.": "Gdy nie wybrano interfejsu sceny lub rekord jest niedostępny, używany jest standardowy ekran tytułowy.", "The project could not be saved to browser storage.": "Nie udało się zapisać projektu w pamięci przeglądarki." });
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.id, { "Add a box, image, text, button, or list to start.": "Tambahkan kotak, gambar, teks, tombol, atau daftar untuk memulai.", "Custom main / pause menu:": "Menu utama / jeda kustom:", "Custom title interface:": "Antarmuka judul kustom:", "First control": "Kontrol pertama", "Stock (default)": "Bawaan (default)", "Stock menu is used when no scene interface is selected or the record is unavailable.": "Menu bawaan digunakan saat tidak ada antarmuka adegan yang dipilih atau rekaman tidak tersedia.", "Stock title screen is used when no scene interface is selected or the record is unavailable.": "Layar judul bawaan digunakan saat tidak ada antarmuka adegan yang dipilih atau rekaman tidak tersedia.", "The project could not be saved to browser storage.": "Proyek tidak dapat disimpan ke penyimpanan browser." });
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.vi, { "Add a box, image, text, button, or list to start.": "Thêm hộp, hình ảnh, văn bản, nút hoặc danh sách để bắt đầu.", "Custom main / pause menu:": "Menu chính / tạm dừng tùy chỉnh:", "Custom title interface:": "Giao diện tiêu đề tùy chỉnh:", "First control": "Điều khiển đầu tiên", "Stock (default)": "Mặc định (gốc)", "Stock menu is used when no scene interface is selected or the record is unavailable.": "Menu gốc được dùng khi chưa chọn giao diện cảnh hoặc bản ghi không khả dụng.", "Stock title screen is used when no scene interface is selected or the record is unavailable.": "Màn hình tiêu đề gốc được dùng khi chưa chọn giao diện cảnh hoặc bản ghi không khả dụng.", "The project could not be saved to browser storage.": "Không thể lưu dự án vào bộ nhớ trình duyệt." });
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.th, { "Add a box, image, text, button, or list to start.": "เพิ่มกล่อง รูปภาพ ข้อความ ปุ่ม หรือรายการเพื่อเริ่มต้น", "Custom main / pause menu:": "เมนูหลัก / หยุดชั่วคราวแบบกำหนดเอง:", "Custom title interface:": "อินเทอร์เฟซหน้าไตเติลแบบกำหนดเอง:", "First control": "ตัวควบคุมแรก", "Stock (default)": "มาตรฐาน (ค่าเริ่มต้น)", "Stock menu is used when no scene interface is selected or the record is unavailable.": "ระบบจะใช้เมนูมาตรฐานเมื่อไม่ได้เลือกอินเทอร์เฟซฉากหรือไม่มีเรคคอร์ดนั้น", "Stock title screen is used when no scene interface is selected or the record is unavailable.": "ระบบจะใช้หน้าไตเติลมาตรฐานเมื่อไม่ได้เลือกอินเทอร์เฟซฉากหรือไม่มีเรคคอร์ดนั้น", "The project could not be saved to browser storage.": "ไม่สามารถบันทึกโปรเจกต์ลงในพื้นที่จัดเก็บของเบราว์เซอร์ได้" });
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.tr, { "Add a box, image, text, button, or list to start.": "Başlamak için kutu, resim, metin, düğme veya liste ekleyin.", "Custom main / pause menu:": "Özel ana / duraklatma menüsü:", "Custom title interface:": "Özel başlık arayüzü:", "First control": "İlk denetim", "Stock (default)": "Standart (varsayılan)", "Stock menu is used when no scene interface is selected or the record is unavailable.": "Sahne arayüzü seçilmediğinde veya kayıt kullanılamadığında standart menü kullanılır.", "Stock title screen is used when no scene interface is selected or the record is unavailable.": "Sahne arayüzü seçilmediğinde veya kayıt kullanılamadığında standart başlık ekranı kullanılır.", "The project could not be saved to browser storage.": "Proje tarayıcı depolama alanına kaydedilemedi." });
+
+// User Interfaces: typed contexts and actor-bound data surfaces.
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.ja, { "Actor source": "アクターの参照元", "List context": "リストコンテキスト", "The editor uses starting-party and class data; runtime preview is authoritative.": "エディターは初期パーティーと職業データを使用します。実行時プレビューが最終的な表示です。", "States": "ステート" });
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.es, { "Actor source": "Origen del actor", "List context": "Contexto de lista", "The editor uses starting-party and class data; runtime preview is authoritative.": "El editor usa el grupo inicial y los datos de clase; la vista previa en ejecución es la referencia definitiva.", "States": "Estados" });
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS['zh-Hant'], { "Actor source": "角色來源", "List context": "清單內容", "The editor uses starting-party and class data; runtime preview is authoritative.": "編輯器使用初始隊伍與職業資料；執行時預覽才是最終結果。", "States": "狀態" });
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS['zh-Hans'], { "Actor source": "角色来源", "List context": "列表上下文", "The editor uses starting-party and class data; runtime preview is authoritative.": "编辑器使用初始队伍和职业数据；运行时预览才是最终结果。", "States": "状态" });
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.ru, { "Actor source": "Источник персонажа", "List context": "Контекст списка", "The editor uses starting-party and class data; runtime preview is authoritative.": "Редактор использует начальную группу и данные класса; окончательный результат показывает предпросмотр во время выполнения.", "States": "Состояния" });
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.pt, { "Actor source": "Origem do ator", "List context": "Contexto da lista", "The editor uses starting-party and class data; runtime preview is authoritative.": "O editor usa o grupo inicial e os dados de classe; a prévia em execução é a referência definitiva.", "States": "Estados" });
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.de, { "Actor source": "Akteurquelle", "List context": "Listenkontext", "The editor uses starting-party and class data; runtime preview is authoritative.": "Der Editor verwendet die Startgruppe und Klassendaten; maßgeblich ist die Laufzeitvorschau.", "States": "Zustände" });
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.fr, { "Actor source": "Source de l'acteur", "List context": "Contexte de liste", "The editor uses starting-party and class data; runtime preview is authoritative.": "L'éditeur utilise le groupe initial et les données de classe ; l'aperçu à l'exécution fait foi.", "States": "États" });
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.el, { "Actor source": "Πηγή χαρακτήρα", "List context": "Περιβάλλον λίστας", "The editor uses starting-party and class data; runtime preview is authoritative.": "Ο επεξεργαστής χρησιμοποιεί την αρχική ομάδα και τα δεδομένα κλάσης· η προεπισκόπηση εκτέλεσης είναι η οριστική.", "States": "Καταστάσεις" });
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.ko, { "Actor source": "액터 소스", "List context": "목록 컨텍스트", "The editor uses starting-party and class data; runtime preview is authoritative.": "편집기는 시작 파티와 직업 데이터를 사용하며, 런타임 미리보기가 최종 기준입니다.", "States": "상태" });
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.ar, { "Actor source": "مصدر الممثل", "List context": "سياق القائمة", "The editor uses starting-party and class data; runtime preview is authoritative.": "يستخدم المحرر بيانات الفريق الابتدائي والفئة؛ ومعاينة وقت التشغيل هي المرجع النهائي.", "States": "الحالات" });
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.it, { "Actor source": "Origine dell'attore", "List context": "Contesto dell'elenco", "The editor uses starting-party and class data; runtime preview is authoritative.": "L'editor usa il gruppo iniziale e i dati della classe; l'anteprima in esecuzione è il riferimento definitivo.", "States": "Stati" });
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.pl, { "Actor source": "Źródło aktora", "List context": "Kontekst listy", "The editor uses starting-party and class data; runtime preview is authoritative.": "Edytor używa początkowej drużyny i danych klasy; miarodajny jest podgląd w czasie działania.", "States": "Stany" });
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.id, { "Actor source": "Sumber aktor", "List context": "Konteks daftar", "The editor uses starting-party and class data; runtime preview is authoritative.": "Editor memakai party awal dan data kelas; pratinjau saat dijalankan adalah acuan akhir.", "States": "Status" });
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.vi, { "Actor source": "Nguồn nhân vật", "List context": "Ngữ cảnh danh sách", "The editor uses starting-party and class data; runtime preview is authoritative.": "Trình biên tập dùng tổ đội ban đầu và dữ liệu lớp; bản xem trước khi chạy là kết quả chuẩn.", "States": "Trạng thái" });
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.th, { "Actor source": "แหล่งตัวละคร", "List context": "บริบทรายการ", "The editor uses starting-party and class data; runtime preview is authoritative.": "ตัวแก้ไขใช้ข้อมูลปาร์ตี้เริ่มต้นและอาชีพ โดยตัวอย่างขณะรันเป็นผลลัพธ์ที่ถูกต้องที่สุด", "States": "สถานะ" });
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.tr, { "Actor source": "Aktör kaynağı", "List context": "Liste bağlamı", "The editor uses starting-party and class data; runtime preview is authoritative.": "Düzenleyici başlangıç partisi ve sınıf verilerini kullanır; çalışma zamanı önizlemesi kesin sonuçtur.", "States": "Durumlar" });
+
+// User Interfaces: hand-authored replacement selector label.
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.ja, { "Custom Interfaces": "カスタムインターフェース" });
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.es, { "Custom Interfaces": "Interfaces personalizadas" });
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS['zh-Hant'], { "Custom Interfaces": "自訂介面" });
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS['zh-Hans'], { "Custom Interfaces": "自定义界面" });
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.ru, { "Custom Interfaces": "Пользовательские интерфейсы" });
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.pt, { "Custom Interfaces": "Interfaces personalizadas" });
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.de, { "Custom Interfaces": "Eigene Oberflächen" });
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.fr, { "Custom Interfaces": "Interfaces personnalisées" });
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.el, { "Custom Interfaces": "Προσαρμοσμένες διεπαφές" });
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.ko, { "Custom Interfaces": "사용자 지정 인터페이스" });
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.ar, { "Custom Interfaces": "واجهات مخصصة" });
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.it, { "Custom Interfaces": "Interfacce personalizzate" });
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.pl, { "Custom Interfaces": "Własne interfejsy" });
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.id, { "Custom Interfaces": "Antarmuka kustom" });
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.vi, { "Custom Interfaces": "Giao diện tùy chỉnh" });
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.th, { "Custom Interfaces": "อินเทอร์เฟซแบบกำหนดเอง" });
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.tr, { "Custom Interfaces": "Özel arayüzler" });
+
+// User Interfaces: hand-authored role and runtime-authority guidance.
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.ja, { "Use as": "用途", "Only matching scene roles are routed; stock remains the safe fallback.": "一致するシーン役割だけが切り替えられます。標準画面が安全な代替になります。", "Options rows and values come from the running game; runtime is authoritative.": "オプションの行と値は実行中のゲームから取得されます。実行時の内容が最終的な基準です。" });
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.es, { "Use as": "Usar como", "Only matching scene roles are routed; stock remains the safe fallback.": "Solo se redirigen los roles de escena coincidentes; la pantalla estándar sigue siendo la alternativa segura.", "Options rows and values come from the running game; runtime is authoritative.": "Las filas y los valores de opciones proceden del juego en ejecución; el resultado en ejecución es el definitivo." });
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS['zh-Hant'], { "Use as": "用作", "Only matching scene roles are routed; stock remains the safe fallback.": "只會路由相符的場景角色；標準畫面仍是安全的備援。", "Options rows and values come from the running game; runtime is authoritative.": "選項列與數值來自執行中的遊戲；以執行時內容為準。" });
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS['zh-Hans'], { "Use as": "用作", "Only matching scene roles are routed; stock remains the safe fallback.": "只会路由匹配的场景角色；标准画面仍是安全的后备。", "Options rows and values come from the running game; runtime is authoritative.": "选项行和值来自运行中的游戏；以运行时内容为准。" });
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.ru, { "Use as": "Использовать как", "Only matching scene roles are routed; stock remains the safe fallback.": "Перенаправляются только совпадающие роли сцен; стандартный экран остаётся безопасным запасным вариантом.", "Options rows and values come from the running game; runtime is authoritative.": "Строки и значения настроек берутся из запущенной игры; данные времени выполнения являются окончательными." });
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.pt, { "Use as": "Usar como", "Only matching scene roles are routed; stock remains the safe fallback.": "Apenas funções de cena correspondentes são redirecionadas; a tela padrão continua sendo a alternativa segura.", "Options rows and values come from the running game; runtime is authoritative.": "As linhas e os valores das opções vêm do jogo em execução; o resultado em execução é o definitivo." });
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.de, { "Use as": "Verwenden als", "Only matching scene roles are routed; stock remains the safe fallback.": "Nur passende Szenenrollen werden umgeleitet; der Standardbildschirm bleibt die sichere Ausweichlösung.", "Options rows and values come from the running game; runtime is authoritative.": "Optionszeilen und Werte stammen aus dem laufenden Spiel; maßgeblich ist die Laufzeit." });
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.fr, { "Use as": "Utiliser comme", "Only matching scene roles are routed; stock remains the safe fallback.": "Seuls les rôles de scène correspondants sont redirigés ; l'écran standard reste la solution de repli sûre.", "Options rows and values come from the running game; runtime is authoritative.": "Les lignes et valeurs des options proviennent du jeu en cours ; l'exécution fait foi." });
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.el, { "Use as": "Χρήση ως", "Only matching scene roles are routed; stock remains the safe fallback.": "Δρομολογούνται μόνο οι αντίστοιχοι ρόλοι σκηνής· η τυπική οθόνη παραμένει η ασφαλής εναλλακτική.", "Options rows and values come from the running game; runtime is authoritative.": "Οι γραμμές και οι τιμές επιλογών προέρχονται από το παιχνίδι που εκτελείται· η εκτέλεση είναι η οριστική πηγή." });
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.ko, { "Use as": "용도", "Only matching scene roles are routed; stock remains the safe fallback.": "일치하는 장면 역할만 전환되며 기본 화면은 안전한 대체 화면으로 유지됩니다.", "Options rows and values come from the running game; runtime is authoritative.": "옵션 행과 값은 실행 중인 게임에서 가져오며 런타임 내용이 최종 기준입니다." });
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.ar, { "Use as": "استخدام كـ", "Only matching scene roles are routed; stock remains the safe fallback.": "لا تُوجّه إلا أدوار المشاهد المتطابقة؛ وتبقى الشاشة القياسية البديل الآمن.", "Options rows and values come from the running game; runtime is authoritative.": "تأتي صفوف الخيارات وقيمها من اللعبة قيد التشغيل؛ ومحتوى وقت التشغيل هو المرجع النهائي." });
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.it, { "Use as": "Usa come", "Only matching scene roles are routed; stock remains the safe fallback.": "Vengono reindirizzati solo i ruoli scena corrispondenti; la schermata standard resta il ripiego sicuro.", "Options rows and values come from the running game; runtime is authoritative.": "Le righe e i valori delle opzioni provengono dal gioco in esecuzione; l'esecuzione fa fede." });
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.pl, { "Use as": "Użyj jako", "Only matching scene roles are routed; stock remains the safe fallback.": "Przekierowywane są tylko zgodne role scen; ekran standardowy pozostaje bezpiecznym rozwiązaniem awaryjnym.", "Options rows and values come from the running game; runtime is authoritative.": "Wiersze i wartości opcji pochodzą z uruchomionej gry; dane czasu działania są rozstrzygające." });
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.id, { "Use as": "Gunakan sebagai", "Only matching scene roles are routed; stock remains the safe fallback.": "Hanya peran adegan yang cocok yang dialihkan; layar bawaan tetap menjadi cadangan yang aman.", "Options rows and values come from the running game; runtime is authoritative.": "Baris dan nilai opsi berasal dari game yang sedang berjalan; hasil saat dijalankan adalah acuan akhir." });
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.vi, { "Use as": "Dùng làm", "Only matching scene roles are routed; stock remains the safe fallback.": "Chỉ các vai trò cảnh phù hợp mới được chuyển hướng; màn hình gốc vẫn là phương án dự phòng an toàn.", "Options rows and values come from the running game; runtime is authoritative.": "Các hàng và giá trị tùy chọn đến từ trò chơi đang chạy; nội dung khi chạy là kết quả chuẩn." });
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.th, { "Use as": "ใช้เป็น", "Only matching scene roles are routed; stock remains the safe fallback.": "ระบบจะเปลี่ยนเส้นทางเฉพาะบทบาทฉากที่ตรงกัน โดยหน้าจอมาตรฐานยังเป็นทางเลือกสำรองที่ปลอดภัย", "Options rows and values come from the running game; runtime is authoritative.": "แถวและค่าตัวเลือกมาจากเกมที่กำลังทำงาน โดยข้อมูลขณะรันเป็นผลลัพธ์ที่ถูกต้องที่สุด" });
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.tr, { "Use as": "Şu amaçla kullan", "Only matching scene roles are routed; stock remains the safe fallback.": "Yalnızca eşleşen sahne rolleri yönlendirilir; standart ekran güvenli yedek olarak kalır.", "Options rows and values come from the running game; runtime is authoritative.": "Seçenek satırları ve değerleri çalışan oyundan gelir; çalışma zamanı içeriği kesin kaynaktır." });
+
+// User Interfaces: hand-authored automatic focus-navigation label.
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.ja, { "Automatic": "自動" });
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.es, { "Automatic": "Automático" });
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS['zh-Hant'], { "Automatic": "自動" });
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS['zh-Hans'], { "Automatic": "自动" });
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.ru, { "Automatic": "Автоматически" });
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.pt, { "Automatic": "Automático" });
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.de, { "Automatic": "Automatisch" });
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.fr, { "Automatic": "Automatique" });
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.el, { "Automatic": "Αυτόματα" });
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.ko, { "Automatic": "자동" });
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.ar, { "Automatic": "تلقائي" });
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.it, { "Automatic": "Automatico" });
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.pl, { "Automatic": "Automatycznie" });
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.id, { "Automatic": "Otomatis" });
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.vi, { "Automatic": "Tự động" });
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.th, { "Automatic": "อัตโนมัติ" });
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.tr, { "Automatic": "Otomatik" });
+
+// User Interfaces: hand-authored focus and appearance roadmap labels.
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.ja, {
+  "Transition in": "開始トランジション", "Transition out": "終了トランジション", "Slide left": "左へスライド",
+  "Input stays locked while an interface opens; closing completes before leaving.": "インターフェースの開始中は入力を受け付けず、終了処理が完了してから画面を離れます。",
+  "Appearance": "外観", "Font face": "フォント名", "Game font": "ゲームフォント", "Blank uses the game font.": "空欄の場合はゲームフォントを使用します。",
+  "Bold": "太字", "Italic": "斜体", "Outline color": "縁取り色", "Outline width": "縁取り幅", "Letter spacing": "文字間隔",
+  "Nine-slice": "9スライス", "Keeps image borders unscaled; available for Picture and System images.": "画像の縁を拡大せずに保ちます。ピクチャとシステム画像で使用できます。",
+  "Blank state values inherit the base appearance.": "状態の値が空欄の場合は基本の外観を継承します。", "Focused": "フォーカス時", "Inherit": "継承", "Disabled": "無効時", "Navigation": "ナビゲーション",
+  "Automatic uses geometric navigation; invalid targets safely fall back to it.": "自動では位置関係から移動先を決め、無効な指定先も安全に自動へ戻ります。"
+});
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.es, {
+  "Transition in": "Transición de entrada", "Transition out": "Transición de salida", "Slide left": "Deslizar a la izquierda",
+  "Input stays locked while an interface opens; closing completes before leaving.": "La entrada permanece bloqueada mientras se abre la interfaz; el cierre termina antes de salir.",
+  "Appearance": "Apariencia", "Font face": "Tipo de letra", "Game font": "Fuente del juego", "Blank uses the game font.": "En blanco usa la fuente del juego.",
+  "Bold": "Negrita", "Italic": "Cursiva", "Outline color": "Color del contorno", "Outline width": "Ancho del contorno", "Letter spacing": "Espaciado de letras",
+  "Nine-slice": "Nueve segmentos", "Keeps image borders unscaled; available for Picture and System images.": "Mantiene los bordes de la imagen sin escalar; disponible para imágenes de Pic y Sistema.",
+  "Blank state values inherit the base appearance.": "Los valores de estado en blanco heredan la apariencia base.", "Focused": "Enfocado", "Inherit": "Heredar", "Disabled": "Deshabilitado", "Navigation": "Navegación",
+  "Automatic uses geometric navigation; invalid targets safely fall back to it.": "Automático usa navegación geométrica; los destinos no válidos vuelven a ella de forma segura."
+});
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS['zh-Hant'], {
+  "Transition in": "進入轉場", "Transition out": "離開轉場", "Slide left": "向左滑動",
+  "Input stays locked while an interface opens; closing completes before leaving.": "介面開啟期間會鎖定輸入；關閉轉場完成後才會離開。",
+  "Appearance": "外觀", "Font face": "字型", "Game font": "遊戲字型", "Blank uses the game font.": "留白會使用遊戲字型。",
+  "Bold": "粗體", "Italic": "斜體", "Outline color": "外框顏色", "Outline width": "外框寬度", "Letter spacing": "字距",
+  "Nine-slice": "九宮格切片", "Keeps image borders unscaled; available for Picture and System images.": "保持圖片邊框不縮放；可用於圖片與系統圖片。",
+  "Blank state values inherit the base appearance.": "空白的狀態值會繼承基本外觀。", "Focused": "取得焦點", "Inherit": "繼承", "Disabled": "停用", "Navigation": "導覽",
+  "Automatic uses geometric navigation; invalid targets safely fall back to it.": "自動模式依幾何位置導覽；無效目標會安全地改用自動模式。"
+});
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS['zh-Hans'], {
+  "Transition in": "进入转场", "Transition out": "离开转场", "Slide left": "向左滑动",
+  "Input stays locked while an interface opens; closing completes before leaving.": "界面打开期间会锁定输入；关闭转场完成后才会离开。",
+  "Appearance": "外观", "Font face": "字体", "Game font": "游戏字体", "Blank uses the game font.": "留空时使用游戏字体。",
+  "Bold": "粗体", "Italic": "斜体", "Outline color": "描边颜色", "Outline width": "描边宽度", "Letter spacing": "字间距",
+  "Nine-slice": "九宫格切片", "Keeps image borders unscaled; available for Picture and System images.": "保持图像边框不缩放；可用于图片和系统图像。",
+  "Blank state values inherit the base appearance.": "空白状态值会继承基础外观。", "Focused": "聚焦", "Inherit": "继承", "Disabled": "禁用", "Navigation": "导航",
+  "Automatic uses geometric navigation; invalid targets safely fall back to it.": "自动模式按几何位置导航；无效目标会安全地回退到自动模式。"
+});
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.ru, {
+  "Transition in": "Переход при открытии", "Transition out": "Переход при закрытии", "Slide left": "Сдвиг влево",
+  "Input stays locked while an interface opens; closing completes before leaving.": "Во время открытия ввод заблокирован; выход выполняется после завершения закрытия.",
+  "Appearance": "Внешний вид", "Font face": "Гарнитура", "Game font": "Шрифт игры", "Blank uses the game font.": "Пустое поле использует шрифт игры.",
+  "Bold": "Полужирный", "Italic": "Курсив", "Outline color": "Цвет контура", "Outline width": "Толщина контура", "Letter spacing": "Межбуквенный интервал",
+  "Nine-slice": "Девятисекционное масштабирование", "Keeps image borders unscaled; available for Picture and System images.": "Сохраняет границы изображения без растяжения; доступно для изображений Picture и System.",
+  "Blank state values inherit the base appearance.": "Пустые значения состояния наследуют основной вид.", "Focused": "В фокусе", "Inherit": "Наследовать", "Disabled": "Отключено", "Navigation": "Навигация",
+  "Automatic uses geometric navigation; invalid targets safely fall back to it.": "Автоматический режим использует геометрию; недопустимые цели безопасно возвращаются к нему."
+});
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.pt, {
+  "Transition in": "Transição de entrada", "Transition out": "Transição de saída", "Slide left": "Deslizar para a esquerda",
+  "Input stays locked while an interface opens; closing completes before leaving.": "A entrada fica bloqueada durante a abertura; o fechamento termina antes de sair.",
+  "Appearance": "Aparência", "Font face": "Tipo de fonte", "Game font": "Fonte do jogo", "Blank uses the game font.": "Em branco usa a fonte do jogo.",
+  "Bold": "Negrito", "Italic": "Itálico", "Outline color": "Cor do contorno", "Outline width": "Largura do contorno", "Letter spacing": "Espaçamento entre letras",
+  "Nine-slice": "Nove fatias", "Keeps image borders unscaled; available for Picture and System images.": "Mantém as bordas da imagem sem escala; disponível para imagens de Picture e System.",
+  "Blank state values inherit the base appearance.": "Valores de estado em branco herdam a aparência base.", "Focused": "Focado", "Inherit": "Herdar", "Disabled": "Desativado", "Navigation": "Navegação",
+  "Automatic uses geometric navigation; invalid targets safely fall back to it.": "Automático usa navegação geométrica; alvos inválidos retornam a ela com segurança."
+});
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.de, {
+  "Transition in": "Eingangsübergang", "Transition out": "Ausgangsübergang", "Slide left": "Nach links gleiten",
+  "Input stays locked while an interface opens; closing completes before leaving.": "Während des Öffnens bleibt die Eingabe gesperrt; vor dem Verlassen wird das Schließen abgeschlossen.",
+  "Appearance": "Darstellung", "Font face": "Schriftart", "Game font": "Spielschrift", "Blank uses the game font.": "Leer verwendet die Spielschrift.",
+  "Bold": "Fett", "Italic": "Kursiv", "Outline color": "Konturfarbe", "Outline width": "Konturbreite", "Letter spacing": "Zeichenabstand",
+  "Nine-slice": "Neunteilige Skalierung", "Keeps image borders unscaled; available for Picture and System images.": "Behält Bildränder unskaliert; verfügbar für Picture- und Systembilder.",
+  "Blank state values inherit the base appearance.": "Leere Zustandswerte übernehmen die Grunddarstellung.", "Focused": "Fokussiert", "Inherit": "Übernehmen", "Disabled": "Deaktiviert", "Navigation": "Navigation",
+  "Automatic uses geometric navigation; invalid targets safely fall back to it.": "Automatisch nutzt geometrische Navigation; ungültige Ziele fallen sicher darauf zurück."
+});
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.fr, {
+  "Transition in": "Transition d'entrée", "Transition out": "Transition de sortie", "Slide left": "Glisser à gauche",
+  "Input stays locked while an interface opens; closing completes before leaving.": "Les entrées restent verrouillées pendant l'ouverture ; la fermeture se termine avant de quitter.",
+  "Appearance": "Apparence", "Font face": "Police", "Game font": "Police du jeu", "Blank uses the game font.": "Vide utilise la police du jeu.",
+  "Bold": "Gras", "Italic": "Italique", "Outline color": "Couleur du contour", "Outline width": "Largeur du contour", "Letter spacing": "Espacement des lettres",
+  "Nine-slice": "Découpage en neuf", "Keeps image borders unscaled; available for Picture and System images.": "Conserve les bordures sans les étirer ; disponible pour les images Picture et System.",
+  "Blank state values inherit the base appearance.": "Les valeurs d'état vides héritent de l'apparence de base.", "Focused": "Sélectionné", "Inherit": "Hériter", "Disabled": "Désactivé", "Navigation": "Navigation",
+  "Automatic uses geometric navigation; invalid targets safely fall back to it.": "Automatique utilise la navigation géométrique ; les cibles invalides y reviennent sans risque."
+});
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.el, {
+  "Transition in": "Μετάβαση εισόδου", "Transition out": "Μετάβαση εξόδου", "Slide left": "Ολίσθηση αριστερά",
+  "Input stays locked while an interface opens; closing completes before leaving.": "Η είσοδος παραμένει κλειδωμένη κατά το άνοιγμα· το κλείσιμο ολοκληρώνεται πριν από την έξοδο.",
+  "Appearance": "Εμφάνιση", "Font face": "Γραμματοσειρά", "Game font": "Γραμματοσειρά παιχνιδιού", "Blank uses the game font.": "Το κενό χρησιμοποιεί τη γραμματοσειρά του παιχνιδιού.",
+  "Bold": "Έντονα", "Italic": "Πλάγια", "Outline color": "Χρώμα περιγράμματος", "Outline width": "Πλάτος περιγράμματος", "Letter spacing": "Απόσταση γραμμάτων",
+  "Nine-slice": "Κλιμάκωση εννέα τμημάτων", "Keeps image borders unscaled; available for Picture and System images.": "Διατηρεί τα περιθώρια χωρίς κλιμάκωση· διαθέσιμο για εικόνες Picture και System.",
+  "Blank state values inherit the base appearance.": "Οι κενές τιμές κατάστασης κληρονομούν τη βασική εμφάνιση.", "Focused": "Εστιασμένο", "Inherit": "Κληρονόμηση", "Disabled": "Απενεργοποιημένο", "Navigation": "Πλοήγηση",
+  "Automatic uses geometric navigation; invalid targets safely fall back to it.": "Το Αυτόματο χρησιμοποιεί γεωμετρική πλοήγηση· οι άκυροι στόχοι επιστρέφουν με ασφάλεια σε αυτή."
+});
+
+// Compact Interface toolbar, Inspector states, and concise layer-order labels.
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.ja, { "Interface Settings": "インターフェース設定", "Close Inspector": "インスペクターを閉じる", "Initial Focus": "初期フォーカス", "Behavior": "動作", "Transitions": "トランジション", "Notes": "メモ", "To Back": "最背面", "Back 1": "1つ背面", "Forward 1": "1つ前面", "To Front": "最前面" });
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.es, { "Interface Settings": "Ajustes de interfaz", "Close Inspector": "Cerrar inspector", "Initial Focus": "Foco inicial", "Behavior": "Comportamiento", "Transitions": "Transiciones", "Notes": "Notas", "To Back": "Al fondo", "Back 1": "Atrás 1", "Forward 1": "Adelante 1", "To Front": "Al frente" });
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS['zh-Hant'], { "Interface Settings": "介面設定", "Close Inspector": "關閉檢查器", "Initial Focus": "初始焦點", "Behavior": "行為", "Transitions": "轉場", "Notes": "備註", "To Back": "移至底層", "Back 1": "後移一層", "Forward 1": "前移一層", "To Front": "移至頂層" });
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS['zh-Hans'], { "Interface Settings": "界面设置", "Close Inspector": "关闭检查器", "Initial Focus": "初始焦点", "Behavior": "行为", "Transitions": "转场", "Notes": "备注", "To Back": "移到底层", "Back 1": "后移一层", "Forward 1": "前移一层", "To Front": "移到顶层" });
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.ru, { "Interface Settings": "Настройки интерфейса", "Close Inspector": "Закрыть инспектор", "Initial Focus": "Начальный фокус", "Behavior": "Поведение", "Transitions": "Переходы", "Notes": "Заметки", "To Back": "На задний план", "Back 1": "На шаг назад", "Forward 1": "На шаг вперёд", "To Front": "На передний план" });
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.pt, { "Interface Settings": "Configurações da interface", "Close Inspector": "Fechar inspetor", "Initial Focus": "Foco inicial", "Behavior": "Comportamento", "Transitions": "Transições", "Notes": "Notas", "To Back": "Para trás", "Back 1": "Recuar 1", "Forward 1": "Avançar 1", "To Front": "Para frente" });
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.de, { "Interface Settings": "Oberflächeneinstellungen", "Close Inspector": "Inspektor schließen", "Initial Focus": "Anfangsfokus", "Behavior": "Verhalten", "Transitions": "Übergänge", "Notes": "Notizen", "To Back": "Ganz nach hinten", "Back 1": "1 zurück", "Forward 1": "1 vor", "To Front": "Ganz nach vorn" });
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.fr, { "Interface Settings": "Paramètres de l'interface", "Close Inspector": "Fermer l'inspecteur", "Initial Focus": "Focus initial", "Behavior": "Comportement", "Transitions": "Transitions", "Notes": "Notes", "To Back": "À l'arrière", "Back 1": "Reculer de 1", "Forward 1": "Avancer de 1", "To Front": "À l'avant" });
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.el, { "Interface Settings": "Ρυθμίσεις διεπαφής", "Close Inspector": "Κλείσιμο επιθεωρητή", "Initial Focus": "Αρχική εστίαση", "Behavior": "Συμπεριφορά", "Transitions": "Μεταβάσεις", "Notes": "Σημειώσεις", "To Back": "Στο πίσω μέρος", "Back 1": "Πίσω 1", "Forward 1": "Μπροστά 1", "To Front": "Στο μπροστινό μέρος" });
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.ko, { "Interface Settings": "인터페이스 설정", "Close Inspector": "검사기 닫기", "Initial Focus": "초기 포커스", "Behavior": "동작", "Transitions": "전환", "Notes": "메모", "To Back": "맨 뒤로", "Back 1": "뒤로 1", "Forward 1": "앞으로 1", "To Front": "맨 앞으로" });
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.ar, { "Interface Settings": "إعدادات الواجهة", "Close Inspector": "إغلاق الفاحص", "Initial Focus": "التركيز الأولي", "Behavior": "السلوك", "Transitions": "الانتقالات", "Notes": "ملاحظات", "To Back": "إلى الخلف", "Back 1": "للخلف 1", "Forward 1": "للأمام 1", "To Front": "إلى الأمام" });
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.it, { "Interface Settings": "Impostazioni interfaccia", "Close Inspector": "Chiudi ispettore", "Initial Focus": "Focus iniziale", "Behavior": "Comportamento", "Transitions": "Transizioni", "Notes": "Note", "To Back": "In fondo", "Back 1": "Indietro 1", "Forward 1": "Avanti 1", "To Front": "In primo piano" });
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.pl, { "Interface Settings": "Ustawienia interfejsu", "Close Inspector": "Zamknij inspektor", "Initial Focus": "Początkowy fokus", "Behavior": "Zachowanie", "Transitions": "Przejścia", "Notes": "Notatki", "To Back": "Na spód", "Back 1": "Wstecz 1", "Forward 1": "Naprzód 1", "To Front": "Na wierzch" });
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.id, { "Interface Settings": "Pengaturan antarmuka", "Close Inspector": "Tutup inspektur", "Initial Focus": "Fokus awal", "Behavior": "Perilaku", "Transitions": "Transisi", "Notes": "Catatan", "To Back": "Ke belakang", "Back 1": "Mundur 1", "Forward 1": "Maju 1", "To Front": "Ke depan" });
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.vi, { "Interface Settings": "Cài đặt giao diện", "Close Inspector": "Đóng trình kiểm tra", "Initial Focus": "Tiêu điểm ban đầu", "Behavior": "Hành vi", "Transitions": "Chuyển cảnh", "Notes": "Ghi chú", "To Back": "Ra sau cùng", "Back 1": "Lùi 1", "Forward 1": "Tiến 1", "To Front": "Ra trước cùng" });
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.th, { "Interface Settings": "การตั้งค่าอินเทอร์เฟซ", "Close Inspector": "ปิดตัวตรวจสอบ", "Initial Focus": "โฟกัสเริ่มต้น", "Behavior": "พฤติกรรม", "Transitions": "การเปลี่ยน", "Notes": "หมายเหตุ", "To Back": "ไปหลังสุด", "Back 1": "ถอย 1", "Forward 1": "เดินหน้า 1", "To Front": "ไปหน้าสุด" });
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.tr, { "Interface Settings": "Arayüz ayarları", "Close Inspector": "Denetçiyi kapat", "Initial Focus": "İlk odak", "Behavior": "Davranış", "Transitions": "Geçişler", "Notes": "Notlar", "To Back": "En arkaya", "Back 1": "1 geri", "Forward 1": "1 ileri", "To Front": "En öne" });
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.ko, {
+  "Interface": "인터페이스", "Use As": "용도", "Playtest": "플레이테스트", "On Cancel": "취소 시", "More": "더 보기", "Layers": "레이어", "+ Add Node": "+ 노드 추가", "Add Node": "노드 추가", "Back": "뒤", "Front": "앞", "Send to Back": "맨 뒤로 보내기", "Move Backward": "뒤로 이동", "Move Forward": "앞으로 이동", "Bring to Front": "맨 앞으로 가져오기", "Game Reference": "게임 참조", "Game scene": "게임 장면", "Inspector": "검사기", "roles": "역할", "Search roles": "역할 검색", "Overlay": "오버레이", "Window": "창",
+  "Parents draw before their children. Later rows draw on top.": "부모는 자식보다 먼저 그려집니다. 뒤쪽 행일수록 위에 그려집니다.", "Overlays cannot replace System scenes. Existing assignments can be cleared.": "오버레이는 시스템 장면을 대체할 수 없습니다. 기존 할당은 해제할 수 있습니다.", "Custom clears this interface from System replacements.": "사용자 지정은 시스템 대체에서 이 인터페이스만 해제합니다.", "Layers, Back to Front": "레이어, 뒤에서 앞으로", "Pinned / locked": "고정 / 잠금", "Add a node or use a captured layout to start.": "노드를 추가하거나 캡처한 레이아웃으로 시작하세요.", "Captured layers": "캡처한 레이어", "Add All to Front": "모두 앞에 추가", "Use as Starting Layout": "시작 레이아웃으로 사용", "Add to Front": "앞에 추가", "nodes added to front": "개 노드를 앞에 추가함"
+});
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.ar, {
+  "Interface": "الواجهة", "Use As": "استخدام كـ", "Playtest": "اختبار اللعب", "On Cancel": "عند الإلغاء", "More": "المزيد", "Layers": "الطبقات", "+ Add Node": "+ إضافة عقدة", "Add Node": "إضافة عقدة", "Back": "الخلف", "Front": "الأمام", "Send to Back": "إرسال إلى الخلف", "Move Backward": "تحريك للخلف", "Move Forward": "تحريك للأمام", "Bring to Front": "إحضار إلى الأمام", "Game Reference": "مرجع اللعبة", "Game scene": "مشهد اللعبة", "Inspector": "الفاحص", "roles": "أدوار", "Search roles": "بحث في الأدوار", "Overlay": "طبقة علوية", "Window": "نافذة",
+  "Parents draw before their children. Later rows draw on top.": "يُرسم الأصل قبل أبنائه. تُرسم الصفوف اللاحقة في الأعلى.", "Overlays cannot replace System scenes. Existing assignments can be cleared.": "لا يمكن للطبقات العلوية استبدال مشاهد النظام. يمكن مسح التعيينات الحالية.", "Custom clears this interface from System replacements.": "يمسح مخصص هذه الواجهة فقط من بدائل النظام.", "Layers, Back to Front": "الطبقات، من الخلف إلى الأمام", "Pinned / locked": "مثبت / مقفل", "Add a node or use a captured layout to start.": "أضف عقدة أو استخدم تخطيطًا ملتقطًا للبدء.", "Captured layers": "الطبقات الملتقطة", "Add All to Front": "إضافة الكل إلى الأمام", "Use as Starting Layout": "استخدام كتخطيط بداية", "Add to Front": "إضافة إلى الأمام", "nodes added to front": "عقد أضيفت إلى الأمام"
+});
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.it, {
+  "Interface": "Interfaccia", "Use As": "Usa come", "Playtest": "Prova", "On Cancel": "All'annullamento", "More": "Altro", "Layers": "Livelli", "+ Add Node": "+ Aggiungi nodo", "Add Node": "Aggiungi nodo", "Back": "Dietro", "Front": "Davanti", "Send to Back": "Porta in fondo", "Move Backward": "Sposta indietro", "Move Forward": "Sposta avanti", "Bring to Front": "Porta in primo piano", "Game Reference": "Riferimento del gioco", "Game scene": "Scena di gioco", "Inspector": "Ispettore", "roles": "ruoli", "Search roles": "Cerca ruoli", "Overlay": "Sovrapposizione", "Window": "Finestra",
+  "Parents draw before their children. Later rows draw on top.": "I genitori vengono disegnati prima dei figli. Le righe successive vengono disegnate sopra.", "Overlays cannot replace System scenes. Existing assignments can be cleared.": "Le sovrapposizioni non possono sostituire le scene di sistema. Le assegnazioni esistenti possono essere rimosse.", "Custom clears this interface from System replacements.": "Personalizzato rimuove solo questa interfaccia dalle sostituzioni di sistema.", "Layers, Back to Front": "Livelli, da dietro a davanti", "Pinned / locked": "Fissato / bloccato", "Add a node or use a captured layout to start.": "Aggiungi un nodo o usa un layout acquisito per iniziare.", "Captured layers": "Livelli acquisiti", "Add All to Front": "Aggiungi tutto davanti", "Use as Starting Layout": "Usa come layout iniziale", "Add to Front": "Aggiungi davanti", "nodes added to front": "nodi aggiunti davanti"
+});
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.pl, {
+  "Interface": "Interfejs", "Use As": "Użyj jako", "Playtest": "Test gry", "On Cancel": "Przy anulowaniu", "More": "Więcej", "Layers": "Warstwy", "+ Add Node": "+ Dodaj węzeł", "Add Node": "Dodaj węzeł", "Back": "Tył", "Front": "Przód", "Send to Back": "Przenieś na spód", "Move Backward": "Przenieś do tyłu", "Move Forward": "Przenieś do przodu", "Bring to Front": "Przenieś na wierzch", "Game Reference": "Podgląd gry", "Game scene": "Scena gry", "Inspector": "Inspektor", "roles": "role", "Search roles": "Szukaj ról", "Overlay": "Nakładka", "Window": "Okno",
+  "Parents draw before their children. Later rows draw on top.": "Rodzice są rysowani przed dziećmi. Późniejsze wiersze są rysowane na wierzchu.", "Overlays cannot replace System scenes. Existing assignments can be cleared.": "Nakładki nie mogą zastępować scen systemowych. Istniejące przypisania można usunąć.", "Custom clears this interface from System replacements.": "Niestandardowy usuwa tylko ten interfejs z zastępstw systemowych.", "Layers, Back to Front": "Warstwy, od tyłu do przodu", "Pinned / locked": "Przypięte / zablokowane", "Add a node or use a captured layout to start.": "Dodaj węzeł lub użyj przechwyconego układu.", "Captured layers": "Przechwycone warstwy", "Add All to Front": "Dodaj wszystko na wierzch", "Use as Starting Layout": "Użyj jako układu początkowego", "Add to Front": "Dodaj na wierzch", "nodes added to front": "węzłów dodano na wierzch"
+});
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.id, {
+  "Interface": "Antarmuka", "Use As": "Gunakan sebagai", "Playtest": "Uji main", "On Cancel": "Saat batal", "More": "Lainnya", "Layers": "Lapisan", "+ Add Node": "+ Tambah node", "Add Node": "Tambah node", "Back": "Belakang", "Front": "Depan", "Send to Back": "Kirim ke belakang", "Move Backward": "Mundur", "Move Forward": "Maju", "Bring to Front": "Bawa ke depan", "Game Reference": "Referensi game", "Game scene": "Adegan game", "Inspector": "Inspektur", "roles": "peran", "Search roles": "Cari peran", "Overlay": "Hamparan", "Window": "Jendela",
+  "Parents draw before their children. Later rows draw on top.": "Induk digambar sebelum anaknya. Baris berikutnya digambar di atas.", "Overlays cannot replace System scenes. Existing assignments can be cleared.": "Hamparan tidak dapat mengganti adegan Sistem. Penetapan lama dapat dihapus.", "Custom clears this interface from System replacements.": "Kustom hanya menghapus antarmuka ini dari penggantian Sistem.", "Layers, Back to Front": "Lapisan, belakang ke depan", "Pinned / locked": "Disematkan / dikunci", "Add a node or use a captured layout to start.": "Tambahkan node atau gunakan tata letak tangkapan untuk memulai.", "Captured layers": "Lapisan tangkapan", "Add All to Front": "Tambah semua ke depan", "Use as Starting Layout": "Gunakan sebagai tata letak awal", "Add to Front": "Tambah ke depan", "nodes added to front": "node ditambahkan ke depan"
+});
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.vi, {
+  "Interface": "Giao diện", "Use As": "Dùng làm", "Playtest": "Chạy thử", "On Cancel": "Khi hủy", "More": "Thêm", "Layers": "Lớp", "+ Add Node": "+ Thêm nút", "Add Node": "Thêm nút", "Back": "Sau", "Front": "Trước", "Send to Back": "Đưa ra sau cùng", "Move Backward": "Lùi ra sau", "Move Forward": "Tiến lên trước", "Bring to Front": "Đưa lên trước cùng", "Game Reference": "Tham chiếu trò chơi", "Game scene": "Cảnh trò chơi", "Inspector": "Trình kiểm tra", "roles": "vai trò", "Search roles": "Tìm vai trò", "Overlay": "Lớp phủ", "Window": "Cửa sổ",
+  "Parents draw before their children. Later rows draw on top.": "Nút cha được vẽ trước nút con. Hàng sau được vẽ lên trên.", "Overlays cannot replace System scenes. Existing assignments can be cleared.": "Lớp phủ không thể thay cảnh Hệ thống. Có thể xóa các gán hiện có.", "Custom clears this interface from System replacements.": "Tùy chỉnh chỉ xóa giao diện này khỏi thay thế Hệ thống.", "Layers, Back to Front": "Lớp, từ sau ra trước", "Pinned / locked": "Ghim / khóa", "Add a node or use a captured layout to start.": "Thêm nút hoặc dùng bố cục đã chụp để bắt đầu.", "Captured layers": "Lớp đã chụp", "Add All to Front": "Thêm tất cả ra trước", "Use as Starting Layout": "Dùng làm bố cục ban đầu", "Add to Front": "Thêm ra trước", "nodes added to front": "nút đã thêm ra trước"
+});
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.th, {
+  "Interface": "อินเทอร์เฟซ", "Use As": "ใช้เป็น", "Playtest": "ทดสอบเล่น", "On Cancel": "เมื่อยกเลิก", "More": "เพิ่มเติม", "Layers": "เลเยอร์", "+ Add Node": "+ เพิ่มโหนด", "Add Node": "เพิ่มโหนด", "Back": "ด้านหลัง", "Front": "ด้านหน้า", "Send to Back": "ส่งไปหลังสุด", "Move Backward": "เลื่อนไปด้านหลัง", "Move Forward": "เลื่อนไปด้านหน้า", "Bring to Front": "นำมาหน้าสุด", "Game Reference": "ภาพอ้างอิงเกม", "Game scene": "ฉากเกม", "Inspector": "ตัวตรวจสอบ", "roles": "บทบาท", "Search roles": "ค้นหาบทบาท", "Overlay": "โอเวอร์เลย์", "Window": "หน้าต่าง",
+  "Parents draw before their children. Later rows draw on top.": "โหนดแม่จะวาดก่อนโหนดลูก แถวที่อยู่ภายหลังจะวาดทับด้านบน", "Overlays cannot replace System scenes. Existing assignments can be cleared.": "โอเวอร์เลย์ไม่สามารถแทนฉากระบบได้ แต่ล้างการกำหนดเดิมได้", "Custom clears this interface from System replacements.": "กำหนดเองจะล้างเฉพาะอินเทอร์เฟซนี้จากการแทนที่ระบบ", "Layers, Back to Front": "เลเยอร์ จากหลังมาหน้า", "Pinned / locked": "ปักหมุด / ล็อก", "Add a node or use a captured layout to start.": "เพิ่มโหนดหรือใช้เลย์เอาต์ที่จับภาพไว้เพื่อเริ่มต้น", "Captured layers": "เลเยอร์ที่จับภาพ", "Add All to Front": "เพิ่มทั้งหมดไว้ด้านหน้า", "Use as Starting Layout": "ใช้เป็นเลย์เอาต์เริ่มต้น", "Add to Front": "เพิ่มไว้ด้านหน้า", "nodes added to front": "โหนดถูกเพิ่มไว้ด้านหน้า"
+});
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.tr, {
+  "Interface": "Arayüz", "Use As": "Farklı kullan", "Playtest": "Oyun testi", "On Cancel": "İptalde", "More": "Daha fazla", "Layers": "Katmanlar", "+ Add Node": "+ Düğüm ekle", "Add Node": "Düğüm ekle", "Back": "Arka", "Front": "Ön", "Send to Back": "En arkaya gönder", "Move Backward": "Geri taşı", "Move Forward": "İleri taşı", "Bring to Front": "En öne getir", "Game Reference": "Oyun referansı", "Game scene": "Oyun sahnesi", "Inspector": "Denetçi", "roles": "roller", "Search roles": "Rol ara", "Overlay": "Kaplama", "Window": "Pencere",
+  "Parents draw before their children. Later rows draw on top.": "Üst düğümler alt düğümlerden önce çizilir. Sonraki satırlar üste çizilir.", "Overlays cannot replace System scenes. Existing assignments can be cleared.": "Kaplamalar Sistem sahnelerinin yerini alamaz. Mevcut atamalar temizlenebilir.", "Custom clears this interface from System replacements.": "Özel, yalnızca bu arayüzü Sistem değiştirmelerinden temizler.", "Layers, Back to Front": "Katmanlar, arkadan öne", "Pinned / locked": "Sabit / kilitli", "Add a node or use a captured layout to start.": "Başlamak için bir düğüm ekleyin veya yakalanmış düzeni kullanın.", "Captured layers": "Yakalanan katmanlar", "Add All to Front": "Tümünü öne ekle", "Use as Starting Layout": "Başlangıç düzeni olarak kullan", "Add to Front": "Öne ekle", "nodes added to front": "düğüm öne eklendi"
+});
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.ko, {
+  "Transition in": "열기 전환", "Transition out": "닫기 전환", "Slide left": "왼쪽으로 슬라이드",
+  "Input stays locked while an interface opens; closing completes before leaving.": "인터페이스가 열리는 동안 입력이 잠기며, 닫기 전환이 끝난 뒤 화면을 나갑니다.",
+  "Appearance": "모양", "Font face": "글꼴", "Game font": "게임 글꼴", "Blank uses the game font.": "비워 두면 게임 글꼴을 사용합니다.",
+  "Bold": "굵게", "Italic": "기울임", "Outline color": "외곽선 색", "Outline width": "외곽선 너비", "Letter spacing": "자간",
+  "Nine-slice": "나인 슬라이스", "Keeps image borders unscaled; available for Picture and System images.": "이미지 테두리를 늘리지 않습니다. Picture 및 System 이미지에서 사용할 수 있습니다.",
+  "Blank state values inherit the base appearance.": "빈 상태 값은 기본 모양을 상속합니다.", "Focused": "포커스", "Inherit": "상속", "Disabled": "비활성", "Navigation": "탐색",
+  "Automatic uses geometric navigation; invalid targets safely fall back to it.": "자동은 위치 기반 탐색을 사용하며 잘못된 대상은 안전하게 자동 방식으로 돌아갑니다."
+});
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.ar, {
+  "Transition in": "انتقال الدخول", "Transition out": "انتقال الخروج", "Slide left": "انزلاق لليسار",
+  "Input stays locked while an interface opens; closing completes before leaving.": "يبقى الإدخال مقفلاً أثناء فتح الواجهة؛ ويكتمل الإغلاق قبل المغادرة.",
+  "Appearance": "المظهر", "Font face": "نوع الخط", "Game font": "خط اللعبة", "Blank uses the game font.": "يستخدم الحقل الفارغ خط اللعبة.",
+  "Bold": "عريض", "Italic": "مائل", "Outline color": "لون الحد", "Outline width": "عرض الحد", "Letter spacing": "تباعد الحروف",
+  "Nine-slice": "تقسيم تساعي", "Keeps image borders unscaled; available for Picture and System images.": "يحافظ على حدود الصورة بلا تحجيم؛ متاح لصور Picture وSystem.",
+  "Blank state values inherit the base appearance.": "ترث قيم الحالة الفارغة المظهر الأساسي.", "Focused": "مركّز", "Inherit": "وراثة", "Disabled": "معطّل", "Navigation": "التنقل",
+  "Automatic uses geometric navigation; invalid targets safely fall back to it.": "يستخدم الوضع التلقائي التنقل الهندسي؛ وتعود الأهداف غير الصالحة إليه بأمان."
+});
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.it, {
+  "Transition in": "Transizione in entrata", "Transition out": "Transizione in uscita", "Slide left": "Scorri a sinistra",
+  "Input stays locked while an interface opens; closing completes before leaving.": "L'input resta bloccato durante l'apertura; la chiusura termina prima di uscire.",
+  "Appearance": "Aspetto", "Font face": "Tipo di carattere", "Game font": "Carattere del gioco", "Blank uses the game font.": "Vuoto usa il carattere del gioco.",
+  "Bold": "Grassetto", "Italic": "Corsivo", "Outline color": "Colore contorno", "Outline width": "Larghezza contorno", "Letter spacing": "Spaziatura lettere",
+  "Nine-slice": "Nove sezioni", "Keeps image borders unscaled; available for Picture and System images.": "Mantiene i bordi non scalati; disponibile per immagini Picture e System.",
+  "Blank state values inherit the base appearance.": "I valori di stato vuoti ereditano l'aspetto base.", "Focused": "Evidenziato", "Inherit": "Eredita", "Disabled": "Disabilitato", "Navigation": "Navigazione",
+  "Automatic uses geometric navigation; invalid targets safely fall back to it.": "Automatico usa la navigazione geometrica; i bersagli non validi vi tornano in sicurezza."
+});
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.pl, {
+  "Transition in": "Przejście otwarcia", "Transition out": "Przejście zamknięcia", "Slide left": "Przesuń w lewo",
+  "Input stays locked while an interface opens; closing completes before leaving.": "Podczas otwierania wejście jest zablokowane; zamknięcie kończy się przed wyjściem.",
+  "Appearance": "Wygląd", "Font face": "Krój pisma", "Game font": "Czcionka gry", "Blank uses the game font.": "Puste pole używa czcionki gry.",
+  "Bold": "Pogrubienie", "Italic": "Kursywa", "Outline color": "Kolor obrysu", "Outline width": "Szerokość obrysu", "Letter spacing": "Odstęp liter",
+  "Nine-slice": "Skalowanie dziewięcioczęściowe", "Keeps image borders unscaled; available for Picture and System images.": "Zachowuje brzegi obrazu bez skalowania; dostępne dla obrazów Picture i System.",
+  "Blank state values inherit the base appearance.": "Puste wartości stanu dziedziczą wygląd podstawowy.", "Focused": "Aktywne", "Inherit": "Dziedzicz", "Disabled": "Wyłączone", "Navigation": "Nawigacja",
+  "Automatic uses geometric navigation; invalid targets safely fall back to it.": "Tryb automatyczny używa geometrii; nieprawidłowe cele bezpiecznie do niego wracają."
+});
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.id, {
+  "Transition in": "Transisi masuk", "Transition out": "Transisi keluar", "Slide left": "Geser ke kiri",
+  "Input stays locked while an interface opens; closing completes before leaving.": "Input tetap terkunci saat antarmuka dibuka; penutupan selesai sebelum keluar.",
+  "Appearance": "Tampilan", "Font face": "Jenis font", "Game font": "Font game", "Blank uses the game font.": "Kosong menggunakan font game.",
+  "Bold": "Tebal", "Italic": "Miring", "Outline color": "Warna garis tepi", "Outline width": "Lebar garis tepi", "Letter spacing": "Jarak huruf",
+  "Nine-slice": "Sembilan irisan", "Keeps image borders unscaled; available for Picture and System images.": "Menjaga tepi gambar tanpa diskalakan; tersedia untuk gambar Picture dan System.",
+  "Blank state values inherit the base appearance.": "Nilai status kosong mewarisi tampilan dasar.", "Focused": "Fokus", "Inherit": "Warisi", "Disabled": "Dinonaktifkan", "Navigation": "Navigasi",
+  "Automatic uses geometric navigation; invalid targets safely fall back to it.": "Otomatis memakai navigasi geometris; target tidak valid kembali ke sana dengan aman."
+});
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.vi, {
+  "Transition in": "Chuyển cảnh vào", "Transition out": "Chuyển cảnh ra", "Slide left": "Trượt sang trái",
+  "Input stays locked while an interface opens; closing completes before leaving.": "Đầu vào bị khóa khi giao diện mở; quá trình đóng hoàn tất trước khi rời đi.",
+  "Appearance": "Diện mạo", "Font face": "Kiểu chữ", "Game font": "Phông chữ trò chơi", "Blank uses the game font.": "Để trống sẽ dùng phông chữ trò chơi.",
+  "Bold": "Đậm", "Italic": "Nghiêng", "Outline color": "Màu viền", "Outline width": "Độ rộng viền", "Letter spacing": "Khoảng cách chữ",
+  "Nine-slice": "Chín lát", "Keeps image borders unscaled; available for Picture and System images.": "Giữ viền ảnh không bị co giãn; dùng được cho ảnh Picture và System.",
+  "Blank state values inherit the base appearance.": "Giá trị trạng thái để trống sẽ kế thừa diện mạo cơ sở.", "Focused": "Được chọn", "Inherit": "Kế thừa", "Disabled": "Vô hiệu", "Navigation": "Điều hướng",
+  "Automatic uses geometric navigation; invalid targets safely fall back to it.": "Tự động dùng điều hướng hình học; mục tiêu không hợp lệ sẽ an toàn quay về chế độ này."
+});
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.th, {
+  "Transition in": "การเปลี่ยนตอนเข้า", "Transition out": "การเปลี่ยนตอนออก", "Slide left": "เลื่อนไปทางซ้าย",
+  "Input stays locked while an interface opens; closing completes before leaving.": "อินพุตจะถูกล็อกขณะเปิดอินเทอร์เฟซ และจะปิดให้เสร็จก่อนออกจากหน้า",
+  "Appearance": "รูปลักษณ์", "Font face": "แบบอักษร", "Game font": "แบบอักษรของเกม", "Blank uses the game font.": "เว้นว่างเพื่อใช้แบบอักษรของเกม",
+  "Bold": "ตัวหนา", "Italic": "ตัวเอียง", "Outline color": "สีเส้นขอบ", "Outline width": "ความกว้างเส้นขอบ", "Letter spacing": "ระยะห่างตัวอักษร",
+  "Nine-slice": "เก้าส่วน", "Keeps image borders unscaled; available for Picture and System images.": "คงขอบภาพโดยไม่ย่อขยาย ใช้ได้กับภาพ Picture และ System",
+  "Blank state values inherit the base appearance.": "ค่าสถานะที่เว้นว่างจะสืบทอดรูปลักษณ์พื้นฐาน", "Focused": "โฟกัส", "Inherit": "สืบทอด", "Disabled": "ปิดใช้งาน", "Navigation": "การนำทาง",
+  "Automatic uses geometric navigation; invalid targets safely fall back to it.": "อัตโนมัติใช้ตำแหน่งเรขาคณิต เป้าหมายที่ไม่ถูกต้องจะกลับมาใช้โหมดนี้อย่างปลอดภัย"
+});
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.tr, {
+  "Transition in": "Giriş geçişi", "Transition out": "Çıkış geçişi", "Slide left": "Sola kaydır",
+  "Input stays locked while an interface opens; closing completes before leaving.": "Arayüz açılırken giriş kilitli kalır; ayrılmadan önce kapanış tamamlanır.",
+  "Appearance": "Görünüm", "Font face": "Yazı tipi", "Game font": "Oyun yazı tipi", "Blank uses the game font.": "Boş bırakılırsa oyun yazı tipi kullanılır.",
+  "Bold": "Kalın", "Italic": "İtalik", "Outline color": "Ana hat rengi", "Outline width": "Ana hat genişliği", "Letter spacing": "Harf aralığı",
+  "Nine-slice": "Dokuz dilim", "Keeps image borders unscaled; available for Picture and System images.": "Görüntü kenarlarını ölçeklemeden korur; Picture ve System görüntülerinde kullanılabilir.",
+  "Blank state values inherit the base appearance.": "Boş durum değerleri temel görünümü devralır.", "Focused": "Odaklı", "Inherit": "Devral", "Disabled": "Devre dışı", "Navigation": "Gezinme",
+  "Automatic uses geometric navigation; invalid targets safely fall back to it.": "Otomatik geometrik gezinmeyi kullanır; geçersiz hedefler güvenle buna döner."
+});
+
+// User Interfaces editor redesign labels, hand-authored for every shipped locale.
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.ja, {
+  "Interface": "インターフェース", "Use As": "用途", "Playtest": "テストプレイ", "On Cancel": "キャンセル時", "More": "その他", "Layers": "レイヤー", "+ Add Node": "+ ノードを追加", "Add Node": "ノードを追加", "Back": "背面", "Front": "前面", "Send to Back": "最背面へ", "Move Backward": "背面へ移動", "Move Forward": "前面へ移動", "Bring to Front": "最前面へ", "Game Reference": "ゲーム参照", "Game scene": "ゲームシーン", "Inspector": "インスペクター", "roles": "用途", "Search roles": "用途を検索", "Overlay": "オーバーレイ", "Window": "ウィンドウ",
+  "Parents draw before their children. Later rows draw on top.": "親は子より先に描画されます。後の行ほど手前に描画されます。", "Overlays cannot replace System scenes. Existing assignments can be cleared.": "オーバーレイはシステムシーンを置き換えられません。既存の割り当ては解除できます。", "Custom clears this interface from System replacements.": "カスタムはシステムの置き換えからこのインターフェースだけを解除します。", "Layers, Back to Front": "レイヤー、背面から前面", "Pinned / locked": "固定 / ロック", "Add a node or use a captured layout to start.": "ノードを追加するか、キャプチャしたレイアウトを使って開始します。", "Captured layers": "キャプチャしたレイヤー", "Add All to Front": "すべて前面に追加", "Use as Starting Layout": "開始レイアウトとして使用", "Add to Front": "前面に追加", "nodes added to front": "個のノードを前面に追加"
+});
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.es, {
+  "Interface": "Interfaz", "Use As": "Usar como", "Playtest": "Probar", "On Cancel": "Al cancelar", "More": "Más", "Layers": "Capas", "+ Add Node": "+ Añadir nodo", "Add Node": "Añadir nodo", "Back": "Fondo", "Front": "Frente", "Send to Back": "Enviar al fondo", "Move Backward": "Mover hacia atrás", "Move Forward": "Mover hacia delante", "Bring to Front": "Traer al frente", "Game Reference": "Referencia del juego", "Game scene": "Escena del juego", "Inspector": "Inspector", "roles": "funciones", "Search roles": "Buscar funciones", "Overlay": "Superposición", "Window": "Ventana",
+  "Parents draw before their children. Later rows draw on top.": "Los padres se dibujan antes que sus hijos. Las filas posteriores quedan encima.", "Overlays cannot replace System scenes. Existing assignments can be cleared.": "Las superposiciones no pueden sustituir escenas del sistema. Las asignaciones existentes se pueden borrar.", "Custom clears this interface from System replacements.": "Personalizado quita solo esta interfaz de las sustituciones del sistema.", "Layers, Back to Front": "Capas, del fondo al frente", "Pinned / locked": "Fijada / bloqueada", "Add a node or use a captured layout to start.": "Añade un nodo o usa un diseño capturado para empezar.", "Captured layers": "Capas capturadas", "Add All to Front": "Añadir todo al frente", "Use as Starting Layout": "Usar como diseño inicial", "Add to Front": "Añadir al frente", "nodes added to front": "nodos añadidos al frente"
+});
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS['zh-Hant'], {
+  "Interface": "介面", "Use As": "用途", "Playtest": "測試遊玩", "On Cancel": "取消時", "More": "更多", "Layers": "圖層", "+ Add Node": "+ 新增節點", "Add Node": "新增節點", "Back": "後方", "Front": "前方", "Send to Back": "移至最底層", "Move Backward": "向後移動", "Move Forward": "向前移動", "Bring to Front": "移至最上層", "Game Reference": "遊戲參考", "Game scene": "遊戲場景", "Inspector": "檢查器", "roles": "用途", "Search roles": "搜尋用途", "Overlay": "覆蓋層", "Window": "視窗",
+  "Parents draw before their children. Later rows draw on top.": "父節點先於子節點繪製。較後的列會顯示在上方。", "Overlays cannot replace System scenes. Existing assignments can be cleared.": "覆蓋層不能取代系統場景，但可清除現有指派。", "Custom clears this interface from System replacements.": "自訂只會從系統替換中清除此介面。", "Layers, Back to Front": "圖層，由後至前", "Pinned / locked": "固定 / 鎖定", "Add a node or use a captured layout to start.": "新增節點或使用擷取的版面配置開始。", "Captured layers": "擷取的圖層", "Add All to Front": "全部新增至前方", "Use as Starting Layout": "用作起始版面", "Add to Front": "新增至前方", "nodes added to front": "個節點已新增至前方"
+});
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS['zh-Hans'], {
+  "Interface": "界面", "Use As": "用途", "Playtest": "测试运行", "On Cancel": "取消时", "More": "更多", "Layers": "图层", "+ Add Node": "+ 添加节点", "Add Node": "添加节点", "Back": "后方", "Front": "前方", "Send to Back": "移到最底层", "Move Backward": "向后移动", "Move Forward": "向前移动", "Bring to Front": "移到最上层", "Game Reference": "游戏参考", "Game scene": "游戏场景", "Inspector": "检查器", "roles": "用途", "Search roles": "搜索用途", "Overlay": "叠加层", "Window": "窗口",
+  "Parents draw before their children. Later rows draw on top.": "父节点先于子节点绘制。较后的行显示在上方。", "Overlays cannot replace System scenes. Existing assignments can be cleared.": "叠加层不能替换系统场景，但可以清除现有分配。", "Custom clears this interface from System replacements.": "自定义只会从系统替换中清除此界面。", "Layers, Back to Front": "图层，从后到前", "Pinned / locked": "固定 / 锁定", "Add a node or use a captured layout to start.": "添加节点或使用捕获的布局开始。", "Captured layers": "捕获的图层", "Add All to Front": "全部添加到前方", "Use as Starting Layout": "用作起始布局", "Add to Front": "添加到前方", "nodes added to front": "个节点已添加到前方"
+});
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.ru, {
+  "Interface": "Интерфейс", "Use As": "Использовать как", "Playtest": "Тест", "On Cancel": "При отмене", "More": "Ещё", "Layers": "Слои", "+ Add Node": "+ Добавить узел", "Add Node": "Добавить узел", "Back": "Сзади", "Front": "Спереди", "Send to Back": "На задний план", "Move Backward": "Переместить назад", "Move Forward": "Переместить вперёд", "Bring to Front": "На передний план", "Game Reference": "Образец из игры", "Game scene": "Игровая сцена", "Inspector": "Инспектор", "roles": "ролей", "Search roles": "Поиск ролей", "Overlay": "Оверлей", "Window": "Окно",
+  "Parents draw before their children. Later rows draw on top.": "Родители рисуются до дочерних узлов. Более поздние строки рисуются сверху.", "Overlays cannot replace System scenes. Existing assignments can be cleared.": "Оверлеи не заменяют системные сцены. Существующие назначения можно снять.", "Custom clears this interface from System replacements.": "Пользовательский режим снимает только этот интерфейс с системных замен.", "Layers, Back to Front": "Слои, сзади вперёд", "Pinned / locked": "Закреплено / заблокировано", "Add a node or use a captured layout to start.": "Добавьте узел или используйте захваченный макет.", "Captured layers": "Захваченные слои", "Add All to Front": "Добавить всё вперёд", "Use as Starting Layout": "Использовать как начальный макет", "Add to Front": "Добавить вперёд", "nodes added to front": "узлов добавлено вперёд"
+});
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.pt, {
+  "Interface": "Interface", "Use As": "Usar como", "Playtest": "Testar", "On Cancel": "Ao cancelar", "More": "Mais", "Layers": "Camadas", "+ Add Node": "+ Adicionar nó", "Add Node": "Adicionar nó", "Back": "Atrás", "Front": "Frente", "Send to Back": "Enviar para trás", "Move Backward": "Mover para trás", "Move Forward": "Mover para a frente", "Bring to Front": "Trazer para a frente", "Game Reference": "Referência do jogo", "Game scene": "Cena do jogo", "Inspector": "Inspetor", "roles": "funções", "Search roles": "Buscar funções", "Overlay": "Sobreposição", "Window": "Janela",
+  "Parents draw before their children. Later rows draw on top.": "Os pais são desenhados antes dos filhos. Linhas posteriores ficam por cima.", "Overlays cannot replace System scenes. Existing assignments can be cleared.": "Sobreposições não substituem cenas do sistema. Atribuições existentes podem ser removidas.", "Custom clears this interface from System replacements.": "Personalizado remove somente esta interface das substituições do sistema.", "Layers, Back to Front": "Camadas, de trás para a frente", "Pinned / locked": "Fixada / bloqueada", "Add a node or use a captured layout to start.": "Adicione um nó ou use um layout capturado para começar.", "Captured layers": "Camadas capturadas", "Add All to Front": "Adicionar tudo à frente", "Use as Starting Layout": "Usar como layout inicial", "Add to Front": "Adicionar à frente", "nodes added to front": "nós adicionados à frente"
+});
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.de, {
+  "Interface": "Benutzeroberfläche", "Use As": "Verwenden als", "Playtest": "Testlauf", "On Cancel": "Beim Abbrechen", "More": "Mehr", "Layers": "Ebenen", "+ Add Node": "+ Knoten hinzufügen", "Add Node": "Knoten hinzufügen", "Back": "Hinten", "Front": "Vorne", "Send to Back": "Ganz nach hinten", "Move Backward": "Nach hinten", "Move Forward": "Nach vorne", "Bring to Front": "Ganz nach vorne", "Game Reference": "Spielreferenz", "Game scene": "Spielszene", "Inspector": "Inspektor", "roles": "Rollen", "Search roles": "Rollen suchen", "Overlay": "Overlay", "Window": "Fenster",
+  "Parents draw before their children. Later rows draw on top.": "Eltern werden vor ihren Kindern gezeichnet. Spätere Zeilen liegen oben.", "Overlays cannot replace System scenes. Existing assignments can be cleared.": "Overlays können keine Systemszenen ersetzen. Bestehende Zuweisungen können entfernt werden.", "Custom clears this interface from System replacements.": "Benutzerdefiniert entfernt nur diese Oberfläche aus den Systemersetzungen.", "Layers, Back to Front": "Ebenen, hinten nach vorne", "Pinned / locked": "Angeheftet / gesperrt", "Add a node or use a captured layout to start.": "Füge einen Knoten hinzu oder nutze ein erfasstes Layout.", "Captured layers": "Erfasste Ebenen", "Add All to Front": "Alle vorne hinzufügen", "Use as Starting Layout": "Als Startlayout verwenden", "Add to Front": "Vorne hinzufügen", "nodes added to front": "Knoten vorne hinzugefügt"
+});
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.fr, {
+  "Interface": "Interface", "Use As": "Utiliser comme", "Playtest": "Tester", "On Cancel": "À l'annulation", "More": "Plus", "Layers": "Calques", "+ Add Node": "+ Ajouter un nœud", "Add Node": "Ajouter un nœud", "Back": "Arrière", "Front": "Avant", "Send to Back": "Envoyer à l'arrière", "Move Backward": "Reculer", "Move Forward": "Avancer", "Bring to Front": "Mettre au premier plan", "Game Reference": "Référence du jeu", "Game scene": "Scène du jeu", "Inspector": "Inspecteur", "roles": "rôles", "Search roles": "Rechercher des rôles", "Overlay": "Superposition", "Window": "Fenêtre",
+  "Parents draw before their children. Later rows draw on top.": "Les parents sont dessinés avant leurs enfants. Les lignes suivantes apparaissent au-dessus.", "Overlays cannot replace System scenes. Existing assignments can be cleared.": "Les superpositions ne remplacent pas les scènes système. Les affectations existantes peuvent être retirées.", "Custom clears this interface from System replacements.": "Personnalisé retire uniquement cette interface des remplacements système.", "Layers, Back to Front": "Calques, de l'arrière vers l'avant", "Pinned / locked": "Épinglé / verrouillé", "Add a node or use a captured layout to start.": "Ajoutez un nœud ou utilisez une disposition capturée.", "Captured layers": "Calques capturés", "Add All to Front": "Tout ajouter à l'avant", "Use as Starting Layout": "Utiliser comme disposition initiale", "Add to Front": "Ajouter à l'avant", "nodes added to front": "nœuds ajoutés à l'avant"
+});
+Object.assign(globalThis.RR_DEEP_TEXT_TRANSLATIONS.el, {
+  "Interface": "Διεπαφή", "Use As": "Χρήση ως", "Playtest": "Δοκιμή", "On Cancel": "Κατά την ακύρωση", "More": "Περισσότερα", "Layers": "Στρώσεις", "+ Add Node": "+ Προσθήκη κόμβου", "Add Node": "Προσθήκη κόμβου", "Back": "Πίσω", "Front": "Μπροστά", "Send to Back": "Αποστολή πίσω", "Move Backward": "Μετακίνηση πίσω", "Move Forward": "Μετακίνηση μπροστά", "Bring to Front": "Μεταφορά μπροστά", "Game Reference": "Αναφορά παιχνιδιού", "Game scene": "Σκηνή παιχνιδιού", "Inspector": "Επιθεωρητής", "roles": "ρόλοι", "Search roles": "Αναζήτηση ρόλων", "Overlay": "Επικάλυψη", "Window": "Παράθυρο",
+  "Parents draw before their children. Later rows draw on top.": "Οι γονείς σχεδιάζονται πριν από τα παιδιά. Οι επόμενες σειρές σχεδιάζονται από πάνω.", "Overlays cannot replace System scenes. Existing assignments can be cleared.": "Οι επικαλύψεις δεν αντικαθιστούν σκηνές συστήματος. Οι υπάρχουσες αναθέσεις μπορούν να αφαιρεθούν.", "Custom clears this interface from System replacements.": "Η προσαρμογή αφαιρεί μόνο αυτή τη διεπαφή από τις αντικαταστάσεις συστήματος.", "Layers, Back to Front": "Στρώσεις, από πίσω προς τα εμπρός", "Pinned / locked": "Καρφιτσωμένο / κλειδωμένο", "Add a node or use a captured layout to start.": "Προσθέστε κόμβο ή χρησιμοποιήστε μια καταγεγραμμένη διάταξη.", "Captured layers": "Καταγεγραμμένες στρώσεις", "Add All to Front": "Προσθήκη όλων μπροστά", "Use as Starting Layout": "Χρήση ως αρχική διάταξη", "Add to Front": "Προσθήκη μπροστά", "nodes added to front": "κόμβοι προστέθηκαν μπροστά"
+});

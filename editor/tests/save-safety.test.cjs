@@ -343,6 +343,140 @@ test('ProjectController saveAll stops immediately when map or database persisten
     assert.equal(alerts.length, 2);
 });
 
+test('browser Save awaits the host flush before reporting success', async () => {
+    let releaseFlush;
+    const flushGate = new Promise(resolve => { releaseFlush = resolve; });
+    const statuses = [];
+    const window = {
+        addEventListener() {},
+        RPGReactorHost: { mode: 'web', flush: () => flushGate }
+    };
+    const ProjectController = loadBrowserClass('ProjectController.js', 'ProjectController', {
+        window,
+        alert: () => {}
+    });
+    const controller = new ProjectController(
+        { saveProject: async () => true },
+        { data: {}, savedState: {}, saveAllData: async () => true },
+        { updateStatus: status => statuses.push(status) }
+    );
+    controller.projectLoaded = true;
+    controller.currentProject = { path: '/project', name: 'Web', maps: [] };
+    controller.tilemapManager = null;
+    controller.updateWindowTitle = () => {};
+    let captured = 0;
+    controller.captureProjectSavedState = () => { captured++; };
+
+    let settled = false;
+    const save = controller.saveAll().then(result => { settled = true; return result; });
+    await Promise.resolve();
+    await Promise.resolve();
+    assert.equal(settled, false);
+    assert.equal(captured, 0);
+    assert.equal(statuses.includes('All files saved'), false);
+
+    releaseFlush();
+    assert.equal(await save, true);
+    assert.equal(captured, 1);
+    assert.equal(statuses.at(-1), 'All files saved');
+});
+
+test('browser Save reports flush errors and restores dirty-state baselines', async () => {
+    const statuses = [];
+    const alerts = [];
+    const window = {
+        addEventListener() {},
+        RPGReactorHost: {
+            mode: 'web',
+            flush: async () => { throw new Error('QuotaExceededError'); }
+        }
+    };
+    const databaseManager = {
+        data: {},
+        savedState: { actors: 'old database' },
+        isDirty() { return this.savedState.actors !== 'new database'; },
+        saveAllData: async function() {
+            this.savedState = { actors: 'new database' };
+            return true;
+        }
+    };
+    const ProjectController = loadBrowserClass('ProjectController.js', 'ProjectController', {
+        window,
+        alert: message => alerts.push(message)
+    });
+    const controller = new ProjectController(
+        { saveProject: async project => { project.modified = 'new'; return true; } },
+        databaseManager,
+        { updateStatus: status => statuses.push(status) }
+    );
+    controller.projectLoaded = true;
+    controller.currentProject = { path: '/project', name: 'Web', maps: [] };
+    const projectBaseline = controller.serializeProjectState();
+    controller.savedProjectState = projectBaseline;
+    controller.savedMapInfosState = JSON.stringify(controller.currentProject.maps);
+    controller.tilemapManager = {
+        currentMap: { id: 1 },
+        savedMapState: 'old map',
+        savedSidecarState: 'old sidecar',
+        saveMap() {
+            this.savedMapState = 'new map';
+            this.savedSidecarState = 'new sidecar';
+            return true;
+        },
+        isMapDirty() { return this.savedMapState !== 'new map'; }
+    };
+    let captured = 0;
+    controller.captureProjectSavedState = () => { captured++; };
+
+    assert.equal(await controller.saveAll(), false);
+    assert.equal(controller.savedProjectState, projectBaseline);
+    assert.equal(controller.savedMapInfosState, JSON.stringify(controller.currentProject.maps));
+    assert.equal(databaseManager.savedState.actors, 'old database');
+    assert.equal(Object.keys(databaseManager.savedState).length, 1);
+    assert.equal(controller.tilemapManager.savedMapState, 'old map');
+    assert.equal(controller.tilemapManager.savedSidecarState, 'old sidecar');
+    assert.equal(captured, 0);
+    assert.equal(statuses.at(-1), 'Error saving to browser storage');
+    assert.equal(statuses.includes('All files saved'), false);
+    assert.equal(alerts.length, 1);
+    assert.equal(controller.hasUnsavedChanges(), true, 'the failed Save remains visibly dirty');
+});
+
+test('malformed Reactor 3D sidecars are not overwritten by normal saves', async () => {
+    const RRMapElevation = require(path.join(editorRoot, 'src', 'utils', 'MapElevation.js'));
+    const RRTileset3DClass = require(path.join(editorRoot, 'src', 'utils', 'Tileset3DClass.js'));
+    const TilemapManager = loadBrowserClass('TilemapManager.js', 'TilemapManager', { RRMapElevation });
+    const DatabaseManager = loadBrowserClass('DatabaseManager.js', 'DatabaseManager', { RRTileset3DClass });
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'rr-malformed-r3d-save-'));
+    const dataPath = path.join(root, 'data');
+    fs.mkdirSync(dataPath);
+    const mapSidecar = path.join(dataPath, 'Map001.r3d.json');
+    const tilesetSidecar = path.join(dataPath, 'Tilesets.r3d.json');
+    fs.writeFileSync(mapSidecar, '{ broken map sidecar');
+    fs.writeFileSync(tilesetSidecar, '{ broken tileset sidecar');
+
+    try {
+        const tilemap = new TilemapManager(null, root, {});
+        tilemap.currentMap = {
+            id: 1, width: 1, height: 1, data: new Array(6).fill(0), events: [null]
+        };
+        tilemap.captureSavedMapState();
+        tilemap.currentMap.data[0] = 1;
+        assert.equal(tilemap.loadMapSidecar(tilemap.currentMap), false);
+        assert.equal(tilemap.saveMap(), false);
+        assert.equal(fs.readFileSync(mapSidecar, 'utf8'), '{ broken map sidecar');
+        assert.equal(tilemap.isMapDirty(), true, 'a refused sidecar save remains dirty');
+
+        const database = new DatabaseManager();
+        database.data.tileset3d = await database.loadTileset3D(root);
+        assert.ok(database.tileset3DLoadError);
+        assert.equal(await database.saveTileset3D(root), false);
+        assert.equal(fs.readFileSync(tilesetSidecar, 'utf8'), '{ broken tileset sidecar');
+    } finally {
+        fs.rmSync(root, { recursive: true, force: true });
+    }
+});
+
 test('ProjectController checks dirty state before deleting the loaded map', async () => {
     const ProjectController = loadBrowserClass('ProjectController.js', 'ProjectController', {
         alert: () => {},

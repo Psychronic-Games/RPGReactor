@@ -15,6 +15,28 @@
  * model's ambient animations stand still so nothing fights the hand.
  */
 class Database3DEditor {
+    _writeFileAtomic(fs, filePath, data, options) {
+        const atomic = typeof globalThis.RRWriteFileAtomicSync === 'function'
+            ? globalThis.RRWriteFileAtomicSync
+            : null;
+        if (atomic && fs && typeof fs.renameSync === 'function') atomic(fs, filePath, data, options);
+        else fs.writeFileSync(filePath, data, options);
+    }
+
+    _readSidecarForUpdate(fs) {
+        const sidecarPath = this.rulesPath();
+        try {
+            return fs.readFileSync(sidecarPath, 'utf8');
+        } catch (error) {
+            if (error?.code === 'ENOENT') return '';
+            // The browser fs does not attach Node error codes, but it can
+            // author a new sidecar whose manifest entry is genuinely absent.
+            const host = typeof window !== 'undefined' ? window.RPGReactorHost : null;
+            if (host?.mode === 'web' && !fs.existsSync(sidecarPath)) return '';
+            throw error;
+        }
+    }
+
     /**
      * Hover highlighting raycasts the whole mesh on the main thread, with
      * no BVH: roughly 0.6 ms per thousand triangles, so a 600k-triangle
@@ -604,11 +626,12 @@ class Database3DEditor {
      */
     static mergeSidecar(previousText, animations, parts, pivots) {
         let json = {};
-        try {
+        if (previousText) {
             const parsed = JSON.parse(previousText);
-            if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) json = parsed;
-        } catch (error) {
-            json = {};
+            if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+                throw new Error('model.json must contain a JSON object');
+            }
+            json = parsed;
         }
         json.animations = animations || [];
         if (parts && parts.length) json.parts = parts;
@@ -621,13 +644,8 @@ class Database3DEditor {
     /** Every edit writes the model's own sidecar; the runtime reads it as-is. */
     saveRules() {
         const fs = require('fs');
-        let previous = '';
-        try {
-            previous = fs.readFileSync(this.rulesPath(), 'utf8');
-        } catch (error) {
-            previous = '';
-        }
-        fs.writeFileSync(this.rulesPath(),
+        const previous = this._readSidecarForUpdate(fs);
+        this._writeFileAtomic(fs, this.rulesPath(),
             Database3DEditor.mergeSidecar(previous, this.rawAnimations, this.customParts, this.customPivots));
         this.rebuildPlayback();
         const status = this._detail.querySelector('.r3d-status');
@@ -3448,22 +3466,24 @@ class Database3DEditor {
     saveRig() {
         const fs = require('fs');
         let json = {};
-        try {
-            const parsed = JSON.parse(fs.readFileSync(this.rulesPath(), 'utf8'));
-            if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) json = parsed;
-        } catch (error) {
-            json = {};
+        const previous = this._readSidecarForUpdate(fs);
+        if (previous) {
+            const parsed = JSON.parse(previous);
+            if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+                throw new Error('model.json must contain a JSON object');
+            }
+            json = parsed;
         }
         if (this.customRig) json.rig = this.customRig;
         else delete json.rig;
         // weightsBin is the in-memory decode; the bytes live in their own
         // file beside the JSON, never inside it.
-        fs.writeFileSync(this.rulesPath(),
+        this._writeFileAtomic(fs, this.rulesPath(),
             JSON.stringify(json, (key, value) => key === 'weightsBin' ? undefined : value, 2) + '\n');
         const path = require('path');
         const binPath = path.join(path.dirname(this.rulesPath()), 'model.rig.bin');
         if (this.customRig && this._rigBinary) {
-            fs.writeFileSync(binPath, Buffer.from(this._rigBinary));
+            this._writeFileAtomic(fs, binPath, Buffer.from(this._rigBinary));
         } else if (!this.customRig && fs.existsSync(binPath)) {
             fs.rmSync(binPath, { force: true });
         }

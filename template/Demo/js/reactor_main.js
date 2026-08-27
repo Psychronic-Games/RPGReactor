@@ -165,6 +165,12 @@ class Main {
                 console.error("MZGlobalUpgrade failed:", e);
             }
         }
+        // Project plugins are loaded by this point and may have replaced the
+        // SceneManager methods ReactorUI routes. Wrap the final methods just
+        // before boot, even when a plugin replaced Scene_Boot without aliasing.
+        if (window.ReactorUI && window.ReactorUI.installSceneRouting) {
+            window.ReactorUI.installSceneRouting();
+        }
         SceneManager.run(Scene_Boot);
     }
 

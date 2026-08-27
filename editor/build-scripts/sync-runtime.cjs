@@ -4,9 +4,10 @@
  *
  * `runtime/` is the source of truth and each project under `template/` keeps
  * its own copy in `js/`, because that is what a real project looks like — the
- * editor copies the runtime in when the project is created and never touches it
- * again. They drift, silently, and a fix tested against a stale copy is not
- * tested at all.
+ * editor copies the runtime into new projects and refreshes Reactor projects
+ * when their engine version changes. Bundled and local corpus copies can still
+ * drift between refreshes, and a fix tested against a stale copy is not tested
+ * at all.
  *
  *   node editor/build-scripts/sync-runtime.cjs            # copy what differs
  *   node editor/build-scripts/sync-runtime.cjs --check    # report, change nothing

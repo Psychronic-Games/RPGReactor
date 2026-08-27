@@ -1,5 +1,6 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
 const test = require('node:test');
 
@@ -369,13 +370,56 @@ test('the sidecar write preserves foreign keys and drops an empty parts list', (
     assert.deepEqual(merged.somebodyElses, { keep: true }, 'unknown keys survive');
     const emptied = JSON.parse(Database3DEditor.mergeSidecar(previous, [], []));
     assert.equal('parts' in emptied, false, 'no parts means no key');
-    const fromBroken = JSON.parse(Database3DEditor.mergeSidecar('not json', [], []));
-    assert.deepEqual(fromBroken, { animations: [] });
+    assert.throws(() => Database3DEditor.mergeSidecar('not json', [], []), /JSON/,
+        'malformed existing data is never replaced from an empty object');
     const withPivots = JSON.parse(Database3DEditor.mergeSidecar('{}', [], [], { turret: [1, 2, 3] }));
     assert.deepEqual(withPivots.pivots, { turret: [1, 2, 3] });
     const noPivots = JSON.parse(Database3DEditor.mergeSidecar(
         JSON.stringify({ pivots: { stale: [0, 0, 0] } }), [], [], {}));
     assert.equal('pivots' in noPivots, false, 'an empty override map clears the key');
+});
+
+test('model sidecar and rig writes are atomic and preserve malformed model.json', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'rr-model-sidecar-save-'));
+    const modelDir = path.join(root, '3d', 'Hero');
+    fs.mkdirSync(modelDir, { recursive: true });
+    const modelPath = path.join(modelDir, 'model.json');
+    const editor = Object.create(Database3DEditor.prototype);
+    editor._project = () => ({ path: root });
+    editor.selectedName = 'Hero';
+    editor.rawAnimations = [];
+    editor.customParts = [];
+    editor.customPivots = {};
+    editor.rebuildPlayback = () => {};
+    editor._detail = { querySelector: () => null };
+    editor._t = text => text;
+
+    const previousAtomic = global.RRWriteFileAtomicSync;
+    const writeAtomic = require(path.join(repoRoot, 'editor', 'src', 'utils', 'FsAtomic.js'));
+    let atomicWrites = 0;
+    global.RRWriteFileAtomicSync = (...args) => {
+        atomicWrites++;
+        return writeAtomic(...args);
+    };
+    try {
+        editor.saveRules();
+        assert.equal(atomicWrites, 1, 'model.json uses the shared atomic writer');
+
+        editor.customRig = { template: 'humanoid', weightsFile: 'model.rig.bin' };
+        editor._rigBinary = Uint8Array.from([1, 2, 3]).buffer;
+        editor.saveRig();
+        assert.equal(atomicWrites, 3, 'model.json and model.rig.bin are each atomic');
+
+        fs.writeFileSync(modelPath, '{ malformed');
+        assert.throws(() => editor.saveRules(), /JSON/);
+        assert.throws(() => editor.saveRig(), /JSON/);
+        assert.equal(fs.readFileSync(modelPath, 'utf8'), '{ malformed');
+        assert.equal(atomicWrites, 3, 'refused writes never reach the atomic writer');
+    } finally {
+        if (previousAtomic === undefined) delete global.RRWriteFileAtomicSync;
+        else global.RRWriteFileAtomicSync = previousAtomic;
+        fs.rmSync(root, { recursive: true, force: true });
+    }
 });
 
 test('the pivot is a movable fulcrum on the card and in the viewport', () => {

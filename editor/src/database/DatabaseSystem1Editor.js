@@ -197,6 +197,14 @@ class DatabaseSystem1Editor {
                 });
             });
 
+            const titleInterface = container.querySelector('.system-title-interface');
+            if (titleInterface) {
+                titleInterface.addEventListener('change', event => {
+                    system.reactorTitleInterfaceId = Math.max(0, Math.floor(Number(event.target.value) || 0));
+                    this.databaseManager.mutationGeneration = (this.databaseManager.mutationGeneration || 0) + 1;
+                });
+            }
+
             // Starting Party management
             this.wirePartyListeners(container, system);
 
@@ -456,7 +464,13 @@ class DatabaseSystem1Editor {
 
         // Row 1: Title Screen
         const titleImageName = system.title1Name || '';
+        const interfaceOptions = this.userInterfaceOptions(system.reactorTitleInterfaceId);
         const titleScreen = `
+            <div class="form-row" style="margin-bottom: 8px;">
+                <label class="database-field-label">${tt('Custom title interface:')}</label>
+                <select class="database-field-value system-title-interface" style="width: 100%;">${interfaceOptions}</select>
+                <div style="color: var(--color-text-muted); font-size: 11px; margin-top: 4px;">${tt('Stock title screen is used when no scene interface is selected or the record is unavailable.')}</div>
+            </div>
             <div class="form-row">
                 <label class="database-field-label">${tt('Title Image:')}</label>
                 <div style="display: flex; gap: 8px; align-items: center;">
@@ -573,6 +587,26 @@ class DatabaseSystem1Editor {
         column.appendChild(optionsSection);
 
         return column;
+    }
+
+    userInterfaceOptions(selectedId) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
+        const selected = Math.max(0, Math.floor(Number(selectedId) || 0));
+        let html = `<option value="0"${selected === 0 ? ' selected' : ''}>${tt('Stock (default)')}</option>`;
+        const records = this.databaseManager.getUserInterfaces ? this.databaseManager.getUserInterfaces() : [];
+        for (const entry of records || []) {
+            const id = Math.floor(Number(entry && entry.id) || 0);
+            const roles = Array.isArray(entry && entry.roles) ? entry.roles : entry && entry.stock ? [entry.stock] : [];
+            if (!entry || !(id > 0) || entry.mode === 'overlay' || !roles.includes('title')) continue;
+            html += `<option value="${id}"${id === selected ? ' selected' : ''}>${String(id).padStart(4, '0')}: ${rrEscapeHtml(entry.name || tt('(Unnamed)'))}</option>`;
+        }
+        if (selected > 0 && !(records || []).some(entry => {
+            const roles = Array.isArray(entry && entry.roles) ? entry.roles : entry && entry.stock ? [entry.stock] : [];
+            return entry && Number(entry.id) === selected && entry.mode !== 'overlay' && roles.includes('title');
+        })) {
+            html += `<option value="${selected}" selected>${tt('(Missing)')} / ${tt('(incompatible)')} #${selected}</option>`;
+        }
+        return html;
     }
 
     createColumn3(system) {

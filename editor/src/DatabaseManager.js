@@ -46,6 +46,7 @@ class DatabaseManager {
         this.dataGeneration = 0;
         this.mutationGeneration = 0;
         this.savedState = {};
+        this.tileset3DLoadError = null;
         const host = typeof window !== 'undefined' ? window.RPGReactorHost : null;
         if (host?.fs && host?.path) {
             this.fs = host.fs;
@@ -191,14 +192,24 @@ class DatabaseManager {
         const classes = this.tileset3DClasses();
         if (!classes || !this.fs || !this.path) return null;
         const filePath = this.path.join(projectPath, 'data', classes.FILENAME);
-        if (!this.fs.existsSync(filePath)) return classes.create();
+        if (!this.fs.existsSync(filePath)) {
+            this.tileset3DLoadError = null;
+            return classes.create();
+        }
         try {
-            return classes.normalize(await this._readJsonWithRetry(filePath));
+            const parsed = await this._readJsonWithRetry(filePath);
+            if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)
+                || !parsed.tilesets || typeof parsed.tilesets !== 'object' || Array.isArray(parsed.tilesets)) {
+                throw new Error(`${classes.FILENAME} must contain a 3D tileset data object`);
+            }
+            this.tileset3DLoadError = null;
+            return classes.normalize(parsed);
         } catch (error) {
             // A damaged sidecar must not stop the database from opening: the
             // runtime falls back to its flag heuristic for anything it cannot
             // read, so the cost is a worse-looking 3D map, not a dead editor.
             console.error(`Error loading ${classes.FILENAME}:`, error);
+            this.tileset3DLoadError = error;
             return classes.create();
         }
     }
@@ -207,6 +218,10 @@ class DatabaseManager {
         const classes = this.tileset3DClasses();
         if (!classes || !this.fs || !this.path) return true;
         const filePath = this.path.join(projectPath, 'data', classes.FILENAME);
+        if (this.tileset3DLoadError && this.fs.existsSync(filePath)) {
+            console.error(`Refusing to overwrite unreadable ${classes.FILENAME}:`, this.tileset3DLoadError);
+            return false;
+        }
         // A project that never classifies a tile gains no file. One that had
         // classes and then cleared them keeps an empty file rather than a stale
         // one — deleting a file the author may have in version control is not

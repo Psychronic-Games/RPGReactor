@@ -1,6 +1,6 @@
 # Handoff - 0.98.4 In Progress
 
-Last updated 2026-08-25.
+Last updated 2026-08-27.
 
 ## Current State
 
@@ -9,14 +9,17 @@ Last updated 2026-08-25.
   (2026-08-24): in-editor rigging, rig templates and preset motions,
   database 3D bindings, MP3/WAV/FLAC/M4A audio, PixiJS 8.20.0.
 - **0.98.4** is open in `editor/package.json`, both READMEs, and the
-  `[Unreleased - 0.98.4]` sections of both changelogs. Two features (custom user interfaces phase 1, interface capture) and twenty-one fixes are queued
-  there already (VisuStella Effekseer/heat-distortion draw failures and
-  off-centre transition shaders from user reports, Audio Player loop points, the Enemies note resize,
-  seek-broken Demo tracks, the web editor's 3D suite, two PIXI 8 compat
-  gaps, the map-title load soft lock, console quieting, the v8 `origin`
-  accessor, render-guard noise, DB3D first-open glitches).
-- Validation: **1,560 passing tests**, no failures, skips, or TODOs
-  (`cd editor && npm test`, ~19 s). Syntax and `git diff --check` pass.
+  `[Unreleased - 0.98.4]` sections of both changelogs. Custom interfaces now
+  cover typed named List contexts, complete actor data/bindings, expanded
+  Gauges, seven stable generated baselines, functional Options and Save/Load,
+  display-only map HUDs, styling/focus/transitions, and seven opt-in replacement
+  roles. The cycle also includes the PIXI 8
+  compatibility and 3D performance work described below, browser save
+  durability, atomic Reactor sidecars, and real Chromium/NW.js smoke tests.
+- Validation: **1,666 passing Node tests**, no failures, skips, or TODOs
+  (`cd editor && npm test`, ~19 s). Real Web persistence and NW.js launch/save
+  smokes pass. Syntax, runtime sync, and `git diff --check` pass. No manual
+  visual playtest is claimed for this validation.
 - `template/Demo` is the only git-tracked template. The other folders under
   `template/` are local compatibility-corpus projects (Star Shift
   Freelancers / Origins / Rebellion, Project2/3, MZ3D, Parallax, Hendrix,
@@ -31,11 +34,13 @@ Feature work, in the order the owner has been asking:
   death/knockback presets; bird/fish templates; retargeting clips between
   same-template rigs; a terrain-driven rule-set switch so Swim is automatic;
   decimation guidance for Meshy-scale models.
-- **Custom user interfaces** — phase 1 and capture-from-game shipped in
-  this cycle (cycle notes below). Next: List and Gauge nodes with data
-  sources, overlay/HUD mode, focus-order overrides (phase 2); stock
-  interface importers and capture-to-nodes (2½); styling depth (3);
-  title/menu replacement settings (4); standalone MZ plugin (5).
+- **Custom user interfaces** - the current Reactor system is complete through
+  typed Lists/contexts, actor bindings/tokens, expanded Gauges, seven generated
+  baselines and replacement roles, functional Options and Save/Load, styling,
+  focus overrides, and transitions. Remaining product scope is dedicated
+  workflow adapters for any future Item/Skill/Equip/Shop/Formation/Name Input,
+  message-input, or Battle replacement. There is no active next interface task;
+  the standalone MZ plugin is explicitly deferred per owner direction.
 - **Stock MZ battler motions are not mapped to model actions** — a 3D
   battler plays its ambient rules and named actions, but walk/attack/damage
   motion cells do not yet trigger model animations.
@@ -80,7 +85,9 @@ Content and tooling:
 
 ## Manual Release Gates
 
-Not runnable from this Linux checkout; do them on the release hardware.
+The real Chromium Web persistence and Linux NW.js launch/save smokes are now
+automated in CI. The following visual and native signing checks still require
+release hardware.
 
 - Open the rebuilt Web package over HTTPS or localhost and confirm the 3D
   checkbox stays checked, the canvas appears, model previews render in the
@@ -105,6 +112,58 @@ Engineering notes and gotchas from each piece of work, kept because the
 suite and the next session both lean on them. Shipped-cycle narrative starts
 at *History* below.
 
+## Persistence, Lists, HUDs, Replacement Scenes, GUI Smokes (2026-08-27)
+
+- `ProjectController.saveAll` now awaits the Web host's IndexedDB `flush()`
+  before advancing saved-state snapshots or reporting success. A failed
+  transaction restores the prior dirty baselines and reports a browser-storage
+  save error. The real Chromium smoke gates that flush, proves Save stays
+  pending, checks `project.rpgreactor` in IndexedDB, reloads, and verifies the
+  saved token comes back.
+- Reactor-authored `Database.r3d.json`, `Map###.r3d.json`,
+  `Tilesets.r3d.json`, `model.json`, and `model.rig.bin` use the shared atomic
+  writer on desktop. Missing sidecars remain a valid empty state; malformed or
+  unreadable sidecars are no longer treated as empty and cannot be overwritten
+  by the next edit.
+- List nodes bind to party members, categorized inventory, actor skills,
+  parameters, equipment, states, Options, save slots, variable ranges, or
+  literal rows. Every typed row has stable source-qualified identity and is
+  published immediately under an authored context name. Text/detail nodes,
+  actor-aware nodes, and semantic actor actions can consume that context; List
+  confirmation can also write row ID/value before its action. Lists use
+  `Window_Selectable` for engine input and scrolling.
+- Text, `partyFace`, Gauge, and actor Lists share fixed party-slot, fixed actor,
+  current-menu-actor, variable actor-ID, and named-context actor bindings.
+  Tokens cover actor identity/level/profile, resources, EXP, and parameters.
+  Gauges cover HP/MP/TP, level-relative EXP, MHP/MMP, all combat parameters,
+  and variables, with authored maximums, value formats, colors, back color, and
+  bar height. Actor parameter/equipment/state Lists feed the Status baseline.
+- Generated records append at stable IDs: 1 Title Screen, 2 Main Menu, 3 Game
+  End, 4 Status, 5 Options, 6 Save, 7 Load. Existing interface files are not
+  regenerated. The Demo carries all seven records and no System replacement
+  binding, so it remains stock by default.
+- Exact replaceable roles are Title, Main Menu, Status, Game End, Options, Save,
+  and Load. Records are explicitly role-tagged. Zero, missing/malformed,
+  overlay, ID-mismatched, and role-mismatched bindings fall back to stock.
+  Routing wraps the latest plugin `SceneManager.goto/push` after plugins load.
+  Item, Skill, Equip, Shop, Formation, Name Input/message inputs, and Battle
+  remain stock/unreplaceable. Main Menu can choose an actor, then launch stock
+  Skill/Equip or configured Status.
+- Options rows mutate MZ configuration and persist it on termination. Save/Load
+  rows expose slot metadata and enabled state; async actions lock duplicate
+  activation, preserve stock lifecycle order, recover on failure, and enter the
+  map only after successful Load.
+- Typography covers face/size/bold/italic/color/outline/letter spacing;
+  nine-slice is restricted to Picture/System images. Buttons and Lists have
+  inheritable focused/pressed/disabled overrides and directional focus targets
+  with geometric fallback. Scene transitions are none/fade/slide-left; overlays
+  are display-only/input-transparent and can fade with visibility.
+- `npm run smoke:web` and `npm run smoke:nw` use a dependency-free W3C
+  WebDriver client. CI runs them in a separate job; the NW.js 0.107.0 SDK
+  archive is hash-verified before use. The NW smoke launches the actual editor,
+  saves a temporary project through `ProjectController`, and checks the native
+  file without initializing map rendering.
+
 ## Interface Capture from Game (2026-08-25, owner: "see the current menus, with plugins")
 
 - The only faithful source is the running game, so the tab launches the
@@ -114,9 +173,14 @@ at *History* below.
   `encodeURIComponent` output (`%`) is valid there; untested on Windows.
 - Capture folder: `RREditorCache.dir('InterfaceCaptures', projectPath, scene)`
   → `~/.cache/rpg-reactor/interface-captures/<sha1-16>/<scene>/`
-  (`%LOCALAPPDATA%\RPGReactor\InterfaceCaptures\…` on Windows). The tab
-  reopens the last captured scene per project (localStorage
-  `rrui.lastCapture.<key>`).
+  (`%LOCALAPPDATA%\RPGReactor\InterfaceCaptures\…` on Windows). The
+  reference layer is per open view: nothing is restored on a record switch
+  or a reopen (owner: a capture "followed" every record and survived the
+  database's Cancel), a Clear chip drops it, and picking the scene in the
+  dropdown loads the cached capture on demand. Capture itself never saves the
+  project; explicit node imports remain unsaved database edits, while Picture
+  immediately copies a PNG into `img/pictures`. The status says when there are
+  unsaved changes.
 - Menus are captured OVER A RUNNING MAP (new game → Scene_Map → 30 frames
   → snapForBackground → push). Booting straight into Scene_Menu crashed
   SSR's `Irina_PerformanceUpgrade` on the missing background snapshot;
@@ -125,12 +189,16 @@ at *History* below.
   when reactor_ui.js loads was replaced under the MV layer and never ran.
 - "I see nothing in User Interfaces" on an older project = no
   `UserInterfaces.json`. `DatabaseManager.loadProject` now seeds
-  `RRStockInterfaces.build(data)` (Title / Main Menu / Game End, `stock`
+  `RRStockInterfaces.build(data)` (Title / Main Menu / Game End / Status /
+  Options / Save / Load, `stock`
   key on each) into that case; a file holding `[null]` stays empty and
   shows the first-run panel. The baselines use the Scene_* rect math with
   `isRightInputMode() === true` (commands on the right). Runtime:
-  `partyFace` image source and party codes (`ReactorUI.convertPartyCodes`).
-  List-driven scenes get baselines once the List node exists.
+  `partyFace` image source, typed actor bindings and named List contexts. Main
+  Menu publishes `selectedActor`; the appended read-only Status baseline uses
+  `menuActor`, actor gauges/lists and previous/next paging. Options, Save, and
+  Load now have dedicated functional adapters. Item, Skill, Equip, Shop,
+  Formation, Name Input/message inputs, and Battle remain stock.
 - The title also needs `setupNewGame` first (title plugins read game
   objects); `extract.canvas` must be given the screen `frame`, or a stage
   whose bounds include an off-screen sprite asks for a texture too large
@@ -144,8 +212,73 @@ at *History* below.
   selects a record (the detail does not render until one is), presses
   Capture, and reads the list; `capture-run.mjs` exercises the runtime
   alone from the launch line.
-- Next in the design: stock importers generated from System.json, then
-  capture-to-nodes off a draw-primitive log.
+- Owner pass 2026-08-26 (1440p, Windows): the tab scrolled; Delete after
+  clicking a node/captured row cleared the *record*; the capture followed
+  every record. Fixes: workspace flexes to the window and the canvas fits
+  both ways (`--rr-ui-fit`), note folded into General Settings; one
+  `onKey` on the wrapper that stops propagation, focusable rows whose
+  focus survives `renderTree`/`renderCaptureList` (a rebuild dropped focus
+  to the body, where `DatabaseEditorUI`'s document-level Delete lives, and
+  that handler now ignores targets inside `#database-detail`); Add Box
+  from a capture was a no-op default box because `addNode` returned
+  nothing. Live rig: `ui-fit-check.mjs` (session scratchpad; resizes the
+  editor window through `nw.Window.get().resizeTo`, measures
+  `scrollHeight` vs `clientHeight`, drives a real capture, Add Box, Delete,
+  Clear, and a new record): 1080p fits with the canvas at 62 %, 1440p at
+  100 %.
+- Owner UX correction 2026-08-27: the rejected Interface form slab was removed.
+  A single compact toolbar contains Name, Presentation, Use As, Interface
+  Settings, and Playtest. Use As retains its searchable checkbox combobox and
+  System-pointer-derived Custom semantics. Interface behavior, transitions, and
+  Note render in Inspector when no layer is selected; selecting a layer switches
+  the header and properties. Practical desktop widths show all three panels in
+  one row. At intermediate widths Layers stays beside Layout and Inspector is a
+  closable contained drawer, never a second document row; one-column begins only
+  below a 620px detail container. Workspace fitting remains `--rr-ui-fit: both`.
+  Layers, subtree drag/reparent, pinned Game Reference, capture tray, and explicit
+  imports are unchanged.
+- Real NW.js validation: `npm run smoke:nw-ui` opens the tracked Demo without
+  saving and uses matching Chromium/ChromeDriver 144.0.7559.59. At outer/inner
+  1280x720 the detail is 804x590, toolbar 780x70, workspace 780x490, Layers
+  230x490, and Layout 538x490. The Inspector is initially `display: none` and
+  opens as a contained 390x490 drawer after selection. At 1600x900,
+  1920x1080, and 2560x1440 the detail widths are 1124, 1444, and 2084; toolbar
+  heights are 48 and workspace heights are 692, 872, and 1232, with all three
+  panels in one row. Document/editor scrollHeight equals clientHeight at every
+  size, including 1280 after closing the drawer. There is no measured horizontal
+  overflow or panel overlap at wide sizes. Game Reference is 30px high and in
+  view at 720p; Capture/Undo/Redo are 28px, and Add Node/layer/reorder controls
+  are 30px. The pass also opens the Use As popover across the toolbar boundary,
+  selects a layer, returns to Interface Settings, and closes the drawer.
+  Existing capture files remain scene-elements-then-windows; true mixed plugin
+  sprite/window order is not claimed. The editor accepts a future `layers`
+  sequence without requiring it.
+- **Capture → nodes (2026-08-26, owner: "make it more automatic... creates
+  the layers... why only the windows?").** Hooks install in `beginCapture`
+  (after plugins), never at load: `Bitmap` primitives log to
+  `bitmap.__rrDraws`; semantic wrappers (`drawTextEx`, `drawItemName`,
+  `drawCurrencyValue`, `Window_StatusBase.drawActor*`,
+  `Window_Command.drawItem`) push coded elements and suppress the
+  primitives beneath them via `_captureSuppress`. Text merging is per line
+  keyed on y (icons at y+2 → key y−2), gap ≤ 6 px joins, `measured` from
+  `measureTextWidth` gives the run end. A subclass override of a wrapped
+  method (VisuStella's `drawItem`) bypasses the semantic hook and falls
+  back to primitives → Text nodes, not Buttons. **Canvas-painted content is
+  invisible** (the Demo's `PSYCHRONIC_MenuManagerMZ` chamfered gauges draw
+  on `contents.context` directly): the Picture button copies the captured
+  `window-N.png` into `img/pictures/Capture_<class>.png`. Found and fixed
+  in passing: `\PCLASS[n]` drew as `[n]` in the game — `currentText`
+  ran `convertPartyCodes` but `drawTextEx` did not; `Window_ReactorUINode`
+  now overrides `convertEscapeCharacters`. Live rig `ui-capture-nodes.mjs`
+  (session scratchpad): blank record + Capture, Picture row, save, boot
+  the game with `test&rrui=<id>` on port 9400, screenshot, restore the
+  three project files and delete the picture.
+- Capture is a visual draft. Recognized draws become editable nodes and a
+  Picture preserves direct canvas content, but arbitrary plugin behavior,
+  complete transactions, touch controls, and every override cannot be inferred.
+  Shop/Battle capture does not make those scenes replaceable. Capture itself
+  never saves the project; the explicit Picture import is the exception that
+  immediately copies an asset into `img/pictures`.
 
 ## GPU-Side Pass: Window Stencil Clip, Shared Billboard Sheets, Frozen World, Texture Cap (2026-08-25)
 
@@ -441,10 +574,11 @@ at *History* below.
   `ui-sweep.mjs` (viewport sweep 1280→2560 via
   `Emulation.setDeviceMetricsOverride`, unfolded action/condition states,
   empty record, light themes; one screenshot per state). All use the repo
-  `scratchpad/cdp.mjs`. Layout rules that came out of the sweep: the
+  `scratchpad/cdp.mjs`. Historical phase-1 layout rules from that sweep: the
   properties panel is one 4-track grid (label|field|label|field) that
-  collapses pairs below 340px; the workspace stacks below 1300px of detail
-  width because three columns starve the canvas before that; sections in
+  collapses pairs below 340px; the workspace originally stacked below 1300px of
+  detail width. The 2026-08-27 redesign above supersedes that with a contained
+  drawer below 1050px and one-column reflow below 620px. Sections in
   the editor column never flex-shrink; the settings line wraps by column.
 - The canvas preview loads the project's `mainFontFilename` through
   `FontFace` and uses MZ's line metrics (line = fontSize + (36 − main size),
@@ -487,9 +621,13 @@ at *History* below.
   process; fit probe 585 px → 8 px floor, wrapped 200×60 → 10 px/2 lines.
   Rig gotcha: pass the ABSOLUTE project path as the app argument — `.`
   with `cwd` set raised NW's "manifest file" dialog from Git Bash.
-- Known gaps (design phases 2+): no List/Gauge nodes, no overlay mode, no
-  per-node focus order, no open/close transitions, no marquee or
-  multi-select on the canvas.
+- Current boundaries: no Container node, general flow layout, alignment guides,
+  marquee, or multi-select. Item/Skill/Equip/Shop/Formation/Name Input,
+  message-input, and Battle replacements await dedicated workflow adapters.
+  The standalone MZ plugin is deferred by owner direction. Gauge now covers
+  HP/MP/TP/EXP, MHP/MMP and combat stats through all actor sources, plus a
+  variable against a fixed or variable maximum; `Sprite_ReactorUIGauge` remains
+  an inner child with opacity mirrored from `contentsOpacity`.
 
 ## Audio Player Loop Points + Enemies Note Resize (2026-08-24, user-reported)
 

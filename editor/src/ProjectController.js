@@ -1239,6 +1239,28 @@ class ProjectController {
     async saveAll() {
         if (!this.projectLoaded || !this.currentProject) return false;
 
+        // The individual synchronous writers advance their own dirty-state
+        // baselines. Keep the old baselines until the whole save, including
+        // browser persistence, is known to have completed.
+        const savedStateBefore = {
+            project: this.savedProjectState,
+            mapInfos: this.savedMapInfosState,
+            database: this.databaseManager?.savedState
+                ? { ...this.databaseManager.savedState }
+                : null,
+            map: this.tilemapManager?.savedMapState,
+            mapSidecar: this.tilemapManager?.savedSidecarState
+        };
+        const restoreSavedState = () => {
+            this.savedProjectState = savedStateBefore.project;
+            this.savedMapInfosState = savedStateBefore.mapInfos;
+            if (savedStateBefore.database) this.databaseManager.savedState = savedStateBefore.database;
+            if (this.tilemapManager) {
+                this.tilemapManager.savedMapState = savedStateBefore.map;
+                this.tilemapManager.savedSidecarState = savedStateBefore.mapSidecar;
+            }
+        };
+
         if (typeof document !== 'undefined' && document.activeElement?.blur) {
             document.activeElement.blur();
         }
@@ -1246,21 +1268,37 @@ class ProjectController {
         const eventEditor = this.eventManager && this.eventManager.eventEditor;
         if (eventEditor && eventEditor._writePendingModels) eventEditor._writePendingModels();
         if (this.tilemapManager?.currentMap && this.tilemapManager.saveMap() !== true) {
+            restoreSavedState();
             this.uiManager.updateStatus('Error saving current map');
             alert(this._tt('The current map could not be saved.'));
             return false;
         }
 
         if (!await this.databaseManager.saveAllData(this.currentProject.path)) {
+            restoreSavedState();
             this.uiManager.updateStatus('Error saving database');
             alert(this._tt('One or more database files could not be saved.'));
             return false;
         }
 
         if (!await this.projectManager.saveProject(this.currentProject)) {
+            restoreSavedState();
             this.uiManager.updateStatus('Error saving project');
             alert(this._tt('The project metadata or map list could not be saved.'));
             return false;
+        }
+
+        const browserHost = typeof window !== 'undefined' ? window.RPGReactorHost : null;
+        if (browserHost?.mode === 'web' && typeof browserHost.flush === 'function') {
+            try {
+                await browserHost.flush();
+            } catch (error) {
+                restoreSavedState();
+                console.error('Error saving to browser storage:', error);
+                this.uiManager.updateStatus('Error saving to browser storage');
+                alert(this._tt('The project could not be saved to browser storage.'));
+                return false;
+            }
         }
 
         const databaseEditor = typeof window !== 'undefined' ? window.reactor?.databaseEditorUI : null;

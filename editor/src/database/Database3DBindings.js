@@ -17,13 +17,27 @@
         return path.join(projectPath, 'data', 'Database.r3d.json');
     }
 
+    function writeFile(fs, destination, data) {
+        const atomic = typeof root.RRWriteFileAtomicSync === 'function'
+            ? root.RRWriteFileAtomicSync
+            : null;
+        if (atomic && typeof fs.renameSync === 'function') atomic(fs, destination, data, 'utf8');
+        else fs.writeFileSync(destination, data, 'utf8');
+    }
+
     function read(projectPath) {
         const fs = require('fs');
+        const destination = filePath(projectPath);
         try {
-            const parsed = JSON.parse(fs.readFileSync(filePath(projectPath), 'utf8'));
-            return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+            const parsed = JSON.parse(fs.readFileSync(destination, 'utf8'));
+            if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+                throw new Error('Database.r3d.json must contain a JSON object');
+            }
+            return parsed;
         } catch (error) {
-            return {};
+            if (error?.code === 'ENOENT') return {};
+            error.filePath = destination;
+            throw error;
         }
     }
 
@@ -80,7 +94,7 @@
             return;
         }
         data.version = 1;
-        fs.writeFileSync(filePath(projectPath), JSON.stringify(data, null, 2) + '\n');
+        writeFile(fs, filePath(projectPath), JSON.stringify(data, null, 2) + '\n');
     }
 
     /**
