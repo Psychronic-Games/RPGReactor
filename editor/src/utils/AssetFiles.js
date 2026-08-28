@@ -164,7 +164,7 @@
 
         let normalized = String(filePath).replace(/\\/g, '/');
         if (/^[A-Za-z]:\//.test(normalized)) normalized = `/${normalized}`;
-        return `file://${encodeURI(normalized).replace(/#/g, '%23')}`;
+        return `file://${encodeURI(normalized).replace(/#/g, '%23').replace(/\?/g, '%3F')}`;
     };
 
     // RPG Maker face sheets always have four 144px columns. Reactor also

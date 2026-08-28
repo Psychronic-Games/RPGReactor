@@ -1313,6 +1313,12 @@ class DatabaseTroopEditor {
                 this.getCommandEditor('loop', LoopEditor).show(null, insertCommands);
                 return;
             }
+            if ([241, 242, 245, 246, 249, 250, 251].includes(command.code)) {
+                this.getCommandEditor('audio', AudioCommandEditor).show(null, command.code, edited => {
+                    if (edited) insertCommands([edited]);
+                });
+                return;
+            }
             const editorMap = {
                 117: ['commonEvent', CommonEventEditor],
                 122: ['variables', ControlVariablesEditor],
@@ -1327,7 +1333,7 @@ class DatabaseTroopEditor {
             if (editorConfig) {
                 const editor = this.getCommandEditor(editorConfig[0], editorConfig[1]);
                 const context = command.code === 232 ? { commands: page.list, index: insertIndex } : undefined;
-                editor.show(null, edited => edited && insertCommands([edited]), context);
+                editor.show(null, edited => edited && insertCommands(ECL.commandBlock(edited)), context);
                 return;
             }
 
@@ -1401,8 +1407,12 @@ class DatabaseTroopEditor {
             126: [1, 0, 0, 1],          // Change Items
             230: [60],                   // Wait
             241: [{ name: '', volume: 90, pitch: 100, pan: 0 }], // Play BGM
+            242: [1],                    // Fadeout BGM
             245: [{ name: '', volume: 90, pitch: 100, pan: 0 }], // Play BGS
+            246: [1],                    // Fadeout BGS
+            249: [{ name: '', volume: 90, pitch: 100, pan: 0 }], // Play ME
             250: [{ name: '', volume: 90, pitch: 100, pan: 0 }], // Play SE
+            251: [],                     // Stop SE
             311: [0, 0, 0, 0, 100, false], // Change HP
             312: [0, 0, 0, 0, 100, false], // Change MP
             313: [0, 0, 0, 1],          // Change State
@@ -1426,6 +1436,12 @@ class DatabaseTroopEditor {
         if (cmd.code === 0) return;
 
         const ECL = this._eventCommandListClass();
+        if (cmd.code === 657) {
+            const range = ECL.contiguousBlockRange(page.list, idx, 357, 657);
+            if (!range) return;
+            idx = range.start;
+            cmd = page.list[idx];
+        }
         const refresh = () => {
             this.persistTroop();
             const container = document.getElementById('battle-command-list');
@@ -1507,8 +1523,26 @@ class DatabaseTroopEditor {
             replaceSingle(this.getCommandEditor('forceAction', ForceActionEditor));
             return;
         }
+        if ([241, 242, 245, 246, 249, 250, 251].includes(cmd.code)) {
+            this.getCommandEditor('audio', AudioCommandEditor).show(cmd, cmd.code, edited => {
+                if (!edited) return;
+                edited.indent = cmd.indent || 0;
+                page.list[idx] = edited;
+                refresh();
+            });
+            return;
+        }
         if (cmd.code === 356 || cmd.code === 357) {
-            replaceSingle(this.getCommandEditor('pluginCommand', PluginCommandEditor));
+            const range = cmd.code === 357
+                ? ECL.contiguousBlockRange(page.list, idx, 357, 657)
+                : { start: idx, end: idx };
+            const continuationCommands = range
+                ? page.list.slice(range.start + 1, range.end + 1) : [];
+            this.getCommandEditor('pluginCommand', PluginCommandEditor).show(cmd, commands => {
+                if (!ECL.commandBlock(commands).length) return;
+                ECL.replaceContiguousBlock(page.list, idx, commands, cmd.code, 657);
+                refresh();
+            }, { continuationCommands });
             return;
         }
         if (cmd.code === 355 && ECL.generatedCommand(cmd, 'eventCall')) {
@@ -1647,14 +1681,11 @@ class DatabaseTroopEditor {
         }
         const selectedIndex = selected.length > 0 ? Math.max(...selected) : -1;
         let insertAt = selectedIndex >= 0 ? selectedIndex + 1 : page.list.length - 1;
-        if (typeof EventCommandList !== 'undefined' && EventCommandList.safeInsertionIndex) {
-            insertAt = EventCommandList.safeInsertionIndex(page.list, insertAt);
-        }
+        const ECL = this._eventCommandListClass();
+        insertAt = ECL.safeInsertionIndex(page.list, insertAt);
         const pasted = commands.map(command => JSON.parse(JSON.stringify(command)));
-        if (typeof EventCommandList !== 'undefined' && EventCommandList.rebaseInsertIndent) {
-            const baseIndent = EventCommandList.insertionIndent(page.list, insertAt);
-            EventCommandList.rebaseInsertIndent(pasted, baseIndent);
-        }
+        const baseIndent = ECL.insertionIndent(page.list, insertAt);
+        ECL.rebaseInsertIndent(pasted, baseIndent);
         pasted.forEach((cmd, i) => {
             page.list.splice(insertAt + i, 0, cmd);
         });
@@ -1674,7 +1705,7 @@ class DatabaseTroopEditor {
         if (code >= 301 && code <= 340) return 'var(--color-syntax-function)';
         if (code >= 351 && code <= 357) return 'var(--color-syntax-keyword)';
         if (code >= 401 && code <= 413) return 'var(--color-syntax-comment)';
-        if (code >= 601 && code <= 604) return 'var(--color-syntax-comment)';
+        if ((code >= 601 && code <= 604) || code === 655 || code === 657) return 'var(--color-syntax-comment)';
         return 'var(--color-text-muted)';
     }
 
@@ -1714,7 +1745,8 @@ class DatabaseTroopEditor {
             401: '\u25B7 Text', 402: 'When', 403: 'When Cancel', 404: 'End Choices',
             405: '\u25B7 Scrolling Text', 408: '\u25B7 Comment',
             411: 'Else', 412: 'End', 413: 'Repeat Above',
-            601: 'If Win', 602: 'If Escape', 603: 'If Lose', 604: 'End'
+            601: 'If Win', 602: 'If Escape', 603: 'If Lose', 604: 'End',
+            655: 'Script', 657: 'Plugin Command'
         };
 
         const name = names[cmd.code] ? tt(names[cmd.code]) : `Cmd ${cmd.code}`;

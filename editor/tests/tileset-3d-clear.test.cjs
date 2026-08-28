@@ -104,7 +104,7 @@ test('the editor offers Clear as its own tool', () => {
     // And it runs before objects are refused on autotiles, or an autotile's
     // class could be set and never removed.
     assert.ok(source.indexOf("if (tool === 'clear')")
-        < source.indexOf('Objects are declared on A5 and B-G'));
+        < source.indexOf("if ((tool === 'object' || tool === 'role') && autotile)"));
 });
 
 //-----------------------------------------------------------------------------

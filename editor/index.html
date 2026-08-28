@@ -268,7 +268,7 @@
                                 </label>
                                 <label class="map-info-item map-grid" title="Show the tile grid" data-i18n-title="toolbar.title.showGrid">
                                     <input id="map-grid" type="checkbox" aria-label="Show the tile grid" data-i18n-aria="toolbar.title.showGrid">
-                                    <span>Grid</span>
+                                    <span data-i18n="workspace.grid">Grid</span>
                                 </label>
                                 <label class="map-info-item map-3d-view" title="Show the map in 3D" data-i18n-title="toolbar.title.map3DView">
                                     <input id="map-3d-view" type="checkbox" aria-label="Show the map in 3D" data-i18n-aria="toolbar.title.map3DView">
@@ -353,25 +353,25 @@
                                 <div id="map-resize-anchor-row" style="display: none; flex: 0 0 auto;">
                                     <label style="display: block; font-size: 11px; color: var(--color-text-muted); margin-bottom: 3px;" data-i18n="mapProps.anchor">Anchor:</label>
                                     <div id="map-resize-anchor" style="display: grid; grid-template-columns: repeat(3, 24px); grid-template-rows: repeat(3, 24px); gap: 2px;">
-                                        <button type="button" class="map-anchor-cell" data-anchor="top-left" title="Top-Left">↖</button>
-                                        <button type="button" class="map-anchor-cell" data-anchor="top" title="Top">↑</button>
-                                        <button type="button" class="map-anchor-cell" data-anchor="top-right" title="Top-Right">↗</button>
-                                        <button type="button" class="map-anchor-cell" data-anchor="left" title="Left">←</button>
-                                        <button type="button" class="map-anchor-cell" data-anchor="center" title="Center">✦</button>
-                                        <button type="button" class="map-anchor-cell" data-anchor="right" title="Right">→</button>
-                                        <button type="button" class="map-anchor-cell" data-anchor="bottom-left" title="Bottom-Left">↙</button>
-                                        <button type="button" class="map-anchor-cell" data-anchor="bottom" title="Bottom">↓</button>
-                                        <button type="button" class="map-anchor-cell" data-anchor="bottom-right" title="Bottom-Right">↘</button>
+                                        <button type="button" class="map-anchor-cell" data-anchor="top-left" title="Top-Left" data-i18n-title="mapProps.anchorTopLeft">↖</button>
+                                        <button type="button" class="map-anchor-cell" data-anchor="top" title="Top" data-i18n-title="mapProps.anchorTop">↑</button>
+                                        <button type="button" class="map-anchor-cell" data-anchor="top-right" title="Top-Right" data-i18n-title="mapProps.anchorTopRight">↗</button>
+                                        <button type="button" class="map-anchor-cell" data-anchor="left" title="Left" data-i18n-title="mapProps.anchorLeft">←</button>
+                                        <button type="button" class="map-anchor-cell" data-anchor="center" title="Center" data-i18n-title="mapProps.anchorCenter">✦</button>
+                                        <button type="button" class="map-anchor-cell" data-anchor="right" title="Right" data-i18n-title="mapProps.anchorRight">→</button>
+                                        <button type="button" class="map-anchor-cell" data-anchor="bottom-left" title="Bottom-Left" data-i18n-title="mapProps.anchorBottomLeft">↙</button>
+                                        <button type="button" class="map-anchor-cell" data-anchor="bottom" title="Bottom" data-i18n-title="mapProps.anchorBottom">↓</button>
+                                        <button type="button" class="map-anchor-cell" data-anchor="bottom-right" title="Bottom-Right" data-i18n-title="mapProps.anchorBottomRight">↘</button>
                                     </div>
                                 </div>
                                 <div style="flex: 1; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px;">
                                     <div>
                                         <label style="display: block; font-size: 11px; color: var(--color-text-muted); margin-bottom: 3px;" data-i18n="mapProps.width">Width:</label>
-                                        <input type="number" id="map-width-input" min="1" max="512" step="1" value="17" title="1-512 tiles" style="width: 100%; padding: 5px 6px; background-color: var(--color-bg-input); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 3px; font-size: 12px;">
+                                        <input type="number" id="map-width-input" min="1" max="512" step="1" value="17" title="1-512 tiles" data-i18n-title="mapProps.sizeRange" style="width: 100%; padding: 5px 6px; background-color: var(--color-bg-input); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 3px; font-size: 12px;">
                                     </div>
                                     <div>
                                         <label style="display: block; font-size: 11px; color: var(--color-text-muted); margin-bottom: 3px;" data-i18n="mapProps.height">Height:</label>
-                                        <input type="number" id="map-height-input" min="1" max="512" step="1" value="13" title="1-512 tiles" style="width: 100%; padding: 5px 6px; background-color: var(--color-bg-input); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 3px; font-size: 12px;">
+                                        <input type="number" id="map-height-input" min="1" max="512" step="1" value="13" title="1-512 tiles" data-i18n-title="mapProps.sizeRange" style="width: 100%; padding: 5px 6px; background-color: var(--color-bg-input); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 3px; font-size: 12px;">
                                     </div>
                                     <div>
                                         <label style="display: block; font-size: 11px; color: var(--color-text-muted); margin-bottom: 3px;" data-i18n="mapProps.encounterSteps">Encounter Steps:</label>
@@ -392,7 +392,7 @@
                                         <select id="map-bgm-select" style="flex: 1; min-width: 0; padding: 4px 6px; background-color: var(--color-bg-input); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 3px; font-size: 11px;">
                                             <option value="" data-i18n="common.none">(None)</option>
                                         </select>
-                                        <button type="button" id="map-bgm-browse-btn" title="Browse..." style="padding: 4px 8px; background-color: var(--color-bg-button); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 3px; cursor: pointer; font-size: 10px;">…</button>
+                                        <button type="button" id="map-bgm-browse-btn" title="Browse..." data-i18n-title="mapProps.browse" style="padding: 4px 8px; background-color: var(--color-bg-button); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 3px; cursor: pointer; font-size: 10px;">…</button>
                                     </div>
                                     <div style="display: flex; gap: 4px; margin-bottom: 4px;">
                                         <button type="button" id="map-bgm-play-btn" style="flex: 1; padding: 4px 6px; background-color: var(--color-bg-button); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 3px; cursor: pointer; font-size: 10px;" data-i18n="mapProps.play">Play</button>
@@ -427,7 +427,7 @@
                                         <select id="map-bgs-select" style="flex: 1; min-width: 0; padding: 4px 6px; background-color: var(--color-bg-input); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 3px; font-size: 11px;">
                                             <option value="" data-i18n="common.none">(None)</option>
                                         </select>
-                                        <button type="button" id="map-bgs-browse-btn" title="Browse..." style="padding: 4px 8px; background-color: var(--color-bg-button); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 3px; cursor: pointer; font-size: 10px;">…</button>
+                                        <button type="button" id="map-bgs-browse-btn" title="Browse..." data-i18n-title="mapProps.browse" style="padding: 4px 8px; background-color: var(--color-bg-button); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 3px; cursor: pointer; font-size: 10px;">…</button>
                                     </div>
                                     <div style="display: flex; gap: 4px; margin-bottom: 4px;">
                                         <button type="button" id="map-bgs-play-btn" style="flex: 1; padding: 4px 6px; background-color: var(--color-bg-button); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 3px; cursor: pointer; font-size: 10px;" data-i18n="mapProps.play">Play</button>
@@ -516,13 +516,13 @@
                                     <select id="map-parallax-image-select" style="flex: 1; min-width: 0; padding: 5px 6px; background-color: var(--color-bg-input); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 3px; font-size: 12px;">
                                         <option value="" data-i18n="common.none">(None)</option>
                                     </select>
-                                    <button id="map-parallax-browse-btn" type="button" title="Preview and choose a parallax image" style="flex: 0 0 auto; padding: 5px 12px; background-color: var(--color-border-subtle); border: 1px solid var(--color-border-input); color: var(--color-text-strong); border-radius: 3px; font-size: 12px; cursor: pointer;" data-i18n="mapProps.browse">Browse…</button>
+                                    <button id="map-parallax-browse-btn" type="button" title="Preview and choose a parallax image" data-i18n-title="mapProps.parallaxBrowseHint" style="flex: 0 0 auto; padding: 5px 12px; background-color: var(--color-border-subtle); border: 1px solid var(--color-border-input); color: var(--color-text-strong); border-radius: 3px; font-size: 12px; cursor: pointer;" data-i18n="mapProps.browse">Browse…</button>
                                 </div>
                                 <!-- A parallax is the map's picture: it is chosen by looking at
                                      it, not by reading a filename off a list. The thumbnail is
                                      the current choice, and clicking it opens the same picker
                                      the button does. -->
-                                <div id="map-parallax-preview" style="margin-top: 6px; display: none; border: 1px solid var(--color-border); border-radius: 3px; background-color: var(--color-bg-deep); padding: 4px; cursor: pointer;" title="Click to choose a different parallax">
+                                <div id="map-parallax-preview" style="margin-top: 6px; display: none; border: 1px solid var(--color-border); border-radius: 3px; background-color: var(--color-bg-deep); padding: 4px; cursor: pointer;" title="Click to choose a different parallax" data-i18n-title="mapProps.parallaxPreviewHint">
                                     <img id="map-parallax-preview-img" alt="" style="display: block; width: 100%; max-height: 110px; object-fit: contain; image-rendering: pixelated;">
                                     <div id="map-parallax-preview-caption" style="font-size: 10px; color: var(--color-text-muted); text-align: center; margin-top: 3px;"></div>
                                 </div>
@@ -782,8 +782,13 @@
     <script src="src/utils/AssetFiles.js"></script>
     <script src="src/utils/AudioCoverArt.js"></script>
     <script src="src/utils/AudioLoopTags.js"></script>
-    <script src="src/utils/AudioPickerModal.js"></script>
     <script src="src/utils/PickerIndex.js"></script>
+    <script src="src/utils/AudioPickerModal.js"></script>
+    <script src="src/utils/SystemSoundSlotModal.js"></script>
+    <script src="src/utils/PluginAnnotations.js"></script>
+    <script src="src/utils/PluginParamCodec.js"></script>
+    <script src="src/utils/PluginDataRefs.js"></script>
+    <script src="src/utils/PluginParamWidgets.js"></script>
     <script src="src/utils/IconPicker.js"></script>
     <script src="src/utils/EditorCache.js"></script>
     <script src="src/utils/StockInterfaces.js"></script>
@@ -793,8 +798,10 @@
     <script src="src/utils/MapElevation.js"></script>
     <script src="src/utils/MapObjects3D.js"></script>
     <script src="src/utils/Tileset3DClass.js"></script>
+    <script src="src/utils/EditorNames.js"></script>
     <script src="src/utils/FsAtomic.js"></script>
     <script src="src/I18nDeepTranslations.js"></script>
+    <script src="src/I18nReviewedTranslations.js"></script>
     <script src="src/I18nManager.js"></script>
     <script src="src/OptionsManager.js"></script>
     <!-- Forge tool suite -->

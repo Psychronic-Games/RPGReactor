@@ -32,7 +32,8 @@ function loadEditor() {
     };
     return vm.runInNewContext(`${editorSource}\nPluginCommandEditor;`, {
         console: { log() {}, warn() {}, error() {} },
-        process, require, window: {}, document
+        process, require, window: {}, document,
+        RRPluginAnnotations: require(path.join(editorRoot, 'src', 'utils', 'PluginAnnotations.js'))
     });
 }
 
@@ -46,6 +47,7 @@ function editorWith(state) {
     instance.commandText = '';
     instance.selectedCommand = null;
     instance.args = {};
+    instance.existingArgumentCommands = [];
     return Object.assign(instance, state);
 }
 
@@ -60,9 +62,9 @@ test('reopening a plugin command does not blank its display label', () => {
     );
     assert.equal(instance.commandText, 'Start PTBS Battle');
 
-    const rebuilt = instance.buildCommand();
+    const [rebuilt] = instance.buildCommand();
     assert.equal(rebuilt.parameters[2], 'Start PTBS Battle');
-    assert.deepEqual({ ...rebuilt.parameters[3] }, { id: 1 });
+    assert.deepEqual({ ...rebuilt.parameters[3] }, { id: '1' });
 });
 
 test('the label comes from the plugin annotation when a command is picked', () => {
@@ -106,7 +108,7 @@ test('an MV-style classic command is unaffected', () => {
     const instance = editorWith({});
     instance.show({ code: 356, parameters: ['SomeText arg1 arg2'] }, () => {});
     assert.equal(instance.classicMode, true);
-    const rebuilt = instance.buildCommand();
+    const [rebuilt] = instance.buildCommand();
     assert.equal(rebuilt.code, 356);
     // Array.from: the editor runs in a vm realm, so its arrays are not
     // reference-comparable with this one.

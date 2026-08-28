@@ -13,7 +13,9 @@ function loadBrowserClass(filePath, className) {
         console,
         require,
         nw: {},
-        alert: () => {}
+        alert: () => {},
+        RRPluginAnnotations: require(path.join(repoRoot, 'src', 'utils', 'PluginAnnotations.js')),
+        RRPluginParamCodec: require(path.join(repoRoot, 'src', 'utils', 'PluginParamCodec.js'))
     });
 }
 

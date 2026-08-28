@@ -804,6 +804,7 @@ class DatabaseTilesetEditor {
             const browser = RRPickerIndex.createBrowser({
                 files: files.map(file => file.name),
                 selectedName: this.currentTileset?.tilesetNames?.[layerIndex] || '',
+                folders: true,
                 searchPlaceholder: tt('Search files...'),
                 emptyText: tt('No tileset images found in img/tilesets'),
                 onSelect: name => {
@@ -2385,31 +2386,33 @@ class DatabaseTilesetEditor {
      * because the flags that matter are drawn as glyphs rather than as tints.
      */
     static flagKeyRows(mode) {
+        const tt = text => (typeof window !== 'undefined' && window.I18n)
+            ? window.I18n.tText(text) : text;
         const rows = {
             passability: [
-                ['pass-o', 'Passable'],
-                ['pass-x', 'Blocked'],
-                ['pass-star', 'Drawn above characters']
+                ['pass-o', tt('Passable')],
+                ['pass-x', tt('Blocked')],
+                ['pass-star', tt('Drawn above characters')]
             ],
             '4dir': [
-                ['dir-open', 'Arrow: that side is open'],
-                ['dir-blocked', 'Dot: that side is blocked']
+                ['dir-open', tt('Arrow: that side is open')],
+                ['dir-blocked', tt('Dot: that side is blocked')]
             ],
-            ladder: [['ladder', 'Climbed vertically']],
-            bush: [['bush', 'Covers the lower half of a character']],
-            counter: [['counter', 'Talked and traded across']],
-            damage: [['damage', 'Costs HP to stand on']],
-            terrain: [['terrain', 'Tag 0-7, read by events and plugins']],
+            ladder: [['ladder', tt('Climbed vertically')]],
+            bush: [['bush', tt('Covers the lower half of a character')]],
+            counter: [['counter', tt('Talked and traded across')]],
+            damage: [['damage', tt('Costs HP to stand on')]],
+            terrain: [['terrain', tt('Tag 0-7, read by events and plugins')]],
             tile3d: [
-                ['3d-flat', 'Flat - lies on the ground'],
-                ['3d-upright', 'Upright - part of a standing object'],
-                ['3d-scenery', 'Scenery - raises the ground into a mass'],
-                ['3d-foliage', 'Foliage - a cut-out per cell, ground unchanged'],
-                ['3d-panel', 'Panel - faces a way: a gate, a door, a sign'],
-                ['3d-object', 'One declared 3D object'],
-                ['3d-role-flat', 'Lies flat within its object'],
-                ['3d-roof-wall', 'Wall capped with a roof (Roof tool)'],
-                ['3d-roof-top', 'The roof another wall is capped with']
+                ['3d-flat', tt('Flat - lies on the ground')],
+                ['3d-upright', tt('Upright - part of a standing object')],
+                ['3d-scenery', tt('Scenery - raises the ground into a mass')],
+                ['3d-foliage', tt('Foliage - a cut-out per cell, ground unchanged')],
+                ['3d-panel', tt('Panel - faces a way: a gate, a door, a sign')],
+                ['3d-object', tt('One declared 3D object')],
+                ['3d-role-flat', tt('Lies flat within its object')],
+                ['3d-roof-wall', tt('Wall capped with a roof (Roof tool)')],
+                ['3d-roof-top', tt('The roof another wall is capped with')]
             ]
         };
         return rows[mode] || null;
@@ -2447,7 +2450,7 @@ class DatabaseTilesetEditor {
         return `<div style="background:var(--color-bg-panel);border:1px solid var(--color-border);`
             + `border-radius:6px;padding:10px;">`
             + `<h4 style="margin:0 0 8px 0;font-size:9px;text-transform:uppercase;`
-            + `letter-spacing:0.5px;color:var(--color-text-muted);">Key</h4>${items}${hint}</div>`;
+            + `letter-spacing:0.5px;color:var(--color-text-muted);">${tt('Key')}</h4>${items}${hint}</div>`;
     }
 
     /**
@@ -2479,6 +2482,8 @@ class DatabaseTilesetEditor {
     }
 
     static tile3dToolbar(active) {
+        const tt = text => (typeof window !== 'undefined' && window.I18n)
+            ? window.I18n.tText(text) : text;
         const buttons = DatabaseTilesetEditor.tile3dTools().map(([id, label, hint]) =>
             `<button class="tile3d-tool" data-tool="${id}" title="${hint}" `
             + `style="font-size:10px;padding:5px 6px;border-radius:4px;cursor:pointer;`
@@ -2489,11 +2494,10 @@ class DatabaseTilesetEditor {
         return `<div style="background:var(--color-bg-panel);border:1px solid var(--color-border);`
             + `border-radius:6px;padding:10px;margin-bottom:10px;">`
             + `<h4 style="margin:0 0 8px 0;font-size:9px;text-transform:uppercase;`
-            + `letter-spacing:0.5px;color:var(--color-text-muted);">3D tool</h4>`
+            + `letter-spacing:0.5px;color:var(--color-text-muted);">${tt('3D tool')}</h4>`
             + `<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;">${buttons}</div>`
             + `<p style="font-size:9px;color:var(--color-text-dim);margin:8px 0 0 0;line-height:1.4;">`
-            + `Drag a rectangle to apply the tool. A click is a single tile. `
-            + `Select changes nothing.</p>`
+            + `${tt('Drag a rectangle to apply the tool. A click is a single tile. Select changes nothing.')}</p>`
             + `<p id="tile3d-tool-notice" style="font-size:9px;line-height:1.4;`
             + `color:var(--color-accent-bright);margin:6px 0 0 0;display:none;"></p></div>`;
     }
@@ -2743,7 +2747,8 @@ class DatabaseTilesetEditor {
     refreshTile3DPreview() {
         const host = document.getElementById('tile3d-preview');
         if (!host) return;
-        // English for now, as with the key beside it.
+        const tt = text => (typeof window !== 'undefined' && window.I18n)
+            ? window.I18n.tText(text) : text;
         if (this.currentEditMode !== 'tile3d') { host.innerHTML = ''; return; }
 
         const classes = this.tileset3DClasses();
@@ -2752,7 +2757,7 @@ class DatabaseTilesetEditor {
         if (!classes || !store || !this.currentTileset || tileIndex === undefined) {
             host.innerHTML = `<div style="background:var(--color-bg-panel);border:1px solid `
                 + `var(--color-border);border-radius:6px;padding:10px;font-size:10px;`
-                + `color:var(--color-text-muted);">Click a tile to preview it in 3D</div>`;
+                + `color:var(--color-text-muted);">${tt('Click a tile to preview it in 3D')}</div>`;
             return;
         }
 
@@ -2768,24 +2773,24 @@ class DatabaseTilesetEditor {
             ? member.object
             : { tile: tileIndex, w: 1, h: 1, roles: soloRole };
         const names = {
-            [classes.GROUND]: 'Flat', [classes.UPRIGHT]: 'Upright',
-            [classes.SCENERY]: 'Scenery', [classes.FOLIAGE]: 'Foliage'
+            [classes.GROUND]: tt('Flat'), [classes.UPRIGHT]: tt('Upright'),
+            [classes.SCENERY]: tt('Scenery'), [classes.FOLIAGE]: tt('Foliage')
         };
-        const className = names[value] || 'unclassified — the runtime decides';
+        const className = names[value] || tt('unclassified — the runtime decides');
         const label = member
-            ? `${object.w}x${object.h} declared object — ${className}`
-            : `single tile — ${className}`;
+            ? `${object.w}x${object.h} ${tt('declared object')} — ${className}`
+            : `${tt('single tile')} — ${className}`;
 
         host.innerHTML = `<div style="background:var(--color-bg-panel);border:1px solid `
             + `var(--color-border);border-radius:6px;padding:10px;">`
             + `<h4 style="margin:0 0 8px 0;font-size:9px;text-transform:uppercase;`
-            + `letter-spacing:0.5px;color:var(--color-text-muted);">3D preview</h4>`
+            + `letter-spacing:0.5px;color:var(--color-text-muted);">${tt('3D preview')}</h4>`
             + `<canvas id="tile3d-preview-canvas" width="146" height="146" `
             + `style="width:146px;height:146px;image-rendering:pixelated;border-radius:4px;`
             + `background:var(--color-bg-deep);cursor:ew-resize;touch-action:none;"></canvas>`
             + `<p style="font-size:9px;color:var(--color-text-dim);margin:6px 0 0 0;">${label}</p>`
             + `<p style="font-size:9px;color:var(--color-text-dim);margin:2px 0 0 0;">`
-            + `Drag to turn</p></div>`;
+            + `${tt('Drag to turn')}</p></div>`;
         const canvas = document.getElementById('tile3d-preview-canvas');
         this.drawTile3DPreview(canvas, object);
         this.attachTile3DPreviewDrag(canvas, object);
@@ -3208,6 +3213,8 @@ class DatabaseTilesetEditor {
         const classes = this.tileset3DClasses();
         const store = this.tileset3DStore();
         if (!classes || !store || !this.currentTileset) return null;
+        const tt = text => (typeof window !== 'undefined' && window.I18n)
+            ? window.I18n.tText(text) : text;
         // By origin rather than by lookup: an object anchored at the top-left
         // of a sheet has origin 0, and a *lookup* for 0 is refused on purpose —
         // an empty map cell reads as 0 and must not match anything.
@@ -3218,14 +3225,13 @@ class DatabaseTilesetEditor {
         // an object anchored at the top-left of a sheet reported that the two
         // halves were on different sheets when they plainly were not.
         if (!existing) {
-            return { error: 'The object being extended is no longer there — select it '
-                + 'again, then shift-drag.' };
+            return { error: tt('The object being extended is no longer there — select it again, then shift-drag.') };
         }
 
         const origin = classes.sheetCell(existing.tile);
         const added = classes.sheetCell(addedTile);
         if (origin.setNumber !== added.setNumber) {
-            return { error: 'That is on a different sheet from the object being extended.' };
+            return { error: tt('That is on a different sheet from the object being extended.') };
         }
 
         const left = Math.min(origin.col, added.col);
@@ -3237,7 +3243,7 @@ class DatabaseTilesetEditor {
         // its edge. Treating that 0 as failure is what broke this: an object
         // anchored at the sheet's first tile could never be extended.
         if (left < 0 || top < 0 || right > 16 || bottom > 16) {
-            return { error: 'That would reach past the edge of the sheet.' };
+            return { error: tt('That would reach past the edge of the sheet.') };
         }
         return {
             tile: classes.tileAtCell(origin.setNumber, left, top),
@@ -3284,6 +3290,8 @@ class DatabaseTilesetEditor {
         const classes = this.tileset3DClasses();
         const store = this.tileset3DStore();
         if (!classes || !store || !this.currentTileset) return;
+        const tt = text => (typeof window !== 'undefined' && window.I18n)
+            ? window.I18n.tText(text) : text;
         const tilesetId = this.currentTileset.id;
         const tool = this.tile3dTool || 'select';
         const { x0, x1, y0, y1 } = DatabaseTilesetEditor.dragBounds(drag);
@@ -3330,15 +3338,15 @@ class DatabaseTilesetEditor {
                 if (!classes.isWallLike || !classes.isWallLike(picked)) {
                     // Anything can be a roof; only a wall can want one.
                     this.noteTile3DRefusal(
-                        'Start with the wall: click a wall autotile on A3 or A4, '
-                        + 'then click the tile that covers its top.');
+                        `${tt('Start with the wall: click a wall autotile on one of these sheets:')} `
+                        + `A3, A4. ${tt('Then click the tile that covers its top.')}`);
                     return;
                 }
                 this._tile3dTopWall = picked;
                 const named = classes.materialOf(store, tilesetId, picked);
                 this.noteTile3DRefusal(named
-                    ? 'Wall selected — click its roof, or click this wall again to clear.'
-                    : 'Wall selected — now click the tile that covers its top.');
+                    ? tt('Wall selected — click its roof, or click this wall again to clear.')
+                    : tt('Wall selected — now click the tile that covers its top.'));
                 this.refreshTile3DPreview();
                 return;
             }
@@ -3346,10 +3354,10 @@ class DatabaseTilesetEditor {
             this._tile3dTopWall = null;
             if (classes.keyFor(picked) === classes.keyFor(wall)) {
                 classes.setTopFace(store, tilesetId, wall, 0);
-                this.noteTile3DRefusal('Roof cleared — this wall keeps its own art on top.');
+                this.noteTile3DRefusal(tt('Roof cleared — this wall keeps its own art on top.'));
             } else {
                 classes.setTopFace(store, tilesetId, wall, picked);
-                this.noteTile3DRefusal('Roof set.');
+                this.noteTile3DRefusal(tt('Roof set.'));
             }
             this.saveTileset3DFile();
             this.refreshOverlays();
@@ -3372,10 +3380,12 @@ class DatabaseTilesetEditor {
             this._selected3dObject = null;
             this._lastDeclaredObject = null;
             this.selected3dRect = { x: x0, y: y0, w: x1 - x0 + 1, h: y1 - y0 + 1, imageIndex };
+            const clearedTiles = cleared === 1
+                ? tt('tile — class, object, stand-in and roof.')
+                : tt('tiles — class, object, stand-in and roof.');
             this.noteTile3DRefusal(cleared
-                ? `Cleared ${cleared} tile${cleared === 1 ? '' : 's'} — class, object, `
-                    + 'stand-in and roof.'
-                : 'Nothing set on these tiles to clear.');
+                ? `${tt('Cleared')} ${cleared} ${clearedTiles}`
+                : tt('Nothing set on these tiles to clear.'));
             this.saveTileset3DFile();
             this.refreshOverlays();
             this.refreshTile3DPreview();
@@ -3389,11 +3399,9 @@ class DatabaseTilesetEditor {
         // objects like B-G. Only A1-A4 cannot.
         const autotile = indexAt(x0, y0) >= 2048;
         if ((tool === 'object' || tool === 'role') && autotile) {
-            this.noteTile3DRefusal(
-                'Objects are declared on A5 and B-G. An autotile id is a corner '
-                + 'arrangement rather than a place in a drawing, so a rectangle '
-                + 'of the sheet means nothing here — classify the kind with '
-                + 'Flat, Upright, Scenery or Foliage instead.');
+            this.noteTile3DRefusal(`${tt('Objects are declared on picture-tile sheets:')} A5, B-G. `
+                + `${tt('An autotile id is a corner arrangement rather than a place in a drawing, so a rectangle of the sheet means nothing here. Use one of these classes instead:')} `
+                + `${tt('Flat')}, ${tt('Upright')}, ${tt('Scenery')}, ${tt('Foliage')}.`);
             return;
         }
         this.noteTile3DRefusal('');
@@ -3405,8 +3413,7 @@ class DatabaseTilesetEditor {
             // object was gone, which is far too easy to do by accident.
             if (!joinTo && width === 1 && height === 1
                 && classes.objectAt(store, tilesetId, indexAt(x0, y0))) {
-                this.noteTile3DRefusal('Already part of an object — drag a rectangle '
-                    + 'to redeclare it, shift-drag to extend it, or use Clear.');
+                this.noteTile3DRefusal(tt('Already part of an object — drag a rectangle to redeclare it, shift-drag to extend it, or use Clear.'));
                 return;
             }
             // Shift extends what was declared last instead of starting again.
@@ -3422,7 +3429,7 @@ class DatabaseTilesetEditor {
                     joinTo, indexAt(x0, y0), width, height);
                 if (!merged || merged.error) {
                     this.noteTile3DRefusal((merged && merged.error)
-                        || 'That cannot be joined to the object being extended.');
+                        || tt('That cannot be joined to the object being extended.'));
                     return;
                 }
                 classes.clearObject(store, tilesetId, joinTo);
@@ -3437,8 +3444,8 @@ class DatabaseTilesetEditor {
                 this.selected3dRect = DatabaseTilesetEditor.sheetSelection(
                     classes, wholeObject, imageIndex);
                 this._selected3dObject = wholeObject;
-                this.noteTile3DRefusal(`Object extended to ${merged.w}x${merged.h}. `
-                    + 'Shift-drag again to add more.');
+                this.noteTile3DRefusal(`${tt('Object extended to')} ${merged.w}x${merged.h}. `
+                    + tt('Shift-drag again to add more.'));
                 this.saveTileset3DFile();
                 this.refreshOverlays();
                 return;
@@ -3446,8 +3453,8 @@ class DatabaseTilesetEditor {
 
             classes.defineObject(store, tilesetId, indexAt(x0, y0), width, height);
             this._lastDeclaredObject = indexAt(x0, y0);
-            this.noteTile3DRefusal(`Object declared: ${width}x${height}. `
-                + 'Shift-drag another part to add it to this one.');
+            this.noteTile3DRefusal(`${tt('Object declared:')} ${width}x${height}. `
+                + tt('Shift-drag another part to add it to this one.'));
             this.saveTileset3DFile();
             return;
         }

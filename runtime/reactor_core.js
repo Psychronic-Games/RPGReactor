@@ -6188,21 +6188,23 @@ Window.prototype._updatePauseSign = function() {
 
 Window.prototype._updateFilterArea = function() {
     // World-space, on every PIXI version: that is what v5/v6/v7 consumed
-    // directly, and it is what every plugin replacing this method writes.
+    // directly, and it is what plugins replacing this method normally write.
     // _localizeFilterArea() below converts it for v8 afterwards, so a plugin's
-    // version needs no cooperation to land in the right place.
+    // version needs no cooperation to land in the right place. Stock-style
+    // plugins that leave the dimensions unscaled retain their legacy over-clip.
     // Measured every frame; the origin read and the result written go
     // through two points the window keeps, not two fresh ones.
     if (!this._filterOriginScratch) {
         this._filterOriginScratch = new Point(0, 0);
         this._filterPosScratch = new Point(0, 0);
     }
-    const pos = this._clientArea.worldTransform.apply(this._filterOriginScratch, this._filterPosScratch);
+    const wt = this._clientArea.worldTransform;
+    const pos = wt.apply(this._filterOriginScratch, this._filterPosScratch);
     const filterArea = this._clientArea.filterArea;
     filterArea.x = pos.x + this.origin.x;
     filterArea.y = pos.y + this.origin.y;
-    filterArea.width = this.innerWidth;
-    filterArea.height = this.innerHeight;
+    filterArea.width = this.innerWidth * (Math.hypot(wt.a, wt.b) || 1);
+    filterArea.height = this.innerHeight * (Math.hypot(wt.c, wt.d) || 1);
 };
 
 /**
@@ -6226,8 +6228,13 @@ Window.prototype._updateFilterArea = function() {
  * last, and plugins that reimplement scrolling or window drawing routinely
  * install their own — VisuMZ's CoreEngine among them. Those all write the
  * world-space rect the engine documented, cannot know about v8, and cannot be
- * edited. Subtracting the client area's world origin afterwards fixes every
- * one of them, including our own, with no version branch above.
+ * edited. Removing the client area's world origin and scale afterwards fixes
+ * every one of them, including our own, with no version branch above.
+ *
+ * Position staleness cancels because both methods read the same transform.
+ * A plugin can instead scale dimensions from this.scale, so on the first frame
+ * its size can be divided by a still-identity world transform; the next frame
+ * is correct. Guessing which convention wrote a rectangle is less reliable.
  */
 Window.prototype._localizeFilterArea = function() {
     const clientArea = this._clientArea;
@@ -6241,6 +6248,10 @@ Window.prototype._localizeFilterArea = function() {
     const wt = clientArea.worldTransform;
     filterArea.x -= wt.tx;
     filterArea.y -= wt.ty;
+    // Matrix-column lengths handle rotation and negative scales. Degenerate
+    // transforms use 1 so a hidden zero-scale window cannot produce Infinity.
+    filterArea.width /= (Math.hypot(wt.a, wt.b) || 1);
+    filterArea.height /= (Math.hypot(wt.c, wt.d) || 1);
 };
 
 //-----------------------------------------------------------------------------

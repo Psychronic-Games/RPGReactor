@@ -2,6 +2,16 @@
 // Handles project creation, loading, and saving
 
 class ProjectManager {
+    _t(text, params = {}) {
+        let value = typeof window !== 'undefined' && window.I18n
+            ? window.I18n.tText(text)
+            : text;
+        for (const [key, replacement] of Object.entries(params)) {
+            value = value.split(`{${key}}`).join(String(replacement));
+        }
+        return value;
+    }
+
     // Atomic write for project data: write a temp sibling then rename over
     // the destination, so a crash/kill/full-disk mid-write can never destroy
     // the previous good file. Falls back to a plain write when the fs
@@ -48,7 +58,10 @@ class ProjectManager {
             }
         }
 
-        const error = new Error(`Could not read ${this.path.basename(filePath)}: ${lastError?.message || lastError}`);
+        const error = new Error(this._t('Could not read {file}: {error}', {
+            file: this.path.basename(filePath),
+            error: lastError?.message || lastError
+        }));
         error.code = lastError?.code;
         error.filePath = filePath;
         throw error;
@@ -100,10 +113,10 @@ class ProjectManager {
             if (this.fs.existsSync(resolvedTarget)) {
                 const stat = this.fs.lstatSync ? this.fs.lstatSync(resolvedTarget) : this.fs.statSync(resolvedTarget);
                 if (!stat.isDirectory() || stat.isSymbolicLink?.()) {
-                    throw new Error('Project target must be an ordinary directory.');
+                    throw new Error(this._t('Project target must be an ordinary directory.'));
                 }
                 if (this.fs.readdirSync(resolvedTarget).length > 0) {
-                    throw new Error('Project target already exists and is not empty.');
+                    throw new Error(this._t('Project target already exists and is not empty.'));
                 }
             } else {
                 this.fs.mkdirSync(resolvedTarget);
@@ -386,7 +399,7 @@ class ProjectManager {
             const webHost = typeof window !== 'undefined' && window.RPGReactorHost?.mode === 'web';
             return webHost
                 ? { ok: true, updated: false }
-                : { ok: false, updated: false, error: 'The current Reactor runtime could not be found.' };
+                : { ok: false, updated: false, error: this._t('The current Reactor runtime could not be found.') };
         }
 
         try {
@@ -832,7 +845,7 @@ class ProjectManager {
                     return {
                         ok: false,
                         path: packagePath,
-                        error: `Cannot use ${packagePath}: expected package.json to contain a JSON object.`
+                        error: this._t('Cannot use {packagePath}: expected package.json to contain a JSON object.', { packagePath })
                     };
                 }
             } else {
@@ -863,7 +876,10 @@ class ProjectManager {
             return {
                 ok: false,
                 path: packagePath,
-                error: `Cannot use ${packagePath}: ${error.message || error}`
+                error: this._t('Cannot use {packagePath}: {error}', {
+                    packagePath,
+                    error: error.message || error
+                })
             };
         }
     }
@@ -894,7 +910,7 @@ class ProjectManager {
                 // Load RPG Reactor project
                 projectData = await this._readJsonWithRetry(projectFilePath);
                 if (!projectData || typeof projectData !== 'object' || Array.isArray(projectData)) {
-                    const error = new Error('project.rpgreactor must contain a JSON object');
+                    const error = new Error(this._t('project.rpgreactor must contain a JSON object'));
                     error.filePath = projectFilePath;
                     throw error;
                 }
@@ -919,7 +935,7 @@ class ProjectManager {
                 } else {
                     console.error('No valid project file found');
                     this.lastLoadError = {
-                        message: 'No project.rpgreactor, game.rmmzproject, or Game.rpgproject file was found.',
+                        message: this._t('No project.rpgreactor, game.rmmzproject, or Game.rpgproject file was found.'),
                         filePath: projectPath
                     };
                     return null;
@@ -931,7 +947,7 @@ class ProjectManager {
             if (this.fs.existsSync(mapInfosPath)) {
                 projectData.maps = await this._readJsonWithRetry(mapInfosPath);
                 if (!Array.isArray(projectData.maps)) {
-                    const error = new Error('MapInfos.json must contain a JSON array');
+                    const error = new Error(this._t('MapInfos.json must contain a JSON array'));
                     error.filePath = mapInfosPath;
                     throw error;
                 }

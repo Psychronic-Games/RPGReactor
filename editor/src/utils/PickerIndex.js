@@ -50,6 +50,60 @@
         return Array.from(sections, ([key, values]) => ({ key, names: values }));
     };
 
+    const fileName = name => String(name || '').split('/').pop() || '';
+
+    const buildFolderTree = names => {
+        const root = { files: [], folders: [], _folders: new Map() };
+        for (const fullName of new Set((names || []).map(name => String(name)))) {
+            const parts = fullName.split('/');
+            if (parts.length < 2) {
+                root.files.push(fullName);
+                continue;
+            }
+
+            let node = root;
+            let folderPath = '';
+            for (const name of parts.slice(0, -1)) {
+                folderPath = folderPath ? `${folderPath}/${name}` : name;
+                if (!node._folders.has(name)) {
+                    node._folders.set(name, {
+                        name,
+                        path: folderPath,
+                        files: [],
+                        folders: [],
+                        total: 0,
+                        _folders: new Map()
+                    });
+                }
+                node = node._folders.get(name);
+                node.total += 1;
+            }
+            node.files.push(fullName);
+        }
+
+        const finish = node => {
+            node.files.sort((a, b) => compareNames(fileName(a), fileName(b)));
+            node.folders = Array.from(node._folders.values())
+                .sort((a, b) => compareNames(a.name, b.name));
+            for (const folder of node.folders) finish(folder);
+            delete node._folders;
+            return node;
+        };
+        return finish(root);
+    };
+
+    const foldersLeadingTo = name => {
+        const parts = String(name || '').split('/');
+        parts.pop();
+        const folders = [];
+        let folderPath = '';
+        for (const part of parts) {
+            folderPath = folderPath ? `${folderPath}/${part}` : part;
+            folders.push(folderPath);
+        }
+        return folders;
+    };
+
     const sectionOffset = (container, target) => {
         let top = 0;
         for (const child of Array.from(container?.children || [])) {
@@ -60,13 +114,11 @@
     };
 
     const createBrowser = options => {
+        const tt = text => root.I18n ? root.I18n.tText(text) : text;
         const files = options.files || [];
         let selectedName = options.selectedName || '';
-        const openFolders = new Set();
-        // The folder holding the current selection starts open.
-        if (selectedName.indexOf('/') > 0) {
-            openFolders.add(selectedName.slice(0, selectedName.indexOf('/')));
-        }
+        const openFolders = new Set(options.openSelectedFolders === false
+            ? [] : foldersLeadingTo(selectedName));
 
         const element = document.createElement('div');
         element.className = 'rr-picker-browser';
@@ -78,15 +130,15 @@
 
         const searchInput = document.createElement('input');
         searchInput.type = 'text';
-        searchInput.placeholder = options.searchPlaceholder || 'Search files...';
+        searchInput.placeholder = options.searchPlaceholder || tt('Search files...');
         searchInput.style.cssText = 'width:100%;padding:8px 34px 8px 10px;background:transparent;color:var(--color-text-strong);border:0;outline:0;border-radius:3px;font-size:12px;box-sizing:border-box;';
 
         const clearSearch = document.createElement('button');
         clearSearch.type = 'button';
         clearSearch.className = 'rr-picker-search-clear';
         clearSearch.textContent = '×';
-        clearSearch.title = 'Clear search';
-        clearSearch.setAttribute('aria-label', 'Clear search');
+        clearSearch.title = tt('Clear search');
+        clearSearch.setAttribute('aria-label', tt('Clear search'));
         clearSearch.style.cssText = 'display:none;position:absolute;right:5px;top:50%;transform:translateY(-50%);width:22px;height:22px;padding:0;background:var(--color-accent-tint-15);color:var(--color-accent-bright);border:1px solid var(--color-accent-border-strong);border-radius:3px;cursor:pointer;font-size:17px;font-weight:bold;line-height:18px;';
         searchWrap.appendChild(searchInput);
         searchWrap.appendChild(clearSearch);
@@ -103,14 +155,17 @@
         list.setAttribute('role', 'listbox');
         list.style.cssText = 'flex:1;min-width:0;overflow-y:auto;background:var(--color-bg-surface);';
 
-        const setSelected = name => {
+        const setSelected = (name, revealAncestors = true) => {
             selectedName = name || '';
+            if (revealAncestors) {
+                for (const folder of foldersLeadingTo(selectedName)) openFolders.add(folder);
+            }
             list.querySelectorAll('.rr-picker-file-item').forEach(item => {
                 const selected = item.dataset.fileName === selectedName;
                 item.classList.toggle('selected', selected);
                 item.setAttribute('aria-selected', String(selected));
                 item.style.backgroundColor = selected ? 'var(--color-selection-deep)' : '';
-                item.style.color = selected ? 'var(--color-accent-bright)' : 'var(--color-text)';
+                item.style.color = selected ? 'var(--color-text-strong)' : 'var(--color-text)';
             });
         };
 
@@ -123,14 +178,14 @@
             });
         };
 
-        const makeItem = (name, displayText, indented) => {
+        const makeItem = (name, displayText, depth = 0) => {
             const item = document.createElement('div');
             item.className = `rr-picker-file-item${options.itemClass ? ` ${options.itemClass}` : ''}`;
             item.dataset.fileName = name;
             item.textContent = displayText;
             item.tabIndex = 0;
             item.setAttribute('role', 'option');
-            item.style.cssText = `padding:7px 10px 7px ${indented ? 24 : 10}px;cursor:pointer;`
+            item.style.cssText = `padding:7px 10px 7px ${10 + depth * 14}px;cursor:pointer;`
                 + 'border-bottom:1px solid var(--color-bg-menubar);font-size:12px;color:var(--color-text);';
             item.addEventListener('mouseenter', () => {
                 if (item.dataset.fileName !== selectedName) item.style.backgroundColor = 'var(--color-bg-button)';
@@ -154,46 +209,38 @@
             rail.innerHTML = '';
             list.innerHTML = '';
 
-            // Folder mode: slashed names group under their first segment
-            // as collapsible folders, listed ahead of the loose files.
-            let rootFiles = files;
-            let folderGroups = [];
-            if (options.folders) {
-                const map = new Map();
-                rootFiles = [];
-                for (const name of files) {
-                    const cut = name.indexOf('/');
-                    if (cut < 0) {
-                        rootFiles.push(name);
-                        continue;
-                    }
-                    const folder = name.slice(0, cut);
-                    if (!map.has(folder)) map.set(folder, []);
-                    map.get(folder).push(name);
-                }
-                const query = searchInput.value;
-                folderGroups = Array.from(map.entries())
-                    .map(([folder, names]) => [folder, names.filter(name => matches(name, query)).sort(compareNames)])
-                    .filter(([, names]) => names.length)
-                    .sort((a, b) => a[0].localeCompare(b[0], undefined, { sensitivity: 'base' }));
-            }
-
-            const sections = group(rootFiles, searchInput.value);
+            const query = searchInput.value;
+            const visibleFiles = files.filter(name => matches(name, query));
+            const tree = options.folders
+                ? buildFolderTree(visibleFiles)
+                : { files: visibleFiles, folders: [] };
+            const sections = group(tree.files);
 
             // An action row pinned to the top of the list — "(None)" and
             // friends — rendered ahead of the files, search or no search.
             if (options.leadingItem) {
                 const lead = document.createElement('div');
                 lead.className = 'rr-picker-file-item rr-picker-leading';
+                lead.dataset.fileName = '';
                 lead.textContent = options.leadingItem.label;
                 lead.tabIndex = 0;
                 lead.setAttribute('role', 'option');
                 lead.style.cssText = 'padding:7px 10px;cursor:pointer;font-size:12px;'
                     + 'color:var(--color-text-muted);font-style:italic;'
                     + 'border-bottom:1px solid var(--color-border);';
-                lead.addEventListener('mouseenter', () => { lead.style.backgroundColor = 'var(--color-bg-button)'; });
-                lead.addEventListener('mouseleave', () => { lead.style.backgroundColor = ''; });
-                lead.addEventListener('click', () => options.leadingItem.onClick());
+                lead.addEventListener('mouseenter', () => {
+                    if (selectedName !== '') lead.style.backgroundColor = 'var(--color-bg-button)';
+                });
+                lead.addEventListener('mouseleave', () => {
+                    if (selectedName !== '') lead.style.backgroundColor = '';
+                });
+                lead.addEventListener('click', () => {
+                    setSelected('');
+                    options.leadingItem.onClick();
+                });
+                if (options.leadingItem.onDoubleClick) {
+                    lead.addEventListener('dblclick', () => options.leadingItem.onDoubleClick());
+                }
                 lead.addEventListener('keydown', event => {
                     if (event.key !== 'Enter' && event.key !== ' ') return;
                     event.preventDefault();
@@ -202,37 +249,58 @@
                 list.appendChild(lead);
             }
 
-            if (!sections.length && !folderGroups.length && !options.leadingItem && options.emptyText) {
+            if (!sections.length && !tree.folders.length && options.emptyText) {
                 const empty = document.createElement('div');
                 empty.style.cssText = 'padding:16px;color:var(--color-text-muted);font-size:12px;text-align:center;';
                 empty.textContent = options.emptyText;
                 list.appendChild(empty);
+                setSelected(selectedName, false);
                 return;
             }
 
-            for (const [folder, names] of folderGroups) {
-                // A search reveals everything it matched.
-                const open = !!searchInput.value || openFolders.has(folder);
+            const renderFolder = (folder, depth) => {
+                const open = !!query || openFolders.has(folder.path);
                 const header = document.createElement('div');
                 header.className = 'rr-picker-section folder-section';
-                header.dataset.folder = folder;
+                header.dataset.folder = folder.path;
+                header.tabIndex = 0;
+                header.setAttribute('role', 'button');
+                header.setAttribute('aria-expanded', String(open));
                 header.setAttribute('data-rr-i18n-skip', '1');
-                header.textContent = `${open ? '▾' : '▸'} ${folder} (${names.length})`;
-                header.style.cssText = 'padding:6px 10px;background:var(--color-bg-panel);'
+                header.textContent = `${open ? '▾' : '▸'} ${folder.name} (${folder.total})`;
+                header.style.cssText = `padding:6px 10px 6px ${10 + depth * 14}px;background:var(--color-bg-panel);`
                     + 'color:var(--color-accent-hover);border-bottom:1px solid var(--color-border);'
                     + 'font-size:11px;font-weight:bold;cursor:pointer;';
-                header.addEventListener('click', () => {
-                    if (openFolders.has(folder)) openFolders.delete(folder);
-                    else openFolders.add(folder);
+                const setOpen = nextOpen => {
+                    if (nextOpen) openFolders.add(folder.path);
+                    else openFolders.delete(folder.path);
                     render();
+                    Array.from(list.querySelectorAll('.folder-section'))
+                        .find(candidate => candidate.dataset.folder === folder.path)
+                        ?.focus({ preventScroll: true });
+                };
+                header.addEventListener('click', () => setOpen(!openFolders.has(folder.path)));
+                header.addEventListener('keydown', event => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        setOpen(!openFolders.has(folder.path));
+                    } else if (event.key === 'ArrowRight' && !open) {
+                        event.preventDefault();
+                        setOpen(true);
+                    } else if (event.key === 'ArrowLeft' && open) {
+                        event.preventDefault();
+                        setOpen(false);
+                    }
                 });
                 list.appendChild(header);
                 if (open) {
-                    for (const name of names) {
-                        list.appendChild(makeItem(name, name.slice(folder.length + 1), true));
+                    for (const child of folder.folders) renderFolder(child, depth + 1);
+                    for (const name of folder.files) {
+                        list.appendChild(makeItem(name, fileName(name), depth + 1));
                     }
                 }
-            }
+            };
+            for (const folder of tree.folders) renderFolder(folder, 0);
 
             sections.forEach(section => {
                 const button = document.createElement('button');
@@ -261,11 +329,11 @@
                 list.appendChild(header);
 
                 section.names.forEach(name => {
-                    list.appendChild(makeItem(name, name, false));
+                    list.appendChild(makeItem(name, name));
                 });
             });
 
-            setSelected(selectedName);
+            setSelected(selectedName, false);
             if (sections[0]) setActiveSection(sections[0].key);
         };
 
@@ -312,7 +380,7 @@
         list.addEventListener('scroll', () => {
             let active = null;
             const listTop = list.getBoundingClientRect().top;
-            list.querySelectorAll('.rr-picker-section').forEach(section => {
+            list.querySelectorAll('.letter-section').forEach(section => {
                 if (section.getBoundingClientRect().top - listTop <= 8) active = section.dataset.letter;
             });
             if (active) setActiveSection(active);
@@ -370,7 +438,18 @@
         };
     };
 
-    const api = { compareNames, compareSectionKeys, createBrowser, group, matches, searchKey, sectionKey, sectionOffset };
+    const api = {
+        buildFolderTree,
+        compareNames,
+        compareSectionKeys,
+        createBrowser,
+        foldersLeadingTo,
+        group,
+        matches,
+        searchKey,
+        sectionKey,
+        sectionOffset
+    };
     root.RRPickerIndex = api;
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof globalThis !== 'undefined' ? globalThis : window);

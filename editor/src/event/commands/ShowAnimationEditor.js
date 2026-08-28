@@ -174,9 +174,10 @@ class ShowAnimationEditor {
         animationRow.style.cssText = 'display: flex; gap: 8px; align-items: center;';
 
         const animationInput = document.createElement('input');
+        const animationLimit = globalThis.RR_LIMITS?.DATABASE_ENTRIES?.animations || 5000;
         animationInput.type = 'number';
         animationInput.min = 1;
-        animationInput.max = 999;
+        animationInput.max = animationLimit;
         animationInput.value = this.animationId;
         animationInput.style.cssText = `
             padding: 6px 10px;
@@ -188,7 +189,7 @@ class ShowAnimationEditor {
             width: 80px;
         `;
         animationInput.addEventListener('input', (e) => {
-            this.animationId = parseInt(e.target.value) || 1;
+            this.animationId = Math.max(1, Math.min(animationLimit, parseInt(e.target.value) || 1));
         });
 
         const browseBtn = document.createElement('button');

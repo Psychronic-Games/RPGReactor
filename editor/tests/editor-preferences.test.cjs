@@ -89,7 +89,8 @@ test('a persisted 3D view is cleared before a new process can open a project', (
         theme: 'ocean-dark',
         language: 'ja',
         animateAutotiles: true,
-        map3DView: false
+        map3DView: false,
+        databaseListLabels: 'editorFirst'
     }, 'recovery preserves unrelated preferences while durably failing closed');
 
     manager.setMap3DView(true);
@@ -99,6 +100,31 @@ test('a persisted 3D view is cleared before a new process can open a project', (
     const nextLaunch = loadOptionsManager(JSON.parse(loaded.store.get('rr-settings')));
     assert.equal(new nextLaunch.OptionsManager().getMap3DView(), false,
         'the next process requires an explicit 3D opt-in');
+});
+
+test('database list label preference validates, persists, dispatches, and exposes all three modes', () => {
+    const loaded = loadOptionsManager();
+    const manager = new loaded.OptionsManager();
+
+    assert.equal(manager.getDatabaseListLabels(), 'editorFirst');
+    manager.setDatabaseListLabels('gameFirst');
+    assert.equal(manager.getDatabaseListLabels(), 'gameFirst');
+    assert.equal(JSON.parse(loaded.store.get('rr-settings')).databaseListLabels, 'gameFirst');
+    assert.equal(loaded.events.at(-1).type, 'rr-database-list-labels-changed');
+    assert.equal(loaded.events.at(-1).detail.value, 'gameFirst');
+
+    manager.setDatabaseListLabels('unsupported');
+    assert.equal(manager.getDatabaseListLabels(), 'editorFirst');
+    assert.equal(loaded.events.at(-1).detail.value, 'editorFirst');
+
+    const invalid = loadOptionsManager({ databaseListLabels: 'unsupported' });
+    assert.equal(new invalid.OptionsManager().getDatabaseListLabels(), 'editorFirst');
+
+    const source = fs.readFileSync(path.join(editorRoot, 'src', 'OptionsManager.js'), 'utf8');
+    for (const value of ['editorFirst', 'gameFirst', 'gameOnly']) {
+        assert.match(source, new RegExp(`data-value="${value}"`), `${value} toggle button is rendered`);
+    }
+    assert.match(source, /options\.databaseListLabelsNote/);
 });
 
 test('the menu bar language control stays at the far edge and follows the active locale', () => {

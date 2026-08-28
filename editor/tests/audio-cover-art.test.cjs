@@ -230,7 +230,7 @@ test('placeholders are stable, name-specific, and cover the idle state', () => {
     assert.match(CoverArt.placeholderFor(null), /^data:image\/svg\+xml/);
 });
 
-test('readAssetBytes serves plain and encrypted prefixes; extractFromFile rides it', () => {
+test('readAssetBytes serves plain and encrypted prefixes; every picker shares cached cover resolution', async () => {
     const projectRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'rr-cover-art-'));
     try {
         const keyHex = '000102030405060708090a0b0c0d0e0f';
@@ -247,6 +247,8 @@ test('readAssetBytes serves plain and encrypted prefixes; extractFromFile rides 
         assert.deepEqual(Buffer.from(prefix), ogg.subarray(0, 16));
         assert.equal(EncryptedAssets.readAssetBytes(plainPath, 1 << 20).length, ogg.length);
         assert.equal(CoverArt.extractFromFile(plainPath), expectedUrl);
+        assert.equal(await CoverArt.forFile(plainPath), expectedUrl);
+        assert.equal(await CoverArt.forFile(plainPath), expectedUrl);
 
         // Encrypted variant: 16-byte fake header, first 16 real bytes XOR key.
         const key = Buffer.from(keyHex, 'hex');

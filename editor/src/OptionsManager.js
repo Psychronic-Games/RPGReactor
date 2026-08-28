@@ -69,7 +69,13 @@ class OptionsManager {
 
     /** Defaults; merged over whatever's saved. */
     _defaultSettings() {
-        return { theme: 'dark', language: 'en', animateAutotiles: true, map3DView: false };
+        return {
+            theme: 'dark',
+            language: 'en',
+            animateAutotiles: true,
+            map3DView: false,
+            databaseListLabels: 'editorFirst'
+        };
     }
 
     _loadSettings() {
@@ -120,6 +126,20 @@ class OptionsManager {
         this._saveSettings();
         window.dispatchEvent(new CustomEvent('rr-autotile-animation-changed', {
             detail: { enabled: next }
+        }));
+    }
+
+    getDatabaseListLabels() {
+        const value = this.settings.databaseListLabels;
+        return ['editorFirst', 'gameFirst', 'gameOnly'].includes(value) ? value : 'editorFirst';
+    }
+
+    setDatabaseListLabels(value) {
+        const next = ['editorFirst', 'gameFirst', 'gameOnly'].includes(value) ? value : 'editorFirst';
+        this.settings.databaseListLabels = next;
+        this._saveSettings();
+        window.dispatchEvent(new CustomEvent('rr-database-list-labels-changed', {
+            detail: { value: next }
         }));
     }
 
@@ -208,6 +228,7 @@ class OptionsManager {
     _renderContent() {
         const { palette: currentPalette, mode: currentMode } = this._parseTheme(this.settings.theme);
         const animateAutotiles = this.getAnimateAutotiles();
+        const databaseListLabels = this.getDatabaseListLabels();
         const t = (key) => window.I18n ? window.I18n.t(key) : key;
 
         const swatchesHtml = (palette) => palette.colors.map(color =>
@@ -238,7 +259,7 @@ class OptionsManager {
                     <button class="rr-modal-close" style="background: none; border: none; color: var(--color-text-muted); font-size: 22px; cursor: pointer; line-height: 1; padding: 0 4px;">&times;</button>
                 </div>
 
-                <div class="rr-modal-body" style="padding: 18px; overflow: visible;">
+                <div class="rr-modal-body" style="padding: 18px; overflow-x: visible; overflow-y: auto;">
                     <div style="font-size: 11px; font-weight: 700; color: var(--color-accent-bright); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px; padding-bottom: 4px; border-bottom: 1px solid var(--color-accent-border-mid);">${t('options.appearance')}</div>
 
                     <div style="display: grid; grid-template-columns: 120px 1fr; gap: 12px 16px; align-items: center; padding: 6px 4px;">
@@ -291,6 +312,14 @@ class OptionsManager {
                         <label for="rr-opt-animate-autotiles" style="font-size: 12px; color: var(--color-text-muted);">${t('options.animateAutotiles')}</label>
                         <input id="rr-opt-animate-autotiles" class="rr-opt-animate-autotiles" type="checkbox" ${animateAutotiles ? 'checked' : ''} style="justify-self: start; width: 16px; height: 16px; accent-color: var(--color-accent-bright);">
                         <div style="grid-column: 2; font-size: 11px; color: var(--color-text-muted); margin-top: -2px;">${t('options.animateAutotilesNote')}</div>
+
+                        <label style="font-size: 12px; color: var(--color-text-muted);">${t('options.databaseListLabels')}</label>
+                        <div class="rr-opt-database-list-labels" style="display: inline-flex; gap: 0; border: 1px solid var(--color-border-input); border-radius: 4px; overflow: hidden; align-self: start; justify-self: start; width: max-content; max-width: 100%;">
+                            <button type="button" data-value="editorFirst" class="rr-opt-database-list-labels-btn" aria-pressed="${databaseListLabels === 'editorFirst'}" style="padding: 6px 8px; background: ${databaseListLabels === 'editorFirst' ? 'var(--color-bg-button-active)' : 'var(--color-bg-button)'}; color: var(--color-text-strong); border: none; cursor: pointer; font-size: 11px; font-weight: 600;">${t('options.databaseListLabelsEditorFirst')}</button>
+                            <button type="button" data-value="gameFirst" class="rr-opt-database-list-labels-btn" aria-pressed="${databaseListLabels === 'gameFirst'}" style="padding: 6px 8px; background: ${databaseListLabels === 'gameFirst' ? 'var(--color-bg-button-active)' : 'var(--color-bg-button)'}; color: var(--color-text-strong); border: none; border-left: 1px solid var(--color-border-input); cursor: pointer; font-size: 11px; font-weight: 600;">${t('options.databaseListLabelsGameFirst')}</button>
+                            <button type="button" data-value="gameOnly" class="rr-opt-database-list-labels-btn" aria-pressed="${databaseListLabels === 'gameOnly'}" style="padding: 6px 8px; background: ${databaseListLabels === 'gameOnly' ? 'var(--color-bg-button-active)' : 'var(--color-bg-button)'}; color: var(--color-text-strong); border: none; border-left: 1px solid var(--color-border-input); cursor: pointer; font-size: 11px; font-weight: 600;">${t('options.databaseListLabelsGameOnly')}</button>
+                        </div>
+                        <div style="grid-column: 2; font-size: 11px; color: var(--color-text-muted); margin-top: -2px;">${t('options.databaseListLabelsNote')}</div>
                     </div>
                 </div>
 
@@ -315,6 +344,7 @@ class OptionsManager {
         const modeButtons = this.modal.querySelectorAll('.rr-opt-mode-btn');
         const paletteDesc = this.modal.querySelector('.rr-opt-palette-desc');
         const animateAutotilesInput = this.modal.querySelector('.rr-opt-animate-autotiles');
+        const databaseListLabelButtons = this.modal.querySelectorAll('.rr-opt-database-list-labels-btn');
 
         const applyCurrentSelection = () => {
             const palette = paletteSelect.value;
@@ -385,6 +415,17 @@ class OptionsManager {
 
         animateAutotilesInput.addEventListener('change', () => {
             this.setAnimateAutotiles(animateAutotilesInput.checked);
+        });
+
+        databaseListLabelButtons.forEach(btn => {
+            btn.addEventListener('click', () => {
+                databaseListLabelButtons.forEach(button => {
+                    const active = button === btn;
+                    button.style.background = active ? 'var(--color-bg-button-active)' : 'var(--color-bg-button)';
+                    button.setAttribute('aria-pressed', String(active));
+                });
+                this.setDatabaseListLabels(btn.dataset.value);
+            });
         });
     }
 }

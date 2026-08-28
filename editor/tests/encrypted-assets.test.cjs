@@ -3,6 +3,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const test = require('node:test');
+const { fileURLToPath } = require('node:url');
 
 const repoRoot = path.resolve(__dirname, '..', '..');
 const editorRoot = path.resolve(__dirname, '..');
@@ -54,7 +55,9 @@ test('encrypted assets resolve to decrypted data URLs', () => {
     const root = makeProject({ withKey: true });
     try {
         const plainPath = path.join(root, 'img', 'tilesets', 'Plain.png');
-        assert.equal(EncryptedAssets.resolveAssetUrl(plainPath), 'file://' + plainPath.replace(/\\/g, '/'));
+        const plainUrl = EncryptedAssets.resolveAssetUrl(plainPath);
+        assert.match(plainUrl, /^file:\/\/\//);
+        assert.equal(fileURLToPath(plainUrl), plainPath);
 
         const mzUrl = EncryptedAssets.resolveAssetUrl(path.join(root, 'img', 'tilesets', 'Tavern B4.png'));
         assert.deepEqual(dataUrlBytes(mzUrl), TINY_PNG);
@@ -67,6 +70,58 @@ test('encrypted assets resolve to decrypted data URLs', () => {
         assert.match(audioUrl, /^data:audio\/ogg;base64,/);
         assert.deepEqual(dataUrlBytes(audioUrl), Buffer.from('OggS-not-really'));
     } finally {
+        fs.rmSync(root, { recursive: true, force: true });
+    }
+});
+
+test('the Web host filesystem keeps plain URLs hosted and asynchronously decrypts binary previews', async () => {
+    const root = makeProject({ withKey: true });
+    try {
+        const webFs = {
+            existsSync: fs.existsSync,
+            readdirSync: fs.readdirSync,
+            statSync: fs.statSync,
+            readFileSync(filePath, encoding) {
+                if (String(filePath).endsWith(path.join('data', 'System.json'))) {
+                    return fs.readFileSync(filePath, encoding);
+                }
+                throw new Error('Binary file is not preloaded');
+            },
+            readFileAsync: filePath => fs.promises.readFile(filePath)
+        };
+        EncryptedAssets.useFileSystem(webFs, path, filePath => `web://${filePath}`);
+        const plainPath = path.join(root, 'img', 'tilesets', 'Plain.png');
+        assert.equal(EncryptedAssets.resolveAssetUrl(plainPath), `web://${plainPath}`);
+        const encryptedPath = path.join(root, 'img', 'tilesets', 'Tavern B4.png');
+        assert.equal(EncryptedAssets.resolveAssetUrl(encryptedPath), `web://${encryptedPath}`,
+            'the synchronous Web path cannot load a non-preloaded binary');
+        assert.deepEqual(dataUrlBytes(await EncryptedAssets.resolveAssetUrlAsync(encryptedPath)), TINY_PNG);
+    } finally {
+        EncryptedAssets.useFileSystem(fs, path);
+        fs.rmSync(root, { recursive: true, force: true });
+    }
+});
+
+test('the Web async resolver can recover a missing encryption key from an encrypted PNG', async () => {
+    const root = makeProject({ withKey: false });
+    try {
+        const webFs = {
+            existsSync: fs.existsSync,
+            readdirSync: fs.readdirSync,
+            statSync: fs.statSync,
+            readFileSync(filePath, encoding) {
+                if (String(filePath).endsWith(path.join('data', 'System.json'))) {
+                    return fs.readFileSync(filePath, encoding);
+                }
+                throw new Error('Binary file is not preloaded');
+            },
+            readFileAsync: filePath => fs.promises.readFile(filePath)
+        };
+        EncryptedAssets.useFileSystem(webFs, path, filePath => `web://${filePath}`);
+        const encryptedPath = path.join(root, 'img', 'tilesets', 'Tavern B4.png');
+        assert.deepEqual(dataUrlBytes(await EncryptedAssets.resolveAssetUrlAsync(encryptedPath)), TINY_PNG);
+    } finally {
+        EncryptedAssets.useFileSystem(fs, path);
         fs.rmSync(root, { recursive: true, force: true });
     }
 });

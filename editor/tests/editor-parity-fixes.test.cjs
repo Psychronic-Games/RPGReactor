@@ -6,6 +6,7 @@ const test = require('node:test');
 const repoRoot = path.resolve(__dirname, '..', '..');
 const editorRoot = path.resolve(__dirname, '..');
 const read = relative => fs.readFileSync(path.join(editorRoot, relative), 'utf8');
+const annotations = require(path.join(editorRoot, 'src', 'utils', 'PluginAnnotations.js'));
 
 /** How the engine turns a tile id into a source rect on the B-E sheet. */
 function engineFrame(tileId) {
@@ -69,9 +70,9 @@ test('plugin command metadata does not overwrite plugin parameter defaults', () 
     assert.match(source.slice(metaAt, metaAt + 1500), /token\.tag === 'command'/);
 });
 
-test('the two plugin annotation parsers agree on every bundled plugin', () => {
-    // Both are lifted from source and run over the real plugin corpus; any
-    // parameter where they disagree is a default that would be written wrong.
+test('the parameter parser and shared annotation tokenizer agree on every bundled plugin', () => {
+    // The real parameter parser and shared tokenizer run over the plugin corpus;
+    // any disagreement is a default that would be written wrong.
     const source = read('src/PluginManager.js');
     const lift = signature => {
         const at = source.indexOf(signature);
@@ -79,10 +80,10 @@ test('the two plugin annotation parsers agree on every bundled plugin', () => {
         return source.slice(source.indexOf('{', at) + 1, source.indexOf('\n    }', at));
     };
     const host = {
-        normalizeAnnotationLine: new Function('line', lift('normalizeAnnotationLine(line) {'))
+        normalizeAnnotationLine: annotations.normalizeLine,
+        cleanAnnotationValue: annotations.cleanValue,
+        splitAnnotationLine: annotations.splitLine
     };
-    host.cleanAnnotationValue = new Function('value', lift('cleanAnnotationValue(value) {')).bind(host);
-    host.splitAnnotationLine = new Function('line', lift('splitAnnotationLine(line) {')).bind(host);
     host.parsePluginParameters = new Function('source', lift('parsePluginParameters(source) {')).bind(host);
 
     const templates = path.join(repoRoot, 'template', 'Demo', 'js', 'plugins');

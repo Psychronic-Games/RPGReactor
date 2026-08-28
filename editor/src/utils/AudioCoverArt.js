@@ -433,7 +433,20 @@
         return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
     }
 
-    const api = { extractFromFile, extractFromBytes, placeholderFor };
+    const fileCache = new Map();
+
+    /** One cached async resolver shared by the Audio Player and every picker. */
+    function forFile(filePath) {
+        if (!filePath) return Promise.resolve(null);
+        let promise = fileCache.get(filePath);
+        if (!promise) {
+            promise = Promise.resolve().then(() => extractFromFile(filePath)).catch(() => null);
+            fileCache.set(filePath, promise);
+        }
+        return promise;
+    }
+
+    const api = { extractFromFile, extractFromBytes, forFile, placeholderFor };
     root.RRAudioCoverArt = api;
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);

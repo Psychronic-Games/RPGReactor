@@ -1894,12 +1894,283 @@ input[type="radio"]:disabled,
     gap: 10px;
     justify-content: flex-end;
 }
+
+/* System sound pools */
+.rr-system-sound-modal {
+    width: min(680px, 96vw);
+    max-height: 88vh;
+}
+.rr-system-sound-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.rr-system-sound-card {
+    display: grid;
+    grid-template-columns: 46px minmax(0, 1fr) auto;
+    gap: 10px;
+    align-items: center;
+    padding: 9px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: linear-gradient(100deg, var(--color-bg-panel), var(--color-bg-surface));
+    transition: border-color var(--ease-fast), transform var(--ease-fast), background var(--ease-fast);
+}
+.rr-system-sound-card:hover {
+    border-color: var(--color-accent-border);
+    transform: translateY(-1px);
+}
+.rr-system-sound-card.is-primary {
+    border-left: 3px solid var(--color-accent);
+    background: linear-gradient(100deg, var(--color-accent-tint-15), var(--color-bg-surface) 70%);
+}
+.rr-system-sound-art {
+    width: 42px;
+    height: 42px;
+    border-radius: 5px;
+    object-fit: cover;
+    background: var(--color-bg-deep);
+    box-shadow: inset 0 0 0 1px var(--color-border);
+}
+.rr-system-sound-summary {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 3px;
+    padding: 2px 4px;
+    border: 0;
+    background: transparent;
+    color: var(--color-text);
+    text-align: left;
+    cursor: pointer;
+}
+.rr-system-sound-ordinal {
+    color: var(--color-text-muted);
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+}
+.rr-system-sound-filename {
+    max-width: 100%;
+    overflow: hidden;
+    color: var(--color-text-strong);
+    font-size: 13px;
+    font-weight: 650;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.rr-system-sound-metadata {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+.rr-system-sound-metadata > span {
+    padding: 1px 5px;
+    border: 1px solid var(--color-border);
+    border-radius: 999px;
+    background: var(--color-bg-deep);
+    color: var(--color-text-muted);
+    font-size: 9px;
+}
+.rr-system-sound-actions {
+    display: flex;
+    gap: 3px;
+}
+.rr-system-sound-icon {
+    width: 27px;
+    height: 27px;
+    display: grid;
+    place-items: center;
+    padding: 5px;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--color-text-muted);
+    cursor: pointer;
+}
+.rr-system-sound-icon svg {
+    width: 16px;
+    height: 16px;
+    fill: currentColor;
+}
+.rr-system-sound-icon:hover {
+    border-color: var(--color-border);
+    background: var(--color-bg-hover);
+    color: var(--color-text-strong);
+}
+.rr-system-sound-icon.is-danger:hover {
+    border-color: var(--color-danger-bright);
+    color: var(--color-danger-bright);
+}
+.rr-system-sound-add {
+    width: 100%;
+    padding: 9px;
+    border: 1px dashed var(--color-accent-border);
+    border-radius: var(--radius-md);
+    background: var(--color-accent-tint-10);
+    color: var(--color-accent-bright);
+    font-weight: 600;
+    cursor: pointer;
+}
+.rr-system-sound-add:hover {
+    border-style: solid;
+    background: var(--color-accent-tint-25);
+}
+.rr-system-pitch-card {
+    display: grid;
+    grid-template-columns: minmax(130px, .7fr) 1fr 1fr;
+    gap: 14px;
+    align-items: center;
+    padding: 12px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: var(--color-bg-panel);
+}
+.rr-system-pitch-card.is-disabled .rr-system-pitch-field {
+    opacity: .45;
+}
+.rr-system-pitch-toggle {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    color: var(--color-text-strong);
+    font-size: 12px;
+    font-weight: 650;
+    cursor: pointer;
+}
+.rr-system-pitch-field {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    color: var(--color-text-muted);
+    font-size: 10px;
+    font-weight: 600;
+    transition: opacity var(--ease-fast);
+}
+.rr-system-pitch-controls {
+    display: grid;
+    grid-template-columns: minmax(70px, 1fr) 52px;
+    gap: 7px;
+    align-items: center;
+}
+.rr-system-pitch-controls input[type="range"] {
+    min-width: 0;
+}
+.rr-system-pitch-number {
+    width: 56px;
+    height: 28px;
+    padding: 3px 4px;
+    box-sizing: border-box;
+    background: var(--color-bg-input);
+    border: 1px solid var(--color-accent-border);
+    border-radius: var(--radius-md);
+    color: var(--color-text-strong);
+    font-family: inherit;
+    font-size: 11px;
+    font-weight: 650;
+    line-height: 1;
+    text-align: center;
+    outline: none;
+    transition: border-color var(--ease-fast), box-shadow var(--ease-fast), background var(--ease-fast);
+}
+.rr-system-pitch-number:hover:not(:disabled) {
+    border-color: var(--color-accent-border-strong);
+}
+.rr-system-pitch-number:focus {
+    border-color: var(--color-accent-bright);
+    box-shadow: 0 0 0 2px var(--color-accent-tint-15);
+}
+.rr-system-pitch-number:invalid {
+    border-color: var(--color-danger-bright);
+}
+.rr-system-pitch-number:disabled {
+    background: var(--color-bg-deep);
+    color: var(--color-text-muted);
+    cursor: not-allowed;
+}
+.rr-system-pitch-slider:focus-visible::-webkit-slider-thumb {
+    box-shadow: 0 0 0 3px var(--color-accent-tint-25);
+}
+.rr-system-pitch-slider:focus-visible::-moz-range-thumb {
+    box-shadow: 0 0 0 3px var(--color-accent-tint-25);
+}
+
+/* Database maximums are typed values; Chromium's native spinner cannot adopt
+ * palette colors, so keep keyboard stepping and remove only its OS chrome. */
+.rr-database-maximum-input {
+    -moz-appearance: textfield;
+    appearance: textfield;
+}
+.rr-database-maximum-input::-webkit-inner-spin-button,
+.rr-database-maximum-input::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    appearance: none;
+    margin: 0;
+}
+@media (max-width: 620px) {
+    .rr-system-sound-card {
+        grid-template-columns: 42px minmax(0, 1fr);
+    }
+    .rr-system-sound-actions {
+        grid-column: 2;
+        justify-content: flex-end;
+    }
+    .rr-system-pitch-card {
+        grid-template-columns: 1fr;
+    }
+}
 @media (max-width: 700px) {
     .rr-modal {
         max-height: calc(100vh - 16px);
     }
     .rr-modal-body {
         padding: var(--space-3);
+    }
+    .rr-plugin-image-picker .rr-plugin-image-picker-body {
+        grid-template-columns: minmax(0, 1fr) !important;
+        grid-template-rows: minmax(220px, 1fr) minmax(180px, 0.8fr);
+        overflow-y: auto !important;
+    }
+    .rr-plugin-image-picker .rr-plugin-image-picker-body > :first-child {
+        border-right: 0 !important;
+        border-bottom: 1px solid var(--color-border);
+    }
+}
+
+/* Typed plugin values remain usable in narrow child dialogs. */
+@media (max-width: 680px) {
+    .plugin-complex-parameter-editor {
+        width: calc(100vw - 16px) !important;
+        height: calc(100vh - 16px) !important;
+        max-height: none !important;
+    }
+    .rr-plugin-array-header,
+    .rr-plugin-struct-header {
+        display: none !important;
+    }
+    .rr-plugin-array-row {
+        grid-template-columns: 32px minmax(0, 1fr) !important;
+    }
+    .rr-plugin-array-actions {
+        grid-column: 1 / -1;
+        justify-content: flex-end;
+        border-top: 1px solid var(--color-border-subtle);
+    }
+    .rr-plugin-struct-row {
+        grid-template-columns: minmax(0, 1fr) !important;
+        border-bottom: 1px solid var(--color-border-subtle);
+    }
+    .rr-plugin-struct-name {
+        border-right: 0 !important;
+        border-bottom: 1px solid var(--color-border-subtle);
+    }
+    .rr-plugin-choice-array-row {
+        grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    }
+    .rr-plugin-choice-array-row > :first-child {
+        grid-column: 1 / -1;
     }
 }
 
@@ -2645,7 +2916,7 @@ input.rr-color-swatch[type="color"]::-webkit-color-swatch-wrapper {
 }
 .rr-ag-param[type="color"]::-webkit-color-swatch,
 input.rr-color-swatch[type="color"]::-webkit-color-swatch {
-    border: 1px solid var(--color-border-strong, var(--color-border-input));
+    border: 1px solid var(--color-border-input);
     border-radius: var(--radius-sm, 2px);
 }
 
@@ -2833,4 +3104,28 @@ input.rr-color-swatch[type="color"]::-webkit-color-swatch {
 @keyframes rr-download-indeterminate {
     from { transform: translateX(-115%); }
     to { transform: translateX(265%); }
+}
+
+/* Database rows use these for every database type, including types without an
+ * icon. Both labels may shrink without displacing the fixed entry id. */
+.database-list-name,
+.database-list-alt {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.database-list-name {
+    flex: 1 1 auto;
+    color: var(--color-text);
+}
+.database-list-alt {
+    flex: 0 1 40%;
+    margin-left: 6px;
+    color: var(--color-text-muted);
+    font-size: 11px;
+}
+.database-list-id {
+    flex: 0 0 auto;
+    margin-left: 8px;
 }

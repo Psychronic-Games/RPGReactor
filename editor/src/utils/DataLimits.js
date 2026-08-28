@@ -19,7 +19,7 @@ globalThis.RR_LIMITS = Object.freeze({
         enemies: 9999,
         troops: 9999,
         states: 9999,
-        animations: 1000,
+        animations: 5000,
         tilesets: 1000,
         commonEvents: 9999,
         userInterfaces: 9999,

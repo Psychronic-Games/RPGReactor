@@ -11,10 +11,12 @@ const {
 
 const repoRoot = path.resolve(__dirname, '..');
 const deepTranslationsPath = path.join(repoRoot, 'src', 'I18nDeepTranslations.js');
+const reviewedTranslationsPath = path.join(repoRoot, 'src', 'I18nReviewedTranslations.js');
 
 function i18nSource() {
     const deep = fs.existsSync(deepTranslationsPath) ? fs.readFileSync(deepTranslationsPath, 'utf8') : '';
-    return `${deep}\n${fs.readFileSync(path.join(repoRoot, 'src', 'I18nManager.js'), 'utf8')}`;
+    const reviewed = fs.existsSync(reviewedTranslationsPath) ? fs.readFileSync(reviewedTranslationsPath, 'utf8') : '';
+    return `${deep}\n${reviewed}\n${fs.readFileSync(path.join(repoRoot, 'src', 'I18nManager.js'), 'utf8')}`;
 }
 
 function loadI18nForTest(savedSettings = null) {
@@ -42,7 +44,19 @@ function loadI18nForTest(savedSettings = null) {
     sandbox.window.CustomEvent = sandbox.CustomEvent;
 
     const source = i18nSource();
-    const result = vm.runInNewContext(`${source}\n({ RR_LANGUAGES, RR_I18N_STRINGS, manager: window.I18n, store: localStorage });`, sandbox);
+    const result = vm.runInNewContext(`${source}\n({
+        RR_LANGUAGES,
+        RR_I18N_STRINGS,
+        reviewed: globalThis.RR_REVIEWED_TRANSLATIONS,
+        catalogs: {
+            text: RR_TEXT_TRANSLATIONS,
+            keyed: RR_I18N_STRINGS,
+            commands: RR_EVENT_COMMAND_NAMES,
+            sections: RR_EVENT_SECTION_NAMES
+        },
+        manager: window.I18n,
+        store: localStorage
+    });`, sandbox);
     result.savedSettings = () => JSON.parse(store.get('rr-settings') || '{}');
     result.document = sandbox.document;
     return result;
@@ -51,6 +65,10 @@ function loadI18nForTest(savedSettings = null) {
 test('i18n dictionaries expose every supported language for every English key', () => {
     const { RR_LANGUAGES, RR_I18N_STRINGS } = loadI18nForTest();
     assert.deepEqual(Array.from(RR_LANGUAGES, lang => lang.id), ['en', 'ja', 'es', 'zh-Hant', 'zh-Hans', 'ru', 'pt', 'de', 'fr', 'el', 'ko', 'ar', 'it', 'pl', 'id', 'vi', 'th', 'tr']);
+    const portuguese = Array.from(RR_LANGUAGES).find(lang => lang.id === 'pt');
+    assert.equal(portuguese.name, 'Portuguese (Brazil)');
+    assert.equal(portuguese.nativeName, 'Português (Brasil)');
+    assert.equal(portuguese.flag, '🇧🇷');
 
     const englishKeys = Array.from(Object.keys(RR_I18N_STRINGS.en)).sort();
     for (const lang of ['ja', 'es', 'zh-Hant', 'zh-Hans', 'ru', 'pt', 'de', 'fr', 'el', 'ko', 'ar', 'it', 'pl', 'id', 'vi', 'th', 'tr']) {
@@ -124,6 +142,10 @@ test('high-visibility localized labels do not fall back to English', () => {
         'forge.effekseerGenerator.description'
     ];
     const eventCommandNames = ['Script'];
+    const identicalCommandLoanwords = {
+        fr: new Set(['Script']),
+        it: new Set(['Script'])
+    };
     const literalLabels = [
         'Clear Selected',
         'Last Action Data',
@@ -145,6 +167,7 @@ test('high-visibility localized labels do not fall back to English', () => {
         }
 
         for (const name of eventCommandNames) {
+            if (identicalCommandLoanwords[lang]?.has(name)) continue;
             assert.notEqual(manager.tEventCommandName(name), name, `${lang} translates event command ${name}`);
         }
 
@@ -284,12 +307,22 @@ const IDENTICAL_TO_ENGLISH_BY_DESIGN = [
     'about.rarelyTypicalPlayers', 'common.ok'
 ];
 
+// Focused features may intentionally use I18nManager's English fallback until
+// translated catalogs are available. Listing them keeps that fallback visible.
+const ENGLISH_FALLBACK_KEYS = [
+    'options.databaseListLabels',
+    'options.databaseListLabelsEditorFirst',
+    'options.databaseListLabelsGameFirst',
+    'options.databaseListLabelsGameOnly',
+    'options.databaseListLabelsNote'
+];
+
 const LOANWORDS_BY_LOCALE = {
     es: ['event.actor', 'event.dir', 'event.normal', 'event.tile', 'event.variable', 'forge.tab.procedural', 'mapProps.tileset', 'mapProps.vol', 'menu.tilesets', 'options.editor', 'theme.cascadia.name', 'toolbar.tileset', 'toolbar.title.plugins', 'workspace.zoom'],
-    pt: ['audio.volume', 'event.item', 'event.normal', 'event.tile', 'forge.tab.procedural', 'mapProps.tileset', 'menu.classes', 'menu.tilesets', 'options.editor', 'toolbar.tileset', 'workspace.zoom'],
+    pt: ['audio.volume', 'event.item', 'event.normal', 'event.tile', 'forge.tab.procedural', 'mapProps.sizeRange', 'mapProps.tileset', 'menu.classes', 'menu.tilesets', 'options.editor', 'toolbar.tileset', 'workspace.zoom'],
     de: ['audio.me', 'audio.pause', 'db.system1', 'db.system2', 'efk.frame', 'efk.framesLabel', 'efk.pause', 'event.index', 'event.normal', 'event.parallel', 'event.position', 'event.variable', 'forge.frame', 'mapProps.pause', 'mapProps.tileset', 'menu.system', 'menu.tilesets', 'options.editor', 'options.palette', 'toolbar.tileset', 'workspace.zoom'],
     fr: ['audio.pause', 'audio.volume', 'efk.orientation', 'efk.pause', 'event.conditions', 'event.image', 'event.normal', 'event.options', 'event.page', 'mapProps.note', 'mapProps.pause', 'menu.animations', 'menu.classes', 'menu.forge', 'menu.tilesets', 'menu.types', 'options.mode', 'options.palette', 'options.title'],
-    it: ['audio.volume', 'event.dir', 'event.pattern', 'event.tile', 'mapProps.loopX', 'mapProps.loopY', 'mapProps.tileset', 'mapProps.vol', 'menu.database', 'menu.file', 'options.editor', 'theme.cascadia.name', 'toolbar.tileset', 'toolbar.title.database', 'toolbar.title.playtest', 'workspace.zoom'],
+    it: ['audio.volume', 'event.dir', 'event.pattern', 'event.tile', 'mapProps.loopX', 'mapProps.loopY', 'mapProps.tileset', 'mapProps.vol', 'menu.database', 'menu.file', 'options.editor', 'theme.cascadia.name', 'toolbar.tileset', 'toolbar.title.database', 'workspace.zoom'],
     pl: ['db.system1', 'db.system2', 'mapProps.tileset', 'menu.system', 'theme.cascadia.name', 'theme.ocean.name', 'toolbar.tileset'],
     id: ['audio.pan', 'audio.pitch', 'audio.volume', 'efk.frame', 'event.item', 'event.normal', 'event.tile', 'forge.frame', 'mapProps.loopX', 'mapProps.loopY', 'mapProps.pan', 'mapProps.pitch', 'mapProps.tileset', 'mapProps.vol', 'menu.database', 'menu.file', 'options.editor', 'options.mode', 'theme.cascadia.name', 'toolbar.tileset', 'toolbar.title.database', 'workspace.zoom'],
     vi: ['audio.pan', 'mapProps.pan', 'mapProps.tileset', 'theme.cascadia.name', 'toolbar.tileset'],
@@ -304,7 +337,11 @@ test('no locale silently renders an untranslated English string', () => {
 
     for (const { id } of RR_LANGUAGES) {
         if (id === 'en') continue;
-        const allowed = new Set([...IDENTICAL_TO_ENGLISH_BY_DESIGN, ...(LOANWORDS_BY_LOCALE[id] || [])]);
+        const allowed = new Set([
+            ...IDENTICAL_TO_ENGLISH_BY_DESIGN,
+            ...ENGLISH_FALLBACK_KEYS,
+            ...(LOANWORDS_BY_LOCALE[id] || [])
+        ]);
         const table = RR_I18N_STRINGS[id] || {};
         for (const key of englishKeys) {
             // Digit- and symbol-only values carry no language to translate.
@@ -348,5 +385,113 @@ test('Terms array labels are translated in every non-English locale', () => {
         for (const label of labels) {
             assert.notEqual(manager.tText(label), label, `${id} translates Terms label ${label}`);
         }
+    }
+});
+
+const REVIEWED_CATALOG_NAMES = ['text', 'keyed', 'commands', 'sections'];
+const sortedKeys = object => Array.from(Object.keys(object)).sort();
+
+test('reviewed catalogs exactly cover every supported non-English locale', () => {
+    const { RR_LANGUAGES, reviewed } = loadI18nForTest();
+    const expectedLocales = Array.from(RR_LANGUAGES, ({ id }) => id)
+        .filter(id => id !== 'en')
+        .sort();
+
+    assert.deepEqual(sortedKeys(reviewed), [...REVIEWED_CATALOG_NAMES].sort());
+    for (const catalog of REVIEWED_CATALOG_NAMES) {
+        assert.deepEqual(
+            sortedKeys(reviewed[catalog]),
+            expectedLocales,
+            `${catalog} has exactly the supported non-English locales`
+        );
+    }
+});
+
+test('every reviewed translation wins over generated and legacy catalogs', () => {
+    const { reviewed, catalogs } = loadI18nForTest();
+
+    for (const catalog of REVIEWED_CATALOG_NAMES) {
+        for (const [locale, translations] of Object.entries(reviewed[catalog])) {
+            for (const [key, expected] of Object.entries(translations)) {
+                assert.equal(
+                    catalogs[catalog][locale][key],
+                    expected,
+                    `${catalog}[${locale}][${JSON.stringify(key)}] uses reviewed text`
+                );
+            }
+        }
+    }
+});
+
+test('reviewed translations preserve interpolation placeholders', () => {
+    const { reviewed, catalogs } = loadI18nForTest();
+    const placeholders = text =>
+        (String(text).match(/\{[A-Za-z_][A-Za-z0-9_]*\}|%[1-9]\d*/g) || []).sort();
+
+    for (const catalog of REVIEWED_CATALOG_NAMES) {
+        for (const [locale, translations] of Object.entries(reviewed[catalog])) {
+            for (const [key, translated] of Object.entries(translations)) {
+                const source = catalog === 'keyed' ? catalogs.keyed.en[key] : key;
+                assert.equal(typeof source, 'string', `${key} has an English source`);
+                assert.deepEqual(
+                    placeholders(translated),
+                    placeholders(source),
+                    `${catalog}[${locale}][${JSON.stringify(key)}] preserves placeholders`
+                );
+            }
+        }
+    }
+});
+
+test('known Greek fallback values do not leak into corrected locales', () => {
+    const { catalogs } = loadI18nForTest();
+    const affectedLocales = ['ko', 'it', 'pl', 'ar', 'tr', 'id', 'vi', 'th'];
+    const badValues = {
+        'toolbar.title.heightBrush': 'Πινέλο ύψους (ζωγραφίζει το υψόμετρο για χάρτες 3D)',
+        'toolbar.height': 'Ύψος:',
+        'toolbar.height.set': 'Ορισμός σε',
+        'toolbar.height.raise': 'Ανύψωση',
+        'toolbar.height.lower': 'Χαμήλωμα'
+    };
+
+    for (const locale of affectedLocales) {
+        for (const [key, badValue] of Object.entries(badValues)) {
+            assert.notEqual(
+                catalogs.keyed[locale][key],
+                badValue,
+                `${locale} does not inherit Greek text for ${key}`
+            );
+        }
+    }
+});
+
+test('reviewed Thai translations use normalized orthography', () => {
+    const { reviewed } = loadI18nForTest();
+    const decomposedSaraAm = '\u0E4D\u0E32';
+
+    for (const catalog of REVIEWED_CATALOG_NAMES) {
+        for (const [key, value] of Object.entries(reviewed[catalog].th)) {
+            assert.equal(value.normalize('NFC'), value, `${catalog}.th[${JSON.stringify(key)}] is NFC`);
+            assert.equal(
+                value.includes(decomposedSaraAm),
+                false,
+                `${catalog}.th[${JSON.stringify(key)}] uses U+0E33 instead of U+0E4D U+0E32`
+            );
+        }
+    }
+});
+
+test('reviewed Polish covers every event command and section', () => {
+    const { reviewed, catalogs } = loadI18nForTest();
+    const unionKeys = tables => Array.from(new Set(
+        Object.values(tables).flatMap(table => Object.keys(table))
+    )).sort();
+
+    for (const catalog of ['commands', 'sections']) {
+        assert.deepEqual(
+            sortedKeys(reviewed[catalog].pl),
+            unionKeys(catalogs[catalog]),
+            `reviewed Polish ${catalog} covers the complete catalog`
+        );
     }
 });

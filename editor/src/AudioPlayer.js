@@ -434,25 +434,7 @@ class AudioPlayer {
      */
     getCoverArt(absolutePath) {
         if (!absolutePath || !window.RRAudioCoverArt) return Promise.resolve(null);
-        if (!this._coverArtCache) this._coverArtCache = new Map();
-        let promise = this._coverArtCache.get(absolutePath);
-        if (!promise) {
-            promise = new Promise(resolve => {
-                // Off the scroll/click path; the read itself is a small
-                // synchronous prefix of the file.
-                setTimeout(() => {
-                    let url = null;
-                    try {
-                        url = window.RRAudioCoverArt.extractFromFile(absolutePath);
-                    } catch (error) {
-                        url = null;
-                    }
-                    resolve(url);
-                }, 0);
-            });
-            this._coverArtCache.set(absolutePath, promise);
-        }
-        return promise;
+        return window.RRAudioCoverArt.forFile(absolutePath);
     }
 
     updatePanValueLabel() {

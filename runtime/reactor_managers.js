@@ -1623,15 +1623,43 @@ SoundManager.preloadImportantSounds = function() {
 };
 
 SoundManager.loadSystemSound = function(n) {
-    if ($dataSystem) {
-        AudioManager.loadStaticSe($dataSystem.sounds[n]);
+    for (const se of this.systemSoundVariants(n)) {
+        AudioManager.loadStaticSe(se);
     }
 };
 
 SoundManager.playSystemSound = function(n) {
-    if ($dataSystem) {
-        AudioManager.playStaticSe($dataSystem.sounds[n]);
-    }
+    const variants = this.systemSoundVariants(n);
+    if (variants.length === 0) return;
+    const selected = variants.length === 1
+        ? variants[0]
+        : variants[Math.floor(Math.random() * variants.length)];
+    AudioManager.playStaticSe(this.applySystemSoundPitch(selected, $dataSystem.sounds[n]));
+};
+
+SoundManager.systemSoundVariants = function(n) {
+    const slot = $dataSystem && $dataSystem.sounds && $dataSystem.sounds[n];
+    if (!slot) return [];
+    return [slot].concat(Array.isArray(slot.variants) ? slot.variants : [])
+        .filter(se => se && se.name);
+};
+
+SoundManager.applySystemSoundPitch = function(se, slot) {
+    const range = slot && slot.pitchRandom;
+    if (!range || range.min == null || range.max == null) return se;
+    if (String(range.min).trim() === '' || String(range.max).trim() === '') return se;
+    let min = Math.round(Number(range.min));
+    let max = Math.round(Number(range.max));
+    if (!Number.isFinite(min) || !Number.isFinite(max)) return se;
+    min = Math.max(50, Math.min(150, min));
+    max = Math.max(50, Math.min(150, max));
+    if (min > max) return se;
+    return {
+        name: se.name,
+        volume: se.volume,
+        pitch: min + Math.floor(Math.random() * (max - min + 1)),
+        pan: se.pan
+    };
 };
 
 SoundManager.playCursor = function() {

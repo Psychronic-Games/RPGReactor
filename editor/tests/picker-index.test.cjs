@@ -38,6 +38,40 @@ test('picker search is case- and accent-insensitive across relative paths', () =
     assert.equal(PickerIndex.sectionOffset({ children: rows }, rows[2]), 42);
 });
 
+test('folder trees preserve full values and recursively count and sort their contents', () => {
+    const tree = PickerIndex.buildFolderTree([
+        'Root Track',
+        'custom/Loose',
+        'custom/Sanctuary/Chime',
+        'custom/Sanctuary/Bell',
+        'custom/EVFX Shoot/Laser'
+    ]);
+
+    assert.deepEqual(tree.files, ['Root Track']);
+    assert.equal(tree.folders.length, 1);
+    const custom = tree.folders[0];
+    assert.equal(custom.path, 'custom');
+    assert.equal(custom.total, 4);
+    assert.deepEqual(custom.files, ['custom/Loose']);
+    assert.deepEqual(custom.folders.map(folder => [folder.name, folder.path, folder.total]), [
+        ['EVFX Shoot', 'custom/EVFX Shoot', 1],
+        ['Sanctuary', 'custom/Sanctuary', 2]
+    ]);
+    assert.deepEqual(custom.folders[1].files, [
+        'custom/Sanctuary/Bell', 'custom/Sanctuary/Chime'
+    ]);
+});
+
+test('flat folder trees stay flat and selection paths include every ancestor', () => {
+    assert.deepEqual(PickerIndex.buildFolderTree(['Bravo', 'Alpha']), {
+        files: ['Alpha', 'Bravo'], folders: []
+    });
+    assert.deepEqual(PickerIndex.foldersLeadingTo('custom/Sanctuary/chime'), [
+        'custom', 'custom/Sanctuary'
+    ]);
+    assert.deepEqual(PickerIndex.foldersLeadingTo('root-file'), []);
+});
+
 test('character and face pickers use the shared searchable Unicode browser', () => {
     const html = fs.readFileSync(path.join(repoRoot, 'index.html'), 'utf8');
     const helper = html.indexOf('src/utils/PickerIndex.js');
@@ -61,4 +95,19 @@ test('character and face pickers use the shared searchable Unicode browser', () 
     assert.match(helperSource, /rr-picker-search-clear/);
     assert.match(helperSource, /color-accent-border-strong/);
     assert.match(helperSource, /list\.scrollTop = sectionOffset\(list, header\)/);
+});
+
+test('asset-image pickers opt into recursive folder rendering', () => {
+    for (const relativePath of [
+        'src/DatabaseEditorUI.js',
+        'src/database/DatabaseSystem1Editor.js',
+        'src/event/CharacterGraphicPicker.js',
+        'src/database/DatabaseTilesetEditor.js',
+        'src/event/ModelGraphicPicker.js',
+        'src/event/commands/MessageCommandEditor.js'
+    ]) {
+        const source = fs.readFileSync(path.join(repoRoot, relativePath), 'utf8');
+        assert.match(source, /RRPickerIndex\.createBrowser\(\{[\s\S]*?folders: true,/,
+            relativePath);
+    }
 });

@@ -20,10 +20,10 @@
     const tt = text => root.I18n ? root.I18n.tText(text) : text;
 
     function imageUrl(filePath) {
-        const isWeb = !!root.RPGReactorHost;
-        return isWeb && root.RPGReactorAssetUrl
+        return root.RPGReactorAssetUrl
             ? root.RPGReactorAssetUrl(filePath)
-            : encodeURI('file://' + String(filePath).replace(/\\/g, '/')).replace(/#/g, '%23');
+            : encodeURI('file://' + String(filePath).replace(/\\/g, '/'))
+                .replace(/#/g, '%23').replace(/\?/g, '%3F');
     }
 
     function iconSetPathFor(projectPath) {

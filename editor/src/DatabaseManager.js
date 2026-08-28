@@ -13,7 +13,7 @@ class DatabaseManager {
             enemies: 9999,
             troops: 9999,
             states: 9999,
-            animations: 1000,
+            animations: 5000,
             tilesets: 1000,
             commonEvents: 9999,
             userInterfaces: 9999,
@@ -47,6 +47,7 @@ class DatabaseManager {
         this.mutationGeneration = 0;
         this.savedState = {};
         this.tileset3DLoadError = null;
+        this.editorNamesLoadError = null;
         const host = typeof window !== 'undefined' ? window.RPGReactorHost : null;
         if (host?.fs && host?.path) {
             this.fs = host.fs;
@@ -90,7 +91,9 @@ class DatabaseManager {
             mapInfos: [],
             // Per-tile 3D classification. Not one of the dataFiles: those are
             // the MZ database format, and this is ours, stored beside them.
-            tileset3d: null
+            tileset3d: null,
+            // Editor-only labels for player-facing database entries.
+            editorNames: null
         };
 
         // Initialize Node.js modules if running in NW.js
@@ -128,6 +131,7 @@ class DatabaseManager {
                 loaded[key] = await this.loadJSON(dataPath, filename);
             }
             loaded.tileset3d = await this.loadTileset3D(projectPath);
+            loaded.editorNames = await this.loadEditorNames(projectPath);
             // An absent file reads as []; records start at id 1 behind the
             // null slot every other database file keeps. A project that has
             // never authored an interface opens on baselines of its stock
@@ -244,6 +248,69 @@ class DatabaseManager {
         }
     }
 
+    editorNamesModule() {
+        return (typeof globalThis !== 'undefined' && globalThis.RREditorNames) || null;
+    }
+
+    async loadEditorNames(projectPath) {
+        const names = this.editorNamesModule();
+        if (!names || !this.fs || !this.path) return null;
+        const filePath = this.path.join(projectPath, 'data', names.FILENAME);
+        if (!this.fs.existsSync(filePath)) {
+            this.editorNamesLoadError = null;
+            return names.create();
+        }
+        try {
+            const parsed = await this._readJsonWithRetry(filePath);
+            if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+                throw new Error(`${names.FILENAME} must contain an editor names object`);
+            }
+            this.editorNamesLoadError = null;
+            return names.normalize(parsed);
+        } catch (error) {
+            // Losing editor-only labels must not stop the project database from
+            // opening, but the damaged source file must remain untouched.
+            console.error(`Error loading ${names.FILENAME}:`, error);
+            this.editorNamesLoadError = error;
+            return names.create();
+        }
+    }
+
+    async saveEditorNames(projectPath) {
+        const names = this.editorNamesModule();
+        if (!names || !this.fs || !this.path) return true;
+        const filePath = this.path.join(projectPath, 'data', names.FILENAME);
+        if (this.editorNamesLoadError && this.fs.existsSync(filePath)) {
+            console.error(`Refusing to overwrite unreadable ${names.FILENAME}:`, this.editorNamesLoadError);
+            return false;
+        }
+        const store = this.data.editorNames;
+        if (names.isEmpty(store) && !this.fs.existsSync(filePath)) {
+            this.captureSavedState('editorNames');
+            return true;
+        }
+        try {
+            this._writeFileAtomic(this.fs, filePath, JSON.stringify(names.normalize(store)));
+            this.editorNamesLoadError = null;
+            this.captureSavedState('editorNames');
+            return true;
+        } catch (error) {
+            console.error(`Error saving ${names.FILENAME}:`, error);
+            return false;
+        }
+    }
+
+    canSaveEditorNames(projectPath) {
+        const names = this.editorNamesModule();
+        if (!names || !this.fs || !this.path) return true;
+        const filePath = this.path.join(projectPath, 'data', names.FILENAME);
+        if (this.editorNamesLoadError && this.fs.existsSync(filePath)) {
+            console.error(`Refusing to overwrite unreadable ${names.FILENAME}:`, this.editorNamesLoadError);
+            return false;
+        }
+        return true;
+    }
+
     captureSavedState(dataKey = null) {
         const entries = dataKey
             ? this.dataFiles.filter(([key]) => key === dataKey)
@@ -253,6 +320,9 @@ class DatabaseManager {
         }
         if (!dataKey || dataKey === 'tileset3d') {
             this.savedState.tileset3d = this.serialize(this.data.tileset3d || null);
+        }
+        if (!dataKey || dataKey === 'editorNames') {
+            this.savedState.editorNames = this.serialize(this.data.editorNames || null);
         }
     }
 
@@ -265,6 +335,10 @@ class DatabaseManager {
         if (this.savedState.tileset3d !== undefined
             && this.serialize(this.data.tileset3d || null) !== this.savedState.tileset3d) {
             dirty.push('tileset3d');
+        }
+        if (this.savedState.editorNames !== undefined
+            && this.serialize(this.data.editorNames || null) !== this.savedState.editorNames) {
+            dirty.push('editorNames');
         }
         return dirty;
     }
@@ -507,6 +581,8 @@ class DatabaseManager {
     deleteEntry(dataKey, id) {
         if (!this.data[dataKey]) return;
         this.data[dataKey][id] = null;
+        const names = this.editorNamesModule();
+        if (names) this.data.editorNames = names.prune(this.data.editorNames, dataKey, this.data[dataKey]);
         this.mutationGeneration++;
     }
 
@@ -552,6 +628,8 @@ class DatabaseManager {
         } else if (newMax < currentMax) {
             // Truncate array
             this.data[dataKey].length = newMax + 1;
+            const names = this.editorNamesModule();
+            if (names) this.data.editorNames = names.prune(this.data.editorNames, dataKey, newMax);
         }
 
         if (newMax !== currentMax) this.mutationGeneration++;
@@ -563,6 +641,9 @@ class DatabaseManager {
         if (!this.fs || !this.path) return false;
 
         const failed = [];
+        // Reject an unreadable sidecar before touching RPG Maker files, but do
+        // not persist editor names until every normal database write succeeds.
+        if (!this.canSaveEditorNames(projectPath)) return false;
         for (const [key, filename] of this.dataFiles) {
             // A project that never authored an interface gains no file.
             if (key === 'userInterfaces' && !this.hasUserInterfaces()
@@ -578,6 +659,9 @@ class DatabaseManager {
         }
         if (!await this.saveTileset3D(projectPath)) {
             failed.push(this.tileset3DClasses()?.FILENAME || 'Tilesets.r3d.json');
+        }
+        if (failed.length === 0 && !await this.saveEditorNames(projectPath)) {
+            failed.push(this.editorNamesModule()?.FILENAME || 'Database.names.json');
         }
         if (failed.length) console.error(`Failed to save database files: ${failed.join(', ')}`);
         return failed.length === 0;

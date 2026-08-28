@@ -13,6 +13,7 @@ class PluginCommandEditor {
         this.commandName = '';
         this.commandText = ''; // Display label stored in params[2]
         this.args = {};
+        this.existingArgumentCommands = [];
 
         // Cached plugin data
         this.availablePlugins = [];
@@ -20,8 +21,14 @@ class PluginCommandEditor {
         this.selectedPlugin = null;
         this.selectedCommand = null;
 
+        const host = typeof window !== 'undefined' ? window.RPGReactorHost : null;
+        if (host?.fs && host?.path) {
+            this.fs = host.fs;
+            this.path = host.path;
+        }
+
         // Node.js modules for file reading (NW.js environment)
-        if (typeof nw !== 'undefined') {
+        if (!this.fs && typeof nw !== 'undefined') {
             this.fs = require('fs');
             this.path = require('path');
         }
@@ -32,9 +39,15 @@ class PluginCommandEditor {
      * @param {object} command - The command to edit (or null for new)
      * @param {function} callback - Callback when done editing
      */
-    show(command, callback) {
+    show(command, callback, context = null) {
         console.log('PluginCommandEditor.show() called with command:', command);
         this.callback = callback;
+        this.selectedPlugin = null;
+        this.selectedCommand = null;
+        this.existingArgumentCommands = Array.isArray(context?.continuationCommands)
+            ? context.continuationCommands.filter(row => row?.code === 657 &&
+                typeof row.parameters?.[0] === 'string')
+            : [];
 
         if (command && (command.code === 356 || command.code === 357)) {
             const params = command.parameters;
@@ -54,7 +67,12 @@ class PluginCommandEditor {
                 // plugin's @text annotation. Keep whatever the command already
                 // carries so reopening it cannot blank the label.
                 this.commandText = typeof params[2] === 'string' ? params[2] : '';
-                this.args = params[3] || {};
+                const loadedArgs = params[3] && typeof params[3] === 'object'
+                    ? JSON.parse(JSON.stringify(params[3]))
+                    : {};
+                this.args = Object.fromEntries(Object.entries(loadedArgs).map(([key, value]) =>
+                    [key, this.storedArgumentValue(value)]
+                ));
             }
         } else {
             this.classicMode = false;
@@ -263,6 +281,7 @@ class PluginCommandEditor {
      */
     parsePluginCommands(pluginSource) {
         const commands = [];
+        const structDefinitions = RRPluginAnnotations.parseStructDefinitions(pluginSource);
 
         // Split into comment blocks
         const commentBlocks = pluginSource.match(/\/\*:[\s\S]*?\*\//g) || [];
@@ -272,103 +291,36 @@ class PluginCommandEditor {
             let currentCommand = null;
             let currentArg = null;
 
-            for (let i = 0; i < lines.length; i++) {
-                const line = lines[i].trim();
-
-                // New command
-                const cmdMatch = line.match(/\*\s*@command\s+(\S+)/);
-                if (cmdMatch) {
-                    if (currentCommand) {
-                        commands.push(currentCommand);
+            for (const line of lines) {
+                const tokens = RRPluginAnnotations.splitLine(RRPluginAnnotations.normalizeLine(line));
+                for (const token of tokens) {
+                    if (token.tag === 'command') {
+                        if (currentCommand) commands.push(currentCommand);
+                        currentCommand = token.value ? {
+                            name: token.value,
+                            text: '',
+                            desc: '',
+                            args: []
+                        } : null;
+                        currentArg = null;
+                        continue;
                     }
-                    currentCommand = {
-                        name: cmdMatch[1],
-                        text: '',
-                        desc: '',
-                        args: []
-                    };
-                    currentArg = null; // Reset current arg when starting new command
-                    continue;
-                }
-
-                if (!currentCommand) continue;
-
-                // New argument - this marks the start of argument properties
-                const argMatch = line.match(/\*\s*@arg\s+(\S+)/);
-                if (argMatch) {
-                    currentArg = {
-                        name: argMatch[1],
-                        text: '',
-                        desc: '',
-                        type: 'string',
-                        default: '',
-                        dir: '',
-                        min: null,
-                        max: null,
-                        decimals: null
-                    };
-                    currentCommand.args.push(currentArg);
-                    continue;
-                }
-
-                // @text - applies to current arg if one exists, otherwise to command
-                const textMatch = line.match(/\*\s*@text\s+(.+)/);
-                if (textMatch) {
+                    if (!currentCommand) continue;
+                    if (token.tag === 'arg') {
+                        currentArg = token.value
+                            ? { ...RRPluginAnnotations.blankSchema(), name: token.value, default: '', dir: '' }
+                            : null;
+                        if (currentArg) currentCommand.args.push(currentArg);
+                        continue;
+                    }
                     if (currentArg) {
-                        currentArg.text = textMatch[1];
-                    } else {
-                        currentCommand.text = textMatch[1];
-                    }
-                    continue;
-                }
-
-                // @desc - applies to current arg if one exists, otherwise to command
-                const descMatch = line.match(/\*\s*@desc\s+(.+)/);
-                if (descMatch) {
-                    if (currentArg) {
-                        currentArg.desc = descMatch[1];
-                    } else {
-                        currentCommand.desc = descMatch[1];
-                    }
-                    continue;
-                }
-
-                // Argument-only properties
-                if (currentArg) {
-                    const argTypeMatch = line.match(/\*\s*@type\s+(\S+)/);
-                    if (argTypeMatch) {
-                        currentArg.type = argTypeMatch[1];
-                        continue;
-                    }
-
-                    const argDefaultMatch = line.match(/\*\s*@default\s+(.+)/);
-                    if (argDefaultMatch) {
-                        currentArg.default = argDefaultMatch[1];
-                        continue;
-                    }
-
-                    const argMinMatch = line.match(/\*\s*@min\s+(\S+)/);
-                    if (argMinMatch) {
-                        currentArg.min = argMinMatch[1];
-                        continue;
-                    }
-
-                    const argMaxMatch = line.match(/\*\s*@max\s+(\S+)/);
-                    if (argMaxMatch) {
-                        currentArg.max = argMaxMatch[1];
-                        continue;
-                    }
-
-                    const argDecimalsMatch = line.match(/\*\s*@decimals\s+(\S+)/);
-                    if (argDecimalsMatch) {
-                        currentArg.decimals = argDecimalsMatch[1];
-                        continue;
-                    }
-
-                    const argDirMatch = line.match(/\*\s*@dir\s+(.+)/);
-                    if (argDirMatch) {
-                        currentArg.dir = argDirMatch[1].trim();
-                        continue;
+                        RRPluginAnnotations.applyToSchema(currentArg, token.tag, token.value);
+                    } else if (token.tag === 'text') {
+                        currentCommand.text = token.value;
+                    } else if (token.tag === 'desc') {
+                        currentCommand.desc = currentCommand.desc
+                            ? `${currentCommand.desc} ${token.value}`
+                            : token.value;
                     }
                 }
             }
@@ -378,6 +330,7 @@ class PluginCommandEditor {
             }
         }
 
+        for (const command of commands) command.structDefinitions = structDefinitions;
         console.log('Parsed commands:', commands);
         return commands;
     }
@@ -681,6 +634,32 @@ class PluginCommandEditor {
     /**
      * Create input field for a command argument
      */
+    complexParameterEditor() {
+        if (this._complexParameterEditor) return this._complexParameterEditor;
+        if (typeof window !== 'undefined' && window.reactor?.pluginManager) {
+            return window.reactor.pluginManager;
+        }
+        if (typeof PluginManager !== 'undefined') {
+            this._complexParameterEditor = new PluginManager(this.projectController);
+            return this._complexParameterEditor;
+        }
+        return null;
+    }
+
+    pluginWidgetContext(tt) {
+        const options = {
+            projectController: this.projectController,
+            database: this.databaseManager,
+            fs: this.fs,
+            path: this.path,
+            tt,
+            zIndex: 10010
+        };
+        return typeof RRPluginParamWidgets !== 'undefined' && RRPluginParamWidgets.buildContext
+            ? RRPluginParamWidgets.buildContext(options)
+            : options;
+    }
+
     createArgumentInput(arg) {
         const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const section = document.createElement('div');
@@ -700,7 +679,64 @@ class PluginCommandEditor {
         section.appendChild(label);
 
         let input;
-        const currentValue = this.args[arg.name] !== undefined ? this.args[arg.name] : arg.default;
+        const argType = String(arg.type || 'string');
+        const rawValue = this.args[arg.name] !== undefined ? this.args[arg.name] : arg.default;
+        const currentValue = ['boolean', 'number'].includes(argType)
+            ? this.convertArgValue(rawValue, argType)
+            : rawValue;
+        if (['boolean', 'number'].includes(argType)) this.args[arg.name] = currentValue;
+
+        const choiceWidget = typeof RRPluginParamWidgets !== 'undefined'
+            ? RRPluginParamWidgets.create({
+                schema: arg,
+                value: currentValue,
+                onChange: newValue => { this.args[arg.name] = newValue; },
+                context: this.pluginWidgetContext(tt)
+            })
+            : null;
+        if (choiceWidget) {
+            section.appendChild(choiceWidget);
+            return section;
+        }
+
+        if (argType.includes('struct<') || argType.includes('[]')) {
+            const row = document.createElement('div');
+            row.className = 'plugin-command-complex-argument';
+            row.style.cssText = 'display:flex;gap:6px;align-items:center;min-width:0;';
+            const rawInput = document.createElement('input');
+            rawInput.type = 'text';
+            rawInput.value = String(currentValue ?? '');
+            rawInput.style.cssText = 'flex:1;min-width:0;padding:6px 10px;background-color:var(--color-bg-input);color:var(--color-text);border:1px solid var(--color-border-input);border-radius:3px;font-size:12px;';
+            rawInput.addEventListener('input', event => {
+                this.args[arg.name] = event.target.value;
+            });
+            const editButton = document.createElement('button');
+            editButton.type = 'button';
+            editButton.className = 'rr-btn-browse plugin-command-complex-edit';
+            editButton.textContent = tt('Edit...');
+            editButton.addEventListener('click', () => {
+                const editor = this.complexParameterEditor();
+                if (!editor) {
+                    console.error('PluginManager is unavailable for complex command arguments.');
+                    return;
+                }
+                editor.showComplexParameterEditor({
+                    key: arg.name,
+                    value: this.args[arg.name] ?? rawInput.value,
+                    schema: arg,
+                    structDefinitions: this.selectedCommand?.structDefinitions || {},
+                    onCommit: serialized => {
+                        const stored = String(serialized ?? '');
+                        this.args[arg.name] = stored;
+                        rawInput.value = stored;
+                    }
+                });
+            });
+            row.appendChild(rawInput);
+            row.appendChild(editButton);
+            section.appendChild(row);
+            return section;
+        }
 
         switch (arg.type) {
             case 'boolean':
@@ -717,12 +753,12 @@ class PluginCommandEditor {
 
                 const trueOption = document.createElement('option');
                 trueOption.value = 'true';
-                trueOption.textContent = tt('True');
+                trueOption.textContent = arg.on ?? tt('True');
                 trueOption.selected = currentValue === 'true' || currentValue === true;
 
                 const falseOption = document.createElement('option');
                 falseOption.value = 'false';
-                falseOption.textContent = tt('False');
+                falseOption.textContent = arg.off ?? tt('False');
                 falseOption.selected = currentValue === 'false' || currentValue === false;
 
                 input.appendChild(trueOption);
@@ -736,7 +772,7 @@ class PluginCommandEditor {
             case 'number':
                 input = document.createElement('input');
                 input.type = 'number';
-                input.value = currentValue || 0;
+                input.value = String(currentValue ?? '') || '0';
                 if (arg.min !== null) input.min = arg.min;
                 if (arg.max !== null) input.max = arg.max;
                 if (arg.decimals !== null) input.step = Math.pow(10, -parseInt(arg.decimals));
@@ -750,6 +786,29 @@ class PluginCommandEditor {
                 `;
                 input.addEventListener('input', (e) => {
                     this.args[arg.name] = e.target.value;
+                });
+                break;
+
+            case 'note':
+            case 'multiline_string':
+                input = document.createElement('textarea');
+                input.rows = 5;
+                input.value = String(currentValue ?? '');
+                input.style.cssText = `
+                    min-height: 88px;
+                    padding: 6px 10px;
+                    background-color: var(--color-bg-input);
+                    color: var(--color-text);
+                    border: 1px solid var(--color-border-input);
+                    border-radius: 3px;
+                    box-sizing: border-box;
+                    font-size: 12px;
+                    line-height: 1.4;
+                    resize: vertical;
+                    width: 100%;
+                `;
+                input.addEventListener('input', event => {
+                    this.args[arg.name] = event.target.value;
                 });
                 break;
 
@@ -813,7 +872,7 @@ class PluginCommandEditor {
             default: // string
                 input = document.createElement('input');
                 input.type = 'text';
-                input.value = currentValue || '';
+                input.value = String(currentValue ?? '');
                 input.style.cssText = `
                     padding: 6px 10px;
                     background-color: var(--color-bg-input);
@@ -836,12 +895,11 @@ class PluginCommandEditor {
      * Convert argument value based on type
      */
     convertArgValue(value, type) {
-        if (type === 'number') {
-            return Number(value) || 0;
-        } else if (type === 'boolean') {
-            return value === 'true' || value === true ? 'true' : 'false';
+        if (value === null || value === undefined || value === '') {
+            if (type === 'boolean') return 'false';
+            if (type === 'number') return '0';
         }
-        return String(value || '');
+        return String(value ?? '');
     }
 
     /**
@@ -864,6 +922,7 @@ class PluginCommandEditor {
             console.warn('Could not scan directory:', arg.dir, e);
         }
         const folder = String(arg.dir).match(/audio[\\/]+([A-Za-z]+)/);
+        const folderName = folder ? folder[1].toLowerCase() : '';
         RRAudioPickerModal.open({
             title: 'Select Audio File',
             folderLabel: folder ? folder[1].toUpperCase() : '',
@@ -871,7 +930,7 @@ class PluginCommandEditor {
             selected: inputElement.value || '',
             levels: null,
             previewLevels: { volume: 90, pitch: 100, pan: 0 },
-            loopDefault: false,
+            loopDefault: ['bgm', 'bgs', 'me'].includes(folderName),
             zIndex: 10010,
             onOk: result => {
                 inputElement.value = result.name;
@@ -1035,24 +1094,91 @@ class PluginCommandEditor {
         return annotated || this.commandText || '';
     }
 
+    storedArgumentValue(value) {
+        if (Array.isArray(value) || (value && typeof value === 'object')) {
+            return JSON.stringify(value);
+        }
+        return String(value ?? '');
+    }
+
+    readableArgumentValue(arg, value) {
+        const choiceLabel = (schema, stored) => {
+            const options = Array.isArray(schema.options) ? schema.options : [];
+            const values = Array.isArray(schema.values) ? schema.values : [];
+            const index = options.findIndex((option, i) =>
+                String(i in values ? values[i] : option) === stored);
+            if (index >= 0 && options[index]) return options[index];
+            if (schema.type === 'boolean') {
+                if (stored === 'true' && schema.on) return schema.on;
+                if (stored === 'false' && schema.off) return schema.off;
+            }
+            return stored;
+        };
+
+        const stored = this.storedArgumentValue(value);
+        if (String(arg.type || '').endsWith('[]')) {
+            try {
+                const values = JSON.parse(stored);
+                if (Array.isArray(values)) {
+                    const scalar = { ...arg, type: String(arg.type).slice(0, -2) };
+                    return values.map(item => choiceLabel(scalar, String(item ?? ''))).join(', ');
+                }
+            } catch (_error) {
+                // Keep malformed authored text visible rather than replacing it.
+            }
+        }
+        return choiceLabel(arg, stored);
+    }
+
     buildCommand() {
         if (this.classicMode) {
-            return {
+            return [{
                 code: 356,
                 indent: 0,
                 parameters: [this.classicText]
-            };
+            }];
         }
-        return {
+        const args = {};
+        for (const [key, value] of Object.entries(this.args || {})) {
+            args[key] = this.storedArgumentValue(value);
+        }
+        const commands = [{
             code: 357,
             indent: 0,
             parameters: [
                 this.pluginName,
                 this.commandName,
                 this.displayLabel(),
-                this.args
+                args
             ]
-        };
+        }];
+
+        const definition = this.selectedCommand?.name === this.commandName
+            ? this.selectedCommand : null;
+        if (definition) {
+            const knownPrefixes = new Set();
+            for (const arg of definition.args || []) {
+                const prefix = `${arg.text || arg.name} = `;
+                knownPrefixes.add(prefix);
+                const value = args[arg.name] ?? '';
+                if (value === '') continue;
+                commands.push({
+                    code: 657,
+                    indent: 0,
+                    parameters: [`${prefix}${this.readableArgumentValue(arg, value)}`]
+                });
+            }
+            for (const row of this.existingArgumentCommands) {
+                const text = row.parameters[0];
+                if ([...knownPrefixes].some(prefix => text.startsWith(prefix))) continue;
+                commands.push({ code: 657, indent: 0, parameters: [text] });
+            }
+        } else {
+            for (const row of this.existingArgumentCommands) {
+                commands.push({ code: 657, indent: 0, parameters: [row.parameters[0]] });
+            }
+        }
+        return commands;
     }
 
     /**
@@ -1060,8 +1186,7 @@ class PluginCommandEditor {
      */
     save() {
         if (this.callback) {
-            const command = this.buildCommand();
-            this.callback(command);
+            this.callback(this.buildCommand());
         }
         this.close();
     }

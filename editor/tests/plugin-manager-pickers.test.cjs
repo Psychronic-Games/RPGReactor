@@ -14,7 +14,9 @@ const read = rel => fs.readFileSync(path.join(repoRoot, rel), 'utf8');
 
 function loadPluginManager() {
     return vm.runInNewContext(`${read('src/PluginManager.js')}\nPluginManager;`, {
-        console, require, nw: {}, alert: () => {}
+        console, require, nw: {}, alert: () => {},
+        RRPluginAnnotations: require(path.join(repoRoot, 'src', 'utils', 'PluginAnnotations.js')),
+        RRPluginParamCodec: require(path.join(repoRoot, 'src', 'utils', 'PluginParamCodec.js'))
     });
 }
 

@@ -124,12 +124,15 @@ test('type list clipboard operations preserve IDs and grow only when needed', ()
 
 test('database maximum UI displays caps and lazy-loads continuous large lists', () => {
     const source = fs.readFileSync(path.join(repoRoot, 'src', 'DatabaseEditorUI.js'), 'utf8');
+    const theme = fs.readFileSync(path.join(repoRoot, 'css', 'theme.css'), 'utf8');
     const tilesetPath = path.join(repoRoot, 'src', 'database', 'DatabaseTilesetEditor.js');
     const tilesets = fs.readFileSync(tilesetPath, 'utf8');
     const animations = fs.readFileSync(path.join(repoRoot, 'src', 'database', 'DatabaseAnimationEditor.js'), 'utf8');
 
     assert.match(source, /const batchSize = 250;/);
     assert.match(source, /input\.max = String\(maximum\)/);
+    assert.match(source, /input\.className = 'rr-database-maximum-input'/);
+    assert.match(theme, /\.rr-database-maximum-input::\-webkit-inner-spin-button,[\s\S]*\-webkit-appearance: none;/);
     assert.match(source, /tt\('Max:'\).*maximum/);
     assert.match(source, /filteredData\.slice\(renderedCount, end\)/);
     assert.match(source, /listEl\.onscroll[\s\S]*populateList\(searchInput\.value, true\)/);
@@ -285,6 +288,7 @@ test('level 999 extrapolates finite class parameters without expanding class dat
     assert.equal(limits.ACTOR_LEVEL, 999);
     assert.equal(limits.ACTION_REPEATS, 100);
     assert.equal(limits.MAP_COUNT, 2000);
+    assert.equal(limits.DATABASE_ENTRIES.animations, 5000);
     assert.equal(limits.DATABASE_ENTRIES.tilesets, 1000);
     assert.equal(limits.DATABASE_ENTRIES.skills, 9999);
     assert.equal(resolve(curve, 99), 198);
@@ -441,6 +445,8 @@ test('database viewer owns the viewport while child panes own scrolling', () => 
     assert.match(styles, /html\.rr-web #database-viewer\s*\{[^}]*overflow: hidden;/s);
     assert.match(styles, /html\.rr-web \.database-window\s*\{[^}]*width: 100% !important;[^}]*max-width: none !important;[^}]*height: 100% !important;/s);
     assert.match(styles, /\.database-detail\s*\{[^}]*min-height: 0;[^}]*overflow-y: auto;/s);
+    assert.match(styles, /\.database-list::\-webkit-scrollbar-thumb\s*\{[^}]*var\(--color-accent\)[^}]*var\(--color-accent-muted\)/s);
+    assert.match(styles, /\.database-list\s*\{[^}]*scrollbar-color:\s*var\(--color-accent-muted\) var\(--color-bg-deep\)/s);
     assert.match(styles, /\.rr-types-grid\s*\{[^}]*display: grid;[^}]*grid-template-columns: repeat\(5,/s);
     assert.match(styles, /\.rr-types-list\s*\{[^}]*overflow-y: auto;/s);
     assert.match(styles, /\.rr-troop-editor \.database-section\s*\{[^}]*margin-bottom: 0;/s);
@@ -470,6 +476,12 @@ test('database viewer owns the viewport while child panes own scrolling', () => 
     assert.match(troopSource, /this\.canvas\.tabIndex = -1/);
     assert.match(troopSource, /this\.canvas\.addEventListener\('keydown'/);
     assert.match(animationSource, /class="anim-editor-main-row"/);
+    assert.match(animationSource, /class="anim-editor-workspace"/);
+    assert.match(animationSource, /class="anim-editor-content-column"/);
+    assert.match(animationSource, /class="anim-editor-timings"/);
+    assert.match(animationSource, /\.anim-editor-timings\s*\{[^}]*flex:\s*0 0 clamp\(260px, 29%, 340px\);[^}]*min-height:\s*0;/s);
+    assert.match(animationSource, /id="timings-list"[^>]*flex:1;min-height:0;overflow-y:auto/);
+    assert.doesNotMatch(animationSource, /anim-editor-summary-row/);
     assert.match(animationSource, /grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/);
     assert.match(animationSource, /class="rr-dark-surface anim-preview-surface"[^>]*height:clamp\(180px,30vh,420px\)/);
     assert.match(animationSource, /class="anim-preview-column"[^>]*min-width:0/);
@@ -529,7 +541,7 @@ test('troop members use the indexed enemy picker and own clipboard shortcuts', (
     assert.match(source, /e\.shiftKey && this\.commandSelectionAnchor !== null/);
     assert.match(source, /handleCommandListKeyDown/);
     assert.match(source, /expandCommandSelection\(page\)/);
-    assert.match(source, /EventCommandList\.rebaseInsertIndent/);
+    assert.match(source, /ECL\.rebaseInsertIndent/);
 });
 
 test('actor equipment hides unsupported slots and trait pickers preserve sparse type IDs', () => {

@@ -63,7 +63,7 @@ test('Points and Rectangles are plain field writes on PIXI 8, and window per-fra
     assert.match(core, /Point\.prototype\.initialize = function\(x, y\) \{[\s\S]*?if \(PIXI\.TextureSource\) \{\s*this\.x = x \|\| 0;\s*this\.y = y \|\| 0;\s*return;/);
     assert.match(core, /Rectangle\.prototype\.initialize = function\(x, y, width, height\) \{[\s\S]*?if \(PIXI\.TextureSource\) \{\s*this\.type = "rectangle";/);
     assert.match(core, /const rect = this\._clampedCursorScratch \|\| \(this\._clampedCursorScratch = new Rectangle\(0, 0, 0, 0\)\);/);
-    assert.match(core, /worldTransform\.apply\(this\._filterOriginScratch, this\._filterPosScratch\)/);
+    assert.match(core, /const wt = this\._clientArea\.worldTransform;[\s\S]*?wt\.apply\(this\._filterOriginScratch, this\._filterPosScratch\)/);
     // A hidden tilemap (a 3D map in its place) paints nothing until shown.
     assert.match(core, /const hidden = this\._lowerLayer\.visible === false && this\._upperLayer\.visible === false;\s*if \(\s*!hidden && \(/);
 });

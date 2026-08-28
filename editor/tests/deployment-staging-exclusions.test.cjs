@@ -41,6 +41,12 @@ for (const scriptName of scripts) {
         }
     });
 
+    test(`${scriptName}: editor-only database names are not staged`, () => {
+        assert.equal(isStagingExcluded(nodePath.join('data', 'Database.names.json')), true);
+        assert.equal(isStagingExcluded(nodePath.join('data', 'Database.r3d.json')), false,
+            'runtime database sidecars remain deployable');
+    });
+
     test(`${scriptName}: the Test_ rule does not reach outside data/`, () => {
         // A plugin or asset legitimately named Test_… must not be dropped.
         assert.equal(isStagingExcluded(nodePath.join('js', 'plugins', 'Test_Harness.json')), false);

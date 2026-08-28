@@ -157,7 +157,7 @@ test('database record batches overwrite consecutive target slots with independen
         { id: 9, name: 'Hero C', traits: [] }
     ], 'actors');
 
-    assert.equal(transport.envelope.payload.version, 2);
+    assert.equal(transport.envelope.payload.version, 3);
     assert.deepEqual(transport.envelope.payload.entries.map(entry => entry.name), ['Hero A', 'Hero B', 'Hero C']);
     assert.equal(transport.envelope.payload.entries.some(entry => 'id' in entry), false);
 

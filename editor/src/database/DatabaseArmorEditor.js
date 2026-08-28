@@ -149,8 +149,7 @@ class DatabaseArmorEditor {
                 <table class="traits-table" id="armor-traits-table-${armor.id}">
                     <thead>
                         <tr>
-                            <th style="width: 3px; padding: 0; border: none; background: transparent;"></th>
-                            <th>${tt('Type')}</th>
+                            <th colspan="2">${tt('Type')}</th>
                             <th>${tt('Content')}</th>
                         </tr>
                     </thead>

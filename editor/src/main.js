@@ -1006,6 +1006,7 @@ class RPGReactor {
                     updateStatus: (msg) => this.updateStatus(msg),
                     getRendererApp: () => this.tilemapManager?.app || null,
                     getTilemapManager: () => this.projectController.getTilemapManager(),
+                    saveProject: () => this.projectController.saveProject(),
                     showTypesEditor: () => this.showTypesEditor(),
                     showTermsEditor: () => this.showTermsEditor()
                 }
@@ -1029,6 +1030,7 @@ class RPGReactor {
                     updateStatus: (msg) => this.updateStatus(msg),
                     getRendererApp: () => this.tilemapManager?.app || null,
                     getTilemapManager: () => this.projectController.getTilemapManager(),
+                    saveProject: () => this.projectController.saveProject(),
                     showTypesEditor: () => this.showTypesEditor(),
                     showTermsEditor: () => this.showTermsEditor()
                 }
@@ -1126,7 +1128,8 @@ class RPGReactor {
             // Fallback to displayName from Map file if MapInfos not available
             const mapInfos = this.projectController.getMapInfos();
             const mapInfo = mapInfos && mapInfos[map.id];
-            const mapName = (mapInfo && mapInfo.name) ? mapInfo.name : (map.displayName || 'Unnamed Map');
+            const unnamedMap = window.I18n ? window.I18n.tText('Unnamed Map') : 'Unnamed Map';
+            const mapName = (mapInfo && mapInfo.name) ? mapInfo.name : (map.displayName || unnamedMap);
             mapNameEl.textContent = mapName;
 
             // Display dimensions

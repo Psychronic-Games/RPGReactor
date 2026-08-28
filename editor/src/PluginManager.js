@@ -193,142 +193,43 @@ class PluginManager {
     }
 
     getStructName(type) {
-        const match = String(type || '').match(/struct<([^>]+)>/);
-        return match ? match[1].trim() : '';
+        return RRPluginParamCodec.getStructName(type);
     }
 
     parsePluginJsonLayer(value, fallback) {
-        if (typeof value !== 'string') return value;
-        try {
-            return JSON.parse(value);
-        } catch (error) {
-            return fallback !== undefined ? fallback : value;
-        }
+        return RRPluginParamCodec.parseJsonLayer(value, fallback);
     }
 
     clonePluginValue(value) {
-        if (value === undefined) return undefined;
-        return JSON.parse(JSON.stringify(value));
+        return RRPluginParamCodec.clone(value);
     }
 
     deserializeStructFieldValue(rawValue, fieldSchema, structDefinitions) {
-        const type = String(fieldSchema?.type || 'string');
-        const nestedStructName = this.getStructName(type);
-        if (nestedStructName) {
-            const nestedSchema = structDefinitions[nestedStructName] || {};
-            if (type.includes('[]')) {
-                const entries = this.parsePluginJsonLayer(rawValue, []);
-                return Array.isArray(entries)
-                    ? entries.map(entry => this.deserializeStructValue(entry, nestedSchema, structDefinitions))
-                    : [];
-            }
-            return this.deserializeStructValue(rawValue, nestedSchema, structDefinitions);
-        }
-        if (type === 'note') {
-            const note = this.parsePluginJsonLayer(rawValue, rawValue ?? '');
-            return typeof note === 'string' ? note : String(rawValue ?? '');
-        }
-        if (type.includes('[]')) {
-            const entries = this.parsePluginJsonLayer(rawValue, []);
-            return Array.isArray(entries) ? entries : [];
-        }
-        return rawValue === null || rawValue === undefined ? '' : rawValue;
+        return RRPluginParamCodec.deserializeStructFieldValue(rawValue, fieldSchema, structDefinitions);
     }
 
     deserializeStructValue(value, structSchema, structDefinitions) {
-        const parsed = this.parsePluginJsonLayer(value, {});
-        const source = parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
-        const result = {};
-        const fieldNames = new Set([...Object.keys(structSchema || {}), ...Object.keys(source)]);
-
-        for (const fieldName of fieldNames) {
-            const fieldSchema = structSchema?.[fieldName] || { type: 'string', default: '' };
-            const rawValue = source[fieldName] !== undefined ? source[fieldName] : fieldSchema.default;
-            result[fieldName] = this.deserializeStructFieldValue(rawValue, fieldSchema, structDefinitions);
-        }
-        return result;
+        return RRPluginParamCodec.deserializeStructValue(value, structSchema, structDefinitions);
     }
 
     deserializeComplexPluginParameter(value, metadata, structDefinitions) {
-        const type = String(metadata?.type || '');
-        const structName = this.getStructName(type);
-        if (structName) {
-            const structSchema = structDefinitions[structName] || {};
-            if (type.includes('[]')) {
-                const entries = this.parsePluginJsonLayer(value, []);
-                return Array.isArray(entries)
-                    ? entries.map(entry => this.deserializeStructValue(entry, structSchema, structDefinitions))
-                    : [];
-            }
-            return this.deserializeStructValue(value, structSchema, structDefinitions);
-        }
-        if (type.includes('[]')) {
-            const entries = this.parsePluginJsonLayer(value, []);
-            return Array.isArray(entries) ? entries : [];
-        }
-        return this.parsePluginJsonLayer(value, value);
+        return RRPluginParamCodec.deserializeComplex(value, metadata, structDefinitions);
     }
 
     createDefaultStructValue(structSchema, structDefinitions = {}) {
-        return this.deserializeStructValue({}, structSchema, structDefinitions);
+        return RRPluginParamCodec.createDefaultStructValue(structSchema, structDefinitions);
     }
 
     serializeStructValue(structData, structSchema, structDefinitions) {
-        const source = structData && typeof structData === 'object' && !Array.isArray(structData) ? structData : {};
-        const result = {};
-        const fieldNames = new Set([...Object.keys(structSchema || {}), ...Object.keys(source)]);
-
-        for (const fieldName of fieldNames) {
-            const fieldSchema = structSchema?.[fieldName] || { type: 'string', default: '' };
-            const rawValue = source[fieldName] !== undefined
-                ? source[fieldName]
-                : this.deserializeStructFieldValue(fieldSchema.default, fieldSchema, structDefinitions);
-            const type = String(fieldSchema.type || 'string');
-            const nestedStructName = this.getStructName(type);
-
-            if (nestedStructName) {
-                const nestedSchema = structDefinitions[nestedStructName] || {};
-                if (type.includes('[]')) {
-                    const entries = Array.isArray(rawValue) ? rawValue : [];
-                    result[fieldName] = JSON.stringify(entries.map(entry =>
-                        JSON.stringify(this.serializeStructValue(entry, nestedSchema, structDefinitions))
-                    ));
-                } else {
-                    result[fieldName] = JSON.stringify(
-                        this.serializeStructValue(rawValue, nestedSchema, structDefinitions)
-                    );
-                }
-            } else if (type === 'note') {
-                result[fieldName] = JSON.stringify(String(rawValue ?? ''));
-            } else if (type.includes('[]')) {
-                result[fieldName] = JSON.stringify(Array.isArray(rawValue) ? rawValue : []);
-            } else if (rawValue && typeof rawValue === 'object') {
-                result[fieldName] = JSON.stringify(rawValue);
-            } else {
-                result[fieldName] = String(rawValue ?? '');
-            }
-        }
-        return result;
+        return RRPluginParamCodec.serializeStructValue(structData, structSchema, structDefinitions);
     }
 
     serializeComplexPluginParameter(value, metadata, structDefinitions) {
-        const type = String(metadata?.type || '');
-        const structName = this.getStructName(type);
-        if (!structName) return JSON.stringify(value);
-        const structSchema = structDefinitions[structName] || {};
-        if (type.includes('[]')) {
-            const entries = Array.isArray(value) ? value : [];
-            return JSON.stringify(entries.map(entry =>
-                JSON.stringify(this.serializeStructValue(entry, structSchema, structDefinitions))
-            ));
-        }
-        return JSON.stringify(this.serializeStructValue(value, structSchema, structDefinitions));
+        return RRPluginParamCodec.serializeComplex(value, metadata, structDefinitions);
     }
 
     setSimpleArrayElement(arrayData, index, value) {
-        if (!Array.isArray(arrayData) || index < 0 || index >= arrayData.length) return false;
-        arrayData[index] = String(value);
-        return true;
+        return RRPluginParamCodec.setSimpleArrayElement(arrayData, index, value);
     }
 
     /**
@@ -340,7 +241,17 @@ class PluginManager {
      * @param {Function} onSave - Optional callback when saved
      * @param {Object} structDefinitions - Optional pre-parsed struct definitions
      */
-    showComplexParameterEditor(plugin, key, value, metadata, onSave = null, structDefinitions = null) {
+    showComplexParameterEditor(pluginOrOptions, key, value, metadata, onSave = null, structDefinitions = null) {
+        const generalized = Boolean(arguments.length === 1 && pluginOrOptions && pluginOrOptions.schema);
+        const options = generalized ? pluginOrOptions : null;
+        const plugin = generalized ? options.plugin || {} : pluginOrOptions;
+        if (generalized) {
+            key = options.key || '';
+            value = options.value;
+            metadata = options.schema;
+            structDefinitions = options.structDefinitions || {};
+        }
+        metadata = metadata || { type: 'string' };
         // Determine if this is an array or struct
         const isArray = metadata.type && metadata.type.includes('[]');
         const isStruct = metadata.type && metadata.type.includes('struct<');
@@ -364,7 +275,9 @@ class PluginManager {
             structDefinitions = {};
         }
 
-        let parsedValue = this.deserializeComplexPluginParameter(value, metadata, structDefinitions);
+        let parsedValue = this.clonePluginValue(
+            this.deserializeComplexPluginParameter(value, metadata, structDefinitions)
+        );
 
         // Extract struct name from type
         let structName = null;
@@ -375,27 +288,14 @@ class PluginManager {
             structSchema = structDefinitions[structName] || null;
         }
 
-        // For arrays, ensure we have an array
-        if (isArray) {
-            if (!parsedValue) {
-                parsedValue = [];
-            } else if (!Array.isArray(parsedValue)) {
-                console.warn('Expected array but got:', typeof parsedValue, parsedValue);
-                // Try to wrap in array if it's a single object
-                if (typeof parsedValue === 'object') {
-                    parsedValue = [parsedValue];
-                } else {
-                    parsedValue = [];
-                }
-            }
-        }
-
-        // For structs, ensure we have an object
-        if (isStruct && !isArray) {
-            if (!parsedValue || typeof parsedValue !== 'object' || Array.isArray(parsedValue)) {
-                parsedValue = {};
-            }
-        }
+        const hasExpectedShape = candidate => isArray
+            ? Array.isArray(candidate)
+            : (!isStruct || Boolean(candidate && typeof candidate === 'object' && !Array.isArray(candidate)));
+        const allowRawText = !hasExpectedShape(parsedValue);
+        const overlayZIndex = generalized && Number.isFinite(Number(options.zIndex))
+            ? Number(options.zIndex)
+            : 10006;
+        const previousFocus = document.activeElement;
 
         // Create modal overlay
         const overlay = document.createElement('div');
@@ -410,10 +310,13 @@ class PluginManager {
             display: flex;
             justify-content: center;
             align-items: center;
-            z-index: 10001;
+            z-index: ${overlayZIndex};
         `;
 
         const modal = document.createElement('div');
+        modal.className = 'plugin-complex-parameter-editor';
+        modal.setAttribute?.('role', 'dialog');
+        modal.setAttribute?.('aria-modal', 'true');
         modal.style.cssText = `
             background-color: var(--color-bg-surface);
             border: 1px solid var(--color-border);
@@ -426,6 +329,11 @@ class PluginManager {
             flex-direction: column;
             box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
         `;
+
+        const closeModal = () => {
+            if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+            if (previousFocus?.isConnected && typeof previousFocus.focus === 'function') previousFocus.focus();
+        };
 
         // Header
         const header = document.createElement('div');
@@ -442,12 +350,16 @@ class PluginManager {
         `;
 
         const title = document.createElement('h3');
+        title.id = `plugin-complex-title-${this._modalSequence = (this._modalSequence || 0) + 1}`;
         title.textContent = metadata.text || key;
         title.style.cssText = 'margin: 0; color: var(--color-text-strong); font-size: 16px;';
+        modal.setAttribute?.('aria-labelledby', title.id);
         header.appendChild(title);
 
         const closeBtn = document.createElement('button');
+        closeBtn.type = 'button';
         closeBtn.textContent = '×';
+        closeBtn.setAttribute?.('aria-label', this._tt('Close'));
         closeBtn.style.cssText = `
             background: none;
             border: none;
@@ -459,7 +371,7 @@ class PluginManager {
             height: 30px;
             line-height: 1;
         `;
-        closeBtn.addEventListener('click', () => document.body.removeChild(overlay));
+        closeBtn.addEventListener('click', closeModal);
         closeBtn.addEventListener('mouseenter', () => closeBtn.style.color = 'var(--color-text-strong)');
         closeBtn.addEventListener('mouseleave', () => closeBtn.style.color = 'var(--color-text-muted)');
         header.appendChild(closeBtn);
@@ -476,6 +388,9 @@ class PluginManager {
         `;
 
         const structureTab = document.createElement('button');
+        structureTab.type = 'button';
+        structureTab.setAttribute?.('role', 'tab');
+        structureTab.setAttribute?.('aria-selected', String(!allowRawText));
         structureTab.textContent = isArray ? this._tt('Structure List') : this._tt('Structure');
         structureTab.style.cssText = `
             padding: 8px 16px;
@@ -488,6 +403,9 @@ class PluginManager {
         `;
 
         const textTab = document.createElement('button');
+        textTab.type = 'button';
+        textTab.setAttribute?.('role', 'tab');
+        textTab.setAttribute?.('aria-selected', String(allowRawText));
         textTab.textContent = this._tt('Text');
         textTab.style.cssText = `
             padding: 8px 16px;
@@ -520,6 +438,7 @@ class PluginManager {
 
         const renderStructureView = () => {
             structureView.innerHTML = '';
+            if (!hasExpectedShape(parsedValue)) return;
             if (isArray) {
                 this.renderArrayStructureEditor(structureView, parsedValue, metadata, structDefinitions, structDefinitions);
             } else if (isStruct) {
@@ -552,7 +471,9 @@ class PluginManager {
             resize: none;
             box-sizing: border-box;
         `;
-        textarea.value = JSON.stringify(parsedValue, null, 2);
+        textarea.value = hasExpectedShape(parsedValue)
+            ? JSON.stringify(parsedValue, null, 2)
+            : String(parsedValue ?? '');
         textView.appendChild(textarea);
 
         content.appendChild(textView);
@@ -568,6 +489,10 @@ class PluginManager {
                 parsedValue = nextValue;
                 return true;
             } catch (error) {
+                if (allowRawText) {
+                    parsedValue = textarea.value;
+                    return true;
+                }
                 alert(this._tt('Invalid JSON format. Please fix the syntax errors.'));
                 return false;
             }
@@ -577,6 +502,10 @@ class PluginManager {
         structureTab.addEventListener('click', () => {
             if (textView.style.display !== 'none') {
                 if (!applyTextValue()) return;
+                if (!hasExpectedShape(parsedValue)) {
+                    alert(this._tt('Invalid JSON format. Please fix the syntax errors.'));
+                    return;
+                }
                 renderStructureView();
             }
             structureTab.style.backgroundColor = 'var(--color-bg-input)';
@@ -585,6 +514,8 @@ class PluginManager {
             textTab.style.color = 'var(--color-text-muted)';
             structureView.style.display = 'block';
             textView.style.display = 'none';
+            structureTab.setAttribute?.('aria-selected', 'true');
+            textTab.setAttribute?.('aria-selected', 'false');
         });
 
         textTab.addEventListener('click', () => {
@@ -594,10 +525,23 @@ class PluginManager {
             structureTab.style.color = 'var(--color-text-muted)';
             structureView.style.display = 'none';
             textView.style.display = 'block';
+            structureTab.setAttribute?.('aria-selected', 'false');
+            textTab.setAttribute?.('aria-selected', 'true');
 
             // Update textarea with current structure data
-            textarea.value = JSON.stringify(parsedValue, null, 2);
+            textarea.value = hasExpectedShape(parsedValue)
+                ? JSON.stringify(parsedValue, null, 2)
+                : String(parsedValue ?? '');
         });
+
+        if (allowRawText) {
+            structureTab.style.backgroundColor = 'transparent';
+            structureTab.style.color = 'var(--color-text-muted)';
+            textTab.style.backgroundColor = 'var(--color-bg-input)';
+            textTab.style.color = 'var(--color-text)';
+            structureView.style.display = 'none';
+            textView.style.display = 'block';
+        }
 
         // Description
         if (metadata.desc) {
@@ -632,7 +576,7 @@ class PluginManager {
         const cancelBtn = document.createElement('button');
         cancelBtn.textContent = this._tt('Cancel');
         cancelBtn.className = 'rr-btn-secondary';
-        cancelBtn.addEventListener('click', () => document.body.removeChild(overlay));
+        cancelBtn.addEventListener('click', closeModal);
         footer.appendChild(cancelBtn);
 
         const saveBtn = document.createElement('button');
@@ -646,15 +590,16 @@ class PluginManager {
                 if (!applyTextValue()) return;
             }
 
-            // Update the plugin parameter
-            if (!plugin.parameters) {
-                plugin.parameters = {};
+            const serialized = this.serializeComplexPluginParameter(parsedValue, metadata, structDefinitions);
+            if (!generalized) {
+                if (!plugin.parameters) plugin.parameters = {};
+                plugin.parameters[key] = serialized;
             }
-            plugin.parameters[key] = this.serializeComplexPluginParameter(parsedValue, metadata, structDefinitions);
-            document.body.removeChild(overlay);
+            closeModal();
 
-            // Call the onSave callback if provided
-            if (onSave) {
+            if (generalized) {
+                if (typeof options.onCommit === 'function') options.onCommit(serialized);
+            } else if (onSave) {
                 onSave(parsedValue);
             } else {
                 // Refresh the details view (only for top-level edits)
@@ -671,9 +616,32 @@ class PluginManager {
         // Close on click outside
         overlay.addEventListener('click', (e) => {
             if (e.target === overlay) {
-                document.body.removeChild(overlay);
+                closeModal();
             }
         });
+        overlay.addEventListener('keydown', event => {
+            if (event.key === 'Escape') {
+                event.preventDefault();
+                event.stopPropagation();
+                closeModal();
+                return;
+            }
+            if (event.key !== 'Tab') return;
+            const focusable = Array.from(modal.querySelectorAll(
+                'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+            )).filter(element => element.offsetParent !== null);
+            if (focusable.length === 0) return;
+            const first = focusable[0];
+            const last = focusable[focusable.length - 1];
+            if (event.shiftKey && document.activeElement === first) {
+                event.preventDefault();
+                last.focus();
+            } else if (!event.shiftKey && document.activeElement === last) {
+                event.preventDefault();
+                first.focus();
+            }
+        });
+        closeBtn.focus?.();
     }
 
     /**
@@ -722,6 +690,22 @@ class PluginManager {
             ? this.deserializeComplexPluginParameter(value, fieldSchema, structDefinitions)
             : value;
         const parsedValue = this.clonePluginValue(decodedValue ?? (isArray ? [] : {}));
+        const hasExpectedShape = isArray
+            ? Array.isArray(parsedValue)
+            : Boolean(parsedValue && typeof parsedValue === 'object' && !Array.isArray(parsedValue));
+        if (!hasExpectedShape) {
+            this.showComplexParameterEditor({
+                key: fieldName,
+                value,
+                schema: fieldSchema,
+                structDefinitions,
+                zIndex: 10009,
+                onCommit: serialized => onSave(
+                    this.deserializeComplexPluginParameter(serialized, fieldSchema, structDefinitions)
+                )
+            });
+            return;
+        }
 
         // Create modal overlay
         const overlay = document.createElement('div');
@@ -736,7 +720,7 @@ class PluginManager {
             display: flex;
             justify-content: center;
             align-items: center;
-            z-index: 10002;
+            z-index: 10007;
         `;
 
         const modal = document.createElement('div');
@@ -890,6 +874,7 @@ class PluginManager {
 
         // Create table header
         const table = document.createElement('div');
+        table.className = 'rr-plugin-array-table';
         table.style.cssText = `
             display: flex;
             flex-direction: column;
@@ -909,6 +894,7 @@ class PluginManager {
 
         // Header row
         const headerRow = document.createElement('div');
+        headerRow.className = 'rr-plugin-array-header';
         headerRow.style.cssText = `
             display: grid;
             grid-template-columns: 40px minmax(0, 1fr) auto;
@@ -937,6 +923,7 @@ class PluginManager {
         // Data rows
         arrayData.forEach((item, index) => {
             const row = document.createElement('div');
+            row.className = 'rr-plugin-array-row';
             const rowBackground = index % 2 === 0
                 ? 'var(--color-bg-list-item)'
                 : 'var(--color-bg-list-item-alt)';
@@ -958,6 +945,7 @@ class PluginManager {
             });
 
             const indexCell = document.createElement('div');
+            indexCell.className = 'rr-plugin-array-index';
             indexCell.style.cssText = 'align-self:stretch;display:flex;align-items:center;justify-content:center;padding:8px 4px;border-right:1px solid var(--color-border);color:var(--color-text-muted);font-size:11px;user-select:none;';
             indexCell.textContent = index + 1;
             row.draggable = true;
@@ -1002,6 +990,7 @@ class PluginManager {
             });
 
             const valueCell = document.createElement('div');
+            valueCell.className = 'rr-plugin-array-value';
             valueCell.style.cssText = 'padding:8px;color:var(--color-text);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
             if (item && typeof item === 'object' && !Array.isArray(item)) {
                 const preferredKey = ['Name', 'name', 'Text', 'text', 'Title', 'title']
@@ -1010,7 +999,9 @@ class PluginManager {
                     !/^---.*---$/.test(key) && item[key] !== undefined && typeof item[key] !== 'object'
                 );
                 const displayKey = preferredKey || firstReadableKey;
-                valueCell.textContent = displayKey ? String(item[displayKey]) : `${structType || this._tt('Element')} ${index + 1}`;
+                valueCell.textContent = displayKey
+                    ? this.describeStructFieldValue(item[displayKey], (structSchema || {})[displayKey])
+                    : `${structType || this._tt('Element')} ${index + 1}`;
             } else {
                 valueCell.textContent = String(item);
             }
@@ -1027,6 +1018,7 @@ class PluginManager {
             row.appendChild(valueCell);
 
             const actions = document.createElement('div');
+            actions.className = 'rr-plugin-array-actions';
             actions.style.cssText = 'display:flex;gap:4px;padding:4px 6px;';
             const makeAction = (label, title, action, disabled = false) => {
                 const button = document.createElement('button');
@@ -1117,6 +1109,7 @@ class PluginManager {
 
         // Create table
         const table = document.createElement('div');
+        table.className = 'rr-plugin-struct-table';
         table.style.cssText = `
             display: flex;
             flex-direction: column;
@@ -1129,6 +1122,7 @@ class PluginManager {
 
         // Header row
         const headerRow = document.createElement('div');
+        headerRow.className = 'rr-plugin-struct-header';
         headerRow.style.cssText = `
             display: grid;
             grid-template-columns: minmax(180px, 36%) minmax(0, 1fr);
@@ -1185,6 +1179,7 @@ class PluginManager {
                     row.textContent = fieldSchema.text || groupMatch?.[1] || fieldName;
                     table.appendChild(row);
                 } else {
+                    row.className = 'rr-plugin-struct-row';
                     row.style.cssText = `
                         display: grid;
                         grid-template-columns: minmax(180px, 36%) minmax(0, 1fr);
@@ -1193,12 +1188,14 @@ class PluginManager {
                     `;
 
                     const nameCell = document.createElement('div');
+                    nameCell.className = 'rr-plugin-struct-name';
                     nameCell.style.cssText = `padding:8px 8px 8px ${8 + depth * 16}px;border-right:1px solid var(--color-border);color:var(--color-syntax-function);font-size:11px;line-height:1.35;`;
                     nameCell.textContent = fieldSchema.text || fieldName;
                     if (fieldSchema.desc) nameCell.title = fieldSchema.desc;
                     row.appendChild(nameCell);
 
                     const valueCell = document.createElement('div');
+                    valueCell.className = 'rr-plugin-struct-value';
                     valueCell.style.cssText = 'padding:8px;min-width:0;';
                     const currentValue = structData[fieldName] !== undefined
                         ? structData[fieldName]
@@ -1225,6 +1222,38 @@ class PluginManager {
     /**
      * Create input field for a struct field based on its schema
      */
+    pluginWidgetContext() {
+        const options = {
+            projectController: this.projectController,
+            database: this.projectController?.databaseManager,
+            fs: this.fs,
+            path: this.path,
+            tt: text => this._tt(text),
+            zIndex: 10010
+        };
+        return typeof RRPluginParamWidgets !== 'undefined' && RRPluginParamWidgets.buildContext
+            ? RRPluginParamWidgets.buildContext(options)
+            : options;
+    }
+
+    describeStructFieldValue(value, fieldSchema) {
+        const refs = typeof RRPluginDataRefs !== 'undefined' ? RRPluginDataRefs : null;
+        const context = this.pluginWidgetContext();
+        if (refs && fieldSchema && refs.isRefType(fieldSchema.type)
+                && !String(fieldSchema.type || '').endsWith('[]')
+                && (value === null || typeof value !== 'object')
+                && refs.hasEntries(fieldSchema.type, context.database)) {
+            return refs.describe(fieldSchema.type, context.database, value, {
+                none: this._tt('(None)'),
+                unnamed: this._tt('Unnamed'),
+                missing: this._tt('(missing)'),
+                editorName: context.editorName,
+                editorNameFirst: context.editorNameFirst
+            });
+        }
+        return String(value);
+    }
+
     /** Absolute path of the open project's IconSet.png, or null without a project. */
     iconSetPath() {
         const project = this.projectController && typeof this.projectController.getCurrentProject === 'function'
@@ -1372,6 +1401,17 @@ class PluginManager {
     createStructFieldInput(fieldName, value, fieldSchema, structData, allStructDefinitions = {}) {
         const type = fieldSchema.type;
 
+        const choiceWidget = typeof RRPluginParamWidgets !== 'undefined'
+            ? RRPluginParamWidgets.create({
+                schema: fieldSchema,
+                value,
+                onChange: newValue => { structData[fieldName] = newValue; },
+                context: this.pluginWidgetContext(),
+                inputStyle: 'width:100%;padding:4px 8px;background-color:var(--color-border);color:var(--color-text);border:1px solid var(--color-border-input);border-radius:3px;box-sizing:border-box;font-size:11px;'
+            })
+            : null;
+        if (choiceWidget) return choiceWidget;
+
         // Handle boolean
         if (type === 'boolean') {
             const select = document.createElement('select');
@@ -1397,34 +1437,6 @@ class PluginManager {
 
             select.appendChild(trueOpt);
             select.appendChild(falseOpt);
-
-            select.addEventListener('change', (e) => {
-                structData[fieldName] = e.target.value;
-            });
-
-            return select;
-        }
-
-        // Handle select/combo with options
-        if ((type === 'select' || type === 'combo') && fieldSchema.options && fieldSchema.options.length > 0) {
-            const select = document.createElement('select');
-            select.style.cssText = `
-                width: 100%;
-                padding: 4px 8px;
-                background-color: var(--color-border);
-                color: var(--color-text);
-                border: 1px solid var(--color-border-input);
-                border-radius: 3px;
-                font-size: 11px;
-            `;
-
-            for (const option of fieldSchema.options) {
-                const opt = document.createElement('option');
-                opt.value = option;
-                opt.textContent = option;
-                opt.selected = value === option;
-                select.appendChild(opt);
-            }
 
             select.addEventListener('change', (e) => {
                 structData[fieldName] = e.target.value;
@@ -1657,7 +1669,7 @@ class PluginManager {
             display: flex;
             justify-content: center;
             align-items: center;
-            z-index: 10002;
+            z-index: 10007;
         `;
 
         const modal = document.createElement('div');
@@ -3006,73 +3018,19 @@ class PluginManager {
      * Handles both ` * @param Foo` (Format A) and `@param Foo` (Format B).
      */
     normalizeAnnotationLine(line) {
-        return line.trim().replace(/^\*\s?/, '');
+        return RRPluginAnnotations.normalizeLine(line);
     }
 
     cleanAnnotationValue(value) {
-        return String(value || '').replace(/[\u200B-\u200F\u202A-\u202E\u2060-\u2064\uFEFF]/g, '').trim();
+        return RRPluginAnnotations.cleanValue(value);
     }
 
     splitAnnotationLine(line) {
-        const pattern = /@(param|text|desc|type|default|parent|on|off|min|max|dir|option|command|arg|plugindesc|author|help|url|target|base|decimals)\b/gi;
-        const matches = [];
-        let match;
-        while ((match = pattern.exec(line))) {
-            matches.push({
-                tag: match[1].toLowerCase(),
-                index: match.index,
-                end: match.index + match[0].length
-            });
-        }
-        return matches.map((item, index) => {
-            const valueEnd = index + 1 < matches.length ? matches[index + 1].index : line.length;
-            return {
-                tag: item.tag,
-                value: this.cleanAnnotationValue(line.slice(item.end, valueEnd))
-            };
-        });
+        return RRPluginAnnotations.splitLine(line);
     }
 
     applyAnnotationToSchema(schema, tag, value) {
-        if (!schema) return;
-        switch (tag) {
-            case 'text':
-                schema.text = value;
-                schema.textSpecified = true;
-                break;
-            case 'desc':
-                schema.desc = schema.desc ? `${schema.desc} ${value}` : value;
-                if (Array.isArray(schema.descLines)) schema.descLines.push(value);
-                break;
-            case 'type':
-                schema.type = value;
-                schema.typeSpecified = true;
-                break;
-            case 'parent':
-                schema.parent = value;
-                break;
-            case 'default':
-                schema.default = value;
-                break;
-            case 'on':
-                schema.on = value;
-                break;
-            case 'off':
-                schema.off = value;
-                break;
-            case 'min':
-                schema.min = value.split(/\s+/, 1)[0] || value;
-                break;
-            case 'max':
-                schema.max = value.split(/\s+/, 1)[0] || value;
-                break;
-            case 'dir':
-                schema.dir = value;
-                break;
-            case 'option':
-                if (Array.isArray(schema.options)) schema.options.push(value);
-                break;
-        }
+        RRPluginAnnotations.applyToSchema(schema, tag, value);
     }
 
     /**
@@ -3800,6 +3758,21 @@ class PluginManager {
         const isArray = metadata.type && metadata.type.includes('[]');
         const isComplexType = isStruct || isArray;
 
+        const choiceWidget = typeof RRPluginParamWidgets !== 'undefined'
+            ? RRPluginParamWidgets.create({
+                schema: metadata,
+                value,
+                onChange: newValue => { plugin.parameters[key] = newValue; },
+                context: this.pluginWidgetContext(),
+                inputStyle
+            })
+            : null;
+        if (choiceWidget) {
+            inputWrapper.appendChild(choiceWidget);
+            container.appendChild(inputWrapper);
+            return container;
+        }
+
         if (isComplexType) {
             const editButton = document.createElement('button');
             editButton.textContent = this._tt('Edit...');
@@ -3819,50 +3792,6 @@ class PluginManager {
                 this.showComplexParameterEditor(plugin, key, value, metadata);
             });
             inputWrapper.appendChild(editButton);
-            container.appendChild(inputWrapper);
-            return container;
-        }
-
-        // Handle combo type (dropdown with predefined options)
-        if (metadata.type === 'combo' && metadata.options && metadata.options.length > 0) {
-            const select = document.createElement('select');
-            select.style.cssText = inputStyle;
-
-            for (const option of metadata.options) {
-                const opt = document.createElement('option');
-                opt.value = option;
-                opt.textContent = option;
-                opt.selected = value === option;
-                select.appendChild(opt);
-            }
-
-            select.addEventListener('change', (e) => {
-                plugin.parameters[key] = e.target.value;
-            });
-
-            inputWrapper.appendChild(select);
-            container.appendChild(inputWrapper);
-            return container;
-        }
-
-        // Handle select type (same as combo)
-        if (metadata.type === 'select' && metadata.options && metadata.options.length > 0) {
-            const select = document.createElement('select');
-            select.style.cssText = inputStyle;
-
-            for (const option of metadata.options) {
-                const opt = document.createElement('option');
-                opt.value = option;
-                opt.textContent = option;
-                opt.selected = value === option;
-                select.appendChild(opt);
-            }
-
-            select.addEventListener('change', (e) => {
-                plugin.parameters[key] = e.target.value;
-            });
-
-            inputWrapper.appendChild(select);
             container.appendChild(inputWrapper);
             return container;
         }
@@ -3992,37 +3921,7 @@ class PluginManager {
      * Parse struct definitions from plugin source
      */
     parseStructDefinitions(source) {
-        const structs = {};
-        const structPattern = /\/\*~struct~([^:\r\n]+):([\s\S]*?)\*\//g;
-
-        for (const match of source.matchAll(structPattern)) {
-            const structName = match[1].trim();
-            if (!structName) continue;
-            structs[structName] = {};
-
-            const lines = match[2].split('\n');
-            let currentParam = null;
-
-            for (const line of lines) {
-                const tokens = this.splitAnnotationLine(this.normalizeAnnotationLine(line));
-                for (const token of tokens) {
-                    if (token.tag === 'param') {
-                        if (!token.value) {
-                            currentParam = null;
-                            continue;
-                        }
-                        currentParam = token.value;
-                        structs[structName][currentParam] = this.blankParameterSchema();
-                        continue;
-                    }
-                    if (currentParam && structs[structName][currentParam]) {
-                        this.applyAnnotationToSchema(structs[structName][currentParam], token.tag, token.value);
-                    }
-                }
-            }
-        }
-
-        return structs;
+        return RRPluginAnnotations.parseStructDefinitions(source);
     }
 
     /**
@@ -4119,22 +4018,7 @@ class PluginManager {
 
     /** An empty parameter schema in the shape every renderer here expects. */
     blankParameterSchema() {
-        return {
-            text: '',
-            textSpecified: false,
-            desc: '',
-            descLines: [],
-            type: 'string',
-            typeSpecified: false,
-            default: null,
-            parent: null,
-            on: null,
-            off: null,
-            min: null,
-            max: null,
-            dir: null,
-            options: []
-        };
+        return RRPluginAnnotations.blankSchema();
     }
 
     /**

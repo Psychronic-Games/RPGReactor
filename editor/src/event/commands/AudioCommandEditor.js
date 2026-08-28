@@ -145,6 +145,11 @@ class AudioCommandEditor {
         this.applyCurrentTrackDefaults();
         this.callback = callback;
 
+        if (this.commandType.folder && !this.commandType.fadeout) {
+            this.showPlayCommandPicker();
+            return;
+        }
+
         if (!this.modal) {
             this.createModal();
         }
@@ -204,6 +209,55 @@ class AudioCommandEditor {
                 }]
             };
         }
+    }
+
+    /**
+     * Play BGM/BGS/ME/SE use the same current browser/player as every other
+     * audio surface. The preview-only loop toggle is not serialized.
+     */
+    showPlayCommandPicker() {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
+        const currentProject = this.projectController.getCurrentProject
+            ? this.projectController.getCurrentProject()
+            : this.projectController.currentProject;
+        if (!currentProject || !currentProject.path) {
+            alert(tt('No project loaded'));
+            return;
+        }
+
+        const path = require('path');
+        const fs = require('fs');
+        const folder = this.commandType.folder;
+        const audioFolder = path.join(currentProject.path, 'audio', folder);
+        const files = fs.existsSync(audioFolder)
+            ? RRAssetFiles.listUnique(audioFolder, RRAssetFiles.AUDIO_EXTENSIONS)
+            : [];
+        const current = this.command.parameters[0] || {};
+
+        RRAudioPickerModal.open({
+            title: `${tt('Select')} ${folder.toUpperCase()} ${tt('File')}`,
+            folderLabel: folder.toUpperCase(),
+            files,
+            selected: current.name || '',
+            levels: {
+                volume: current.volume !== undefined ? current.volume : 90,
+                pitch: current.pitch !== undefined ? current.pitch : 100,
+                pan: current.pan !== undefined ? current.pan : 0
+            },
+            loopDefault: folder !== 'se',
+            zIndex: 10006,
+            onOk: result => {
+                this.command.parameters[0] = {
+                    name: result.name,
+                    volume: result.volume,
+                    pitch: result.pitch,
+                    pan: result.pan
+                };
+                const done = this.callback;
+                this.callback = null;
+                if (done) done(this.command);
+            }
+        });
     }
 
     /**

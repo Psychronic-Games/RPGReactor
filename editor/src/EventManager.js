@@ -1360,7 +1360,12 @@ class EventManager {
 
     showQuickEventDialog(kind, x, y) {
         if (!this.currentMap || this.getEventAt(x, y)) return;
-        const tt = text => window.I18n ? window.I18n.tText(text) : text;
+        const tt = (text, replacements = {}) => {
+            const translated = window.I18n ? window.I18n.tText(text) : text;
+            return Object.entries(replacements).reduce((result, [key, value]) => (
+                result.split(`{${key}}`).join(String(value))
+            ), translated);
+        };
         const targetMap = this.currentMap;
         const defaults = this.quickEventAssetDefaults(kind);
         const config = {
@@ -1391,7 +1396,7 @@ class EventManager {
             const element = document.createElement('label');
             element.style.cssText = 'display:grid;grid-template-columns:150px minmax(0,1fr);align-items:center;gap:10px;color:var(--color-text);';
             const caption = document.createElement('span');
-            caption.textContent = tt(label);
+            caption.textContent = label;
             element.append(caption, control);
             body.appendChild(element);
             return element;
@@ -1436,7 +1441,7 @@ class EventManager {
                     });
             });
             group.append(graphicName, change);
-            row('Character Graphic:', group);
+            row(tt('Character Graphic:'), group);
         }
 
         if (kind === 'transfer' || kind === 'door') {
@@ -1446,7 +1451,9 @@ class EventManager {
             destinationText.style.flex = '1';
             const refreshDestination = () => {
                 const d = config.destination;
-                destinationText.textContent = `Map ${d.mapId}: (${d.x}, ${d.y})`;
+                destinationText.textContent = tt('Map {id}: ({x}, {y})', {
+                    id: d.mapId, x: d.x, y: d.y
+                });
             };
             refreshDestination();
             const browse = document.createElement('button');
@@ -1460,18 +1467,18 @@ class EventManager {
                 });
             });
             destinationGroup.append(destinationText, browse);
-            row('Destination:', destinationGroup);
+            row(tt('Destination:'), destinationGroup);
             const direction = select([
                 { value: 0, label: 'Retain' }, { value: 2, label: 'Down' },
                 { value: 4, label: 'Left' }, { value: 6, label: 'Right' }, { value: 8, label: 'Up' }
             ]);
             direction.addEventListener('change', () => { config.direction = Number(direction.value); });
-            row('Player Direction:', direction);
+            row(tt('Player Direction:'), direction);
             const fade = select([
                 { value: 0, label: 'Black' }, { value: 1, label: 'White' }, { value: 2, label: 'None' }
             ]);
             fade.addEventListener('change', () => { config.fadeType = Number(fade.value); });
-            row('Fade:', fade);
+            row(tt('Fade:'), fade);
         }
 
         if (kind === 'treasure') {
@@ -1501,17 +1508,17 @@ class EventManager {
             rewardData.addEventListener('change', () => { config.rewardId = Number(rewardData.value) || 1; });
             amount.addEventListener('input', () => { config.amount = Math.max(1, Number(amount.value) || 1); });
             message.addEventListener('input', () => { config.message = message.value; });
-            row('Reward Type:', rewardType);
-            row('Reward:', rewardData);
-            row('Amount:', amount);
-            row('Message:', message);
+            row(tt('Reward Type:'), rewardType);
+            row(tt('Reward:'), rewardData);
+            row(tt('Amount:'), amount);
+            row(tt('Message:'), message);
             populateRewards();
         }
 
         if (kind === 'inn') {
             const price = input('number', 0, 0);
             price.addEventListener('input', () => { config.price = Math.max(0, Number(price.value) || 0); });
-            row(`Price (${config.currency}):`, price);
+            row(tt('Price ({currency}):', { currency: config.currency }), price);
         }
 
         overlay.appendChild(dialog);

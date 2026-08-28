@@ -81,6 +81,7 @@ const EXCLUDED = new Set([
     'game.rpgproject',
     path.join('js', 'REACTOR_CORE_DUMP_MIDDEV'),
     path.join('js', 'RMMZ_Corescript'),
+    path.join('data', 'Database.names.json'),
     path.join('data', 'nul'),
 ]);
 

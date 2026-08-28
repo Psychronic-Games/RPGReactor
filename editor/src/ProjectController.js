@@ -224,11 +224,11 @@ class ProjectController {
         if (error) console.warn('Could not acquire project lock:', error);
         const message = live
             ? this._tt('This project is already open in another RPG Reactor instance.')
-            : 'The project lock could not be verified. The project was not opened.';
+            : this._tt('The project lock could not be verified. The project was not opened.');
         if (typeof alert === 'function') alert(message + `\n\n${projectPath}`);
         this.uiManager?.updateStatus(live
             ? 'Project already open in another instance'
-            : 'Could not verify project lock');
+            : this._tt('Could not verify project lock'));
         return false;
     }
 

@@ -108,7 +108,7 @@ test('DatabaseManager enforces RPG Maker database maximums without growing overs
     const template = { id: 0, name: '', values: [] };
 
     assert.equal(manager.getMaximumEntries('actors'), 9999);
-    assert.equal(manager.getMaximumEntries('animations'), 1000);
+    assert.equal(manager.getMaximumEntries('animations'), 5000);
     assert.equal(manager.getMaximumEntries('tilesets'), 1000);
     assert.equal(manager.getMaximumEntries('elements'), 512);
 
@@ -122,7 +122,9 @@ test('DatabaseManager enforces RPG Maker database maximums without growing overs
     assert.equal(manager.data.actors.length, 4);
 
     manager.data.animations = [null];
-    assert.equal(manager.changeMaximum('animations', 1001, template), false);
+    assert.equal(manager.changeMaximum('animations', 1001, template), true);
+    assert.equal(manager.data.animations.length, 1002);
+    assert.equal(manager.changeMaximum('animations', 5001, template), false);
     manager.data.tilesets = [null];
     assert.equal(manager.changeMaximum('tilesets', 9999, template), false);
 
@@ -135,10 +137,10 @@ test('DatabaseManager enforces RPG Maker database maximums without growing overs
 test('DatabaseManager addEntry stops at the database maximum', () => {
     const DatabaseManager = loadBrowserClass('DatabaseManager.js', 'DatabaseManager');
     const manager = new DatabaseManager();
-    manager.data.animations = new Array(1001);
+    manager.data.animations = new Array(5001);
 
     assert.equal(manager.addEntry('animations', { name: 'Too many' }), null);
-    assert.equal(manager.data.animations.length, 1001);
+    assert.equal(manager.data.animations.length, 5001);
 });
 
 test('map allocation and insertion preserve IDs, sibling hierarchy, and local ordering', () => {

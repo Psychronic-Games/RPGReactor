@@ -182,6 +182,7 @@ class DatabaseAnimationEditor {
         this._previewTargetEnabled = false;
         this._previewBgCanvas = null;
         this._currentSpriteRenderFrame = null;
+        this._resetPreviewFlash();
     }
 
     /**
@@ -204,6 +205,71 @@ class DatabaseAnimationEditor {
         }
     }
 
+    _resetPreviewFlash() {
+        this._previewFlash = {
+            target: [0, 0, 0, 0],
+            targetDuration: 0,
+            screen: [0, 0, 0, 0],
+            screenDuration: 0,
+            hideDuration: 0
+        };
+    }
+
+    _firePreviewFlashTiming(timing, rate = 1) {
+        if (!this._previewFlash) this._resetPreviewFlash();
+        const scope = Number(timing?.flashScope ?? 1);
+        const duration = Math.max(0, Number(timing?.flashDuration ?? timing?.duration) || 0)
+            * Math.max(1, Number(rate) || 1);
+        if (scope === 0 || duration <= 0) return false;
+        const sourceColor = timing?.flashColor || timing?.color;
+        const color = DatabaseAnimationEditor.normalizeFlashColor(sourceColor)
+            .map(value => Math.max(0, Math.min(255, value)));
+        if (scope === 1) {
+            this._previewFlash.target = color;
+            this._previewFlash.targetDuration = duration;
+        } else if (scope === 2) {
+            this._previewFlash.screen = color;
+            this._previewFlash.screenDuration = duration;
+        } else if (scope === 3) {
+            this._previewFlash.hideDuration = duration;
+        }
+        return scope >= 1 && scope <= 3;
+    }
+
+    _stepPreviewFlash() {
+        if (!this._previewFlash) this._resetPreviewFlash();
+        const decay = (colorKey, durationKey) => {
+            const duration = this._previewFlash[durationKey];
+            if (duration <= 0) return;
+            this._previewFlash[durationKey] = duration - 1;
+            this._previewFlash[colorKey][3] *= (duration - 1) / duration;
+            if (duration === 1) this._previewFlash[colorKey][3] = 0;
+        };
+        decay('target', 'targetDuration');
+        decay('screen', 'screenDuration');
+        if (this._previewFlash.hideDuration > 0) this._previewFlash.hideDuration--;
+        return this._previewFlashActive();
+    }
+
+    _previewFlashActive() {
+        const state = this._previewFlash;
+        return !!state && (state.targetDuration > 0 || state.screenDuration > 0 || state.hideDuration > 0);
+    }
+
+    _seedSpritePreviewFlash(animation, frameIndex) {
+        this._resetPreviewFlash();
+        for (const timing of animation?.timings || []) {
+            if (timing?.frame === frameIndex) this._firePreviewFlashTiming(timing, 4);
+        }
+    }
+
+    _refreshStaticAnimationPreview(animation) {
+        if (DatabaseAnimationEditor.isSpriteAnimation(animation)
+                && this._currentSpriteRenderStaticFrame) {
+            this._currentSpriteRenderStaticFrame(window.currentAnimationFrameIndex || 0);
+        }
+    }
+
     getAnimationCanvasPoint(canvas, event) {
         const rect = canvas.getBoundingClientRect();
         const displayWidth = rect.width || canvas.width || 1;
@@ -215,12 +281,15 @@ class DatabaseAnimationEditor {
     }
 
     showAnimationDetail(container, animation) {
+        this._previewSetupGeneration = (this._previewSetupGeneration || 0) + 1;
+        this._effekseerRetryCount = 0;
         // Stop any currently playing animation before switching
         if (this._currentEffekseerStop) {
             this._currentEffekseerStop();
             this._currentEffekseerStop = null;
         }
         this._runDetailCleanups();
+        this._resetPreviewFlash();
 
         const tt = text => window.I18n ? window.I18n.tText(text) : text;
 
@@ -293,7 +362,7 @@ class DatabaseAnimationEditor {
                 .anim-gold-dropdown {
                     position: relative;
                     padding: 6px 24px 6px 10px;
-                    background: rgba(255, 215, 0, 0.12);
+                    background: var(--color-accent-tint-15);
                     border: 1px solid var(--color-accent-border);
                     color: var(--color-accent-bright);
                     border-radius: 3px;
@@ -312,6 +381,44 @@ class DatabaseAnimationEditor {
                     top: 50%;
                     transform: translateY(-50%);
                     font-size: 9px;
+                }
+                .anim-editor-workspace {
+                    display: flex;
+                    flex: 1;
+                    min-height: 0;
+                    gap: 8px;
+                }
+                .anim-editor-content-column {
+                    display: flex;
+                    flex: 1;
+                    min-width: 0;
+                    min-height: 0;
+                    flex-direction: column;
+                    gap: 8px;
+                }
+                .anim-editor-properties {
+                    max-height: clamp(140px, 20vh, 190px);
+                    flex: 0 0 auto;
+                }
+                .anim-editor-timings {
+                    display: flex;
+                    flex: 0 0 clamp(260px, 29%, 340px);
+                    min-width: 0;
+                    min-height: 0;
+                    flex-direction: column;
+                }
+                @container database-detail (max-width: 720px) {
+                    .anim-editor-workspace {
+                        flex-direction: column;
+                        overflow-y: auto;
+                    }
+                    .anim-editor-content-column {
+                        flex: 0 0 auto;
+                        min-height: 620px;
+                    }
+                    .anim-editor-timings {
+                        flex: 0 0 280px;
+                    }
                 }
             </style>
             <div class="anim-editor-root" style="display:flex;flex-direction:column;gap:8px;width:100%;height:100%;min-height:0;padding:8px;box-sizing:border-box;overflow:hidden;">
@@ -333,10 +440,10 @@ class DatabaseAnimationEditor {
                     </div>
                 </div>
 
-                <!-- Properties and Timings Row (Top) -->
-                <div class="anim-editor-summary-row" style="display:flex;gap:8px;flex-wrap:nowrap;flex-shrink:0;min-height:0;">
+                <div class="anim-editor-workspace">
+                    <div class="anim-editor-content-column">
                     <!-- Properties -->
-                    <div style="flex:0 0 33%;min-width:180px;max-height:clamp(140px,20vh,190px);background:var(--color-bg-panel);border:1px solid var(--color-border);border-radius:3px;padding:6px;display:flex;flex-direction:column;">
+                    <div class="anim-editor-properties" style="min-width:180px;background:var(--color-bg-panel);border:1px solid var(--color-border);border-radius:3px;padding:6px;display:flex;flex-direction:column;">
                         <div style="font-size:11px;font-weight:600;margin-bottom:6px;color:var(--color-text);flex-shrink:0;">${tt('Properties')}</div>
                         <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;font-size:10px;flex:1;min-height:0;overflow-y:auto;padding-right:2px;">
                             ${isSpriteAnimation ? `
@@ -378,19 +485,6 @@ class DatabaseAnimationEditor {
                             ` : ''}
                         </div>
                     </div>
-
-                    <!-- Sound & Flash Timings -->
-                    <div style="flex:1;min-width:300px;max-height:clamp(140px,20vh,190px);background:var(--color-bg-panel);border:1px solid var(--color-border);border-radius:3px;padding:6px;display:flex;flex-direction:column;">
-                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;flex-shrink:0;">
-                            <div style="font-size: 11px; font-weight: 600; color: var(--color-text);">${tt('SE & Flash Timings')}</div>
-                            <button id="add-timing-btn" style="padding: 4px 8px; background: var(--color-success); border: 1px solid var(--color-success-border); color: var(--color-text-strong); border-radius: 2px; cursor: pointer; font-size: 10px;">+ ${tt('Add')}</button>
-                        </div>
-
-                        <div id="timings-list" style="flex:1;min-height:0;overflow-y:auto;background:var(--color-bg-input-alt);border:1px solid var(--color-border-input);border-radius:2px;padding:6px;">
-                            <div style="font-size: 10px; color: var(--color-text-muted); padding: 6px;">${tt('No timings added')}</div>
-                        </div>
-                    </div>
-                </div>
 
                 <!-- Sprite Sheet Preview Row -->
                 ${isSpriteAnimation ? `
@@ -542,6 +636,19 @@ class DatabaseAnimationEditor {
                         </div>
                     </div>
                 </div>
+                    </div>
+
+                    <!-- Sound & Flash Timings stay independent of Properties and Preview height. -->
+                    <aside class="anim-editor-timings" style="background:var(--color-bg-panel);border:1px solid var(--color-border);border-radius:3px;padding:6px;box-sizing:border-box;">
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;flex-shrink:0;gap:8px;">
+                            <div style="font-size:11px;font-weight:600;color:var(--color-text);">${tt('SE & Flash Timings')}</div>
+                            <button id="add-timing-btn" style="padding:4px 8px;background:var(--color-success);border:1px solid var(--color-success-border);color:var(--color-text-strong);border-radius:2px;cursor:pointer;font-size:10px;">+ ${tt('Add')}</button>
+                        </div>
+                        <div id="timings-list" style="flex:1;min-height:0;overflow-y:auto;background:var(--color-bg-input-alt);border:1px solid var(--color-border-input);border-radius:2px;padding:6px;">
+                            <div style="font-size:10px;color:var(--color-text-muted);padding:6px;">${tt('No timings added')}</div>
+                        </div>
+                    </aside>
+                </div>
             </div>
         `;
 
@@ -678,6 +785,9 @@ class DatabaseAnimationEditor {
                                 positionTrigger.textContent = opt.label;
                                 animation.position = parseInt(opt.value);
                                 persistSprite();
+                                if (self._currentSpriteRenderFrame) {
+                                    self._currentSpriteRenderFrame(window.currentAnimationFrameIndex || 0);
+                                }
                             }
                         });
                         popup.appendChild(item);
@@ -1052,6 +1162,71 @@ class DatabaseAnimationEditor {
         if (pending === 0) this._onPreviewImagesLoaded();
     }
 
+    _previewTargetRect(canvas) {
+        if (!this._previewTargetEnabled || !this._previewTargetImg
+                || !this._previewTargetImg.complete || !this._previewTargetImg.naturalWidth) return null;
+        const img = this._previewTargetImg;
+        const battlerName = this._previewTargetBattlerName || '';
+        const firstChar = RRAssetFiles.basename(battlerName).charAt(0);
+        const isBigChar = RRAssetFiles.isBigCharacter(battlerName);
+        const isCharBattler = firstChar === '!' || firstChar === '$';
+        let sourceX = 0;
+        let sourceY = 0;
+        let width = img.naturalWidth;
+        let height = img.naturalHeight;
+        if (isCharBattler) {
+            const columns = isBigChar ? 3 : 12;
+            const rows = isBigChar ? 4 : 8;
+            width = img.naturalWidth / columns;
+            height = img.naturalHeight / rows;
+            sourceX = width;
+        }
+        const centerX = canvas.width / 2;
+        const centerY = canvas.height * 0.65;
+        return {
+            image: img,
+            sourceX,
+            sourceY,
+            sourceWidth: width,
+            sourceHeight: height,
+            x: centerX - width / 2,
+            y: centerY - height / 2,
+            width,
+            height,
+            centerX,
+            centerY,
+            feetY: centerY + height / 2
+        };
+    }
+
+    _previewAnchor(animation, canvas) {
+        const target = this._previewTargetRect(canvas);
+        const position = Number(animation?.position ?? 1);
+        if (!target || position === 3) {
+            return { x: canvas.width / 2, y: canvas.height / 2 };
+        }
+        if (position === 0) return { x: target.centerX, y: target.feetY - target.height };
+        if (position === 2) return { x: target.centerX, y: target.feetY };
+        return { x: target.centerX, y: target.feetY - target.height / 2 };
+    }
+
+    _drawPreviewTarget(ctx, target) {
+        if (!target) return;
+        ctx.drawImage(target.image,
+            target.sourceX, target.sourceY, target.sourceWidth, target.sourceHeight,
+            target.x, target.y, target.width, target.height);
+    }
+
+    _drawPreviewScreenFlash(ctx, canvas) {
+        const color = this._previewFlash?.screen;
+        if (!color || color[3] <= 0) return;
+        ctx.save();
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.fillStyle = `rgba(${color[0]}, ${color[1]}, ${color[2]}, ${color[3] / 255})`;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.restore();
+    }
+
     _drawPreviewBackground(ctx, canvas) {
         // Fill black base
         ctx.fillStyle = '#000';
@@ -1067,32 +1242,30 @@ class DatabaseAnimationEditor {
             ctx.drawImage(this._previewBB2Img, 0, 0, canvas.width, canvas.height);
         }
 
-        // Draw dummy enemy target
-        if (this._previewTargetEnabled && this._previewTargetImg && this._previewTargetImg.complete && this._previewTargetImg.naturalWidth) {
-            const img = this._previewTargetImg;
-            const battlerName = this._previewTargetBattlerName || '';
-            const firstChar = RRAssetFiles.basename(battlerName).charAt(0);
-            const isBigChar = RRAssetFiles.isBigCharacter(battlerName);
-            const isCharBattler = (firstChar === '!' || firstChar === '$');
-
-            const targetX = canvas.width / 2;
-            const targetY = canvas.height * 0.65;
-
-            if (isCharBattler && !isBigChar) {
-                // Standard character sheet: 12 cols x 8 rows — middle frame of first row
-                const fw = img.naturalWidth / 12;
-                const fh = img.naturalHeight / 8;
-                ctx.drawImage(img, fw, 0, fw, fh, targetX - fw / 2, targetY - fh / 2, fw, fh);
-            } else if (isCharBattler && isBigChar) {
-                // Big character ($ prefix): 3 cols x 4 rows
-                const fw = img.naturalWidth / 3;
-                const fh = img.naturalHeight / 4;
-                ctx.drawImage(img, fw, 0, fw, fh, targetX - fw / 2, targetY - fh / 2, fw, fh);
-            } else {
-                // Standard enemy sprite: full image centered
-                ctx.drawImage(img, targetX - img.naturalWidth / 2, targetY - img.naturalHeight / 2);
-            }
+        const target = this._previewTargetRect(canvas);
+        if (!target || this._previewFlash?.hideDuration > 0) return;
+        const color = this._previewFlash?.target;
+        if (!color || color[3] <= 0 || typeof document === 'undefined') {
+            this._drawPreviewTarget(ctx, target);
+            return;
         }
+
+        if (!this._previewTargetTintCanvas) this._previewTargetTintCanvas = document.createElement('canvas');
+        const scratch = this._previewTargetTintCanvas;
+        if (scratch.width !== canvas.width || scratch.height !== canvas.height) {
+            scratch.width = canvas.width;
+            scratch.height = canvas.height;
+        }
+        const scratchCtx = scratch.getContext('2d');
+        scratchCtx.imageSmoothingEnabled = false;
+        scratchCtx.clearRect(0, 0, scratch.width, scratch.height);
+        this._drawPreviewTarget(scratchCtx, target);
+        scratchCtx.save();
+        scratchCtx.globalCompositeOperation = 'source-atop';
+        scratchCtx.fillStyle = `rgba(${color[0]}, ${color[1]}, ${color[2]}, ${color[3] / 255})`;
+        scratchCtx.fillRect(0, 0, scratch.width, scratch.height);
+        scratchCtx.restore();
+        ctx.drawImage(scratch, 0, 0);
     }
 
     _onPreviewImagesLoaded() {
@@ -1165,6 +1338,7 @@ class DatabaseAnimationEditor {
                     }
                     timingsMap.get(ft.frame).flashColor = ft.color;
                     timingsMap.get(ft.frame).flashDuration = ft.duration;
+                    timingsMap.get(ft.frame).flashScope = 1;
                 });
             }
 
@@ -1185,12 +1359,13 @@ class DatabaseAnimationEditor {
             const flashTypeNames = [tt('None'), tt('Target'), tt('Screen'), tt('Hide Target')];
             const flashScope = timing.flashScope !== undefined ? timing.flashScope : (timing.flashColor ? 1 : 0);
             const flashTypeName = flashTypeNames[flashScope] || tt('None');
-            const seName = timing.se?.name || 'None';
+            const seName = timing.se?.name || '';
             const flashColor = timing.flashColor || [0, 0, 0, 0];
             const [r, g, b, a] = flashColor;
 
             const isSelected = this._selectedTimingIndices.has(index);
             const timingEntry = document.createElement('div');
+            timingEntry.className = 'anim-timing-entry';
             timingEntry.dataset.timingIndex = index;
             timingEntry.style.cssText = `
                 background: ${isSelected ? 'var(--color-accent-tint-25)' : 'var(--color-bg-input)'};
@@ -1199,9 +1374,10 @@ class DatabaseAnimationEditor {
                 padding: 6px 8px;
                 margin-bottom: 4px;
                 font-size: 10px;
-                display: flex;
+                display: grid;
+                grid-template-columns: minmax(0, 1fr) auto;
                 align-items: center;
-                gap: 12px;
+                gap: 5px 8px;
                 cursor: pointer;
                 user-select: none;
             `;
@@ -1226,9 +1402,9 @@ class DatabaseAnimationEditor {
             });
 
             // Format SE info compactly
-            const seInfo = seName !== 'None' && timing.se?.volume !== undefined
+            const seInfo = seName && timing.se?.volume !== undefined
                 ? `${seName} (${tt('Vol:')}${timing.se.volume} ${tt('Pitch:')}${timing.se.pitch})`
-                : (seName === 'None' ? tt('None') : seName);
+                : (seName || tt('None'));
 
             // When selected, the entry has a gold-tinted background. All text
             // bumps to bright white for max contrast (gold-on-gold is invisible).
@@ -1236,16 +1412,16 @@ class DatabaseAnimationEditor {
             const textColor = isSelected ? 'var(--color-text-strong)' : 'var(--color-text)';
             const mutedColor = isSelected ? 'var(--color-text-strong)' : 'var(--color-text-muted)';
             timingEntry.innerHTML = `
-                <div style="font-weight: 600; color: ${frameLabelColor}; font-size: 12px; min-width: 70px;">${tt('Frame')} ${timing.frame}</div>
-                <div style="color: ${textColor}; font-size: 11px; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"><strong>${tt('SE:')}</strong> ${rrEscapeHtml(seInfo)}</div>
-                <div style="display: flex; align-items: center; gap: 6px; font-size: 11px;">
+                <div style="font-weight:600;color:${frameLabelColor};font-size:12px;">${tt('Frame')} ${timing.frame}</div>
+                <div style="grid-column:1 / -1;color:${textColor};font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"><strong>${tt('SE:')}</strong> ${rrEscapeHtml(seInfo)}</div>
+                <div style="grid-column:1 / -1;display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:11px;">
                     <span style="color: ${textColor};"><strong>${tt('Flash:')}</strong> ${flashTypeName}</span>
                     ${flashScope !== 0 ? `
                         <div style="width: 24px; height: 14px; border: 1px solid var(--color-border-input); background: rgb(${r}, ${g}, ${b}); border-radius: 2px;" title="RGB(${r}, ${g}, ${b}) A:${a}"></div>
                         <span style="color: ${mutedColor};">${tt('Dur:')}${timing.flashDuration || 0}</span>
                     ` : ''}
                 </div>
-                <div style="display: flex; gap: 6px;">
+                <div style="grid-column:2;grid-row:1;display:flex;gap:4px;">
                     <button class="edit-timing-btn rr-btn-chip" data-index="${index}">${tt('Edit')}</button>
                     <button class="remove-timing-btn rr-btn-chip-danger" data-index="${index}">${tt('Remove')}</button>
                 </div>
@@ -1260,6 +1436,7 @@ class DatabaseAnimationEditor {
                 const index = parseInt(btn.dataset.index);
                 this.removeTiming(animation, index);
                 this.populateTimingsList(animation);
+                this._refreshStaticAnimationPreview(animation);
             });
         });
 
@@ -1297,6 +1474,7 @@ class DatabaseAnimationEditor {
                     this._selectedTimingIndices.clear();
                     persist();
                     this.populateTimingsList(animation);
+                    this._refreshStaticAnimationPreview(animation);
                 } else if (isCtrl && e.key.toLowerCase() === 'c' && this._selectedTimingIndices.size > 0) {
                     e.preventDefault();
                     e.stopPropagation();
@@ -1314,12 +1492,14 @@ class DatabaseAnimationEditor {
                     this._selectedTimingIndices.clear();
                     persist();
                     this.populateTimingsList(animation);
+                    this._refreshStaticAnimationPreview(animation);
                 } else if (isCtrl && e.key.toLowerCase() === 'v' && this._timingClipboard && this._timingClipboard.length > 0) {
                     e.preventDefault();
                     e.stopPropagation();
                     this._timingClipboard.forEach(t => this._appendTiming(animation, JSON.parse(JSON.stringify(t))));
                     persist();
                     this.populateTimingsList(animation);
+                    this._refreshStaticAnimationPreview(animation);
                 } else if (isCtrl && e.key.toLowerCase() === 'a') {
                     e.preventDefault();
                     e.stopPropagation();
@@ -1412,6 +1592,7 @@ class DatabaseAnimationEditor {
                     }
                     timingsMap.get(ft.frame).flashColor = ft.color;
                     timingsMap.get(ft.frame).flashDuration = ft.duration;
+                    timingsMap.get(ft.frame).flashScope = 1;
                 });
             }
 
@@ -1434,7 +1615,7 @@ class DatabaseAnimationEditor {
 
         // Populate fields
         frameInput.value = timingData.frame || 0;
-        seNameInput.value = timingData.se?.name || 'None';
+        seNameInput.value = timingData.se?.name || tt('None');
 
         // Populate SE volume and pitch
         const seVolumeSlider = document.getElementById('timing-se-volume');
@@ -1534,6 +1715,8 @@ class DatabaseAnimationEditor {
 
     setupTimingModal(animation, container) {
         const tt = text => window.I18n ? window.I18n.tText(text) : text;
+        const noneLabel = tt('None');
+        const isSpriteAnimation = DatabaseAnimationEditor.isSpriteAnimation(animation);
         // Create modal HTML
         const modalHTML = `
             <div id="timing-modal" class="rr-modal-overlay" style="display: none;">
@@ -1641,6 +1824,15 @@ class DatabaseAnimationEditor {
         const closeBtn = document.getElementById('timing-modal-close');
         const cancelBtn = document.getElementById('timing-modal-cancel');
         const saveBtn = document.getElementById('timing-modal-save');
+        if (!isSpriteAnimation) {
+            for (const value of ['2', '3']) {
+                const radio = document.querySelector(`input[name="flash-type"][value="${value}"]`);
+                if (radio) {
+                    radio.disabled = true;
+                    radio.closest('label')?.style.setProperty('opacity', '0.45');
+                }
+            }
+        }
 
         // Color sliders
         const redSlider = document.getElementById('timing-red');
@@ -1675,7 +1867,7 @@ class DatabaseAnimationEditor {
 
             // Reset form fields
             document.getElementById('timing-frame').value = 0;
-            document.getElementById('timing-se-name').value = tt('None');
+            document.getElementById('timing-se-name').value = noneLabel;
             redSlider.value = 0;
             greenSlider.value = 0;
             blueSlider.value = 0;
@@ -1737,7 +1929,7 @@ class DatabaseAnimationEditor {
                 // Effekseer format: separate soundTimings and flashTimings
 
                 // Add sound timing if SE is selected
-                if (seName && seName !== 'None') {
+                if (seName && seName !== noneLabel) {
                     if (!animation.soundTimings) animation.soundTimings = [];
 
                     // Check if there's already a sound timing at this frame
@@ -1785,7 +1977,7 @@ class DatabaseAnimationEditor {
                 const existingIndex = animation.timings.findIndex(t => t.frame === frame);
                 const timingData = {
                     frame: frame,
-                    se: seName && seName !== 'None' ? {
+                    se: seName && seName !== noneLabel ? {
                         name: seName,
                         pan: 0,
                         pitch: sePitch,
@@ -1806,6 +1998,7 @@ class DatabaseAnimationEditor {
             // Refresh the timings list
             this.databaseManager?.updateAnimation?.(animation.id, animation);
             this.populateTimingsList(animation);
+            this._refreshStaticAnimationPreview(animation);
 
             console.debug(isEditMode ? 'Updated timing:' : 'Added timing:', { frame, seName, flashType, color: [red, green, blue, intensity], duration });
             closeModal();
@@ -1825,7 +2018,7 @@ class DatabaseAnimationEditor {
         let previewAudio = null;
         sePreviewBtn?.addEventListener('click', () => {
             const seName = document.getElementById('timing-se-name').value;
-            if (!seName || seName === 'None') return;
+            if (!seName || seName === noneLabel) return;
 
             const currentProject = this.projectManager.getCurrentProject();
             if (!currentProject) return;
@@ -1849,7 +2042,7 @@ class DatabaseAnimationEditor {
         // SE clear button
         const seClearBtn = document.getElementById('timing-se-clear');
         seClearBtn?.addEventListener('click', () => {
-            document.getElementById('timing-se-name').value = tt('None');
+            document.getElementById('timing-se-name').value = noneLabel;
             seVolumeSlider.value = 90;
             seVolumeValue.textContent = '90';
             sePitchSlider.value = 100;
@@ -1881,7 +2074,8 @@ class DatabaseAnimationEditor {
      */
     _showSEPicker(files, seFolder, seNameInput) {
         const tt = text => window.I18n ? window.I18n.tText(text) : text;
-        let selectedFile = seNameInput.value !== 'None' ? seNameInput.value : null;
+        const noneLabel = tt('None');
+        let selectedFile = seNameInput.value !== noneLabel ? seNameInput.value : null;
         let pickerAudio = null;
 
         const picker = document.createElement('div');
@@ -2233,6 +2427,7 @@ class DatabaseAnimationEditor {
             if (totalCells === 0) {
                 canvas.width = 400;
                 canvas.height = displayCellSize;
+                ctx.imageSmoothingEnabled = false;
                 ctx.fillStyle = ThemeColors.resolve('--color-border-subtle', '#333333');
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
                 ctx.fillStyle = ThemeColors.resolve('--color-text-muted', '#999999');
@@ -2245,6 +2440,7 @@ class DatabaseAnimationEditor {
             // Set canvas size (using display size for compact view)
             canvas.width = totalCells * displayCellSize;
             canvas.height = displayCellSize;
+            ctx.imageSmoothingEnabled = false;
 
             let currentX = 0;
             let cellIndex = 0;
@@ -2492,10 +2688,9 @@ class DatabaseAnimationEditor {
 
                             // Convert displayed CSS coordinates into the 960x540 backing space.
                             const point = this.getAnimationCanvasPoint(previewCanvas, e);
-                            const centerX = previewCanvas.width / 2;
-                            const centerY = previewCanvas.height / 2;
-                            const relativeX = point.x - centerX;
-                            const relativeY = point.y - centerY;
+                            const anchor = this._previewAnchor(animation, previewCanvas);
+                            const relativeX = point.x - anchor.x;
+                            const relativeY = point.y - anchor.y;
 
                             // Get current frame from animation playback
                             const frameIndex = window.currentAnimationFrameIndex || 0;
@@ -2630,14 +2825,11 @@ class DatabaseAnimationEditor {
             // Draw preview background (battlebacks + target) instead of plain clear
             editorSelf._drawPreviewBackground(ctx, canvas);
 
-            if (frameIndex >= animation.frames.length) return;
-
-            const frameData = animation.frames[frameIndex];
-            if (!frameData || frameData.length === 0) return;
-
-            // Center point of canvas
-            const centerX = canvas.width / 2;
-            const centerY = canvas.height / 2;
+            const frameData = frameIndex < animation.frames.length
+                ? (animation.frames[frameIndex] || [])
+                : [];
+            const anchor = editorSelf._previewAnchor(animation, canvas);
+            const canvasBlendOperations = ['source-over', 'lighter', 'multiply', 'screen'];
 
             // Each cell is [pattern, x, y, scale, rotation, mirror, opacity, blendMode]
             frameData.slice(0, 16).forEach((cell, index) => {
@@ -2657,9 +2849,10 @@ class DatabaseAnimationEditor {
                 const srcY = Math.floor(cellPattern / cols) * cellSize;
 
                 ctx.save();
+                ctx.globalCompositeOperation = canvasBlendOperations[blendMode] || 'source-over';
 
                 // Apply transformations
-                ctx.translate(centerX + x, centerY + y);
+                ctx.translate(anchor.x + x, anchor.y + y);
                 ctx.rotate((rotation * Math.PI) / 180);
                 ctx.scale(scale / 100, scale / 100);
                 if (mirror) {
@@ -2687,7 +2880,7 @@ class DatabaseAnimationEditor {
                 // Draw selection highlight
                 if (index === selectedCellIndex) {
                     ctx.save();
-                    ctx.translate(centerX + x, centerY + y);
+                    ctx.translate(anchor.x + x, anchor.y + y);
                     ctx.rotate((rotation * Math.PI) / 180);
                     ctx.scale(scale / 100, scale / 100);
                     if (mirror) {
@@ -2711,7 +2904,12 @@ class DatabaseAnimationEditor {
                 }
             });
 
+            editorSelf._drawPreviewScreenFlash(ctx, canvas);
             frameCounter.textContent = `${tt('Frame:')} ${frameIndex + 1} / ${animation.frames.length}`;
+        };
+        const renderStaticFrame = (frameIndex) => {
+            editorSelf._seedSpritePreviewFlash(animation, frameIndex);
+            renderFrame(frameIndex);
         };
 
         // Save state for undo/redo
@@ -2744,10 +2942,9 @@ class DatabaseAnimationEditor {
             tempCtx.drawImage(sheet, srcX, srcY, cellSize, cellSize, 0, 0, cellSize, cellSize);
 
             // Calculate relative position on the sprite
-            const centerX = canvas.width / 2;
-            const centerY = canvas.height / 2;
-            const spriteX = centerX + cellX;
-            const spriteY = centerY + cellY;
+            const anchor = editorSelf._previewAnchor(animation, canvas);
+            const spriteX = anchor.x + cellX;
+            const spriteY = anchor.y + cellY;
 
             // Transform mouse position to sprite local coordinates
             let localX = mouseX - spriteX;
@@ -2791,8 +2988,7 @@ class DatabaseAnimationEditor {
             const frameData = animation.frames[currentFrame];
             if (!frameData) return -1;
 
-            const centerX = canvas.width / 2;
-            const centerY = canvas.height / 2;
+            const anchor = editorSelf._previewAnchor(animation, canvas);
             const cellSize = 192;
 
             let visibleCells = [];
@@ -2805,8 +3001,8 @@ class DatabaseAnimationEditor {
                 const [pattern, x, y, scale, rotation, mirror, opacity, blendMode] = frameData[i];
                 if (pattern < 0) continue;
 
-                const spriteX = centerX + x;
-                const spriteY = centerY + y;
+                const spriteX = anchor.x + x;
+                const spriteY = anchor.y + y;
                 const scaledSize = (cellSize * scale) / 100;
 
                 // Bounding box check
@@ -3055,7 +3251,7 @@ class DatabaseAnimationEditor {
                 if (!audioFile) return;
 
                 const audio = new Audio(RRAssetFiles.toUrl(audioFile.absolutePath));
-                audio.volume = (se.volume || 90) / 100;
+                audio.volume = (Number.isFinite(se.volume) ? se.volume : 90) / 100;
 
                 // Handle pitch (playbackRate)
                 // RPG Maker pitch: 50-150, where 100 is normal
@@ -3076,29 +3272,53 @@ class DatabaseAnimationEditor {
             if (animationInterval || animation.frames.length === 0) return;
 
             currentFrame = 0;
-            // 15fps MV cadence paced by rAF (setInterval drifts and fires
-            // late under main-thread load, reading as juddery playback).
-            // Elapsed time advances the frame counter, and SE cues fire for
-            // every frame stepped over so audio stays in sync.
-            const STEP = 1000 / 15;
+            editorSelf._resetPreviewFlash();
+            // Sprite_AnimationMV updates flashes at 60 Hz and advances its
+            // authored frame every fourth tick. Keep that model so fades and
+            // hide timings have the same duration as the runtime.
+            const STEP = 1000 / 60;
             let last = performance.now();
             let acc = 0;
+            let tickInFrame = 0;
+            const advanceTick = () => {
+                const frameBoundary = tickInFrame === 0;
+                if (frameBoundary) {
+                    playSE(currentFrame);
+                    for (const timing of animation.timings || []) {
+                        if (timing?.frame === currentFrame) {
+                            editorSelf._firePreviewFlashTiming(timing, 4);
+                        }
+                    }
+                }
+                const flashWasActive = editorSelf._previewFlashActive();
+                editorSelf._stepPreviewFlash();
+                if (frameBoundary || flashWasActive || editorSelf._previewFlashActive()) {
+                    renderFrame(currentFrame);
+                }
+                tickInFrame++;
+                if (tickInFrame >= 4) {
+                    tickInFrame = 0;
+                    currentFrame++;
+                    if (currentFrame >= animation.frames.length) {
+                        currentFrame = 0;
+                        editorSelf._resetPreviewFlash();
+                    }
+                }
+            };
+            // The runtime processes frame zero on its first update rather than
+            // waiting one full authored frame (66.7ms).
+            advanceTick();
             const tick = () => {
                 const now = performance.now();
                 acc += now - last;
                 last = now;
-                if (acc >= STEP) {
-                    let steps = Math.floor(acc / STEP);
-                    acc -= steps * STEP;
-                    while (steps-- > 0) {
-                        renderFrame(currentFrame);
-                        playSE(currentFrame);
-                        currentFrame++;
-                        if (currentFrame >= animation.frames.length) {
-                            currentFrame = 0; // Loop
-                        }
-                    }
+                let steps = 0;
+                while (acc >= STEP && steps < 5) {
+                    advanceTick();
+                    acc -= STEP;
+                    steps++;
                 }
+                if (acc > STEP * 5) acc = 0;
                 animationInterval = requestAnimationFrame(tick);
             };
             animationInterval = requestAnimationFrame(tick);
@@ -3117,6 +3337,7 @@ class DatabaseAnimationEditor {
             }
 
             currentFrame = 0;
+            editorSelf._resetPreviewFlash();
             editorSelf._drawPreviewBackground(ctx, canvas);
             frameCounter.textContent = `${tt('Frame:')} 0 / ${animation.frames.length}`;
 
@@ -3162,7 +3383,7 @@ class DatabaseAnimationEditor {
             if (cellIndex !== -1) {
                 // Update selection and render immediately to show highlight
                 selectedCellIndex = cellIndex;
-                renderFrame(currentFrame);
+                renderStaticFrame(currentFrame);
 
                 // Save state before dragging
                 saveState();
@@ -3176,7 +3397,7 @@ class DatabaseAnimationEditor {
             } else {
                 // Clicked on empty space - deselect
                 selectedCellIndex = -1;
-                renderFrame(currentFrame);
+                renderStaticFrame(currentFrame);
             }
         });
 
@@ -3273,7 +3494,7 @@ class DatabaseAnimationEditor {
                 selectedFrameIndices.add(currentFrame);
                 persistAnimation();
                 populateFrameList();
-                renderFrame(currentFrame);
+                renderStaticFrame(currentFrame);
                 updateFrameCounter();
             });
         }
@@ -3297,7 +3518,7 @@ class DatabaseAnimationEditor {
                 selectedFrameIndices.add(currentFrame);
                 persistAnimation();
                 populateFrameList();
-                renderFrame(currentFrame);
+                renderStaticFrame(currentFrame);
                 updateFrameCounter();
             });
         }
@@ -3362,7 +3583,7 @@ class DatabaseAnimationEditor {
                         selectedFrameIndices.add(index);
                     }
                     currentFrame = index;
-                    renderFrame(index);
+                    renderStaticFrame(index);
                     refreshFrameHighlights();
                 });
 
@@ -3417,7 +3638,7 @@ class DatabaseAnimationEditor {
                 selectedFrameIndices.add(currentFrame);
                 persistAnimation();
                 populateFrameList();
-                renderFrame(currentFrame);
+                renderStaticFrame(currentFrame);
                 updateFrameCounter();
             } else if (isCtrl && e.key.toLowerCase() === 'c' && selectedFrameIndices.size > 0) {
                 e.preventDefault();
@@ -3440,7 +3661,7 @@ class DatabaseAnimationEditor {
                 selectedFrameIndices.add(currentFrame);
                 persistAnimation();
                 populateFrameList();
-                renderFrame(currentFrame);
+                renderStaticFrame(currentFrame);
                 updateFrameCounter();
             } else if (isCtrl && e.key.toLowerCase() === 'v' && frameClipboard && frameClipboard.length > 0) {
                 e.preventDefault();
@@ -3454,7 +3675,7 @@ class DatabaseAnimationEditor {
                 currentFrame = insertAt;
                 persistAnimation();
                 populateFrameList();
-                renderFrame(currentFrame);
+                renderStaticFrame(currentFrame);
                 updateFrameCounter();
             } else if (isCtrl && e.key.toLowerCase() === 'a' && animation.frames.length > 0) {
                 // Select all
@@ -3471,12 +3692,14 @@ class DatabaseAnimationEditor {
 
         // Store renderFrame reference for preview image re-renders
         editorSelf._currentSpriteRenderFrame = renderFrame;
+        editorSelf._currentSpriteRenderStaticFrame = renderStaticFrame;
         editorSelf._previewBgCanvas = null; // Not in Effekseer mode
+        editorSelf._resetPreviewFlash();
 
         // Load sprite sheets and render first frame
         loadSpriteSheets().then(() => {
             populateFrameList();
-            renderFrame(0);
+            renderStaticFrame(0);
         });
 
         // Initial state
@@ -3484,7 +3707,7 @@ class DatabaseAnimationEditor {
         stopBtn.style.opacity = '0.5';
     }
 
-    setupEffekseerAnimationPlayback(animation) {
+    setupEffekseerAnimationPlayback(animation, expectedGeneration = this._previewSetupGeneration) {
         const canvasContainer = document.getElementById('animation-preview-canvas');
         const playBtn = document.getElementById('animation-play-btn');
         const stopBtn = document.getElementById('animation-stop-btn');
@@ -3527,7 +3750,8 @@ class DatabaseAnimationEditor {
                     this._effekseerRetryCount++;
                     console.debug(`[Effekseer Preview] Retry attempt ${this._effekseerRetryCount}/20`);
 
-                    setTimeout(() => {
+                    const retryTimer = setTimeout(() => {
+                        if (expectedGeneration !== this._previewSetupGeneration) return;
                         if (window._effekseerReady) {
                             console.debug('[Effekseer Preview] Effekseer now ready! Retrying setup...');
                             // Clear the "initializing" message first
@@ -3541,12 +3765,13 @@ class DatabaseAnimationEditor {
                             // Reset retry count
                             this._effekseerRetryCount = 0;
                             // Retry setup
-                            this.setupEffekseerAnimationPlayback(animation);
+                            this.setupEffekseerAnimationPlayback(animation, expectedGeneration);
                         } else {
                             // Still not ready, this will trigger another retry
-                            this.setupEffekseerAnimationPlayback(animation);
+                            this.setupEffekseerAnimationPlayback(animation, expectedGeneration);
                         }
                     }, 500);
+                    this._registerDetailCleanup(() => clearTimeout(retryTimer));
                 } else {
                     console.error('[Effekseer Preview] Failed to initialize after 20 retries');
                     if (ctx) {
@@ -3594,6 +3819,8 @@ class DatabaseAnimationEditor {
         // Store background canvas reference and clear sprite mode ref
         this._previewBgCanvas = bgCanvas;
         this._currentSpriteRenderFrame = null;
+        this._currentSpriteRenderStaticFrame = null;
+        this._resetPreviewFlash();
 
         // Draw initial background
         const bgCtx = bgCanvas.getContext('2d');
@@ -3682,6 +3909,26 @@ class DatabaseAnimationEditor {
         let lastTime = Date.now();
         let accumulator = 0;
         const fixedTimeStep = 1000 / 60; // 16.666ms per frame for 60 FPS
+        const maxTimingFrames = Math.max(0,
+            ...(animation.soundTimings || []).map(timing => Number(timing?.frame) || 0),
+            ...(animation.flashTimings || []).map(timing => Number(timing?.frame) || 0));
+        const advanceEffekseerTick = () => {
+            playSE(currentFrame);
+            for (const timing of animation.flashTimings || []) {
+                if (timing?.frame === currentFrame) {
+                    editorSelf._firePreviewFlashTiming({
+                        flashScope: 1,
+                        flashColor: timing.color,
+                        flashDuration: timing.duration
+                    }, 1);
+                }
+            }
+            const flashWasActive = editorSelf._previewFlashActive();
+            editorSelf._stepPreviewFlash();
+            effekseerContext.update();
+            currentFrame++;
+            return flashWasActive || editorSelf._previewFlashActive();
+        };
 
         const render = () => {
             if (!isPlaying || !effekseerContext || !gl) {
@@ -3696,19 +3943,21 @@ class DatabaseAnimationEditor {
 
             // Update Effekseer at fixed 60 FPS
             let updatesThisFrame = 0;
+            let redrawBackground = false;
             while (accumulator >= fixedTimeStep && updatesThisFrame < 5) {
-                // Play sound effects for this frame BEFORE incrementing
-                playSE(currentFrame);
-
-                effekseerContext.update();
+                const tickNeedsRedraw = advanceEffekseerTick();
+                redrawBackground = redrawBackground || tickNeedsRedraw;
                 accumulator -= fixedTimeStep;
-                currentFrame++;
                 updatesThisFrame++;
             }
 
             // If we're way behind, just reset
             if (accumulator > fixedTimeStep * 5) {
                 accumulator = 0;
+            }
+            if (redrawBackground && editorSelf._previewBgCanvas) {
+                const previewCtx = editorSelf._previewBgCanvas.getContext('2d');
+                if (previewCtx) editorSelf._drawPreviewBackground(previewCtx, editorSelf._previewBgCanvas);
             }
 
             renderFrameCount++;
@@ -3759,37 +4008,41 @@ class DatabaseAnimationEditor {
 
             // Draw effects
             effekseerContext.beginDraw();
-            if (handle && handle.exists) {
-                if (renderFrameCount === 1) {
-                    console.debug('[Effekseer Render] Drawing handle...');
-                    console.debug('[Effekseer Render] Handle location:',
-                        handle.location ? handle.location : 'not available');
-                }
-                effekseerContext.drawHandle(handle);
-
-                // Check for GL errors
-                const err = gl.getError();
-                if (err !== gl.NO_ERROR && renderFrameCount === 1) {
-                    console.error('[Effekseer Render] GL Error:', err);
-                }
-            } else {
-                // Handle no longer exists - effect has finished
-                if (renderFrameCount > 1) {
-                    console.debug('[Effekseer Render] Effect finished');
-                    // Check if repeat is enabled
-                    if (repeatCheckbox && repeatCheckbox.checked) {
-                        console.debug('[Effekseer Render] Repeat enabled, restarting...');
-                        // Restart the effect
-                        stop();
-                        setTimeout(() => play(), 100); // Small delay to ensure clean restart
-                    } else {
-                        console.debug('[Effekseer Render] Auto-stopping');
-                        stop();
+            let effectFinished = false;
+            try {
+                if (handle && handle.exists) {
+                    if (renderFrameCount === 1) {
+                        console.debug('[Effekseer Render] Drawing handle...');
+                        console.debug('[Effekseer Render] Handle location:',
+                            handle.location ? handle.location : 'not available');
                     }
-                    return;
+                    effekseerContext.drawHandle(handle);
+
+                    // Check for GL errors
+                    const err = gl.getError();
+                    if (err !== gl.NO_ERROR && renderFrameCount === 1) {
+                        console.error('[Effekseer Render] GL Error:', err);
+                    }
+                } else if (renderFrameCount > 1 && currentFrame > maxTimingFrames
+                        && !editorSelf._previewFlashActive()) {
+                    effectFinished = true;
                 }
+            } finally {
+                effekseerContext.endDraw();
             }
-            effekseerContext.endDraw();
+
+            if (effectFinished) {
+                console.debug('[Effekseer Render] Effect finished');
+                if (repeatCheckbox && repeatCheckbox.checked) {
+                    console.debug('[Effekseer Render] Repeat enabled, restarting...');
+                    stop();
+                    setTimeout(() => play(), 100);
+                } else {
+                    console.debug('[Effekseer Render] Auto-stopping');
+                    stop();
+                }
+                return;
+            }
 
             if (renderFrameCount === 1) {
                 console.debug('[Effekseer Render] First frame rendered successfully');
@@ -3814,7 +4067,7 @@ class DatabaseAnimationEditor {
                 if (!audioFile) return;
 
                 const audio = new Audio(RRAssetFiles.toUrl(audioFile.absolutePath));
-                audio.volume = (se.volume || 90) / 100;
+                audio.volume = (Number.isFinite(se.volume) ? se.volume : 90) / 100;
                 audio.playbackRate = (se.pitch || 100) / 100;
 
                 audio.play().catch(err => {
@@ -3835,6 +4088,14 @@ class DatabaseAnimationEditor {
             isPlaying = true;
             startTime = Date.now();
             currentFrame = 0;
+            renderFrameCount = 0;
+            lastTime = Date.now();
+            accumulator = 0;
+            editorSelf._resetPreviewFlash();
+            if (editorSelf._previewBgCanvas) {
+                const previewCtx = editorSelf._previewBgCanvas.getContext('2d');
+                if (previewCtx) editorSelf._drawPreviewBackground(previewCtx, editorSelf._previewBgCanvas);
+            }
 
             // Play effect
             handle = effekseerContext.play(effect);
@@ -3862,6 +4123,12 @@ class DatabaseAnimationEditor {
                 console.debug('Playing Effekseer effect with params:', { scale, speed, rotation, offsetX, offsetY });
             }
 
+            const redrawBackground = advanceEffekseerTick();
+            if (redrawBackground && editorSelf._previewBgCanvas) {
+                const previewCtx = editorSelf._previewBgCanvas.getContext('2d');
+                if (previewCtx) editorSelf._drawPreviewBackground(previewCtx, editorSelf._previewBgCanvas);
+            }
+
             playBtn.disabled = true;
             playBtn.style.opacity = '0.5';
             stopBtn.disabled = false;
@@ -3873,6 +4140,7 @@ class DatabaseAnimationEditor {
         // Stop button handler
         const stop = () => {
             isPlaying = false;
+            editorSelf._resetPreviewFlash();
 
             if (animationFrameId) {
                 cancelAnimationFrame(animationFrameId);
@@ -3920,6 +4188,7 @@ class DatabaseAnimationEditor {
                     animationFrameId = null;
                 }
                 isPlaying = false;
+                editorSelf._resetPreviewFlash();
                 if (effekseerContext) {
                     try { if (effect) effekseerContext.releaseEffect(effect); } catch (e) {}
                     try { effekseer.releaseContext(effekseerContext); } catch (e) {}

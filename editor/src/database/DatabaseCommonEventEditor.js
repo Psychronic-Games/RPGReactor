@@ -352,8 +352,9 @@ class DatabaseCommonEventEditor {
 
         const ECL = this._eventCommandListClass();
         const insertIndex = ECL.safeInsertionIndex(event.list, insertBeforeIndex);
-        const insertAndRefresh = (commands) => {
-            if (commands && commands.length > 0) {
+        const insertAndRefresh = (built) => {
+            const commands = ECL.commandBlock(built);
+            if (commands.length > 0) {
                 ECL.rebaseInsertIndent(commands, ECL.insertionIndent(event.list, insertIndex));
                 commands.forEach((cmd, i) => event.list.splice(insertIndex + i, 0, cmd));
                 this.selectedCommandIndices = [insertIndex];
@@ -452,11 +453,14 @@ class DatabaseCommonEventEditor {
                 337: ['showBattleAnimation', ShowBattleAnimationEditor],
                 339: ['forceAction', ForceActionEditor],
                 356: ['pluginCommand', PluginCommandEditor],
+                357: ['pluginCommand', PluginCommandEditor],
             };
 
             if (simpleEditorMap[code]) {
                 const [name, EditorClass] = simpleEditorMap[code];
-                singleInsert(this.getEditor(name, EditorClass));
+                const editor = this.getEditor(name, EditorClass);
+                if (code === 356 || code === 357) editor.show(null, insertAndRefresh);
+                else singleInsert(editor);
                 return;
             }
 
@@ -516,11 +520,17 @@ class DatabaseCommonEventEditor {
 
     editCommand(idx, event) {
         const tt = text => window.I18n ? window.I18n.tText(text) : text;
-        const command = event.list[idx];
+        let command = event.list[idx];
         if (!command || command.code === 0) return;
 
-        const code = command.code;
         const ECL = this._eventCommandListClass();
+        if (command.code === 657) {
+            const range = ECL.contiguousBlockRange(event.list, idx, 357, 657);
+            if (!range) return;
+            idx = range.start;
+            command = event.list[idx];
+        }
+        const code = command.code;
         const refreshList = () => {
             this.persistEvent();
             const container = document.getElementById('common-event-command-list');
@@ -1042,7 +1052,19 @@ class DatabaseCommonEventEditor {
         }
 
         // Plugin Command (356, 357)
-        if (code === 356 || code === 357) { singleReplace(this.getEditor('pluginCommand', PluginCommandEditor)); return; }
+        if (code === 356 || code === 357) {
+            const range = code === 357
+                ? ECL.contiguousBlockRange(event.list, idx, 357, 657)
+                : { start: idx, end: idx };
+            const continuationCommands = range
+                ? event.list.slice(range.start + 1, range.end + 1) : [];
+            this.getEditor('pluginCommand', PluginCommandEditor).show(command, commands => {
+                if (!ECL.commandBlock(commands).length) return;
+                ECL.replaceContiguousBlock(event.list, idx, commands, code, 657);
+                refreshList();
+            }, { continuationCommands });
+            return;
+        }
 
         // Fallback: raw JSON editor for unrecognized codes
         this.editCommandRawJSON(command, idx, event);
@@ -1053,6 +1075,10 @@ class DatabaseCommonEventEditor {
      */
     findParentCommandIndex(idx, event) {
         const code = event.list[idx].code;
+        if (code === 657) {
+            const ECL = this._eventCommandListClass();
+            return ECL.contiguousBlockRange(event.list, idx, 357, 657)?.start ?? idx;
+        }
         const parentCodes = { 401: 101, 405: 105, 408: 108, 655: 355 };
         const parentCode = parentCodes[code];
         if (!parentCode) return idx;
@@ -1080,7 +1106,8 @@ class DatabaseCommonEventEditor {
             602: 301,  // Battle Processing  (if escape/loss)
             603: 301,  // Battle Processing  (if lose)
             604: 301,  // Battle Processing  (end-battle)
-            655: 355   // Script  (additional line)
+            655: 355,  // Script  (additional line)
+            657: 357   // Plugin Command  (argument display)
         };
     }
 
@@ -1094,7 +1121,8 @@ class DatabaseCommonEventEditor {
             105: [405],
             108: [408],
             205: [505],
-            355: [655]
+            355: [655],
+            357: [657]
         };
     }
 
@@ -1316,14 +1344,11 @@ class DatabaseCommonEventEditor {
         }
         const selectedIndex = selected.length > 0 ? Math.max(...selected) : -1;
         let insertAt = selectedIndex >= 0 ? selectedIndex + 1 : event.list.length - 1;
-        if (typeof EventCommandList !== 'undefined' && EventCommandList.safeInsertionIndex) {
-            insertAt = EventCommandList.safeInsertionIndex(event.list, insertAt);
-        }
+        const ECL = this._eventCommandListClass();
+        insertAt = ECL.safeInsertionIndex(event.list, insertAt);
         const pasted = commands.map(command => JSON.parse(JSON.stringify(command)));
-        if (typeof EventCommandList !== 'undefined' && EventCommandList.rebaseInsertIndent) {
-            const baseIndent = EventCommandList.insertionIndent(event.list, insertAt);
-            EventCommandList.rebaseInsertIndent(pasted, baseIndent);
-        }
+        const baseIndent = ECL.insertionIndent(event.list, insertAt);
+        ECL.rebaseInsertIndent(pasted, baseIndent);
         pasted.forEach((cmd, i) => {
             event.list.splice(insertAt + i, 0, cmd);
         });

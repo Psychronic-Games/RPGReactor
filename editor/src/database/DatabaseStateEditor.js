@@ -97,66 +97,54 @@ class DatabaseStateEditor {
         durationSection.innerHTML = `
             <div class="database-section-header">${tt('Duration')}</div>
             <div class="database-section-content">
-                <div class="form-row">
-                    <div class="form-group-fixed">
-                        <label class="database-field-label">${tt('Auto-Remove:')}</label>
-                        <select class="database-field-value" style="width: 130px;" data-field="autoRemovalTiming" data-state-id="${state.id}" id="state-auto-remove-${state.id}">
+                <div class="state-duration-form">
+                    <label class="state-duration-row">
+                        <select class="database-field-value" data-field="autoRemovalTiming" data-state-id="${state.id}" id="state-auto-remove-${state.id}">
                             ${removalNames.map((name, idx) => `<option value="${idx}" ${state.autoRemovalTiming === idx ? 'selected' : ''}>${name}</option>`).join('')}
                         </select>
-                    </div>
-                </div>
-                <div id="state-turns-row-${state.id}" style="${showTurns ? '' : 'display: none;'}">
-                    <div class="form-row">
-                        <div class="form-group-fixed">
-                            <label class="database-field-label">${tt('Min Turns:')}</label>
+                        <span>${tt('Auto-Remove:')}</span>
+                    </label>
+                    <div id="state-turns-row-${state.id}" class="state-duration-dependent" style="${showTurns ? '' : 'display: none;'}">
+                        <label class="state-duration-row">
                             <input type="number" class="database-field-value database-field-value-small" value="${this.escapeHTML(state.minTurns || 1)}" min="1" data-field="minTurns" data-state-id="${state.id}">
-                        </div>
-                        <div class="form-group-fixed">
-                            <label class="database-field-label">${tt('Max Turns:')}</label>
+                            <span>${tt('Min Turns:')}</span>
+                        </label>
+                        <label class="state-duration-row">
                             <input type="number" class="database-field-value database-field-value-small" value="${this.escapeHTML(state.maxTurns || 1)}" min="1" data-field="maxTurns" data-state-id="${state.id}">
-                        </div>
+                            <span>${tt('Max Turns:')}</span>
+                        </label>
                     </div>
-                </div>
-                <div class="form-row">
-                    <div class="form-group-fixed">
-                        <label class="database-field-label" style="width: auto;">${tt('Remove by Damage:')}</label>
+                    <label class="state-duration-row state-duration-check-row">
                         <input type="checkbox" class="system-checkbox" ${state.removeByDamage ? 'checked' : ''} data-field="removeByDamage" data-state-id="${state.id}" id="state-rbd-${state.id}">
-                    </div>
-                </div>
-                <div id="state-chance-row-${state.id}" style="${state.removeByDamage ? '' : 'display: none;'}">
-                    <div class="form-row" style="margin-left: 20px;">
-                        <div class="form-group-fixed">
-                            <label class="database-field-label">${tt('Chance by Damage:')}</label>
+                        <span>${tt('Remove by Damage:')}</span>
+                    </label>
+                    <div id="state-chance-row-${state.id}" class="state-duration-dependent" style="${state.removeByDamage ? '' : 'display: none;'}">
+                        <label class="state-duration-row">
+                            <span class="state-duration-number">
                             <input type="number" class="database-field-value database-field-value-small" value="${this.escapeHTML(state.chanceByDamage != null ? state.chanceByDamage : 100)}" min="0" max="100" data-field="chanceByDamage" data-state-id="${state.id}">
-                            <span style="color: var(--color-text-muted); margin-left: 4px;">%</span>
-                        </div>
+                                <span>%</span>
+                            </span>
+                            <span>${tt('Chance by Damage:')}</span>
+                        </label>
                     </div>
-                </div>
-                <div class="form-row">
-                    <div class="form-group-fixed">
-                        <label class="database-field-label" style="width: auto;">${tt('Remove at Battle End:')}</label>
+                    <label class="state-duration-row state-duration-check-row">
                         <input type="checkbox" class="system-checkbox" ${state.removeAtBattleEnd ? 'checked' : ''} data-field="removeAtBattleEnd" data-state-id="${state.id}">
-                    </div>
-                </div>
-                <div class="form-row">
-                    <div class="form-group-fixed">
-                        <label class="database-field-label" style="width: auto;">${tt('Remove by Walking:')}</label>
+                        <span>${tt('Remove at Battle End:')}</span>
+                    </label>
+                    <label class="state-duration-row state-duration-check-row">
                         <input type="checkbox" class="system-checkbox" ${state.removeByWalking ? 'checked' : ''} data-field="removeByWalking" data-state-id="${state.id}" id="state-rbw-${state.id}">
-                    </div>
-                </div>
-                <div id="state-steps-row-${state.id}" style="${state.removeByWalking ? '' : 'display: none;'}">
-                    <div class="form-row" style="margin-left: 20px;">
-                        <div class="form-group-fixed">
-                            <label class="database-field-label">${tt('Steps to Remove:')}</label>
+                        <span>${tt('Remove by Walking:')}</span>
+                    </label>
+                    <div id="state-steps-row-${state.id}" class="state-duration-dependent" style="${state.removeByWalking ? '' : 'display: none;'}">
+                        <label class="state-duration-row">
                             <input type="number" class="database-field-value database-field-value-small" value="${this.escapeHTML(state.stepsToRemove || 100)}" min="0" data-field="stepsToRemove" data-state-id="${state.id}">
-                        </div>
+                            <span>${tt('Steps to Remove:')}</span>
+                        </label>
                     </div>
-                </div>
-                <div class="form-row">
-                    <div class="form-group-fixed">
-                        <label class="database-field-label" style="width: auto;">${tt('Remove by Restriction:')}</label>
+                    <label class="state-duration-row state-duration-check-row">
                         <input type="checkbox" class="system-checkbox" ${state.removeByRestriction ? 'checked' : ''} data-field="removeByRestriction" data-state-id="${state.id}">
-                    </div>
+                        <span>${tt('Remove by Restriction:')}</span>
+                    </label>
                 </div>
             </div>
         `;
@@ -168,21 +156,22 @@ class DatabaseStateEditor {
         messagesSection.innerHTML = `
             <div class="database-section-header">${tt('Messages')}</div>
             <div class="database-section-content">
-                <div class="form-row" style="margin-bottom: 8px;">
-                    <label class="database-field-label" style="min-width: 140px;">${tt('Actor Afflicted:')}</label>
-                    <input type="text" class="database-field-value" style="flex: 1;" value="${this.escapeHTML(state.message1 || '')}" data-field="message1" data-state-id="${state.id}">
+                <div class="state-message-help"><code>%1</code><span>= ${tt('Actor')} / ${tt('Enemy')} ${tt('Name')}</span></div>
+                <div class="state-message-row">
+                    <input id="state-message1-${state.id}" type="text" class="database-field-value" value="${this.escapeHTML(state.message1 || '')}" data-field="message1" data-state-id="${state.id}">
+                    <label for="state-message1-${state.id}" class="database-field-label">${tt('Actor Afflicted:')}</label>
                 </div>
-                <div class="form-row" style="margin-bottom: 8px;">
-                    <label class="database-field-label" style="min-width: 140px;">${tt('Enemy Afflicted:')}</label>
-                    <input type="text" class="database-field-value" style="flex: 1;" value="${this.escapeHTML(state.message2 || '')}" data-field="message2" data-state-id="${state.id}">
+                <div class="state-message-row">
+                    <input id="state-message2-${state.id}" type="text" class="database-field-value" value="${this.escapeHTML(state.message2 || '')}" data-field="message2" data-state-id="${state.id}">
+                    <label for="state-message2-${state.id}" class="database-field-label">${tt('Enemy Afflicted:')}</label>
                 </div>
-                <div class="form-row" style="margin-bottom: 8px;">
-                    <label class="database-field-label" style="min-width: 140px;">${tt('State Persists:')}</label>
-                    <input type="text" class="database-field-value" style="flex: 1;" value="${this.escapeHTML(state.message3 || '')}" data-field="message3" data-state-id="${state.id}">
+                <div class="state-message-row">
+                    <input id="state-message3-${state.id}" type="text" class="database-field-value" value="${this.escapeHTML(state.message3 || '')}" data-field="message3" data-state-id="${state.id}">
+                    <label for="state-message3-${state.id}" class="database-field-label">${tt('State Persists:')}</label>
                 </div>
-                <div class="form-row">
-                    <label class="database-field-label" style="min-width: 140px;">${tt('State Removed:')}</label>
-                    <input type="text" class="database-field-value" style="flex: 1;" value="${this.escapeHTML(state.message4 || '')}" data-field="message4" data-state-id="${state.id}">
+                <div class="state-message-row">
+                    <input id="state-message4-${state.id}" type="text" class="database-field-value" value="${this.escapeHTML(state.message4 || '')}" data-field="message4" data-state-id="${state.id}">
+                    <label for="state-message4-${state.id}" class="database-field-label">${tt('State Removed:')}</label>
                 </div>
             </div>
         `;
@@ -232,8 +221,7 @@ class DatabaseStateEditor {
             <table class="traits-table" id="state-traits-table-${state.id}">
                 <thead>
                     <tr>
-                        <th style="width: 4px; padding: 0;"></th>
-                        <th>${tt('Type')}</th>
+                        <th colspan="2">${tt('Type')}</th>
                         <th>${tt('Content')}</th>
                     </tr>
                 </thead>

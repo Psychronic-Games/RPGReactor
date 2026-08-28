@@ -23,11 +23,19 @@
 
     let fs = null;
     let path = null;
+    let pathToFileURL = null;
+    let hostAssetUrl = null;
     try {
         fs = require('fs');
         path = require('path');
     } catch (error) {
         fs = null;
+        path = null;
+    }
+    try {
+        pathToFileURL = require('url').pathToFileURL;
+    } catch (error) {
+        pathToFileURL = null;
     }
 
     const HEADER_BYTES = 16;
@@ -53,7 +61,42 @@
     const urlByFile = new Map();    // encrypted file path -> { mtimeMs, size, url }
 
     function fileUrl(filePath) {
-        return 'file://' + String(filePath).replace(/\\/g, '/');
+        const raw = String(filePath);
+        if (hostAssetUrl) return hostAssetUrl(raw);
+        const nativeWindows = typeof process !== 'undefined' && process.platform === 'win32';
+        const drivePath = /^[A-Za-z]:[\\/]/.test(raw);
+        const backslashUnc = /^\\\\[^\\]/.test(raw);
+        const forwardSlashUnc = /^\/\/[^/]/.test(raw);
+        const windowsPath = drivePath || backslashUnc || (nativeWindows && forwardSlashUnc);
+        if (pathToFileURL) {
+            try {
+                return windowsPath
+                    ? pathToFileURL(raw, { windows: true }).href
+                    : pathToFileURL(raw).href;
+            } catch (error) {
+                // Fall through for restricted hosts or paths rejected by Node.
+            }
+        }
+
+        const encodePath = value => encodeURI(value)
+            .replace(/#/g, '%23')
+            .replace(/\?/g, '%3F');
+        let normalized = raw.replace(/\\/g, '/');
+        let href;
+        if (windowsPath && normalized.startsWith('//')) {
+            const pathStart = normalized.indexOf('/', 2);
+            const host = pathStart < 0 ? normalized.slice(2) : normalized.slice(2, pathStart);
+            const pathname = pathStart < 0 ? '/' : normalized.slice(pathStart);
+            href = 'file://' + host + encodePath(pathname);
+        } else {
+            if (/^[A-Za-z]:\//.test(normalized)) normalized = '/' + normalized;
+            href = 'file://' + encodePath(normalized);
+        }
+        try {
+            return typeof URL === 'function' ? new URL(href).href : href;
+        } catch (error) {
+            return href;
+        }
     }
 
     /** The project directory an asset belongs to: the nearest ancestor with data/System.json. */
@@ -118,6 +161,51 @@
             key = null;
         }
         if (!key) key = recoverKey(projectRoot);
+        keyByProject.set(projectRoot, key);
+        return key;
+    }
+
+    async function recoverKeyAsync(projectRoot) {
+        if (!fs || typeof fs.readFileAsync !== 'function') return null;
+        const probeDirs = ['img/system', 'img/tilesets', 'img/characters', 'img/pictures', 'img/faces'];
+        for (const rel of probeDirs) {
+            const dir = path.join(projectRoot, rel);
+            let entries;
+            try {
+                entries = fs.readdirSync(dir);
+            } catch (error) {
+                continue;
+            }
+            const name = entries.find(entry => /\.(png_|rpgmvp)$/i.test(entry));
+            if (!name) continue;
+            try {
+                const value = await fs.readFileAsync(path.join(dir, name));
+                const bytes = value instanceof Uint8Array ? value : new Uint8Array(value);
+                if (bytes.length < HEADER_BYTES * 2) continue;
+                const key = new Uint8Array(HEADER_BYTES);
+                for (let i = 0; i < HEADER_BYTES; i++) {
+                    key[i] = bytes[HEADER_BYTES + i] ^ PNG_HEADER[i];
+                }
+                return key;
+            } catch (error) {
+                continue;
+            }
+        }
+        return null;
+    }
+
+    async function keyForAsync(projectRoot) {
+        const cached = keyByProject.get(projectRoot);
+        if (cached) return cached;
+        let key = null;
+        try {
+            const system = JSON.parse(
+                fs.readFileSync(path.join(projectRoot, 'data', 'System.json'), 'utf8'));
+            key = keyFromHex(system.encryptionKey);
+        } catch (error) {
+            key = null;
+        }
+        if (!key) key = await recoverKeyAsync(projectRoot);
         keyByProject.set(projectRoot, key);
         return key;
     }
@@ -218,6 +306,42 @@
         return fileUrl(filePath);
     }
 
+    async function dataUrlForAsync(encryptedPath, mime) {
+        const direct = dataUrlFor(encryptedPath, mime);
+        if (direct) return direct;
+        if (!fs || typeof fs.readFileAsync !== 'function') return null;
+        const projectRoot = projectRootFor(encryptedPath);
+        const key = projectRoot ? await keyForAsync(projectRoot) : null;
+        if (!key) return null;
+        try {
+            const value = await fs.readFileAsync(encryptedPath);
+            const bytes = value instanceof Uint8Array ? value : new Uint8Array(value);
+            if (bytes.length <= HEADER_BYTES) return null;
+            return 'data:' + mime + ';base64,'
+                + Buffer.from(decrypt(bytes, key)).toString('base64');
+        } catch (error) {
+            return null;
+        }
+    }
+
+    async function resolveAssetUrlAsync(filePath) {
+        if (!fs || !filePath) return fileUrl(filePath);
+        try {
+            if (fs.existsSync(filePath)) return fileUrl(filePath);
+            const ext = path.extname(filePath).toLowerCase();
+            const encrypted = encryptedPathFor(filePath);
+            if (encrypted) return await dataUrlForAsync(encrypted, MIME[ext]) || fileUrl(filePath);
+            const match = caseInsensitivePath(filePath);
+            if (match?.plain) return fileUrl(match.plain);
+            if (match?.encrypted) {
+                return await dataUrlForAsync(match.encrypted, MIME[ext]) || fileUrl(filePath);
+            }
+        } catch (error) {
+            // Fall through to the host or desktop URL.
+        }
+        return fileUrl(filePath);
+    }
+
     function readPrefix(target, limit) {
         const fd = fs.openSync(target, 'r');
         try {
@@ -296,7 +420,20 @@
         return null;
     }
 
-    const api = { resolveAssetUrl, assetExists, readAssetBytes, readAssetBytesAsync };
+    function useFileSystem(nextFs, nextPath, nextAssetUrl = null) {
+        fs = nextFs || fs;
+        path = nextPath || path;
+        hostAssetUrl = typeof nextAssetUrl === 'function' ? nextAssetUrl : null;
+    }
+
+    const api = {
+        resolveAssetUrl,
+        resolveAssetUrlAsync,
+        assetExists,
+        readAssetBytes,
+        readAssetBytesAsync,
+        useFileSystem
+    };
     root.RREncryptedAssets = api;
 
     // WebHost overwrites this with its own resolver when the editor runs in a

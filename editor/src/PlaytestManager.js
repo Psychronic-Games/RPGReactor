@@ -90,6 +90,7 @@ class PlaytestManager {
 
     launchPlaytestWindow(projectPath, mode) {
         if (mode === undefined) mode = 'test';
+        const tt = text => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
 
         this.lastLaunchError = null;
         if (this.projectManager?.ensureProjectPackageMetadata) {
@@ -98,7 +99,7 @@ class PlaytestManager {
                 this.lastLaunchError = packageResult.error;
                 console.error('Cannot start playtest:', packageResult.error);
                 if (typeof window !== 'undefined' && typeof window.alert === 'function') {
-                    window.alert(`Cannot start playtest.\n\n${packageResult.error}`);
+                    window.alert(`${tt('Cannot start playtest.')}\n\n${packageResult.error}`);
                 }
                 return false;
             }

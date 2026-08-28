@@ -150,8 +150,12 @@ class Database3DEditor {
         };
     }
 
-    _t(text) {
-        return window.I18n ? window.I18n.tText(text) : text;
+    _t(text, params = {}) {
+        let value = window.I18n ? window.I18n.tText(text) : text;
+        for (const [key, replacement] of Object.entries(params)) {
+            value = value.split(`{${key}}`).join(String(replacement));
+        }
+        return value;
     }
 
     _project() {
@@ -3446,7 +3450,10 @@ class Database3DEditor {
             this._refreshMotionsButton();
             if (status) {
                 const total = meshes.reduce((sum, mesh) => sum + mesh.positions.length / 3, 0);
-                status.textContent = `${this._t('Rig bound')} — ${bones.length} bones, ${total} vertices`;
+                status.textContent = this._t('Rig bound — {bones} bones, {vertices} vertices', {
+                    bones: bones.length,
+                    vertices: total
+                });
             }
         }, 30);
     }

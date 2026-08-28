@@ -98,6 +98,8 @@ test('every trait section uses the shared chip buttons', () => {
         'DatabaseArmorEditor.js', 'DatabaseStateEditor.js', 'DatabaseEnemyEditor.js'];
     for (const name of editors) {
         const editorSource = source('database', name);
+        assert.match(editorSource, /<th colspan="2">\$\{tt\('Type'\)\}<\/th>/, name);
+        assert.doesNotMatch(editorSource, /<th style="width: [34]px;[^>]*><\/th>\s*<th>\$\{tt\('Type'\)\}<\/th>/, name);
         assert.match(editorSource, /class="trait-btn-add rr-btn-chip">/, name);
         assert.match(editorSource, /class="trait-btn-edit rr-btn-chip" disabled>/, name);
         assert.match(editorSource, /class="trait-btn-copy rr-btn-chip" disabled>/, name);
@@ -105,6 +107,16 @@ test('every trait section uses the shared chip buttons', () => {
         assert.match(editorSource, /class="trait-btn-delete rr-btn-chip" disabled>/, name);
         assert.doesNotMatch(editorSource, /trait-btn-\w+" style="/, name);
     }
+});
+
+test('state messages explain their format token and duration controls align on the left', () => {
+    const state = source('database', 'DatabaseStateEditor.js');
+    const styles = source('..', 'css', 'styles.css');
+    assert.match(state, /class="state-message-help"><code>%1<\/code>/);
+    assert.match(state, /= \$\{tt\('Actor'\)\} \/ \$\{tt\('Enemy'\)\} \$\{tt\('Name'\)\}/);
+    assert.match(state, /class="state-duration-row state-duration-check-row">\s*<input type="checkbox"/);
+    assert.match(styles, /\.state-duration-row\s*\{[^}]*grid-template-columns: 130px minmax\(0, 1fr\)/s);
+    assert.match(styles, /\.state-message-row\s*\{[^}]*grid-template-columns: minmax\(0, 1fr\) 140px/s);
 });
 
 test('the Level 999 value label is translated in every locale', () => {

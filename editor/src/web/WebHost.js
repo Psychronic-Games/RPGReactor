@@ -524,7 +524,12 @@
             }
             try { localStorage.setItem('rrWebBundleStamp', bundleStamp); } catch (error) { /* best effort */ }
             window.RPGReactorHost = this;
-            window.RPGReactorAssetUrl = filePath => this.assetUrl(filePath);
+            if (window.RREncryptedAssets?.useFileSystem) {
+                window.RREncryptedAssets.useFileSystem(this.fs, this.path, filePath => this.assetUrl(filePath));
+                window.RPGReactorAssetUrl = window.RREncryptedAssets.resolveAssetUrl;
+            } else {
+                window.RPGReactorAssetUrl = filePath => this.assetUrl(filePath);
+            }
             installFileUrlBridge(this);
             window.require = moduleName => {
                 if (moduleName === 'fs') return this.fs;

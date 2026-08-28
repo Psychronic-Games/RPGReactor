@@ -344,8 +344,8 @@ test('the key explains both halves of a pairing', () => {
     // A marking nobody can look up is a marking nobody can use.
     const source = fs.readFileSync(
         path.join(editorRoot, 'src', 'database', 'DatabaseTilesetEditor.js'), 'utf8');
-    assert.match(source, /\['3d-roof-wall', 'Wall capped with a roof \(Roof tool\)'\]/);
-    assert.match(source, /\['3d-roof-top', 'The roof another wall is capped with'\]/);
+    assert.match(source, /\['3d-roof-wall', tt\('Wall capped with a roof \(Roof tool\)'\)\]/);
+    assert.match(source, /\['3d-roof-top', tt\('The roof another wall is capped with'\)\]/);
     // And each key row needs a swatch, or it draws an empty box.
     assert.match(source, /case '3d-roof-wall':/);
     assert.match(source, /case '3d-roof-top':/);

@@ -62,6 +62,9 @@ class DatabaseEditorUI {
                     if (activeType === 'terms') this.showTermsEditor();
                 }
             });
+            window.addEventListener('rr-database-list-labels-changed', () => {
+                this._activeDatabaseList?.refresh();
+            });
         }
     }
 
@@ -71,6 +74,70 @@ class DatabaseEditorUI {
 
     _dbTitle(type, fallback = type) {
         return typeof window !== 'undefined' && window.I18n?.tDbType ? window.I18n.tDbType(type, fallback) : fallback;
+    }
+
+    editorNamesModule() {
+        return this.databaseManager?.editorNamesModule?.()
+            || (typeof globalThis !== 'undefined' ? globalThis.RREditorNames : null);
+    }
+
+    getEditorName(type, id) {
+        const names = this.editorNamesModule();
+        return names ? names.get(this.databaseManager?.data?.editorNames, type, id) : '';
+    }
+
+    setEditorName(type, id, value) {
+        const names = this.editorNamesModule();
+        if (!names || !names.SECTIONS.includes(type)) return '';
+        const before = names.get(this.databaseManager.data.editorNames, type, id);
+        this.databaseManager.data.editorNames = names.set(
+            this.databaseManager.data.editorNames || names.create(), type, id, value);
+        const after = names.get(this.databaseManager.data.editorNames, type, id);
+        if (after !== before) this._markDatabaseMutation();
+        return after;
+    }
+
+    getDatabaseListLabels() {
+        const value = this.callbacks.getDatabaseListLabels?.()
+            || (typeof window !== 'undefined' && window.reactor?.optionsManager?.getDatabaseListLabels?.())
+            || 'editorFirst';
+        return ['editorFirst', 'gameFirst', 'gameOnly'].includes(value) ? value : 'editorFirst';
+    }
+
+    databaseEntryLabels(entry, type) {
+        const gameName = String(entry?.name || '');
+        const editorName = this.getEditorName(type, entry?.id);
+        const unnamed = this._t('common.unnamed');
+        const mode = this.getDatabaseListLabels();
+        if (mode === 'gameOnly' || !editorName) {
+            return { primary: gameName || unnamed, secondary: '', editorName };
+        }
+        if (mode === 'gameFirst') {
+            return { primary: gameName || unnamed, secondary: editorName, editorName };
+        }
+        return { primary: editorName, secondary: gameName, editorName };
+    }
+
+    refreshDatabaseListLabel(entry, type) {
+        const listEl = document.getElementById('database-list');
+        const item = Array.from(listEl?.querySelectorAll('.database-list-item') || [])
+            .find(el => el.dataset.entryId === String(entry?.id || ''));
+        if (!item) return;
+        const labels = this.databaseEntryLabels(entry, type);
+        item.dataset.entryName = labels.primary;
+        const nameSpan = item.querySelector('.database-list-name');
+        if (nameSpan) nameSpan.textContent = labels.primary;
+        let altSpan = item.querySelector('.database-list-alt');
+        if (labels.secondary) {
+            if (!altSpan) {
+                altSpan = document.createElement('span');
+                altSpan.className = 'database-list-alt';
+                item.insertBefore(altSpan, item.querySelector('.database-list-id'));
+            }
+            altSpan.textContent = labels.secondary;
+        } else {
+            altSpan?.remove();
+        }
     }
 
     _selectEntryMarkup(type) {
@@ -249,6 +316,7 @@ class DatabaseEditorUI {
         const applyBtn = document.getElementById('database-apply-btn');
 
         const cancelAndClose = () => {
+            if (this._databaseSaveInFlight) return;
             this.revertDatabaseSnapshot();
             this.closeDatabaseViewer();
         };
@@ -258,11 +326,27 @@ class DatabaseEditorUI {
 
         if (okBtn) {
             okBtn.onclick = async () => {
+                if (this._databaseSaveInFlight) return;
                 const projectPath = this.currentProject?.path;
                 if (projectPath) {
-                    const saved = await this.databaseManager.saveAllData(projectPath);
+                    this.setDatabaseSaveInFlight(true);
+                    let saved = false;
+                    try {
+                        saved = this.callbacks.saveProject
+                            ? await this.callbacks.saveProject()
+                            : await this.databaseManager.saveAllData(projectPath);
+                    } finally {
+                        this.setDatabaseSaveInFlight(false);
+                    }
                     if (!saved) {
-                        alert(tt('One or more database files could not be saved.'));
+                        // A multi-file save may have completed some writes. Keep
+                        // the live data dirty and make Cancel preserve it so the
+                        // user can retry instead of restoring a state no longer
+                        // guaranteed to match disk.
+                        this._dataSnapshot = JSON.stringify(this.databaseManager.data);
+                        if (!this.callbacks.saveProject) {
+                            alert(tt('One or more database files could not be saved.'));
+                        }
                         return;
                     }
                     this.updateStatus(this._t('db.saved'));
@@ -274,11 +358,23 @@ class DatabaseEditorUI {
 
         if (applyBtn) {
             applyBtn.onclick = async () => {
+                if (this._databaseSaveInFlight) return;
                 const projectPath = this.currentProject?.path;
                 if (projectPath) {
-                    const saved = await this.databaseManager.saveAllData(projectPath);
+                    this.setDatabaseSaveInFlight(true);
+                    let saved = false;
+                    try {
+                        saved = this.callbacks.saveProject
+                            ? await this.callbacks.saveProject()
+                            : await this.databaseManager.saveAllData(projectPath);
+                    } finally {
+                        this.setDatabaseSaveInFlight(false);
+                    }
                     if (!saved) {
-                        alert(tt('One or more database files could not be saved.'));
+                        this._dataSnapshot = JSON.stringify(this.databaseManager.data);
+                        if (!this.callbacks.saveProject) {
+                            alert(tt('One or more database files could not be saved.'));
+                        }
                         return;
                     }
                     this.updateStatus(this._t('db.saved'));
@@ -291,6 +387,14 @@ class DatabaseEditorUI {
                     }, 200);
                 }
             };
+        }
+    }
+
+    setDatabaseSaveInFlight(saving) {
+        this._databaseSaveInFlight = saving === true;
+        for (const id of ['database-close-btn', 'database-ok-btn', 'database-cancel-btn', 'database-apply-btn']) {
+            const button = document.getElementById(id);
+            if (button) button.disabled = this._databaseSaveInFlight;
         }
     }
 
@@ -535,7 +639,9 @@ class DatabaseEditorUI {
                 const query = filterText.toLowerCase();
                 filteredData = query ? data.filter(entry => {
                     const name = (entry.name || this._t('common.unnamed')).toLowerCase();
-                    return name.includes(query) || String(entry.id || '').includes(query);
+                    const editorName = this.getEditorName(type, entry.id).toLowerCase();
+                    return name.includes(query) || editorName.includes(query)
+                        || String(entry.id || '').includes(query);
                 }) : data;
                 if (options.resetSelection) {
                     selectedIds.clear();
@@ -551,17 +657,18 @@ class DatabaseEditorUI {
             const visibleData = filteredData.slice(renderedCount, end);
 
             visibleData.forEach(entry => {
+                const labels = this.databaseEntryLabels(entry, type);
                 const item = document.createElement('div');
                 item.className = 'database-list-item';
                 item.dataset.entryId = String(entry.id);
-                item.dataset.entryName = entry.name || this._t('common.unnamed');
+                item.dataset.entryName = labels.primary;
                 item.setAttribute('role', 'option');
                 item.setAttribute('aria-selected', String(selectedIds.has(entry.id)));
                 if (selectedIds.has(entry.id)) item.classList.add('selected');
 
                 const nameSpan = document.createElement('span');
                 nameSpan.className = 'database-list-name';
-                nameSpan.textContent = entry.name || this._t('common.unnamed');
+                nameSpan.textContent = labels.primary;
                 const idSpan = document.createElement('span');
                 idSpan.className = 'database-list-id';
                 idSpan.textContent = `#${entry.id}`;
@@ -570,9 +677,14 @@ class DatabaseEditorUI {
                     iconSpan.className = 'database-list-icon';
                     this.applyListIcon(iconSpan, entry, type);
                     item.appendChild(iconSpan);
-                    nameSpan.style.cssText = 'flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
                 }
                 item.appendChild(nameSpan);
+                if (labels.secondary) {
+                    const altSpan = document.createElement('span');
+                    altSpan.className = 'database-list-alt';
+                    altSpan.textContent = labels.secondary;
+                    item.appendChild(altSpan);
+                }
                 item.appendChild(idSpan);
 
                 item.addEventListener('click', event => {
@@ -640,11 +752,16 @@ class DatabaseEditorUI {
         };
 
         const undoStack = [];
-        const snapshotForUndo = () => undoStack.push(JSON.parse(JSON.stringify(this.databaseManager.data[type])));
+        const snapshotForUndo = () => undoStack.push({
+            entries: JSON.parse(JSON.stringify(this.databaseManager.data[type])),
+            editorNames: JSON.parse(JSON.stringify(this.databaseManager.data.editorNames))
+        });
         const performUndo = () => {
             if (undoStack.length === 0) return;
             listSession.mutationGeneration++;
-            this.databaseManager.data[type] = undoStack.pop();
+            const snapshot = undoStack.pop();
+            this.databaseManager.data[type] = snapshot.entries;
+            this.databaseManager.data.editorNames = snapshot.editorNames;
             this._markDatabaseMutation();
             refreshData();
             selectedIds.clear();
@@ -709,6 +826,8 @@ class DatabaseEditorUI {
             this.showChangeMaximumModal(title, type, this.databaseManager.getMaxEntries(type), newMax => {
                 const template = this.getDefaultTemplates()[type];
                 if (!template) return;
+                if (newMax === this.databaseManager.getMaxEntries(type)) return;
+                snapshotForUndo();
                 listSession.mutationGeneration++;
                 this.databaseManager.changeMaximum(type, newMax, template);
                 refreshData();
@@ -962,19 +1081,21 @@ class DatabaseEditorUI {
 
     writeDatabaseEntryClipboard(type, entries) {
         const sourceEntries = Array.isArray(entries) ? entries : [entries];
+        const editorNames = sourceEntries.map(entry => this.getEditorName(type, entry.id));
         const copiedEntries = sourceEntries.map(entry => {
             const copied = JSON.parse(JSON.stringify(entry));
             delete copied.id;
             return copied;
         });
-        this.listClipboard = { type, entries: copiedEntries, entry: copiedEntries[0] || null };
+        this.listClipboard = { type, entries: copiedEntries, entry: copiedEntries[0] || null, editorNames };
         let writePromise = Promise.resolve(true);
         if (typeof ReactorClipboard !== 'undefined') {
             writePromise = Promise.resolve(ReactorClipboard.write('databaseEntry', {
-                version: 2,
+                version: 3,
                 databaseType: type,
                 entries: copiedEntries,
                 entry: copiedEntries[0] || null,
+                editorNames,
                 sourceProjectName: this.currentProject?.name || null,
                 sourceProjectPath: this.currentProject?.path || null
             }));
@@ -994,7 +1115,9 @@ class DatabaseEditorUI {
                 delete entry.id;
                 return entry;
             });
-            this.listClipboard = { type, entries, entry: entries[0] };
+            const editorNames = entries.map((_, index) =>
+                typeof payload.editorNames?.[index] === 'string' ? payload.editorNames[index].trim() : '');
+            this.listClipboard = { type, entries, entry: entries[0], editorNames };
             return this.listClipboard;
         }
 
@@ -1111,6 +1234,7 @@ class DatabaseEditorUI {
             const pasted = JSON.parse(JSON.stringify(sourceEntry));
             pasted.id = targetId + index;
             targetArray[pasted.id] = pasted;
+            this.setEditorName(type, pasted.id, clipboard.editorNames?.[index] || '');
             return pasted;
         });
         this._markDatabaseMutation();
@@ -1131,6 +1255,11 @@ class DatabaseEditorUI {
         cloned.name = (cloned.name || this._t('common.unnamed')) + ` (${this._t('common.copy')})`;
         const newEntry = this.databaseManager.addEntry(type, cloned);
         if (newEntry) {
+            const editorName = this.getEditorName(type, entry.id);
+            if (editorName) {
+                this.setEditorName(type, newEntry.id,
+                    editorName + ` (${this._t('common.copy')})`);
+            }
             data.push(newEntry);
             if (this._activeDatabaseList?.type === type) {
                 this._activeDatabaseList.selectIds([newEntry.id], newEntry.id, false);
@@ -1226,7 +1355,7 @@ class DatabaseEditorUI {
             // Generic display for other types
             this.showGenericDetail(detailEl, entry, type);
         }
-        this.wireLiveDatabaseNameSync(detailEl, entry);
+        this.wireLiveDatabaseNameSync(detailEl, entry, type);
         if (window.I18n) window.I18n.applyText(detailEl);
     }
 
@@ -1253,9 +1382,9 @@ class DatabaseEditorUI {
         // them into %5C, which Chromium cannot read as a path separator, and
         // file:///E:/%5CGame%20Dev%5C... is ERR_INVALID_URL on every Windows
         // machine (the actor list showed no face icons there at all).
-        const imageUrl = p => isWeb && window.RPGReactorAssetUrl
+        const imageUrl = p => window.RPGReactorAssetUrl
             ? window.RPGReactorAssetUrl(p)
-            : encodeURI('file://' + String(p).replace(/\\/g, '/')).replace(/#/g, '%23');
+            : RRAssetFiles.toUrl(p);
         const SIZE = 20;
         if (type === 'actors') {
             if (!entry.faceName) return;
@@ -1333,24 +1462,39 @@ class DatabaseEditorUI {
         if (iconSpan) this.applyListIcon(iconSpan, entry, type);
     }
 
-    wireLiveDatabaseNameSync(detailEl, entry) {
+    wireLiveDatabaseNameSync(detailEl, entry, type) {
         const nameField = detailEl.querySelector('[data-field="name"]');
         if (!nameField || !entry) return;
 
         const syncName = () => {
             entry.name = nameField.value || '';
-            const listEl = document.getElementById('database-list');
-            const item = Array.from(listEl?.querySelectorAll('.database-list-item') || [])
-                .find(el => el.dataset.entryId === String(entry.id || ''));
-            if (!item) return;
-            const displayName = entry.name || this._t('common.unnamed');
-            item.dataset.entryName = displayName;
-            const nameSpan = item.querySelector('.database-list-name');
-            if (nameSpan) nameSpan.textContent = displayName;
+            this.refreshDatabaseListLabel(entry, type);
         };
 
         nameField.addEventListener('input', syncName);
         nameField.addEventListener('change', syncName);
+
+        const names = this.editorNamesModule();
+        const nameRow = nameField.closest('.db-row-cols');
+        if (!names?.SECTIONS.includes(type) || !nameRow) return;
+
+        const column = document.createElement('span');
+        column.className = 'db-col rr-editor-name-column';
+        const label = document.createElement('label');
+        label.textContent = this._t('db.editorName');
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.className = 'database-field-value rr-editor-name-input';
+        input.dataset.rrEditorName = type;
+        input.value = this.getEditorName(type, entry.id);
+        const syncEditorName = () => {
+            this.setEditorName(type, entry.id, input.value);
+            this.refreshDatabaseListLabel(entry, type);
+        };
+        input.addEventListener('input', syncEditorName);
+        input.addEventListener('change', syncEditorName);
+        column.append(label, input);
+        nameRow.appendChild(column);
     }
 
     /**
@@ -1394,7 +1538,7 @@ class DatabaseEditorUI {
         return globalThis.RR_LIMITS?.DATABASE_ENTRIES?.[type] || {
             actors: 9999, classes: 9999, skills: 9999, items: 9999,
             weapons: 9999, armors: 9999, enemies: 9999, troops: 9999,
-            states: 9999, animations: 1000, tilesets: 1000, commonEvents: 9999,
+            states: 9999, animations: 5000, tilesets: 1000, commonEvents: 9999,
             userInterfaces: 9999, elements: 512, skillTypes: 128, weaponTypes: 256,
             armorTypes: 256, equipTypes: 128
         }[type] || 0;
@@ -1415,6 +1559,7 @@ class DatabaseEditorUI {
         const blank = this.createBlankDatabaseEntry(type, id);
         if (!blank) return null;
         entries[id] = blank;
+        this.setEditorName(type, id, '');
         this._markDatabaseMutation();
         return blank;
     }
@@ -1645,11 +1790,10 @@ class DatabaseEditorUI {
                 const ctx = canvas.getContext('2d');
                 const img = new Image();
 
-                // Use file:// protocol for NW.js
                 const path = require('path');
                 // Add .png extension if not already present (RPG Maker stores names without extension)
                 const filename = entry.characterName.endsWith('.png') ? entry.characterName : entry.characterName + '.png';
-                const imgPath = 'file://' + path.join(this.currentProject.path, 'img', 'characters', filename).replace(/\\/g, '/');
+                const imgPath = RRAssetFiles.toUrl(path.join(this.currentProject.path, 'img', 'characters', filename));
 
                 console.debug('Loading character sprite:', imgPath);
 
@@ -1788,7 +1932,7 @@ class DatabaseEditorUI {
                 const faceImg = new Image();
 
                 const path = require('path');
-                const faceImgPath = 'file://' + path.join(this.currentProject.path, 'img', 'faces', entry.faceName + '.png').replace(/\\/g, '/');
+                const faceImgPath = RRAssetFiles.toUrl(path.join(this.currentProject.path, 'img', 'faces', entry.faceName + '.png'));
 
                 console.debug('Loading face graphic:', faceImgPath);
 
@@ -1857,7 +2001,7 @@ class DatabaseEditorUI {
                 const svImg = new Image();
 
                 const path = require('path');
-                const svImgPath = 'file://' + path.join(this.currentProject.path, 'img', 'sv_actors', entry.battlerName + '.png').replace(/\\/g, '/');
+                const svImgPath = RRAssetFiles.toUrl(path.join(this.currentProject.path, 'img', 'sv_actors', entry.battlerName + '.png'));
 
                 console.debug('Loading SV battler:', svImgPath);
 
@@ -1968,9 +2112,8 @@ class DatabaseEditorUI {
             const ctx = canvas.getContext('2d');
             const img = new Image();
 
-            // Use file:// protocol for NW.js
             const path = require('path');
-            const imgPath = 'file://' + path.join(this.currentProject.path, 'img', 'system', 'IconSet.png');
+            const imgPath = RRAssetFiles.toUrl(path.join(this.currentProject.path, 'img', 'system', 'IconSet.png'));
 
             img.onload = () => {
                 // IconSet is 16 icons wide, each 32x32
@@ -2196,6 +2339,7 @@ class DatabaseEditorUI {
 
         const input = document.createElement('input');
         input.type = 'number';
+        input.className = 'rr-database-maximum-input';
         input.min = '1';
         input.max = String(maximum);
         input.step = '1';
@@ -2449,6 +2593,7 @@ class DatabaseEditorUI {
         const browser = RRPickerIndex.createBrowser({
             files,
             selectedName: currentFile,
+            folders: true,
             searchPlaceholder: tt('Search files...'),
             onSelect: showPreview,
             // The graphic is optional: (None) leads the file list.

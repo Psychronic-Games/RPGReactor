@@ -580,7 +580,8 @@ class EventPageEditor {
             return;
         }
 
-        const imgPath = 'file://' + path.join(currentProject.path, 'img', 'tilesets', tilesetName + '.png').replace(/\\/g, '/');
+        const imgPath = RRAssetFiles.toUrl(
+            path.join(currentProject.path, 'img', 'tilesets', tilesetName + '.png'));
 
         const img = new Image();
         img.onload = () => {

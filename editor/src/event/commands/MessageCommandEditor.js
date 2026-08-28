@@ -584,6 +584,7 @@ class MessageCommandEditor {
         const browser = RRPickerIndex.createBrowser({
             files,
             selectedName: selectedFilename,
+            folders: true,
             itemClass: 'file-list-item',
             searchPlaceholder: this._t('Search facesets...'),
             onSelect: filename => {

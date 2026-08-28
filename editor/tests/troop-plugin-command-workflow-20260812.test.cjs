@@ -35,6 +35,21 @@ function makeEditor(DatabaseTroopEditor, PluginCommandEditorStub, pickedCode) {
         safeInsertionIndex: (list, index) => index,
         insertionIndent: () => 2,
         rebaseInsertIndent: (commands, indent) => commands.forEach(command => { command.indent = indent; }),
+        commandBlock: value => Array.isArray(value) ? value : value ? [value] : [],
+        contiguousBlockRange(list, index, parentCode, continuationCode) {
+            let start = index;
+            while (start > 0 && list[start].code === continuationCode) start--;
+            if (list[start].code !== parentCode) return null;
+            let end = start;
+            while (list[end + 1]?.code === continuationCode) end++;
+            return { start, end };
+        },
+        replaceContiguousBlock(list, index, replacement, parentCode, continuationCode) {
+            const range = this.contiguousBlockRange(list, index, parentCode, continuationCode);
+            const commands = this.commandBlock(replacement);
+            this.rebaseInsertIndent(commands, list[range.start].indent || 0);
+            list.splice(range.start, range.end - range.start + 1, ...commands);
+        },
         generatedCommand: () => null,
         pictureEditorFor: () => null,
     });

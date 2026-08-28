@@ -12,7 +12,7 @@ const RR_LANGUAGES = [
     { id: 'zh-Hant', name: 'Traditional Chinese', nativeName: '繁體中文', flag: '🇹🇼' },
     { id: 'zh-Hans', name: 'Simplified Chinese', nativeName: '简体中文', flag: '🇨🇳' },
     { id: 'ru', name: 'Russian', nativeName: 'Русский', flag: '🇷🇺' },
-    { id: 'pt', name: 'Portuguese', nativeName: 'Português', flag: '🇵🇹' },
+    { id: 'pt', name: 'Portuguese (Brazil)', nativeName: 'Português (Brasil)', flag: '🇧🇷' },
     { id: 'de', name: 'German', nativeName: 'Deutsch', flag: '🇩🇪' },
     { id: 'fr', name: 'French', nativeName: 'Français', flag: '🇫🇷' },
     { id: 'el', name: 'Greek', nativeName: 'Ελληνικά', flag: '🇬🇷' },
@@ -356,6 +356,8 @@ const RR_I18N_STRINGS = {
         'common.duplicate': 'Duplicate',
         'common.unnamed': 'Unnamed',
 
+        'db.editorName': 'Editor Name',
+
         'options.title': 'Options',
         'options.appearance': 'Appearance',
         'options.language': 'Language',
@@ -368,6 +370,11 @@ const RR_I18N_STRINGS = {
         'options.editor': 'Editor',
         'options.animateAutotiles': 'Animate A1 Autotiles',
         'options.animateAutotilesNote': 'Preview A1 water and waterfall animation in the map editor.',
+        'options.databaseListLabels': 'Database List Labels',
+        'options.databaseListLabelsEditorFirst': 'Editor Name First',
+        'options.databaseListLabelsGameFirst': 'Game Name First',
+        'options.databaseListLabelsGameOnly': 'Game Name Only',
+        'options.databaseListLabelsNote': 'Choose which names appear in database lists. List order does not change.',
 
         'about.title': 'About RPG Reactor',
         'about.version': `RPG Reactor v${RR_APP_VERSION}`,
@@ -8242,6 +8249,45 @@ for (const [locale, translations] of Object.entries(RR_EDITOR_PREFERENCE_TRANSLA
     Object.assign(RR_I18N_STRINGS[locale], translations);
 }
 
+const RR_EDITOR_NAME_TRANSLATIONS = {
+    ja: 'エディター名',
+    es: 'Nombre del editor',
+    'zh-Hant': '編輯器名稱',
+    'zh-Hans': '编辑器名称',
+    ru: 'Имя в редакторе',
+    pt: 'Nome no editor',
+    de: 'Editorname',
+    fr: 'Nom dans l’éditeur',
+    el: 'Όνομα επεξεργαστή',
+    ko: '에디터 이름',
+    ar: 'اسم المحرر',
+    it: 'Nome nell’editor',
+    pl: 'Nazwa w edytorze',
+    id: 'Nama editor',
+    vi: 'Tên trong trình biên tập',
+    th: 'ชื่อในตัวแก้ไข',
+    tr: 'Düzenleyici adı'
+};
+for (const [locale, value] of Object.entries(RR_EDITOR_NAME_TRANSLATIONS)) {
+    RR_I18N_STRINGS[locale]['db.editorName'] = value;
+}
+
+// New preferences can ship before deep translations are available. Keep every
+// locale table structurally complete while I18nManager.t supplies English.
+for (const language of RR_LANGUAGES) {
+    if (language.id === 'en') continue;
+    for (const key of [
+        'options.databaseListLabels',
+        'options.databaseListLabelsEditorFirst',
+        'options.databaseListLabelsGameFirst',
+        'options.databaseListLabelsGameOnly',
+        'options.databaseListLabelsNote',
+        'db.editorName'
+    ]) {
+        RR_I18N_STRINGS[language.id][key] ||= RR_I18N_STRINGS.en[key];
+    }
+}
+
 const RR_DATABASE_CLIPBOARD_TRANSLATIONS = {
     ja: 'クリップボードに互換性のあるデータベース項目がありません。',
     es: 'No hay una entrada de base de datos compatible en el portapapeles.',
@@ -8757,7 +8803,7 @@ Object.assign(RR_TEXT_TRANSLATIONS['zh-Hans'], {
     'Reactor Advanced': 'Reactor 高级条件'
 });
 
-// The broad database/event/Forge pass is generated separately so this manager
+// The broad database/event/Forge catalog is stored separately so this manager
 // remains reviewable. It is loaded synchronously before I18nManager.js.
 const RR_DEEP_TRANSLATIONS = globalThis.RR_DEEP_TEXT_TRANSLATIONS || {};
 for (const [locale, translations] of Object.entries(RR_DEEP_TRANSLATIONS)) {
@@ -10362,7 +10408,22 @@ Object.assign(RR_I18N_STRINGS.tr, {
 
 // Short label for the resize anchor picker; the full sentence in
 // mapProps.resizeAnchor is attached to the control as its tooltip.
-Object.assign(RR_I18N_STRINGS.en, { 'mapProps.anchor': 'Anchor:' });
+Object.assign(RR_I18N_STRINGS.en, {
+    'workspace.grid': 'Grid',
+    'mapProps.anchor': 'Anchor:',
+    'mapProps.anchorTopLeft': 'Top-Left',
+    'mapProps.anchorTop': 'Top',
+    'mapProps.anchorTopRight': 'Top-Right',
+    'mapProps.anchorLeft': 'Left',
+    'mapProps.anchorCenter': 'Center',
+    'mapProps.anchorRight': 'Right',
+    'mapProps.anchorBottomLeft': 'Bottom-Left',
+    'mapProps.anchorBottom': 'Bottom',
+    'mapProps.anchorBottomRight': 'Bottom-Right',
+    'mapProps.sizeRange': '1-512 tiles',
+    'mapProps.parallaxBrowseHint': 'Preview and choose a parallax image',
+    'mapProps.parallaxPreviewHint': 'Click to choose a different parallax'
+});
 Object.assign(RR_I18N_STRINGS.ja, { 'mapProps.anchor': '基準:' });
 Object.assign(RR_I18N_STRINGS.es, { 'mapProps.anchor': 'Anclaje:' });
 Object.assign(RR_I18N_STRINGS['zh-Hant'], { 'mapProps.anchor': '錨點:' });
@@ -11056,6 +11117,43 @@ Object.assign(RR_I18N_STRINGS.tr, { 'menu.userInterfaces': 'Kullanıcı arayüzl
         RR_EVENT_SECTION_NAMES[lang]['User Interfaces'] = section[lang] || 'User Interfaces';
     }
 })();
+
+const RR_SYSTEM_SOUND_TRANSLATIONS = {
+    ja: { Miss: 'ミス', Evasion: '回避', Reflection: '反射', Shop: 'ショップ', 'Use Item': 'アイテム使用', 'Use Skill': 'スキル使用' },
+    es: { Miss: 'Fallo', Evasion: 'Evasión', Reflection: 'Reflejo', Shop: 'Tienda', 'Use Item': 'Usar objeto', 'Use Skill': 'Usar habilidad' },
+    'zh-Hant': { Miss: '未命中', Evasion: '迴避', Reflection: '反射', Shop: '商店', 'Use Item': '使用物品', 'Use Skill': '使用技能' },
+    'zh-Hans': { Miss: '未命中', Evasion: '闪避', Reflection: '反射', Shop: '商店', 'Use Item': '使用物品', 'Use Skill': '使用技能' },
+    ru: { Miss: 'Промах', Evasion: 'Уклонение', Reflection: 'Отражение', Shop: 'Магазин', 'Use Item': 'Использовать Предмет', 'Use Skill': 'Использовать Навык' },
+    pt: { Miss: 'Erro', Evasion: 'Evasão', Reflection: 'Reflexão', Shop: 'Loja', 'Use Item': 'Usar Item', 'Use Skill': 'Usar Habilidade' },
+    de: { Miss: 'Verfehlen', Evasion: 'Ausweichen', Reflection: 'Reflexion', Shop: 'Laden', 'Use Item': 'Gegenstand benutzen', 'Use Skill': 'Fertigkeit benutzen' },
+    fr: { Miss: 'Raté', Evasion: 'Esquive', Reflection: 'Réflexion', Shop: 'Boutique', 'Use Item': "Utiliser l'objet", 'Use Skill': 'Utiliser la compétence' },
+    el: { Miss: 'Αστοχία', Evasion: 'Αποφυγή', Reflection: 'Αντανάκλαση', Shop: 'Κατάστημα', 'Use Item': 'Χρήση αντικειμένου', 'Use Skill': 'Χρήση ικανότητας' },
+    ko: { Miss: '빗나감', Evasion: '회피', Reflection: '반사', Shop: '상점', 'Use Item': '아이템 사용', 'Use Skill': '스킬 사용' },
+    ar: { Miss: 'إخفاق', Evasion: 'تفادي', Reflection: 'انعكاس', Shop: 'متجر', 'Use Item': 'استخدام عنصر', 'Use Skill': 'استخدام مهارة' },
+    it: { Miss: 'Mancato', Evasion: 'Schivata', Reflection: 'Riflesso', Shop: 'Negozio', 'Use Item': 'Usa oggetto', 'Use Skill': 'Usa abilità' },
+    pl: { Miss: 'Pudło', Evasion: 'Unik', Reflection: 'Odbicie', Shop: 'Sklep', 'Use Item': 'Użyj przedmiotu', 'Use Skill': 'Użyj umiejętności' },
+    id: { Miss: 'Meleset', Evasion: 'Menghindar', Reflection: 'Pantulan', Shop: 'Toko', 'Use Item': 'Gunakan Item', 'Use Skill': 'Gunakan Skill' },
+    vi: { Miss: 'Trượt', Evasion: 'Né tránh', Reflection: 'Phản xạ', Shop: 'Cửa hàng', 'Use Item': 'Dùng vật phẩm', 'Use Skill': 'Dùng kỹ năng' },
+    th: { Miss: 'พลาด', Evasion: 'หลบหลีก', Reflection: 'สะท้อน', Shop: 'ร้านค้า', 'Use Item': 'ใช้ไอเทม', 'Use Skill': 'ใช้สกิล' },
+    tr: { Miss: 'Iskalama', Evasion: 'Kaçınma', Reflection: 'Yansıtma', Shop: 'Mağaza', 'Use Item': 'Eşya kullan', 'Use Skill': 'Beceri kullan' }
+};
+for (const [language, translations] of Object.entries(RR_SYSTEM_SOUND_TRANSLATIONS)) {
+    Object.assign(RR_TEXT_TRANSLATIONS[language], translations);
+}
+
+// Reviewed entries are deliberately applied last. They correct legacy wording,
+// replace generated first-pass text, and complete newly routed UI phrases.
+const RR_REVIEWED_I18N = globalThis.RR_REVIEWED_TRANSLATIONS || {};
+for (const [catalog, tables] of [
+    [RR_REVIEWED_I18N.text, RR_TEXT_TRANSLATIONS],
+    [RR_REVIEWED_I18N.keyed, RR_I18N_STRINGS],
+    [RR_REVIEWED_I18N.commands, RR_EVENT_COMMAND_NAMES],
+    [RR_REVIEWED_I18N.sections, RR_EVENT_SECTION_NAMES]
+]) {
+    for (const [locale, translations] of Object.entries(catalog || {})) {
+        if (tables[locale]) Object.assign(tables[locale], translations);
+    }
+}
 
 class I18nManager {
     constructor() {

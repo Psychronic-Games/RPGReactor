@@ -215,7 +215,7 @@ test('Clear takes back the selection it was showing', () => {
     assert.match(body, /this\._selected3dObject = null;/);
     assert.match(body, /this\.selected3dRect = \{ x: x0, y: y0/,
         'the selection shrinks to what was dragged');
-    assert.match(body, /Cleared \$\{cleared\}/, 'and it says so');
+    assert.match(body, /`\$\{tt\('Cleared'\)\} \$\{cleared\} \$\{clearedTiles\}`/, 'and it says so');
     assert.match(body, /this\.saveTileset3DFile\(\);/, 'and the change is written');
 });
 
@@ -238,7 +238,7 @@ test('a prop split across the sheet seam can be declared as one object', () => {
     const source = fs.readFileSync(
         path.join(repoRoot, 'editor', 'src', 'database', 'DatabaseTilesetEditor.js'), 'utf8');
     assert.match(source, /mergeTile3DObject\(existingTile, addedTile, addedW, addedH\)/);
-    assert.match(source, /if \(origin\.setNumber !== added\.setNumber\) \{\n\s*return \{ error: 'That is on a different sheet/,
+    assert.match(source, /if \(origin\.setNumber !== added\.setNumber\) \{\n\s*return \{ error: tt\('That is on a different sheet/,
         'two different sheets can never be one object, and it says so');
     assert.match(source, /extend: !!\(event\.shiftKey \|\| event\.ctrlKey \|\| event\.metaKey\)/,
         'shift, ctrl, and cmd all extend — which key a hand reaches for varies');

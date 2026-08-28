@@ -189,6 +189,7 @@ class CharacterGraphicPicker {
             const browser = RRPickerIndex.createBrowser({
                 files: files.map(file => file.baseName),
                 selectedName: currentCharacterName,
+                folders: true,
                 itemClass: 'char-file-item',
                 searchPlaceholder: this._t('Search files...'),
                 onSelect: name => {

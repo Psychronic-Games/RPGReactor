@@ -833,9 +833,9 @@ class EventCommandList {
 
         // Click to select
         div.addEventListener('click', (e) => {
-            // For continuation lines (401, 408), redirect to parent command
+            // Continuation rows select their authored parent.
             let targetIndex = index;
-            if (command.code === 401 || command.code === 408) {
+            if (command.code === 401 || command.code === 408 || command.code === 657) {
                 targetIndex = this.findParentCommandIndex(index, page);
             }
 
@@ -856,9 +856,9 @@ class EventCommandList {
 
         // Double-click to edit
         div.addEventListener('dblclick', () => {
-            // For continuation lines (401, 408), redirect to parent command
+            // Continuation rows edit their authored parent.
             let targetIndex = index;
-            if (command.code === 401 || command.code === 408) {
+            if (command.code === 401 || command.code === 408 || command.code === 657) {
                 targetIndex = this.findParentCommandIndex(index, page);
             }
             this.editCommand(targetIndex, page, pageIndex);
@@ -896,7 +896,7 @@ class EventCommandList {
         const command = page.list[index];
         if (!command) return false;
         if (this.selectedIndices.includes(index)) return true;
-        if (command.code === 401 || command.code === 408) {
+        if (command.code === 401 || command.code === 408 || command.code === 657) {
             return this.selectedIndices.includes(this.findParentCommandIndex(index, page));
         }
         return false;
@@ -987,6 +987,9 @@ class EventCommandList {
      * @returns {number} - The index of the parent command (101 or 108)
      */
     findParentCommandIndex(index, page) {
+        if (page.list[index]?.code === 657) {
+            return EventCommandList.contiguousBlockRange(page.list, index, 357, 657)?.start ?? index;
+        }
         // Walk backwards to find the parent command
         for (let i = index - 1; i >= 0; i--) {
             const code = page.list[i].code;
@@ -1042,7 +1045,7 @@ class EventCommandList {
         const ctx = canvas.getContext('2d');
         const path = require('path');
         const imagePath = path.join(currentProject.path, 'img', 'faces', faceName + '.png');
-        const src = 'file://' + imagePath.replace(/\\/g, '/');
+        const src = RRAssetFiles.toUrl(imagePath);
 
         // One decoded sheet per face file — a fresh Image() per row
         // re-fetched and re-decoded the same PNG for every message row.
@@ -2556,6 +2559,37 @@ class EventCommandList {
         return commands;
     }
 
+    static commandBlock(value) {
+        if (!value) return [];
+        return Array.isArray(value) ? value : [value];
+    }
+
+    /** Locate a parent and its immediately trailing continuation rows. */
+    static contiguousBlockRange(list, index, parentCode, continuationCode) {
+        if (!Array.isArray(list) || !list[index]) return null;
+        let start = index;
+        if (list[start].code === continuationCode) {
+            while (start > 0 && list[start - 1]?.code === continuationCode) start--;
+            if (start === 0 || list[start - 1]?.code !== parentCode) return null;
+            start--;
+        } else if (list[start].code !== parentCode) {
+            return null;
+        }
+        let end = start;
+        while (end + 1 < list.length && list[end + 1]?.code === continuationCode) end++;
+        return { start, end };
+    }
+
+    /** Replace a contiguous parent/continuation block in one splice. */
+    static replaceContiguousBlock(list, index, replacement, parentCode, continuationCode) {
+        const range = this.contiguousBlockRange(list, index, parentCode, continuationCode);
+        if (!range) return null;
+        const commands = this.commandBlock(replacement);
+        this.rebaseInsertIndent(commands, list[range.start].indent || 0);
+        list.splice(range.start, range.end - range.start + 1, ...commands);
+        return { start: range.start, commands };
+    }
+
     static insertionIndent(list, insertIndex) {
         const previous = list?.[insertIndex - 1];
         const next = list?.[insertIndex];
@@ -2571,6 +2605,11 @@ class EventCommandList {
     }
 
     static safeInsertionIndex(list, insertIndex) {
+        for (const [parentCode, continuationCode] of [[355, 655], [357, 657]]) {
+            if (list?.[insertIndex]?.code !== continuationCode) continue;
+            const range = this.contiguousBlockRange(list, insertIndex, parentCode, continuationCode);
+            if (range) insertIndex = range.end + 1;
+        }
         const next = list?.[insertIndex];
         const previous = list?.[insertIndex - 1];
         const branchMarkers = [402, 403, 601, 602, 603];
@@ -3164,9 +3203,11 @@ class EventCommandList {
 
             // For plugin command, open the editor immediately
             if (code === 356 || code === 357) {
-                this.pluginCommandEditor.show(null, (command) => {
-                    if (command) {
-                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
+                this.pluginCommandEditor.show(null, (built) => {
+                    const commands = EventCommandList.commandBlock(built);
+                    if (commands.length > 0) {
+                        this._rebaseInsertIndent(commands, baseIndent);
+                        page.list.splice(insertIndex, 0, ...commands);
                         this.selectedIndices = [insertIndex];
                         // Expand plugin commands by default
                         this.expandedPluginCommands.add(insertIndex);
@@ -4068,8 +4109,15 @@ class EventCommandList {
     }
 
     editCommand(index, page, pageIndex) {
-        const command = page.list[index];
+        let command = page.list[index];
         if (!command || command.code === 0) return;
+
+        if (command.code === 657) {
+            const range = EventCommandList.contiguousBlockRange(page.list, index, 357, 657);
+            if (!range) return;
+            index = range.start;
+            command = page.list[index];
+        }
 
         const code = command.code;
         const rebaseReplacement = commands => this._rebaseInsertIndent(commands, command.indent || 0);
@@ -4535,19 +4583,26 @@ class EventCommandList {
         if (reactorEditor) {
             reactorEditor.show(command, (editedCommand) => {
                 if (editedCommand) {
-                    replaceSingle(editedCommand);
+                    EventCommandList.replaceContiguousBlock(
+                        page.list, index, editedCommand, 357, 657);
                     this.refreshCommandList(page, pageIndex);
                 }
             });
             return;
         }
         if (code === 356 || code === 357) {
-            this.pluginCommandEditor.show(command, (editedCommand) => {
-                if (editedCommand) {
-                    replaceSingle(editedCommand);
+            const range = code === 357
+                ? EventCommandList.contiguousBlockRange(page.list, index, 357, 657)
+                : { start: index, end: index };
+            const continuationCommands = range
+                ? page.list.slice(range.start + 1, range.end + 1) : [];
+            this.pluginCommandEditor.show(command, (commands) => {
+                if (EventCommandList.commandBlock(commands).length > 0) {
+                    EventCommandList.replaceContiguousBlock(
+                        page.list, index, commands, code, 657);
                     this.refreshCommandList(page, pageIndex);
                 }
-            });
+            }, { continuationCommands });
             return;
         }
 
@@ -5329,15 +5384,16 @@ class EventCommandList {
                     }
                 }
             }
-            // For Script (355), include all 655 continuation lines
-            else if (code === 355) {
-                expanded.add(index);
-                for (let i = index + 1; i < page.list.length; i++) {
-                    if (page.list[i].code === 655) {
-                        expanded.add(i);
-                    } else {
-                        break;
-                    }
+            // Script and MZ plugin commands own immediately trailing rows.
+            else if (code === 355 || code === 655 || code === 357 || code === 657) {
+                const parentCode = code === 355 || code === 655 ? 355 : 357;
+                const continuationCode = parentCode === 355 ? 655 : 657;
+                const range = EventCommandList.contiguousBlockRange(
+                    page.list, index, parentCode, continuationCode);
+                if (range) {
+                    for (let i = range.start; i <= range.end; i++) expanded.add(i);
+                } else {
+                    expanded.add(index);
                 }
             }
             // For Show Choices (102), include entire branch structure. The
@@ -5375,23 +5431,6 @@ class EventCommandList {
                     if (page.list[i].code === 408) {
                         expanded.add(i);
                     } else {
-                        break;
-                    }
-                }
-            }
-            else if (code === 655) {
-                // Find parent 355 command
-                for (let i = index - 1; i >= 0; i--) {
-                    if (page.list[i].code === 355) {
-                        expanded.add(i);
-                        // Add all 655 lines following the parent
-                        for (let j = i + 1; j < page.list.length; j++) {
-                            if (page.list[j].code === 655) {
-                                expanded.add(j);
-                            } else {
-                                break;
-                            }
-                        }
                         break;
                     }
                 }
@@ -5584,7 +5623,7 @@ class EventCommandList {
             const selectedCommand = page.list[minSelected];
 
             // If it's a continuation line, find the parent command
-            if (selectedCommand.code === 401 || selectedCommand.code === 408) {
+            if (selectedCommand.code === 401 || selectedCommand.code === 408 || selectedCommand.code === 657) {
                 // Find parent and insert before it
                 const parentIndex = this.findParentCommandIndex(minSelected, page);
                 insertIndex = parentIndex;

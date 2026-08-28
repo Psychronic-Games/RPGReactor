@@ -3201,7 +3201,10 @@ class DatabaseUserInterfaceEditor {
             rows = labels.map((name, index) => {
                 const volume = symbols[index].includes('Volume');
                 const value = volume ? 80 : index !== 1;
-                return row('option', symbols[index], value, this._t(name), { symbol: symbols[index], valueText: volume ? '80%' : value ? 'ON' : 'OFF' });
+                return row('option', symbols[index], value, this._t(name), {
+                    symbol: symbols[index],
+                    valueText: volume ? '80%' : this._t(value ? 'ON' : 'OFF')
+                });
             });
         } else if (node.dataSource === 'saveSlots') {
             const first = node.includeAutosave ? 0 : 1;

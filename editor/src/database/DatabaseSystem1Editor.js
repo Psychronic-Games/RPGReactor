@@ -75,9 +75,9 @@ class DatabaseSystem1Editor {
 
         // 3-column grid
         const columnsGrid = document.createElement('div');
+        columnsGrid.className = 'system1-columns-grid';
         columnsGrid.style.cssText = `
             display: grid;
-            grid-template-columns: 1fr 0.8fr 1.2fr;
             gap: 16px;
             padding: 16px;
             flex: 1;
@@ -155,9 +155,18 @@ class DatabaseSystem1Editor {
             // Music rows
             const musicRows = container.querySelectorAll('.music-row');
             musicRows.forEach(row => {
-                row.addEventListener('click', () => {
+                const activate = () => {
                     const musicType = row.dataset.musicType;
                     this.showMusicPicker(system, musicType);
+                };
+                row.tabIndex = 0;
+                row.setAttribute('role', 'button');
+                row.setAttribute('aria-label', row.textContent.trim());
+                row.addEventListener('click', activate);
+                row.addEventListener('keydown', event => {
+                    if (event.key !== 'Enter' && event.key !== ' ') return;
+                    event.preventDefault();
+                    activate();
                 });
                 row.addEventListener('mouseenter', () => {
                     row.style.backgroundColor = 'var(--color-bg-button)';
@@ -170,9 +179,18 @@ class DatabaseSystem1Editor {
             // Sound rows
             const soundRows = container.querySelectorAll('.sound-row');
             soundRows.forEach(row => {
-                row.addEventListener('click', () => {
+                const activate = () => {
                     const soundIndex = parseInt(row.dataset.soundIndex);
                     this.showSoundPicker(system, soundIndex);
+                };
+                row.tabIndex = 0;
+                row.setAttribute('role', 'button');
+                row.setAttribute('aria-label', row.textContent.trim());
+                row.addEventListener('click', activate);
+                row.addEventListener('keydown', event => {
+                    if (event.key !== 'Enter' && event.key !== ' ') return;
+                    event.preventDefault();
+                    activate();
                 });
                 row.addEventListener('mouseenter', () => {
                     row.style.backgroundColor = 'var(--color-bg-button)';
@@ -646,20 +664,18 @@ class DatabaseSystem1Editor {
         column.appendChild(musicSection);
 
         // Row 2: Sound
-        const soundTypes = ['cursor', 'ok', 'cancel', 'buzzer', 'equip', 'save', 'load', 'battleStart',
-                           'escape', 'enemyAttack', 'enemyDamage', 'enemyCollapse', 'bossCollapse1',
-                           'bossCollapse2', 'actorDamage', 'actorCollapse', 'recovery'];
-        const soundLabels = ['Cursor', 'Ok', 'Cancel', 'Buzzer', 'Equip', 'Save', 'Load', 'Battle Start',
-                            'Escape', 'Enemy Attack', 'Enemy Damage', 'Enemy Collapse', 'Boss Collapse 1',
-                            'Boss Collapse 2', 'Actor Damage', 'Actor Collapse', 'Recovery'];
+        const soundLabels = RRSystemSoundSlotModal.SOUND_LABELS;
 
         let soundRows = '';
-        soundTypes.forEach((type, idx) => {
+        soundLabels.forEach((label, idx) => {
             const se = system.sounds?.[idx] || {};
+            const variants = Array.isArray(se.variants) ? se.variants.length : 0;
+            const range = RRSystemSoundSlotModal.pitchRange(se.pitchRandom);
+            const details = `${se.name || tt('(None)')}${variants ? ` +${variants}` : ''}${range ? `  P${range.min}-${range.max}` : ''}`;
             soundRows += `
                 <tr class="sound-row" data-sound-index="${idx}" style="cursor: pointer;">
-                    <td>${tt(soundLabels[idx])}</td>
-                    <td>${rrEscapeHtml(se.name || tt('(None)'))}</td>
+                    <td>${tt(label)}</td>
+                    <td>${rrEscapeHtml(details)}</td>
                 </tr>
             `;
         });
@@ -996,6 +1012,7 @@ class DatabaseSystem1Editor {
         const browser = RRPickerIndex.createBrowser({
             files: files.map(file => file.name),
             selectedName: selectedFile,
+            folders: true,
             searchPlaceholder: tt('Search files...'),
             emptyText: `${tt('No files found in:')} img/titles1`,
             onSelect: updatePreview
@@ -1105,7 +1122,22 @@ class DatabaseSystem1Editor {
 
         const files = RRAssetFiles.listUnique(sePath, RRAssetFiles.AUDIO_EXTENSIONS);
 
-        this.showAudioPickerModal(system, files, sePath, soundIndex, 'se', 'SE');
+        const current = system.sounds?.[soundIndex] || {};
+        RRSystemSoundSlotModal.open({
+            label: RRSystemSoundSlotModal.SOUND_LABELS[soundIndex],
+            slot: current,
+            files,
+            onOk: result => {
+                if (!system.sounds) system.sounds = [];
+                system.sounds[soundIndex] = result;
+                const detailEl = document.getElementById('database-detail');
+                if (detailEl) {
+                    detailEl.innerHTML = '';
+                    this.showSystem1Detail(detailEl);
+                    setTimeout(() => detailEl.querySelector(`.sound-row[data-sound-index="${soundIndex}"]`)?.focus(), 0);
+                }
+            }
+        });
     }
 
     showAudioPickerModal(system, files, audioPath, identifier, audioType, folderName) {
@@ -1135,13 +1167,17 @@ class DatabaseSystem1Editor {
                     if (!system.sounds) {
                         system.sounds = [];
                     }
-                    system.sounds[identifier] = { ...result };
+                    system.sounds[identifier] = { ...system.sounds[identifier], ...result };
                 }
 
                 const detailEl = document.getElementById('database-detail');
                 if (detailEl) {
                     detailEl.innerHTML = '';
                     this.showSystem1Detail(detailEl);
+                    const selector = isMusic
+                        ? `.music-row[data-music-type="${identifier}"]`
+                        : `.sound-row[data-sound-index="${identifier}"]`;
+                    setTimeout(() => detailEl.querySelector(selector)?.focus(), 0);
                 }
             }
         });

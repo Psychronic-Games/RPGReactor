@@ -15,15 +15,94 @@ Last updated 2026-08-27.
   display-only map HUDs, styling/focus/transitions, and seven opt-in replacement
   roles. The cycle also includes the PIXI 8
   compatibility and 3D performance work described below, browser save
-  durability, atomic Reactor sidecars, and real Chromium/NW.js smoke tests.
-- Validation: **1,666 passing Node tests**, no failures, skips, or TODOs
+  durability, atomic Reactor sidecars, escaped desktop asset URLs, complete
+  plugin schema/command-block handling, editor-only database names, all-slot
+  system-sound variants/pitch ranges, Audio Player parity for music/sound
+  commands, one shared album-art cache, animation-preview fidelity, a 5,000-entry
+  Animation ceiling with an independent timing sidebar, locally reviewed
+  18-language localization and audited UI routing, State/trait database layout
+  polish, scaled-window clipping, and real Chromium/NW.js smoke tests.
+- Validation: **1,785 passing Node tests**, no failures, skips, or TODOs
   (`cd editor && npm test`, ~19 s). Real Web persistence and NW.js launch/save
-  smokes pass. Syntax, runtime sync, and `git diff --check` pass. No manual
-  visual playtest is claimed for this validation.
+  smokes pass, as does the NW.js UI-layout smoke at 1280x720 through 2560x1440.
+  Syntax passes across 921 source JavaScript files; dependency audit, runtime
+  sync, and `git diff --check` pass. A read-only NW.js screenshot/geometry pass
+  also checked the State and Animation editors at 1280x720 and 1600x900,
+  dark/light screenshots, all 14 palette/mode theme keys, local scrolling and
+  overflow, and confirmed that the validation did not dirty the project. No
+  full end-user playtest is claimed for this validation.
 - `template/Demo` is the only git-tracked template. The other folders under
   `template/` are local compatibility-corpus projects (Star Shift
   Freelancers / Origins / Rebellion, Project2/3, MZ3D, Parallax, Hendrix,
   Barebones) and are ignored; tests must not depend on them.
+
+## GitHub Fix Batch (2026-08-27)
+
+- **#20 recursive asset folders:** `PickerIndex` and `AudioPickerModal` share an
+  arbitrary-depth folder tree with descendant totals, full relative values,
+  selected-ancestor expansion, search filtering, and accessible keyboard
+  toggles. Characters, tilesets, database images, title images, models, and
+  message faces opt in; flat folders keep their A-Z sections.
+- **#21 asset URLs:** `EncryptedAssets.fileUrl` uses standards-compliant file
+  URL conversion for POSIX, Windows drive, and UNC paths. Character, face,
+  battler, tileset, event-face, database-icon, and IconSet previews use the
+  shared resolver. Reserved characters and Unicode round-trip;
+  encrypted/WebHost behavior is unchanged.
+- **#19 scaled windows:** Reactor writes world-scaled filter dimensions and the
+  PIXI 8 compatibility step localizes dimensions as well as position. Plugin
+  and stock-style producers, rotation/reflection, zero scale, and old PIXI are
+  covered; all runtime copies are synchronized.
+- **#18 complete:** Plugin Manager and Plugin Command Editor share annotation,
+  widget, complex-codec, and database-reference helpers. Choices, all 19
+  database/System reference types and arrays, colors, Boolean labels,
+  multiline values, and recursive structs preserve RPG Maker storage. MZ 357
+  commands regenerate readable ordered 657 rows, preserve rows unknown to
+  partial metadata, and remain atomic across map, Common Event, and Troop edit,
+  insertion, selection, and clipboard paths. Malformed complex values stay raw
+  and typed blank defaults save the values displayed by their controls. The
+  broader #22 image-file follow-up is also complete: `img/...` fields use the
+  recursive browser and image/dimension preview on desktop and Web, including
+  encrypted assets and key recovery.
+- **#10 editor-only database names:** the eight player-facing database types
+  store optional labels in `data/Database.names.json`, never in RPG Maker data.
+  Lists search both names and follow the Editor-first, Game-first, or Game-only
+  preference; typed plugin references follow it too. Cancel, Apply, dirty-state,
+  Undo, pruning, duplicate, cross-project clipboard, malformed-file protection,
+  Web flush, and deployment exclusion are covered.
+- **#13 animation-preview fidelity:** MV sprite previews update at the engine's
+  60 Hz rate while retaining 15 fps authored cells, with target, screen, and
+  hide flashes; MZ/Effekseer previews consume target flashes and finish late
+  timing work. Sprite blends and position anchors match rendering and picking,
+  static views reseed after edits, Effekseer draw/catch-up/cleanup paths are
+  guarded, and zero SE volume survives editing.
+- **#12 system-sound variation:** all 24 slots are visible and can keep a stock
+  primary plus uniformly selected variants and an optional absolute 50-150
+  pitch range. The Cancel-safe modal reuses the recursive audio picker and
+  preserves unknown keys. Runtime preload and playback handle complete pools;
+  extension-free projects keep exact stock behavior without consuming RNG.
+  Older runtimes play the primary; RPG Maker MZ can discard the optional inline
+  keys if its own editor rewrites `System.json`.
+- **Audio command parity:** Play BGM/BGS/ME/SE now bypasses the duplicated old
+  inline browser and opens the current shared Audio Player UI from map, Common,
+  and Troop events. Stock command serialization is unchanged. Plugin audio
+  arguments share matching loop defaults; the picker now honors native loop
+  points and the main player's Wine HTML-audio fallback.
+- **Shared album art:** `RRAudioCoverArt.forFile()` owns one Promise cache used
+  by the Audio Player, shared picker, System 1 music/system sounds, event audio,
+  and plugin audio. The selected header/row loads eagerly and the remaining
+  recursive list stays lazy, so one metadata extraction serves every surface.
+- **Animation scale/layout:** the canonical workload-aware animation maximum is
+  5,000 in database growth, Change Maximum, direct Show Animation IDs, tests,
+  and documentation. The editor keeps SE/Flash timings in a separate right-side
+  scrolling column; the Properties, sprite sheets, frames, and preview retain
+  a stable content column, with narrow container reflow below it.
+- **State and shared database polish:** State Duration and Messages are
+  controls-first aligned grids, conditional rows remain symmetric, and `%1 =
+  Actor / Enemy Name` is visible beside message authoring. Actor, Class, Weapon,
+  Armor, State, and Enemy trait headers no longer render an empty indicator-cell
+  spur. Database lists use a themed scrollbar, Change Maximum hides the native
+  spinner without losing keyboard stepping, and recent System/audio/plugin
+  controls preserve theme, focus, Escape, backdrop, and responsive behavior.
 
 ## Open Threads (pick up from here)
 
@@ -44,6 +123,9 @@ Feature work, in the order the owner has been asking:
 - **Stock MZ battler motions are not mapped to model actions** — a 3D
   battler plays its ambient rules and named actions, but walk/attack/damage
   motion cells do not yet trigger model animations.
+- **Animation-preview follow-ups:** Effekseer background capture/compositing and
+  asynchronous browser effect loading remain separate from the completed #13
+  fidelity scope.
 - **Embedded-clip follow-ups**: bake clip → keyed pose rules (needs
   animated-GLB bones registered as parts); cloth/limb interpenetration
   mitigations (per-part depth bias) — authoring-side skinning is the real
@@ -67,13 +149,15 @@ Content and tooling:
   `docs/demo-missing-se.md` lists the 120 SE names animations still
   reference. Intentional Demo removals must be staged with `git rm` or the
   completeness test fails.
-- **Translations are hand-authored, by decision (2026-08-25).** The owner
-  does not want the app depending on an online translation engine;
-  `generate-deep-translations.cjs` (Microsoft edge endpoint, now 404) is
-  retired rather than repaired. New phrases go into all 17 non-English
-  locales in `I18nDeepTranslations.js` / the curated `I18nManager.js`
-  blocks by hand; `i18n.test.cjs` fails on any locale missing a phrase. The
-  shipped editor never needed the network: the file is static.
+- **Translations are stored and reviewed locally, by decision (2026-08-25).**
+  The owner does not want the app depending on an online translation engine,
+  so the obsolete Microsoft-based generator was deleted. The checked-in
+  `I18nDeepTranslations.js` remains the broad offline baseline;
+  `I18nReviewedTranslations.js` is the maintained final-precedence layer for
+  exact text, keyed UI, event commands, and event sections. Add new phrases to
+  all 17 non-English locale maps there. `i18n.test.cjs` enforces source
+  coverage, locale parity, placeholders, reviewed precedence, known
+  wrong-language regressions, Thai normalization, and Polish event coverage.
 - **GitHub feedback round-up, open items** (the closed ones are in the
   cycle note below): documentation/wiki and a compatible-plugin list;
   Android APK and ARM64 (RG34xx-class) game deploys; a plugin boilerplate
@@ -1131,10 +1215,9 @@ both the editor and the running game.
   MP3 TXXX loops verified via `NAME\0digits`. Loop verification failure
   or a non-smaller result leaves the file untouched. Prefs migrated
   ogg/oggQuality→audio/audioQuality (legacy keys read); the checkbox is
-  NEVER restored checked (per-deploy opt-in). The translation generator
-  (`generate-deep-translations.cjs`) is broken — Microsoft's edge auth
-  endpoint 404s — the three new phrases were hand-authored into all 17
-  locales in `I18nDeepTranslations.js`.
+  NEVER restored checked (per-deploy opt-in). The obsolete online translation
+  generator was subsequently removed; reviewed additions now live in all 17
+  locale maps in `I18nReviewedTranslations.js`.
 
 ## Database 3D Part Carving & Pose Card (2026-08-22)
 
