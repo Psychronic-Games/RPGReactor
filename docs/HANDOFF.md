@@ -45,6 +45,24 @@ Last updated 2026-08-29.
   and `template/Demo/3d/Room-Rings/`, which Demo Map001 references. A clean
   checkout's Demo shows that map without its props and room rings until
   they are added or replaced with smaller models.
+- GitHub issues triage (2026-08-29 evening, all 13 open issues read):
+  DONE in the tree — #28 ColorFilter `.uniforms` on PIXI 8 (contributed
+  patch applied), #32 User/Target Lacks State, #7 folder-aware plugin file
+  picker (rest of #7 and all of #6 Resource Manager were already shipped),
+  #23 Referenced by (contributed code applied; `databaseListLabels` →
+  `databaseEntryLabels` was the one live fix), #31 enemy Max TP + layout,
+  #16 Add State duration override, #15 Grow Max TP + ranges + Change
+  Parameter Random. Runtime revision `20260829.42`, 2,005 tests.
+  REMAINING (all L): #17 multi-element skills (needs a VisuStella
+  `getActionObjectElements` shim + an element-set popover), #29 Show Text
+  multi-box/text-code menu/preview (5,000-line contributed diff, does not
+  apply as-is: reconcile its IconPickerModal with utils/IconPicker.js,
+  hand-write its machine-drafted locales) then #30 (depends on #29), #11 BGM
+  palettes (design question: the plan puts new keys on Map###.json top level;
+  this codebase's convention is a sidecar — decide before building), #9 Quest
+  Manager (VisuStella-specific; suggest a read-only first cut without the
+  QuestUsageIndex rewrite). Contributed diffs are in the session scratchpad
+  `patches/`; re-download from the issues if lost.
 - `template/Demo` is the only git-tracked template. The other folders under
   `template/` are local compatibility-corpus projects (Star Shift
   Freelancers / Origins / Rebellion, Project2/3, MZ3D, Parallax, Hendrix,
