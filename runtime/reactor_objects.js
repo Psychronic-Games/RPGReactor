@@ -5180,6 +5180,14 @@ Game_Battler.prototype.meetsActionCondition = function(
             return this.meetsTpCondition(param1, param2);
         case 8:
             return this.meetsTargetStateCondition(param1, action);
+        // "Lacks" is the negation of the same check, not of isStateAffected:
+        // a plugin that replaces meetsStateCondition with a passive-state-
+        // aware version (VisuMZ_1_SkillsStatesCore does) then moves has and
+        // lacks together instead of leaving them disagreeing.
+        case 9:
+            return !this.meetsStateCondition(param1);
+        case 10:
+            return !this.meetsTargetStateCondition(param1, action);
         default:
             return Number(type) === 0;
     }

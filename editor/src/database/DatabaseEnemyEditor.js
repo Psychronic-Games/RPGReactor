@@ -453,7 +453,15 @@ class DatabaseEnemyEditor {
             { id: 4, label: 'User State', fields: [
                 { param: 1, kind: 'state', value: 1 }
             ] },
+            // "Lacks" rows of their own rather than a "not" box: an action can
+            // then require both at once - enraged, but not silenced.
+            { id: 9, label: 'User Lacks State', fields: [
+                { param: 1, kind: 'state', value: 1 }
+            ] },
             { id: 8, label: 'Target State', fields: [
+                { param: 1, kind: 'state', value: 1 }
+            ] },
+            { id: 10, label: 'Target Lacks State', fields: [
                 { param: 1, kind: 'state', value: 1 }
             ] },
             { id: 5, label: 'Party Level', fields: [
@@ -555,6 +563,10 @@ class DatabaseEnemyEditor {
                 return `${tt('User State')}: ${this.conditionStateName(condition.param1)}`;
             case 8:
                 return `${tt('Target State')}: ${this.conditionStateName(condition.param1)}`;
+            case 9:
+                return `${tt('User Lacks State')}: ${this.conditionStateName(condition.param1)}`;
+            case 10:
+                return `${tt('Target Lacks State')}: ${this.conditionStateName(condition.param1)}`;
             case 5:
                 return `${tt('Party Lv')} >= ${condition.param1}`;
             case 6:

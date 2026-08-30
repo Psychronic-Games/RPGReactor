@@ -275,7 +275,7 @@ test('the editor catalog and runtime dispatch expose exactly the same type IDs',
         .map(type => type.id)
         .sort((a, b) => a - b);
     assert.deepEqual(offered, dispatched);
-    assert.deepEqual(offered, [1, 2, 3, 4, 5, 6, 7, 8]);
+    assert.deepEqual(offered, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
 });
 
 test('catalog fields are named, defaulted, and unchecked rows are disabled', () => {
@@ -649,4 +649,67 @@ test('state conditions stay distinct and orphan state/switch IDs remain selectab
         /<option value="4" selected>#4 Poison<\/option>/);
     assert.match(editor.getConditionSwitchOptions(1),
         /<option value="1" selected>#1 Gate<\/option>/);
+});
+
+// ---------------------------------------------------------------------------
+// User Lacks State / Target Lacks State (GitHub #32)
+// ---------------------------------------------------------------------------
+
+test('a lacks-state condition is the exact inverse of the has-state one', () => {
+    const ENRAGED = 7;
+    const has = { skillId: 101, conditions: [{ type: 4, param1: ENRAGED, param2: 0 }] };
+    const lacks = { skillId: 101, conditions: [{ type: 9, param1: ENRAGED, param2: 0 }] };
+    assert.equal(meets(has, { skills, states: [ENRAGED] }), true);
+    assert.equal(meets(lacks, { skills, states: [ENRAGED] }), false);
+    assert.equal(meets(has, { skills, states: [] }), false);
+    assert.equal(meets(lacks, { skills, states: [] }), true);
+});
+
+test('has and lacks can gate one action together: enraged, but not silenced', () => {
+    const ENRAGED = 7, SILENCE = 9;
+    const action = { skillId: 101, conditions: [
+        { type: 4, param1: ENRAGED, param2: 0 },
+        { type: 9, param1: SILENCE, param2: 0 }
+    ] };
+    assert.equal(meets(action, { skills, states: [ENRAGED] }), true);
+    assert.equal(meets(action, { skills, states: [ENRAGED, SILENCE] }), false);
+    assert.equal(meets(action, { skills, states: [] }), false);
+    assert.equal(meets(action, { skills, states: [SILENCE] }), false);
+});
+
+test('lacks-state reads states through the same method has-state does, once', () => {
+    // A plugin that replaces meetsStateCondition (SkillsStatesCore's
+    // passive-state-aware version) must move has and lacks together.
+    const { enemy } = loadRuntimeConditions({ skills, states: [] });
+    let calls = 0;
+    enemy.meetsStateCondition = () => { calls++; return true; };
+    assert.equal(enemy.meetsCondition({ skillId: 101, conditions: [{ type: 9, param1: 7, param2: 0 }] }), false);
+    assert.equal(calls, 1);
+    enemy.meetsStateCondition = () => { calls++; return false; };
+    assert.equal(enemy.meetsCondition({ skillId: 101, conditions: [{ type: 9, param1: 7, param2: 0 }] }), true);
+    assert.equal(calls, 2);
+});
+
+test('target-lacks-state holds while nobody the action can reach carries the state', () => {
+    const poisoned = battler('sick', [POISON]);
+    const healthy = battler('well');
+    const lacks = { skillId: 101, conditions: [{ type: 10, param1: POISON, param2: 0 }] };
+    assert.equal(meets(lacks, { skills, opponents: [healthy] }), true, 'nobody poisoned: the poison skill is worth using');
+    assert.equal(meets(lacks, { skills, opponents: [healthy, poisoned] }), false, 'someone already is');
+    let reads = 0;
+    const { enemy } = loadRuntimeConditions({ skills, opponents: [healthy] });
+    enemy.meetsTargetStateCondition = () => { reads++; return false; };
+    assert.equal(enemy.meetsCondition(lacks), true);
+    assert.equal(reads, 1, 'routed through meetsTargetStateCondition');
+});
+
+test('the action list names the state a lacks condition rules out', () => {
+    const editor = loadEnemyEditor([{ id: 7, name: 'Enraged' }, { id: 9, name: 'Silence' }, { id: 4, name: 'Poison' }]);
+    assert.equal(editor.describeConditions({ conditions: [
+        { type: 4, param1: 7, param2: 0 },
+        { type: 9, param1: 9, param2: 0 },
+        { type: 10, param1: 4, param2: 0 }
+    ] }), 'User State: Enraged and User Lacks State: Silence and Target Lacks State: Poison');
+    const ids = Array.from(editor.conditionTypeCatalog(), entry => entry.id);
+    assert.deepEqual(ids, [1, 2, 3, 7, 4, 9, 8, 10, 5, 6], 'each lacks row sits beside its has row');
 });
