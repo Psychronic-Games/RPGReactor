@@ -881,6 +881,8 @@ function trimWebProject(projectRoot, log) {
                 for (const pages of Object.values(sidecar && sidecar.events || {})) {
                     for (const spec of Object.values(pages || {})) noteSpec(spec);
                 }
+                // Props placed straight on the map reference models too.
+                for (const prop of (sidecar && sidecar.props || [])) noteSpec(prop);
                 // Database bindings place models too: actors bind per
                 // slot (character/face/battler), the other sections flat.
                 for (const section of ['actors', 'enemies', 'weapons', 'armors', 'items']) {

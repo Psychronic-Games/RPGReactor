@@ -5,6 +5,21 @@
 globalThis.RR_REVIEWED_TRANSLATIONS = {
   "text": {
     "ja": {
+      "Height (tiles):": "高さ（タイル）:",
+      "Set Height...": "高さを設定...",
+      "Set Height": "高さを設定",
+      "Descend": "下降",
+      "Rise": "上昇",
+      "Prop": "プロップ",
+      "Is in the party": "パーティにいる",
+      "is facing": "の向き",
+      "is being driven": "に乗っている",
+      "Include Equipment": "装備品を含む",
+      "Keyboard": "キーボード",
+      "Pointer": "ポインター",
+      "min": "分",
+      "sec": "秒",
+      "Reactor": "Reactor",
       "Select Parallax Background": "遠景を選択",
       "Browse…": "ブラウズ…",
       "Select Picture": "ピクチャを選択",
@@ -109,6 +124,21 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Rig bound — {bones} bones, {vertices} vertices": "リグをバインドしました — ボーン {bones} 個、頂点 {vertices} 個"
     },
     "zh-Hant": {
+      "Height (tiles):": "高度（格）:",
+      "Set Height...": "設定高度...",
+      "Set Height": "設定高度",
+      "Descend": "下降",
+      "Rise": "上升",
+      "Prop": "道具",
+      "Is in the party": "在隊伍中",
+      "is facing": "面向",
+      "is being driven": "正在駕駛",
+      "Include Equipment": "包含裝備",
+      "Keyboard": "鍵盤",
+      "Pointer": "指標",
+      "min": "分",
+      "sec": "秒",
+      "Reactor": "Reactor",
       "Select Parallax Background": "選擇遠景",
       "Browse…": "瀏覽…",
       "Select Picture": "選擇圖片",
@@ -217,6 +247,21 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Rig bound — {bones} bones, {vertices} vertices": "骨架綁定完成 — {bones} 根骨骼，{vertices} 個頂點"
     },
     "zh-Hans": {
+      "Height (tiles):": "高度（格）:",
+      "Set Height...": "设置高度...",
+      "Set Height": "设置高度",
+      "Descend": "下降",
+      "Rise": "上升",
+      "Prop": "道具",
+      "Is in the party": "在队伍中",
+      "is facing": "面向",
+      "is being driven": "正在驾驶",
+      "Include Equipment": "包含装备",
+      "Keyboard": "键盘",
+      "Pointer": "指针",
+      "min": "分",
+      "sec": "秒",
+      "Reactor": "Reactor",
       "Select Parallax Background": "选择远景",
       "Browse…": "浏览…",
       "Select Picture": "选择图片",
@@ -326,6 +371,21 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Rig bound — {bones} bones, {vertices} vertices": "骨架绑定完成 — {bones} 根骨骼，{vertices} 个顶点"
     },
     "ko": {
+      "Height (tiles):": "높이 (타일):",
+      "Set Height...": "높이 설정...",
+      "Set Height": "높이 설정",
+      "Descend": "하강",
+      "Rise": "상승",
+      "Prop": "소품",
+      "Is in the party": "파티에 있음",
+      "is facing": "바라보는 방향",
+      "is being driven": "탑승 중",
+      "Include Equipment": "장비 포함",
+      "Keyboard": "키보드",
+      "Pointer": "포인터",
+      "min": "분",
+      "sec": "초",
+      "Reactor": "Reactor",
       "Select Parallax Background": "원경 선택",
       "Browse…": "찾아보기…",
       "Select Picture": "그림 선택",
@@ -435,6 +495,21 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Rig bound — {bones} bones, {vertices} vertices": "리그 바인딩 완료 — 본 {bones}개, 버텍스 {vertices}개"
     },
     "es": {
+      "Height (tiles):": "Altura (casillas):",
+      "Set Height...": "Fijar altura...",
+      "Set Height": "Fijar altura",
+      "Descend": "Bajar",
+      "Rise": "Subir",
+      "Prop": "Objeto",
+      "Is in the party": "Está en el grupo",
+      "is facing": "mira hacia",
+      "is being driven": "está siendo conducido",
+      "Include Equipment": "Incluir equipo",
+      "Keyboard": "Teclado",
+      "Pointer": "Puntero",
+      "min": "min",
+      "sec": "seg",
+      "Reactor": "Reactor",
       "Select Parallax Background": "Seleccionar fondo de parallax",
       "Browse…": "Explorar…",
       "Select Picture": "Seleccionar imagen",
@@ -577,6 +652,21 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Rig bound — {bones} bones, {vertices} vertices": "Rig vinculado — {bones} huesos, {vertices} vértices"
     },
     "pt": {
+      "Height (tiles):": "Altura (tiles):",
+      "Set Height...": "Definir altura...",
+      "Set Height": "Definir altura",
+      "Descend": "Descer",
+      "Rise": "Subir",
+      "Prop": "Objeto",
+      "Is in the party": "Está no grupo",
+      "is facing": "está virado para",
+      "is being driven": "está sendo conduzido",
+      "Include Equipment": "Incluir equipamento",
+      "Keyboard": "Teclado",
+      "Pointer": "Ponteiro",
+      "min": "min",
+      "sec": "seg",
+      "Reactor": "Reactor",
       "Select Parallax Background": "Selecionar fundo parallax",
       "Browse…": "Procurar…",
       "Select Picture": "Selecionar imagem",
@@ -716,6 +806,21 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Rig bound — {bones} bones, {vertices} vertices": "Rig vinculado — {bones} ossos, {vertices} vértices"
     },
     "fr": {
+      "Height (tiles):": "Hauteur (tuiles) :",
+      "Set Height...": "Définir la hauteur...",
+      "Set Height": "Définir la hauteur",
+      "Descend": "Descendre",
+      "Rise": "Monter",
+      "Prop": "Accessoire",
+      "Is in the party": "Est dans l'équipe",
+      "is facing": "regarde vers",
+      "is being driven": "est conduit",
+      "Include Equipment": "Inclure l'équipement",
+      "Keyboard": "Clavier",
+      "Pointer": "Pointeur",
+      "min": "min",
+      "sec": "sec",
+      "Reactor": "Reactor",
       "Select Parallax Background": "Sélectionner le fond parallaxe",
       "Browse…": "Parcourir…",
       "Select Picture": "Sélectionner une image",
@@ -853,6 +958,21 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Rig bound — {bones} bones, {vertices} vertices": "Rig lié — {bones} os, {vertices} sommets"
     },
     "it": {
+      "Height (tiles):": "Altezza (tile):",
+      "Set Height...": "Imposta altezza...",
+      "Set Height": "Imposta altezza",
+      "Descend": "Scendere",
+      "Rise": "Salire",
+      "Prop": "Oggetto",
+      "Is in the party": "È nel gruppo",
+      "is facing": "è rivolto verso",
+      "is being driven": "è in uso",
+      "Include Equipment": "Includi equipaggiamento",
+      "Keyboard": "Tastiera",
+      "Pointer": "Puntatore",
+      "min": "min",
+      "sec": "sec",
+      "Reactor": "Reactor",
       "Select Parallax Background": "Seleziona sfondo parallasse",
       "Browse…": "Sfoglia…",
       "Select Picture": "Seleziona immagine",
@@ -1000,6 +1120,21 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Rig bound — {bones} bones, {vertices} vertices": "Rig vincolato — {bones} ossa, {vertices} vertici"
     },
     "de": {
+      "Height (tiles):": "Höhe (Kacheln):",
+      "Set Height...": "Höhe festlegen...",
+      "Set Height": "Höhe festlegen",
+      "Descend": "Absinken",
+      "Rise": "Aufsteigen",
+      "Prop": "Requisit",
+      "Is in the party": "Ist in der Gruppe",
+      "is facing": "blickt nach",
+      "is being driven": "wird gesteuert",
+      "Include Equipment": "Ausrüstung einbeziehen",
+      "Keyboard": "Tastatur",
+      "Pointer": "Zeiger",
+      "min": "Min",
+      "sec": "Sek",
+      "Reactor": "Reactor",
       "Select Parallax Background": "Parallax-Hintergrund auswählen",
       "Browse…": "Durchsuchen…",
       "Select Picture": "Bild auswählen",
@@ -1115,6 +1250,21 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Rig bound — {bones} bones, {vertices} vertices": "Rig gebunden — {bones} Bones, {vertices} Vertices"
     },
     "ru": {
+      "Height (tiles):": "Высота (тайлы):",
+      "Set Height...": "Задать высоту...",
+      "Set Height": "Задать высоту",
+      "Descend": "Опуститься",
+      "Rise": "Подняться",
+      "Prop": "Объект",
+      "Is in the party": "В группе",
+      "is facing": "смотрит",
+      "is being driven": "управляется",
+      "Include Equipment": "Включая экипировку",
+      "Keyboard": "Клавиатура",
+      "Pointer": "Указатель",
+      "min": "мин",
+      "sec": "сек",
+      "Reactor": "Reactor",
       "Select Parallax Background": "Выберите параллакс",
       "Browse…": "Обзор…",
       "Select Picture": "Выберите картинку",
@@ -1237,6 +1387,21 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Rig bound — {bones} bones, {vertices} vertices": "Скелет привязан — {bones} костей, {vertices} вершин"
     },
     "pl": {
+      "Height (tiles):": "Wysokość (kafelki):",
+      "Set Height...": "Ustaw wysokość...",
+      "Set Height": "Ustaw wysokość",
+      "Descend": "Opadnij",
+      "Rise": "Wznieś",
+      "Prop": "Rekwizyt",
+      "Is in the party": "Jest w drużynie",
+      "is facing": "patrzy w kierunku",
+      "is being driven": "jest prowadzony",
+      "Include Equipment": "Uwzględnij ekwipunek",
+      "Keyboard": "Klawiatura",
+      "Pointer": "Wskaźnik",
+      "min": "min",
+      "sec": "sek",
+      "Reactor": "Reactor",
       "Select Parallax Background": "Wybierz tło paralaksy",
       "Browse…": "Przeglądaj…",
       "Select Picture": "Wybierz obraz",
@@ -1358,6 +1523,21 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Rig bound — {bones} bones, {vertices} vertices": "Szkielet powiązany — {bones} kości, {vertices} wierzchołków"
     },
     "el": {
+      "Height (tiles):": "Ύψος (πλακίδια):",
+      "Set Height...": "Ορισμός ύψους...",
+      "Set Height": "Ορισμός ύψους",
+      "Descend": "Κάθοδος",
+      "Rise": "Άνοδος",
+      "Prop": "Αντικείμενο",
+      "Is in the party": "Είναι στην ομάδα",
+      "is facing": "κοιτάζει προς",
+      "is being driven": "οδηγείται",
+      "Include Equipment": "Συμπερίληψη εξοπλισμού",
+      "Keyboard": "Πληκτρολόγιο",
+      "Pointer": "Δείκτης",
+      "min": "λεπ",
+      "sec": "δευτ",
+      "Reactor": "Reactor",
       "Select Parallax Background": "Επιλέξτε φόντο παράλλαξης",
       "Browse…": "Περιήγηση…",
       "Select Picture": "Επιλέξτε εικόνα",
@@ -1479,6 +1659,21 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Rig bound — {bones} bones, {vertices} vertices": "Ο σκελετός συνδέθηκε — {bones} οστά, {vertices} κορυφές"
     },
     "ar": {
+      "Height (tiles):": "الارتفاع (بلاطات):",
+      "Set Height...": "تعيين الارتفاع...",
+      "Set Height": "تعيين الارتفاع",
+      "Descend": "انخفاض",
+      "Rise": "ارتفاع",
+      "Prop": "عنصر",
+      "Is in the party": "في الفريق",
+      "is facing": "يواجه",
+      "is being driven": "قيد القيادة",
+      "Include Equipment": "تضمين العتاد",
+      "Keyboard": "لوحة المفاتيح",
+      "Pointer": "المؤشر",
+      "min": "د",
+      "sec": "ث",
+      "Reactor": "Reactor",
       "Select Parallax Background": "اختر خلفية باراللاكس",
       "Browse…": "استعراض…",
       "Select Picture": "اختر الصورة",
@@ -1680,6 +1875,21 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Rig bound — {bones} bones, {vertices} vertices": "تم ربط الهيكل العظمي — {bones} عظمة، {vertices} رأسًا"
     },
     "tr": {
+      "Height (tiles):": "Yükseklik (karo):",
+      "Set Height...": "Yükseklik ayarla...",
+      "Set Height": "Yükseklik ayarla",
+      "Descend": "Alçal",
+      "Rise": "Yüksel",
+      "Prop": "Nesne",
+      "Is in the party": "Partide",
+      "is facing": "yönü",
+      "is being driven": "sürülüyor",
+      "Include Equipment": "Ekipmanı dahil et",
+      "Keyboard": "Klavye",
+      "Pointer": "İşaretçi",
+      "min": "dk",
+      "sec": "sn",
+      "Reactor": "Reactor",
       "Select Parallax Background": "Paralaks arka plan seç",
       "Browse…": "Gözat…",
       "Select Picture": "Resim Seç",
@@ -1897,6 +2107,21 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Rig bound — {bones} bones, {vertices} vertices": "İskelet bağlandı — {bones} kemik, {vertices} köşe"
     },
     "id": {
+      "Height (tiles):": "Ketinggian (petak):",
+      "Set Height...": "Atur ketinggian...",
+      "Set Height": "Atur ketinggian",
+      "Descend": "Turun",
+      "Rise": "Naik",
+      "Prop": "Properti",
+      "Is in the party": "Ada di grup",
+      "is facing": "menghadap",
+      "is being driven": "sedang dikendarai",
+      "Include Equipment": "Sertakan perlengkapan",
+      "Keyboard": "Keyboard",
+      "Pointer": "Penunjuk",
+      "min": "mnt",
+      "sec": "dtk",
+      "Reactor": "Reactor",
       "Select Parallax Background": "Pilih Latar Belakang Paralaks",
       "Browse…": "Telusuri…",
       "Select Picture": "Pilih Gambar",
@@ -2044,6 +2269,21 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Rig bound — {bones} bones, {vertices} vertices": "Rig terikat — {bones} tulang, {vertices} verteks"
     },
     "vi": {
+      "Height (tiles):": "Độ cao (ô):",
+      "Set Height...": "Đặt độ cao...",
+      "Set Height": "Đặt độ cao",
+      "Descend": "Hạ xuống",
+      "Rise": "Bay lên",
+      "Prop": "Đạo cụ",
+      "Is in the party": "Có trong nhóm",
+      "is facing": "quay mặt về",
+      "is being driven": "đang được điều khiển",
+      "Include Equipment": "Bao gồm trang bị",
+      "Keyboard": "Bàn phím",
+      "Pointer": "Con trỏ",
+      "min": "phút",
+      "sec": "giây",
+      "Reactor": "Reactor",
       "Select Parallax Background": "Chọn nền parallax",
       "Browse…": "Duyệt…",
       "Select Picture": "Chọn hình ảnh",
@@ -2215,6 +2455,21 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Rig bound — {bones} bones, {vertices} vertices": "Đã liên kết rig — {bones} xương, {vertices} đỉnh"
     },
     "th": {
+      "Height (tiles):": "ความสูง (ไทล์):",
+      "Set Height...": "ตั้งความสูง...",
+      "Set Height": "ตั้งความสูง",
+      "Descend": "ลอยลง",
+      "Rise": "ลอยขึ้น",
+      "Prop": "พร็อพ",
+      "Is in the party": "อยู่ในปาร์ตี้",
+      "is facing": "หันหน้าไปทาง",
+      "is being driven": "กำลังถูกขับ",
+      "Include Equipment": "รวมอุปกรณ์ที่สวมใส่",
+      "Keyboard": "คีย์บอร์ด",
+      "Pointer": "ตัวชี้",
+      "min": "นาที",
+      "sec": "วินาที",
+      "Reactor": "Reactor",
       "Select Parallax Background": "เลือกพื้นหลังพารัลแลกซ์",
       "Browse…": "เรียกดู…",
       "Select Picture": "เลือกรูปภาพ",
@@ -2884,6 +3139,9 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
   },
   "commands": {
     "ja": {
+      "Scoped Wait": "範囲ウェイト",
+      "Wait for 3D": "3Dの完了を待つ",
+      "Transform 3D Model": "3Dモデルの変形",
       "Input Number": "数値入力の処理",
       "Break Loop": "ループの中断",
       "Change Armors": "防具の増減",
@@ -2894,6 +3152,9 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Change Transparency": "透明状態の変更"
     },
     "zh-Hant": {
+      "Scoped Wait": "範圍等待",
+      "Wait for 3D": "等待 3D",
+      "Transform 3D Model": "變換 3D 模型",
       "Input Number": "輸入數字",
       "Break Loop": "中斷迴圈",
       "Change Armors": "變更防具",
@@ -2904,6 +3165,9 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Change Transparency": "變更透明度"
     },
     "zh-Hans": {
+      "Scoped Wait": "范围等待",
+      "Wait for 3D": "等待 3D",
+      "Transform 3D Model": "变换 3D 模型",
       "Input Number": "输入数字",
       "Break Loop": "中断循环",
       "Change Armors": "更改防具",
@@ -2914,6 +3178,9 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Change Transparency": "更改透明度"
     },
     "ko": {
+      "Scoped Wait": "범위 대기",
+      "Wait for 3D": "3D 대기",
+      "Transform 3D Model": "3D 모델 변형",
       "Input Number": "숫자 입력 처리",
       "Break Loop": "루프 중단",
       "Change Armors": "방어구 증감",
@@ -2924,6 +3191,9 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Change Transparency": "투명 상태 변경"
     },
     "es": {
+      "Scoped Wait": "Espera dirigida",
+      "Wait for 3D": "Esperar 3D",
+      "Transform 3D Model": "Transformar modelo 3D",
       "Input Number": "Introducir número",
       "Conditional Branch": "Rama condicional",
       "Break Loop": "Interrumpir bucle",
@@ -2936,12 +3206,18 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Change Actor Images": "Cambiar imágenes del personaje"
     },
     "pt": {
+      "Scoped Wait": "Espera direcionada",
+      "Wait for 3D": "Aguardar 3D",
+      "Transform 3D Model": "Transformar modelo 3D",
       "Show Scrolling Text": "Mostrar texto com rolagem",
       "Fadeout BGM": "Desvanecer BGM",
       "Fadeout BGS": "Desvanecer BGS",
       "Change Actor Images": "Alterar imagens do personagem"
     },
     "fr": {
+      "Scoped Wait": "Attente ciblée",
+      "Wait for 3D": "Attendre la 3D",
+      "Transform 3D Model": "Transformer le modèle 3D",
       "Show Text": "Afficher un texte",
       "Show Choices": "Afficher des choix",
       "Conditional Branch": "Branche conditionnelle",
@@ -2967,6 +3243,9 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Game Over": "Fin de partie"
     },
     "it": {
+      "Scoped Wait": "Attesa mirata",
+      "Wait for 3D": "Attendi 3D",
+      "Transform 3D Model": "Trasforma modello 3D",
       "Input Number": "Inserisci numero",
       "Conditional Branch": "Diramazione condizionale",
       "Change Window Color": "Cambia colore della finestra",
@@ -2980,6 +3259,9 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Script": "Script"
     },
     "de": {
+      "Scoped Wait": "Gezieltes Warten",
+      "Wait for 3D": "Auf 3D warten",
+      "Transform 3D Model": "3D-Modell transformieren",
       "Common Event": "Allgemeines Ereignis",
       "Get on/off Vehicle": "Fahrzeug besteigen/verlassen",
       "Return to Title Screen": "Zum Titelbildschirm zurückkehren",
@@ -3013,6 +3295,9 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Tint Picture": "Bild einfärben"
     },
     "ru": {
+      "Scoped Wait": "Целевое ожидание",
+      "Wait for 3D": "Ждать 3D",
+      "Transform 3D Model": "Преобразовать 3D-модель",
       "Show Choices": "Показать варианты",
       "Return to Title Screen": "Вернуться к титульному экрану",
       "Change Encounter": "Изменить доступность встреч",
@@ -3040,6 +3325,9 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Tint Picture": "Тонировать изображение"
     },
     "pl": {
+      "Scoped Wait": "Oczekiwanie celowane",
+      "Wait for 3D": "Czekaj na 3D",
+      "Transform 3D Model": "Przekształć model 3D",
       "End": "Koniec",
       "Show Text": "Pokaż tekst",
       "Show Choices": "Pokaż wybory",
@@ -3166,6 +3454,9 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Play 3D Effect": "Odtwórz efekt 3D"
     },
     "el": {
+      "Scoped Wait": "Στοχευμένη αναμονή",
+      "Wait for 3D": "Αναμονή 3D",
+      "Transform 3D Model": "Μετασχηματισμός μοντέλου 3D",
       "Abort Battle": "Διακοπή μάχης",
       "Change Actor Images": "Αλλαγή εικόνων ήρωα",
       "Change Defeat ME": "Αλλαγή ME ήττας",
@@ -3188,6 +3479,9 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Tint Picture": "Χρωματισμός εικόνας"
     },
     "ar": {
+      "Scoped Wait": "انتظار محدد النطاق",
+      "Wait for 3D": "انتظار ثلاثي الأبعاد",
+      "Transform 3D Model": "تحويل النموذج ثلاثي الأبعاد",
       "End": "النهاية",
       "Conditional Branch": "تفرّع شرطي",
       "Break Loop": "إنهاء حلقة التكرار",
@@ -3229,6 +3523,9 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Name Input Processing": "فتح إدخال الاسم"
     },
     "tr": {
+      "Scoped Wait": "Kapsamlı bekleme",
+      "Wait for 3D": "3B bekle",
+      "Transform 3D Model": "3B modeli dönüştür",
       "End": "Bitiş",
       "Conditional Branch": "Koşullu dallanma",
       "Break Loop": "Döngüden çık",
@@ -3272,6 +3569,9 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Name Input Processing": "Ad girişi işlemleri"
     },
     "id": {
+      "Scoped Wait": "Tunggu tertarget",
+      "Wait for 3D": "Tunggu 3D",
+      "Transform 3D Model": "Transformasi model 3D",
       "Change Gold": "Ubah Jumlah Emas",
       "Change Items": "Ubah Jumlah Item",
       "Change Weapons": "Ubah Jumlah Senjata",
@@ -3286,6 +3586,9 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Replay BGM": "Lanjutkan BGM"
     },
     "vi": {
+      "Scoped Wait": "Chờ theo phạm vi",
+      "Wait for 3D": "Chờ 3D",
+      "Transform 3D Model": "Biến đổi mô hình 3D",
       "Change Gold": "Thay đổi tiền vàng",
       "Change Items": "Thay đổi số vật phẩm",
       "Change Weapons": "Thay đổi số vũ khí",
@@ -3300,6 +3603,9 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Replay BGM": "Tiếp tục BGM đã lưu"
     },
     "th": {
+      "Scoped Wait": "รอตามขอบเขต",
+      "Wait for 3D": "รอ 3D",
+      "Transform 3D Model": "แปลงโมเดล 3D",
       "Change Gold": "เปลี่ยนจำนวนเงิน",
       "Change Items": "เปลี่ยนจำนวนไอเทม",
       "Change Weapons": "เปลี่ยนจำนวนอาวุธ",
@@ -3316,29 +3622,35 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
   },
   "sections": {
     "ja": {
+      "Game Flow": "ゲームフロー",
       "Actor": "アクター",
       "Party": "パーティ",
       "Advanced": "上級"
     },
     "zh-Hant": {
+      "Game Flow": "遊戲流程",
       "Actor": "角色",
       "Party": "隊伍",
       "Advanced": "進階"
     },
     "zh-Hans": {
+      "Game Flow": "游戏流程",
       "Actor": "角色",
       "Party": "队伍",
       "Advanced": "高级"
     },
     "ko": {
+      "Game Flow": "게임 흐름",
       "Actor": "액터",
       "Party": "파티",
       "Advanced": "고급"
     },
     "es": {
+      "Game Flow": "Flujo de juego",
       "Actor": "Personaje"
     },
     "pt": {
+      "Game Flow": "Fluxo de jogo",
       "Message & Flow": "Mensagem e fluxo",
       "Map & Screen": "Mapa e tela",
       "Battle & System": "Batalha e sistema",
@@ -3360,14 +3672,21 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Advanced": "Avançado"
     },
     "fr": {
+      "Game Flow": "Flux de jeu",
       "Actor": "Personnage"
     },
     "it": {
+      "Game Flow": "Flusso di gioco",
       "Actor": "Personaggio"
     },
-    "de": {},
-    "ru": {},
+    "de": {
+      "Game Flow": "Spielfluss"
+    },
+    "ru": {
+      "Game Flow": "Ход игры"
+    },
     "pl": {
+      "Game Flow": "Przepływ gry",
       "Message & Flow": "Wiadomości i przepływ",
       "Map & Screen": "Mapa i ekran",
       "Battle & System": "Walka i system",
@@ -3392,9 +3711,11 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "User Interfaces": "Interfejsy użytkownika"
     },
     "el": {
+      "Game Flow": "Ροή παιχνιδιού",
       "Actor": "Ήρωας"
     },
     "ar": {
+      "Game Flow": "تدفق اللعبة",
       "Message & Flow": "الرسائل والتدفق",
       "Map & Screen": "الخريطة والشاشة",
       "Battle & System": "المعركة والنظام",
@@ -3419,6 +3740,7 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "User Interfaces": "واجهات المستخدم"
     },
     "tr": {
+      "Game Flow": "Oyun akışı",
       "Message & Flow": "Mesaj ve akış",
       "Map & Screen": "Harita ve ekran",
       "Battle & System": "Savaş ve sistem",
@@ -3443,13 +3765,16 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "User Interfaces": "Kullanıcı arayüzleri"
     },
     "id": {
+      "Game Flow": "Alur permainan",
       "Party": "Kelompok",
       "Timing": "Waktu"
     },
     "vi": {
+      "Game Flow": "Luồng trò chơi",
       "Timing": "Thời điểm"
     },
     "th": {
+      "Game Flow": "โฟลว์เกม",
       "Flow Control": "การควบคุมลำดับ",
       "Character": "ตัวละครบนแผนที่",
       "Scene Control": "การควบคุมฉาก"

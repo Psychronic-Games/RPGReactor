@@ -349,9 +349,10 @@ class MapEditor {
         this.mapSampleDrag = null;
         this.clearPreview();
 
-        // Picking a single autotile takes the kind, not the exact piece — the
-        // eyedropper, as RPG Maker's own right-click is. A sampled *area* is a
-        // different gesture and is handled below.
+        // Picking a single autotile takes the kind for ordinary painting, and
+        // remembers the exact piece for Shift-painting, as RPG Maker's own
+        // right-click does: Shift+click then stamps that corner verbatim. A
+        // sampled *area* is a different gesture and is handled below.
         if (start.x === current.x && start.y === current.y
             && this.selectPickedAutotile(start.x, start.y)) {
             return;
@@ -362,7 +363,8 @@ class MapEditor {
     }
 
     /**
-     * Point the palette at the autotile kind under a picked cell.
+     * Point the palette at the autotile kind under a picked cell, carrying the
+     * picked piece's exact id (`tileId`) for Shift-painting.
      *
      * Returns false when the cell holds no autotile, leaving the caller to fall
      * back to a verbatim stamp.
@@ -381,6 +383,7 @@ class MapEditor {
             if (!position) return false;
 
             this.clearMapStamp();
+            position.tileId = tileId;
             palette.selectedTiles = [position];
             palette.currentLayer = 'A';
             if (this.shadowPenMode) this.setShadowPenMode(false);
@@ -411,6 +414,16 @@ class MapEditor {
             }
         }
         return null;
+    }
+
+    /**
+     * The id a Shift-paint stamps for a palette tile: the exact piece a pick
+     * remembered when it is of the same kind, else the kind's base shape.
+     */
+    exactAutotileId(paletteTile, baseTileId) {
+        const exact = paletteTile && paletteTile.tileId;
+        if (!Number.isInteger(exact) || exact < 2048 || exact >= 8192) return baseTileId;
+        return Math.floor((exact - 2048) / 48) === Math.floor((baseTileId - 2048) / 48) ? exact : baseTileId;
     }
 
     paintMapStamp(x, y) {
@@ -767,6 +780,8 @@ class MapEditor {
     isUndoSnapshotValid(snapshot) {
         const map = this.tilemapManager && this.tilemapManager.currentMap;
         if (!map) return false;
+        // A props snapshot is the map's own list, any map: it is checked by its map id.
+        if (snapshot && snapshot.kind === 'props') return snapshot.mapId === map.id;
         // Elevation strokes share this stack so one Ctrl+Z steps back through
         // the work in the order it was done, rather than the author having to
         // know which of two histories a change went into. A bare array is the
@@ -876,9 +891,36 @@ class MapEditor {
         return before !== this.undoStack.length + this.redoStack.length;
     }
 
+    /** The props tab's edits share this history: a snapshot of the map's prop list before a change. */
+    recordPropsState(snapshot) {
+        const map = this.tilemapManager && this.tilemapManager.currentMap;
+        if (!map) return;
+        this.undoStack.push({ kind: 'props', mapId: map.id, data: snapshot });
+        this.redoStack = [];
+        this.trimMapHistory(this.undoStack);
+        this.notifyUndoStateChange();
+    }
+
+    propsManager() {
+        return this.projectController?.modelPropsManager || window.reactor?.modelPropsManager || null;
+    }
+
     undo() {
         if (this.dropStaleUndoStates()) this.notifyUndoStateChange();
         if (this.undoStack.length === 0) return;
+
+        if (this.undoStack[this.undoStack.length - 1]?.kind === 'props') {
+            const entry = this.undoStack.pop();
+            const manager = this.propsManager();
+            if (manager) {
+                this.redoStack.push({ kind: 'props', mapId: entry.mapId, data: manager.snapshotProps() });
+                this.trimMapHistory(this.redoStack);
+                manager.restoreProps(entry.data);
+            }
+            this.notifyUndoStateChange();
+            this.notifyMapEdited();
+            return;
+        }
 
         // An elevation entry restores the height field and leaves the tiles
         // alone; the two kinds share one stack but not one payload.
@@ -927,6 +969,18 @@ class MapEditor {
 
     redo() {
         if (this.dropStaleUndoStates()) this.notifyUndoStateChange();
+        if (this.redoStack[this.redoStack.length - 1]?.kind === 'props') {
+            const entry = this.redoStack.pop();
+            const manager = this.propsManager();
+            if (manager) {
+                this.undoStack.push({ kind: 'props', mapId: entry.mapId, data: manager.snapshotProps() });
+                this.trimMapHistory(this.undoStack);
+                manager.restoreProps(entry.data);
+            }
+            this.notifyUndoStateChange();
+            this.notifyMapEdited();
+            return;
+        }
         if (this.redoStack.length === 0) return;
 
         if (this.redoStack[this.redoStack.length - 1]?.kind === 'object3d') {
@@ -1544,9 +1598,9 @@ class MapEditor {
                             affectedTiles.add(`${targetX},${targetY},0`);
                         }
 
-                        // Place the tile with base shape
+                        // Place the tile with base shape (a Shift-paint of a picked piece: that piece)
                         const targetLayerIndex = actualPlacementLayer * layerSize + basePos;
-                        data[targetLayerIndex] = baseTileId;
+                        data[targetLayerIndex] = preserveSelectedAutotileShapes ? this.exactAutotileId(tile, baseTileId) : baseTileId;
                         affectedTiles.add(`${targetX},${targetY},${actualPlacementLayer}`);
 
                         // For A1/A2 decorations on layer 1, also update layer 0 for proper rendering
@@ -1780,7 +1834,10 @@ class MapEditor {
                     const targetLayerIndex = actualPlacementLayer * layerSize + basePos;
                     data[targetLayerIndex] = baseTileId; // Base shape first
 
-                    if (!preserveAutotileShape) {
+                    if (preserveAutotileShape) {
+                        // A picked piece is stamped as it was, corner and all.
+                        data[targetLayerIndex] = this.exactAutotileId(paletteTile, baseTileId);
+                    } else {
                         const result = this.calculateAutotileShape(
                             baseTileId, mapX, mapY, null, actualPlacementLayer);
                         data[targetLayerIndex] = result.tileId;
@@ -3247,7 +3304,7 @@ class MapEditor {
                     const placeLayer = this.getAutotilePlacementLayer(baseTileId, px, py);
                     const previewTileId = this.preserveAutotileShape &&
                         ['A1', 'A2', 'A3', 'A4'].includes(layerToUse)
-                        ? baseTileId
+                        ? this.exactAutotileId(tile, baseTileId)
                         : this.calculateAutotileShape(baseTileId, px, py, hoverPattern, placeLayer).tileId;
                     const auto = new PIXI.Container();
                     auto.alpha = 0.7;

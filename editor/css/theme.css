@@ -2759,6 +2759,133 @@ input[type="number"]::-webkit-outer-spin-button {
     color: var(--color-text-muted);
     text-align: center;
 }
+
+/* Conditional Branch: RPG Maker's numbered tabs of radio-chosen conditions,
+   plus a Reactor tab for the input conditions RPG Maker does not have. */
+.rr-conditional-branch-dialog {
+    width: min(520px, calc(100vw - 24px));
+}
+.rr-cb-body {
+    gap: 0;
+}
+.rr-cb-tabs {
+    display: flex;
+    gap: 2px;
+    padding: 0 6px;
+}
+.rr-cb-tab {
+    min-width: 36px;
+    padding: 5px 12px;
+    color: var(--color-text-muted);
+    background: var(--color-bg-deep);
+    border: 1px solid var(--color-border);
+    border-bottom: 0;
+    border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+    cursor: pointer;
+    font: inherit;
+    font-size: var(--font-size-base);
+    font-weight: 600;
+}
+.rr-cb-tab:hover {
+    color: var(--color-accent-bright);
+}
+.rr-cb-tab.has-condition {
+    color: var(--color-accent-bright);
+}
+.rr-cb-tab.is-active {
+    color: var(--color-text-strong);
+    background: var(--color-bg-list-item);
+    position: relative;
+    top: 1px;
+}
+.rr-cb-page {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    min-height: 304px;
+    padding: 10px 10px 12px;
+    background: var(--color-bg-list-item);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+}
+.rr-cb-row {
+    display: grid;
+    grid-template-columns: 16px 92px minmax(0, 1fr);
+    gap: 7px;
+    align-items: center;
+    min-height: 30px;
+}
+.rr-cb-row.is-sub {
+    grid-template-columns: 16px 80px minmax(0, 1fr);
+    margin-left: 23px;
+    min-height: 28px;
+}
+.rr-cb-row.is-check {
+    grid-template-columns: 0 16px minmax(0, 1fr);
+}
+.rr-cb-row > label {
+    overflow: hidden;
+    color: var(--color-text);
+    cursor: pointer;
+    font-size: var(--font-size-base);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.rr-cb-row.is-off > label,
+.rr-cb-row.is-off .rr-cb-word {
+    color: var(--color-text-dim);
+}
+.rr-cb-row > input[type="checkbox"] {
+    margin: 0;
+}
+.rr-cb-controls {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+}
+.rr-cb-controls > select,
+.rr-cb-controls > input,
+.rr-cb-controls > textarea,
+.rr-cb-controls > .rr-number-stepper,
+.rr-cb-controls > .rr-variable-reference {
+    flex: 1 1 0;
+    min-width: 0;
+}
+.rr-cb-controls > select.is-narrow,
+.rr-cb-controls > input.is-narrow {
+    flex: 0 0 auto;
+    width: 72px;
+}
+.rr-cb-controls > .rr-number-stepper > input {
+    width: 100%;
+}
+.rr-cb-controls > :disabled,
+.rr-cb-controls > .rr-number-stepper:has(> input:disabled) {
+    opacity: 0.45;
+}
+.rr-cb-word {
+    flex: 0 0 auto;
+    color: var(--color-text-muted);
+    font-size: var(--font-size-sm);
+    white-space: nowrap;
+}
+.rr-cb-script {
+    height: 30px;
+    min-height: 30px;
+    resize: vertical;
+    font-family: var(--font-mono, monospace);
+    font-size: var(--font-size-sm);
+}
+.rr-cb-else {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-right: auto;
+    color: var(--color-text);
+    cursor: pointer;
+    font-size: var(--font-size-base);
+}
 .rr-command-control-group {
     display: flex;
     flex-wrap: wrap;

@@ -2405,6 +2405,10 @@ class EventManager {
     renderEvents() {
         if (!this.eventContainer || !this.currentMap) return;
         this.renderEventPreviews();
+        // The 3D view draws the same events; without this an edited event
+        // kept its old model there until the next full rebuild.
+        const map3d = this.projectController?.mapEditor3D;
+        if (map3d?.isEnabled?.()) map3d.refreshEvents?.();
 
         // Clear existing event sprites. Destroy them — removeChildren()
         // alone detaches, and each name label is a PIXI.Text that owns a

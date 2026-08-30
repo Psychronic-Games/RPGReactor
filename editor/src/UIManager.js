@@ -651,6 +651,15 @@ class UIManager {
                     }
                 }
 
+                // A selected 3D prop owns the key: Delete removes the prop
+                // (undoable through the map history), never the map behind it.
+                const propsManager = window.reactor?.projectController?.modelPropsManager || window.reactor?.modelPropsManager;
+                if (!isTextInput && !eventEditorOpen && propsManager?.active && propsManager.selectedId) {
+                    e.preventDefault();
+                    propsManager.remove(propsManager.selectedId);
+                    return;
+                }
+
                 if (!isTextInput && !eventEditorOpen && this.callbacks.getEventManager) {
                     const eventManager = this.callbacks.getEventManager();
                     if (eventManager && eventManager.eventMode && eventManager.selectedEvent) {

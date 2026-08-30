@@ -25,6 +25,8 @@ class EventCommandList {
         this.playModelAnimationEditor = new PlayModelAnimationEditor();
         this.callUserInterfaceEditor = new CallUserInterfaceEditor();
         this.camera3DEditor = typeof Camera3DEditor !== 'undefined' ? new Camera3DEditor() : null;
+        this.transformModel3DEditor = typeof TransformModel3DEditor !== 'undefined' ? new TransformModel3DEditor() : null;
+        this.waitForModel3DEditor = typeof WaitForModel3DEditor !== 'undefined' ? new WaitForModel3DEditor() : null;
         this.playModelEffectEditor = typeof PlayModelEffectEditor !== 'undefined' ? new PlayModelEffectEditor() : null;
         this.videoSurfaceEditor = typeof VideoSurfaceEditor !== 'undefined'
             ? new VideoSurfaceEditor(eventEditor.databaseManager, eventEditor.projectController) : null;
@@ -387,6 +389,8 @@ class EventCommandList {
         }
         if (name === 'PlayModelAnimation') return this.playModelAnimationEditor;
         if (name === 'ChangeCamera3D') return this.camera3DEditor;
+        if (name === 'TransformModel3D') return this.transformModel3DEditor;
+        if (name === 'WaitForModelAnimation' || name === 'ScopedWait') return this.waitForModel3DEditor;
         if (name === 'PlayModelEffect') return this.playModelEffectEditor;
         if (name === 'CallUserInterface') return this.callUserInterfaceEditor;
         return null;
@@ -1827,7 +1831,23 @@ class EventCommandList {
                         else if (mc === 42) description += `: ${mp[0]}`;
                         else if (mc === 43) { const blendName = ({0:'Normal',1:'Additive',2:'Multiply',3:'Screen'})[mp[0]]; description += `: ${blendName ? tt(blendName) : mp[0]}`; }
                         else if (mc === 44) description += mp[0] && mp[0].name ? `: ${mp[0].name}` : '';
-                        else if (mc === 45) description += `: ${String(mp[0] || '').substring(0, 30)}`;
+                        else if (mc === 45) {
+                            // A Reactor route step rides a Script entry; it
+                            // says what it does, not the marker that does it.
+                            const step = typeof SetMovementRouteEditor !== 'undefined' && SetMovementRouteEditor.parseRouteCommand
+                                ? SetMovementRouteEditor.parseRouteCommand(params[0]) : null;
+                            if (step) {
+                                if (step.op === 'rise') description = tt('Rise');
+                                else if (step.op === 'descend') description = tt('Descend');
+                                else if (step.op === 'faceceiling') description = tt('Face Ceiling');
+                                else if (step.op === 'faceground') description = tt('Face Ground');
+                                else if (step.op === 'standup') description = tt('Stand Up');
+                                else if (step.op === 'rotate') description = `${tt('Rotate')}: ${step.n}°`;
+                                else description = `${tt('Set Height')}: ${step.n}`;
+                            } else {
+                                description += `: ${String(mp[0] || '').substring(0, 30)}`;
+                            }
+                        }
                     }
                 }
                 break;

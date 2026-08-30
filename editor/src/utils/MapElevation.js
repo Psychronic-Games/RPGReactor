@@ -361,6 +361,12 @@
             pitch: wrap(raw.pitch),
             roll: wrap(raw.roll),
             direction: PROP_DIRECTIONS.indexOf(direction) >= 0 ? direction : 2,
+            // Per-axis stretch on top of the size; left out when it is 1 on every axis.
+            ...(() => {
+                const axes = Array.isArray(raw.stretch) ? raw.stretch : [];
+                const stretch = [0, 1, 2].map(i => { const v = number(axes[i], 1); return v > 0 ? Math.round(v * 100) / 100 : 1; });
+                return stretch.every(v => v === 1) ? {} : { stretch };
+            })(),
             size: size > 0 ? Math.round(size * 100) / 100 : 2,
             scale: scale > 0 ? Math.round(scale * 1000) / 1000 : 1,
             passable: raw.passable === true || raw.passable === 'true',

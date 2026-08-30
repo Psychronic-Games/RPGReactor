@@ -440,8 +440,14 @@ test('a turning model must clear the disc its corners sweep', () => {
             'not overlapped while the car holds its facing');
         assert.equal(Reactor3D.eventModelWouldOverlap(event, 5, 5, bystander, 2), true,
             'a turning step sweeps the diagonal');
-        assert.equal(Reactor3D.eventModelWouldOverlap(event, 5, 5, bystander, 8), true,
-            'in either swing direction');
+        // Turning the OTHER way the bow swings through the north-east and
+        // the stern through the south-west; the south-east bystander is
+        // never touched. The old whole-disc test blocked this too, which is
+        // exactly why a long vehicle could not turn near anything.
+        assert.equal(Reactor3D.eventModelWouldOverlap(event, 5, 5, bystander, 8), false,
+            'the unswept quadrant stays free');
+        assert.equal(Reactor3D.eventModelWouldOverlap(event, 5, 5, { _x: 6, _y: 4 }, 8), true,
+            'while the swept one still blocks');
         const far = { _x: 9, _y: 9 };
         assert.equal(Reactor3D.eventModelWouldOverlap(event, 5, 5, far, 2), false,
             'outside the sweep the turn is free');

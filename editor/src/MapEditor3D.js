@@ -13,6 +13,9 @@
  * the game will draw.
  */
 class MapEditor3D {
+    /** The most pixels an in-scene effect is drawn at per frame in this view (a 1920x1080 view). */
+    static EFFECT_PIXELS = 1920 * 1080;
+
     constructor(projectController) {
         this.projectController = projectController;
         // A cell is the project's tile size in pixels, which MZ lets a project
@@ -366,10 +369,12 @@ class MapEditor3D {
         this._onClassesChanged = this._onMapEdited;
         document.addEventListener('rr-tileset-3d-saved', this._onClassesChanged);
 
-        // An event's note decides how it stands — see `buildEvents` — so a note
-        // edited in the event window has to reach here. Same throttle: editing
-        // events can announce several times in a row.
-        this._onEventsChanged = this._onMapEdited;
+        // An event's note decides how it stands — see `buildEvents` — so a
+        // note edited in the event window has to reach here. But events are
+        // their own layer: editing or deleting one must not blink every model
+        // on the map, so this refreshes the event pieces (with a per-event
+        // diff) instead of rebuilding the world.
+        this._onEventsChanged = () => this.refreshEvents();
         document.addEventListener('rr-events-changed', this._onEventsChanged);
 
         // Selecting an event anywhere — the map, the events panel, the editor —
@@ -445,6 +450,20 @@ class MapEditor3D {
                 console.error('Could not restore the 2D renderer state:', error);
             }
         }
+        // The saved size predates whatever the layout did while 3D was up,
+        // so a straight restore could leave the 2D view showing a cropped
+        // corner of the map until the next manual zoom. Recompute from the
+        // live layout once the 3D surfaces are out of the DOM — the same
+        // crop-and-redraw a wheel zoom runs.
+        // A timeout, not requestAnimationFrame: this is layout cleanup, not
+        // a frame, and the watchdog that proves a failed render schedules no
+        // further frames counts rAF calls.
+        setTimeout(() => {
+            const tilemap = this.projectController?.tilemapManager
+                || this.projectController?.getTilemapManager?.();
+            tilemap?.applyViewportCrop?.();
+            tilemap?.renderMap?.({ preserveScroll: true });
+        });
         this.canvas = null;
         this.camera = null;
         this.sheetImages = {};
@@ -683,6 +702,7 @@ class MapEditor3D {
         this.buildHoverCell();
         if (!await this.buildEvents(mapData, request)) return false;
         this.buildProps(mapData, request);
+        this.drawPassage();
         if (!this.rebuildIsCurrent(request, renderer)) return false;
         this.projectController?.videoSurfacePreviewManager?.attachThree?.(this);
         // Frame the map when it is a different map, not on every rebuild.
@@ -963,97 +983,122 @@ class MapEditor3D {
         this.pickables = [];
         this.animatedEvents = [];
         this.selected = null;
-        const cube = new THREE.BoxGeometry(0.55, 0.55, 0.55);
 
         for (const event of mapData.events || []) {
             if (!event) continue;
-            const elevation = Reactor3D.elevationAt(mapData, event.x, event.y);
-            // Preview Event shows a chosen page instead of the first one.
-            const previewIndex = MapEditor3D.previewPageIndex(mapData, event);
-            const page = event.pages?.[previewIndex ?? 0] || event.pages?.[0];
-            const sprite = this.eventSprite(event, sheets, page?.image, previewIndex !== null && page?.stepAnime ? page : null);
-            if (previewIndex !== null) this.previewEventModel(event, page, previewIndex, mapData, request);
-            const mesh = sprite || new THREE.Mesh(cube, new THREE.MeshBasicMaterial({
-                color: this.eventColor(event),
-                transparent: true,
-                opacity: 0.8
-            }));
-            const height = sprite ? sprite.userData.height : 0.55;
-            // What the raycaster hands back on a click.
-            mesh.userData.event = event;
-            mesh.userData.height = height;
-            this.eventGroup.add(mesh);
-            this.pickables.push(mesh);
+            this._buildOneEvent(event, sheets, mapData, request);
+        }
 
-            /*
-             * A box round the event, so it reads as one.
-             *
-             * An event drawn from a character sheet is just a picture standing
-             * on the map, indistinguishable from a painted tree until you
-             * click it. The 2D canvas borders every event for exactly that
-             * reason. Only the edges are drawn — a filled box would have to be
-             * transparent, and transparent boxes are what sliced the labels.
-             */
-            const boxHeight = Math.max(height, 0.94);
-            const box = this.eventBox(boxHeight, this.eventColor(event));
-            mesh.userData.box = box;
-            mesh.userData.boxHeight = boxHeight;
-            this.eventGroup.add(box);
-
-            /*
-             * An event can say what it is, in its own note.
-             *
-             * An event whose graphic is a *tile* inherits that tile's 3D class
-             * before any geometry is built. One drawn from a character sheet
-             * has no tile to inherit from, so it says so itself — `<3d panel>`,
-             * `<3d panel east>`, `<3d upright>`, `<3d flat>` — which is what
-             * lets an animated piece of a city stand with the painted
-             * buildings beside it instead of turning to follow the viewer.
-             *
-             * Anything that says nothing keeps turning, which is right for
-             * anything character-shaped.
-             */
-            const asked = sprite ? Reactor3D.eventShapeFromNote(event.note) : null;
-            mesh.userData.asked = !!asked;
-            // Standing against a wall means standing still: a sprite that is
-            // part of the art beside it must not turn away from it.
-            // An event that has asked to stand on the ground never joins the
-            // object painted over its cell, here as in the running game.
-            const loose = Reactor3D.eventStaysOnGround?.(event.note);
-            mesh.userData.loose = !!loose;
-            const onFacade = sprite && !asked && !loose
-                && !!this.mapScene?.facadeAt?.(event.x, event.y);
-            if (!sprite || !asked) {
-                if (sprite && !onFacade) this.billboards.push(mesh);
-            } else if (asked.shape === 'flat') {
-                mesh.rotation.x = -Math.PI / 2;
-                mesh.userData.flat = true;
-            } else {
-                // Panel and upright both stand still; only the way they face
-                // differs, and an upright keeps the map's own orientation.
-                mesh.rotation.y = asked.shape === 'panel'
-                    ? Reactor3D.facingRotation(asked.facing)
-                    : 0;
-            }
-
-            const label = this.eventLabel(event);
-            if (label) {
-                label.userData.event = event;
-                mesh.userData.label = label;
-                this.eventGroup.add(label);
-                this.billboards.push(label);
-                this.labels.push(label);
-            }
-
-            // One place decides where an event's pieces sit, because dragging
-            // one has to put all three back down together.
-            this.placeEvent(mesh);
+        this._eventSnapshot = new Map();
+        for (const event of mapData.events || []) {
+            if (event) this._eventSnapshot.set(event.id, this._eventIdentity(event, mapData));
         }
 
         this.buildStartMarkers(mapData);
         scene.add(this.eventGroup);
         this.faceCamera();
         return true;
+    }
+
+
+
+    /** One event's pieces — sprite or cube, box, label, model preview — built and placed. */
+    _buildOneEvent(event, sheets, mapData, request) {
+
+        const elevation = Reactor3D.elevationAt(mapData, event.x, event.y);
+        // Preview Event shows a chosen page instead of the first one.
+        const previewIndex = MapEditor3D.previewPageIndex(mapData, event);
+        const page = event.pages?.[previewIndex ?? 0] || event.pages?.[0];
+        const sprite = this.eventSprite(event, sheets, page?.image, previewIndex !== null && page?.stepAnime ? page : null);
+        if (previewIndex !== null) this.previewEventModel(event, page, previewIndex, mapData, request);
+        const mesh = sprite || new THREE.Mesh(this._eventCube || (this._eventCube = new THREE.BoxGeometry(0.55, 0.55, 0.55)), new THREE.MeshBasicMaterial({
+            color: this.eventColor(event),
+            transparent: true,
+            opacity: 0.8
+        }));
+        const height = sprite ? sprite.userData.height : 0.55;
+        // What the raycaster hands back on a click.
+        mesh.userData.event = event;
+        mesh.userData.height = height;
+        this.eventGroup.add(mesh);
+        this.pickables.push(mesh);
+
+        /*
+         * A box round the event, so it reads as one.
+         *
+         * An event drawn from a character sheet is just a picture standing
+         * on the map, indistinguishable from a painted tree until you
+         * click it. The 2D canvas borders every event for exactly that
+         * reason. Only the edges are drawn — a filled box would have to be
+         * transparent, and transparent boxes are what sliced the labels.
+         */
+        const boxHeight = Math.max(height, 0.94);
+        const box = this.eventBox(boxHeight, this.eventColor(event));
+        mesh.userData.box = box;
+        mesh.userData.boxHeight = boxHeight;
+        this.eventGroup.add(box);
+
+        /*
+         * An event can say what it is, in its own note.
+         *
+         * An event whose graphic is a *tile* inherits that tile's 3D class
+         * before any geometry is built. One drawn from a character sheet
+         * has no tile to inherit from, so it says so itself — `<3d panel>`,
+         * `<3d panel east>`, `<3d upright>`, `<3d flat>` — which is what
+         * lets an animated piece of a city stand with the painted
+         * buildings beside it instead of turning to follow the viewer.
+         *
+         * Anything that says nothing keeps turning, which is right for
+         * anything character-shaped.
+         */
+        const asked = sprite ? Reactor3D.eventShapeFromNote(event.note) : null;
+        mesh.userData.asked = !!asked;
+        // Standing against a wall means standing still: a sprite that is
+        // part of the art beside it must not turn away from it.
+        // An event that has asked to stand on the ground never joins the
+        // object painted over its cell, here as in the running game.
+        const loose = Reactor3D.eventStaysOnGround?.(event.note);
+        mesh.userData.loose = !!loose;
+        const onFacade = sprite && !asked && !loose
+            && !!this.mapScene?.facadeAt?.(event.x, event.y);
+        if (!sprite || !asked) {
+            if (sprite && !onFacade) this.billboards.push(mesh);
+        } else if (asked.shape === 'flat') {
+            mesh.rotation.x = -Math.PI / 2;
+            mesh.userData.flat = true;
+        } else {
+            // Panel and upright both stand still; only the way they face
+            // differs, and an upright keeps the map's own orientation.
+            mesh.rotation.y = asked.shape === 'panel'
+                ? Reactor3D.facingRotation(asked.facing)
+                : 0;
+        }
+
+        const label = this.eventLabel(event);
+        if (label) {
+            label.userData.event = event;
+            mesh.userData.label = label;
+            this.eventGroup.add(label);
+            this.billboards.push(label);
+            this.labels.push(label);
+        }
+
+        // One place decides where an event's pieces sit, because dragging
+        // one has to put all three back down together.
+        this.placeEvent(mesh);
+        
+    }
+
+    /** What one event looks like in this view; a change means rebuild its pieces. */
+    _eventIdentity(event, mapData) {
+        const previewIndex = MapEditor3D.previewPageIndex(mapData, event);
+        const page = event.pages?.[previewIndex ?? 0] || event.pages?.[0];
+        return JSON.stringify([
+            event.x, event.y, event.name, event.note, previewIndex,
+            page && page.image, page && page.stepAnime,
+            Reactor3D.eventModelSpec ? Reactor3D.eventModelSpec(mapData, event.id, previewIndex ?? 0) : null,
+            Reactor3D.eventZAt ? Reactor3D.eventZAt(mapData, event.id) : 0
+        ]);
     }
 
     /**
@@ -1189,9 +1234,10 @@ class MapEditor3D {
         const facade = (mesh.userData.asked || mesh.userData.loose)
             ? null
             : this.mapScene?.facadeAt?.(event.x, event.y);
-        const elevation = facade
+        const eventZ = Reactor3D.eventZAt ? Reactor3D.eventZAt(mapData, event.id) : 0;
+        const elevation = (facade
             ? facade.height + facade.lift
-            : Reactor3D.elevationAt(mapData, event.x, event.y);
+            : Reactor3D.elevationAt(mapData, event.x, event.y)) + eventZ;
         const z = facade ? facade.z : event.y + 0.5;
 
         // A flat event lies on the ground; everything else stands on it.
@@ -1237,6 +1283,101 @@ class MapEditor3D {
     setGridVisible(on) {
         this.gridVisible = !!on;
         if (this.grid) this.grid.visible = this.gridVisible;
+    }
+
+    /** Show or hide the passage marks in this view. */
+    setPassageVisible(on) {
+        this.passageVisible = !!on;
+        this.drawPassage();
+    }
+
+    /** Redraw the passage marks after a change, once per frame. */
+    refreshPassage() {
+        if (!this.passageVisible || this._passageRefresh) return;
+        this._passageRefresh = requestAnimationFrame(() => {
+            this._passageRefresh = null;
+            this.drawPassage();
+        });
+    }
+
+    /**
+     * The passage marks on the ground of the 3D view: the same reading as
+     * the flat map's (`TilemapManager.tilePassage`) - an X where nothing
+     * walks, a red edge on a side that cannot be crossed - and red under
+     * the tiles a placed model (prop or model event) blocks.
+     */
+    drawPassage() {
+        if (this.passageGroup) {
+            this.passageGroup.parent?.remove(this.passageGroup);
+            this.passageGroup.traverse(node => { node.geometry?.dispose?.(); node.material?.dispose?.(); });
+            this.passageGroup = null;
+        }
+        this._passageGeneration = (this._passageGeneration || 0) + 1;
+        const mapData = this.currentMap();
+        if (!this.passageVisible || !mapData || !this.mapScene || typeof TilemapManager === 'undefined' || !TilemapManager.tilePassage) return;
+        const tileset = this.projectController?.tilemapManager?.currentTileset
+            || this.projectController?.databaseManager?.getTileset?.(mapData.tilesetId);
+        const flags = (tileset && tileset.flags) || [];
+        const roomFloor = !!(Reactor3D.roomFor && Reactor3D.roomFor(mapData) && Reactor3D.isMap3D(mapData));
+        const group = new THREE.Group();
+        group.name = 'passage';
+        group.userData.__reactorOverlay = true;
+        const lines = [];
+        const inset = 0.18;
+        const lift = 0.03;
+        for (let y = 0; y < mapData.height; y++) {
+            for (let x = 0; x < mapData.width; x++) {
+                const { blocked } = TilemapManager.tilePassage(mapData.data, mapData.width, mapData.height, flags, x, y, roomFloor);
+                if (!blocked) continue;
+                const h = Reactor3D.elevationAt(mapData, x, y) + lift;
+                const x0 = x + inset, x1 = x + 1 - inset, z0 = y + inset, z1 = y + 1 - inset;
+                if (blocked === 0x0f) {
+                    lines.push(x0, h, z0, x1, h, z1, x1, h, z0, x0, h, z1);
+                    continue;
+                }
+                if (blocked & 1) lines.push(x0, h, z1, x1, h, z1);
+                if (blocked & 2) lines.push(x0, h, z0, x0, h, z1);
+                if (blocked & 4) lines.push(x1, h, z0, x1, h, z1);
+                if (blocked & 8) lines.push(x0, h, z0, x1, h, z0);
+            }
+        }
+        if (lines.length) {
+            const geometry = new THREE.BufferGeometry();
+            geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(lines), 3));
+            const marks = new THREE.LineSegments(geometry, new THREE.LineBasicMaterial({ color: 0xff4040, transparent: true, opacity: 0.9, depthTest: false }));
+            marks.renderOrder = 996;
+            group.add(marks);
+        }
+        this.mapScene.scene().add(group);
+        this.passageGroup = group;
+        // Model footprints, as their templates arrive.
+        const placements = TilemapManager.modelPlacements ? TilemapManager.modelPlacements(mapData) : [];
+        if (!placements.length || typeof RREventPreviewModels === 'undefined' || !Reactor3D.blockedTilesFor) return;
+        const generation = this._passageGeneration;
+        const project = this.projectController?.getCurrentProject
+            ? this.projectController.getCurrentProject() : this.projectController?.currentProject;
+        for (const placed of placements) {
+            // A model in the air blocks nothing on the ground.
+            if (placed.z > 0.5) continue;
+            RREventPreviewModels.templateFor(project, placed.spec, this).then(template => {
+                if (!template || generation !== this._passageGeneration || this.passageGroup !== group) return;
+                const tiles = Reactor3D.blockedTilesFor(template, template.userData.reactorSidecar, placed.spec, placed.direction, placed.x, placed.y);
+                if (!tiles.length) return;
+                const positions = new Float32Array(tiles.length * 18);
+                let at = 0;
+                for (const tile of tiles) {
+                    const h = Reactor3D.elevationAt(mapData, tile.x, tile.y) + 0.02;
+                    const x0 = tile.x + 0.04, x1 = tile.x + 0.96, z0 = tile.y + 0.04, z1 = tile.y + 0.96;
+                    positions.set([x0, h, z0, x1, h, z0, x1, h, z1, x0, h, z0, x1, h, z1, x0, h, z1], at);
+                    at += 18;
+                }
+                const geometry = new THREE.BufferGeometry();
+                geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+                const fill = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ color: 0xff4040, transparent: true, opacity: 0.22, depthTest: false, depthWrite: false, side: THREE.DoubleSide }));
+                fill.renderOrder = 995;
+                group.add(fill);
+            }).catch(() => {});
+        }
     }
 
     /**
@@ -1372,11 +1513,15 @@ class MapEditor3D {
         RREventPreviewModels.templateFor(project, spec, this).then(template => {
             if (!template || !this.rebuildIsCurrent(request) || this.eventGroup !== group) return;
             const object = RREventPreviewModels.instance(template, spec, page?.image?.direction || 2);
-            const elevation = Reactor3D.elevationAt(mapData, event.x, event.y);
+            const elevation = Reactor3D.elevationAt(mapData, event.x, event.y)
+                + (Reactor3D.eventZAt ? Reactor3D.eventZAt(mapData, event.id) : 0);
             object.position.set(event.x + 0.5, elevation, event.y + 0.5);
             object.userData.event = event;
             object.userData.modelPreview = true;
             group.add(object);
+            // Clickable by its box, like a prop: a raycast through a heavy
+            // mesh on every hover is what jitters.
+            object.userData.pickBox = new THREE.Box3().setFromObject(object);
             this.animateModel(object, template, null);
             this.playModelEffects(object, template, '');
         });
@@ -1417,6 +1562,7 @@ class MapEditor3D {
                 if (!template || !this.rebuildIsCurrent(request) || this.propGroup !== group) return;
                 const object = RREventPreviewModels.instance(template, spec, prop.direction);
                 object.userData.propId = prop.id;
+                object.userData.propIdentity = MapEditor3D.propIdentity(prop);
                 object.userData.modelPreview = true;
                 object.traverse(node => { node.userData.propId = prop.id; });
                 this.placeProp(object, prop, mapData);
@@ -1449,6 +1595,9 @@ class MapEditor3D {
         driver.object = object;
         driver.start = this._modelFrame || 0;
         driver.action = action ? { name: action.name, frame: driver.start, repeat: !!action.repeat } : null;
+        if (driver.action && Reactor3D.rulesForPlacement) {
+            driver.rules = Reactor3D.rulesForPlacement(driver.rules, driver.action.name, driver.action.repeat);
+        }
         if (!this.animatedModels) this.animatedModels = [];
         this.animatedModels.push(driver);
     }
@@ -1541,6 +1690,15 @@ class MapEditor3D {
                 play.plane.position.copy(local);
                 const rotate = play.effect.rotate || [0, 0, 0];
                 play.plane.rotation.set(rotate[0] * Math.PI / 180, rotate[1] * Math.PI / 180, rotate[2] * Math.PI / 180, 'YXZ');
+                // Anchored to a posed part, the plane turns with the part:
+                // in the plane's local frame, conjugated by the object's turn.
+                if (Reactor3D.effectAnchorQuaternion) {
+                    const pose = Reactor3D.effectAnchorQuaternion(play.object, play.effect, this._poseQuat || (this._poseQuat = new THREE.Quaternion()));
+                    if (pose.w !== 1) {
+                        const objectQuat = play.object.getWorldQuaternion(this._objQuat || (this._objQuat = new THREE.Quaternion()));
+                        play.plane.quaternion.premultiply(objectQuat.clone().invert().multiply(pose).multiply(objectQuat));
+                    }
+                }
                 continue;
             }
             const world = Reactor3D.effectAnchorWorld(play.object, play.effect, scratch);
@@ -1585,18 +1743,97 @@ class MapEditor3D {
         const axes = Reactor3D.scaleAxes ? Reactor3D.scaleAxes(play.effect.scale) : [1, 1, 1];
         const span = Reactor3D.modelSpanTiles ? (Reactor3D.modelSpanTiles(play.object) || 1) : 1;
         const unit = span / 26 * ((record.scale || 100) / 100);
+        const size = this.renderer.getDrawingBufferSize(this._effectSize || (this._effectSize = new THREE.Vector2()));
+        // The whole view, at its own resolution (the game crops to the
+        // effect's box to save pixels every frame; this view simply draws
+        // the view; the layer draws it on its own loop and the quad takes
+        // the latest picture each render). Past EFFECT_PIXELS the canvas
+        // is drawn smaller.
+        const area = size.x * size.y;
+        const scale = area > MapEditor3D.EFFECT_PIXELS ? Math.sqrt(MapEditor3D.EFFECT_PIXELS / area) : 1;
+        const rect = { x: 0, y: 0, w: size.x, h: size.y, scale };
         play.layer.setWorld({
             projection: camera.projectionMatrix.elements,
             view: camera.matrixWorldInverse.elements,
             position: [world.x, world.y, world.z],
             scale: [unit * axes[0], unit * axes[1], unit * axes[2]],
-            rotation: [(rot.x + rotate[0]) * r, (rot.y + rotate[1]) * r + play.object.rotation.y, (rot.z + rotate[2]) * r]
+            rotation: [(rot.x + rotate[0]) * r, (rot.y + rotate[1]) * r + play.object.rotation.y, (rot.z + rotate[2]) * r],
+            rect, viewWidth: size.x, viewHeight: size.y
         });
-        const size = this.renderer.getDrawingBufferSize(this._effectSize || (this._effectSize = new THREE.Vector2()));
-        play.quad.material.uniforms.resolution.value.set(size.x, size.y);
+        const uniforms = play.quad.material.uniforms;
+        uniforms.resolution.value.set(size.x, size.y);
+        uniforms.rectMin.value.set(0, 0);
+        uniforms.rectSize.value.set(1, 1);
         Reactor3D.EffekseerScene.standQuad(mesh, world, camera);
+        // A canvas texture is allocated once, at its first size (three uses
+        // immutable storage on WebGL 2): after the window grew, uploads of
+        // the bigger canvas failed and the quad kept the last frame,
+        // stretched over the screen. Let go of the GL texture when the
+        // canvas changes size so the next upload allocates it afresh.
+        const source = play.layer.fxCanvas;
+        if (play.texWidth !== source.width || play.texHeight !== source.height) {
+            play.texWidth = source.width;
+            play.texHeight = source.height;
+            play.quad.texture.dispose();
+        }
         play.quad.texture.needsUpdate = true;
         mesh.visible = !!play.layer.active;
+    }
+
+    /**
+     * A half-seen copy of the chosen model where a click would place it,
+     * following the cursor over the ground. Built once per model and pose,
+     * hidden when the cursor is over a prop or off the map.
+     */
+    updatePlacementGhost(clientX, clientY) {
+        const manager = this.propsManager();
+        const spec = manager && manager._placementSpec ? manager._placementSpec() : null;
+        const mapData = this.currentMap();
+        if (!spec || !mapData || !this.mapScene || typeof RREventPreviewModels === 'undefined') { this.hidePlacementGhost(); return; }
+        const point = this.groundPointAt(clientX, clientY);
+        if (!point) { this.hidePlacementGhost(); return; }
+        const key = `${spec.name}|${spec.ext}|${spec.file}|${spec.size}|${spec.scale}|${(spec.stretch || []).join(',')}|${spec.yaw}|${spec.pitch}|${spec.roll}|${manager.fields.direction}`;
+        if (this._ghostKey !== key) {
+            this.hidePlacementGhost(true);
+            this._ghostKey = key;
+            const project = this.projectController?.getCurrentProject
+                ? this.projectController.getCurrentProject() : this.projectController?.currentProject;
+            RREventPreviewModels.templateFor(project, spec, this).then(template => {
+                if (!template || this._ghostKey !== key || !this.mapScene) return;
+                const ghost = RREventPreviewModels.instance(template, spec, manager.fields.direction);
+                ghost.traverse(node => {
+                    const materials = Array.isArray(node.material) ? node.material : node.material ? [node.material] : [];
+                    if (!materials.length) return;
+                    const faded = materials.map(material => { const copy = material.clone(); copy.transparent = true; copy.opacity = 0.45; copy.depthWrite = false; return copy; });
+                    node.material = Array.isArray(node.material) ? faded : faded[0];
+                });
+                ghost.userData.__reactorOverlay = true;
+                ghost.userData.placementGhost = true;
+                this.mapScene.scene().add(ghost);
+                this.placementGhost = ghost;
+                if (this._ghostPoint) this.placeProp(ghost, { x: this._ghostPoint.x, y: this._ghostPoint.y, z: manager.fields.z || 0 }, mapData);
+            }).catch(() => {});
+        }
+        this._ghostPoint = point;
+        if (this.placementGhost) {
+            this.placementGhost.visible = true;
+            this.placeProp(this.placementGhost, { x: point.x, y: point.y, z: manager.fields.z || 0 }, mapData);
+        }
+    }
+
+    hidePlacementGhost(dispose) {
+        if (!this.placementGhost) { if (dispose) this._ghostKey = null; return; }
+        if (dispose) {
+            this.placementGhost.parent?.remove(this.placementGhost);
+            this.placementGhost.traverse(node => {
+                const materials = Array.isArray(node.material) ? node.material : node.material ? [node.material] : [];
+                for (const material of materials) material.dispose?.();
+            });
+            this.placementGhost = null;
+            this._ghostKey = null;
+        } else {
+            this.placementGhost.visible = false;
+        }
     }
 
     disposeEffectPlays(filter) {
@@ -1648,10 +1885,140 @@ class MapEditor3D {
     }
 
     /** Rebuild only the props, after one was added, moved, turned or removed. */
-    refreshProps() {
+    /**
+     * What a placed instance cannot take in place: its model file, texture,
+     * and the animation and effect it runs. Anything else (size, scale,
+     * facing, pitch/yaw/roll, lift, position, passability) is a pose.
+     */
+    static propIdentity(prop) {
+        return [prop.name, prop.ext, prop.file, prop.texture, prop.animation, prop.repeat ? 1 : 0, prop.effect].join('|');
+    }
+
+    /** Re-pose a placed prop's instance: size and scale, facing and turn, lift and position. */
+    poseProp(object, prop, mapData = this.currentMap()) {
+        const spec = Reactor3D.normalizeModelSpec ? Reactor3D.normalizeModelSpec(ModelPropsManager.specOf(prop)) : null;
+        if (!spec) return false;
+        const extent = object.userData.glbSize || { x: 1, y: 1, z: 1 };
+        const span = Math.max(extent.x, extent.y, extent.z, 0.0001);
+        const fit = (spec.size > 0 ? spec.size : 2) / span;
+        const uniform = fit * (spec.scale > 0 ? spec.scale : 1);
+        const stretch = spec.stretch || [1, 1, 1];
+        object.scale.set(uniform * stretch[0], uniform * stretch[1], uniform * stretch[2]);
+        if (Reactor3D.applyEventModelPose) Reactor3D.applyEventModelPose(object, spec, prop.direction || 2);
+        else object.rotation.y = spec.yaw || 0;
+        this.placeProp(object, prop, mapData);
+        return true;
+    }
+
+    /**
+     * Follow prop edits. The edited props are re-posed in place when they
+     * still exist with the same model, animation and effect: a slider drag
+     * transforms the instance it already has, and its effect plays and
+     * animation drivers ride along. Rebuilding on every change made and
+     * destroyed a WebGL context per step and paused the effect each time.
+     * A new, removed or re-modelled prop rebuilds the set.
+     */
+    refreshProps(ids) {
         const mapData = this.currentMap();
         if (!mapData || !this.mapScene) return;
+        const elevation = window.RRMapElevation;
+        if (Array.isArray(ids) && ids.length && this.propGroup && elevation) {
+            const props = elevation.props(mapData);
+            const work = [];
+            for (const id of ids) {
+                const prop = props.find(entry => entry.id === id);
+                const object = this.propObject(id);
+                if (!prop || !object || object.userData.propIdentity !== MapEditor3D.propIdentity(prop)) { work.length = 0; break; }
+                work.push([object, prop]);
+            }
+            if (work.length === ids.length) {
+                for (const [object, prop] of work) this.poseProp(object, prop, mapData);
+                this.syncPropRings();
+                this.refreshPassage();
+                return;
+            }
+        }
         this.buildProps(mapData, this._rebuildGeneration);
+    }
+
+    /**
+     * Rebuild just the events — cubes, sprites, model previews, routes —
+     * from the current data. Editing an event (a new model, a moved tile)
+     * used to leave the 3D view showing the old one until a full rebuild.
+     */
+    refreshEvents() {
+        if (!this.enabled || !this.mapScene || this._eventsRefresh) return;
+        this._eventsRefresh = requestAnimationFrame(async () => {
+            this._eventsRefresh = null;
+            const mapData = this.currentMap();
+            if (!this.enabled || !this.mapScene || !mapData) return;
+            if (!this.eventGroup || !this._eventSnapshot) {
+                // Nothing to diff against: build the lot, as a rebuild would.
+                this.select(null);
+                this.disposeEffectPlays(play => play.object.userData.propId === undefined);
+                if (this.animatedModels) this.animatedModels = this.animatedModels.filter(driver => driver.object.userData.propId !== undefined);
+                if (this.eventGroup) {
+                    for (const child of this.eventGroup.children) {
+                        child.traverse(node => {
+                            const materials = Array.isArray(node.material) ? node.material : node.material ? [node.material] : [];
+                            for (const material of materials) material.dispose?.();
+                        });
+                    }
+                    this.eventGroup.parent?.remove(this.eventGroup);
+                    this.eventGroup = null;
+                }
+                await this.buildEvents(mapData);
+                this.refreshPassage();
+                return;
+            }
+            // The diff: only what actually changed is torn down and rebuilt.
+            // Deleting one event must not blink every model on the map.
+            const fresh = new Map();
+            for (const event of mapData.events || []) {
+                if (event) fresh.set(event.id, this._eventIdentity(event, mapData));
+            }
+            const affected = new Set();
+            for (const [id, identity] of this._eventSnapshot) {
+                if (fresh.get(id) !== identity) affected.add(id);
+            }
+            const added = [];
+            for (const [id, identity] of fresh) {
+                if (this._eventSnapshot.get(id) !== identity) added.push(id);
+            }
+            if (!affected.size && !added.length) { this.refreshPassage(); return; }
+            if (this.selected && this.selected.userData.event && affected.has(this.selected.userData.event.id)) this.select(null);
+            this.disposeEffectPlays(play => play.object.userData.event && affected.has(play.object.userData.event.id));
+            if (this.animatedModels) this.animatedModels = this.animatedModels.filter(driver => !(driver.object.userData.event && affected.has(driver.object.userData.event.id)));
+            this.animatedEvents = (this.animatedEvents || []).filter(entry => !affected.has(entry.eventId));
+            const doomed = new Set();
+            for (const child of this.eventGroup.children) {
+                const id = child.userData.event ? child.userData.event.id : undefined;
+                if (id === undefined || !affected.has(id)) continue;
+                doomed.add(child);
+                if (child.userData.box) doomed.add(child.userData.box);
+                if (child.userData.label) doomed.add(child.userData.label);
+            }
+            for (const child of doomed) {
+                child.traverse(node => {
+                    const materials = Array.isArray(node.material) ? node.material : node.material ? [node.material] : [];
+                    for (const material of materials) material.dispose?.();
+                });
+                this.eventGroup.remove(child);
+            }
+            this.pickables = this.pickables.filter(mesh => !doomed.has(mesh));
+            this.billboards = this.billboards.filter(mesh => !doomed.has(mesh));
+            this.labels = this.labels.filter(mesh => !doomed.has(mesh));
+            if (added.length) {
+                const sheets = await this.loadCharacterSheets(mapData);
+                for (const id of added) {
+                    const event = (mapData.events || []).find(entry => entry && entry.id === id);
+                    if (event) this._buildOneEvent(event, sheets, mapData, this._rebuildGeneration);
+                }
+            }
+            this._eventSnapshot = fresh;
+            this.syncEventArrows();
+            this.refreshPassage();
+        });
     }
 
     disposeProps() {
@@ -1731,12 +2098,21 @@ class MapEditor3D {
             RRPoseRings3D.dispose(this.propRings);
             this.propRings = null;
         }
+        if (this.propArrows) {
+            RRAxisArrows3D.dispose(this.propArrows);
+            this.propArrows = null;
+        }
+        this.showPropFootprint(object ? object.userData.propId : null);
         if (!object || typeof RRPoseRings3D === 'undefined' || !this.propGroup) return;
         const prop = this.propsManager()?.prop(object.userData.propId);
         if (!prop) return;
         const radius = Math.max(0.6, prop.size * prop.scale * 0.6 + 0.2);
         this.propRings = RRPoseRings3D.create(THREE, radius, 'prop-rings');
         this.propGroup.add(this.propRings.root);
+        if (typeof RRAxisArrows3D !== 'undefined') {
+            this.propArrows = RRAxisArrows3D.create(THREE, radius * 1.15, 'prop-arrows');
+            this.propGroup.add(this.propArrows.root);
+        }
         this.syncPropRings();
     }
 
@@ -1747,7 +2123,59 @@ class MapEditor3D {
         if (!prop || !object) return;
         const centre = object.position.clone();
         centre.y += prop.size * prop.scale * 0.5;
-        RRPoseRings3D.sync(this.propRings, centre, prop.yaw, prop.pitch, true);
+        // The rings wear the object's REAL rotation — facing turn and mark
+        // correction included — so the pitch and roll circles sit on the
+        // axes the drag will actually turn. Fed the spec's bare yaw, a prop
+        // faced left or right span visibly off its own rings.
+        RRPoseRings3D.sync(this.propRings, centre,
+            object.rotation.y * 180 / Math.PI, object.rotation.x * 180 / Math.PI, true);
+        if (this.propArrows) RRAxisArrows3D.sync(this.propArrows, centre, true);
+        this.showPropFootprint(prop.id);
+    }
+
+    /**
+     * The tiles the selected prop blocks, drawn flat on the ground in red:
+     * the game's own rule (`Reactor3D.blockedTilesFor`) on the model's
+     * mesh at this size, facing and turn, so a long car shows its long
+     * footprint and an edit shows what it did. Nothing for no selection.
+     */
+    showPropFootprint(id) {
+        if (this.propFootprint) {
+            this.propFootprint.parent?.remove(this.propFootprint);
+            this.propFootprint.geometry?.dispose?.();
+            this.propFootprint.material?.dispose?.();
+            this.propFootprint = null;
+        }
+        const prop = id ? this.propsManager()?.prop(id) : null;
+        if (!prop || !this.mapScene || typeof RREventPreviewModels === 'undefined' || !Reactor3D.blockedTilesFor) return;
+        const spec = Reactor3D.normalizeModelSpec ? Reactor3D.normalizeModelSpec(ModelPropsManager.specOf(prop)) : null;
+        if (!spec) return;
+        const project = this.projectController?.getCurrentProject
+            ? this.projectController.getCurrentProject() : this.projectController?.currentProject;
+        const generation = (this._footprintGeneration = (this._footprintGeneration || 0) + 1);
+        RREventPreviewModels.templateFor(project, spec, this).then(template => {
+            if (!template || generation !== this._footprintGeneration || this.selectedPropId !== prop.id) return;
+            const tiles = Reactor3D.blockedTilesFor(template, template.userData.reactorSidecar, spec, prop.direction, prop.x, prop.y);
+            if (!tiles.length) return;
+            const mapData = this.currentMap();
+            const positions = new Float32Array(tiles.length * 18);
+            let at = 0;
+            for (const tile of tiles) {
+                const y = (Reactor3D.elevationAt ? Reactor3D.elevationAt(mapData, tile.x, tile.y) : 0) + 0.02;
+                const x0 = tile.x + 0.04, x1 = tile.x + 0.96, z0 = tile.y + 0.04, z1 = tile.y + 0.96;
+                positions.set([x0, y, z0, x1, y, z0, x1, y, z1, x0, y, z0, x1, y, z1, x0, y, z1], at);
+                at += 18;
+            }
+            const geometry = new THREE.BufferGeometry();
+            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            const mesh = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({
+                color: 0xff5a5a, transparent: true, opacity: 0.35, depthTest: false, depthWrite: false, side: THREE.DoubleSide
+            }));
+            mesh.renderOrder = 997;
+            mesh.userData.__reactorOverlay = true;
+            this.mapScene.scene().add(mesh);
+            this.propFootprint = mesh;
+        }).catch(() => {});
     }
 
     _propRect() {
@@ -1781,6 +2209,25 @@ class MapEditor3D {
         this._propRingPending = { id: prop.id, axis: grab.axis, value };
         manager.elevation()?.updateProp(manager.currentMap, prop.id, { [grab.axis]: value });
         this.syncPropRings();
+        manager._syncCard?.();
+    }
+
+    /** Slide the selected prop along one arrow: X and Z over the map (fractional), Y its height. */
+    dragPropAlongAxis(state, clientX, clientY) {
+        const travel = state.grab.travel(clientX, clientY);
+        const manager = this.propsManager();
+        const prop = manager?.prop(state.id);
+        const object = this.propObject(state.id);
+        if (!prop || !object) return;
+        const round = n => Math.round(n * 100) / 100;
+        const patch = state.grab.axis === 'x' ? { x: Math.max(0, round(state.startX + travel)) }
+            : state.grab.axis === 'z' ? { y: Math.max(0, round(state.startY + travel)) }
+            : { z: Math.min(RRMapElevation.PROP_MAX_LIFT, Math.max(0, round(state.startZ + travel))) };
+        manager.elevation()?.updateProp(manager.currentMap, state.id, patch);
+        this.placeProp(object, manager.prop(state.id));
+        this.syncPropRings();
+        manager._syncCard?.();
+        this._propMoved = true;
     }
 
     dragPropTo(id, point) {
@@ -1792,12 +2239,14 @@ class MapEditor3D {
         manager.elevation()?.updateProp(manager.currentMap, id, { x: point.x, y: point.y });
         this.placeProp(object, manager.prop(id));
         this.syncPropRings();
+        manager._syncCard?.();
         this._propMoved = true;
     }
 
     finishPropDrag() {
         if (this.canvas) this.canvas.style.cursor = 'default';
         if (this.propRings) RRPoseRings3D.emphasize(this.propRings, null, false);
+        if (this.propArrows && typeof RRAxisArrows3D !== 'undefined') RRAxisArrows3D.emphasize(this.propArrows, null, false);
         const moved = this._propMoved || this._propRingPending;
         this._propMoved = false;
         this._propRingPending = null;
@@ -1805,6 +2254,13 @@ class MapEditor3D {
         if (moved) {
             const manager = this.propsManager();
             manager?.render?.();
+            // The card's sliders were built around where the prop USED to
+            // stand (a slider spans ±4 tiles of it); a drag that went further
+            // pegged them. Rebuilt, they centre on where it is now.
+            if (manager) {
+                manager._cardFor = null;
+                manager._syncCard?.();
+            }
             manager?._syncPanel?.();
         }
     }
@@ -1880,6 +2336,7 @@ class MapEditor3D {
         if (animatedPage) {
             const speed = Number(animatedPage.moveSpeed) || 3;
             this.animatedEvents.push({
+                eventId: event.id,
                 sheet, canvas, texture, baseX, baseY, frameWidth, frameHeight,
                 pattern: Number.isInteger(image.pattern) ? image.pattern : 1, count: 0,
                 wait: (9 - Math.min(6, Math.max(1, speed))) * 3
@@ -1975,7 +2432,20 @@ class MapEditor3D {
         );
         this._raycaster.setFromCamera(point, this.camera);
         const hits = this._raycaster.intersectObjects(this.pickables, false);
-        return hits.length ? hits[0].object : null;
+        let best = hits.length ? { object: hits[0].object, distance: hits[0].distance } : null;
+        // A previewed model IS its event to the hand: clicking the machine
+        // selects the machine. Boxes, not triangles — cheap on heavy meshes.
+        if (this.eventGroup) {
+            const ray = this._raycaster.ray;
+            const at = this._pickPoint || (this._pickPoint = new THREE.Vector3());
+            for (const child of this.eventGroup.children) {
+                if (!child.userData.modelPreview || !child.userData.event || !child.userData.pickBox) continue;
+                if (!ray.intersectBox(child.userData.pickBox, at)) continue;
+                const distance = at.distanceTo(ray.origin);
+                if (!best || distance < best.distance) best = { object: child, distance };
+            }
+        }
+        return best ? best.object : null;
     }
 
     /**
@@ -2019,10 +2489,81 @@ class MapEditor3D {
         if (this.selected && this.selected !== mesh) this.highlight(this.selected, false);
         this.selected = mesh || null;
         if (this.selected) this.highlight(this.selected, true);
+        this.syncEventArrows();
         return this.selected ? this.selected.userData.event : null;
     }
 
+    /**
+     * Drag arrows on the selected event: X and Z move it a tile at a time
+     * (the grid stays the map's truth), Y sets its height, freely.
+     */
+    syncEventArrows() {
+        const mesh = this.selected;
+        if (!mesh || !mesh.userData?.event || typeof RRAxisArrows3D === 'undefined' || !this.mapScene) {
+            if (this.eventArrows) { RRAxisArrows3D.dispose(this.eventArrows); this.eventArrows = null; }
+            this.syncGridLevel();
+            return;
+        }
+        if (!this.eventArrows) {
+            this.eventArrows = RRAxisArrows3D.create(THREE, 1.1, 'event-arrows');
+            this.mapScene.scene().add(this.eventArrows.root);
+        }
+        RRAxisArrows3D.sync(this.eventArrows, mesh.position, true);
+        this.syncGridLevel();
+    }
+
+    /**
+     * A second grid at the selection's height, with the column's corners
+     * down to the ground: the cube being worked in, seen. Nothing at
+     * ground level, where the floor grid already is.
+     */
+    syncGridLevel() {
+        if (this.gridLevel) {
+            this.gridLevel.parent?.remove(this.gridLevel);
+            this.gridLevel.geometry?.dispose?.();
+            this.gridLevel.material?.dispose?.();
+            this.gridLevel = null;
+        }
+        const mapData = this.currentMap();
+        if (!mapData || !this.mapScene || !this.gridVisible) return;
+        let at = null;
+        const mesh = this.selected;
+        if (mesh && mesh.userData?.event) {
+            const z = Reactor3D.eventZAt ? Reactor3D.eventZAt(mapData, mesh.userData.event.id) : 0;
+            if (z > 0.25) at = { x: mesh.userData.event.x, y: mesh.userData.event.y, z };
+        }
+        if (!at && this.selectedPropId) {
+            const prop = this.propsManager()?.prop(this.selectedPropId);
+            if (prop && prop.z > 0.25) at = { x: Math.round(prop.x), y: Math.round(prop.y), z: prop.z };
+        }
+        if (!at) return;
+        const ground = Reactor3D.elevationAt(mapData, at.x, at.y);
+        const level = ground + at.z + 0.02;
+        const points = [];
+        const R = 6;
+        const x0 = Math.max(0, at.x - R), x1 = Math.min(mapData.width, at.x + R + 1);
+        const y0 = Math.max(0, at.y - R), y1 = Math.min(mapData.height, at.y + R + 1);
+        for (let x = x0; x <= x1; x++) points.push(x, level, y0, x, level, y1);
+        for (let y = y0; y <= y1; y++) points.push(x0, level, y, x1, level, y);
+        // The column's corners, level to ground.
+        for (const [cx, cy] of [[at.x, at.y], [at.x + 1, at.y], [at.x, at.y + 1], [at.x + 1, at.y + 1]]) {
+            points.push(cx, ground, cy, cx, level, cy);
+        }
+        const geometry = new THREE.BufferGeometry();
+        geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(points), 3));
+        this.gridLevel = new THREE.LineSegments(geometry, new THREE.LineBasicMaterial({
+            color: 0xffe08a, transparent: true, opacity: 0.3, depthWrite: false
+        }));
+        this.gridLevel.userData.__reactorOverlay = true;
+        this.mapScene.scene().add(this.gridLevel);
+    }
+
     highlight(mesh, on) {
+        // A previewed model's root is a Group: no material of its own, and
+        // its scale IS the model's size. Reaching for either crashed the
+        // click handler mid-update and took the outlines and labels with it
+        // until a restart — the arrows and grid mark its selection instead.
+        if (mesh.userData.modelPreview) return;
         const scale = on ? 1.25 : 1;
         mesh.scale.set(scale, scale, scale);
         // The box marks the cell, so it holds its size and brightens instead.
@@ -2031,6 +2572,7 @@ class MapEditor3D {
             box.material.opacity = on ? 1 : 0.8;
             box.material.color.setHex(on ? 0xfff2a0 : box.userData.color);
         }
+        if (!mesh.material) return;
         if (mesh.material.map) {
             // A character sprite is brightened rather than faded: dimming the
             // unselected ones would make every other event harder to read.
@@ -2155,8 +2697,16 @@ class MapEditor3D {
             if (event.button === 0 && !event.shiftKey && !event.ctrlKey
                 && !this.pointer.paint && this.canEditProps()) {
                 const manager = this.propsManager();
-                const ring = this.pickPropRing(event.clientX, event.clientY);
-                if (ring) {
+                const arrow = this.selectedPropId && this.propArrows && typeof RRAxisArrows3D !== 'undefined' && this.canvas
+                    ? RRAxisArrows3D.pick(THREE, this.propArrows, this.camera, this.canvas.getBoundingClientRect(), event.clientX, event.clientY)
+                    : null;
+                const ring = arrow ? null : this.pickPropRing(event.clientX, event.clientY);
+                if (arrow) {
+                    const prop = manager.prop(this.selectedPropId);
+                    manager.pushUndo?.();
+                    this.pointer.propArrow = { grab: arrow, id: this.selectedPropId, startX: prop.x, startY: prop.y, startZ: prop.z || 0 };
+                    RRAxisArrows3D.emphasize(this.propArrows, arrow.axis, true);
+                } else if (ring) {
                     manager.pushUndo?.();
                     this.pointer.propRing = ring;
                 } else {
@@ -2180,7 +2730,7 @@ class MapEditor3D {
                         }
                     }
                 }
-                if (this.pointer.propRing || this.pointer.propDrag || this.pointer.propPlaced) {
+                if (this.pointer.propRing || this.pointer.propArrow || this.pointer.propDrag || this.pointer.propPlaced) {
                     this.pointer.pan = false;
                     this.pointer.propHold = true;
                 }
@@ -2191,12 +2741,25 @@ class MapEditor3D {
             // canvas. Starting anywhere else still orbits.
             if (event.button === 0 && !event.shiftKey && !event.ctrlKey
                 && !this.pointer.paint && !this.pointer.propHold && this.canDragEvents()) {
-                const mesh = this.eventAt(event.clientX, event.clientY);
-                if (mesh) {
-                    this.pointer.drag = mesh;
+                const grab = this.selected && this.eventArrows && typeof RRAxisArrows3D !== 'undefined' && this.canvas
+                    ? RRAxisArrows3D.pick(THREE, this.eventArrows, this.camera, this.canvas.getBoundingClientRect(), event.clientX, event.clientY)
+                    : null;
+                if (grab) {
+                    const selected = this.selected.userData.event;
+                    this.pointer.eventArrow = { grab, mesh: this.selected,
+                        startX: selected.x, startY: selected.y,
+                        startZ: Reactor3D.eventZAt ? Reactor3D.eventZAt(this.currentMap(), selected.id) : 0 };
+                    RRAxisArrows3D.emphasize(this.eventArrows, grab.axis, true);
                     this.beginEventDrag();
+                } else {
+                    const mesh = this.eventAt(event.clientX, event.clientY);
+                    if (mesh) {
+                        this.pointer.drag = mesh;
+                        this.beginEventDrag();
+                    }
                 }
             }
+            if (this.pointer.eventArrow) this.pointer.pan = false;
         };
         this._onPointerMove = event => {
             this._lastActiveAt = performance.now();
@@ -2221,6 +2784,8 @@ class MapEditor3D {
                     // "nothing happened" from "already at that height".
                     window.reactor?.updateMapCoordinates?.(tile.x, tile.y);
                 }
+            } else if (this.pointer.propArrow) {
+                this.dragPropAlongAxis(this.pointer.propArrow, event.clientX, event.clientY);
             } else if (this.pointer.propRing) {
                 this.dragPropRing(this.pointer.propRing, event.clientX, event.clientY);
             } else if (this.pointer.propDrag) {
@@ -2233,6 +2798,8 @@ class MapEditor3D {
                 }
             } else if (this.pointer.propHold) {
                 // A placement is a click; the drag that follows moves nothing.
+            } else if (this.pointer.eventArrow) {
+                this.dragEventAlongAxis(this.pointer.eventArrow, event.clientX, event.clientY);
             } else if (this.pointer.drag) {
                 const tile = this.tileAt(event.clientX, event.clientY);
                 if (tile) {
@@ -2247,6 +2814,10 @@ class MapEditor3D {
         };
         this._onPointerUp = event => {
             this._lastActiveAt = performance.now();
+            if (this.pointer && this.pointer.eventArrow) {
+                if (this.eventArrows && typeof RRAxisArrows3D !== 'undefined') RRAxisArrows3D.emphasize(this.eventArrows, null, false);
+                this.finishEventDrag();
+            }
             const drag = this.pointer;
             this.pointer = null;
             input.releasePointerCapture?.(event.pointerId);
@@ -2357,6 +2928,7 @@ class MapEditor3D {
         input.addEventListener('pointerup', this._onPointerUp);
         input.addEventListener('pointercancel', this._onPointerUp);
         input.addEventListener('pointerleave', this._onPointerLeave);
+        input.addEventListener('pointerleave', () => this.hidePlacementGhost());
         input.addEventListener('dblclick', this._onDoubleClick);
         input.addEventListener('wheel', this._onWheel, { passive: false });
         input.addEventListener('contextmenu', this._onContextMenu);
@@ -2482,6 +3054,32 @@ class MapEditor3D {
         if (this.canvas) this.canvas.style.cursor = 'grabbing';
     }
 
+    /** Move the grabbed event along one axis: X/Z a tile at a time, Y (height) freely. */
+    dragEventAlongAxis(state, clientX, clientY) {
+        const travel = state.grab.travel(clientX, clientY);
+        const event = state.mesh?.userData?.event;
+        const mapData = this.currentMap();
+        if (!event || !mapData) return;
+        if (state.grab.axis === 'y') {
+            const room = Reactor3D.roomFor ? Reactor3D.roomFor(mapData) : null;
+            const ceiling = room && room.height > 0 ? room.height : 64;
+            const z = Math.round(Math.max(0, Math.min(ceiling, state.startZ + travel)) * 100) / 100;
+            if (!this._eventDragSaved) { this._eventDragSaved = true; this.eventManager()?.saveState?.(); }
+            if (Reactor3D.setEventZ) Reactor3D.setEventZ(mapData, event.id, z);
+            this._eventDragMoved = true;
+            this.placeEvent(state.mesh);
+            this.syncEventArrows();
+            return;
+        }
+        const tile = state.grab.axis === 'x'
+            ? { x: Math.round(state.startX + travel), y: event.y }
+            : { x: event.x, y: Math.round(state.startY + travel) };
+        if (tile.x !== event.x || tile.y !== event.y) {
+            this.dragEventTo(state.mesh, tile);
+            this.syncEventArrows();
+        }
+    }
+
     dragEventTo(mesh, tile) {
         const mapData = this.currentMap();
         const event = mesh?.userData?.event;
@@ -2538,13 +3136,20 @@ class MapEditor3D {
         this.updateHoverCell(tile);
         if (!this.canvas) return;
         if (this.canEditProps()) {
+            // The prop pick (a box per prop) is throttled to 30 Hz; the
+            // ghost is not - it moved at that rate and looked choppy against
+            // a view drawing at 60. Its one ground raycast per move is cheap.
             const at = performance.now();
-            if (this._propHoverAt && at - this._propHoverAt < 33) return;
-            this._propHoverAt = at;
-            const overProp = this.propAt(clientX, clientY) !== null;
-            this.canvas.style.cursor = overProp ? 'grab' : (this.propsManager()?.model ? 'copy' : 'default');
+            if (!this._propHoverAt || at - this._propHoverAt >= 33) {
+                this._propHoverAt = at;
+                this._hoverOverProp = this.propAt(clientX, clientY) !== null;
+                this.canvas.style.cursor = this._hoverOverProp ? 'grab' : (this.propsManager()?.model ? 'copy' : 'default');
+            }
+            if (this._hoverOverProp || !tile) this.hidePlacementGhost();
+            else this.updatePlacementGhost(clientX, clientY);
             return;
         }
+        this.hidePlacementGhost();
         const over = this.canSelectEvents() && this.eventAt(clientX, clientY);
         this.canvas.style.cursor = over
             ? (this.canDragEvents() ? 'grab' : 'pointer')
@@ -2818,6 +3423,10 @@ class MapEditor3D {
     previewActive(now) {
         if (this.projectController?.videoSurfacePreviewManager?.previewActive?.()) return true;
         if (this.flying()) return true;
+        // A playing effect is a moving picture: the quad takes a new frame
+        // of it only when this view renders, so the idle rate would show it
+        // at ten frames a second.
+        if ((this.effectPlays || []).some(play => play.quad && play.layer && play.layer.active)) return true;
         const camera = this.camera;
         const cameraKey = camera
             ? `${camera.position.x.toFixed(4)}|${camera.position.y.toFixed(4)}|${camera.position.z.toFixed(4)}|`

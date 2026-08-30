@@ -115,9 +115,10 @@ test('MV to MZ conversion writes only frame/color/duration flash fields', () => 
     assert.deepEqual(plain(animation.flashTimings), [{
         frame: 4,
         color: [255, 128, 0, 0],
-        duration: 0
+        duration: 0,
+        scope: 2
     }]);
-    assert.deepEqual(Array.from(Object.keys(animation.flashTimings[0])).sort(), ['color', 'duration', 'frame']);
+    assert.deepEqual(Array.from(Object.keys(animation.flashTimings[0])).sort(), ['color', 'duration', 'frame', 'scope']);
     assert.equal(JSON.stringify(animation).includes('undefined'), false);
 });
 

@@ -1599,6 +1599,10 @@ class ProjectController {
         if (this.tilesetPaletteViewer?.loadTilesetForMap) {
             await this.tilesetPaletteViewer.loadTilesetForMap(mapData);
         }
+        // Passability edited in the database shows on the map at once.
+        if (tileset && this.tilemapManager) this.tilemapManager.currentTileset = tileset;
+        this.tilemapManager?.refreshPassage?.();
+        this.mapEditor3D?.refreshPassage?.();
         return true;
     }
 

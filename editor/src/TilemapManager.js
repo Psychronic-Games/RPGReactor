@@ -577,6 +577,7 @@ class TilemapManager {
         this.container.addChild(this.layers.upper3);
         this.container.addChild(this.layers.layerHighlight);
         this.drawGrid();
+        this.drawPassage();
 
         // Containers are recreated on setup — re-apply any active layer
         // dimming so switching maps keeps the editing context visible.
@@ -629,6 +630,149 @@ class TilemapManager {
     setGridVisible(on) {
         this.gridVisible = on === true;
         if (this.gridLayer) this.gridLayer.visible = this.gridVisible;
+    }
+
+    /**
+     * What can walk on a cell, by the game's own reading: layers top down,
+     * a star tile skipped, the first tile with a say decides; a cell with
+     * no tile cannot be walked on - except on a room floor (a 3D map with
+     * `reactor3d.room`), where bare floor is the parallax plane.
+     * Returns the blocked direction bits (0x0f = nothing passes) and
+     * whether the cell was empty.
+     */
+    static tilePassage(data, width, height, flags, x, y, roomFloor) {
+        let blocked = 0, decided = false, empty = true;
+        for (let z = 3; z >= 0; z--) {
+            const tileId = data[(z * height + y) * width + x] || 0;
+            if (tileId === 0) continue;
+            const flag = flags[tileId] || 0;
+            if (flag & 0x10) continue;
+            empty = false;
+            blocked = flag & 0x0f;
+            decided = true;
+            break;
+        }
+        if (!decided) blocked = empty && roomFloor ? 0 : 0x0f;
+        return { blocked, empty };
+    }
+
+    /**
+     * RPG Maker's passage marks, on the map: an X where nothing can walk,
+     * a red edge on a side that cannot be crossed, and red under the tiles
+     * a placed 3D model blocks (its footprint, as the game tests it).
+     */
+    drawPassage() {
+        if (typeof PIXI === "undefined" || !this.container) return;
+        if (this.passageLayer) {
+            this.passageLayer.parent?.removeChild(this.passageLayer);
+            this.passageLayer.destroy({ children: true });
+            this.passageLayer = null;
+        }
+        this._passageGeneration = (this._passageGeneration || 0) + 1;
+        if (!this.currentMap || !this.passageVisible) return;
+        const map = this.currentMap;
+        const flags = (this.currentTileset && this.currentTileset.flags) || [];
+        const tw = this.TILE_WIDTH, th = this.TILE_HEIGHT;
+        const roomFloor = !!(typeof Reactor3D !== "undefined" && Reactor3D.roomFor && Reactor3D.isMap3D
+            && Reactor3D.roomFor(map) && Reactor3D.isMap3D(map));
+        const layer = new PIXI.Container();
+        layer.eventMode = "none";
+        const marks = new PIXI.Graphics();
+        const inset = Math.max(2, Math.round(tw * 0.18));
+        for (let y = 0; y < map.height; y++) {
+            for (let x = 0; x < map.width; x++) {
+                const { blocked } = TilemapManager.tilePassage(map.data, map.width, map.height, flags, x, y, roomFloor);
+                if (!blocked) continue;
+                const px = x * tw, py = y * th;
+                if (blocked === 0x0f) {
+                    marks.moveTo(px + inset, py + inset).lineTo(px + tw - inset, py + th - inset);
+                    marks.moveTo(px + tw - inset, py + inset).lineTo(px + inset, py + th - inset);
+                    continue;
+                }
+                // Bits: 1 down, 2 left, 4 right, 8 up - the side that cannot be crossed.
+                if (blocked & 1) marks.moveTo(px + inset, py + th - inset).lineTo(px + tw - inset, py + th - inset);
+                if (blocked & 2) marks.moveTo(px + inset, py + inset).lineTo(px + inset, py + th - inset);
+                if (blocked & 4) marks.moveTo(px + tw - inset, py + inset).lineTo(px + tw - inset, py + th - inset);
+                if (blocked & 8) marks.moveTo(px + inset, py + inset).lineTo(px + tw - inset, py + inset);
+            }
+        }
+        marks.stroke({ width: Math.max(2, Math.round(tw * 0.06)), color: 0xff4040, alpha: 0.85 });
+        layer.addChild(marks);
+        this.passageLayer = layer;
+        this.container.addChild(layer);
+        this._drawModelPassage(layer, tw, th);
+    }
+
+    /**
+     * Every 3D model standing on the map with where and how it stands: the
+     * props of the sidecar and the events whose previewed page is bound to
+     * a model. What the passage overlays (flat and 3D) draw footprints for.
+     */
+    static modelPlacements(mapData) {
+        if (!mapData || typeof Reactor3D === "undefined" || !Reactor3D.normalizeModelSpec) return [];
+        const out = [];
+        const elevation = typeof window !== "undefined" ? window.RRMapElevation : null;
+        if (elevation && typeof ModelPropsManager !== "undefined") {
+            for (const prop of elevation.props(mapData)) {
+                const spec = Reactor3D.normalizeModelSpec(ModelPropsManager.specOf(prop));
+                if (spec) out.push({ spec, direction: prop.direction, x: prop.x, y: prop.y, z: prop.z || 0, prop });
+            }
+        }
+        if (Reactor3D.eventModelSpec) {
+            for (const event of mapData.events || []) {
+                if (!event) continue;
+                const index = typeof MapEditor3D !== "undefined" && MapEditor3D.previewPageIndex
+                    ? MapEditor3D.previewPageIndex(mapData, event) : 0;
+                if (index === null) continue;
+                const spec = Reactor3D.eventModelSpec(mapData, event.id, index);
+                if (!spec) continue;
+                const page = event.pages && event.pages[index];
+                const z = Reactor3D.eventZAt ? Reactor3D.eventZAt(mapData, event.id) : 0;
+                out.push({ spec, direction: (page && page.image && page.image.direction) || 2, x: event.x, y: event.y, z, event });
+            }
+        }
+        return out;
+    }
+
+    /** The tiles placed 3D models (props and model events) block, in red, once their templates are in. */
+    _drawModelPassage(layer, tw, th) {
+        const placements = TilemapManager.modelPlacements(this.currentMap);
+        if (!placements.length || typeof RREventPreviewModels === "undefined" || !Reactor3D.blockedTilesFor) return;
+        const generation = this._passageGeneration;
+        const project = this.projectController?.getCurrentProject
+            ? this.projectController.getCurrentProject() : this.projectController?.currentProject;
+        const map3d = this.projectController?.mapEditor3D || null;
+        for (const placed of placements) {
+            // A model in the air blocks nothing on the ground.
+            if (placed.z > 0.5) continue;
+            const { spec } = placed;
+            RREventPreviewModels.templateFor(project, spec, map3d).then(template => {
+                if (!template || generation !== this._passageGeneration || !layer.parent) return;
+                const tiles = Reactor3D.blockedTilesFor(template, template.userData.reactorSidecar, spec, placed.direction, placed.x, placed.y);
+                if (!tiles.length) return;
+                const fill = new PIXI.Graphics();
+                for (const tile of tiles) fill.rect(tile.x * tw + 1, tile.y * th + 1, tw - 2, th - 2);
+                fill.fill({ color: 0xff4040, alpha: 0.22 });
+                fill.eventMode = "none";
+                layer.addChildAt(fill, 0);
+            }).catch(() => {});
+        }
+    }
+
+    /** Show or hide the passage marks. */
+    setPassageVisible(on) {
+        this.passageVisible = on === true;
+        this.drawPassage();
+    }
+
+    /** Redraw the passage marks after tiles or props changed, once per frame. */
+    refreshPassage() {
+        if (!this.passageVisible || this._passageRefresh) return;
+        const schedule = typeof requestAnimationFrame === "function" ? requestAnimationFrame : (fn => setTimeout(fn, 16));
+        this._passageRefresh = schedule(() => {
+            this._passageRefresh = null;
+            this.drawPassage();
+        });
     }
 
     /**
@@ -1497,6 +1641,7 @@ class TilemapManager {
     // This is 1000x faster than renderMap() when only a few tiles changed
     // positions: Array of {x, y, layer} objects, where layer is 0-4 (0=ground, 1=lower1, 2=lower2, 3=lower3, 4=shadow)
     updateTiles(positions) {
+        if (this.passageVisible) this.refreshPassage();
         if (!this.currentMap || !this.currentTileset) return;
 
         if (this.usesVirtualViewport()) {

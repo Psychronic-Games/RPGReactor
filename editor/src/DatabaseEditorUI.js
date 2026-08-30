@@ -484,7 +484,7 @@ class DatabaseEditorUI {
                 title = this._dbTitle(type, 'User Interfaces');
                 break;
             case 'reactor3d': {
-                const { detailEl } = this.prepareDatabaseSection('reactor3d', this._dbTitle('reactor3d', '3D'), { showListPanel: false });
+                const { detailEl } = this.prepareDatabaseSection('reactor3d', this._dbTitle('reactor3d', '3D Models'), { showListPanel: false });
                 this.reactor3dEditor.projectController = { getCurrentProject: () => this.currentProject, mapEditor3D: this.callbacks.getMapEditor3D ? this.callbacks.getMapEditor3D() : (window.reactor && window.reactor.mapEditor3D) };
                 this.reactor3dEditor.show(detailEl);
                 return;
@@ -1495,7 +1495,7 @@ class DatabaseEditorUI {
             { name: 'States', type: 'states' },
             { name: 'Animations', type: 'animations' },
             { name: 'Tilesets', type: 'tilesets' },
-            { name: '3D', type: 'reactor3d' },
+            { name: '3D Models', type: 'reactor3d' },
             { name: 'Common Events', type: 'commonEvents' },
             { name: 'User Interfaces', type: 'userInterfaces' },
             { name: 'System 1', type: 'system1' },

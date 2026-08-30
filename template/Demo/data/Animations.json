@@ -9980,10 +9980,31 @@
     "id": 122
   },
   {
-    "name": "",
-    "flashTimings": [],
-    "soundTimings": [],
-    "effectName": "",
+    "name": "Fire Canon",
+    "flashTimings": [
+      {
+        "frame": 0,
+        "duration": 8,
+        "color": [
+          255,
+          0,
+          0,
+          61
+        ]
+      }
+    ],
+    "soundTimings": [
+      {
+        "frame": 0,
+        "se": {
+          "name": "blaster-01",
+          "pan": 0,
+          "pitch": 100,
+          "volume": 100
+        }
+      }
+    ],
+    "effectName": "Fire-Cannon",
     "displayType": 0,
     "offsetX": 0,
     "offsetY": 0,

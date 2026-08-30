@@ -277,7 +277,7 @@ class EventPageEditor {
 
                 <div style="font-size: 10px; color: var(--color-text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex-shrink: 0;">
                     ${use3d
-                        ? `${tt('Model size (tiles)')} <strong style="color: var(--color-text);">${model.size || 2}</strong>
+                        ? `${tt('Model size')} <strong style="color: var(--color-text);">${model.size || 2}</strong>
                             <span style="margin-left:6px;">${this._t('event.dir')}</span>
                             ${[2, 4, 6, 8].map(dir => {
                                 const label = { 2: 'Down', 4: 'Left', 6: 'Right', 8: 'Up' }[dir];

@@ -94,9 +94,11 @@ class ModelPropsManager {
         const container = this._ensureContainer();
         if (!container) return;
         for (const child of container.removeChildren()) child.destroy({ children: false });
+        this._ghost = null;
         this._sprites.clear();
         const tw = this.tilemapManager?.TILE_WIDTH || 48;
         const th = this.tilemapManager?.TILE_HEIGHT || tw;
+        this._drawFootprint(container, tw, th);
         const props = this.props().slice().sort((a, b) => a.y - b.y || a.id - b.id);
         for (const prop of props) {
             const sprite = this._spriteFor(prop, tw, th);
@@ -108,6 +110,32 @@ class ModelPropsManager {
             this._sprites.set(prop.id, sprite);
             container.addChild(sprite);
         }
+    }
+
+    /**
+     * The tiles the selected prop blocks, in red under its sprite: the
+     * game's rule on the model's mesh at this size and facing, so the
+     * footprint is seen, not guessed. Drawn when the template is in.
+     */
+    _drawFootprint(container, tw, th) {
+        const prop = this.prop(this.selectedId);
+        if (!prop || typeof RREventPreviewModels === 'undefined' || typeof Reactor3D === 'undefined'
+            || !Reactor3D.blockedTilesFor || !Reactor3D.normalizeModelSpec || typeof PIXI === 'undefined') return;
+        const spec = Reactor3D.normalizeModelSpec(ModelPropsManager.specOf(prop));
+        if (!spec) return;
+        const generation = (this._footprintGeneration = (this._footprintGeneration || 0) + 1);
+        RREventPreviewModels.templateFor(this.project(), spec, this.mapEditor3D()).then(template => {
+            if (!template || generation !== this._footprintGeneration || container.destroyed) return;
+            const tiles = Reactor3D.blockedTilesFor(template, template.userData.reactorSidecar, spec, prop.direction, prop.x, prop.y);
+            if (!tiles.length) return;
+            const graphics = new PIXI.Graphics();
+            for (const tile of tiles) {
+                graphics.rect(tile.x * tw + 1, tile.y * th + 1, tw - 2, th - 2);
+            }
+            graphics.fill({ color: 0xff5a5a, alpha: 0.28 });
+            graphics.eventMode = 'none';
+            container.addChildAt(graphics, 0);
+        }).catch(() => {});
     }
 
     _spriteFor(prop, tw, th) {
@@ -124,8 +152,8 @@ class ModelPropsManager {
         }
         const spec = Reactor3D.normalizeModelSpec(ModelPropsManager.specOf(prop));
         if (!spec) return null;
-        const pixels = Math.round(spec.size * spec.scale * tw);
-        const key = `${spec.name}|${spec.ext || ''}|${spec.file || ''}@${pixels}:${prop.direction}:${prop.yaw}:${prop.pitch}:${prop.roll}`;
+        const pixels = Math.round(spec.size * spec.scale * Math.max.apply(null, spec.stretch || [1]) * tw);
+        const key = `${spec.name}|${spec.ext || ''}|${spec.file || ''}@${pixels}:${prop.direction}:${prop.yaw}:${prop.pitch}:${prop.roll}:${(spec.stretch || []).join(',')}`;
         let texture = this._textures.get(key);
         if (texture === undefined) {
             this._textures.set(key, null);
@@ -162,7 +190,7 @@ class ModelPropsManager {
     static specOf(prop) {
         return {
             name: prop.name, ext: prop.ext, file: prop.file, texture: prop.texture,
-            size: prop.size, scale: prop.scale, yaw: prop.yaw, pitch: prop.pitch, roll: prop.roll
+            size: prop.size, scale: prop.scale, stretch: prop.stretch, yaw: prop.yaw, pitch: prop.pitch, roll: prop.roll
         };
     }
 
@@ -187,6 +215,8 @@ class ModelPropsManager {
         this._syncPanel();
         const map3d = this.mapEditor3D();
         if (map3d?.isEnabled?.()) map3d.refreshProps?.(ids);
+        this.tilemapManager?.refreshPassage?.();
+        map3d?.refreshPassage?.();
         this.projectController?.videoSurfacePreviewManager?.refresh?.();
     }
 
@@ -194,15 +224,40 @@ class ModelPropsManager {
     // Undo: whole-list snapshots of the map's props, per map, Ctrl+Z / Ctrl+Y
     // while the tab is up. Small lists, so a copy per edit is nothing.
 
+    _tx(text) {
+        return (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
+    }
+
     _snapshot() {
         return JSON.stringify(this.currentMap?.reactor3d?.props || []);
     }
 
+    /** The map editor whose Undo/Redo the props share, when there is one. */
+    _mapEditor() {
+        return this.projectController?.mapEditor || window.reactor?.mapEditor || null;
+    }
+
     pushUndo() {
         if (!this.currentMap) return;
+        const mapEditor = this._mapEditor();
+        if (mapEditor && typeof mapEditor.recordPropsState === 'function') {
+            // One history for the map: a placed prop undoes with Ctrl+Z and
+            // the toolbar like a painted tile does.
+            mapEditor.recordPropsState(this._snapshot());
+            return;
+        }
         this._undo.push(this._snapshot());
         if (this._undo.length > 100) this._undo.shift();
         this._redo = [];
+    }
+
+    /** Snapshot and restore for the map editor's history. */
+    snapshotProps() {
+        return this._snapshot();
+    }
+
+    restoreProps(snapshot) {
+        this._restore(snapshot);
     }
 
     _restore(snapshot) {
@@ -216,6 +271,8 @@ class ModelPropsManager {
     }
 
     undo() {
+        const mapEditor = this._mapEditor();
+        if (mapEditor && typeof mapEditor.recordPropsState === 'function') { mapEditor.undo(); return true; }
         if (!this._undo.length) return false;
         this._redo.push(this._snapshot());
         this._restore(this._undo.pop());
@@ -223,6 +280,8 @@ class ModelPropsManager {
     }
 
     redo() {
+        const mapEditor = this._mapEditor();
+        if (mapEditor && typeof mapEditor.recordPropsState === 'function') { mapEditor.redo(); return true; }
         if (!this._redo.length) return false;
         this._undo.push(this._snapshot());
         this._restore(this._redo.pop());
@@ -302,6 +361,7 @@ class ModelPropsManager {
     deactivate() {
         if (!this.active) return;
         this.active = false;
+        this._hideGhost(true);
         this._unbindPointer();
         document.removeEventListener('keydown', this._onKeyDown);
         this.mapEditor3D()?.selectProp?.(null);
@@ -324,6 +384,7 @@ class ModelPropsManager {
         on('pointermove', event => this._pointerMove(event, container));
         on('pointerup', event => this._pointerUp(event));
         on('pointerupoutside', event => this._pointerUp(event));
+        on('pointerleave', () => this._hideGhost());
     }
 
     _unbindPointer() {
@@ -355,7 +416,20 @@ class ModelPropsManager {
     }
 
     _pointerMove(event, container) {
-        if (!this.active || !this.drag) return;
+        if (!this.active) return;
+        if (!this.drag) {
+            // The 3D view owns the ghost while it is up: the flat stage still
+            // hears the pointer under it, and hiding from here on a 2D sprite
+            // hit (an unrelated spot in 3D) made the 3D ghost flicker.
+            if (this.mapEditor3D()?.isEnabled?.()) return;
+            // Hovering with a model in hand: show what a click would place.
+            const pos = event.data.getLocalPosition(container);
+            const tw = this.tilemapManager.TILE_WIDTH, th = this.tilemapManager.TILE_HEIGHT;
+            const gx = Math.floor(pos.x / tw), gy = Math.floor(pos.y / th);
+            if (this.model && !this.propAtPoint(pos.x, pos.y) && gx >= 0 && gy >= 0) this._showGhost(gx, gy);
+            else this._hideGhost();
+            return;
+        }
         const pos = event.data.getLocalPosition(container);
         const tw = this.tilemapManager.TILE_WIDTH, th = this.tilemapManager.TILE_HEIGHT;
         // The flat map moves props a tile at a time; free placement is the 3D view's.
@@ -387,6 +461,8 @@ class ModelPropsManager {
 
     _handleUndoKeys(event) {
         if (!this.active) return;
+        // With a map editor the toolbar's own Ctrl+Z handler steps this history; a second handler would step it twice.
+        if (this._mapEditor() && typeof this._mapEditor().recordPropsState === 'function') return;
         const tag = event.target?.tagName;
         if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || event.target?.isContentEditable) return;
         if (!(event.ctrlKey || event.metaKey)) return;
@@ -424,8 +500,7 @@ class ModelPropsManager {
                         </div>
                     </div>
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px 8px; margin-top: 8px; font-size: 10px; color: var(--color-text-muted);">
-                        <label>${escape(t('props.size'))}${stepper('model-props-size', 0.1, 64, 0.5, 2)}</label>
-                        <label>${escape(t('props.scale'))}${stepper('model-props-scale', 0.05, 20, 0.1, 1)}</label>
+                        <label style="grid-column: 1 / -1;">${escape(t('props.size'))}${stepper('model-props-size', 0.1, 64, 0.5, 2)}</label>
                         <label>${escape(t('props.direction'))}
                             <select id="model-props-direction" style="width: 100%; margin-top: 2px; font-size: 11px; padding: 3px 4px; background: var(--color-bg-input); color: var(--color-text); border: 1px solid var(--color-border-input); border-radius: 3px;">
                                 <option value="2">${escape(t('props.dirDown'))}</option>
@@ -446,6 +521,10 @@ class ModelPropsManager {
                             <input type="checkbox" id="model-props-passable"> ${escape(t('props.passable'))}
                         </label>
                     </div>
+                    <div id="model-props-card" style="margin-top: 8px; padding: 6px; background: var(--color-bg-deep); border: 1px solid var(--color-border); border-radius: 3px; font-size: 10px; color: var(--color-text-muted);">
+                        <div id="model-props-card-tabs" style="display: flex; gap: 4px; margin-bottom: 6px;"></div>
+                        <div id="model-props-card-body"></div>
+                    </div>
                     <div style="display: flex; gap: 6px; margin-top: 8px;">
                         <button type="button" id="model-props-remove" class="map-props-btn" style="padding: 3px 10px; font-size: 10px;" disabled>${escape(t('props.remove'))}</button>
                         <button type="button" id="model-props-deselect" class="map-props-btn" style="padding: 3px 10px; font-size: 10px;" disabled>${escape(t('props.deselect'))}</button>
@@ -462,8 +541,10 @@ class ModelPropsManager {
                 return Number.isFinite(value) ? value : fallback;
             };
             this.fields = {
+                // One size: the model's longest side in tiles. An old prop's
+                // separate scale is folded into it the first time it is edited.
                 size: Math.max(0.1, number('model-props-size', 2)),
-                scale: Math.max(0.05, number('model-props-scale', 1)),
+                scale: 1,
                 direction: Number(byId('model-props-direction')?.value) || 2,
                 z: Math.max(0, number('model-props-z', 0)),
                 passable: !!byId('model-props-passable')?.checked,
@@ -474,7 +555,7 @@ class ModelPropsManager {
             };
             if (this.selectedId) this.update(this.selectedId, this.fields);
         };
-        for (const id of ['model-props-size', 'model-props-scale', 'model-props-z']) byId(id)?.addEventListener('change', readFields);
+        for (const id of ['model-props-size', 'model-props-z']) byId(id)?.addEventListener('change', readFields);
         byId('model-props-direction')?.addEventListener('change', readFields);
         byId('model-props-passable')?.addEventListener('change', readFields);
         byId('model-props-animation')?.addEventListener('change', readFields);
@@ -531,8 +612,29 @@ class ModelPropsManager {
         // Every rule, on demand or not: a continuous one plays on its own,
         // but listing it says what the model does.
         const actions = ModelPropsManager.modelRuleNames(project.path, name);
-        const effects = typeof PlayModelEffectEditor !== 'undefined' ? PlayModelEffectEditor.modelActionNames(project.path, name) : [];
+        // Effects with their trigger too: an "always" one plays on every
+        // instance whether or not it is chosen here.
+        const effects = ModelPropsManager.modelEffectNames(project.path, name);
         return { actions, effects };
+    }
+
+    /** Effect names with their trigger, e.g. "Animated Screen (always)". */
+    static modelEffectNames(projectPath, modelName) {
+        if (!projectPath || !modelName || typeof require !== 'function') return [];
+        const fs = require('fs');
+        const path = require('path');
+        try {
+            const parsed = JSON.parse(fs.readFileSync(path.join(projectPath, '3d', ...String(modelName).split('/'), 'model.json'), 'utf8'));
+            const names = [];
+            for (const effect of parsed.effects || []) {
+                if (effect && effect.name && !names.some(entry => entry.name === effect.name)) {
+                    names.push({ name: String(effect.name), trigger: effect.trigger || 'action' });
+                }
+            }
+            return names;
+        } catch (error) {
+            return [];
+        }
     }
 
     /** Rule names with their trigger, e.g. "sway (always)". */
@@ -576,11 +678,18 @@ class ModelPropsManager {
     }
 
     chooseModel(model) {
+        // The animation and effect chosen belong to a model: picking the
+        // same model again (to place another) keeps them, so a row of
+        // consoles all get the screen chosen once; a different model starts
+        // with none, since its names are different.
+        const same = this.model && model && this.model.name === model.name && this.model.file === model.file;
         this.model = model;
         // A new model means a new placement, not a swap of the selected one.
         this.selectedId = null;
-        this.fields.animation = '';
-        this.fields.effect = '';
+        if (!same) {
+            this.fields.animation = '';
+            this.fields.effect = '';
+        }
         this.render();
         this._syncPanel();
         this.mapEditor3D()?.selectProp?.(null);
@@ -600,15 +709,194 @@ class ModelPropsManager {
                 ? this._t('props.selected', { id: shown.id, x: shown.x, y: shown.y })
                 : (this.model ? this._t('props.hintPlace') : this._t('props.hintChoose'));
         }
-        if (byId('model-props-size')) byId('model-props-size').value = this.fields.size;
-        if (byId('model-props-scale')) byId('model-props-scale').value = this.fields.scale;
+        if (byId('model-props-size')) byId('model-props-size').value = Math.round(this.fields.size * (this.fields.scale || 1) * 100) / 100;
         if (byId('model-props-direction')) byId('model-props-direction').value = String(this.fields.direction);
         if (byId('model-props-z')) byId('model-props-z').value = this.fields.z;
         if (byId('model-props-passable')) byId('model-props-passable').checked = !!this.fields.passable;
         if (byId('model-props-remove')) byId('model-props-remove').disabled = !shown;
+        this._syncCard();
         if (byId('model-props-deselect')) byId('model-props-deselect').disabled = !shown;
         this._fillChoiceSelects();
         this._syncPreview(shown ? ModelPropsManager.specOf(shown) : (this.model ? { name: this.model.name, ext: this.model.ext, file: this.model.file, texture: this.model.texture, size: 1, scale: 1, yaw: this.fields.yaw, pitch: this.fields.pitch, roll: this.fields.roll } : null), shown ? shown.direction : this.fields.direction);
+    }
+
+    //-------------------------------------------------------------------------
+    // Transform card: sliders for the selected prop's place, turn and size,
+    // live on the map (and in 3D) as they move, with the number beside each.
+
+    /** The values the card shows: the selected prop's, else the next placement's. */
+    _cardValues() {
+        const prop = this.prop(this.selectedId);
+        const source = prop || this.fields;
+        const stretch = Array.isArray(source.stretch) ? source.stretch : [1, 1, 1];
+        return {
+            x: prop ? prop.x : null, y: prop ? prop.y : null, z: source.z || 0,
+            yaw: source.yaw || 0, pitch: source.pitch || 0, roll: source.roll || 0,
+            size: Math.round((source.size || 2) * (source.scale || 1) * 100) / 100,
+            sx: stretch[0], sy: stretch[1], sz: stretch[2]
+        };
+    }
+
+    _cardRows() {
+        const v = this._cardValues();
+        const tab = this._cardTab || 'offset';
+        if (tab === 'rotate') {
+            return [['yaw', this._tx('Yaw'), -180, 180, 1, v.yaw, '°'], ['pitch', this._tx('Pitch'), -180, 180, 1, v.pitch, '°'], ['roll', this._tx('Roll'), -180, 180, 1, v.roll, '°']];
+        }
+        if (tab === 'scale') {
+            const proportional = this._cardProportional !== false && v.sx === 1 && v.sy === 1 && v.sz === 1 ? true : this._cardProportional === true;
+            const rows = [['size', this._t('props.size'), 0.1, 20, 0.05, v.size, '']];
+            if (!proportional) rows.push(['sx', 'X', 0.1, 4, 0.01, v.sx, '×'], ['sy', 'Y', 0.1, 4, 0.01, v.sy, '×'], ['sz', 'Z', 0.1, 4, 0.01, v.sz, '×']);
+            return rows;
+        }
+        const x = v.x == null ? 0 : v.x, y = v.y == null ? 0 : v.y;
+        return [['x', 'X', Math.max(0, x - 4), x + 4, 0.05, x, ''], ['y', 'Y', Math.max(0, y - 4), y + 4, 0.05, y, ''], ['z', 'Z', 0, 32, 0.05, v.z, '']];
+    }
+
+    /** Build the card for the current tab and selection; sliders edit live. */
+    _renderCard() {
+        const panel = this.panel;
+        const tabs = panel && panel.querySelector('#model-props-card-tabs');
+        const body = panel && panel.querySelector('#model-props-card-body');
+        if (!tabs || !body) return;
+        const escape = text => String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+        const tab = this._cardTab || 'offset';
+        tabs.innerHTML = [['offset', this._tx('Coordinates')], ['rotate', this._tx('Rotate')], ['scale', this._tx('Scale')]]
+            .map(([id, label]) => `<button type="button" class="map-props-btn${id === tab ? ' primary' : ''}" data-card-tab="${id}" style="flex: 1; padding: 2px 4px; font-size: 10px;">${escape(label)}</button>`).join('');
+        const v = this._cardValues();
+        const hasProp = !!this.prop(this.selectedId);
+        const rows = this._cardRows();
+        const proportional = !rows.some(r => r[0] === 'sx');
+        body.innerHTML = rows.map(([key, label, min, max, step, value, unit]) => `
+            <div style="display: grid; grid-template-columns: 26px 1fr 58px; gap: 4px; align-items: center; margin: 2px 0;${(key === 'x' || key === 'y') && !hasProp ? ' opacity: 0.4;' : ''}">
+                <span style="color: var(--color-text);">${escape(label)}</span>
+                <input type="range" class="mp-card-slider" data-key="${key}" min="${min}" max="${max}" step="${step}" value="${value}" style="width: 100%; min-width: 0;"${(key === 'x' || key === 'y') && !hasProp ? ' disabled' : ''}>
+                <input type="number" class="mp-card-num" data-key="${key}" data-no-stepper min="${key === 'x' || key === 'y' ? 0 : min}" max="${key === 'x' || key === 'y' ? 9999 : max}" step="${step}" value="${value}" title="${escape(unit)}"
+                    style="width: 100%; box-sizing: border-box; font-size: 10px; padding: 2px 3px; background: var(--color-bg-input); color: var(--color-text); border: 1px solid var(--color-border-input); border-radius: 3px;"${(key === 'x' || key === 'y') && !hasProp ? ' disabled' : ''}>
+            </div>`).join('')
+            + (tab === 'scale' ? `<label style="display: flex; align-items: center; gap: 6px; margin-top: 4px; color: var(--color-text); cursor: pointer;"><input type="checkbox" class="mp-card-proportional"${proportional ? ' checked' : ''}> ${escape(this._t('r3dcard.proportional'))}</label>` : '');
+        tabs.querySelectorAll('[data-card-tab]').forEach(button => button.addEventListener('click', () => {
+            this._cardTab = button.dataset.cardTab;
+            this._renderCard();
+        }));
+        const apply = (key, raw, live) => {
+            const value = Number(raw);
+            if (!Number.isFinite(value)) return;
+            this._cardApply(key, value, live);
+        };
+        body.querySelectorAll('.mp-card-slider').forEach(slider => {
+            slider.addEventListener('input', () => {
+                const num = body.querySelector(`.mp-card-num[data-key="${slider.dataset.key}"]`);
+                if (num) num.value = slider.value;
+                apply(slider.dataset.key, slider.value, true);
+            });
+            slider.addEventListener('change', () => { this._cardUndoPushed = false; });
+        });
+        body.querySelectorAll('.mp-card-num').forEach(num => num.addEventListener('change', () => {
+            const slider = body.querySelector(`.mp-card-slider[data-key="${num.dataset.key}"]`);
+            if (slider) slider.value = num.value;
+            apply(num.dataset.key, num.value, false);
+            this._cardUndoPushed = false;
+        }));
+        const box = body.querySelector('.mp-card-proportional');
+        if (box) box.addEventListener('change', () => {
+            this._cardProportional = box.checked;
+            if (box.checked) this._cardApply('stretch', [1, 1, 1], false);
+            this._renderCard();
+        });
+        this._cardFor = `${this.selectedId || ''}|${tab}|${this.model ? this.model.name : ''}`;
+    }
+
+    /** One card value changed: patch the selected prop (undo once per drag), or the next placement's fields. */
+    _cardApply(key, value, live) {
+        let patch;
+        if (key === 'size') patch = { size: value, scale: 1 };
+        else if (key === 'stretch') patch = { stretch: value };
+        else if (key === 'sx' || key === 'sy' || key === 'sz') {
+            const v = this._cardValues();
+            const stretch = [v.sx, v.sy, v.sz];
+            stretch[{ sx: 0, sy: 1, sz: 2 }[key]] = value;
+            patch = { stretch };
+        } else patch = { [key]: value };
+        const id = this.selectedId;
+        if (id && this.prop(id)) {
+            if (!this._cardUndoPushed) { this.pushUndo(); this._cardUndoPushed = true; }
+            this._cardLive = true;
+            this.update(id, patch, { silent: true });
+            this._cardLive = false;
+            if (!live) this._cardUndoPushed = false;
+            return;
+        }
+        if ('x' in patch || 'y' in patch) return;
+        if ('size' in patch) { this.fields.size = patch.size; this.fields.scale = 1; }
+        else if ('stretch' in patch) this.fields.stretch = patch.stretch;
+        else Object.assign(this.fields, patch);
+        this._syncPanel();
+    }
+
+    /** Keep the card's numbers true without rebuilding it mid-drag. */
+    _syncCard() {
+        const panel = this.panel;
+        if (!panel || !panel.querySelector('#model-props-card-body')) return;
+        const key = `${this.selectedId || ''}|${this._cardTab || 'offset'}|${this.model ? this.model.name : ''}`;
+        // A different prop, tab or model: build the card afresh. The same
+        // one, mid-drag or not: only its numbers move.
+        if (this._cardFor !== key) { this._renderCard(); return; }
+        const v = this._cardValues();
+        const values = { x: v.x, y: v.y, z: v.z, yaw: v.yaw, pitch: v.pitch, roll: v.roll, size: v.size, sx: v.sx, sy: v.sy, sz: v.sz };
+        for (const input of panel.querySelectorAll('.mp-card-slider, .mp-card-num')) {
+            const next = values[input.dataset.key];
+            if (next == null) continue;
+            if (document.activeElement === input) continue;
+            if (String(input.value) !== String(next)) input.value = next;
+        }
+    }
+
+    /** The prop the next click would place, as a spec, or null without a model. */
+    _placementSpec() {
+        if (!this.model || typeof Reactor3D === 'undefined' || !Reactor3D.normalizeModelSpec) return null;
+        // Asked on every pointer move: the same spec object comes back until a field changes.
+        const f = this.fields;
+        const key = `${this.model.name}|${this.model.ext}|${this.model.file}|${this.model.texture}|${f.size}|${f.scale}|${(f.stretch || []).join(',')}|${f.yaw}|${f.pitch}|${f.roll}`;
+        if (this._placementSpecKey === key && this._placementSpecValue) return this._placementSpecValue;
+        this._placementSpecKey = key;
+        this._placementSpecValue = Reactor3D.normalizeModelSpec(ModelPropsManager.specOf({
+            name: this.model.name, ext: this.model.ext, file: this.model.file, texture: this.model.texture,
+            size: f.size, scale: f.scale, stretch: f.stretch, yaw: f.yaw, pitch: f.pitch, roll: f.roll
+        }));
+        return this._placementSpecValue;
+    }
+
+    /** A half-seen copy of the model under the cursor on the flat map: what a click would place. */
+    _showGhost(x, y) {
+        const container = this._ensureContainer();
+        if (!container || !this.model) return;
+        const tw = this.tilemapManager?.TILE_WIDTH || 48;
+        const th = this.tilemapManager?.TILE_HEIGHT || tw;
+        const fake = { id: 0, name: this.model.name, ext: this.model.ext, file: this.model.file, texture: this.model.texture,
+            x, y, z: this.fields.z, direction: this.fields.direction, yaw: this.fields.yaw, pitch: this.fields.pitch, roll: this.fields.roll,
+            size: this.fields.size, scale: this.fields.scale, stretch: this.fields.stretch };
+        if (this._ghost && (this._ghost.parent !== container || this._ghostKey !== `${this.model.name}|${fake.size}|${fake.scale}|${fake.direction}`)) {
+            this._ghost.parent?.removeChild(this._ghost);
+            this._ghost = null;
+        }
+        if (!this._ghost) {
+            const sprite = this._spriteFor(fake, tw, th);
+            if (!sprite) return;
+            sprite.alpha = 0.5;
+            sprite.eventMode = 'none';
+            container.addChild(sprite);
+            this._ghost = sprite;
+            this._ghostKey = `${this.model.name}|${fake.size}|${fake.scale}|${fake.direction}`;
+        }
+        this._ghost.visible = true;
+        this._ghost.x = (x + 0.5) * tw;
+        this._ghost.y = (y + 0.5) * th - fake.z * th;
+    }
+
+    _hideGhost(also3D = false) {
+        if (this._ghost) this._ghost.visible = false;
+        if (also3D) this.mapEditor3D()?.hidePlacementGhost?.();
     }
 
     _syncPreview(rawSpec, direction) {

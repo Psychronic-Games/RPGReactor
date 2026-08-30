@@ -1350,7 +1350,7 @@ class DatabaseTroopEditor {
                 return;
             }
             if (command.code === 111) {
-                this.getCommandEditor('conditionalBranch', ConditionalBranchEditor).show(null, insertCommands);
+                this.getCommandEditor('conditionalBranch', ConditionalBranchEditor).show(null, insertCommands, { troop: this.currentTroop });
                 return;
             }
             if (command.code === 112 || command.code === 413) {
@@ -1552,7 +1552,7 @@ class DatabaseTroopEditor {
                     if (body) for (const nested of body) page.list.splice(insertAt++, 0, nested);
                 }
                 refresh();
-            }, { hasElse: !!elseBranch });
+            }, { hasElse: !!elseBranch, troop: this.currentTroop });
             return;
         }
 

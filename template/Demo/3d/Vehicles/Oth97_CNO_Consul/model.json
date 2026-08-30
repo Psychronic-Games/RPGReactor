@@ -46,7 +46,8 @@
         1
       ],
       "period": 24,
-      "hold": false
+      "hold": false,
+      "repeat": false
     }
   ],
   "parts": [
@@ -184,5 +185,34 @@
       1.259704926076757,
       -0.000045693107514961274
     ]
-  }
+  },
+  "effects": [
+    {
+      "name": "effect",
+      "animation": 123,
+      "anchor": {
+        "part": "Canon Shaft",
+        "offset": [
+          5.5,
+          1.722,
+          0
+        ]
+      },
+      "scale": 1,
+      "loop": false,
+      "rotate": [
+        0,
+        0,
+        0
+      ],
+      "video": {
+        "file": "",
+        "width": 0.3,
+        "height": 0.2,
+        "loop": true,
+        "audio": false,
+        "volume": 100
+      }
+    }
+  ]
 }

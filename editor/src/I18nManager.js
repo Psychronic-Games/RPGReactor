@@ -57,8 +57,8 @@ const RR_EVENT_COMMAND_NAMES = {
 };
 
 const RR_EVENT_SECTION_NAMES = {
-    ja: { 'Message & Flow': 'メッセージとフロー', 'Map & Screen': 'マップと画面', 'Battle & System': '戦闘とシステム', 'Message': 'メッセージ', 'Game Progression': 'ゲーム進行', 'Flow Control': 'フロー制御', 'Party': 'パーティ', 'Actor': 'アクター', 'Movement': '移動', 'Character': 'キャラクター', 'Picture': 'ピクチャ', 'Timing': 'タイミング', 'Screen': '画面', 'Audio & Video': 'オーディオとビデオ', 'Scene Control': 'シーン制御', 'System Settings': 'システム設定', 'Map': 'マップ', 'Battle': '戦闘', 'Advanced': '高度' },
-    es: { 'Message & Flow': 'Mensaje y flujo', 'Map & Screen': 'Mapa y pantalla', 'Battle & System': 'Batalla y sistema', 'Message': 'Mensaje', 'Game Progression': 'Progreso del juego', 'Flow Control': 'Control de flujo', 'Party': 'Grupo', 'Actor': 'Actor', 'Movement': 'Movimiento', 'Character': 'Personaje', 'Picture': 'Imagen', 'Timing': 'Tiempo', 'Screen': 'Pantalla', 'Audio & Video': 'Audio y video', 'Scene Control': 'Control de escena', 'System Settings': 'Ajustes del sistema', 'Map': 'Mapa', 'Battle': 'Batalla', 'Advanced': 'Avanzado' }
+    ja: { 'Game Flow': 'ゲームフロー', 'Message & Flow': 'メッセージとフロー', 'Map & Screen': 'マップと画面', 'Battle & System': '戦闘とシステム', 'Message': 'メッセージ', 'Game Progression': 'ゲーム進行', 'Flow Control': 'フロー制御', 'Party': 'パーティ', 'Actor': 'アクター', 'Movement': '移動', 'Character': 'キャラクター', 'Picture': 'ピクチャ', 'Timing': 'タイミング', 'Screen': '画面', 'Audio & Video': 'オーディオとビデオ', 'Scene Control': 'シーン制御', 'System Settings': 'システム設定', 'Map': 'マップ', 'Battle': '戦闘', 'Advanced': '高度' },
+    es: { 'Game Flow': 'Flujo de juego', 'Message & Flow': 'Mensaje y flujo', 'Map & Screen': 'Mapa y pantalla', 'Battle & System': 'Batalla y sistema', 'Message': 'Mensaje', 'Game Progression': 'Progreso del juego', 'Flow Control': 'Control de flujo', 'Party': 'Grupo', 'Actor': 'Actor', 'Movement': 'Movimiento', 'Character': 'Personaje', 'Picture': 'Imagen', 'Timing': 'Tiempo', 'Screen': 'Pantalla', 'Audio & Video': 'Audio y video', 'Scene Control': 'Control de escena', 'System Settings': 'Ajustes del sistema', 'Map': 'Mapa', 'Battle': 'Batalla', 'Advanced': 'Avanzado' }
 };
 
 Object.assign(RR_EVENT_COMMAND_NAMES, {
@@ -304,6 +304,7 @@ const RR_I18N_STRINGS = {
         'toolbar.title.animateAutotiles': 'Toggle A1 Autotile Animation',
         'toolbar.title.map3DView': 'Show the map in 3D',
         'toolbar.title.showGrid': 'Show the tile grid',
+        'toolbar.title.showPassage': 'Show passability: X where nothing can walk, a red edge where one direction cannot, red where a 3D model stands',
         'toolbar.title.eventManager': 'Event Manager',
         'toolbar.title.database': 'Database',
         'toolbar.title.plugins': 'Plugins',
@@ -3231,6 +3232,7 @@ RR_EVENT_COMMAND_NAMES['ko'] = {
     'If Escape': '도주한 경우', 'If Lose': '패배한 경우', 'Shop Good': '상점 상품', 'Plugin Args': '플러그인 인수',
 };
 RR_EVENT_SECTION_NAMES['ko'] = {
+    'Game Flow': '게임 흐름',
     'Message & Flow': '메시지 및 흐름', 'Map & Screen': '맵 및 화면', 'Battle & System': '전투 및 시스템', 'Message': '메시지',
     'Game Progression': '게임 진행', 'Flow Control': '흐름 제어', 'Party': '파티', 'Actor': '액터',
     'Movement': '이동', 'Character': '캐릭터', 'Picture': '그림', 'Timing': '타이밍',
@@ -3529,6 +3531,7 @@ RR_EVENT_COMMAND_NAMES['ar'] = {
     'If Escape': 'عند الهروب', 'If Lose': 'عند الخسارة', 'Shop Good': 'سلعة المتجر', 'Plugin Args': 'وسائط الإضافة',
 };
 RR_EVENT_SECTION_NAMES['ar'] = {
+    'Game Flow': 'تدفق اللعبة',
     'Message & Flow': 'الرسائل والتدفق', 'Map & Screen': 'الخريطة والشاشة', 'Battle & System': 'المعركة والنظام', 'Message': 'الرسائل',
     'Game Progression': 'تقدم اللعبة', 'Flow Control': 'التحكم في التدفق', 'Party': 'الفريق', 'Actor': 'الشخصية',
     'Movement': 'الحركة', 'Character': 'الكائن', 'Picture': 'الصورة', 'Timing': 'التوقيت',
@@ -3661,6 +3664,19 @@ Object.assign(RR_TEXT_TRANSLATIONS.ja, {
     'Ring Segments': 'リングのセグメント数', 'Ring Size': 'リングサイズ', 'Ring Spacing': 'リング間隔', 'Ring Thickness': 'リングの太さ',
     'Ring Width': 'リングの幅', 'Ring Y Position': 'リングY位置', 'Rings': 'リング', 'Rings / Grid': 'リング/グリッド',
     'Rings per Drop': '滴ごとのリング数', 'Ripple Drops': '波紋の雫', 'Rise': '上昇', 'Rise (materialize)': '上昇（出現）',
+    'This event keeps moving': 'Αυτό το συμβάν συνεχίζει να κινείται',
+    'Last action': 'Τελευταία ενέργεια',
+    'The player keeps moving while this holds.': 'Ο παίκτης συνεχίζει να κινείται όσο κρατά.',
+    'Everything': 'Όλα',
+    'Face Ceiling': 'Προς την οροφή',
+    'Face Ground': 'Προς το έδαφος',
+    'Stand Up': 'Σήκωμα',
+    'Rotate...': 'Περιστροφή...',
+    'Rotation (degrees):': 'Περιστροφή (μοίρες):',
+    'Descend': 'Κάθοδος',
+    'Set Height': 'Ορισμός ύψους',
+    'Set Height...': 'Ορισμός ύψους...',
+    'Height (tiles):': 'Ύψος (πλακίδια):',
     'Rise Cycles': '上昇サイクル', 'Rise Speed': '上昇速度', 'Rock': '岩', 'Roll': 'ロール',
     'Roll Cycles': 'ロールサイクル', 'Rotation (°/s)': '回転（°/s）', 'Rotation Cycles': '回転サイクル', 'Rotation Speed': '回転速度',
     'Row 1 (Heartbeat)': '行1（心拍）', 'Row 1 Speed': '行1の速度', 'Row 2 (Breathing)': '行2（呼吸）', 'Row 2 Speed': '行2の速度',
@@ -3822,6 +3838,19 @@ Object.assign(RR_TEXT_TRANSLATIONS.es, {
     'Ring Segments': 'Segmentos de anillo', 'Ring Size': 'Tamaño de anillo', 'Ring Spacing': 'Espaciado de anillos', 'Ring Thickness': 'Grosor de anillo',
     'Ring Width': 'Ancho de anillo', 'Ring Y Position': 'Posición Y del anillo', 'Rings': 'Anillos', 'Rings / Grid': 'Anillos / cuadrícula',
     'Rings per Drop': 'Anillos por gota', 'Ripple Drops': 'Ondas de gotas', 'Rise': 'Ascenso', 'Rise (materialize)': 'Ascender (materializar)',
+    'This event keeps moving': 'Αυτό το συμβάν συνεχίζει να κινείται',
+    'Last action': 'Τελευταία ενέργεια',
+    'The player keeps moving while this holds.': 'Ο παίκτης συνεχίζει να κινείται όσο κρατά.',
+    'Everything': 'Όλα',
+    'Face Ceiling': 'Προς την οροφή',
+    'Face Ground': 'Προς το έδαφος',
+    'Stand Up': 'Σήκωμα',
+    'Rotate...': 'Περιστροφή...',
+    'Rotation (degrees):': 'Περιστροφή (μοίρες):',
+    'Descend': 'Κάθοδος',
+    'Set Height': 'Ορισμός ύψους',
+    'Set Height...': 'Ορισμός ύψους...',
+    'Height (tiles):': 'Ύψος (πλακίδια):',
     'Rise Cycles': 'Ciclos de ascenso', 'Rise Speed': 'Velocidad de ascenso', 'Rock': 'Roca', 'Roll': 'Alabeo',
     'Roll Cycles': 'Ciclos de alabeo', 'Rotation (°/s)': 'Rotación (°/s)', 'Rotation Cycles': 'Ciclos de rotación', 'Rotation Speed': 'Velocidad de rotación',
     'Row 1 (Heartbeat)': 'Fila 1 (latido)', 'Row 1 Speed': 'Velocidad de fila 1', 'Row 2 (Breathing)': 'Fila 2 (respiración)', 'Row 2 Speed': 'Velocidad de fila 2',
@@ -3983,6 +4012,19 @@ Object.assign(RR_TEXT_TRANSLATIONS['zh-Hant'], {
     'Ring Segments': '環分段數', 'Ring Size': '環大小', 'Ring Spacing': '環間距', 'Ring Thickness': '環厚度',
     'Ring Width': '環寬度', 'Ring Y Position': '環 Y 位置', 'Rings': '環圈', 'Rings / Grid': '環圈 / 網格',
     'Rings per Drop': '每滴環數', 'Ripple Drops': '漣漪水滴', 'Rise': '上升', 'Rise (materialize)': '上升（實體化）',
+    'This event keeps moving': 'Αυτό το συμβάν συνεχίζει να κινείται',
+    'Last action': 'Τελευταία ενέργεια',
+    'The player keeps moving while this holds.': 'Ο παίκτης συνεχίζει να κινείται όσο κρατά.',
+    'Everything': 'Όλα',
+    'Face Ceiling': 'Προς την οροφή',
+    'Face Ground': 'Προς το έδαφος',
+    'Stand Up': 'Σήκωμα',
+    'Rotate...': 'Περιστροφή...',
+    'Rotation (degrees):': 'Περιστροφή (μοίρες):',
+    'Descend': 'Κάθοδος',
+    'Set Height': 'Ορισμός ύψους',
+    'Set Height...': 'Ορισμός ύψους...',
+    'Height (tiles):': 'Ύψος (πλακίδια):',
     'Rise Cycles': '上升週期', 'Rise Speed': '上升速度', 'Rock': '岩石', 'Roll': '翻滾',
     'Roll Cycles': '翻滾週期', 'Rotation (°/s)': '旋轉（°/s）', 'Rotation Cycles': '旋轉圈數', 'Rotation Speed': '旋轉速度',
     'Row 1 (Heartbeat)': '第 1 列（心跳）', 'Row 1 Speed': '第 1 列速度', 'Row 2 (Breathing)': '第 2 列（呼吸）', 'Row 2 Speed': '第 2 列速度',
@@ -4144,6 +4186,19 @@ Object.assign(RR_TEXT_TRANSLATIONS['zh-Hans'], {
     'Ring Segments': '圆环分段', 'Ring Size': '圆环大小', 'Ring Spacing': '圆环间距', 'Ring Thickness': '圆环粗细',
     'Ring Width': '圆环宽度', 'Ring Y Position': '圆环Y位置', 'Rings': '圆环', 'Rings / Grid': '圆环/网格',
     'Rings per Drop': '每滴圆环数', 'Ripple Drops': '涟漪水滴', 'Rise': '上升', 'Rise (materialize)': '上升 (显现)',
+    'This event keeps moving': 'Αυτό το συμβάν συνεχίζει να κινείται',
+    'Last action': 'Τελευταία ενέργεια',
+    'The player keeps moving while this holds.': 'Ο παίκτης συνεχίζει να κινείται όσο κρατά.',
+    'Everything': 'Όλα',
+    'Face Ceiling': 'Προς την οροφή',
+    'Face Ground': 'Προς το έδαφος',
+    'Stand Up': 'Σήκωμα',
+    'Rotate...': 'Περιστροφή...',
+    'Rotation (degrees):': 'Περιστροφή (μοίρες):',
+    'Descend': 'Κάθοδος',
+    'Set Height': 'Ορισμός ύψους',
+    'Set Height...': 'Ορισμός ύψους...',
+    'Height (tiles):': 'Ύψος (πλακίδια):',
     'Rise Cycles': '上升周期', 'Rise Speed': '上升速度', 'Rock': '岩石', 'Roll': '翻滚',
     'Roll Cycles': '翻滚周期', 'Rotation (°/s)': '旋转 (°/s)', 'Rotation Cycles': '旋转周数', 'Rotation Speed': '旋转速度',
     'Row 1 (Heartbeat)': '第1行 (心跳)', 'Row 1 Speed': '第1行速度', 'Row 2 (Breathing)': '第2行 (呼吸)', 'Row 2 Speed': '第2行速度',
@@ -4305,6 +4360,19 @@ Object.assign(RR_TEXT_TRANSLATIONS.ru, {
     'Ring Segments': 'Сегменты Кольца', 'Ring Size': 'Размер Кольца', 'Ring Spacing': 'Шаг Колец', 'Ring Thickness': 'Толщина Кольца',
     'Ring Width': 'Ширина Кольца', 'Ring Y Position': 'Позиция Кольца по Y', 'Rings': 'Кольца', 'Rings / Grid': 'Кольца / Сетка',
     'Rings per Drop': 'Колец на Каплю', 'Ripple Drops': 'Капли Ряби', 'Rise': 'Подъём', 'Rise (materialize)': 'Подъём (материализация)',
+    'This event keeps moving': 'Αυτό το συμβάν συνεχίζει να κινείται',
+    'Last action': 'Τελευταία ενέργεια',
+    'The player keeps moving while this holds.': 'Ο παίκτης συνεχίζει να κινείται όσο κρατά.',
+    'Everything': 'Όλα',
+    'Face Ceiling': 'Προς την οροφή',
+    'Face Ground': 'Προς το έδαφος',
+    'Stand Up': 'Σήκωμα',
+    'Rotate...': 'Περιστροφή...',
+    'Rotation (degrees):': 'Περιστροφή (μοίρες):',
+    'Descend': 'Κάθοδος',
+    'Set Height': 'Ορισμός ύψους',
+    'Set Height...': 'Ορισμός ύψους...',
+    'Height (tiles):': 'Ύψος (πλακίδια):',
     'Rise Cycles': 'Циклы Подъёма', 'Rise Speed': 'Скорость Подъёма', 'Rock': 'Камень', 'Roll': 'Крен',
     'Roll Cycles': 'Циклы Крена', 'Rotation (°/s)': 'Вращение (°/с)', 'Rotation Cycles': 'Циклы Вращения', 'Rotation Speed': 'Скорость Вращения',
     'Row 1 (Heartbeat)': 'Ряд 1 (Сердцебиение)', 'Row 1 Speed': 'Скорость Ряда 1', 'Row 2 (Breathing)': 'Ряд 2 (Дыхание)', 'Row 2 Speed': 'Скорость Ряда 2',
@@ -4466,6 +4534,19 @@ Object.assign(RR_TEXT_TRANSLATIONS.pt, {
     'Ring Segments': 'Segmentos do Anel', 'Ring Size': 'Tamanho do Anel', 'Ring Spacing': 'Espaçamento dos Anéis', 'Ring Thickness': 'Espessura do Anel',
     'Ring Width': 'Largura do Anel', 'Ring Y Position': 'Posição Y do Anel', 'Rings': 'Anéis', 'Rings / Grid': 'Anéis / Grade',
     'Rings per Drop': 'Anéis por Gota', 'Ripple Drops': 'Gotas Ondulantes', 'Rise': 'Subida', 'Rise (materialize)': 'Subir (materializar)',
+    'This event keeps moving': 'Αυτό το συμβάν συνεχίζει να κινείται',
+    'Last action': 'Τελευταία ενέργεια',
+    'The player keeps moving while this holds.': 'Ο παίκτης συνεχίζει να κινείται όσο κρατά.',
+    'Everything': 'Όλα',
+    'Face Ceiling': 'Προς την οροφή',
+    'Face Ground': 'Προς το έδαφος',
+    'Stand Up': 'Σήκωμα',
+    'Rotate...': 'Περιστροφή...',
+    'Rotation (degrees):': 'Περιστροφή (μοίρες):',
+    'Descend': 'Κάθοδος',
+    'Set Height': 'Ορισμός ύψους',
+    'Set Height...': 'Ορισμός ύψους...',
+    'Height (tiles):': 'Ύψος (πλακίδια):',
     'Rise Cycles': 'Ciclos de Subida', 'Rise Speed': 'Velocidade de Subida', 'Rock': 'Rocha', 'Roll': 'Rolagem',
     'Roll Cycles': 'Ciclos de Rolagem', 'Rotation (°/s)': 'Rotação (°/s)', 'Rotation Cycles': 'Ciclos de Rotação', 'Rotation Speed': 'Velocidade de Rotação',
     'Row 1 (Heartbeat)': 'Linha 1 (Batimento)', 'Row 1 Speed': 'Velocidade da Linha 1', 'Row 2 (Breathing)': 'Linha 2 (Respiração)', 'Row 2 Speed': 'Velocidade da Linha 2',
@@ -4627,6 +4708,19 @@ Object.assign(RR_TEXT_TRANSLATIONS.de, {
     'Ring Segments': 'Ringsegmente', 'Ring Size': 'Ringgröße', 'Ring Spacing': 'Ringabstand', 'Ring Thickness': 'Ringdicke',
     'Ring Width': 'Ringbreite', 'Ring Y Position': 'Ring-Y-Position', 'Rings': 'Ringe', 'Rings / Grid': 'Ringe / Gitter',
     'Rings per Drop': 'Ringe pro Tropfen', 'Ripple Drops': 'Wellentropfen', 'Rise': 'Aufstieg', 'Rise (materialize)': 'Aufstieg (materialisieren)',
+    'This event keeps moving': 'Αυτό το συμβάν συνεχίζει να κινείται',
+    'Last action': 'Τελευταία ενέργεια',
+    'The player keeps moving while this holds.': 'Ο παίκτης συνεχίζει να κινείται όσο κρατά.',
+    'Everything': 'Όλα',
+    'Face Ceiling': 'Προς την οροφή',
+    'Face Ground': 'Προς το έδαφος',
+    'Stand Up': 'Σήκωμα',
+    'Rotate...': 'Περιστροφή...',
+    'Rotation (degrees):': 'Περιστροφή (μοίρες):',
+    'Descend': 'Κάθοδος',
+    'Set Height': 'Ορισμός ύψους',
+    'Set Height...': 'Ορισμός ύψους...',
+    'Height (tiles):': 'Ύψος (πλακίδια):',
     'Rise Cycles': 'Aufstiegszyklen', 'Rise Speed': 'Aufstiegsgeschwindigkeit', 'Rock': 'Fels', 'Roll': 'Rollen',
     'Roll Cycles': 'Rollzyklen', 'Rotation (°/s)': 'Rotation (°/s)', 'Rotation Cycles': 'Rotationszyklen', 'Rotation Speed': 'Rotationsgeschwindigkeit',
     'Row 1 (Heartbeat)': 'Zeile 1 (Herzschlag)', 'Row 1 Speed': 'Tempo Zeile 1', 'Row 2 (Breathing)': 'Zeile 2 (Atmung)', 'Row 2 Speed': 'Tempo Zeile 2',
@@ -4788,6 +4882,19 @@ Object.assign(RR_TEXT_TRANSLATIONS.fr, {
     'Ring Segments': 'Segments de l\'anneau', 'Ring Size': 'Taille de l\'anneau', 'Ring Spacing': 'Espacement des anneaux', 'Ring Thickness': 'Épaisseur des anneaux',
     'Ring Width': 'Largeur des anneaux', 'Ring Y Position': 'Position Y de l\'anneau', 'Rings': 'Anneaux', 'Rings / Grid': 'Anneaux / grille',
     'Rings per Drop': 'Anneaux par goutte', 'Ripple Drops': 'Gouttes d\'ondulation', 'Rise': 'Montée', 'Rise (materialize)': 'Montée (matérialisation)',
+    'This event keeps moving': 'Αυτό το συμβάν συνεχίζει να κινείται',
+    'Last action': 'Τελευταία ενέργεια',
+    'The player keeps moving while this holds.': 'Ο παίκτης συνεχίζει να κινείται όσο κρατά.',
+    'Everything': 'Όλα',
+    'Face Ceiling': 'Προς την οροφή',
+    'Face Ground': 'Προς το έδαφος',
+    'Stand Up': 'Σήκωμα',
+    'Rotate...': 'Περιστροφή...',
+    'Rotation (degrees):': 'Περιστροφή (μοίρες):',
+    'Descend': 'Κάθοδος',
+    'Set Height': 'Ορισμός ύψους',
+    'Set Height...': 'Ορισμός ύψους...',
+    'Height (tiles):': 'Ύψος (πλακίδια):',
     'Rise Cycles': 'Cycles de montée', 'Rise Speed': 'Vitesse de montée', 'Rock': 'Rocher', 'Roll': 'Roulis',
     'Roll Cycles': 'Cycles de roulis', 'Rotation (°/s)': 'Rotation (°/s)', 'Rotation Cycles': 'Cycles de rotation', 'Rotation Speed': 'Vitesse de rotation',
     'Row 1 (Heartbeat)': 'Ligne 1 (battement)', 'Row 1 Speed': 'Vitesse ligne 1', 'Row 2 (Breathing)': 'Ligne 2 (respiration)', 'Row 2 Speed': 'Vitesse ligne 2',
@@ -4949,6 +5056,19 @@ Object.assign(RR_TEXT_TRANSLATIONS.el, {
     'Ring Segments': 'Τμήματα δακτυλίου', 'Ring Size': 'Μέγεθος δακτυλίου', 'Ring Spacing': 'Απόσταση δακτυλίων', 'Ring Thickness': 'Πάχος δακτυλίων',
     'Ring Width': 'Πλάτος δακτυλίων', 'Ring Y Position': 'Θέση Y δακτυλίου', 'Rings': 'Δακτύλιοι', 'Rings / Grid': 'Δακτύλιοι / πλέγμα',
     'Rings per Drop': 'Δακτύλιοι ανά σταγόνα', 'Ripple Drops': 'Σταγόνες κυματισμού', 'Rise': 'Άνοδος', 'Rise (materialize)': 'Άνοδος (υλοποίηση)',
+    'This event keeps moving': 'Αυτό το συμβάν συνεχίζει να κινείται',
+    'Last action': 'Τελευταία ενέργεια',
+    'The player keeps moving while this holds.': 'Ο παίκτης συνεχίζει να κινείται όσο κρατά.',
+    'Everything': 'Όλα',
+    'Face Ceiling': 'Προς την οροφή',
+    'Face Ground': 'Προς το έδαφος',
+    'Stand Up': 'Σήκωμα',
+    'Rotate...': 'Περιστροφή...',
+    'Rotation (degrees):': 'Περιστροφή (μοίρες):',
+    'Descend': 'Κάθοδος',
+    'Set Height': 'Ορισμός ύψους',
+    'Set Height...': 'Ορισμός ύψους...',
+    'Height (tiles):': 'Ύψος (πλακίδια):',
     'Rise Cycles': 'Κύκλοι ανόδου', 'Rise Speed': 'Ταχύτητα ανόδου', 'Rock': 'Βράχος', 'Roll': 'Διατοιχισμός',
     'Roll Cycles': 'Κύκλοι διατοιχισμού', 'Rotation (°/s)': 'Περιστροφή (°/s)', 'Rotation Cycles': 'Κύκλοι περιστροφής', 'Rotation Speed': 'Ταχύτητα περιστροφής',
     'Row 1 (Heartbeat)': 'Σειρά 1 (καρδιακός παλμός)', 'Row 1 Speed': 'Ταχύτητα σειράς 1', 'Row 2 (Breathing)': 'Σειρά 2 (αναπνοή)', 'Row 2 Speed': 'Ταχύτητα σειράς 2',
@@ -5110,6 +5230,19 @@ Object.assign(RR_TEXT_TRANSLATIONS.ko, {
     'Ring Segments': '링 세그먼트', 'Ring Size': '링 크기', 'Ring Spacing': '링 간격', 'Ring Thickness': '링 두께',
     'Ring Width': '링 폭', 'Ring Y Position': '링 Y 위치', 'Rings': '링', 'Rings / Grid': '링 / 그리드',
     'Rings per Drop': '물방울당 링', 'Ripple Drops': '리플 드롭', 'Rise': '상승', 'Rise (materialize)': '상승 (실체화)',
+    'This event keeps moving': 'Αυτό το συμβάν συνεχίζει να κινείται',
+    'Last action': 'Τελευταία ενέργεια',
+    'The player keeps moving while this holds.': 'Ο παίκτης συνεχίζει να κινείται όσο κρατά.',
+    'Everything': 'Όλα',
+    'Face Ceiling': 'Προς την οροφή',
+    'Face Ground': 'Προς το έδαφος',
+    'Stand Up': 'Σήκωμα',
+    'Rotate...': 'Περιστροφή...',
+    'Rotation (degrees):': 'Περιστροφή (μοίρες):',
+    'Descend': 'Κάθοδος',
+    'Set Height': 'Ορισμός ύψους',
+    'Set Height...': 'Ορισμός ύψους...',
+    'Height (tiles):': 'Ύψος (πλακίδια):',
     'Rise Cycles': '상승 사이클', 'Rise Speed': '상승 속도', 'Rock': '바위', 'Roll': '롤',
     'Roll Cycles': '롤 사이클', 'Rotation (°/s)': '회전 (°/s)', 'Rotation Cycles': '회전 사이클', 'Rotation Speed': '회전 속도',
     'Row 1 (Heartbeat)': '행 1 (심박)', 'Row 1 Speed': '행 1 속도', 'Row 2 (Breathing)': '행 2 (호흡)', 'Row 2 Speed': '행 2 속도',
@@ -5271,6 +5404,19 @@ Object.assign(RR_TEXT_TRANSLATIONS.ar, {
     'Ring Segments': 'مقاطع الحلقة', 'Ring Size': 'حجم الحلقة', 'Ring Spacing': 'تباعد الحلقات', 'Ring Thickness': 'سماكة الحلقة',
     'Ring Width': 'عرض الحلقة', 'Ring Y Position': 'موضع Y للحلقة', 'Rings': 'حلقات', 'Rings / Grid': 'حلقات / شبكة',
     'Rings per Drop': 'حلقات لكل قطرة', 'Ripple Drops': 'قطرات متموجة', 'Rise': 'الصعود', 'Rise (materialize)': 'صعود (تجسد)',
+    'This event keeps moving': 'Αυτό το συμβάν συνεχίζει να κινείται',
+    'Last action': 'Τελευταία ενέργεια',
+    'The player keeps moving while this holds.': 'Ο παίκτης συνεχίζει να κινείται όσο κρατά.',
+    'Everything': 'Όλα',
+    'Face Ceiling': 'Προς την οροφή',
+    'Face Ground': 'Προς το έδαφος',
+    'Stand Up': 'Σήκωμα',
+    'Rotate...': 'Περιστροφή...',
+    'Rotation (degrees):': 'Περιστροφή (μοίρες):',
+    'Descend': 'Κάθοδος',
+    'Set Height': 'Ορισμός ύψους',
+    'Set Height...': 'Ορισμός ύψους...',
+    'Height (tiles):': 'Ύψος (πλακίδια):',
     'Rise Cycles': 'دورات الصعود', 'Rise Speed': 'سرعة الصعود', 'Rock': 'صخرة', 'Roll': 'التدحرج',
     'Roll Cycles': 'دورات التدحرج', 'Rotation (°/s)': 'الدوران (°/s)', 'Rotation Cycles': 'دورات الدوران', 'Rotation Speed': 'سرعة الدوران',
     'Row 1 (Heartbeat)': 'الصف 1 (نبض القلب)', 'Row 1 Speed': 'سرعة الصف 1', 'Row 2 (Breathing)': 'الصف 2 (التنفس)', 'Row 2 Speed': 'سرعة الصف 2',
@@ -5663,6 +5809,19 @@ RR_TEXT_TRANSLATIONS['it'] = {
     'Ring Segments': 'Segmenti anello', 'Ring Size': 'Dimensione anello', 'Ring Spacing': 'Spaziatura anelli', 'Ring Thickness': 'Spessore anelli',
     'Ring Width': 'Larghezza anelli', 'Ring Y Position': 'Posizione Y anello', 'Rings': 'Anelli', 'Rings / Grid': 'Anelli / griglia',
     'Rings per Drop': 'Anelli per goccia', 'Ripple Drops': 'Gocce increspate', 'Rise': 'Salita', 'Rise (materialize)': 'Salita (materializza)',
+    'This event keeps moving': 'Αυτό το συμβάν συνεχίζει να κινείται',
+    'Last action': 'Τελευταία ενέργεια',
+    'The player keeps moving while this holds.': 'Ο παίκτης συνεχίζει να κινείται όσο κρατά.',
+    'Everything': 'Όλα',
+    'Face Ceiling': 'Προς την οροφή',
+    'Face Ground': 'Προς το έδαφος',
+    'Stand Up': 'Σήκωμα',
+    'Rotate...': 'Περιστροφή...',
+    'Rotation (degrees):': 'Περιστροφή (μοίρες):',
+    'Descend': 'Κάθοδος',
+    'Set Height': 'Ορισμός ύψους',
+    'Set Height...': 'Ορισμός ύψους...',
+    'Height (tiles):': 'Ύψος (πλακίδια):',
     'Rise Cycles': 'Cicli di salita', 'Rise Speed': 'Velocità di salita', 'Rock': 'Roccia', 'Roll': 'Rollio',
     'Roll Cycles': 'Cicli rollio', 'Rotation (°/s)': 'Rotazione (°/s)', 'Rotation Cycles': 'Cicli rotazione', 'Rotation Speed': 'Velocità rotazione',
     'Row 1 (Heartbeat)': 'Riga 1 (battito)', 'Row 1 Speed': 'Velocità riga 1', 'Row 2 (Breathing)': 'Riga 2 (respiro)', 'Row 2 Speed': 'Velocità riga 2',
@@ -5792,6 +5951,7 @@ RR_EVENT_COMMAND_NAMES['it'] = {
     'If Escape': 'Se fuga', 'If Lose': 'Se sconfitta', 'Shop Good': 'Merce del negozio', 'Plugin Args': 'Argomenti plugin',
 };
 RR_EVENT_SECTION_NAMES['it'] = {
+    'Game Flow': 'Flusso di gioco',
     'Message & Flow': 'Messaggi e flusso', 'Map & Screen': 'Mappa e schermo', 'Battle & System': 'Battaglia e sistema', 'Message': 'Messaggio',
     'Game Progression': 'Avanzamento di gioco', 'Flow Control': 'Controllo di flusso', 'Party': 'Gruppo', 'Actor': 'Attore',
     'Movement': 'Movimento', 'Character': 'Personaggio', 'Picture': 'Immagine', 'Timing': 'Tempi',
@@ -6119,6 +6279,19 @@ RR_TEXT_TRANSLATIONS['pl'] = {
     'Ring Segments': 'Segmenty pierścienia', 'Ring Size': 'Rozmiar pierścienia', 'Ring Spacing': 'Rozstaw pierścieni', 'Ring Thickness': 'Grubość pierścienia',
     'Ring Width': 'Szerokość pierścienia', 'Ring Y Position': 'Pozycja Y pierścienia', 'Rings': 'Pierścienie', 'Rings / Grid': 'Pierścienie / siatka',
     'Rings per Drop': 'Pierścieni na kroplę', 'Ripple Drops': 'Krople z falami', 'Rise': 'Wznoszenie', 'Rise (materialize)': 'Wznoszenie (materializacja)',
+    'This event keeps moving': 'Αυτό το συμβάν συνεχίζει να κινείται',
+    'Last action': 'Τελευταία ενέργεια',
+    'The player keeps moving while this holds.': 'Ο παίκτης συνεχίζει να κινείται όσο κρατά.',
+    'Everything': 'Όλα',
+    'Face Ceiling': 'Προς την οροφή',
+    'Face Ground': 'Προς το έδαφος',
+    'Stand Up': 'Σήκωμα',
+    'Rotate...': 'Περιστροφή...',
+    'Rotation (degrees):': 'Περιστροφή (μοίρες):',
+    'Descend': 'Κάθοδος',
+    'Set Height': 'Ορισμός ύψους',
+    'Set Height...': 'Ορισμός ύψους...',
+    'Height (tiles):': 'Ύψος (πλακίδια):',
     'Rise Cycles': 'Cykle wznoszenia', 'Rise Speed': 'Szybkość wznoszenia', 'Rock': 'Skała', 'Roll': 'Przechył',
     'Roll Cycles': 'Cykle przechyłu', 'Rotation (°/s)': 'Obrót (°/s)', 'Rotation Cycles': 'Cykle obrotu', 'Rotation Speed': 'Szybkość obrotu',
     'Row 1 (Heartbeat)': 'Wiersz 1 (tętno)', 'Row 1 Speed': 'Szybkość wiersza 1', 'Row 2 (Breathing)': 'Wiersz 2 (oddech)', 'Row 2 Speed': 'Szybkość wiersza 2',
@@ -6248,6 +6421,7 @@ RR_EVENT_COMMAND_NAMES['pl'] = {
     'If Escape': 'Jeśli ucieczka', 'If Lose': 'Jeśli przegrana', 'Shop Good': 'Towar sklepu', 'Plugin Args': 'Argumenty wtyczki',
 };
 RR_EVENT_SECTION_NAMES['pl'] = {
+    'Game Flow': 'Przepływ gry',
     'Message & Flow': 'Wiadomości i przepływ', 'Map & Screen': 'Mapa i ekran', 'Battle & System': 'Walka i system', 'Message': 'Wiadomość',
     'Game Progression': 'Postęp gry', 'Flow Control': 'Kontrola przepływu', 'Party': 'Drużyna', 'Actor': 'Bohater',
     'Movement': 'Ruch', 'Character': 'Postać', 'Picture': 'Obrazek', 'Timing': 'Czas',
@@ -6575,6 +6749,19 @@ RR_TEXT_TRANSLATIONS['id'] = {
     'Ring Segments': 'Segmen Cincin', 'Ring Size': 'Ukuran Cincin', 'Ring Spacing': 'Jarak Cincin', 'Ring Thickness': 'Ketebalan Cincin',
     'Ring Width': 'Lebar Cincin', 'Ring Y Position': 'Posisi Y Cincin', 'Rings': 'Cincin', 'Rings / Grid': 'Cincin / Kisi',
     'Rings per Drop': 'Cincin per Tetesan', 'Ripple Drops': 'Tetesan Riak', 'Rise': 'Naik', 'Rise (materialize)': 'Naik (materialisasi)',
+    'This event keeps moving': 'Αυτό το συμβάν συνεχίζει να κινείται',
+    'Last action': 'Τελευταία ενέργεια',
+    'The player keeps moving while this holds.': 'Ο παίκτης συνεχίζει να κινείται όσο κρατά.',
+    'Everything': 'Όλα',
+    'Face Ceiling': 'Προς την οροφή',
+    'Face Ground': 'Προς το έδαφος',
+    'Stand Up': 'Σήκωμα',
+    'Rotate...': 'Περιστροφή...',
+    'Rotation (degrees):': 'Περιστροφή (μοίρες):',
+    'Descend': 'Κάθοδος',
+    'Set Height': 'Ορισμός ύψους',
+    'Set Height...': 'Ορισμός ύψους...',
+    'Height (tiles):': 'Ύψος (πλακίδια):',
     'Rise Cycles': 'Siklus Naik', 'Rise Speed': 'Kecepatan Naik', 'Rock': 'Batu', 'Roll': 'Roll',
     'Roll Cycles': 'Siklus Roll', 'Rotation (°/s)': 'Rotasi (°/s)', 'Rotation Cycles': 'Siklus Rotasi', 'Rotation Speed': 'Kecepatan Rotasi',
     'Row 1 (Heartbeat)': 'Baris 1 (Detak Jantung)', 'Row 1 Speed': 'Kecepatan Baris 1', 'Row 2 (Breathing)': 'Baris 2 (Pernapasan)', 'Row 2 Speed': 'Kecepatan Baris 2',
@@ -6704,6 +6891,7 @@ RR_EVENT_COMMAND_NAMES['id'] = {
     'If Escape': 'Jika Kabur', 'If Lose': 'Jika Kalah', 'Shop Good': 'Barang Toko', 'Plugin Args': 'Argumen Plugin',
 };
 RR_EVENT_SECTION_NAMES['id'] = {
+    'Game Flow': 'Alur permainan',
     'Message & Flow': 'Pesan & Alur', 'Map & Screen': 'Peta & Layar', 'Battle & System': 'Pertempuran & Sistem', 'Message': 'Pesan',
     'Game Progression': 'Progres Permainan', 'Flow Control': 'Kontrol Alur', 'Party': 'Party', 'Actor': 'Aktor',
     'Movement': 'Pergerakan', 'Character': 'Karakter', 'Picture': 'Gambar', 'Timing': 'Pewaktuan',
@@ -7031,6 +7219,19 @@ RR_TEXT_TRANSLATIONS['vi'] = {
     'Ring Segments': 'Số đoạn vòng', 'Ring Size': 'Kích thước vòng', 'Ring Spacing': 'Giãn cách vòng', 'Ring Thickness': 'Độ dày vòng',
     'Ring Width': 'Độ rộng vòng', 'Ring Y Position': 'Vị trí Y của vòng', 'Rings': 'Vòng', 'Rings / Grid': 'Vòng / lưới',
     'Rings per Drop': 'Số vòng mỗi giọt', 'Ripple Drops': 'Giọt gợn sóng', 'Rise': 'Bay lên', 'Rise (materialize)': 'Bay lên (hiện hình)',
+    'This event keeps moving': 'Αυτό το συμβάν συνεχίζει να κινείται',
+    'Last action': 'Τελευταία ενέργεια',
+    'The player keeps moving while this holds.': 'Ο παίκτης συνεχίζει να κινείται όσο κρατά.',
+    'Everything': 'Όλα',
+    'Face Ceiling': 'Προς την οροφή',
+    'Face Ground': 'Προς το έδαφος',
+    'Stand Up': 'Σήκωμα',
+    'Rotate...': 'Περιστροφή...',
+    'Rotation (degrees):': 'Περιστροφή (μοίρες):',
+    'Descend': 'Κάθοδος',
+    'Set Height': 'Ορισμός ύψους',
+    'Set Height...': 'Ορισμός ύψους...',
+    'Height (tiles):': 'Ύψος (πλακίδια):',
     'Rise Cycles': 'Chu kỳ bay lên', 'Rise Speed': 'Tốc độ bay lên', 'Rock': 'Đá', 'Roll': 'Nghiêng (roll)',
     'Roll Cycles': 'Chu kỳ nghiêng', 'Rotation (°/s)': 'Xoay (°/s)', 'Rotation Cycles': 'Chu kỳ xoay', 'Rotation Speed': 'Tốc độ xoay',
     'Row 1 (Heartbeat)': 'Hàng 1 (nhịp tim)', 'Row 1 Speed': 'Tốc độ hàng 1', 'Row 2 (Breathing)': 'Hàng 2 (nhịp thở)', 'Row 2 Speed': 'Tốc độ hàng 2',
@@ -7160,6 +7361,7 @@ RR_EVENT_COMMAND_NAMES['vi'] = {
     'If Escape': 'Nếu chạy thoát', 'If Lose': 'Nếu thua', 'Shop Good': 'Hàng hóa cửa hàng', 'Plugin Args': 'Tham số plugin',
 };
 RR_EVENT_SECTION_NAMES['vi'] = {
+    'Game Flow': 'Luồng trò chơi',
     'Message & Flow': 'Thông điệp & Luồng', 'Map & Screen': 'Bản đồ & Màn hình', 'Battle & System': 'Trận đấu & Hệ thống', 'Message': 'Thông điệp',
     'Game Progression': 'Tiến trình trò chơi', 'Flow Control': 'Điều khiển luồng', 'Party': 'Tổ đội', 'Actor': 'Nhân vật',
     'Movement': 'Di chuyển', 'Character': 'Nhân vật bản đồ', 'Picture': 'Hình ảnh', 'Timing': 'Thời gian',
@@ -7487,6 +7689,19 @@ RR_TEXT_TRANSLATIONS['th'] = {
     'Ring Segments': 'จำนวนส่วนวงแหวน', 'Ring Size': 'ขนาดวงแหวน', 'Ring Spacing': 'ระยะห่างวงแหวน', 'Ring Thickness': 'ความหนาวงแหวน',
     'Ring Width': 'ความกว้างวงแหวน', 'Ring Y Position': 'ตำแหน่ง Y วงแหวน', 'Rings': 'วงแหวน', 'Rings / Grid': 'วงแหวน / กริด',
     'Rings per Drop': 'วงแหวนต่อหยด', 'Ripple Drops': 'หยดคลื่นกระเพื่อม', 'Rise': 'ลอยขึ้น', 'Rise (materialize)': 'ลอยขึ้น (ก่อตัว)',
+    'This event keeps moving': 'Αυτό το συμβάν συνεχίζει να κινείται',
+    'Last action': 'Τελευταία ενέργεια',
+    'The player keeps moving while this holds.': 'Ο παίκτης συνεχίζει να κινείται όσο κρατά.',
+    'Everything': 'Όλα',
+    'Face Ceiling': 'Προς την οροφή',
+    'Face Ground': 'Προς το έδαφος',
+    'Stand Up': 'Σήκωμα',
+    'Rotate...': 'Περιστροφή...',
+    'Rotation (degrees):': 'Περιστροφή (μοίρες):',
+    'Descend': 'Κάθοδος',
+    'Set Height': 'Ορισμός ύψους',
+    'Set Height...': 'Ορισμός ύψους...',
+    'Height (tiles):': 'Ύψος (πλακίδια):',
     'Rise Cycles': 'รอบการลอยขึ้น', 'Rise Speed': 'ความเร็วการลอยขึ้น', 'Rock': 'หิน', 'Roll': 'โรล',
     'Roll Cycles': 'รอบโรล', 'Rotation (°/s)': 'การหมุน (°/วินาที)', 'Rotation Cycles': 'รอบการหมุน', 'Rotation Speed': 'ความเร็วการหมุน',
     'Row 1 (Heartbeat)': 'แถว 1 (ชีพจร)', 'Row 1 Speed': 'ความเร็วแถว 1', 'Row 2 (Breathing)': 'แถว 2 (การหายใจ)', 'Row 2 Speed': 'ความเร็วแถว 2',
@@ -7616,6 +7831,7 @@ RR_EVENT_COMMAND_NAMES['th'] = {
     'If Escape': 'หากหนี', 'If Lose': 'หากแพ้', 'Shop Good': 'สินค้าร้านค้า', 'Plugin Args': 'อาร์กิวเมนต์ปลั๊กอิน',
 };
 RR_EVENT_SECTION_NAMES['th'] = {
+    'Game Flow': 'โฟลว์เกม',
     'Message & Flow': 'ข้อความและโฟลว์', 'Map & Screen': 'แผนที่และหน้าจอ', 'Battle & System': 'การต่อสู้และระบบ', 'Message': 'ข้อความ',
     'Game Progression': 'ความคืบหน้าของเกม', 'Flow Control': 'ควบคุมโฟลว์', 'Party': 'ปาร์ตี้', 'Actor': 'ตัวละคร',
     'Movement': 'การเคลื่อนที่', 'Character': 'คาแรคเตอร์', 'Picture': 'รูปภาพ', 'Timing': 'จังหวะเวลา',
@@ -7943,6 +8159,19 @@ RR_TEXT_TRANSLATIONS['tr'] = {
     'Ring Segments': 'Halka segmentleri', 'Ring Size': 'Halka boyutu', 'Ring Spacing': 'Halka boşluğu', 'Ring Thickness': 'Halka kalınlığı',
     'Ring Width': 'Halka genişliği', 'Ring Y Position': 'Halka Y konumu', 'Rings': 'Halkalar', 'Rings / Grid': 'Halkalar / ızgara',
     'Rings per Drop': 'Damla başına halka', 'Ripple Drops': 'Dalgacık damlaları', 'Rise': 'Yükseliş', 'Rise (materialize)': 'Yüksel (belir)',
+    'This event keeps moving': 'Αυτό το συμβάν συνεχίζει να κινείται',
+    'Last action': 'Τελευταία ενέργεια',
+    'The player keeps moving while this holds.': 'Ο παίκτης συνεχίζει να κινείται όσο κρατά.',
+    'Everything': 'Όλα',
+    'Face Ceiling': 'Προς την οροφή',
+    'Face Ground': 'Προς το έδαφος',
+    'Stand Up': 'Σήκωμα',
+    'Rotate...': 'Περιστροφή...',
+    'Rotation (degrees):': 'Περιστροφή (μοίρες):',
+    'Descend': 'Κάθοδος',
+    'Set Height': 'Ορισμός ύψους',
+    'Set Height...': 'Ορισμός ύψους...',
+    'Height (tiles):': 'Ύψος (πλακίδια):',
     'Rise Cycles': 'Yükselme döngüleri', 'Rise Speed': 'Yükselme hızı', 'Rock': 'Kaya', 'Roll': 'Yalpa',
     'Roll Cycles': 'Yalpa döngüleri', 'Rotation (°/s)': 'Dönme (°/sn)', 'Rotation Cycles': 'Dönme döngüleri', 'Rotation Speed': 'Dönme hızı',
     'Row 1 (Heartbeat)': 'Satır 1 (kalp atışı)', 'Row 1 Speed': 'Satır 1 hızı', 'Row 2 (Breathing)': 'Satır 2 (solunum)', 'Row 2 Speed': 'Satır 2 hızı',
@@ -8072,6 +8301,7 @@ RR_EVENT_COMMAND_NAMES['tr'] = {
     'If Escape': 'Kaçılırsa', 'If Lose': 'Kaybedilirse', 'Shop Good': 'Dükkân malı', 'Plugin Args': 'Eklenti argümanları',
 };
 RR_EVENT_SECTION_NAMES['tr'] = {
+    'Game Flow': 'Oyun akışı',
     'Message & Flow': 'Mesaj ve akış', 'Map & Screen': 'Harita ve ekran', 'Battle & System': 'Savaş ve sistem', 'Message': 'Mesaj',
     'Game Progression': 'Oyun ilerlemesi', 'Flow Control': 'Akış kontrolü', 'Party': 'Grup', 'Actor': 'Aktör',
     'Movement': 'Hareket', 'Character': 'Karakter', 'Picture': 'Resim', 'Timing': 'Zamanlama',
@@ -8084,6 +8314,8 @@ const RR_EDITOR_PREFERENCE_TRANSLATIONS = {
         'toolbar.title.animateAutotiles': 'A1オートタイルアニメーションを切り替え',
         'toolbar.title.map3DView': 'マップを3Dで表示',
         'toolbar.title.showGrid': 'タイルグリッドを表示',
+        'toolbar.title.showPassage': '通行設定を表示: ×は通行不可、赤い辺は一方向のみ不可、赤は3Dモデルの占有',
+        'workspace.passage': '通行',
         'options.editor': 'エディター', 'options.animateAutotiles': 'A1オートタイルをアニメーション',
         'options.animateAutotilesNote': 'マップエディターでA1の水面と滝のアニメーションをプレビューします。'
     },
@@ -8091,6 +8323,8 @@ const RR_EDITOR_PREFERENCE_TRANSLATIONS = {
         'toolbar.title.animateAutotiles': 'Alternar animación de autotiles A1',
         'toolbar.title.map3DView': 'Ver el mapa en 3D',
         'toolbar.title.showGrid': 'Mostrar la cuadrícula de casillas',
+        'toolbar.title.showPassage': 'Mostrar paso: X donde nada pasa, borde rojo donde una dirección no pasa, rojo donde hay un modelo 3D',
+        'workspace.passage': 'Paso',
         'options.editor': 'Editor', 'options.animateAutotiles': 'Animar autotiles A1',
         'options.animateAutotilesNote': 'Muestra la animación de agua y cascadas A1 en el editor de mapas.'
     },
@@ -8098,6 +8332,8 @@ const RR_EDITOR_PREFERENCE_TRANSLATIONS = {
         'toolbar.title.animateAutotiles': '切換 A1 自動圖塊動畫',
         'toolbar.title.map3DView': '以 3D 顯示地圖',
         'toolbar.title.showGrid': '顯示圖塊格線',
+        'toolbar.title.showPassage': '顯示通行設定：X 為不可通行，紅邊為單向不可，紅色為 3D 模型佔用',
+        'workspace.passage': '通行',
         'options.editor': '編輯器', 'options.animateAutotiles': '播放 A1 自動圖塊動畫',
         'options.animateAutotilesNote': '在地圖編輯器中預覽 A1 水面與瀑布動畫。',
         'theme.gold.name': '預設', 'theme.gold.description': '經典黑底金色的高級編輯器',
@@ -8112,6 +8348,8 @@ const RR_EDITOR_PREFERENCE_TRANSLATIONS = {
         'toolbar.title.animateAutotiles': '切换 A1 自动图块动画',
         'toolbar.title.map3DView': '以 3D 显示地图',
         'toolbar.title.showGrid': '显示图块网格',
+        'toolbar.title.showPassage': '显示通行设置：X 为不可通行，红边为单向不可，红色为 3D 模型占用',
+        'workspace.passage': '通行',
         'options.editor': '编辑器', 'options.animateAutotiles': '播放 A1 自动图块动画',
         'options.animateAutotilesNote': '在地图编辑器中预览 A1 水面和瀑布动画。',
         'theme.gold.name': '默认', 'theme.gold.description': '经典黑底金色的高级编辑器',
@@ -8126,6 +8364,8 @@ const RR_EDITOR_PREFERENCE_TRANSLATIONS = {
         'toolbar.title.animateAutotiles': 'Переключить анимацию автотайлов A1',
         'toolbar.title.map3DView': 'Показать карту в 3D',
         'toolbar.title.showGrid': 'Показать сетку тайлов',
+        'toolbar.title.showPassage': 'Показать проходимость: X где не пройти, красная кромка где закрыто одно направление, красное где стоит 3D-модель',
+        'workspace.passage': 'Проход',
         'options.editor': 'Редактор', 'options.animateAutotiles': 'Анимировать автотайлы A1',
         'options.animateAutotilesNote': 'Показывать анимацию воды и водопадов A1 в редакторе карт.',
         'theme.gold.name': 'По умолчанию', 'theme.gold.description': 'Классический премиальный редактор: золото на чёрном',
@@ -8140,6 +8380,8 @@ const RR_EDITOR_PREFERENCE_TRANSLATIONS = {
         'toolbar.title.animateAutotiles': 'Alternar animação de autotiles A1',
         'toolbar.title.map3DView': 'Ver o mapa em 3D',
         'toolbar.title.showGrid': 'Mostrar a grade de tiles',
+        'toolbar.title.showPassage': 'Mostrar passagem: X onde nada passa, borda vermelha onde uma direção não passa, vermelho onde há um modelo 3D',
+        'workspace.passage': 'Passagem',
         'options.editor': 'Editor', 'options.animateAutotiles': 'Animar autotiles A1',
         'options.animateAutotilesNote': 'Pré-visualiza a animação de água e cascatas A1 no editor de mapas.',
         'theme.gold.name': 'Padrão', 'theme.gold.description': 'Editor premium clássico em dourado sobre preto',
@@ -8154,6 +8396,8 @@ const RR_EDITOR_PREFERENCE_TRANSLATIONS = {
         'toolbar.title.animateAutotiles': 'A1-Autotile-Animation umschalten',
         'toolbar.title.map3DView': 'Karte in 3D anzeigen',
         'toolbar.title.showGrid': 'Kachelraster anzeigen',
+        'toolbar.title.showPassage': 'Passierbarkeit anzeigen: X wo nichts passieren kann, roter Rand wo eine Richtung gesperrt ist, rot wo ein 3D-Modell steht',
+        'workspace.passage': 'Passierbarkeit',
         'options.editor': 'Editor', 'options.animateAutotiles': 'A1-Autotiles animieren',
         'options.animateAutotilesNote': 'Zeigt die A1-Wasser- und Wasserfallanimation im Karteneditor an.',
         'theme.gold.name': 'Standard', 'theme.gold.description': 'Klassischer Premium-Editor in Gold auf Schwarz',
@@ -8168,6 +8412,8 @@ const RR_EDITOR_PREFERENCE_TRANSLATIONS = {
         'toolbar.title.animateAutotiles': 'Activer ou désactiver l’animation des autotiles A1',
         'toolbar.title.map3DView': 'Afficher la carte en 3D',
         'toolbar.title.showGrid': 'Afficher la grille de tuiles',
+        'toolbar.title.showPassage': 'Afficher le passage : X où rien ne passe, bord rouge où une direction ne passe pas, rouge où se tient un modèle 3D',
+        'workspace.passage': 'Passage',
         'options.editor': 'Éditeur', 'options.animateAutotiles': 'Animer les autotiles A1',
         'options.animateAutotilesNote': 'Prévisualise l’animation de l’eau et des cascades A1 dans l’éditeur de cartes.',
         'theme.gold.name': 'Par défaut', 'theme.gold.description': 'Éditeur premium classique doré sur noir',
@@ -8182,6 +8428,8 @@ const RR_EDITOR_PREFERENCE_TRANSLATIONS = {
         'toolbar.title.animateAutotiles': 'Εναλλαγή κίνησης αυτόματων πλακιδίων A1',
         'toolbar.title.map3DView': 'Προβολή χάρτη σε 3D',
         'toolbar.title.showGrid': 'Εμφάνιση πλέγματος πλακιδίων',
+        'toolbar.title.showPassage': 'Εμφάνιση διέλευσης: X όπου τίποτα δεν περνά, κόκκινη άκρη όπου μία κατεύθυνση δεν περνά, κόκκινο όπου στέκεται μοντέλο 3D',
+        'workspace.passage': 'Διέλευση',
         'options.editor': 'Επεξεργαστής', 'options.animateAutotiles': 'Κίνηση αυτόματων πλακιδίων A1',
         'options.animateAutotilesNote': 'Προεπισκόπηση της κίνησης νερού και καταρρακτών A1 στον επεξεργαστή χαρτών.',
         'theme.gold.name': 'Προεπιλογή', 'theme.gold.description': 'Κλασικός premium επεξεργαστής με χρυσό σε μαύρο',
@@ -8196,6 +8444,8 @@ const RR_EDITOR_PREFERENCE_TRANSLATIONS = {
         'toolbar.title.animateAutotiles': 'A1 오토타일 애니메이션 전환',
         'toolbar.title.map3DView': '맵을 3D로 보기',
         'toolbar.title.showGrid': '타일 격자 표시',
+        'toolbar.title.showPassage': '통행 설정 표시: X는 통행 불가, 빨간 변은 한 방향 불가, 빨강은 3D 모델이 차지한 칸',
+        'workspace.passage': '통행',
         'options.editor': '에디터', 'options.animateAutotiles': 'A1 오토타일 애니메이션',
         'options.animateAutotilesNote': '맵 에디터에서 A1 물과 폭포 애니메이션을 미리 봅니다.'
     },
@@ -8203,6 +8453,8 @@ const RR_EDITOR_PREFERENCE_TRANSLATIONS = {
         'toolbar.title.animateAutotiles': 'تبديل حركة البلاطات التلقائية A1',
         'toolbar.title.map3DView': 'عرض الخريطة بشكل ثلاثي الأبعاد',
         'toolbar.title.showGrid': 'إظهار شبكة البلاطات',
+        'toolbar.title.showPassage': 'إظهار العبور: X حيث لا يمر شيء، حافة حمراء حيث لا يمر اتجاه واحد، أحمر حيث يقف نموذج ثلاثي الأبعاد',
+        'workspace.passage': 'العبور',
         'options.editor': 'المحرر', 'options.animateAutotiles': 'تحريك البلاطات التلقائية A1',
         'options.animateAutotilesNote': 'معاينة حركة مياه وشلالات A1 في محرر الخرائط.'
     },
@@ -8210,6 +8462,8 @@ const RR_EDITOR_PREFERENCE_TRANSLATIONS = {
         'toolbar.title.animateAutotiles': 'Attiva o disattiva l’animazione autotile A1',
         'toolbar.title.map3DView': 'Mostra la mappa in 3D',
         'toolbar.title.showGrid': 'Mostra la griglia delle tile',
+        'toolbar.title.showPassage': 'Mostra passaggio: X dove nulla passa, bordo rosso dove una direzione non passa, rosso dove sta un modello 3D',
+        'workspace.passage': 'Passaggio',
         'options.editor': 'Editor', 'options.animateAutotiles': 'Anima autotile A1',
         'options.animateAutotilesNote': 'Mostra l’anteprima dell’acqua e delle cascate A1 nell’editor delle mappe.'
     },
@@ -8217,6 +8471,8 @@ const RR_EDITOR_PREFERENCE_TRANSLATIONS = {
         'toolbar.title.animateAutotiles': 'Przełącz animację autotile A1',
         'toolbar.title.map3DView': 'Pokaż mapę w 3D',
         'toolbar.title.showGrid': 'Pokaż siatkę kafelków',
+        'toolbar.title.showPassage': 'Pokaż przejście: X gdzie nic nie przejdzie, czerwona krawędź gdzie zamknięty jeden kierunek, czerwone gdzie stoi model 3D',
+        'workspace.passage': 'Przejście',
         'options.editor': 'Edytor', 'options.animateAutotiles': 'Animuj autotile A1',
         'options.animateAutotilesNote': 'Wyświetla animację wody i wodospadów A1 w edytorze map.'
     },
@@ -8224,6 +8480,8 @@ const RR_EDITOR_PREFERENCE_TRANSLATIONS = {
         'toolbar.title.animateAutotiles': 'Aktifkan animasi autotile A1',
         'toolbar.title.map3DView': 'Tampilkan peta dalam 3D',
         'toolbar.title.showGrid': 'Tampilkan kisi tile',
+        'toolbar.title.showPassage': 'Tampilkan lintasan: X tempat tak ada yang bisa lewat, tepi merah tempat satu arah tertutup, merah tempat model 3D berdiri',
+        'workspace.passage': 'Lintasan',
         'options.editor': 'Editor', 'options.animateAutotiles': 'Animasikan autotile A1',
         'options.animateAutotilesNote': 'Pratinjau animasi air dan air terjun A1 di editor peta.'
     },
@@ -8231,6 +8489,8 @@ const RR_EDITOR_PREFERENCE_TRANSLATIONS = {
         'toolbar.title.animateAutotiles': 'Bật hoặc tắt hoạt ảnh autotile A1',
         'toolbar.title.map3DView': 'Xem bản đồ ở chế độ 3D',
         'toolbar.title.showGrid': 'Hiện lưới ô',
+        'toolbar.title.showPassage': 'Hiện khả năng đi lại: X nơi không đi được, viền đỏ nơi một hướng không đi được, đỏ nơi có mô hình 3D',
+        'workspace.passage': 'Đi lại',
         'options.editor': 'Trình biên tập', 'options.animateAutotiles': 'Tạo hoạt ảnh autotile A1',
         'options.animateAutotilesNote': 'Xem trước hoạt ảnh nước và thác nước A1 trong trình biên tập bản đồ.'
     },
@@ -8238,6 +8498,8 @@ const RR_EDITOR_PREFERENCE_TRANSLATIONS = {
         'toolbar.title.animateAutotiles': 'สลับแอนิเมชันออโต้ไทล์ A1',
         'toolbar.title.map3DView': 'แสดงแผนที่แบบ 3 มิติ',
         'toolbar.title.showGrid': 'แสดงเส้นตารางไทล์',
+        'toolbar.title.showPassage': 'แสดงการผ่าน: X คือผ่านไม่ได้, ขอบแดงคือทิศทางเดียวผ่านไม่ได้, สีแดงคือตำแหน่งโมเดล 3D',
+        'workspace.passage': 'การผ่าน',
         'options.editor': 'ตัวแก้ไข', 'options.animateAutotiles': 'แสดงแอนิเมชันออโต้ไทล์ A1',
         'options.animateAutotilesNote': 'ดูตัวอย่างแอนิเมชันน้ำและน้ำตก A1 ในตัวแก้ไขแผนที่'
     },
@@ -8245,6 +8507,8 @@ const RR_EDITOR_PREFERENCE_TRANSLATIONS = {
         'toolbar.title.animateAutotiles': 'A1 otomatik karo animasyonunu aç/kapat',
         'toolbar.title.map3DView': 'Haritayı 3B göster',
         'toolbar.title.showGrid': 'Karo ızgarasını göster',
+        'toolbar.title.showPassage': 'Geçişi göster: X hiçbir şeyin geçemediği yer, kırmızı kenar tek yönün geçemediği yer, kırmızı 3D modelin durduğu yer',
+        'workspace.passage': 'Geçiş',
         'options.editor': 'Düzenleyici', 'options.animateAutotiles': 'A1 otomatik karolarını canlandır',
         'options.animateAutotilesNote': 'Harita düzenleyicisinde A1 su ve şelale animasyonlarını önizler.'
     }
@@ -10414,6 +10678,7 @@ Object.assign(RR_I18N_STRINGS.tr, {
 // mapProps.resizeAnchor is attached to the control as its tooltip.
 Object.assign(RR_I18N_STRINGS.en, {
     'workspace.grid': 'Grid',
+    'workspace.passage': 'Passage',
     'mapProps.anchor': 'Anchor:',
     'mapProps.anchorTopLeft': 'Top-Left',
     'mapProps.anchorTop': 'Top',
@@ -10577,23 +10842,23 @@ Object.assign(RR_TEXT_TRANSLATIONS.vi, { 'Install': 'Cài đặt', 'Plugin Manif
 Object.assign(RR_TEXT_TRANSLATIONS.th, { 'Install': 'ติดตั้ง', 'Plugin Manifest': 'รายการปลั๊กอิน', 'Rebuild': 'สร้างใหม่', 'Keep Current': 'คงของเดิม', 'Rebuild replaces the Reactor plugin manifest with the RPG Maker one.': 'การสร้างใหม่จะแทนที่รายการปลั๊กอินของ Reactor ด้วยของ RPG Maker', 'Keep Current leaves reactor_plugins.js unchanged.': 'คงของเดิมจะไม่เปลี่ยน reactor_plugins.js' });
 Object.assign(RR_TEXT_TRANSLATIONS.tr, { 'Install': 'Yükle', 'Plugin Manifest': 'Eklenti bildirimi', 'Rebuild': 'Yeniden oluştur', 'Keep Current': 'Mevcut olanı koru', 'Rebuild replaces the Reactor plugin manifest with the RPG Maker one.': 'Yeniden oluşturmak, Reactor eklenti bildirimini RPG Maker bildirimiyle değiştirir.', 'Keep Current leaves reactor_plugins.js unchanged.': 'Mevcut olanı koru, reactor_plugins.js dosyasını değiştirmez.' });
 
-Object.assign(RR_TEXT_TRANSLATIONS.ja, { '3D': '3D', '3D Model': '3Dモデル', 'This face is Down': 'この面が下', 'Model size (tiles)': 'モデルサイズ（タイル）', 'Front': '前', 'Back': '後', 'This side is': 'この面は' });
-Object.assign(RR_TEXT_TRANSLATIONS.es, { '3D': '3D', '3D Model': 'Modelo 3D', 'This face is Down': 'Esta cara mira abajo', 'Model size (tiles)': 'Tamaño del modelo (tiles)', 'Front': 'Frente', 'Back': 'Atrás', 'This side is': 'Este lado es' });
-Object.assign(RR_TEXT_TRANSLATIONS['zh-Hant'], { '3D': '3D', '3D Model': '3D 模型', 'This face is Down': '此面朝下', 'Model size (tiles)': '模型大小（圖塊）', 'Front': '前', 'Back': '後', 'This side is': '此面是' });
-Object.assign(RR_TEXT_TRANSLATIONS['zh-Hans'], { '3D': '3D', '3D Model': '3D 模型', 'This face is Down': '此面朝下', 'Model size (tiles)': '模型大小（图块）', 'Front': '前', 'Back': '后', 'This side is': '此面是' });
-Object.assign(RR_TEXT_TRANSLATIONS.ru, { '3D': '3D', '3D Model': '3D-модель', 'This face is Down': 'Эта сторона смотрит вниз', 'Model size (tiles)': 'Размер модели (тайлы)', 'Front': 'Перед', 'Back': 'Зад', 'This side is': 'Эта сторона' });
-Object.assign(RR_TEXT_TRANSLATIONS.pt, { '3D': '3D', '3D Model': 'Modelo 3D', 'This face is Down': 'Esta face aponta para baixo', 'Model size (tiles)': 'Tamanho do modelo (tiles)', 'Front': 'Frente', 'Back': 'Trás', 'This side is': 'Este lado é' });
-Object.assign(RR_TEXT_TRANSLATIONS.de, { '3D': '3D', '3D Model': '3D-Modell', 'This face is Down': 'Diese Seite zeigt nach unten', 'Model size (tiles)': 'Modellgröße (Kacheln)', 'Front': 'Vorne', 'Back': 'Hinten', 'This side is': 'Diese Seite ist' });
-Object.assign(RR_TEXT_TRANSLATIONS.fr, { '3D': '3D', '3D Model': 'Modèle 3D', 'This face is Down': 'Cette face est le bas', 'Model size (tiles)': 'Taille du modèle (tiles)', 'Front': 'Avant', 'Back': 'Arrière', 'This side is': 'Ce côté est' });
-Object.assign(RR_TEXT_TRANSLATIONS.el, { '3D': '3D', '3D Model': 'Μοντέλο 3D', 'This face is Down': 'Αυτή η όψη κοιτά κάτω', 'Model size (tiles)': 'Μέγεθος μοντέλου (πλακίδια)', 'Front': 'Μπροστά', 'Back': 'Πίσω', 'This side is': 'Αυτή η πλευρά είναι' });
-Object.assign(RR_TEXT_TRANSLATIONS.ko, { '3D': '3D', '3D Model': '3D 모델', 'This face is Down': '이 면이 아래', 'Model size (tiles)': '모델 크기(타일)', 'Front': '앞', 'Back': '뒤', 'This side is': '이 면은' });
-Object.assign(RR_TEXT_TRANSLATIONS.ar, { '3D': '3D', '3D Model': 'نموذج ثلاثي الأبعاد', 'This face is Down': 'هذا الوجه للأسفل', 'Model size (tiles)': 'حجم النموذج (بلاطات)', 'Front': 'أمام', 'Back': 'خلف', 'This side is': 'هذا الجانب' });
-Object.assign(RR_TEXT_TRANSLATIONS.it, { '3D': '3D', '3D Model': 'Modello 3D', 'This face is Down': 'Questa faccia è in basso', 'Model size (tiles)': 'Dimensione del modello (tile)', 'Front': 'Fronte', 'Back': 'Retro', 'This side is': 'Questo lato è' });
-Object.assign(RR_TEXT_TRANSLATIONS.pl, { '3D': '3D', '3D Model': 'Model 3D', 'This face is Down': 'Ta ściana jest na dole', 'Model size (tiles)': 'Rozmiar modelu (kafelki)', 'Front': 'Przód', 'Back': 'Tył', 'This side is': 'Ta strona to' });
-Object.assign(RR_TEXT_TRANSLATIONS.id, { '3D': '3D', '3D Model': 'Model 3D', 'This face is Down': 'Sisi ini menghadap bawah', 'Model size (tiles)': 'Ukuran model (tile)', 'Front': 'Depan', 'Back': 'Belakang', 'This side is': 'Sisi ini' });
-Object.assign(RR_TEXT_TRANSLATIONS.vi, { '3D': '3D', '3D Model': 'Mô hình 3D', 'This face is Down': 'Mặt này hướng xuống', 'Model size (tiles)': 'Kích thước mô hình (ô)', 'Front': 'Trước', 'Back': 'Sau', 'This side is': 'Mặt này là' });
-Object.assign(RR_TEXT_TRANSLATIONS.th, { '3D': '3D', '3D Model': 'โมเดล 3D', 'This face is Down': 'ด้านนี้หันลง', 'Model size (tiles)': 'ขนาดโมเดล (ไทล์)', 'Front': 'หน้า', 'Back': 'หลัง', 'This side is': 'ด้านนี้คือ' });
-Object.assign(RR_TEXT_TRANSLATIONS.tr, { '3D': '3D', '3D Model': '3D model', 'This face is Down': 'Bu yüz aşağı bakar', 'Model size (tiles)': 'Model boyutu (kare)', 'Front': 'Ön', 'Back': 'Arka', 'This side is': 'Bu taraf' });
+Object.assign(RR_TEXT_TRANSLATIONS.ja, { '3D': '3D', '3D Model': '3Dモデル', 'This face is Down': 'この面が下', 'Model size': 'モデルサイズ', 'Front': '前', 'Back': '後', 'This side is': 'この面は' });
+Object.assign(RR_TEXT_TRANSLATIONS.es, { '3D': '3D', '3D Model': 'Modelo 3D', 'This face is Down': 'Esta cara mira abajo', 'Model size': 'Tamaño del modelo', 'Front': 'Frente', 'Back': 'Atrás', 'This side is': 'Este lado es' });
+Object.assign(RR_TEXT_TRANSLATIONS['zh-Hant'], { '3D': '3D', '3D Model': '3D 模型', 'This face is Down': '此面朝下', 'Model size': '模型大小', 'Front': '前', 'Back': '後', 'This side is': '此面是' });
+Object.assign(RR_TEXT_TRANSLATIONS['zh-Hans'], { '3D': '3D', '3D Model': '3D 模型', 'This face is Down': '此面朝下', 'Model size': '模型大小', 'Front': '前', 'Back': '后', 'This side is': '此面是' });
+Object.assign(RR_TEXT_TRANSLATIONS.ru, { '3D': '3D', '3D Model': '3D-модель', 'This face is Down': 'Эта сторона смотрит вниз', 'Model size': 'Размер модели', 'Front': 'Перед', 'Back': 'Зад', 'This side is': 'Эта сторона' });
+Object.assign(RR_TEXT_TRANSLATIONS.pt, { '3D': '3D', '3D Model': 'Modelo 3D', 'This face is Down': 'Esta face aponta para baixo', 'Model size': 'Tamanho do modelo', 'Front': 'Frente', 'Back': 'Trás', 'This side is': 'Este lado é' });
+Object.assign(RR_TEXT_TRANSLATIONS.de, { '3D': '3D', '3D Model': '3D-Modell', 'This face is Down': 'Diese Seite zeigt nach unten', 'Model size': 'Modellgröße', 'Front': 'Vorne', 'Back': 'Hinten', 'This side is': 'Diese Seite ist' });
+Object.assign(RR_TEXT_TRANSLATIONS.fr, { '3D': '3D', '3D Model': 'Modèle 3D', 'This face is Down': 'Cette face est le bas', 'Model size': 'Taille du modèle', 'Front': 'Avant', 'Back': 'Arrière', 'This side is': 'Ce côté est' });
+Object.assign(RR_TEXT_TRANSLATIONS.el, { '3D': '3D', '3D Model': 'Μοντέλο 3D', 'This face is Down': 'Αυτή η όψη κοιτά κάτω', 'Model size': 'Μέγεθος μοντέλου', 'Front': 'Μπροστά', 'Back': 'Πίσω', 'This side is': 'Αυτή η πλευρά είναι' });
+Object.assign(RR_TEXT_TRANSLATIONS.ko, { '3D': '3D', '3D Model': '3D 모델', 'This face is Down': '이 면이 아래', 'Model size': '모델 크기', 'Front': '앞', 'Back': '뒤', 'This side is': '이 면은' });
+Object.assign(RR_TEXT_TRANSLATIONS.ar, { '3D': '3D', '3D Model': 'نموذج ثلاثي الأبعاد', 'This face is Down': 'هذا الوجه للأسفل', 'Model size': 'حجم النموذج', 'Front': 'أمام', 'Back': 'خلف', 'This side is': 'هذا الجانب' });
+Object.assign(RR_TEXT_TRANSLATIONS.it, { '3D': '3D', '3D Model': 'Modello 3D', 'This face is Down': 'Questa faccia è in basso', 'Model size': 'Dimensione del modello', 'Front': 'Fronte', 'Back': 'Retro', 'This side is': 'Questo lato è' });
+Object.assign(RR_TEXT_TRANSLATIONS.pl, { '3D': '3D', '3D Model': 'Model 3D', 'This face is Down': 'Ta ściana jest na dole', 'Model size': 'Rozmiar modelu', 'Front': 'Przód', 'Back': 'Tył', 'This side is': 'Ta strona to' });
+Object.assign(RR_TEXT_TRANSLATIONS.id, { '3D': '3D', '3D Model': 'Model 3D', 'This face is Down': 'Sisi ini menghadap bawah', 'Model size': 'Ukuran model', 'Front': 'Depan', 'Back': 'Belakang', 'This side is': 'Sisi ini' });
+Object.assign(RR_TEXT_TRANSLATIONS.vi, { '3D': '3D', '3D Model': 'Mô hình 3D', 'This face is Down': 'Mặt này hướng xuống', 'Model size': 'Kích thước mô hình', 'Front': 'Trước', 'Back': 'Sau', 'This side is': 'Mặt này là' });
+Object.assign(RR_TEXT_TRANSLATIONS.th, { '3D': '3D', '3D Model': 'โมเดล 3D', 'This face is Down': 'ด้านนี้หันลง', 'Model size': 'ขนาดโมเดล', 'Front': 'หน้า', 'Back': 'หลัง', 'This side is': 'ด้านนี้คือ' });
+Object.assign(RR_TEXT_TRANSLATIONS.tr, { '3D': '3D', '3D Model': '3D model', 'This face is Down': 'Bu yüz aşağı bakar', 'Model size': 'Model boyutu', 'Front': 'Ön', 'Back': 'Arka', 'This side is': 'Bu taraf' });
 
 // Database 3D section: part carving and posing tools.
 Object.assign(RR_TEXT_TRANSLATIONS.ja, { 'Add a part, then drag a box over the model to choose its triangles.': 'パーツを追加し、モデル上をボックスでドラッグして三角形を選択します。', 'Back (-Z)': '後 (-Z)', 'Drag acts on this axis': 'ドラッグはこの軸に作用', 'Ease (frames)': 'イージング（フレーム）', 'Front (+Z)': '前 (+Z)', 'Left (-X)': '左 (-X)', 'Move (tiles X/Y/Z)': '移動（タイル X/Y/Z）', 'Move (tiles)': '移動（タイル）', 'Move part (drag; pick an axis)': 'パーツを移動（ドラッグ・軸を選択）', 'Orbit (drag to look around)': 'オービット（ドラッグで見回す）', 'Pivot': 'ピボット', 'Pivot preset…': 'ピボットプリセット…', 'Place pivot (click the model)': 'ピボットを配置（モデルをクリック）', 'Pose': 'ポーズ', 'Reselect triangles': '三角形を選び直す', 'Reset pose': 'ポーズをリセット', 'Right (+X)': '右 (+X)', 'Rotate (deg X/Y/Z)': '回転（度 X/Y/Z）', 'Rotate (deg)': '回転（度）', 'Rotate part (drag; pick an axis)': 'パーツを回転（ドラッグ・軸を選択）', 'Save as animation': 'アニメーションとして保存', 'Select part (drag a box; Alt removes)': 'パーツを選択（ボックスをドラッグ・Altで解除）', 'drag adds, Alt-drag removes': 'ドラッグで追加、Alt+ドラッグで解除', 'triangles': '三角形' });
@@ -11195,6 +11460,23 @@ const RR_SYSTEM_SOUND_TRANSLATIONS = {
 };
 for (const [language, translations] of Object.entries(RR_SYSTEM_SOUND_TRANSLATIONS)) {
     Object.assign(RR_TEXT_TRANSLATIONS[language], translations);
+Object.assign(RR_TEXT_TRANSLATIONS['ja'], { 'Coordinates': '座標' });
+Object.assign(RR_TEXT_TRANSLATIONS['zh-Hant'], { 'Coordinates': '座標' });
+Object.assign(RR_TEXT_TRANSLATIONS['zh-Hans'], { 'Coordinates': '坐标' });
+Object.assign(RR_TEXT_TRANSLATIONS['ko'], { 'Coordinates': '좌표' });
+Object.assign(RR_TEXT_TRANSLATIONS['es'], { 'Coordinates': 'Coordenadas' });
+Object.assign(RR_TEXT_TRANSLATIONS['pt'], { 'Coordinates': 'Coordenadas' });
+Object.assign(RR_TEXT_TRANSLATIONS['fr'], { 'Coordinates': 'Coordonnées' });
+Object.assign(RR_TEXT_TRANSLATIONS['it'], { 'Coordinates': 'Coordinate' });
+Object.assign(RR_TEXT_TRANSLATIONS['de'], { 'Coordinates': 'Koordinaten' });
+Object.assign(RR_TEXT_TRANSLATIONS['ru'], { 'Coordinates': 'Координаты' });
+Object.assign(RR_TEXT_TRANSLATIONS['pl'], { 'Coordinates': 'Współrzędne' });
+Object.assign(RR_TEXT_TRANSLATIONS['el'], { 'Coordinates': 'Συντεταγμένες' });
+Object.assign(RR_TEXT_TRANSLATIONS['ar'], { 'Coordinates': 'الإحداثيات' });
+Object.assign(RR_TEXT_TRANSLATIONS['tr'], { 'Coordinates': 'Koordinatlar' });
+Object.assign(RR_TEXT_TRANSLATIONS['id'], { 'Coordinates': 'Koordinat' });
+Object.assign(RR_TEXT_TRANSLATIONS['vi'], { 'Coordinates': 'Tọa độ' });
+Object.assign(RR_TEXT_TRANSLATIONS['th'], { 'Coordinates': 'พิกัด' });
 }
 
 // Reviewed entries are deliberately applied last. They correct legacy wording,
@@ -12047,6 +12329,18 @@ Object.assign(RR_I18N_STRINGS.tr, {
     for (const lang of Object.keys(RR_EVENT_COMMAND_NAMES)) {
         RR_EVENT_COMMAND_NAMES[lang]['Change 3D Camera'] = change[lang] || 'Change 3D Camera';
     }
+    const scoped = { ja: '範囲ウェイト', es: 'Espera dirigida', "zh-Hant": '範圍等待', "zh-Hans": '范围等待', ru: 'Целевое ожидание', pt: 'Espera direcionada', de: 'Gezieltes Warten', fr: 'Attente ciblée', el: 'Στοχευμένη αναμονή', ko: '범위 대기', ar: 'انتظار محدد النطاق', it: 'Attesa mirata', pl: 'Oczekiwanie celowane', id: 'Tunggu tertarget', vi: 'Chờ theo phạm vi', th: 'รอตามขอบเขต', tr: 'Kapsamlı bekleme' };
+    for (const lang of Object.keys(RR_EVENT_COMMAND_NAMES)) {
+        RR_EVENT_COMMAND_NAMES[lang]['Scoped Wait'] = scoped[lang] || 'Scoped Wait';
+    }
+    const wait3d = { ja: '3Dの完了を待つ', es: 'Esperar 3D', "zh-Hant": '等待 3D', "zh-Hans": '等待 3D', ru: 'Ждать 3D', pt: 'Aguardar 3D', de: 'Auf 3D warten', fr: 'Attendre la 3D', el: 'Αναμονή 3D', ko: '3D 대기', ar: 'انتظار ثلاثي الأبعاد', it: 'Attendi 3D', pl: 'Czekaj na 3D', id: 'Tunggu 3D', vi: 'Chờ 3D', th: 'รอ 3D', tr: '3B bekle' };
+    for (const lang of Object.keys(RR_EVENT_COMMAND_NAMES)) {
+        RR_EVENT_COMMAND_NAMES[lang]['Wait for 3D'] = wait3d[lang] || 'Wait for 3D';
+    }
+    const transform = { ja: '3Dモデルの変形', es: 'Transformar modelo 3D', "zh-Hant": '變換 3D 模型', "zh-Hans": '变换 3D 模型', ru: 'Преобразовать 3D-модель', pt: 'Transformar modelo 3D', de: '3D-Modell transformieren', fr: 'Transformer le modèle 3D', el: 'Μετασχηματισμός μοντέλου 3D', ko: '3D 모델 변형', ar: 'تحويل النموذج ثلاثي الأبعاد', it: 'Trasforma modello 3D', pl: 'Przekształć model 3D', id: 'Transformasi model 3D', vi: 'Biến đổi mô hình 3D', th: 'แปลงโมเดล 3D', tr: '3B modeli dönüştür' };
+    for (const lang of Object.keys(RR_EVENT_COMMAND_NAMES)) {
+        RR_EVENT_COMMAND_NAMES[lang]['Transform 3D Model'] = transform[lang] || 'Transform 3D Model';
+    }
 })();
 
 // Model props palette (hand-written).
@@ -12054,7 +12348,7 @@ Object.assign(RR_I18N_STRINGS.en, {
     'props.noModel': 'No model chosen',
     'props.hintPlace': 'Click the map to place it. Click a placed model to select it, drag to move, Delete to remove.',
     'props.hintChoose': 'Choose a model from the list below.',
-    'props.size': 'Size (tiles)',
+    'props.size': 'Size',
     'props.scale': 'Scale',
     'props.direction': 'Facing',
     'props.dirDown': 'Down',
@@ -12072,7 +12366,7 @@ Object.assign(RR_I18N_STRINGS.ja, {
     'props.noModel': 'モデル未選択',
     'props.hintPlace': 'マップをクリックして配置。配置済みのモデルはクリックで選択、ドラッグで移動、Delete で削除。',
     'props.hintChoose': '下のリストからモデルを選択してください。',
-    'props.size': 'サイズ (タイル)',
+    'props.size': 'サイズ',
     'props.scale': 'スケール',
     'props.direction': '向き',
     'props.dirDown': '下',
@@ -12090,7 +12384,7 @@ Object.assign(RR_I18N_STRINGS.es, {
     'props.noModel': 'Ningún modelo elegido',
     'props.hintPlace': 'Haz clic en el mapa para colocarlo. Clic en un modelo colocado para seleccionarlo, arrastra para mover, Supr para quitar.',
     'props.hintChoose': 'Elige un modelo de la lista de abajo.',
-    'props.size': 'Tamaño (casillas)',
+    'props.size': 'Tamaño',
     'props.scale': 'Escala',
     'props.direction': 'Orientación',
     'props.dirDown': 'Abajo',
@@ -12108,7 +12402,7 @@ Object.assign(RR_I18N_STRINGS['zh-Hant'], {
     'props.noModel': '未選擇模型',
     'props.hintPlace': '點擊地圖放置。點擊已放置的模型可選取，拖曳移動，Delete 移除。',
     'props.hintChoose': '從下方清單選擇模型。',
-    'props.size': '大小（格）',
+    'props.size': '大小',
     'props.scale': '縮放',
     'props.direction': '朝向',
     'props.dirDown': '下',
@@ -12126,7 +12420,7 @@ Object.assign(RR_I18N_STRINGS['zh-Hans'], {
     'props.noModel': '未选择模型',
     'props.hintPlace': '点击地图放置。点击已放置的模型可选中，拖动移动，Delete 移除。',
     'props.hintChoose': '从下方列表选择模型。',
-    'props.size': '大小（格）',
+    'props.size': '大小',
     'props.scale': '缩放',
     'props.direction': '朝向',
     'props.dirDown': '下',
@@ -12144,7 +12438,7 @@ Object.assign(RR_I18N_STRINGS.ru, {
     'props.noModel': 'Модель не выбрана',
     'props.hintPlace': 'Щёлкните по карте, чтобы поставить. Щелчок по модели выбирает её, перетаскивание двигает, Delete удаляет.',
     'props.hintChoose': 'Выберите модель из списка ниже.',
-    'props.size': 'Размер (тайлы)',
+    'props.size': 'Размер',
     'props.scale': 'Масштаб',
     'props.direction': 'Направление',
     'props.dirDown': 'Вниз',
@@ -12162,7 +12456,7 @@ Object.assign(RR_I18N_STRINGS.pt, {
     'props.noModel': 'Nenhum modelo escolhido',
     'props.hintPlace': 'Clique no mapa para colocar. Clique em um modelo colocado para selecioná-lo, arraste para mover, Delete para remover.',
     'props.hintChoose': 'Escolha um modelo na lista abaixo.',
-    'props.size': 'Tamanho (tiles)',
+    'props.size': 'Tamanho',
     'props.scale': 'Escala',
     'props.direction': 'Direção',
     'props.dirDown': 'Baixo',
@@ -12180,7 +12474,7 @@ Object.assign(RR_I18N_STRINGS.de, {
     'props.noModel': 'Kein Modell gewählt',
     'props.hintPlace': 'Auf die Karte klicken, um es zu setzen. Ein gesetztes Modell anklicken wählt es, Ziehen bewegt, Entf entfernt.',
     'props.hintChoose': 'Wähle unten ein Modell aus der Liste.',
-    'props.size': 'Größe (Kacheln)',
+    'props.size': 'Größe',
     'props.scale': 'Skalierung',
     'props.direction': 'Blickrichtung',
     'props.dirDown': 'Unten',
@@ -12198,7 +12492,7 @@ Object.assign(RR_I18N_STRINGS.fr, {
     'props.noModel': 'Aucun modèle choisi',
     'props.hintPlace': 'Cliquez sur la carte pour le placer. Cliquez sur un modèle placé pour le sélectionner, glissez pour déplacer, Suppr pour retirer.',
     'props.hintChoose': 'Choisissez un modèle dans la liste ci-dessous.',
-    'props.size': 'Taille (tuiles)',
+    'props.size': 'Taille',
     'props.scale': 'Échelle',
     'props.direction': 'Orientation',
     'props.dirDown': 'Bas',
@@ -12216,7 +12510,7 @@ Object.assign(RR_I18N_STRINGS.el, {
     'props.noModel': 'Δεν επιλέχθηκε μοντέλο',
     'props.hintPlace': 'Κάντε κλικ στον χάρτη για τοποθέτηση. Κλικ σε τοποθετημένο μοντέλο το επιλέγει, σύρσιμο το μετακινεί, Delete το αφαιρεί.',
     'props.hintChoose': 'Επιλέξτε μοντέλο από την παρακάτω λίστα.',
-    'props.size': 'Μέγεθος (πλακίδια)',
+    'props.size': 'Μέγεθος',
     'props.scale': 'Κλίμακα',
     'props.direction': 'Κατεύθυνση',
     'props.dirDown': 'Κάτω',
@@ -12234,7 +12528,7 @@ Object.assign(RR_I18N_STRINGS.ko, {
     'props.noModel': '선택된 모델 없음',
     'props.hintPlace': '맵을 클릭해 배치합니다. 배치된 모델을 클릭하면 선택, 드래그로 이동, Delete로 제거합니다.',
     'props.hintChoose': '아래 목록에서 모델을 선택하세요.',
-    'props.size': '크기 (타일)',
+    'props.size': '크기',
     'props.scale': '배율',
     'props.direction': '방향',
     'props.dirDown': '아래',
@@ -12252,7 +12546,7 @@ Object.assign(RR_I18N_STRINGS.ar, {
     'props.noModel': 'لم يتم اختيار نموذج',
     'props.hintPlace': 'انقر على الخريطة لوضعه. انقر على نموذج موضوع لتحديده، واسحب لتحريكه، وDelete لإزالته.',
     'props.hintChoose': 'اختر نموذجًا من القائمة أدناه.',
-    'props.size': 'الحجم (بلاطات)',
+    'props.size': 'الحجم',
     'props.scale': 'المقياس',
     'props.direction': 'الاتجاه',
     'props.dirDown': 'أسفل',
@@ -12270,7 +12564,7 @@ Object.assign(RR_I18N_STRINGS.it, {
     'props.noModel': 'Nessun modello scelto',
     'props.hintPlace': 'Clicca sulla mappa per posizionarlo. Clicca un modello posizionato per selezionarlo, trascina per spostare, Canc per rimuovere.',
     'props.hintChoose': 'Scegli un modello dall’elenco qui sotto.',
-    'props.size': 'Dimensione (tile)',
+    'props.size': 'Dimensione',
     'props.scale': 'Scala',
     'props.direction': 'Orientamento',
     'props.dirDown': 'Giù',
@@ -12288,7 +12582,7 @@ Object.assign(RR_I18N_STRINGS.pl, {
     'props.noModel': 'Nie wybrano modelu',
     'props.hintPlace': 'Kliknij mapę, aby umieścić. Kliknięcie umieszczonego modelu zaznacza go, przeciąganie przesuwa, Delete usuwa.',
     'props.hintChoose': 'Wybierz model z listy poniżej.',
-    'props.size': 'Rozmiar (kafelki)',
+    'props.size': 'Rozmiar',
     'props.scale': 'Skala',
     'props.direction': 'Kierunek',
     'props.dirDown': 'Dół',
@@ -12306,7 +12600,7 @@ Object.assign(RR_I18N_STRINGS.id, {
     'props.noModel': 'Belum ada model dipilih',
     'props.hintPlace': 'Klik peta untuk menempatkannya. Klik model yang sudah ditempatkan untuk memilih, seret untuk memindahkan, Delete untuk menghapus.',
     'props.hintChoose': 'Pilih model dari daftar di bawah.',
-    'props.size': 'Ukuran (petak)',
+    'props.size': 'Ukuran',
     'props.scale': 'Skala',
     'props.direction': 'Arah hadap',
     'props.dirDown': 'Bawah',
@@ -12324,7 +12618,7 @@ Object.assign(RR_I18N_STRINGS.vi, {
     'props.noModel': 'Chưa chọn mô hình',
     'props.hintPlace': 'Nhấp vào bản đồ để đặt. Nhấp vào mô hình đã đặt để chọn, kéo để di chuyển, Delete để xóa.',
     'props.hintChoose': 'Chọn một mô hình từ danh sách bên dưới.',
-    'props.size': 'Kích thước (ô)',
+    'props.size': 'Kích thước',
     'props.scale': 'Tỷ lệ',
     'props.direction': 'Hướng',
     'props.dirDown': 'Xuống',
@@ -12342,7 +12636,7 @@ Object.assign(RR_I18N_STRINGS.th, {
     'props.noModel': 'ยังไม่ได้เลือกโมเดล',
     'props.hintPlace': 'คลิกแผนที่เพื่อวาง คลิกโมเดลที่วางแล้วเพื่อเลือก ลากเพื่อย้าย กด Delete เพื่อลบ',
     'props.hintChoose': 'เลือกโมเดลจากรายการด้านล่าง',
-    'props.size': 'ขนาด (ไทล์)',
+    'props.size': 'ขนาด',
     'props.scale': 'สเกล',
     'props.direction': 'ทิศหันหน้า',
     'props.dirDown': 'ลง',
@@ -12360,7 +12654,7 @@ Object.assign(RR_I18N_STRINGS.tr, {
     'props.noModel': 'Model seçilmedi',
     'props.hintPlace': 'Yerleştirmek için haritaya tıklayın. Yerleştirilmiş bir modele tıklamak seçer, sürüklemek taşır, Delete kaldırır.',
     'props.hintChoose': 'Aşağıdaki listeden bir model seçin.',
-    'props.size': 'Boyut (karo)',
+    'props.size': 'Boyut',
     'props.scale': 'Ölçek',
     'props.direction': 'Yön',
     'props.dirDown': 'Aşağı',

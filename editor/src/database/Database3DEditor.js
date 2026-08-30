@@ -707,6 +707,11 @@ class Database3DEditor {
         this.rebuildPlayback();
         const status = this._detail.querySelector('.r3d-status');
         if (status) status.textContent = `${this._t('Saved')} — 3d/${this.selectedName}/model.json`;
+        // The map's 3D view keeps a loaded template per model, with the
+        // sidecar it was read with: a changed effect trigger or rule went
+        // on playing the old way there until the editor was reopened.
+        if (typeof RREventPreviewModels !== 'undefined' && RREventPreviewModels.clear) RREventPreviewModels.clear();
+        this.projectController?.refreshMap3DView?.();
     }
 
     rebuildPlayback() {
@@ -994,7 +999,11 @@ class Database3DEditor {
                         || Math.abs(this._viewGoal.pitch - this._view.pitch) > 0.01
                         || Math.abs(this._viewGoal.distance - this._view.distance) > 0.001;
                     const animating = rules.some(rule => rule && rule.trigger !== 'action')
-                        || !!this._sim.action || !!this._sim.walking || !!this._workRule || !!this._previewRule;
+                        || !!this._sim.action || !!this._sim.walking || !!this._workRule || !!this._previewRule
+                        // A movie on a surface, or an effect overlay, is
+                        // motion too: throttled to the idle rate it played
+                        // as a slideshow and read as "not playing".
+                        || !!this._fxVideo || !!(this._fxPreview && this._fxPreview.active);
                     const active = animating || easing || this._dragging || this._loadingPreview
                         || this._selectMode || this._rigMode || this._editingRule >= 0 || this.selectedPartName !== null
                         || (Number.isFinite(this._lastInputAt) && now - this._lastInputAt < 1000)
@@ -1253,6 +1262,26 @@ class Database3DEditor {
         if (this.selectedPart < 0) return;
         if (this._selectMode) this.cancelSelectMode();
         const removed = this.customParts[this.selectedPart];
+        // Effects anchored to the dying part drop back to the model without
+        // moving: the offset converts out of the part's frame first.
+        if (removed && typeof THREE !== 'undefined' && this._object) {
+            for (const raw of this.rawEffects) {
+                const anchor = raw && raw.anchor;
+                if (!anchor || anchor.part !== removed.name) continue;
+                const frame = this._anchorNode(removed.name);
+                if (frame && Array.isArray(anchor.offset)) {
+                    frame.updateWorldMatrix(true, false);
+                    const world = frame.localToWorld(new THREE.Vector3(anchor.offset[0] || 0, anchor.offset[1] || 0, anchor.offset[2] || 0));
+                    const local = this._object.worldToLocal(world);
+                    anchor.offset = [local.x, local.y, local.z].map(value => Math.round(value * 1000) / 1000);
+                }
+                anchor.part = '';
+            }
+            if (this._effectWork && this._effectWork.anchor && this._effectWork.anchor.part === removed.name) {
+                const saved = this.rawEffects.find(raw => raw && raw.name === this._effectWork.name);
+                if (saved && saved.anchor) this._effectWork.anchor = JSON.parse(JSON.stringify(saved.anchor));
+            }
+        }
         this.customParts.splice(this.selectedPart, 1);
         this.selectedPart = Math.min(this.selectedPart, this.customParts.length - 1);
         if (removed && this.selectedPartName === removed.name) this.deselectPart();
@@ -1372,6 +1401,10 @@ class Database3DEditor {
         this._selection = new Map();
         this.saveRules();
         this._rebuildInstance();
+        // A new part claims the effects sitting on it: a video placed on
+        // the whole model, later carved into a screen part, follows the
+        // screen from now on.
+        this._healAllAnchorBindings();
         this.setTool('orbit');
         this.renderSelectBar();
         this.renderPartList();
@@ -1599,8 +1632,26 @@ class Database3DEditor {
         const list = this._detail.querySelector('.r3d-part-list');
         if (!list) return;
         list.innerHTML = '';
+        // The whole model is a part from the first import: pose it, animate
+        // it, anchor effects to it — no carving required. Carved parts are
+        // for pieces that move on their own.
+        const whole = document.createElement('div');
+        whole.textContent = this._t('Whole model');
+        whole.style.cssText = 'padding:4px 10px;cursor:pointer;font-size:12px;color:var(--color-text);'
+            + (this.selectedPart < 0 && this.selectedPartName === '' ? 'background:var(--color-bg-active, #234);' : '');
+        whole.addEventListener('click', () => {
+            if (this._selectMode) this.cancelSelectMode();
+            this.selectedPart = -1;
+            this.renderPartList();
+            this.renderPartForm();
+            this.selectPartByName('');
+        });
+        list.appendChild(whole);
         if (!this.customParts.length) {
-            list.innerHTML = `<div style="padding:6px 10px;color:var(--color-text-muted);font-size:11px;">${this._t('Add a part, then drag a box over the model to choose its triangles.')}</div>`;
+            const hint = document.createElement('div');
+            hint.textContent = this._t('Add a part, then drag a box over the model to choose its triangles.');
+            hint.style.cssText = 'padding:6px 10px;color:var(--color-text-muted);font-size:11px;';
+            list.appendChild(hint);
             return;
         }
         this.customParts.forEach((part, index) => {
@@ -1655,9 +1706,17 @@ class Database3DEditor {
             if (!name) return;
             const oldName = part.name;
             part.name = name;
-            // Rules aimed at the old name follow the rename.
+            // Rules aimed at the old name follow the rename — and so do
+            // effect anchors, or a renamed screen's video falls back to the
+            // model origin and stops tracking without a word of warning.
             for (const raw of this.rawAnimations) {
                 if (raw.part === oldName) raw.part = name;
+            }
+            for (const raw of this.rawEffects) {
+                if (raw && raw.anchor && raw.anchor.part === oldName) raw.anchor.part = name;
+            }
+            if (this._effectWork && this._effectWork.anchor && this._effectWork.anchor.part === oldName) {
+                this._effectWork.anchor.part = name;
             }
             if (this.selectedPartName === oldName) this.selectedPartName = name;
             if (this._poses[oldName]) {
@@ -1672,6 +1731,8 @@ class Database3DEditor {
             this._rebuildInstance();
             this.renderPartList();
             this.renderRuleList();
+            this.renderEffectList();
+            this.renderEffectForm();
             this.renderEditCard();
         });
         form.querySelector('.r3d-part-reselect').addEventListener('click', () => this.setTool('select'));
@@ -1890,9 +1951,11 @@ class Database3DEditor {
             values.period = work.period;
             values.hold = values.trigger === 'action' ? work.hold : false;
             values.repeat = values.trigger === 'action' ? !!work.repeat : false;
-            // Keys ride only the real action: the live always-rule keeps
-            // showing the sliders' current pose while the hand moves them.
-            if (values.trigger === 'action' && (work.keys || []).length) {
+            // Keys ride every authored trigger — an Always keyframe timeline
+            // loops on its own. Only the live stand-in (triggerOverride: the
+            // rule that mirrors the sliders while the hand moves them) goes
+            // without, or editing would fight the playing timeline.
+            if ((work.keys || []).length && !triggerOverride) {
                 values.keys = JSON.parse(JSON.stringify(work.keys));
                 values.hold = false;
             }
@@ -2287,7 +2350,7 @@ class Database3DEditor {
                     <option value="return"${work.hold ? '' : ' selected'}>${this._t('Return to rest')}</option>
                     <option value="hold"${work.hold ? ' selected' : ''}>${this._t('Stay posed')}</option>
                 </select>`) : '')
-            + (work.motion === 'pose' && work.trigger === 'action' ? this._keysHtml() : '')
+            + (work.motion === 'pose' ? this._keysHtml() : '')
             + (work.trigger === 'action' ? this._effectsHtml() : '')
             + `<div style="display:flex;gap:6px;margin-top:9px;">
                 <button type="button" class="rr-btn-secondary r3d-card-preview" style="flex:1;" title="${this._t('Play this animation from rest')}">${this._t('Preview')}</button>
@@ -2772,10 +2835,21 @@ class Database3DEditor {
         } else if (this._cardMode === 'effect') {
             this._cardMode = 'part';
         }
+        this._healAnchorBinding(this._effectWork);
         this.renderEffectList();
         this.renderEffectForm();
         this._syncEffectAnchorMarker();
         this.renderEditCard();
+        // A video effect previews the moment it is selected: the movie on
+        // its surface IS the thing being placed, so it has to be visible
+        // while the sliders move it — not only after a press of Play.
+        if (this._effectWork && this._effectWork.type === 'video'
+            && this._effectWork.video && this._effectWork.video.file) {
+            this._fxPreviewDef = this._effectWork;
+            this._playVideoPreview(this._effectWork);
+        } else {
+            this._stopVideoPreview();
+        }
     }
 
     _leaveEffectMode() {
@@ -3184,8 +3258,24 @@ class Database3DEditor {
         const q = selector => form.querySelector(selector);
         const syncWork = () => {
             work.name = q('.r3d-fx-name').value.trim() || work.name;
-            work.anchor = { part: q('.r3d-fx-part').value, offset: (work.anchor && work.anchor.offset) || [0, 0, 0] };
+            const previous = work.anchor && typeof work.anchor === 'object' ? work.anchor : { part: '', offset: [0, 0, 0] };
+            const part = q('.r3d-fx-part').value;
+            let offset = previous.offset || [0, 0, 0];
+            // A different frame, the same place: the dot must not jump when
+            // the anchor part changes, so the offset converts between the
+            // old frame and the new one.
+            if (part !== (previous.part || '') && this._object && typeof THREE !== 'undefined') {
+                const from = (previous.part && this._anchorNode(previous.part)) || this._object;
+                const to = (part && this._anchorNode(part)) || this._object;
+                from.updateWorldMatrix(true, false);
+                to.updateWorldMatrix(true, false);
+                const world = from.localToWorld(new THREE.Vector3(offset[0] || 0, offset[1] || 0, offset[2] || 0));
+                const local = to.worldToLocal(world);
+                offset = [local.x, local.y, local.z].map(value => Math.round(value * 1000) / 1000);
+            }
+            work.anchor = { part, offset };
             this._syncEffectAnchorMarker();
+            if (this._fxVideo) this._updateVideoPreview();
         };
         for (const selector of ['.r3d-fx-name', '.r3d-fx-part']) {
             q(selector).addEventListener('change', syncWork);
@@ -3305,6 +3395,14 @@ class Database3DEditor {
         live.mesh.scale.set(native[0] * axes[0], native[1] * axes[1], 1);
         const rotate = def.rotate || [0, 0, 0];
         live.mesh.rotation.set(rotate[0] * Math.PI / 180, rotate[1] * Math.PI / 180, rotate[2] * Math.PI / 180, 'YXZ');
+        // Anchored to a posed part, the movie turns with the part.
+        if (Reactor3D.effectAnchorQuaternion) {
+            const pose = Reactor3D.effectAnchorQuaternion(this._object, def, new THREE.Quaternion());
+            if (pose.w !== 1) {
+                const objectQuat = this._object.getWorldQuaternion(new THREE.Quaternion());
+                live.mesh.quaternion.premultiply(objectQuat.clone().invert().multiply(pose).multiply(objectQuat));
+            }
+        }
         this._lastInputAt = performance.now();
     }
 
@@ -3336,11 +3434,21 @@ class Database3DEditor {
         const hits = this._raycastPointer(event.clientX, event.clientY) || [];
         const hit = hits.find(entry => !(entry.object.userData && entry.object.userData.__reactorOverlay));
         if (!hit) return;
-        const anchor = work.anchor && typeof work.anchor === 'object' ? work.anchor : { part: '', offset: [0, 0, 0] };
-        const frame = (anchor.part && this._object.getObjectByName(anchor.part)) || this._object;
+        // The click BINDS the anchor: land it on a carved part (or a bone)
+        // and the effect belongs to that part from then on — a video placed
+        // on a screen rides the screen when the arm carrying it swings.
+        // Leaving the binding to a dropdown nobody knew about left every
+        // anchor on the model origin, where nothing ever tracks.
+        let partName = '';
+        if (hit.object.isSkinnedMesh && hit.face) {
+            partName = this._dominantBoneName(hit.object, hit.face) || '';
+        } else if (hit.object.userData.parts && hit.object.userData.parts.length) {
+            partName = hit.object.userData.parts[0].name;
+        }
+        const frame = (partName && this._anchorNode(partName)) || this._object;
         frame.updateWorldMatrix(true, false);
         const local = frame.worldToLocal(hit.point.clone());
-        work.anchor = { part: anchor.part || '', offset: [local.x, local.y, local.z].map(value => Math.round(value * 1000) / 1000) };
+        work.anchor = { part: frame === this._object ? '' : partName, offset: [local.x, local.y, local.z].map(value => Math.round(value * 1000) / 1000) };
         this.renderEffectForm();
         this._syncEffectAnchorMarker();
         this.renderEditCard();
@@ -3358,11 +3466,67 @@ class Database3DEditor {
     }
 
     /** After dragging the anchor marker: its new place, in the anchor's frame. */
+    /** The node an anchor part name means, through the runtime's carve-aware lookup. */
+    _anchorNode(name) {
+        if (!name || !this._object) return null;
+        return typeof Reactor3D !== 'undefined' && Reactor3D.effectAnchorNode
+            ? Reactor3D.effectAnchorNode(this._object, name)
+            : this._object.getObjectByName(name);
+    }
+
+    /**
+     * An effect saved before anchors bound to parts (anchor.part '') is
+     * quietly rebound to the part whose piece contains its point, most
+     * specific first — the screen claims the video that sits on it, and
+     * from then on the video rides the screen's pose. No part contains
+     * the point: it stays on the origin, as authored.
+     */
+    _healAnchorBinding(work) {
+        if (!work || !this._object || typeof THREE === 'undefined') return;
+        const anchor = work.anchor && typeof work.anchor === 'object' ? work.anchor : null;
+        if (!anchor || anchor.part || !Array.isArray(anchor.offset)) return;
+        if (!this.customParts.length) return;
+        this._object.updateWorldMatrix(true, true);
+        const world = this._object.localToWorld(new THREE.Vector3(anchor.offset[0] || 0, anchor.offset[1] || 0, anchor.offset[2] || 0));
+        const span = this._modelSpan() * (this._scale || 1);
+        let best = null;
+        this._object.traverse(node => {
+            if (!node.isMesh || !node.userData.parts || !node.userData.parts.length) return;
+            const box = new THREE.Box3().setFromObject(node).expandByScalar(span * 0.02);
+            if (!box.containsPoint(world)) return;
+            const size = box.getSize(new THREE.Vector3());
+            const volume = size.x * size.y * size.z;
+            if (!best || volume < best.volume) best = { node, volume };
+        });
+        if (!best) return;
+        const name = best.node.userData.parts[0].name;
+        const frame = this._anchorNode(name) || best.node;
+        frame.updateWorldMatrix(true, false);
+        const local = frame.worldToLocal(world);
+        work.anchor = { part: name, offset: [local.x, local.y, local.z].map(value => Math.round(value * 1000) / 1000) };
+    }
+
+    /** Rebind every origin-anchored effect to the part that now contains it. */
+    _healAllAnchorBindings() {
+        let changed = false;
+        for (const raw of this.rawEffects) {
+            const before = raw && raw.anchor ? raw.anchor.part : null;
+            this._healAnchorBinding(raw);
+            if (raw && raw.anchor && raw.anchor.part !== before) changed = true;
+        }
+        if (this._effectWork) this._healAnchorBinding(this._effectWork);
+        if (changed) {
+            this.saveRules();
+            this.renderEffectList();
+            this.renderEffectForm();
+        }
+    }
+
     _commitAnchorFromMarker() {
         const work = this._effectWork;
         if (!work || !this._fxMarker || !this._object) return;
         const anchor = work.anchor && typeof work.anchor === 'object' ? work.anchor : { part: '', offset: [0, 0, 0] };
-        const frame = (anchor.part && this._object.getObjectByName(anchor.part)) || this._object;
+        const frame = (anchor.part && this._anchorNode(anchor.part)) || this._object;
         frame.updateWorldMatrix(true, false);
         const local = frame.worldToLocal(this._fxMarker.position.clone());
         work.anchor = { part: anchor.part || '', offset: [local.x, local.y, local.z].map(value => Math.round(value * 1000) / 1000) };
@@ -3855,6 +4019,12 @@ class Database3DEditor {
     }
 
     _pickPart(event) {
+        // With the effect card up, a click on the model must not swap the
+        // card for a part's. A whole-object part made every click on the
+        // mesh a dismissal, and the video surface's placement panel seemed
+        // to simply vanish. Parts are still reached through their list and
+        // the card's chooser; the anchor tool keeps the canvas.
+        if (this._cardMode === 'effect') return;
         const found = this._partUnderPointer(event.clientX, event.clientY);
         if (found) {
             this.selectPartByName(found.name);

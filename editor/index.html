@@ -277,6 +277,10 @@
                                     <input id="map-grid" type="checkbox" aria-label="Show the tile grid" data-i18n-aria="toolbar.title.showGrid">
                                     <span data-i18n="workspace.grid">Grid</span>
                                 </label>
+                                <label class="map-info-item map-passage" title="Show passability: X where nothing can walk, a red edge where one direction cannot, red where a 3D model stands" data-i18n-title="toolbar.title.showPassage">
+                                    <input id="map-passage" type="checkbox" aria-label="Show passability" data-i18n-aria="toolbar.title.showPassage">
+                                    <span data-i18n="workspace.passage">Passage</span>
+                                </label>
                                 <label class="map-info-item map-3d-view" title="Show the map in 3D" data-i18n-title="toolbar.title.map3DView">
                                     <input id="map-3d-view" type="checkbox" aria-label="Show the map in 3D" data-i18n-aria="toolbar.title.map3DView">
                                     <span>3D</span>
@@ -1015,6 +1019,7 @@
     <script src="src/RegionManager.js"></script>
     <script src="src/utils/PoseRings3D.js"></script>
     <script src="src/Object3DManager.js"></script>
+    <script src="src/utils/AxisArrows3D.js"></script>
     <script src="src/ModelPropsManager.js"></script>
     <script src="src/MapEditor.js"></script>
     <script src="src/MapEditor3D.js"></script>
@@ -1153,6 +1158,8 @@
     <script src="src/database/Database3DEditor.js"></script>
     <script src="src/event/commands/PlayModelAnimationEditor.js"></script>
     <script src="src/event/commands/Camera3DEditor.js"></script>
+    <script src="src/event/commands/TransformModel3DEditor.js"></script>
+    <script src="src/event/commands/WaitForModel3DEditor.js"></script>
     <script src="src/event/commands/PlayModelEffectEditor.js"></script>
     <script src="src/event/commands/CallUserInterfaceEditor.js"></script>
     <script src="src/database/DatabaseSystem1Editor.js"></script>

@@ -15,6 +15,7 @@ It runs everywhere you do. Build on Windows, macOS, Linux or the Web.
 Everything you need to make your game:
 
 - Full-featured map editor
+- HD-2D 3D maps: models, rooms, cameras, and in-scene effects on top of your tile maps
 - Visual event system — no coding required
 - Built-in combat system
 - Complete database editors
@@ -25,7 +26,7 @@ Everything you need to make your game:
 - One-click playtesting
 - One-click cross-platform builds
 
-It's all here. And when you want to go beyond what the visual tools offer, the full JavaScript engine is wide open — no obfuscation, no locked internals, no guessing how things work.
+It's all here, built on PixiJS 8 and Three.js. And when you want to go beyond what the visual tools offer, the full JavaScript engine is wide open — no obfuscation, no locked internals, no guessing how things work.
 
 For RPG Maker developers:
 

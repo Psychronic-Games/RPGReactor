@@ -605,10 +605,24 @@ Sprite_Character.prototype.update = function() {
     }
     this._reactor3dBaseUpdate();
     if (Reactor3D.updateMapModelSprite) Reactor3D.updateMapModelSprite(this);
-    // A prop lifted off the ground rises by its lift on a flat map too.
+    // A prop lifted off the ground rises by its lift on a flat map too. An
+    // event's height is a 3D map's coordinate; on a flat map it does nothing.
     if (!this._rrCulled && this._character && this._character._reactorLift > 0
-        && typeof $gameMap !== "undefined" && $gameMap && $gameMap.tileHeight) {
+        && typeof $gameMap !== "undefined" && $gameMap && $gameMap.tileHeight
+        && (typeof this._character.eventId !== "function" || typeof Reactor3D === "undefined"
+            || !Reactor3D.isEventProp || Reactor3D.isEventProp(this._character.eventId()))) {
         this.y -= this._character._reactorLift * $gameMap.tileHeight();
+    }
+    // Face Ceiling / Face Ground / Rotate route steps: the sprite turns
+    // about its feet (its anchor). The 3D stand is scale and skew, so the
+    // rotation passes straight through it.
+    if (this._character) {
+        const posePitch = this._character._reactorPosePitch || 0;
+        const poseSpin = this._character._reactorSpin || 0;
+        if (posePitch || poseSpin || this._reactorPoseTurned) {
+            this.rotation = ((posePitch ? posePitch * 90 : 0) + poseSpin) * Math.PI / 180;
+            this._reactorPoseTurned = !!(posePitch || poseSpin);
+        }
     }
     // Applied last: plugins replace updatePosition wholesale, and a model
     // sprite's frame is only right once updateMapModelSprite has set it.
@@ -1571,8 +1585,19 @@ Sprite_Animation.prototype.processSoundTimings = function() {
 Sprite_Animation.prototype.processFlashTimings = function() {
     for (const timing of this._animation.flashTimings) {
         if (timing.frame === this._frameIndex) {
-            this._flashColor = timing.color.clone();
-            this._flashDuration = timing.duration;
+            // Stock flash timings tint the target. A timing can also carry a
+            // scope: 2 flashes the whole screen, 3 hides the target for the
+            // duration — the same three choices the sheet animations have.
+            if (timing.scope === 2) {
+                if (typeof $gameScreen !== "undefined" && $gameScreen) {
+                    $gameScreen.startFlash(timing.color.slice(), timing.duration);
+                }
+            } else if (timing.scope === 3) {
+                this._reactorHideDuration = Math.max(this._reactorHideDuration || 0, timing.duration);
+            } else {
+                this._flashColor = timing.color.clone();
+                this._flashDuration = timing.duration;
+            }
         }
     }
 };
@@ -1581,6 +1606,7 @@ Sprite_Animation.prototype.checkEnd = function() {
     if (
         this._frameIndex > this._maxTimingFrames &&
         this._flashDuration === 0 &&
+        !(this._reactorHideDuration > 0) &&
         !(this._handle && this._handle.exists)
     ) {
         this._playing = false;
@@ -1593,6 +1619,17 @@ Sprite_Animation.prototype.updateFlash = function() {
         this._flashColor[3] *= (d - 1) / d;
         for (const target of this._targets) {
             target.setBlendColor(this._flashColor);
+        }
+    }
+    if (this._reactorHideDuration > 0) {
+        this._reactorHideDuration--;
+        for (const target of this._targets) {
+            if (target.hide) target.hide();
+        }
+        if (this._reactorHideDuration === 0) {
+            for (const target of this._targets) {
+                if (target.show) target.show();
+            }
         }
     }
 };

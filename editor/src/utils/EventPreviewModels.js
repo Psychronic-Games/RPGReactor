@@ -81,7 +81,9 @@
         const extent = template.userData.glbSize || { x: 1, y: 1, z: 1 };
         const span = Math.max(extent.x, extent.y, extent.z, 0.0001);
         const fit = (spec.size > 0 ? spec.size : 2) / span;
-        object.scale.setScalar(fit * (spec.scale > 0 ? spec.scale : 1));
+        const uniform = fit * (spec.scale > 0 ? spec.scale : 1);
+        const stretch = spec.stretch || [1, 1, 1];
+        object.scale.set(uniform * stretch[0], uniform * stretch[1], uniform * stretch[2]);
         if (Reactor3D.applyEventModelPose) Reactor3D.applyEventModelPose(object, spec, direction || 2);
         else object.rotation.y = spec.yaw || 0;
         object.userData.glbSize = extent;

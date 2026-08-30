@@ -332,6 +332,21 @@
             trigger.firstChild.nodeValue = getCurrentLabel(selectEl);
         };
         selectEl.addEventListener('change', refreshLabel);
+        // A programmatic `select.value = x` (a panel showing the selected
+        // thing's settings) fires no change event, and the trigger kept
+        // its old label: the 3D-M Facing read "Down" for a prop facing
+        // right. Own accessors over the native setters keep the label true.
+        const proto = Object.getPrototypeOf(selectEl);
+        for (const name of ['value', 'selectedIndex']) {
+            const native = Object.getOwnPropertyDescriptor(proto, name)
+                || Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, name);
+            if (!native || !native.set || !native.get) continue;
+            Object.defineProperty(selectEl, name, {
+                configurable: true,
+                get() { return native.get.call(this); },
+                set(next) { native.set.call(this, next); refreshLabel(); }
+            });
+        }
         // Also observe direct .innerHTML changes to options.
         const obs = new MutationObserver(refreshLabel);
         obs.observe(selectEl, { childList: true, subtree: true });

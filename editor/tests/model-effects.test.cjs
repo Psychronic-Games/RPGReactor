@@ -46,7 +46,7 @@ test('the runtime plays anchored animations through a stand-in target and regist
     assert.match(runtime, /current\.effects = sidecar \? Reactor3D\.readModelEffects\(sidecar\) : \[\];/);
     assert.match(runtime, /for \(const name of Reactor3D\.takeModelEffects\(character\)\)/);
     assert.match(runtime, /Reactor3D\.updateAnchoredAnimations\(holder\);/);
-    assert.match(read('runtime/reactor_main.js'), /runtime revision: 20260829\.45/);
+    assert.match(read('runtime/reactor_main.js'), /runtime revision: 20260830\.26/);
 });
 
 test('the editor wires the Play 3D Effect command and the Effects section', () => {
@@ -99,7 +99,7 @@ test('a model base transform wraps every instance and effects carry a turn', () 
     assert.equal((runtime.match(/applyModelTransform\(object, (?:this|Reactor3D)\.readModelTransform\(sidecar\)\)/g) || []).length, 5, 'every instance site applies the base transform');
     assert.match(runtime, /sprite\._animation = Object\.assign\(\{\}, animation, \{/, 'effect turn and size ride on a copy of the record');
     assert.match(runtime, /holder\.action = rule && \(rule\.repeat \|\| holder\.action\.repeat\)/, 'a repeating action starts over');
-    assert.match(read('runtime/reactor_main.js'), /runtime revision: 20260829\.45/);
+    assert.match(read('runtime/reactor_main.js'), /runtime revision: 20260830\.26/);
 });
 
 test('the 3D editor card chooses model, parts, bones and effects, and edits each with sliders', () => {
@@ -154,7 +154,7 @@ test('effects play on their own by state, and scale proportionally or per axis',
     const runtime = read('runtime/reactor_3d.js');
     assert.match(runtime, /Reactor3D\.updateTriggeredEffects\(holder, character, \{/);
     assert.match(runtime, /this\._handle\.setScale\(uniform \* axes\[0\], uniform \* axes\[1\], uniform \* axes\[2\]\);/);
-    assert.match(read('runtime/reactor_main.js'), /runtime revision: 20260829\.45/);
+    assert.match(read('runtime/reactor_main.js'), /runtime revision: 20260830\.26/);
     const db3d = read('editor/src/database/Database3DEditor.js');
     assert.match(db3d, /this\._fxPreviewDef = raw;/, 'the preview follows the live effect');
     assert.match(db3d, /_scaleSlidersHtml\(prefix, scale\)/);
@@ -187,7 +187,7 @@ test('video effects, mesh collision, repeat and player-relative controls are wir
     assert.equal(Reactor3D.pointInTriangle2D(0, 0, -1, -1, 1, -1, 0, 2), true);
     assert.equal(Reactor3D.pointInTriangle2D(5, 5, -1, -1, 1, -1, 0, 2), false);
     const runtime = read('runtime/reactor_3d.js');
-    assert.match(runtime, /if \(foot\.mask\) return foot\.mask\.touches\(localX, localZ\);/);
+    assert.match(runtime, /if \(foot\.mask\) return foot\.mask\.blocksTile\(localX, localZ\);/);
     assert.match(runtime, /Reactor3D\._sidecarJson\[name\] = parsed \|\| null;/);
     assert.match(runtime, /Game_Player\.prototype\.moveByInput = function\(\) \{/);
     assert.match(runtime, /repeat: !!\(options && options\.repeat\)/);
@@ -195,7 +195,7 @@ test('video effects, mesh collision, repeat and player-relative controls are wir
     assert.match(runtime, /Reactor3D\.spawnVideoEffect = function\(effect, character, holder\)/);
     assert.match(read('runtime/reactor_video_surfaces.js'), /anchor: anchor,/);
     assert.match(read('runtime/reactor_video_surfaces.js'), /Reactor3D\.effectAnchorWorld\(holder\.object, \{ anchor: descriptor\.anchor \}/);
-    assert.match(read('runtime/reactor_main.js'), /runtime revision: 20260829\.45/);
+    assert.match(read('runtime/reactor_main.js'), /runtime revision: 20260830\.26/);
     const db3d = read('editor/src/database/Database3DEditor.js');
     assert.match(db3d, /class="r3d-fx-type"/);
     assert.match(db3d, /_playVideoPreview\(raw\) \{/);
@@ -283,11 +283,118 @@ test('anchored Effekseer effects go into the 3D scene at the anchor, in world un
     assert.equal(+play.rotation[1].toFixed(4), +(Math.PI / 2).toFixed(4));
     const source = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_3d.js'), 'utf8');
     assert.match(source, /Graphics\.effekseer[\s\S]*efx\.drawHandle\(handle\)/, 'drawn with the overlay context: Effekseer cannot draw on the scene\'s WebGL 2 one, and a second context fights the first');
-    assert.match(source, /ctx\.drawImage\(overlay, 0, overlay\.height - height, width, height, 0, 0, width, height\)/, 'the corner is copied out of the overlay canvas');
+    assert.match(source, /ctx\.drawImage\(overlay, drawX, overlay\.height - drawY - drawH, drawW, drawH, 0, 0, drawW, drawH\)/, 'the effect\'s own box is copied out of the overlay canvas');
+    assert.match(source, /gl\.scissor\(drawX, drawY, drawW, drawH\)/, 'and only that box is drawn');
     assert.match(fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_sprites.js'), 'utf8'), /if \(this\._reactorInScene\) return;/, 'the hidden sprite leaves the handle alone');
     assert.match(source, /standQuad\(mesh, world, camera\) \{[\s\S]*mesh\.lookAt\(target\)/, 'a big vertical plane standing on the anchor, facing the camera');
     assert.match(source, /gl_FragCoord\.xy \/ resolution/, 'sampled in screen space');
     assert.match(fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_sprites.js'), 'utf8'), /Reactor3D\.EffekseerScene\.render\(state\.viewport\)/, 'drawn before the passes');
+});
+
+test('an in-scene effect is drawn as its own screen box at full resolution, smaller only past the budget', () => {
+    require(path.join(repoRoot, 'runtime', 'libs', 'three.js'));
+    const THREE = global.THREE;
+    const scene = Reactor3D.EffekseerScene;
+    // A 20-tile model at scale 100 with a 0.5 effect: the frame is 10 tiles, the box 12.5.
+    assert.equal(scene.effectRadius(20, { scale: 100 }, [0.5, 0.5, 0.5]), 12.5);
+    assert.equal(scene.effectRadius(20, { scale: 50 }, [2, 1, 1]), 25, 'the widest axis sets the reach');
+    const camera = new THREE.PerspectiveCamera(40, 1280 / 720, 0.1, 1000);
+    camera.position.set(0, 10, 60);
+    camera.lookAt(0, 0, 0);
+    camera.updateMatrixWorld();
+    const anchor = new THREE.Vector3(0, 0, 0);
+    const near = scene.screenRect(camera, anchor, 5, 1280, 720, 1280 * 720 * 0.25, 32);
+    assert.ok(near, 'a sphere in front of the camera has a box');
+    assert.equal(near.scale, 1, 'a small box is drawn 1:1');
+    assert.ok(near.w < 1280 && near.h < 720, 'and is smaller than the screen');
+    assert.equal(near.x % 32, 0); assert.equal(near.y % 32, 0); assert.equal(near.w % 32, 0); assert.equal(near.h % 32, 0);
+    const centre = { x: near.x + near.w / 2, y: near.y + near.h / 2 };
+    assert.ok(Math.abs(centre.x - 640) < 40 && Math.abs(centre.y - 360) < 80, 'centred on the anchor');
+    const huge = scene.screenRect(camera, anchor, 500, 1280, 720, 1280 * 720 * 0.25, 32);
+    assert.deepEqual([huge.x, huge.y, huge.w, huge.h], [0, 0, 1280, 720], 'a box past the screen is the screen');
+    assert.equal(+huge.scale.toFixed(3), 0.5, 'drawn at half size to stay within a quarter of the pixels');
+    assert.equal(scene.screenRect(camera, new THREE.Vector3(0, 0, 200), 1, 1280, 720, 0, 32), null, 'behind the camera, nothing');
+    // A tracker learns how far the picture reaches from the anchor, in tiles: a sphere,
+    // the same from every angle, so the box stays right as the camera turns.
+    const track = scene.boxTracker();
+    assert.equal(track.radius, null);
+    const whole = scene.trackedRect(track, camera, anchor, 20, 1280, 720, 1280 * 720 * 0.25, 32);
+    const wide = scene.screenRect(camera, anchor, 20, 1280, 720, 1280 * 720 * 0.25, 32);
+    assert.deepEqual([whole.x, whole.y, whole.w, whole.h], [wide.x, wide.y, wide.w, wide.h], 'a fresh tracker draws the authored reach');
+    assert.equal(scene.shouldMeasure(3), true); assert.equal(scene.shouldMeasure(10), true); assert.equal(scene.shouldMeasure(7), false);
+    // A drawn box whose alpha is lit in the `lit` fractions (x0, y0, x1, y1, rows top-first);
+    // the mini canvas the tracker downscales into reports whatever was last drawn into it.
+    const picture = (w, h, lit) => ({ width: w, height: h, lit });
+    const miniCanvas = () => {
+        let drawn = null;
+        const ctx = { clearRect() {}, drawImage(source) { drawn = source; }, getImageData: (x, y, mw, mh) => {
+            const data = new Uint8ClampedArray(mw * mh * 4);
+            const lit = drawn ? drawn.lit : [0, 0, 0, 0];
+            for (let py = 0; py < mh; py++) for (let px = 0; px < mw; px++) {
+                if (px / mw >= lit[0] && px / mw < lit[2] && py / mh >= lit[1] && py / mh < lit[3]) data[(py * mw + px) * 4 + 3] = 255;
+            }
+            return { data };
+        } };
+        return { width: 0, height: 0, getContext() { return ctx; } };
+    };
+    global.document = global.document || {};
+    const createElement = global.document.createElement;
+    global.document.createElement = () => miniCanvas();
+    try {
+        const anchorPx = { x: wide.x + wide.w / 2, y: wide.y + wide.h / 2 };
+        const pxPerUnit = wide.w / 40;   // the box spans the sphere's 40 tiles
+        assert.equal(scene.measure(track, picture(wide.w, wide.h, [0, 0, 0, 0]), wide, 1280, 720, anchorPx, pxPerUnit, 20), false, 'nothing lit, nothing learned');
+        assert.equal(track.radius, null);
+        // Lit in the middle fifth: the reach is about a tenth of the box plus the pad.
+        assert.equal(scene.measure(track, picture(wide.w, wide.h, [0.45, 0.45, 0.55, 0.55]), wide, 1280, 720, anchorPx, pxPerUnit, 20), true);
+        assert.ok(track.radius > 1.5 && track.radius < 4, `learned a small radius: ${track.radius.toFixed(2)} tiles`);
+        assert.ok(track.below < 0 && track.below > -4 && track.above > 0 && track.above < 4, `and a short range: ${track.below.toFixed(2)}..${track.above.toFixed(2)}`);
+        const tight = scene.trackedRect(track, camera, anchor, 20, 1280, 720, 1280 * 720 * 0.25, 32);
+        assert.ok(tight.w < wide.w / 2 && tight.h < wide.h / 2, 'a much smaller box is drawn');
+        assert.equal(tight.scale, 1, 'at full resolution');
+        // Touching the tight box's side: the radius grows by half; the range is untouched.
+        const small = track.radius, range = [track.below, track.above];
+        scene.measure(track, picture(tight.w, tight.h, [0, 0.4, 0.5, 0.6]), tight, 1280, 720, anchorPx, pxPerUnit, 20);
+        assert.ok(Math.abs(track.radius - small * 1.5) < 1e-9, `grows by half: ${track.radius.toFixed(2)}`);
+        assert.deepEqual([track.below, track.above], range);
+        // Seen from a steep camera the same rows mean more height: upY 0.5 doubles the range.
+        const steep = scene.boxTracker();
+        scene.measure(steep, picture(wide.w, wide.h, [0.45, 0.45, 0.55, 0.55]), wide, 1280, 720, anchorPx, pxPerUnit, 20, 0.5);
+        assert.ok(Math.abs(steep.radius - small) < 1e-9, 'the radius is the same');
+        assert.ok(steep.above > track.above * 1.5, `the range is taller: ${steep.above.toFixed(2)} vs ${track.above.toFixed(2)}`);
+        // The largest of the last MEASURE_HISTORY looks: a bolt seen once keeps its room until it is forgotten.
+        for (let i = 0; i < scene.MEASURE_HISTORY - 1; i++) scene.measure(track, picture(wide.w, wide.h, [0.45, 0.45, 0.55, 0.55]), wide, 1280, 720, anchorPx, pxPerUnit, 20);
+        assert.ok(Math.abs(track.radius - small * 1.5) < 1e-9, 'still remembered');
+        scene.measure(track, picture(wide.w, wide.h, [0.45, 0.45, 0.55, 0.55]), wide, 1280, 720, anchorPx, pxPerUnit, 20);
+        assert.ok(Math.abs(track.radius - small) < 1e-9, 'forgotten after MEASURE_HISTORY looks');
+        // Never past the authored reach.
+        scene.measure(track, picture(wide.w, wide.h, [0, 0, 1, 1]), wide, 1280, 720, anchorPx, pxPerUnit, 20);
+        assert.equal(track.radius, 20);
+        assert.ok(track.below >= -20 && track.below < -10 && track.above <= 20 && track.above > 10, `${track.below.toFixed(1)}..${track.above.toFixed(1)} (the box is clamped by the screen's height)`);
+    } finally {
+        if (createElement) global.document.createElement = createElement; else delete global.document.createElement;
+    }
+    // A restarted play keeps its model's tracker, and a loop starts over where its picture ended.
+    const runtime = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_3d.js'), 'utf8');
+    assert.match(runtime, /play\.track = tracks\[key\] \|\| \(tracks\[key\] = this\.EffekseerScene\.boxTracker\(\)\);/);
+    assert.match(runtime, /if \(play\.track && play\.lastLit > 0\) play\.track\.visibleFrames = Math\.max\(play\.track\.visibleFrames \|\| 0, play\.lastLit\);/);
+    assert.match(runtime, /entry\.fx3d\.frames >= track\.visibleFrames\) \{\s*entry\.restarted = true;/);
+    // The quad maps the box back onto the same screen pixels.
+    assert.match(fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_3d.js'), 'utf8'),
+        /vec2 uv = \(gl_FragCoord\.xy \/ resolution - rectMin\) \/ rectSize;/);
+    // The editor's map view draws the same box into its layer's canvas.
+    const layer = fs.readFileSync(path.join(repoRoot, 'editor', 'src', 'utils', 'AnimationPreviewLayer.js'), 'utf8');
+    assert.match(layer, /gl\.viewport\(-Math\.round\(rect\.x \* s\), -Math\.round\(rect\.y \* s\)/, 'the view\'s viewport shifted so the canvas holds the box');
+    // A disposed layer hands its WebGL context back at once: props edited live rebuild their
+    // effect layers on every change, and the browser's context budget is sixteen.
+    assert.match(layer, /dispose\(\) \{[\s\S]*?getExtension\('WEBGL_lose_context'\)\?\.loseContext\(\);/);
+    const editor = fs.readFileSync(path.join(repoRoot, 'editor', 'src', 'MapEditor3D.js'), 'utf8');
+    assert.match(editor, /const rect = \{ x: 0, y: 0, w: size\.x, h: size\.y, scale \};/, 'the map view draws the whole view at its own resolution');
+    assert.match(editor, /rect, viewWidth: size\.x, viewHeight: size\.y\s*\}\);/, 'the layer draws it on its own loop');
+    assert.match(editor, /play\.quad && play\.layer && play\.layer\.active\)\) return true;/, 'and a playing effect keeps the view rendering at full rate');
+    // three allocates a canvas texture immutably at its first size: a resized source must get a new GL texture.
+    assert.match(editor, /if \(play\.texWidth !== source\.width \|\| play\.texHeight !== source\.height\) \{[\s\S]*?play\.quad\.texture\.dispose\(\);/, 'the editor lets go of the texture when its canvas changes size');
+    assert.match(runtime, /scratch\.height = drawH;[\s\S]*?play\.quad\.texture\.dispose\(\);\s*\}/, 'so does the game when the box changes size');
 });
 
 test('a map with models is drawn under one depth buffer, in the editor and the game', () => {
@@ -302,4 +409,32 @@ test('a map with models is drawn under one depth buffer, in the editor and the g
     const layer = fs.readFileSync(path.join(editorRoot, 'src', 'utils', 'AnimationPreviewLayer.js'), 'utf8');
     assert.match(layer, /setWorld\(world\)/);
     assert.match(layer, /fx\.ctx\.setProjectionMatrix\(this\.world\.projection\)/, 'world mode draws from the given camera');
+});
+
+test('saving a model sidecar reaches the map 3D view without a restart', () => {
+    // Owner: an effect switched from Always to on-demand kept playing on the map until the editor was reopened.
+    const source = fs.readFileSync(path.join(repoRoot, 'editor', 'src', 'database', 'Database3DEditor.js'), 'utf8');
+    const save = source.slice(source.indexOf('\n    saveRules() {'), source.indexOf('\n    }\n', source.indexOf('\n    saveRules() {')));
+    assert.match(save, /RREventPreviewModels\.clear\(\);/, 'the cached template (with its sidecar) is dropped');
+    assert.match(save, /this\.projectController\?\.refreshMap3DView\?\.\(\);/, 'and the map view rebuilds');
+});
+
+test('a prop lists the tiles it blocks by the same rule, turned to its facing', () => {
+    require(path.join(repoRoot, 'runtime', 'libs', 'three.js'));
+    const THREE = global.THREE;
+    const template = new THREE.Group();
+    const box = new THREE.Mesh(new THREE.BoxGeometry(3, 1, 1));   // three long, one deep
+    box.position.y = 0.5;
+    template.add(box);
+    template.userData.glbSize = { x: 3, y: 1, z: 1 };
+    const spec = { name: 'test/bench', size: 3, scale: 1, pitch: 0, roll: 0, yaw: 0 };
+    const facingDown = Reactor3D.blockedTilesFor(template, {}, spec, 2, 10, 10).map(t => `${t.x},${t.y}`).sort();
+    assert.deepEqual(facingDown, ['10,10', '11,10', '9,10'], 'three tiles across');
+    const facingLeft = Reactor3D.blockedTilesFor(template, {}, spec, 4, 10, 10).map(t => `${t.x},${t.y}`).sort();
+    assert.deepEqual(facingLeft, ['10,10', '10,11', '10,9'], 'turned: three tiles down the map');
+    const boxOnly = Reactor3D.blockedTilesFor(template, { collision: 'box' }, spec, 2, 10, 10).map(t => `${t.x},${t.y}`).sort();
+    assert.deepEqual(boxOnly, ['10,10', '11,10', '9,10'], 'a box model by its box');
+    // The editor draws these tiles for the selected prop, in 3D and on the flat map.
+    assert.match(fs.readFileSync(path.join(repoRoot, 'editor', 'src', 'MapEditor3D.js'), 'utf8'), /Reactor3D\.blockedTilesFor\(template, template\.userData\.reactorSidecar, spec, prop\.direction, prop\.x, prop\.y\)/);
+    assert.match(fs.readFileSync(path.join(repoRoot, 'editor', 'src', 'ModelPropsManager.js'), 'utf8'), /Reactor3D\.blockedTilesFor\(template, template\.userData\.reactorSidecar, spec, prop\.direction, prop\.x, prop\.y\)/);
 });

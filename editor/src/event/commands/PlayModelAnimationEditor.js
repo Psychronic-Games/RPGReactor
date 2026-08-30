@@ -158,6 +158,7 @@ class PlayModelAnimationEditor {
         const args = (command && command.parameters && command.parameters[3]) || {};
         const target = String(args.target != null ? args.target : '0');
         const animation = String(args.animation || '');
+        const wait = String(args.wait) === 'true';
         const escape = text => String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
 
         const modal = document.createElement('div');
@@ -193,6 +194,10 @@ class PlayModelAnimationEditor {
                     <label class="pma-custom-row" style="display:none;align-items:center;gap:8px;font-size:12px;color:var(--color-text);">
                         <span style="flex:0 0 90px;"></span>
                         <input type="text" class="pma-custom" value="" style="${control}">
+                    </label>
+                    <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--color-text);cursor:pointer;">
+                        <span style="flex:0 0 90px;"></span>
+                        <span style="display:flex;align-items:center;gap:6px;"><input type="checkbox" class="pma-wait"${wait ? ' checked' : ''}> ${this._t('Wait for Completion')}</span>
                     </label>
                 </div>
                 <div class="rr-modal-footer" style="display:flex;justify-content:flex-end;gap:8px;padding:10px 14px;">
@@ -253,7 +258,8 @@ class PlayModelAnimationEditor {
                     'Play Model Animation',
                     {
                         target: q('.pma-target').value,
-                        animation: this.readAnimation(modal, CUSTOM)
+                        animation: this.readAnimation(modal, CUSTOM),
+                        wait: q('.pma-wait').checked ? 'true' : 'false'
                     }
                 ]
             };

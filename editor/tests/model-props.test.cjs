@@ -77,7 +77,7 @@ test('runtime hooks lift props and read their free position after the events are
     const sprites = read('runtime/reactor_sprites.js');
     assert.match(sprites, /Reactor3D\.installPropHooks\(\)/);
     assert.match(sprites, /this\.y -= this\._character\._reactorLift \* \$gameMap\.tileHeight\(\);/);
-    assert.match(read('runtime/reactor_main.js'), /runtime revision: 20260829\.45/);
+    assert.match(read('runtime/reactor_main.js'), /runtime revision: 20260830\.26/);
 });
 
 test('the editor has a props tab, a manager, and 3D placement with pose rings', () => {
@@ -90,7 +90,7 @@ test('the editor has a props tab, a manager, and 3D placement with pose rings', 
     assert.match(main, /onModelPropsTabSelected = \(\) => \{/);
     assert.match(main, /onModelPropsTabLeft = \(\) => \{/);
     const editor3d = read('editor/src/MapEditor3D.js');
-    for (const method of ['buildProps(', 'refreshProps()', 'propAt(', 'groundPointAt(', 'selectProp(', 'pickPropRing(', 'dragPropRing(', 'dragPropTo(', 'finishPropDrag()']) {
+    for (const method of ['buildProps(', 'refreshProps(ids)', 'propAt(', 'groundPointAt(', 'selectProp(', 'pickPropRing(', 'dragPropRing(', 'dragPropTo(', 'finishPropDrag()']) {
         assert.ok(editor3d.includes('    ' + method), method);
     }
     assert.match(editor3d, /this\.buildProps\(mapData, request\);/);
@@ -144,5 +144,65 @@ test('props are chosen in the model picker and can start with an animation or ef
     const runtime = read('runtime/reactor_3d.js');
     assert.match(runtime, /if \(prop\.animation\) Reactor3D\.playModelAnimation\(event, prop\.animation, \{ repeat: prop\.repeat \}\);/);
     assert.match(runtime, /if \(prop\.effect\) Reactor3D\.playModelEffect\(event, prop\.effect\);/);
-    assert.match(read('runtime/reactor_main.js'), /runtime revision: 20260829\.45/);
+    assert.match(read('runtime/reactor_main.js'), /runtime revision: 20260830\.26/);
+});
+
+test('editing a placed prop re-poses its instance instead of rebuilding the set', () => {
+    // Owner: "instead of destroying and recreating with each tick, it should transform".
+    // A rebuild per slider step made and lost a WebGL context each time and restarted the effect.
+    const source = fs.readFileSync(path.join(editorRoot, 'src', 'MapEditor3D.js'), 'utf8');
+    const start = source.indexOf('\n    refreshProps(ids) {');
+    const end = source.indexOf('\n    }\n', start);
+    const body = source.slice(start, end);
+    assert.match(body, /object\.userData\.propIdentity !== MapEditor3D\.propIdentity\(prop\)/, 'same model, animation and effect');
+    assert.match(body, /this\.poseProp\(object, prop, mapData\)/, 'pose in place');
+    assert.match(body, /this\.syncPropRings\(\);\s*this\.refreshPassage\(\);\s*return;/, 'rings and passage marks follow, no rebuild');
+    assert.match(body, /this\.buildProps\(mapData, this\._rebuildGeneration\)/, 'otherwise rebuild');
+    const pose = source.slice(source.indexOf('\n    poseProp('), source.indexOf('\n    }\n', source.indexOf('\n    poseProp(')));
+    assert.match(pose, /object\.scale\.set\(uniform \* stretch\[0\], uniform \* stretch\[1\], uniform \* stretch\[2\]\)/, 'size, scale and per-axis stretch, as instance() does');
+    assert.match(pose, /Reactor3D\.applyEventModelPose\(object, spec, prop\.direction \|\| 2\)/, 'facing and turn');
+    assert.match(pose, /this\.placeProp\(object, prop, mapData\)/, 'lift and position');
+    assert.match(source, /object\.userData\.propIdentity = MapEditor3D\.propIdentity\(prop\);/, 'stamped at build');
+    const identity = source.slice(source.indexOf('static propIdentity(prop) {'), source.indexOf('\n    }', source.indexOf('static propIdentity(prop) {')));
+    for (const field of ['name', 'ext', 'file', 'texture', 'animation', 'repeat', 'effect']) assert.match(identity, new RegExp(`prop\\.${field}`), `${field} is identity`);
+    for (const field of ['size', 'scale', 'direction', 'yaw', 'x', 'z', 'passable']) assert.doesNotMatch(identity, new RegExp(`prop\\.${field}\\b`), `${field} is a pose`);
+});
+
+test('picking the same model again keeps the chosen animation and effect; the effect list shows triggers', () => {
+    // Owner: consoles placed after re-picking the model came out with Effect "(none)".
+    const source = fs.readFileSync(path.join(editorRoot, 'src', 'ModelPropsManager.js'), 'utf8');
+    const choose = source.slice(source.indexOf('\n    chooseModel(model) {'), source.indexOf('\n    }\n', source.indexOf('\n    chooseModel(model) {')));
+    assert.match(choose, /const same = this\.model && model && this\.model\.name === model\.name && this\.model\.file === model\.file;/);
+    assert.match(choose, /if \(!same\) \{\s*this\.fields\.animation = '';\s*this\.fields\.effect = '';\s*\}/);
+    assert.match(source, /const effects = ModelPropsManager\.modelEffectNames\(project\.path, name\);/, 'effects carry their trigger');
+    assert.match(source, /names\.push\(\{ name: String\(effect\.name\), trigger: effect\.trigger \|\| 'action' \}\);/);
+});
+
+test('the props panel has one Size, the longest side in tiles; an old scale folds into it', () => {
+    // Owner: Size (squares) and Scale both resized the model - "we need a more coherent way".
+    const source = fs.readFileSync(path.join(editorRoot, 'src', 'ModelPropsManager.js'), 'utf8');
+    assert.doesNotMatch(source, /stepper\('model-props-scale'/, 'no Scale stepper');
+    assert.match(source, /size: Math\.max\(0\.1, number\('model-props-size', 2\)\),\s*scale: 1,/, 'an edit writes size with scale 1');
+    assert.match(source, /byId\('model-props-size'\)\.value = Math\.round\(this\.fields\.size \* \(this\.fields\.scale \|\| 1\) \* 100\) \/ 100;/, 'shown as size times scale');
+});
+
+test('leaving event mode with the 3D-M tab up re-arms the props tool', () => {
+    // Owner: 3D-M → Event tool → edit → back to 3D-M: clicks on props did nothing.
+    const main = fs.readFileSync(path.join(editorRoot, 'src', 'main.js'), 'utf8');
+    assert.match(main, /if \(newMode\) this\.modelPropsManager\?\.deactivate\(\);/, 'dropped on the way in');
+    assert.match(main, /if \(!newMode && this\.tilesetPaletteViewer\?\.currentLayer === 'M' && this\.modelPropsManager\) \{[\s\S]*?this\.modelPropsManager\.activate\(\);/, 're-armed on the way out');
+});
+
+test('a themed dropdown shows a value set by code, not the label it had', () => {
+    // Owner: the 3D-M Facing dropdown read "Down" for a prop facing right; the setting was right, the label stale.
+    const shim = fs.readFileSync(path.join(editorRoot, 'src', 'utils', 'SelectThemingShim.js'), 'utf8');
+    assert.match(shim, /for \(const name of \['value', 'selectedIndex'\]\) \{[\s\S]*?set\(next\) \{ native\.set\.call\(this, next\); refreshLabel\(\); \}/, 'own accessors over the native setters refresh the label');
+});
+
+test('the flat map leaves the placement ghost to the 3D view while it is up', () => {
+    // Owner: the ghost flickered on and off while hovering in 3D.
+    const source = fs.readFileSync(path.join(editorRoot, 'src', 'ModelPropsManager.js'), 'utf8');
+    assert.match(source, /if \(this\.mapEditor3D\(\)\?\.isEnabled\?\.\(\)\) return;\s*\/\/ Hovering with a model in hand/, 'no 2D hover ghost logic under the 3D view');
+    assert.match(source, /_hideGhost\(also3D = false\) \{[\s\S]*?if \(also3D\) this\.mapEditor3D\(\)\?\.hidePlacementGhost\?\.\(\);/, 'the 3D ghost is hidden only on purpose');
+    assert.match(source, /this\.active = false;\s*this\._hideGhost\(true\);/, 'deactivate hides both');
 });

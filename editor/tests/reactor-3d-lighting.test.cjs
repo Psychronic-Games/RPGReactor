@@ -139,12 +139,12 @@ test('PSYCHRONIC_RaveLighting: lights are read from the character, not a sprite'
     assert.equal(lamp.y, 9);
     assert.equal(lamp.radius, 300 / 48);
     assert.equal(lamp.colour, 0xff0000, 'a #rrggbb string reads as a colour');
-    assert.equal(lamp.yaw, 0, 'facing south');
+    assert.equal(lamp.yaw, -0, 'facing south');
 
     assert.equal(torch.type, Reactor3D.LIGHT_SPOT);
     // Rave states its cone in pixels outright, so it needs no such workings.
     assert.equal(torch.radius, 480 / 48);
-    assert.equal(torch.yaw, 90, 'facing west');
+    assert.equal(torch.yaw, -90, 'facing west aims west — the scene is east-positive, so the clockwise facing is negated');
     assert.ok(torch.angle > 0 && torch.angle < 90, `a cone has a spread, got ${torch.angle}`);
 });
 
@@ -174,19 +174,20 @@ test('PSYCHRONIC_RaveLighting: each shape keeps its reach in its own field', () 
 test('PSYCHRONIC_RaveLighting: a flashlight points where it is turned', () => {
     // It turns smoothly and can track a target, so the plugin's own running
     // angle is the truthful answer wherever it has one -- radians clockwise
-    // from south, which is this codebase's own convention.
+    // from south, negated into the scene's anticlockwise east-positive yaw
+    // (the nova shim negates for the same reason).
     const [tracked] = withGlobals(raveWorld([
         { _realX: 0, _realY: 0, direction: () => 8, _lights: [
             { _lightId: 'a', _lightType: 'flashlight', _coneLengthPx: 96,
               _smoothFlashlightAngle: Math.PI / 2 }] }
     ]), () => Reactor3D.LightShims.rave());
-    assert.equal(tracked.yaw, 90, 'the running angle wins over the facing');
+    assert.equal(tracked.yaw, -90, 'the running angle wins over the facing, negated');
 
     const [plain] = withGlobals(raveWorld([
         { _realX: 0, _realY: 0, direction: () => 8, _lights: [
             { _lightId: 'a', _lightType: 'flashlight', _coneLengthPx: 96 }] }
     ]), () => Reactor3D.LightShims.rave());
-    assert.equal(plain.yaw, 180, 'and the facing is the fallback');
+    assert.equal(plain.yaw, -180, 'and the facing is the fallback, negated');
 });
 
 test('PSYCHRONIC_RaveLighting: the player carries lights too', () => {
@@ -429,7 +430,7 @@ test('a cone shines out of its source, not into it', () => {
     const body = three.slice(at, three.indexOf('\n};', at));
     assert.match(body, /\[\[0, 0\], \[1, 0\], \[0\.5, 1\], \[0\.5, 1\]\]/);
     assert.match(body, /\[\[0, 0\], \[1, 0\], \[1, 1\], \[0, 1\]\]/);
-    assert.match(body, /const tipU = alongU \* radius/, 'the far edge is a radius away');
+    assert.match(body, /const tipU = alongU \* beamReach/, 'the far edge is the clamped reach away');
 });
 
 test('light is added to the scene, not painted over it', () => {
@@ -567,9 +568,10 @@ test('a pool sits where the thing casting it stands', () => {
     // several tiles up and a couple further back, and the two slid apart as
     // the camera panned.
     const three = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_3d.js'), 'utf8');
-    assert.match(three, /const cz = \(facade \? facade\.z : light\.y \+ 1\) \+ up\.z \* lift;/);
-    assert.match(three, /const lift = facade \? facade\.lift : 0;/,
-        'and it travels up the wall the way the courses were stacked');
+    assert.match(three, /const cz = facade \? facade\.z : light\.y \+ 1;/);
+    assert.match(three, /const y = standsOn \+ lift \+ 0\.02/,
+        'and a wall light keeps its height — the quad lies flat at it');
+    assert.match(three, /const lift = facade \? facade\.lift : 0;/);
     assert.match(three, /const facade = Reactor3D\.facadeAt\(Math\.round\(light\.x\), Math\.round\(light\.y\)\);/);
     assert.match(three, /\? light\.groundY\n\s*: \(facade \? facade\.height/,
         'and a plugin that states a height still wins');

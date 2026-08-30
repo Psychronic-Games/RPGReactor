@@ -243,7 +243,16 @@ class EventCommandPicker {
                                 commands: [
                                     { name: 'Play Model Animation', code: 357, reactor: 'PlayModelAnimation' },
                                     { name: 'Play 3D Effect', code: 357, reactor: 'PlayModelEffect' },
-                                    { name: 'Change 3D Camera', code: 357, reactor: 'ChangeCamera3D' }
+                                    { name: 'Change 3D Camera', code: 357, reactor: 'ChangeCamera3D' },
+                                    { name: 'Transform 3D Model', code: 357, reactor: 'TransformModel3D' }
+                                ]
+                            },
+                            {
+                                // Not 3D-specific: waits, and later the quest
+                                // system's commands, live under Game Flow.
+                                title: 'Game Flow',
+                                commands: [
+                                    { name: 'Scoped Wait', code: 357, reactor: 'ScopedWait' }
                                 ]
                             },
                             {

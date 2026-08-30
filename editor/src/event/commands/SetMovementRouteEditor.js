@@ -497,7 +497,7 @@ class SetMovementRouteEditor {
             `;
             el.addEventListener('mouseenter', () => el.style.backgroundColor = 'var(--color-border)');
             el.addEventListener('mouseleave', () => el.style.backgroundColor = 'var(--color-bg-input)');
-            el.addEventListener('click', () => this._handleGridClick(btn.code));
+            el.addEventListener('click', () => this._handleGridClick(btn.code, btn));
             col.appendChild(el);
         });
 
@@ -508,7 +508,17 @@ class SetMovementRouteEditor {
     //  Command management
     // ----------------------------------------------------------------
 
-    _handleGridClick(code) {
+    _handleGridClick(code, btn) {
+        if (btn && btn.reactor) {
+            if (btn.reactor === 'height') {
+                this._dlgHeight(null, (z) => this._addCommand(45, SetMovementRouteEditor.routeCommand('height', z).parameters));
+            } else if (btn.reactor === 'rotate') {
+                this._dlgRotate(null, (deg) => this._addCommand(45, SetMovementRouteEditor.routeCommand('rotate', deg).parameters));
+            } else {
+                this._addCommand(45, SetMovementRouteEditor.routeCommand(btn.reactor, 1).parameters);
+            }
+            return;
+        }
         if (this._needsParams(code)) {
             this._openParamDialog(code, null, (params) => {
                 this._addCommand(code, params);
@@ -516,6 +526,82 @@ class SetMovementRouteEditor {
         } else {
             this._addCommand(code);
         }
+    }
+
+    /**
+     * A Reactor route step (Rise, Descend, Set Height) saved as a Script
+     * step whose text carries a marker, so RPG Maker's own runtime runs a
+     * guarded no-op and Reactor's runs the move.
+     */
+    static routeBody(data) {
+        const op = data && data.op;
+        if (op === 'rise') return `if (typeof this.reactorRise === "function") this.reactorRise(${Number(data.n) || 1});`;
+        if (op === 'descend') return `if (typeof this.reactorRise === "function") this.reactorRise(${-(Number(data.n) || 1)});`;
+        if (op === 'height') return `if (typeof this.reactorSetHeight === "function") this.reactorSetHeight(${Number(data.n) || 0});`;
+        if (op === 'faceceiling') return 'if (typeof this.reactorFacePose === "function") this.reactorFacePose(1);';
+        if (op === 'faceground') return 'if (typeof this.reactorFacePose === "function") this.reactorFacePose(-1);';
+        if (op === 'standup') return 'if (typeof this.reactorFacePose === "function") this.reactorFacePose(0);';
+        if (op === 'rotate') return `if (typeof this.reactorRotate === "function") this.reactorRotate(${Number(data.n) || 0});`;
+        return '';
+    }
+
+    static routeCommand(op, n) {
+        const codec = typeof ReactorEventCommandCodec !== 'undefined' ? ReactorEventCommandCodec
+            : (typeof require === 'function' ? require('./ReactorEventCommandCodec.js') : null);
+        const data = { op, n: Math.round((Number(n) || (op === 'height' ? 0 : 1)) * 100) / 100 };
+        return { code: 45, parameters: [codec.createText('route', data, SetMovementRouteEditor.routeBody(data))] };
+    }
+
+    /** The Reactor step a Script route entry is, or null for a plain script. */
+    static parseRouteCommand(cmd) {
+        if (!cmd || cmd.code !== 45 || !cmd.parameters) return null;
+        const codec = typeof ReactorEventCommandCodec !== 'undefined' ? ReactorEventCommandCodec
+            : (typeof require === 'function' ? require('./ReactorEventCommandCodec.js') : null);
+        if (!codec) return null;
+        let parsed = null;
+        try { parsed = codec.parseText(String(cmd.parameters[0] || ''), 'route'); } catch (_) { return null; }
+        if (!parsed || !parsed.data
+            || !['rise', 'descend', 'height', 'faceceiling', 'faceground', 'standup', 'rotate'].includes(parsed.data.op)) return null;
+        if (parsed.body !== SetMovementRouteEditor.routeBody(parsed.data)) return null;
+        return parsed.data;
+    }
+
+    _dlgHeight(existing, callback) {
+        const { content, okBtn, cancelBtn } = this._createDialog('Set Height', 320);
+        const label = document.createElement('span');
+        label.textContent = this._t('Height (tiles):');
+        label.style.cssText = 'color: var(--color-text); font-size: 12px;';
+        const input = document.createElement('input');
+        input.type = 'number';
+        input.min = '0';
+        input.max = '512';
+        input.step = '0.25';
+        input.value = existing && existing.n != null ? String(existing.n) : '0';
+        input.style.cssText = 'width: 100%; margin-top: 6px; padding: 5px 6px; background: var(--color-bg-input); color: var(--color-text); border: 1px solid var(--color-border-input); border-radius: 3px;';
+        content.appendChild(label);
+        content.appendChild(input);
+        okBtn.addEventListener('click', () => { callback(Number(input.value) || 0); });
+        cancelBtn.addEventListener('click', () => {});
+        setTimeout(() => input.focus(), 0);
+    }
+
+    _dlgRotate(existing, callback) {
+        const { content, okBtn, cancelBtn } = this._createDialog('Rotate', 320);
+        const label = document.createElement('span');
+        label.textContent = this._t('Rotation (degrees):');
+        label.style.cssText = 'color: var(--color-text); font-size: 12px;';
+        const input = document.createElement('input');
+        input.type = 'number';
+        input.min = '-360';
+        input.max = '360';
+        input.step = '5';
+        input.value = existing && existing.n != null ? String(existing.n) : '90';
+        input.style.cssText = 'width: 100%; margin-top: 6px; padding: 5px 6px; background: var(--color-bg-input); color: var(--color-text); border: 1px solid var(--color-border-input); border-radius: 3px;';
+        content.appendChild(label);
+        content.appendChild(input);
+        okBtn.addEventListener('click', () => { callback(Number(input.value) || 0); });
+        cancelBtn.addEventListener('click', () => {});
+        setTimeout(() => input.focus(), 0);
     }
 
     _addCommand(code, parameters) {
@@ -1025,6 +1111,16 @@ class SetMovementRouteEditor {
                 return (se && se.name) ? `${name}: ${se.name}` : `${name}: ${this._t('(none)')}`;
             }
             case 45: {
+                const step = SetMovementRouteEditor.parseRouteCommand(cmd);
+                if (step) {
+                    if (step.op === 'rise') return this._t('Rise');
+                    if (step.op === 'descend') return this._t('Descend');
+                    if (step.op === 'faceceiling') return this._t('Face Ceiling');
+                    if (step.op === 'faceground') return this._t('Face Ground');
+                    if (step.op === 'standup') return this._t('Stand Up');
+                    if (step.op === 'rotate') return `${this._t('Rotate')}: ${step.n}°`;
+                    return `${this._t('Set Height')}: ${step.n}`;
+                }
                 const src = String(p[0] || '');
                 return `${name}: ${src.length > 30 ? src.substring(0, 30) + '...' : src}`;
             }
@@ -1054,6 +1150,9 @@ class SetMovementRouteEditor {
                 { code: 13, label: '1 Step Back' },
                 { code: 14, label: 'Jump...' },
                 { code: 15, label: 'Wait...' },
+                { code: 45, reactor: 'rise', label: 'Rise' },
+                { code: 45, reactor: 'descend', label: 'Descend' },
+                { code: 45, reactor: 'height', label: 'Set Height...' },
             ],
             column2: [
                 { code: 16, label: 'Turn Down' },
@@ -1071,6 +1170,9 @@ class SetMovementRouteEditor {
                 { code: 28, label: 'Switch OFF...' },
                 { code: 29, label: 'Change Speed...' },
                 { code: 30, label: 'Change Freq...' },
+                { code: 45, reactor: 'faceceiling', label: 'Face Ceiling' },
+                { code: 45, reactor: 'faceground', label: 'Face Ground' },
+                { code: 45, reactor: 'standup', label: 'Stand Up' },
             ],
             column3: [
                 { code: 31, label: 'Walk Anim ON' },
@@ -1088,6 +1190,7 @@ class SetMovementRouteEditor {
                 { code: 43, label: 'Change Blend...' },
                 { code: 44, label: 'Play SE...' },
                 { code: 45, label: 'Script...' },
+                { code: 45, reactor: 'rotate', label: 'Rotate...' },
             ],
         };
     }

@@ -41,7 +41,7 @@ function methodBody(name) {
 }
 
 test('every event gets a box round it', () => {
-    const body = methodBody('buildEvents');
+    const body = (methodBody('buildEvents') + methodBody('_buildOneEvent'));
     assert.match(body, /this\.eventBox\(/, 'a box is built per event');
     assert.match(body, /mesh\.userData\.box = box/, 'and the event knows its own');
     assert.match(body, /this\.eventGroup\.add\(box\)/, 'and it is in the scene');
@@ -71,7 +71,7 @@ test('the box is inset from the cell', () => {
 test('the box stands on the ground whatever the sprite height', () => {
     // A character sprite is taller than it is wide and a bare cube is squat;
     // the box takes the larger so it never sits inside the thing it marks.
-    const body = methodBody('buildEvents');
+    const body = (methodBody('buildEvents') + methodBody('_buildOneEvent'));
     assert.match(body, /Math\.max\(height, 0\.94\)/);
     const place = methodBody('placeEvent');
     assert.match(place, /elevation \+ mesh\.userData\.boxHeight \/ 2/,
@@ -97,14 +97,14 @@ test('one place decides where an event sits', () => {
     // Read from the event, so moving the event is enough to move the pieces.
     assert.match(place, /elevationAt\(mapData, event\.x, event\.y\)/,
         'and the new cell decides the height, not the old one');
-    assert.match(methodBody('buildEvents'), /this\.placeEvent\(mesh\)/,
+    assert.match((methodBody('buildEvents') + methodBody('_buildOneEvent')), /this\.placeEvent\(mesh\)/,
         'the build uses it too, so there is only one arrangement');
 });
 
 test('a flat event still lies down after being moved', () => {
     // The shape came from the note and was applied once at build time; the
     // drag has to know about it or a flat event stands up when you move it.
-    assert.match(methodBody('buildEvents'), /mesh\.userData\.flat = true/);
+    assert.match((methodBody('buildEvents') + methodBody('_buildOneEvent')), /mesh\.userData\.flat = true/);
     assert.match(methodBody('placeEvent'), /userData\.flat \? elevation \+ 0\.01/);
 });
 
@@ -239,7 +239,7 @@ test('an event standing on stood-up art is drawn on it', () => {
 test('an event standing against a wall stands still', () => {
     // Half the fix. Putting it in the right place but leaving it turning
     // would still swing it out of the wall as the camera came round.
-    const body = methodBody('buildEvents');
+    const body = (methodBody('buildEvents') + methodBody('_buildOneEvent'));
     // `loose` joined the condition: an event whose note says it stands on the
     // ground never joins the object painted over its cell — see
     // event-stays-on-ground.test.cjs.
@@ -249,7 +249,7 @@ test('an event standing against a wall stands still', () => {
 
 test('a note still wins over the wall behind it', () => {
     // Someone who has said how an event stands has said it about this cell.
-    assert.match(methodBody('buildEvents'), /mesh\.userData\.asked = !!asked/);
+    assert.match((methodBody('buildEvents') + methodBody('_buildOneEvent')), /mesh\.userData\.asked = !!asked/);
     assert.match(methodBody('placeEvent'),
         /\(mesh\.userData\.asked \|\| mesh\.userData\.loose\)\s*\n\s*\? null/);
 });

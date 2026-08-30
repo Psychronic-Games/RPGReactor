@@ -10,7 +10,7 @@ const source = fs.readFileSync(path.join(editorRoot, 'src', 'MapEditor.js'), 'ut
 function editorWith(map) {
     const stub = Object.create(null);
     const names = ['isWallAutotile', 'isSameKindTile', 'calculateWallAutotileShape',
-        'palettePositionForTile'];
+        'palettePositionForTile', 'selectPickedAutotile', 'exactAutotileId'];
     for (const name of names) {
         const start = source.indexOf(`\n    ${name}(`);
         assert.ok(start > 0, `${name} exists`);
@@ -91,4 +91,26 @@ test('a single-tile pick selects rather than stamps', () => {
     assert.match(source, /start\.x === current\.x && start\.y === current\.y/);
     assert.match(source, /this\.selectPickedAutotile\(start\.x, start\.y\)/);
     assert.match(source, /this\.activateMapStamp\(this\.captureMapStamp\(/);
+});
+
+test('a picked piece is remembered for Shift-painting, as RPG Maker copies the corner', () => {
+    // User report: right-click the bottom-right exterior wall, Shift+click the
+    // cell beside it. RPG Maker stamps that corner piece; Reactor stamped the
+    // kind's plain centre. Ordinary painting still re-shapes from the kind.
+    const corner = 4352 + 3 * 48 + 20;   // A3 wall kind 3, one of its shaped pieces
+    const editor = editorWith(mapOf(2, 1, [corner, 0]));
+    const palette = { selectedTiles: [], currentLayer: 'B', rendered: 0, renderCurrentLayer() { this.rendered++; } };
+    editor.tilesetPaletteViewer = palette;
+    editor.clearMapStamp = () => {};
+    editor.setTool = () => {};
+    assert.equal(editor.selectPickedAutotile(0, 0), true);
+    assert.deepEqual(palette.selectedTiles, [{ x: 3, y: 0, layer: 'A3', tileId: corner }], 'the kind for the palette, the piece for Shift');
+    assert.equal(palette.currentLayer, 'A');
+    assert.equal(editor.exactAutotileId(palette.selectedTiles[0], 4352 + 3 * 48), corner, 'Shift stamps the piece');
+    assert.equal(editor.exactAutotileId({ x: 3, y: 0, layer: 'A3' }, 4352 + 3 * 48), 4352 + 3 * 48, 'a palette-clicked kind stamps its base shape');
+    assert.equal(editor.exactAutotileId(palette.selectedTiles[0], 4352 + 4 * 48), 4352 + 4 * 48, 'a piece of another kind does not leak');
+    assert.equal(editor.selectPickedAutotile(1, 0), false, 'an empty cell is no pick');
+    assert.match(source, /if \(preserveAutotileShape\) \{\s*\/\/ A picked piece is stamped as it was, corner and all\.\s*data\[targetLayerIndex\] = this\.exactAutotileId\(paletteTile, baseTileId\);/, 'the pencil stamps it');
+    assert.match(source, /data\[targetLayerIndex\] = preserveSelectedAutotileShapes \? this\.exactAutotileId\(tile, baseTileId\) : baseTileId;/, 'so does the rectangle');
+    assert.match(source, /\? this\.exactAutotileId\(tile, baseTileId\)\s*: this\.calculateAutotileShape\(baseTileId, px, py, hoverPattern, placeLayer\)\.tileId;/, 'and the preview shows it');
 });

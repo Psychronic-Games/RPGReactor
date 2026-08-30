@@ -193,10 +193,33 @@ class EventEditor {
         this.pendingModelsBaseline = this._clone(this.pendingModels);
     }
 
+    /** The event's height above the ground, from the sidecar. */
+    _eventZ(eventId) {
+        const map = this._currentMap();
+        return map && typeof Reactor3D !== 'undefined' && Reactor3D.eventZAt ? Reactor3D.eventZAt(map, eventId) : 0;
+    }
+
+    _readPositionFields() {
+        const map = this._currentMap();
+        const event = this.currentEvent;
+        if (!map || !event) return;
+        const number = (id, fallback) => {
+            const input = document.getElementById(id);
+            const value = input ? Number(input.value) : NaN;
+            return Number.isFinite(value) ? value : fallback;
+        };
+        event.x = Math.max(0, Math.min((map.width || 1) - 1, Math.round(number('event-position-x', event.x))));
+        event.y = Math.max(0, Math.min((map.height || 1) - 1, Math.round(number('event-position-y', event.y))));
+        this.pendingZ = Math.max(0, number('event-position-z', this.pendingZ || 0));
+    }
+
     _writePendingModels() {
         const map = this._currentMap();
         const event = this.currentEvent;
         if (!map || !event || event.id == null) return;
+        if (typeof Reactor3D !== 'undefined' && Reactor3D.setEventZ && this.pendingZ != null) {
+            Reactor3D.setEventZ(map, event.id, this.pendingZ);
+        }
         if (typeof Reactor3D !== 'undefined' && Reactor3D.setEventModelSpec) {
             const pageCount = (event.pages || []).length;
             const store = map.reactor3d && map.reactor3d.events && map.reactor3d.events[String(event.id)];
@@ -242,9 +265,12 @@ class EventEditor {
 
     _commitChanges() {
         if (!this.currentEvent || !this.sourceEvent) return false;
+        this._readPositionFields();
+        const zChanged = this.pendingZ != null && this.pendingZ !== this._eventZ(this.currentEvent.id);
         const committed = this._clone(this.currentEvent);
         const eventChanged = JSON.stringify(committed) !== JSON.stringify(this.cancelBaseline);
-        const modelsChanged = JSON.stringify(this.pendingModels) !== JSON.stringify(this.pendingModelsBaseline);
+        const modelsChanged = zChanged
+            || JSON.stringify(this.pendingModels) !== JSON.stringify(this.pendingModelsBaseline);
         if (eventChanged) {
             if (this.onCommit) {
                 if (this.onCommit(this.sourceEvent, committed) === false) return false;
@@ -293,14 +319,19 @@ class EventEditor {
                     <input type="text"
                            class="event-name-input"
                            value="${rrEscapeHtml(event.name)}"
-                           style="width: 200px; padding: 4px 8px; background: var(--color-bg-surface);
+                           style="width: 200px; padding: 4px 8px; background: var(--color-bg-input-alt);
                                   color: var(--color-text); border: 1px solid var(--color-border-input);
                                   border-radius: 3px; font-size: 12px;"
                            data-event-id="${event.id}">
                 </div>
-                <div>
-                    <label style="font-weight: bold; margin-right: 8px;">${this._t('event.position')}</label>
-                    <span>X: ${event.x}, Y: ${event.y}</span>
+                <div style="display: flex; align-items: center; gap: 6px;">
+                    <label style="font-weight: bold;">${this._t('event.position')}</label>
+                    <span>X:</span><input type="number" id="event-position-x" data-no-stepper min="0" step="1" value="${event.x}"
+                        style="width: 64px; padding: 3px 6px; background: var(--color-bg-input-alt); color: var(--color-text); border: 1px solid var(--color-border-input); border-radius: 3px; font-size: 12px;">
+                    <span>Y:</span><input type="number" id="event-position-y" data-no-stepper min="0" step="1" value="${event.y}"
+                        style="width: 64px; padding: 3px 6px; background: var(--color-bg-input-alt); color: var(--color-text); border: 1px solid var(--color-border-input); border-radius: 3px; font-size: 12px;">
+                    <span>Z:</span><input type="number" id="event-position-z" data-no-stepper min="0" step="0.25" value="${this._eventZ(event.id)}"
+                        style="width: 64px; padding: 3px 6px; background: var(--color-bg-input-alt); color: var(--color-text); border: 1px solid var(--color-border-input); border-radius: 3px; font-size: 12px;">
                 </div>
             </div>
         `;

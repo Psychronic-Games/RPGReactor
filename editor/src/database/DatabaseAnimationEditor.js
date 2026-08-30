@@ -91,11 +91,15 @@ class DatabaseAnimationEditor {
                 }));
             animation.flashTimings = timings
                 .filter(timing => Number.isFinite(timing.flashScope) && timing.flashScope !== 0)
-                .map(timing => ({
-                    frame: Number.isFinite(timing.frame) ? timing.frame : 0,
-                    color: DatabaseAnimationEditor.normalizeFlashColor(timing.flashColor),
-                    duration: Number.isFinite(timing.flashDuration) ? timing.flashDuration : 0
-                }));
+                .map(timing => {
+                    const entry = {
+                        frame: Number.isFinite(timing.frame) ? timing.frame : 0,
+                        color: DatabaseAnimationEditor.normalizeFlashColor(timing.flashColor),
+                        duration: Number.isFinite(timing.flashDuration) ? timing.flashDuration : 0
+                    };
+                    if (timing.flashScope === 2 || timing.flashScope === 3) entry.scope = timing.flashScope;
+                    return entry;
+                });
 
             delete animation.animation1Name;
             delete animation.animation1Hue;
@@ -1554,6 +1558,7 @@ class DatabaseAnimationEditor {
                 if (!map.has(ft.frame)) map.set(ft.frame, { frame: ft.frame });
                 map.get(ft.frame).flashColor = ft.color;
                 map.get(ft.frame).flashDuration = ft.duration;
+                map.get(ft.frame).flashScope = ft.scope === 2 || ft.scope === 3 ? ft.scope : 1;
             });
             return Array.from(map.values()).sort((a, b) => a.frame - b.frame);
         }
@@ -1572,7 +1577,11 @@ class DatabaseAnimationEditor {
                 animation.soundTimings.push({ frame: timing.frame, se: timing.se });
             }
             if (timing.flashColor) {
-                animation.flashTimings.push({ frame: timing.frame, color: timing.flashColor, duration: timing.flashDuration || 0 });
+                const entry = { frame: timing.frame, color: timing.flashColor, duration: timing.flashDuration || 0 };
+                // Target is the stock meaning; Screen and Hide Target ride
+                // along as a scope the runtime honours.
+                if (timing.flashScope === 2 || timing.flashScope === 3) entry.scope = timing.flashScope;
+                animation.flashTimings.push(entry);
             }
         } else {
             if (!animation.timings) animation.timings = [];
@@ -1864,15 +1873,6 @@ class DatabaseAnimationEditor {
         const closeBtn = document.getElementById('timing-modal-close');
         const cancelBtn = document.getElementById('timing-modal-cancel');
         const saveBtn = document.getElementById('timing-modal-save');
-        if (!isSpriteAnimation) {
-            for (const value of ['2', '3']) {
-                const radio = document.querySelector(`input[name="flash-type"][value="${value}"]`);
-                if (radio) {
-                    radio.disabled = true;
-                    radio.closest('label')?.style.setProperty('opacity', '0.45');
-                }
-            }
-        }
 
         // Color sliders
         const redSlider = document.getElementById('timing-red');
@@ -3828,6 +3828,22 @@ class DatabaseAnimationEditor {
         let animationFrameId = null;
         let startTime = 0;
         let currentFrame = 0;
+        // Where the picture ended last play (frames): a repeat starts over
+        // there instead of waiting for the last invisible particle to die,
+        // so there is no dark gap between plays.
+        let lastLitFrame = 0;
+        let visibleFrames = 0;
+        let litMini = null;
+        const anythingLit = () => {
+            if (!litMini) { litMini = document.createElement('canvas'); litMini.width = 32; litMini.height = 32; }
+            const ctx = litMini.getContext('2d', { willReadFrequently: true });
+            ctx.clearRect(0, 0, 32, 32);
+            ctx.drawImage(canvas, 0, 0, canvas.width, canvas.height, 0, 0, 32, 32);
+            let data;
+            try { data = ctx.getImageData(0, 0, 32, 32).data; } catch (e) { return false; }
+            for (let i = 3; i < data.length; i += 4) if (data[i] >= 4) return true;
+            return false;
+        };
 
         // Initialize WebGL context
         const initWebGL = () => {
@@ -4010,6 +4026,7 @@ class DatabaseAnimationEditor {
             // Draw effects
             effekseerContext.beginDraw();
             let effectFinished = false;
+            let pictureEnded = false;
             try {
                 if (handle && handle.exists) {
                     if (renderFrameCount === 1) {
@@ -4031,13 +4048,21 @@ class DatabaseAnimationEditor {
             } finally {
                 effekseerContext.endDraw();
             }
+            if (handle && handle.exists) {
+                if ((currentFrame === 3 || currentFrame % 10 === 0) && anythingLit()) lastLitFrame = currentFrame;
+                if (repeatCheckbox && repeatCheckbox.checked && visibleFrames > 0 && currentFrame >= visibleFrames
+                        && currentFrame > maxTimingFrames && !editorSelf._previewFlashActive()) {
+                    pictureEnded = true;
+                }
+            }
 
-            if (effectFinished) {
+            if (effectFinished || pictureEnded) {
+                if (lastLitFrame > 0) visibleFrames = Math.max(visibleFrames, lastLitFrame);
                 console.debug('[Effekseer Render] Effect finished');
                 if (repeatCheckbox && repeatCheckbox.checked) {
                     console.debug('[Effekseer Render] Repeat enabled, restarting...');
                     stop();
-                    setTimeout(() => play(), 100);
+                    play();
                 } else {
                     console.debug('[Effekseer Render] Auto-stopping');
                     stop();
@@ -4089,6 +4114,7 @@ class DatabaseAnimationEditor {
             isPlaying = true;
             startTime = Date.now();
             currentFrame = 0;
+            lastLitFrame = 0;
             renderFrameCount = 0;
             lastTime = Date.now();
             accumulator = 0;

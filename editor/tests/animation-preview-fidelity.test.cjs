@@ -123,7 +123,9 @@ test('Effekseer preview consumes target flashes and always balances beginDraw/en
     assert.match(source, /const redrawBackground = advanceEffekseerTick\(\);[\s\S]*render\(\)/);
     assert.match(source, /const tickNeedsRedraw = advanceEffekseerTick\(\);\s*redrawBackground = redrawBackground \|\| tickNeedsRedraw/);
     assert.doesNotMatch(source, /redrawBackground \|\|= advanceEffekseerTick/);
-    assert.match(source, /radio\.disabled = true/);
+    // Screen and Hide Target used to be greyed out for Effekseer animations;
+    // the scope now rides the saved timing and the runtime honours it.
+    assert.doesNotMatch(source, /radio\.disabled = true/);
 });
 
 test('timing edits, position changes, and delayed setup keep the active detail coherent', () => {

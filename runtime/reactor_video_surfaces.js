@@ -951,6 +951,10 @@
                 const turn = new THREE.Quaternion().setFromEuler(new THREE.Euler(
                     descriptor.rotationX * DEG, descriptor.rotationY * DEG, descriptor.rotationZ * DEG, "YXZ"));
                 const modelTurn = holder.object.getWorldQuaternion(new THREE.Quaternion());
+                // Anchored to a posed part, the plane turns with the part.
+                const poseTurn = Reactor3D.effectAnchorQuaternion
+                    ? Reactor3D.effectAnchorQuaternion(holder.object, { anchor: descriptor.anchor }, new THREE.Quaternion())
+                    : null;
                 // Sized in the model's units: the plane's own geometry is in
                 // tiles, so it is scaled to (units × the model's world scale).
                 let sx = descriptor.scaleX, sy = descriptor.scaleY;
@@ -965,6 +969,7 @@
                 for (const mesh of meshes) {
                     mesh.position.copy(world);
                     mesh.quaternion.copy(modelTurn).multiply(turn);
+                    if (poseTurn) mesh.quaternion.premultiply(poseTurn);
                     mesh.scale.set(sx, sy, 1);
                     mesh.visible = true;
                 }

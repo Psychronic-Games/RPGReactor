@@ -1,6 +1,214 @@
 # Handoff - 0.98.4 In Progress
 
-Last updated 2026-08-29.
+Last updated 2026-08-30.
+
+## 2026-08-30 — vertical Z coordinate (runtime 20260830.8)
+
+Height is a coordinate now, not an offset. `_reactorLift` is every character's
+current height in tiles (was props-only), eased toward `_reactorZTarget` in the
+`updateMove` wrapper at `distancePerFrame` — `isMoving` includes the climb, so
+Wait for Completion holds. `Reactor3D.eventZAt/setEventZ` keep per-event heights
+in the sidecar (`reactor3d.eventZ`, zero leaves no record); `verticalCeiling` is
+the room height or 64. Collision is vertical overlap (`charactersOverlapVertically`,
+character height from `characterHeightTiles`); all heights zero degenerates to
+always-overlap, so 2D maps are untouched. Flat maps lift only props
+(`reactor_sprites.js` gates on `isEventProp`).
+
+Move routes: **Rise / Descend / Set Height…** are code-45 Script steps whose body
+is guarded (`typeof this.reactorRise === "function"`), so MZ ignores them; the
+codec marker (kind `route`) is what the editor reads back
+(`SetMovementRouteEditor.routeCommand/parseRouteCommand`).
+
+Editor: EventEditor's Position row is editable X/Y/Z (z commits through
+`_writePendingModels` and counts as a model change); `MapEditor3D.placeEvent` and
+`previewEventModel` add `eventZAt`; the selected event grows `RRAxisArrows3D`
+drag arrows (new util, PoseRings3D pattern — X/Z snap to tiles via `dragEventTo`,
+Y writes `setEventZ` freely, pointer ray dropped onto the axis line in
+`axisTravel`); `syncGridLevel` draws a second grid plane plus the column's corner
+lines at the selection's height. Passage overlays skip placements with z > 0.5
+(a model in the air blocks nothing on the ground).
+
+Per-event 3D refresh + selection fixes (editor-only): `rr-events-changed`
+used to route into the throttled FULL rebuild — deleting one event blinked
+and reset every model on the map. It now calls `refreshEvents`, which diffs
+`_eventIdentity` snapshots (x/y/name/note/page image/spec/z) and tears down
+or builds only the affected events' pieces (`_buildOneEvent`, carved out of
+buildEvents; sheet animations tagged `eventId`; effects/animated
+models/pickables/billboards/labels follow their event out). UIManager's
+capture-phase Delete yields to an active props selection
+(`propsManager.remove` — records undo), so DEL deletes the prop, not the
+map. Clicking a previewed event model used to crash `highlight()` on the
+Group's missing material — the outlines and labels died until restart;
+preview roots are now box-picked in `eventAt` (select their event) and
+`highlight` skips them.
+
+Scoped Wait (runtime 20260830.20-22): grew out of "Wait for 3D" when the
+user hit the real issue — ANY wait in an action-button event locks the
+player (Game_Player.canMove -> $gameMap.isEventRunning). Scoped Wait is
+defined as a BACKGROUND wait: `Game_Map.isEventRunning` reports false while
+the only running interpreter sits in waitMode `reactorScopedWait` (never
+while an event is starting), and the invoking event unlocks at wait start
+("This event keeps moving" checkbox, default on). Four modes decided by
+`Reactor3D.scopedWaitHolding`: last actions (animation queue +
+isMoveRouteForcing, 60 s deadline), duration (frames), switch flipped,
+variable compares (>=,>,=,<,<=,!=) — switch/variable carry NO deadline (they
+are "resume when it happens"). Command `ScopedWait`; `WaitForModelAnimation`
+stays registered as an alias for events saved in the hour it existed.
+20260830.23 unified the rule after a live repro of the user's tank flow
+(fx-tanklock.cjs: locate beside the event, event.start(), sample canMove):
+`reactorModelAnimation` (Play Model Animation's Wait for Completion) is
+background too — a Reactor wait sequences the SCRIPT, never freezes the
+world; stock Wait (230) remains the blocking tool. Movement and animation
+are independent axes: a 3D event can walk its route while a pose plays.
+The freedom exposed a second-order trap (20260830.25): the now-walking
+player bumping into (or pressing action on) the waiting event re-armed
+`start()` EVERY FRAME via `checkEventTriggerTouchFront` — `_starting` stayed
+true, `isAnyEventStarting()` vetoed the exemption, player froze again.
+Diagnosed by wrapping `Game_Event.start` with a stack capture in the live
+game (fx-diag2.cjs). Guard: `start()` no-ops while the map interpreter is
+running that same event. `RPG_REACTOR_RUNTIME_REVISION` is now a console
+global — first question for any "fix didn't work" report.
+Parked scripts (20260830.26): a background-waiting interpreter used to make
+the NEXT interaction queue behind it (second event `_starting` -> exemption
+vetoed -> frozen until the first script finished). `Game_Map.updateInterpreter`
+now parks the waiting interpreter onto `$gameMap._reactorParked` (serialized
+with the map; ticked each frame; event unlocked on completion) and hands the
+map a fresh Game_Interpreter, so each interaction runs — and locks — on its
+own merits. Live-verified: tank parked mid-routine while the plant monster's
+script ran and released. The self-retrigger guard covers parked ids.
+
+Animation sequencing (runtime 20260830.17-19): `_modelActions[characterKey]`
+is a QUEUE — Play Model Animation commands chain one after another (empty
+name stops and clears), a repeating action yields when something waits
+behind it, and the event ends immediately so the player is never frozen by
+an object going through its motions. Per-command "Wait for Completion"
+checkbox (waitMode `reactorModelAnimation`, repeat releases after one
+cycle) and the scoped **Wait for 3D** command (`WaitForModelAnimation`,
+target id/0/-1/'all', waitMode `reactorModelWait` on
+`Reactor3D.modelAnimationsBusy`). Flash timings on Effekseer animations
+carry `scope` (2 screen / 3 hide target), honoured in Sprite_Animation.
+CAUTION from this stretch: a python splice cut a block at the wrong brace
+and the broken runtime was SYNCED before the syntax check ran — gate
+`sync-runtime.cjs` behind `node -e "new vm.Script(...)"` in the same chain,
+and brace-match blocks instead of taking the first `}`.
+UNVERIFIED: the DB 3D editor's rule-attached Effekseer effect preview (user
+report) — the live editor repro needs the user's editor closed; in-game the
+same chain works (fx-cannon.cjs proved action+anchored animation fire).
+
+Turn sweep is an arc, not a disc (runtime 20260830.16): `eventModelSweepHits`
+takes from/to yaws and samples the real footprint (mask included) along the
+short arc — the whole-disc rule meant a size-19 tank could not turn with
+anything inside ~10 tiles in ANY direction, including behind it. Model
+overlap loops (`eventModelCanFace`, `eventModelWouldOverlapEvents`, the
+player check) also skip characters that fail `charactersOverlapVertically`.
+Diagnosed with `scratchpad/fx-tank.cjs` (boots DemoCopy, tracks an event's
+route progress, then dumps canPass/canFace/overlap blockers for its next
+step). The Demo tank's remaining stops are genuine: its rear really reaches
+9.9 tiles, and EV026 — an invisible priority-1 event at (24,22) — plus the
+player sit inside real swept arcs.
+
+Placement trigger override (runtime 20260830.14): a prop/event choosing an
+animation fires it as an ACTION, but the fire and restart lookups only
+matched `trigger === 'action'` rules — an Always-authored pose extended once
+and froze (MonitorArmExtend). `rulesForPlacement` clones the chosen rule as
+action (+ placement repeat) at the game holder's pending-fire and in the map
+editor's drivers; authored rules untouched, ambient double-play impossible
+(the clone replaces in place). DB editor: keyframes render for every
+trigger; `_workValues` strips keys only from the live slider stand-in;
+`_healAllAnchorBindings` after carve; `deletePart` unbinds effects with the
+offset converted out of the dying frame.
+
+Whole-model target (runtime 20260830.13) + the MonitorArm post-mortem: the
+user's 'Monitor+Arm' part turned out to cover 10 of 14,447 triangles (a
+marquee sliver) and the effect's anchor.part was still '' — so nothing could
+have tracked. Structural fixes: `effectAnchorNode` resolves '' to the
+anim-root (rest turn stamped in `prepareModelInstance`), so an unanchored
+effect rides whole-model poses; carved pieces answer to every owner in
+`userData.parts`, not just their node name; `_healAnchorBinding` rebinds
+origin anchors to the containing piece on selection; and the parts list
+opens with a built-in "Whole model" row — no carving needed to pose a model
+or hang effects on it. Functional coverage drives applyModelAnimation inside
+a three.js vm (`effect-anchor-tracking.test.cjs`).
+
+Anchor binding was the real gap behind "video doesn't track": the Place
+tool never set `anchor.part` (kept whatever the dropdown said, i.e. ''), so
+every anchor lived on the model origin and there was nothing to track.
+`_placeEffectAnchor` now binds the part under the click (carved part name,
+dominant bone on rigs; origin only off-part) and stores the offset in that
+part's frame; the anchor-part dropdown converts the offset between frames so
+the dot stays put. Existing effects saved with part '' need one re-place
+click to bind. Editor-only, no runtime bump.
+
+Part-anchored effects track their part (runtime 20260830.11):
+`effectAnchorWorld` always followed the part node's POSITION, but every
+consumer oriented the plane by the whole model's quaternion, so a video on a
+swinging monitor arm slid after its point without turning. Fix:
+`prepareModelInstance` stamps `__restQuaternion` on each posed node, and
+`Reactor3D.effectAnchorQuaternion(object, effect)` returns the part's pose
+delta (identity at rest); applied in the game surface placement
+(`reactor_video_surfaces`), `MapEditor3D.updateEffectPlays` (conjugated into
+the plane's local frame) and the DB preview. A part RENAME now also renames
+`rawEffects[].anchor.part` — before, a renamed screen's video fell back to
+the model origin silently (this is likely what "doesn't track" looked like
+when the part was renamed after anchoring). Prop pose rings orient from the
+placed object's real rotation (`object.rotation`), not the spec's bare
+yaw/pitch, so a facing-turned model's rings sit on the axes the drag turns.
+
+Database 3D Models editor effect flow (editor-only, same day): the video
+surface's placement card seemed to vanish because `_pickPart` swapped the
+effect card for a part card on ANY model click — with a whole-object part
+that is every click; it now returns early in effect mode (parts stay
+reachable via list + card chooser). `selectEffect` auto-starts
+`_playVideoPreview` for video effects, and the frame gate counts
+`_fxVideo`/active `_fxPreview` as activity (idle-throttled video read as
+"not playing"/choppy). DB nav section renamed 3D Models (`RR_DB_TYPE_KEYS`
+has no reactor3d entry, so the fallback string IS the label in every
+locale). MonitorArm's authored effect has no `trigger` → defaults to
+on-demand; choose it on the prop, or set Play when: Always on the card.
+
+Lights flat + poses (runtime 20260830.10): the light quads are no longer
+camera billboards — they lie flat on the ground (`syncLights` basis right=+x,
+up=north; facade lift is plain vertical now), so a pool is a thing on the
+floor, a flashlight is a wedge along it, and nothing floats onto the wall a
+player faces. Route steps Face Ceiling / Face Ground / Stand Up / Rotate…:
+`reactorFacePose(±1|0)` and `reactorRotate(deg)` on `Game_CharacterBase`
+(installed by `installVerticalMotion`), models get `rotateX(-pose·π/2)` +
+`rotateZ(-spin)` after facing in the model loop, sprites get feet-anchored
+`rotation` in reactor_sprites (works flat and stood-up — the 3D stand is
+scale+skew). Same code-45 codec rails (`routeBody` ops
+faceceiling/faceground/standup/rotate). Pose sign convention is untested
+visually: ceiling = model front tips to +y; flip the sign in ONE place (the
+model loop) if it lands face-down.
+
+RaveLighting in 3D (runtime 20260830.9): the rave shim fed the plugin's
+clockwise-from-south angles (smooth flashlight angle, `facingYaw`) straight
+into the scene's anticlockwise east-positive aim (`sin/cos` of yaw), mirroring
+every beam east-west — the nova shim negates for exactly this reason, rave now
+does too. Light quads deliberately draw with `depthTest: false`, so walls are
+honoured CPU-side instead: `lightSolidGrid` (per-map cache; on room maps a
+cell without any tile is wall at room height) + `lightBlockHeightAt` +
+`lightSegmentBlocked` (height-aware cell march — a high camera sees over a
+wall) + `clampConeReach`. `syncLights` skips lights whose cell the camera
+can't see and shortens cones to `beamReach`; kill switch
+`Reactor3D.LIGHT_OCCLUSION = false`. The transform card follows 3D drags now:
+`_syncCard` on every ring/arrow/carry move, and `_cardFor = null` on release
+so the ±4-tile slider ranges rebuild around the new spot.
+
+Same-day follow-ups: `ModelGraphicPicker._placeFaceAt` snaps face marks to the
+nearest 45° within 15° (an off-centre dot was a permanent in-game tilt) and its
+pointer-move work is RAF-coalesced; `MapEditor3D.refreshEvents` (called from
+`EventManager.renderEvents` when 3D is up) rebuilds just the event group so a
+changed event model shows without a restart — buildEvents draws start markers
+itself, don't call `buildStartMarkers` again; the selected prop gets
+`RRAxisArrows3D` beside its rings (`dragPropAlongAxis`: x/y fractional,
+z ≤ PROP_MAX_LIFT) and the card tab reads Coordinates; EventEditor header
+inputs use `--color-bg-input-alt` so they read as fields on the header strip.
+
+Also fixed here: the web trim (`dist-editor-worker.js`) never scanned the new
+`props` array for used models, so every prop-placed model was dropped from web
+bundles; and the web build test pinned `free-buick-riviera-car`, which the Demo
+no longer places (it is `kawashaki_ninja_h2`'s event now). Tests:
+`editor/tests/vertical-position.test.cjs`.
 
 ## Current State
 
@@ -72,6 +280,96 @@ Last updated 2026-08-29.
   `template/` are local compatibility-corpus projects (Star Shift
   Freelancers / Origins / Rebellion, Project2/3, MZ3D, Parallax, Hendrix,
   Barebones) and are ignored; tests must not depend on them.
+
+## 3D-M Transform Card, Ghosts, Undo, Transform 3D Model (2026-08-30, owner asks)
+
+- Card in the 3D-M panel (`_renderCard`): offset/rotate/scale sliders with
+  numbers; live via `update(id, patch, {silent:true})`, one undo per drag.
+  Props gained `stretch` [x,y,z]; every consumer of `spec.scale` also reads
+  `spec.stretch` (instance, poseProp, play-time placement, mask, footprint,
+  thumbnail size). Prop undo is on `MapEditor.undoStack` (`kind: 'props'`).
+- Ghosts: 3D `updatePlacementGhost` (faded instance at the ground point),
+  2D `_showGhost` (half-alpha thumbnail sprite). Hidden over a prop, off the
+  map, and on deactivate.
+- `TransformModel3D` plugin command: `character._reactorTransform` eased
+  over the pose each frame (`applyLiveTransform` after `position.set` in
+  the model loop). Visual only: collision stays at the placed pose (by
+  design; note it if a moved model must block where it shows).
+- Not live-tested in the editor: the card, ghosts and the command dialog
+  (structure mirrors `Camera3DEditor`); runtime tween has unit tests.
+
+## Sharp In-Scene Effects, Seamless Loops, Autotile Pick (2026-08-30, owner-reported)
+
+- Blur: the game drew anchored Effekseer effects at half the screen and
+  stretched them; the map view into a 512 square; the DB preview at 1:1
+  (why it looked right). Now the game draws the effect's own box at 1:1
+  (`EffekseerScene.trackedRect`/`measure`, world-space cylinder learned from
+  the drawn pixels, `BUDGET` unchanged at a quarter screen) and the map
+  view keeps its old mechanism with a view-sized layer canvas, plus
+  `previewActive` true while an effect plays (video previews OFF in the
+  owner's profile left the view at 10 renders/s: choppy). DEAD ENDS: a box
+  tracked as screen fractions drifts as the camera turns (this shipped
+  into the templates for an hour and looked like the effect "losing" the
+  model); a sphere costs 4× on a tall beam; the frozen effect bound to
+  the screen the owner saw was the WINDOW RESIZE: three allocates a
+  canvas texture immutably at its first size, a grown canvas never uploads
+  again; `texture.dispose()` on a source size change (editor and game).
+  Repro: open the 3D view, maximise the window. Harness limits:
+  CDP mouse drags and `m.orbit()` did not turn the camera under the
+  owner's profile copy; readPixels on three's context sees nothing under
+  the shared strategy (use screenshots); the video panel pollutes a
+  "cyan" mask (use a bright-core mask).
+- Loops: `visibleFrames` learned from the last lit measurement, longest
+  seen; the next play starts there (`entry.restarted`), tail underneath.
+- Harness gotchas: third person's default camera looks down and cannot
+  see the core (dispatch `mousemove` with decreasing clientY to look up);
+  the Demo core restarts every ~2 s, so a fresh tracker per play blurs.
+  `fx-verify.mjs` reports lit/dark/clipped frames and box sizes;
+  `fx-editor.mjs` orbits the map view and samples picture-vs-anchor.
+- Not live-tested: the Animations page Repeat path (code only; same
+  32-px readback as the layer).
+- Autotile: single-cell right-click keeps the exact piece for Shift-paint.
+- Collision (owner: "invisible walls"): tiles are blocked by mesh
+  COVERAGE (`mask.blocksTile`), not by a 0.34-tile body circle at the
+  tile centre; vertical faces no longer leak a quarter tile. The props
+  panel has one Size; the selected prop's blocked tiles draw in red (3D
+  and flat map) via `Reactor3D.blockedTilesFor`. Measure with
+  `scratchpad/fx-collide.mjs` (prints each prop's mask and a blocked-tile
+  map). Not done: a per-prop footprint override (none needed once the
+  mask is right; `collision: "box"` in model.json is the escape hatch).
+  The in-game "2-3 tile buffer" was NOT the model: `fx-canpass.mjs`
+  showed `m` (map passability) on cells with no tile at all under and
+  around the reactor; a 3D room's bare floor now passes
+  (`installRoomFloorPassage`). The header's Passage toggle draws what the
+  game reads, plus model footprints (props AND model-bound events, via
+  `TilemapManager.modelPlacements`), in the flat map and the 3D view;
+  a tileset saved in the database refreshes it. When the editor's red
+  squares and the game disagree for ONE prop, run `fx-prop2.mjs`: it
+  prints both tile sets with the spec and yaw each side used (the last
+  such gap was the rounded-tile second centre in `eventModelContains`).
+- WebGL context budget (16 in Chromium): `AnimationPreviewLayer.dispose()`
+  now loses its context; live prop edits rebuild effect layers per edit
+  and evicted the map view's context (white screen). Any new context
+  owner must `WEBGL_lose_context.loseContext()` on dispose.
+
+## Conditional Branch: RPG Maker Layout (2026-08-30, user reports)
+
+- Users found the dropdown-driven dialog foreign. It is now MZ's four
+  numbered tabs of radio rows plus a fifth **Reactor** tab for the input
+  conditions (keyboard/mouse/wheel/pointer); nothing was dropped.
+  Reference screenshots of MZ's dialog are in `scratchpad/Conditional/`.
+- Rendering only: `parseCommand`/`buildParameters`/the advanced-input codec
+  are untouched, so round-trips stay byte-identical. `show()` gained
+  `options.troop` for enemy names in troop events.
+- Harnesses: `scratchpad/cb-shots.mjs` (every tab, dark + light, cropped to
+  the modal) and `scratchpad/cb-func.mjs` (clicks radios/tabs in the real
+  editor and checks `buildParameters`). The first shot run showed `0001
+  Missing` in every database select: the database had not finished loading
+  2 s after `isProjectLoaded`; wait on `getActors().length` instead.
+- Also today: Three.js named beside PixiJS on every description surface
+  (both READMEs, package.json, the itch blurb); Three.js 0.185.1 is npm
+  `latest`; the stale "stacked canvases" header in `reactor_3d.js` now
+  describes the shared-context path with the canvas fallback.
 
 ## Video Effects, Mesh Collision, Relative Controls, Editor Playback (2026-08-29, owner-reported)
 

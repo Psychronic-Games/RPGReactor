@@ -93,6 +93,9 @@ class ConditionalBranchEditor {
             this.createElse = true;
         }
 
+        this._troop = options.troop || null;
+        this.activeTab = this._tabFor(this.conditionType);
+
         if (!this.modal) {
             this.createModal();
         }
@@ -240,26 +243,35 @@ class ConditionalBranchEditor {
         }
     }
 
+    /**
+     * RPG Maker's Conditional Branch layout: four numbered tabs of
+     * radio-selected conditions with every control on screen and only the
+     * chosen condition's controls enabled. A fifth tab holds the Reactor-only
+     * input conditions (keyboard/mouse/wheel/pointer), which still serialize
+     * as a Script condition the runtime and RPG Maker both accept.
+     */
+    static get TABS() {
+        return [
+            { label: '1', types: [0, 1, 2, 3] },
+            { label: '2', types: [4] },
+            { label: '3', types: [5, 6, 13] },
+            { label: '4', types: [7, 8, 9, 10, 11, 12] },
+            { label: 'Reactor', types: [14, 15, 16, 17] }
+        ];
+    }
+
+    _tabFor(type) {
+        const index = ConditionalBranchEditor.TABS.findIndex(tab => tab.types.includes(type));
+        return index < 0 ? 0 : index;
+    }
+
     createModal() {
         this.modal = document.createElement('div');
-        this.modal.className = 'conditional-branch-editor-modal';
-        this.modal.style.cssText = `
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0, 0, 0, 0.7);
-            z-index: 10005;
-            justify-content: center;
-            align-items: center;
-        `;
+        this.modal.className = 'conditional-branch-editor-modal rr-modal-overlay rr-event-command-modal';
+        this.modal.style.display = 'none';
 
         const container = document.createElement('div');
-        container.className = 'conditional-branch-container rr-modal';
-        container.style.cssText = `width: min(600px, calc(100vw - 24px)); max-height: 80vh;`;
-
+        container.className = 'conditional-branch-container rr-modal rr-event-command-dialog rr-conditional-branch-dialog';
         this.modal.appendChild(container);
 
         this.modal.addEventListener('click', (e) => {
@@ -275,35 +287,63 @@ class ConditionalBranchEditor {
         const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const container = this.modal.querySelector('.conditional-branch-container');
         container.innerHTML = '';
+        if (!this._scope) {
+            ConditionalBranchEditor._instances = (ConditionalBranchEditor._instances || 0) + 1;
+            this._scope = `rr-cb-${ConditionalBranchEditor._instances}`;
+        }
+        if (this.activeTab == null) this.activeTab = this._tabFor(this.conditionType);
 
         // Header
         const header = document.createElement('div');
         header.className = 'rr-modal-header';
-        header.innerHTML = `
-            <div class="rr-modal-title">${tt('Conditional Branch')}</div>
-            <button class="rr-modal-close close-btn" type="button">×</button>
-        `;
+        const title = document.createElement('div');
+        title.className = 'rr-modal-title';
+        title.textContent = tt('Conditional Branch');
+        const closeButton = document.createElement('button');
+        closeButton.className = 'rr-modal-close close-btn';
+        closeButton.type = 'button';
+        closeButton.setAttribute('aria-label', tt('Close'));
+        closeButton.textContent = '×';
+        closeButton.addEventListener('click', () => this.close());
+        header.appendChild(title);
+        header.appendChild(closeButton);
         container.appendChild(header);
 
-        header.querySelector('.close-btn').addEventListener('click', () => this.close());
-
-        // Content
+        // Body: tab strip + the active page
         const content = document.createElement('div');
-        content.style.cssText = `
-            padding: 16px;
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-            overflow-y: auto;
-            min-height: 0;
-        `;
+        content.className = 'rr-modal-body rr-cb-body';
 
-        // Condition Type selector
-        content.appendChild(this.createConditionTypeSelector());
+        const tabs = document.createElement('div');
+        tabs.className = 'rr-cb-tabs';
+        tabs.setAttribute('role', 'tablist');
+        ConditionalBranchEditor.TABS.forEach((tab, index) => {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'rr-cb-tab' + (index === this.activeTab ? ' is-active' : '');
+            button.setAttribute('role', 'tab');
+            button.setAttribute('aria-selected', index === this.activeTab ? 'true' : 'false');
+            button.textContent = tab.label === 'Reactor' ? tt('Reactor') : tab.label;
+            if (tab.types.includes(this.conditionType)) button.classList.add('has-condition');
+            button.addEventListener('click', () => {
+                this.activeTab = index;
+                this.renderContent();
+            });
+            tabs.appendChild(button);
+        });
+        content.appendChild(tabs);
 
-        // Condition-specific controls
-        content.appendChild(this.createConditionControls());
-
+        const page = document.createElement('div');
+        page.className = 'rr-cb-page';
+        page.setAttribute('role', 'tabpanel');
+        const builders = [
+            () => this.createPageOne(page),
+            () => this.createPageTwo(page),
+            () => this.createPageThree(page),
+            () => this.createPageFour(page),
+            () => this.createPageReactor(page)
+        ];
+        builders[this.activeTab]();
+        content.appendChild(page);
         container.appendChild(content);
 
         // Footer
@@ -311,15 +351,7 @@ class ConditionalBranchEditor {
         footer.className = 'rr-modal-footer';
 
         const elseLabel = document.createElement('label');
-        elseLabel.style.cssText = `
-            margin-right: auto;
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            color: var(--color-text);
-            font-size: 12px;
-            cursor: pointer;
-        `;
+        elseLabel.className = 'rr-cb-else';
         const elseCheckbox = document.createElement('input');
         elseCheckbox.type = 'checkbox';
         elseCheckbox.checked = this.createElse;
@@ -345,476 +377,188 @@ class ConditionalBranchEditor {
         container.appendChild(footer);
     }
 
-    createConditionTypeSelector() {
-        const tt = text => window.I18n ? window.I18n.tText(text) : text;
-        const section = document.createElement('div');
-        section.style.cssText = 'display: flex; flex-direction: column; gap: 8px;';
+    // ---- Row and control helpers -------------------------------------------
 
-        const label = document.createElement('div');
-        label.textContent = tt('Condition Type:');
-        label.style.cssText = 'color: var(--color-text); font-size: 13px; font-weight: bold;';
-        section.appendChild(label);
-
-        const select = document.createElement('select');
-        select.style.cssText = `
-            padding: 6px 10px;
-            background-color: var(--color-bg-input);
-            color: var(--color-text);
-            border: 1px solid var(--color-border-input);
-            border-radius: 3px;
-            font-size: 12px;
-        `;
-        select.innerHTML = `
-            <optgroup label="${tt('MZ Conditions')}">
-                <option value="0">${tt('Switch')}</option>
-                <option value="1">${tt('Variable')}</option>
-                <option value="2">${tt('Self Switch')}</option>
-                <option value="3">${tt('Timer')}</option>
-                <option value="4">${tt('Actor')}</option>
-                <option value="5">${tt('Enemy')}</option>
-                <option value="6">${tt('Character')}</option>
-                <option value="7">${tt('Gold')}</option>
-                <option value="8">${tt('Item')}</option>
-                <option value="9">${tt('Weapon')}</option>
-                <option value="10">${tt('Armor')}</option>
-                <option value="11">${tt('Button')}</option>
-                <option value="12">${tt('Script')}</option>
-                <option value="13">${tt('Vehicle')}</option>
-            </optgroup>
-            <optgroup label="${tt('Reactor Advanced')}">
-                <option value="14">${tt('Keyboard Extended')}</option>
-                <option value="15">${tt('Mouse Button')}</option>
-                <option value="16">${tt('Mouse Wheel')}</option>
-                <option value="17">${tt('Pointer Position')}</option>
-            </optgroup>
-        `;
-        select.value = this.conditionType.toString();
-        select.addEventListener('change', (e) => {
-            this.conditionType = parseInt(e.target.value);
-            this.renderContent();
-        });
-
-        section.appendChild(select);
-        return section;
+    _selectType(type) {
+        this.conditionType = type;
+        this.renderContent();
     }
 
-    createConditionControls() {
-        const section = document.createElement('div');
-        section.style.cssText = 'display: flex; flex-direction: column; gap: 8px; padding-top: 8px; border-top: 1px solid var(--color-border);';
-
-        switch (this.conditionType) {
-            case 0: // Switch
-                section.appendChild(this.createSwitchControls());
-                break;
-            case 1: // Variable
-                section.appendChild(this.createVariableControls());
-                break;
-            case 2: // Self Switch
-                section.appendChild(this.createSelfSwitchControls());
-                break;
-            case 3: // Timer
-                section.appendChild(this.createTimerControls());
-                break;
-            case 4: // Actor
-                section.appendChild(this.createActorControls());
-                break;
-            case 5: // Enemy
-                section.appendChild(this.createEnemyControls());
-                break;
-            case 6: // Character
-                section.appendChild(this.createCharacterControls());
-                break;
-            case 7: // Gold
-                section.appendChild(this.createGoldControls());
-                break;
-            case 8: // Item
-            case 9: // Weapon
-            case 10: // Armor
-                section.appendChild(this.createItemControls());
-                break;
-            case 11: // Button
-                section.appendChild(this.createButtonControls());
-                break;
-            case 12: // Script
-                section.appendChild(this.createScriptControls());
-                break;
-            case 13: // Vehicle
-                section.appendChild(this.createVehicleControls());
-                break;
-            case 14: // Keyboard Extended
-                section.appendChild(this.createExtendedKeyboardControls());
-                break;
-            case 15: // Mouse Button
-                section.appendChild(this.createMouseButtonControls());
-                break;
-            case 16: // Mouse Wheel
-                section.appendChild(this.createMouseWheelControls());
-                break;
-            case 17: // Pointer Position
-                section.appendChild(this.createPointerPositionControls());
-                break;
-        }
-
-        return section;
-    }
-
-    createSwitchControls() {
-        const tt = text => window.I18n ? window.I18n.tText(text) : text;
-        const container = document.createElement('div');
-        container.style.cssText = 'display: flex; flex-direction: column; gap: 8px;';
-
-        // Switch selector
-        const switchRow = document.createElement('div');
-        switchRow.style.cssText = 'display: flex; align-items: center; gap: 8px;';
-
-        const switchLabel = document.createElement('span');
-        switchLabel.textContent = tt('Switch:');
-        switchLabel.style.cssText = 'color: var(--color-text); font-size: 13px; min-width: 80px;';
-
-        const switchInput = document.createElement('input');
-        switchInput.type = 'number';
-        switchInput.min = 1;
-        switchInput.max = 9999;
-        switchInput.value = this.switchId;
-        switchInput.style.cssText = `
-            padding: 6px 10px;
-            background-color: var(--color-bg-input);
-            color: var(--color-text);
-            border: 1px solid var(--color-border-input);
-            border-radius: 3px;
-            font-size: 12px;
-            width: 100px;
-        `;
-        switchInput.addEventListener('input', (e) => {
-            this.switchId = parseInt(e.target.value) || 1;
-        });
-
-        const browseBtn = document.createElement('button');
-        browseBtn.textContent = '...';
-        browseBtn.className = 'rr-btn-browse';
-        browseBtn.addEventListener('click', () => this.browseSwitches());
-
-        switchRow.appendChild(switchLabel);
-        switchRow.appendChild(switchInput);
-        switchRow.appendChild(browseBtn);
-        container.appendChild(switchRow);
-
-        // Value selector
-        const valueRow = document.createElement('div');
-        valueRow.style.cssText = 'display: flex; align-items: center; gap: 8px;';
-
-        const valueLabel = document.createElement('span');
-        valueLabel.textContent = tt('is:');
-        valueLabel.style.cssText = 'color: var(--color-text); font-size: 13px; min-width: 80px;';
-
-        const onRadio = document.createElement('input');
-        onRadio.type = 'radio';
-        onRadio.name = 'switch-value';
-        onRadio.id = 'switch-on';
-        onRadio.checked = (this.switchValue === 0);
-        onRadio.addEventListener('change', () => { this.switchValue = 0; });
-
-        const onLabel = document.createElement('label');
-        onLabel.htmlFor = 'switch-on';
-        onLabel.textContent = tt('ON');
-        onLabel.style.cssText = 'color: var(--color-text); cursor: pointer;';
-
-        const offRadio = document.createElement('input');
-        offRadio.type = 'radio';
-        offRadio.name = 'switch-value';
-        offRadio.id = 'switch-off';
-        offRadio.checked = (this.switchValue === 1);
-        offRadio.addEventListener('change', () => { this.switchValue = 1; });
-
-        const offLabel = document.createElement('label');
-        offLabel.htmlFor = 'switch-off';
-        offLabel.textContent = tt('OFF');
-        offLabel.style.cssText = 'color: var(--color-text); cursor: pointer;';
-
-        valueRow.appendChild(valueLabel);
-        valueRow.appendChild(onRadio);
-        valueRow.appendChild(onLabel);
-        valueRow.appendChild(offRadio);
-        valueRow.appendChild(offLabel);
-        container.appendChild(valueRow);
-
-        return container;
-    }
-
-    createVariableControls() {
-        const tt = text => window.I18n ? window.I18n.tText(text) : text;
-        const container = document.createElement('div');
-        container.style.cssText = 'display: flex; flex-direction: column; gap: 8px;';
-
-        // Variable selector
-        const varRow = document.createElement('div');
-        varRow.style.cssText = 'display: flex; align-items: center; gap: 8px;';
-
-        const varLabel = document.createElement('span');
-        varLabel.textContent = tt('Variable:');
-        varLabel.style.cssText = 'color: var(--color-text); font-size: 13px; min-width: 80px;';
-
-        const varInput = document.createElement('input');
-        varInput.type = 'number';
-        varInput.min = 1;
-        varInput.max = 9999;
-        varInput.value = this.variableId;
-        varInput.style.cssText = `
-            padding: 6px 10px;
-            background-color: var(--color-bg-input);
-            color: var(--color-text);
-            border: 1px solid var(--color-border-input);
-            border-radius: 3px;
-            font-size: 12px;
-            width: 100px;
-        `;
-        varInput.addEventListener('input', (e) => {
-            this.variableId = parseInt(e.target.value) || 1;
-        });
-
-        const browseBtn = document.createElement('button');
-        browseBtn.textContent = '...';
-        browseBtn.className = 'rr-btn-browse';
-        browseBtn.addEventListener('click', () => this.browseVariables());
-
-        varRow.appendChild(varLabel);
-        varRow.appendChild(varInput);
-        varRow.appendChild(browseBtn);
-        container.appendChild(varRow);
-
-        // Comparison
-        const compRow = document.createElement('div');
-        compRow.style.cssText = 'display: flex; align-items: center; gap: 8px;';
-
-        const compLabel = document.createElement('span');
-        compLabel.textContent = tt('Comparison:');
-        compLabel.style.cssText = 'color: var(--color-text); font-size: 13px; min-width: 80px;';
-
-        const compSelect = document.createElement('select');
-        compSelect.style.cssText = `
-            padding: 6px 10px;
-            background-color: var(--color-bg-input);
-            color: var(--color-text);
-            border: 1px solid var(--color-border-input);
-            border-radius: 3px;
-            font-size: 12px;
-            width: 150px;
-        `;
-        compSelect.innerHTML = `
-            <option value="0">${tt('Equal to (==)')}</option>
-            <option value="1">${tt('Greater or Equal (>=)')}</option>
-            <option value="2">${tt('Less or Equal (<=)')}</option>
-            <option value="3">${tt('Greater than (>)')}</option>
-            <option value="4">${tt('Less than (<)')}</option>
-            <option value="5">${tt('Not Equal (!=)')}</option>
-        `;
-        compSelect.value = this.variableComparison.toString();
-        compSelect.addEventListener('change', (e) => {
-            this.variableComparison = parseInt(e.target.value);
-        });
-
-        compRow.appendChild(compLabel);
-        compRow.appendChild(compSelect);
-        container.appendChild(compRow);
-
-        // Value
-        const valueRow = document.createElement('div');
-        valueRow.style.cssText = 'display: flex; align-items: center; gap: 8px;';
-
-        const valueLabel = document.createElement('span');
-        valueLabel.textContent = tt('Value:');
-        valueLabel.style.cssText = 'color: var(--color-text); font-size: 13px; min-width: 80px;';
-
-        const constRadio = document.createElement('input');
-        constRadio.type = 'radio';
-        constRadio.name = 'var-value-type';
-        constRadio.id = 'var-const';
-        constRadio.checked = (this.variableValueType === 0);
-        constRadio.addEventListener('change', () => {
-            this.variableValueType = 0;
-            this.renderContent();
-        });
-
-        const constLabel = document.createElement('label');
-        constLabel.htmlFor = 'var-const';
-        constLabel.textContent = tt('Constant');
-        constLabel.style.cssText = 'color: var(--color-text); cursor: pointer;';
-
-        const varRadio = document.createElement('input');
-        varRadio.type = 'radio';
-        varRadio.name = 'var-value-type';
-        varRadio.id = 'var-var';
-        varRadio.checked = (this.variableValueType === 1);
-        varRadio.addEventListener('change', () => {
-            this.variableValueType = 1;
-            this.renderContent();
-        });
-
-        const varVarLabel = document.createElement('label');
-        varVarLabel.htmlFor = 'var-var';
-        varVarLabel.textContent = tt('Variable');
-        varVarLabel.style.cssText = 'color: var(--color-text); cursor: pointer;';
-
-        valueRow.appendChild(valueLabel);
-        valueRow.appendChild(constRadio);
-        valueRow.appendChild(constLabel);
-        valueRow.appendChild(varRadio);
-        valueRow.appendChild(varVarLabel);
-        container.appendChild(valueRow);
-
-        // Value input
-        const valueInputRow = document.createElement('div');
-        valueInputRow.style.cssText = 'display: flex; align-items: center; gap: 8px; margin-left: 80px;';
-
-        const valueInput = document.createElement('input');
-        valueInput.type = 'number';
-        valueInput.value = this.variableValue;
-        valueInput.style.cssText = `
-            padding: 6px 10px;
-            background-color: var(--color-bg-input);
-            color: var(--color-text);
-            border: 1px solid var(--color-border-input);
-            border-radius: 3px;
-            font-size: 12px;
-            width: 150px;
-        `;
-        valueInput.addEventListener('input', (e) => {
-            this.variableValue = parseInt(e.target.value) || 0;
-        });
-
-        valueInputRow.appendChild(valueInput);
-        if (this.variableValueType === 1) {
-            const browseValueBtn = document.createElement('button');
-            browseValueBtn.textContent = '...';
-            browseValueBtn.className = 'rr-btn-browse';
-            browseValueBtn.addEventListener('click', () => this.browseVariables('variableValue'));
-            valueInputRow.appendChild(browseValueBtn);
-        }
-        container.appendChild(valueInputRow);
-
-        return container;
-    }
-
-    createSelfSwitchControls() {
-        const tt = text => window.I18n ? window.I18n.tText(text) : text;
-        const container = document.createElement('div');
-        container.style.cssText = 'display: flex; flex-direction: column; gap: 8px;';
-
-        // Self Switch selector
-        const switchRow = document.createElement('div');
-        switchRow.style.cssText = 'display: flex; align-items: center; gap: 8px;';
-
-        const switchLabel = document.createElement('span');
-        switchLabel.textContent = tt('Self Switch:');
-        switchLabel.style.cssText = 'color: var(--color-text); font-size: 13px; min-width: 80px;';
-
-        const switchSelect = document.createElement('select');
-        switchSelect.style.cssText = `
-            padding: 6px 10px;
-            background-color: var(--color-bg-input);
-            color: var(--color-text);
-            border: 1px solid var(--color-border-input);
-            border-radius: 3px;
-            font-size: 12px;
-            width: 100px;
-        `;
-        switchSelect.innerHTML = `
-            <option value="A">A</option>
-            <option value="B">B</option>
-            <option value="C">C</option>
-            <option value="D">D</option>
-        `;
-        switchSelect.value = this.selfSwitchCh;
-        switchSelect.addEventListener('change', (e) => {
-            this.selfSwitchCh = e.target.value;
-        });
-
-        switchRow.appendChild(switchLabel);
-        switchRow.appendChild(switchSelect);
-        container.appendChild(switchRow);
-
-        // Value selector
-        const valueRow = document.createElement('div');
-        valueRow.style.cssText = 'display: flex; align-items: center; gap: 8px;';
-
-        const valueLabel = document.createElement('span');
-        valueLabel.textContent = tt('is:');
-        valueLabel.style.cssText = 'color: var(--color-text); font-size: 13px; min-width: 80px;';
-
-        const onRadio = document.createElement('input');
-        onRadio.type = 'radio';
-        onRadio.name = 'self-switch-value';
-        onRadio.id = 'self-switch-on';
-        onRadio.checked = (this.selfSwitchValue === 0);
-        onRadio.addEventListener('change', () => { this.selfSwitchValue = 0; });
-
-        const onLabel = document.createElement('label');
-        onLabel.htmlFor = 'self-switch-on';
-        onLabel.textContent = tt('ON');
-        onLabel.style.cssText = 'color: var(--color-text); cursor: pointer;';
-
-        const offRadio = document.createElement('input');
-        offRadio.type = 'radio';
-        offRadio.name = 'self-switch-value';
-        offRadio.id = 'self-switch-off';
-        offRadio.checked = (this.selfSwitchValue === 1);
-        offRadio.addEventListener('change', () => { this.selfSwitchValue = 1; });
-
-        const offLabel = document.createElement('label');
-        offLabel.htmlFor = 'self-switch-off';
-        offLabel.textContent = tt('OFF');
-        offLabel.style.cssText = 'color: var(--color-text); cursor: pointer;';
-
-        valueRow.appendChild(valueLabel);
-        valueRow.appendChild(onRadio);
-        valueRow.appendChild(onLabel);
-        valueRow.appendChild(offRadio);
-        valueRow.appendChild(offLabel);
-        container.appendChild(valueRow);
-
-        return container;
-    }
-
-    _tt(text) {
-        return typeof window !== 'undefined' && window.I18n ? window.I18n.tText(text) : text;
-    }
-
-    _styleControl(control) {
-        control.style.cssText = `
-            padding: 6px 10px;
-            background-color: var(--color-bg-input);
-            color: var(--color-text);
-            border: 1px solid var(--color-border-input);
-            border-radius: 3px;
-            font-size: 12px;
-            flex: 1;
-            min-width: 0;
-        `;
-        return control;
-    }
-
-    _createRow(labelText, control) {
+    /**
+     * A condition row: radio, label, controls. The controls are live only
+     * while this row's condition is the chosen one.
+     */
+    _conditionRow(type, labelText, controls) {
+        const active = this.conditionType === type;
         const row = document.createElement('div');
-        row.style.cssText = 'display: flex; align-items: center; gap: 8px;';
-        const label = document.createElement('span');
+        row.className = 'rr-cb-row' + (active ? '' : ' is-off');
+        const radio = document.createElement('input');
+        radio.type = 'radio';
+        radio.name = `${this._scope}-type`;
+        radio.id = `${this._scope}-type-${type}`;
+        radio.checked = active;
+        radio.addEventListener('change', () => this._selectType(type));
+        const label = document.createElement('label');
+        label.htmlFor = radio.id;
         label.textContent = labelText;
-        label.style.cssText = 'color: var(--color-text); font-size: 13px; min-width: 130px;';
+        row.appendChild(radio);
         row.appendChild(label);
-        row.appendChild(control);
+        row.appendChild(this._controls(controls, !active));
         return row;
     }
 
-    _createSelect(labelText, options, value, onChange) {
-        const select = this._styleControl(document.createElement('select'));
+    /**
+     * An indented choice under a condition row (Constant / Variable, an
+     * actor's sub-condition). Its radio is live while the parent condition
+     * is chosen; its controls only while it is the chosen choice too.
+     */
+    _choiceRow(parentType, checked, labelText, onSelect, controls) {
+        const parentActive = this.conditionType === parentType;
+        const active = parentActive && checked;
+        const row = document.createElement('div');
+        row.className = 'rr-cb-row is-sub' + (active ? '' : ' is-off');
+        const radio = document.createElement('input');
+        radio.type = 'radio';
+        radio.name = `${this._scope}-choice-${parentType}`;
+        radio.id = `${this._scope}-choice-${parentType}-${labelText.replace(/\W+/g, '')}`;
+        radio.checked = checked;
+        radio.disabled = !parentActive;
+        radio.addEventListener('change', () => {
+            onSelect();
+            this.renderContent();
+        });
+        const label = document.createElement('label');
+        label.htmlFor = radio.id;
+        label.textContent = labelText;
+        row.appendChild(radio);
+        row.appendChild(label);
+        row.appendChild(this._controls(controls, !active));
+        return row;
+    }
+
+    /** An indented checkbox under a condition row (Include Equipment). */
+    _checkRow(parentType, checked, labelText, onChange) {
+        const active = this.conditionType === parentType;
+        const row = document.createElement('div');
+        row.className = 'rr-cb-row is-sub is-check' + (active ? '' : ' is-off');
+        const spacer = document.createElement('span');
+        const box = document.createElement('input');
+        box.type = 'checkbox';
+        box.id = `${this._scope}-check-${parentType}`;
+        box.checked = checked;
+        box.disabled = !active;
+        box.addEventListener('change', e => onChange(e.target.checked));
+        const label = document.createElement('label');
+        label.htmlFor = box.id;
+        label.textContent = labelText;
+        row.appendChild(spacer);
+        row.appendChild(box);
+        row.appendChild(label);
+        return row;
+    }
+
+    _controls(controls, disabled) {
+        const box = document.createElement('div');
+        box.className = 'rr-cb-controls';
+        for (const control of controls || []) {
+            if (!control) continue;
+            if (disabled && 'disabled' in control) control.disabled = true;
+            box.appendChild(control);
+        }
+        return box;
+    }
+
+    _word(text) {
+        const span = document.createElement('span');
+        span.className = 'rr-cb-word';
+        span.textContent = text;
+        return span;
+    }
+
+    _select(options, value, onChange, narrow = false) {
+        const select = document.createElement('select');
+        if (narrow) select.classList.add('is-narrow');
+        let hasCurrent = false;
         for (const optionData of options) {
             const option = document.createElement('option');
             option.value = String(optionData.value);
             option.textContent = optionData.label;
             select.appendChild(option);
+            if (String(optionData.value) === String(value)) hasCurrent = true;
+        }
+        if (!hasCurrent && value != null) {
+            const option = document.createElement('option');
+            option.value = String(value);
+            option.textContent = String(value);
+            select.appendChild(option);
         }
         select.value = String(value);
         select.addEventListener('change', e => onChange(e.target.value));
-        return this._createRow(labelText, select);
+        return select;
+    }
+
+    _number(value, onChange, { min = null, max = null, narrow = false } = {}) {
+        const input = document.createElement('input');
+        input.type = 'number';
+        if (narrow) input.classList.add('is-narrow');
+        if (min !== null) input.min = min;
+        if (max !== null) input.max = max;
+        input.value = value;
+        input.addEventListener('input', e => {
+            const parsed = parseInt(e.target.value, 10);
+            if (!Number.isNaN(parsed)) onChange(parsed);
+        });
+        return input;
+    }
+
+    _text(value, onChange) {
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.value = value;
+        input.addEventListener('input', e => onChange(e.target.value));
+        return input;
+    }
+
+    _entryLabel(id, name, fallback) {
+        return `${String(id).padStart(4, '0')} ${name || fallback}`;
+    }
+
+    _systemNames(kind) {
+        try {
+            const system = this.databaseManager && typeof this.databaseManager.getSystem === 'function'
+                ? this.databaseManager.getSystem() || {} : {};
+            const names = kind === 'switch' ? system.switches : system.variables;
+            return Array.isArray(names) ? names : [];
+        } catch (e) {
+            return [];
+        }
+    }
+
+    /** The "0001 Name ..." button that opens the switch/variable picker. */
+    _reference(kind, id, onPick) {
+        const names = this._systemNames(kind);
+        const name = typeof names[id] === 'string' ? names[id].trim() : '';
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'rr-variable-reference';
+        const label = document.createElement('span');
+        label.className = 'rr-variable-reference-label';
+        label.textContent = this._entryLabel(id, name,
+            `${kind === 'switch' ? this._tt('Switch') : this._tt('Variable')} ${id}`);
+        const more = document.createElement('span');
+        more.textContent = '...';
+        button.appendChild(label);
+        button.appendChild(more);
+        button.addEventListener('click', () => {
+            const picker = new SwitchVariablePicker(this.databaseManager, this.projectController);
+            picker.show(kind, id, selectedId => {
+                if (selectedId) {
+                    onPick(selectedId);
+                    this.renderContent();
+                }
+            });
+        });
+        return button;
     }
 
     _databaseEntries(getterName) {
@@ -826,111 +570,132 @@ class ConditionalBranchEditor {
         }
     }
 
-    _createDatabaseSelect(labelText, getterName, value, onChange) {
-        const select = this._styleControl(document.createElement('select'));
+    _databaseSelect(getterName, value, onChange) {
+        const options = [];
         let hasCurrent = false;
         for (const entry of this._databaseEntries(getterName)) {
             if (!entry || entry.id == null) continue;
-            const option = document.createElement('option');
-            option.value = String(entry.id);
-            option.textContent = `#${String(entry.id).padStart(4, '0')}: ${entry.name || this._tt('Unnamed')}`;
-            select.appendChild(option);
+            options.push({ value: entry.id, label: this._entryLabel(entry.id, entry.name, this._tt('Unnamed')) });
             if (entry.id === value) hasCurrent = true;
         }
         if (!hasCurrent) {
-            const fallback = document.createElement('option');
-            fallback.value = String(value);
-            fallback.textContent = `#${String(value).padStart(4, '0')}: ${this._tt('Missing')}`;
-            select.appendChild(fallback);
+            options.push({ value, label: this._entryLabel(value, '', this._tt('Missing')) });
         }
-        select.value = String(value);
-        select.addEventListener('change', e => onChange(parseInt(e.target.value, 10)));
-        return this._createRow(labelText, select);
+        return this._select(options, value, v => onChange(parseInt(v, 10)));
     }
 
-    _createNumberRow(labelText, value, onChange, min = null) {
-        const input = this._styleControl(document.createElement('input'));
-        input.type = 'number';
-        if (min !== null) input.min = min;
-        input.value = value;
-        input.addEventListener('input', e => {
-            const parsed = parseInt(e.target.value, 10);
-            if (!Number.isNaN(parsed)) onChange(parsed);
-        });
-        return this._createRow(labelText, input);
+    _onOffSelect(value, onChange) {
+        return this._select([
+            { value: 0, label: this._tt('ON') },
+            { value: 1, label: this._tt('OFF') }
+        ], value, v => onChange(parseInt(v, 10)), true);
     }
 
-    createTimerControls() {
-        const container = document.createElement('div');
-        container.style.cssText = 'display: flex; flex-direction: column; gap: 8px;';
-        container.appendChild(this._createSelect(this._tt('Comparison:'), [
-            { value: 0, label: this._tt('Greater or Equal (>=)') },
-            { value: 1, label: this._tt('Less or Equal (<=)') }
-        ], this.timerComparison, value => { this.timerComparison = parseInt(value, 10); }));
-        container.appendChild(this._createNumberRow(this._tt('Seconds:'), this.timerSeconds,
-            value => { this.timerSeconds = value; }, 0));
-        return container;
+    // ---- Tab 1: Switch, Variable, Self Switch, Timer -----------------------
+
+    createPageOne(page) {
+        page.appendChild(this._conditionRow(0, this._tt('Switch'), [
+            this._reference('switch', this.switchId, id => { this.switchId = id; }),
+            this._word(this._tt('is')),
+            this._onOffSelect(this.switchValue, v => { this.switchValue = v; })
+        ]));
+
+        page.appendChild(this._conditionRow(1, this._tt('Variable'), [
+            this._reference('variable', this.variableId, id => { this.variableId = id; }),
+            this._select([
+                { value: 0, label: '=' },
+                { value: 1, label: '≥' },
+                { value: 2, label: '≤' },
+                { value: 3, label: '>' },
+                { value: 4, label: '<' },
+                { value: 5, label: '≠' }
+            ], this.variableComparison, v => { this.variableComparison = parseInt(v, 10); }, true)
+        ]));
+        page.appendChild(this._choiceRow(1, this.variableValueType === 0, this._tt('Constant'),
+            () => { this.variableValueType = 0; }, [
+                this._number(this.variableValue, v => { this.variableValue = v; })
+            ]));
+        page.appendChild(this._choiceRow(1, this.variableValueType === 1, this._tt('Variable'),
+            () => { this.variableValueType = 1; if (!(this.variableValue >= 1)) this.variableValue = 1; }, [
+                this._reference('variable', Math.max(1, this.variableValue), id => { this.variableValue = id; })
+            ]));
+
+        page.appendChild(this._conditionRow(2, this._tt('Self Switch'), [
+            this._select(['A', 'B', 'C', 'D'].map(ch => ({ value: ch, label: ch })),
+                this.selfSwitchCh, v => { this.selfSwitchCh = v; }, true),
+            this._word(this._tt('is')),
+            this._onOffSelect(this.selfSwitchValue, v => { this.selfSwitchValue = v; })
+        ]));
+
+        const minutes = Math.floor(this.timerSeconds / 60);
+        const seconds = this.timerSeconds % 60;
+        const setTimer = (m, s) => { this.timerSeconds = Math.max(0, m) * 60 + Math.min(59, Math.max(0, s)); };
+        let currentMinutes = minutes;
+        let currentSeconds = seconds;
+        page.appendChild(this._conditionRow(3, this._tt('Timer'), [
+            this._select([
+                { value: 0, label: '≥' },
+                { value: 1, label: '≤' }
+            ], this.timerComparison, v => { this.timerComparison = parseInt(v, 10); }, true),
+            this._number(minutes, v => { currentMinutes = v; setTimer(currentMinutes, currentSeconds); }, { min: 0, max: 99 }),
+            this._word(this._tt('min')),
+            this._number(seconds, v => { currentSeconds = v; setTimer(currentMinutes, currentSeconds); }, { min: 0, max: 59 }),
+            this._word(this._tt('sec'))
+        ]));
     }
 
-    createActorControls() {
-        const container = document.createElement('div');
-        container.style.cssText = 'display: flex; flex-direction: column; gap: 8px;';
-        container.appendChild(this._createDatabaseSelect(this._tt('Actor:'), 'getActors', this.actorId,
-            value => { this.actorId = value; }));
-        container.appendChild(this._createSelect(this._tt('Condition:'), [
-            { value: 0, label: this._tt('In the Party') },
-            { value: 1, label: this._tt('Name') },
-            { value: 2, label: this._tt('Class') },
-            { value: 3, label: this._tt('Skill') },
-            { value: 4, label: this._tt('Weapon') },
-            { value: 5, label: this._tt('Armor') },
-            { value: 6, label: this._tt('State') }
-        ], this.actorCondition, value => {
-            this.actorCondition = parseInt(value, 10);
-            this.actorValue = this.actorCondition === 1 ? '' : 1;
-            this.renderContent();
-        }));
+    // ---- Tab 2: Actor ------------------------------------------------------
 
-        if (this.actorCondition === 1) {
-            const input = this._styleControl(document.createElement('input'));
-            input.type = 'text';
-            input.value = this.actorValue;
-            input.addEventListener('input', e => { this.actorValue = e.target.value; });
-            container.appendChild(this._createRow(this._tt('Name:'), input));
-        } else {
-            const actorGetters = {
-                2: [this._tt('Class:'), 'getClasses'],
-                3: [this._tt('Skill:'), 'getSkills'],
-                4: [this._tt('Weapon:'), 'getWeapons'],
-                5: [this._tt('Armor:'), 'getArmors'],
-                6: [this._tt('State:'), 'getStates']
-            };
-            const target = actorGetters[this.actorCondition];
-            if (target) {
-                container.appendChild(this._createDatabaseSelect(target[0], target[1], this.actorValue,
-                    value => { this.actorValue = value; }));
+    createPageTwo(page) {
+        page.appendChild(this._conditionRow(4, this._tt('Actor'), [
+            this._databaseSelect('getActors', this.actorId, v => { this.actorId = v; })
+        ]));
+        const choose = (condition) => () => {
+            this.actorCondition = condition;
+            if (condition === 1) {
+                if (typeof this.actorValue !== 'string') this.actorValue = '';
+            } else if (condition >= 2) {
+                if (!(Number.isInteger(this.actorValue) && this.actorValue >= 1)) this.actorValue = 1;
             }
-        }
-        return container;
+        };
+        const choice = (condition, labelText, controls) =>
+            this._choiceRow(4, this.actorCondition === condition, labelText, choose(condition), controls);
+        const entry = getter => this.actorCondition >= 2 && typeof this.actorValue === 'number' ? this.actorValue : 1;
+
+        page.appendChild(choice(0, this._tt('Is in the party'), []));
+        page.appendChild(choice(1, this._tt('Name'), [
+            this._text(typeof this.actorValue === 'string' ? this.actorValue : '', v => { this.actorValue = v; })
+        ]));
+        page.appendChild(choice(2, this._tt('Class'), [
+            this._databaseSelect('getClasses', this.actorCondition === 2 ? entry() : 1, v => { this.actorValue = v; })
+        ]));
+        page.appendChild(choice(3, this._tt('Skill'), [
+            this._databaseSelect('getSkills', this.actorCondition === 3 ? entry() : 1, v => { this.actorValue = v; })
+        ]));
+        page.appendChild(choice(4, this._tt('Weapon'), [
+            this._databaseSelect('getWeapons', this.actorCondition === 4 ? entry() : 1, v => { this.actorValue = v; })
+        ]));
+        page.appendChild(choice(5, this._tt('Armor'), [
+            this._databaseSelect('getArmors', this.actorCondition === 5 ? entry() : 1, v => { this.actorValue = v; })
+        ]));
+        page.appendChild(choice(6, this._tt('State'), [
+            this._databaseSelect('getStates', this.actorCondition === 6 ? entry() : 1, v => { this.actorValue = v; })
+        ]));
     }
 
-    createEnemyControls() {
-        const container = document.createElement('div');
-        container.style.cssText = 'display: flex; flex-direction: column; gap: 8px;';
-        container.appendChild(this._createNumberRow(this._tt('Troop Member Index:'), this.enemyIndex,
-            value => { this.enemyIndex = value; }, 0));
-        container.appendChild(this._createSelect(this._tt('Condition:'), [
-            { value: 0, label: this._tt('Appeared') },
-            { value: 1, label: this._tt('State') }
-        ], this.enemyCondition, value => {
-            this.enemyCondition = parseInt(value, 10);
-            this.renderContent();
-        }));
-        if (this.enemyCondition === 1) {
-            container.appendChild(this._createDatabaseSelect(this._tt('State:'), 'getStates', this.enemyStateId,
-                value => { this.enemyStateId = value; }));
+    // ---- Tab 3: Enemy, Character, Vehicle ----------------------------------
+
+    _troopMemberOptions() {
+        const enemies = this._databaseEntries('getEnemies');
+        const members = this._troop && Array.isArray(this._troop.members) ? this._troop.members : [];
+        const count = Math.max(8, members.length);
+        const options = [];
+        for (let index = 0; index < count; index++) {
+            const member = members[index];
+            const enemy = member ? enemies.find(e => e && e.id === member.enemyId) : null;
+            options.push({ value: index, label: enemy ? `#${index + 1} ${enemy.name || ''}`.trim() : `#${index + 1}` });
         }
-        return container;
+        return options;
     }
 
     _currentMapEvents() {
@@ -944,9 +709,7 @@ class ConditionalBranchEditor {
         }
     }
 
-    createCharacterControls() {
-        const container = document.createElement('div');
-        container.style.cssText = 'display: flex; flex-direction: column; gap: 8px;';
+    _characterOptions() {
         const options = [
             { value: -1, label: this._tt('Player') },
             { value: 0, label: this._tt('This Event') }
@@ -956,123 +719,57 @@ class ConditionalBranchEditor {
             if (!event) return;
             const id = event.id ?? index;
             if (id <= 0) return;
-            options.push({ value: id, label: `${this._tt('Event')} ${String(id).padStart(3, '0')}: ${event.name || this._tt('Unnamed')}` });
+            options.push({ value: id, label: `EV${String(id).padStart(3, '0')} ${event.name || ''}`.trim() });
             if (id === this.characterId) hasCurrent = true;
         });
-        if (this.characterId > 0 && !hasCurrent) {
-            options.push({ value: this.characterId, label: `${this._tt('Event')} ${String(this.characterId).padStart(3, '0')}: ${this._tt('Missing')}` });
+        if (!hasCurrent) {
+            options.push({ value: this.characterId, label: `EV${String(this.characterId).padStart(3, '0')} ${this._tt('Missing')}` });
         }
-        container.appendChild(this._createSelect(this._tt('Character:'), options, this.characterId,
-            value => { this.characterId = parseInt(value, 10); }));
-        container.appendChild(this._createSelect(this._tt('Direction:'), [
-            { value: 2, label: this._tt('Down') },
-            { value: 4, label: this._tt('Left') },
-            { value: 6, label: this._tt('Right') },
-            { value: 8, label: this._tt('Up') }
-        ], this.characterDirection, value => { this.characterDirection = parseInt(value, 10); }));
-        return container;
+        return options;
     }
 
-    createGoldControls() {
-        const tt = text => window.I18n ? window.I18n.tText(text) : text;
-        const container = document.createElement('div');
-        container.style.cssText = 'display: flex; flex-direction: column; gap: 8px;';
+    createPageThree(page) {
+        page.appendChild(this._conditionRow(5, this._tt('Enemy'), [
+            this._select(this._troopMemberOptions(), this.enemyIndex, v => { this.enemyIndex = parseInt(v, 10); })
+        ]));
+        page.appendChild(this._choiceRow(5, this.enemyCondition === 0, this._tt('Appeared'),
+            () => { this.enemyCondition = 0; }, []));
+        page.appendChild(this._choiceRow(5, this.enemyCondition === 1, this._tt('State'),
+            () => { this.enemyCondition = 1; }, [
+                this._databaseSelect('getStates', this.enemyStateId, v => { this.enemyStateId = v; })
+            ]));
 
-        const row = document.createElement('div');
-        row.style.cssText = 'display: flex; align-items: center; gap: 8px;';
+        page.appendChild(this._conditionRow(6, this._tt('Character'), [
+            this._select(this._characterOptions(), this.characterId, v => { this.characterId = parseInt(v, 10); })
+        ]));
+        const facing = document.createElement('div');
+        facing.className = 'rr-cb-row is-sub is-plain' + (this.conditionType === 6 ? '' : ' is-off');
+        facing.appendChild(document.createElement('span'));
+        const facingLabel = document.createElement('span');
+        facingLabel.className = 'rr-cb-word';
+        facingLabel.textContent = this._tt('is facing');
+        facing.appendChild(facingLabel);
+        facing.appendChild(this._controls([
+            this._select([
+                { value: 2, label: this._tt('Down') },
+                { value: 4, label: this._tt('Left') },
+                { value: 6, label: this._tt('Right') },
+                { value: 8, label: this._tt('Up') }
+            ], this.characterDirection, v => { this.characterDirection = parseInt(v, 10); }, true)
+        ], this.conditionType !== 6));
+        page.appendChild(facing);
 
-        const label = document.createElement('span');
-        label.textContent = tt('Amount:');
-        label.style.cssText = 'color: var(--color-text); font-size: 13px; min-width: 80px;';
-
-        const compSelect = document.createElement('select');
-        compSelect.style.cssText = `
-            padding: 6px 10px;
-            background-color: var(--color-bg-input);
-            color: var(--color-text);
-            border: 1px solid var(--color-border-input);
-            border-radius: 3px;
-            font-size: 12px;
-        `;
-        compSelect.innerHTML = `
-            <option value="0">>=</option>
-            <option value="1"><=</option>
-            <option value="2"><</option>
-        `;
-        compSelect.value = this.goldComparison.toString();
-        compSelect.addEventListener('change', (e) => {
-            this.goldComparison = parseInt(e.target.value);
-        });
-
-        const input = document.createElement('input');
-        input.type = 'number';
-        input.min = 0;
-        input.value = this.goldAmount;
-        input.style.cssText = `
-            padding: 6px 10px;
-            background-color: var(--color-bg-input);
-            color: var(--color-text);
-            border: 1px solid var(--color-border-input);
-            border-radius: 3px;
-            font-size: 12px;
-            width: 150px;
-        `;
-        input.addEventListener('input', (e) => {
-            this.goldAmount = parseInt(e.target.value) || 0;
-        });
-
-        row.appendChild(label);
-        row.appendChild(compSelect);
-        row.appendChild(input);
-        container.appendChild(row);
-
-        return container;
+        page.appendChild(this._conditionRow(13, this._tt('Vehicle'), [
+            this._select([
+                { value: 0, label: this._tt('Boat') },
+                { value: 1, label: this._tt('Ship') },
+                { value: 2, label: this._tt('Airship') }
+            ], this.vehicleType, v => { this.vehicleType = parseInt(v, 10); }, true),
+            this._word(this._tt('is being driven'))
+        ]));
     }
 
-    createItemControls() {
-        const container = document.createElement('div');
-        container.style.cssText = 'display: flex; flex-direction: column; gap: 8px;';
-        const config = this.conditionType === 8 ? [this._tt('Item:'), 'getItems'] :
-            this.conditionType === 9 ? [this._tt('Weapon:'), 'getWeapons'] : [this._tt('Armor:'), 'getArmors'];
-        container.appendChild(this._createDatabaseSelect(config[0], config[1], this.itemId,
-            value => { this.itemId = value; }));
-
-        if (this.conditionType === 9 || this.conditionType === 10) {
-            const checkbox = document.createElement('input');
-            checkbox.type = 'checkbox';
-            checkbox.checked = this.includeEquipped;
-            checkbox.addEventListener('change', e => { this.includeEquipped = e.target.checked; });
-            const label = document.createElement('label');
-            label.style.cssText = 'display: flex; align-items: center; gap: 8px; color: var(--color-text); font-size: 13px; cursor: pointer;';
-            label.appendChild(checkbox);
-            label.appendChild(document.createTextNode(this._tt('Include Equipped')));
-            container.appendChild(label);
-        }
-
-        return container;
-    }
-
-    createButtonControls() {
-        const container = document.createElement('div');
-        container.style.cssText = 'display: flex; flex-direction: column; gap: 8px;';
-        container.appendChild(this._createSelect(this._tt('Button:'), [
-            { value: 'ok', label: this._tt('OK') },
-            { value: 'cancel', label: this._tt('Cancel') },
-            { value: 'shift', label: this._tt('Shift') },
-            { value: 'down', label: this._tt('Down') },
-            { value: 'left', label: this._tt('Left') },
-            { value: 'right', label: this._tt('Right') },
-            { value: 'up', label: this._tt('Up') },
-            { value: 'pageup', label: this._tt('Page Up') },
-            { value: 'pagedown', label: this._tt('Page Down') }
-        ], this.buttonName, value => { this.buttonName = value; }));
-        container.appendChild(this._createSelect(this._tt('Button Mode:'), [
-            { value: 0, label: this._tt('Pressed') },
-            { value: 1, label: this._tt('Triggered') },
-            { value: 2, label: this._tt('Repeated') }
-        ], this.buttonMode, value => { this.buttonMode = parseInt(value, 10); }));
-        return container;
-    }
+    // ---- Tab 4: Gold, Item, Weapon, Armor, Button, Script ------------------
 
     _logicalButtonOptions() {
         return [
@@ -1088,144 +785,106 @@ class ConditionalBranchEditor {
         ];
     }
 
-    createExtendedKeyboardControls() {
-        const container = document.createElement('div');
-        container.style.cssText = 'display: flex; flex-direction: column; gap: 8px;';
-        container.appendChild(this._createSelect(this._tt('Button:'), this._logicalButtonOptions(),
-            this.extendedButtonName, value => { this.extendedButtonName = value; }));
-        container.appendChild(this._createSelect(this._tt('Button Mode:'), [
-            { value: 'released', label: this._tt('Released') },
-            { value: 'held', label: this._tt('Held') }
-        ], this.extendedButtonMode, value => { this.extendedButtonMode = value; }));
-        return container;
+    createPageFour(page) {
+        page.appendChild(this._conditionRow(7, this._tt('Gold'), [
+            this._select([
+                { value: 0, label: '≥' },
+                { value: 1, label: '≤' },
+                { value: 2, label: '<' }
+            ], this.goldComparison, v => { this.goldComparison = parseInt(v, 10); }, true),
+            this._number(this.goldAmount, v => { this.goldAmount = v; }, { min: 0 })
+        ]));
+
+        const itemId = type => this.conditionType === type ? this.itemId : 1;
+        page.appendChild(this._conditionRow(8, this._tt('Item'), [
+            this._databaseSelect('getItems', itemId(8), v => { this.itemId = v; })
+        ]));
+        page.appendChild(this._conditionRow(9, this._tt('Weapon'), [
+            this._databaseSelect('getWeapons', itemId(9), v => { this.itemId = v; })
+        ]));
+        page.appendChild(this._checkRow(9, this.includeEquipped, this._tt('Include Equipment'),
+            v => { this.includeEquipped = v; }));
+        page.appendChild(this._conditionRow(10, this._tt('Armor'), [
+            this._databaseSelect('getArmors', itemId(10), v => { this.itemId = v; })
+        ]));
+        page.appendChild(this._checkRow(10, this.includeEquipped, this._tt('Include Equipment'),
+            v => { this.includeEquipped = v; }));
+
+        page.appendChild(this._conditionRow(11, this._tt('Button'), [
+            this._select(this._logicalButtonOptions(), this.buttonName, v => { this.buttonName = v; }),
+            this._word(this._tt('is')),
+            this._select([
+                { value: 0, label: this._tt('Pressed') },
+                { value: 1, label: this._tt('Triggered') },
+                { value: 2, label: this._tt('Repeated') }
+            ], this.buttonMode, v => { this.buttonMode = parseInt(v, 10); })
+        ]));
+
+        const script = document.createElement('textarea');
+        script.className = 'rr-cb-script';
+        script.rows = 1;
+        script.spellcheck = false;
+        script.value = this.scriptText;
+        script.addEventListener('input', e => { this.scriptText = e.target.value; });
+        page.appendChild(this._conditionRow(12, this._tt('Script'), [script]));
     }
 
-    createMouseButtonControls() {
-        const container = document.createElement('div');
-        container.style.cssText = 'display: flex; flex-direction: column; gap: 8px;';
-        container.appendChild(this._createSelect(this._tt('Mouse Button:'), [
-            { value: 0, label: this._tt('Left') },
-            { value: 1, label: this._tt('Middle') },
-            { value: 2, label: this._tt('Right') }
-        ], this.mouseButton, value => { this.mouseButton = parseInt(value, 10); }));
-        container.appendChild(this._createSelect(this._tt('Button Mode:'), [
-            { value: 'pressed', label: this._tt('Pressed') },
-            { value: 'triggered', label: this._tt('Triggered') },
-            { value: 'released', label: this._tt('Released') },
-            { value: 'held', label: this._tt('Held') }
-        ], this.mouseButtonMode, value => { this.mouseButtonMode = value; }));
-        return container;
+    // ---- Tab Reactor: Keyboard, Mouse Button, Mouse Wheel, Pointer ---------
+
+    createPageReactor(page) {
+        page.appendChild(this._conditionRow(14, this._tt('Keyboard'), [
+            this._select(this._logicalButtonOptions(), this.extendedButtonName, v => { this.extendedButtonName = v; }),
+            this._word(this._tt('is')),
+            this._select([
+                { value: 'released', label: this._tt('Released') },
+                { value: 'held', label: this._tt('Held') }
+            ], this.extendedButtonMode, v => { this.extendedButtonMode = v; })
+        ]));
+
+        page.appendChild(this._conditionRow(15, this._tt('Mouse Button'), [
+            this._select([
+                { value: 0, label: this._tt('Left') },
+                { value: 1, label: this._tt('Middle') },
+                { value: 2, label: this._tt('Right') }
+            ], this.mouseButton, v => { this.mouseButton = parseInt(v, 10); }),
+            this._word(this._tt('is')),
+            this._select([
+                { value: 'pressed', label: this._tt('Pressed') },
+                { value: 'triggered', label: this._tt('Triggered') },
+                { value: 'released', label: this._tt('Released') },
+                { value: 'held', label: this._tt('Held') }
+            ], this.mouseButtonMode, v => { this.mouseButtonMode = v; })
+        ]));
+
+        page.appendChild(this._conditionRow(16, this._tt('Mouse Wheel'), [
+            this._select([
+                { value: 'up', label: this._tt('Up') },
+                { value: 'down', label: this._tt('Down') },
+                { value: 'left', label: this._tt('Left') },
+                { value: 'right', label: this._tt('Right') }
+            ], this.wheelDirection, v => { this.wheelDirection = v; })
+        ]));
+
+        page.appendChild(this._conditionRow(17, this._tt('Pointer'), [
+            this._select([
+                { value: 'x', label: 'X' },
+                { value: 'y', label: 'Y' }
+            ], this.pointerAxis, v => { this.pointerAxis = v; }, true),
+            this._select(['==', '!=', '>=', '<=', '>', '<'].map(op => ({ value: op, label: op })),
+                this.pointerComparison, v => { this.pointerComparison = v; }, true)
+        ]));
+        page.appendChild(this._choiceRow(17, this.pointerValueType === 'constant', this._tt('Constant'),
+            () => { this.pointerValueType = 'constant'; }, [
+                this._number(this.pointerValue, v => { this.pointerValue = v; })
+            ]));
+        page.appendChild(this._choiceRow(17, this.pointerValueType === 'variable', this._tt('Variable'),
+            () => { this.pointerValueType = 'variable'; if (!(this.pointerValue >= 1)) this.pointerValue = 1; }, [
+                this._reference('variable', Math.max(1, this.pointerValue), id => { this.pointerValue = id; })
+            ]));
     }
 
-    createMouseWheelControls() {
-        const container = document.createElement('div');
-        container.appendChild(this._createSelect(this._tt('Direction:'), [
-            { value: 'up', label: this._tt('Up') },
-            { value: 'down', label: this._tt('Down') },
-            { value: 'left', label: this._tt('Left') },
-            { value: 'right', label: this._tt('Right') }
-        ], this.wheelDirection, value => { this.wheelDirection = value; }));
-        return container;
-    }
-
-    createPointerPositionControls() {
-        const container = document.createElement('div');
-        container.style.cssText = 'display: flex; flex-direction: column; gap: 8px;';
-        container.appendChild(this._createSelect(this._tt('Axis:'), [
-            { value: 'x', label: 'X' },
-            { value: 'y', label: 'Y' }
-        ], this.pointerAxis, value => { this.pointerAxis = value; }));
-        container.appendChild(this._createSelect(this._tt('Comparison:'), [
-            { value: '==', label: '==' },
-            { value: '!=', label: '!=' },
-            { value: '>=', label: '>=' },
-            { value: '<=', label: '<=' },
-            { value: '>', label: '>' },
-            { value: '<', label: '<' }
-        ], this.pointerComparison, value => { this.pointerComparison = value; }));
-        container.appendChild(this._createSelect(this._tt('Value Type:'), [
-            { value: 'constant', label: this._tt('Constant') },
-            { value: 'variable', label: this._tt('Variable') }
-        ], this.pointerValueType, value => {
-            this.pointerValueType = value;
-            this.renderContent();
-        }));
-        const valueRow = this._createNumberRow(
-            this.pointerValueType === 'variable' ? this._tt('Variable:') : this._tt('Value:'),
-            this.pointerValue, value => { this.pointerValue = value; },
-            this.pointerValueType === 'variable' ? 1 : null
-        );
-        if (this.pointerValueType === 'variable') {
-            const browseButton = document.createElement('button');
-            browseButton.textContent = '...';
-            browseButton.className = 'rr-btn-browse';
-            browseButton.addEventListener('click', () => this.browseVariables('pointerValue'));
-            valueRow.appendChild(browseButton);
-        }
-        container.appendChild(valueRow);
-        return container;
-    }
-
-    createVehicleControls() {
-        const container = document.createElement('div');
-        container.appendChild(this._createSelect(this._tt('Vehicle:'), [
-            { value: 0, label: this._tt('Boat') },
-            { value: 1, label: this._tt('Ship') },
-            { value: 2, label: this._tt('Airship') }
-        ], this.vehicleType, value => { this.vehicleType = parseInt(value, 10); }));
-        return container;
-    }
-
-    createScriptControls() {
-        const tt = text => window.I18n ? window.I18n.tText(text) : text;
-        const container = document.createElement('div');
-        container.style.cssText = 'display: flex; flex-direction: column; gap: 8px;';
-
-        const label = document.createElement('div');
-        label.textContent = tt('Script:');
-        label.style.cssText = 'color: var(--color-text); font-size: 13px;';
-
-        const textarea = document.createElement('textarea');
-        textarea.value = this.scriptText;
-        textarea.style.cssText = `
-            padding: 8px;
-            background-color: var(--color-bg-input);
-            color: var(--color-text);
-            border: 1px solid var(--color-border-input);
-            border-radius: 3px;
-            font-size: 12px;
-            font-family: monospace;
-            resize: vertical;
-            min-height: 100px;
-        `;
-        textarea.addEventListener('input', (e) => {
-            this.scriptText = e.target.value;
-        });
-
-        container.appendChild(label);
-        container.appendChild(textarea);
-
-        return container;
-    }
-
-    browseSwitches() {
-        const picker = new SwitchVariablePicker(this.databaseManager, this.projectController);
-        picker.show('switch', this.switchId, (selectedId) => {
-            if (selectedId) {
-                this.switchId = selectedId;
-                this.renderContent();
-            }
-        });
-    }
-
-    browseVariables(target = 'variableId') {
-        const picker = new SwitchVariablePicker(this.databaseManager, this.projectController);
-        picker.show('variable', this[target], (selectedId) => {
-            if (selectedId) {
-                this[target] = selectedId;
-                this.renderContent();
-            }
-        });
+    _tt(text) {
+        return typeof window !== 'undefined' && window.I18n ? window.I18n.tText(text) : text;
     }
 
     buildCommands() {

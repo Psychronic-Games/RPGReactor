@@ -156,7 +156,7 @@ class ModelGraphicPicker {
                                         style="width:64px;padding:3px 5px;background:var(--color-bg-surface);color:var(--color-text);border:1px solid var(--color-border-input);">
                                     <button type="button" class="rr-btn-secondary model-angle-level" title="${this._t('Zero the X and Z tilt; keep the turn')}">${this._t('Upright')}</button>
                                     <button type="button" class="rr-btn-secondary model-angle-reset" title="${this._t('Zero every angle')}">${this._t('Reset')}</button>
-                                    ${this._t('Model size (tiles)')}
+                                    ${this._t('Model size')}
                                     <input type="number" class="model-size-input" min="0.25" max="32" step="0.25"
                                         value="${this.selectedSize}"
                                         style="width:64px;padding:3px 5px;background:var(--color-bg-surface);color:var(--color-text);border:1px solid var(--color-border-input);">
@@ -408,7 +408,7 @@ class ModelGraphicPicker {
             canvas.style.cursor = 'grabbing';
             e.preventDefault();
         };
-        const move = e => {
+        const applyMove = e => {
             if (!dragging) {
                 if (e.target === canvas && this._rings && !this._placingFace) {
                     const over = this._pickPoseRing(e);
@@ -432,6 +432,20 @@ class ModelGraphicPicker {
                 return;
             }
             this._nudgeRotation(dx, dy);
+        };
+        // Pointer events arrive faster than frames (well past 100Hz on many
+        // mice); doing the ring pick and pose apply on every one of them is
+        // what made a ring drag stutter on a heavy model. The latest event
+        // wins, once per frame.
+        let queuedMove = null;
+        const move = e => {
+            queuedMove = e;
+            if (this._moveFrame) return;
+            this._moveFrame = requestAnimationFrame(() => {
+                this._moveFrame = null;
+                if (queuedMove) applyMove(queuedMove);
+                queuedMove = null;
+            });
         };
         const up = () => {
             dragging = false;
@@ -577,6 +591,25 @@ class ModelGraphicPicker {
         }
         if (!point) return;
         const local = this._object.worldToLocal(point);
+        // The mark IS the model's facing: the engine turns the model so this
+        // direction meets the camera, exactly. A dot clicked a few pixels off
+        // the side's centre bakes that error in as a permanent tilt — the
+        // model stands at a slight angle in game and nobody can see why. A
+        // click within 15 degrees of one of the model's own axes (or a
+        // diagonal) means that axis, so the stored mark lands square on it.
+        const reach = Math.hypot(local.x, local.z);
+        if (reach > 1e-6) {
+            const angle = Math.atan2(local.x, local.z);
+            const step = Math.PI / 4;
+            const snapped = Math.round(angle / step) * step;
+            let off = angle - snapped;
+            if (off > Math.PI) off -= 2 * Math.PI;
+            if (off < -Math.PI) off += 2 * Math.PI;
+            if (Math.abs(off) <= 15 * Math.PI / 180) {
+                local.x = Math.sin(snapped) * reach;
+                local.z = Math.cos(snapped) * reach;
+            }
+        }
         this.selectedFaces[this._placingFace] = [local.x, local.y, local.z];
         this._placingFace = '';
         this._rebuildFaceMarkers();

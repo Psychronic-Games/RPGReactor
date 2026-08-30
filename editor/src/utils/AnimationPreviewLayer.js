@@ -85,15 +85,27 @@
             this.world = world || null;
             if (this.world) {
                 this.wrap.style.display = 'none';
-                if (this.size < 512) {
-                    this.size = 512;
-                    this.mvCanvas.width = this.mvCanvas.height = 512;
-                    this.fxCanvas.width = this.fxCanvas.height = 512;
+                // `rect` ({ x, y, w, h, scale }, GL origin, drawing-buffer
+                // pixels of a `viewWidth` x `viewHeight` view): the canvas
+                // holds just that box of the view, drawn 1:1 (or at `scale`
+                // of it), so the effect is as sharp as the view it sits in.
+                // Without one the canvas is a 512 square of the whole view.
+                const rect = this.world.rect;
+                const width = rect ? Math.max(1, Math.round(rect.w * (rect.scale || 1))) : 512;
+                const height = rect ? Math.max(1, Math.round(rect.h * (rect.scale || 1))) : 512;
+                if (this.fxCanvas.width !== width || this.fxCanvas.height !== height) {
+                    this.fxCanvas.width = width;
+                    this.fxCanvas.height = height;
                 }
                 if (this.fx.handle && this.fx.handle.exists && this._applyHandleTransform) this._applyHandleTransform();
             } else if (this.active) {
                 this.wrap.style.display = 'block';
             }
+        }
+
+        /** Draw the playing Effekseer frame into the canvas now, on top of the loop's own draws. */
+        drawNow() {
+            return this._drawFrame ? this._drawFrame() : false;
         }
 
         /** Turn (degrees, x/y/z) and scale the playing animation on top of its record's own. */
@@ -134,6 +146,8 @@
             if (!animation) return false;
             this.active = true;
             this.loop = !!options.loop;
+            if (animation !== this._lastPlayed) { this.visibleFrames = null; this._litPlays = 0; }
+            this._lastPlayed = animation;
             if (options.transform) this.setTransform(options.transform);
             this.wrap.style.display = this.world ? 'none' : 'block';
             const generation = ++this.generation;
@@ -162,8 +176,18 @@
 
         dispose() {
             this.stop();
+            this._drawFrame = null;
             if (this.fx.ctx && typeof effekseer !== 'undefined') {
                 try { effekseer.releaseContext(this.fx.ctx); } catch (_) {}
+            }
+            // Hand the WebGL context back now. A browser keeps a canvas's
+            // context until the canvas is collected, and counts it against
+            // its small budget (16 in Chromium) meanwhile: a map whose props
+            // are edited live rebuilds their effect layers on every change,
+            // and sixteen edits evicted the oldest live contexts, the map
+            // view's among them ("Too many active WebGL contexts").
+            if (this.fx.gl) {
+                try { this.fx.gl.getExtension('WEBGL_lose_context')?.loseContext(); } catch (_) {}
             }
             this.fx = { gl: null, ctx: null, ready: false, handle: null, raf: null, effects: new Map(), waiters: new Map() };
             this.wrap.parentNode?.removeChild(this.wrap);
@@ -292,29 +316,46 @@
                     fx.handle.setScale(base * extra.scale[0], base * extra.scale[1], base * extra.scale[2]);
                     fx.handle.setSpeed((animation.speed || 100) / 100);
                 };
+                // Frames since the play began, and the last one anything
+                // was lit: a loop starts over there, not when the last
+                // invisible particle dies, so there is no dark gap.
+                let ticks = 0, lastLit = 0;
                 const start = () => {
+                    if (lastLit > 0) { this.visibleFrames = Math.max(this.visibleFrames || 0, lastLit); this._litPlays = (this._litPlays || 0) + 1; }
                     fx.handle = fx.ctx.play(effect);
-                    alive = 0; dead = 0;
+                    alive = 0; dead = 0; ticks = 0; lastLit = 0;
                     this._applyHandleTransform();
+                };
+                const lit = () => {
+                    const mini = this._litMini || (this._litMini = document.createElement('canvas'));
+                    if (mini.width !== 32) { mini.width = 32; mini.height = 32; }
+                    const ctx = mini.getContext('2d', { willReadFrequently: true });
+                    ctx.clearRect(0, 0, 32, 32);
+                    ctx.drawImage(this.fxCanvas, 0, 0, this.fxCanvas.width, this.fxCanvas.height, 0, 0, 32, 32);
+                    let data;
+                    try { data = ctx.getImageData(0, 0, 32, 32).data; } catch (e) { return false; }
+                    for (let i = 3; i < data.length; i += 4) if (data[i] >= 4) return true;
+                    return false;
                 };
                 start();
                 let last = Date.now(), acc = 0;
                 const step = 1000 / 60;
-                const loop = () => {
-                    if (generation !== this.generation) return;
-                    const now = Date.now();
-                    acc += now - last;
-                    last = now;
-                    let n = 0;
-                    while (acc >= step && n < 5) {
-                        fx.ctx.update();
-                        acc -= step;
-                        if (fx.handle && fx.handle.exists) alive++;
-                        n++;
-                    }
-                    if (acc > step * 5) acc = 0;
+                /** Draw the current frame into the canvas (also `drawNow`, for a caller that wants one on demand). */
+                this._drawFrame = () => {
+                    if (generation !== this.generation || !fx.ctx) return false;
                     const gl = fx.gl;
-                    gl.viewport(0, 0, this.size, this.size);
+                    const rect = this.world && this.world.rect;
+                    if (rect) {
+                        // The full view's viewport, shifted so the canvas's
+                        // pixels are the box's: WebGL clips the rest.
+                        const s = rect.scale || 1;
+                        gl.viewport(-Math.round(rect.x * s), -Math.round(rect.y * s),
+                            Math.round(this.world.viewWidth * s), Math.round(this.world.viewHeight * s));
+                    } else if (this.world) {
+                        gl.viewport(0, 0, this.fxCanvas.width, this.fxCanvas.height);
+                    } else {
+                        gl.viewport(0, 0, this.size, this.size);
+                    }
                     gl.clearColor(0, 0, 0, 0);
                     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
                     if (this.world) {
@@ -329,17 +370,38 @@
                         fx.ctx.setProjectionMatrix([q, 0, 0, 0, 0, q, 0, 0, 0, 0, 1, -1.2, 0, 0, 0, 1]);
                         fx.ctx.setCameraMatrix([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, -10, 1]);
                     }
+                    const drawn = !!(fx.handle && fx.handle.exists);
                     fx.ctx.beginDraw();
-                    if (fx.handle && fx.handle.exists) {
-                        fx.ctx.drawHandle(fx.handle);
+                    if (drawn) fx.ctx.drawHandle(fx.handle);
+                    fx.ctx.endDraw();
+                    // Where the picture ends is learned from the first two
+                    // plays; the readback that finds it stalls the GPU, so
+                    // it is not repeated once known.
+                    if (drawn && (this._litPlays || 0) < 2 && (ticks === 3 || ticks % 10 === 0) && lit()) lastLit = ticks;
+                    return drawn;
+                };
+                const loop = () => {
+                    if (generation !== this.generation) return;
+                    const now = Date.now();
+                    acc += now - last;
+                    last = now;
+                    let n = 0;
+                    while (acc >= step && n < 5) {
+                        fx.ctx.update();
+                        acc -= step;
+                        if (fx.handle && fx.handle.exists) alive++;
+                        n++;
+                        ticks++;
+                    }
+                    if (acc > step * 5) acc = 0;
+                    const drawn = this._drawFrame();
+                    if (drawn) {
+                        dead = 0;
+                        if (this.loop && this.visibleFrames > 0 && ticks >= this.visibleFrames && alive >= 3) start();
                     } else if (++dead >= 20) {
-                        fx.ctx.endDraw();
                         if (!this.loop || alive < 3) { this._finish(generation); return; }
                         start();
-                        fx.raf = requestAnimationFrame(loop);
-                        return;
                     }
-                    fx.ctx.endDraw();
                     fx.raf = requestAnimationFrame(loop);
                 };
                 fx.raf = requestAnimationFrame(loop);

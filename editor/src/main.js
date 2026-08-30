@@ -420,6 +420,10 @@ class RPGReactor {
         });
         const gridCheckbox = document.getElementById('map-grid');
         if (gridCheckbox) gridCheckbox.checked = this.optionsManager.getShowGrid();
+        document.getElementById('map-passage')?.addEventListener('change', (event) => {
+            this.projectController?.tilemapManager?.setPassageVisible?.(event.currentTarget.checked);
+            this.mapEditor3D?.setPassageVisible?.(event.currentTarget.checked);
+        });
 
         this.installEscapeToDeselect();
         // Asked for again whenever a map comes up with the viewport off, so a
@@ -694,6 +698,9 @@ class RPGReactor {
         // Toggle event mode
         const newMode = !this.eventManager.eventMode;
         this.eventManager.setEventMode(newMode);
+        // The props tool places models on click; the Event tool selects
+        // events on click. One of them owns the pointer.
+        if (newMode) this.modelPropsManager?.deactivate();
 
         // Disable/enable map editor based on event mode
         if (this.mapEditor) {
@@ -706,6 +713,13 @@ class RPGReactor {
             if (!newMode) {
                 this.mapEditor.setupMapInteraction();
             }
+        }
+        // Back from event mode with the 3D-M tab still up: the props tool
+        // takes the pointer again (it is dropped on the way in, above).
+        if (!newMode && this.tilesetPaletteViewer?.currentLayer === 'M' && this.modelPropsManager) {
+            const container = document.getElementById('model-props-ui-container');
+            if (container) this.modelPropsManager.initializeUI(container);
+            this.modelPropsManager.activate();
         }
 
         // Clear tileset palette selection when entering event mode
@@ -903,6 +917,10 @@ class RPGReactor {
                 const manager = this.modelPropsManager;
                 if (!container || !manager) return;
                 manager.initializeUI(container);
+                if (this.eventManager && this.eventManager.eventMode) {
+                    this.eventManager.setEventMode(false);
+                    document.getElementById('toolbar-event-manager-btn')?.classList.remove('active');
+                }
                 manager.activate();
                 this.projectController.getRegionManager()?.setVisible(false);
                 this.projectController.getObject3DManager()?.setVisible(false);
