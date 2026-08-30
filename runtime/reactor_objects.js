@@ -2141,6 +2141,7 @@ Game_Action.prototype.itemEffectAddAttackState = function(target, effect) {
         chance *= this.lukEffectRate(target);
         if (Math.random() < chance) {
             target.addState(stateId);
+            this.applyEffectStateTurns(target, stateId, effect);
             this.makeSuccess(target);
         }
     }
@@ -2154,8 +2155,28 @@ Game_Action.prototype.itemEffectAddNormalState = function(target, effect) {
     }
     if (Math.random() < chance) {
         target.addState(effect.dataId);
+        this.applyEffectStateTurns(target, effect.dataId, effect);
         this.makeSuccess(target);
     }
+};
+
+/**
+ * An Add State effect may say how long the state lasts, overriding the
+ * state's own Min/Max Turns for this one skill or item: `value2` is the
+ * turns (0, which every RPG Maker-authored effect carries, keeps the
+ * state's default) and an optional `value3` is the upper end of a range.
+ * Applied after addState, so the count it wrote is what gets replaced.
+ */
+Game_Action.effectStateTurns = function(effect) {
+    const min = Math.max(0, Math.floor(Number(effect && effect.value2) || 0));
+    if (min <= 0) return 0;
+    const max = Math.max(min, Math.floor(Number(effect.value3) || 0));
+    return min + Math.randomInt(max - min + 1);
+};
+
+Game_Action.prototype.applyEffectStateTurns = function(target, stateId, effect) {
+    const turns = Game_Action.effectStateTurns(effect);
+    if (turns > 0) target.setStateTurns(stateId, turns);
 };
 
 Game_Action.prototype.itemEffectRemoveState = function(target, effect) {
@@ -2675,6 +2696,12 @@ Game_BattlerBase.prototype.resetStateCounts = function(stateId) {
     const state = $dataStates[stateId];
     const variance = 1 + Math.max(state.maxTurns - state.minTurns, 0);
     this._stateTurns[stateId] = state.minTurns + Math.randomInt(variance);
+};
+
+/** Set how many turns a state the battler already has will last. */
+Game_BattlerBase.prototype.setStateTurns = function(stateId, turns) {
+    if (!this.isStateAffected(stateId)) return;
+    this._stateTurns[stateId] = Math.max(0, Math.floor(Number(turns) || 0));
 };
 
 Game_BattlerBase.prototype.isStateExpired = function(stateId) {

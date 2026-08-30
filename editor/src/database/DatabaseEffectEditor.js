@@ -42,7 +42,7 @@ class DatabaseEffectEditor {
                 }
                 const state = dbManager ? dbManager.getState(effect.dataId) : null;
                 const name = state ? state.name : `${tt('State')} #${effect.dataId}`;
-                return `${name} (${Math.round(effect.value1 * 100)}%)`;
+                return `${name} (${Math.round(effect.value1 * 100)}%)${DatabaseEffectEditor.durationSummary(effect, tt)}`;
             }
             case 31: case 32:
                 return `${p[effect.dataId] || tt('Param')} (${effect.value1} ${tt('turns')})`;
@@ -243,6 +243,9 @@ class DatabaseEffectEditor {
                 value: this._numberHTML(21, 'value1', effect.code === 21 ? Math.round(effect.value1 * 100) : 100),
                 unit: '%'
             }),
+            // A sibling of the Add State row, not a child: the i18n pass and
+            // the radio lookups read `.effect-option > span`.
+            this._durationRowHTML(effect),
             this._rowHTML(effect, {
                 code: 22, label: tt('Remove State'),
                 control: this._selectHTML(22, stateOpts),
@@ -251,6 +254,78 @@ class DatabaseEffectEditor {
             })
         ].join('');
         this.setupEffectRadioInputs(container, effect);
+        this.setupDurationInputs(container, effect);
+    }
+
+    /**
+     * Add State's duration override: ticked, the state lasts the turns
+     * given here (a range when the two differ) instead of its own Min/Max
+     * Turns. Unticked, the boxes show the state's own turns, greyed.
+     */
+    _durationRowHTML(effect) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
+        const override = effect.code === 21 && Number(effect.value2) > 0;
+        const state = this.databaseManager && this.databaseManager.getState ? this.databaseManager.getState(effect.dataId) : null;
+        const min = override ? Number(effect.value2) : (state ? state.minTurns : 1);
+        const max = override ? Math.max(Number(effect.value2), Number(effect.value3) || 0) : (state ? state.maxTurns : 1);
+        const never = !!state && state.autoRemovalTiming === 0;
+        return `
+            <div class="effect-duration rr-trait-row" data-code="21" style="margin-top: 6px;">
+                <input type="checkbox" class="effect-duration-override" style="margin: 0; justify-self: center;" ${override ? 'checked' : ''} ${never ? 'disabled' : ''}>
+                <span class="rr-trait-label" style="color: var(--color-text-muted);">${tt('Duration')}</span>
+                <span style="grid-column: 3 / -1; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                    <input type="number" class="effect-duration-min database-field-value" min="1" step="1" value="${min}" style="width: 84px; box-sizing: border-box;" ${override ? '' : 'disabled'}>
+                    <span style="color: var(--color-text-muted);">–</span>
+                    <input type="number" class="effect-duration-max database-field-value" min="1" step="1" value="${max}" style="width: 84px; box-sizing: border-box;" ${override ? '' : 'disabled'}>
+                    <span style="color: var(--color-text-muted);">${tt('turns')}</span>
+                    <span class="effect-duration-note" style="font-size: 11px; color: var(--color-text-muted); ${never ? '' : 'display: none;'}">${tt('Not removed automatically')}</span>
+                </span>
+            </div>`;
+    }
+
+    /** Read the duration row into the effect (code 21 only). */
+    _readDuration(container, effect) {
+        const row = container.querySelector ? container.querySelector('.effect-duration') : null;
+        if (!row || effect.code !== 21) return;
+        const override = row.querySelector('.effect-duration-override');
+        const minInput = row.querySelector('.effect-duration-min');
+        const maxInput = row.querySelector('.effect-duration-max');
+        if (override && override.checked && !override.disabled) {
+            const min = Math.max(1, Math.floor(parseFloat(minInput.value) || 1));
+            const max = Math.max(min, Math.floor(parseFloat(maxInput.value) || min));
+            effect.value2 = min;
+            if (max > min) effect.value3 = max;
+            else delete effect.value3;
+        } else {
+            effect.value2 = 0;
+            delete effect.value3;
+        }
+    }
+
+    setupDurationInputs(container, effect) {
+        const row = container.querySelector ? container.querySelector('.effect-duration') : null;
+        if (!row) return;
+        const override = row.querySelector('.effect-duration-override');
+        const minInput = row.querySelector('.effect-duration-min');
+        const maxInput = row.querySelector('.effect-duration-max');
+        const note = row.querySelector('.effect-duration-note');
+        const stateSelect = container.querySelector('select.effect-sel[data-code="21"]');
+        const refresh = () => {
+            const state = this.databaseManager && this.databaseManager.getState && stateSelect
+                ? this.databaseManager.getState(parseInt(stateSelect.value) || 0) : null;
+            const never = !!state && state.autoRemovalTiming === 0;
+            override.disabled = never;
+            if (never) override.checked = false;
+            if (note) note.style.display = never ? '' : 'none';
+            const on = override.checked && !never;
+            minInput.disabled = !on;
+            maxInput.disabled = !on;
+            if (!on && state) { minInput.value = state.minTurns; maxInput.value = state.maxTurns; }
+            this._readDuration(container, effect);
+        };
+        override.addEventListener('change', refresh);
+        for (const input of [minInput, maxInput]) input.addEventListener('input', () => this._readDuration(container, effect));
+        if (stateSelect) stateSelect.addEventListener('change', refresh);
     }
 
     createBuffTab(container, effect) {
@@ -406,3 +481,12 @@ class DatabaseEffectEditor {
         return true;
     }
 }
+
+/** ", 3–6 turns" for an Add State effect that overrides the state's duration. */
+DatabaseEffectEditor.durationSummary = function(effect, tt) {
+    if (!effect || effect.code !== 21) return '';
+    const min = Math.floor(Number(effect.value2) || 0);
+    if (min <= 0) return '';
+    const max = Math.max(min, Math.floor(Number(effect.value3) || 0));
+    return `, ${max > min ? `${min}–${max}` : min} ${tt('turns')}`;
+};
