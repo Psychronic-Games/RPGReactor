@@ -117,7 +117,14 @@ Last updated 2026-08-29.
   was 1.875× too small at 720p and capped at 1024 px. Verified: Core beam
   1.35× tower in DB, ~1.25× in game (its beam clips the frame).
   `effectFacesCamera`: box-face heuristic, no geometry; interior anchors
-  always show. NOTE: Demo Map001 event 2 (EV002) has a note
+  always show — now only for MV sheet animations. Effekseer effects on 3D
+  maps are drawn in the scene (`Reactor3D.EffekseerScene`): own offscreen
+  WebGL 1 canvas rendered from the three camera, uploaded into a
+  screen-sized quad at the anchor's clip depth. DEAD END, do not retry:
+  Effekseer 1.70b on three's WebGL 2 context — its `useProgram` fails
+  (INVALID_OPERATION), and even `init` alone leaves PIXI's filter draws
+  failing → black frame. Verified in third person on the Demo: the core
+  glows inside the tower chamber, hidden by the frame and by the player. NOTE: Demo Map001 event 2 (EV002) has a note
   `flashlight 20 25 #5555FF 0 -24 1` that the light shim draws as a huge
   purple cone over the reactor — that is what looks like a giant "effect",
   not the Core animation. Left as authored.

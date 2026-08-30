@@ -46,7 +46,7 @@ test('the runtime plays anchored animations through a stand-in target and regist
     assert.match(runtime, /current\.effects = sidecar \? Reactor3D\.readModelEffects\(sidecar\) : \[\];/);
     assert.match(runtime, /for \(const name of Reactor3D\.takeModelEffects\(character\)\)/);
     assert.match(runtime, /Reactor3D\.updateAnchoredAnimations\(holder\);/);
-    assert.match(read('runtime/reactor_main.js'), /runtime revision: 20260829\.43/);
+    assert.match(read('runtime/reactor_main.js'), /runtime revision: 20260829\.44/);
 });
 
 test('the editor wires the Play 3D Effect command and the Effects section', () => {
@@ -99,7 +99,7 @@ test('a model base transform wraps every instance and effects carry a turn', () 
     assert.equal((runtime.match(/applyModelTransform\(object, (?:this|Reactor3D)\.readModelTransform\(sidecar\)\)/g) || []).length, 5, 'every instance site applies the base transform');
     assert.match(runtime, /sprite\._animation = Object\.assign\(\{\}, animation, \{/, 'effect turn and size ride on a copy of the record');
     assert.match(runtime, /holder\.action = rule && \(rule\.repeat \|\| holder\.action\.repeat\)/, 'a repeating action starts over');
-    assert.match(read('runtime/reactor_main.js'), /runtime revision: 20260829\.43/);
+    assert.match(read('runtime/reactor_main.js'), /runtime revision: 20260829\.44/);
 });
 
 test('the 3D editor card chooses model, parts, bones and effects, and edits each with sliders', () => {
@@ -154,7 +154,7 @@ test('effects play on their own by state, and scale proportionally or per axis',
     const runtime = read('runtime/reactor_3d.js');
     assert.match(runtime, /Reactor3D\.updateTriggeredEffects\(holder, character, \{/);
     assert.match(runtime, /this\._handle\.setScale\(uniform \* axes\[0\], uniform \* axes\[1\], uniform \* axes\[2\]\);/);
-    assert.match(read('runtime/reactor_main.js'), /runtime revision: 20260829\.43/);
+    assert.match(read('runtime/reactor_main.js'), /runtime revision: 20260829\.44/);
     const db3d = read('editor/src/database/Database3DEditor.js');
     assert.match(db3d, /this\._fxPreviewDef = raw;/, 'the preview follows the live effect');
     assert.match(db3d, /_scaleSlidersHtml\(prefix, scale\)/);
@@ -195,7 +195,7 @@ test('video effects, mesh collision, repeat and player-relative controls are wir
     assert.match(runtime, /Reactor3D\.spawnVideoEffect = function\(effect, character, holder\)/);
     assert.match(read('runtime/reactor_video_surfaces.js'), /anchor: anchor,/);
     assert.match(read('runtime/reactor_video_surfaces.js'), /Reactor3D\.effectAnchorWorld\(holder\.object, \{ anchor: descriptor\.anchor \}/);
-    assert.match(read('runtime/reactor_main.js'), /runtime revision: 20260829\.43/);
+    assert.match(read('runtime/reactor_main.js'), /runtime revision: 20260829\.44/);
     const db3d = read('editor/src/database/Database3DEditor.js');
     assert.match(db3d, /class="r3d-fx-type"/);
     assert.match(db3d, /_playVideoPreview\(raw\) \{/);
@@ -262,4 +262,27 @@ test('an anchored effect scales with its instance and hides behind the face it s
     } finally {
         global.SceneManager = previous;
     }
+});
+
+test('anchored Effekseer effects go into the 3D scene at the anchor, in world units, at the anchor depth', () => {
+    require(path.join(repoRoot, 'runtime', 'libs', 'three.js'));
+    const THREE = global.THREE;
+    const scene = Reactor3D.EffekseerScene;
+    assert.equal(scene.begin(null, { effectName: 'x' }), null, 'no viewport, no play');
+    assert.equal(scene.begin({ _scene: {} }, { name: 'MV sheet' }), null, 'an MV animation stays on the overlay');
+    // sync() takes the numbers; the handle is touched only in render().
+    const object = new THREE.Group();
+    object.userData.glbSize = { x: 1, y: 2, z: 1 };
+    object.scale.setScalar(10);   // a 20-tile model
+    object.updateMatrixWorld(true);
+    const play = { animation: { scale: 100 }, world: new THREE.Vector3(), scale: [1, 1, 1], rotation: [0, 0, 0] };
+    scene.sync(play, { object }, { anchor: { offset: [0, 1, 0] } }, [2.05, 2.05, 2.05], [0, 90, 0]);
+    assert.ok(play.placed);
+    assert.deepEqual(play.world.toArray().map(v => +v.toFixed(2)), [0, 10, 0], 'the anchor, in the world');
+    assert.equal(+play.scale[0].toFixed(3), +(20 / 26 * 2.05).toFixed(3), 'one Effekseer unit = span * scale / 26 tiles');
+    assert.equal(+play.rotation[1].toFixed(4), +(Math.PI / 2).toFixed(4));
+    const source = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_3d.js'), 'utf8');
+    assert.match(source, /canvas\.getContext\("webgl", \{ alpha: true, premultipliedAlpha: false/, 'its own WebGL 1 context: Effekseer cannot draw on the scene\'s WebGL 2 one');
+    assert.match(source, /gl_Position = vec4\(position\.xy, depth, 1\.0\)/, 'a screen quad standing at the anchor depth');
+    assert.match(fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_sprites.js'), 'utf8'), /Reactor3D\.EffekseerScene\.render\(state\.viewport\)/, 'drawn before the passes');
 });

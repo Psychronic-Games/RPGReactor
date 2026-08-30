@@ -4553,6 +4553,9 @@ Spriteset_Map.prototype.updateReactor3D = function() {
         this.createReactor3DSprite(state.viewport, state.scene);
     }
     const split = this._reactor3dAbove || this._reactor3dLights;
+    // Anchored Effekseer effects are drawn from this frame's camera and
+    // handed to their in-scene quads before the passes render.
+    if (typeof Reactor3D !== "undefined" && Reactor3D.EffekseerScene) Reactor3D.EffekseerScene.render(state.viewport);
     state.viewport.renderPass(state.scene,
         modelsInWorld ? "world" : (split ? "below" : "all"), "below");
     this.updateReactor3DTexture(this._reactor3dBelow, canvas);

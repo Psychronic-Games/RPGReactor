@@ -562,7 +562,7 @@
     "",
     ""
   ],
-  "versionId": 49714044,
+  "versionId": 65365631,
   "victoryMe": {
     "name": "Victory1",
     "pan": 0,
@@ -599,5 +599,6 @@
   "faceSize": 144,
   "iconSize": 32,
   "optSplashScreen": false,
-  "optMessageSkip": true
+  "optMessageSkip": true,
+  "startDirection": 8
 }

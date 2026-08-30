@@ -595,6 +595,11 @@ Reactor3D.Viewport.prototype.renderInto = function(target, scene, camera) {
     this._resetPixi();
 };
 
+/** The three.js renderer, for anything that has to upload a texture on the spot. */
+Reactor3D.Viewport.prototype.renderer = function() {
+    return this._renderer;
+};
+
 /** A render target PIXI can sample as if it were an uploaded canvas. */
 Reactor3D.Viewport.prototype.createTarget = function(width, height, scale) {
     const gl = this._pixi.gl;
@@ -933,7 +938,10 @@ Reactor3D.Viewport.prototype.render = function(slot) {
 Reactor3D.Viewport.prototype.renderPass = function(mapScene, which, slot) {
     if (!mapScene || !mapScene.setPass) return this.render(slot);
     mapScene.setPass(which);
+    // Anchored effects belong with the world's depth, not over the overlay.
+    if (Reactor3D.EffekseerScene) Reactor3D.EffekseerScene.setPass(which);
     this.render(slot);
+    if (Reactor3D.EffekseerScene) Reactor3D.EffekseerScene.setPass("all");
     mapScene.setPass("all");
 };
 
@@ -10928,10 +10936,239 @@ Reactor3D.spawnAnchoredAnimation = function(effect, character, holder) {
         }
     }
     if (!holder.anchored) holder.anchored = [];
-    holder.anchored.push({ effect, sprite, standIn, loop: effect.loop, character });
+    const entry = { effect, sprite, standIn, loop: effect.loop, character };
+    // An Effekseer effect on a 3D map is drawn inside the scene instead of
+    // on the overlay: at the anchor, in world units, behind what is in
+    // front of it. The sprite stays for its timings.
+    const viewport = spriteset._reactor3d ? spriteset._reactor3d.viewport : null;
+    if (viewport && animation.effectName) {
+        const play = this.EffekseerScene.begin(viewport, animation);
+        if (play) {
+            entry.fx3d = play;
+            // World units: the authored scale only. The screen factor in
+            // `axes` is for the overlay's screen-relative drawing rule.
+            entry.axes = this.scaleAxes(effect.scale);
+            entry.rotate = [
+                ((animation.rotation && animation.rotation.x) || 0) + (effect.rotate ? effect.rotate[0] : 0),
+                ((animation.rotation && animation.rotation.y) || 0) + (effect.rotate ? effect.rotate[1] : 0) + modelYaw,
+                ((animation.rotation && animation.rotation.z) || 0) + (effect.rotate ? effect.rotate[2] : 0)
+            ];
+            sprite.visible = false;
+        }
+    }
+    holder.anchored.push(entry);
 };
 
 Reactor3D.MAX_ANCHORED_PER_MODEL = 8;
+
+/*
+ * Anchored Effekseer effects, in the 3D scene.
+ *
+ * The game's animation sprites draw on a 2D overlay above everything, so an
+ * effect on a model could never go behind the model's own struts or a wall,
+ * and its place came from projecting the anchor with last frame's camera.
+ * Effekseer itself cannot draw on the scene's WebGL2 context (its programs
+ * are WebGL 1), so it keeps a context of its own, an offscreen canvas: each
+ * effect is drawn there from the scene's camera - the same projection and
+ * view, at the world anchor, in world units - and the picture is then put
+ * into the scene as a screen-sized quad standing at the anchor's depth. The
+ * effect lands exactly where the anchor is, and whatever the scene has in
+ * front of the anchor hides it. Cost: one small texture upload per live
+ * effect per frame, at `SCALE` of the screen.
+ *
+ * The animation sprite still exists, hidden, for the record's sound and
+ * flash timings and its lifetime.
+ */
+Reactor3D.EffekseerScene = {
+    /** Offscreen render size as a fraction of the screen; effects are soft, the upload is not free. */
+    SCALE: 0.5,
+    _live: [],
+    _pass: "all",
+
+    /** The offscreen canvas and its own Effekseer context, made on first use. */
+    ensure() {
+        if (this._context) return this._context;
+        if (this._failed || typeof effekseer === "undefined" || !effekseer.createContext || typeof document === "undefined") return null;
+        try {
+            const canvas = document.createElement("canvas");
+            const gl = canvas.getContext("webgl", { alpha: true, premultipliedAlpha: false, antialias: false, depth: true, preserveDrawingBuffer: false })
+                || canvas.getContext("experimental-webgl", { alpha: true, premultipliedAlpha: false });
+            if (!gl) throw new Error("no WebGL for the effect canvas");
+            const context = effekseer.createContext();
+            context.init(gl, { instanceMaxCount: 4000, squareMaxCount: 12000 });
+            context.setRestorationOfStatesFlag(true);
+            this._canvas = canvas;
+            this._gl = gl;
+            this._context = context;
+            this._effects = {};
+            this.resize();
+            return context;
+        } catch (error) {
+            console.error("Reactor3D: Effekseer could not set up the effect canvas:", error);
+            this._failed = true;
+            return null;
+        }
+    },
+
+    resize() {
+        const width = Math.max(64, Math.round((typeof Graphics !== "undefined" ? Graphics.width : 816) * this.SCALE));
+        const height = Math.max(64, Math.round((typeof Graphics !== "undefined" ? Graphics.height : 624) * this.SCALE));
+        if (this._canvas.width !== width || this._canvas.height !== height) {
+            this._canvas.width = width;
+            this._canvas.height = height;
+        }
+    },
+
+    effectFor(animation) {
+        const url = typeof EffectManager !== "undefined" ? EffectManager.makeUrl(animation.effectName) : null;
+        if (!url) return null;
+        if (!this._effects[url]) {
+            this._effects[url] = this._context.loadEffect(url, 1, () => {}, () => {
+                console.error("Reactor3D: Effekseer effect failed to load for the 3D scene: " + url);
+            });
+        }
+        return this._effects[url];
+    },
+
+    /** The screen-sized quad that carries one effect's picture at its anchor's depth. */
+    quadFor(play) {
+        const texture = new THREE.Texture(this._canvas);
+        texture.flipY = false;
+        texture.premultiplyAlpha = false;
+        texture.minFilter = THREE.LinearFilter;
+        texture.magFilter = THREE.LinearFilter;
+        texture.generateMipmaps = false;
+        if (THREE.SRGBColorSpace) texture.colorSpace = THREE.SRGBColorSpace;
+        const material = new THREE.ShaderMaterial({
+            uniforms: { map: { value: texture }, resolution: { value: new THREE.Vector2(1, 1) }, depth: { value: 0 } },
+            vertexShader: [
+                "uniform float depth;",
+                "void main() { gl_Position = vec4(position.xy, depth, 1.0); }"
+            ].join("\n"),
+            fragmentShader: [
+                "uniform sampler2D map;",
+                "uniform vec2 resolution;",
+                "void main() {",
+                "    vec4 c = texture2D(map, gl_FragCoord.xy / resolution);",
+                "    if (c.a <= 0.002) discard;",
+                "    gl_FragColor = c;",
+                "}"
+            ].join("\n"),
+            transparent: true,
+            depthTest: true,
+            depthWrite: false
+        });
+        const mesh = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), material);
+        mesh.frustumCulled = false;
+        mesh.renderOrder = 5000;
+        mesh.visible = false;
+        mesh.userData.reactorEffectQuad = true;
+        return { mesh, texture, material };
+    },
+
+    /** Begin an anchored animation in the scene; null when it cannot. */
+    begin(viewport, animation) {
+        if (!animation || !animation.effectName || !viewport || typeof THREE === "undefined") return null;
+        const context = this.ensure();
+        const scene = viewport._scene;
+        if (!context || !scene) return null;
+        const effect = this.effectFor(animation);
+        if (!effect) return null;
+        const quad = this.quadFor();
+        scene.add(quad.mesh);
+        const play = { viewport, animation, effect, handle: null, done: false, quad, world: new THREE.Vector3(), scale: [1, 1, 1], rotation: [0, 0, 0], placed: false };
+        this._live.push(play);
+        return play;
+    },
+
+    /**
+     * Keep a play on its anchor. The effect's frame is model-sized: one
+     * Effekseer unit is (span * scale / 26) tiles - the animation picker's
+     * canvas is 26 units tall - times the record's own scale.
+     */
+    sync(play, holder, effect, axes, rotate) {
+        if (!play || play.done || !holder || !holder.object) return;
+        if (!Reactor3D.effectAnchorWorld(holder.object, effect, play.world)) return;
+        const span = Reactor3D.modelSpanTiles(holder.object) || 1;
+        const unit = span / 26 * ((play.animation.scale || 100) / 100);
+        play.scale = [unit * axes[0], unit * axes[1], unit * axes[2]];
+        const r = Math.PI / 180;
+        play.rotation = [rotate[0] * r, rotate[1] * r, rotate[2] * r];
+        play.placed = true;
+    },
+
+    stop(play) {
+        if (!play || play.done) return;
+        play.done = true;
+        try { if (play.handle) play.handle.stop(); } catch (error) { /* already gone */ }
+        const quad = play.quad;
+        if (quad) {
+            if (quad.mesh.parent) quad.mesh.parent.remove(quad.mesh);
+            quad.mesh.geometry.dispose();
+            quad.material.dispose();
+            quad.texture.dispose();
+        }
+        const at = this._live.indexOf(play);
+        if (at >= 0) this._live.splice(at, 1);
+    },
+
+    setPass(which) {
+        this._pass = which;
+        const shown = which === "all" || which === "world" || which === "below";
+        for (const play of this._live) if (play.quad) play.quad.mesh.visible = shown && play.ready === true;
+    },
+
+    /**
+     * Draw every live play from the scene's camera and hand the pictures to
+     * their quads. Called once per frame before the 3D passes render.
+     */
+    render(viewport) {
+        if (!this._live.length || !this._context) return;
+        const camera = viewport && viewport._camera;
+        const renderer = viewport && viewport.renderer ? viewport.renderer() : null;
+        if (!camera || !renderer) return;
+        this.resize();
+        const gl = this._gl, context = this._context, canvas = this._canvas;
+        const size = viewport.targetSize ? viewport.targetSize() : { width: canvas.width, height: canvas.height };
+        camera.updateMatrixWorld();
+        const clip = this._clip || (this._clip = new THREE.Vector4());
+        try {
+            context.update(1);
+            context.setProjectionMatrix(camera.projectionMatrix.elements);
+            context.setCameraMatrix(camera.matrixWorldInverse.elements);
+            for (const play of this._live) {
+                if (play.done || !play.placed) continue;
+                if (!play.handle) {
+                    if (!play.effect.isLoaded) continue;
+                    play.handle = context.play(play.effect, 0, 0, 0);
+                    if (!play.handle) { play.done = true; continue; }
+                    play.handle.setSpeed((play.animation.speed || 100) / 100);
+                }
+                play.handle.setLocation(play.world.x, play.world.y, play.world.z);
+                play.handle.setScale(play.scale[0], play.scale[1], play.scale[2]);
+                play.handle.setRotation(play.rotation[0], play.rotation[1], play.rotation[2]);
+                // The anchor's depth in clip space is where the quad stands.
+                clip.set(play.world.x, play.world.y, play.world.z, 1).applyMatrix4(camera.matrixWorldInverse).applyMatrix4(camera.projectionMatrix);
+                if (clip.w <= 0) { play.ready = false; play.quad.mesh.visible = false; continue; }
+                gl.viewport(0, 0, canvas.width, canvas.height);
+                gl.clearColor(0, 0, 0, 0);
+                gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+                context.beginDraw();
+                context.drawHandle(play.handle);
+                context.endDraw();
+                // Uploaded now, before the canvas is drawn over for the next play.
+                play.quad.texture.needsUpdate = true;
+                renderer.initTexture(play.quad.texture);
+                play.quad.material.uniforms.depth.value = clip.z / clip.w;
+                play.quad.material.uniforms.resolution.value.set(size.width, size.height);
+                play.ready = true;
+                play.quad.mesh.visible = this._pass === "all" || this._pass === "world" || this._pass === "below";
+            }
+        } catch (error) {
+            console.error("Reactor3D: Effekseer scene draw failed:", error);
+        }
+    }
+};
 
 /** The longest side of a model instance, in tiles. */
 Reactor3D.modelSpanTiles = function(object) {
@@ -11040,6 +11277,7 @@ Reactor3D.placeStandIn = function(holder, effect, standIn) {
 Reactor3D.stopAnchoredAnimation = function(entry) {
     if (!entry) return;
     entry.loop = false;
+    if (entry.fx3d) this.EffekseerScene.stop(entry.fx3d);
     const spriteset = typeof SceneManager !== "undefined" && SceneManager._scene
         ? SceneManager._scene._spriteset : null;
     if (spriteset && spriteset.removeAnimation && entry.sprite.parent) spriteset.removeAnimation(entry.sprite);
@@ -11095,11 +11333,18 @@ Reactor3D.updateAnchoredAnimations = function(holder) {
     for (const entry of holder.anchored) {
         if (!entry.sprite.parent) {
             if (entry.standIn.parent) entry.standIn.parent.removeChild(entry.standIn);
+            if (entry.fx3d) this.EffekseerScene.stop(entry.fx3d);
             if (entry.loop && holder.object) restart.push(entry);
             continue;
         }
         this.placeStandIn(holder, entry.effect, entry.standIn);
-        entry.sprite.visible = this.effectFacesCamera(holder, entry.effect, entry);
+        if (entry.fx3d) {
+            // Drawn in the scene: the model's own turn is in `rotate` already.
+            this.EffekseerScene.sync(entry.fx3d, holder, entry.effect, entry.axes, entry.rotate);
+            entry.sprite.visible = false;
+        } else {
+            entry.sprite.visible = this.effectFacesCamera(holder, entry.effect, entry);
+        }
         kept.push(entry);
     }
     holder.anchored = kept;

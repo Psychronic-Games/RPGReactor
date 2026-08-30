@@ -155,7 +155,7 @@ test('a map default camera is written to the sidecar only when it differs from t
 
 test('the runtime, editor, and manifest are wired for the camera module', () => {
     const main = read('runtime/reactor_main.js');
-    assert.match(main, /runtime revision: 20260829\.43/);
+    assert.match(main, /runtime revision: 20260829\.44/);
     assert.doesNotMatch(main, /reactor_camera_3d/, 'the camera lives in reactor_3d.js, not a file of its own');
 
     const sprites = read('runtime/reactor_sprites.js');
