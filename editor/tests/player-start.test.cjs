@@ -41,3 +41,15 @@ test('the marker arrow points the way the facing says', () => {
     assert.equal(MapEditor3D.startDirection({ startDirection: 6 }), 6);
     assert.equal(MapEditor3D.startDirection({ startDirection: 5 }), 2, 'a diagonal is not a facing');
 });
+
+test('the map context menu does not reach for a translator it never declared', () => {
+    // Regression: the Player Facing submenu called tt() inside showContextMenu,
+    // which has no tt in scope, and every right-click on the map or an event
+    // threw before the menu appeared.
+    const source = fs.readFileSync(path.join(editorRoot, 'src', 'EventManager.js'), 'utf8');
+    const start = source.indexOf('    showContextMenu(');
+    const end = source.indexOf('\n    }\n', start);
+    const body = source.slice(start, end);
+    assert.ok(start >= 0 && end > start);
+    if (/\btt\(/.test(body)) assert.match(body, /const tt = /, 'tt is defined where it is used');
+});

@@ -781,7 +781,7 @@ class EventManager {
                 { label: this._t('eventCtx.airship'), action: () => this.setStartingPosition(tileX, tileY, 'airship') }
             ] },
             { label: this._t('eventCtx.playerFacing'), submenu: EventManager.DIRECTIONS.map(([direction, name]) => ({
-                label: `${direction === this.playerStartDirection() ? '✓ ' : ''}${tt(name)}`,
+                label: `${direction === this.playerStartDirection() ? '✓ ' : ''}${window.I18n ? window.I18n.tText(name) : name}`,
                 action: () => this.setPlayerStartDirection(direction)
             })) }
         ];
