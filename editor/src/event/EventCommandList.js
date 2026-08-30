@@ -2120,10 +2120,14 @@ class EventCommandList {
                 break;
             }
             case 317: {
-                const paramNames = ['Max HP', 'Max MP', 'Attack', 'Defense', 'M.Attack', 'M.Defense', 'Agility', 'Luck'];
+                const paramNames = ['Max HP', 'Max MP', 'Attack', 'Defense', 'M.Attack', 'M.Defense', 'Agility', 'Luck', 'Max TP'];
                 const pName = tt(paramNames[params[2]] || 'Unknown');
                 const op = params[3] === 0 ? '+' : '-';
-                const val = params[5] || 0;
+                const val = params[4] === 1
+                    ? `{${params[5] || 0}}`
+                    : params[4] === 2
+                        ? `${params[5] || 0}–${params[6] || 0}`
+                        : (params[5] || 0);
                 description = `${pName} ${op}${val}`;
                 break;
             }

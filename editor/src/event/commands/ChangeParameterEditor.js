@@ -31,6 +31,8 @@ class ChangeParameterEditor {
             this.operation = params[3] || 0;
             this.operandType = params[4] || 0;
             this.operand = params[5] || 0;
+            // Random (operand type 2) keeps its upper end in a seventh slot.
+            this.operandMax = params[6] ?? 0;
         } else {
             this.actorSelect = 0;
             this.actorId = 1;
@@ -38,6 +40,7 @@ class ChangeParameterEditor {
             this.operation = 0;
             this.operandType = 0;
             this.operand = 0;
+            this.operandMax = 0;
         }
 
         if (!this.modal) {
@@ -128,7 +131,9 @@ class ChangeParameterEditor {
             { value: 4, label: 'M.Attack' },
             { value: 5, label: 'M.Defense' },
             { value: 6, label: 'Agility' },
-            { value: 7, label: 'Luck' }
+            { value: 7, label: 'Luck' },
+            // Max TP: paramId 8 in the runtime's own accumulator.
+            { value: 8, label: 'Max TP' }
         ];
 
         paramTypes.forEach(pt => {
@@ -341,6 +346,38 @@ class ChangeParameterEditor {
         }
         section.appendChild(varRow);
 
+        // Random radio row: a whole number between two ends.
+        const randRow = document.createElement('div');
+        randRow.style.cssText = 'display: flex; align-items: center; gap: 8px;';
+        const randRadio = document.createElement('input');
+        randRadio.type = 'radio';
+        randRadio.name = 'operand-type-317';
+        randRadio.id = 'random-317';
+        randRadio.checked = (this.operandType === 2);
+        randRadio.addEventListener('change', () => { this.operandType = 2; this.renderContent(); });
+        const randLabel = document.createElement('label');
+        randLabel.htmlFor = 'random-317';
+        randLabel.textContent = tt('Random');
+        randLabel.style.cssText = 'color: var(--color-text); cursor: pointer; min-width: 60px;';
+        randRow.appendChild(randRadio);
+        randRow.appendChild(randLabel);
+        if (this.operandType === 2) {
+            const field = (value, onInput) => {
+                const input = document.createElement('input');
+                input.type = 'number'; input.min = 0; input.max = 99999999; input.value = value;
+                input.style.cssText = 'padding:6px 10px; background-color:var(--color-bg-input); color:var(--color-text); border:1px solid var(--color-border-input); border-radius:3px; font-size:12px; width:100px;';
+                input.addEventListener('input', onInput);
+                return input;
+            };
+            randRow.appendChild(field(this.operand, e => { this.operand = parseInt(e.target.value) || 0; }));
+            const dash = document.createElement('span');
+            dash.textContent = '–';
+            dash.style.cssText = 'color: var(--color-text-muted);';
+            randRow.appendChild(dash);
+            randRow.appendChild(field(this.operandMax, e => { this.operandMax = parseInt(e.target.value) || 0; }));
+        }
+        section.appendChild(randRow);
+
         return section;
     }
 
@@ -355,7 +392,9 @@ class ChangeParameterEditor {
         return {
             code: 317,
             indent: 0,
-            parameters: [this.actorSelect, this.actorId, this.paramType, this.operation, this.operandType, this.operand]
+            parameters: this.operandType === 2
+                ? [this.actorSelect, this.actorId, this.paramType, this.operation, this.operandType, this.operand, this.operandMax]
+                : [this.actorSelect, this.actorId, this.paramType, this.operation, this.operandType, this.operand]
         };
     }
 

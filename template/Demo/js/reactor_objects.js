@@ -2221,8 +2221,21 @@ Game_Action.prototype.itemEffectSpecial = function(target, effect) {
     }
 };
 
+/**
+ * A Grow effect's amount: `value1`, or a whole number drawn between
+ * `value1` and `value2` when `value2` is set (RPG Maker writes 0 there).
+ * Either end may be the larger.
+ */
+Game_Action.effectGrowValue = function(effect) {
+    const a = Math.floor(Number(effect && effect.value1) || 0);
+    const b = Math.floor(Number(effect && effect.value2) || 0);
+    if (b === 0) return a;
+    const min = Math.min(a, b), max = Math.max(a, b);
+    return min + Math.randomInt(max - min + 1);
+};
+
 Game_Action.prototype.itemEffectGrow = function(target, effect) {
-    target.addParam(effect.dataId, Math.floor(effect.value1));
+    target.addParam(effect.dataId, Game_Action.effectGrowValue(effect));
     this.makeSuccess(target);
 };
 
@@ -2668,7 +2681,13 @@ Game_BattlerBase.prototype.initMembers = function() {
 
 Game_BattlerBase.prototype.clearParamPlus = function() {
     this._paramPlus = [0, 0, 0, 0, 0, 0, 0, 0];
+    // Max TP grows too (Grow effect / Change Parameter with param 8), in
+    // its own field: `_paramPlus` has exactly eight entries, one per paramId.
+    this._maxTpPlus = 0;
 };
+
+/** The paramId Grow and Change Parameter use for Max TP. Not a `params` index. */
+Game_BattlerBase.PARAM_MAX_TP = 8;
 
 Game_BattlerBase.prototype.clearStates = function() {
     this._states = [];
@@ -3045,7 +3064,11 @@ Game_BattlerBase.prototype.isPreserveTp = function() {
 };
 
 Game_BattlerBase.prototype.addParam = function(paramId, value) {
-    this._paramPlus[paramId] += value;
+    if (paramId === Game_BattlerBase.PARAM_MAX_TP) {
+        this._maxTpPlus = (this._maxTpPlus || 0) + value;
+    } else {
+        this._paramPlus[paramId] += value;
+    }
     this.refresh();
 };
 
@@ -3065,7 +3088,8 @@ Game_BattlerBase.prototype.setTp = function(tp) {
 };
 
 Game_BattlerBase.prototype.maxTp = function() {
-    return 100;
+    // `|| 0`: a save from before Max TP could grow has no field.
+    return Math.max(0, 100 + (this._maxTpPlus || 0));
 };
 
 Game_BattlerBase.prototype.refresh = function() {
@@ -10008,9 +10032,17 @@ Game_Interpreter.prototype.character = function(param) {
 
 // prettier-ignore
 Game_Interpreter.prototype.operateValue = function(
-    operation, operandType, operand
+    operation, operandType, operand, operandMax
 ) {
-    const value = operandType === 0 ? operand : $gameVariables.value(operand);
+    let value;
+    if (operandType === 2) {
+        // Random: a whole number between the two ends, either order.
+        const a = Math.floor(Number(operand) || 0), b = Math.floor(Number(operandMax) || 0);
+        const min = Math.min(a, b), max = Math.max(a, b);
+        value = min + Math.randomInt(max - min + 1);
+    } else {
+        value = operandType === 0 ? operand : $gameVariables.value(operand);
+    }
     return operation === 0 ? value : -value;
 };
 
@@ -11309,7 +11341,8 @@ Game_Interpreter.prototype.command316 = function(params) {
 
 // Change Parameter
 Game_Interpreter.prototype.command317 = function(params) {
-    const value = this.operateValue(params[3], params[4], params[5]);
+    // Rolled once, so a party-wide change gives everyone the same number.
+    const value = this.operateValue(params[3], params[4], params[5], params[6]);
     this.iterateActorEx(params[0], params[1], actor => {
         actor.addParam(params[2], value);
     });

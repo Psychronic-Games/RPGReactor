@@ -26,7 +26,7 @@ class DatabaseEffectEditor {
 
     static getEffectValue(effect, dbManager) {
         const tt = text => window.I18n ? window.I18n.tText(text) : text;
-        const p = ['Max HP', 'Max MP', 'Attack', 'Defense', 'M.Attack', 'M.Defense', 'Agility', 'Luck'].map(tt);
+        const p = ['Max HP', 'Max MP', 'Attack', 'Defense', 'M.Attack', 'M.Defense', 'Agility', 'Luck', 'Max TP'].map(tt);
         switch (effect.code) {
             case 11: case 12: {
                 const pct = Math.round(effect.value1 * 100);
@@ -52,8 +52,13 @@ class DatabaseEffectEditor {
                 const specials = ['Escape'];
                 return specials[effect.dataId] ? tt(specials[effect.dataId]) : `${tt('Special')} #${effect.dataId}`;
             }
-            case 42:
-                return `${p[effect.dataId] || tt('Param')} +${effect.value1}`;
+            case 42: {
+                const amount = Math.floor(Number(effect.value1) || 0);
+                const other = Math.floor(Number(effect.value2) || 0);
+                const signed = n => (n < 0 ? `${n}` : `+${n}`);
+                const range = other !== 0 ? `${signed(Math.min(amount, other))}–${Math.max(amount, other)}` : signed(amount);
+                return `${p[effect.dataId] || tt('Param')} ${range}`;
+            }
             case 43: {
                 const skill = dbManager ? dbManager.getSkill(effect.dataId) : null;
                 return skill ? skill.name : `${tt('Skill')} #${effect.dataId}`;
@@ -362,9 +367,11 @@ class DatabaseEffectEditor {
 
     createSpecialTab(container, effect) {
         const tt = text => window.I18n ? window.I18n.tText(text) : text;
-        const paramNames = ['Max HP', 'Max MP', 'Attack', 'Defense', 'M.Attack', 'M.Defense', 'Agility', 'Luck'].map(tt);
+        // Grow reaches Max TP as paramId 8 (`Game_BattlerBase.PARAM_MAX_TP`),
+        // which is its own accumulator in the runtime, never a ninth params entry.
+        const paramNames = ['Max HP', 'Max MP', 'Attack', 'Defense', 'M.Attack', 'M.Defense', 'Agility', 'Luck', 'Max TP'].map(tt);
         const paramOpts = paramNames.map((name, idx) =>
-            `<option value="${idx}" ${effect.dataId === idx ? 'selected' : ''}>${name}</option>`
+            `<option value="${idx}" ${effect.code === 42 && effect.dataId === idx ? 'selected' : ''}>${name}</option>`
         ).join('');
 
         const skills = this.databaseManager.getSkills() || [];
@@ -387,6 +394,7 @@ class DatabaseEffectEditor {
                 control: this._selectHTML(42, paramOpts),
                 value: this._numberHTML(42, 'value1', rrEscapeHtml(effect.code === 42 ? effect.value1 : 1))
             }),
+            this._growRangeRowHTML(effect),
             this._rowHTML(effect, {
                 code: 43, label: tt('Learn Skill'),
                 control: this._selectHTML(43, skillOpts)
@@ -397,6 +405,60 @@ class DatabaseEffectEditor {
             })
         ].join('');
         this.setupEffectRadioInputs(container, effect);
+        this.setupGrowRangeInputs(container, effect);
+    }
+
+    /**
+     * Grow's random range: ticked, the amount is drawn between the Grow
+     * row's number and this one (`value2`, which RPG Maker leaves at 0).
+     * A sibling of the Grow row, like the Add State duration row.
+     */
+    _growRangeRowHTML(effect) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
+        const on = effect.code === 42 && Math.floor(Number(effect.value2) || 0) !== 0;
+        const upper = on ? effect.value2 : (effect.code === 42 ? effect.value1 : 1);
+        return `
+            <div class="effect-grow-range rr-trait-row" data-code="42" style="margin-top: 6px;">
+                <input type="checkbox" class="effect-grow-random" style="margin: 0; justify-self: center;" ${on ? 'checked' : ''}>
+                <span class="rr-trait-label" style="color: var(--color-text-muted);">${tt('Random')}</span>
+                <span style="grid-column: 3 / -1; display: flex; align-items: center; gap: 8px;">
+                    <span style="color: var(--color-text-muted);">–</span>
+                    <input type="number" class="effect-grow-max database-field-value" step="1" value="${rrEscapeHtml(upper)}" style="width: 84px; box-sizing: border-box;" ${on ? '' : 'disabled'}>
+                </span>
+            </div>`;
+    }
+
+    /** Read the Grow range row into the effect (code 42 only). */
+    _readGrowRange(container, effect) {
+        const row = container.querySelector ? container.querySelector('.effect-grow-range') : null;
+        if (!row || effect.code !== 42) return;
+        const random = row.querySelector('.effect-grow-random');
+        const maxInput = row.querySelector('.effect-grow-max');
+        if (random && random.checked) {
+            let a = Math.floor(Number(effect.value1) || 0);
+            let b = Math.floor(parseFloat(maxInput.value) || 0);
+            // The runtime reads a non-zero value2 as "ranged": keep the
+            // non-zero end there when one end is 0.
+            if (b === 0 && a !== 0) { const t = a; a = b; b = t; }
+            effect.value1 = a;
+            effect.value2 = b;
+        } else {
+            effect.value2 = 0;
+        }
+    }
+
+    setupGrowRangeInputs(container, effect) {
+        const row = container.querySelector ? container.querySelector('.effect-grow-range') : null;
+        if (!row) return;
+        const random = row.querySelector('.effect-grow-random');
+        const maxInput = row.querySelector('.effect-grow-max');
+        random.addEventListener('change', () => {
+            maxInput.disabled = !random.checked;
+            this._readGrowRange(container, effect);
+        });
+        maxInput.addEventListener('input', () => this._readGrowRange(container, effect));
+        const amount = container.querySelector('input.effect-val[data-code="42"][data-field="value1"]');
+        if (amount) amount.addEventListener('input', () => this._readGrowRange(container, effect));
     }
 
     setupEffectRadioInputs(container, effect) {
@@ -426,12 +488,19 @@ class DatabaseEffectEditor {
                 if (code === 11 || code === 12) {
                     effect.value1 = val1Input ? (parseFloat(val1Input.value) || 0) / 100 : 0;
                     effect.value2 = val2Input ? parseFloat(val2Input.value) || 0 : 0;
-                } else if (code === 21 || code === 22) {
+                } else if (code === 21) {
                     effect.value1 = val1Input ? (parseFloat(val1Input.value) || 0) / 100 : 1;
                     effect.value2 = 0;
+                    delete effect.value3;
+                    this._readDuration(container, effect);
+                } else if (code === 22) {
+                    effect.value1 = val1Input ? (parseFloat(val1Input.value) || 0) / 100 : 1;
+                    effect.value2 = 0;
+                    delete effect.value3;
                 } else {
                     effect.value1 = val1Input ? parseFloat(val1Input.value) || 0 : 0;
                     effect.value2 = val2Input ? parseFloat(val2Input.value) || 0 : 0;
+                    if (code === 42) this._readGrowRange(container, effect);
                 }
             });
         });
