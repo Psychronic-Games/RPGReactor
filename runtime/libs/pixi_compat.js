@@ -2438,8 +2438,9 @@
     }
     // Sprite color manipulation API (setHue/setColorTone/setBlendColor/
     // setBrightness) is sometimes called on container-purpose objects. Stub
-    // these on Container.prototype so they don't throw; ColorFilter is a
-    // no-op on v8 anyway so this doesn't lose meaningful behavior.
+    // these on Container.prototype so they don't throw. (ColorFilter itself
+    // is a ColorMatrixFilter on v8 and does its job; this only covers calls
+    // that land on a plain container.)
     if (PIXI.Container && !PIXI.Container.prototype.setHue) {
         PIXI.Container.prototype.setHue = function(hue) { this._hue = hue; };
     }

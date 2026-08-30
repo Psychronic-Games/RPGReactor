@@ -6606,6 +6606,7 @@ ColorFilter.prototype.initialize = function() {
         this._blendColor = [0, 0, 0, 0];
         this._brightness = 255;
         this._rebuildColorMatrix();
+        this._defineLegacyUniforms();
         return;
     }
     // v5/v6/v7 path -- custom shader implementation (unchanged from the
@@ -6641,7 +6642,9 @@ ColorFilter.prototype.setColorTone = function(tone) {
         throw new Error("Argument must be an array");
     }
     if (PIXI.GlProgram && PIXI.ColorMatrixFilter) {
-        this._colorTone = tone.clone();
+        // Copy in place: the legacy `.uniforms.colorTone` view is a Proxy bound
+        // to this array object, so replacing it would strand the view.
+        ColorFilter._copyInto(this._colorTone, tone);
         this._rebuildColorMatrix();
     } else {
         this.uniforms.colorTone = tone.clone();
@@ -6658,7 +6661,7 @@ ColorFilter.prototype.setBlendColor = function(color) {
         throw new Error("Argument must be an array");
     }
     if (PIXI.GlProgram && PIXI.ColorMatrixFilter) {
-        this._blendColor = color.clone();
+        ColorFilter._copyInto(this._blendColor, color);
         this._rebuildColorMatrix();
     } else {
         this.uniforms.blendColor = color.clone();
@@ -6677,6 +6680,57 @@ ColorFilter.prototype.setBrightness = function(brightness) {
     } else {
         this.uniforms.brightness = Number(brightness);
     }
+};
+
+ColorFilter._copyInto = function(dest, src) {
+    dest.length = src.length;
+    for (let i = 0; i < src.length; i++) {
+        dest[i] = src[i];
+    }
+};
+
+// v8 only: PIXI 8 shaders expose `resources`, not `uniforms`, so the MZ-era
+// idiom `filter.uniforms.colorTone[i] = x` reads `undefined.colorTone` and
+// throws. Every VisuMZ_4_EncounterEffects battle transition writes that way.
+// Expose a `uniforms` view whose writes route through the public setters and
+// rebuild the color matrix. Array-valued entries hand back a Proxy over the
+// backing array so in-place element writes are caught too.
+ColorFilter.prototype._defineLegacyUniforms = function() {
+    if ("uniforms" in this) {
+        return;
+    }
+    const filter = this;
+    const arrayView = function(backing) {
+        return new Proxy(backing, {
+            set(target, prop, value) {
+                target[prop] = value;
+                filter._rebuildColorMatrix();
+                return true;
+            }
+        });
+    };
+    const colorToneView = arrayView(this._colorTone);
+    const blendColorView = arrayView(this._blendColor);
+    const uniforms = {};
+    Object.defineProperties(uniforms, {
+        hue: {
+            get: () => filter._hue,
+            set: value => filter.setHue(value)
+        },
+        brightness: {
+            get: () => filter._brightness,
+            set: value => filter.setBrightness(value)
+        },
+        colorTone: {
+            get: () => colorToneView,
+            set: value => filter.setColorTone(value)
+        },
+        blendColor: {
+            get: () => blendColorView,
+            set: value => filter.setBlendColor(value)
+        }
+    });
+    Object.defineProperty(this, "uniforms", { value: uniforms });
 };
 
 // 5x4 color matrix multiply (a * b). Both flat 20-element arrays; row layout
