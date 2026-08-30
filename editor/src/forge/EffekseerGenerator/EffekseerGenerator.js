@@ -2201,7 +2201,7 @@ class EffekseerGenerator {
             this._gl = gl;
             this._efkContext = effekseer.createContext();
             this._efkContext.init(gl);
-            this._efkContext.setRestorationOfStatesFlag(false);
+            this._efkContext.setRestorationOfStatesFlag(true);
         } catch (e) {
             console.error('EffekseerGenerator: context init failed:', e);
             this._overlay('Effekseer init failed', true);
@@ -2540,7 +2540,7 @@ class EffekseerGenerator {
 
         // MZ-style projection (as AnimationPicker) + orbit camera.
         const p = -((canvas.height * 1.2) / canvas.height);
-        this._efkContext.setProjectionMatrix([1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1, p, 0, 0, 0, 1]);
+        this._efkContext.setProjectionMatrix([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, p, 0, 0, 0, 1]);
         this._efkContext.setCameraMatrix(this._cameraMatrix());
 
         this._efkContext.beginDraw();

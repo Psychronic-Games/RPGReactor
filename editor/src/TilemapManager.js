@@ -2225,18 +2225,15 @@ class TilemapManager {
         }
 
         // Load parallax image
-        const parallaxPath = this.path.join(this.projectPath, 'img', 'parallaxes', parallaxName + '.png');
+        const parallaxRoot = this.path.join(this.projectPath, 'img', 'parallaxes');
+        const fileUrl = RRAssetFiles.imageUrlFor(parallaxRoot, parallaxName);
 
-        if (!this.fs.existsSync(parallaxPath)
-            && !(typeof window !== 'undefined' && window.RREncryptedAssets?.assetExists(parallaxPath))) {
+        if (!fileUrl) {
             if (this.layers.parallax) {
                 this.layers.parallax.visible = false;
             }
             return;
         }
-
-        // Convert to file:// URL for Pixi.js
-        const fileUrl = this.assetUrl(parallaxPath);
 
         try {
             // Load texture using PIXI.Assets.load() to ensure it's loaded before rendering
@@ -3521,16 +3518,16 @@ class TilemapManager {
     async renderParallaxToCanvas(ctx, mapData, mapWidth, mapHeight, tileSize) {
         const { parallaxName, parallaxLoopX, parallaxLoopY } = mapData;
 
-        const parallaxPath = this.path.join(this.projectPath, 'img', 'parallaxes', parallaxName + '.png');
+        const parallaxRoot = this.path.join(this.projectPath, 'img', 'parallaxes');
+        const parallaxUrl = RRAssetFiles.imageUrlFor(parallaxRoot, parallaxName);
 
-        if (!this.fs.existsSync(parallaxPath)
-            && !(typeof window !== 'undefined' && window.RREncryptedAssets?.assetExists(parallaxPath))) {
+        if (!parallaxUrl) {
             return; // Skip if image doesn't exist
         }
 
         // Load parallax image
         const img = new Image();
-        img.src = this.assetUrl(parallaxPath);
+        img.src = parallaxUrl;
 
         await new Promise((resolve, reject) => {
             img.onload = resolve;

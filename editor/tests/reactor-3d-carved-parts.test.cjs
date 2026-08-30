@@ -435,7 +435,7 @@ test('the pivot is a movable fulcrum on the card and in the viewport', () => {
     assert.match(editor, /_pivotPlanePoint\(/);
     // The card's target dropdown retargets the animation being edited —
     // values intact — and shows a deleted target marked for re-aiming.
-    assert.match(editor, /retargetWork\(event\.target\.value\)/);
+    assert.match(editor, /this\.retargetWork\(id\)/);
     assert.match(editor, /this\.partNames\.indexOf\(this\.selectedPartName\) < 0/);
     // A click on the canvas lets an open dropdown dismiss itself.
     assert.match(editor, /active\.tagName === 'SELECT'/);
@@ -472,7 +472,7 @@ test('the 3D section carries the tool strip, part picking, and the edit card', (
     // header carries a target dropdown (Whole model included), and its ×
     // folds it to a small button instead of losing the controls.
     assert.match(source, /const hasParts = \(this\._binding && this\._binding\.meshes\.length > 0\)/);
-    assert.match(source, /r3d-card-part/);
+    assert.match(source, /r3d-card-chooser/);
     assert.match(source, /r3d-card-expand/);
     // Every motion type is edited on the card — pose sliders, and swing /
     // spin / bob / clip bodies with axis chips — driven on 'input' so the

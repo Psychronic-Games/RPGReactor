@@ -139,11 +139,18 @@ test('resolution falls back to a case-insensitive match', () => {
     }
 });
 
-test('a missing encryptionKey is recovered from the constant PNG header', () => {
+test('a missing encryptionKey is recovered from the constant PNG header', async () => {
     const root = makeProject({ withKey: false });
     try {
-        const url = EncryptedAssets.resolveAssetUrl(path.join(root, 'img', 'tilesets', 'Tavern B4.png'));
+        fs.unlinkSync(path.join(root, 'img', 'tilesets', 'Tavern B4.png_'));
+        fs.unlinkSync(path.join(root, 'img', 'system', 'Window.rpgmvp'));
+        const nested = path.join(root, 'img', 'pictures', 'portraits');
+        fs.mkdirSync(nested, { recursive: true });
+        fs.writeFileSync(path.join(nested, 'Nested.png_'), encrypt(TINY_PNG, KEY_HEX));
+        const url = EncryptedAssets.resolveAssetUrl(path.join(nested, 'Nested.png'));
         assert.deepEqual(dataUrlBytes(url), TINY_PNG);
+        assert.deepEqual(Buffer.from(await EncryptedAssets.readPhysicalAssetBytesAsync(
+            path.join(nested, 'Nested.png_'), true)), TINY_PNG);
     } finally {
         fs.rmSync(root, { recursive: true, force: true });
     }
@@ -162,6 +169,74 @@ test('asset listings present encrypted files under their plain extension', () =>
         const found = AssetFiles.find(path.join(root, 'img', 'tilesets'), 'Tavern B4', ['.png']);
         assert.ok(found, 'find resolves an encrypted-only asset');
         assert.equal(found.relativePath, 'Tavern B4.png');
+    } finally {
+        fs.rmSync(root, { recursive: true, force: true });
+    }
+});
+
+test('alternate encrypted images retain their logical extension and MIME type', () => {
+    const root = makeProject({ withKey: true });
+    const webp = Buffer.from('524946460400000057454250', 'hex');
+    try {
+        const directory = path.join(root, 'img', 'pictures');
+        fs.mkdirSync(directory, { recursive: true });
+        fs.writeFileSync(path.join(directory, 'Poster.webp_'), encrypt(webp, KEY_HEX));
+        const logical = path.join(directory, 'Poster.webp');
+        const url = EncryptedAssets.resolveAssetUrl(logical);
+        assert.match(url, /^data:image\/webp;base64,/);
+        assert.deepEqual(dataUrlBytes(url), webp);
+        const record = AssetFiles.findImage(directory, 'Poster.webp');
+        assert.equal(record.relativePath, 'Poster.webp');
+        assert.equal(record.sourceExtension, '.webp_');
+    } finally {
+        fs.rmSync(root, { recursive: true, force: true });
+    }
+});
+
+test('encryption helpers round-trip bytes and identify the physical encrypted file', async () => {
+    const root = makeProject({ withKey: true });
+    try {
+        const key = EncryptedAssets.encryptionKeyFor(root);
+        assert.deepEqual(Buffer.from(key), Buffer.from(KEY_HEX, 'hex'));
+        const encrypted = EncryptedAssets.encryptAssetBytes(TINY_PNG, key);
+        assert.deepEqual(Buffer.from(encrypted.subarray(0, 16)), RPGMV_HEADER);
+        const replacementKey = '00112233445566778899aabbccddeeff';
+        fs.writeFileSync(path.join(root, 'data', 'System.json'), JSON.stringify({
+            hasEncryptedImages: true,
+            hasEncryptedAudio: true,
+            encryptionKey: replacementKey
+        }));
+        assert.deepEqual(Buffer.from(EncryptedAssets.encryptionKeyFor(root)), Buffer.from(replacementKey, 'hex'),
+            'a System.json key change is observed without relying on cache invalidation');
+        fs.writeFileSync(path.join(root, 'data', 'System.json'), JSON.stringify({
+            hasEncryptedImages: true,
+            hasEncryptedAudio: true,
+            encryptionKey: KEY_HEX
+        }));
+        const target = path.join(root, 'img', 'tilesets', 'RoundTrip.png_');
+        fs.writeFileSync(target, encrypted);
+        EncryptedAssets.invalidateProject(root);
+
+        const logical = path.join(root, 'img', 'tilesets', 'RoundTrip.png');
+        assert.deepEqual(dataUrlBytes(EncryptedAssets.resolveAssetUrl(logical)), TINY_PNG);
+        fs.writeFileSync(path.join(root, 'data', 'System.json'), JSON.stringify({
+            hasEncryptedImages: true,
+            hasEncryptedAudio: true,
+            encryptionKey: replacementKey
+        }));
+        assert.notDeepEqual(dataUrlBytes(EncryptedAssets.resolveAssetUrl(logical)), TINY_PNG,
+            'decrypted URL cache entries are bound to the current encryption key');
+        fs.writeFileSync(path.join(root, 'data', 'System.json'), JSON.stringify({
+            hasEncryptedImages: true,
+            hasEncryptedAudio: true,
+            encryptionKey: KEY_HEX
+        }));
+        assert.deepEqual(EncryptedAssets.physicalAssetRecord(logical), {
+            path: target,
+            encrypted: true,
+            sourceExtension: '.png_'
+        });
+        assert.deepEqual(Buffer.from(await EncryptedAssets.readAssetBytesAsync(logical)), TINY_PNG);
     } finally {
         fs.rmSync(root, { recursive: true, force: true });
     }

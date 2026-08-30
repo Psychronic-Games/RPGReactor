@@ -230,19 +230,22 @@ DataManager.loadMapData = function(mapId) {
  */
 DataManager.loadMapSidecar = function(mapData) {
     this._mapSidecarPending = false;
-    if (!mapData || !mapData.meta || !mapData.meta["3d"]) return;
-    if (!this._lastMapSrc || typeof Reactor3D === "undefined") return;
+    if (!mapData || !this._lastMapSrc || typeof Reactor3D === "undefined") return;
 
     const filename = this._lastMapSrc.replace(/\.json$/, Reactor3D.SIDECAR_SUFFIX);
     const url = "data/" + filename;
-    // A <3d> map with no painted sidecar is a normal state, but the request
-    // for the absent file would log a network error the page cannot suppress.
-    // When the disk is reachable, ask it instead of the network.
+    // The sidecar also carries event models and previews a flat map draws as
+    // sprites, so it is wanted whether or not the note says <3d>. A missing
+    // file is a normal state, but a request for it would log a network error
+    // the page cannot suppress: on disk, ask the disk; on the web, ask only
+    // when the note opts in or the project has 3D bindings at all.
     if (Utils.isNwjs()) {
         const fs = require("fs");
         const path = require("path");
         const base = path.dirname(process.mainModule.filename);
         if (!fs.existsSync(path.join(base, url))) return;
+    } else if (!(mapData.meta && mapData.meta["3d"]) && !Reactor3D._databaseSidecar) {
+        return;
     }
     const xhr = new XMLHttpRequest();
     this._mapSidecarPending = true;
@@ -252,6 +255,8 @@ DataManager.loadMapSidecar = function(mapData) {
         if (xhr.status < 400) {
             try {
                 mapData.reactor3d = JSON.parse(xhr.responseText);
+                // Props become model-bound events before the map counts as loaded.
+                if (Reactor3D.installProps) Reactor3D.installProps(mapData);
             } catch (e) {
                 console.error(`Reactor3D: ${filename} is not valid JSON.`, e);
             }
@@ -984,6 +989,7 @@ ImageManager.faceHeight = 144;
 ImageManager._cache = {};
 ImageManager._system = {};
 ImageManager._emptyBitmap = new Bitmap(1, 1);
+ImageManager._imageExtensions = [".png", ".jpg", ".jpeg", ".webp", ".svg", ".gif"];
 
 ImageManager.loadAnimation = function(filename) {
     return this.loadBitmap("img/animations/", filename);
@@ -1068,17 +1074,22 @@ ImageManager.loadTitle2 = function(filename) {
 
 ImageManager.loadBitmap = function(folder, filename) {
     if (filename) {
-        const url = folder + Utils.encodeURI(filename) + ".png";
-        return this.loadBitmapFromUrl(url);
+        const encoded = folder + Utils.encodeURI(filename);
+        const explicit = this._imageExtensions.some(extension =>
+            encoded.toLowerCase().endsWith(extension));
+        const url = explicit ? encoded : encoded + ".png";
+        // Stock MZ stored the physical "Portrait.jpg.png" as "Portrait.jpg".
+        // Retry that legacy interpretation only if an explicit modern path fails.
+        return this.loadBitmapFromUrl(url, explicit ? [url + ".png"] : []);
     } else {
         return this._emptyBitmap;
     }
 };
 
-ImageManager.loadBitmapFromUrl = function(url) {
+ImageManager.loadBitmapFromUrl = function(url, fallbackUrls) {
     const cache = url.includes("/system/") ? this._system : this._cache;
     if (!cache[url]) {
-        cache[url] = Bitmap.load(url);
+        cache[url] = Bitmap.load(url, fallbackUrls);
     }
     return cache[url];
 };

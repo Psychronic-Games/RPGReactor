@@ -93,8 +93,8 @@ class BuildManager {
                                 <div style="margin-top: 10px; display: grid; grid-template-columns: 130px minmax(0, 1fr); gap: 8px; align-items: center;">
                                     <label for="build-nw-version-policy" style="color: var(--color-text-muted); font-size: 11px;">${tt('Fallback version')}</label>
                                     <select id="build-nw-version-policy" class="rr-select" style="font-size: 12px; padding: 5px 7px;">
-                                        <option value="stable" selected>${tt('Latest stable')}</option>
-                                        <option value="editor">${tt('Same as editor')}</option>
+                                        <option value="stable">${tt('Latest stable')}</option>
+                                        <option value="editor" selected>${tt('Same as editor')}</option>
                                         <option value="exact">${tt('Specific version')}</option>
                                     </select>
                                     <label for="build-nw-version-exact" style="color: var(--color-text-muted); font-size: 11px;">${tt('Specific version')}</label>
@@ -102,9 +102,12 @@ class BuildManager {
                                     <div id="build-nw-version-list" class="nw-version-menu" role="listbox" hidden></div>
                                 </div>
                                 <div style="color: var(--color-text-muted); font-size: 10px; margin-top: 5px; line-height: 1.35;">${tt('Bundled and cached runtimes are checked before an official download.')}</div>
-                                <label style="display: flex; align-items: center; gap: 8px; margin-top: 10px; padding: 8px 10px; background: var(--color-bg-panel); border: 1px solid var(--color-border); border-radius: 4px; cursor: pointer;">
-                                    <input id="build-include-proprietary-codecs" type="checkbox" class="system-checkbox" style="width: 16px; height: 16px; min-width: 16px; min-height: 16px; max-width: 16px; max-height: 16px; flex: 0 0 16px; margin: 0;">
-                                    <span style="color: var(--color-text); font-weight: 600; font-size: 12px;">${tt('Include third-party H.264/AAC codec')}</span>
+                                <label id="build-codec-option" style="display: flex; align-items: flex-start; gap: 8px; margin-top: 10px; padding: 8px 10px; background: var(--color-bg-panel); border: 1px solid var(--color-border); border-radius: 4px; cursor: pointer;">
+                                    <input id="build-include-proprietary-codecs" type="checkbox" checked class="system-checkbox" style="width: 16px; height: 16px; min-width: 16px; min-height: 16px; max-width: 16px; max-height: 16px; flex: 0 0 16px; margin: 1px 0 0;">
+                                    <span>
+                                        <span style="display:block;color:var(--color-text);font-weight:600;font-size:12px;">${tt('Include third-party H.264/AAC codec')}</span>
+                                        <span id="build-codec-note" style="display:block;color:var(--color-text-muted);font-size:10px;line-height:1.35;margin-top:2px;">${tt('Desktop only. Requires a trusted hash for the exact NW.js version and includes LGPL/source and patent notices for redistribution.')}</span>
+                                    </span>
                                 </label>
                             </div>
 
@@ -322,6 +325,9 @@ class BuildManager {
         versionPolicy.addEventListener('change', () => {
             this.versionPicker.setEnabled(versionPolicy.value === 'exact');
         });
+        for (const id of ['build-platform-win', 'build-platform-mac', 'build-platform-linux', 'build-platform-web']) {
+            document.getElementById(id).addEventListener('change', () => this.updateCodecAvailability());
+        }
         document.getElementById('build-platform-linux').addEventListener('change', () => this.updateAppImageAvailability());
 
         // Close on background click
@@ -363,6 +369,24 @@ class BuildManager {
             : tt('Portable x86_64 file emitted beside the Linux folder.');
     }
 
+    updateCodecAvailability() {
+        const tt = text => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
+        const codec = document.getElementById('build-include-proprietary-codecs');
+        const option = document.getElementById('build-codec-option');
+        const note = document.getElementById('build-codec-note');
+        const desktop = ['build-platform-win', 'build-platform-mac', 'build-platform-linux']
+            .some(id => document.getElementById(id).checked);
+        if (!desktop && !codec.disabled) codec.dataset.restoreChecked = String(codec.checked);
+        codec.disabled = !desktop;
+        if (codec.disabled) codec.checked = false;
+        else if (codec.dataset.restoreChecked !== 'false') codec.checked = true;
+        option.style.opacity = codec.disabled ? '0.5' : '1';
+        option.style.cursor = codec.disabled ? 'not-allowed' : 'pointer';
+        note.textContent = desktop
+            ? tt('Enabled for desktop video playback. Web builds use browser codec support.')
+            : tt('Native codecs are unavailable for Web-only builds.');
+    }
+
     open() {
         const tt = text => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
         if (typeof window !== 'undefined' && window.I18n
@@ -372,6 +396,7 @@ class BuildManager {
         this.modal.style.display = 'flex';
         this.clearLog();
         this.resetProgress();
+        this.updateCodecAvailability();
         this.updateAppImageAvailability();
         this.log(tt('Ready to build. Select platforms and click "Start Build".'), 'var(--color-text-muted)');
         this.versionPicker.load().catch(() => {});

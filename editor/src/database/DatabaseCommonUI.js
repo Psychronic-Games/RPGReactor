@@ -124,10 +124,8 @@ class DatabaseCommonUI {
      */
     createImagePath(folder, filename) {
         const path = require('path');
-        const filePath = path.join(this.currentProject.path, 'img', folder, filename + '.png');
-        return typeof window !== 'undefined' && window.RPGReactorAssetUrl
-            ? window.RPGReactorAssetUrl(filePath)
-            : 'file://' + this.normalizeFilePath(filePath);
+        const imageRoot = path.join(this.currentProject.path, 'img', folder);
+        return RRAssetFiles.imageUrlFor(imageRoot, filename);
     }
 
     /**

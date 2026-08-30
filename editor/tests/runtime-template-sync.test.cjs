@@ -54,10 +54,8 @@ test('every bundled project carries the current runtime', () => {
             if (PER_PROJECT.has(path.basename(rel))) continue;
             const source = path.join(runtimeRoot, rel);
             const copy = path.join(templateRoot, project, 'js', rel);
-            // A project that never shipped a file is not missing it; only
-            // files it already has are held to the canonical version.
-            if (!fs.existsSync(copy)) continue;
-            if (!fs.readFileSync(source).equals(fs.readFileSync(copy))) {
+            if (!fs.existsSync(copy)
+                || !fs.readFileSync(source).equals(fs.readFileSync(copy))) {
                 drifted.push(`${project}/js/${rel}`);
             }
         }

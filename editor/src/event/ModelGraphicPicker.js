@@ -288,6 +288,7 @@ class ModelGraphicPicker {
     }
 
     _close() {
+        this._previewGen = (this._previewGen || 0) + 1;
         if (this._raf) cancelAnimationFrame(this._raf);
         this._raf = 0;
         if (this._orbitCleanup) this._orbitCleanup();
@@ -319,6 +320,7 @@ class ModelGraphicPicker {
             onSelect: label => {
                 const file = files.find(entry => entry.name === label);
                 if (!file) return;
+                if (this.selectedName === file.name) return;
                 if (this.selectedName !== file.name) this.selectedFaces = {};
                 this.selectedName = file.name;
                 this.selectedFile = file.file;
@@ -591,6 +593,8 @@ class ModelGraphicPicker {
         });
         for (const marker of remove) {
             if (marker.parent) marker.parent.remove(marker);
+            marker.geometry?.dispose?.();
+            marker.material?.dispose?.();
         }
         const colors = this._faceColors();
         const names = Object.keys(this.selectedFaces || {});
@@ -849,8 +853,7 @@ class ModelGraphicPicker {
 
     _disposePreview() {
         this._disposePoseRings();
-        if (this._object && this._object.parent) this._object.parent.remove(this._object);
-        this._object = null;
+        this._disposeModelResources();
         if (this._renderer) {
             this._renderer.dispose();
             const gl = this._renderer.getContext && this._renderer.getContext();
@@ -860,6 +863,15 @@ class ModelGraphicPicker {
         this._renderer = null;
         this._scene = null;
         this._camera = null;
+    }
+
+    _disposeModelResources() {
+        if (this._object && this._object.parent) this._object.parent.remove(this._object);
+        if (typeof ModelPreview3D !== 'undefined' && ModelPreview3D.disposeObject) {
+            ModelPreview3D.disposeObject(this._object, this._template);
+        }
+        this._object = null;
+        this._template = null;
     }
 
     _setMessage(text) {
@@ -905,10 +917,18 @@ class ModelGraphicPicker {
             const buffer = data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength);
             const path = require('path');
             const baseUrl = 'file://' + path.dirname(filePath).replace(/\\/g, '/') + '/';
+            const beforeBuild = () => {
+                if (gen !== this._previewGen || !this._modal) {
+                    throw new Error('The model preview was superseded.');
+                }
+            };
             const template = Reactor3D.readModelAsync
-                ? await Reactor3D.readModelAsync(buffer, this.selectedExt, baseUrl, this.selectedTexture)
+                ? await Reactor3D.readModelAsync(buffer, this.selectedExt, baseUrl, this.selectedTexture, { beforeBuild })
                 : Reactor3D.readModel(buffer, this.selectedExt, baseUrl, this.selectedTexture);
-            if (gen !== this._previewGen || !this._modal) return;
+            if (gen !== this._previewGen || !this._modal) {
+                if (typeof ModelPreview3D !== 'undefined') ModelPreview3D.disposeObject(template);
+                return;
+            }
             if (!this._renderer) {
                 this._scene = new THREE.Scene();
                 this._scene.background = new THREE.Color(0x1a1a1e);
@@ -921,7 +941,10 @@ class ModelGraphicPicker {
                     const rect = canvas.getBoundingClientRect();
                     const width = Math.max(1, Math.round(rect.width));
                     const height = Math.max(1, Math.round(rect.height));
-                    if (canvas.width !== width || canvas.height !== height) {
+                    const pixelRatio = this._renderer.getPixelRatio();
+                    const bufferWidth = Math.floor(width * pixelRatio);
+                    const bufferHeight = Math.floor(height * pixelRatio);
+                    if (canvas.width !== bufferWidth || canvas.height !== bufferHeight) {
                         this._renderer.setSize(width, height, false);
                         this._camera.aspect = width / height;
                         this._camera.updateProjectionMatrix();
@@ -960,7 +983,9 @@ class ModelGraphicPicker {
                 };
                 this._raf = requestAnimationFrame(tick);
             }
-            if (this._object && this._object.parent) this._object.parent.remove(this._object);
+            this._disposePoseRings();
+            this._disposeModelResources();
+            this._template = template;
             this._lastInputAt = performance.now();
             const model = Reactor3D.cloneModelTemplate
                 ? Reactor3D.cloneModelTemplate(template)
@@ -981,10 +1006,19 @@ class ModelGraphicPicker {
             this._applyModelRotation();
             this._rebuildFaceMarkers();
             this._scene.add(this._object);
+            try {
+                this._renderer.compile?.(this._scene, this._camera);
+                for (const texture of template.userData?.glbTextures || []) {
+                    this._renderer.initTexture?.(texture);
+                }
+            } catch (error) {
+                // Shader/texture warm-up is best-effort.
+            }
             this._applyCamera();
             this._applyFraming();
             this._setMessage('');
         } catch (error) {
+            if (/superseded/i.test(error?.message || '')) return;
             console.error('Reactor3D preview failed.', error);
             this._setMessage(this.selectedName);
         }

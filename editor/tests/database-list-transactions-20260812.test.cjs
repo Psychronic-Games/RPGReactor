@@ -52,7 +52,8 @@ test('enemy Add and modal Cancel leave action data and persistence untouched', (
                 addEventListener(type, listener) { listeners.set(type, listener); },
                 dispatch(type, event = {}) { listeners.get(type)?.(event); },
                 remove() { this.removed = true; },
-                querySelector() { return null; }
+                querySelector() { return null; },
+                querySelectorAll() { return []; }
             };
             created.push(element);
             return element;
@@ -60,11 +61,24 @@ test('enemy Add and modal Cancel leave action data and persistence untouched', (
     };
     const EnemyEditor = loadClass('DatabaseEnemyEditor.js', 'DatabaseEnemyEditor', { document });
     const editor = Object.create(EnemyEditor.prototype);
-    const original = { skillId: 2, conditionType: 2, conditionParam1: 0.25, conditionParam2: 0.75, rating: 5 };
+    const original = {
+        skillId: 2,
+        conditionType: 2,
+        conditionParam1: 0.25,
+        conditionParam2: 0.75,
+        conditions: [
+            { type: 2, param1: 0.25, param2: 0.75 },
+            { type: 4, param1: 3, param2: 0 }
+        ],
+        rating: 5
+    };
+    const before = JSON.parse(JSON.stringify(original));
     const enemy = { id: 7, actions: [original] };
     let updates = 0;
     editor.databaseManager = {
         getSkills: () => [{ id: 2, name: 'Spark' }],
+        getStates: () => [],
+        getSystem: () => ({ switches: [] }),
         updateEnemy: () => { updates++; }
     };
     editor.escapeHTML = value => String(value);
@@ -83,7 +97,8 @@ test('enemy Add and modal Cancel leave action data and persistence untouched', (
     const cancel = created.find(element => element.tagName === 'button' && element.textContent === 'Cancel');
     assert.ok(cancel, 'the action draft editor has a Cancel button');
     cancel.dispatch('click');
-    assert.deepEqual(enemy.actions[0], original);
+    assert.deepEqual(enemy.actions[0], before);
+    assert.equal(enemy.actions[0], original, 'Cancel retains the original action object');
     assert.equal(updates, 0);
 });
 

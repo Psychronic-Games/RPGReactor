@@ -36,8 +36,8 @@ class DatabaseEffectEditor {
             case 13:
                 return `+${effect.value1}`;
             case 21: case 22: {
-                // dataId 0 = the attacker's normal-attack state
-                if (effect.dataId === 0) {
+                // dataId 0 on Add State means the attacker's own attack states.
+                if (effect.code === 21 && effect.dataId === 0) {
                     return `${tt('Normal Attack')} (${Math.round(effect.value1 * 100)}%)`;
                 }
                 const state = dbManager ? dbManager.getState(effect.dataId) : null;
@@ -234,11 +234,12 @@ class DatabaseEffectEditor {
         const stateOpts = states.filter(s => s && s.id > 0).map(s =>
             `<option value="${s.id}" ${effect.dataId === s.id ? 'selected' : ''}>${rrEscapeHtml(s.name)}</option>`
         ).join('');
+        const addStateOpts = `<option value="0" ${effect.code === 21 && effect.dataId === 0 ? 'selected' : ''}>${tt('Normal Attack')}</option>` + stateOpts;
 
         container.innerHTML = [
             this._rowHTML(effect, {
                 code: 21, label: tt('Add State'),
-                control: this._selectHTML(21, stateOpts),
+                control: this._selectHTML(21, addStateOpts),
                 value: this._numberHTML(21, 'value1', effect.code === 21 ? Math.round(effect.value1 * 100) : 100),
                 unit: '%'
             }),

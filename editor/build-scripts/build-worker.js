@@ -76,8 +76,8 @@ const cacheCandidates = nwRuntime.cacheDirectories(appRoot);
 const codecCacheCandidates = nwCodec.cacheDirectories(appRoot);
 let releaseHashManifest = null;
 
-function getReleaseHashManifest() {
-    if (!releaseBuild) return null;
+function getReleaseHashManifest(required = false) {
+    if (!releaseBuild && !required) return null;
     if (!releaseHashManifest) {
         const manifestPath = releaseHashManifestPath || process.env.RPG_REACTOR_RELEASE_HASH_MANIFEST ||
             path.join(appRoot, 'build-scripts', 'release-hashes.json');
@@ -165,6 +165,7 @@ function validateProjectRuntime(root) {
     const required = [
         'reactor_main.js', 'reactor_core.js', 'reactor_3d.js', 'reactor_managers.js',
         'reactor_objects.js', 'reactor_scenes.js', 'reactor_sprites.js', 'reactor_picture_extensions.js',
+        'reactor_video_surfaces.js',
         'reactor_windows.js', 'reactor_ui.js', 'reactor_mv_compat.js', 'reactor_plugins.js',
         path.join('libs', 'pixi.js'), path.join('libs', 'pixi_compat.js'),
         path.join('libs', 'pako.min.js'), path.join('libs', 'lz-string.js'), path.join('libs', 'localforage.min.js'),
@@ -399,12 +400,12 @@ async function installProprietaryCodec(platform, runtimeRoot, runtimeVersion, pr
         cacheDirectories: codecCacheCandidates,
         download: (url, destination) => downloadFile(url, destination, progressBase, progressSpan),
         onWarning: logWarn,
-        releaseBuild,
-        hashManifest: getReleaseHashManifest(),
+        releaseBuild: true,
+        hashManifest: getReleaseHashManifest(true),
     });
     const temp = path.join(os.tmpdir(), `rpgreactor-codec-${process.pid}-${threadId}-${Date.now()}`);
     try {
-        const binary = nwCodec.extractBinary(acquired.archivePath, platform, temp);
+        const binary = nwCodec.extractBinary(acquired.archivePath, platform, temp, acquired.expectedHash);
         const destination = nwCodec.installBinary(binary, runtimeRoot, platform, acquired);
         logGood(`Proprietary codec installed: ${destination}`);
     } finally {
@@ -551,8 +552,11 @@ async function installProprietaryCodec(platform, runtimeRoot, runtimeVersion, pr
                 if (requiresSelectedVersion) await ensureNwVersion();
                 const localVersionMatches = !requiresSelectedVersion ||
                     (localRuntimeVersion && localRuntimeVersion === nwVersion);
+                // A packaged or local runtime may already contain a codec overlay. For an
+                // unchecked build, use a clean official runtime rather than guessing whether
+                // its native codec is stock.
                 const canUseBundled = hasBundledRuntime && localVersionMatches &&
-                    (!includeProprietaryCodecs || localRuntimeVersion);
+                    includeProprietaryCodecs && localRuntimeVersion;
                 if (runtimeSource === 'bundled' && canUseBundled) {
                     // Copy the local NW.js runtime before applying optional codec overlays.
                     const sourceDir = bundledDir || packagedDir;
@@ -574,7 +578,7 @@ async function installProprietaryCodec(platform, runtimeRoot, runtimeVersion, pr
                 } else {
                     if (runtimeSource === 'bundled') {
                         logWarn(hasBundledRuntime
-                            ? `Bundled NW.js does not match the selected version for ${label}; using the exact official runtime/cache.`
+                            ? `Bundled NW.js cannot satisfy the selected version/codec policy for ${label}; using the exact official runtime/cache.`
                             : `Bundled NW.js not found for ${label} — falling back to download`);
                     }
                     // Download NW.js for the target platform

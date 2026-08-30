@@ -351,8 +351,9 @@ class AnimationPicker {
         const canvas = document.createElement('canvas');
         canvas.width = 480;
         canvas.height = 360;
+        const previewBackdrop = window.RRPreviewBackdrop;
         canvas.style.cssText = `
-            background-color: var(--color-bg-deep);
+            background-color: ${previewBackdrop.color()};
             border: 1px solid var(--color-border);
             border-radius: 3px;
             max-width: 100%;
@@ -401,6 +402,12 @@ class AnimationPicker {
         controls.appendChild(playBtn);
         controls.appendChild(stopBtn);
         controls.appendChild(frameLabel);
+        const backdropSwitcher = previewBackdrop.createSwitcher(() => {
+            canvas.style.backgroundColor = previewBackdrop.color();
+            if (this._refreshPreviewBackdrop) this._refreshPreviewBackdrop();
+        });
+        backdropSwitcher.style.marginLeft = 'auto';
+        controls.appendChild(backdropSwitcher);
         panel.appendChild(controls);
 
         // Load and auto-play
@@ -426,23 +433,25 @@ class AnimationPicker {
             const path = require('path');
 
             if (animation.animation1Name) {
-                const imgPath = path.join(currentProject.path, 'img', 'animations', animation.animation1Name + '.png');
+                const imageRoot = path.join(currentProject.path, 'img', 'animations');
+                const imgPath = RRAssetFiles.imageUrlFor(imageRoot, animation.animation1Name);
                 const img1 = new Image();
                 const p1 = new Promise((resolve) => {
                     img1.onload = () => { spriteSheet1 = img1; resolve(); };
                     img1.onerror = () => { console.warn('Failed to load:', imgPath); resolve(); };
-                    img1.src = RRAssetFiles.toUrl(imgPath);
+                    img1.src = imgPath;
                 });
                 promises.push(p1);
             }
 
             if (animation.animation2Name) {
-                const imgPath = path.join(currentProject.path, 'img', 'animations', animation.animation2Name + '.png');
+                const imageRoot = path.join(currentProject.path, 'img', 'animations');
+                const imgPath = RRAssetFiles.imageUrlFor(imageRoot, animation.animation2Name);
                 const img2 = new Image();
                 const p2 = new Promise((resolve) => {
                     img2.onload = () => { spriteSheet2 = img2; resolve(); };
                     img2.onerror = () => { console.warn('Failed to load:', imgPath); resolve(); };
-                    img2.src = RRAssetFiles.toUrl(imgPath);
+                    img2.src = imgPath;
                 });
                 promises.push(p2);
             }
@@ -454,7 +463,7 @@ class AnimationPicker {
             if (gen !== this._loadGeneration) return;
 
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-            ctx.fillStyle = '#000000';
+            ctx.fillStyle = window.RRPreviewBackdrop.color();
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
             if (!animation.frames || frameIndex >= animation.frames.length) return;
@@ -490,6 +499,7 @@ class AnimationPicker {
 
             frameLabel.textContent = `${this._t('Frame:')} ${frameIndex + 1} / ${animation.frames.length}`;
         };
+        this._refreshPreviewBackdrop = () => renderFrame(currentFrame > 0 ? currentFrame - 1 : 0);
 
         const play = () => {
             if (isPlaying) return;
@@ -624,7 +634,7 @@ class AnimationPicker {
                 return;
             }
             effekseerContext.init(gl);
-            effekseerContext.setRestorationOfStatesFlag(false);
+            effekseerContext.setRestorationOfStatesFlag(true);
             this._effekseerContext = effekseerContext;
             this._gl = gl;
         } catch (e) {
@@ -704,15 +714,17 @@ class AnimationPicker {
             frameLabel.textContent = `${this._t('Frame:')} ${currentFrame}`;
 
             gl.viewport(0, 0, canvas.width, canvas.height);
-            gl.clearColor(0, 0, 0, 1);
+            const backdrop = window.RRPreviewBackdrop.rgb01();
+            gl.clearColor(backdrop[0], backdrop[1], backdrop[2], 1);
             gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
             // Projection & camera matrices (RPG Maker MZ style)
             const viewportSize = canvas.height * 1.2;
             const p = -(viewportSize / canvas.height);
+            const x = canvas.height / canvas.width;
             effekseerContext.setProjectionMatrix([
-                1, 0, 0, 0,
-                0, -1, 0, 0,
+                x, 0, 0, 0,
+                0, 1, 0, 0,
                 0, 0, 1, p,
                 0, 0, 0, 1
             ]);
@@ -756,7 +768,7 @@ class AnimationPicker {
                 const offsetX = animation.offsetX || 0;
                 const offsetY = animation.offsetY || 0;
 
-                const rx = ((180 - rotation.x) * Math.PI) / 180;
+                const rx = (rotation.x * Math.PI) / 180;
                 const ry = (rotation.y * Math.PI) / 180;
                 const rz = (rotation.z * Math.PI) / 180;
 
@@ -791,7 +803,8 @@ class AnimationPicker {
             }
 
             if (gl) {
-                gl.clearColor(0, 0, 0, 1);
+                const backdrop = window.RRPreviewBackdrop.rgb01();
+                gl.clearColor(backdrop[0], backdrop[1], backdrop[2], 1);
                 gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
             }
 
@@ -802,6 +815,12 @@ class AnimationPicker {
             playBtn.style.opacity = '1';
             stopBtn.disabled = true;
             stopBtn.style.opacity = '0.5';
+        };
+        this._refreshPreviewBackdrop = () => {
+            if (!gl) return;
+            const backdrop = window.RRPreviewBackdrop.rgb01();
+            gl.clearColor(backdrop[0], backdrop[1], backdrop[2], 1);
+            gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
         };
 
         playBtn.addEventListener('click', play);
@@ -849,6 +868,7 @@ class AnimationPicker {
         this._spriteSheet2 = null;
         this._previewCanvas = null;
         this._rightPanel = null;
+        this._refreshPreviewBackdrop = null;
     }
 
     _confirm() {

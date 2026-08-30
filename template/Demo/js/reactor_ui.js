@@ -894,10 +894,10 @@
     ReactorUI.imageSourceFromUrl = function(url) {
         let value = String(url || "");
         try { value = decodeURIComponent(value); } catch (e) { /* as is */ }
-        const m = /(?:^|[\/\\])img[\/\\]([^\/\\]+)[\/\\](.+?)(?:\.(?:png|png_|rpgmvp|webp))?(?:\?.*)?$/i.exec(value);
+        const m = /(?:^|[\/\\])img[\/\\]([^\/\\]+)[\/\\]([^?]+)(?:\?.*)?$/i.exec(value);
         if (!m) return null;
         const folder = m[1].toLowerCase();
-        const file = m[2];
+        const file = m[2].replace(/(?:\.png_|\.rpgmvp)$/i, "").replace(/\.png$/i, "");
         const source = { pictures: "picture", system: "system", faces: "face", characters: "character", titles1: "title1", titles2: "title2" }[folder];
         return source ? { source, file, folder } : null;
     };

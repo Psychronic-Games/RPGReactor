@@ -9961,5 +9961,498 @@
     ],
     "flashTimings": [],
     "soundTimings": []
+  },
+  {
+    "name": "RPG Reactor Core",
+    "flashTimings": [],
+    "soundTimings": [],
+    "effectName": "RPGReactor-Core",
+    "displayType": 0,
+    "offsetX": 0,
+    "offsetY": 0,
+    "rotation": {
+      "x": 0,
+      "y": 0,
+      "z": 0
+    },
+    "scale": 100,
+    "speed": 100,
+    "id": 122
+  },
+  {
+    "name": "",
+    "flashTimings": [],
+    "soundTimings": [],
+    "effectName": "",
+    "displayType": 0,
+    "offsetX": 0,
+    "offsetY": 0,
+    "rotation": {
+      "x": 0,
+      "y": 0,
+      "z": 0
+    },
+    "scale": 100,
+    "speed": 100,
+    "id": 123
+  },
+  {
+    "name": "",
+    "flashTimings": [],
+    "soundTimings": [],
+    "effectName": "",
+    "displayType": 0,
+    "offsetX": 0,
+    "offsetY": 0,
+    "rotation": {
+      "x": 0,
+      "y": 0,
+      "z": 0
+    },
+    "scale": 100,
+    "speed": 100,
+    "id": 124
+  },
+  {
+    "name": "",
+    "flashTimings": [],
+    "soundTimings": [],
+    "effectName": "",
+    "displayType": 0,
+    "offsetX": 0,
+    "offsetY": 0,
+    "rotation": {
+      "x": 0,
+      "y": 0,
+      "z": 0
+    },
+    "scale": 100,
+    "speed": 100,
+    "id": 125
+  },
+  {
+    "name": "",
+    "flashTimings": [],
+    "soundTimings": [],
+    "effectName": "",
+    "displayType": 0,
+    "offsetX": 0,
+    "offsetY": 0,
+    "rotation": {
+      "x": 0,
+      "y": 0,
+      "z": 0
+    },
+    "scale": 100,
+    "speed": 100,
+    "id": 126
+  },
+  {
+    "name": "",
+    "flashTimings": [],
+    "soundTimings": [],
+    "effectName": "",
+    "displayType": 0,
+    "offsetX": 0,
+    "offsetY": 0,
+    "rotation": {
+      "x": 0,
+      "y": 0,
+      "z": 0
+    },
+    "scale": 100,
+    "speed": 100,
+    "id": 127
+  },
+  {
+    "name": "",
+    "flashTimings": [],
+    "soundTimings": [],
+    "effectName": "",
+    "displayType": 0,
+    "offsetX": 0,
+    "offsetY": 0,
+    "rotation": {
+      "x": 0,
+      "y": 0,
+      "z": 0
+    },
+    "scale": 100,
+    "speed": 100,
+    "id": 128
+  },
+  {
+    "name": "",
+    "flashTimings": [],
+    "soundTimings": [],
+    "effectName": "",
+    "displayType": 0,
+    "offsetX": 0,
+    "offsetY": 0,
+    "rotation": {
+      "x": 0,
+      "y": 0,
+      "z": 0
+    },
+    "scale": 100,
+    "speed": 100,
+    "id": 129
+  },
+  {
+    "name": "",
+    "flashTimings": [],
+    "soundTimings": [],
+    "effectName": "",
+    "displayType": 0,
+    "offsetX": 0,
+    "offsetY": 0,
+    "rotation": {
+      "x": 0,
+      "y": 0,
+      "z": 0
+    },
+    "scale": 100,
+    "speed": 100,
+    "id": 130
+  },
+  {
+    "name": "",
+    "flashTimings": [],
+    "soundTimings": [],
+    "effectName": "",
+    "displayType": 0,
+    "offsetX": 0,
+    "offsetY": 0,
+    "rotation": {
+      "x": 0,
+      "y": 0,
+      "z": 0
+    },
+    "scale": 100,
+    "speed": 100,
+    "id": 131
+  },
+  {
+    "name": "",
+    "flashTimings": [],
+    "soundTimings": [],
+    "effectName": "",
+    "displayType": 0,
+    "offsetX": 0,
+    "offsetY": 0,
+    "rotation": {
+      "x": 0,
+      "y": 0,
+      "z": 0
+    },
+    "scale": 100,
+    "speed": 100,
+    "id": 132
+  },
+  {
+    "name": "",
+    "flashTimings": [],
+    "soundTimings": [],
+    "effectName": "",
+    "displayType": 0,
+    "offsetX": 0,
+    "offsetY": 0,
+    "rotation": {
+      "x": 0,
+      "y": 0,
+      "z": 0
+    },
+    "scale": 100,
+    "speed": 100,
+    "id": 133
+  },
+  {
+    "name": "",
+    "flashTimings": [],
+    "soundTimings": [],
+    "effectName": "",
+    "displayType": 0,
+    "offsetX": 0,
+    "offsetY": 0,
+    "rotation": {
+      "x": 0,
+      "y": 0,
+      "z": 0
+    },
+    "scale": 100,
+    "speed": 100,
+    "id": 134
+  },
+  {
+    "name": "",
+    "flashTimings": [],
+    "soundTimings": [],
+    "effectName": "",
+    "displayType": 0,
+    "offsetX": 0,
+    "offsetY": 0,
+    "rotation": {
+      "x": 0,
+      "y": 0,
+      "z": 0
+    },
+    "scale": 100,
+    "speed": 100,
+    "id": 135
+  },
+  {
+    "name": "",
+    "flashTimings": [],
+    "soundTimings": [],
+    "effectName": "",
+    "displayType": 0,
+    "offsetX": 0,
+    "offsetY": 0,
+    "rotation": {
+      "x": 0,
+      "y": 0,
+      "z": 0
+    },
+    "scale": 100,
+    "speed": 100,
+    "id": 136
+  },
+  {
+    "name": "",
+    "flashTimings": [],
+    "soundTimings": [],
+    "effectName": "",
+    "displayType": 0,
+    "offsetX": 0,
+    "offsetY": 0,
+    "rotation": {
+      "x": 0,
+      "y": 0,
+      "z": 0
+    },
+    "scale": 100,
+    "speed": 100,
+    "id": 137
+  },
+  {
+    "name": "",
+    "flashTimings": [],
+    "soundTimings": [],
+    "effectName": "",
+    "displayType": 0,
+    "offsetX": 0,
+    "offsetY": 0,
+    "rotation": {
+      "x": 0,
+      "y": 0,
+      "z": 0
+    },
+    "scale": 100,
+    "speed": 100,
+    "id": 138
+  },
+  {
+    "name": "",
+    "flashTimings": [],
+    "soundTimings": [],
+    "effectName": "",
+    "displayType": 0,
+    "offsetX": 0,
+    "offsetY": 0,
+    "rotation": {
+      "x": 0,
+      "y": 0,
+      "z": 0
+    },
+    "scale": 100,
+    "speed": 100,
+    "id": 139
+  },
+  {
+    "name": "",
+    "flashTimings": [],
+    "soundTimings": [],
+    "effectName": "",
+    "displayType": 0,
+    "offsetX": 0,
+    "offsetY": 0,
+    "rotation": {
+      "x": 0,
+      "y": 0,
+      "z": 0
+    },
+    "scale": 100,
+    "speed": 100,
+    "id": 140
+  },
+  {
+    "name": "",
+    "flashTimings": [],
+    "soundTimings": [],
+    "effectName": "",
+    "displayType": 0,
+    "offsetX": 0,
+    "offsetY": 0,
+    "rotation": {
+      "x": 0,
+      "y": 0,
+      "z": 0
+    },
+    "scale": 100,
+    "speed": 100,
+    "id": 141
+  },
+  {
+    "name": "",
+    "flashTimings": [],
+    "soundTimings": [],
+    "effectName": "",
+    "displayType": 0,
+    "offsetX": 0,
+    "offsetY": 0,
+    "rotation": {
+      "x": 0,
+      "y": 0,
+      "z": 0
+    },
+    "scale": 100,
+    "speed": 100,
+    "id": 142
+  },
+  {
+    "name": "",
+    "flashTimings": [],
+    "soundTimings": [],
+    "effectName": "",
+    "displayType": 0,
+    "offsetX": 0,
+    "offsetY": 0,
+    "rotation": {
+      "x": 0,
+      "y": 0,
+      "z": 0
+    },
+    "scale": 100,
+    "speed": 100,
+    "id": 143
+  },
+  {
+    "name": "",
+    "flashTimings": [],
+    "soundTimings": [],
+    "effectName": "",
+    "displayType": 0,
+    "offsetX": 0,
+    "offsetY": 0,
+    "rotation": {
+      "x": 0,
+      "y": 0,
+      "z": 0
+    },
+    "scale": 100,
+    "speed": 100,
+    "id": 144
+  },
+  {
+    "name": "",
+    "flashTimings": [],
+    "soundTimings": [],
+    "effectName": "",
+    "displayType": 0,
+    "offsetX": 0,
+    "offsetY": 0,
+    "rotation": {
+      "x": 0,
+      "y": 0,
+      "z": 0
+    },
+    "scale": 100,
+    "speed": 100,
+    "id": 145
+  },
+  {
+    "name": "",
+    "flashTimings": [],
+    "soundTimings": [],
+    "effectName": "",
+    "displayType": 0,
+    "offsetX": 0,
+    "offsetY": 0,
+    "rotation": {
+      "x": 0,
+      "y": 0,
+      "z": 0
+    },
+    "scale": 100,
+    "speed": 100,
+    "id": 146
+  },
+  {
+    "name": "",
+    "flashTimings": [],
+    "soundTimings": [],
+    "effectName": "",
+    "displayType": 0,
+    "offsetX": 0,
+    "offsetY": 0,
+    "rotation": {
+      "x": 0,
+      "y": 0,
+      "z": 0
+    },
+    "scale": 100,
+    "speed": 100,
+    "id": 147
+  },
+  {
+    "name": "",
+    "flashTimings": [],
+    "soundTimings": [],
+    "effectName": "",
+    "displayType": 0,
+    "offsetX": 0,
+    "offsetY": 0,
+    "rotation": {
+      "x": 0,
+      "y": 0,
+      "z": 0
+    },
+    "scale": 100,
+    "speed": 100,
+    "id": 148
+  },
+  {
+    "name": "",
+    "flashTimings": [],
+    "soundTimings": [],
+    "effectName": "",
+    "displayType": 0,
+    "offsetX": 0,
+    "offsetY": 0,
+    "rotation": {
+      "x": 0,
+      "y": 0,
+      "z": 0
+    },
+    "scale": 100,
+    "speed": 100,
+    "id": 149
+  },
+  {
+    "name": "",
+    "flashTimings": [],
+    "soundTimings": [],
+    "effectName": "",
+    "displayType": 0,
+    "offsetX": 0,
+    "offsetY": 0,
+    "rotation": {
+      "x": 0,
+      "y": 0,
+      "z": 0
+    },
+    "scale": 100,
+    "speed": 100,
+    "id": 150
   }
 ]

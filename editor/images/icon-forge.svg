@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Forge">
+  <defs>
+    <linearGradient id="gold" x1="5" y1="15" x2="51" y2="58" gradientUnits="userSpaceOnUse"><stop stop-color="#fff3a0"/><stop offset=".3" stop-color="#ffd529"/><stop offset=".72" stop-color="#f08a0c"/><stop offset="1" stop-color="#a94d08"/></linearGradient>
+    <radialGradient id="spark"><stop stop-color="#fff"/><stop offset=".28" stop-color="#fffbd5"/><stop offset=".62" stop-color="#ffd529"/><stop offset="1" stop-color="#d7318f"/></radialGradient>
+  </defs>
+  <path d="M58 16H25C16 16 8 20 4 27c6 3 13 4 20 4h3v11h-7l-4 15h32l-4-15h-7V31h15c4 0 6-3 6-7z" fill="url(#gold)" stroke="#010718" stroke-width="4.5" stroke-linejoin="round"/>
+  <path d="M10 25h43M22 52h20" stroke="#072b95" stroke-width="2.7" stroke-linecap="round"/>
+  <path d="M14 1c1.7 6.1 4.3 9.1 10 10.5-5.7 1.4-8.3 4.4-10 10.5-1.7-6.1-4.3-9.1-10-10.5C9.7 10.1 12.3 7.1 14 1z" fill="url(#spark)" stroke="#d7318f" stroke-width="2.2" stroke-linejoin="round"/>
+</svg>

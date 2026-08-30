@@ -238,6 +238,10 @@ class EventManager {
             if (this.eventContainer.parent) {
                 this.eventContainer.parent.removeChild(this.eventContainer);
             }
+            if (this.eventPreviewContainer?.parent) {
+                this.eventPreviewContainer.parent.removeChild(this.eventPreviewContainer);
+            }
+            this.eventPreviewContainer = null;
             this.eventContainer = null;
         }
 
@@ -264,6 +268,9 @@ class EventManager {
 
         // Create event container if it doesn't exist
         if (!this.eventContainer) {
+            this.eventPreviewContainer = new PIXI.Container();
+            this.eventPreviewContainer.label = 'event previews';
+            tilemapManager.container.addChild(this.eventPreviewContainer);
             this.eventContainer = new PIXI.Container();
             this.eventContainer.label = 'events';
             tilemapManager.container.addChild(this.eventContainer);
@@ -750,6 +757,7 @@ class EventManager {
         const menuItems = [
             { label: this._t('eventCtx.newEvent'), shortcut: 'Enter', action: createEventAction, enabled: !eventAtPos },
             { label: this._t('eventCtx.editEvent'), shortcut: 'Enter', action: () => this.editEvent(eventAtPos), enabled: !!eventAtPos },
+            { label: this._t('eventCtx.previewEvent'), enabled: !!eventAtPos, submenu: this._eventPreviewMenu(eventAtPos) },
             { label: this._t('quickEvent.title'), enabled: !eventAtPos, submenu: [
                 { label: this._t('quickEvent.transfer'), action: () => this.showQuickEventDialog('transfer', tileX, tileY) },
                 { label: this._t('quickEvent.door'), action: () => this.showQuickEventDialog('door', tileX, tileY) },
@@ -771,7 +779,11 @@ class EventManager {
                 { label: this._t('eventCtx.boat'), action: () => this.setStartingPosition(tileX, tileY, 'boat') },
                 { label: this._t('eventCtx.ship'), action: () => this.setStartingPosition(tileX, tileY, 'ship') },
                 { label: this._t('eventCtx.airship'), action: () => this.setStartingPosition(tileX, tileY, 'airship') }
-            ] }
+            ] },
+            { label: this._t('eventCtx.playerFacing'), submenu: EventManager.DIRECTIONS.map(([direction, name]) => ({
+                label: `${direction === this.playerStartDirection() ? '✓ ' : ''}${tt(name)}`,
+                action: () => this.setPlayerStartDirection(direction)
+            })) }
         ];
 
         menuItems.forEach(item => {
@@ -1342,7 +1354,7 @@ class EventManager {
         const project = this.projectController.getCurrentProject?.() || this.projectController.currentProject;
         if (!project?.path || typeof RRAssetFiles === 'undefined') return {};
         const path = require('path');
-        const names = RRAssetFiles.listNames(path.join(project.path, 'img', 'characters'), ['.png']);
+        const names = RRAssetFiles.listImageReferences(path.join(project.path, 'img', 'characters'));
         const wanted = kind === 'door' ? /door/i : /chest|treasure/i;
         const characterName = names.find(name => wanted.test(RRAssetFiles.basename(name))) || '';
         return { characterName, characterIndex: 0, pattern: 1, imageDirection: 2 };
@@ -2034,6 +2046,29 @@ class EventManager {
     }
 
     // Set starting position
+    /** The facing the player starts with: System.json `startDirection`, down when unset. */
+    playerStartDirection() {
+        const system = this.databaseManager && this.databaseManager.getSystem ? this.databaseManager.getSystem() : null;
+        const asked = Number(system && system.startDirection);
+        return EventManager.DIRECTIONS.some(([direction]) => direction === asked) ? asked : 2;
+    }
+
+    /** Set the facing the player starts with, and save it with the start position. */
+    async setPlayerStartDirection(direction) {
+        const tt = (text) => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
+        const currentProject = this.projectController ? this.projectController.getCurrentProject() : null;
+        const systemData = this.databaseManager ? this.databaseManager.getSystem() : null;
+        if (!currentProject || !systemData) return;
+        systemData.startDirection = EventManager.DIRECTIONS.some(([value]) => value === direction) ? direction : 2;
+        try {
+            await this.databaseManager.saveJSON(currentProject.path, 'System.json', systemData);
+        } catch (error) {
+            console.error('Error saving System.json:', error);
+            alert(tt('Error saving starting position. Check console for details.'));
+        }
+        this.renderStartingPositions();
+    }
+
     async setStartingPosition(x, y, type) {
         const tt = (text) => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
         const currentProject = this.projectController.getCurrentProject();
@@ -2152,8 +2187,220 @@ class EventManager {
         if (this._characterImages) this._characterImages.clear();
     }
 
+    /**
+     * Preview Event draws a page's graphic at its real size and position, the
+     * way the game will, under the event marker. The choice is kept per
+     * event in the map's Reactor sidecar so it survives reopening the project.
+     */
+    _eventPreviewMenu(event) {
+        if (!event) return [{ label: this._t('eventCtx.hidePreview'), action: () => {} }];
+        const current = this.getEventPreviewPage(event);
+        const pages = (event.pages || []).map((page, index) => ({
+            label: `${current === index ? '\u2713 ' : ''}${this._t('eventCtx.previewPage', { n: index + 1 })}`,
+            action: () => this.setEventPreview(event, index)
+        }));
+        pages.push({ label: this._t('eventCtx.hidePreview'), enabled: current !== null, action: () => this.setEventPreview(event, null) });
+        return pages;
+    }
+
+    getEventPreviewPage(event) {
+        const previews = this.currentMap?.reactor3d?.eventPreviews;
+        const page = previews ? previews[String(event?.id)] : undefined;
+        return Number.isInteger(page) && event?.pages?.[page] ? page : null;
+    }
+
+    setEventPreview(event, pageIndex) {
+        if (!event || !Number.isInteger(event.id) || !this.currentMap) return false;
+        const map = this.currentMap;
+        if (pageIndex === null || pageIndex === undefined) {
+            if (map.reactor3d?.eventPreviews) delete map.reactor3d.eventPreviews[String(event.id)];
+            if (map.reactor3d?.eventPreviews && !Object.keys(map.reactor3d.eventPreviews).length) delete map.reactor3d.eventPreviews;
+        } else {
+            map.reactor3d = map.reactor3d || {};
+            map.reactor3d.eventPreviews = map.reactor3d.eventPreviews || {};
+            map.reactor3d.eventPreviews[String(event.id)] = pageIndex;
+        }
+        this.renderEventPreviews();
+        // The 3D view places the preview as a model or billboard of its own,
+        // which only a rebuild adds; without it a preview chosen in 3D showed
+        // up at the next project open and not before.
+        this.projectController?.refreshMap3DView?.();
+        return true;
+    }
+
+    renderEventPreviews() {
+        const container = this.eventPreviewContainer;
+        if (!container || !this.currentMap) return;
+        for (const child of container.removeChildren()) child.destroy({ children: true });
+        this._previewAnimations = [];
+        for (const event of this.currentMap.events || []) {
+            if (!event) continue;
+            const pageIndex = this.getEventPreviewPage(event);
+            if (pageIndex === null) continue;
+            try {
+                const sprite = this.createEventPreviewSprite(event, event.pages[pageIndex], pageIndex);
+                if (sprite) container.addChild(sprite);
+            } catch (error) {
+                console.warn(`Could not preview event ${event.id}:`, error);
+            }
+        }
+        this._syncPreviewTicker();
+    }
+
+    /** Stepping animation runs at the game's cadence: (9 - move speed) * 3 frames per pattern. */
+    static stepWaitFrames(page) {
+        const speed = Number(page?.moveSpeed) || 3;
+        return (9 - Math.min(6, Math.max(1, speed))) * 3;
+    }
+
+    _syncPreviewTicker() {
+        const app = this.tilemapManager?.app;
+        const wanted = this._previewAnimations?.length > 0;
+        if (this._previewTicker && (this._previewTickerApp !== app || !wanted)) {
+            try { this._previewTickerApp?.ticker?.remove(this._previewTicker); } catch (_) {}
+            this._previewTicker = null;
+            this._previewTickerApp = null;
+        }
+        if (!wanted || this._previewTicker || !app?.ticker) return;
+        this._previewTicker = ticker => {
+            for (const anim of this._previewAnimations || []) {
+                anim.count += ticker.deltaTime;
+                if (anim.count < anim.wait) continue;
+                anim.count = 0;
+                anim.pattern = (anim.pattern + 1) % 4;
+                anim.sprite.texture = anim.frames[anim.pattern < 3 ? anim.pattern : 1];
+            }
+        };
+        this._previewTickerApp = app;
+        app.ticker.add(this._previewTicker);
+    }
+
+    createEventPreviewSprite(event, page, pageIndex = 0) {
+        const image = page?.image;
+        if (!image) return null;
+        const tw = this.tilemapManager?.TILE_WIDTH || 48;
+        const th = this.tilemapManager?.TILE_HEIGHT || tw;
+        const modelSprite = this.createModelPreviewSprite(event, page, pageIndex);
+        if (modelSprite) return modelSprite;
+        if (image.tileId > 0) {
+            const tile = this.createTileSprite(image.tileId);
+            if (!tile) return null;
+            tile.x = event.x * tw;
+            tile.y = event.y * th;
+            return tile;
+        }
+        if (!image.characterName) return null;
+        const frame = this.characterFrame(image);
+        if (!frame) return null;
+        const sprite = new PIXI.Sprite(frame.texture);
+        sprite.anchor.set(0.5, 1);
+        // Sprite_Character: feet at the tile's bottom centre, lifted 6px unless
+        // the sheet is an object ("!") sheet.
+        const shift = /^!/.test(image.characterName) ? 0 : 6;
+        sprite.x = (event.x + 0.5) * tw;
+        sprite.y = (event.y + 1) * th - shift;
+        if (page.stepAnime) {
+            const frames = [0, 1, 2].map(pattern => this.characterFrame(image, pattern)?.texture || frame.texture);
+            this._previewAnimations.push({
+                sprite, frames, pattern: Number.isInteger(image.pattern) ? image.pattern : 1,
+                count: 0, wait: EventManager.stepWaitFrames(page)
+            });
+        }
+        return sprite;
+    }
+
+    /**
+     * A page bound to a 3D model previews as a front-facing render of the
+     * model at its footprint size, standing on the tile.
+     */
+    createModelPreviewSprite(event, page, pageIndex) {
+        if (typeof RREventPreviewModels === 'undefined') return null;
+        const raw = this.currentMap?.reactor3d?.events?.[String(event.id)]?.[String(pageIndex)];
+        if (!raw?.name) return null;
+        // three.js and Reactor3D only load with the 3D view; a model preview
+        // on the 2D canvas asks for them once and redraws when they arrive.
+        if (typeof Reactor3D === 'undefined' || !Reactor3D.normalizeModelSpec) {
+            const map3d = this.projectController?.mapEditor3D;
+            if (map3d?.ensureLibraries && !this._loading3DLibraries) {
+                this._loading3DLibraries = map3d.ensureLibraries().then(ready => {
+                    this._loading3DLibraries = null;
+                    if (ready) this.renderEventPreviews();
+                }).catch(() => { this._loading3DLibraries = null; });
+            }
+            return null;
+        }
+        const spec = Reactor3D.normalizeModelSpec(raw);
+        if (!spec) return null;
+        const tw = this.tilemapManager?.TILE_WIDTH || 48;
+        const th = this.tilemapManager?.TILE_HEIGHT || tw;
+        const pixels = Math.round((spec.size > 0 ? spec.size : 2) * (spec.scale > 0 ? spec.scale : 1) * tw);
+        const direction = page?.image?.direction || 2;
+        const key = `${spec.name}|${spec.ext || ''}|${spec.file || ''}@${pixels}:${direction}`;
+        if (!this._modelPreviewTextures) this._modelPreviewTextures = new Map();
+        let texture = this._modelPreviewTextures.get(key);
+        if (texture === undefined) {
+            this._modelPreviewTextures.set(key, null);
+            const project = this.projectController.getCurrentProject ? this.projectController.getCurrentProject() : this.projectController.currentProject;
+            RREventPreviewModels.thumbnail(project, spec, this.projectController.mapEditor3D, pixels, direction).then(result => {
+                if (!result) {
+                    // Textures still loading (or the file is gone): try again shortly.
+                    this._modelPreviewTextures.delete(key);
+                    setTimeout(() => this.renderEventPreviews(), 2000);
+                    return;
+                }
+                const image = new Image();
+                image.onload = () => {
+                    this._modelPreviewTextures.set(key, { texture: PIXI.Texture.from(image), anchorX: result.anchorX, anchorY: result.anchorY });
+                    this.renderEventPreviews();
+                };
+                image.src = result.url;
+            });
+        }
+        if (!texture) return null;
+        const sprite = new PIXI.Sprite(texture.texture);
+        // Ground origin on the tile centre, as the game places it.
+        sprite.anchor.set(texture.anchorX, texture.anchorY);
+        sprite.x = (event.x + 0.5) * tw;
+        sprite.y = (event.y + 0.5) * th;
+        return sprite;
+    }
+
+    /** One character cell of a sheet at its natural size, or null while the sheet loads. */
+    characterFrame(image, patternOverride) {
+        const currentProject = this.projectController.getCurrentProject ? this.projectController.getCurrentProject() : this.projectController.currentProject;
+        if (!currentProject || !image?.characterName) return null;
+        const path = require('path');
+        const imgPath = RRAssetFiles.imageUrlFor(path.join(currentProject.path, 'img', 'characters'), image.characterName);
+        if (!this._characterImages) this._characterImages = new Map();
+        let htmlImg = this._characterImages.get(imgPath);
+        if (!htmlImg) {
+            htmlImg = new Image();
+            htmlImg.src = imgPath;
+            this._characterImages.set(imgPath, htmlImg);
+        }
+        if (!htmlImg.complete || !htmlImg.width || !htmlImg.height) {
+            htmlImg.onload = () => this.renderEvents();
+            return null;
+        }
+        const source = PIXI.Texture.from(htmlImg)?.source;
+        if (!source) return null;
+        const big = RRAssetFiles.isBigCharacter(image.characterName);
+        const dirRow = { 2: 0, 4: 1, 6: 2, 8: 3 }[image.direction || 2] || 0;
+        const width = big ? source.width / 3 : source.width / 12;
+        const height = big ? source.height / 4 : source.height / 8;
+        const index = image.characterIndex || 0;
+        const baseX = big ? 0 : (index % 4) * 3 * width;
+        const baseY = big ? dirRow * height : (Math.floor(index / 4) * 4 + dirRow) * height;
+        const pattern = patternOverride !== undefined ? patternOverride : (image.pattern === undefined ? 1 : image.pattern);
+        return {
+            width, height,
+            texture: new PIXI.Texture({ source, frame: new PIXI.Rectangle(baseX + pattern * width, baseY, width, height) })
+        };
+    }
+
     renderEvents() {
         if (!this.eventContainer || !this.currentMap) return;
+        this.renderEventPreviews();
 
         // Clear existing event sprites. Destroy them — removeChildren()
         // alone detaches, and each name label is a PIXI.Text that owns a
@@ -2317,7 +2564,7 @@ class EventManager {
         // Render player starting position
         if (systemData.startMapId === mapId) {
             console.debug(`Rendering player starting position marker at (${systemData.startX}, ${systemData.startY})`);
-            this.createStartingPositionMarker(systemData.startX, systemData.startY, tt('Player'), 0x00ff00);
+            this.createStartingPositionMarker(systemData.startX, systemData.startY, tt('Player'), 0x00ff00, this.playerStartDirection());
         }
 
         // Render boat starting position
@@ -2337,10 +2584,13 @@ class EventManager {
 
         // Make container visible
         this.startingPositionContainer.visible = true;
+        // The 3D view draws the same markers.
+        const map3d = this.projectController?.mapEditor3D;
+        if (map3d && typeof map3d.refreshStartMarkers === 'function') map3d.refreshStartMarkers();
     }
 
     // Create a starting position marker
-    createStartingPositionMarker(x, y, label, color) {
+    createStartingPositionMarker(x, y, label, color, direction) {
         const container = new PIXI.Container();
         container.x = x * this.tilemapManager.TILE_WIDTH;
         container.y = y * this.tilemapManager.TILE_HEIGHT;
@@ -2353,6 +2603,15 @@ class EventManager {
         // Draw marker border - PIXI v8 API
         graphics.rect(0, 0, this.tilemapManager.TILE_WIDTH, this.tilemapManager.TILE_HEIGHT);
         graphics.stroke({ color: color, width: 3, alpha: 1.0 });
+
+        // The player's marker carries an arrow at the edge it faces.
+        if (direction) {
+            const w = this.tilemapManager.TILE_WIDTH, h = this.tilemapManager.TILE_HEIGHT;
+            graphics.poly(EventManager.arrowPoints(direction, w, h));
+            graphics.fill({ color: 0xffffff, alpha: 0.95 });
+            graphics.poly(EventManager.arrowPoints(direction, w, h));
+            graphics.stroke({ color: 0x000000, width: 1, alpha: 0.8 });
+        }
 
         container.addChild(graphics);
 
@@ -2587,12 +2846,8 @@ class EventManager {
         }
 
         const path = require('path');
-        // Add .png extension if not already present (RPG Maker stores names without extension)
-        const filename = image.characterName.endsWith('.png') ? image.characterName : image.characterName + '.png';
-        const filePath = path.join(currentProject.path, 'img', 'characters', filename);
-        const imgPath = window.RPGReactorAssetUrl
-            ? window.RPGReactorAssetUrl(filePath)
-            : 'file://' + filePath.replace(/\\/g, '/');
+        const imgPath = RRAssetFiles.imageUrlFor(
+            path.join(currentProject.path, 'img', 'characters'), image.characterName);
 
         try {
             // Load as HTML Image element first, then convert to PIXI texture
@@ -2691,6 +2946,8 @@ class EventManager {
     destroy() {
         this.removeEventInteraction();
         this.hideContextMenu();
+        this._previewAnimations = [];
+        this._syncPreviewTicker();
         if (this.findDialog) {
             this.findDialog.remove();
         }
@@ -2712,4 +2969,26 @@ class EventManager {
         }
         this.eventSprites.clear();
     }
+}
+
+/** The four facings a player can start with, and the words the picker uses for them. */
+EventManager.DIRECTIONS = [[2, 'Down'], [4, 'Left'], [6, 'Right'], [8, 'Up']];
+
+/**
+ * A small arrow at the edge of a tile-sized marker, pointing the way a
+ * facing says: a down arrow at the bottom edge, turned about the centre for
+ * the other three.
+ */
+EventManager.arrowPoints = function(direction, width, height) {
+    const cx = width / 2, cy = height / 2;
+    const base = [[-6, cy - 13], [6, cy - 13], [0, cy - 3]];
+    const angle = { 2: 0, 4: Math.PI / 2, 6: -Math.PI / 2, 8: Math.PI }[direction] || 0;
+    const cos = Math.cos(angle), sin = Math.sin(angle);
+    const points = [];
+    for (const [x, y] of base) points.push(cx + x * cos - y * sin, cy + x * sin + y * cos);
+    return points;
+};
+
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = EventManager;
 }

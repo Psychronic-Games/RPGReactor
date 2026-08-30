@@ -40,6 +40,31 @@ test('recursive asset index preserves extensionless POSIX relative names', () =>
     }
 });
 
+test('image references keep PNG compatibility and preserve explicit modern extensions', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'rr-image-assets-'));
+    try {
+        for (const relativePath of [
+            'Poster.png', 'Poster.jpg', 'Nested/Card.jpeg', 'Nested/Card.webp',
+            'Vector.svg', 'Animated.gif', 'Legacy.jpg.png', 'Secret.webp_'
+        ]) {
+            const filePath = path.join(root, relativePath);
+            fs.mkdirSync(path.dirname(filePath), { recursive: true });
+            fs.writeFileSync(filePath, 'fixture');
+        }
+        assert.deepEqual(AssetFiles.listImageReferences(root), [
+            'Animated.gif', 'Legacy.jpg', 'Nested/Card.jpeg', 'Nested/Card.webp',
+            'Poster', 'Poster.jpg', 'Secret.webp', 'Vector.svg'
+        ]);
+        assert.equal(AssetFiles.findImage(root, 'Poster').relativePath, 'Poster.png');
+        assert.equal(AssetFiles.findImage(root, 'Poster.png').relativePath, 'Poster.png');
+        assert.equal(AssetFiles.findImage(root, 'Poster.jpg').relativePath, 'Poster.jpg');
+        assert.equal(AssetFiles.findImage(root, 'Legacy.jpg').relativePath, 'Legacy.jpg.png');
+        assert.equal(AssetFiles.findImage(root, 'Secret.webp').sourceExtension, '.webp_');
+    } finally {
+        fs.rmSync(root, { recursive: true, force: true });
+    }
+});
+
 test('editor loads the recursive asset index before asset consumers', () => {
     const html = fs.readFileSync(path.join(repoRoot, 'index.html'), 'utf8');
     const helper = html.indexOf('src/utils/AssetFiles.js');

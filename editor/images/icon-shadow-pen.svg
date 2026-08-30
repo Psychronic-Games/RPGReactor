@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Shadow Pen">
+  <defs>
+    <linearGradient id="pen-barrel" x1="33" y1="4" x2="47" y2="34" gradientUnits="userSpaceOnUse"><stop stop-color="#0876ed"/><stop offset=".52" stop-color="#07399f"/><stop offset="1" stop-color="#03142f"/></linearGradient>
+    <linearGradient id="shadow-ground" x1="7" y1="35" x2="57" y2="60" gradientUnits="userSpaceOnUse"><stop stop-color="#075cdd"/><stop offset="1" stop-color="#03142f"/></linearGradient>
+    <linearGradient id="pen-nib" x1="34" y1="37" x2="42" y2="50" gradientUnits="userSpaceOnUse"><stop stop-color="#e8fbff"/><stop offset=".45" stop-color="#24bdf3"/><stop offset="1" stop-color="#075cdd"/></linearGradient>
+  </defs>
+  <path d="M6 37h44l8 8v14H6z" fill="#01030a" stroke="#01030a" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M8 38h41l7 7v12H8z" fill="url(#shadow-ground)" stroke="#24bdf3" stroke-width="2.2" stroke-linejoin="round"/>
+  <path d="M23 39h25M32 39v18M8 48h48" fill="none" stroke="#168ed8" stroke-width="1.8"/>
+  <path d="m21 40 29 10-8 7-27-11z" fill="#01030a" stroke="#000" stroke-width="2" stroke-linejoin="round"/>
+  <path d="m17 44 24 8" fill="none" stroke="#0b1833" stroke-width="2.2" stroke-linecap="round" opacity=".9"/>
+  <g transform="rotate(35 39.5 25)" stroke-linejoin="round">
+    <rect x="29" y="1.5" width="21" height="35" rx="7" fill="#01030a" stroke="#01030a" stroke-width="4"/>
+    <rect x="32" y="4" width="15" height="30" rx="4.5" fill="url(#pen-barrel)" stroke="#075cdd" stroke-width="2"/>
+    <path d="M44 8v13c0 3-2 5-5 5" fill="none" stroke="#24bdf3" stroke-width="2.8" stroke-linecap="round"/>
+    <path d="M34 7h7" fill="none" stroke="#e8fbff" stroke-width="2" stroke-linecap="round" opacity=".8"/>
+
+    <path d="M28.5 29h22v9h-22z" fill="#01030a" stroke="#01030a" stroke-width="3"/>
+    <path d="M31 30.5h17v5H31z" fill="#d7318f" stroke="#24bdf3" stroke-width="1.5"/>
+
+    <path d="M30.5 36h18l-9 17z" fill="#01030a" stroke="#01030a" stroke-width="4"/>
+    <path d="m34 38 11 0-5.5 11z" fill="url(#pen-nib)" stroke="#24bdf3" stroke-width="1.5"/>
+    <circle cx="39.5" cy="42" r="1.6" fill="#07399f"/>
+    <path d="M39.5 43.5V49" fill="none" stroke="#07399f" stroke-width="1.5" stroke-linecap="round"/>
+  </g>
+</svg>

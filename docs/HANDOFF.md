@@ -1,6 +1,6 @@
 # Handoff - 0.98.4 In Progress
 
-Last updated 2026-08-27.
+Last updated 2026-08-29.
 
 ## Current State
 
@@ -9,32 +9,505 @@ Last updated 2026-08-27.
   (2026-08-24): in-editor rigging, rig templates and preset motions,
   database 3D bindings, MP3/WAV/FLAC/M4A audio, PixiJS 8.20.0.
 - **0.98.4** is open in `editor/package.json`, both READMEs, and the
-  `[Unreleased - 0.98.4]` sections of both changelogs. Custom interfaces now
-  cover typed named List contexts, complete actor data/bindings, expanded
-  Gauges, seven stable generated baselines, functional Options and Save/Load,
-  display-only map HUDs, styling/focus/transitions, and seven opt-in replacement
-  roles. The cycle also includes the PIXI 8
-  compatibility and 3D performance work described below, browser save
-  durability, atomic Reactor sidecars, escaped desktop asset URLs, complete
-  plugin schema/command-block handling, editor-only database names, all-slot
-  system-sound variants/pitch ranges, Audio Player parity for music/sound
-  commands, one shared album-art cache, animation-preview fidelity, a 5,000-entry
-  Animation ceiling with an independent timing sidebar, locally reviewed
-  18-language localization and audited UI routing, State/trait database layout
-  polish, scaled-window clipping, and real Chromium/NW.js smoke tests.
-- Validation: **1,785 passing Node tests**, no failures, skips, or TODOs
-  (`cd editor && npm test`, ~19 s). Real Web persistence and NW.js launch/save
-  smokes pass, as does the NW.js UI-layout smoke at 1280x720 through 2560x1440.
-  Syntax passes across 921 source JavaScript files; dependency audit, runtime
-  sync, and `git diff --check` pass. A read-only NW.js screenshot/geometry pass
-  also checked the State and Animation editors at 1280x720 and 1600x900,
-  dark/light screenshots, all 14 palette/mode theme keys, local scrolling and
-  overflow, and confirmed that the validation did not dirty the project. No
-  full end-user playtest is claimed for this validation.
+  `[Unreleased - 0.98.4]` sections of both changelogs. In addition to the custom
+  interfaces, GitHub fixes, PIXI 8 compatibility, 3D performance, browser-save,
+  localization, plugin schema, database, audio, animation, and Resource Manager
+  work described below, the current tree now includes native Video Surface
+  commands/runtime/live-map authoring; transactional single-model import into
+  the deletion-disabled 3D catalog; PNG/JPG/JPEG/WebP/safe-SVG/GIF handling
+  across converted consumers with animated GIF refresh; exact-version verified
+  desktop H.264/AAC codec overlays and redistribution metadata; actor/model
+  preview lifecycle cleanup; and an expanded themed SVG toolbar set including Fill, Shadow Pen,
+  Undo/Redo, draw modes, layers, Audio, Database, Plugins, Resource Manager, and
+  Forge.
+- Validation: **1,957 passing Node tests**, no failures, skips, or TODOs
+  (`cd editor && npm test`, ~57 s), re-run 2026-08-29 with the whole tree
+  staged (runtime revision `20260829.38`). Focused Resource Manager, model transaction,
+  image-format, Video Surface, actor-preview, localization, asset URL, and System
+  browser suites pass. `npm audit` reports zero vulnerabilities; source syntax,
+  runtime-focused checks, and `git diff --check` pass. Existing real Web
+  persistence, NW.js launch/save, NW.js UI-layout (1280x720 through 2560x1440),
+  and read-only State/Animation screenshot results remain valid.
+- Manual status: animated GIF playback in the actual editor/runtime, live 3D
+  Video Surface placement and right-click navigation (2D placement, warp,
+  resize, and playback were driven in the real NW.js editor on 2026-08-29),
+  actor-preview
+  performance under repeated selection, and final toolbar-icon inspection in
+  dark/light themes have not yet been run. No full end-user playtest is claimed.
+- 2026-08-29 3D authoring day (details in the dated sections below): Map
+  Properties 3D switch + room + Default Camera; five camera modes and the
+  Change 3D Camera command; 3D-M model props; Database → 3D Effects
+  (animations and video surfaces, anchors, triggers, model-relative scale,
+  face occlusion) with Play 3D Effect; mesh collision; third/first person
+  mouse look + WASD, look-up over the shoulder, head lean, Escape → menu;
+  player start facing with 3D start markers; themed steppers app-wide.
+- NOT tracked (owner decision pending, ~410 MB): `template/Demo/3d/Map-Objects/`
+  and `template/Demo/3d/Room-Rings/`, which Demo Map001 references. A clean
+  checkout's Demo shows that map without its props and room rings until
+  they are added or replaced with smaller models.
 - `template/Demo` is the only git-tracked template. The other folders under
   `template/` are local compatibility-corpus projects (Star Shift
   Freelancers / Origins / Rebellion, Project2/3, MZ3D, Parallax, Hendrix,
   Barebones) and are ignored; tests must not depend on them.
+
+## Video Effects, Mesh Collision, Relative Controls, Editor Playback (2026-08-29, owner-reported)
+
+- **Use the current Demo.** The scratchpad `DemoCopy` had drifted; refresh
+  with `rsync -a --delete --exclude .rpgreactor.lock template/Demo/ DemoCopy/`
+  then rsync `runtime/` into its `js/`. The real repro was
+  `Map-Objects/RPGReactor` (size 20, no rules, effect `Core` trigger
+  Always) placed as a prop with `effect: "Core"`.
+- Effects for models without animation rules never ran: the effect pass
+  lived inside `if (holder.binding && holder.rules.length)`. Now separate.
+- Runaway: `spawnAnchoredAnimation` ended by calling
+  `updateAnchoredAnimations`, whose loop restart called spawn again →
+  recursion until the stack died (1,832 sprites, then a frozen list).
+  Restarts are collected and run after the pass; `MAX_ANCHORED_PER_MODEL`
+  = 8; a sprite is "playing" iff the spriteset still parents it.
+- Mesh collision is the DEFAULT (`collision: "box"` opts out). Mask per
+  model+pose: quarter-tile cells from triangles under 1.2 tiles;
+  `mask.touches(x, z, r)` tests the walking body (r = 0.34 tile) so tile
+  granularity no longer makes walls. Built in `preloadMapModels` under the
+  fade (reactor: 3.09M triangles, ~300 ms). Verified: reactor 117 tiles as
+  a round base vs 173 box; 1 µs per `pos()`.
+- Third/first person: mouse look (pointer lock; `Camera.look`) + WASD/arrows
+  relative to the camera (`Camera.relativeMove`, 8-way via
+  `moveDiagonally`); first person turns the body to the look when still.
+  Verified in game: yaw 90 → W walks east, A strafes north. Harness sets
+  `look.locked = true` and dispatches `mousemove` (no real pointer lock).
+  Look-up: third-person pitch range [-25, 80]; the mouse turns the look
+  unlocked too (client deltas). Head lean (`applyLookLean`) MUST run after
+  `applyModelAnimation` — the mixer writes every bone each frame, so a lean
+  applied before it read as rotX 0. Looking up is over the shoulder: the eye
+  stays at focus height and slides in (75% at full look-up, min 1.5 tiles),
+  the view pitches up — never under the floor. Verified: eye y 1.0, 2 tiles
+  behind, head −30°. Escape while pointer-locked is swallowed by Chrome:
+  `lockReleased` on `pointerlockchange` (window focused) sets `menuCalling`;
+  F3/F4 and `fullscreenchange` suppress it for 1.5 s (fullscreen drops the
+  lock too). The DB effect preview must read the WORKING copy once its
+  effect is selected (`_fxPreviewDef = wanted`), else sliders look dead.
+  The overlay canvases grow to the shown size (≤1024) — at 384 they were
+  blurry over a big model.
+- Effect scale contract (owner asked for model-relative): scale 1 = the
+  animation's authored screen is the model's longest side. Game:
+  `effectModelScale` = spanTiles × tileHeight / Graphics.height on the
+  axes; editor layer: `setSpan(tiles)`, q = span/8, MV cells
+  (size/8)×span/screenHeight. Earlier bugs fixed on the way: the DB layer
+  was 1.875× too small at 720p and capped at 1024 px. Verified: Core beam
+  1.35× tower in DB, ~1.25× in game (its beam clips the frame).
+  `effectFacesCamera`: box-face heuristic, no geometry; interior anchors
+  always show. NOTE: Demo Map001 event 2 (EV002) has a note
+  `flashlight 20 25 #5555FF 0 -24 1` that the light shim draws as a huge
+  purple cone over the reactor — that is what looks like a giant "effect",
+  not the Core animation. Left as authored.
+- Player start facing: `System.json.startDirection`; 3D start markers are
+  in `eventGroup` (not pickable), rebuilt by `refreshStartMarkers`.
+- Editor 3D view plays rules + Always effects + a prop's chosen effect
+  (`RRAnimationPreviewLayer` per effect: one WebGL context each — keep
+  Always effects few on a map; video effects are `VideoTexture` planes).
+- Perf pass (owner rule: potato PCs): editor profile showed no per-frame
+  texture churn; the real per-move cost was `propAt` raycasting whole
+  meshes — now `Box3` per prop, hover throttled to 30 Hz. Game frame with
+  the reactor + Core effect: p50 7 ms, max 12 ms.
+
+## Props Panel via Picker + Start Animation/Effect (2026-08-29, owner-reported)
+
+- 3D-M panel: picture/Choose button → `ModelGraphicPicker`; its pose
+  (yaw/pitch/roll/size) lands on the prop. Animation/Effect dropdowns read
+  the chosen model's model.json (`PlayModelAnimationEditor.modelActionNames`
+  / `PlayModelEffectEditor.modelActionNames`). Runtime queues both after
+  `setupEvents` (verified in game: the plant prop's queued `peck` was
+  consumed and one anchored `zap` was live). A start animation plays once
+  unless the rule has Repeat.
+
+## Effect Triggers, Free Scale, Global Steppers (2026-08-29, owner-reported)
+
+- Effect `trigger` mirrors rule triggers; runtime `updateTriggeredEffects`
+  runs in the holder loop with the same moving/dashing state as the rules.
+  Editor preview: `_updateTriggeredEffectPreview` picks the first active
+  triggered effect (one overlay layer = one animation at a time).
+- Scale is `number | [x,y,z]` in model.json (`transform.scale`, effect
+  `scale`); the runtime's `scaleAxes` normalises. Non-uniform effect scale
+  in play patches the sprite instance's `updateEffectGeometry` because the
+  stock pass calls `setScale(s,s,s)` every frame.
+- The preview follows the live `_effectWork` (was a normalised snapshot, so
+  placing the anchor did nothing until Play).
+- `NumberSteppers.js` wraps every number input app-wide on load and via
+  MutationObserver; hand-authored `.rr-number-stepper` markup is skipped.
+  If a field must keep the bare input (none known), add `data-no-stepper`.
+
+## 3D Editor Card Rework (2026-08-29, owner-reported)
+
+- The card (upper right now) is one surface for three targets, chosen from
+  a grouped searchable dropdown (`utils/SearchSelect.js`): `__model` →
+  transform mode (`_transformWork`, live via `_applyBaseTransform`, saved
+  as model.json `transform`; Animations tab = the old whole-model card),
+  a part/bone → the pose card as before, `fx:<name>` → effect mode
+  (`_effectWork` offset/rotate/scale sliders, marker drag, Play, Save).
+  `_cardMode` is 'part' | 'effect'; `_modelTab` 'transform' | 'animation';
+  `editRule` forces the animation tab for whole-model rules.
+- Base transform is a wrapper group inside the instance
+  (`Reactor3D.applyModelTransform`), applied at every clone site. Rigs and
+  carved parts sit under it; verified the rigged Fleagus still binds.
+- Repeat: rule `repeat` (on-demand only). Runtime restarts the action at
+  `until`; `PlayModelAnimation` with an empty name stops it. Editor preview
+  restarts `_sim.action` for repeat rules and for any preview whose trigger
+  is not on-demand (the "why doesn't Always repeat" report).
+- Effect `rotate` is degrees on top of the record's rotation; MV sheets
+  only honour Z (2D) in the preview; Effekseer takes all three in play and
+  preview.
+
+## Model Effects + Play 3D Effect (2026-08-29, owner-reported)
+
+- model.json `effects[]` are first-class (Effects section under Animations
+  in the 3D database editor); rule timelines reference them by name
+  (`{ at, effect }`, the ✦ rows; clicking a row steps to the next named
+  effect). Runtime: `readModelEffects`, `fireNamedEffect`,
+  `spawnAnchoredAnimation` (stand-in target sprite in `_effectsContainer`,
+  `sprite._targets = [standIn]`, repositioned per frame from
+  `effectAnchorWorld` + `projectToScreen`), queue via `playModelEffect`.
+  Anchors only project on 3D-scene maps; flat maps play on the character.
+- Editor preview: `RRAnimationPreviewLayer` (transparent WebGL canvas for
+  Effekseer with `premultipliedAlpha: true, alpha: true`; 2D canvas for MV
+  sheets) inside `.r3d-canvas-wrap`, moved by `_updateEffectPreview` each
+  tick; sized to the model's on-screen height × effect scale. Inline
+  animation effects on rules preview at the origin now (they did not before).
+- Markup-escaping guard: an i18n key ending in `.name` inside `${…}` reads
+  as a field access — keys are `r3dfx.effectName`, not `r3dfx.name`.
+- Not done: anchors in 2D sprite mode, per-effect rotation/mirror, effect
+  tracks on the rule timeline UI beyond the name step, deleting an SE from
+  the runtime SE cache.
+
+## Model Props (2026-08-29, owner: "computer consoles in a 3D map")
+
+- Palette M tab (`TilesetPaletteViewer.tabIcon('model3d')`, container
+  `model-props-ui-container`) → `ModelPropsManager` (main.js creates it on
+  map load, `projectController.modelPropsManager`; `activate()` disables the
+  tile painter and binds PIXI pointer handlers on the tilemap container,
+  `deactivate()` restores it). Panel: model list from
+  `ModelGraphicPicker.listModels`, thumbnail via `RREventPreviewModels`,
+  Size/Scale/Facing/Lift/Passable, Remove/Deselect. Fields become the
+  selected prop's values and edit it live.
+- Data: `RRMapElevation.props/addProp/updateProp/removeProp`; a sidecar with
+  only props is kept. Runtime: `Reactor3D.installProps` → synthetic events
+  at `PROP_EVENT_BASE + id` with `reactorProp`, page `through = passable`,
+  `directionFix`, empty list; `installPropHooks` (from reactor_sprites.js)
+  sets fractional `_realX/_realY`, `_reactorLift`, and pins `isMoving()`
+  false (else `updateMove` slides the event home to its cell — seen in the
+  harness as x drifting 12.35→12.29). Verified in game: event exists, faces
+  6, `canPass` into the Buick's footprint false, passable bike true, lift 1.
+- 3D editor: `buildProps` after `buildEvents` (own `propGroup`, instances
+  tagged `userData.propId`), pointer-down order: prop ring → prop pick/drag
+  → ground click places (with a chosen model) → else events/orbit. Rings
+  come from `utils/PoseRings3D.js` (extracted; the video-surface manager
+  still carries its own copy — fold it in when touching that code next).
+- Not done: undo/redo for props (events have it; props edit the sidecar
+  directly), a prop context menu, multi-select, snapping to the grid in 3D,
+  and per-prop animation rules (a prop's model.json rules would run through
+  the event-model driver already — untested).
+
+## 3D View Memory + Preview Rebuild (2026-08-29, owner-reported)
+
+- Preview Event chosen in 3D never rebuilt the 3D event layer (rebuild
+  generation stayed put; harness `preview3d`), so vehicles appeared only at
+  the next open. `setEventPreview` now calls `refreshMap3DView`.
+- The 3D toolbar box is a per-map, per-project memory in localStorage
+  (`rrMap3DViewMaps:<projectPath>` → `{ "<mapId>": true }`), off until
+  ticked; `refreshMap3DView` reconciles on every map load, so switching maps
+  switches the view, and reopening restores it. `OptionsManager.map3DView`
+  remains only the crash-safety flag; a detected crash sets
+  `_map3DCrashGuard` so remembered maps stay 2D until ticked by hand.
+  Chosen over the sidecar so a view toggle never dirties the map; the
+  trade-off is that the memory is per machine.
+
+## 3D Camera Modes + Change 3D Camera (2026-08-29)
+
+- `Reactor3D.Camera` lives at the end of `reactor_3d.js` (the foundation test
+  keeps the 3D subsystem to one runtime file and the js/ root at 13). It
+  loads before the game classes, so `installHooks()` + `registerCommands()`
+  are called from `reactor_sprites.js` next to `updateReactor3DCamera`, which
+  delegates to `Camera.update(spriteset)` and keeps the old display-following
+  aim as the fallback.
+- Modes: fixed 55°/fov 30 over the display centre (unchanged default),
+  topDown 89° (90 degenerates `lookAt`), isometric 35.264°/yaw 45/fov 15
+  (perspective with a narrow FOV, not an OrthographicCamera, so projection,
+  `standScaleAt` and the billboard shader are untouched; `frameDistance(fov)`
+  keeps the tile scale), thirdPerson 25°/distance 8/lift 1 behind the player
+  (`yawForDirection` 8→0 2→180 4→270 6→90, yaw override adds), firstPerson at
+  eye height 0.8 looking along the facing, party sprites + billboards +
+  models hidden via `Reactor3D.characterHiddenByCamera`.
+- State: `Game_Map._reactorCamera3d` (saved), reset on `setup` to
+  `mapDefault($dataMap)` unless `$gameSystem._reactorCamera3d` (command's
+  "keep"); tween `{frames,total,from}` counted down in `step`, `from`
+  captured from the spriteset's `cameraCurrent` on the first update so a
+  command issued before the scene is built still lands (verified:
+  `cam-debug.cjs`). Wait mode `reactorCamera3D`.
+- Editor: Map Properties 3D options gain Default Camera + pitch/yaw/
+  distance/FOV (blank = mode value; `RRMapElevation.setCamera` drops the
+  record for the stock view). `Camera3DEditor` modal (keyed `cam3d.*`
+  strings) reachable from the picker's 3D section, event pages and Common
+  Events; Troops fall through to the generic plugin-command editor (camera
+  is map-only). Verified in the running game for all five modes with
+  `cam-game.cjs` screenshots (DemoCopy, striped test walls).
+- Not done: the editor's 3D viewport still uses its own flight camera; a
+  "view through the map's default camera" toggle would help isometric/
+  top-down authoring. No per-event camera targets beyond focus; no cutscene
+  paths (a sequence of Change 3D Camera commands with waits does that).
+
+## Map Room + Map Audio Picker (2026-08-29)
+
+- Map Properties has a 3D section. `map-3d-checkbox` is the `<3d>` note
+  (hidden from the note textarea, written back on save; a typed tag counts).
+  Under it: Room Height (1-512 tiles, the map size ceiling, default 4) and Parallax Floor / Walls /
+  Ceiling from `img/parallaxes`. Stored as `reactor3d.room` in
+  `Map###.r3d.json` (`RRMapElevation.room/setRoom/setMode3D`; the room is
+  dropped when all defaults, and a sidecar holding only a room is kept).
+- Runtime revision `20260829.17`: `Reactor3D.roomFor` + `MapScene.addRoom`.
+  Floor a layer step under the parallax grounds, ceiling at `height` facing
+  down, four `FrontSide` walls facing inward (image height = wall height,
+  repeats along the wall by aspect). The near wall and the ceiling are
+  back-face culled from the usual camera, so the room reads as a room from
+  outside and from inside. `MapScene.clear` counts `_build` so a late bitmap
+  load cannot add to a rebuilt scene. The editor's `loadParallaxes` fetches
+  the room images. Verified in the real editor (walls stand on N/E/W, south
+  culled, ceiling hidden from above) and the running game (`room-flow.js`,
+  `vs-game.cjs` in the scratchpad against a DemoCopy with `!TestWall.png`).
+- Map Properties BGM/BGS: track row + levels line, `Choose…` opens
+  `RRAudioPickerModal` (levels cards on); the dropdown, inline transport and
+  volume/pitch/pan steppers are gone. `_mapAudio` holds the choice.
+- **Next (owner direction): vertical events.** With a room the map has a Z
+  axis, so events need a height of their own: a character `z` in tiles
+  (float) seeded from the painted elevation under it, `Sprite_Character` /
+  the billboard placing the sprite at `z`, move-route steps that change it
+  (up/down a level, jump to a level, ramp along stairs by interpolating
+  `elevationAt` across the step), per-level passability (regions or terrain
+  tags naming floors so a two-storey room does not collide across floors),
+  and an elevator = an event whose `z` animates while the player stands on
+  it. Nothing in `Game_Map` knows about height yet; the sidecar's elevation
+  is render-only. Start with the character `z` + billboard placement + two
+  move-route commands, then passability.
+
+## Native Media, Resource, And Toolbar Pass (2026-08-28)
+
+- **Video Surfaces:** `runtime/reactor_video_surfaces.js` owns the canonical
+  Show/Transform/Stop implementation; runtime revision `20260828.3` adds it to
+  the boot manifest and is synchronized across all ten bundled projects. Commands
+  remain code 357 under `RPGReactor`; stock movie command 261 and
+  `PSYCHRONIC_VideoOverlay` are untouched. Screen coordinates are absolute
+  pixels, map X/Y are tiles, event/player X/Y are anchor-relative pixels, and
+  all corners are local pixel offsets. Since revision `20260829.16` map/event/
+  player surfaces stand on their anchor (centre lifted by half the scaled
+  height) in 2D as well as 3D; screen surfaces stay centred. Runtime PIXI/Three backends cover waits,
+  persistence, autoplay retry, culling, audio/playback rate, layers, scanlines,
+  map/event/player/screen binding, same-map suspension, and deterministic
+  cleanup. Runtime PIXI handles 2D/all screen targets, projectively warps corners,
+  ignores Z (3D elevation only; the drag is the whole 2D placement), and
+  measures culling in screen pixels; rectangular Three.js planes
+  handle 3D map/event/player targets with Z/world-camera culling and ignore
+  corners. `VideoSurfacePreviewManager` scans pages, resolves sparse transforms,
+  owns every resource, and exposes direct move, anchors, synchronized fields,
+  and source navigation. Preview PIXI warps projectively; 3D-screen DOM changes a
+  bounding-box clip without perspective-correct pixels; Three.js stays
+  rectangular. Editor previews omit scanlines; only Three.js previews apply
+  culling. The map
+  display is deliberately an authoring composite: each page is reduced
+  independently without evaluating page conditions/runtime command flow, and
+  preview media is forced muted/looping while playtest honors authored settings.
+  Preview state never enters map JSON or 3D sidecars. Common Events use the
+  isolated editor preview; Troops allow Stop only. 2026-08-29: PIXI previews
+  keep a placeholder texture until the movie's first frame (PIXI's
+  `VideoSource.load()` restarts the element load, which aborts any earlier
+  `play()`; never call `play()` before it, let `autoPlay` do it); edge handles
+  resize along their normal (`resizeEdge`), corners warp; `revealAuthoringSurface`
+  pans the surface clear of the live panel, which is draggable by its title.
+  `convertTargetPosition` keeps the surface in place when the target changes;
+  `_syncTargetFields` greys the Event control beside Target (naming this event, Player, or None) and hides Z/culling when the target has no use for them; panel drags blur the active control so a native dropdown cannot stay behind;
+  `_popOut` adopts the panel element into a child NW.js window
+  (`editor/video-surface-panel.html`, stylesheets copied, `close()` docks first).
+  3D authoring: `_buildSurfaceRings` ports ModelGraphicPicker's pose rings
+  (torus yaw/pitch/roll, gimbal-nested, screen-distance picking in
+  `_pickSurfaceRing`, plane-drag angle in `_dragSurfaceRing`) around the
+  authoring Three owner; `_attachThreeInput` tries a ring grab before a move
+  and emphasises the hovered ring.
+  `editRecord` opens a saved surface's Show command from a click on any backend
+  (its own preview hides via `replacedKey` while editing); `context.fromMap`
+  adds Go to Event. `EventCommandList` names `RPGReactor` 357 commands by
+  their label rather than Plugin Command. `PIXI_BANDS` (`under`/`mid`/`over`/
+  `top`) are roots inserted into the tilemap container at the game's z
+  boundaries (`_placePixiBands`); `_updatePixiOwner` re-parents on layer change.
+  The 3D backend already mirrored the runtime (`layer >= 5` above pass,
+  `renderOrder = layer * 1000 + depth`). Editor previews now draw scanlines
+  (PIXI multiply mesh, Three repeat texture, DOM gradient; 1px line every
+  2px, alpha = scanlines * 0.5, the PSYCHRONIC_VideoOverlay pitch); panel numbers
+  clamp to their range on input/change; `setEnabled` backs the toolbar Video
+  box (`OptionsManager.showVideoPreviews`). EventManager's Preview Event
+  (`_eventPreviewMenu`/`setEventPreview`/`renderEventPreviews`) stores
+  `map.reactor3d.eventPreviews[eventId] = pageIndex` and MapElevation keeps
+  the sidecar for it; previews render under `eventContainer` in 2D, and in 3D
+  `MapEditor3D.previewPageIndex` swaps the billboard to the chosen page.
+  Stepping pages animate (0,1,2,1 at `(9 - moveSpeed) * 3` frames) through a
+  PIXI ticker in 2D and `animateEventPreviews` in 3D. Model-bound pages use
+  `utils/EventPreviewModels.js` (`templateFor`/`instance`/`thumbnail`): the
+  placed model in 3D, a front orthographic render at footprint size in 2D
+  (three.js is loaded on demand for it). Runtime `Reactor3D.updateMapModelSprite`
+  (revision `20260829.6`) gives model-bound characters on flat maps the same
+  render as their sprite through `paintBattlerFrame` with `state.copyOnly`
+  (canvas path: the shared-context target the battlers adopt is wiped by
+  PIXI's next canvas upload unless repainted every frame); `Sprite_Character.updateVisibility`
+  only hides model/billboard characters when a 3D scene draws them.
+  `Reactor3D.mapMode`: the note (`<3d>`, or `meta['3d']`) is the switch and
+  the sidecar may only downgrade to `2d`; `DataManager.loadMapSidecar` fetches
+  for any map whose file exists on disk (web: note or database sidecar), so
+  flat maps keep their event models/previews. Sprite-mode models pose with
+  `applyEventModelPose` and animate with the scene's driver (no scene-side
+  effects). `startPlayback` (PIXI) waits for `loadedmetadata` before
+  `VideoSource.load()`: an async PIXI load restarts the element's own load,
+  whose `abort` the runtime treats as failure (why 2D video failed silently).
+  `Reactor3D.frameModelSprite(object, unit, camera)` (revision `20260829.9`):
+  orthographic camera pitched `MODEL_SPRITE_PITCH` (55, the 3D view default)
+  about the model's ground origin, frame = bounding sphere (constant across
+  turns), anchors 0.5/0.5 with the runtime adding half a tile so the origin
+  sits on the tile centre; the editor thumbnail uses the same helper and
+  places the sprite at the tile centre. Revision `20260829.10`:
+  `paintModelSpriteCanvas` (defined before the battler painters) keeps flat
+  maps off the shared viewport; `clearUnpackState(gl)` precedes every three
+  renderer created on PIXI's context (runtime and editor);
+  `updateOffscreenCulling` calls `update()` on culled sprites and
+  `Sprite_Character.update` runs `updatePosition()` before its culled
+  early-out (plugins read `this.x/y` after wrapping it); event priority 3
+  (`event.aboveCharactersSorted`): `screenZ` 5, `Spriteset_Map.update`
+  collects `_reactorSortedAbove`, `Sprite_Character.reactorSortedZ` lifts an
+  overlapping character in front (feet lower) to z 5 so the tilemap y-sort
+  orders the pair; MZ itself reads priority 3 as z 7 (above), passability is
+  the tile's. 3D is deliberately left as it was after the 2D fix: the page is
+  an ordinary depth-tested billboard there (facade snap and bias apply as for
+  any event). Three 3D variants were tried on 2026-08-29 (depth-free
+  distance sort, depth-tested without writing, and a map-space lift that
+  repaints lifted characters after the event); each fixed one case and broke
+  another for model characters, so they were reverted. Standing inside a
+  painted 3D object's rows is occluded by that object's geometry regardless
+  of the priority; pixi_compat
+  replaces PIXI's deprecated Graphics shims with silent equivalents. Plugin
+  defect fixed in the Demo's RaveLighting: beam sprites cached across scenes.
+  3D: `_threeGroupFor` puts layer >= 5 into `aboveBillboardsGroup` and
+  `MapEditor3D.render` gives that group its own depth-cleared `overlay` pass
+  (hidden during the star-tile `above` pass), matching the runtime's third
+  slot; lower layers depth-sort with the models. Depth (revision
+  `20260829.4`) is the 3D forward/back control: `worldZ = feetRow + 0.5 +
+  depth` in both runtime and editor (the 3D drag subtracts it back), so a
+  surface is pulled in front of the reactor without moving its 2D feet row.
+  In 2D depth stays the sub-layer sort key.
+  Verified through a WebDriver NW.js harness (real pointer events, pixel readback).
+- **Transactional model import:** Resource Manager keeps the `3d/` category
+  `readOnly` for deletion but sets `allowImport` for one model-creation path.
+  GLB, OBJ, FBX, STL, USDZ, 3MF, and DXF geometry is validated; GLB dependencies
+  must be embedded and `.blend` is refused with export guidance. A user-named
+  nested destination receives `source/<case-preserved filename>` and empty
+  `textures/`. Source/project/staging identities, a per-destination lock, and an
+  atomically created exact destination reservation are checked before publish;
+  ordinary concurrent creators cannot be replaced. Windows removes only its
+  owned reservation before relying on Windows rename's no-replace behavior.
+  Existing folders are never merged or replaced, and failures clean owned
+  staging and newly created empty parents.
+- **Image formats:** shared editor/runtime resolution now supports PNG,
+  JPG/JPEG, WebP, safe SVG, and GIF. PNG remains extensionless; explicit modern
+  extensions remain stored and retry legacy `<name>.<ext>.png`. Import validates
+  signatures and permits only restricted self-contained SVG content. Encrypted
+  decoding preserves MIME, WebHost serves each format correctly, and animated
+  GIF sprites/tiling sprites refresh their PIXI sources while visible. This pass
+  covers converted battleback/parallax/enemy-detail/title/animation/event
+  character-face/Change Actor Images/Change Vehicle Image/System 1 vehicle/
+  Picture/Reactor UI Picture consumers. Tilesets, plugin-parameter fields,
+  database actor/list thumbnails, Reactor UI character/face/party-face/System/
+  Title/Icon sources, balloon sheets, and fixed sheets such as IconSet retain
+  PNG-oriented/storage contracts.
+- **Preview lifecycle:** actor/model selection generation-cancels stale loads,
+  disposes superseded templates, avoids the HiDPI resize feedback loop,
+  deduplicates concurrent thumbnail renders, and performs one close refresh.
+  Shared cleanup releases cloned geometry, materials, textures, object URLs,
+  controls, renderer resources, and WebGL contexts.
+- **Desktop codecs:** eligible full desktop packages default to an exact-version
+  `nwjs-ffmpeg-prebuilt` overlay. Acquisition uses checked-in trusted archive
+  hashes plus binary validation and a separate cache; disabling the option
+  reacquires a clean official runtime. Packages carry
+  `rpg-reactor-codec.json`, `RPG_REACTOR_CODEC_NOTICE.txt`, complete LGPL text,
+  immutable build/source revisions, hashes, and patent guidance. Minimal/Web
+  packages never include an overlay.
+- **Toolbar SVGs:** the current set includes Undo, Redo, single tile, rectangle,
+  circle, Fill, Shadow Pen, Eraser, Auto, Layer 1-4, Database, Plugins, Resource
+  Manager, Audio, and Forge. Fill is a traditional pouring bucket; Shadow Pen's
+  cool-metal nib applies a black tile shadow with no spark cues; Undo/Redo are a
+  mirrored curved pair. New/Open/Save/Playtest/Event remain their existing PNGs,
+  so this is an expanded themed set rather than a claim that every toolbar image
+  has been converted.
+
+## GitHub Fix Batch (2026-08-28)
+
+- **#6 Resource Manager:** Tools opens a recursive searchable catalog spanning
+  every MZ image/audio category, effects, movies, fonts, application icons, and
+  Reactor 3D models, with categories locale-sorted and a dedicated futuristic SVG
+  toolbar icon. Image, audio, video, and font previews share the editor's safe
+  asset resolver; 3D reuses the existing Reactor3D loader, texture resolution,
+  camera, orbit/zoom, and cleanup path. Existing 3D content remains deletion-
+  disabled, while the dedicated transactional model import above creates new
+  validated folders without merge or replacement. Ctrl/Cmd and
+  Shift multi-selection batch-exports decrypted assets while preserving nested
+  paths. Effects remain metadata-only. Desktop batch imports validate names,
+  extensions, PNG signatures, existing subfolders, collisions, symlink ancestry,
+  current project identity, and the live project lock before an atomic write.
+  Encrypted projects receive correctly encrypted bytes or fail closed; exports
+  are decrypted. Delete rechecks physical identity and warns that references are
+  not scanned. Web remains browse/preview/export-only. Regression coverage spans
+  catalog/encryption/format twins, paths, ownership, ordinary import/delete,
+  model geometry, staging, destination races, rollback, and shell integration.
+- **RPG Catalyst community link:** `https://rpgcatalyst.com` is available from
+  both Help menu implementations, the projectless welcome screen, and About.
+  Desktop activations route to the user's default browser, and the product name
+  participates in all 18 locale dictionaries without translation.
+- **Plugin Manager link and scrollbar polish:** parsed plugin URLs now route
+  through `nw.Shell.openExternal()` to the user's default browser instead of a
+  child NW.js window. Main and nested Plugin Manager scroll regions share the
+  slim accent scrollbar and derive track, thumb, and hover colors from the theme.
+- **Animation database polish:** the full Animation index now owns a stable native
+  scrollbar extent. Preview battlebacks use the shared recursive image browser;
+  effect files use a wide folder/search/alphabet browser beside their live preview;
+  and timing sounds use the shared audio picker with volume, pitch, pan, seek, and
+  nested folders. Pan persists through both animation formats, Duration has themed
+  step controls, stale Effekseer loads are generation-guarded and released, image
+  picker utility actions have visible theme contrast, and the Forge spark sits
+  separately in the anvil's upper-left corner.
+- **#27 multiple enemy action conditions:** action patterns now hold an AND list
+  authored through named Turn, HP, MP, TP, User State, Target State, Party Level,
+  and Switch rows; no checked rows remains Always. Target State derives living or
+  dead candidates from stock skill scopes before normal target selection. Legacy
+  actions still use their original triple, edited actions mirror the first list
+  entry, unsupported plugin records survive, malformed entries fail closed, and
+  all dispatch helpers are actor-safe on `Game_Battler`. Four phrases are reviewed
+  in all 17 non-English locales. Runtime revision `20260828.2` refreshed the
+  bundle (since superseded by `20260828.3`).
+- **#26 complete image browse controls:** the recursive preview picker now backs
+  all eight bare image-name fields in Show Picture, Change Battle Background,
+  Change Parallax, Change Actor Images, and Change Vehicle Image. Character and
+  face picks also synchronize their sheet index. Map Properties and Troop
+  battleback dropdowns retain their fast text lists and add Browse controls;
+  parallax and battleback clearing use the picker's pinned `(None)` action.
+  Nested relative names remain unchanged, event-command pickers stack above
+  their parent dialogs only while open, and five phrases are reviewed in all 17
+  non-English locales.
+- **#25 Add State Normal Attack:** Add State exposes and preserves RPG Maker
+  MZ's `dataId: 0` sentinel, including existing effects and interaction round
+  trips. Remove State still lists only real states, and its zero value is no
+  longer mislabeled as Normal Attack.
+- **#24 Effekseer preview repair:** plugin animation parameters and Show Battle
+  Animation use the live picker; direct project paths, synchronous cached
+  loads, repeated pending selections, opaque additive compositing, and a
+  remembered light/mid/dark backdrop are handled. The Animations page blits its
+  battle scene into WebGL before background capture, avoids unchanged uploads,
+  restores shared GL state, and applies effect-file transforms. Editor, Forge,
+  and game matrices now share aspect-correct positive-Y projection and authored
+  X rotation. Runtime revision `20260828.1` upgrades existing 0.98.4 projects
+  once while preserving plugins, with `reactor_main.js` copied last so an
+  interrupted refresh retries.
 
 ## GitHub Fix Batch (2026-08-27)
 
@@ -123,9 +596,8 @@ Feature work, in the order the owner has been asking:
 - **Stock MZ battler motions are not mapped to model actions** — a 3D
   battler plays its ambient rules and named actions, but walk/attack/damage
   motion cells do not yet trigger model animations.
-- **Animation-preview follow-ups:** Effekseer background capture/compositing and
-  asynchronous browser effect loading remain separate from the completed #13
-  fidelity scope.
+- **Animation-preview follow-up:** broader asynchronous Web-host effect loading
+  remains separate. Desktop background capture/compositing is complete in #24.
 - **Embedded-clip follow-ups**: bake clip → keyed pose rules (needs
   animated-GLB bones registered as parts); cloth/limb interpenetration
   mitigations (per-part depth bias) — authoring-side skinning is the real
@@ -183,6 +655,11 @@ release hardware.
   on macOS with release credentials.
 - Region and object-designation overlays remain absent from the 3D
   viewport; an existing editor affordance gap, not a bug.
+- Check a directional/model Effekseer effect in the Animations page, event
+  picker, plugin picker, Forge, and a playtest; confirm it stays upright and its
+  depth/facing matches. Check additive effects on all three picker backdrops and
+  a distortion effect over an enabled battleback. This is the remaining manual
+  visual gate for #24.
 
 Windows 3D-checkbox crash: **resolved and confirmed on native Windows
 2026-08-22** (inline three.js injection overflowed the 1MB main-thread stack;
@@ -195,6 +672,25 @@ Blob-URL loading fixed it in 0.98.2 — `f3f87cc`, `97e0457`).
 Engineering notes and gotchas from each piece of work, kept because the
 suite and the next session both lean on them. Shipped-cycle narrative starts
 at *History* below.
+
+## Effekseer Preview Repair and Add State Sentinel (2026-08-28)
+
+- `AnimationPickerModal` is now the common visible animation chooser for
+  database fields, plugin references, and battle-animation commands. Pending
+  effects are cached by name and generation-gated, so selecting the same effect
+  during a load cannot create two handles or requestAnimationFrame loops.
+- Standalone pickers share a persisted three-swatch backdrop. Their WebGL
+  canvases are opaque, while the Animations page instead uploads its battleback,
+  target, and flash scene into the effect context before background capture.
+  Uploads occur only after the Canvas2D scene changes.
+- The old `180 - rotation.x` compensation was removed everywhere. Positive-Y,
+  aspect-correct projection keeps 2D direction upright without reversing model
+  Z/depth. The editor's effect-file preview now applies authored transforms.
+- Runtime revision `20260828.1` closes the same-version deployment gap. The
+  marker file is copied last, making it a reliable completion marker after a
+  failed runtime refresh.
+- Add State code 21 alone offers `dataId: 0` as Normal Attack. Remove State has
+  no runtime sentinel and remains limited to real state IDs.
 
 ## Persistence, Lists, HUDs, Replacement Scenes, GUI Smokes (2026-08-27)
 

@@ -69,5 +69,6 @@ test('localized animation None label is display-only, not a stored sound filenam
     assert.match(animation, /const noneLabel = tt\('None'\)/);
     assert.doesNotMatch(animation, /seName[^\n]*(?:===|!==) 'None'/);
     assert.match(animation, /se: seName && seName !== noneLabel \? \{/);
-    assert.match(animation, /let selectedFile = seNameInput\.value !== noneLabel \? seNameInput\.value : null/);
+    assert.match(animation, /selected: seNameInput\.value !== noneLabel \? seNameInput\.value : ''/);
+    assert.match(animation, /seNameInput\.value = result\.name \|\| noneLabel/);
 });

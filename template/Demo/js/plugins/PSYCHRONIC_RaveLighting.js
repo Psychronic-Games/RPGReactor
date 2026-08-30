@@ -2668,6 +2668,13 @@ PsychronicRaveLighting.parseLightTokens = function(tokens) {
         (sy + radius) >= screenTop && (sy - radius) <= screenBottom;
 
         let beamSprites = PsychronicRaveLighting._beamSpriteStorage.get(cfg);
+        // The storage outlives the scene, the sprites do not: a scene change
+        // destroys the light container and everything in it. Re-adding those
+        // sprites draws nothing (or garbage), so start over with fresh ones.
+        if (beamSprites && beamSprites.some(bs => !bs || bs.destroyed || !bs.parent)) {
+            PsychronicRaveLighting._beamSpriteStorage.delete(cfg);
+            beamSprites = null;
+        }
 
         if (!isVisible) {
             if (beamSprites) {

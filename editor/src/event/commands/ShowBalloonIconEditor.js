@@ -530,8 +530,8 @@ class ShowBalloonIconEditor {
         // If we have a character name, load and draw the sprite
         if (characterName && characterName.trim() !== '') {
             const characterImage = new Image();
-            const imagePath = path.join(currentProject.path, 'img', 'characters', characterName + '.png');
-            characterImage.src = RRAssetFiles.toUrl(imagePath);
+            characterImage.src = RRAssetFiles.imageUrlFor(
+                path.join(currentProject.path, 'img', 'characters'), characterName);
 
             characterImage.onload = () => {
                 // Detect character sheet format based on filename and image size

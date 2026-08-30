@@ -22,6 +22,8 @@
     // goes through RPGReactorAssetUrl, which decrypts on the fly.
     const ENCRYPTED_TO_PLAIN = {
         '.png_': '.png', '.rpgmvp': '.png',
+        '.jpg_': '.jpg', '.jpeg_': '.jpeg', '.webp_': '.webp',
+        '.svg_': '.svg', '.gif_': '.gif',
         '.ogg_': '.ogg', '.rpgmvo': '.ogg',
         '.m4a_': '.m4a', '.rpgmvm': '.m4a',
         '.mp3_': '.mp3', '.wav_': '.wav', '.flac_': '.flac'
@@ -30,6 +32,7 @@
     // Every format the runtime can play, in resolution priority order:
     // when the same name exists in several formats, the earliest wins.
     const AUDIO_EXTENSIONS = ['.ogg', '.mp3', '.wav', '.flac', '.m4a'];
+    const IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.webp', '.svg', '.gif'];
 
     const list = (rootDir, extensions, options = {}) => {
         if (!rootDir) return [];
@@ -125,11 +128,15 @@
             try {
                 if (!fs.existsSync(absolutePath)
                     && root.RREncryptedAssets && root.RREncryptedAssets.assetExists(absolutePath)) {
+                    const physical = root.RREncryptedAssets.physicalAssetRecord
+                        ? root.RREncryptedAssets.physicalAssetRecord(absolutePath)
+                        : null;
                     return {
                         name: normalized,
                         relativePath: `${normalized}${extension}`,
                         absolutePath,
-                        extension
+                        extension,
+                        sourceExtension: physical?.sourceExtension || extension
                     };
                 }
                 if (fs.existsSync(absolutePath) && fs.statSync(absolutePath).isFile()) {
@@ -149,6 +156,34 @@
         return records.find(record => record.name === normalized)
             || records.find(record => record.name.toLowerCase() === normalized.toLowerCase())
             || null;
+    };
+
+    const imageReference = record => record.extension === '.png'
+        ? record.name
+        : record.relativePath;
+
+    const listImages = (rootDir, options) => {
+        const references = new Set();
+        return list(rootDir, IMAGE_EXTENSIONS, options).filter(record => {
+            const reference = imageReference(record);
+            if (references.has(reference)) return false;
+            references.add(reference);
+            record.imageReference = reference;
+            return true;
+        });
+    };
+
+    const findImage = (rootDir, reference) => {
+        const normalized = normalizeRelative(reference);
+        if (!normalized || normalized.split('/').includes('..')) return null;
+        const lower = normalized.toLowerCase();
+        const extension = IMAGE_EXTENSIONS.find(item => lower.endsWith(item));
+        let record = extension
+            ? find(rootDir, normalized.slice(0, -extension.length), [extension])
+            : find(rootDir, normalized, ['.png']);
+        if (!record && extension) record = find(rootDir, normalized, ['.png']);
+        if (record) record.imageReference = imageReference(record);
+        return record;
     };
 
     const toUrl = filePath => {
@@ -192,10 +227,13 @@
 
     const api = {
         AUDIO_EXTENSIONS,
+        IMAGE_EXTENSIONS,
         basename(name) {
             return normalizeRelative(name).split('/').pop() || '';
         },
         find,
+        findImage,
+        imageReference,
         isBigCharacter(name) {
             const basename = normalizeRelative(name).split('/').pop() || '';
             const sign = basename.match(/^[!$]+/);
@@ -207,6 +245,10 @@
             return Boolean(sign && sign[0].includes('!'));
         },
         list,
+        listImages,
+        listImageReferences(rootDir, options) {
+            return listImages(rootDir, options).map(record => record.imageReference);
+        },
         listNames(rootDir, extensions, options) {
             return unique(list(rootDir, extensions, options)).map(record => record.name);
         },
@@ -215,6 +257,10 @@
         toUrl,
         urlFor(rootDir, name, extensions) {
             const record = find(rootDir, name, extensions);
+            return record ? toUrl(record.absolutePath) : '';
+        },
+        imageUrlFor(rootDir, reference) {
+            const record = findImage(rootDir, reference);
             return record ? toUrl(record.absolutePath) : '';
         }
     };

@@ -184,7 +184,11 @@ class ProjectManager {
 
     async copyRuntimeIntoProject(runtimePath, jsPath, preservePluginConfig = false) {
         if (!this.fs.existsSync(jsPath)) this.fs.mkdirSync(jsPath, { recursive: true });
-        for (const entry of this.fs.readdirSync(runtimePath, { withFileTypes: true })) {
+        const entries = this.fs.readdirSync(runtimePath, { withFileTypes: true });
+        // The revision in reactor_main.js is the completion marker. Copy it
+        // last so an interrupted refresh is retried on the next project open.
+        entries.sort((a, b) => Number(a.name === 'reactor_main.js') - Number(b.name === 'reactor_main.js'));
+        for (const entry of entries) {
             if (preservePluginConfig && entry.name === 'reactor_plugins.js') continue;
             const sourcePath = this.path.join(runtimePath, entry.name);
             const targetPath = this.path.join(jsPath, entry.name);
@@ -408,8 +412,14 @@ class ProjectManager {
             const targetSource = this.fs.existsSync(targetMain)
                 ? this.fs.readFileSync(targetMain, 'utf8')
                 : '';
+            const sourceMain = this.fs.readFileSync(
+                this.path.join(runtimePath, 'reactor_main.js'), 'utf8');
             const targetVersion = targetSource.match(/RPG Reactor runtime version:\s*([\d.]+)/)?.[1] || '';
-            if (targetVersion === engineVersion && projectData.engineVersion === engineVersion) {
+            const sourceRevision = sourceMain.match(/RPG Reactor runtime revision:\s*([\w.-]+)/)?.[1] || '';
+            const targetRevision = targetSource.match(/RPG Reactor runtime revision:\s*([\w.-]+)/)?.[1] || '';
+            const currentRevision = !sourceRevision || targetRevision === sourceRevision;
+            if (targetVersion === engineVersion && projectData.engineVersion === engineVersion
+                    && currentRevision) {
                 return { ok: true, updated: false };
             }
 

@@ -116,8 +116,8 @@ class DistEditorManager {
                                 <div style="margin-top: 10px; display: grid; grid-template-columns: 130px minmax(0, 1fr); gap: 8px; align-items: center;">
                                     <label for="dist-nw-version-policy" style="color: var(--color-text-muted); font-size: 11px;">${tt('NW.js version')}</label>
                                     <select id="dist-nw-version-policy" class="rr-select" style="font-size: 12px; padding: 5px 7px;">
-                                        <option value="stable" selected>${tt('Latest stable')}</option>
-                                        <option value="editor">${tt('Same as editor')}</option>
+                                        <option value="stable">${tt('Latest stable')}</option>
+                                        <option value="editor" selected>${tt('Same as editor')}</option>
                                         <option value="exact">${tt('Specific version')}</option>
                                     </select>
                                     <label for="dist-nw-version-exact" style="color: var(--color-text-muted); font-size: 11px;">${tt('Specific version')}</label>
@@ -126,8 +126,11 @@ class DistEditorManager {
                                 </div>
                                 <div style="color: var(--color-text-muted); font-size: 10px; margin-top: 5px; line-height: 1.35;">${tt('Matching local bundles and every NW.js cache are checked before downloading.')}</div>
                                 <label id="dist-codec-option" style="display: flex; align-items: center; gap: 8px; margin-top: 10px; padding: 8px 10px; background: var(--color-bg-panel); border: 1px solid var(--color-border); border-radius: 4px; cursor: pointer;">
-                                    <input id="dist-include-proprietary-codecs" type="checkbox" class="system-checkbox" style="width: 16px; height: 16px; min-width: 16px; min-height: 16px; max-width: 16px; max-height: 16px; flex: 0 0 16px; margin: 0;">
-                                    <span style="color: var(--color-text); font-weight: 600; font-size: 12px;">${tt('Include third-party H.264/AAC codec')}</span>
+                                    <input id="dist-include-proprietary-codecs" type="checkbox" checked class="system-checkbox" style="width: 16px; height: 16px; min-width: 16px; min-height: 16px; max-width: 16px; max-height: 16px; flex: 0 0 16px; margin: 0;">
+                                    <span>
+                                        <span style="display:block;color:var(--color-text);font-weight:600;font-size:12px;">${tt('Include third-party H.264/AAC codec')}</span>
+                                        <span style="display:block;color:var(--color-text-muted);font-size:10px;line-height:1.35;margin-top:2px;">${tt('Desktop only. Requires a trusted hash for the exact NW.js version and includes LGPL/source and patent notices for redistribution.')}</span>
+                                    </span>
                                 </label>
                             </div>
                         </div>
@@ -233,8 +236,11 @@ class DistEditorManager {
         document.getElementById('dist-nw-section').style.display = web ? 'none' : 'block';
         const codec = document.getElementById('dist-include-proprietary-codecs');
         const codecOption = document.getElementById('dist-codec-option');
-        codec.disabled = type === 'minimal' || web;
+        const disabled = type === 'minimal' || web;
+        if (disabled && !codec.disabled) codec.dataset.restoreChecked = String(codec.checked);
+        codec.disabled = disabled;
         if (codec.disabled) codec.checked = false;
+        else if (codec.dataset.restoreChecked !== 'false') codec.checked = true;
         codecOption.style.opacity = codec.disabled ? '0.5' : '1';
         codecOption.style.cursor = codec.disabled ? 'not-allowed' : 'pointer';
         const appImageCheckbox = document.getElementById('dist-create-linux-appimage');

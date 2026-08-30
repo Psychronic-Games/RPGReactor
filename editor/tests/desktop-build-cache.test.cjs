@@ -44,6 +44,7 @@ test('desktop deployment reuses an exact archive from the second cache root', as
         fs.mkdirSync(firstCache, { recursive: true });
         fs.mkdirSync(secondCache, { recursive: true });
         fs.mkdirSync(codecCache, { recursive: true });
+        fs.mkdirSync(path.join(appRoot, 'build-scripts'), { recursive: true });
         fs.mkdirSync(path.join(projectPath, 'data'), { recursive: true });
         fs.mkdirSync(path.join(projectPath, 'icon'), { recursive: true });
         fs.writeFileSync(path.join(projectPath, 'package.json'), JSON.stringify({ name: 'raw-mv', main: 'index.html' }));
@@ -68,6 +69,11 @@ test('desktop deployment reuses an exact archive from the second cache root', as
         fs.mkdirSync(codecSource);
         fs.writeFileSync(path.join(codecSource, 'libffmpeg.so'), 'verified proprietary codec');
         execFileSync('zip', ['-q', codecArchive, 'libffmpeg.so'], { cwd: codecSource });
+        fs.writeFileSync(path.join(appRoot, 'build-scripts', 'release-hashes.json'), JSON.stringify({
+            schema: 1,
+            nwjs: {},
+            codecs: { '9.9.9-linux-x64.zip': nwCodec.sha256(codecArchive) },
+        }));
         fs.writeFileSync(path.join(codecCache, 'release-9.9.9.json'), JSON.stringify({
             tag_name: '9.9.9',
             assets: [{

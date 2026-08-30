@@ -405,6 +405,24 @@ class DatabaseCommonEventEditor {
                 return;
             }
 
+            if (code === 357 && ['ShowVideoSurface', 'TransformVideoSurface', 'StopVideoSurface'].includes(command.reactor)
+                && typeof VideoSurfaceEditor !== 'undefined'
+                && typeof VideoSurfaceEditor.supports === 'function'
+                && VideoSurfaceEditor.supports(command.reactor)) {
+                this.getEditor('videoSurface', VideoSurfaceEditor)
+                    .show(null, insertAndRefresh, command.reactor, { type: 'common' });
+                return;
+            }
+
+            if (code === 357 && command.reactor === 'ChangeCamera3D' && typeof Camera3DEditor !== 'undefined') {
+                this.getEditor('camera3D', Camera3DEditor).show(null, insertAndRefresh);
+                return;
+            }
+            if (code === 357 && command.reactor === 'PlayModelEffect' && typeof PlayModelEffectEditor !== 'undefined') {
+                this.getEditor('playModelEffect', PlayModelEffectEditor).show(null, insertAndRefresh);
+                return;
+            }
+
             const simpleEditorMap = {
                 103: ['inputNumber', InputNumberEditor],
                 104: ['selectItem', SelectItemEditor],
@@ -421,6 +439,7 @@ class DatabaseCommonEventEditor {
                 127: ['changeWeapons', ChangeWeaponsEditor],
                 128: ['changeArmors', ChangeArmorsEditor],
                 129: ['changePartyMember', ChangePartyMemberEditor],
+                140: ['changeVehicleBGM', ChangeVehicleBGMEditor],
                 201: ['transferPlayer', TransferPlayerEditor],
                 205: ['setMovementRoute', SetMovementRouteEditor],
                 211: ['changeTransparency', ChangeTransparencyEditor],
@@ -465,7 +484,7 @@ class DatabaseCommonEventEditor {
             }
 
             // Audio commands
-            if ([241, 242, 245, 246, 249, 250, 251].includes(code)) {
+            if ([132, 133, 139, 241, 242, 245, 246, 249, 250, 251].includes(code)) {
                 const editor = this.getEditor('audio', AudioCommandEditor);
                 editor.show(null, code, (editedCommand) => {
                     if (editedCommand) {
@@ -546,6 +565,14 @@ class DatabaseCommonEventEditor {
                     refreshList();
                 }
             }, ...showArgs);
+        };
+        const audioReplace = () => {
+            this.getEditor('audio', AudioCommandEditor).show(command, code, editedCommand => {
+                if (!editedCommand) return;
+                editedCommand.indent = command.indent || 0;
+                event.list[idx] = editedCommand;
+                refreshList();
+            });
         };
 
         // Helper: multi-command replace (removes continuation lines first)
@@ -780,10 +807,10 @@ class DatabaseCommonEventEditor {
         if (code === 129) { singleReplace(this.getEditor('changePartyMember', ChangePartyMemberEditor)); return; }
 
         // Change Battle BGM (132)
-        if (code === 132) { singleReplace(this.getEditor('changeBattleBGM', ChangeBattleBGMEditor)); return; }
+        if (code === 132) { audioReplace(); return; }
 
         // Change Victory ME (133)
-        if (code === 133) { singleReplace(this.getEditor('changeVictoryME', ChangeVictoryMEEditor)); return; }
+        if (code === 133) { audioReplace(); return; }
 
         // Toggle commands (134-137)
         if (code === 134) { singleReplace(this.getEditor('toggle', ToggleCommandEditor), { code: 134, title: tt('Change Save Access'), option0: tt('Disable'), option1: tt('Enable') }); return; }
@@ -795,7 +822,7 @@ class DatabaseCommonEventEditor {
         if (code === 138) { singleReplace(this.getEditor('changeWindowColor', ChangeWindowColorEditor)); return; }
 
         // Change Defeat ME (139)
-        if (code === 139) { singleReplace(this.getEditor('changeDefeatME', ChangeDefeatMEEditor)); return; }
+        if (code === 139) { audioReplace(); return; }
 
         // Change Vehicle BGM (140)
         if (code === 140) { singleReplace(this.getEditor('changeVehicleBGM', ChangeVehicleBGMEditor)); return; }
@@ -889,7 +916,7 @@ class DatabaseCommonEventEditor {
         // Set Weather Effect (236)
         if (code === 236) { singleReplace(this.getEditor('setWeatherEffect', SetWeatherEffectEditor)); return; }
 
-        // Audio commands (241, 242, 245, 246, 249, 250, 251)
+        // Play/fade/stop audio commands
         if ([241, 242, 245, 246, 249, 250, 251].includes(code)) {
             const editor = this.getEditor('audio', AudioCommandEditor);
             editor.show(command, code, (editedCommand) => {
@@ -1052,6 +1079,36 @@ class DatabaseCommonEventEditor {
         }
 
         // Plugin Command (356, 357)
+        if (code === 357 && command.parameters?.[0] === 'RPGReactor'
+            && command.parameters?.[1] === 'PlayModelEffect' && typeof PlayModelEffectEditor !== 'undefined') {
+            this.getEditor('playModelEffect', PlayModelEffectEditor).show(command, editedCommand => {
+                if (!editedCommand) return;
+                ECL.replaceContiguousBlock(event.list, idx, editedCommand, 357, 657);
+                refreshList();
+            });
+            return;
+        }
+        if (code === 357 && command.parameters?.[0] === 'RPGReactor'
+            && command.parameters?.[1] === 'ChangeCamera3D' && typeof Camera3DEditor !== 'undefined') {
+            this.getEditor('camera3D', Camera3DEditor).show(command, editedCommand => {
+                if (!editedCommand) return;
+                ECL.replaceContiguousBlock(event.list, idx, editedCommand, 357, 657);
+                refreshList();
+            });
+            return;
+        }
+        if (code === 357 && command.parameters?.[0] === 'RPGReactor'
+            && ['ShowVideoSurface', 'TransformVideoSurface', 'StopVideoSurface'].includes(command.parameters?.[1])
+            && typeof VideoSurfaceEditor !== 'undefined'
+            && typeof VideoSurfaceEditor.supports === 'function'
+            && VideoSurfaceEditor.supports(command.parameters?.[1])) {
+            this.getEditor('videoSurface', VideoSurfaceEditor).show(command, editedCommand => {
+                if (!editedCommand) return;
+                ECL.replaceContiguousBlock(event.list, idx, editedCommand, 357, 657);
+                refreshList();
+            }, undefined, { type: 'common' });
+            return;
+        }
         if (code === 356 || code === 357) {
             const range = code === 357
                 ? ECL.contiguousBlockRange(event.list, idx, 357, 657)
@@ -1411,9 +1468,14 @@ class DatabaseCommonEventEditor {
             122: [1, 1, 0, 0, 0],       // Control Variables
             125: [0, 0, 0],             // Change Gold
             126: [1, 0, 0, 1],          // Change Items
+            132: [{ name: '', volume: 90, pitch: 100, pan: 0 }], // Change Battle BGM
+            133: [{ name: '', volume: 90, pitch: 100, pan: 0 }], // Change Victory ME
+            139: [{ name: '', volume: 90, pitch: 100, pan: 0 }], // Change Defeat ME
+            140: [0, { name: '', volume: 90, pitch: 100, pan: 0 }], // Change Vehicle BGM
             230: [60],                   // Wait
             241: [{ name: '', volume: 90, pitch: 100, pan: 0 }], // Play BGM
             245: [{ name: '', volume: 90, pitch: 100, pan: 0 }], // Play BGS
+            249: [{ name: '', volume: 90, pitch: 100, pan: 0 }], // Play ME
             250: [{ name: '', volume: 90, pitch: 100, pan: 0 }], // Play SE
             311: [0, 0, 0, 0, 100, false], // Change HP
             312: [0, 0, 0, 0, 100, false], // Change MP

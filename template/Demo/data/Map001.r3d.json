@@ -7,7 +7,7 @@
         "name": "Vehicles/free-buick-riviera-car",
         "file": "free-buick-riviera-car",
         "ext": ".glb",
-        "size": 9,
+        "size": 11,
         "scale": 1,
         "yaw": 0,
         "pitch": 0,
@@ -10117,5 +10117,102 @@
       0,
       0
     ]
+  },
+  "eventPreviews": {
+    "22": 0,
+    "23": 0,
+    "24": 0,
+    "25": 0
+  },
+  "room": {
+    "height": 25,
+    "floor": "!Reactor-Room-01-Floor",
+    "walls": "!Reactor-Room-01-Walls",
+    "ceiling": "!Reactor-Room-01-Walls"
+  },
+  "props": [
+    {
+      "id": 1,
+      "name": "Map-Objects/RPGReactor",
+      "ext": ".glb",
+      "file": "Meshy_AI_Aether_Core_Tower_0829202342_texture",
+      "texture": "",
+      "x": 24,
+      "y": 14,
+      "z": 0,
+      "yaw": 0,
+      "pitch": 0,
+      "roll": 0,
+      "direction": 2,
+      "size": 20,
+      "scale": 1,
+      "passable": false,
+      "animation": "",
+      "repeat": true,
+      "effect": "Core"
+    },
+    {
+      "id": 2,
+      "name": "Map-Objects/RPGReactor-Computer-01",
+      "ext": ".glb",
+      "file": "RPGReactor-Computer-01",
+      "texture": "",
+      "x": 20.67,
+      "y": 22.86,
+      "z": 0,
+      "yaw": 0,
+      "pitch": 0,
+      "roll": 0,
+      "direction": 6,
+      "size": 3.1,
+      "scale": 1,
+      "passable": false,
+      "animation": "",
+      "repeat": false,
+      "effect": ""
+    },
+    {
+      "id": 3,
+      "name": "Map-Objects/RPGReactor-Computer-01",
+      "ext": ".glb",
+      "file": "RPGReactor-Computer-01",
+      "texture": "",
+      "x": 27.27,
+      "y": 22.81,
+      "z": 0,
+      "yaw": 0,
+      "pitch": 0,
+      "roll": 0,
+      "direction": 4,
+      "size": 3.1,
+      "scale": 1,
+      "passable": false,
+      "animation": "",
+      "repeat": false,
+      "effect": ""
+    },
+    {
+      "id": 4,
+      "name": "Map-Objects/RPGReactor-Computer-01",
+      "ext": ".glb",
+      "file": "RPGReactor-Computer-01",
+      "texture": "",
+      "x": 23.97,
+      "y": 21.24,
+      "z": 0,
+      "yaw": 1.7,
+      "pitch": 0,
+      "roll": 0,
+      "direction": 2,
+      "size": 3.1,
+      "scale": 1,
+      "passable": false,
+      "animation": "",
+      "repeat": false,
+      "effect": ""
+    }
+  ],
+  "camera": {
+    "mode": "thirdPerson"
   }
 }

@@ -20,7 +20,8 @@ function loadTroopEditor() {
     for (const name of [
         'CommonEventEditor', 'ControlVariablesEditor', 'ShowPictureEditor',
         'MovePictureEditor', 'ErasePictureEditor', 'ForceActionEditor',
-        'ConditionalBranchEditor', 'LoopEditor'
+        'ConditionalBranchEditor', 'LoopEditor', 'AudioCommandEditor',
+        'ChangeVehicleBGMEditor'
     ]) context[name] = EditorStub;
     const DatabaseTroopEditor = vm.runInNewContext(`${source}\nDatabaseTroopEditor;`, context);
     return { DatabaseTroopEditor, PluginCommandEditorStub };

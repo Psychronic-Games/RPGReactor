@@ -781,7 +781,7 @@ class DatabaseSystem1Editor {
         const charactersPath = path.join(project.path, 'img', 'characters');
         if (!fs.existsSync(charactersPath)) { alert(tt('Characters folder not found')); return; }
 
-        const files = RRAssetFiles.listNames(charactersPath, ['.png']);
+        const files = RRAssetFiles.listImageReferences(charactersPath);
 
         if (files.length === 0) { alert(tt('No character images found')); return; }
 
@@ -803,7 +803,7 @@ class DatabaseSystem1Editor {
                 this.showSystem1Detail(detailEl);
             }
         }, (fileName) => {
-            return RRAssetFiles.urlFor(charactersPath, fileName, ['.png']);
+            return RRAssetFiles.imageUrlFor(charactersPath, fileName);
         });
     }
 
@@ -908,8 +908,7 @@ class DatabaseSystem1Editor {
             return;
         }
 
-        const files = RRAssetFiles.listUnique(titlesPath, ['.png']);
-        const fileByName = new Map(files.map(file => [file.name, file]));
+        const files = RRAssetFiles.listImageReferences(titlesPath);
 
         const overlay = document.createElement('div');
         overlay.style.cssText = `
@@ -996,8 +995,8 @@ class DatabaseSystem1Editor {
         let selectedFile = system.title1Name || '';
 
         const updatePreview = (fileName) => {
-            const actualFile = fileByName.get(fileName);
-            if (!actualFile) {
+            const imageUrl = RRAssetFiles.imageUrlFor(titlesPath, fileName);
+            if (!imageUrl) {
                 previewImage.src = '';
                 previewImage.style.display = 'none';
                 previewLabel.textContent = fileName ? tt('No preview') : tt('No image selected');
@@ -1005,12 +1004,12 @@ class DatabaseSystem1Editor {
             }
             selectedFile = fileName;
             previewImage.style.display = '';
-            previewImage.src = RRAssetFiles.toUrl(actualFile.absolutePath);
+            previewImage.src = imageUrl;
             previewLabel.textContent = fileName;
         };
 
         const browser = RRPickerIndex.createBrowser({
-            files: files.map(file => file.name),
+            files,
             selectedName: selectedFile,
             folders: true,
             searchPlaceholder: tt('Search files...'),
@@ -1022,7 +1021,7 @@ class DatabaseSystem1Editor {
         workspace.appendChild(previewPanel);
         modal.appendChild(workspace);
 
-        if (fileByName.has(selectedFile)) {
+        if (files.includes(selectedFile)) {
             updatePreview(selectedFile);
             requestAnimationFrame(() => browser.scrollTo(selectedFile));
         } else {

@@ -242,6 +242,10 @@ Sprite_Character.prototype.update = function() {
     // so hiding here never sticks.
     if (this._rrCulled) {
         this.visible = false;
+        // Position still tracks the character: plugins that wrap update()
+        // and steer their own sprites (lights, labels) read this.x/y after
+        // the early return, and a stale position pins those to the screen.
+        this.updatePosition();
         return;
     }
     Sprite.prototype.update.call(this);
@@ -428,7 +432,41 @@ Sprite_Character.prototype.updatePosition = function() {
     if (this.updateReactor3DPosition()) return;
     this.x = this._character.screenX();
     this.y = this._character.screenY();
-    this.z = this._character.screenZ();
+    this.z = this.reactorSortedZ();
+};
+
+/**
+ * A character in front of an "Above Characters (Sorted by Y)" event, and
+ * overlapping it, draws on that event's layer for the frame; the tilemap
+ * then orders the two by their feet. Everything else keeps its own z.
+ */
+Sprite_Character.prototype.reactorSortedZ = function() {
+    const base = this._character.screenZ();
+    if (base !== 3) return base;
+    const scene = typeof SceneManager !== "undefined" ? SceneManager._scene : null;
+    const sorted = scene && scene._spriteset && scene._spriteset._reactorSortedAbove;
+    if (!sorted || !sorted.length) return base;
+    // Frame sizes, not PIXI's bounds getters: mid-update those read from a
+    // half-applied transform (and null for a width) and lie about overlap.
+    const drawnWidth = sprite => ((sprite._frame && sprite._frame.width) || sprite.width || 48)
+        * Math.abs((sprite.scale && sprite.scale.x) || 1);
+    const drawnHeight = sprite => ((sprite._frame && sprite._frame.height) || sprite.height || 48)
+        * Math.abs((sprite.scale && sprite.scale.y) || 1);
+    const anchorY = sprite => (sprite.anchor ? sprite.anchor.y : 1);
+    const cx = this.x, cy = this.y;
+    const cw = drawnWidth(this), ch = drawnHeight(this);
+    const top = cy - ch * anchorY(this);
+    for (const other of sorted) {
+        if (other === this || !other._character) continue;
+        const oy = other.y;
+        if (cy <= oy) continue;                                  // behind it
+        const ow = drawnWidth(other), oh = drawnHeight(other);
+        if (Math.abs(cx - other.x) >= (cw + ow) / 2) continue;   // beside it
+        const bottom = oy + oh * (1 - anchorY(other));
+        if (top >= bottom) continue;                             // clear below it
+        return 5;
+    }
+    return base;
 };
 
 /**
@@ -500,9 +538,16 @@ Sprite_Character.prototype.updateVisibility = function() {
         this.visible = false;
         return;
     }
-    if (Reactor3D.hasCharacterModel(character)) this.visible = false;
-    if (typeof $dataMap !== "undefined" && Reactor3D.hasEventModels($dataMap)) {
-        this.visible = false;
+    // Only a 3D scene draws these itself; on a flat map a model-bound
+    // character is a rendered sprite (updateMapModelSprite) and the others
+    // are ordinary sprites.
+    const inScene = typeof $dataMap !== "undefined" && Reactor3D.shouldRender3D($dataMap);
+    if (inScene && Reactor3D.hasCharacterModel(character)) this.visible = false;
+    if (inScene && Reactor3D.hasEventModels($dataMap)) this.visible = false;
+    // A model-bound character has no sheet name, which the base class reads
+    // as an empty character; its rendered model is the picture.
+    if (!inScene && this._reactorMapModel && this._reactorMapModel.ready) {
+        this.visible = !(character.isTransparent && character.isTransparent());
     }
 };
 
@@ -559,6 +604,15 @@ Sprite_Character.prototype.update = function() {
         this._reactor3dStand = null;
     }
     this._reactor3dBaseUpdate();
+    if (Reactor3D.updateMapModelSprite) Reactor3D.updateMapModelSprite(this);
+    // A prop lifted off the ground rises by its lift on a flat map too.
+    if (!this._rrCulled && this._character && this._character._reactorLift > 0
+        && typeof $gameMap !== "undefined" && $gameMap && $gameMap.tileHeight) {
+        this.y -= this._character._reactorLift * $gameMap.tileHeight();
+    }
+    // Applied last: plugins replace updatePosition wholesale, and a model
+    // sprite's frame is only right once updateMapModelSprite has set it.
+    if (!this._rrCulled && this.reactorSortedZ) this.z = this.reactorSortedZ();
     const stand = this.reactor3DScale();
     if (!stand) return;
     this.scale.x *= stand.x;
@@ -1467,10 +1521,9 @@ Sprite_Animation.prototype.reactor3DScale = function() {
 Sprite_Animation.prototype.updateEffectGeometry = function() {
     const scale = (this._animation.scale / 100) * this.reactor3DScale();
     const r = Math.PI / 180;
-    // Compensate for the projection's y-flip by rotating the effect 180° on
-    // the x-axis (AnimationPicker's recipe). Without this, particle motion
-    // designed to go "up" instead appears to go "down" on screen.
-    const rx = (180 - this._animation.rotation.x) * r;
+    // The projection handles screen-space Y. Rotating 180 degrees around X
+    // also reversed Z, breaking model facing, culling, and depth ordering.
+    const rx = this._animation.rotation.x * r;
     const ry = this._animation.rotation.y * r;
     const rz = this._animation.rotation.z * r;
     if (!this._handle) return;
@@ -1682,7 +1735,7 @@ Sprite_Animation.prototype.setProjectionMatrix = function(renderer) {
     const canvas = Graphics._effekseerCanvas || renderer.view;
     const q = canvas.height / Sprite_Animation.effekseerViewportSide();
     const x = (this._mirror ? -1 : 1) * q;
-    const y = -q;
+    const y = q;
     const p = -1.2;
     Graphics.effekseer.setProjectionMatrix([
         x, 0, 0, 0,
@@ -4034,6 +4087,14 @@ Spriteset_Map.prototype.updateOffscreenCulling = function() {
         }
         sprite._rrCulled = culled;
     }
+    // A culled sprite is off the display list, so the scene's update cascade
+    // no longer reaches it. It still updates: plugins hang their own sprites
+    // (lights, shadows, labels) elsewhere in the tree and steer them from
+    // Sprite_Character.update, and those would otherwise freeze at the last
+    // on-screen position. Only the drawing is saved, which is the expensive part.
+    for (const sprite of this._rrCullHolder.children) {
+        if (typeof sprite.update === "function") sprite.update();
+    }
     // Reattachment appends at the end of the tilemap's children — AFTER
     // this frame's z-sort already ran. Without an immediate re-sort the
     // render draws the appended sprites above the upper tile layer for a
@@ -4620,6 +4681,10 @@ Spriteset_Map.prototype.keepReactor3DLightsOnTop = function() {
 Spriteset_Map.prototype.updateReactor3DCamera = function() {
     const state = this._reactor3d;
     if (!state) return;
+    // The camera module knows the modes, the map's default and the event
+    // command; the display-following view below is what it does by default.
+    const cameras = typeof RPGReactorCamera3D !== "undefined" ? RPGReactorCamera3D : null;
+    if (cameras && cameras.update(this)) return;
     const focus = this.reactor3DCameraFocus();
     const height = Reactor3D.elevationAt(
         $dataMap, Math.round(focus.x), Math.round(focus.y));
@@ -4639,6 +4704,16 @@ Spriteset_Map.prototype.updateReactor3DCamera = function() {
         });
     Reactor3D.aimCamera(state.camera, { x: focus.x, y: height, z: focus.y }, settings);
 };
+
+// reactor_3d.js loads before the game classes exist, so its camera hooks
+// (Game_Map.setup, the interpreter wait mode, the party hidden in first
+// person) and its plugin command are installed here, once everything they
+// wrap is defined.
+if (typeof Reactor3D !== "undefined" && Reactor3D.Camera) {
+    Reactor3D.Camera.installHooks();
+    Reactor3D.Camera.registerCommands();
+}
+if (typeof Reactor3D !== "undefined" && Reactor3D.installPropHooks) Reactor3D.installPropHooks();
 
 /**
  * The centre of what the map is displaying, in map coordinates.
@@ -5070,6 +5145,14 @@ Spriteset_Map.prototype.update = function() {
         && $gameMap.mapId() !== this._reactorBuiltForMapId) {
         return;
     }
+    // The sorted-above events, looked up by every character sprite this frame.
+    const sprites = this._characterSprites || [];
+    const sorted = [];
+    for (const sprite of sprites) {
+        const character = sprite._character;
+        if (character && character.isSortedAbovePriority && character.isSortedAbovePriority()) sorted.push(sprite);
+    }
+    this._reactorSortedAbove = sorted;
     _reactorSpritesetMapStaleUpdate.apply(this, arguments);
 };
 

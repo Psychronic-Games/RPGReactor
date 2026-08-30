@@ -304,7 +304,7 @@ test('literal translations preserve interpolation placeholders', () => {
 // translation renders in English instead of failing loudly.
 const IDENTICAL_TO_ENGLISH_BY_DESIGN = [
     'app.title', 'about.version', 'about.steam', 'about.youtube',
-    'about.rarelyTypicalPlayers', 'common.ok'
+    'about.catalyst', 'about.rarelyTypicalPlayers', 'common.ok'
 ];
 
 // Focused features may intentionally use I18nManager's English fallback until
@@ -318,15 +318,22 @@ const ENGLISH_FALLBACK_KEYS = [
 ];
 
 const LOANWORDS_BY_LOCALE = {
-    es: ['event.actor', 'event.dir', 'event.normal', 'event.tile', 'event.variable', 'forge.tab.procedural', 'mapProps.tileset', 'mapProps.vol', 'menu.tilesets', 'options.editor', 'theme.cascadia.name', 'toolbar.tileset', 'toolbar.title.plugins', 'workspace.zoom'],
-    pt: ['audio.volume', 'event.item', 'event.normal', 'event.tile', 'forge.tab.procedural', 'mapProps.sizeRange', 'mapProps.tileset', 'menu.classes', 'menu.tilesets', 'options.editor', 'toolbar.tileset', 'workspace.zoom'],
-    de: ['audio.me', 'audio.pause', 'db.system1', 'db.system2', 'efk.frame', 'efk.framesLabel', 'efk.pause', 'event.index', 'event.normal', 'event.parallel', 'event.position', 'event.variable', 'forge.frame', 'mapProps.pause', 'mapProps.tileset', 'menu.system', 'menu.tilesets', 'options.editor', 'options.palette', 'toolbar.tileset', 'workspace.zoom'],
-    fr: ['audio.pause', 'audio.volume', 'efk.orientation', 'efk.pause', 'event.conditions', 'event.image', 'event.normal', 'event.options', 'event.page', 'mapProps.note', 'mapProps.pause', 'menu.animations', 'menu.classes', 'menu.forge', 'menu.tilesets', 'menu.types', 'options.mode', 'options.palette', 'options.title'],
-    it: ['audio.volume', 'event.dir', 'event.pattern', 'event.tile', 'mapProps.loopX', 'mapProps.loopY', 'mapProps.tileset', 'mapProps.vol', 'menu.database', 'menu.file', 'options.editor', 'theme.cascadia.name', 'toolbar.tileset', 'toolbar.title.database', 'workspace.zoom'],
-    pl: ['db.system1', 'db.system2', 'mapProps.tileset', 'menu.system', 'theme.cascadia.name', 'theme.ocean.name', 'toolbar.tileset'],
-    id: ['audio.pan', 'audio.pitch', 'audio.volume', 'efk.frame', 'event.item', 'event.normal', 'event.tile', 'forge.frame', 'mapProps.loopX', 'mapProps.loopY', 'mapProps.pan', 'mapProps.pitch', 'mapProps.tileset', 'mapProps.vol', 'menu.database', 'menu.file', 'options.editor', 'options.mode', 'theme.cascadia.name', 'toolbar.tileset', 'toolbar.title.database', 'workspace.zoom'],
-    vi: ['audio.pan', 'mapProps.pan', 'mapProps.tileset', 'theme.cascadia.name', 'toolbar.tileset'],
-    tr: ['event.normal', 'theme.cascadia.name']
+    es: ['cam3d.auto', 'cam3d.fov', 'event.actor', 'event.dir', 'event.normal', 'event.tile', 'event.variable', 'forge.tab.procedural', 'mapProps.threeD', 'mapProps.tileset', 'mapProps.vol', 'menu.tilesets', 'options.editor', 'r3dfx.audio', 'theme.cascadia.name', 'toolbar.tileset', 'toolbar.title.plugins', 'workspace.zoom'],
+    pt: ['audio.volume', 'cam3d.auto', 'cam3d.fov', 'event.item', 'event.normal', 'event.tile', 'forge.tab.procedural', 'mapProps.sizeRange', 'mapProps.threeD', 'mapProps.tileset', 'menu.classes', 'menu.tilesets', 'options.editor', 'toolbar.tileset', 'workspace.zoom'],
+    de: ['audio.me', 'audio.pause', 'cam3d.auto', 'db.system1', 'db.system2', 'efk.frame', 'efk.framesLabel', 'efk.pause', 'event.index', 'event.normal', 'event.parallel', 'event.position', 'event.variable', 'forge.frame', 'mapProps.pause', 'mapProps.threeD', 'mapProps.tileset', 'menu.system', 'menu.tilesets', 'options.editor', 'options.palette', 'props.animation', 'r3dcard.proportional', 'r3dfx.animation', 'r3dfx.effectName', 'r3dfx.sound', 'r3dfx.typeAnimation', 'r3dfx.video', 'toolbar.tileset', 'workspace.zoom'],
+    fr: ['audio.pause', 'audio.volume', 'cam3d.auto', 'cam3d.mode', 'efk.orientation', 'efk.pause', 'event.conditions', 'event.image', 'event.normal', 'event.options', 'event.page', 'eventCtx.previewPage', 'mapProps.note', 'mapProps.pause', 'mapProps.threeD', 'menu.animations', 'menu.classes', 'menu.forge', 'menu.tilesets', 'menu.types', 'options.mode', 'options.palette', 'options.title', 'props.animation', 'r3dfx.animation', 'r3dfx.audio', 'r3dfx.type', 'r3dfx.typeAnimation'],
+    it: ['audio.volume', 'cam3d.auto', 'cam3d.fov', 'event.dir', 'event.pattern', 'event.tile', 'mapProps.loopX', 'mapProps.loopY', 'mapProps.threeD', 'mapProps.tileset', 'mapProps.vol', 'menu.database', 'menu.file', 'options.editor', 'r3dfx.audio', 'r3dfx.video', 'theme.cascadia.name', 'toolbar.tileset', 'toolbar.title.database', 'workspace.zoom'],
+    pl: ['cam3d.auto', 'db.system1', 'db.system2', 'mapProps.threeD', 'mapProps.tileset', 'menu.system', 'pma.model', 'r3dcard.groupModel', 'theme.cascadia.name', 'theme.ocean.name', 'toolbar.tileset'],
+    id: ['audio.pan', 'audio.pitch', 'audio.volume', 'cam3d.event', 'cam3d.focus.event', 'cam3d.fov', 'cam3d.mode', 'cam3d.pitch', 'cam3d.yaw', 'efk.frame', 'event.item', 'event.normal', 'event.tile', 'forge.frame', 'mapProps.loopX', 'mapProps.loopY', 'mapProps.pan', 'mapProps.pitch', 'mapProps.threeD', 'mapProps.tileset', 'mapProps.vol', 'menu.database', 'menu.file', 'options.editor', 'options.mode', 'pma.model', 'r3dcard.groupModel', 'r3dfx.audio', 'r3dfx.offset', 'r3dfx.video', 'theme.cascadia.name', 'toolbar.tileset', 'toolbar.title.database', 'workspace.zoom'],
+    vi: ['audio.pan', 'cam3d.mode.isometric', 'mapProps.pan', 'mapProps.threeD', 'mapProps.tileset', 'r3dfx.video', 'theme.cascadia.name', 'toolbar.tileset'],
+    tr: ['event.normal', 'pma.model', 'r3dcard.groupModel', 'r3dfx.video', 'theme.cascadia.name'],
+    ja: ['mapProps.threeD'],
+    'zh-Hant': ['mapProps.threeD'],
+    'zh-Hans': ['mapProps.threeD'],
+    ru: ['mapProps.threeD'],
+    el: ['mapProps.threeD'],
+    ko: ['mapProps.threeD'],
+    th: ['mapProps.threeD'],
 };
 
 test('no locale silently renders an untranslated English string', () => {

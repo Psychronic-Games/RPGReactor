@@ -101,7 +101,7 @@ test('Transfer Player keeps picker edits local and System 1 uses shared title br
     assert.match(systemSource, /\['boat', 'ship', 'airship'\]\.includes\(ownerKey\)/);
     assert.match(systemSource, /ownerKey === 'player'/);
     assert.match(systemSource, /RRPickerIndex\.createBrowser\(\{/);
-    assert.match(systemSource, /files: files\.map\(file => file\.name\)/);
+    assert.match(systemSource, /files,\s+selectedName: selectedFile/);
     assert.match(dbUiSource, /get tilemapManager\(\)/);
     assert.equal((mainSource.match(/getTilemapManager: \(\) => this\.projectController\.getTilemapManager\(\)/g) || []).length, 2);
 });

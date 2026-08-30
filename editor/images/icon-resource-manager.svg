@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Resource Manager">
+  <defs>
+    <linearGradient id="rm-blue" x1="8" y1="8" x2="55" y2="57" gradientUnits="userSpaceOnUse"><stop stop-color="#075cdd"/><stop offset=".52" stop-color="#072b95"/><stop offset="1" stop-color="#03102a"/></linearGradient>
+    <radialGradient id="rm-gold"><stop stop-color="#fff"/><stop offset=".14" stop-color="#fffbd5"/><stop offset=".36" stop-color="#ffd52b"/><stop offset=".6" stop-color="#ff9a0b"/><stop offset=".8" stop-color="#f0440b"/><stop offset="1" stop-color="#d7318f"/></radialGradient>
+    <filter id="rm-glow" x="-70%" y="-70%" width="240%" height="240%"><feGaussianBlur stdDeviation="1.4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  </defs>
+  <path d="M30 6h9v10h-9zm11 0h9v10h-9zm11 0h9v10h-9z" fill="#01040e" stroke="#01030a" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M31 7h7v8h-7z" fill="#d92842" stroke="#ff7a8d"/><path d="M42 7h7v8h-7z" fill="#18a85d" stroke="#63f0a2"/><path d="M53 7h7v8h-7z" fill="#e18a0c" stroke="#ffd85a"/>
+  <path d="M32.5 12l1.6-2 2.4 3m7-2h4m-2-2v4m9-3 2-1.5L59 10l-2 2-2.5-2z" fill="none" stroke="#fff8c7" stroke-width=".8" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M8 11h17l5 6h26v38H8z" fill="#01040e" stroke="#01030a" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M8 11h17l5 6h26v38H8z" fill="url(#rm-blue)" stroke="#075cdd" stroke-width="2.4" stroke-linejoin="round"/>
+  <path d="M12 22h40v28H12z" fill="#05143d" stroke="#168ed8" stroke-width="1.8"/>
+  <path d="M16 28h9m14 0h9M15 36h8m18 0h8M17 44h8m14 0h8" stroke="#2a78df" stroke-width="2.1"/>
+  <path d="M20 24v7m24-7v7M20 41v7m24-7v7" stroke="#0668d4" stroke-width="1.7"/>
+  <circle cx="32" cy="36" r="12" fill="#01040e" stroke="#01030a" stroke-width="5"/>
+  <circle cx="32" cy="36" r="9.5" fill="#082967" stroke="#0795df" stroke-width="2.3"/>
+  <circle cx="32" cy="36" r="7.5" fill="#8f1f68" stroke="#d7318f" stroke-width="1.8"/>
+  <circle cx="32" cy="36" r="6.8" fill="#01030a"/>
+  <circle cx="32" cy="36" r="5.5" fill="url(#rm-gold)" stroke="#01030a" stroke-width="1.5" filter="url(#rm-glow)"/>
+  <path d="M17 20h30M24 36h2m12 0h2" stroke="#d7318f" stroke-width="1.8" stroke-linecap="round"/>
+  <path d="M13 8h12l3 4H13z" fill="#1556b9" stroke="#23bdf3" stroke-width="1.6"/>
+</svg>

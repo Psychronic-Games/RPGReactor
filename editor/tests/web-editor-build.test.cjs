@@ -152,6 +152,19 @@ test('Web package and browser host use a root-scoped saved-file overlay', () => 
     assert.match(host, /async saveFiles\(/);
     assert.match(host, /showSaveFilePicker/);
     assert.match(host, /showDirectoryPicker/);
+    assert.match(host, /for \(const item of written\.reverse\(\)\)/);
+    assert.match(host, /The export contains duplicate target paths/);
+    assert.match(host, /sameBlobBytes/);
+    assert.match(host, /changed before rollback could restore it/);
+    assert.match(host, /rmdirSync\(dirPath\)/);
+    assert.match(host, /restoreBundledFileSync/);
+    assert.match(host, /item\.snapshot = new Blob/,
+        'rollback retains independent original bytes rather than invalidatable File snapshots');
+    assert.match(host, /item\.handle\.isSameEntry/,
+        'rollback verifies export-created directories before removing them');
+    assert.match(host, /writeDirectoryFile\([\s\S]{0,160}?destination = null/,
+        'directory exports write through the file handle that was just validated');
+    assert.match(host, /beforeWrite\s*\n\s*\}\);/);
     assert.match(host, /rr-web-sw-reload/);
     assert.match(serviceWorker, /\/project\//);
     assert.match(serviceWorker, /indexedDB\.open\(DB_NAME, DB_VERSION\)/);

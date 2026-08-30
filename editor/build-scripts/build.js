@@ -128,6 +128,7 @@ function validateProjectRuntime(root) {
     const required = [
         'reactor_main.js', 'reactor_core.js', 'reactor_3d.js', 'reactor_managers.js',
         'reactor_objects.js', 'reactor_scenes.js', 'reactor_sprites.js', 'reactor_picture_extensions.js',
+        'reactor_video_surfaces.js',
         'reactor_windows.js', 'reactor_ui.js', 'reactor_mv_compat.js', 'reactor_plugins.js',
         path.join('libs', 'pixi.js'), path.join('libs', 'pixi_compat.js'),
         path.join('libs', 'pako.min.js'), path.join('libs', 'lz-string.js'), path.join('libs', 'localforage.min.js'),

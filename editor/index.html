@@ -79,6 +79,7 @@
                 <span data-i18n="menu.tools">Tools</span>
                 <div class="html-submenu" id="submenu-tools" style="display: none; position: absolute; top: 100%; left: 0; background-color: var(--color-bg-toolbar); color: var(--color-text); border: 1px solid var(--color-border); min-width: 200px; z-index: 10000; box-shadow: var(--shadow-popup);">
                     <div class="html-menu-option" data-action="toggle-event-mode" data-i18n="menu.eventManager" style="padding: 8px 16px; cursor: pointer;">Event Manager</div>
+                    <div class="html-menu-option" data-action="resource-manager" data-i18n="menu.resourceManager" style="padding: 8px 16px; cursor: pointer;">Resource Manager</div>
                     <div class="html-menu-option" data-action="audio-player" data-i18n="menu.audioPlayer" style="padding: 8px 16px; cursor: pointer;">♪ Audio Player</div>
                 </div>
             </div>
@@ -108,6 +109,8 @@
                 <div class="html-submenu" id="submenu-help" style="display: none; position: absolute; top: 100%; left: 0; background-color: var(--color-bg-toolbar); color: var(--color-text); border: 1px solid var(--color-border); min-width: 200px; z-index: 10000; box-shadow: var(--shadow-popup);">
                     <div class="html-menu-option" data-action="devtools" data-i18n="menu.developerTools" style="padding: 8px 16px; cursor: pointer;">Developer Tools</div>
                     <div style="height: 1px; background: var(--color-border); margin: 4px 0;"></div>
+                    <a class="html-menu-option external-link" href="https://rpgcatalyst.com" target="_blank" rel="noreferrer" data-i18n="about.catalyst" style="display: block; padding: 8px 16px; color: inherit; text-decoration: none;">RPG Catalyst Forums</a>
+                    <div style="height: 1px; background: var(--color-border); margin: 4px 0;"></div>
                     <div class="html-menu-option" data-action="about" data-i18n="menu.about" style="padding: 8px 16px; cursor: pointer;">About RPG Reactor</div>
                 </div>
             </div>
@@ -128,45 +131,48 @@
             <button class="tool-button" data-action="open-project" title="Open Project" data-i18n-title="toolbar.title.openProject"><img src="images/icon-open-project.png"></button>
             <button class="tool-button" data-action="save" title="Save Project" data-i18n-title="toolbar.title.saveProject"><img src="images/icon-save.png"></button>
             <div class="toolbar-separator"></div>
-            <button class="tool-button" id="undo-btn" data-action="undo" title="Undo (Ctrl+Z)" data-i18n-title="toolbar.title.undo" disabled><img src="images/icon-undo.png"></button>
-            <button class="tool-button" id="redo-btn" data-action="redo" title="Redo (Ctrl+Y)" data-i18n-title="toolbar.title.redo" disabled><img src="images/icon-redo.png"></button>
+            <button class="tool-button" id="undo-btn" data-action="undo" title="Undo (Ctrl+Z)" data-i18n-title="toolbar.title.undo" disabled><img src="images/icon-undo.svg" alt=""></button>
+            <button class="tool-button" id="redo-btn" data-action="redo" title="Redo (Ctrl+Y)" data-i18n-title="toolbar.title.redo" disabled><img src="images/icon-redo.svg" alt=""></button>
             <div class="toolbar-separator"></div>
             <button class="tool-button" data-action="playtest" title="Playtest" data-i18n-title="toolbar.title.playtest"><img src="images/icon-playtest.png"></button>
             <div class="toolbar-separator"></div>
             <!-- Drawing Tools -->
             <span class="toolbar-label" data-i18n="toolbar.tileset">Tileset:</span>
-            <button class="tool-button tool-draw-mode active" data-tool="pencil" title="Single Tile Tool" data-i18n-title="toolbar.title.singleTile"><img src="images/icon-single.png"></button>
-            <button class="tool-button tool-draw-mode" data-tool="rectangle" title="Rectangular Area Tool" data-i18n-title="toolbar.title.rectangle"><img src="images/icon-area.png"></button>
-            <button class="tool-button tool-draw-mode" data-tool="circle" title="Circular Area Tool" data-i18n-title="toolbar.title.circle"><img src="images/icon-circular-area.png"></button>
-            <button class="tool-button tool-draw-mode" data-tool="fill" title="Fill Tool" data-i18n-title="toolbar.title.fill"><img src="images/icon-fill.png"></button>
+            <button class="tool-button tool-draw-mode active" data-tool="pencil" title="Single Tile Tool" data-i18n-title="toolbar.title.singleTile"><img src="images/icon-single.svg" alt=""></button>
+            <button class="tool-button tool-draw-mode" data-tool="rectangle" title="Rectangular Area Tool" data-i18n-title="toolbar.title.rectangle"><img src="images/icon-area.svg" alt=""></button>
+            <button class="tool-button tool-draw-mode" data-tool="circle" title="Circular Area Tool" data-i18n-title="toolbar.title.circle"><img src="images/icon-circular-area.svg" alt=""></button>
+            <button class="tool-button tool-draw-mode" data-tool="fill" title="Fill Tool" data-i18n-title="toolbar.title.fill"><img src="images/icon-fill.svg" alt=""></button>
             <div class="toolbar-separator"></div>
-            <button class="tool-button" data-action="shadow-pen" title="Shadow Pen (Toggle shadows on tiles)" data-i18n-title="toolbar.title.shadowPen" style="font-size: var(--toolbar-icon-size); line-height: 1;">🌓</button>
-            <button class="tool-button" data-action="eraser" title="Erase Tiles (Layer-Aware)" data-i18n-title="toolbar.title.eraser"><img src="images/icon-erase.png" onerror="this.style.display='none';"></button>
+            <button class="tool-button" data-action="shadow-pen" title="Shadow Pen (Toggle shadows on tiles)" data-i18n-title="toolbar.title.shadowPen"><img src="images/icon-shadow-pen.svg" alt="" onerror="this.style.display='none';"></button>
+            <button class="tool-button" data-action="eraser" title="Erase Tiles (Layer-Aware)" data-i18n-title="toolbar.title.eraser"><img src="images/icon-erase.svg" alt="" onerror="this.style.display='none';"></button>
             <div class="toolbar-separator"></div>
             <!-- Layer Selection -->
             <span class="toolbar-label" data-i18n="toolbar.layer">Layer:</span>
-            <button class="tool-button layer-mode active" data-layer="auto" title="Auto-Select Layer (Smart Stacking)" data-i18n-title="toolbar.title.autoLayer"><img src="images/icon-LA.png" onerror="this.style.display='none'; this.parentElement.innerHTML='LA';"></button>
-            <button class="tool-button layer-mode" data-layer="0" title="Layer 1" data-i18n-title="toolbar.title.layer1"><img src="images/icon-L1.png" onerror="this.style.display='none'; this.parentElement.innerHTML='L1';"></button>
-            <button class="tool-button layer-mode" data-layer="1" title="Layer 2" data-i18n-title="toolbar.title.layer2"><img src="images/icon-L2.png" onerror="this.style.display='none'; this.parentElement.innerHTML='L2';"></button>
-            <button class="tool-button layer-mode" data-layer="2" title="Layer 3" data-i18n-title="toolbar.title.layer3"><img src="images/icon-L3.png" onerror="this.style.display='none'; this.parentElement.innerHTML='L3';"></button>
-            <button class="tool-button layer-mode" data-layer="3" title="Layer 4" data-i18n-title="toolbar.title.layer4"><img src="images/icon-L4.png" onerror="this.style.display='none'; this.parentElement.innerHTML='L4';"></button>
+            <button class="tool-button layer-mode active" data-layer="auto" title="Auto-Select Layer (Smart Stacking)" data-i18n-title="toolbar.title.autoLayer"><img src="images/icon-LA.svg" alt="" onerror="this.style.display='none'; this.parentElement.innerHTML='LA';"></button>
+            <button class="tool-button layer-mode" data-layer="0" title="Layer 1" data-i18n-title="toolbar.title.layer1"><img src="images/icon-L1.svg" alt="" onerror="this.style.display='none'; this.parentElement.innerHTML='L1';"></button>
+            <button class="tool-button layer-mode" data-layer="1" title="Layer 2" data-i18n-title="toolbar.title.layer2"><img src="images/icon-L2.svg" alt="" onerror="this.style.display='none'; this.parentElement.innerHTML='L2';"></button>
+            <button class="tool-button layer-mode" data-layer="2" title="Layer 3" data-i18n-title="toolbar.title.layer3"><img src="images/icon-L3.svg" alt="" onerror="this.style.display='none'; this.parentElement.innerHTML='L3';"></button>
+            <button class="tool-button layer-mode" data-layer="3" title="Layer 4" data-i18n-title="toolbar.title.layer4"><img src="images/icon-L4.svg" alt="" onerror="this.style.display='none'; this.parentElement.innerHTML='L4';"></button>
 
             <!-- Tools Section -->
             <div class="toolbar-separator"></div>
             <span class="toolbar-label" data-i18n="toolbar.tools">Tools:</span>
             <button class="tool-button" id="toolbar-event-manager-btn" data-action="toggle-event-mode" title="Event Manager" data-i18n-title="toolbar.title.eventManager"><img src="images/icon-event.png" onerror="this.style.display='none'; this.parentElement.innerHTML='EV';"></button>
             <button class="tool-button" id="toolbar-database-btn" data-action="open-database" title="Database" data-i18n-title="toolbar.title.database">
-                <img src="images/icon-database.png" onerror="this.style.display='none'; this.parentElement.innerHTML='DB';">
+                <img src="images/icon-database.svg" alt="" onerror="this.style.display='none'; this.parentElement.innerHTML='DB';">
             </button>
             <button class="tool-button" id="toolbar-plugins-btn" data-action="open-plugins" title="Plugins" data-i18n-title="toolbar.title.plugins">
-                <img src="images/icon-plugins.png" onerror="this.style.display='none'; this.parentElement.innerHTML='PL';">
+                <img src="images/icon-plugins.svg" alt="" onerror="this.style.display='none'; this.parentElement.innerHTML='PL';">
             </button>
-            <button class="tool-button" data-action="audio-player" title="Audio Player" data-i18n-title="toolbar.title.audioPlayer"><img src="images/icon-audioplayer.png" onerror="this.style.display='none'; this.parentElement.innerHTML='♪';"></button>
+            <button class="tool-button" id="toolbar-resource-manager-btn" data-action="resource-manager" title="Resource Manager" data-i18n-title="menu.resourceManager">
+                <img src="images/icon-resource-manager.svg" alt="" onerror="this.style.display='none'; this.parentElement.innerHTML='RM';">
+            </button>
+            <button class="tool-button" data-action="audio-player" title="Audio Player" data-i18n-title="toolbar.title.audioPlayer"><img src="images/icon-speaker.svg" alt="" onerror="this.style.display='none'; this.parentElement.innerHTML='♪';"></button>
 
             <!-- Forge Section -->
             <div class="toolbar-separator"></div>
             <span class="toolbar-label" data-i18n="toolbar.forge">Forge:</span>
-            <button class="tool-button" data-action="forge-launcher" title="Forge - Development Tool Suite" data-i18n-title="toolbar.title.forgeLauncher"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M 22 5 H 9 C 6.2 5, 3.6 6.3, 2 8.6 C 4 9.6, 6.4 10, 9 10 H 10 V 14 H 7 L 5.5 18 H 18.5 L 17 14 H 14 V 10 H 20 C 21.1 10, 22 9.1, 22 8 Z" fill="#ffd700"/><path d="M 19.5 0.5 Q 20 2.5 22 3 Q 20 3.5 19.5 5.5 Q 19 3.5 17 3 Q 19 2.5 19.5 0.5 Z" fill="#fff066"/></svg></button>
+            <button class="tool-button" data-action="forge-launcher" title="Forge - Development Tool Suite" data-i18n-title="toolbar.title.forgeLauncher"><img src="images/icon-forge.svg" alt="" onerror="this.style.display='none'; this.parentElement.innerHTML='FG';"></button>
         </div>
 
         <!-- Main Content -->
@@ -209,6 +215,7 @@
                                 <a class="external-link" href="https://www.youtube.com/@PsychronicGames" target="_blank" rel="noreferrer" data-i18n="about.youtube">YouTube - Psychronic Games</a>
                                 <a class="external-link" href="https://www.youtube.com/@RarelyTypicalPlayers" target="_blank" rel="noreferrer" data-i18n="about.rarelyTypicalPlayers">YouTube - Rarely Typical Players Podcast</a>
                                 <a class="external-link" href="https://discord.gg/hXacc38PTw" target="_blank" rel="noreferrer" data-i18n="about.discord">Discord - Join The Community</a>
+                                <a class="external-link" href="https://rpgcatalyst.com" target="_blank" rel="noreferrer" data-i18n="about.catalyst">RPG Catalyst Forums</a>
                             </div>
                         </section>
                     </div>
@@ -274,6 +281,10 @@
                                     <input id="map-3d-view" type="checkbox" aria-label="Show the map in 3D" data-i18n-aria="toolbar.title.map3DView">
                                     <span>3D</span>
                                 </label>
+                                <label class="map-info-item map-video-previews" title="Show video surface previews" data-i18n-title="toolbar.title.videoPreviews">
+                                    <input id="map-video-previews" type="checkbox" checked aria-label="Show video surface previews" data-i18n-aria="toolbar.title.videoPreviews">
+                                    <span>Video</span>
+                                </label>
                                 <span class="map-info-item"><span data-i18n="workspace.zoom">Zoom:</span> <span class="map-info-value" id="map-zoom">100%</span></span>
                                 <span class="map-info-item">(<span class="map-info-value" id="map-coordinates">--,--</span>)</span>
                             </div>
@@ -322,24 +333,24 @@
 
                             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px;">
                                 <div>
-                                    <label style="display: block; font-size: 11px; color: var(--color-text-muted); margin-bottom: 3px;" data-i18n="mapProps.mapName">Map Name:</label>
+                                    <label class="map-props-label" style="display: block; margin-bottom: 3px;" data-i18n="mapProps.mapName">Map Name:</label>
                                     <input type="text" id="map-name-input" style="width: 100%; padding: 5px 6px; background-color: var(--color-bg-input); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 3px; font-size: 12px;">
                                 </div>
                                 <div>
-                                    <label style="display: block; font-size: 11px; color: var(--color-text-muted); margin-bottom: 3px;" data-i18n="mapProps.displayName">Display Name:</label>
+                                    <label class="map-props-label" style="display: block; margin-bottom: 3px;" data-i18n="mapProps.displayName">Display Name:</label>
                                     <input type="text" id="map-display-name-input" style="width: 100%; padding: 5px 6px; background-color: var(--color-bg-input); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 3px; font-size: 12px;">
                                 </div>
                             </div>
 
                             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px;">
                                 <div>
-                                    <label style="display: block; font-size: 11px; color: var(--color-text-muted); margin-bottom: 3px;" data-i18n="mapProps.tileset">Tileset:</label>
+                                    <label class="map-props-label" style="display: block; margin-bottom: 3px;" data-i18n="mapProps.tileset">Tileset:</label>
                                     <select id="map-tileset-select" style="width: 100%; min-height: 26px; padding: 5px 6px; background-color: var(--color-bg-input); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 3px; font-size: 12px;">
                                         <option value="1">Tileset 1</option>
                                     </select>
                                 </div>
                                 <div>
-                                    <label style="display: block; font-size: 11px; color: var(--color-text-muted); margin-bottom: 3px;" data-i18n="mapProps.scrollType">Scroll Type:</label>
+                                    <label class="map-props-label" style="display: block; margin-bottom: 3px;" data-i18n="mapProps.scrollType">Scroll Type:</label>
                                     <select id="map-scroll-type-select" style="width: 100%; padding: 5px 6px; background-color: var(--color-bg-input); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 3px; font-size: 12px;">
                                         <option value="0" data-i18n="mapProps.noLoop">No Loop</option>
                                         <option value="1" data-i18n="mapProps.loopVertical">Loop Vertically</option>
@@ -351,7 +362,7 @@
 
                             <div style="display: flex; align-items: flex-start; gap: 10px; margin-bottom: 8px;">
                                 <div id="map-resize-anchor-row" style="display: none; flex: 0 0 auto;">
-                                    <label style="display: block; font-size: 11px; color: var(--color-text-muted); margin-bottom: 3px;" data-i18n="mapProps.anchor">Anchor:</label>
+                                    <label class="map-props-label" style="display: block; margin-bottom: 3px;" data-i18n="mapProps.anchor">Anchor:</label>
                                     <div id="map-resize-anchor" style="display: grid; grid-template-columns: repeat(3, 24px); grid-template-rows: repeat(3, 24px); gap: 2px;">
                                         <button type="button" class="map-anchor-cell" data-anchor="top-left" title="Top-Left" data-i18n-title="mapProps.anchorTopLeft">↖</button>
                                         <button type="button" class="map-anchor-cell" data-anchor="top" title="Top" data-i18n-title="mapProps.anchorTop">↑</button>
@@ -366,16 +377,16 @@
                                 </div>
                                 <div style="flex: 1; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px;">
                                     <div>
-                                        <label style="display: block; font-size: 11px; color: var(--color-text-muted); margin-bottom: 3px;" data-i18n="mapProps.width">Width:</label>
-                                        <input type="number" id="map-width-input" min="1" max="512" step="1" value="17" title="1-512 tiles" data-i18n-title="mapProps.sizeRange" style="width: 100%; padding: 5px 6px; background-color: var(--color-bg-input); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 3px; font-size: 12px;">
+                                        <label class="map-props-label" style="display: block; margin-bottom: 3px;" data-i18n="mapProps.width">Width:</label>
+                                        <div class="rr-number-stepper"><input class="rr-number-stepper-input" style="flex: 1; min-width: 0; width: 100%; box-sizing: border-box; padding: 5px 6px; border: 0; background: transparent; color: var(--color-text); font-size: 12px;" type="number" id="map-width-input" min="1" max="512" step="1" value="17" title="1-512 tiles" data-i18n-title="mapProps.sizeRange"><div class="rr-number-stepper-buttons"><button type="button" tabindex="-1" data-map-props-step="1" data-target="map-width-input" aria-label="+">&#9650;</button><button type="button" tabindex="-1" data-map-props-step="-1" data-target="map-width-input" aria-label="-">&#9660;</button></div></div>
                                     </div>
                                     <div>
-                                        <label style="display: block; font-size: 11px; color: var(--color-text-muted); margin-bottom: 3px;" data-i18n="mapProps.height">Height:</label>
-                                        <input type="number" id="map-height-input" min="1" max="512" step="1" value="13" title="1-512 tiles" data-i18n-title="mapProps.sizeRange" style="width: 100%; padding: 5px 6px; background-color: var(--color-bg-input); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 3px; font-size: 12px;">
+                                        <label class="map-props-label" style="display: block; margin-bottom: 3px;" data-i18n="mapProps.height">Height:</label>
+                                        <div class="rr-number-stepper"><input class="rr-number-stepper-input" style="flex: 1; min-width: 0; width: 100%; box-sizing: border-box; padding: 5px 6px; border: 0; background: transparent; color: var(--color-text); font-size: 12px;" type="number" id="map-height-input" min="1" max="512" step="1" value="13" title="1-512 tiles" data-i18n-title="mapProps.sizeRange"><div class="rr-number-stepper-buttons"><button type="button" tabindex="-1" data-map-props-step="1" data-target="map-height-input" aria-label="+">&#9650;</button><button type="button" tabindex="-1" data-map-props-step="-1" data-target="map-height-input" aria-label="-">&#9660;</button></div></div>
                                     </div>
                                     <div>
-                                        <label style="display: block; font-size: 11px; color: var(--color-text-muted); margin-bottom: 3px;" data-i18n="mapProps.encounterSteps">Encounter Steps:</label>
-                                        <input type="number" id="map-encounter-steps-input" min="1" max="999" value="30" style="width: 100%; padding: 5px 6px; background-color: var(--color-bg-input); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 3px; font-size: 12px;">
+                                        <label class="map-props-label" style="display: block; margin-bottom: 3px;" data-i18n="mapProps.encounterSteps">Encounter Steps:</label>
+                                        <div class="rr-number-stepper"><input class="rr-number-stepper-input" style="flex: 1; min-width: 0; width: 100%; box-sizing: border-box; padding: 5px 6px; border: 0; background: transparent; color: var(--color-text); font-size: 12px;" type="number" id="map-encounter-steps-input" min="1" max="999" value="30"><div class="rr-number-stepper-buttons"><button type="button" tabindex="-1" data-map-props-step="1" data-target="map-encounter-steps-input" aria-label="+">&#9650;</button><button type="button" tabindex="-1" data-map-props-step="-1" data-target="map-encounter-steps-input" aria-label="-">&#9660;</button></div></div>
                                     </div>
                                 </div>
                             </div>
@@ -383,78 +394,40 @@
                             <div id="map-resize-anchor-hint" style="display: none; font-size: 11px; color: var(--color-text-muted); line-height: 1.5; margin-bottom: 8px;"></div>
 
                             <div style="margin-bottom: 8px;">
-                                <label style="display: flex; align-items: center; font-size: 11px; color: var(--color-text); cursor: pointer;">
+                                <label class="map-props-label" style="display: flex; align-items: center; cursor: pointer;">
                                     <input type="checkbox" id="map-autoplay-bgm-checkbox" style="margin-right: 6px;">
                                     <span data-i18n="mapProps.autoplayBgm">Autoplay BGM</span>
                                 </label>
                                 <div id="map-bgm-picker" style="display: none; margin-top: 6px; padding: 6px; background-color: var(--color-bg-panel); border: 1px solid var(--color-border); border-radius: 3px;">
-                                    <div style="display: flex; gap: 4px; margin-bottom: 4px;">
-                                        <select id="map-bgm-select" style="flex: 1; min-width: 0; padding: 4px 6px; background-color: var(--color-bg-input); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 3px; font-size: 11px;">
-                                            <option value="" data-i18n="common.none">(None)</option>
-                                        </select>
-                                        <button type="button" id="map-bgm-browse-btn" title="Browse..." data-i18n-title="mapProps.browse" style="padding: 4px 8px; background-color: var(--color-bg-button); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 3px; cursor: pointer; font-size: 10px;">…</button>
+                                    <!-- The track and its levels are chosen in the audio picker,
+                                         which also plays it; this row only shows the choice. -->
+                                    <div style="display: flex; gap: 6px; align-items: center;">
+                                        <div id="map-bgm-track" title="Choose a track" data-i18n-title="mapProps.trackHint" style="flex: 1; min-width: 0; padding: 5px 6px; background-color: var(--color-bg-input); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 3px; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer;"></div>
+                                        <button type="button" id="map-bgm-choose-btn" class="map-props-btn primary" style="flex: 0 0 auto; padding: 5px 12px; font-size: 12px;" data-i18n="mapProps.choose">Choose…</button>
                                     </div>
-                                    <div style="display: flex; gap: 4px; margin-bottom: 4px;">
-                                        <button type="button" id="map-bgm-play-btn" style="flex: 1; padding: 4px 6px; background-color: var(--color-bg-button); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 3px; cursor: pointer; font-size: 10px;" data-i18n="mapProps.play">Play</button>
-                                        <button type="button" id="map-bgm-pause-btn" style="flex: 1; padding: 4px 6px; background-color: var(--color-bg-button); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 3px; cursor: pointer; font-size: 10px;" data-i18n="mapProps.pause">Pause</button>
-                                        <button type="button" id="map-bgm-stop-btn" style="flex: 1; padding: 4px 6px; background-color: var(--color-bg-button); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 3px; cursor: pointer; font-size: 10px;" data-i18n="mapProps.stop">Stop</button>
-                                    </div>
-                                    <div id="map-bgm-preview-status" style="color: var(--color-text-muted); font-size: 10px; margin-bottom: 4px; min-height: 12px;" data-i18n="mapProps.noPreview">No preview playing</div>
-                                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; font-size: 10px;">
-                                        <div>
-                                            <label style="display: block; color: var(--color-text-muted); margin-bottom: 1px;" data-i18n="mapProps.vol">Vol:</label>
-                                            <input type="number" id="map-bgm-volume" min="0" max="100" value="100" style="width: 100%; padding: 2px; background-color: var(--color-bg-input); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 3px; font-size: 10px;">
-                                        </div>
-                                        <div>
-                                            <label style="display: block; color: var(--color-text-muted); margin-bottom: 1px;" data-i18n="mapProps.pitch">Pitch:</label>
-                                            <input type="number" id="map-bgm-pitch" min="50" max="150" value="100" style="width: 100%; padding: 2px; background-color: var(--color-bg-input); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 3px; font-size: 10px;">
-                                        </div>
-                                        <div>
-                                            <label style="display: block; color: var(--color-text-muted); margin-bottom: 1px;" data-i18n="mapProps.pan">Pan:</label>
-                                            <input type="number" id="map-bgm-pan" min="-100" max="100" value="0" style="width: 100%; padding: 2px; background-color: var(--color-bg-input); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 3px; font-size: 10px;">
-                                        </div>
-                                    </div>
+                                    <div id="map-bgm-levels" style="font-size: 11px; color: var(--color-text-muted); margin-top: 4px; min-height: 12px;"></div>
                                 </div>
                             </div>
 
                             <div style="margin-bottom: 8px;">
-                                <label style="display: flex; align-items: center; font-size: 11px; color: var(--color-text); cursor: pointer;">
+                                <label class="map-props-label" style="display: flex; align-items: center; cursor: pointer;">
                                     <input type="checkbox" id="map-autoplay-bgs-checkbox" style="margin-right: 6px;">
                                     <span data-i18n="mapProps.autoplayBgs">Autoplay BGS</span>
                                 </label>
                                 <div id="map-bgs-picker" style="display: none; margin-top: 6px; padding: 6px; background-color: var(--color-bg-panel); border: 1px solid var(--color-border); border-radius: 3px;">
-                                    <div style="display: flex; gap: 4px; margin-bottom: 4px;">
-                                        <select id="map-bgs-select" style="flex: 1; min-width: 0; padding: 4px 6px; background-color: var(--color-bg-input); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 3px; font-size: 11px;">
-                                            <option value="" data-i18n="common.none">(None)</option>
-                                        </select>
-                                        <button type="button" id="map-bgs-browse-btn" title="Browse..." data-i18n-title="mapProps.browse" style="padding: 4px 8px; background-color: var(--color-bg-button); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 3px; cursor: pointer; font-size: 10px;">…</button>
+                                    <!-- The track and its levels are chosen in the audio picker,
+                                         which also plays it; this row only shows the choice. -->
+                                    <div style="display: flex; gap: 6px; align-items: center;">
+                                        <div id="map-bgs-track" title="Choose a track" data-i18n-title="mapProps.trackHint" style="flex: 1; min-width: 0; padding: 5px 6px; background-color: var(--color-bg-input); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 3px; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer;"></div>
+                                        <button type="button" id="map-bgs-choose-btn" class="map-props-btn primary" style="flex: 0 0 auto; padding: 5px 12px; font-size: 12px;" data-i18n="mapProps.choose">Choose…</button>
                                     </div>
-                                    <div style="display: flex; gap: 4px; margin-bottom: 4px;">
-                                        <button type="button" id="map-bgs-play-btn" style="flex: 1; padding: 4px 6px; background-color: var(--color-bg-button); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 3px; cursor: pointer; font-size: 10px;" data-i18n="mapProps.play">Play</button>
-                                        <button type="button" id="map-bgs-pause-btn" style="flex: 1; padding: 4px 6px; background-color: var(--color-bg-button); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 3px; cursor: pointer; font-size: 10px;" data-i18n="mapProps.pause">Pause</button>
-                                        <button type="button" id="map-bgs-stop-btn" style="flex: 1; padding: 4px 6px; background-color: var(--color-bg-button); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 3px; cursor: pointer; font-size: 10px;" data-i18n="mapProps.stop">Stop</button>
-                                    </div>
-                                    <div id="map-bgs-preview-status" style="color: var(--color-text-muted); font-size: 10px; margin-bottom: 4px; min-height: 12px;" data-i18n="mapProps.noPreview">No preview playing</div>
-                                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; font-size: 10px;">
-                                        <div>
-                                            <label style="display: block; color: var(--color-text-muted); margin-bottom: 1px;" data-i18n="mapProps.vol">Vol:</label>
-                                            <input type="number" id="map-bgs-volume" min="0" max="100" value="80" style="width: 100%; padding: 2px; background-color: var(--color-bg-input); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 3px; font-size: 10px;">
-                                        </div>
-                                        <div>
-                                            <label style="display: block; color: var(--color-text-muted); margin-bottom: 1px;" data-i18n="mapProps.pitch">Pitch:</label>
-                                            <input type="number" id="map-bgs-pitch" min="50" max="150" value="100" style="width: 100%; padding: 2px; background-color: var(--color-bg-input); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 3px; font-size: 10px;">
-                                        </div>
-                                        <div>
-                                            <label style="display: block; color: var(--color-text-muted); margin-bottom: 1px;" data-i18n="mapProps.pan">Pan:</label>
-                                            <input type="number" id="map-bgs-pan" min="-100" max="100" value="0" style="width: 100%; padding: 2px; background-color: var(--color-bg-input); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 3px; font-size: 10px;">
-                                        </div>
-                                    </div>
+                                    <div id="map-bgs-levels" style="font-size: 11px; color: var(--color-text-muted); margin-top: 4px; min-height: 12px;"></div>
                                 </div>
                             </div>
 
 
                             <div>
-                                <label style="display: flex; align-items: center; font-size: 11px; color: var(--color-text); cursor: pointer;">
+                                <label class="map-props-label" style="display: flex; align-items: center; cursor: pointer;">
                                     <input type="checkbox" id="map-disable-dashing-checkbox" style="margin-right: 6px;">
                                     <span data-i18n="mapProps.disableDashing">Disable Dashing</span>
                                 </label>
@@ -469,7 +442,7 @@
                             </div>
 
                             <div style="margin-bottom: 6px;">
-                                <div style="display: grid; grid-template-columns: 2fr 1fr 2fr auto; gap: 6px; padding: 4px 6px; background-color: var(--color-bg-surface); border-radius: 3px; font-size: 10px; color: var(--color-text-muted); font-weight: 600;">
+                                <div style="display: grid; grid-template-columns: 2fr 1fr 2fr auto; gap: 6px; padding: 4px 6px; background-color: var(--color-bg-surface); border-radius: 3px; font-size: 11px; color: var(--color-text-muted); font-weight: 600;">
                                     <div data-i18n="mapProps.troop">Troop</div>
                                     <div data-i18n="mapProps.weight">Weight</div>
                                     <div data-i18n="mapProps.range">Range</div>
@@ -485,22 +458,24 @@
                         <!-- Battleback Section -->
                         <div style="background-color: var(--color-bg-deep); border: 1px solid var(--color-border); border-radius: 4px; padding: 12px;">
                             <div style="margin-bottom: 8px;">
-                                <label style="display: flex; align-items: center; font-size: 11px; color: var(--color-text); cursor: pointer;">
+                                <label class="map-props-label" style="display: flex; align-items: center; cursor: pointer;">
                                     <input type="checkbox" id="map-specify-battleback-checkbox" style="margin-right: 6px;">
                                     <span data-i18n="mapProps.specifyBattleback">Specify Battleback</span>
                                 </label>
                                 <div id="map-battleback-picker" style="display: none; margin-top: 6px; padding: 6px; background-color: var(--color-bg-panel); border: 1px solid var(--color-border); border-radius: 3px; grid-template-columns: 1fr 1fr; gap: 6px;">
                                     <div>
-                                        <label style="display: block; font-size: 10px; color: var(--color-text-muted); margin-bottom: 2px;" data-i18n="mapProps.battleback1">Battleback 1:</label>
+                                        <label class="map-props-label" style="display: block; margin-bottom: 2px;" data-i18n="mapProps.battleback1">Battleback 1:</label>
                                         <select id="map-battleback1-select" style="width: 100%; padding: 4px 6px; background-color: var(--color-bg-input); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 3px; font-size: 11px;">
                                             <option value="" data-i18n="common.none">(None)</option>
                                         </select>
+                                        <button class="map-props-btn primary" style="flex: 0 0 auto; padding: 5px 12px; font-size: 12px;" id="map-battleback1-browse-btn" type="button" data-i18n="mapProps.browse">Browse…</button>
                                     </div>
                                     <div>
-                                        <label style="display: block; font-size: 10px; color: var(--color-text-muted); margin-bottom: 2px;" data-i18n="mapProps.battleback2">Battleback 2:</label>
+                                        <label class="map-props-label" style="display: block; margin-bottom: 2px;" data-i18n="mapProps.battleback2">Battleback 2:</label>
                                         <select id="map-battleback2-select" style="width: 100%; padding: 4px 6px; background-color: var(--color-bg-input); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 3px; font-size: 11px;">
                                             <option value="" data-i18n="common.none">(None)</option>
                                         </select>
+                                        <button class="map-props-btn primary" style="flex: 0 0 auto; padding: 5px 12px; font-size: 12px;" id="map-battleback2-browse-btn" type="button" data-i18n="mapProps.browse">Browse…</button>
                                     </div>
                                 </div>
                             </div>
@@ -511,12 +486,12 @@
                             <div style="font-size: 13px; font-weight: 600; color: var(--color-text); margin-bottom: 8px;" data-i18n="mapProps.parallax">Parallax Background</div>
 
                             <div style="margin-bottom: 8px;">
-                                <label style="display: block; font-size: 11px; color: var(--color-text-muted); margin-bottom: 3px;" data-i18n="mapProps.image">Image:</label>
+                                <label class="map-props-label" style="display: block; margin-bottom: 3px;" data-i18n="mapProps.image">Image:</label>
                                 <div style="display: flex; gap: 6px; align-items: stretch;">
                                     <select id="map-parallax-image-select" style="flex: 1; min-width: 0; padding: 5px 6px; background-color: var(--color-bg-input); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 3px; font-size: 12px;">
                                         <option value="" data-i18n="common.none">(None)</option>
                                     </select>
-                                    <button id="map-parallax-browse-btn" type="button" title="Preview and choose a parallax image" data-i18n-title="mapProps.parallaxBrowseHint" style="flex: 0 0 auto; padding: 5px 12px; background-color: var(--color-border-subtle); border: 1px solid var(--color-border-input); color: var(--color-text-strong); border-radius: 3px; font-size: 12px; cursor: pointer;" data-i18n="mapProps.browse">Browse…</button>
+                                    <button class="map-props-btn primary" style="flex: 0 0 auto; padding: 5px 12px; font-size: 12px;" id="map-parallax-browse-btn" type="button" title="Preview and choose a parallax image" data-i18n-title="mapProps.parallaxBrowseHint" data-i18n="mapProps.browse">Browse…</button>
                                 </div>
                                 <!-- A parallax is the map's picture: it is chosen by looking at
                                      it, not by reading a filename off a list. The thumbnail is
@@ -524,20 +499,20 @@
                                      the button does. -->
                                 <div id="map-parallax-preview" style="margin-top: 6px; display: none; border: 1px solid var(--color-border); border-radius: 3px; background-color: var(--color-bg-deep); padding: 4px; cursor: pointer;" title="Click to choose a different parallax" data-i18n-title="mapProps.parallaxPreviewHint">
                                     <img id="map-parallax-preview-img" alt="" style="display: block; width: 100%; max-height: 110px; object-fit: contain; image-rendering: pixelated;">
-                                    <div id="map-parallax-preview-caption" style="font-size: 10px; color: var(--color-text-muted); text-align: center; margin-top: 3px;"></div>
+                                    <div id="map-parallax-preview-caption" style="font-size: 11px; color: var(--color-text-muted); text-align: center; margin-top: 3px;"></div>
                                 </div>
                             </div>
 
                             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px;">
                                 <div>
-                                    <label style="display: flex; align-items: center; font-size: 11px; color: var(--color-text); cursor: pointer; margin-bottom: 4px;">
+                                    <label class="map-props-label" style="display: flex; align-items: center; cursor: pointer; margin-bottom: 4px;">
                                         <input type="checkbox" id="map-parallax-loop-x-checkbox" style="margin-right: 4px;">
                                         <span data-i18n="mapProps.loopX">Loop X</span>
                                     </label>
                                     <input type="number" id="map-parallax-sx-input" placeholder="Speed" data-i18n-placeholder="mapTools.speedPlaceholder" value="0" style="width: 100%; padding: 4px 6px; background-color: var(--color-bg-input); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 3px; font-size: 11px;">
                                 </div>
                                 <div>
-                                    <label style="display: flex; align-items: center; font-size: 11px; color: var(--color-text); cursor: pointer; margin-bottom: 4px;">
+                                    <label class="map-props-label" style="display: flex; align-items: center; cursor: pointer; margin-bottom: 4px;">
                                         <input type="checkbox" id="map-parallax-loop-y-checkbox" style="margin-right: 4px;">
                                         <span data-i18n="mapProps.loopY">Loop Y</span>
                                     </label>
@@ -546,10 +521,74 @@
                             </div>
 
                             <div>
-                                <label style="display: flex; align-items: center; font-size: 11px; color: var(--color-text); cursor: pointer;">
+                                <label class="map-props-label" style="display: flex; align-items: center; cursor: pointer;">
                                     <input type="checkbox" id="map-parallax-show-checkbox" style="margin-right: 6px;">
                                     <span data-i18n="mapProps.showInEditor">Show in Editor</span>
                                 </label>
+                            </div>
+                        </div>
+                        <!-- 3D Section: the in-game switch and the room a 3D map is built in -->
+                        <div style="background-color: var(--color-bg-deep); border: 1px solid var(--color-border); border-radius: 4px; padding: 12px;">
+                            <div style="font-size: 13px; font-weight: 600; color: var(--color-text); margin-bottom: 8px;" data-i18n="mapProps.threeD">3D</div>
+                            <label class="map-props-label" style="display: flex; align-items: center; cursor: pointer;">
+                                <input type="checkbox" id="map-3d-checkbox" style="margin-right: 6px;">
+                                <span data-i18n="mapProps.map3D">3D Map</span>
+                            </label>
+                            <div id="map-3d-options" style="display: none; margin-top: 6px; padding: 6px; background-color: var(--color-bg-panel); border: 1px solid var(--color-border); border-radius: 3px;">
+                                <div style="display: grid; grid-template-columns: auto 1fr; gap: 8px; align-items: center; margin-bottom: 8px;">
+                                    <label class="map-props-label" data-i18n="mapProps.roomHeight">Room Height (tiles):</label>
+                                    <div style="max-width: 120px;"><div class="rr-number-stepper"><input class="rr-number-stepper-input" style="flex: 1; min-width: 0; width: 100%; box-sizing: border-box; padding: 5px 6px; border: 0; background: transparent; color: var(--color-text); font-size: 12px;" type="number" id="map-3d-height-input" min="1" max="512" step="1" value="4"><div class="rr-number-stepper-buttons"><button type="button" tabindex="-1" data-map-props-step="1" data-target="map-3d-height-input" aria-label="+">&#9650;</button><button type="button" tabindex="-1" data-map-props-step="-1" data-target="map-3d-height-input" aria-label="-">&#9660;</button></div></div></div>
+                                </div>
+                                <div style="margin-bottom: 6px;">
+                                    <label class="map-props-label" style="display: block; margin-bottom: 3px;" data-i18n="mapProps.parallaxFloor">Parallax Floor:</label>
+                                    <div style="display: flex; gap: 6px; align-items: stretch;">
+                                        <select id="map-3d-floor-select" style="flex: 1; min-width: 0; padding: 5px 6px; background-color: var(--color-bg-input); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 3px; font-size: 12px;"><option value="" data-i18n="common.none">(None)</option></select>
+                                        <button class="map-props-btn primary" style="flex: 0 0 auto; padding: 5px 12px; font-size: 12px;" id="map-3d-floor-browse-btn" type="button" data-i18n="mapProps.browse">Browse…</button>
+                                    </div>
+                                </div>
+                                <div style="margin-bottom: 6px;">
+                                    <label class="map-props-label" style="display: block; margin-bottom: 3px;" data-i18n="mapProps.parallaxWalls">Parallax Walls:</label>
+                                    <div style="display: flex; gap: 6px; align-items: stretch;">
+                                        <select id="map-3d-walls-select" style="flex: 1; min-width: 0; padding: 5px 6px; background-color: var(--color-bg-input); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 3px; font-size: 12px;"><option value="" data-i18n="common.none">(None)</option></select>
+                                        <button class="map-props-btn primary" style="flex: 0 0 auto; padding: 5px 12px; font-size: 12px;" id="map-3d-walls-browse-btn" type="button" data-i18n="mapProps.browse">Browse…</button>
+                                    </div>
+                                </div>
+                                <div style="margin-bottom: 6px;">
+                                    <label class="map-props-label" style="display: block; margin-bottom: 3px;" data-i18n="mapProps.parallaxCeiling">Parallax Ceiling:</label>
+                                    <div style="display: flex; gap: 6px; align-items: stretch;">
+                                        <select id="map-3d-ceiling-select" style="flex: 1; min-width: 0; padding: 5px 6px; background-color: var(--color-bg-input); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 3px; font-size: 12px;"><option value="" data-i18n="common.none">(None)</option></select>
+                                        <button class="map-props-btn primary" style="flex: 0 0 auto; padding: 5px 12px; font-size: 12px;" id="map-3d-ceiling-browse-btn" type="button" data-i18n="mapProps.browse">Browse…</button>
+                                    </div>
+                                </div>
+                                <div style="margin-bottom: 6px;">
+                                    <label class="map-props-label" style="display: block; margin-bottom: 3px;" data-i18n="mapProps.defaultCamera">Default Camera:</label>
+                                    <select id="map-3d-camera-select" style="width: 100%; padding: 5px 6px; background-color: var(--color-bg-input); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 3px; font-size: 12px;">
+                                        <option value="fixed" data-i18n="cam3d.mode.fixed">Fixed Angle (HD-2D)</option>
+                                        <option value="topDown" data-i18n="cam3d.mode.topDown">Top-Down</option>
+                                        <option value="isometric" data-i18n="cam3d.mode.isometric">Isometric</option>
+                                        <option value="thirdPerson" data-i18n="cam3d.mode.thirdPerson">Third Person</option>
+                                        <option value="firstPerson" data-i18n="cam3d.mode.firstPerson">First Person</option>
+                                    </select>
+                                </div>
+                                <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 6px;">
+                                    <div>
+                                        <label class="map-props-label" style="display: block; margin-bottom: 3px;" data-i18n="cam3d.pitch">Pitch:</label>
+                                        <div class="rr-number-stepper"><input class="rr-number-stepper-input" style="flex: 1; min-width: 0; width: 100%; box-sizing: border-box; padding: 5px 6px; border: 0; background: transparent; color: var(--color-text); font-size: 12px;" type="number" id="map-3d-camera-pitch" step="any" min="-89" max="89" placeholder="auto" data-i18n-placeholder="cam3d.auto"><div class="rr-number-stepper-buttons"><button type="button" tabindex="-1" data-map-props-step="1" data-target="map-3d-camera-pitch" aria-label="+">&#9650;</button><button type="button" tabindex="-1" data-map-props-step="-1" data-target="map-3d-camera-pitch" aria-label="-">&#9660;</button></div></div>
+                                    </div>
+                                    <div>
+                                        <label class="map-props-label" style="display: block; margin-bottom: 3px;" data-i18n="cam3d.yaw">Yaw:</label>
+                                        <div class="rr-number-stepper"><input class="rr-number-stepper-input" style="flex: 1; min-width: 0; width: 100%; box-sizing: border-box; padding: 5px 6px; border: 0; background: transparent; color: var(--color-text); font-size: 12px;" type="number" id="map-3d-camera-yaw" step="any" min="-360" max="360" placeholder="auto" data-i18n-placeholder="cam3d.auto"><div class="rr-number-stepper-buttons"><button type="button" tabindex="-1" data-map-props-step="1" data-target="map-3d-camera-yaw" aria-label="+">&#9650;</button><button type="button" tabindex="-1" data-map-props-step="-1" data-target="map-3d-camera-yaw" aria-label="-">&#9660;</button></div></div>
+                                    </div>
+                                    <div>
+                                        <label class="map-props-label" style="display: block; margin-bottom: 3px;" data-i18n="cam3d.distance">Distance:</label>
+                                        <div class="rr-number-stepper"><input class="rr-number-stepper-input" style="flex: 1; min-width: 0; width: 100%; box-sizing: border-box; padding: 5px 6px; border: 0; background: transparent; color: var(--color-text); font-size: 12px;" type="number" id="map-3d-camera-distance" step="any" min="0.5" max="1024" placeholder="auto" data-i18n-placeholder="cam3d.auto"><div class="rr-number-stepper-buttons"><button type="button" tabindex="-1" data-map-props-step="1" data-target="map-3d-camera-distance" aria-label="+">&#9650;</button><button type="button" tabindex="-1" data-map-props-step="-1" data-target="map-3d-camera-distance" aria-label="-">&#9660;</button></div></div>
+                                    </div>
+                                    <div>
+                                        <label class="map-props-label" style="display: block; margin-bottom: 3px;" data-i18n="cam3d.fov">FOV:</label>
+                                        <div class="rr-number-stepper"><input class="rr-number-stepper-input" style="flex: 1; min-width: 0; width: 100%; box-sizing: border-box; padding: 5px 6px; border: 0; background: transparent; color: var(--color-text); font-size: 12px;" type="number" id="map-3d-camera-fov" step="any" min="5" max="150" placeholder="auto" data-i18n-placeholder="cam3d.auto"><div class="rr-number-stepper-buttons"><button type="button" tabindex="-1" data-map-props-step="1" data-target="map-3d-camera-fov" aria-label="+">&#9650;</button><button type="button" tabindex="-1" data-map-props-step="-1" data-target="map-3d-camera-fov" aria-label="-">&#9660;</button></div></div>
+                                    </div>
+                                </div>
+                                <div style="font-size: 11px; color: var(--color-text-muted); line-height: 1.4;" data-i18n="mapProps.roomHint">The floor lies under the parallax background. Walls and the ceiling face inward, so the camera looks past them into the room.</div>
                             </div>
                         </div>
                         <!-- Note Section -->
@@ -646,6 +685,7 @@
                         <a class="external-link" href="https://www.youtube.com/@PsychronicGames" target="_blank" rel="noreferrer" data-i18n="about.youtube" style="color: var(--color-link); text-decoration: none;">YouTube - Psychronic Games</a>
                         <a class="external-link" href="https://www.youtube.com/@RarelyTypicalPlayers" target="_blank" rel="noreferrer" data-i18n="about.rarelyTypicalPlayers" style="color: var(--color-link); text-decoration: none;">YouTube - Rarely Typical Players Podcast</a>
                         <a class="external-link" href="https://discord.gg/hXacc38PTw" target="_blank" rel="noreferrer" data-i18n="about.discord" style="color: var(--color-link); text-decoration: none;">Discord - Join The Community</a>
+                        <a class="external-link" href="https://rpgcatalyst.com" target="_blank" rel="noreferrer" data-i18n="about.catalyst" style="color: var(--color-link); text-decoration: none;">RPG Catalyst Forums</a>
                     </div>
                 </div>
 
@@ -658,6 +698,9 @@
 
     <!-- Plugin Manager Modal -->
     <div id="plugin-manager-modal" style="display: none;"></div>
+
+    <!-- Resource Manager Modal -->
+    <div id="resource-manager-modal" style="display: none;"></div>
 
     <!-- Audio Player Modal -->
     <div id="audio-player-modal" class="modal">
@@ -776,6 +819,7 @@
     <script src="libs/effekseer.min.js"></script>
     <!-- Performance profiler -->
     <script src="src/utils/ThemeColors.js"></script>
+    <script src="src/utils/NumberSteppers.js"></script>
     <script src="src/utils/HtmlEscape.js"></script>
     <script src="src/utils/DataLimits.js"></script>
     <script src="src/utils/EncryptedAssets.js"></script>
@@ -796,6 +840,7 @@
     <script src="src/utils/TilesetSheets.js"></script>
     <script src="src/utils/TileMetrics.js"></script>
     <script src="src/utils/MapElevation.js"></script>
+    <script src="src/utils/EventPreviewModels.js"></script>
     <script src="src/utils/MapObjects3D.js"></script>
     <script src="src/utils/Tileset3DClass.js"></script>
     <script src="src/utils/EditorNames.js"></script>
@@ -962,9 +1007,12 @@
     <!-- Map editing subsystems -->
     <script src="src/TilemapManager.js"></script>
     <script src="src/RegionManager.js"></script>
+    <script src="src/utils/PoseRings3D.js"></script>
     <script src="src/Object3DManager.js"></script>
+    <script src="src/ModelPropsManager.js"></script>
     <script src="src/MapEditor.js"></script>
     <script src="src/MapEditor3D.js"></script>
+    <script src="src/utils/ModelPreview3D.js"></script>
     <script src="src/TilesetPaletteViewer.js"></script>
     <script src="src/EventManager.js"></script>
     <!-- Event editor modules -->
@@ -1058,10 +1106,13 @@
     <script src="src/event/commands/EnemyTransformEditor.js"></script>
     <script src="src/event/commands/ShowBattleAnimationEditor.js"></script>
     <script src="src/event/commands/ForceActionEditor.js"></script>
+    <script src="src/event/commands/VideoSurfaceEditor.js"></script>
+    <script src="src/VideoSurfacePreviewManager.js"></script>
     <script src="src/event/EventCollapsePreferences.js"></script>
     <script src="src/event/EventCommandList.js"></script>
     <!-- Plugin Manager -->
     <script src="src/PluginManager.js"></script>
+    <script src="src/ResourceManager.js"></script>
     <!-- Refactored modules -->
     <script src="src/UIManager.js"></script>
     <script src="src/SidebarResizer.js"></script>
@@ -1090,8 +1141,12 @@
     <script src="src/database/DatabaseTilesetEditor.js"></script>
     <script src="src/database/ModelRigger.js"></script>
     <script src="src/database/RigMotionPresets.js"></script>
+    <script src="src/utils/AnimationPreviewLayer.js"></script>
+    <script src="src/utils/SearchSelect.js"></script>
     <script src="src/database/Database3DEditor.js"></script>
     <script src="src/event/commands/PlayModelAnimationEditor.js"></script>
+    <script src="src/event/commands/Camera3DEditor.js"></script>
+    <script src="src/event/commands/PlayModelEffectEditor.js"></script>
     <script src="src/event/commands/CallUserInterfaceEditor.js"></script>
     <script src="src/database/DatabaseSystem1Editor.js"></script>
     <script src="src/database/DatabaseSystem2Editor.js"></script>

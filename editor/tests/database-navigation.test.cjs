@@ -135,6 +135,8 @@ test('database maximum UI displays caps and lazy-loads continuous large lists', 
     assert.match(theme, /\.rr-database-maximum-input::\-webkit-inner-spin-button,[\s\S]*\-webkit-appearance: none;/);
     assert.match(source, /tt\('Max:'\).*maximum/);
     assert.match(source, /filteredData\.slice\(renderedCount, end\)/);
+    assert.match(source, /type === 'animations'[\s\S]*?filteredData\.length/,
+        'animations render their complete scrollbar extent up front');
     assert.match(source, /listEl\.onscroll[\s\S]*populateList\(searchInput\.value, true\)/);
     assert.match(source, /aria-multiselectable/);
     assert.match(source, /event\.shiftKey && selectionAnchorId !== null/);

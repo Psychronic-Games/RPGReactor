@@ -211,7 +211,7 @@ const RR_I18N_STRINGS = {
         // Menus & dialog chrome (event/plugin context menus, pickers)
         'common.none': '(None)', 'eventCtx.newEvent': 'New Event', 'eventCtx.editEvent': 'Edit Event', 'eventCtx.cutEvent': 'Cut Event',
         'eventCtx.copyEvent': 'Copy Event', 'eventCtx.pasteEvent': 'Paste Event', 'eventCtx.deleteEvent': 'Delete Event', 'eventCtx.findEvent': 'Find Event...',
-        'eventCtx.findNext': 'Find Next Event', 'eventCtx.findPrev': 'Find Previous Event', 'eventCtx.setStart': 'Set Starting Position', 'eventCtx.player': 'Player',
+        'eventCtx.findNext': 'Find Next Event', 'eventCtx.findPrev': 'Find Previous Event', 'eventCtx.playerFacing': 'Player Facing', 'eventCtx.setStart': 'Set Starting Position', 'eventCtx.player': 'Player', 'eventCtx.previewEvent': 'Preview Event', 'eventCtx.previewPage': 'Page {n}', 'eventCtx.hidePreview': 'Hide Preview', 'toolbar.title.videoPreviews': 'Show video surface previews',
         'eventCtx.boat': 'Boat', 'eventCtx.ship': 'Ship', 'eventCtx.airship': 'Airship', 'eventFind.title': 'Find Event',
         'eventFind.searchBy': 'Search by name or ID:', 'eventFind.find': 'Find', 'pluginCtx.pastePlugin': 'Paste Plugin', 'pluginCtx.pasteAbove': 'Paste Above',
         'pluginCtx.removePlugin': 'Remove Plugin', 'pluginCtx.copyN': 'Copy {n} Plugins', 'pluginCtx.cutN': 'Cut {n} Plugins', 'pluginCtx.duplicateN': 'Duplicate {n} Plugins',
@@ -260,6 +260,7 @@ const RR_I18N_STRINGS = {
         'menu.managePlugins': 'Manage Plugins',
         'menu.tools': 'Tools',
         'menu.eventManager': 'Event Manager',
+        'menu.resourceManager': 'Resource Manager',
         'menu.audioPlayer': '♪ Audio Player',
         'menu.forge': 'Forge',
         'menu.forgeLauncher': 'Forge Launcher',
@@ -381,6 +382,7 @@ const RR_I18N_STRINGS = {
         'about.description': 'An open-source, cross-platform RPG game engine built with NW.js, PixiJS v8, and Three.js',
         'about.compatibility': 'Create amazing RPG games with a professional editor that runs on Windows, Mac, and Linux. Compatible with RPG Maker MZ and MV projects in most cases; runtime compatibility depends primarily on the project\'s corescripts and plugins.',
         'about.linksTitle': 'Psychronic Links',
+        'about.catalyst': 'RPG Catalyst Forums',
         'about.itch': 'Itch.io - Plugins And Tools',
         'about.steam': 'Steam - Psychronic Games',
         'about.github': 'GitHub - Other Projects',
@@ -549,7 +551,7 @@ const RR_I18N_STRINGS = {
         'event.highest': 'Highest',
         'event.belowCharacters': 'Below Characters',
         'event.sameAsCharacters': 'Same as Characters',
-        'event.aboveCharacters': 'Above Characters',
+        'event.aboveCharacters': 'Above Characters', 'event.aboveCharactersSorted': 'Above Characters (Sorted by Y)',
         'event.actionButton': 'Action Button',
         'event.playerTouch': 'Player Touch',
         'event.eventTouch': 'Event Touch',
@@ -570,7 +572,7 @@ const RR_I18N_STRINGS = {
         // Menus & dialog chrome (event/plugin context menus, pickers)
         'common.none': '（なし）', 'eventCtx.newEvent': 'イベントの新規作成', 'eventCtx.editEvent': 'イベントの編集', 'eventCtx.cutEvent': 'イベントの切り取り',
         'eventCtx.copyEvent': 'イベントのコピー', 'eventCtx.pasteEvent': 'イベントの貼り付け', 'eventCtx.deleteEvent': 'イベントの削除', 'eventCtx.findEvent': 'イベントの検索...',
-        'eventCtx.findNext': '次のイベントを検索', 'eventCtx.findPrev': '前のイベントを検索', 'eventCtx.setStart': '初期位置の設定', 'eventCtx.player': 'プレイヤー',
+        'eventCtx.findNext': '次のイベントを検索', 'eventCtx.findPrev': '前のイベントを検索', 'eventCtx.playerFacing': 'プレイヤーの向き', 'eventCtx.setStart': '初期位置の設定', 'eventCtx.player': 'プレイヤー', 'eventCtx.previewEvent': 'イベントをプレビュー', 'eventCtx.previewPage': 'ページ {n}', 'eventCtx.hidePreview': 'プレビューを非表示', 'toolbar.title.videoPreviews': 'ビデオサーフェスのプレビューを表示',
         'eventCtx.boat': '小型船', 'eventCtx.ship': '大型船', 'eventCtx.airship': '飛行船', 'eventFind.title': 'イベントの検索',
         'eventFind.searchBy': '名前またはIDで検索:', 'eventFind.find': '検索', 'pluginCtx.pastePlugin': 'プラグインの貼り付け', 'pluginCtx.pasteAbove': '上に貼り付け',
         'pluginCtx.removePlugin': 'プラグインの削除', 'pluginCtx.copyN': '{n}個のプラグインをコピー', 'pluginCtx.cutN': '{n}個のプラグインを切り取り', 'pluginCtx.duplicateN': '{n}個のプラグインを複製',
@@ -727,6 +729,7 @@ const RR_I18N_STRINGS = {
         'about.description': 'NW.js、PixiJS v8、Three.js で構築された、オープンソースのクロスプラットフォームRPGゲームエンジンです',
         'about.compatibility': 'Windows、Mac、Linux で動作する本格的なエディターで、すばらしいRPGを作成できます。多くの場合、RPG Maker MZ / MV プロジェクトと互換性がありますが、ランタイム互換性は主にプロジェクトのコアスクリプトとプラグインに依存します。',
         'about.linksTitle': 'Psychronic リンク',
+        'about.catalyst': 'RPG Catalyst Forums',
         'about.itch': 'Itch.io - プラグインとツール',
         'about.steam': 'Steam - Psychronic のゲーム',
         'about.github': 'GitHub - その他のプロジェクト',
@@ -891,7 +894,7 @@ const RR_I18N_STRINGS = {
         'event.highest': '最高',
         'event.belowCharacters': '通常キャラの下',
         'event.sameAsCharacters': '通常キャラと同じ',
-        'event.aboveCharacters': '通常キャラの上',
+        'event.aboveCharacters': '通常キャラの上', 'event.aboveCharactersSorted': '通常キャラの上（Y順）',
         'event.actionButton': '決定ボタン',
         'event.playerTouch': 'プレイヤーから接触',
         'event.eventTouch': 'イベントから接触',
@@ -912,7 +915,7 @@ const RR_I18N_STRINGS = {
         // Menus & dialog chrome (event/plugin context menus, pickers)
         'common.none': '(Ninguno)', 'eventCtx.newEvent': 'Nuevo evento', 'eventCtx.editEvent': 'Editar evento', 'eventCtx.cutEvent': 'Cortar evento',
         'eventCtx.copyEvent': 'Copiar evento', 'eventCtx.pasteEvent': 'Pegar evento', 'eventCtx.deleteEvent': 'Eliminar evento', 'eventCtx.findEvent': 'Buscar evento...',
-        'eventCtx.findNext': 'Buscar siguiente', 'eventCtx.findPrev': 'Buscar anterior', 'eventCtx.setStart': 'Definir posición inicial', 'eventCtx.player': 'Jugador',
+        'eventCtx.findNext': 'Buscar siguiente', 'eventCtx.findPrev': 'Buscar anterior', 'eventCtx.playerFacing': 'Orientación del jugador', 'eventCtx.setStart': 'Definir posición inicial', 'eventCtx.player': 'Jugador', 'eventCtx.previewEvent': 'Previsualizar evento', 'eventCtx.previewPage': 'Página {n}', 'eventCtx.hidePreview': 'Ocultar previsualización', 'toolbar.title.videoPreviews': 'Mostrar previsualizaciones de superficies de vídeo',
         'eventCtx.boat': 'Bote', 'eventCtx.ship': 'Barco', 'eventCtx.airship': 'Aeronave', 'eventFind.title': 'Buscar evento',
         'eventFind.searchBy': 'Buscar por nombre o ID:', 'eventFind.find': 'Buscar', 'pluginCtx.pastePlugin': 'Pegar plugin', 'pluginCtx.pasteAbove': 'Pegar arriba',
         'pluginCtx.removePlugin': 'Quitar plugin', 'pluginCtx.copyN': 'Copiar {n} plugins', 'pluginCtx.cutN': 'Cortar {n} plugins', 'pluginCtx.duplicateN': 'Duplicar {n} plugins',
@@ -1069,6 +1072,7 @@ const RR_I18N_STRINGS = {
         'about.description': 'Un motor de juegos RPG de código abierto y multiplataforma creado con NW.js, PixiJS v8 y Three.js',
         'about.compatibility': 'Crea juegos RPG increíbles con un editor profesional que funciona en Windows, Mac y Linux. Es compatible con proyectos de RPG Maker MZ y MV en la mayoría de los casos; la compatibilidad en tiempo de ejecución depende principalmente de los corescripts y plugins del proyecto.',
         'about.linksTitle': 'Enlaces de Psychronic',
+        'about.catalyst': 'RPG Catalyst Forums',
         'about.itch': 'Itch.io - Plugins Y Herramientas',
         'about.steam': 'Steam - Juegos De Psychronic',
         'about.github': 'GitHub - Otros Proyectos',
@@ -1233,7 +1237,7 @@ const RR_I18N_STRINGS = {
         'event.highest': 'Máxima',
         'event.belowCharacters': 'Debajo de personajes',
         'event.sameAsCharacters': 'Igual que personajes',
-        'event.aboveCharacters': 'Encima de personajes',
+        'event.aboveCharacters': 'Encima de personajes', 'event.aboveCharactersSorted': 'Encima de personajes (orden por Y)',
         'event.actionButton': 'Botón de acción',
         'event.playerTouch': 'Toque del jugador',
         'event.eventTouch': 'Toque del evento',
@@ -1257,7 +1261,7 @@ const RR_ADDITIONAL_LOCALES = {
         // Menus & dialog chrome (event/plugin context menus, pickers)
         'common.none': '（無）', 'eventCtx.newEvent': '新增事件', 'eventCtx.editEvent': '編輯事件', 'eventCtx.cutEvent': '剪下事件',
         'eventCtx.copyEvent': '複製事件', 'eventCtx.pasteEvent': '貼上事件', 'eventCtx.deleteEvent': '刪除事件', 'eventCtx.findEvent': '尋找事件...',
-        'eventCtx.findNext': '尋找下一個', 'eventCtx.findPrev': '尋找上一個', 'eventCtx.setStart': '設定起始位置', 'eventCtx.player': '玩家',
+        'eventCtx.findNext': '尋找下一個', 'eventCtx.findPrev': '尋找上一個', 'eventCtx.playerFacing': '玩家朝向', 'eventCtx.setStart': '設定起始位置', 'eventCtx.player': '玩家', 'eventCtx.previewEvent': '預覽事件', 'eventCtx.previewPage': '第 {n} 頁', 'eventCtx.hidePreview': '隱藏預覽', 'toolbar.title.videoPreviews': '顯示影片表面預覽',
         'eventCtx.boat': '小船', 'eventCtx.ship': '大船', 'eventCtx.airship': '飛空艇', 'eventFind.title': '尋找事件',
         'eventFind.searchBy': '以名稱或ID搜尋:', 'eventFind.find': '尋找', 'pluginCtx.pastePlugin': '貼上插件', 'pluginCtx.pasteAbove': '貼上至上方',
         'pluginCtx.removePlugin': '移除插件', 'pluginCtx.copyN': '複製 {n} 個插件', 'pluginCtx.cutN': '剪下 {n} 個插件', 'pluginCtx.duplicateN': '建立 {n} 個插件副本',
@@ -1288,7 +1292,7 @@ const RR_ADDITIONAL_LOCALES = {
         'modal.eventEditor': '事件編輯器', 'modal.audioPlayer': '♪ 音訊播放器', 'audio.bgm': 'BGM (音樂)', 'audio.bgs': 'BGS (環境音)', 'audio.me': 'ME (短樂句)', 'audio.se': 'SE (音效)', 'audio.noTrackSelected': '未選擇音軌', 'audio.play': '播放', 'audio.pause': '暫停', 'audio.stop': '停止', 'audio.loopOff': '循環: 關', 'audio.loopOn': '循環: 開', 'audio.volume': '音量', 'audio.pitch': '音高', 'audio.pan': '聲像', 'audio.center': '中央', 'audio.loadProjectFirst': '請先載入專案',
         'common.done': '完成', 'common.ok': '確定', 'common.cancel': '取消', 'common.apply': '套用', 'common.new': '新增', 'common.delete': '刪除', 'common.copy': '複製', 'common.cut': '剪下', 'common.paste': '貼上', 'common.duplicate': '建立副本', 'common.unnamed': '未命名',
         'options.title': '選項', 'options.appearance': '外觀', 'options.language': '語言', 'options.palette': '配色', 'options.mode': '模式', 'options.dark': '深色', 'options.light': '淺色', 'options.themeNote': '主題會立即套用。請重新開啟已開啟的編輯器分頁以刷新 Canvas 繪製元素。', 'options.languageNote': '語言會立即套用到已本地化的編輯器介面文字。部分深層表單會逐步本地化。',
-        'about.title': '關於 RPG Reactor', 'about.description': '使用 NW.js、PixiJS v8 與 Three.js 打造的開源跨平台 RPG 遊戲引擎', 'about.compatibility': '使用可在 Windows、Mac 與 Linux 上執行的專業編輯器製作精彩 RPG 遊戲。多數情況下相容 RPG Maker MZ 與 MV 專案；執行階段相容性主要取決於專案的核心腳本與外掛。', 'about.linksTitle': 'Psychronic 連結', 'about.itch': 'Itch.io - 外掛與工具', 'about.steam': 'Steam - Psychronic 遊戲', 'about.github': 'GitHub - 其他專案', 'about.youtube': 'YouTube - Psychronic Games', 'about.rarelyTypicalPlayers': 'YouTube - Rarely Typical Players Podcast', 'about.discord': 'Discord - 加入社群', 'about.license': '授權: MIT',
+        'about.title': '關於 RPG Reactor', 'about.description': '使用 NW.js、PixiJS v8 與 Three.js 打造的開源跨平台 RPG 遊戲引擎', 'about.compatibility': '使用可在 Windows、Mac 與 Linux 上執行的專業編輯器製作精彩 RPG 遊戲。多數情況下相容 RPG Maker MZ 與 MV 專案；執行階段相容性主要取決於專案的核心腳本與外掛。', 'about.linksTitle': 'Psychronic 連結', 'about.catalyst': 'RPG Catalyst Forums', 'about.itch': 'Itch.io - 外掛與工具', 'about.steam': 'Steam - Psychronic 遊戲', 'about.github': 'GitHub - 其他專案', 'about.youtube': 'YouTube - Psychronic Games', 'about.rarelyTypicalPlayers': 'YouTube - Rarely Typical Players Podcast', 'about.discord': 'Discord - 加入社群', 'about.license': '授權: MIT',
         'forge.tools': '工具', 'forge.welcome': '資產產生工具組。請從側邊欄或下方選擇工具。', 'forge.openProject': '請開啟專案以使用鍛造坊工具。', 'forge.tab.procedural': '程序化', 'forge.tab.outfit': '服裝鍛造坊', 'forge.tab.hair': '髮型鍛造坊', 'forge.tab.parts': '部件 (PNG)', 'forge.style': '風格:', 'forge.frame': '影格:', 'forge.sheet': '圖表:', 'forge.saveAs': '另存為:', 'forge.saveSheet': '儲存圖表', 'forge.generateSave': '產生並儲存到素材庫', 'forge.characterGenerator.description': '從分層部件建立角色精靈表。', 'forge.animationGenerator.description': '產生程序式動畫精靈表（幾何、粒子等）。', 'forge.soundEffectGenerator.description': '程序式 SFX 合成器 - sfxr 風格原型 + Web Audio。', 'forge.effekseerGenerator.description': '從配方產生 Effekseer 粒子效果（.efkefc），不需要 Effekseer 編輯器。',
         'db.system1': '系統 1', 'db.system2': '系統 2', 'db.search': '搜尋 {title}...', 'db.selectEntry': '從清單選擇項目', 'db.changeMaximum': '變更最大值', 'db.selectEntryToDelete': '選擇要刪除的項目', 'db.deleteConfirm': '刪除「{name}」？', 'db.unknownType': '未知資料庫類型: {type}', 'db.saved': '資料庫已儲存',
         'event.name': '事件名稱:', 'event.position': '位置:', 'event.note': '備註:', 'event.newPage': '新增事件頁', 'event.copyPage': '複製事件頁', 'event.pastePage': '貼上事件頁', 'event.deletePage': '刪除事件頁', 'event.clearPage': '清除事件頁', 'event.page': '頁面 {number}', 'event.contents': '內容', 'event.selectCommand': '選擇事件指令', 'event.conditions': '條件', 'event.image': '圖片', 'event.options': '選項', 'event.autonomousMovement': '自主移動', 'event.priority': '優先順序', 'event.trigger': '觸發',
@@ -1299,7 +1303,7 @@ const RR_ADDITIONAL_LOCALES = {
         // Menus & dialog chrome (event/plugin context menus, pickers)
         'common.none': '（无）', 'eventCtx.newEvent': '新建事件', 'eventCtx.editEvent': '编辑事件', 'eventCtx.cutEvent': '剪切事件',
         'eventCtx.copyEvent': '复制事件', 'eventCtx.pasteEvent': '粘贴事件', 'eventCtx.deleteEvent': '删除事件', 'eventCtx.findEvent': '查找事件...',
-        'eventCtx.findNext': '查找下一个', 'eventCtx.findPrev': '查找上一个', 'eventCtx.setStart': '设置起始位置', 'eventCtx.player': '玩家',
+        'eventCtx.findNext': '查找下一个', 'eventCtx.findPrev': '查找上一个', 'eventCtx.playerFacing': '玩家朝向', 'eventCtx.setStart': '设置起始位置', 'eventCtx.player': '玩家', 'eventCtx.previewEvent': '预览事件', 'eventCtx.previewPage': '第 {n} 页', 'eventCtx.hidePreview': '隐藏预览', 'toolbar.title.videoPreviews': '显示视频表面预览',
         'eventCtx.boat': '小船', 'eventCtx.ship': '大船', 'eventCtx.airship': '飞空艇', 'eventFind.title': '查找事件',
         'eventFind.searchBy': '按名称或ID搜索:', 'eventFind.find': '查找', 'pluginCtx.pastePlugin': '粘贴插件', 'pluginCtx.pasteAbove': '粘贴到上方',
         'pluginCtx.removePlugin': '移除插件', 'pluginCtx.copyN': '复制 {n} 个插件', 'pluginCtx.cutN': '剪切 {n} 个插件', 'pluginCtx.duplicateN': '创建 {n} 个插件副本',
@@ -1330,7 +1334,7 @@ const RR_ADDITIONAL_LOCALES = {
         'modal.eventEditor': '事件编辑器', 'modal.audioPlayer': '♪ 音频播放器', 'audio.bgm': 'BGM (音乐)', 'audio.bgs': 'BGS (环境音)', 'audio.me': 'ME (短乐句)', 'audio.se': 'SE (音效)', 'audio.noTrackSelected': '未选择音轨', 'audio.play': '播放', 'audio.pause': '暂停', 'audio.stop': '停止', 'audio.loopOff': '循环: 关', 'audio.loopOn': '循环: 开', 'audio.volume': '音量', 'audio.pitch': '音高', 'audio.pan': '声像', 'audio.center': '居中', 'audio.loadProjectFirst': '请先加载项目',
         'common.done': '完成', 'common.ok': '确定', 'common.cancel': '取消', 'common.apply': '应用', 'common.new': '新建', 'common.delete': '删除', 'common.copy': '复制', 'common.cut': '剪切', 'common.paste': '粘贴', 'common.duplicate': '复制副本', 'common.unnamed': '未命名',
         'options.title': '选项', 'options.appearance': '外观', 'options.language': '语言', 'options.palette': '配色', 'options.mode': '模式', 'options.dark': '深色', 'options.light': '浅色', 'options.themeNote': '主题会立即应用。请重新打开已打开的编辑器标签以刷新 Canvas 绘制元素。', 'options.languageNote': '语言会立即应用到已本地化的编辑器界面文字。部分深层表单会逐步本地化。',
-        'about.title': '关于 RPG Reactor', 'about.description': '使用 NW.js、PixiJS v8 和 Three.js 构建的开源跨平台 RPG 游戏引擎', 'about.compatibility': '使用可在 Windows、Mac 和 Linux 上运行的专业编辑器制作精彩 RPG 游戏。多数情况下兼容 RPG Maker MZ 和 MV 项目；运行时兼容性主要取决于项目的核心脚本和插件。', 'about.linksTitle': 'Psychronic 链接', 'about.itch': 'Itch.io - 插件和工具', 'about.steam': 'Steam - Psychronic 游戏', 'about.github': 'GitHub - 其他项目', 'about.youtube': 'YouTube - Psychronic Games', 'about.rarelyTypicalPlayers': 'YouTube - Rarely Typical Players Podcast', 'about.discord': 'Discord - 加入社区', 'about.license': '许可证: MIT',
+        'about.title': '关于 RPG Reactor', 'about.description': '使用 NW.js、PixiJS v8 和 Three.js 构建的开源跨平台 RPG 游戏引擎', 'about.compatibility': '使用可在 Windows、Mac 和 Linux 上运行的专业编辑器制作精彩 RPG 游戏。多数情况下兼容 RPG Maker MZ 和 MV 项目；运行时兼容性主要取决于项目的核心脚本和插件。', 'about.linksTitle': 'Psychronic 链接', 'about.catalyst': 'RPG Catalyst Forums', 'about.itch': 'Itch.io - 插件和工具', 'about.steam': 'Steam - Psychronic 游戏', 'about.github': 'GitHub - 其他项目', 'about.youtube': 'YouTube - Psychronic Games', 'about.rarelyTypicalPlayers': 'YouTube - Rarely Typical Players Podcast', 'about.discord': 'Discord - 加入社区', 'about.license': '许可证: MIT',
         'forge.tools': '工具', 'forge.welcome': '资源生成工具套件。请从侧边栏或下方选择工具。', 'forge.openProject': '请打开项目以使用锻造坊工具。', 'forge.tab.procedural': '程序化', 'forge.tab.outfit': '服装锻造坊', 'forge.tab.hair': '发型锻造坊', 'forge.tab.parts': '部件 (PNG)', 'forge.style': '风格:', 'forge.frame': '帧:', 'forge.sheet': '图表:', 'forge.saveAs': '另存为:', 'forge.saveSheet': '保存图表', 'forge.generateSave': '生成并保存到素材库', 'forge.characterGenerator.description': '从分层部件创建角色精灵表。', 'forge.animationGenerator.description': '生成程序化动画精灵表（几何、粒子等）。', 'forge.soundEffectGenerator.description': '程序化 SFX 合成器 - sfxr 风格原型 + Web Audio。', 'forge.effekseerGenerator.description': '从配方生成 Effekseer 粒子效果（.efkefc），无需 Effekseer 编辑器。',
         'db.system1': '系统 1', 'db.system2': '系统 2', 'db.search': '搜索 {title}...', 'db.selectEntry': '从列表选择项目', 'db.changeMaximum': '更改最大值', 'db.selectEntryToDelete': '选择要删除的项目', 'db.deleteConfirm': '删除“{name}”？', 'db.unknownType': '未知数据库类型: {type}', 'db.saved': '数据库已保存',
         'event.name': '事件名称:', 'event.position': '位置:', 'event.note': '备注:', 'event.newPage': '新建事件页', 'event.copyPage': '复制事件页', 'event.pastePage': '粘贴事件页', 'event.deletePage': '删除事件页', 'event.clearPage': '清除事件页', 'event.page': '页面 {number}', 'event.contents': '内容', 'event.selectCommand': '选择事件指令', 'event.conditions': '条件', 'event.image': '图片', 'event.options': '选项', 'event.autonomousMovement': '自主移动', 'event.priority': '优先级', 'event.trigger': '触发',
@@ -1341,7 +1345,7 @@ const RR_ADDITIONAL_LOCALES = {
         // Menus & dialog chrome (event/plugin context menus, pickers)
         'common.none': '(Нет)', 'eventCtx.newEvent': 'Новое Событие', 'eventCtx.editEvent': 'Редактировать Событие', 'eventCtx.cutEvent': 'Вырезать Событие',
         'eventCtx.copyEvent': 'Копировать Событие', 'eventCtx.pasteEvent': 'Вставить Событие', 'eventCtx.deleteEvent': 'Удалить Событие', 'eventCtx.findEvent': 'Найти Событие...',
-        'eventCtx.findNext': 'Найти Следующее', 'eventCtx.findPrev': 'Найти Предыдущее', 'eventCtx.setStart': 'Задать Начальную Позицию', 'eventCtx.player': 'Игрок',
+        'eventCtx.findNext': 'Найти Следующее', 'eventCtx.findPrev': 'Найти Предыдущее', 'eventCtx.playerFacing': 'Направление игрока', 'eventCtx.setStart': 'Задать Начальную Позицию', 'eventCtx.player': 'Игрок', 'eventCtx.previewEvent': 'Предпросмотр события', 'eventCtx.previewPage': 'Страница {n}', 'eventCtx.hidePreview': 'Скрыть предпросмотр', 'toolbar.title.videoPreviews': 'Показывать предпросмотр видеоповерхностей',
         'eventCtx.boat': 'Лодка', 'eventCtx.ship': 'Корабль', 'eventCtx.airship': 'Дирижабль', 'eventFind.title': 'Поиск События',
         'eventFind.searchBy': 'Поиск По Имени Или ID:', 'eventFind.find': 'Найти', 'pluginCtx.pastePlugin': 'Вставить Плагин', 'pluginCtx.pasteAbove': 'Вставить Выше',
         'pluginCtx.removePlugin': 'Удалить Плагин', 'pluginCtx.copyN': 'Копировать Плагины ({n})', 'pluginCtx.cutN': 'Вырезать Плагины ({n})', 'pluginCtx.duplicateN': 'Дублировать Плагины ({n})',
@@ -1372,7 +1376,7 @@ const RR_ADDITIONAL_LOCALES = {
         'modal.eventEditor': 'Редактор Событий', 'modal.audioPlayer': '♪ Аудиоплеер', 'audio.bgm': 'BGM (Музыка)', 'audio.bgs': 'BGS (Атмосфера)', 'audio.me': 'ME (Джинглы)', 'audio.se': 'SE (Эффекты)', 'audio.noTrackSelected': 'Трек не выбран', 'audio.play': 'Играть', 'audio.pause': 'Пауза', 'audio.stop': 'Стоп', 'audio.loopOff': 'Повтор: Выкл', 'audio.loopOn': 'Повтор: Вкл', 'audio.volume': 'Громкость', 'audio.pitch': 'Тон', 'audio.pan': 'Панорама', 'audio.center': 'Центр', 'audio.loadProjectFirst': 'Сначала загрузите проект',
         'common.done': 'Готово', 'common.ok': 'OK', 'common.cancel': 'Отмена', 'common.apply': 'Применить', 'common.new': 'Новый', 'common.delete': 'Удалить', 'common.copy': 'Копировать', 'common.cut': 'Вырезать', 'common.paste': 'Вставить', 'common.duplicate': 'Дублировать', 'common.unnamed': 'Без имени',
         'options.title': 'Параметры', 'options.appearance': 'Внешний Вид', 'options.language': 'Язык', 'options.palette': 'Палитра', 'options.mode': 'Режим', 'options.dark': 'Тёмный', 'options.light': 'Светлый', 'options.themeNote': 'Тема применяется сразу. Переоткройте вкладки редактора, чтобы обновить элементы Canvas.', 'options.languageNote': 'Язык сразу применяется к локализованному тексту интерфейса. Некоторые глубокие формы будут локализованы постепенно.',
-        'about.title': 'О RPG Reactor', 'about.description': 'Открытый кроссплатформенный RPG-движок на NW.js, PixiJS v8 и Three.js', 'about.compatibility': 'Создавайте потрясающие RPG в профессиональном редакторе для Windows, Mac и Linux. В большинстве случаев совместим с проектами RPG Maker MZ и MV; совместимость во время выполнения в основном зависит от corescripts и плагинов проекта.', 'about.linksTitle': 'Ссылки Psychronic', 'about.itch': 'Itch.io - Плагины И Инструменты', 'about.steam': 'Steam - Игры Psychronic', 'about.github': 'GitHub - Другие Проекты', 'about.youtube': 'YouTube - Psychronic Games', 'about.rarelyTypicalPlayers': 'YouTube - Rarely Typical Players Podcast', 'about.discord': 'Discord - Присоединиться К Сообществу', 'about.license': 'Лицензия: MIT',
+        'about.title': 'О RPG Reactor', 'about.description': 'Открытый кроссплатформенный RPG-движок на NW.js, PixiJS v8 и Three.js', 'about.compatibility': 'Создавайте потрясающие RPG в профессиональном редакторе для Windows, Mac и Linux. В большинстве случаев совместим с проектами RPG Maker MZ и MV; совместимость во время выполнения в основном зависит от corescripts и плагинов проекта.', 'about.linksTitle': 'Ссылки Psychronic', 'about.catalyst': 'RPG Catalyst Forums', 'about.itch': 'Itch.io - Плагины И Инструменты', 'about.steam': 'Steam - Игры Psychronic', 'about.github': 'GitHub - Другие Проекты', 'about.youtube': 'YouTube - Psychronic Games', 'about.rarelyTypicalPlayers': 'YouTube - Rarely Typical Players Podcast', 'about.discord': 'Discord - Присоединиться К Сообществу', 'about.license': 'Лицензия: MIT',
         'forge.tools': 'Инструменты', 'forge.welcome': 'Набор инструментов генерации ресурсов. Выберите инструмент на боковой панели или ниже.', 'forge.openProject': 'Откройте проект, чтобы использовать инструменты Кузницы.', 'forge.tab.procedural': 'Процедурно', 'forge.tab.outfit': 'Кузница Костюмов', 'forge.tab.hair': 'Кузница Волос', 'forge.tab.parts': 'Части (PNG)', 'forge.style': 'Стиль:', 'forge.frame': 'Кадр:', 'forge.sheet': 'Лист:', 'forge.saveAs': 'Сохранить как:', 'forge.saveSheet': 'Сохранить Лист', 'forge.generateSave': 'Создать И Сохранить В Библиотеку', 'forge.characterGenerator.description': 'Создавайте листы спрайтов персонажей из многослойных частей.', 'forge.animationGenerator.description': 'Создавайте листы процедурной анимации (геометрия, частицы и т. д.).', 'forge.soundEffectGenerator.description': 'Процедурный синтезатор SFX: архетипы в стиле sfxr и Web Audio.', 'forge.effekseerGenerator.description': 'Создавайте эффекты частиц Effekseer (.efkefc) по рецептам без редактора Effekseer.',
         'db.system1': 'Система 1', 'db.system2': 'Система 2', 'db.search': 'Поиск {title}...', 'db.selectEntry': 'Выберите запись из списка', 'db.changeMaximum': 'Изменить максимум', 'db.selectEntryToDelete': 'Выберите запись для удаления', 'db.deleteConfirm': 'Удалить «{name}»?', 'db.unknownType': 'Неизвестный тип базы данных: {type}', 'db.saved': 'База данных сохранена',
         'event.name': 'Имя События:', 'event.position': 'Позиция:', 'event.note': 'Заметка:', 'event.newPage': 'Новая Страница События', 'event.copyPage': 'Копировать Страницу', 'event.pastePage': 'Вставить Страницу', 'event.deletePage': 'Удалить Страницу', 'event.clearPage': 'Очистить Страницу', 'event.page': 'Страница {number}', 'event.contents': 'Содержимое', 'event.selectCommand': 'Выберите Команду События', 'event.conditions': 'Условия', 'event.image': 'Изображение', 'event.options': 'Опции', 'event.autonomousMovement': 'Автономное Движение', 'event.priority': 'Приоритет', 'event.trigger': 'Триггер',
@@ -1383,7 +1387,7 @@ const RR_ADDITIONAL_LOCALES = {
         // Menus & dialog chrome (event/plugin context menus, pickers)
         'common.none': '(Nenhum)', 'eventCtx.newEvent': 'Novo Evento', 'eventCtx.editEvent': 'Editar Evento', 'eventCtx.cutEvent': 'Recortar Evento',
         'eventCtx.copyEvent': 'Copiar Evento', 'eventCtx.pasteEvent': 'Colar Evento', 'eventCtx.deleteEvent': 'Excluir Evento', 'eventCtx.findEvent': 'Localizar Evento...',
-        'eventCtx.findNext': 'Localizar Próximo', 'eventCtx.findPrev': 'Localizar Anterior', 'eventCtx.setStart': 'Definir Posição Inicial', 'eventCtx.player': 'Jogador',
+        'eventCtx.findNext': 'Localizar Próximo', 'eventCtx.findPrev': 'Localizar Anterior', 'eventCtx.playerFacing': 'Direção do jogador', 'eventCtx.setStart': 'Definir Posição Inicial', 'eventCtx.player': 'Jogador', 'eventCtx.previewEvent': 'Pré-visualizar evento', 'eventCtx.previewPage': 'Página {n}', 'eventCtx.hidePreview': 'Ocultar pré-visualização', 'toolbar.title.videoPreviews': 'Mostrar pré-visualizações de superfícies de vídeo',
         'eventCtx.boat': 'Bote', 'eventCtx.ship': 'Navio', 'eventCtx.airship': 'Aeronave', 'eventFind.title': 'Localizar Evento',
         'eventFind.searchBy': 'Buscar por nome ou ID:', 'eventFind.find': 'Localizar', 'pluginCtx.pastePlugin': 'Colar Plugin', 'pluginCtx.pasteAbove': 'Colar Acima',
         'pluginCtx.removePlugin': 'Remover Plugin', 'pluginCtx.copyN': 'Copiar {n} Plugins', 'pluginCtx.cutN': 'Recortar {n} Plugins', 'pluginCtx.duplicateN': 'Duplicar {n} Plugins',
@@ -1414,7 +1418,7 @@ const RR_ADDITIONAL_LOCALES = {
         'modal.eventEditor': 'Editor De Eventos', 'modal.audioPlayer': '♪ Reprodutor De Áudio', 'audio.bgm': 'BGM (Música)', 'audio.bgs': 'BGS (Ambiente)', 'audio.me': 'ME (Vinhetas)', 'audio.se': 'SE (Efeitos)', 'audio.noTrackSelected': 'Nenhuma faixa selecionada', 'audio.play': 'Reproduzir', 'audio.pause': 'Pausar', 'audio.stop': 'Parar', 'audio.loopOff': 'Loop: Desligado', 'audio.loopOn': 'Loop: Ligado', 'audio.volume': 'Volume', 'audio.pitch': 'Tom', 'audio.pan': 'Pan', 'audio.center': 'Centro', 'audio.loadProjectFirst': 'Carregue um projeto primeiro',
         'common.done': 'Concluído', 'common.ok': 'OK', 'common.cancel': 'Cancelar', 'common.apply': 'Aplicar', 'common.new': 'Novo', 'common.delete': 'Excluir', 'common.copy': 'Copiar', 'common.cut': 'Recortar', 'common.paste': 'Colar', 'common.duplicate': 'Duplicar', 'common.unnamed': 'Sem Nome',
         'options.title': 'Opções', 'options.appearance': 'Aparência', 'options.language': 'Idioma', 'options.palette': 'Paleta', 'options.mode': 'Modo', 'options.dark': 'Escuro', 'options.light': 'Claro', 'options.themeNote': 'O tema é aplicado imediatamente. Reabra abas do editor para atualizar elementos desenhados em Canvas.', 'options.languageNote': 'O idioma é aplicado imediatamente ao texto localizado da interface. Alguns formulários profundos serão localizados gradualmente.',
-        'about.title': 'Sobre O RPG Reactor', 'about.description': 'Um motor RPG aberto e multiplataforma criado com NW.js, PixiJS v8 e Three.js', 'about.compatibility': 'Crie jogos RPG incríveis com um editor profissional que roda no Windows, Mac e Linux. Compatível com projetos RPG Maker MZ e MV na maioria dos casos; a compatibilidade em tempo de execução depende principalmente dos corescripts e plugins do projeto.', 'about.linksTitle': 'Links Da Psychronic', 'about.itch': 'Itch.io - Plugins E Ferramentas', 'about.steam': 'Steam - Jogos Da Psychronic', 'about.github': 'GitHub - Outros Projetos', 'about.youtube': 'YouTube - Psychronic Games', 'about.rarelyTypicalPlayers': 'YouTube - Rarely Typical Players Podcast', 'about.discord': 'Discord - Entrar Na Comunidade', 'about.license': 'Licença: MIT',
+        'about.title': 'Sobre O RPG Reactor', 'about.description': 'Um motor RPG aberto e multiplataforma criado com NW.js, PixiJS v8 e Three.js', 'about.compatibility': 'Crie jogos RPG incríveis com um editor profissional que roda no Windows, Mac e Linux. Compatível com projetos RPG Maker MZ e MV na maioria dos casos; a compatibilidade em tempo de execução depende principalmente dos corescripts e plugins do projeto.', 'about.linksTitle': 'Links Da Psychronic', 'about.catalyst': 'RPG Catalyst Forums', 'about.itch': 'Itch.io - Plugins E Ferramentas', 'about.steam': 'Steam - Jogos Da Psychronic', 'about.github': 'GitHub - Outros Projetos', 'about.youtube': 'YouTube - Psychronic Games', 'about.rarelyTypicalPlayers': 'YouTube - Rarely Typical Players Podcast', 'about.discord': 'Discord - Entrar Na Comunidade', 'about.license': 'Licença: MIT',
         'forge.tools': 'Ferramentas', 'forge.welcome': 'Suíte de ferramentas de geração de recursos. Escolha uma ferramenta na barra lateral ou abaixo.', 'forge.openProject': 'Abra um projeto para usar as ferramentas da Forja.', 'forge.tab.procedural': 'Procedural', 'forge.tab.outfit': 'Forja De Roupas', 'forge.tab.hair': 'Forja De Cabelo', 'forge.tab.parts': 'Partes (PNG)', 'forge.style': 'Estilo:', 'forge.frame': 'Quadro:', 'forge.sheet': 'Folha:', 'forge.saveAs': 'Salvar como:', 'forge.saveSheet': 'Salvar Folha', 'forge.generateSave': 'Gerar E Salvar Na Biblioteca', 'forge.characterGenerator.description': 'Crie folhas de sprites de personagens a partir de partes em camadas.', 'forge.animationGenerator.description': 'Gere folhas de sprites de animação procedural (geométrica, partículas etc.).', 'forge.soundEffectGenerator.description': 'Sintetizador procedural de SFX: arquétipos no estilo sfxr + Web Audio.', 'forge.effekseerGenerator.description': 'Gere efeitos de partículas Effekseer (.efkefc) a partir de receitas, sem precisar do editor Effekseer.',
         'db.system1': 'Sistema 1', 'db.system2': 'Sistema 2', 'db.search': 'Buscar {title}...', 'db.selectEntry': 'Selecione uma entrada da lista', 'db.changeMaximum': 'Alterar Máximo', 'db.selectEntryToDelete': 'Selecione uma entrada para excluir', 'db.deleteConfirm': 'Excluir "{name}"?', 'db.unknownType': 'Tipo de banco de dados desconhecido: {type}', 'db.saved': 'Banco de dados salvo',
         'event.name': 'Nome Do Evento:', 'event.position': 'Posição:', 'event.note': 'Nota:', 'event.newPage': 'Nova Página De Evento', 'event.copyPage': 'Copiar Página De Evento', 'event.pastePage': 'Colar Página De Evento', 'event.deletePage': 'Excluir Página De Evento', 'event.clearPage': 'Limpar Página De Evento', 'event.page': 'Página {number}', 'event.contents': 'Conteúdo', 'event.selectCommand': 'Selecionar Comando De Evento', 'event.conditions': 'Condições', 'event.image': 'Imagem', 'event.options': 'Opções', 'event.autonomousMovement': 'Movimento Autônomo', 'event.priority': 'Prioridade', 'event.trigger': 'Gatilho',
@@ -1425,7 +1429,7 @@ const RR_ADDITIONAL_LOCALES = {
         // Menus & dialog chrome (event/plugin context menus, pickers)
         'common.none': '(Keine)', 'eventCtx.newEvent': 'Neues Ereignis', 'eventCtx.editEvent': 'Ereignis bearbeiten', 'eventCtx.cutEvent': 'Ereignis ausschneiden',
         'eventCtx.copyEvent': 'Ereignis kopieren', 'eventCtx.pasteEvent': 'Ereignis einfügen', 'eventCtx.deleteEvent': 'Ereignis löschen', 'eventCtx.findEvent': 'Ereignis suchen...',
-        'eventCtx.findNext': 'Nächstes suchen', 'eventCtx.findPrev': 'Vorheriges suchen', 'eventCtx.setStart': 'Startposition festlegen', 'eventCtx.player': 'Spieler',
+        'eventCtx.findNext': 'Nächstes suchen', 'eventCtx.findPrev': 'Vorheriges suchen', 'eventCtx.playerFacing': 'Blickrichtung des Spielers', 'eventCtx.setStart': 'Startposition festlegen', 'eventCtx.player': 'Spieler', 'eventCtx.previewEvent': 'Ereignis-Vorschau', 'eventCtx.previewPage': 'Seite {n}', 'eventCtx.hidePreview': 'Vorschau ausblenden', 'toolbar.title.videoPreviews': 'Vorschauen der Videoflächen anzeigen',
         'eventCtx.boat': 'Boot', 'eventCtx.ship': 'Schiff', 'eventCtx.airship': 'Luftschiff', 'eventFind.title': 'Ereignis suchen',
         'eventFind.searchBy': 'Nach Name oder ID suchen:', 'eventFind.find': 'Suchen', 'pluginCtx.pastePlugin': 'Plugin einfügen', 'pluginCtx.pasteAbove': 'Darüber einfügen',
         'pluginCtx.removePlugin': 'Plugin entfernen', 'pluginCtx.copyN': '{n} Plugins kopieren', 'pluginCtx.cutN': '{n} Plugins ausschneiden', 'pluginCtx.duplicateN': '{n} Plugins duplizieren',
@@ -1467,7 +1471,7 @@ const RR_ADDITIONAL_LOCALES = {
         // Menus & dialog chrome (event/plugin context menus, pickers)
         'common.none': '(Aucun)', 'eventCtx.newEvent': 'Nouvel événement', 'eventCtx.editEvent': 'Modifier l\'événement', 'eventCtx.cutEvent': 'Couper l\'événement',
         'eventCtx.copyEvent': 'Copier l\'événement', 'eventCtx.pasteEvent': 'Coller l\'événement', 'eventCtx.deleteEvent': 'Supprimer l\'événement', 'eventCtx.findEvent': 'Rechercher un événement...',
-        'eventCtx.findNext': 'Rechercher le suivant', 'eventCtx.findPrev': 'Rechercher le précédent', 'eventCtx.setStart': 'Définir la position de départ', 'eventCtx.player': 'Joueur',
+        'eventCtx.findNext': 'Rechercher le suivant', 'eventCtx.findPrev': 'Rechercher le précédent', 'eventCtx.playerFacing': 'Orientation du joueur', 'eventCtx.setStart': 'Définir la position de départ', 'eventCtx.player': 'Joueur', 'eventCtx.previewEvent': 'Aperçu de l’événement', 'eventCtx.previewPage': 'Page {n}', 'eventCtx.hidePreview': 'Masquer l’aperçu', 'toolbar.title.videoPreviews': 'Afficher les aperçus des surfaces vidéo',
         'eventCtx.boat': 'Barque', 'eventCtx.ship': 'Navire', 'eventCtx.airship': 'Aéronef', 'eventFind.title': 'Rechercher un événement',
         'eventFind.searchBy': 'Rechercher par nom ou ID :', 'eventFind.find': 'Rechercher', 'pluginCtx.pastePlugin': 'Coller le plugin', 'pluginCtx.pasteAbove': 'Coller au-dessus',
         'pluginCtx.removePlugin': 'Retirer le plugin', 'pluginCtx.copyN': 'Copier {n} plugins', 'pluginCtx.cutN': 'Couper {n} plugins', 'pluginCtx.duplicateN': 'Dupliquer {n} plugins',
@@ -1509,7 +1513,7 @@ const RR_ADDITIONAL_LOCALES = {
         // Menus & dialog chrome (event/plugin context menus, pickers)
         'common.none': '(Κανένα)', 'eventCtx.newEvent': 'Νέο συμβάν', 'eventCtx.editEvent': 'Επεξεργασία συμβάντος', 'eventCtx.cutEvent': 'Αποκοπή συμβάντος',
         'eventCtx.copyEvent': 'Αντιγραφή συμβάντος', 'eventCtx.pasteEvent': 'Επικόλληση συμβάντος', 'eventCtx.deleteEvent': 'Διαγραφή συμβάντος', 'eventCtx.findEvent': 'Εύρεση συμβάντος...',
-        'eventCtx.findNext': 'Εύρεση επόμενου', 'eventCtx.findPrev': 'Εύρεση προηγούμενου', 'eventCtx.setStart': 'Ορισμός αρχικής θέσης', 'eventCtx.player': 'Παίκτης',
+        'eventCtx.findNext': 'Εύρεση επόμενου', 'eventCtx.findPrev': 'Εύρεση προηγούμενου', 'eventCtx.playerFacing': 'Κατεύθυνση παίκτη', 'eventCtx.setStart': 'Ορισμός αρχικής θέσης', 'eventCtx.player': 'Παίκτης', 'eventCtx.previewEvent': 'Προεπισκόπηση συμβάντος', 'eventCtx.previewPage': 'Σελίδα {n}', 'eventCtx.hidePreview': 'Απόκρυψη προεπισκόπησης', 'toolbar.title.videoPreviews': 'Εμφάνιση προεπισκοπήσεων επιφανειών βίντεο',
         'eventCtx.boat': 'Βάρκα', 'eventCtx.ship': 'Πλοίο', 'eventCtx.airship': 'Αερόπλοιο', 'eventFind.title': 'Εύρεση συμβάντος',
         'eventFind.searchBy': 'Αναζήτηση με όνομα ή ID:', 'eventFind.find': 'Εύρεση', 'pluginCtx.pastePlugin': 'Επικόλληση πρόσθετου', 'pluginCtx.pasteAbove': 'Επικόλληση από πάνω',
         'pluginCtx.removePlugin': 'Αφαίρεση πρόσθετου', 'pluginCtx.copyN': 'Αντιγραφή {n} πρόσθετων', 'pluginCtx.cutN': 'Αποκοπή {n} πρόσθετων', 'pluginCtx.duplicateN': 'Διπλασιασμός {n} πρόσθετων',
@@ -2939,7 +2943,7 @@ RR_I18N_STRINGS['ko'] = { ...RR_I18N_STRINGS.en,
     'mapTools.speedPlaceholder': '속도',
     'common.none': '(없음)', 'eventCtx.newEvent': '새 이벤트', 'eventCtx.editEvent': '이벤트 편집', 'eventCtx.cutEvent': '이벤트 잘라내기',
     'eventCtx.copyEvent': '이벤트 복사', 'eventCtx.pasteEvent': '이벤트 붙여넣기', 'eventCtx.deleteEvent': '이벤트 삭제', 'eventCtx.findEvent': '이벤트 찾기...',
-    'eventCtx.findNext': '다음 이벤트 찾기', 'eventCtx.findPrev': '이전 이벤트 찾기', 'eventCtx.setStart': '시작 위치 설정', 'eventCtx.player': '플레이어',
+    'eventCtx.findNext': '다음 이벤트 찾기', 'eventCtx.findPrev': '이전 이벤트 찾기', 'eventCtx.playerFacing': '플레이어 방향', 'eventCtx.setStart': '시작 위치 설정', 'eventCtx.player': '플레이어', 'eventCtx.previewEvent': '이벤트 미리보기', 'eventCtx.previewPage': '페이지 {n}', 'eventCtx.hidePreview': '미리보기 숨기기', 'toolbar.title.videoPreviews': '동영상 표면 미리보기 표시',
     'eventCtx.boat': '소형선', 'eventCtx.ship': '대형선', 'eventCtx.airship': '비행선', 'eventFind.title': '이벤트 찾기',
     'eventFind.searchBy': '이름 또는 ID로 검색:', 'eventFind.find': '찾기', 'pluginCtx.pastePlugin': '플러그인 붙여넣기', 'pluginCtx.pasteAbove': '위에 붙여넣기',
     'pluginCtx.removePlugin': '플러그인 제거', 'pluginCtx.copyN': '플러그인 {n}개 복사', 'pluginCtx.cutN': '플러그인 {n}개 잘라내기', 'pluginCtx.duplicateN': '플러그인 {n}개 복제',
@@ -3034,7 +3038,7 @@ RR_I18N_STRINGS['ko'] = { ...RR_I18N_STRINGS.en,
     'event.trigger': '트리거', 'event.fixed': '고정', 'event.random': '랜덤', 'event.approach': '접근',
     'event.custom': '커스텀', 'event.normal': '보통', 'event.lowest': '가장 낮음', 'event.lower': '낮음',
     'event.higher': '높음', 'event.highest': '가장 높음', 'event.belowCharacters': '캐릭터 아래', 'event.sameAsCharacters': '캐릭터와 같음',
-    'event.aboveCharacters': '캐릭터 위', 'event.actionButton': '결정 버튼', 'event.playerTouch': '플레이어 접촉', 'event.eventTouch': '이벤트 접촉',
+    'event.aboveCharacters': '캐릭터 위', 'event.aboveCharactersSorted': '캐릭터 위 (Y 정렬)', 'event.actionButton': '결정 버튼', 'event.playerTouch': '플레이어 접촉', 'event.eventTouch': '이벤트 접촉',
     'event.autorun': '자동 실행', 'event.parallel': '병렬 처리', 'event.noneAvailable': '사용 가능한 항목 없음', 'status.noProjectLoaded': '불러온 프로젝트 없음',
     'status.playtestNotImplemented': '테스트 플레이 모드는 아직 구현되지 않았습니다', 'status.playtestSaveFailed': '테스트 플레이 취소됨: 프로젝트를 저장할 수 없습니다', 'status.loadMapFirst': '먼저 맵을 불러오세요', 'status.eventModeEnabled': '이벤트 모드 활성화됨', 'status.eventModeDisabled': '이벤트 모드 비활성화됨',
     'alert.loadProjectFirst': '먼저 프로젝트를 불러와 주세요.',
@@ -3237,7 +3241,7 @@ RR_I18N_STRINGS['ar'] = { ...RR_I18N_STRINGS.en,
     'mapTools.speedPlaceholder': 'السرعة',
     'common.none': '(بلا)', 'eventCtx.newEvent': 'حدث جديد', 'eventCtx.editEvent': 'تحرير الحدث', 'eventCtx.cutEvent': 'قص الحدث',
     'eventCtx.copyEvent': 'نسخ الحدث', 'eventCtx.pasteEvent': 'لصق الحدث', 'eventCtx.deleteEvent': 'حذف الحدث', 'eventCtx.findEvent': 'بحث عن حدث...',
-    'eventCtx.findNext': 'البحث عن الحدث التالي', 'eventCtx.findPrev': 'البحث عن الحدث السابق', 'eventCtx.setStart': 'تعيين موضع البداية', 'eventCtx.player': 'اللاعب',
+    'eventCtx.findNext': 'البحث عن الحدث التالي', 'eventCtx.findPrev': 'البحث عن الحدث السابق', 'eventCtx.playerFacing': 'اتجاه اللاعب', 'eventCtx.setStart': 'تعيين موضع البداية', 'eventCtx.player': 'اللاعب', 'eventCtx.previewEvent': 'معاينة الحدث', 'eventCtx.previewPage': 'الصفحة {n}', 'eventCtx.hidePreview': 'إخفاء المعاينة', 'toolbar.title.videoPreviews': 'إظهار معاينات أسطح الفيديو',
     'eventCtx.boat': 'قارب', 'eventCtx.ship': 'سفينة', 'eventCtx.airship': 'سفينة جوية', 'eventFind.title': 'بحث عن حدث',
     'eventFind.searchBy': 'البحث بالاسم أو ID:', 'eventFind.find': 'بحث', 'pluginCtx.pastePlugin': 'لصق الإضافة', 'pluginCtx.pasteAbove': 'لصق في الأعلى',
     'pluginCtx.removePlugin': 'إزالة الإضافة', 'pluginCtx.copyN': 'نسخ {n} من الإضافات', 'pluginCtx.cutN': 'قص {n} من الإضافات', 'pluginCtx.duplicateN': 'تكرار {n} من الإضافات',
@@ -3332,7 +3336,7 @@ RR_I18N_STRINGS['ar'] = { ...RR_I18N_STRINGS.en,
     'event.trigger': 'المحفّز', 'event.fixed': 'ثابت', 'event.random': 'عشوائي', 'event.approach': 'اقتراب',
     'event.custom': 'مخصص', 'event.normal': 'عادي', 'event.lowest': 'الأدنى', 'event.lower': 'أدنى',
     'event.higher': 'أعلى', 'event.highest': 'الأعلى', 'event.belowCharacters': 'أسفل الشخصيات', 'event.sameAsCharacters': 'بمستوى الشخصيات',
-    'event.aboveCharacters': 'فوق الشخصيات', 'event.actionButton': 'زر الإجراء', 'event.playerTouch': 'لمس اللاعب', 'event.eventTouch': 'لمس الحدث',
+    'event.aboveCharacters': 'فوق الشخصيات', 'event.aboveCharactersSorted': 'فوق الشخصيات (مرتّب حسب Y)', 'event.actionButton': 'زر الإجراء', 'event.playerTouch': 'لمس اللاعب', 'event.eventTouch': 'لمس الحدث',
     'event.autorun': 'تشغيل تلقائي', 'event.parallel': 'متوازٍ', 'event.noneAvailable': 'لا يوجد متاح', 'status.noProjectLoaded': 'لم يتم تحميل مشروع',
     'status.playtestNotImplemented': 'وضع اختبار اللعب غير متوفر بعد', 'status.playtestSaveFailed': 'تم إلغاء اختبار اللعب: تعذر حفظ المشروع', 'status.loadMapFirst': 'حمّل خريطة أولًا', 'status.eventModeEnabled': 'تم تفعيل وضع الأحداث', 'status.eventModeDisabled': 'تم تعطيل وضع الأحداث',
     'alert.loadProjectFirst': 'يرجى تحميل مشروع أولًا.',
@@ -5342,7 +5346,7 @@ RR_I18N_STRINGS['it'] = { ...RR_I18N_STRINGS.en,
     'mapTools.speedPlaceholder': 'Velocità',
     'common.none': '(Nessuno)', 'eventCtx.newEvent': 'Nuovo evento', 'eventCtx.editEvent': 'Modifica evento', 'eventCtx.cutEvent': 'Taglia evento',
     'eventCtx.copyEvent': 'Copia evento', 'eventCtx.pasteEvent': 'Incolla evento', 'eventCtx.deleteEvent': 'Elimina evento', 'eventCtx.findEvent': 'Trova evento...',
-    'eventCtx.findNext': 'Trova evento successivo', 'eventCtx.findPrev': 'Trova evento precedente', 'eventCtx.setStart': 'Imposta posizione iniziale', 'eventCtx.player': 'Giocatore',
+    'eventCtx.findNext': 'Trova evento successivo', 'eventCtx.findPrev': 'Trova evento precedente', 'eventCtx.playerFacing': 'Direzione del giocatore', 'eventCtx.setStart': 'Imposta posizione iniziale', 'eventCtx.player': 'Giocatore', 'eventCtx.previewEvent': 'Anteprima evento', 'eventCtx.previewPage': 'Pagina {n}', 'eventCtx.hidePreview': 'Nascondi anteprima', 'toolbar.title.videoPreviews': 'Mostra le anteprime delle superfici video',
     'eventCtx.boat': 'Barca', 'eventCtx.ship': 'Nave', 'eventCtx.airship': 'Aeronave', 'eventFind.title': 'Trova evento',
     'eventFind.searchBy': 'Cerca per nome o ID:', 'eventFind.find': 'Trova', 'pluginCtx.pastePlugin': 'Incolla plugin', 'pluginCtx.pasteAbove': 'Incolla sopra',
     'pluginCtx.removePlugin': 'Rimuovi plugin', 'pluginCtx.copyN': 'Copia {n} plugin', 'pluginCtx.cutN': 'Taglia {n} plugin', 'pluginCtx.duplicateN': 'Duplica {n} plugin',
@@ -5437,7 +5441,7 @@ RR_I18N_STRINGS['it'] = { ...RR_I18N_STRINGS.en,
     'event.trigger': 'Attivazione', 'event.fixed': 'Fisso', 'event.random': 'Casuale', 'event.approach': 'Avvicinamento',
     'event.custom': 'Personalizzato', 'event.normal': 'Normale', 'event.lowest': 'Minima', 'event.lower': 'Bassa',
     'event.higher': 'Alta', 'event.highest': 'Massima', 'event.belowCharacters': 'Sotto i personaggi', 'event.sameAsCharacters': 'Come i personaggi',
-    'event.aboveCharacters': 'Sopra i personaggi', 'event.actionButton': 'Tasto azione', 'event.playerTouch': 'Tocco del giocatore', 'event.eventTouch': 'Tocco dell\'evento',
+    'event.aboveCharacters': 'Sopra i personaggi', 'event.aboveCharactersSorted': 'Sopra i personaggi (ordinato per Y)', 'event.actionButton': 'Tasto azione', 'event.playerTouch': 'Tocco del giocatore', 'event.eventTouch': 'Tocco dell\'evento',
     'event.autorun': 'Avvio automatico', 'event.parallel': 'Parallelo', 'event.noneAvailable': 'Nessuno disponibile', 'status.noProjectLoaded': 'Nessun progetto caricato',
     'status.playtestNotImplemented': 'Modalità playtest non ancora implementata', 'status.playtestSaveFailed': 'Playtest annullato: impossibile salvare il progetto', 'status.loadMapFirst': 'Carica prima una mappa', 'status.eventModeEnabled': 'Modalità eventi attivata', 'status.eventModeDisabled': 'Modalità eventi disattivata',
     'alert.loadProjectFirst': 'Carica prima un progetto.',
@@ -5798,7 +5802,7 @@ RR_I18N_STRINGS['pl'] = { ...RR_I18N_STRINGS.en,
     'mapTools.speedPlaceholder': 'Prędkość',
     'common.none': '(Brak)', 'eventCtx.newEvent': 'Nowe zdarzenie', 'eventCtx.editEvent': 'Edytuj zdarzenie', 'eventCtx.cutEvent': 'Wytnij zdarzenie',
     'eventCtx.copyEvent': 'Kopiuj zdarzenie', 'eventCtx.pasteEvent': 'Wklej zdarzenie', 'eventCtx.deleteEvent': 'Usuń zdarzenie', 'eventCtx.findEvent': 'Znajdź zdarzenie...',
-    'eventCtx.findNext': 'Znajdź następne zdarzenie', 'eventCtx.findPrev': 'Znajdź poprzednie zdarzenie', 'eventCtx.setStart': 'Ustaw pozycję startową', 'eventCtx.player': 'Gracz',
+    'eventCtx.findNext': 'Znajdź następne zdarzenie', 'eventCtx.findPrev': 'Znajdź poprzednie zdarzenie', 'eventCtx.playerFacing': 'Kierunek gracza', 'eventCtx.setStart': 'Ustaw pozycję startową', 'eventCtx.player': 'Gracz', 'eventCtx.previewEvent': 'Podgląd zdarzenia', 'eventCtx.previewPage': 'Strona {n}', 'eventCtx.hidePreview': 'Ukryj podgląd', 'toolbar.title.videoPreviews': 'Pokaż podglądy powierzchni wideo',
     'eventCtx.boat': 'Łódź', 'eventCtx.ship': 'Statek', 'eventCtx.airship': 'Sterowiec', 'eventFind.title': 'Znajdź zdarzenie',
     'eventFind.searchBy': 'Szukaj po nazwie lub ID:', 'eventFind.find': 'Znajdź', 'pluginCtx.pastePlugin': 'Wklej wtyczkę', 'pluginCtx.pasteAbove': 'Wklej powyżej',
     'pluginCtx.removePlugin': 'Usuń wtyczkę', 'pluginCtx.copyN': 'Kopiuj wtyczki ({n})', 'pluginCtx.cutN': 'Wytnij wtyczki ({n})', 'pluginCtx.duplicateN': 'Duplikuj wtyczki ({n})',
@@ -5893,7 +5897,7 @@ RR_I18N_STRINGS['pl'] = { ...RR_I18N_STRINGS.en,
     'event.trigger': 'Wyzwalacz', 'event.fixed': 'Stały', 'event.random': 'Losowy', 'event.approach': 'Zbliżanie',
     'event.custom': 'Własny', 'event.normal': 'Normalny', 'event.lowest': 'Najniższy', 'event.lower': 'Niższy',
     'event.higher': 'Wyższy', 'event.highest': 'Najwyższy', 'event.belowCharacters': 'Pod postaciami', 'event.sameAsCharacters': 'Na poziomie postaci',
-    'event.aboveCharacters': 'Nad postaciami', 'event.actionButton': 'Przycisk akcji', 'event.playerTouch': 'Dotknięcie przez gracza', 'event.eventTouch': 'Dotknięcie przez zdarzenie',
+    'event.aboveCharacters': 'Nad postaciami', 'event.aboveCharactersSorted': 'Nad postaciami (sortowanie wg Y)', 'event.actionButton': 'Przycisk akcji', 'event.playerTouch': 'Dotknięcie przez gracza', 'event.eventTouch': 'Dotknięcie przez zdarzenie',
     'event.autorun': 'Autostart', 'event.parallel': 'Równoległy', 'event.noneAvailable': 'Brak dostępnych', 'status.noProjectLoaded': 'Nie wczytano projektu',
     'status.playtestNotImplemented': 'Tryb testu gry nie został jeszcze zaimplementowany', 'status.playtestSaveFailed': 'Test gry anulowany: nie udało się zapisać projektu', 'status.loadMapFirst': 'Najpierw wczytaj mapę', 'status.eventModeEnabled': 'Tryb zdarzeń włączony', 'status.eventModeDisabled': 'Tryb zdarzeń wyłączony',
     'alert.loadProjectFirst': 'Najpierw wczytaj projekt.',
@@ -6254,7 +6258,7 @@ RR_I18N_STRINGS['id'] = { ...RR_I18N_STRINGS.en,
     'mapTools.speedPlaceholder': 'Kecepatan',
     'common.none': '(Tidak Ada)', 'eventCtx.newEvent': 'Event Baru', 'eventCtx.editEvent': 'Edit Event', 'eventCtx.cutEvent': 'Potong Event',
     'eventCtx.copyEvent': 'Salin Event', 'eventCtx.pasteEvent': 'Tempel Event', 'eventCtx.deleteEvent': 'Hapus Event', 'eventCtx.findEvent': 'Cari Event...',
-    'eventCtx.findNext': 'Cari Event Berikutnya', 'eventCtx.findPrev': 'Cari Event Sebelumnya', 'eventCtx.setStart': 'Atur Posisi Awal', 'eventCtx.player': 'Pemain',
+    'eventCtx.findNext': 'Cari Event Berikutnya', 'eventCtx.findPrev': 'Cari Event Sebelumnya', 'eventCtx.playerFacing': 'Arah pemain', 'eventCtx.setStart': 'Atur Posisi Awal', 'eventCtx.player': 'Pemain', 'eventCtx.previewEvent': 'Pratinjau Event', 'eventCtx.previewPage': 'Halaman {n}', 'eventCtx.hidePreview': 'Sembunyikan Pratinjau', 'toolbar.title.videoPreviews': 'Tampilkan pratinjau permukaan video',
     'eventCtx.boat': 'Perahu', 'eventCtx.ship': 'Kapal', 'eventCtx.airship': 'Kapal Udara', 'eventFind.title': 'Cari Event',
     'eventFind.searchBy': 'Cari berdasarkan nama atau ID:', 'eventFind.find': 'Cari', 'pluginCtx.pastePlugin': 'Tempel Plugin', 'pluginCtx.pasteAbove': 'Tempel di Atas',
     'pluginCtx.removePlugin': 'Hapus Plugin', 'pluginCtx.copyN': 'Salin {n} Plugin', 'pluginCtx.cutN': 'Potong {n} Plugin', 'pluginCtx.duplicateN': 'Duplikat {n} Plugin',
@@ -6349,7 +6353,7 @@ RR_I18N_STRINGS['id'] = { ...RR_I18N_STRINGS.en,
     'event.trigger': 'Pemicu', 'event.fixed': 'Tetap', 'event.random': 'Acak', 'event.approach': 'Mendekat',
     'event.custom': 'Kustom', 'event.normal': 'Normal', 'event.lowest': 'Terendah', 'event.lower': 'Lebih Rendah',
     'event.higher': 'Lebih Tinggi', 'event.highest': 'Tertinggi', 'event.belowCharacters': 'Di Bawah Karakter', 'event.sameAsCharacters': 'Sama dengan Karakter',
-    'event.aboveCharacters': 'Di Atas Karakter', 'event.actionButton': 'Tombol Aksi', 'event.playerTouch': 'Sentuhan Pemain', 'event.eventTouch': 'Sentuhan Event',
+    'event.aboveCharacters': 'Di Atas Karakter', 'event.aboveCharactersSorted': 'Di Atas Karakter (urut Y)', 'event.actionButton': 'Tombol Aksi', 'event.playerTouch': 'Sentuhan Pemain', 'event.eventTouch': 'Sentuhan Event',
     'event.autorun': 'Jalan Otomatis', 'event.parallel': 'Paralel', 'event.noneAvailable': 'Tidak ada yang tersedia', 'status.noProjectLoaded': 'Tidak ada proyek yang dimuat',
     'status.playtestNotImplemented': 'Mode uji main belum diimplementasikan', 'status.playtestSaveFailed': 'Uji main dibatalkan: proyek tidak dapat disimpan', 'status.loadMapFirst': 'Muat peta terlebih dahulu', 'status.eventModeEnabled': 'Mode event diaktifkan', 'status.eventModeDisabled': 'Mode event dinonaktifkan',
     'alert.loadProjectFirst': 'Silakan muat proyek terlebih dahulu.',
@@ -6710,7 +6714,7 @@ RR_I18N_STRINGS['vi'] = { ...RR_I18N_STRINGS.en,
     'mapTools.speedPlaceholder': 'Tốc độ',
     'common.none': '(Không có)', 'eventCtx.newEvent': 'Sự kiện mới', 'eventCtx.editEvent': 'Chỉnh sửa sự kiện', 'eventCtx.cutEvent': 'Cắt sự kiện',
     'eventCtx.copyEvent': 'Sao chép sự kiện', 'eventCtx.pasteEvent': 'Dán sự kiện', 'eventCtx.deleteEvent': 'Xóa sự kiện', 'eventCtx.findEvent': 'Tìm sự kiện...',
-    'eventCtx.findNext': 'Tìm sự kiện tiếp theo', 'eventCtx.findPrev': 'Tìm sự kiện trước', 'eventCtx.setStart': 'Đặt vị trí bắt đầu', 'eventCtx.player': 'Người chơi',
+    'eventCtx.findNext': 'Tìm sự kiện tiếp theo', 'eventCtx.findPrev': 'Tìm sự kiện trước', 'eventCtx.playerFacing': 'Hướng người chơi', 'eventCtx.setStart': 'Đặt vị trí bắt đầu', 'eventCtx.player': 'Người chơi', 'eventCtx.previewEvent': 'Xem trước sự kiện', 'eventCtx.previewPage': 'Trang {n}', 'eventCtx.hidePreview': 'Ẩn xem trước', 'toolbar.title.videoPreviews': 'Hiển thị bản xem trước bề mặt video',
     'eventCtx.boat': 'Thuyền', 'eventCtx.ship': 'Tàu', 'eventCtx.airship': 'Phi thuyền', 'eventFind.title': 'Tìm sự kiện',
     'eventFind.searchBy': 'Tìm theo tên hoặc ID:', 'eventFind.find': 'Tìm', 'pluginCtx.pastePlugin': 'Dán plugin', 'pluginCtx.pasteAbove': 'Dán lên trên',
     'pluginCtx.removePlugin': 'Gỡ plugin', 'pluginCtx.copyN': 'Sao chép {n} plugin', 'pluginCtx.cutN': 'Cắt {n} plugin', 'pluginCtx.duplicateN': 'Nhân bản {n} plugin',
@@ -6805,7 +6809,7 @@ RR_I18N_STRINGS['vi'] = { ...RR_I18N_STRINGS.en,
     'event.trigger': 'Kích hoạt', 'event.fixed': 'Cố định', 'event.random': 'Ngẫu nhiên', 'event.approach': 'Tiếp cận',
     'event.custom': 'Tùy chỉnh', 'event.normal': 'Bình thường', 'event.lowest': 'Thấp nhất', 'event.lower': 'Thấp',
     'event.higher': 'Cao', 'event.highest': 'Cao nhất', 'event.belowCharacters': 'Dưới nhân vật', 'event.sameAsCharacters': 'Ngang nhân vật',
-    'event.aboveCharacters': 'Trên nhân vật', 'event.actionButton': 'Nút hành động', 'event.playerTouch': 'Người chơi chạm', 'event.eventTouch': 'Sự kiện chạm',
+    'event.aboveCharacters': 'Trên nhân vật', 'event.aboveCharactersSorted': 'Trên nhân vật (sắp xếp theo Y)', 'event.actionButton': 'Nút hành động', 'event.playerTouch': 'Người chơi chạm', 'event.eventTouch': 'Sự kiện chạm',
     'event.autorun': 'Tự chạy', 'event.parallel': 'Song song', 'event.noneAvailable': 'Không có sẵn', 'status.noProjectLoaded': 'Chưa tải dự án nào',
     'status.playtestNotImplemented': 'Chế độ chơi thử chưa được triển khai', 'status.playtestSaveFailed': 'Đã hủy chơi thử: không thể lưu dự án', 'status.loadMapFirst': 'Hãy tải bản đồ trước', 'status.eventModeEnabled': 'Đã bật chế độ sự kiện', 'status.eventModeDisabled': 'Đã tắt chế độ sự kiện',
     'alert.loadProjectFirst': 'Vui lòng tải dự án trước.',
@@ -7166,7 +7170,7 @@ RR_I18N_STRINGS['th'] = { ...RR_I18N_STRINGS.en,
     'mapTools.speedPlaceholder': 'ความเร็ว',
     'common.none': '(ไม่มี)', 'eventCtx.newEvent': 'อีเวนต์ใหม่', 'eventCtx.editEvent': 'แก้ไขอีเวนต์', 'eventCtx.cutEvent': 'ตัดอีเวนต์',
     'eventCtx.copyEvent': 'คัดลอกอีเวนต์', 'eventCtx.pasteEvent': 'วางอีเวนต์', 'eventCtx.deleteEvent': 'ลบอีเวนต์', 'eventCtx.findEvent': 'ค้นหาอีเวนต์...',
-    'eventCtx.findNext': 'ค้นหาอีเวนต์ถัดไป', 'eventCtx.findPrev': 'ค้นหาอีเวนต์ก่อนหน้า', 'eventCtx.setStart': 'กำหนดตำแหน่งเริ่มต้น', 'eventCtx.player': 'ผู้เล่น',
+    'eventCtx.findNext': 'ค้นหาอีเวนต์ถัดไป', 'eventCtx.findPrev': 'ค้นหาอีเวนต์ก่อนหน้า', 'eventCtx.playerFacing': 'ทิศทางผู้เล่น', 'eventCtx.setStart': 'กำหนดตำแหน่งเริ่มต้น', 'eventCtx.player': 'ผู้เล่น', 'eventCtx.previewEvent': 'ดูตัวอย่างอีเวนต์', 'eventCtx.previewPage': 'หน้า {n}', 'eventCtx.hidePreview': 'ซ่อนตัวอย่าง', 'toolbar.title.videoPreviews': 'แสดงตัวอย่างพื้นผิววิดีโอ',
     'eventCtx.boat': 'เรือเล็ก', 'eventCtx.ship': 'เรือใหญ่', 'eventCtx.airship': 'เรือเหาะ', 'eventFind.title': 'ค้นหาอีเวนต์',
     'eventFind.searchBy': 'ค้นหาด้วยชื่อหรือ ID:', 'eventFind.find': 'ค้นหา', 'pluginCtx.pastePlugin': 'วางปลั๊กอิน', 'pluginCtx.pasteAbove': 'วางด้านบน',
     'pluginCtx.removePlugin': 'ลบปลั๊กอิน', 'pluginCtx.copyN': 'คัดลอกปลั๊กอิน {n} รายการ', 'pluginCtx.cutN': 'ตัดปลั๊กอิน {n} รายการ', 'pluginCtx.duplicateN': 'ทำสำเนาปลั๊กอิน {n} รายการ',
@@ -7261,7 +7265,7 @@ RR_I18N_STRINGS['th'] = { ...RR_I18N_STRINGS.en,
     'event.trigger': 'ทริกเกอร์', 'event.fixed': 'อยู่กับที่', 'event.random': 'สุ่ม', 'event.approach': 'เข้าหา',
     'event.custom': 'กำหนดเอง', 'event.normal': 'ปกติ', 'event.lowest': 'ต่ำสุด', 'event.lower': 'ต่ำ',
     'event.higher': 'สูง', 'event.highest': 'สูงสุด', 'event.belowCharacters': 'ใต้ตัวละคร', 'event.sameAsCharacters': 'ระดับเดียวกับตัวละคร',
-    'event.aboveCharacters': 'เหนือตัวละคร', 'event.actionButton': 'ปุ่มแอ็กชัน', 'event.playerTouch': 'ผู้เล่นแตะ', 'event.eventTouch': 'อีเวนต์แตะ',
+    'event.aboveCharacters': 'เหนือตัวละคร', 'event.aboveCharactersSorted': 'เหนือตัวละคร (เรียงตาม Y)', 'event.actionButton': 'ปุ่มแอ็กชัน', 'event.playerTouch': 'ผู้เล่นแตะ', 'event.eventTouch': 'อีเวนต์แตะ',
     'event.autorun': 'ทำงานอัตโนมัติ', 'event.parallel': 'ขนาน', 'event.noneAvailable': 'ไม่มีให้เลือก', 'status.noProjectLoaded': 'ยังไม่ได้โหลดโปรเจกต์',
     'status.playtestNotImplemented': 'โหมดทดสอบเล่นยังไม่พร้อมใช้งาน', 'status.playtestSaveFailed': 'ยกเลิกการทดสอบเล่น: ไม่สามารถบันทึกโปรเจกต์ได้', 'status.loadMapFirst': 'โหลดแผนที่ก่อน', 'status.eventModeEnabled': 'เปิดโหมดอีเวนต์แล้ว', 'status.eventModeDisabled': 'ปิดโหมดอีเวนต์แล้ว',
     'alert.loadProjectFirst': 'กรุณาโหลดโปรเจกต์ก่อน',
@@ -7622,7 +7626,7 @@ RR_I18N_STRINGS['tr'] = { ...RR_I18N_STRINGS.en,
     'mapTools.speedPlaceholder': 'Hız',
     'common.none': '(Yok)', 'eventCtx.newEvent': 'Yeni olay', 'eventCtx.editEvent': 'Olayı düzenle', 'eventCtx.cutEvent': 'Olayı kes',
     'eventCtx.copyEvent': 'Olayı kopyala', 'eventCtx.pasteEvent': 'Olayı yapıştır', 'eventCtx.deleteEvent': 'Olayı sil', 'eventCtx.findEvent': 'Olay bul...',
-    'eventCtx.findNext': 'Sonraki olayı bul', 'eventCtx.findPrev': 'Önceki olayı bul', 'eventCtx.setStart': 'Başlangıç konumunu ayarla', 'eventCtx.player': 'Oyuncu',
+    'eventCtx.findNext': 'Sonraki olayı bul', 'eventCtx.findPrev': 'Önceki olayı bul', 'eventCtx.playerFacing': 'Oyuncu yönü', 'eventCtx.setStart': 'Başlangıç konumunu ayarla', 'eventCtx.player': 'Oyuncu', 'eventCtx.previewEvent': 'Olayı Önizle', 'eventCtx.previewPage': 'Sayfa {n}', 'eventCtx.hidePreview': 'Önizlemeyi Gizle', 'toolbar.title.videoPreviews': 'Video yüzeyi önizlemelerini göster',
     'eventCtx.boat': 'Sandal', 'eventCtx.ship': 'Gemi', 'eventCtx.airship': 'Zeplin', 'eventFind.title': 'Olay bul',
     'eventFind.searchBy': 'Ada veya ID\'ye göre ara:', 'eventFind.find': 'Bul', 'pluginCtx.pastePlugin': 'Eklentiyi yapıştır', 'pluginCtx.pasteAbove': 'Üste yapıştır',
     'pluginCtx.removePlugin': 'Eklentiyi kaldır', 'pluginCtx.copyN': '{n} eklentiyi kopyala', 'pluginCtx.cutN': '{n} eklentiyi kes', 'pluginCtx.duplicateN': '{n} eklentiyi çoğalt',
@@ -7717,7 +7721,7 @@ RR_I18N_STRINGS['tr'] = { ...RR_I18N_STRINGS.en,
     'event.trigger': 'Tetikleyici', 'event.fixed': 'Sabit', 'event.random': 'Rastgele', 'event.approach': 'Yaklaş',
     'event.custom': 'Özel', 'event.normal': 'Normal', 'event.lowest': 'En düşük', 'event.lower': 'Düşük',
     'event.higher': 'Yüksek', 'event.highest': 'En yüksek', 'event.belowCharacters': 'Karakterlerin altında', 'event.sameAsCharacters': 'Karakterlerle aynı',
-    'event.aboveCharacters': 'Karakterlerin üstünde', 'event.actionButton': 'Eylem düğmesi', 'event.playerTouch': 'Oyuncu teması', 'event.eventTouch': 'Olay teması',
+    'event.aboveCharacters': 'Karakterlerin üstünde', 'event.aboveCharactersSorted': 'Karakterlerin Üstünde (Y sıralı)', 'event.actionButton': 'Eylem düğmesi', 'event.playerTouch': 'Oyuncu teması', 'event.eventTouch': 'Olay teması',
     'event.autorun': 'Otomatik çalıştır', 'event.parallel': 'Paralel', 'event.noneAvailable': 'Kullanılabilir öğe yok', 'status.noProjectLoaded': 'Proje yüklenmedi',
     'status.playtestNotImplemented': 'Oyun testi modu henüz uygulanmadı', 'status.playtestSaveFailed': 'Oyun testi iptal edildi: proje kaydedilemedi', 'status.loadMapFirst': 'Önce bir harita yükleyin', 'status.eventModeEnabled': 'Olay modu etkin', 'status.eventModeDisabled': 'Olay modu devre dışı',
     'alert.loadProjectFirst': 'Lütfen önce bir proje yükleyin.',
@@ -8961,7 +8965,7 @@ Object.assign(RR_I18N_STRINGS.de, {
     'efk.search': 'Animationen suchen …',
     'efk.startFrame': 'Startframe',
     'efk.timing': 'Ebenen-Timing',
-    'event.aboveCharacters': 'Über Charakteren',
+    'event.aboveCharacters': 'Über Charakteren', 'event.aboveCharactersSorted': 'Über Charakteren (nach Y sortiert)',
     'event.actionButton': 'Aktionstaste',
     'event.actor': 'Akteur:',
     'event.approach': 'Annähern',
@@ -9134,7 +9138,7 @@ Object.assign(RR_I18N_STRINGS.fr, {
     'efk.search': 'Rechercher des animations…',
     'efk.startFrame': 'Image de début',
     'efk.timing': 'Minutage du calque',
-    'event.aboveCharacters': 'Au-dessus des personnages',
+    'event.aboveCharacters': 'Au-dessus des personnages', 'event.aboveCharactersSorted': 'Au-dessus des personnages (trié par Y)',
     'event.actionButton': 'Touche d\'action',
     'event.actor': 'Acteur :',
     'event.approach': 'Approcher',
@@ -9307,7 +9311,7 @@ Object.assign(RR_I18N_STRINGS.pt, {
     'efk.search': 'Pesquisar animações…',
     'efk.startFrame': 'Quadro inicial',
     'efk.timing': 'Temporização da camada',
-    'event.aboveCharacters': 'Acima dos personagens',
+    'event.aboveCharacters': 'Acima dos personagens', 'event.aboveCharactersSorted': 'Acima dos personagens (ordenado por Y)',
     'event.actionButton': 'Botão de ação',
     'event.actor': 'Ator:',
     'event.approach': 'Aproximar',
@@ -9480,7 +9484,7 @@ Object.assign(RR_I18N_STRINGS.ru, {
     'efk.search': 'Поиск анимаций…',
     'efk.startFrame': 'Начальный кадр',
     'efk.timing': 'Тайминг слоя',
-    'event.aboveCharacters': 'Над персонажами',
+    'event.aboveCharacters': 'Над персонажами', 'event.aboveCharactersSorted': 'Над персонажами (сортировка по Y)',
     'event.actionButton': 'Кнопка действия',
     'event.actor': 'Актёр:',
     'event.approach': 'Приближаться',
@@ -9653,7 +9657,7 @@ Object.assign(RR_I18N_STRINGS.el, {
     'efk.search': 'Αναζήτηση κινήσεων…',
     'efk.startFrame': 'Αρχικό καρέ',
     'efk.timing': 'Χρονισμός επιπέδου',
-    'event.aboveCharacters': 'Πάνω από τους χαρακτήρες',
+    'event.aboveCharacters': 'Πάνω από τους χαρακτήρες', 'event.aboveCharactersSorted': 'Πάνω από χαρακτήρες (ταξινόμηση κατά Y)',
     'event.actionButton': 'Πλήκτρο ενέργειας',
     'event.actor': 'Ήρωας:',
     'event.approach': 'Προσέγγιση',
@@ -9826,7 +9830,7 @@ Object.assign(RR_I18N_STRINGS['zh-Hans'], {
     'efk.search': '搜索动画…',
     'efk.startFrame': '起始帧',
     'efk.timing': '图层时序',
-    'event.aboveCharacters': '在角色上方',
+    'event.aboveCharacters': '在角色上方', 'event.aboveCharactersSorted': '角色之上（按 Y 排序）',
     'event.actionButton': '确定键',
     'event.actor': '角色：',
     'event.approach': '接近',
@@ -9999,7 +10003,7 @@ Object.assign(RR_I18N_STRINGS['zh-Hant'], {
     'efk.search': '搜尋動畫…',
     'efk.startFrame': '起始影格',
     'efk.timing': '圖層時序',
-    'event.aboveCharacters': '在角色上方',
+    'event.aboveCharacters': '在角色上方', 'event.aboveCharactersSorted': '角色之上（依 Y 排序）',
     'event.actionButton': '確定鍵',
     'event.actor': '角色：',
     'event.approach': '接近',
@@ -11091,6 +11095,20 @@ Object.assign(RR_I18N_STRINGS.vi, { 'menu.userInterfaces': 'Giao diện người
 Object.assign(RR_I18N_STRINGS.th, { 'menu.userInterfaces': 'ส่วนติดต่อผู้ใช้' });
 Object.assign(RR_I18N_STRINGS.tr, { 'menu.userInterfaces': 'Kullanıcı arayüzleri' });
 (function() {
+    const labels = {
+        ja: 'リソースマネージャー', es: 'Administrador de recursos',
+        'zh-Hant': '資源管理器', 'zh-Hans': '资源管理器',
+        ru: 'Менеджер ресурсов', pt: 'Gerenciador de recursos',
+        de: 'Ressourcenverwaltung', fr: 'Gestionnaire de ressources',
+        el: 'Διαχείριση πόρων', ko: '리소스 관리자', ar: 'مدير الموارد',
+        it: 'Gestione risorse', pl: 'Menedżer zasobów', id: 'Pengelola sumber daya',
+        vi: 'Trình quản lý tài nguyên', th: 'ตัวจัดการทรัพยากร', tr: 'Kaynak yöneticisi'
+    };
+    for (const [locale, label] of Object.entries(labels)) {
+        RR_I18N_STRINGS[locale]['menu.resourceManager'] = label;
+    }
+})();
+(function() {
     const call = {
         ja: 'ユーザーインターフェースの呼び出し', es: 'Llamar interfaz de usuario',
         'zh-Hant': '呼叫使用者介面', 'zh-Hans': '调用用户界面',
@@ -11154,6 +11172,2342 @@ for (const [catalog, tables] of [
         if (tables[locale]) Object.assign(tables[locale], translations);
     }
 }
+
+// Map Properties: the audio picker flow and the 3D room (hand-written).
+Object.assign(RR_I18N_STRINGS.en, {
+    'mapProps.choose': 'Choose…',
+    'mapProps.trackHint': 'Choose a track',
+    'mapProps.levels': 'Vol {volume} · Pitch {pitch} · Pan {pan}',
+    'mapProps.threeD': '3D',
+    'mapProps.map3D': '3D Map',
+    'mapProps.roomHeight': 'Room Height (tiles):',
+    'mapProps.parallaxFloor': 'Parallax Floor:',
+    'mapProps.parallaxWalls': 'Parallax Walls:',
+    'mapProps.parallaxCeiling': 'Parallax Ceiling:',
+    'mapProps.roomHint': 'The floor lies under the parallax background. Walls and the ceiling face inward, so the camera looks past them into the room.',
+    'mapProps.pickFloor': 'Select Parallax Floor',
+    'mapProps.pickWalls': 'Select Parallax Walls',
+    'mapProps.pickCeiling': 'Select Parallax Ceiling',
+    'mapProps.sidecarNotSaved': 'The map\'s 3D settings could not be saved.'
+});
+Object.assign(RR_I18N_STRINGS.ja, {
+    'mapProps.choose': '選択…',
+    'mapProps.trackHint': 'トラックを選択',
+    'mapProps.levels': '音量 {volume} · ピッチ {pitch} · 位相 {pan}',
+    'mapProps.threeD': '3D',
+    'mapProps.map3D': '3Dマップ',
+    'mapProps.roomHeight': '部屋の高さ (タイル):',
+    'mapProps.parallaxFloor': '遠景の床:',
+    'mapProps.parallaxWalls': '遠景の壁:',
+    'mapProps.parallaxCeiling': '遠景の天井:',
+    'mapProps.roomHint': '床は遠景の下に敷かれます。壁と天井は内側を向くため、カメラはそれらを透かして部屋の中を映します。',
+    'mapProps.pickFloor': '遠景の床を選択',
+    'mapProps.pickWalls': '遠景の壁を選択',
+    'mapProps.pickCeiling': '遠景の天井を選択',
+    'mapProps.sidecarNotSaved': 'マップの3D設定を保存できませんでした。'
+});
+Object.assign(RR_I18N_STRINGS.es, {
+    'mapProps.choose': 'Elegir…',
+    'mapProps.trackHint': 'Elegir una pista',
+    'mapProps.levels': 'Vol {volume} · Tono {pitch} · Pan {pan}',
+    'mapProps.threeD': '3D',
+    'mapProps.map3D': 'Mapa 3D',
+    'mapProps.roomHeight': 'Altura de la sala (casillas):',
+    'mapProps.parallaxFloor': 'Suelo de paralaje:',
+    'mapProps.parallaxWalls': 'Paredes de paralaje:',
+    'mapProps.parallaxCeiling': 'Techo de paralaje:',
+    'mapProps.roomHint': 'El suelo se sitúa bajo el fondo de paralaje. Las paredes y el techo miran hacia dentro, así que la cámara mira a través de ellos hacia la sala.',
+    'mapProps.pickFloor': 'Seleccionar suelo de paralaje',
+    'mapProps.pickWalls': 'Seleccionar paredes de paralaje',
+    'mapProps.pickCeiling': 'Seleccionar techo de paralaje',
+    'mapProps.sidecarNotSaved': 'No se pudieron guardar los ajustes 3D del mapa.'
+});
+Object.assign(RR_I18N_STRINGS['zh-Hant'], {
+    'mapProps.choose': '選擇…',
+    'mapProps.trackHint': '選擇曲目',
+    'mapProps.levels': '音量 {volume} · 音調 {pitch} · 聲相 {pan}',
+    'mapProps.threeD': '3D',
+    'mapProps.map3D': '3D 地圖',
+    'mapProps.roomHeight': '房間高度（格）:',
+    'mapProps.parallaxFloor': '遠景地板:',
+    'mapProps.parallaxWalls': '遠景牆壁:',
+    'mapProps.parallaxCeiling': '遠景天花板:',
+    'mapProps.roomHint': '地板位於遠景背景之下。牆壁與天花板朝向內側，因此攝影機會穿過它們看向房間內部。',
+    'mapProps.pickFloor': '選擇遠景地板',
+    'mapProps.pickWalls': '選擇遠景牆壁',
+    'mapProps.pickCeiling': '選擇遠景天花板',
+    'mapProps.sidecarNotSaved': '無法儲存地圖的 3D 設定。'
+});
+Object.assign(RR_I18N_STRINGS['zh-Hans'], {
+    'mapProps.choose': '选择…',
+    'mapProps.trackHint': '选择曲目',
+    'mapProps.levels': '音量 {volume} · 音调 {pitch} · 声相 {pan}',
+    'mapProps.threeD': '3D',
+    'mapProps.map3D': '3D 地图',
+    'mapProps.roomHeight': '房间高度（格）:',
+    'mapProps.parallaxFloor': '远景地板:',
+    'mapProps.parallaxWalls': '远景墙壁:',
+    'mapProps.parallaxCeiling': '远景天花板:',
+    'mapProps.roomHint': '地板位于远景背景之下。墙壁与天花板朝向内侧，因此摄像机会穿过它们看向房间内部。',
+    'mapProps.pickFloor': '选择远景地板',
+    'mapProps.pickWalls': '选择远景墙壁',
+    'mapProps.pickCeiling': '选择远景天花板',
+    'mapProps.sidecarNotSaved': '无法保存地图的 3D 设置。'
+});
+Object.assign(RR_I18N_STRINGS.ru, {
+    'mapProps.choose': 'Выбрать…',
+    'mapProps.trackHint': 'Выбрать трек',
+    'mapProps.levels': 'Громк. {volume} · Тон {pitch} · Пан. {pan}',
+    'mapProps.threeD': '3D',
+    'mapProps.map3D': '3D-карта',
+    'mapProps.roomHeight': 'Высота комнаты (тайлы):',
+    'mapProps.parallaxFloor': 'Пол (параллакс):',
+    'mapProps.parallaxWalls': 'Стены (параллакс):',
+    'mapProps.parallaxCeiling': 'Потолок (параллакс):',
+    'mapProps.roomHint': 'Пол лежит под фоном параллакса. Стены и потолок обращены внутрь, поэтому камера смотрит сквозь них в комнату.',
+    'mapProps.pickFloor': 'Выбрать пол (параллакс)',
+    'mapProps.pickWalls': 'Выбрать стены (параллакс)',
+    'mapProps.pickCeiling': 'Выбрать потолок (параллакс)',
+    'mapProps.sidecarNotSaved': 'Не удалось сохранить 3D-настройки карты.'
+});
+Object.assign(RR_I18N_STRINGS.pt, {
+    'mapProps.choose': 'Escolher…',
+    'mapProps.trackHint': 'Escolher uma faixa',
+    'mapProps.levels': 'Vol {volume} · Tom {pitch} · Pan {pan}',
+    'mapProps.threeD': '3D',
+    'mapProps.map3D': 'Mapa 3D',
+    'mapProps.roomHeight': 'Altura da sala (tiles):',
+    'mapProps.parallaxFloor': 'Piso de paralaxe:',
+    'mapProps.parallaxWalls': 'Paredes de paralaxe:',
+    'mapProps.parallaxCeiling': 'Teto de paralaxe:',
+    'mapProps.roomHint': 'O piso fica sob o fundo de paralaxe. As paredes e o teto ficam voltados para dentro, então a câmera olha através deles para a sala.',
+    'mapProps.pickFloor': 'Selecionar piso de paralaxe',
+    'mapProps.pickWalls': 'Selecionar paredes de paralaxe',
+    'mapProps.pickCeiling': 'Selecionar teto de paralaxe',
+    'mapProps.sidecarNotSaved': 'Não foi possível salvar as configurações 3D do mapa.'
+});
+Object.assign(RR_I18N_STRINGS.de, {
+    'mapProps.choose': 'Wählen…',
+    'mapProps.trackHint': 'Titel wählen',
+    'mapProps.levels': 'Lautst. {volume} · Tonhöhe {pitch} · Pan {pan}',
+    'mapProps.threeD': '3D',
+    'mapProps.map3D': '3D-Karte',
+    'mapProps.roomHeight': 'Raumhöhe (Kacheln):',
+    'mapProps.parallaxFloor': 'Parallax-Boden:',
+    'mapProps.parallaxWalls': 'Parallax-Wände:',
+    'mapProps.parallaxCeiling': 'Parallax-Decke:',
+    'mapProps.roomHint': 'Der Boden liegt unter dem Parallax-Hintergrund. Wände und Decke zeigen nach innen, sodass die Kamera durch sie hindurch in den Raum blickt.',
+    'mapProps.pickFloor': 'Parallax-Boden wählen',
+    'mapProps.pickWalls': 'Parallax-Wände wählen',
+    'mapProps.pickCeiling': 'Parallax-Decke wählen',
+    'mapProps.sidecarNotSaved': 'Die 3D-Einstellungen der Karte konnten nicht gespeichert werden.'
+});
+Object.assign(RR_I18N_STRINGS.fr, {
+    'mapProps.choose': 'Choisir…',
+    'mapProps.trackHint': 'Choisir une piste',
+    'mapProps.levels': 'Vol {volume} · Hauteur {pitch} · Pan {pan}',
+    'mapProps.threeD': '3D',
+    'mapProps.map3D': 'Carte 3D',
+    'mapProps.roomHeight': 'Hauteur de la pièce (tuiles) :',
+    'mapProps.parallaxFloor': 'Sol parallaxe :',
+    'mapProps.parallaxWalls': 'Murs parallaxe :',
+    'mapProps.parallaxCeiling': 'Plafond parallaxe :',
+    'mapProps.roomHint': 'Le sol se place sous l’arrière-plan parallaxe. Les murs et le plafond sont tournés vers l’intérieur, la caméra regarde donc à travers eux dans la pièce.',
+    'mapProps.pickFloor': 'Choisir le sol parallaxe',
+    'mapProps.pickWalls': 'Choisir les murs parallaxe',
+    'mapProps.pickCeiling': 'Choisir le plafond parallaxe',
+    'mapProps.sidecarNotSaved': 'Les réglages 3D de la carte n’ont pas pu être enregistrés.'
+});
+Object.assign(RR_I18N_STRINGS.el, {
+    'mapProps.choose': 'Επιλογή…',
+    'mapProps.trackHint': 'Επιλέξτε κομμάτι',
+    'mapProps.levels': 'Ένταση {volume} · Τόνος {pitch} · Pan {pan}',
+    'mapProps.threeD': '3D',
+    'mapProps.map3D': 'Χάρτης 3D',
+    'mapProps.roomHeight': 'Ύψος δωματίου (πλακίδια):',
+    'mapProps.parallaxFloor': 'Δάπεδο παράλλαξης:',
+    'mapProps.parallaxWalls': 'Τοίχοι παράλλαξης:',
+    'mapProps.parallaxCeiling': 'Οροφή παράλλαξης:',
+    'mapProps.roomHint': 'Το δάπεδο βρίσκεται κάτω από το φόντο παράλλαξης. Οι τοίχοι και η οροφή κοιτούν προς τα μέσα, ώστε η κάμερα να βλέπει μέσα από αυτά στο δωμάτιο.',
+    'mapProps.pickFloor': 'Επιλογή δαπέδου παράλλαξης',
+    'mapProps.pickWalls': 'Επιλογή τοίχων παράλλαξης',
+    'mapProps.pickCeiling': 'Επιλογή οροφής παράλλαξης',
+    'mapProps.sidecarNotSaved': 'Δεν ήταν δυνατή η αποθήκευση των ρυθμίσεων 3D του χάρτη.'
+});
+Object.assign(RR_I18N_STRINGS.ko, {
+    'mapProps.choose': '선택…',
+    'mapProps.trackHint': '트랙 선택',
+    'mapProps.levels': '음량 {volume} · 피치 {pitch} · 팬 {pan}',
+    'mapProps.threeD': '3D',
+    'mapProps.map3D': '3D 맵',
+    'mapProps.roomHeight': '방 높이 (타일):',
+    'mapProps.parallaxFloor': '원경 바닥:',
+    'mapProps.parallaxWalls': '원경 벽:',
+    'mapProps.parallaxCeiling': '원경 천장:',
+    'mapProps.roomHint': '바닥은 원경 배경 아래에 깔립니다. 벽과 천장은 안쪽을 향하므로 카메라는 이를 통과해 방 안을 봅니다.',
+    'mapProps.pickFloor': '원경 바닥 선택',
+    'mapProps.pickWalls': '원경 벽 선택',
+    'mapProps.pickCeiling': '원경 천장 선택',
+    'mapProps.sidecarNotSaved': '맵의 3D 설정을 저장할 수 없습니다.'
+});
+Object.assign(RR_I18N_STRINGS.ar, {
+    'mapProps.choose': 'اختيار…',
+    'mapProps.trackHint': 'اختر مقطعًا',
+    'mapProps.levels': 'الصوت {volume} · النغمة {pitch} · التوزيع {pan}',
+    'mapProps.threeD': 'ثلاثي الأبعاد',
+    'mapProps.map3D': 'خريطة ثلاثية الأبعاد',
+    'mapProps.roomHeight': 'ارتفاع الغرفة (بلاطات):',
+    'mapProps.parallaxFloor': 'أرضية المنظر البعيد:',
+    'mapProps.parallaxWalls': 'جدران المنظر البعيد:',
+    'mapProps.parallaxCeiling': 'سقف المنظر البعيد:',
+    'mapProps.roomHint': 'تقع الأرضية تحت خلفية المنظر البعيد. تتجه الجدران والسقف إلى الداخل، فتنظر الكاميرا عبرها إلى داخل الغرفة.',
+    'mapProps.pickFloor': 'اختيار أرضية المنظر البعيد',
+    'mapProps.pickWalls': 'اختيار جدران المنظر البعيد',
+    'mapProps.pickCeiling': 'اختيار سقف المنظر البعيد',
+    'mapProps.sidecarNotSaved': 'تعذر حفظ إعدادات الأبعاد الثلاثية للخريطة.'
+});
+Object.assign(RR_I18N_STRINGS.it, {
+    'mapProps.choose': 'Scegli…',
+    'mapProps.trackHint': 'Scegli una traccia',
+    'mapProps.levels': 'Vol {volume} · Tono {pitch} · Pan {pan}',
+    'mapProps.threeD': '3D',
+    'mapProps.map3D': 'Mappa 3D',
+    'mapProps.roomHeight': 'Altezza della stanza (tile):',
+    'mapProps.parallaxFloor': 'Pavimento parallasse:',
+    'mapProps.parallaxWalls': 'Pareti parallasse:',
+    'mapProps.parallaxCeiling': 'Soffitto parallasse:',
+    'mapProps.roomHint': 'Il pavimento sta sotto lo sfondo parallasse. Pareti e soffitto sono rivolti verso l’interno, così la camera guarda attraverso di essi dentro la stanza.',
+    'mapProps.pickFloor': 'Seleziona pavimento parallasse',
+    'mapProps.pickWalls': 'Seleziona pareti parallasse',
+    'mapProps.pickCeiling': 'Seleziona soffitto parallasse',
+    'mapProps.sidecarNotSaved': 'Impossibile salvare le impostazioni 3D della mappa.'
+});
+Object.assign(RR_I18N_STRINGS.pl, {
+    'mapProps.choose': 'Wybierz…',
+    'mapProps.trackHint': 'Wybierz utwór',
+    'mapProps.levels': 'Głośn. {volume} · Ton {pitch} · Pan {pan}',
+    'mapProps.threeD': '3D',
+    'mapProps.map3D': 'Mapa 3D',
+    'mapProps.roomHeight': 'Wysokość pokoju (kafelki):',
+    'mapProps.parallaxFloor': 'Podłoga paralaksy:',
+    'mapProps.parallaxWalls': 'Ściany paralaksy:',
+    'mapProps.parallaxCeiling': 'Sufit paralaksy:',
+    'mapProps.roomHint': 'Podłoga leży pod tłem paralaksy. Ściany i sufit są zwrócone do wewnątrz, więc kamera patrzy przez nie do pokoju.',
+    'mapProps.pickFloor': 'Wybierz podłogę paralaksy',
+    'mapProps.pickWalls': 'Wybierz ściany paralaksy',
+    'mapProps.pickCeiling': 'Wybierz sufit paralaksy',
+    'mapProps.sidecarNotSaved': 'Nie udało się zapisać ustawień 3D mapy.'
+});
+Object.assign(RR_I18N_STRINGS.id, {
+    'mapProps.choose': 'Pilih…',
+    'mapProps.trackHint': 'Pilih trek',
+    'mapProps.levels': 'Vol {volume} · Nada {pitch} · Pan {pan}',
+    'mapProps.threeD': '3D',
+    'mapProps.map3D': 'Peta 3D',
+    'mapProps.roomHeight': 'Tinggi ruangan (petak):',
+    'mapProps.parallaxFloor': 'Lantai paralaks:',
+    'mapProps.parallaxWalls': 'Dinding paralaks:',
+    'mapProps.parallaxCeiling': 'Langit-langit paralaks:',
+    'mapProps.roomHint': 'Lantai berada di bawah latar paralaks. Dinding dan langit-langit menghadap ke dalam, sehingga kamera melihat menembusnya ke dalam ruangan.',
+    'mapProps.pickFloor': 'Pilih lantai paralaks',
+    'mapProps.pickWalls': 'Pilih dinding paralaks',
+    'mapProps.pickCeiling': 'Pilih langit-langit paralaks',
+    'mapProps.sidecarNotSaved': 'Pengaturan 3D peta tidak dapat disimpan.'
+});
+Object.assign(RR_I18N_STRINGS.vi, {
+    'mapProps.choose': 'Chọn…',
+    'mapProps.trackHint': 'Chọn bản nhạc',
+    'mapProps.levels': 'Âm lượng {volume} · Cao độ {pitch} · Pan {pan}',
+    'mapProps.threeD': '3D',
+    'mapProps.map3D': 'Bản đồ 3D',
+    'mapProps.roomHeight': 'Chiều cao phòng (ô):',
+    'mapProps.parallaxFloor': 'Sàn parallax:',
+    'mapProps.parallaxWalls': 'Tường parallax:',
+    'mapProps.parallaxCeiling': 'Trần parallax:',
+    'mapProps.roomHint': 'Sàn nằm dưới nền parallax. Tường và trần hướng vào trong, nên camera nhìn xuyên qua chúng vào trong phòng.',
+    'mapProps.pickFloor': 'Chọn sàn parallax',
+    'mapProps.pickWalls': 'Chọn tường parallax',
+    'mapProps.pickCeiling': 'Chọn trần parallax',
+    'mapProps.sidecarNotSaved': 'Không thể lưu cài đặt 3D của bản đồ.'
+});
+Object.assign(RR_I18N_STRINGS.th, {
+    'mapProps.choose': 'เลือก…',
+    'mapProps.trackHint': 'เลือกแทร็ก',
+    'mapProps.levels': 'ระดับเสียง {volume} · ระดับเสียงสูงต่ำ {pitch} · แพน {pan}',
+    'mapProps.threeD': '3D',
+    'mapProps.map3D': 'แผนที่ 3D',
+    'mapProps.roomHeight': 'ความสูงของห้อง (ไทล์):',
+    'mapProps.parallaxFloor': 'พื้นพารัลแลกซ์:',
+    'mapProps.parallaxWalls': 'ผนังพารัลแลกซ์:',
+    'mapProps.parallaxCeiling': 'เพดานพารัลแลกซ์:',
+    'mapProps.roomHint': 'พื้นอยู่ใต้พื้นหลังพารัลแลกซ์ ผนังและเพดานหันเข้าด้านใน กล้องจึงมองทะลุผ่านเข้าไปในห้อง',
+    'mapProps.pickFloor': 'เลือกพื้นพารัลแลกซ์',
+    'mapProps.pickWalls': 'เลือกผนังพารัลแลกซ์',
+    'mapProps.pickCeiling': 'เลือกเพดานพารัลแลกซ์',
+    'mapProps.sidecarNotSaved': 'ไม่สามารถบันทึกการตั้งค่า 3D ของแผนที่ได้'
+});
+Object.assign(RR_I18N_STRINGS.tr, {
+    'mapProps.choose': 'Seç…',
+    'mapProps.trackHint': 'Bir parça seç',
+    'mapProps.levels': 'Ses {volume} · Perde {pitch} · Pan {pan}',
+    'mapProps.threeD': '3B',
+    'mapProps.map3D': '3B Harita',
+    'mapProps.roomHeight': 'Oda yüksekliği (karo):',
+    'mapProps.parallaxFloor': 'Paralaks zemin:',
+    'mapProps.parallaxWalls': 'Paralaks duvarlar:',
+    'mapProps.parallaxCeiling': 'Paralaks tavan:',
+    'mapProps.roomHint': 'Zemin, paralaks arka planın altında yer alır. Duvarlar ve tavan içe bakar; kamera onların içinden odaya bakar.',
+    'mapProps.pickFloor': 'Paralaks zemin seç',
+    'mapProps.pickWalls': 'Paralaks duvarlar seç',
+    'mapProps.pickCeiling': 'Paralaks tavan seç',
+    'mapProps.sidecarNotSaved': 'Haritanın 3B ayarları kaydedilemedi.'
+});
+
+// Map Properties default camera + Change 3D Camera command (hand-written).
+Object.assign(RR_I18N_STRINGS.en, {
+    'mapProps.defaultCamera': 'Default Camera:',
+    'cam3d.mode': 'Mode',
+    'cam3d.pitch': 'Pitch:',
+    'cam3d.yaw': 'Yaw:',
+    'cam3d.distance': 'Distance:',
+    'cam3d.fov': 'FOV:',
+    'cam3d.focus': 'Focus',
+    'cam3d.event': 'Event',
+    'cam3d.duration': 'Duration (frames)',
+    'cam3d.wait': 'Wait for completion',
+    'cam3d.keep': 'Keep on other maps',
+    'cam3d.blankHint': 'Blank fields use the mode\'s own values.',
+    'cam3d.auto': 'auto',
+    'cam3d.thisEvent': 'This Event',
+    'cam3d.mode.fixed': 'Fixed Angle (HD-2D)',
+    'cam3d.mode.topDown': 'Top-Down',
+    'cam3d.mode.isometric': 'Isometric',
+    'cam3d.mode.thirdPerson': 'Third Person',
+    'cam3d.mode.firstPerson': 'First Person',
+    'cam3d.focus.auto': 'Auto (mode default)',
+    'cam3d.focus.display': 'Display centre',
+    'cam3d.focus.player': 'Player',
+    'cam3d.focus.event': 'Event',
+    'cam3d.hint.fixed': 'The HD-2D view: pitched over the centre of the display, following scroll and zoom.',
+    'cam3d.hint.topDown': 'Straight down over the display.',
+    'cam3d.hint.isometric': 'Pitched 35°, turned 45°, with a narrow field of view.',
+    'cam3d.hint.thirdPerson': 'Behind the player. Click the game to take the mouse: it looks around, WASD or the arrows walk relative to the view.',
+    'cam3d.hint.firstPerson': 'At the player\'s eyes. Click the game to take the mouse: it looks around and turns the character; WASD or the arrows walk. The party is hidden.'
+});
+Object.assign(RR_I18N_STRINGS.ja, {
+    'mapProps.defaultCamera': '既定のカメラ:',
+    'cam3d.mode': 'モード',
+    'cam3d.pitch': 'ピッチ:',
+    'cam3d.yaw': 'ヨー:',
+    'cam3d.distance': '距離:',
+    'cam3d.fov': '視野角:',
+    'cam3d.focus': '注視点',
+    'cam3d.event': 'イベント',
+    'cam3d.duration': '時間 (フレーム)',
+    'cam3d.wait': '完了までウェイト',
+    'cam3d.keep': '他のマップでも維持',
+    'cam3d.blankHint': '空欄はモードの既定値を使います。',
+    'cam3d.auto': '自動',
+    'cam3d.thisEvent': 'このイベント',
+    'cam3d.mode.fixed': '固定アングル (HD-2D)',
+    'cam3d.mode.topDown': 'トップダウン',
+    'cam3d.mode.isometric': 'アイソメトリック',
+    'cam3d.mode.thirdPerson': '三人称',
+    'cam3d.mode.firstPerson': '一人称',
+    'cam3d.focus.auto': '自動 (モードの既定)',
+    'cam3d.focus.display': '画面の中心',
+    'cam3d.focus.player': 'プレイヤー',
+    'cam3d.focus.event': 'イベント',
+    'cam3d.hint.fixed': 'HD-2D の視点: 画面中心を見下ろし、スクロールとズームに追従します。',
+    'cam3d.hint.topDown': '画面の真上から見下ろします。',
+    'cam3d.hint.isometric': '35° の俯角、45° 回転、狭い視野角。',
+    'cam3d.hint.thirdPerson': 'プレイヤーの背後。ゲームをクリックするとマウスで見回せ、WASD/矢印で視点基準に歩きます。',
+    'cam3d.hint.firstPerson': 'プレイヤーの目線。ゲームをクリックするとマウスで見回してキャラクターが向きを変え、WASD/矢印で歩きます。パーティは非表示。'
+});
+Object.assign(RR_I18N_STRINGS.es, {
+    'mapProps.defaultCamera': 'Cámara predeterminada:',
+    'cam3d.mode': 'Modo',
+    'cam3d.pitch': 'Inclinación:',
+    'cam3d.yaw': 'Giro:',
+    'cam3d.distance': 'Distancia:',
+    'cam3d.fov': 'FOV:',
+    'cam3d.focus': 'Enfoque',
+    'cam3d.event': 'Evento',
+    'cam3d.duration': 'Duración (fotogramas)',
+    'cam3d.wait': 'Esperar a que termine',
+    'cam3d.keep': 'Mantener en otros mapas',
+    'cam3d.blankHint': 'Los campos vacíos usan los valores propios del modo.',
+    'cam3d.auto': 'auto',
+    'cam3d.thisEvent': 'Este evento',
+    'cam3d.mode.fixed': 'Ángulo fijo (HD-2D)',
+    'cam3d.mode.topDown': 'Cenital',
+    'cam3d.mode.isometric': 'Isométrica',
+    'cam3d.mode.thirdPerson': 'Tercera persona',
+    'cam3d.mode.firstPerson': 'Primera persona',
+    'cam3d.focus.auto': 'Auto (según el modo)',
+    'cam3d.focus.display': 'Centro de la pantalla',
+    'cam3d.focus.player': 'Jugador',
+    'cam3d.focus.event': 'Evento',
+    'cam3d.hint.fixed': 'La vista HD-2D: inclinada sobre el centro de la pantalla, sigue el desplazamiento y el zoom.',
+    'cam3d.hint.topDown': 'Justo encima de la pantalla, mirando hacia abajo.',
+    'cam3d.hint.isometric': 'Inclinada 35°, girada 45°, con un campo de visión estrecho.',
+    'cam3d.hint.thirdPerson': 'Detrás del jugador. Haz clic en el juego para tomar el ratón: mira alrededor; WASD o las flechas caminan según la vista.',
+    'cam3d.hint.firstPerson': 'En los ojos del jugador. Haz clic en el juego para tomar el ratón: mira alrededor y gira al personaje; WASD o las flechas caminan. El grupo se oculta.'
+});
+Object.assign(RR_I18N_STRINGS['zh-Hant'], {
+    'mapProps.defaultCamera': '預設攝影機:',
+    'cam3d.mode': '模式',
+    'cam3d.pitch': '俯仰:',
+    'cam3d.yaw': '偏航:',
+    'cam3d.distance': '距離:',
+    'cam3d.fov': '視野:',
+    'cam3d.focus': '焦點',
+    'cam3d.event': '事件',
+    'cam3d.duration': '持續時間（幀）',
+    'cam3d.wait': '等待完成',
+    'cam3d.keep': '在其他地圖保留',
+    'cam3d.blankHint': '留空則使用該模式的預設值。',
+    'cam3d.auto': '自動',
+    'cam3d.thisEvent': '此事件',
+    'cam3d.mode.fixed': '固定視角 (HD-2D)',
+    'cam3d.mode.topDown': '俯視',
+    'cam3d.mode.isometric': '等距',
+    'cam3d.mode.thirdPerson': '第三人稱',
+    'cam3d.mode.firstPerson': '第一人稱',
+    'cam3d.focus.auto': '自動（模式預設）',
+    'cam3d.focus.display': '畫面中心',
+    'cam3d.focus.player': '玩家',
+    'cam3d.focus.event': '事件',
+    'cam3d.hint.fixed': 'HD-2D 視角：俯視畫面中心，隨捲動與縮放移動。',
+    'cam3d.hint.topDown': '從畫面正上方垂直向下看。',
+    'cam3d.hint.isometric': '俯角 35°、旋轉 45°、視野較窄。',
+    'cam3d.hint.thirdPerson': '位於玩家身後。點擊遊戲取得滑鼠：滑鼠環視，WASD 或方向鍵依視角行走。',
+    'cam3d.hint.firstPerson': '位於玩家眼睛。點擊遊戲取得滑鼠：滑鼠環視並轉動角色，WASD 或方向鍵行走。隊伍隱藏。'
+});
+Object.assign(RR_I18N_STRINGS['zh-Hans'], {
+    'mapProps.defaultCamera': '默认摄像机:',
+    'cam3d.mode': '模式',
+    'cam3d.pitch': '俯仰:',
+    'cam3d.yaw': '偏航:',
+    'cam3d.distance': '距离:',
+    'cam3d.fov': '视野:',
+    'cam3d.focus': '焦点',
+    'cam3d.event': '事件',
+    'cam3d.duration': '持续时间（帧）',
+    'cam3d.wait': '等待完成',
+    'cam3d.keep': '在其他地图保留',
+    'cam3d.blankHint': '留空则使用该模式的默认值。',
+    'cam3d.auto': '自动',
+    'cam3d.thisEvent': '此事件',
+    'cam3d.mode.fixed': '固定视角 (HD-2D)',
+    'cam3d.mode.topDown': '俯视',
+    'cam3d.mode.isometric': '等距',
+    'cam3d.mode.thirdPerson': '第三人称',
+    'cam3d.mode.firstPerson': '第一人称',
+    'cam3d.focus.auto': '自动（模式默认）',
+    'cam3d.focus.display': '画面中心',
+    'cam3d.focus.player': '玩家',
+    'cam3d.focus.event': '事件',
+    'cam3d.hint.fixed': 'HD-2D 视角：俯视画面中心，随滚动与缩放移动。',
+    'cam3d.hint.topDown': '从画面正上方垂直向下看。',
+    'cam3d.hint.isometric': '俯角 35°、旋转 45°、视野较窄。',
+    'cam3d.hint.thirdPerson': '位于玩家身后。点击游戏获取鼠标：鼠标环视，WASD 或方向键按视角行走。',
+    'cam3d.hint.firstPerson': '位于玩家眼睛。点击游戏获取鼠标：鼠标环视并转动角色，WASD 或方向键行走。队伍隐藏。'
+});
+Object.assign(RR_I18N_STRINGS.ru, {
+    'mapProps.defaultCamera': 'Камера по умолчанию:',
+    'cam3d.mode': 'Режим',
+    'cam3d.pitch': 'Наклон:',
+    'cam3d.yaw': 'Поворот:',
+    'cam3d.distance': 'Дистанция:',
+    'cam3d.fov': 'Угол обзора:',
+    'cam3d.focus': 'Фокус',
+    'cam3d.event': 'Событие',
+    'cam3d.duration': 'Длительность (кадры)',
+    'cam3d.wait': 'Ждать завершения',
+    'cam3d.keep': 'Сохранять на других картах',
+    'cam3d.blankHint': 'Пустые поля используют значения режима.',
+    'cam3d.auto': 'авто',
+    'cam3d.thisEvent': 'Это событие',
+    'cam3d.mode.fixed': 'Фиксированный угол (HD-2D)',
+    'cam3d.mode.topDown': 'Вид сверху',
+    'cam3d.mode.isometric': 'Изометрия',
+    'cam3d.mode.thirdPerson': 'От третьего лица',
+    'cam3d.mode.firstPerson': 'От первого лица',
+    'cam3d.focus.auto': 'Авто (по режиму)',
+    'cam3d.focus.display': 'Центр экрана',
+    'cam3d.focus.player': 'Игрок',
+    'cam3d.focus.event': 'Событие',
+    'cam3d.hint.fixed': 'Вид HD-2D: наклон над центром экрана, следует за прокруткой и зумом.',
+    'cam3d.hint.topDown': 'Строго сверху над экраном.',
+    'cam3d.hint.isometric': 'Наклон 35°, поворот 45°, узкий угол обзора.',
+    'cam3d.hint.thirdPerson': 'Позади игрока. Щёлкните по игре, чтобы взять мышь: она осматривается, WASD или стрелки идут относительно взгляда.',
+    'cam3d.hint.firstPerson': 'Глазами игрока. Щёлкните по игре, чтобы взять мышь: она осматривается и поворачивает персонажа; WASD или стрелки идут. Отряд скрыт.'
+});
+Object.assign(RR_I18N_STRINGS.pt, {
+    'mapProps.defaultCamera': 'Câmera padrão:',
+    'cam3d.mode': 'Modo',
+    'cam3d.pitch': 'Inclinação:',
+    'cam3d.yaw': 'Giro:',
+    'cam3d.distance': 'Distância:',
+    'cam3d.fov': 'FOV:',
+    'cam3d.focus': 'Foco',
+    'cam3d.event': 'Evento',
+    'cam3d.duration': 'Duração (quadros)',
+    'cam3d.wait': 'Aguardar conclusão',
+    'cam3d.keep': 'Manter em outros mapas',
+    'cam3d.blankHint': 'Campos em branco usam os valores do próprio modo.',
+    'cam3d.auto': 'auto',
+    'cam3d.thisEvent': 'Este evento',
+    'cam3d.mode.fixed': 'Ângulo fixo (HD-2D)',
+    'cam3d.mode.topDown': 'Vista de cima',
+    'cam3d.mode.isometric': 'Isométrica',
+    'cam3d.mode.thirdPerson': 'Terceira pessoa',
+    'cam3d.mode.firstPerson': 'Primeira pessoa',
+    'cam3d.focus.auto': 'Auto (padrão do modo)',
+    'cam3d.focus.display': 'Centro da tela',
+    'cam3d.focus.player': 'Jogador',
+    'cam3d.focus.event': 'Evento',
+    'cam3d.hint.fixed': 'A visão HD-2D: inclinada sobre o centro da tela, seguindo rolagem e zoom.',
+    'cam3d.hint.topDown': 'Diretamente acima da tela, olhando para baixo.',
+    'cam3d.hint.isometric': 'Inclinada 35°, girada 45°, com campo de visão estreito.',
+    'cam3d.hint.thirdPerson': 'Atrás do jogador. Clique no jogo para pegar o mouse: ele olha ao redor; WASD ou as setas andam em relação à visão.',
+    'cam3d.hint.firstPerson': 'Nos olhos do jogador. Clique no jogo para pegar o mouse: ele olha ao redor e vira o personagem; WASD ou as setas andam. O grupo fica oculto.'
+});
+Object.assign(RR_I18N_STRINGS.de, {
+    'mapProps.defaultCamera': 'Standardkamera:',
+    'cam3d.mode': 'Modus',
+    'cam3d.pitch': 'Neigung:',
+    'cam3d.yaw': 'Drehung:',
+    'cam3d.distance': 'Abstand:',
+    'cam3d.fov': 'Sichtfeld:',
+    'cam3d.focus': 'Fokus',
+    'cam3d.event': 'Ereignis',
+    'cam3d.duration': 'Dauer (Frames)',
+    'cam3d.wait': 'Auf Abschluss warten',
+    'cam3d.keep': 'Auf anderen Karten beibehalten',
+    'cam3d.blankHint': 'Leere Felder verwenden die Werte des Modus.',
+    'cam3d.auto': 'auto',
+    'cam3d.thisEvent': 'Dieses Ereignis',
+    'cam3d.mode.fixed': 'Fester Winkel (HD-2D)',
+    'cam3d.mode.topDown': 'Draufsicht',
+    'cam3d.mode.isometric': 'Isometrisch',
+    'cam3d.mode.thirdPerson': 'Dritte Person',
+    'cam3d.mode.firstPerson': 'Erste Person',
+    'cam3d.focus.auto': 'Auto (Modusstandard)',
+    'cam3d.focus.display': 'Bildschirmmitte',
+    'cam3d.focus.player': 'Spieler',
+    'cam3d.focus.event': 'Ereignis',
+    'cam3d.hint.fixed': 'Die HD-2D-Ansicht: geneigt über der Bildschirmmitte, folgt Scrollen und Zoom.',
+    'cam3d.hint.topDown': 'Senkrecht von oben auf den Bildschirm.',
+    'cam3d.hint.isometric': '35° geneigt, 45° gedreht, mit engem Sichtfeld.',
+    'cam3d.hint.thirdPerson': 'Hinter dem Spieler. Ins Spiel klicken, um die Maus zu nehmen: sie schaut sich um, WASD oder Pfeile gehen relativ zur Ansicht.',
+    'cam3d.hint.firstPerson': 'Auf Augenhöhe des Spielers. Ins Spiel klicken, um die Maus zu nehmen: sie schaut sich um und dreht die Figur; WASD oder Pfeile gehen. Die Gruppe ist ausgeblendet.'
+});
+Object.assign(RR_I18N_STRINGS.fr, {
+    'mapProps.defaultCamera': 'Caméra par défaut :',
+    'cam3d.mode': 'Mode',
+    'cam3d.pitch': 'Inclinaison :',
+    'cam3d.yaw': 'Lacet :',
+    'cam3d.distance': 'Distance :',
+    'cam3d.fov': 'Champ de vision :',
+    'cam3d.focus': 'Cible',
+    'cam3d.event': 'Événement',
+    'cam3d.duration': 'Durée (images)',
+    'cam3d.wait': 'Attendre la fin',
+    'cam3d.keep': 'Conserver sur les autres cartes',
+    'cam3d.blankHint': 'Les champs vides utilisent les valeurs du mode.',
+    'cam3d.auto': 'auto',
+    'cam3d.thisEvent': 'Cet événement',
+    'cam3d.mode.fixed': 'Angle fixe (HD-2D)',
+    'cam3d.mode.topDown': 'Vue de dessus',
+    'cam3d.mode.isometric': 'Isométrique',
+    'cam3d.mode.thirdPerson': 'Troisième personne',
+    'cam3d.mode.firstPerson': 'Première personne',
+    'cam3d.focus.auto': 'Auto (défaut du mode)',
+    'cam3d.focus.display': 'Centre de l’écran',
+    'cam3d.focus.player': 'Joueur',
+    'cam3d.focus.event': 'Événement',
+    'cam3d.hint.fixed': 'La vue HD-2D : inclinée au-dessus du centre de l’écran, suit le défilement et le zoom.',
+    'cam3d.hint.topDown': 'À la verticale au-dessus de l’écran.',
+    'cam3d.hint.isometric': 'Inclinée de 35°, tournée de 45°, champ de vision étroit.',
+    'cam3d.hint.thirdPerson': 'Derrière le joueur. Cliquez sur le jeu pour prendre la souris : elle regarde autour, WASD ou les flèches marchent selon la vue.',
+    'cam3d.hint.firstPerson': 'Aux yeux du joueur. Cliquez sur le jeu pour prendre la souris : elle regarde autour et tourne le personnage ; WASD ou les flèches marchent. Le groupe est masqué.'
+});
+Object.assign(RR_I18N_STRINGS.el, {
+    'mapProps.defaultCamera': 'Προεπιλεγμένη κάμερα:',
+    'cam3d.mode': 'Λειτουργία',
+    'cam3d.pitch': 'Κλίση:',
+    'cam3d.yaw': 'Στροφή:',
+    'cam3d.distance': 'Απόσταση:',
+    'cam3d.fov': 'Οπτικό πεδίο:',
+    'cam3d.focus': 'Εστίαση',
+    'cam3d.event': 'Συμβάν',
+    'cam3d.duration': 'Διάρκεια (καρέ)',
+    'cam3d.wait': 'Αναμονή ολοκλήρωσης',
+    'cam3d.keep': 'Διατήρηση σε άλλους χάρτες',
+    'cam3d.blankHint': 'Τα κενά πεδία χρησιμοποιούν τις τιμές της λειτουργίας.',
+    'cam3d.auto': 'αυτόματο',
+    'cam3d.thisEvent': 'Αυτό το συμβάν',
+    'cam3d.mode.fixed': 'Σταθερή γωνία (HD-2D)',
+    'cam3d.mode.topDown': 'Κάτοψη',
+    'cam3d.mode.isometric': 'Ισομετρική',
+    'cam3d.mode.thirdPerson': 'Τρίτο πρόσωπο',
+    'cam3d.mode.firstPerson': 'Πρώτο πρόσωπο',
+    'cam3d.focus.auto': 'Αυτόματο (προεπιλογή λειτουργίας)',
+    'cam3d.focus.display': 'Κέντρο οθόνης',
+    'cam3d.focus.player': 'Παίκτης',
+    'cam3d.focus.event': 'Συμβάν',
+    'cam3d.hint.fixed': 'Η προβολή HD-2D: με κλίση πάνω από το κέντρο της οθόνης, ακολουθεί κύλιση και ζουμ.',
+    'cam3d.hint.topDown': 'Κατακόρυφα πάνω από την οθόνη.',
+    'cam3d.hint.isometric': 'Κλίση 35°, στροφή 45°, στενό οπτικό πεδίο.',
+    'cam3d.hint.thirdPerson': 'Πίσω από τον παίκτη. Κάντε κλικ στο παιχνίδι για το ποντίκι: κοιτά γύρω, WASD ή βέλη περπατούν ως προς τη θέα.',
+    'cam3d.hint.firstPerson': 'Στα μάτια του παίκτη. Κάντε κλικ στο παιχνίδι για το ποντίκι: κοιτά γύρω και γυρίζει τον χαρακτήρα· WASD ή βέλη περπατούν. Η ομάδα κρύβεται.'
+});
+Object.assign(RR_I18N_STRINGS.ko, {
+    'mapProps.defaultCamera': '기본 카메라:',
+    'cam3d.mode': '모드',
+    'cam3d.pitch': '피치:',
+    'cam3d.yaw': '요:',
+    'cam3d.distance': '거리:',
+    'cam3d.fov': '시야각:',
+    'cam3d.focus': '초점',
+    'cam3d.event': '이벤트',
+    'cam3d.duration': '지속 시간 (프레임)',
+    'cam3d.wait': '완료까지 대기',
+    'cam3d.keep': '다른 맵에서도 유지',
+    'cam3d.blankHint': '빈 칸은 모드의 기본값을 사용합니다.',
+    'cam3d.auto': '자동',
+    'cam3d.thisEvent': '이 이벤트',
+    'cam3d.mode.fixed': '고정 앵글 (HD-2D)',
+    'cam3d.mode.topDown': '탑다운',
+    'cam3d.mode.isometric': '아이소메트릭',
+    'cam3d.mode.thirdPerson': '3인칭',
+    'cam3d.mode.firstPerson': '1인칭',
+    'cam3d.focus.auto': '자동 (모드 기본)',
+    'cam3d.focus.display': '화면 중앙',
+    'cam3d.focus.player': '플레이어',
+    'cam3d.focus.event': '이벤트',
+    'cam3d.hint.fixed': 'HD-2D 시점: 화면 중앙을 내려다보며 스크롤과 줌을 따릅니다.',
+    'cam3d.hint.topDown': '화면 바로 위에서 수직으로 내려다봅니다.',
+    'cam3d.hint.isometric': '35° 기울기, 45° 회전, 좁은 시야각.',
+    'cam3d.hint.thirdPerson': '플레이어 뒤. 게임을 클릭해 마우스를 잡으면 마우스로 둘러보고 WASD/방향키로 시점 기준 이동합니다.',
+    'cam3d.hint.firstPerson': '플레이어 눈높이. 게임을 클릭해 마우스를 잡으면 마우스로 둘러보며 캐릭터가 돌고 WASD/방향키로 이동합니다. 파티는 숨겨집니다.'
+});
+Object.assign(RR_I18N_STRINGS.ar, {
+    'mapProps.defaultCamera': 'الكاميرا الافتراضية:',
+    'cam3d.mode': 'الوضع',
+    'cam3d.pitch': 'الميل:',
+    'cam3d.yaw': 'الانعراج:',
+    'cam3d.distance': 'المسافة:',
+    'cam3d.fov': 'مجال الرؤية:',
+    'cam3d.focus': 'التركيز',
+    'cam3d.event': 'الحدث',
+    'cam3d.duration': 'المدة (إطارات)',
+    'cam3d.wait': 'انتظار الاكتمال',
+    'cam3d.keep': 'الإبقاء في الخرائط الأخرى',
+    'cam3d.blankHint': 'الحقول الفارغة تستخدم قيم الوضع نفسه.',
+    'cam3d.auto': 'تلقائي',
+    'cam3d.thisEvent': 'هذا الحدث',
+    'cam3d.mode.fixed': 'زاوية ثابتة (HD-2D)',
+    'cam3d.mode.topDown': 'من الأعلى',
+    'cam3d.mode.isometric': 'إيزومتري',
+    'cam3d.mode.thirdPerson': 'منظور الشخص الثالث',
+    'cam3d.mode.firstPerson': 'منظور الشخص الأول',
+    'cam3d.focus.auto': 'تلقائي (افتراضي الوضع)',
+    'cam3d.focus.display': 'مركز الشاشة',
+    'cam3d.focus.player': 'اللاعب',
+    'cam3d.focus.event': 'الحدث',
+    'cam3d.hint.fixed': 'عرض HD-2D: مائل فوق مركز الشاشة ويتبع التمرير والتكبير.',
+    'cam3d.hint.topDown': 'عموديًا فوق الشاشة.',
+    'cam3d.hint.isometric': 'ميل 35°، دوران 45°، مجال رؤية ضيق.',
+    'cam3d.hint.thirdPerson': 'خلف اللاعب. انقر على اللعبة لأخذ الفأرة: تنظر حولك، وWASD أو الأسهم تمشي بالنسبة للمنظر.',
+    'cam3d.hint.firstPerson': 'عند عيني اللاعب. انقر على اللعبة لأخذ الفأرة: تنظر حولك وتدير الشخصية؛ WASD أو الأسهم تمشي. تُخفى المجموعة.'
+});
+Object.assign(RR_I18N_STRINGS.it, {
+    'mapProps.defaultCamera': 'Camera predefinita:',
+    'cam3d.mode': 'Modalità',
+    'cam3d.pitch': 'Inclinazione:',
+    'cam3d.yaw': 'Imbardata:',
+    'cam3d.distance': 'Distanza:',
+    'cam3d.fov': 'FOV:',
+    'cam3d.focus': 'Fuoco',
+    'cam3d.event': 'Evento',
+    'cam3d.duration': 'Durata (fotogrammi)',
+    'cam3d.wait': 'Attendi il completamento',
+    'cam3d.keep': 'Mantieni nelle altre mappe',
+    'cam3d.blankHint': 'I campi vuoti usano i valori della modalità.',
+    'cam3d.auto': 'auto',
+    'cam3d.thisEvent': 'Questo evento',
+    'cam3d.mode.fixed': 'Angolo fisso (HD-2D)',
+    'cam3d.mode.topDown': 'Dall’alto',
+    'cam3d.mode.isometric': 'Isometrica',
+    'cam3d.mode.thirdPerson': 'Terza persona',
+    'cam3d.mode.firstPerson': 'Prima persona',
+    'cam3d.focus.auto': 'Auto (predefinito della modalità)',
+    'cam3d.focus.display': 'Centro dello schermo',
+    'cam3d.focus.player': 'Giocatore',
+    'cam3d.focus.event': 'Evento',
+    'cam3d.hint.fixed': 'La vista HD-2D: inclinata sul centro dello schermo, segue scorrimento e zoom.',
+    'cam3d.hint.topDown': 'Perpendicolare sopra lo schermo.',
+    'cam3d.hint.isometric': 'Inclinata di 35°, ruotata di 45°, con campo visivo stretto.',
+    'cam3d.hint.thirdPerson': 'Dietro il giocatore. Clicca sul gioco per prendere il mouse: guarda intorno; WASD o le frecce camminano rispetto alla vista.',
+    'cam3d.hint.firstPerson': 'Agli occhi del giocatore. Clicca sul gioco per prendere il mouse: guarda intorno e gira il personaggio; WASD o le frecce camminano. Il gruppo è nascosto.'
+});
+Object.assign(RR_I18N_STRINGS.pl, {
+    'mapProps.defaultCamera': 'Domyślna kamera:',
+    'cam3d.mode': 'Tryb',
+    'cam3d.pitch': 'Nachylenie:',
+    'cam3d.yaw': 'Obrót:',
+    'cam3d.distance': 'Odległość:',
+    'cam3d.fov': 'Pole widzenia:',
+    'cam3d.focus': 'Punkt skupienia',
+    'cam3d.event': 'Zdarzenie',
+    'cam3d.duration': 'Czas (klatki)',
+    'cam3d.wait': 'Czekaj na zakończenie',
+    'cam3d.keep': 'Zachowaj na innych mapach',
+    'cam3d.blankHint': 'Puste pola używają wartości trybu.',
+    'cam3d.auto': 'auto',
+    'cam3d.thisEvent': 'To zdarzenie',
+    'cam3d.mode.fixed': 'Stały kąt (HD-2D)',
+    'cam3d.mode.topDown': 'Z góry',
+    'cam3d.mode.isometric': 'Izometryczna',
+    'cam3d.mode.thirdPerson': 'Trzecia osoba',
+    'cam3d.mode.firstPerson': 'Pierwsza osoba',
+    'cam3d.focus.auto': 'Auto (domyślne trybu)',
+    'cam3d.focus.display': 'Środek ekranu',
+    'cam3d.focus.player': 'Gracz',
+    'cam3d.focus.event': 'Zdarzenie',
+    'cam3d.hint.fixed': 'Widok HD-2D: nachylony nad środkiem ekranu, podąża za przewijaniem i zoomem.',
+    'cam3d.hint.topDown': 'Pionowo nad ekranem.',
+    'cam3d.hint.isometric': 'Nachylenie 35°, obrót 45°, wąskie pole widzenia.',
+    'cam3d.hint.thirdPerson': 'Za graczem. Kliknij grę, aby przejąć mysz: rozgląda się, WASD lub strzałki idą względem widoku.',
+    'cam3d.hint.firstPerson': 'Na wysokości oczu gracza. Kliknij grę, aby przejąć mysz: rozgląda się i obraca postać; WASD lub strzałki idą. Drużyna jest ukryta.'
+});
+Object.assign(RR_I18N_STRINGS.id, {
+    'mapProps.defaultCamera': 'Kamera bawaan:',
+    'cam3d.mode': 'Mode',
+    'cam3d.pitch': 'Pitch:',
+    'cam3d.yaw': 'Yaw:',
+    'cam3d.distance': 'Jarak:',
+    'cam3d.fov': 'FOV:',
+    'cam3d.focus': 'Fokus',
+    'cam3d.event': 'Event',
+    'cam3d.duration': 'Durasi (frame)',
+    'cam3d.wait': 'Tunggu sampai selesai',
+    'cam3d.keep': 'Pertahankan di peta lain',
+    'cam3d.blankHint': 'Kolom kosong memakai nilai bawaan mode.',
+    'cam3d.auto': 'otomatis',
+    'cam3d.thisEvent': 'Event ini',
+    'cam3d.mode.fixed': 'Sudut tetap (HD-2D)',
+    'cam3d.mode.topDown': 'Dari atas',
+    'cam3d.mode.isometric': 'Isometrik',
+    'cam3d.mode.thirdPerson': 'Orang ketiga',
+    'cam3d.mode.firstPerson': 'Orang pertama',
+    'cam3d.focus.auto': 'Otomatis (bawaan mode)',
+    'cam3d.focus.display': 'Pusat layar',
+    'cam3d.focus.player': 'Pemain',
+    'cam3d.focus.event': 'Event',
+    'cam3d.hint.fixed': 'Tampilan HD-2D: miring di atas pusat layar, mengikuti gulir dan zoom.',
+    'cam3d.hint.topDown': 'Tepat di atas layar, melihat ke bawah.',
+    'cam3d.hint.isometric': 'Miring 35°, diputar 45°, dengan bidang pandang sempit.',
+    'cam3d.hint.thirdPerson': 'Di belakang pemain. Klik game untuk mengambil mouse: mouse melihat sekeliling, WASD atau panah berjalan relatif terhadap pandangan.',
+    'cam3d.hint.firstPerson': 'Di mata pemain. Klik game untuk mengambil mouse: mouse melihat sekeliling dan memutar karakter; WASD atau panah berjalan. Party disembunyikan.'
+});
+Object.assign(RR_I18N_STRINGS.vi, {
+    'mapProps.defaultCamera': 'Camera mặc định:',
+    'cam3d.mode': 'Chế độ',
+    'cam3d.pitch': 'Góc ngẩng:',
+    'cam3d.yaw': 'Góc xoay:',
+    'cam3d.distance': 'Khoảng cách:',
+    'cam3d.fov': 'Góc nhìn:',
+    'cam3d.focus': 'Tiêu điểm',
+    'cam3d.event': 'Sự kiện',
+    'cam3d.duration': 'Thời lượng (khung hình)',
+    'cam3d.wait': 'Chờ hoàn tất',
+    'cam3d.keep': 'Giữ ở các bản đồ khác',
+    'cam3d.blankHint': 'Ô trống dùng giá trị riêng của chế độ.',
+    'cam3d.auto': 'tự động',
+    'cam3d.thisEvent': 'Sự kiện này',
+    'cam3d.mode.fixed': 'Góc cố định (HD-2D)',
+    'cam3d.mode.topDown': 'Nhìn từ trên',
+    'cam3d.mode.isometric': 'Isometric',
+    'cam3d.mode.thirdPerson': 'Góc nhìn thứ ba',
+    'cam3d.mode.firstPerson': 'Góc nhìn thứ nhất',
+    'cam3d.focus.auto': 'Tự động (mặc định của chế độ)',
+    'cam3d.focus.display': 'Giữa màn hình',
+    'cam3d.focus.player': 'Người chơi',
+    'cam3d.focus.event': 'Sự kiện',
+    'cam3d.hint.fixed': 'Góc nhìn HD-2D: nghiêng trên giữa màn hình, theo cuộn và thu phóng.',
+    'cam3d.hint.topDown': 'Thẳng đứng phía trên màn hình.',
+    'cam3d.hint.isometric': 'Nghiêng 35°, xoay 45°, góc nhìn hẹp.',
+    'cam3d.hint.thirdPerson': 'Phía sau người chơi. Nhấp vào game để lấy chuột: chuột nhìn quanh, WASD hoặc mũi tên đi theo hướng nhìn.',
+    'cam3d.hint.firstPerson': 'Ở tầm mắt người chơi. Nhấp vào game để lấy chuột: chuột nhìn quanh và xoay nhân vật; WASD hoặc mũi tên đi. Nhóm bị ẩn.'
+});
+Object.assign(RR_I18N_STRINGS.th, {
+    'mapProps.defaultCamera': 'กล้องเริ่มต้น:',
+    'cam3d.mode': 'โหมด',
+    'cam3d.pitch': 'มุมก้ม:',
+    'cam3d.yaw': 'มุมหัน:',
+    'cam3d.distance': 'ระยะ:',
+    'cam3d.fov': 'มุมมอง:',
+    'cam3d.focus': 'จุดโฟกัส',
+    'cam3d.event': 'อีเวนต์',
+    'cam3d.duration': 'ระยะเวลา (เฟรม)',
+    'cam3d.wait': 'รอจนเสร็จ',
+    'cam3d.keep': 'คงไว้ในแผนที่อื่น',
+    'cam3d.blankHint': 'ช่องว่างจะใช้ค่าของโหมดนั้น',
+    'cam3d.auto': 'อัตโนมัติ',
+    'cam3d.thisEvent': 'อีเวนต์นี้',
+    'cam3d.mode.fixed': 'มุมคงที่ (HD-2D)',
+    'cam3d.mode.topDown': 'มองจากด้านบน',
+    'cam3d.mode.isometric': 'ไอโซเมตริก',
+    'cam3d.mode.thirdPerson': 'มุมมองบุคคลที่สาม',
+    'cam3d.mode.firstPerson': 'มุมมองบุคคลที่หนึ่ง',
+    'cam3d.focus.auto': 'อัตโนมัติ (ค่าเริ่มต้นของโหมด)',
+    'cam3d.focus.display': 'กึ่งกลางหน้าจอ',
+    'cam3d.focus.player': 'ผู้เล่น',
+    'cam3d.focus.event': 'อีเวนต์',
+    'cam3d.hint.fixed': 'มุมมอง HD-2D: เอียงเหนือกึ่งกลางหน้าจอ ตามการเลื่อนและซูม',
+    'cam3d.hint.topDown': 'ตรงเหนือหน้าจอ มองลงด้านล่าง',
+    'cam3d.hint.isometric': 'เอียง 35° หมุน 45° มุมมองแคบ',
+    'cam3d.hint.thirdPerson': 'อยู่ด้านหลังผู้เล่น คลิกที่เกมเพื่อใช้เมาส์: เมาส์มองรอบ ๆ WASD หรือปุ่มลูกศรเดินตามมุมมอง',
+    'cam3d.hint.firstPerson': 'อยู่ที่ระดับสายตาผู้เล่น คลิกที่เกมเพื่อใช้เมาส์: เมาส์มองรอบ ๆ และหมุนตัวละคร WASD หรือปุ่มลูกศรเดิน ปาร์ตี้จะถูกซ่อน'
+});
+Object.assign(RR_I18N_STRINGS.tr, {
+    'mapProps.defaultCamera': 'Varsayılan kamera:',
+    'cam3d.mode': 'Mod',
+    'cam3d.pitch': 'Eğim:',
+    'cam3d.yaw': 'Dönüş:',
+    'cam3d.distance': 'Mesafe:',
+    'cam3d.fov': 'Görüş alanı:',
+    'cam3d.focus': 'Odak',
+    'cam3d.event': 'Olay',
+    'cam3d.duration': 'Süre (kare)',
+    'cam3d.wait': 'Bitmesini bekle',
+    'cam3d.keep': 'Diğer haritalarda koru',
+    'cam3d.blankHint': 'Boş alanlar modun kendi değerlerini kullanır.',
+    'cam3d.auto': 'otomatik',
+    'cam3d.thisEvent': 'Bu olay',
+    'cam3d.mode.fixed': 'Sabit açı (HD-2D)',
+    'cam3d.mode.topDown': 'Kuş bakışı',
+    'cam3d.mode.isometric': 'İzometrik',
+    'cam3d.mode.thirdPerson': 'Üçüncü şahıs',
+    'cam3d.mode.firstPerson': 'Birinci şahıs',
+    'cam3d.focus.auto': 'Otomatik (mod varsayılanı)',
+    'cam3d.focus.display': 'Ekran merkezi',
+    'cam3d.focus.player': 'Oyuncu',
+    'cam3d.focus.event': 'Olay',
+    'cam3d.hint.fixed': 'HD-2D görünümü: ekran merkezinin üzerinde eğik, kaydırma ve yakınlaştırmayı izler.',
+    'cam3d.hint.topDown': 'Ekranın tam üstünden aşağı bakar.',
+    'cam3d.hint.isometric': '35° eğik, 45° dönük, dar görüş alanı.',
+    'cam3d.hint.thirdPerson': 'Oyuncunun arkasında. Fareyi almak için oyuna tıklayın: fare etrafa bakar, WASD veya oklar görüşe göre yürür.',
+    'cam3d.hint.firstPerson': 'Oyuncunun göz hizasında. Fareyi almak için oyuna tıklayın: fare etrafa bakar ve karakteri döndürür; WASD veya oklar yürür. Grup gizlenir.'
+});
+(function() {
+    const change = { ja: '3Dカメラの変更', es: 'Cambiar cámara 3D', "zh-Hant": '變更 3D 攝影機', "zh-Hans": '更改 3D 摄像机', ru: 'Изменить 3D-камеру', pt: 'Alterar câmera 3D', de: '3D-Kamera ändern', fr: 'Changer la caméra 3D', el: 'Αλλαγή κάμερας 3D', ko: '3D 카메라 변경', ar: 'تغيير الكاميرا ثلاثية الأبعاد', it: 'Cambia camera 3D', pl: 'Zmień kamerę 3D', id: 'Ubah kamera 3D', vi: 'Đổi camera 3D', th: 'เปลี่ยนกล้อง 3D', tr: '3B kamerayı değiştir' };
+    for (const lang of Object.keys(RR_EVENT_COMMAND_NAMES)) {
+        RR_EVENT_COMMAND_NAMES[lang]['Change 3D Camera'] = change[lang] || 'Change 3D Camera';
+    }
+})();
+
+// Model props palette (hand-written).
+Object.assign(RR_I18N_STRINGS.en, {
+    'props.noModel': 'No model chosen',
+    'props.hintPlace': 'Click the map to place it. Click a placed model to select it, drag to move, Delete to remove.',
+    'props.hintChoose': 'Choose a model from the list below.',
+    'props.size': 'Size (tiles)',
+    'props.scale': 'Scale',
+    'props.direction': 'Facing',
+    'props.dirDown': 'Down',
+    'props.dirLeft': 'Left',
+    'props.dirRight': 'Right',
+    'props.dirUp': 'Up',
+    'props.lift': 'Lift (tiles)',
+    'props.passable': 'Passable (no collision)',
+    'props.remove': 'Remove',
+    'props.deselect': 'Deselect',
+    'props.noModels': 'No models in the 3d folder.',
+    'props.selected': '#{id} at ({x}, {y})'
+});
+Object.assign(RR_I18N_STRINGS.ja, {
+    'props.noModel': 'モデル未選択',
+    'props.hintPlace': 'マップをクリックして配置。配置済みのモデルはクリックで選択、ドラッグで移動、Delete で削除。',
+    'props.hintChoose': '下のリストからモデルを選択してください。',
+    'props.size': 'サイズ (タイル)',
+    'props.scale': 'スケール',
+    'props.direction': '向き',
+    'props.dirDown': '下',
+    'props.dirLeft': '左',
+    'props.dirRight': '右',
+    'props.dirUp': '上',
+    'props.lift': '高さ (タイル)',
+    'props.passable': '通行可能 (衝突なし)',
+    'props.remove': '削除',
+    'props.deselect': '選択解除',
+    'props.noModels': '3d フォルダにモデルがありません。',
+    'props.selected': '#{id} ({x}, {y})'
+});
+Object.assign(RR_I18N_STRINGS.es, {
+    'props.noModel': 'Ningún modelo elegido',
+    'props.hintPlace': 'Haz clic en el mapa para colocarlo. Clic en un modelo colocado para seleccionarlo, arrastra para mover, Supr para quitar.',
+    'props.hintChoose': 'Elige un modelo de la lista de abajo.',
+    'props.size': 'Tamaño (casillas)',
+    'props.scale': 'Escala',
+    'props.direction': 'Orientación',
+    'props.dirDown': 'Abajo',
+    'props.dirLeft': 'Izquierda',
+    'props.dirRight': 'Derecha',
+    'props.dirUp': 'Arriba',
+    'props.lift': 'Elevación (casillas)',
+    'props.passable': 'Transitable (sin colisión)',
+    'props.remove': 'Quitar',
+    'props.deselect': 'Deseleccionar',
+    'props.noModels': 'No hay modelos en la carpeta 3d.',
+    'props.selected': '#{id} en ({x}, {y})'
+});
+Object.assign(RR_I18N_STRINGS['zh-Hant'], {
+    'props.noModel': '未選擇模型',
+    'props.hintPlace': '點擊地圖放置。點擊已放置的模型可選取，拖曳移動，Delete 移除。',
+    'props.hintChoose': '從下方清單選擇模型。',
+    'props.size': '大小（格）',
+    'props.scale': '縮放',
+    'props.direction': '朝向',
+    'props.dirDown': '下',
+    'props.dirLeft': '左',
+    'props.dirRight': '右',
+    'props.dirUp': '上',
+    'props.lift': '高度（格）',
+    'props.passable': '可通行（無碰撞）',
+    'props.remove': '移除',
+    'props.deselect': '取消選取',
+    'props.noModels': '3d 資料夾中沒有模型。',
+    'props.selected': '#{id} 於 ({x}, {y})'
+});
+Object.assign(RR_I18N_STRINGS['zh-Hans'], {
+    'props.noModel': '未选择模型',
+    'props.hintPlace': '点击地图放置。点击已放置的模型可选中，拖动移动，Delete 移除。',
+    'props.hintChoose': '从下方列表选择模型。',
+    'props.size': '大小（格）',
+    'props.scale': '缩放',
+    'props.direction': '朝向',
+    'props.dirDown': '下',
+    'props.dirLeft': '左',
+    'props.dirRight': '右',
+    'props.dirUp': '上',
+    'props.lift': '高度（格）',
+    'props.passable': '可通行（无碰撞）',
+    'props.remove': '移除',
+    'props.deselect': '取消选择',
+    'props.noModels': '3d 文件夹中没有模型。',
+    'props.selected': '#{id} 于 ({x}, {y})'
+});
+Object.assign(RR_I18N_STRINGS.ru, {
+    'props.noModel': 'Модель не выбрана',
+    'props.hintPlace': 'Щёлкните по карте, чтобы поставить. Щелчок по модели выбирает её, перетаскивание двигает, Delete удаляет.',
+    'props.hintChoose': 'Выберите модель из списка ниже.',
+    'props.size': 'Размер (тайлы)',
+    'props.scale': 'Масштаб',
+    'props.direction': 'Направление',
+    'props.dirDown': 'Вниз',
+    'props.dirLeft': 'Влево',
+    'props.dirRight': 'Вправо',
+    'props.dirUp': 'Вверх',
+    'props.lift': 'Подъём (тайлы)',
+    'props.passable': 'Проходимо (без столкновений)',
+    'props.remove': 'Удалить',
+    'props.deselect': 'Снять выбор',
+    'props.noModels': 'В папке 3d нет моделей.',
+    'props.selected': '#{id} в ({x}, {y})'
+});
+Object.assign(RR_I18N_STRINGS.pt, {
+    'props.noModel': 'Nenhum modelo escolhido',
+    'props.hintPlace': 'Clique no mapa para colocar. Clique em um modelo colocado para selecioná-lo, arraste para mover, Delete para remover.',
+    'props.hintChoose': 'Escolha um modelo na lista abaixo.',
+    'props.size': 'Tamanho (tiles)',
+    'props.scale': 'Escala',
+    'props.direction': 'Direção',
+    'props.dirDown': 'Baixo',
+    'props.dirLeft': 'Esquerda',
+    'props.dirRight': 'Direita',
+    'props.dirUp': 'Cima',
+    'props.lift': 'Elevação (tiles)',
+    'props.passable': 'Transitável (sem colisão)',
+    'props.remove': 'Remover',
+    'props.deselect': 'Desmarcar',
+    'props.noModels': 'Não há modelos na pasta 3d.',
+    'props.selected': '#{id} em ({x}, {y})'
+});
+Object.assign(RR_I18N_STRINGS.de, {
+    'props.noModel': 'Kein Modell gewählt',
+    'props.hintPlace': 'Auf die Karte klicken, um es zu setzen. Ein gesetztes Modell anklicken wählt es, Ziehen bewegt, Entf entfernt.',
+    'props.hintChoose': 'Wähle unten ein Modell aus der Liste.',
+    'props.size': 'Größe (Kacheln)',
+    'props.scale': 'Skalierung',
+    'props.direction': 'Blickrichtung',
+    'props.dirDown': 'Unten',
+    'props.dirLeft': 'Links',
+    'props.dirRight': 'Rechts',
+    'props.dirUp': 'Oben',
+    'props.lift': 'Anhebung (Kacheln)',
+    'props.passable': 'Passierbar (keine Kollision)',
+    'props.remove': 'Entfernen',
+    'props.deselect': 'Auswahl aufheben',
+    'props.noModels': 'Keine Modelle im Ordner 3d.',
+    'props.selected': '#{id} bei ({x}, {y})'
+});
+Object.assign(RR_I18N_STRINGS.fr, {
+    'props.noModel': 'Aucun modèle choisi',
+    'props.hintPlace': 'Cliquez sur la carte pour le placer. Cliquez sur un modèle placé pour le sélectionner, glissez pour déplacer, Suppr pour retirer.',
+    'props.hintChoose': 'Choisissez un modèle dans la liste ci-dessous.',
+    'props.size': 'Taille (tuiles)',
+    'props.scale': 'Échelle',
+    'props.direction': 'Orientation',
+    'props.dirDown': 'Bas',
+    'props.dirLeft': 'Gauche',
+    'props.dirRight': 'Droite',
+    'props.dirUp': 'Haut',
+    'props.lift': 'Élévation (tuiles)',
+    'props.passable': 'Franchissable (sans collision)',
+    'props.remove': 'Retirer',
+    'props.deselect': 'Désélectionner',
+    'props.noModels': 'Aucun modèle dans le dossier 3d.',
+    'props.selected': 'n°{id} en ({x}, {y})'
+});
+Object.assign(RR_I18N_STRINGS.el, {
+    'props.noModel': 'Δεν επιλέχθηκε μοντέλο',
+    'props.hintPlace': 'Κάντε κλικ στον χάρτη για τοποθέτηση. Κλικ σε τοποθετημένο μοντέλο το επιλέγει, σύρσιμο το μετακινεί, Delete το αφαιρεί.',
+    'props.hintChoose': 'Επιλέξτε μοντέλο από την παρακάτω λίστα.',
+    'props.size': 'Μέγεθος (πλακίδια)',
+    'props.scale': 'Κλίμακα',
+    'props.direction': 'Κατεύθυνση',
+    'props.dirDown': 'Κάτω',
+    'props.dirLeft': 'Αριστερά',
+    'props.dirRight': 'Δεξιά',
+    'props.dirUp': 'Πάνω',
+    'props.lift': 'Ανύψωση (πλακίδια)',
+    'props.passable': 'Διαβατό (χωρίς σύγκρουση)',
+    'props.remove': 'Αφαίρεση',
+    'props.deselect': 'Αποεπιλογή',
+    'props.noModels': 'Δεν υπάρχουν μοντέλα στον φάκελο 3d.',
+    'props.selected': '#{id} στο ({x}, {y})'
+});
+Object.assign(RR_I18N_STRINGS.ko, {
+    'props.noModel': '선택된 모델 없음',
+    'props.hintPlace': '맵을 클릭해 배치합니다. 배치된 모델을 클릭하면 선택, 드래그로 이동, Delete로 제거합니다.',
+    'props.hintChoose': '아래 목록에서 모델을 선택하세요.',
+    'props.size': '크기 (타일)',
+    'props.scale': '배율',
+    'props.direction': '방향',
+    'props.dirDown': '아래',
+    'props.dirLeft': '왼쪽',
+    'props.dirRight': '오른쪽',
+    'props.dirUp': '위',
+    'props.lift': '높이 (타일)',
+    'props.passable': '통행 가능 (충돌 없음)',
+    'props.remove': '제거',
+    'props.deselect': '선택 해제',
+    'props.noModels': '3d 폴더에 모델이 없습니다.',
+    'props.selected': '#{id} ({x}, {y})'
+});
+Object.assign(RR_I18N_STRINGS.ar, {
+    'props.noModel': 'لم يتم اختيار نموذج',
+    'props.hintPlace': 'انقر على الخريطة لوضعه. انقر على نموذج موضوع لتحديده، واسحب لتحريكه، وDelete لإزالته.',
+    'props.hintChoose': 'اختر نموذجًا من القائمة أدناه.',
+    'props.size': 'الحجم (بلاطات)',
+    'props.scale': 'المقياس',
+    'props.direction': 'الاتجاه',
+    'props.dirDown': 'أسفل',
+    'props.dirLeft': 'يسار',
+    'props.dirRight': 'يمين',
+    'props.dirUp': 'أعلى',
+    'props.lift': 'الارتفاع (بلاطات)',
+    'props.passable': 'قابل للعبور (بدون تصادم)',
+    'props.remove': 'إزالة',
+    'props.deselect': 'إلغاء التحديد',
+    'props.noModels': 'لا توجد نماذج في مجلد 3d.',
+    'props.selected': '#{id} عند ({x}, {y})'
+});
+Object.assign(RR_I18N_STRINGS.it, {
+    'props.noModel': 'Nessun modello scelto',
+    'props.hintPlace': 'Clicca sulla mappa per posizionarlo. Clicca un modello posizionato per selezionarlo, trascina per spostare, Canc per rimuovere.',
+    'props.hintChoose': 'Scegli un modello dall’elenco qui sotto.',
+    'props.size': 'Dimensione (tile)',
+    'props.scale': 'Scala',
+    'props.direction': 'Orientamento',
+    'props.dirDown': 'Giù',
+    'props.dirLeft': 'Sinistra',
+    'props.dirRight': 'Destra',
+    'props.dirUp': 'Su',
+    'props.lift': 'Sollevamento (tile)',
+    'props.passable': 'Attraversabile (senza collisione)',
+    'props.remove': 'Rimuovi',
+    'props.deselect': 'Deseleziona',
+    'props.noModels': 'Nessun modello nella cartella 3d.',
+    'props.selected': '#{id} in ({x}, {y})'
+});
+Object.assign(RR_I18N_STRINGS.pl, {
+    'props.noModel': 'Nie wybrano modelu',
+    'props.hintPlace': 'Kliknij mapę, aby umieścić. Kliknięcie umieszczonego modelu zaznacza go, przeciąganie przesuwa, Delete usuwa.',
+    'props.hintChoose': 'Wybierz model z listy poniżej.',
+    'props.size': 'Rozmiar (kafelki)',
+    'props.scale': 'Skala',
+    'props.direction': 'Kierunek',
+    'props.dirDown': 'Dół',
+    'props.dirLeft': 'Lewo',
+    'props.dirRight': 'Prawo',
+    'props.dirUp': 'Góra',
+    'props.lift': 'Uniesienie (kafelki)',
+    'props.passable': 'Przechodni (bez kolizji)',
+    'props.remove': 'Usuń',
+    'props.deselect': 'Odznacz',
+    'props.noModels': 'Brak modeli w folderze 3d.',
+    'props.selected': '#{id} w ({x}, {y})'
+});
+Object.assign(RR_I18N_STRINGS.id, {
+    'props.noModel': 'Belum ada model dipilih',
+    'props.hintPlace': 'Klik peta untuk menempatkannya. Klik model yang sudah ditempatkan untuk memilih, seret untuk memindahkan, Delete untuk menghapus.',
+    'props.hintChoose': 'Pilih model dari daftar di bawah.',
+    'props.size': 'Ukuran (petak)',
+    'props.scale': 'Skala',
+    'props.direction': 'Arah hadap',
+    'props.dirDown': 'Bawah',
+    'props.dirLeft': 'Kiri',
+    'props.dirRight': 'Kanan',
+    'props.dirUp': 'Atas',
+    'props.lift': 'Ketinggian (petak)',
+    'props.passable': 'Bisa dilewati (tanpa tabrakan)',
+    'props.remove': 'Hapus',
+    'props.deselect': 'Batalkan pilihan',
+    'props.noModels': 'Tidak ada model di folder 3d.',
+    'props.selected': '#{id} di ({x}, {y})'
+});
+Object.assign(RR_I18N_STRINGS.vi, {
+    'props.noModel': 'Chưa chọn mô hình',
+    'props.hintPlace': 'Nhấp vào bản đồ để đặt. Nhấp vào mô hình đã đặt để chọn, kéo để di chuyển, Delete để xóa.',
+    'props.hintChoose': 'Chọn một mô hình từ danh sách bên dưới.',
+    'props.size': 'Kích thước (ô)',
+    'props.scale': 'Tỷ lệ',
+    'props.direction': 'Hướng',
+    'props.dirDown': 'Xuống',
+    'props.dirLeft': 'Trái',
+    'props.dirRight': 'Phải',
+    'props.dirUp': 'Lên',
+    'props.lift': 'Độ nâng (ô)',
+    'props.passable': 'Đi xuyên được (không va chạm)',
+    'props.remove': 'Xóa',
+    'props.deselect': 'Bỏ chọn',
+    'props.noModels': 'Không có mô hình trong thư mục 3d.',
+    'props.selected': '#{id} tại ({x}, {y})'
+});
+Object.assign(RR_I18N_STRINGS.th, {
+    'props.noModel': 'ยังไม่ได้เลือกโมเดล',
+    'props.hintPlace': 'คลิกแผนที่เพื่อวาง คลิกโมเดลที่วางแล้วเพื่อเลือก ลากเพื่อย้าย กด Delete เพื่อลบ',
+    'props.hintChoose': 'เลือกโมเดลจากรายการด้านล่าง',
+    'props.size': 'ขนาด (ไทล์)',
+    'props.scale': 'สเกล',
+    'props.direction': 'ทิศหันหน้า',
+    'props.dirDown': 'ลง',
+    'props.dirLeft': 'ซ้าย',
+    'props.dirRight': 'ขวา',
+    'props.dirUp': 'ขึ้น',
+    'props.lift': 'ความสูง (ไทล์)',
+    'props.passable': 'เดินผ่านได้ (ไม่ชน)',
+    'props.remove': 'ลบ',
+    'props.deselect': 'ยกเลิกการเลือก',
+    'props.noModels': 'ไม่มีโมเดลในโฟลเดอร์ 3d',
+    'props.selected': '#{id} ที่ ({x}, {y})'
+});
+Object.assign(RR_I18N_STRINGS.tr, {
+    'props.noModel': 'Model seçilmedi',
+    'props.hintPlace': 'Yerleştirmek için haritaya tıklayın. Yerleştirilmiş bir modele tıklamak seçer, sürüklemek taşır, Delete kaldırır.',
+    'props.hintChoose': 'Aşağıdaki listeden bir model seçin.',
+    'props.size': 'Boyut (karo)',
+    'props.scale': 'Ölçek',
+    'props.direction': 'Yön',
+    'props.dirDown': 'Aşağı',
+    'props.dirLeft': 'Sol',
+    'props.dirRight': 'Sağ',
+    'props.dirUp': 'Yukarı',
+    'props.lift': 'Yükseklik (karo)',
+    'props.passable': 'Geçilebilir (çarpışma yok)',
+    'props.remove': 'Kaldır',
+    'props.deselect': 'Seçimi kaldır',
+    'props.noModels': '3d klasöründe model yok.',
+    'props.selected': '#{id} ({x}, {y}) konumunda'
+});
+
+// Play Model Animation: actions offered per target model (hand-written).
+Object.assign(RR_I18N_STRINGS.en, {
+    'pma.model': 'Model: {model}',
+    'pma.noActions': '{model} declares no actions; listing every action in the project.',
+    'pma.noModel': 'No model is bound to this target; listing every action in the project.',
+    'pma.notInModel': '{name} (not in this model)',
+    'pma.custom': 'Custom…'
+});
+Object.assign(RR_I18N_STRINGS.ja, {
+    'pma.model': 'モデル: {model}',
+    'pma.noActions': '{model} にアクションがありません。プロジェクト内の全アクションを表示します。',
+    'pma.noModel': 'この対象にモデルが割り当てられていません。プロジェクト内の全アクションを表示します。',
+    'pma.notInModel': '{name} (このモデルにありません)',
+    'pma.custom': 'カスタム…'
+});
+Object.assign(RR_I18N_STRINGS.es, {
+    'pma.model': 'Modelo: {model}',
+    'pma.noActions': '{model} no declara acciones; se listan todas las del proyecto.',
+    'pma.noModel': 'Este objetivo no tiene modelo asignado; se listan todas las acciones del proyecto.',
+    'pma.notInModel': '{name} (no está en este modelo)',
+    'pma.custom': 'Personalizado…'
+});
+Object.assign(RR_I18N_STRINGS['zh-Hant'], {
+    'pma.model': '模型: {model}',
+    'pma.noActions': '{model} 未定義動作，列出專案中的所有動作。',
+    'pma.noModel': '此目標未綁定模型，列出專案中的所有動作。',
+    'pma.notInModel': '{name}（不在此模型中）',
+    'pma.custom': '自訂…'
+});
+Object.assign(RR_I18N_STRINGS['zh-Hans'], {
+    'pma.model': '模型: {model}',
+    'pma.noActions': '{model} 未定义动作，列出项目中的所有动作。',
+    'pma.noModel': '此目标未绑定模型，列出项目中的所有动作。',
+    'pma.notInModel': '{name}（不在此模型中）',
+    'pma.custom': '自定义…'
+});
+Object.assign(RR_I18N_STRINGS.ru, {
+    'pma.model': 'Модель: {model}',
+    'pma.noActions': '{model} не объявляет действий; показаны все действия проекта.',
+    'pma.noModel': 'К этой цели не привязана модель; показаны все действия проекта.',
+    'pma.notInModel': '{name} (нет в этой модели)',
+    'pma.custom': 'Свой вариант…'
+});
+Object.assign(RR_I18N_STRINGS.pt, {
+    'pma.model': 'Modelo: {model}',
+    'pma.noActions': '{model} não declara ações; listando todas as ações do projeto.',
+    'pma.noModel': 'Nenhum modelo está vinculado a este alvo; listando todas as ações do projeto.',
+    'pma.notInModel': '{name} (não está neste modelo)',
+    'pma.custom': 'Personalizado…'
+});
+Object.assign(RR_I18N_STRINGS.de, {
+    'pma.model': 'Modell: {model}',
+    'pma.noActions': '{model} deklariert keine Aktionen; alle Aktionen des Projekts werden gelistet.',
+    'pma.noModel': 'Diesem Ziel ist kein Modell zugewiesen; alle Aktionen des Projekts werden gelistet.',
+    'pma.notInModel': '{name} (nicht in diesem Modell)',
+    'pma.custom': 'Benutzerdefiniert…'
+});
+Object.assign(RR_I18N_STRINGS.fr, {
+    'pma.model': 'Modèle : {model}',
+    'pma.noActions': '{model} ne déclare aucune action ; toutes les actions du projet sont listées.',
+    'pma.noModel': 'Aucun modèle n’est lié à cette cible ; toutes les actions du projet sont listées.',
+    'pma.notInModel': '{name} (absent de ce modèle)',
+    'pma.custom': 'Personnalisé…'
+});
+Object.assign(RR_I18N_STRINGS.el, {
+    'pma.model': 'Μοντέλο: {model}',
+    'pma.noActions': 'Το {model} δεν δηλώνει ενέργειες· εμφανίζονται όλες οι ενέργειες του έργου.',
+    'pma.noModel': 'Κανένα μοντέλο δεν είναι δεμένο σε αυτόν τον στόχο· εμφανίζονται όλες οι ενέργειες του έργου.',
+    'pma.notInModel': '{name} (όχι σε αυτό το μοντέλο)',
+    'pma.custom': 'Προσαρμοσμένο…'
+});
+Object.assign(RR_I18N_STRINGS.ko, {
+    'pma.model': '모델: {model}',
+    'pma.noActions': '{model}에 액션이 없습니다. 프로젝트의 모든 액션을 표시합니다.',
+    'pma.noModel': '이 대상에 연결된 모델이 없습니다. 프로젝트의 모든 액션을 표시합니다.',
+    'pma.notInModel': '{name} (이 모델에 없음)',
+    'pma.custom': '직접 입력…'
+});
+Object.assign(RR_I18N_STRINGS.ar, {
+    'pma.model': 'النموذج: {model}',
+    'pma.noActions': '{model} لا يعلن أي إجراءات؛ يتم عرض كل إجراءات المشروع.',
+    'pma.noModel': 'لا يوجد نموذج مرتبط بهذا الهدف؛ يتم عرض كل إجراءات المشروع.',
+    'pma.notInModel': '{name} (ليس في هذا النموذج)',
+    'pma.custom': 'مخصص…'
+});
+Object.assign(RR_I18N_STRINGS.it, {
+    'pma.model': 'Modello: {model}',
+    'pma.noActions': '{model} non dichiara azioni; elenco di tutte le azioni del progetto.',
+    'pma.noModel': 'Nessun modello è associato a questo bersaglio; elenco di tutte le azioni del progetto.',
+    'pma.notInModel': '{name} (non in questo modello)',
+    'pma.custom': 'Personalizzato…'
+});
+Object.assign(RR_I18N_STRINGS.pl, {
+    'pma.model': 'Model: {model}',
+    'pma.noActions': '{model} nie deklaruje akcji; wyświetlono wszystkie akcje projektu.',
+    'pma.noModel': 'Do tego celu nie przypisano modelu; wyświetlono wszystkie akcje projektu.',
+    'pma.notInModel': '{name} (brak w tym modelu)',
+    'pma.custom': 'Własna…'
+});
+Object.assign(RR_I18N_STRINGS.id, {
+    'pma.model': 'Model: {model}',
+    'pma.noActions': '{model} tidak mendeklarasikan aksi; menampilkan semua aksi di proyek.',
+    'pma.noModel': 'Tidak ada model yang terikat ke target ini; menampilkan semua aksi di proyek.',
+    'pma.notInModel': '{name} (tidak ada di model ini)',
+    'pma.custom': 'Kustom…'
+});
+Object.assign(RR_I18N_STRINGS.vi, {
+    'pma.model': 'Mô hình: {model}',
+    'pma.noActions': '{model} không khai báo hành động nào; liệt kê mọi hành động trong dự án.',
+    'pma.noModel': 'Không có mô hình nào gắn với mục tiêu này; liệt kê mọi hành động trong dự án.',
+    'pma.notInModel': '{name} (không có trong mô hình này)',
+    'pma.custom': 'Tùy chỉnh…'
+});
+Object.assign(RR_I18N_STRINGS.th, {
+    'pma.model': 'โมเดล: {model}',
+    'pma.noActions': '{model} ไม่ได้ประกาศแอ็กชัน แสดงแอ็กชันทั้งหมดในโปรเจกต์',
+    'pma.noModel': 'ไม่มีโมเดลผูกกับเป้าหมายนี้ แสดงแอ็กชันทั้งหมดในโปรเจกต์',
+    'pma.notInModel': '{name} (ไม่มีในโมเดลนี้)',
+    'pma.custom': 'กำหนดเอง…'
+});
+Object.assign(RR_I18N_STRINGS.tr, {
+    'pma.model': 'Model: {model}',
+    'pma.noActions': '{model} hiçbir eylem bildirmiyor; projedeki tüm eylemler listeleniyor.',
+    'pma.noModel': 'Bu hedefe bağlı model yok; projedeki tüm eylemler listeleniyor.',
+    'pma.notInModel': '{name} (bu modelde yok)',
+    'pma.custom': 'Özel…'
+});
+
+// Play 3D Effect: effects offered per target model (hand-written).
+Object.assign(RR_I18N_STRINGS.en, {
+    'pme.effect': 'Effect',
+    'pme.noEffects': '{model} declares no effects; listing every effect in the project.',
+    'pme.noModel': 'No model is bound to this target; listing every effect in the project.'
+});
+Object.assign(RR_I18N_STRINGS.ja, {
+    'pme.effect': 'エフェクト',
+    'pme.noEffects': '{model} にエフェクトがありません。プロジェクト内の全エフェクトを表示します。',
+    'pme.noModel': 'この対象にモデルが割り当てられていません。プロジェクト内の全エフェクトを表示します。'
+});
+Object.assign(RR_I18N_STRINGS.es, {
+    'pme.effect': 'Efecto',
+    'pme.noEffects': '{model} no declara efectos; se listan todos los del proyecto.',
+    'pme.noModel': 'Este objetivo no tiene modelo asignado; se listan todos los efectos del proyecto.'
+});
+Object.assign(RR_I18N_STRINGS['zh-Hant'], {
+    'pme.effect': '特效',
+    'pme.noEffects': '{model} 未定義特效，列出專案中的所有特效。',
+    'pme.noModel': '此目標未綁定模型，列出專案中的所有特效。'
+});
+Object.assign(RR_I18N_STRINGS['zh-Hans'], {
+    'pme.effect': '特效',
+    'pme.noEffects': '{model} 未定义特效，列出项目中的所有特效。',
+    'pme.noModel': '此目标未绑定模型，列出项目中的所有特效。'
+});
+Object.assign(RR_I18N_STRINGS.ru, {
+    'pme.effect': 'Эффект',
+    'pme.noEffects': '{model} не объявляет эффектов; показаны все эффекты проекта.',
+    'pme.noModel': 'К этой цели не привязана модель; показаны все эффекты проекта.'
+});
+Object.assign(RR_I18N_STRINGS.pt, {
+    'pme.effect': 'Efeito',
+    'pme.noEffects': '{model} não declara efeitos; listando todos os efeitos do projeto.',
+    'pme.noModel': 'Nenhum modelo está vinculado a este alvo; listando todos os efeitos do projeto.'
+});
+Object.assign(RR_I18N_STRINGS.de, {
+    'pme.effect': 'Effekt',
+    'pme.noEffects': '{model} deklariert keine Effekte; alle Effekte des Projekts werden gelistet.',
+    'pme.noModel': 'Diesem Ziel ist kein Modell zugewiesen; alle Effekte des Projekts werden gelistet.'
+});
+Object.assign(RR_I18N_STRINGS.fr, {
+    'pme.effect': 'Effet',
+    'pme.noEffects': '{model} ne déclare aucun effet ; tous les effets du projet sont listés.',
+    'pme.noModel': 'Aucun modèle n’est lié à cette cible ; tous les effets du projet sont listés.'
+});
+Object.assign(RR_I18N_STRINGS.el, {
+    'pme.effect': 'Εφέ',
+    'pme.noEffects': 'Το {model} δεν δηλώνει εφέ· εμφανίζονται όλα τα εφέ του έργου.',
+    'pme.noModel': 'Κανένα μοντέλο δεν είναι δεμένο σε αυτόν τον στόχο· εμφανίζονται όλα τα εφέ του έργου.'
+});
+Object.assign(RR_I18N_STRINGS.ko, {
+    'pme.effect': '이펙트',
+    'pme.noEffects': '{model}에 이펙트가 없습니다. 프로젝트의 모든 이펙트를 표시합니다.',
+    'pme.noModel': '이 대상에 연결된 모델이 없습니다. 프로젝트의 모든 이펙트를 표시합니다.'
+});
+Object.assign(RR_I18N_STRINGS.ar, {
+    'pme.effect': 'التأثير',
+    'pme.noEffects': '{model} لا يعلن أي تأثيرات؛ يتم عرض كل تأثيرات المشروع.',
+    'pme.noModel': 'لا يوجد نموذج مرتبط بهذا الهدف؛ يتم عرض كل تأثيرات المشروع.'
+});
+Object.assign(RR_I18N_STRINGS.it, {
+    'pme.effect': 'Effetto',
+    'pme.noEffects': '{model} non dichiara effetti; elenco di tutti gli effetti del progetto.',
+    'pme.noModel': 'Nessun modello è associato a questo bersaglio; elenco di tutti gli effetti del progetto.'
+});
+Object.assign(RR_I18N_STRINGS.pl, {
+    'pme.effect': 'Efekt',
+    'pme.noEffects': '{model} nie deklaruje efektów; wyświetlono wszystkie efekty projektu.',
+    'pme.noModel': 'Do tego celu nie przypisano modelu; wyświetlono wszystkie efekty projektu.'
+});
+Object.assign(RR_I18N_STRINGS.id, {
+    'pme.effect': 'Efek',
+    'pme.noEffects': '{model} tidak mendeklarasikan efek; menampilkan semua efek di proyek.',
+    'pme.noModel': 'Tidak ada model yang terikat ke target ini; menampilkan semua efek di proyek.'
+});
+Object.assign(RR_I18N_STRINGS.vi, {
+    'pme.effect': 'Hiệu ứng',
+    'pme.noEffects': '{model} không khai báo hiệu ứng nào; liệt kê mọi hiệu ứng trong dự án.',
+    'pme.noModel': 'Không có mô hình nào gắn với mục tiêu này; liệt kê mọi hiệu ứng trong dự án.'
+});
+Object.assign(RR_I18N_STRINGS.th, {
+    'pme.effect': 'เอฟเฟกต์',
+    'pme.noEffects': '{model} ไม่ได้ประกาศเอฟเฟกต์ แสดงเอฟเฟกต์ทั้งหมดในโปรเจกต์',
+    'pme.noModel': 'ไม่มีโมเดลผูกกับเป้าหมายนี้ แสดงเอฟเฟกต์ทั้งหมดในโปรเจกต์'
+});
+Object.assign(RR_I18N_STRINGS.tr, {
+    'pme.effect': 'Efekt',
+    'pme.noEffects': '{model} hiçbir efekt bildirmiyor; projedeki tüm efektler listeleniyor.',
+    'pme.noModel': 'Bu hedefe bağlı model yok; projedeki tüm efektler listeleniyor.'
+});
+(function() {
+    const play = { ja: '3Dエフェクトの再生', es: 'Reproducir efecto 3D', "zh-Hant": '播放 3D 特效', "zh-Hans": '播放 3D 特效', ru: 'Воспроизвести 3D-эффект', pt: 'Reproduzir efeito 3D', de: '3D-Effekt abspielen', fr: 'Jouer un effet 3D', el: 'Αναπαραγωγή εφέ 3D', ko: '3D 이펙트 재생', ar: 'تشغيل تأثير ثلاثي الأبعاد', it: 'Riproduci effetto 3D', pl: 'Odtwórz efekt 3D', id: 'Putar efek 3D', vi: 'Phát hiệu ứng 3D', th: 'เล่นเอฟเฟกต์ 3D', tr: '3B efekti oynat' };
+    for (const lang of Object.keys(RR_EVENT_COMMAND_NAMES)) {
+        RR_EVENT_COMMAND_NAMES[lang]['Play 3D Effect'] = play[lang] || 'Play 3D Effect';
+    }
+})();
+
+// 3D database Effects section (hand-written).
+Object.assign(RR_I18N_STRINGS.en, {
+    'r3dfx.title': 'Effects',
+    'r3dfx.none': 'No effects yet. Add one, pick its animation, then click the model to place it.',
+    'r3dfx.effectName': 'Name',
+    'r3dfx.animation': 'Animation',
+    'r3dfx.choose': 'Choose…',
+    'r3dfx.anchor': 'Anchor',
+    'r3dfx.origin': 'Model origin',
+    'r3dfx.offset': 'Offset',
+    'r3dfx.place': 'Place on model',
+    'r3dfx.scale': 'Scale',
+    'r3dfx.loop': 'Loop',
+    'r3dfx.sound': 'Sound',
+    'r3dfx.noSound': 'No sound',
+    'r3dfx.clearSound': 'Clear sound',
+    'r3dfx.play': 'Play',
+    'r3dfx.save': 'Save effect',
+    'r3dfx.named': 'Effect',
+    'r3dfx.hintPlace': 'Click the model where the effect should play.'
+});
+Object.assign(RR_I18N_STRINGS.ja, {
+    'r3dfx.title': 'エフェクト',
+    'r3dfx.none': 'エフェクトはまだありません。追加してアニメーションを選び、モデルをクリックして配置してください。',
+    'r3dfx.effectName': '名前',
+    'r3dfx.animation': 'アニメーション',
+    'r3dfx.choose': '選択…',
+    'r3dfx.anchor': 'アンカー',
+    'r3dfx.origin': 'モデル原点',
+    'r3dfx.offset': 'オフセット',
+    'r3dfx.place': 'モデル上に配置',
+    'r3dfx.scale': 'スケール',
+    'r3dfx.loop': 'ループ',
+    'r3dfx.sound': '効果音',
+    'r3dfx.noSound': '効果音なし',
+    'r3dfx.clearSound': '効果音を消去',
+    'r3dfx.play': '再生',
+    'r3dfx.save': 'エフェクトを保存',
+    'r3dfx.named': 'エフェクト',
+    'r3dfx.hintPlace': 'エフェクトを再生する位置でモデルをクリックしてください。'
+});
+Object.assign(RR_I18N_STRINGS.es, {
+    'r3dfx.title': 'Efectos',
+    'r3dfx.none': 'Aún no hay efectos. Añade uno, elige su animación y haz clic en el modelo para colocarlo.',
+    'r3dfx.effectName': 'Nombre',
+    'r3dfx.animation': 'Animación',
+    'r3dfx.choose': 'Elegir…',
+    'r3dfx.anchor': 'Anclaje',
+    'r3dfx.origin': 'Origen del modelo',
+    'r3dfx.offset': 'Desplazamiento',
+    'r3dfx.place': 'Colocar en el modelo',
+    'r3dfx.scale': 'Escala',
+    'r3dfx.loop': 'Bucle',
+    'r3dfx.sound': 'Sonido',
+    'r3dfx.noSound': 'Sin sonido',
+    'r3dfx.clearSound': 'Quitar sonido',
+    'r3dfx.play': 'Reproducir',
+    'r3dfx.save': 'Guardar efecto',
+    'r3dfx.named': 'Efecto',
+    'r3dfx.hintPlace': 'Haz clic en el modelo donde deba reproducirse el efecto.'
+});
+Object.assign(RR_I18N_STRINGS['zh-Hant'], {
+    'r3dfx.title': '特效',
+    'r3dfx.none': '尚無特效。新增一個、選擇動畫，然後點擊模型放置。',
+    'r3dfx.effectName': '名稱',
+    'r3dfx.animation': '動畫',
+    'r3dfx.choose': '選擇…',
+    'r3dfx.anchor': '錨點',
+    'r3dfx.origin': '模型原點',
+    'r3dfx.offset': '偏移',
+    'r3dfx.place': '放到模型上',
+    'r3dfx.scale': '縮放',
+    'r3dfx.loop': '循環',
+    'r3dfx.sound': '音效',
+    'r3dfx.noSound': '無音效',
+    'r3dfx.clearSound': '清除音效',
+    'r3dfx.play': '播放',
+    'r3dfx.save': '儲存特效',
+    'r3dfx.named': '特效',
+    'r3dfx.hintPlace': '在模型上點擊特效要播放的位置。'
+});
+Object.assign(RR_I18N_STRINGS['zh-Hans'], {
+    'r3dfx.title': '特效',
+    'r3dfx.none': '尚无特效。新增一个、选择动画，然后点击模型放置。',
+    'r3dfx.effectName': '名称',
+    'r3dfx.animation': '动画',
+    'r3dfx.choose': '选择…',
+    'r3dfx.anchor': '锚点',
+    'r3dfx.origin': '模型原点',
+    'r3dfx.offset': '偏移',
+    'r3dfx.place': '放到模型上',
+    'r3dfx.scale': '缩放',
+    'r3dfx.loop': '循环',
+    'r3dfx.sound': '音效',
+    'r3dfx.noSound': '无音效',
+    'r3dfx.clearSound': '清除音效',
+    'r3dfx.play': '播放',
+    'r3dfx.save': '保存特效',
+    'r3dfx.named': '特效',
+    'r3dfx.hintPlace': '在模型上点击特效要播放的位置。'
+});
+Object.assign(RR_I18N_STRINGS.ru, {
+    'r3dfx.title': 'Эффекты',
+    'r3dfx.none': 'Эффектов пока нет. Добавьте один, выберите анимацию и щёлкните по модели, чтобы разместить.',
+    'r3dfx.effectName': 'Имя',
+    'r3dfx.animation': 'Анимация',
+    'r3dfx.choose': 'Выбрать…',
+    'r3dfx.anchor': 'Привязка',
+    'r3dfx.origin': 'Начало модели',
+    'r3dfx.offset': 'Смещение',
+    'r3dfx.place': 'Разместить на модели',
+    'r3dfx.scale': 'Масштаб',
+    'r3dfx.loop': 'Цикл',
+    'r3dfx.sound': 'Звук',
+    'r3dfx.noSound': 'Без звука',
+    'r3dfx.clearSound': 'Убрать звук',
+    'r3dfx.play': 'Воспроизвести',
+    'r3dfx.save': 'Сохранить эффект',
+    'r3dfx.named': 'Эффект',
+    'r3dfx.hintPlace': 'Щёлкните по модели там, где должен играть эффект.'
+});
+Object.assign(RR_I18N_STRINGS.pt, {
+    'r3dfx.title': 'Efeitos',
+    'r3dfx.none': 'Ainda não há efeitos. Adicione um, escolha a animação e clique no modelo para posicioná-lo.',
+    'r3dfx.effectName': 'Nome',
+    'r3dfx.animation': 'Animação',
+    'r3dfx.choose': 'Escolher…',
+    'r3dfx.anchor': 'Âncora',
+    'r3dfx.origin': 'Origem do modelo',
+    'r3dfx.offset': 'Deslocamento',
+    'r3dfx.place': 'Posicionar no modelo',
+    'r3dfx.scale': 'Escala',
+    'r3dfx.loop': 'Repetir',
+    'r3dfx.sound': 'Som',
+    'r3dfx.noSound': 'Sem som',
+    'r3dfx.clearSound': 'Remover som',
+    'r3dfx.play': 'Reproduzir',
+    'r3dfx.save': 'Salvar efeito',
+    'r3dfx.named': 'Efeito',
+    'r3dfx.hintPlace': 'Clique no modelo onde o efeito deve tocar.'
+});
+Object.assign(RR_I18N_STRINGS.de, {
+    'r3dfx.title': 'Effekte',
+    'r3dfx.none': 'Noch keine Effekte. Einen hinzufügen, die Animation wählen und dann auf das Modell klicken, um ihn zu platzieren.',
+    'r3dfx.effectName': 'Name',
+    'r3dfx.animation': 'Animation',
+    'r3dfx.choose': 'Wählen…',
+    'r3dfx.anchor': 'Anker',
+    'r3dfx.origin': 'Modellursprung',
+    'r3dfx.offset': 'Versatz',
+    'r3dfx.place': 'Auf dem Modell platzieren',
+    'r3dfx.scale': 'Skalierung',
+    'r3dfx.loop': 'Schleife',
+    'r3dfx.sound': 'Sound',
+    'r3dfx.noSound': 'Kein Sound',
+    'r3dfx.clearSound': 'Sound entfernen',
+    'r3dfx.play': 'Abspielen',
+    'r3dfx.save': 'Effekt speichern',
+    'r3dfx.named': 'Effekt',
+    'r3dfx.hintPlace': 'Klicke auf die Stelle des Modells, an der der Effekt abspielen soll.'
+});
+Object.assign(RR_I18N_STRINGS.fr, {
+    'r3dfx.title': 'Effets',
+    'r3dfx.none': 'Aucun effet pour l’instant. Ajoutez-en un, choisissez son animation, puis cliquez sur le modèle pour le placer.',
+    'r3dfx.effectName': 'Nom',
+    'r3dfx.animation': 'Animation',
+    'r3dfx.choose': 'Choisir…',
+    'r3dfx.anchor': 'Ancre',
+    'r3dfx.origin': 'Origine du modèle',
+    'r3dfx.offset': 'Décalage',
+    'r3dfx.place': 'Placer sur le modèle',
+    'r3dfx.scale': 'Échelle',
+    'r3dfx.loop': 'Boucle',
+    'r3dfx.sound': 'Son',
+    'r3dfx.noSound': 'Aucun son',
+    'r3dfx.clearSound': 'Retirer le son',
+    'r3dfx.play': 'Lire',
+    'r3dfx.save': 'Enregistrer l’effet',
+    'r3dfx.named': 'Effet',
+    'r3dfx.hintPlace': 'Cliquez sur le modèle à l’endroit où l’effet doit jouer.'
+});
+Object.assign(RR_I18N_STRINGS.el, {
+    'r3dfx.title': 'Εφέ',
+    'r3dfx.none': 'Δεν υπάρχουν εφέ ακόμη. Προσθέστε ένα, επιλέξτε την κίνησή του και κάντε κλικ στο μοντέλο για να το τοποθετήσετε.',
+    'r3dfx.effectName': 'Όνομα',
+    'r3dfx.animation': 'Κίνηση',
+    'r3dfx.choose': 'Επιλογή…',
+    'r3dfx.anchor': 'Άγκυρα',
+    'r3dfx.origin': 'Αρχή μοντέλου',
+    'r3dfx.offset': 'Μετατόπιση',
+    'r3dfx.place': 'Τοποθέτηση στο μοντέλο',
+    'r3dfx.scale': 'Κλίμακα',
+    'r3dfx.loop': 'Επανάληψη',
+    'r3dfx.sound': 'Ήχος',
+    'r3dfx.noSound': 'Χωρίς ήχο',
+    'r3dfx.clearSound': 'Αφαίρεση ήχου',
+    'r3dfx.play': 'Αναπαραγωγή',
+    'r3dfx.save': 'Αποθήκευση εφέ',
+    'r3dfx.named': 'Εφέ',
+    'r3dfx.hintPlace': 'Κάντε κλικ στο σημείο του μοντέλου όπου θα παίζει το εφέ.'
+});
+Object.assign(RR_I18N_STRINGS.ko, {
+    'r3dfx.title': '이펙트',
+    'r3dfx.none': '아직 이펙트가 없습니다. 추가하고 애니메이션을 고른 뒤 모델을 클릭해 배치하세요.',
+    'r3dfx.effectName': '이름',
+    'r3dfx.animation': '애니메이션',
+    'r3dfx.choose': '선택…',
+    'r3dfx.anchor': '앵커',
+    'r3dfx.origin': '모델 원점',
+    'r3dfx.offset': '오프셋',
+    'r3dfx.place': '모델 위에 배치',
+    'r3dfx.scale': '배율',
+    'r3dfx.loop': '반복',
+    'r3dfx.sound': '효과음',
+    'r3dfx.noSound': '효과음 없음',
+    'r3dfx.clearSound': '효과음 지우기',
+    'r3dfx.play': '재생',
+    'r3dfx.save': '이펙트 저장',
+    'r3dfx.named': '이펙트',
+    'r3dfx.hintPlace': '이펙트가 재생될 위치에서 모델을 클릭하세요.'
+});
+Object.assign(RR_I18N_STRINGS.ar, {
+    'r3dfx.title': 'التأثيرات',
+    'r3dfx.none': 'لا توجد تأثيرات بعد. أضف واحدًا، واختر الحركة، ثم انقر على النموذج لوضعه.',
+    'r3dfx.effectName': 'الاسم',
+    'r3dfx.animation': 'الحركة',
+    'r3dfx.choose': 'اختيار…',
+    'r3dfx.anchor': 'المرساة',
+    'r3dfx.origin': 'أصل النموذج',
+    'r3dfx.offset': 'الإزاحة',
+    'r3dfx.place': 'وضع على النموذج',
+    'r3dfx.scale': 'المقياس',
+    'r3dfx.loop': 'تكرار',
+    'r3dfx.sound': 'الصوت',
+    'r3dfx.noSound': 'بدون صوت',
+    'r3dfx.clearSound': 'إزالة الصوت',
+    'r3dfx.play': 'تشغيل',
+    'r3dfx.save': 'حفظ التأثير',
+    'r3dfx.named': 'تأثير',
+    'r3dfx.hintPlace': 'انقر على النموذج حيث يجب تشغيل التأثير.'
+});
+Object.assign(RR_I18N_STRINGS.it, {
+    'r3dfx.title': 'Effetti',
+    'r3dfx.none': 'Nessun effetto ancora. Aggiungine uno, scegli l’animazione, poi clicca sul modello per posizionarlo.',
+    'r3dfx.effectName': 'Nome',
+    'r3dfx.animation': 'Animazione',
+    'r3dfx.choose': 'Scegli…',
+    'r3dfx.anchor': 'Ancora',
+    'r3dfx.origin': 'Origine del modello',
+    'r3dfx.offset': 'Scostamento',
+    'r3dfx.place': 'Posiziona sul modello',
+    'r3dfx.scale': 'Scala',
+    'r3dfx.loop': 'Ciclo',
+    'r3dfx.sound': 'Suono',
+    'r3dfx.noSound': 'Nessun suono',
+    'r3dfx.clearSound': 'Rimuovi suono',
+    'r3dfx.play': 'Riproduci',
+    'r3dfx.save': 'Salva effetto',
+    'r3dfx.named': 'Effetto',
+    'r3dfx.hintPlace': 'Clicca sul modello dove l’effetto deve essere riprodotto.'
+});
+Object.assign(RR_I18N_STRINGS.pl, {
+    'r3dfx.title': 'Efekty',
+    'r3dfx.none': 'Brak efektów. Dodaj jeden, wybierz animację, a potem kliknij model, aby go umieścić.',
+    'r3dfx.effectName': 'Nazwa',
+    'r3dfx.animation': 'Animacja',
+    'r3dfx.choose': 'Wybierz…',
+    'r3dfx.anchor': 'Kotwica',
+    'r3dfx.origin': 'Początek modelu',
+    'r3dfx.offset': 'Przesunięcie',
+    'r3dfx.place': 'Umieść na modelu',
+    'r3dfx.scale': 'Skala',
+    'r3dfx.loop': 'Pętla',
+    'r3dfx.sound': 'Dźwięk',
+    'r3dfx.noSound': 'Brak dźwięku',
+    'r3dfx.clearSound': 'Usuń dźwięk',
+    'r3dfx.play': 'Odtwórz',
+    'r3dfx.save': 'Zapisz efekt',
+    'r3dfx.named': 'Efekt',
+    'r3dfx.hintPlace': 'Kliknij model w miejscu, gdzie ma grać efekt.'
+});
+Object.assign(RR_I18N_STRINGS.id, {
+    'r3dfx.title': 'Efek',
+    'r3dfx.none': 'Belum ada efek. Tambahkan satu, pilih animasinya, lalu klik model untuk menempatkannya.',
+    'r3dfx.effectName': 'Nama',
+    'r3dfx.animation': 'Animasi',
+    'r3dfx.choose': 'Pilih…',
+    'r3dfx.anchor': 'Jangkar',
+    'r3dfx.origin': 'Titik asal model',
+    'r3dfx.offset': 'Offset',
+    'r3dfx.place': 'Tempatkan di model',
+    'r3dfx.scale': 'Skala',
+    'r3dfx.loop': 'Ulangi',
+    'r3dfx.sound': 'Suara',
+    'r3dfx.noSound': 'Tanpa suara',
+    'r3dfx.clearSound': 'Hapus suara',
+    'r3dfx.play': 'Putar',
+    'r3dfx.save': 'Simpan efek',
+    'r3dfx.named': 'Efek',
+    'r3dfx.hintPlace': 'Klik model di tempat efek harus dimainkan.'
+});
+Object.assign(RR_I18N_STRINGS.vi, {
+    'r3dfx.title': 'Hiệu ứng',
+    'r3dfx.none': 'Chưa có hiệu ứng. Thêm một hiệu ứng, chọn hoạt ảnh, rồi nhấp vào mô hình để đặt.',
+    'r3dfx.effectName': 'Tên',
+    'r3dfx.animation': 'Hoạt ảnh',
+    'r3dfx.choose': 'Chọn…',
+    'r3dfx.anchor': 'Điểm neo',
+    'r3dfx.origin': 'Gốc mô hình',
+    'r3dfx.offset': 'Độ lệch',
+    'r3dfx.place': 'Đặt lên mô hình',
+    'r3dfx.scale': 'Tỷ lệ',
+    'r3dfx.loop': 'Lặp',
+    'r3dfx.sound': 'Âm thanh',
+    'r3dfx.noSound': 'Không âm thanh',
+    'r3dfx.clearSound': 'Xóa âm thanh',
+    'r3dfx.play': 'Phát',
+    'r3dfx.save': 'Lưu hiệu ứng',
+    'r3dfx.named': 'Hiệu ứng',
+    'r3dfx.hintPlace': 'Nhấp vào mô hình tại nơi hiệu ứng sẽ phát.'
+});
+Object.assign(RR_I18N_STRINGS.th, {
+    'r3dfx.title': 'เอฟเฟกต์',
+    'r3dfx.none': 'ยังไม่มีเอฟเฟกต์ เพิ่มหนึ่งรายการ เลือกแอนิเมชัน แล้วคลิกที่โมเดลเพื่อวาง',
+    'r3dfx.effectName': 'ชื่อ',
+    'r3dfx.animation': 'แอนิเมชัน',
+    'r3dfx.choose': 'เลือก…',
+    'r3dfx.anchor': 'จุดยึด',
+    'r3dfx.origin': 'จุดกำเนิดโมเดล',
+    'r3dfx.offset': 'ระยะเลื่อน',
+    'r3dfx.place': 'วางบนโมเดล',
+    'r3dfx.scale': 'สเกล',
+    'r3dfx.loop': 'วนซ้ำ',
+    'r3dfx.sound': 'เสียง',
+    'r3dfx.noSound': 'ไม่มีเสียง',
+    'r3dfx.clearSound': 'ล้างเสียง',
+    'r3dfx.play': 'เล่น',
+    'r3dfx.save': 'บันทึกเอฟเฟกต์',
+    'r3dfx.named': 'เอฟเฟกต์',
+    'r3dfx.hintPlace': 'คลิกที่โมเดลตรงตำแหน่งที่จะให้เอฟเฟกต์เล่น'
+});
+Object.assign(RR_I18N_STRINGS.tr, {
+    'r3dfx.title': 'Efektler',
+    'r3dfx.none': 'Henüz efekt yok. Bir tane ekleyin, animasyonunu seçin, sonra yerleştirmek için modele tıklayın.',
+    'r3dfx.effectName': 'Ad',
+    'r3dfx.animation': 'Animasyon',
+    'r3dfx.choose': 'Seç…',
+    'r3dfx.anchor': 'Çapa',
+    'r3dfx.origin': 'Model başlangıcı',
+    'r3dfx.offset': 'Kaydırma',
+    'r3dfx.place': 'Modele yerleştir',
+    'r3dfx.scale': 'Ölçek',
+    'r3dfx.loop': 'Döngü',
+    'r3dfx.sound': 'Ses',
+    'r3dfx.noSound': 'Ses yok',
+    'r3dfx.clearSound': 'Sesi kaldır',
+    'r3dfx.play': 'Oynat',
+    'r3dfx.save': 'Efekti kaydet',
+    'r3dfx.named': 'Efekt',
+    'r3dfx.hintPlace': 'Efektin oynayacağı yerde modele tıklayın.'
+});
+
+// 3D editor card: chooser groups, repeat, model transform (hand-written).
+Object.assign(RR_I18N_STRINGS.en, {
+    'r3dcard.repeat': 'Repeat',
+    'r3dcard.repeatHint': 'Until stopped',
+    'r3dcard.groupModel': 'Model',
+    'r3dcard.groupBones': 'Bones',
+    'r3dcard.effectHint': 'Sliders move the effect on the model; drag the pink marker or tick Place to set it by eye.',
+    'r3dcard.transform': 'Transform',
+    'r3dcard.transformHint': 'The model\'s own offset, turn and size, applied everywhere it appears.',
+    'r3dcard.saveTransform': 'Save transform',
+    'search.noMatches': 'No matches'
+});
+Object.assign(RR_I18N_STRINGS.ja, {
+    'r3dcard.repeat': 'リピート',
+    'r3dcard.repeatHint': '停止まで',
+    'r3dcard.groupModel': 'モデル',
+    'r3dcard.groupBones': 'ボーン',
+    'r3dcard.effectHint': 'スライダーでモデル上のエフェクトを動かします。ピンクのマーカーをドラッグするか「配置」で目視で設定できます。',
+    'r3dcard.transform': 'トランスフォーム',
+    'r3dcard.transformHint': 'モデル自体のオフセット・回転・サイズ。表示されるすべての場所に適用されます。',
+    'r3dcard.saveTransform': 'トランスフォームを保存',
+    'search.noMatches': '該当なし'
+});
+Object.assign(RR_I18N_STRINGS.es, {
+    'r3dcard.repeat': 'Repetir',
+    'r3dcard.repeatHint': 'Hasta detener',
+    'r3dcard.groupModel': 'Modelo',
+    'r3dcard.groupBones': 'Huesos',
+    'r3dcard.effectHint': 'Los deslizadores mueven el efecto sobre el modelo; arrastra el marcador rosa o marca Colocar para ajustarlo a ojo.',
+    'r3dcard.transform': 'Transformación',
+    'r3dcard.transformHint': 'Desplazamiento, giro y tamaño propios del modelo, aplicados donde aparezca.',
+    'r3dcard.saveTransform': 'Guardar transformación',
+    'search.noMatches': 'Sin coincidencias'
+});
+Object.assign(RR_I18N_STRINGS['zh-Hant'], {
+    'r3dcard.repeat': '重複',
+    'r3dcard.repeatHint': '直到停止',
+    'r3dcard.groupModel': '模型',
+    'r3dcard.groupBones': '骨骼',
+    'r3dcard.effectHint': '滑桿可移動模型上的特效；拖曳粉色標記或勾選「放置」以目視設定。',
+    'r3dcard.transform': '變換',
+    'r3dcard.transformHint': '模型本身的偏移、旋轉與大小，套用到它出現的每個地方。',
+    'r3dcard.saveTransform': '儲存變換',
+    'search.noMatches': '沒有符合的項目'
+});
+Object.assign(RR_I18N_STRINGS['zh-Hans'], {
+    'r3dcard.repeat': '重复',
+    'r3dcard.repeatHint': '直到停止',
+    'r3dcard.groupModel': '模型',
+    'r3dcard.groupBones': '骨骼',
+    'r3dcard.effectHint': '滑块可移动模型上的特效；拖动粉色标记或勾选“放置”以目视设定。',
+    'r3dcard.transform': '变换',
+    'r3dcard.transformHint': '模型本身的偏移、旋转与大小，应用到它出现的每个地方。',
+    'r3dcard.saveTransform': '保存变换',
+    'search.noMatches': '没有匹配项'
+});
+Object.assign(RR_I18N_STRINGS.ru, {
+    'r3dcard.repeat': 'Повтор',
+    'r3dcard.repeatHint': 'До остановки',
+    'r3dcard.groupModel': 'Модель',
+    'r3dcard.groupBones': 'Кости',
+    'r3dcard.effectHint': 'Ползунки двигают эффект по модели; перетащите розовый маркер или включите «Разместить», чтобы задать на глаз.',
+    'r3dcard.transform': 'Трансформация',
+    'r3dcard.transformHint': 'Собственные смещение, поворот и размер модели, применяемые везде, где она появляется.',
+    'r3dcard.saveTransform': 'Сохранить трансформацию',
+    'search.noMatches': 'Нет совпадений'
+});
+Object.assign(RR_I18N_STRINGS.pt, {
+    'r3dcard.repeat': 'Repetir',
+    'r3dcard.repeatHint': 'Até parar',
+    'r3dcard.groupModel': 'Modelo',
+    'r3dcard.groupBones': 'Ossos',
+    'r3dcard.effectHint': 'Os controles deslizantes movem o efeito no modelo; arraste o marcador rosa ou marque Posicionar para ajustar a olho.',
+    'r3dcard.transform': 'Transformação',
+    'r3dcard.transformHint': 'Deslocamento, giro e tamanho próprios do modelo, aplicados onde ele aparecer.',
+    'r3dcard.saveTransform': 'Salvar transformação',
+    'search.noMatches': 'Sem resultados'
+});
+Object.assign(RR_I18N_STRINGS.de, {
+    'r3dcard.repeat': 'Wiederholen',
+    'r3dcard.repeatHint': 'Bis gestoppt',
+    'r3dcard.groupModel': 'Modell',
+    'r3dcard.groupBones': 'Knochen',
+    'r3dcard.effectHint': 'Die Regler verschieben den Effekt auf dem Modell; den rosa Marker ziehen oder Platzieren ankreuzen, um ihn nach Augenmaß zu setzen.',
+    'r3dcard.transform': 'Transformation',
+    'r3dcard.transformHint': 'Eigener Versatz, Drehung und Größe des Modells, überall angewendet, wo es erscheint.',
+    'r3dcard.saveTransform': 'Transformation speichern',
+    'search.noMatches': 'Keine Treffer'
+});
+Object.assign(RR_I18N_STRINGS.fr, {
+    'r3dcard.repeat': 'Répéter',
+    'r3dcard.repeatHint': 'Jusqu’à l’arrêt',
+    'r3dcard.groupModel': 'Modèle',
+    'r3dcard.groupBones': 'Os',
+    'r3dcard.effectHint': 'Les curseurs déplacent l’effet sur le modèle ; glissez le repère rose ou cochez Placer pour le régler à l’œil.',
+    'r3dcard.transform': 'Transformation',
+    'r3dcard.transformHint': 'Décalage, rotation et taille propres au modèle, appliqués partout où il apparaît.',
+    'r3dcard.saveTransform': 'Enregistrer la transformation',
+    'search.noMatches': 'Aucun résultat'
+});
+Object.assign(RR_I18N_STRINGS.el, {
+    'r3dcard.repeat': 'Επανάληψη',
+    'r3dcard.repeatHint': 'Μέχρι να σταματήσει',
+    'r3dcard.groupModel': 'Μοντέλο',
+    'r3dcard.groupBones': 'Οστά',
+    'r3dcard.effectHint': 'Τα ρυθμιστικά μετακινούν το εφέ πάνω στο μοντέλο· σύρετε τον ροζ δείκτη ή επιλέξτε Τοποθέτηση για ρύθμιση με το μάτι.',
+    'r3dcard.transform': 'Μετασχηματισμός',
+    'r3dcard.transformHint': 'Η μετατόπιση, η στροφή και το μέγεθος του ίδιου του μοντέλου, όπου κι αν εμφανίζεται.',
+    'r3dcard.saveTransform': 'Αποθήκευση μετασχηματισμού',
+    'search.noMatches': 'Κανένα αποτέλεσμα'
+});
+Object.assign(RR_I18N_STRINGS.ko, {
+    'r3dcard.repeat': '반복',
+    'r3dcard.repeatHint': '정지할 때까지',
+    'r3dcard.groupModel': '모델',
+    'r3dcard.groupBones': '본',
+    'r3dcard.effectHint': '슬라이더로 모델 위의 이펙트를 옮깁니다. 분홍 마커를 끌거나 배치를 체크해 눈으로 맞출 수 있습니다.',
+    'r3dcard.transform': '변환',
+    'r3dcard.transformHint': '모델 자체의 오프셋, 회전, 크기이며 모델이 나타나는 모든 곳에 적용됩니다.',
+    'r3dcard.saveTransform': '변환 저장',
+    'search.noMatches': '일치 항목 없음'
+});
+Object.assign(RR_I18N_STRINGS.ar, {
+    'r3dcard.repeat': 'تكرار',
+    'r3dcard.repeatHint': 'حتى الإيقاف',
+    'r3dcard.groupModel': 'النموذج',
+    'r3dcard.groupBones': 'العظام',
+    'r3dcard.effectHint': 'تحرّك المنزلقات التأثير على النموذج؛ اسحب العلامة الوردية أو فعّل «وضع» لضبطه بالعين.',
+    'r3dcard.transform': 'التحويل',
+    'r3dcard.transformHint': 'إزاحة النموذج ودورانه وحجمه الخاصة به، تُطبَّق أينما ظهر.',
+    'r3dcard.saveTransform': 'حفظ التحويل',
+    'search.noMatches': 'لا نتائج'
+});
+Object.assign(RR_I18N_STRINGS.it, {
+    'r3dcard.repeat': 'Ripeti',
+    'r3dcard.repeatHint': 'Fino allo stop',
+    'r3dcard.groupModel': 'Modello',
+    'r3dcard.groupBones': 'Ossa',
+    'r3dcard.effectHint': 'I cursori spostano l’effetto sul modello; trascina l’indicatore rosa o spunta Posiziona per regolarlo a occhio.',
+    'r3dcard.transform': 'Trasformazione',
+    'r3dcard.transformHint': 'Scostamento, rotazione e dimensione propri del modello, applicati ovunque appaia.',
+    'r3dcard.saveTransform': 'Salva trasformazione',
+    'search.noMatches': 'Nessun risultato'
+});
+Object.assign(RR_I18N_STRINGS.pl, {
+    'r3dcard.repeat': 'Powtarzaj',
+    'r3dcard.repeatHint': 'Aż do zatrzymania',
+    'r3dcard.groupModel': 'Model',
+    'r3dcard.groupBones': 'Kości',
+    'r3dcard.effectHint': 'Suwaki przesuwają efekt po modelu; przeciągnij różowy znacznik lub zaznacz Umieść, aby ustawić na oko.',
+    'r3dcard.transform': 'Transformacja',
+    'r3dcard.transformHint': 'Własne przesunięcie, obrót i rozmiar modelu, stosowane wszędzie, gdzie się pojawia.',
+    'r3dcard.saveTransform': 'Zapisz transformację',
+    'search.noMatches': 'Brak wyników'
+});
+Object.assign(RR_I18N_STRINGS.id, {
+    'r3dcard.repeat': 'Ulangi',
+    'r3dcard.repeatHint': 'Sampai dihentikan',
+    'r3dcard.groupModel': 'Model',
+    'r3dcard.groupBones': 'Tulang',
+    'r3dcard.effectHint': 'Slider memindahkan efek pada model; seret penanda merah muda atau centang Tempatkan untuk mengatur dengan mata.',
+    'r3dcard.transform': 'Transformasi',
+    'r3dcard.transformHint': 'Offset, putaran, dan ukuran model itu sendiri, diterapkan di mana pun ia muncul.',
+    'r3dcard.saveTransform': 'Simpan transformasi',
+    'search.noMatches': 'Tidak ada yang cocok'
+});
+Object.assign(RR_I18N_STRINGS.vi, {
+    'r3dcard.repeat': 'Lặp lại',
+    'r3dcard.repeatHint': 'Cho đến khi dừng',
+    'r3dcard.groupModel': 'Mô hình',
+    'r3dcard.groupBones': 'Xương',
+    'r3dcard.effectHint': 'Thanh trượt di chuyển hiệu ứng trên mô hình; kéo điểm đánh dấu hồng hoặc tích Đặt để chỉnh bằng mắt.',
+    'r3dcard.transform': 'Biến đổi',
+    'r3dcard.transformHint': 'Độ lệch, góc xoay và kích thước riêng của mô hình, áp dụng ở mọi nơi nó xuất hiện.',
+    'r3dcard.saveTransform': 'Lưu biến đổi',
+    'search.noMatches': 'Không có kết quả'
+});
+Object.assign(RR_I18N_STRINGS.th, {
+    'r3dcard.repeat': 'ทำซ้ำ',
+    'r3dcard.repeatHint': 'จนกว่าจะหยุด',
+    'r3dcard.groupModel': 'โมเดล',
+    'r3dcard.groupBones': 'กระดูก',
+    'r3dcard.effectHint': 'แถบเลื่อนใช้ย้ายเอฟเฟกต์บนโมเดล ลากจุดสีชมพูหรือติ๊ก "วาง" เพื่อกำหนดด้วยสายตา',
+    'r3dcard.transform': 'ทรานส์ฟอร์ม',
+    'r3dcard.transformHint': 'ระยะเลื่อน การหมุน และขนาดของตัวโมเดลเอง ใช้กับทุกที่ที่โมเดลปรากฏ',
+    'r3dcard.saveTransform': 'บันทึกทรานส์ฟอร์ม',
+    'search.noMatches': 'ไม่พบรายการ'
+});
+Object.assign(RR_I18N_STRINGS.tr, {
+    'r3dcard.repeat': 'Tekrarla',
+    'r3dcard.repeatHint': 'Durdurulana kadar',
+    'r3dcard.groupModel': 'Model',
+    'r3dcard.groupBones': 'Kemikler',
+    'r3dcard.effectHint': 'Kaydırıcılar efekti model üzerinde taşır; pembe işareti sürükleyin veya göz kararı ayarlamak için Yerleştir’i işaretleyin.',
+    'r3dcard.transform': 'Dönüşüm',
+    'r3dcard.transformHint': 'Modelin kendi kaydırması, dönüşü ve boyutu; göründüğü her yerde uygulanır.',
+    'r3dcard.saveTransform': 'Dönüşümü kaydet',
+    'search.noMatches': 'Eşleşme yok'
+});
+
+// Scale sliders: proportional or per axis (hand-written).
+Object.assign(RR_I18N_STRINGS.en, { 'r3dcard.proportional': 'Proportional' });
+Object.assign(RR_I18N_STRINGS.ja, { 'r3dcard.proportional': '比率を維持' });
+Object.assign(RR_I18N_STRINGS.es, { 'r3dcard.proportional': 'Proporcional' });
+Object.assign(RR_I18N_STRINGS['zh-Hant'], { 'r3dcard.proportional': '等比例' });
+Object.assign(RR_I18N_STRINGS['zh-Hans'], { 'r3dcard.proportional': '等比例' });
+Object.assign(RR_I18N_STRINGS.ru, { 'r3dcard.proportional': 'Пропорционально' });
+Object.assign(RR_I18N_STRINGS.pt, { 'r3dcard.proportional': 'Proporcional' });
+Object.assign(RR_I18N_STRINGS.de, { 'r3dcard.proportional': 'Proportional' });
+Object.assign(RR_I18N_STRINGS.fr, { 'r3dcard.proportional': 'Proportionnel' });
+Object.assign(RR_I18N_STRINGS.el, { 'r3dcard.proportional': 'Αναλογικά' });
+Object.assign(RR_I18N_STRINGS.ko, { 'r3dcard.proportional': '비율 유지' });
+Object.assign(RR_I18N_STRINGS.ar, { 'r3dcard.proportional': 'متناسب' });
+Object.assign(RR_I18N_STRINGS.it, { 'r3dcard.proportional': 'Proporzionale' });
+Object.assign(RR_I18N_STRINGS.pl, { 'r3dcard.proportional': 'Proporcjonalnie' });
+Object.assign(RR_I18N_STRINGS.id, { 'r3dcard.proportional': 'Proporsional' });
+Object.assign(RR_I18N_STRINGS.vi, { 'r3dcard.proportional': 'Tỷ lệ đều' });
+Object.assign(RR_I18N_STRINGS.th, { 'r3dcard.proportional': 'ตามสัดส่วน' });
+Object.assign(RR_I18N_STRINGS.tr, { 'r3dcard.proportional': 'Orantılı' });
+
+// Model props panel: picker button and defaults (hand-written).
+Object.assign(RR_I18N_STRINGS.en, {
+    'props.choose': 'Choose 3D Model…',
+    'props.animation': 'Animation',
+    'props.effect': 'Effect',
+    'props.none': '(None)'
+});
+Object.assign(RR_I18N_STRINGS.ja, {
+    'props.choose': '3Dモデルを選択…',
+    'props.animation': 'アニメーション',
+    'props.effect': 'エフェクト',
+    'props.none': '(なし)'
+});
+Object.assign(RR_I18N_STRINGS.es, {
+    'props.choose': 'Elegir modelo 3D…',
+    'props.animation': 'Animación',
+    'props.effect': 'Efecto',
+    'props.none': '(Ninguno)'
+});
+Object.assign(RR_I18N_STRINGS['zh-Hant'], {
+    'props.choose': '選擇 3D 模型…',
+    'props.animation': '動畫',
+    'props.effect': '特效',
+    'props.none': '（無）'
+});
+Object.assign(RR_I18N_STRINGS['zh-Hans'], {
+    'props.choose': '选择 3D 模型…',
+    'props.animation': '动画',
+    'props.effect': '特效',
+    'props.none': '（无）'
+});
+Object.assign(RR_I18N_STRINGS.ru, {
+    'props.choose': 'Выбрать 3D-модель…',
+    'props.animation': 'Анимация',
+    'props.effect': 'Эффект',
+    'props.none': '(Нет)'
+});
+Object.assign(RR_I18N_STRINGS.pt, {
+    'props.choose': 'Escolher modelo 3D…',
+    'props.animation': 'Animação',
+    'props.effect': 'Efeito',
+    'props.none': '(Nenhum)'
+});
+Object.assign(RR_I18N_STRINGS.de, {
+    'props.choose': '3D-Modell wählen…',
+    'props.animation': 'Animation',
+    'props.effect': 'Effekt',
+    'props.none': '(Keine)'
+});
+Object.assign(RR_I18N_STRINGS.fr, {
+    'props.choose': 'Choisir un modèle 3D…',
+    'props.animation': 'Animation',
+    'props.effect': 'Effet',
+    'props.none': '(Aucun)'
+});
+Object.assign(RR_I18N_STRINGS.el, {
+    'props.choose': 'Επιλογή μοντέλου 3D…',
+    'props.animation': 'Κίνηση',
+    'props.effect': 'Εφέ',
+    'props.none': '(Κανένα)'
+});
+Object.assign(RR_I18N_STRINGS.ko, {
+    'props.choose': '3D 모델 선택…',
+    'props.animation': '애니메이션',
+    'props.effect': '이펙트',
+    'props.none': '(없음)'
+});
+Object.assign(RR_I18N_STRINGS.ar, {
+    'props.choose': 'اختيار نموذج ثلاثي الأبعاد…',
+    'props.animation': 'الحركة',
+    'props.effect': 'التأثير',
+    'props.none': '(بدون)'
+});
+Object.assign(RR_I18N_STRINGS.it, {
+    'props.choose': 'Scegli modello 3D…',
+    'props.animation': 'Animazione',
+    'props.effect': 'Effetto',
+    'props.none': '(Nessuno)'
+});
+Object.assign(RR_I18N_STRINGS.pl, {
+    'props.choose': 'Wybierz model 3D…',
+    'props.animation': 'Animacja',
+    'props.effect': 'Efekt',
+    'props.none': '(Brak)'
+});
+Object.assign(RR_I18N_STRINGS.id, {
+    'props.choose': 'Pilih model 3D…',
+    'props.animation': 'Animasi',
+    'props.effect': 'Efek',
+    'props.none': '(Tidak ada)'
+});
+Object.assign(RR_I18N_STRINGS.vi, {
+    'props.choose': 'Chọn mô hình 3D…',
+    'props.animation': 'Hoạt ảnh',
+    'props.effect': 'Hiệu ứng',
+    'props.none': '(Không)'
+});
+Object.assign(RR_I18N_STRINGS.th, {
+    'props.choose': 'เลือกโมเดล 3D…',
+    'props.animation': 'แอนิเมชัน',
+    'props.effect': 'เอฟเฟกต์',
+    'props.none': '(ไม่มี)'
+});
+Object.assign(RR_I18N_STRINGS.tr, {
+    'props.choose': '3B model seç…',
+    'props.animation': 'Animasyon',
+    'props.effect': 'Efekt',
+    'props.none': '(Yok)'
+});
+
+// Video effects, mesh collision, prop repeat (hand-written).
+Object.assign(RR_I18N_STRINGS.en, {
+    'props.repeat': 'Repeat',
+    'r3dfx.type': 'Type',
+    'r3dfx.typeAnimation': 'Animation',
+    'r3dfx.typeVideo': 'Video Surface',
+    'r3dfx.video': 'Video',
+    'r3dfx.chooseVideo': 'Choose a video…',
+    'r3dfx.noVideos': 'No videos in the movies folder.',
+    'r3dfx.width': 'Width (× model size)',
+    'r3dfx.height': 'Height',
+    'r3dfx.audio': 'Audio',
+    'r3dcard.collision': 'Collide with the mesh shape',
+    'r3dcard.collisionHint': 'Block only the tiles the model\'s geometry covers below walking height, instead of its whole bounding box.'
+});
+Object.assign(RR_I18N_STRINGS.ja, {
+    'props.repeat': 'リピート',
+    'r3dfx.type': '種類',
+    'r3dfx.typeAnimation': 'アニメーション',
+    'r3dfx.typeVideo': 'ビデオサーフェス',
+    'r3dfx.video': 'ビデオ',
+    'r3dfx.chooseVideo': 'ビデオを選択…',
+    'r3dfx.noVideos': 'movies フォルダにビデオがありません。',
+    'r3dfx.width': '幅 (モデルサイズ比)',
+    'r3dfx.height': '高さ',
+    'r3dfx.audio': '音声',
+    'r3dcard.collision': 'メッシュ形状で衝突',
+    'r3dcard.collisionHint': '境界ボックス全体ではなく、歩行高さ以下でモデルのジオメトリが覆うタイルだけを塞ぎます。'
+});
+Object.assign(RR_I18N_STRINGS.es, {
+    'props.repeat': 'Repetir',
+    'r3dfx.type': 'Tipo',
+    'r3dfx.typeAnimation': 'Animación',
+    'r3dfx.typeVideo': 'Superficie de vídeo',
+    'r3dfx.video': 'Vídeo',
+    'r3dfx.chooseVideo': 'Elegir un vídeo…',
+    'r3dfx.noVideos': 'No hay vídeos en la carpeta movies.',
+    'r3dfx.width': 'Ancho (× tamaño del modelo)',
+    'r3dfx.height': 'Alto',
+    'r3dfx.audio': 'Audio',
+    'r3dcard.collision': 'Colisionar con la forma de la malla',
+    'r3dcard.collisionHint': 'Bloquea solo las casillas que cubre la geometría del modelo por debajo de la altura de paso, en vez de toda su caja.'
+});
+Object.assign(RR_I18N_STRINGS['zh-Hant'], {
+    'props.repeat': '重複',
+    'r3dfx.type': '類型',
+    'r3dfx.typeAnimation': '動畫',
+    'r3dfx.typeVideo': '影片表面',
+    'r3dfx.video': '影片',
+    'r3dfx.chooseVideo': '選擇影片…',
+    'r3dfx.noVideos': 'movies 資料夾中沒有影片。',
+    'r3dfx.width': '寬度（× 模型大小）',
+    'r3dfx.height': '高度',
+    'r3dfx.audio': '音訊',
+    'r3dcard.collision': '依網格形狀碰撞',
+    'r3dcard.collisionHint': '只阻擋模型幾何在步行高度以下覆蓋的格子，而非整個包圍盒。'
+});
+Object.assign(RR_I18N_STRINGS['zh-Hans'], {
+    'props.repeat': '重复',
+    'r3dfx.type': '类型',
+    'r3dfx.typeAnimation': '动画',
+    'r3dfx.typeVideo': '视频表面',
+    'r3dfx.video': '视频',
+    'r3dfx.chooseVideo': '选择视频…',
+    'r3dfx.noVideos': 'movies 文件夹中没有视频。',
+    'r3dfx.width': '宽度（× 模型大小）',
+    'r3dfx.height': '高度',
+    'r3dfx.audio': '音频',
+    'r3dcard.collision': '按网格形状碰撞',
+    'r3dcard.collisionHint': '只阻挡模型几何在步行高度以下覆盖的格子，而非整个包围盒。'
+});
+Object.assign(RR_I18N_STRINGS.ru, {
+    'props.repeat': 'Повтор',
+    'r3dfx.type': 'Тип',
+    'r3dfx.typeAnimation': 'Анимация',
+    'r3dfx.typeVideo': 'Видеоповерхность',
+    'r3dfx.video': 'Видео',
+    'r3dfx.chooseVideo': 'Выбрать видео…',
+    'r3dfx.noVideos': 'В папке movies нет видео.',
+    'r3dfx.width': 'Ширина (× размер модели)',
+    'r3dfx.height': 'Высота',
+    'r3dfx.audio': 'Звук',
+    'r3dcard.collision': 'Столкновение по форме меша',
+    'r3dcard.collisionHint': 'Блокировать только тайлы, которые геометрия модели покрывает ниже высоты шага, а не весь ограничивающий бокс.'
+});
+Object.assign(RR_I18N_STRINGS.pt, {
+    'props.repeat': 'Repetir',
+    'r3dfx.type': 'Tipo',
+    'r3dfx.typeAnimation': 'Animação',
+    'r3dfx.typeVideo': 'Superfície de vídeo',
+    'r3dfx.video': 'Vídeo',
+    'r3dfx.chooseVideo': 'Escolher um vídeo…',
+    'r3dfx.noVideos': 'Não há vídeos na pasta movies.',
+    'r3dfx.width': 'Largura (× tamanho do modelo)',
+    'r3dfx.height': 'Altura',
+    'r3dfx.audio': 'Áudio',
+    'r3dcard.collision': 'Colidir com a forma da malha',
+    'r3dcard.collisionHint': 'Bloqueia só os tiles que a geometria do modelo cobre abaixo da altura de caminhada, em vez de toda a caixa.'
+});
+Object.assign(RR_I18N_STRINGS.de, {
+    'props.repeat': 'Wiederholen',
+    'r3dfx.type': 'Typ',
+    'r3dfx.typeAnimation': 'Animation',
+    'r3dfx.typeVideo': 'Videofläche',
+    'r3dfx.video': 'Video',
+    'r3dfx.chooseVideo': 'Video wählen…',
+    'r3dfx.noVideos': 'Keine Videos im Ordner movies.',
+    'r3dfx.width': 'Breite (× Modellgröße)',
+    'r3dfx.height': 'Höhe',
+    'r3dfx.audio': 'Ton',
+    'r3dcard.collision': 'Mit der Mesh-Form kollidieren',
+    'r3dcard.collisionHint': 'Sperrt nur die Kacheln, die die Geometrie des Modells unterhalb der Gehhöhe bedeckt, statt der ganzen Bounding Box.'
+});
+Object.assign(RR_I18N_STRINGS.fr, {
+    'props.repeat': 'Répéter',
+    'r3dfx.type': 'Type',
+    'r3dfx.typeAnimation': 'Animation',
+    'r3dfx.typeVideo': 'Surface vidéo',
+    'r3dfx.video': 'Vidéo',
+    'r3dfx.chooseVideo': 'Choisir une vidéo…',
+    'r3dfx.noVideos': 'Aucune vidéo dans le dossier movies.',
+    'r3dfx.width': 'Largeur (× taille du modèle)',
+    'r3dfx.height': 'Hauteur',
+    'r3dfx.audio': 'Audio',
+    'r3dcard.collision': 'Collision selon la forme du maillage',
+    'r3dcard.collisionHint': 'Ne bloque que les tuiles couvertes par la géométrie du modèle sous la hauteur de marche, au lieu de toute sa boîte.'
+});
+Object.assign(RR_I18N_STRINGS.el, {
+    'props.repeat': 'Επανάληψη',
+    'r3dfx.type': 'Τύπος',
+    'r3dfx.typeAnimation': 'Κίνηση',
+    'r3dfx.typeVideo': 'Επιφάνεια βίντεο',
+    'r3dfx.video': 'Βίντεο',
+    'r3dfx.chooseVideo': 'Επιλέξτε βίντεο…',
+    'r3dfx.noVideos': 'Δεν υπάρχουν βίντεο στον φάκελο movies.',
+    'r3dfx.width': 'Πλάτος (× μέγεθος μοντέλου)',
+    'r3dfx.height': 'Ύψος',
+    'r3dfx.audio': 'Ήχος',
+    'r3dcard.collision': 'Σύγκρουση με το σχήμα του πλέγματος',
+    'r3dcard.collisionHint': 'Μπλοκάρει μόνο τα πλακίδια που καλύπτει η γεωμετρία του μοντέλου κάτω από το ύψος βάδισης, αντί για ολόκληρο το πλαίσιο.'
+});
+Object.assign(RR_I18N_STRINGS.ko, {
+    'props.repeat': '반복',
+    'r3dfx.type': '종류',
+    'r3dfx.typeAnimation': '애니메이션',
+    'r3dfx.typeVideo': '비디오 서피스',
+    'r3dfx.video': '비디오',
+    'r3dfx.chooseVideo': '비디오 선택…',
+    'r3dfx.noVideos': 'movies 폴더에 비디오가 없습니다.',
+    'r3dfx.width': '너비 (× 모델 크기)',
+    'r3dfx.height': '높이',
+    'r3dfx.audio': '오디오',
+    'r3dcard.collision': '메시 형태로 충돌',
+    'r3dcard.collisionHint': '경계 상자 전체가 아니라 보행 높이 아래에서 모델 지오메트리가 덮는 타일만 막습니다.'
+});
+Object.assign(RR_I18N_STRINGS.ar, {
+    'props.repeat': 'تكرار',
+    'r3dfx.type': 'النوع',
+    'r3dfx.typeAnimation': 'حركة',
+    'r3dfx.typeVideo': 'سطح فيديو',
+    'r3dfx.video': 'فيديو',
+    'r3dfx.chooseVideo': 'اختر فيديو…',
+    'r3dfx.noVideos': 'لا توجد فيديوهات في مجلد movies.',
+    'r3dfx.width': 'العرض (× حجم النموذج)',
+    'r3dfx.height': 'الارتفاع',
+    'r3dfx.audio': 'الصوت',
+    'r3dcard.collision': 'التصادم بشكل الشبكة',
+    'r3dcard.collisionHint': 'يحجب فقط البلاطات التي تغطيها هندسة النموذج تحت ارتفاع المشي بدلاً من الصندوق المحيط بأكمله.'
+});
+Object.assign(RR_I18N_STRINGS.it, {
+    'props.repeat': 'Ripeti',
+    'r3dfx.type': 'Tipo',
+    'r3dfx.typeAnimation': 'Animazione',
+    'r3dfx.typeVideo': 'Superficie video',
+    'r3dfx.video': 'Video',
+    'r3dfx.chooseVideo': 'Scegli un video…',
+    'r3dfx.noVideos': 'Nessun video nella cartella movies.',
+    'r3dfx.width': 'Larghezza (× dimensione del modello)',
+    'r3dfx.height': 'Altezza',
+    'r3dfx.audio': 'Audio',
+    'r3dcard.collision': 'Collisione con la forma della mesh',
+    'r3dcard.collisionHint': 'Blocca solo i tile coperti dalla geometria del modello sotto l’altezza di passaggio, invece dell’intero riquadro.'
+});
+Object.assign(RR_I18N_STRINGS.pl, {
+    'props.repeat': 'Powtarzaj',
+    'r3dfx.type': 'Typ',
+    'r3dfx.typeAnimation': 'Animacja',
+    'r3dfx.typeVideo': 'Powierzchnia wideo',
+    'r3dfx.video': 'Wideo',
+    'r3dfx.chooseVideo': 'Wybierz wideo…',
+    'r3dfx.noVideos': 'Brak wideo w folderze movies.',
+    'r3dfx.width': 'Szerokość (× rozmiar modelu)',
+    'r3dfx.height': 'Wysokość',
+    'r3dfx.audio': 'Dźwięk',
+    'r3dcard.collision': 'Kolizja z kształtem siatki',
+    'r3dcard.collisionHint': 'Blokuje tylko kafelki, które geometria modelu zakrywa poniżej wysokości chodzenia, zamiast całej ramki.'
+});
+Object.assign(RR_I18N_STRINGS.id, {
+    'props.repeat': 'Ulangi',
+    'r3dfx.type': 'Tipe',
+    'r3dfx.typeAnimation': 'Animasi',
+    'r3dfx.typeVideo': 'Permukaan video',
+    'r3dfx.video': 'Video',
+    'r3dfx.chooseVideo': 'Pilih video…',
+    'r3dfx.noVideos': 'Tidak ada video di folder movies.',
+    'r3dfx.width': 'Lebar (× ukuran model)',
+    'r3dfx.height': 'Tinggi',
+    'r3dfx.audio': 'Audio',
+    'r3dcard.collision': 'Tabrakan sesuai bentuk mesh',
+    'r3dcard.collisionHint': 'Hanya memblokir petak yang ditutupi geometri model di bawah tinggi berjalan, bukan seluruh kotak pembatasnya.'
+});
+Object.assign(RR_I18N_STRINGS.vi, {
+    'props.repeat': 'Lặp lại',
+    'r3dfx.type': 'Loại',
+    'r3dfx.typeAnimation': 'Hoạt ảnh',
+    'r3dfx.typeVideo': 'Bề mặt video',
+    'r3dfx.video': 'Video',
+    'r3dfx.chooseVideo': 'Chọn video…',
+    'r3dfx.noVideos': 'Không có video trong thư mục movies.',
+    'r3dfx.width': 'Rộng (× kích thước mô hình)',
+    'r3dfx.height': 'Cao',
+    'r3dfx.audio': 'Âm thanh',
+    'r3dcard.collision': 'Va chạm theo hình dạng lưới',
+    'r3dcard.collisionHint': 'Chỉ chặn các ô mà hình học mô hình che phủ dưới chiều cao đi bộ, thay vì toàn bộ hộp bao.'
+});
+Object.assign(RR_I18N_STRINGS.th, {
+    'props.repeat': 'ทำซ้ำ',
+    'r3dfx.type': 'ประเภท',
+    'r3dfx.typeAnimation': 'แอนิเมชัน',
+    'r3dfx.typeVideo': 'พื้นผิววิดีโอ',
+    'r3dfx.video': 'วิดีโอ',
+    'r3dfx.chooseVideo': 'เลือกวิดีโอ…',
+    'r3dfx.noVideos': 'ไม่มีวิดีโอในโฟลเดอร์ movies',
+    'r3dfx.width': 'ความกว้าง (× ขนาดโมเดล)',
+    'r3dfx.height': 'ความสูง',
+    'r3dfx.audio': 'เสียง',
+    'r3dcard.collision': 'ชนตามรูปทรงเมช',
+    'r3dcard.collisionHint': 'บล็อกเฉพาะไทล์ที่เรขาคณิตของโมเดลครอบคลุมต่ำกว่าความสูงเดิน แทนที่จะเป็นกล่องขอบเขตทั้งหมด'
+});
+Object.assign(RR_I18N_STRINGS.tr, {
+    'props.repeat': 'Tekrarla',
+    'r3dfx.type': 'Tür',
+    'r3dfx.typeAnimation': 'Animasyon',
+    'r3dfx.typeVideo': 'Video yüzeyi',
+    'r3dfx.video': 'Video',
+    'r3dfx.chooseVideo': 'Video seç…',
+    'r3dfx.noVideos': 'movies klasöründe video yok.',
+    'r3dfx.width': 'Genişlik (× model boyutu)',
+    'r3dfx.height': 'Yükseklik',
+    'r3dfx.audio': 'Ses',
+    'r3dcard.collision': 'Mesh şekliyle çarpış',
+    'r3dcard.collisionHint': 'Tüm sınırlayıcı kutu yerine yalnızca modelin geometrisinin yürüme yüksekliği altında kapladığı karoları engeller.'
+});
 
 class I18nManager {
     constructor() {

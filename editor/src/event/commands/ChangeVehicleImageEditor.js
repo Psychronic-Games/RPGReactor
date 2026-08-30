@@ -150,6 +150,18 @@ class ChangeVehicleImageEditor {
         charIdxRow.appendChild(charIdxInput);
         content.appendChild(charIdxRow);
 
+        const browse = DatabaseEditorUI.imageBrowser(this.projectController);
+        if (browse) {
+            charFileRow.appendChild(browse.picker.createImageBrowseButton(charFileInput, {
+                projectPath: browse.projectPath,
+                folder: 'characters',
+                title: t('Select Vehicle Image'),
+                sheetType: 'character',
+                indexInput: charIdxInput,
+                zIndex: 10007
+            }));
+        }
+
         container.appendChild(content);
 
         // Footer

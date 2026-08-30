@@ -146,7 +146,12 @@
                 return pages && typeof pages === 'object'
                     && Object.keys(pages).some(page => pages[page] && pages[page].name);
             }));
-        if (isFlat(mapData) && !grouped && !modeled && !(sidecar3d && sidecar3d.camera)) {
+        const previewed = !!(sidecar3d && sidecar3d.eventPreviews
+            && Object.keys(sidecar3d.eventPreviews).length);
+        const roomed = !!(sidecar3d && sidecar3d.room);
+        const propped = !!(sidecar3d && Array.isArray(sidecar3d.props) && sidecar3d.props.length);
+        if (isFlat(mapData) && !grouped && !modeled && !previewed && !roomed && !propped
+            && !(sidecar3d && sidecar3d.camera)) {
             if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
             return true;
         }
@@ -190,9 +195,239 @@
         return true;
     };
 
+    /**
+     * Mark the map 3D or flat, reporting whether anything changed.
+     *
+     * The note is what the runtime reads. A sidecar that had downgraded the
+     * map to 2d is brought back up with the note, or the checkbox would tick
+     * and the game stay flat.
+     */
+    const setMode3D = (mapData, enabled) => {
+        if (!mapData) return false;
+        let changed = enabled ? addNote(mapData) : removeNote(mapData);
+        const sidecar = mapData.reactor3d;
+        if (enabled && sidecar && typeof sidecar === 'object' && sidecar.mode !== MODE_3D) {
+            sidecar.mode = MODE_3D;
+            changed = true;
+        }
+        return changed;
+    };
+
+    /*
+     * The room: a floor under the parallax, walls at the map's edge and a
+     * ceiling `height` tiles up, each a parallax image. `reactor3d.room` is
+     * only written when some piece has an image or the height was changed,
+     * so an untouched 3D map does not gain a sidecar for a room it has not
+     * been given.
+     */
+    const ROOM_DEFAULT_HEIGHT = 4;
+    const ROOM_MIN_HEIGHT = 1;
+    const ROOM_MAX_HEIGHT = 512;
+
+    const clampRoomHeight = value => {
+        const height = Math.round(Number(value));
+        if (!Number.isFinite(height)) return ROOM_DEFAULT_HEIGHT;
+        return Math.max(ROOM_MIN_HEIGHT, Math.min(ROOM_MAX_HEIGHT, height));
+    };
+
+    const normalizeRoom = room => {
+        const source = room && typeof room === 'object' ? room : {};
+        const name = value => (typeof value === 'string' ? value.trim() : '');
+        return {
+            height: clampRoomHeight(source.height),
+            floor: name(source.floor),
+            walls: name(source.walls),
+            ceiling: name(source.ceiling)
+        };
+    };
+
+    const isDefaultRoom = room =>
+        !room.floor && !room.walls && !room.ceiling && room.height === ROOM_DEFAULT_HEIGHT;
+
+    /** The map's room, defaults filled in. */
+    const room = mapData => normalizeRoom(mapData && mapData.reactor3d && mapData.reactor3d.room);
+
+    /** Set the room, dropping it from the sidecar when it is all defaults. */
+    const setRoom = (mapData, values) => {
+        if (!mapData) return false;
+        const next = normalizeRoom(values);
+        const before = JSON.stringify(room(mapData));
+        if (before === JSON.stringify(next)) return false;
+        if (isDefaultRoom(next)) {
+            if (mapData.reactor3d) delete mapData.reactor3d.room;
+            return true;
+        }
+        const sidecar = ensure(mapData);
+        if (!sidecar) return false;
+        sidecar.room = next;
+        return true;
+    };
+
+    /*
+     * The map's default 3D camera: a mode plus optional pitch/yaw/distance/
+     * fov overrides, mirroring `reactor_camera_3d.js`. `reactor3d.camera` is
+     * only written when it says more than the default view.
+     */
+    const CAMERA_MODES = ['fixed', 'topDown', 'isometric', 'thirdPerson', 'firstPerson'];
+    const CAMERA_LIMITS = { pitch: [-89, 89], yaw: [-360, 360], distance: [0.5, 1024], fov: [5, 150] };
+
+    const cameraMode = value => {
+        const key = String(value || '').toLowerCase().replace(/[\s_-]/g, '');
+        return CAMERA_MODES.find(mode => mode.toLowerCase() === key) || CAMERA_MODES[0];
+    };
+
+    const cameraNumber = (value, range) => {
+        if (value === null || value === undefined || value === '') return null;
+        const number = Number(value);
+        if (!Number.isFinite(number)) return null;
+        return Math.max(range[0], Math.min(range[1], number));
+    };
+
+    const normalizeCamera = values => {
+        const source = values && typeof values === 'object' ? values : {};
+        return {
+            mode: cameraMode(source.mode),
+            pitch: cameraNumber(source.pitch, CAMERA_LIMITS.pitch),
+            yaw: cameraNumber(source.yaw, CAMERA_LIMITS.yaw),
+            distance: cameraNumber(source.distance, CAMERA_LIMITS.distance),
+            fov: cameraNumber(source.fov, CAMERA_LIMITS.fov)
+        };
+    };
+
+    const isDefaultCamera = camera => camera.mode === CAMERA_MODES[0]
+        && camera.pitch === null && camera.yaw === null && camera.distance === null && camera.fov === null;
+
+    /** The map's default camera, defaults filled in. */
+    const camera = mapData => normalizeCamera(mapData && mapData.reactor3d && mapData.reactor3d.camera);
+
+    /** Set the default camera, dropping it from the sidecar when it is the stock view. */
+    const setCamera = (mapData, values) => {
+        if (!mapData) return false;
+        const next = normalizeCamera(values);
+        if (JSON.stringify(camera(mapData)) === JSON.stringify(next)) return false;
+        if (isDefaultCamera(next)) {
+            if (mapData.reactor3d) delete mapData.reactor3d.camera;
+            return true;
+        }
+        const sidecar = ensure(mapData);
+        if (!sidecar) return false;
+        // Null overrides are left out so the file reads as what was chosen.
+        const stored = { mode: next.mode };
+        for (const key of ['pitch', 'yaw', 'distance', 'fov']) {
+            if (next[key] !== null) stored[key] = next[key];
+        }
+        sidecar.camera = stored;
+        return true;
+    };
+
+    /*
+     * Model props: 3D models placed on the map from the palette, kept in
+     * `reactor3d.props`. Position in tiles (fractional when placed in 3D),
+     * `z` a lift off the ground in tiles, angles in degrees, `size` the
+     * model's longest side in tiles, `direction` the facing (2/4/6/8) the
+     * flat map draws. The runtime stands each one in the map as a
+     * model-bound event, which is what gives it collision.
+     */
+    const PROP_MAX_LIFT = 512;
+    const PROP_DIRECTIONS = [2, 4, 6, 8];
+
+    const normalizeProp = (raw, mapData) => {
+        if (!raw || typeof raw !== 'object' || !raw.name) return null;
+        const number = (value, fallback) => {
+            const parsed = Number(value);
+            return Number.isFinite(parsed) ? parsed : fallback;
+        };
+        const width = mapData && mapData.width > 0 ? mapData.width : Infinity;
+        const height = mapData && mapData.height > 0 ? mapData.height : Infinity;
+        const direction = Number(raw.direction);
+        const size = number(raw.size, 2);
+        const scale = number(raw.scale, 1);
+        const wrap = value => {
+            let angle = number(value, 0) % 360;
+            if (angle > 180) angle -= 360;
+            if (angle < -180) angle += 360;
+            return Math.round(angle * 10) / 10;
+        };
+        return {
+            id: Math.max(1, Math.floor(number(raw.id, 1))),
+            name: String(raw.name),
+            ext: raw.ext ? String(raw.ext) : '',
+            file: raw.file ? String(raw.file) : '',
+            texture: raw.texture ? String(raw.texture) : '',
+            x: Math.round(Math.max(0, Math.min(width - 1, number(raw.x, 0))) * 100) / 100,
+            y: Math.round(Math.max(0, Math.min(height - 1, number(raw.y, 0))) * 100) / 100,
+            z: Math.round(Math.max(0, Math.min(PROP_MAX_LIFT, number(raw.z, 0))) * 100) / 100,
+            yaw: wrap(raw.yaw),
+            pitch: wrap(raw.pitch),
+            roll: wrap(raw.roll),
+            direction: PROP_DIRECTIONS.indexOf(direction) >= 0 ? direction : 2,
+            size: size > 0 ? Math.round(size * 100) / 100 : 2,
+            scale: scale > 0 ? Math.round(scale * 1000) / 1000 : 1,
+            passable: raw.passable === true || raw.passable === 'true',
+            animation: raw.animation ? String(raw.animation) : '',
+            repeat: raw.repeat === true || raw.repeat === 'true',
+            effect: raw.effect ? String(raw.effect) : ''
+        };
+    };
+
+    /** The map's props, validated, in sidecar order. */
+    const props = mapData => {
+        const sidecar = mapData && mapData.reactor3d;
+        const list = sidecar && Array.isArray(sidecar.props) ? sidecar.props : [];
+        return list.map(raw => normalizeProp(raw, mapData)).filter(Boolean);
+    };
+
+    const propById = (mapData, id) => props(mapData).find(prop => prop.id === Number(id)) || null;
+
+    const writeProps = (mapData, list) => {
+        if (!list.length) {
+            if (mapData.reactor3d) delete mapData.reactor3d.props;
+            return true;
+        }
+        const sidecar = ensure(mapData);
+        if (!sidecar) return false;
+        sidecar.props = list;
+        return true;
+    };
+
+    /** Add a prop, returning its id (or 0 when it could not be added). */
+    const addProp = (mapData, values) => {
+        if (!mapData) return 0;
+        const list = props(mapData);
+        const id = list.reduce((max, prop) => Math.max(max, prop.id), 0) + 1;
+        const prop = normalizeProp(Object.assign({}, values, { id }), mapData);
+        if (!prop) return 0;
+        list.push(prop);
+        return writeProps(mapData, list) ? id : 0;
+    };
+
+    /** Change some fields of a prop, reporting whether anything changed. */
+    const updateProp = (mapData, id, patch) => {
+        if (!mapData) return false;
+        const list = props(mapData);
+        const index = list.findIndex(prop => prop.id === Number(id));
+        if (index < 0) return false;
+        const next = normalizeProp(Object.assign({}, list[index], patch, { id: list[index].id }), mapData);
+        if (!next || JSON.stringify(next) === JSON.stringify(list[index])) return false;
+        list[index] = next;
+        return writeProps(mapData, list);
+    };
+
+    const removeProp = (mapData, id) => {
+        if (!mapData) return false;
+        const list = props(mapData);
+        const kept = list.filter(prop => prop.id !== Number(id));
+        if (kept.length === list.length) return false;
+        return writeProps(mapData, kept);
+    };
+
     const api = {
         SUFFIX, VERSION, MODE_3D, MAX, MIN,
-        NOTE_TAG, hasNote, addNote, removeNote,
+        CAMERA_MODES, camera, setCamera,
+        PROP_MAX_LIFT, PROP_DIRECTIONS, normalizeProp, props, propById, addProp, updateProp, removeProp,
+        NOTE_TAG, hasNote, addNote, removeNote, setMode3D,
+        ROOM_DEFAULT_HEIGHT, ROOM_MIN_HEIGHT, ROOM_MAX_HEIGHT,
+        clampRoomHeight, room, setRoom,
         clamp, fileNameFor, ensure, at, setAt, raiseAt,
         snapshot, restore, isFlat, save
     };

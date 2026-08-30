@@ -24,6 +24,10 @@ class EventCommandList {
         this.commandPicker = new EventCommandPicker();
         this.playModelAnimationEditor = new PlayModelAnimationEditor();
         this.callUserInterfaceEditor = new CallUserInterfaceEditor();
+        this.camera3DEditor = typeof Camera3DEditor !== 'undefined' ? new Camera3DEditor() : null;
+        this.playModelEffectEditor = typeof PlayModelEffectEditor !== 'undefined' ? new PlayModelEffectEditor() : null;
+        this.videoSurfaceEditor = typeof VideoSurfaceEditor !== 'undefined'
+            ? new VideoSurfaceEditor(eventEditor.databaseManager, eventEditor.projectController) : null;
         this.selectedIndices = [];
         this.clipboard = null;
         this.currentPage = null;
@@ -376,9 +380,29 @@ class EventCommandList {
 
     /** The dialog for a Reactor plugin command, by its command name. */
     _reactorCommandEditor(name) {
+        if (typeof VideoSurfaceEditor !== 'undefined'
+            && typeof VideoSurfaceEditor.supports === 'function'
+            && VideoSurfaceEditor.supports(name)) {
+            return this.videoSurfaceEditor;
+        }
         if (name === 'PlayModelAnimation') return this.playModelAnimationEditor;
+        if (name === 'ChangeCamera3D') return this.camera3DEditor;
+        if (name === 'PlayModelEffect') return this.playModelEffectEditor;
         if (name === 'CallUserInterface') return this.callUserInterfaceEditor;
         return null;
+    }
+
+    _videoSurfaceContext(page = this.currentPage, pageIndex = this.currentPageIndex, commandIndex = null, editing = false) {
+        return {
+            type: 'map',
+            editing,
+            event: this.eventEditor?.currentEvent || this.eventEditor?.sourceEvent || null,
+            page,
+            pageIndex,
+            commandIndex,
+            currentMap: this.eventEditor?.mapManager?.currentMap
+                || this.eventEditor?.projectController?.eventManager?.currentMap || null
+        };
     }
 
     _t(key, params = {}) {
@@ -1044,8 +1068,8 @@ class EventCommandList {
 
         const ctx = canvas.getContext('2d');
         const path = require('path');
-        const imagePath = path.join(currentProject.path, 'img', 'faces', faceName + '.png');
-        const src = RRAssetFiles.toUrl(imagePath);
+        const src = RRAssetFiles.imageUrlFor(
+            path.join(currentProject.path, 'img', 'faces'), faceName);
 
         // One decoded sheet per face file — a fresh Image() per row
         // re-fetched and re-decoded the same PNG for every message row.
@@ -1863,7 +1887,12 @@ class EventCommandList {
                 // documentation and the engine's editor both show.
                 const label = code === 357 && typeof params[2] === 'string' ? params[2].trim() : '';
                 const commandName = label || params[1] || '';
-                if (pluginName && commandName) {
+                if (code === 357 && pluginName === 'RPGReactor' && commandName) {
+                    // Reactor's own commands are listed by what they do, not
+                    // as an anonymous plugin call.
+                    info.name = this._commandName(commandName);
+                    description = '';
+                } else if (pluginName && commandName) {
                     description = `${pluginName}: ${commandName}`;
                 } else if (pluginName) {
                     description = pluginName;
@@ -3197,7 +3226,8 @@ class EventCommandList {
                         this.selectedIndices = [insertIndex];
                         this.refreshCommandList(page, pageIndex);
                     }
-                });
+                }, command.reactor, reactorEditor === this.videoSurfaceEditor
+                    ? this._videoSurfaceContext(page, pageIndex, insertIndex) : undefined);
                 return;
             }
 
@@ -3336,7 +3366,7 @@ class EventCommandList {
 
             // Change Battle BGM
             if (code === 132) {
-                this.changeBattleBGMEditor.show(null, (command) => {
+                this.audioEditor.show(null, code, (command) => {
                     if (command) {
                         page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
                         this.selectedIndices = [insertIndex];
@@ -3348,7 +3378,7 @@ class EventCommandList {
 
             // Change Victory ME
             if (code === 133) {
-                this.changeVictoryMEEditor.show(null, (command) => {
+                this.audioEditor.show(null, code, (command) => {
                     if (command) {
                         page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
                         this.selectedIndices = [insertIndex];
@@ -3420,7 +3450,7 @@ class EventCommandList {
 
             // Change Defeat ME
             if (code === 139) {
-                this.changeDefeatMEEditor.show(null, (command) => {
+                this.audioEditor.show(null, code, (command) => {
                     if (command) {
                         page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
                         this.selectedIndices = [insertIndex];
@@ -4587,7 +4617,8 @@ class EventCommandList {
                         page.list, index, editedCommand, 357, 657);
                     this.refreshCommandList(page, pageIndex);
                 }
-            });
+            }, undefined, reactorEditor === this.videoSurfaceEditor
+                ? this._videoSurfaceContext(page, pageIndex, index, true) : undefined);
             return;
         }
         if (code === 356 || code === 357) {
@@ -4757,7 +4788,7 @@ class EventCommandList {
 
         // Change Battle BGM command
         if (code === 132) {
-            this.changeBattleBGMEditor.show(command, (editedCommand) => {
+            this.audioEditor.show(command, code, (editedCommand) => {
                 if (editedCommand) {
                     replaceSingle(editedCommand);
                     this.refreshCommandList(page, pageIndex);
@@ -4768,7 +4799,7 @@ class EventCommandList {
 
         // Change Victory ME command
         if (code === 133) {
-            this.changeVictoryMEEditor.show(command, (editedCommand) => {
+            this.audioEditor.show(command, code, (editedCommand) => {
                 if (editedCommand) {
                     replaceSingle(editedCommand);
                     this.refreshCommandList(page, pageIndex);
@@ -4834,7 +4865,7 @@ class EventCommandList {
 
         // Change Defeat ME command
         if (code === 139) {
-            this.changeDefeatMEEditor.show(command, (editedCommand) => {
+            this.audioEditor.show(command, code, (editedCommand) => {
                 if (editedCommand) {
                     replaceSingle(editedCommand);
                     this.refreshCommandList(page, pageIndex);

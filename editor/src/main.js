@@ -20,6 +20,7 @@ class RPGReactor {
         this.sidebarResizer = null;
         this.buildManager = null;
         this.pluginManager = null;
+        this.resourceManager = null;
 
         // Map editing subsystems
         this.tilemapManager = null;
@@ -28,6 +29,7 @@ class RPGReactor {
         this.tilesetEditor = null;
         this.tilesetPaletteViewer = null;
         this.eventManager = null;
+        this.videoSurfacePreviewManager = null;
 
         // PERFORMANCE: Cache last displayed coordinates to avoid unnecessary DOM updates
         this.lastDisplayedCoords = { x: null, y: null };
@@ -77,6 +79,7 @@ class RPGReactor {
             showForgeLauncher: () => this.forgeManager.showLauncher(),
             openForgeTool: (toolId) => this.forgeManager.openTool(toolId),
             showPluginManager: () => this.showPluginManager(),
+            showResourceManager: () => this.resourceManager?.show(),
             showAbout: () => this.showAbout(),
             getMapEditor: () => this.mapEditor,
             getEventManager: () => this.eventManager,
@@ -195,6 +198,7 @@ class RPGReactor {
             const openTab = this.tilesetPaletteViewer?.currentLayer;
             if (openTab === 'O') this.tilesetPaletteViewer.onObject3DTabSelected?.();
             else if (openTab === 'R') this.tilesetPaletteViewer.onRegionTabSelected?.();
+            else if (openTab === 'M') this.tilesetPaletteViewer.onModelPropsTabSelected?.();
 
             // Re-setup map interaction for the new map (important when switching maps)
             if (this.mapEditor) {
@@ -222,6 +226,17 @@ class RPGReactor {
             // This is important when switching projects or maps
             this.eventManager.initializeEventLayer(this.projectController.getTilemapManager());
             this.projectController.eventManager = this.eventManager;
+
+            // Model props are map content: drawn on every map, whichever tab is up.
+            if (!this.modelPropsManager && typeof ModelPropsManager !== 'undefined') {
+                this.modelPropsManager = new ModelPropsManager(this.projectController);
+            }
+            if (this.modelPropsManager) {
+                this.projectController.modelPropsManager = this.modelPropsManager;
+                this.modelPropsManager.setMap(
+                    this.projectController.getTilemapManager().currentMap,
+                    this.projectController.getTilemapManager());
+            }
 
             // Set current map for event manager
             if (this.eventManager) {
@@ -276,6 +291,10 @@ class RPGReactor {
 
             // Update map info banner
             this.updateMapInfoBanner();
+            this.videoSurfacePreviewManager?.setMap(
+                this.projectController.getTilemapManager()?.currentMap,
+                this.projectController.getTilemapManager()
+            );
         };
 
         // Initialize Audio Player
@@ -325,17 +344,32 @@ class RPGReactor {
             this.eventManager.showContextMenu(clientX, clientY, tile.x, tile.y,
                 this.eventManager.getEventAt(tile.x, tile.y));
         };
+        this.videoSurfacePreviewManager = new VideoSurfacePreviewManager(
+            this.projectController,
+            this.databaseManager
+        );
+        this.projectController.videoSurfacePreviewManager = this.videoSurfacePreviewManager;
+        this.videoSurfacePreviewManager.setEnabled(this.optionsManager.getShowVideoPreviews());
         // The height brush's controls only mean anything while it is on, so
         // they are bound once here and shown with it.
 
-        document.getElementById('map-3d-view')?.addEventListener('change', (event) => {
-            this.applyMap3DViewPreference(event.currentTarget.checked);
+        document.getElementById('map-3d-view')?.addEventListener('change', async (event) => {
+            const active = await this.applyMap3DViewPreference(event.currentTarget.checked);
+            // Ticked or unticked by hand: that is the map's preference from now on.
+            this.projectController.rememberMap3DView(
+                this.projectController.tilemapManager?.currentMap?.id, active);
         });
-        // Reflect the stored preference in the checkbox, but do not build the
-        // scene here: there is no map open yet, and three.js should not be
+        document.getElementById('map-video-previews')?.addEventListener('change', (event) => {
+            this.optionsManager.setShowVideoPreviews(event.currentTarget.checked);
+            this.videoSurfacePreviewManager?.setEnabled(event.currentTarget.checked);
+        });
+        const videoCheckbox = document.getElementById('map-video-previews');
+        if (videoCheckbox) videoCheckbox.checked = this.optionsManager.getShowVideoPreviews();
+        // The box follows the map once one is open (each map remembers its
+        // own view); with no map yet it starts clear, and three.js is not
         // parsed until a viewport actually needs it.
         const map3DCheckbox = document.getElementById('map-3d-view');
-        if (map3DCheckbox) map3DCheckbox.checked = this.optionsManager.getMap3DView();
+        if (map3DCheckbox) map3DCheckbox.checked = false;
         // A leftover activation stage means the LAST session died mid-way
         // through turning 3D on — a native GPU crash no JS handler can see.
         // Record which context strategy was in flight so the next attempt
@@ -363,6 +397,9 @@ class RPGReactor {
                 }
                 this.optionsManager.setMap3DView(false);
                 if (map3DCheckbox) map3DCheckbox.checked = false;
+                // Remembered 3D maps stay 2D this session; ticking the box
+                // by hand is the way back in after a crash.
+                this._map3DCrashGuard = true;
                 console.error('The 3D map view crashed the editor last session at stage "'
                     + stage + '" using the ' + strategy + ' context strategy.');
                 const tt = text => window.I18n ? window.I18n.tText(text) : text;
@@ -388,9 +425,9 @@ class RPGReactor {
         // Asked for again whenever a map comes up with the viewport off, so a
         // project opened while the preference is on builds its 3D canvas
         // rather than showing a ticked box over a 2D one.
-        this.projectController.reconcileMap3DView = () => {
-            if (!this.optionsManager.getMap3DView()) return;
-            this.applyMap3DViewPreference(true);
+        this.projectController.reconcileMap3DView = (wanted) => {
+            if (wanted && this._map3DCrashGuard) return;
+            this.applyMap3DViewPreference(wanted === true);
         };
 
         // Initialize Forge tool suite (character generator etc.)
@@ -412,6 +449,9 @@ class RPGReactor {
 
         // Initialize Plugin Manager
         this.pluginManager = new PluginManager(this.projectController);
+
+        // Initialize project resource browser and safe asset operations
+        this.resourceManager = new ResourceManager(this.projectController, this.uiManager);
 
         // Set up UI event handlers
         this.uiManager.setupEventHandlers();
@@ -855,6 +895,20 @@ class RPGReactor {
                 manager.createObjectLayer();
                 manager.setVisible(true);
                 this.projectController.getRegionManager()?.setVisible(false);
+            };
+
+            // The model props tab: 3D models placed on the map from a list.
+            this.tilesetPaletteViewer.onModelPropsTabSelected = () => {
+                const container = document.getElementById('model-props-ui-container');
+                const manager = this.modelPropsManager;
+                if (!container || !manager) return;
+                manager.initializeUI(container);
+                manager.activate();
+                this.projectController.getRegionManager()?.setVisible(false);
+                this.projectController.getObject3DManager()?.setVisible(false);
+            };
+            this.tilesetPaletteViewer.onModelPropsTabLeft = () => {
+                this.modelPropsManager?.deactivate();
             };
 
             // Set up tileset layer selection callback - disable event mode when switching to tileset mode

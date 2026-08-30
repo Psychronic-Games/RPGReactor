@@ -109,6 +109,15 @@ class ChangeParallaxEditor {
 
         filenameRow.appendChild(filenameLabel);
         filenameRow.appendChild(filenameInput);
+        const browse = DatabaseEditorUI.imageBrowser(this.projectController);
+        if (browse) {
+            filenameRow.appendChild(browse.picker.createImageBrowseButton(filenameInput, {
+                projectPath: browse.projectPath,
+                folder: 'parallaxes',
+                title: tt('Select Parallax Background'),
+                zIndex: 10007
+            }));
+        }
         content.appendChild(filenameRow);
 
         // Loop X checkbox

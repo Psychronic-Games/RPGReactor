@@ -480,7 +480,7 @@ class DatabaseTroopEditor {
             ? ['sv_enemies', 'enemies', 'characters']
             : ['enemies', 'sv_enemies', 'characters'];
         for (const dir of searchDirs) {
-            const file = RRAssetFiles.find(path.join(project.path, 'img', dir), enemy.battlerName, ['.png']);
+            const file = RRAssetFiles.findImage(path.join(project.path, 'img', dir), enemy.battlerName);
             if (file) return RRAssetFiles.toUrl(file.absolutePath);
         }
         return null;
@@ -624,19 +624,19 @@ class DatabaseTroopEditor {
         content.appendChild(this.createBBSelect('Lower Layer:', 'troop-bb1-select', bb1Files, this.battleback1Name, (val) => {
             this.battleback1Name = val;
             this.loadAndRenderCanvas();
-        }));
+        }, 1));
 
         // Upper Layer (battleback2)
         content.appendChild(this.createBBSelect('Upper Layer:', 'troop-bb2-select', bb2Files, this.battleback2Name, (val) => {
             this.battleback2Name = val;
             this.loadAndRenderCanvas();
-        }));
+        }, 2));
 
         section.appendChild(content);
         return section;
     }
 
-    createBBSelect(label, id, files, currentVal, onChange) {
+    createBBSelect(label, id, files, currentVal, onChange, layer) {
         const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const row = document.createElement('div');
         row.style.cssText = 'margin-bottom: 6px;';
@@ -654,7 +654,39 @@ class DatabaseTroopEditor {
         });
         select.onchange = () => onChange(select.value);
         row.appendChild(select);
+        const browse = document.createElement('button');
+        browse.type = 'button';
+        browse.className = 'troop-bb-browse-btn';
+        browse.dataset.layer = String(layer);
+        browse.textContent = tt('Browse…');
+        browse.style.cssText = 'margin-top: 3px; width: 100%; background: var(--color-border-subtle); border: 1px solid var(--color-border-input); color: var(--color-text-strong); padding: 3px; border-radius: 3px; font-size: 11px; cursor: pointer;';
+        browse.addEventListener('click', () => this.openBattlebackPicker(layer, select, onChange));
+        row.appendChild(browse);
         return row;
+    }
+
+    openBattlebackPicker(layer, select, onChange) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
+        const project = this.projectManager?.getCurrentProject?.();
+        if (!project?.path || typeof this.parentEditor?.browseImageFolder !== 'function') return;
+
+        this.parentEditor.browseImageFolder({
+            projectPath: project.path,
+            folder: layer === 2 ? 'battlebacks2' : 'battlebacks1',
+            title: tt(layer === 2 ? 'Select Battleback 2' : 'Select Battleback 1'),
+            current: select.value || '',
+            allowNone: true,
+            onPick: (name) => {
+                if (![...select.options].some(option => option.value === name)) {
+                    const option = document.createElement('option');
+                    option.value = name;
+                    option.textContent = name || tt('(None)');
+                    select.appendChild(option);
+                }
+                select.value = name;
+                onChange(name);
+            }
+        });
     }
 
     scanImageDir(project, subdir) {
@@ -664,7 +696,7 @@ class DatabaseTroopEditor {
             const fs = require('fs');
             const dir = path.join(project.path, 'img', subdir);
             if (!fs.existsSync(dir)) return [];
-            return RRAssetFiles.listNames(dir, ['.png']);
+            return RRAssetFiles.listImageReferences(dir);
         } catch (e) { return []; }
     }
 
@@ -825,7 +857,6 @@ class DatabaseTroopEditor {
         if (!project) return;
 
         const path = require('path');
-        const fs = require('fs');
         let pending = 0;
 
         const done = () => { pending--; if (pending <= 0) this.renderCanvas(); };
@@ -836,7 +867,8 @@ class DatabaseTroopEditor {
             this.battleback1Img = new Image();
             this.battleback1Img.onload = done;
             this.battleback1Img.onerror = () => { this.battleback1Img = null; done(); };
-            this.battleback1Img.src = RRAssetFiles.urlFor(path.join(project.path, 'img', 'battlebacks1'), this.battleback1Name, ['.png']);
+            this.battleback1Img.src = RRAssetFiles.imageUrlFor(
+                path.join(project.path, 'img', 'battlebacks1'), this.battleback1Name);
         } else { this.battleback1Img = null; }
 
         // Battleback2
@@ -845,7 +877,8 @@ class DatabaseTroopEditor {
             this.battleback2Img = new Image();
             this.battleback2Img.onload = done;
             this.battleback2Img.onerror = () => { this.battleback2Img = null; done(); };
-            this.battleback2Img.src = RRAssetFiles.urlFor(path.join(project.path, 'img', 'battlebacks2'), this.battleback2Name, ['.png']);
+            this.battleback2Img.src = RRAssetFiles.imageUrlFor(
+                path.join(project.path, 'img', 'battlebacks2'), this.battleback2Name);
         } else { this.battleback2Img = null; }
 
         // Enemy sprites
@@ -867,7 +900,7 @@ class DatabaseTroopEditor {
                 : ['enemies', 'sv_enemies', 'characters'];
             let found = false;
             for (const dir of searchDirs) {
-                const battlerFile = RRAssetFiles.find(path.join(project.path, 'img', dir), battlerName, ['.png']);
+                const battlerFile = RRAssetFiles.findImage(path.join(project.path, 'img', dir), battlerName);
                 if (battlerFile) {
                     const img = new Image();
                     img.onload = () => { this.enemySpriteImages[battlerName] = img; done(); };
@@ -1313,15 +1346,28 @@ class DatabaseTroopEditor {
                 this.getCommandEditor('loop', LoopEditor).show(null, insertCommands);
                 return;
             }
-            if ([241, 242, 245, 246, 249, 250, 251].includes(command.code)) {
+            if ([132, 133, 139, 241, 242, 245, 246, 249, 250, 251].includes(command.code)) {
                 this.getCommandEditor('audio', AudioCommandEditor).show(null, command.code, edited => {
                     if (edited) insertCommands([edited]);
                 });
                 return;
             }
+            if (command.code === 357 && ['ShowVideoSurface', 'TransformVideoSurface'].includes(command.reactor)) {
+                this.warnVideoSurfaceMapOnly();
+                return;
+            }
+            if (command.code === 357 && command.reactor === 'StopVideoSurface'
+                && typeof VideoSurfaceEditor !== 'undefined'
+                && typeof VideoSurfaceEditor.supports === 'function'
+                && VideoSurfaceEditor.supports(command.reactor)) {
+                this.getCommandEditor('videoSurface', VideoSurfaceEditor)
+                    .show(null, edited => edited && insertCommands([edited]), command.reactor, { type: 'troop' });
+                return;
+            }
             const editorMap = {
                 117: ['commonEvent', CommonEventEditor],
                 122: ['variables', ControlVariablesEditor],
+                140: ['changeVehicleBGM', ChangeVehicleBGMEditor],
                 231: ['showPicture', ShowPictureEditor],
                 232: ['movePicture', MovePictureEditor],
                 235: ['erasePicture', ErasePictureEditor],
@@ -1353,6 +1399,12 @@ class DatabaseTroopEditor {
             this._editors[name] = new EditorClass(this.databaseManager, this.projectManager);
         }
         return this._editors[name];
+    }
+
+    warnVideoSurfaceMapOnly() {
+        const message = 'Show and Transform Video Surface are map-only commands and cannot run in troop events.';
+        if (typeof window !== 'undefined' && typeof window.alert === 'function') window.alert(message);
+        else if (typeof alert === 'function') alert(message);
     }
 
     buildCommandStructure(code) {
@@ -1405,6 +1457,10 @@ class DatabaseTroopEditor {
             122: [1, 1, 0, 0, 0],       // Control Variables
             125: [0, 0, 0],             // Change Gold
             126: [1, 0, 0, 1],          // Change Items
+            132: [{ name: '', volume: 90, pitch: 100, pan: 0 }], // Change Battle BGM
+            133: [{ name: '', volume: 90, pitch: 100, pan: 0 }], // Change Victory ME
+            139: [{ name: '', volume: 90, pitch: 100, pan: 0 }], // Change Defeat ME
+            140: [0, { name: '', volume: 90, pitch: 100, pan: 0 }], // Change Vehicle BGM
             230: [60],                   // Wait
             241: [{ name: '', volume: 90, pitch: 100, pan: 0 }], // Play BGM
             242: [1],                    // Fadeout BGM
@@ -1523,13 +1579,34 @@ class DatabaseTroopEditor {
             replaceSingle(this.getCommandEditor('forceAction', ForceActionEditor));
             return;
         }
-        if ([241, 242, 245, 246, 249, 250, 251].includes(cmd.code)) {
+        if ([132, 133, 139, 241, 242, 245, 246, 249, 250, 251].includes(cmd.code)) {
             this.getCommandEditor('audio', AudioCommandEditor).show(cmd, cmd.code, edited => {
                 if (!edited) return;
                 edited.indent = cmd.indent || 0;
                 page.list[idx] = edited;
                 refresh();
             });
+            return;
+        }
+        if (cmd.code === 140) {
+            replaceSingle(this.getCommandEditor('changeVehicleBGM', ChangeVehicleBGMEditor));
+            return;
+        }
+        if (cmd.code === 357 && cmd.parameters?.[0] === 'RPGReactor'
+            && ['ShowVideoSurface', 'TransformVideoSurface'].includes(cmd.parameters?.[1])) {
+            this.warnVideoSurfaceMapOnly();
+            return;
+        }
+        if (cmd.code === 357 && cmd.parameters?.[0] === 'RPGReactor'
+            && cmd.parameters?.[1] === 'StopVideoSurface'
+            && typeof VideoSurfaceEditor !== 'undefined'
+            && typeof VideoSurfaceEditor.supports === 'function'
+            && VideoSurfaceEditor.supports(cmd.parameters?.[1])) {
+            this.getCommandEditor('videoSurface', VideoSurfaceEditor).show(cmd, edited => {
+                if (!edited) return;
+                ECL.replaceContiguousBlock(page.list, idx, edited, 357, 657);
+                refresh();
+            }, undefined, { type: 'troop' });
             return;
         }
         if (cmd.code === 356 || cmd.code === 357) {
@@ -1776,7 +1853,12 @@ class DatabaseTroopEditor {
             case 336: { const en = this.databaseManager.getEnemy(p[1]); desc = `${tt('Enemy')} #${p[0] + 1} → ${en ? en.name : '#' + p[1]}`; break; }
             case 339: desc = `${tt('Enemy')} #${p[0] + 1}`; break;
             case 355: desc = p[0] || ''; break;
-            case 356: case 357: desc = p[0] ? `${p[0]}: ${p[1] || ''}` : ''; break;
+            case 356: case 357: {
+                const commandLabel = cmd.code === 357 && p[0] === 'RPGReactor' && p[2]
+                    ? p[2] : p[1];
+                desc = p[0] ? `${p[0]}: ${commandLabel || ''}` : '';
+                break;
+            }
             case 402: desc = p[1] || `${tt('Choice')} ${p[0]}`; break;
             default:
                 if (p.length > 0 && p.length <= 3) desc = p.map(v => typeof v === 'string' ? v : JSON.stringify(v)).join(', ');

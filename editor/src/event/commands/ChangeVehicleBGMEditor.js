@@ -156,34 +156,28 @@ class ChangeVehicleBGMEditor {
         vehicleRow.appendChild(vehicleSelect);
         content.appendChild(vehicleRow);
 
-        // Name input
+        // The vehicle is unique to this command; the audio object itself uses
+        // the same searchable, previewable picker as Play BGM.
         const nameRow = document.createElement('div');
         nameRow.style.cssText = 'display: flex; align-items: center; gap: 8px;';
 
         const nameLabel = document.createElement('span');
-        nameLabel.textContent = t('Name:');
+        nameLabel.textContent = t('BGM:');
         nameLabel.style.cssText = 'color: var(--color-text); font-size: 13px; min-width: 80px;';
 
-        const nameInput = document.createElement('input');
-        nameInput.type = 'text';
-        nameInput.value = this.audioName;
-        nameInput.style.cssText = 'padding: 6px 10px; background-color: var(--color-bg-input); color: var(--color-text); border: 1px solid var(--color-border-input); border-radius: 3px; font-size: 12px; flex: 1;';
-        nameInput.addEventListener('input', (e) => {
-            this.audioName = e.target.value;
-        });
+        const selected = document.createElement('span');
+        selected.textContent = this.audioName || t('(None)');
+        selected.style.cssText = 'color: var(--color-text); font-size: 12px; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;';
+        const browse = document.createElement('button');
+        browse.type = 'button';
+        browse.className = 'rr-btn-secondary';
+        browse.textContent = t('Browse...');
+        browse.addEventListener('click', () => this.openAudioPicker());
 
         nameRow.appendChild(nameLabel);
-        nameRow.appendChild(nameInput);
+        nameRow.appendChild(selected);
+        nameRow.appendChild(browse);
         content.appendChild(nameRow);
-
-        // Volume slider
-        content.appendChild(this.createSliderInput(t('Volume:'), this.volume, 0, 100, (val) => { this.volume = val; }));
-
-        // Pitch slider
-        content.appendChild(this.createSliderInput(t('Pitch:'), this.pitch, 50, 150, (val) => { this.pitch = val; }));
-
-        // Pan slider
-        content.appendChild(this.createSliderInput(t('Pan:'), this.pan, -100, 100, (val) => { this.pan = val; }));
 
         container.appendChild(content);
 
@@ -204,6 +198,35 @@ class ChangeVehicleBGMEditor {
         footer.appendChild(cancelBtn);
         footer.appendChild(okBtn);
         container.appendChild(footer);
+    }
+
+    openAudioPicker() {
+        const project = this.projectController.getCurrentProject
+            ? this.projectController.getCurrentProject()
+            : this.projectController.currentProject;
+        if (!project?.path || typeof RRAudioPickerModal === 'undefined') return;
+        const fs = require('fs');
+        const path = require('path');
+        const audioFolder = path.join(project.path, 'audio', 'bgm');
+        const files = fs.existsSync(audioFolder)
+            ? RRAssetFiles.listUnique(audioFolder, RRAssetFiles.AUDIO_EXTENSIONS)
+            : [];
+        RRAudioPickerModal.open({
+            title: `${window.I18n ? window.I18n.tText('Select') : 'Select'} BGM ${window.I18n ? window.I18n.tText('File') : 'File'}`,
+            folderLabel: 'BGM',
+            files,
+            selected: this.audioName,
+            levels: { volume: this.volume, pitch: this.pitch, pan: this.pan },
+            loopDefault: true,
+            zIndex: 10006,
+            onOk: result => {
+                this.audioName = result.name;
+                this.volume = result.volume;
+                this.pitch = result.pitch;
+                this.pan = result.pan;
+                this.renderContent();
+            }
+        });
     }
 
     /**

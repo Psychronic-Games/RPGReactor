@@ -1795,7 +1795,7 @@ window.testEffekseerOverlay = function(effectName) {
         efxGL.clear(efxGL.COLOR_BUFFER_BIT | efxGL.DEPTH_BUFFER_BIT);
         const viewportSize = overlay.height * 1.2;
         const p = -(viewportSize / overlay.height);
-        efx.setProjectionMatrix([1, 0, 0, 0,   0, -1, 0, 0,   0, 0, 1, p,   0, 0, 0, 1]);
+        efx.setProjectionMatrix([1, 0, 0, 0,   0, 1, 0, 0,   0, 0, 1, p,   0, 0, 0, 1]);
         efx.setCameraMatrix     ([1, 0, 0, 0,   0,  1, 0, 0,   0, 0, 1, 0,   0, 0, -10, 1]);
         efx.beginDraw();
         if (handle.exists) efx.drawHandle(handle);
@@ -2175,6 +2175,10 @@ Bitmap.prototype.initialize = function(width, height) {
     this._baseTexture = null;
     this._image = null;
     this._url = "";
+    this._urls = [];
+    this._urlIndex = 0;
+    this._objectUrl = null;
+    this._animatedImage = false;
     this._paintOpacity = 255;
     this._smooth = true;
     this._loadListeners = [];
@@ -2242,10 +2246,12 @@ Bitmap.prototype.initialize = function(width, height) {
  * @param {string} url - The image url of the texture.
  * @returns {Bitmap} The new bitmap object.
  */
-Bitmap.load = function(url) {
+Bitmap.load = function(url, fallbackUrls) {
     const bitmap = Object.create(Bitmap.prototype);
     bitmap.initialize();
-    bitmap._url = url;
+    bitmap._urls = [url].concat(fallbackUrls || []).filter((value, index, values) =>
+        value && values.indexOf(value) === index);
+    bitmap._url = bitmap._urls[0] || "";
     bitmap._startLoading();
     return bitmap;
 };
@@ -2333,7 +2339,7 @@ Bitmap._sweepStalledLoads = function() {
             // image.
             if (bitmap._loadAttempts < 3) {
                 console.warn("Bitmap: load error, retrying " + bitmap._url + " (attempt " + bitmap._loadAttempts + ")");
-                bitmap._startLoading();
+                bitmap.retry();
             } else {
                 console.error("Bitmap: '" + bitmap._url + "' failed to load after retries; continuing with a BLANK image. Check that the file exists.");
                 bitmap._degradedToBlank = true;
@@ -2518,6 +2524,7 @@ Object.defineProperty(Bitmap.prototype, "paintOpacity", {
  * Destroys the bitmap.
  */
 Bitmap.prototype.destroy = function() {
+    this._revokeObjectUrl();
     if (this._baseTexture) {
         this._baseTexture.destroy();
         this._baseTexture = null;
@@ -2774,6 +2781,9 @@ Bitmap.prototype.addLoadListener = function(listner) {
  * Tries to load the image again.
  */
 Bitmap.prototype.retry = function() {
+    this._urlIndex = 0;
+    this._url = this._urls[0] || this._url;
+    this._triedCaseCorrection = false;
     this._startLoading();
 };
 
@@ -2851,6 +2861,8 @@ Bitmap.prototype._updateScaleMode = function() {
 };
 
 Bitmap.prototype._startLoading = function() {
+    this._revokeObjectUrl();
+    this._triedMvEncrypted = false;
     this._image = new Image();
     this._image.onload = this._onLoad.bind(this);
     this._image.onerror = this._onError.bind(this);
@@ -2878,31 +2890,72 @@ Bitmap.prototype._startLoading = function() {
 
 Bitmap.prototype._startDecrypting = function() {
     this._url = Utils.resolveFileCase(this._url, "_");
+    this._requestEncrypted(this._url + "_");
+};
+
+Bitmap.prototype._requestEncrypted = function(url) {
     const xhr = new XMLHttpRequest();
-    xhr.open("GET", this._url + "_");
+    xhr.open("GET", url);
     xhr.responseType = "arraybuffer";
     xhr.onload = () => this._onXhrLoad(xhr);
-    xhr.onerror = this._onError.bind(this);
+    xhr.onerror = this._onEncryptedError.bind(this);
     xhr.send();
 };
 
 Bitmap.prototype._onXhrLoad = function(xhr) {
     if (xhr.status < 400) {
         const arrayBuffer = Utils.decryptArrayBuffer(xhr.response);
-        const blob = new Blob([arrayBuffer]);
-        this._image.src = URL.createObjectURL(blob);
+        const blob = new Blob([arrayBuffer], { type: Bitmap._mimeType(this._url) });
+        this._objectUrl = URL.createObjectURL(blob);
+        this._image.src = this._objectUrl;
     } else {
-        this._onError();
+        this._onEncryptedError();
+    }
+};
+
+Bitmap.prototype._onEncryptedError = function() {
+    if (!this._triedMvEncrypted && /\.png$/i.test(this._url)) {
+        this._triedMvEncrypted = true;
+        const candidate = this._url.slice(0, -4) + ".rpgmvp";
+        this._requestEncrypted(Utils.correctFileCase(candidate) || candidate);
+        return;
+    }
+    this._onError();
+};
+
+Bitmap.prototype._revokeObjectUrl = function() {
+    if (this._objectUrl) {
+        URL.revokeObjectURL(this._objectUrl);
+        this._objectUrl = null;
     }
 };
 
 Bitmap.prototype._onLoad = function() {
-    if (Utils.hasEncryptedImages()) {
-        URL.revokeObjectURL(this._image.src);
-    }
+    this._revokeObjectUrl();
     this._loadingState = "loaded";
     this._createBaseTexture(this._image);
+    this._animatedImage = Bitmap._isAnimatedImage(this._url);
     this._callLoadListeners();
+};
+
+Bitmap._mimeType = function(url) {
+    const clean = String(url || "").replace(/[?#].*$/, "").replace(/_$/, "").toLowerCase();
+    if (clean.endsWith(".jpg") || clean.endsWith(".jpeg")) return "image/jpeg";
+    if (clean.endsWith(".webp")) return "image/webp";
+    if (clean.endsWith(".svg")) return "image/svg+xml";
+    if (clean.endsWith(".gif")) return "image/gif";
+    return "image/png";
+};
+
+Bitmap._isAnimatedImage = function(url) {
+    return String(url || "").replace(/[?#].*$/, "").replace(/_$/, "").toLowerCase().endsWith(".gif");
+};
+
+Bitmap.prototype._updateAnimatedImage = function() {
+    if (!this._animatedImage || this._loadingState !== "loaded" || !this._image
+        || this._canvas || !this._baseTexture || this._animatedFrame === Graphics.frameCount) return;
+    this._animatedFrame = Graphics.frameCount;
+    this._baseTexture.update();
 };
 
 Bitmap.prototype._callLoadListeners = function() {
@@ -2913,6 +2966,7 @@ Bitmap.prototype._callLoadListeners = function() {
 };
 
 Bitmap.prototype._onError = function() {
+    this._revokeObjectUrl();
     // One retry with the on-disk casing before giving up: Windows-authored
     // projects freely mix filename case that Windows resolves and a
     // case-sensitive filesystem does not.
@@ -2927,6 +2981,13 @@ Bitmap.prototype._onError = function() {
             this._startLoading();
             return;
         }
+    }
+    if (this._urlIndex + 1 < this._urls.length) {
+        this._urlIndex++;
+        this._url = this._urls[this._urlIndex];
+        this._triedCaseCorrection = false;
+        this._startLoading();
+        return;
     }
     this._loadingState = "error";
 };
@@ -3118,6 +3179,9 @@ Sprite.prototype.destroy = function() {
  * Updates the sprite for each frame.
  */
 Sprite.prototype.update = function() {
+    if (this.visible && this.worldVisible !== false && this._bitmap) {
+        this._bitmap._updateAnimatedImage();
+    }
     for (const child of this.children) {
         if (child.update) {
             child.update();
@@ -5098,6 +5162,9 @@ TilingSprite.prototype.destroy = function() {
  * Updates the tiling sprite for each frame.
  */
 TilingSprite.prototype.update = function() {
+    if (this.visible && this.worldVisible !== false && this._bitmap) {
+        this._bitmap._updateAnimatedImage();
+    }
     for (const child of this.children) {
         if (child.update) {
             child.update();

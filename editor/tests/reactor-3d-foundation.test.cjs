@@ -27,12 +27,14 @@ test('the map note opts a map in, and survives a round trip through RPG Maker', 
     assert.equal(Reactor3D.isMap3D({ meta: { '3d': true } }), true);
 });
 
-test('the sidecar overrides the note', () => {
+test('the note is the switch and the sidecar can only downgrade', () => {
     // The sidecar is the authored source; the note is a declaration that can
     // be left behind after 3D is switched back off.
     assert.equal(Reactor3D.mapMode({ meta: { '3d': true }, reactor3d: { mode: '2d' } }),
         Reactor3D.MODE_2D);
-    assert.equal(Reactor3D.mapMode({ reactor3d: { mode: '3d' } }), Reactor3D.MODE_3D);
+    assert.equal(Reactor3D.mapMode({ reactor3d: { mode: '3d' } }), Reactor3D.MODE_2D,
+        'a sidecar left saying 3d cannot promote a map whose note no longer says <3d>');
+    assert.equal(Reactor3D.mapMode({ note: 'x\n<3d>', reactor3d: { mode: '3d' } }), Reactor3D.MODE_3D, 'the note text counts when meta is absent (editor)');
     // An unrecognised mode is not a licence to guess.
     assert.equal(Reactor3D.mapMode({ reactor3d: { mode: 'isometric' } }), Reactor3D.MODE_2D);
 });
@@ -94,12 +96,14 @@ test('the namespace module loads before the managers that use it', () => {
     assert.ok(three >= 0 && managers > three);
 });
 
-test('only a 3D map asks for a sidecar', () => {
+test('every map on disk asks for its sidecar; the web asks only when 3D is in play', () => {
     // Otherwise every map load in every 2D project pays for a 404.
     const at = managersSource.indexOf('DataManager.loadMapSidecar = function');
     assert.ok(at >= 0);
     const body = managersSource.slice(at, managersSource.indexOf('\n};', at));
-    assert.match(body, /if \(!mapData \|\| !mapData\.meta \|\| !mapData\.meta\["3d"\]\) return;/);
+    assert.doesNotMatch(body, /!mapData\.meta\["3d"\]\) return;/, 'flat maps fetch their sidecar too (event models, previews)');
+    assert.match(body, /if \(!fs\.existsSync\(path\.join\(base, url\)\)\) return;/, 'on disk: only when the file exists');
+    assert.match(body, /else if \(!\(mapData\.meta && mapData\.meta\["3d"\]\) && !Reactor3D\._databaseSidecar\) \{/, 'on the web: only a <3d> map or a project with 3D bindings');
     assert.match(body, /typeof Reactor3D === "undefined"/,
         'and it degrades if the namespace is somehow absent');
 });
@@ -235,7 +239,7 @@ test('the 3D subsystem stays one runtime module', () => {
     const threeD = roots.filter(name => name.startsWith('reactor_3d'));
     assert.deepEqual(threeD, ['reactor_3d.js'],
         'scene, camera and billboards belong in reactor_3d.js, not new files');
-    assert.ok(roots.length <= 12, `runtime js/ root has grown to ${roots.length} files`);
+    assert.ok(roots.length <= 13, `runtime js/ root has grown to ${roots.length} files`);
 });
 
 //-----------------------------------------------------------------------------

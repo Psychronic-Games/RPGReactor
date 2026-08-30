@@ -61,6 +61,7 @@ test('editor distribution staging includes runtime asset dependencies', async ()
             'THIRD_PARTY_NOTICES.md',
             'runtime/reactor_main.js',
             'runtime/reactor_picture_extensions.js',
+            'runtime/reactor_video_surfaces.js',
             'runtime/reactor_mv_compat.js',
             'runtime/libs/pixi.js',
             'runtime/libs/pixi_compat.js',
@@ -73,7 +74,9 @@ test('editor distribution staging includes runtime asset dependencies', async ()
             'template/Demo/project.rpgreactor',
             'template/Demo/data/System.json',
             'template/Demo/js/reactor_main.js',
+            'template/Demo/js/reactor_video_surfaces.js',
             'template/Demo/js/reactor_plugins.js',
+            'src/event/commands/VideoSurfaceEditor.js',
             'template/Demo/audio/bgm/Psychronic - Acoustic Circuits.ogg',
             'template/Demo/effects/Absorb.efkefc',
             'template/Demo/img/system/Window.png'

@@ -178,7 +178,7 @@
                             thumb.style.opacity = '1';
                         }
                     }).catch(() => {});
-                    render().then(() => setTimeout(render, 2500));
+                    render();
                 }
             }
         };
@@ -239,6 +239,7 @@
         const ed = reactor3dEditor;
         if (!ed || !ed._renderThumbnail || !spec) return null;
         if (!ed._thumbs) ed._thumbs = {};
+        if (!ed._thumbPromises) ed._thumbPromises = {};
         if (ed._thumbs[spec.name]) return ed._thumbs[spec.name];
         if (!ed.projectController.mapEditor3D && typeof window !== 'undefined'
             && window.reactor && window.reactor.projectController
@@ -248,18 +249,33 @@
                 mapEditor3D: window.reactor.projectController.mapEditor3D
             };
         }
-        const entry = { name: spec.name, ext: spec.ext, file: spec.file };
-        return ed._renderThumbnail(entry).then(url => {
+        const entry = { name: spec.name, ext: spec.ext, file: spec.file, texture: spec.texture };
+        const cached = ed._readCachedThumbnail?.(entry);
+        if (cached) {
+            ed._thumbs[spec.name] = cached;
+            return cached;
+        }
+        if (ed._thumbPromises[spec.name]) return ed._thumbPromises[spec.name];
+        const pending = ed._renderThumbnail(entry).then(url => {
             if (url) {
                 ed._thumbs[spec.name] = url;
-                setTimeout(() => {
+                const template = ed._templates?.[spec.name];
+                const decoded = typeof Database3DEditor === 'undefined'
+                    || Database3DEditor.texturesDecoded(template?.userData?.glbTextures);
+                if (decoded) ed._writeCachedThumbnail?.(entry, url);
+                else setTimeout(() => {
                     Promise.resolve(ed._renderThumbnail(entry)).then(settled => {
-                        if (settled) ed._thumbs[spec.name] = settled;
+                        if (settled) {
+                            ed._thumbs[spec.name] = settled;
+                            ed._writeCachedThumbnail?.(entry, settled);
+                        }
                     }).catch(() => {});
                 }, 1800);
             }
             return url;
-        });
+        }).finally(() => { delete ed._thumbPromises[spec.name]; });
+        ed._thumbPromises[spec.name] = pending;
+        return pending;
     }
 
     function pickerController(projectManager, project) {
@@ -347,10 +363,7 @@
                             thumb.style.opacity = '1';
                         }
                     }).catch(() => {});
-                    // Twice: a first render can land before the model's
-                    // embedded textures decode and bake a silhouette. The
-                    // provider refreshes its cache at ~1.8s; read it after.
-                    render().then(() => setTimeout(render, 2500));
+                    render();
                 }
             }
         };
@@ -369,7 +382,6 @@
             const picker = new ModelGraphicPicker(pickerController(projectManager, project));
             picker.show(bound(), result => {
                 set(project.path, 'actors', id, result, slot);
-                sync();
             }, options.framing ? { framing: true } : undefined);
             resyncWhenClosed();
         };

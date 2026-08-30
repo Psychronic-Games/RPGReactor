@@ -211,6 +211,31 @@ test('project locks are exclusive, recover stale owners, fail closed when malfor
     }
 });
 
+test('project ownership snapshots fail when project identity or the write lock changes', () => {
+    const ProjectController = loadClass('ProjectController.js', 'ProjectController', { nw: {} });
+    const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'rr-project-owner-'));
+    const manager = { fs, path };
+    const controller = new ProjectController(manager, { data: {} }, { updateStatus() {} });
+    try {
+        assert.equal(controller.acquireProjectLock(tempRoot), true);
+        controller.currentProject = { path: tempRoot, name: 'Owned' };
+        controller.projectLoaded = true;
+        const snapshot = controller.captureProjectOwnership();
+        assert.equal(controller.verifyProjectOwnership(snapshot, { requireWrite: true }), true);
+
+        const original = controller.currentProject;
+        controller.currentProject = { ...original };
+        assert.throws(() => controller.verifyProjectOwnership(snapshot), /open project changed/i);
+        controller.currentProject = original;
+
+        const lock = JSON.parse(fs.readFileSync(controller.projectLockPath, 'utf8'));
+        fs.writeFileSync(controller.projectLockPath, JSON.stringify({ ...lock, token: 'f'.repeat(64) }));
+        assert.throws(() => controller.verifyProjectOwnership(snapshot, { requireWrite: true }), /lock changed/i);
+    } finally {
+        fs.rmSync(tempRoot, { recursive: true, force: true });
+    }
+});
+
 test('FsAtomic uses random exclusive no-follow temp files, fsyncs, and cleans failed writes', () => {
     const writeAtomic = require(path.join(editorRoot, 'src', 'utils', 'FsAtomic.js'));
     const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'rr-atomic-'));

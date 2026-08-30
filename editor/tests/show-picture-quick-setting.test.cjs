@@ -59,6 +59,21 @@ test('Show Picture Quick Setting scales naturally with the app window', () => {
     assert.equal(editor.calculateQuickDialogWidth(1000, 800, 320), 800);
 });
 
+test('Show Picture Quick Setting resolves explicit image references without stripping them', () => {
+    const editor = makeEditor();
+    let received;
+    global.RRAssetFiles = {
+        findImage(root, reference) {
+            received = { root, reference };
+            return { relativePath: reference };
+        }
+    };
+    editor.pictureName = 'portraits/Hero.webp';
+    assert.deepEqual(editor.getPictureAsset(), { relativePath: 'portraits/Hero.webp' });
+    assert.equal(received.reference, 'portraits/Hero.webp');
+    delete global.RRAssetFiles;
+});
+
 test('Show Picture Quick Setting previews origin, scale, and opacity', () => {
     const editor = makeEditor({ screenWidth: 1280, screenHeight: 720 });
     editor.origin = 1;

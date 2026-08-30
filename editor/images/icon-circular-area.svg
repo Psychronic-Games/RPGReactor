@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Circular Area Tool">
+  <defs>
+    <linearGradient id="circle-field" x1="6" y1="7" x2="58" y2="57" gradientUnits="userSpaceOnUse"><stop stop-color="#075cdd"/><stop offset=".55" stop-color="#072b95"/><stop offset="1" stop-color="#03102a"/></linearGradient>
+    <radialGradient id="circle-gold"><stop stop-color="#fff59c"/><stop offset=".45" stop-color="#ffd529"/><stop offset="1" stop-color="#f08a0c"/></radialGradient>
+  </defs>
+  <rect x="4" y="5" width="56" height="54" rx="7" fill="#01030a" stroke="#01030a" stroke-width="6"/>
+  <rect x="6" y="7" width="52" height="50" rx="5" fill="url(#circle-field)" stroke="#24bdf3" stroke-width="2"/>
+  <path d="M23 8v48M41 8v48M7 24h50M7 41h50" fill="none" stroke="#168ed8" stroke-width="2"/>
+  <circle cx="32" cy="32" r="21" fill="#01030a" stroke="#01030a" stroke-width="5"/>
+  <circle cx="32" cy="32" r="19" fill="url(#circle-gold)" stroke="#d7318f" stroke-width="2.7"/>
+  <path d="M32 14v36M14 32h36M19 20c7 6 19 6 26 0M19 44c7-6 19-6 26 0" fill="none" stroke="#f08a0c" stroke-width="1.7" opacity=".8"/>
+  <path d="M32 9v6M32 49v6M9 32h6M49 32h6" stroke="#fff2a0" stroke-width="2.7" stroke-linecap="round"/>
+</svg>

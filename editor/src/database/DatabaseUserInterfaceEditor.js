@@ -2112,7 +2112,9 @@ class DatabaseUserInterfaceEditor {
         const dir = path.join(project.path, 'img', folder);
         let files = [];
         try {
-            files = RRAssetFiles.listNames(dir, ['.png']);
+            files = node.source === 'picture'
+                ? RRAssetFiles.listImageReferences(dir)
+                : RRAssetFiles.listNames(dir, ['.png']);
         } catch (error) {
             console.error('Error reading image folder:', error);
             return;
@@ -2126,7 +2128,9 @@ class DatabaseUserInterfaceEditor {
             this.renderTree();
             this.renderProperties();
             this.scheduleRender();
-        }, fileName => RRAssetFiles.urlFor(dir, fileName, ['.png']), node.file, Object.assign({
+        }, fileName => node.source === 'picture'
+            ? RRAssetFiles.imageUrlFor(dir, fileName)
+            : RRAssetFiles.urlFor(dir, fileName, ['.png']), node.file, Object.assign({
             allowNone: true,
             selectButtonLabel: this._t('Select Image')
         }, sheetType ? { sheetType, currentIndex: node.index || 0 } : {}));
@@ -2653,6 +2657,9 @@ class DatabaseUserInterfaceEditor {
         if (!project || !project.path || !name) return null;
         try {
             const path = require('path');
+            if (folder === 'pictures' && typeof RRAssetFiles !== 'undefined') {
+                return RRAssetFiles.imageUrlFor(path.join(project.path, 'img', folder), name) || null;
+            }
             const filePath = path.join(project.path, 'img', folder, name + '.png');
             return window.RPGReactorAssetUrl ? window.RPGReactorAssetUrl(filePath) : 'file://' + filePath.replace(/\\/g, '/');
         } catch (error) {

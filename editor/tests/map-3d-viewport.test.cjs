@@ -58,6 +58,7 @@ function webViewport({ fail = '' } = {}) {
                     if (failedUrlPart && element.src.includes(failedUrlPart)) {
                         element.onerror();
                     } else {
+                        if (element.src.endsWith('/pako.min.js')) browserWindow.pako = {};
                         if (element.src.endsWith('/three.js')) browserWindow.THREE = {};
                         if (element.src.endsWith('/reactor_3d.js')) browserWindow.Reactor3D = {};
                         element.onload();
@@ -171,6 +172,7 @@ test('the runtime module is read from disk, not copied into the editor', () => {
     // the first time either changed, and seeing what the game will draw is the
     // entire point of the view.
     assert.match(source, /getRuntimePath/);
+    assert.match(source, /'libs', 'pako\.min\.js'/);
     assert.match(source, /'libs', 'three\.js'/);
     assert.match(source, /'reactor_3d\.js'/);
     assert.equal(fs.existsSync(path.join(repoRoot, 'runtime', 'libs', 'three.js')), true);
@@ -189,13 +191,14 @@ test('WebHost loads 3D viewport dependencies lazily from the bundled project', a
 
     assert.equal(await web.view.ensureLibraries(), true);
     assert.deepEqual(web.requested, [
+        '/project/js/libs/pako.min.js',
         '/project/js/libs/three.js',
         '/project/js/reactor_3d.js'
     ]);
     assert.equal(web.desktopLookup(), false, 'the browser does not ask for a desktop runtime path');
 
     assert.equal(await web.view.ensureLibraries(), true);
-    assert.equal(web.requested.length, 2, 'a second request reuses the loaded globals');
+    assert.equal(web.requested.length, 3, 'a second request reuses the loaded globals');
 });
 
 test('a missing Web 3D dependency reports its project path and can be retried', async () => {

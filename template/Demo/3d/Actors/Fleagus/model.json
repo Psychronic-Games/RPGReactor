@@ -2,14 +2,14 @@
   "animations": [
     {
       "type": "clip",
-      "trigger": "moving",
+      "trigger": "dashing",
       "name": "Running",
       "clip": "Running",
       "part": ""
     },
     {
       "type": "clip",
-      "trigger": "moving",
+      "trigger": "walking",
       "name": "Walking",
       "clip": "Walking",
       "part": ""

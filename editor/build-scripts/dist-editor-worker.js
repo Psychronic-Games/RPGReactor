@@ -72,8 +72,8 @@ const codecCacheCandidates = nwCodec.cacheDirectories(appRoot);
 const createdArtifacts = new Set();
 let releaseHashManifest = null;
 
-function getReleaseHashManifest() {
-    if (!releaseBuild) return null;
+function getReleaseHashManifest(required = false) {
+    if (!releaseBuild && !required) return null;
     if (!releaseHashManifest) {
         const manifestPath = releaseHashManifestPath || process.env.RPG_REACTOR_RELEASE_HASH_MANIFEST ||
             path.join(appRoot, 'build-scripts', 'release-hashes.json');
@@ -298,12 +298,12 @@ async function installProprietaryCodec(platform, runtimeRoot, pBase, pSpan) {
         cacheDirectories: codecCacheCandidates,
         download: (url, destination) => downloadFile(url, destination, pBase, pSpan),
         onWarning: logWarn,
-        releaseBuild,
-        hashManifest: getReleaseHashManifest(),
+        releaseBuild: true,
+        hashManifest: getReleaseHashManifest(true),
     });
     const temp = path.join(os.tmpdir(), `rpgreactor-codec-${process.pid}-${threadId}-${Date.now()}`);
     try {
-        const binary = nwCodec.extractBinary(acquired.archivePath, platform, temp);
+        const binary = nwCodec.extractBinary(acquired.archivePath, platform, temp, acquired.expectedHash);
         const destination = nwCodec.installBinary(binary, runtimeRoot, platform, acquired);
         logGood(`  Proprietary codec installed: ${destination}`);
     } finally {
@@ -365,7 +365,9 @@ async function acquireRuntime(platform, targetDir, pBase, pSpan, flat) {
         nwVersion === nwRuntime.normalizeVersion(editorNwVersion) &&
         bundledIsSdk === (edition === 'sdk') &&
         (bundledArchitecture === 'x64' || bundledArchitecture === 'universal');
-    const bundledMatches = allowBundledRuntime && bundledDir && fs.existsSync(bundledDir) &&
+    // An unchecked package must start from an official runtime. Bundled runtimes may
+    // already contain the codec overlay used by the running editor.
+    const bundledMatches = includeProprietaryCodecs && allowBundledRuntime && bundledDir && fs.existsSync(bundledDir) &&
         (markerMatches || unmarkedHostMatches);
 
     // Tier 1: matching bundled local runtime
@@ -575,7 +577,9 @@ function installMacPlaytestRuntime(appBundle) {
 
 function pruneMacRuntimeSidecars(appDir) {
     for (const entry of fs.readdirSync(appDir)) {
-        if (entry !== 'nwjs.app' && entry !== 'rpg-reactor-codec.json' && entry !== '.rpg-reactor-nw-runtime.json') {
+        if (entry !== 'nwjs.app' && entry !== 'rpg-reactor-codec.json'
+            && entry !== nwCodec.NOTICE_NAME && entry !== nwCodec.LICENSE_NAME
+            && entry !== '.rpg-reactor-nw-runtime.json') {
             fs.rmSync(path.join(appDir, entry), { recursive: true, force: true });
         }
     }
@@ -1186,6 +1190,7 @@ function buildWeb(stageRoot, stagingDir) {
         const requiredRuntimeFiles = [
             'reactor_main.js', 'reactor_core.js', 'reactor_3d.js', 'reactor_managers.js',
             'reactor_objects.js', 'reactor_scenes.js', 'reactor_sprites.js', 'reactor_picture_extensions.js',
+            'reactor_video_surfaces.js',
             'reactor_windows.js', 'reactor_ui.js', 'reactor_mv_compat.js', 'reactor_plugins.js',
             path.join('libs', 'pixi.js'), path.join('libs', 'pixi_compat.js'),
             path.join('libs', 'pako.min.js'), path.join('libs', 'lz-string.js'), path.join('libs', 'localforage.min.js'),

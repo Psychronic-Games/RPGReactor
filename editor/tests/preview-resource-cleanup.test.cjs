@@ -50,9 +50,37 @@ test('preview surfaces release capped resources and audio sections support Unico
     assert.match(animEditor, /removeEventListener\('mouseup', onSheetDragMouseUp\)/);
     assert.match(animEditor, /effekseer\.releaseContext\(effekseerContext\)/);
     assert.match(animEditor, /effekseer\.releaseContext\(previewEffekseerContext\)/);
+    assert.match(animEditor, /loadedEffects\.add\(pending\)/);
+    assert.match(animEditor, /previewEffekseerContext\.releaseEffect\(pending\)/);
+    assert.match(animEditor, /currentPreviewEffect !== effectName/,
+        'stale effect loads cannot replace or report over the current preview');
+    assert.match(animEditor, /RRAudioPickerModal\.open\(/,
+        'animation timing sounds use the shared picker that closes its AudioContext');
 
     const animPicker = read('src', 'event', 'AnimationPicker.js');
     assert.match(animPicker, /WEBGL_lose_context/);
+
+    const modelPreview = read('src', 'utils', 'ModelPreview3D.js');
+    assert.match(modelPreview, /cancelAnimationFrame\(this\.raf\)/);
+    assert.match(modelPreview, /removeEventListener\('pointermove', this\.pointerMove\)/);
+    assert.match(modelPreview, /WEBGL_lose_context/);
+    assert.match(modelPreview, /reactorObjectUrl[\s\S]{0,80}?URL\.revokeObjectURL/);
+    assert.match(modelPreview, /getPixelRatio\(\)[\s\S]{0,180}?bufferWidth/,
+        'high-DPI drawing-buffer dimensions are compared instead of CSS dimensions');
+    assert.match(modelPreview, /value !== Reactor3D\._studioEnv/,
+        'preview cleanup does not dispose the shared environment texture');
+    assert.match(modelPreview, /root\.userData\?\.glbTextures/,
+        'preview cleanup includes decoded textures not attached to a scene mesh');
+    assert.match(modelPreview, /beforeBuild/,
+        'superseded worker results are rejected before main-thread model construction');
+    const reactor3d = fs.readFileSync(path.join(editorRoot, '..', 'runtime', 'reactor_3d.js'), 'utf8');
+    assert.match(reactor3d, /releaseObjectUrl[\s\S]{0,500}?TextureLoader\(\)\.load[\s\S]{0,300}?releaseObjectUrl/,
+        'embedded GLB object URLs are released after decode and on load failure');
+    assert.match(reactor3d, /Object\.values\(\(parsed && parsed\.bitmaps\)[\s\S]{0,160}?bitmap\.close\(\)/,
+        'superseded worker-decoded images are closed before template construction');
+    const resources = read('src', 'ResourceManager.js');
+    assert.match(resources, /this\.modelPreview\?\.dispose\(\)/);
+    assert.match(resources, /generation !== this\.previewGeneration[\s\S]{0,180}?URL\.revokeObjectURL/);
 
     const pageEditor = read('src', 'event', 'EventPageEditor.js');
     assert.match(pageEditor, /canvas\.isConnected/);

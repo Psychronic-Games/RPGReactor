@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Audio">
+  <defs>
+    <linearGradient id="sp-blue" x1="7" y1="15" x2="38" y2="50" gradientUnits="userSpaceOnUse"><stop stop-color="#075cdd"/><stop offset=".52" stop-color="#072b95"/><stop offset="1" stop-color="#03102a"/></linearGradient>
+    <radialGradient id="sp-gold"><stop stop-color="#fff"/><stop offset=".14" stop-color="#fffbd5"/><stop offset=".36" stop-color="#ffd52b"/><stop offset=".6" stop-color="#ff9a0b"/><stop offset=".8" stop-color="#f0440b"/><stop offset="1" stop-color="#d7318f"/></radialGradient>
+    <filter id="sp-glow" x="-90%" y="-90%" width="280%" height="280%"><feGaussianBlur stdDeviation="1.7" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  </defs>
+  <path d="M2 23h10L37 7v50L12 41H2z" fill="#01040e" stroke="#01030a" stroke-width="7" stroke-linejoin="round"/>
+  <path d="M3 24h10l22-14v44L13 40H3z" fill="url(#sp-blue)" stroke="#075cdd" stroke-width="2.4" stroke-linejoin="round"/>
+  <path d="M5 28v8h9" fill="none" stroke="#d7318f" stroke-width="1.8" stroke-linecap="round"/>
+  <circle cx="24" cy="32" r="9" fill="#020612" stroke="#01030a" stroke-width="4"/>
+  <circle cx="24" cy="32" r="7" fill="#8f1f68" stroke="#d7318f" stroke-width="1.8"/>
+  <circle cx="24" cy="32" r="5.4" fill="url(#sp-gold)" stroke="#fff09a" stroke-width="1" filter="url(#sp-glow)"/>
+  <path d="M42 24c5 4 5 12 0 16M49 17c10 8 10 22 0 30" fill="none" stroke="#01030a" stroke-width="8" stroke-linecap="round"/>
+  <path d="M42 24c5 4 5 12 0 16M49 17c10 8 10 22 0 30" fill="none" stroke="#23bdf3" stroke-width="3.2" stroke-linecap="round"/>
+  <path d="M39 28c2 2 2 6 0 8" fill="none" stroke="#d7318f" stroke-width="1.8" stroke-linecap="round"/>
+</svg>

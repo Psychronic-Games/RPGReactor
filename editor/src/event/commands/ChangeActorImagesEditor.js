@@ -134,6 +134,8 @@ class ChangeActorImagesEditor {
         sep1.style.cssText = 'border-top: 1px solid var(--color-border);';
         content.appendChild(sep1);
 
+        const browse = DatabaseEditorUI.imageBrowser(this.projectController);
+
         // Character filename input
         const charFileRow = document.createElement('div');
         charFileRow.style.cssText = 'display: flex; align-items: center; gap: 8px;';
@@ -175,6 +177,17 @@ class ChangeActorImagesEditor {
         charIdxRow.appendChild(charIdxLabel);
         charIdxRow.appendChild(charIdxInput);
         content.appendChild(charIdxRow);
+
+        if (browse) {
+            charFileRow.appendChild(browse.picker.createImageBrowseButton(charFileInput, {
+                projectPath: browse.projectPath,
+                folder: 'characters',
+                title: tt('Select Character Sprite'),
+                sheetType: 'character',
+                indexInput: charIdxInput,
+                zIndex: 10007
+            }));
+        }
 
         // Separator
         const sep2 = document.createElement('div');
@@ -236,13 +249,25 @@ class ChangeActorImagesEditor {
                 const maxIndex = RRFaceSheet.metrics(image).count - 1;
                 if (maxIndex >= 0) faceIdxInput.max = maxIndex;
             };
-            image.src = RRAssetFiles.toUrl(path.join(project.path, 'img', 'faces', expectedFile + '.png'));
+            image.src = RRAssetFiles.imageUrlFor(
+                path.join(project.path, 'img', 'faces'), expectedFile);
         };
 
         faceIdxRow.appendChild(faceIdxLabel);
         faceIdxRow.appendChild(faceIdxInput);
         content.appendChild(faceIdxRow);
         updateFaceIndexLimit();
+
+        if (browse) {
+            faceFileRow.appendChild(browse.picker.createImageBrowseButton(faceFileInput, {
+                projectPath: browse.projectPath,
+                folder: 'faces',
+                title: tt('Select Face Graphic'),
+                sheetType: 'face',
+                indexInput: faceIdxInput,
+                zIndex: 10007
+            }));
+        }
 
         // Separator
         const sep3 = document.createElement('div');
@@ -267,6 +292,14 @@ class ChangeActorImagesEditor {
 
         battlerRow.appendChild(battlerLabel);
         battlerRow.appendChild(battlerInput);
+        if (browse) {
+            battlerRow.appendChild(browse.picker.createImageBrowseButton(battlerInput, {
+                projectPath: browse.projectPath,
+                folder: 'sv_actors',
+                title: tt('Select SV Battler'),
+                zIndex: 10007
+            }));
+        }
         content.appendChild(battlerRow);
 
         container.appendChild(content);

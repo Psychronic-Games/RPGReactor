@@ -241,7 +241,17 @@ class EventCommandPicker {
                             {
                                 title: '3D',
                                 commands: [
-                                    { name: 'Play Model Animation', code: 357, reactor: 'PlayModelAnimation' }
+                                    { name: 'Play Model Animation', code: 357, reactor: 'PlayModelAnimation' },
+                                    { name: 'Play 3D Effect', code: 357, reactor: 'PlayModelEffect' },
+                                    { name: 'Change 3D Camera', code: 357, reactor: 'ChangeCamera3D' }
+                                ]
+                            },
+                            {
+                                title: 'Video Surfaces',
+                                commands: [
+                                    { name: 'Show Video Surface', code: 357, reactor: 'ShowVideoSurface' },
+                                    { name: 'Transform Video Surface', code: 357, reactor: 'TransformVideoSurface' },
+                                    { name: 'Stop Video Surface', code: 357, reactor: 'StopVideoSurface' }
                                 ]
                             }
                         ]

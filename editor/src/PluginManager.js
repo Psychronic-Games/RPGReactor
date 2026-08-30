@@ -422,6 +422,7 @@ class PluginManager {
 
         // Content area
         const content = document.createElement('div');
+        content.className = 'rr-accent-scrollbar';
         content.style.cssText = `
             flex: 1;
             overflow-y: auto;
@@ -778,6 +779,7 @@ class PluginManager {
 
         // Content area
         const content = document.createElement('div');
+        content.className = 'rr-accent-scrollbar';
         content.style.cssText = `
             flex: 1;
             overflow-y: auto;
@@ -1729,6 +1731,7 @@ class PluginManager {
 
         // Content
         const content = document.createElement('div');
+        content.className = 'rr-accent-scrollbar';
         content.style.cssText = `
             padding: 16px;
             flex: 1;
@@ -1976,10 +1979,12 @@ class PluginManager {
         this._pluginListSearch = pluginSearchInput;
 
         this.pluginListContainer = document.createElement('div');
+        this.pluginListContainer.className = 'rr-accent-scrollbar';
         this.pluginListContainer.style.cssText = `
             flex: 1;
             overflow-y: auto;
             background-color: var(--color-bg-surface);
+            scrollbar-gutter: stable;
         `;
         listContainer.appendChild(this.pluginListContainer);
 
@@ -1988,6 +1993,7 @@ class PluginManager {
         // Right side - Plugin details and parameters
         this.detailsContainer = document.createElement('div');
         this.detailsContainer.className = 'plugin-details-container';
+        this.detailsContainer.classList.add('rr-accent-scrollbar');
         this.detailsContainer.style.cssText = `
             flex: 1;
             display: flex;
@@ -2911,6 +2917,7 @@ class PluginManager {
         dialog.appendChild(searchInput);
 
         const listContainer = document.createElement('div');
+        listContainer.className = 'rr-accent-scrollbar';
         listContainer.style.cssText = `
             flex: 1;
             overflow-y: auto;
@@ -3286,6 +3293,8 @@ class PluginManager {
             const urlLink = document.createElement('a');
             urlLink.href = plugin.url;
             urlLink.target = '_blank';
+            urlLink.rel = 'noreferrer';
+            urlLink.className = 'external-link';
             urlLink.style.cssText = 'color: var(--color-link); text-decoration: none;';
             urlLink.textContent = plugin.url;
             urlLink.addEventListener('mouseenter', () => urlLink.style.textDecoration = 'underline');
@@ -3402,6 +3411,7 @@ class PluginManager {
 
             const helpContent = document.createElement('pre');
             helpContent.className = 'plugin-help-content';
+            helpContent.classList.add('rr-accent-scrollbar');
             helpContent.style.cssText = `
                 margin: 8px 0 0 0;
                 padding: 12px;

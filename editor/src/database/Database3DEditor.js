@@ -107,6 +107,12 @@ class Database3DEditor {
         this.projectController = projectController;
         this.selectedName = '';
         this.rawAnimations = [];
+        this.rawEffects = [];
+        this.selectedEffect = -1;
+        this.rawTransform = null;
+        this._cardMode = 'part';
+        this._modelTab = 'transform';
+        this._fxTab = 'offset';
         this.customParts = [];
         this.playRules = [];
         this.partNames = [];
@@ -146,7 +152,7 @@ class Database3DEditor {
             name: '', motion: 'pose', axis: 'z',
             rotate: [0, 0, 0], move: [0, 0, 0], resize: [1, 1, 1],
             degrees: 15, speed: 90, perTile: 0, amount: 0.1, clip: '', rate: 1,
-            period: 30, trigger: 'action', hold: false, effects: [], keys: []
+            period: 30, trigger: 'action', hold: false, repeat: false, effects: [], keys: []
         };
     }
 
@@ -184,20 +190,22 @@ class Database3DEditor {
                         <div class="r3d-select-bar" style="position:absolute;top:8px;left:50%;transform:translateX(-50%);display:none;align-items:center;gap:8px;padding:4px 10px;background:var(--color-bg-panel);border:1px solid var(--color-accent);border-radius:4px;font-size:12px;color:var(--color-text);"></div>
                         <div class="r3d-rig-bar" style="position:absolute;top:8px;left:50%;transform:translateX(-50%);display:none;align-items:center;gap:8px;padding:4px 10px;background:var(--color-bg-panel);border:1px solid var(--color-accent);border-radius:4px;font-size:12px;color:var(--color-text);"></div>
                         <div class="r3d-marquee" style="position:absolute;display:none;border:1px dashed var(--color-accent);background:color-mix(in srgb, var(--color-accent) 15%, transparent);pointer-events:none;"></div>
-                        <div class="r3d-card" style="position:absolute;right:10px;bottom:10px;width:280px;display:none;background:var(--color-bg-panel);border:1px solid var(--color-border);border-radius:6px;padding:10px 12px;box-shadow:0 4px 18px rgba(0,0,0,0.35);"></div>
+                        <div class="r3d-card" style="position:absolute;right:10px;top:10px;width:280px;display:none;background:var(--color-bg-panel);border:1px solid var(--color-border);border-radius:6px;padding:10px 12px;box-shadow:0 4px 18px rgba(0,0,0,0.35);"></div>
                     </div>
                     <div class="r3d-sim-bar" style="display:flex;gap:6px;align-items:center;padding:6px 8px;border-top:1px solid var(--color-border);flex-wrap:wrap;"></div>
                 </div>
                 <div style="width:300px;flex:0 0 300px;display:flex;flex-direction:column;border-left:1px solid var(--color-border);min-height:0;">
-                    <div style="display:flex;align-items:center;padding:6px 10px;border-bottom:1px solid var(--color-border);">
-                        <span style="font-weight:bold;color:var(--color-text);flex:1;">${this._t('Parts')}</span>
+                    <div class="sidebar-header r3d-sec-header" data-sec="parts" style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+                        <span class="r3d-sec-toggle" style="flex:0 0 12px;font-size:10px;color:var(--color-text-muted);">▾</span>
+                        <span style="flex:1;">${this._t('Parts')}</span>
                         <button type="button" class="rr-btn-secondary r3d-part-add">${this._t('Add')}</button>
                         <button type="button" class="rr-btn-secondary r3d-part-delete" style="margin-left:6px;">${this._t('Delete')}</button>
                     </div>
                     <div class="r3d-part-list" style="flex:0 0 auto;max-height:110px;overflow-y:auto;border-bottom:1px solid var(--color-border);"></div>
                     <div class="r3d-part-form" style="flex:0 0 auto;padding:0 10px;border-bottom:1px solid var(--color-border);"></div>
-                    <div style="display:flex;align-items:center;padding:6px 10px;border-bottom:1px solid var(--color-border);">
-                        <span style="font-weight:bold;color:var(--color-text);flex:1;">${this._t('Animations')}</span>
+                    <div class="sidebar-header r3d-sec-header" data-sec="animations" style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+                        <span class="r3d-sec-toggle" style="flex:0 0 12px;font-size:10px;color:var(--color-text-muted);">▾</span>
+                        <span style="flex:1;">${this._t('Animations')}</span>
                         <button type="button" class="rr-btn-secondary r3d-rule-add">${this._t('Add')}</button>
                         <button type="button" class="rr-btn-secondary r3d-rule-delete" style="margin-left:6px;">${this._t('Delete')}</button>
                     </div>
@@ -206,6 +214,14 @@ class Database3DEditor {
                     </div>
                     <div class="r3d-rule-list" style="flex:1;overflow-y:auto;min-height:0;"></div>
                     <div class="r3d-rule-note" style="padding:6px 10px;font-size:11px;color:var(--color-text-muted);border-top:1px solid var(--color-border);">${this._t('Adjust this pose with the sliders in the preview.')}</div>
+                    <div class="sidebar-header r3d-sec-header" data-sec="effects" style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+                        <span class="r3d-sec-toggle" style="flex:0 0 12px;font-size:10px;color:var(--color-text-muted);">▾</span>
+                        <span style="flex:1;">${this._k('r3dfx.title')}</span>
+                        <button type="button" class="rr-btn-secondary r3d-effect-add">${this._t('Add')}</button>
+                        <button type="button" class="rr-btn-secondary r3d-effect-delete" style="margin-left:6px;">${this._t('Delete')}</button>
+                    </div>
+                    <div class="r3d-effect-list" style="flex:0 0 auto;max-height:96px;overflow-y:auto;border-top:1px solid var(--color-border);"></div>
+                    <div class="r3d-effect-form" style="flex:0 0 auto;max-height:46%;overflow-y:auto;padding:0 10px;border-top:1px solid var(--color-border);"></div>
                     <div class="r3d-status" style="padding:4px 10px;font-size:11px;color:var(--color-text-muted);min-height:20px;"></div>
                 </div>
             </div>`;
@@ -220,6 +236,21 @@ class Database3DEditor {
         });
         detailEl.querySelector('.r3d-motions').addEventListener('click', () => this.showMotionPresets());
         detailEl.querySelector('.r3d-rule-add').addEventListener('click', () => this.addRule());
+        detailEl.querySelector('.r3d-effect-add').addEventListener('click', () => this.addModelEffect());
+        detailEl.querySelector('.r3d-effect-delete').addEventListener('click', () => this.deleteModelEffect());
+        // Each section folds from its header (the buttons stay live), and a
+        // click on a list's empty space lets go of whatever was selected.
+        this._sectionsCollapsed = this._sectionsCollapsed || {};
+        detailEl.querySelectorAll('.r3d-sec-header').forEach(header => header.addEventListener('click', event => {
+            if (event.target.closest('button')) return;
+            this.toggleSection(header.dataset.sec);
+        }));
+        const clickOff = (selector, clear) => detailEl.querySelector(selector)?.addEventListener('click', event => {
+            if (event.target === event.currentTarget) clear();
+        });
+        clickOff('.r3d-effect-list', () => { this._leaveEffectMode(); this.renderEditCard(); });
+        clickOff('.r3d-rule-list', () => { this.selectedRule = -1; this.deselectPart(); });
+        clickOff('.r3d-part-list', () => this.deselectPart());
         detailEl.querySelector('.r3d-rule-delete').addEventListener('click', () => this.deleteRule());
         detailEl.querySelector('.r3d-part-add').addEventListener('click', () => this.addPart());
         detailEl.querySelector('.r3d-part-delete').addEventListener('click', () => this.deletePart());
@@ -525,6 +556,10 @@ class Database3DEditor {
         this._thumbCamera.updateProjectionMatrix();
         this._thumbRenderer.render(this._thumbScene, this._thumbCamera);
         this._thumbScene.remove(object);
+        object.traverse(node => {
+            const materials = Array.isArray(node.material) ? node.material : [node.material];
+            for (const material of materials) material?.dispose?.();
+        });
         try {
             return this._thumbRenderer.domElement.toDataURL('image/png');
         } catch (error) {
@@ -586,6 +621,13 @@ class Database3DEditor {
             parsed = {};
         }
         this.rawAnimations = Array.isArray(parsed.animations) ? parsed.animations : [];
+        this.rawEffects = Array.isArray(parsed.effects) ? parsed.effects : [];
+        this.selectedEffect = -1;
+        this._effectWork = null;
+        this.rawTransform = parsed.transform && typeof parsed.transform === 'object' && !Array.isArray(parsed.transform)
+            ? parsed.transform : null;
+        this._transformWork = null;
+        this.rawCollision = parsed.collision === 'box' ? 'box' : 'mesh';
         this.customParts = Array.isArray(parsed.parts) ? parsed.parts : [];
         this.customPivots = parsed.pivots && typeof parsed.pivots === 'object'
             && !Array.isArray(parsed.pivots) ? parsed.pivots : {};
@@ -628,7 +670,7 @@ class Database3DEditor {
      * preserving any keys other tools may have put there. Pure, so the
      * write path is testable without a project on disk.
      */
-    static mergeSidecar(previousText, animations, parts, pivots) {
+    static mergeSidecar(previousText, animations, parts, pivots, effects, transform, collision) {
         let json = {};
         if (previousText) {
             const parsed = JSON.parse(previousText);
@@ -638,6 +680,17 @@ class Database3DEditor {
             json = parsed;
         }
         json.animations = animations || [];
+        if (effects && effects.length) json.effects = effects;
+        else if (effects) delete json.effects;
+        if (transform !== undefined) {
+            const identity = !transform || (!(transform.offset || []).some(v => v) && !(transform.rotate || []).some(v => v) && (transform.scale == null || transform.scale === 1));
+            if (identity) delete json.transform;
+            else json.transform = transform;
+        }
+        if (collision !== undefined) {
+            if (collision === 'box') json.collision = 'box';
+            else delete json.collision;
+        }
         if (parts && parts.length) json.parts = parts;
         else delete json.parts;
         if (pivots && Object.keys(pivots).length) json.pivots = pivots;
@@ -650,7 +703,7 @@ class Database3DEditor {
         const fs = require('fs');
         const previous = this._readSidecarForUpdate(fs);
         this._writeFileAtomic(fs, this.rulesPath(),
-            Database3DEditor.mergeSidecar(previous, this.rawAnimations, this.customParts, this.customPivots));
+            Database3DEditor.mergeSidecar(previous, this.rawAnimations, this.customParts, this.customPivots, this.rawEffects, this.rawTransform, this.rawCollision));
         this.rebuildPlayback();
         const status = this._detail.querySelector('.r3d-status');
         if (status) status.textContent = `${this._t('Saved')} — 3d/${this.selectedName}/model.json`;
@@ -860,7 +913,13 @@ class Database3DEditor {
                     this._camera.updateProjectionMatrix();
                 }
                 if (this._sim.action && frame - this._sim.action.frame >= this._sim.action.until) {
-                    this._sim.action = null;
+                    // A repeating animation — or a preview of one that plays
+                    // on its own (always, while moving…) — starts over.
+                    const name = this._sim.action.name;
+                    const repeat = name === '__preview'
+                        ? (!!this._work.repeat || this._work.trigger !== 'action')
+                        : !!(this.playRules || []).find(rule => rule.name === name && rule.repeat);
+                    this._sim.action = repeat ? Object.assign({}, this._sim.action, { frame }) : null;
                 }
                 // The motion being authored rides along as a synthetic rule;
                 // Preview swaps in a timed action version of the same work.
@@ -908,6 +967,7 @@ class Database3DEditor {
                 }
                 this._simFrame = frame;
                 this._updatePreviewFx(frame, rules);
+                this._updateEffectPreview();
                 this._updateHover();
                 this._updateBoxes();
                 {
@@ -1033,6 +1093,8 @@ class Database3DEditor {
         });
         this._triangleCount = triangles;
         this._scene.add(object);
+        this._applyBaseTransform();
+        this._syncEffectAnchorMarker();
         // Shader compilation and texture upload land here, in the load
         // gap, instead of trickling through the first seconds of orbiting
         // as one-frame hitches.
@@ -1065,6 +1127,9 @@ class Database3DEditor {
             if (lose) lose.loseContext();
         }
         this._renderer = null;
+        if (this._fxPreview) { this._fxPreview.dispose(); this._fxPreview = null; }
+        this._stopVideoPreview();
+        this._fxMarker = null;
         this._scene = null;
         this._object = null;
         this._binding = null;
@@ -1143,6 +1208,11 @@ class Database3DEditor {
         }
         if (this._tool === 'pivot') {
             hint.textContent = this._t('Click the model to place the pivot, or drag its axes to slide it.');
+            hint.style.display = 'block';
+            return;
+        }
+        if (this._tool === 'fxanchor') {
+            hint.textContent = this._k('r3dfx.hintPlace');
             hint.style.display = 'block';
             return;
         }
@@ -1617,6 +1687,7 @@ class Database3DEditor {
 
     selectPartByName(name) {
         if (name === null || name === undefined) return;
+        if (this._cardMode === 'effect') this._leaveEffectMode();
         this.selectedPartName = name;
         const custom = this.customParts.findIndex(part => part.name === name);
         if (custom >= 0 && this.selectedPart !== custom) {
@@ -1674,6 +1745,7 @@ class Database3DEditor {
     }
 
     deselectPart() {
+        if (this._cardMode === 'effect') this._leaveEffectMode();
         this.selectedPartName = null;
         this._editingRule = -1;
         this.selectedRule = -1;
@@ -1817,6 +1889,7 @@ class Database3DEditor {
             values.resize = work.resize.slice();
             values.period = work.period;
             values.hold = values.trigger === 'action' ? work.hold : false;
+            values.repeat = values.trigger === 'action' ? !!work.repeat : false;
             // Keys ride only the real action: the live always-rule keeps
             // showing the sliders' current pose while the hand moves them.
             if (values.trigger === 'action' && (work.keys || []).length) {
@@ -1969,6 +2042,8 @@ class Database3DEditor {
         this._editingRule = index;
         this.selectedRule = index;
         this._cardCollapsed = false;
+        this._cardMode = 'part';
+        this._modelTab = 'animation';
         this.selectedPartName = rule.part;
         this._work = {
             name: rule.name,
@@ -1986,6 +2061,7 @@ class Database3DEditor {
             period: rule.period,
             trigger: rule.trigger,
             hold: rule.hold,
+            repeat: !!rule.repeat,
             effects: JSON.parse(JSON.stringify(raw.effects || [])),
             keys: JSON.parse(JSON.stringify(raw.keys || []))
         };
@@ -2057,29 +2133,25 @@ class Database3DEditor {
                 <span style="flex:0 0 62px;font-size:12px;color:var(--color-text);">${label}</span>${control}
             </div>`;
         const selectStyle = 'style="flex:1;min-width:0;padding:3px 6px;background:var(--color-bg-surface);color:var(--color-text);border:1px solid var(--color-border-input);"';
-        const targetOptions = [`<option value=""${this.selectedPartName === '' ? ' selected' : ''}>${this._t('Whole model')}</option>`]
-            .concat(this.partNames.map(name =>
-                `<option value="${escape(name)}"${name === this.selectedPartName ? ' selected' : ''}>${escape(name)}</option>`));
-        if (this.selectedPartName === null) {
-            targetOptions.unshift('<option value="__none" selected>—</option>');
-        } else if (this.selectedPartName && this.partNames.indexOf(this.selectedPartName) < 0) {
-            // A deleted part's animation keeps its target visible, marked,
-            // so it can be re-aimed at a living part from right here.
-            targetOptions.push(`<option value="${escape(this.selectedPartName)}" selected>${escape(this.selectedPartName)} ?</option>`);
-        }
         const header = `
             <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
-                <select class="r3d-card-part" style="flex:1;min-width:0;padding:3px 6px;font-weight:bold;background:var(--color-bg-surface);color:var(--color-text);border:1px solid var(--color-border-input);">${targetOptions.join('')}</select>
+                <div class="r3d-card-chooser" style="flex:1;min-width:0;display:flex;"></div>
                 <button type="button" class="r3d-card-undo" title="${this._t('Undo')} (Ctrl+Z)" style="${headerButton}">↶</button>
                 <button type="button" class="r3d-card-redo" title="${this._t('Redo')} (Ctrl+Y)" style="${headerButton}">↷</button>
                 <button type="button" class="r3d-card-close" title="${this._t('Close')}" style="${headerButton}">×</button>
             </div>`;
+        if (this._cardMode === 'effect' && this._effectWork) {
+            this._renderEffectCard(card, header);
+            return;
+        }
+        if (this.selectedPartName === '' && this._modelTab !== 'animation') {
+            this._renderTransformCard(card, header);
+            return;
+        }
         if (this.selectedPartName === null) {
             card.innerHTML = header
                 + `<div style="font-size:11px;color:var(--color-text-muted);">${this._t('Click a part of the model to pose it.')}</div>`;
-            card.querySelector('.r3d-card-part').addEventListener('change', event => {
-                if (event.target.value !== '__none') this.selectPartByName(event.target.value);
-            });
+            this._mountCardChooser(card);
             card.querySelector('.r3d-card-close').addEventListener('click', () => {
                 this._cardCollapsed = true;
                 this.renderEditCard();
@@ -2190,6 +2262,9 @@ class Database3DEditor {
                     <option value="idle"${work.trigger === 'idle' ? ' selected' : ''}>${this._t('While idle')}</option>
                     <option value="always"${work.trigger === 'always' ? ' selected' : ''}>${this._t('Always')}</option>
                 </select>`)
+            + (work.trigger === 'action' ? row(this._k('r3dcard.repeat'),
+                `<label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--color-text);cursor:pointer;">
+                    <input type="checkbox" class="r3d-card-repeat"${work.repeat ? ' checked' : ''}> ${this._k('r3dcard.repeatHint')}</label>`) : '')
             // A bone hinges about its own head; pivot presets act on
             // carved parts only and would silently do nothing here.
             + (this.selectedPartName && !this._isRigBoneName(this.selectedPartName)
@@ -2230,6 +2305,7 @@ class Database3DEditor {
 
     /** One line per timed effect: when, what, and a way out. */
     _effectSummary(effect) {
+        if (effect.effect) return '\u2726 ' + effect.effect;
         if (effect.se && effect.se.name) return '\u266a ' + effect.se.name;
         if (effect.animation) {
             const animations = (this.databaseManager && this.databaseManager.data
@@ -2284,6 +2360,7 @@ class Database3DEditor {
                 ${addButton('r3d-fx-add-se', this._t('Sound'))}
                 ${addButton('r3d-fx-add-anim', this._t('Animation'))}
                 ${addButton('r3d-fx-add-flash', this._t('Flash'))}
+                ${this.rawEffects.length ? addButton('r3d-fx-add-named', this._k('r3dfx.named')) : ''}
             </div>`;
     }
 
@@ -2367,13 +2444,7 @@ class Database3DEditor {
     }
 
     _bindEditCard(card, spec) {
-        card.querySelector('.r3d-card-part').addEventListener('change', event => {
-            // With work on the card, the dropdown is the animation's Part:
-            // it retargets what is being edited, values intact — clicking
-            // the viewport is how you switch context instead.
-            if (event.target.value === '__none') return;
-            this.retargetWork(event.target.value);
-        });
+        this._mountCardChooser(card);
         card.querySelector('.r3d-card-close').addEventListener('click', () => {
             this._cardCollapsed = true;
             this.deselectPart();
@@ -2381,6 +2452,12 @@ class Database3DEditor {
         });
         card.querySelector('.r3d-card-undo').addEventListener('click', () => this.undoPose());
         card.querySelector('.r3d-card-redo').addEventListener('click', () => this.redoPose());
+        card.querySelector('.r3d-card-repeat')?.addEventListener('change', event => {
+            this._stashUndo();
+            this._work.repeat = event.target.checked;
+            this._syncWorkRule();
+            this._commitUndo();
+        });
         card.querySelector('.r3d-card-name').addEventListener('change', event => {
             this._work.name = event.target.value;
             this._rememberPose();
@@ -2558,6 +2635,7 @@ class Database3DEditor {
         if (this._flashHolder && Reactor3D.updateModelFlash) {
             Reactor3D.updateModelFlash(this._flashHolder);
         }
+        this._updateTriggeredEffectPreview();
         if (this._bgFlash && this._scene && this._scene.background) {
             const flash = this._bgFlash;
             const strength = (flash.color[3] / 255) * Math.max(0, 1 - flash.t / flash.duration);
@@ -2573,6 +2651,16 @@ class Database3DEditor {
     }
 
     _fireEffectPreview(effect) {
+        if (effect.effect) {
+            const raw = this.rawEffects.find(entry => entry && entry.name === effect.effect);
+            if (raw) this._playEffectPreview(raw);
+            return;
+        }
+        if (effect.animation) {
+            // An inline database animation plays at the model's origin.
+            this._playEffectPreview({ animation: effect.animation, anchor: { part: '', offset: [0, 0, 0] }, scale: 1 });
+            return;
+        }
         if (effect.se) {
             try {
                 const path = require('path');
@@ -2598,6 +2686,833 @@ class Database3DEditor {
                 this._bgFlash = { color: effect.flash.color, duration: effect.flash.duration, t: 0 };
             }
         }
+    }
+
+    //-------------------------------------------------------------------------
+    // Model effects
+    //
+    // The model's own effects: a database animation (MV sheet or Effekseer),
+    // optionally a sound, placed at an anchor on the model — a part or bone
+    // plus an offset in model space, picked by clicking the model. Rule
+    // timelines fire them by name and the Play 3D Effect command fires them
+    // on demand. Previewed in the viewport by an overlay that follows the
+    // anchor's projected position as the model turns.
+
+    _k(key, params) {
+        return window.I18n ? window.I18n.t(key, params) : key;
+    }
+
+    _effectDef(raw) {
+        if (typeof Reactor3D !== 'undefined' && Reactor3D.readModelEffects) {
+            return Reactor3D.readModelEffects({ effects: [raw] })[0] || null;
+        }
+        return raw || null;
+    }
+
+    /** Fold or unfold a sidebar section: parts, animations or effects. */
+    toggleSection(name, collapsed) {
+        if (!this._detail) return;
+        const state = this._sectionsCollapsed || (this._sectionsCollapsed = {});
+        state[name] = collapsed === undefined ? !state[name] : !!collapsed;
+        const bodies = {
+            parts: ['.r3d-part-list', '.r3d-part-form'],
+            animations: ['.r3d-motions-row', '.r3d-rule-list', '.r3d-rule-note'],
+            effects: ['.r3d-effect-list', '.r3d-effect-form']
+        }[name] || [];
+        for (const selector of bodies) {
+            const el = this._detail.querySelector(selector);
+            if (!el) continue;
+            if (state[name]) {
+                if (el.dataset.rrDisplay === undefined) el.dataset.rrDisplay = el.style.display || '';
+                el.style.display = 'none';
+            } else if (el.dataset.rrDisplay !== undefined) {
+                // The motions row is shown by its own rule; the rest come back as they were.
+                el.style.display = selector === '.r3d-motions-row' && el.dataset.rrDisplay === 'none' ? 'none' : el.dataset.rrDisplay;
+                delete el.dataset.rrDisplay;
+            }
+        }
+        const toggle = this._detail.querySelector(`.r3d-sec-header[data-sec="${name}"] .r3d-sec-toggle`);
+        if (toggle) toggle.textContent = state[name] ? '▸' : '▾';
+    }
+
+    renderEffectList() {
+        const list = this._detail ? this._detail.querySelector('.r3d-effect-list') : null;
+        if (!list) return;
+        list.innerHTML = '';
+        if (!this.rawEffects.length) {
+            const empty = document.createElement('div');
+            empty.textContent = this._k('r3dfx.none');
+            empty.style.cssText = 'padding:4px 10px;font-size:11px;color:var(--color-text-muted);';
+            list.appendChild(empty);
+        }
+        this.rawEffects.forEach((raw, index) => {
+            const row = document.createElement('div');
+            const animations = this.databaseManager?.data?.animations || [];
+            const record = raw.type === 'video' ? (raw.video && raw.video.file ? { name: raw.video.file } : null) : animations[Number(raw.animation)];
+            const when = { moving: this._t('While moving'), walking: this._t('While walking'), dashing: this._t('While dashing'), idle: this._t('While idle'), always: this._t('Always') }[raw.trigger];
+            row.textContent = `\u2726 ${raw.name || '?'}` + (record && record.name ? ` \u2014 ${record.name}` : '') + (when ? ` \u00b7 ${when}` : '');
+            row.style.cssText = 'padding:4px 10px;cursor:pointer;font-size:12px;color:var(--color-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;'
+                + (index === this.selectedEffect ? 'background:var(--color-bg-active, #234);' : '');
+            row.addEventListener('click', () => this.selectEffect(index));
+            list.appendChild(row);
+        });
+    }
+
+    selectEffect(index) {
+        this.selectedEffect = index;
+        const raw = this.rawEffects[index];
+        this._effectWork = raw ? JSON.parse(JSON.stringify(raw)) : null;
+        if (this._effectWork && !Array.isArray(this._effectWork.rotate)) this._effectWork.rotate = [0, 0, 0];
+        if (this._tool === 'fxanchor' && !raw) this.setTool('orbit');
+        if (this._effectWork) {
+            // The effect takes the card; the part it may have been posing
+            // steps aside without losing its saved work.
+            this._cardMode = 'effect';
+            this._cardCollapsed = false;
+        } else if (this._cardMode === 'effect') {
+            this._cardMode = 'part';
+        }
+        this.renderEffectList();
+        this.renderEffectForm();
+        this._syncEffectAnchorMarker();
+        this.renderEditCard();
+    }
+
+    _leaveEffectMode() {
+        this._cardMode = 'part';
+        this.selectedEffect = -1;
+        this._effectWork = null;
+        this._stopEffectPreview();
+        this._syncEffectAnchorMarker();
+        this.renderEffectList();
+        this.renderEffectForm();
+    }
+
+    /** The card's chooser: everything on the model that can be edited, by type. */
+    _mountCardChooser(card) {
+        const mount = card.querySelector('.r3d-card-chooser');
+        if (!mount || typeof RRSearchSelect === 'undefined') return;
+        const bones = [], parts = [];
+        for (const name of this.partNames || []) (this._isRigBoneName(name) ? bones : parts).push(name);
+        for (const part of this.customParts) if (part && part.name && parts.indexOf(part.name) < 0 && bones.indexOf(part.name) < 0) parts.push(part.name);
+        if (this.selectedPartName && this.partNames.indexOf(this.selectedPartName) < 0 && parts.indexOf(this.selectedPartName) < 0 && bones.indexOf(this.selectedPartName) < 0) {
+            parts.push(this.selectedPartName);
+        }
+        const groups = [
+            { label: this._k('r3dcard.groupModel'), items: [{ id: '__model', label: this._t('Whole model') }] },
+            { label: this._t('Parts'), items: parts.map(name => ({ id: name, label: name })) },
+            { label: this._k('r3dcard.groupBones'), items: bones.map(name => ({ id: name, label: name })) },
+            { label: this._k('r3dfx.title'), items: this.rawEffects.filter(raw => raw && raw.name).map(raw => ({ id: 'fx:' + raw.name, label: '\u2726 ' + raw.name })) }
+        ].filter(group => group.items.length);
+        const value = this._cardMode === 'effect' && this._effectWork
+            ? 'fx:' + this._effectWork.name
+            : this.selectedPartName === '' ? '__model' : (this.selectedPartName || '');
+        const chooser = RRSearchSelect.create({
+            groups, value, placeholder: '\u2014',
+            onChange: id => this._onCardChooserPick(id)
+        });
+        mount.appendChild(chooser.element);
+        this._cardChooser = chooser;
+    }
+
+    _onCardChooserPick(id) {
+        if (id.startsWith('fx:')) {
+            const index = this.rawEffects.findIndex(raw => raw && raw.name === id.slice(3));
+            if (index >= 0) this.selectEffect(index);
+            return;
+        }
+        if (this._cardMode === 'effect') this._leaveEffectMode();
+        if (id === '__model') {
+            this._modelTab = 'transform';
+            this.selectPartByName('');
+            return;
+        }
+        // With work on the card, the chooser is the animation's Part: it
+        // retargets what is being edited, values intact.
+        if (this._workIsLive() && this.selectedPartName !== null) this.retargetWork(id);
+        else this.selectPartByName(id);
+    }
+
+    /** Shared slider block for a 3-axis field, X/Y/Z coloured like the pose card. */
+    _axisSlidersHtml(cls, spec) {
+        const axes = [{ label: 'X', color: '#e5484d' }, { label: 'Y', color: '#46a758' }, { label: 'Z', color: '#3e63dd' }];
+        return axes.map((axis, i) => `
+            <div style="display:flex;align-items:center;gap:8px;margin:6px 0;">
+                <span style="flex:0 0 14px;font-weight:bold;font-size:12px;color:${axis.color};">${axis.label}</span>
+                <input type="range" class="${cls}" data-i="${i}" min="${spec.min}" max="${spec.max}" step="${spec.step}"
+                    value="${spec.value(i)}" style="flex:1;min-width:0;accent-color:${axis.color};" title="${this._t('Double-click to reset')}">
+                <span class="${cls}-val" data-i="${i}" style="flex:0 0 48px;text-align:right;font-size:11px;color:var(--color-text);">${spec.show(spec.value(i))}</span>
+            </div>`).join('');
+    }
+
+    /**
+     * Scale sliders: one for a proportional scale, three for a free one.
+     * `scale` is a number when proportional and [x, y, z] when free, which
+     * is also how the runtime reads it.
+     */
+    _scaleSlidersHtml(prefix, scale) {
+        const proportional = !Array.isArray(scale);
+        const axes = Array.isArray(scale) ? scale : [scale || 1, scale || 1, scale || 1];
+        const percent = value => Math.round((Number(value) > 0 ? Number(value) : 1) * 100);
+        const check = `<label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--color-text);cursor:pointer;margin:2px 0 4px;">
+            <input type="checkbox" class="${prefix}-proportional"${proportional ? ' checked' : ''}> ${this._k('r3dcard.proportional')}</label>`;
+        if (proportional) {
+            return check + `<div style="display:flex;align-items:center;gap:8px;margin:6px 0;">
+                <span style="flex:0 0 14px;font-weight:bold;font-size:12px;color:var(--color-text);">S</span>
+                <input type="range" class="${prefix}-scale" data-i="all" min="10" max="400" step="1" value="${percent(axes[0])}" style="flex:1;min-width:0;accent-color:var(--color-accent);" title="${this._t('Double-click to reset')}">
+                <span class="${prefix}-scale-val" data-i="all" style="flex:0 0 48px;text-align:right;font-size:11px;color:var(--color-text);">${percent(axes[0])}%</span>
+            </div>`;
+        }
+        return check + this._axisSlidersHtml(prefix + '-scale', {
+            min: 10, max: 400, step: 1, value: i => percent(axes[i]), show: v => Math.round(v) + '%'
+        });
+    }
+
+    _bindScaleSliders(card, prefix, work, live) {
+        card.querySelector(`.${prefix}-proportional`)?.addEventListener('change', event => {
+            const axes = Array.isArray(work.scale) ? work.scale : [work.scale || 1, work.scale || 1, work.scale || 1];
+            work.scale = event.target.checked ? axes[0] : axes.slice();
+            live();
+            this.renderEditCard();
+        });
+        card.querySelectorAll(`.${prefix}-scale`).forEach(slider => {
+            const which = slider.dataset.i;
+            const readout = card.querySelector(`.${prefix}-scale-val[data-i="${which}"]`);
+            const apply = () => {
+                const value = Math.max(0.1, Number(slider.value) / 100);
+                if (which === 'all') work.scale = value;
+                else {
+                    if (!Array.isArray(work.scale)) work.scale = [work.scale || 1, work.scale || 1, work.scale || 1];
+                    work.scale[Number(which)] = value;
+                }
+                if (readout) readout.textContent = Math.round(Number(slider.value)) + '%';
+                live();
+            };
+            slider.addEventListener('input', apply);
+            slider.addEventListener('dblclick', () => { slider.value = 100; apply(); });
+        });
+    }
+
+    _tabStripHtml(cls, tabs, current) {
+        return `<div style="display:flex;gap:4px;margin-bottom:8px;">
+            ${tabs.map(tab => `<button type="button" class="${cls}" data-tab="${tab.id}"
+                style="flex:1;padding:4px 0;font-size:12px;border-radius:4px;cursor:pointer;
+                border:1px solid ${tab.id === current ? 'var(--color-accent)' : 'var(--color-border)'};
+                background:${tab.id === current ? 'var(--color-accent)' : 'var(--color-bg-surface)'};
+                color:${tab.id === current ? 'var(--color-bg-deep)' : 'var(--color-text)'};font-weight:bold;">${tab.label}</button>`).join('')}
+        </div>`;
+    }
+
+    /** The model's native span, for offset slider ranges. */
+    _modelSpan() {
+        const size = (this._template && this._template.userData.glbSize) || { x: 1, y: 1.8, z: 1 };
+        return Math.max(size.x, size.y, size.z, 0.001);
+    }
+
+    /** The card in effect mode: offset, turn and size of the selected effect, with sliders. */
+    _renderEffectCard(card, header) {
+        const work = this._effectWork;
+        const span = this._modelSpan();
+        const offset = work.anchor && Array.isArray(work.anchor.offset) ? work.anchor.offset : [0, 0, 0];
+        if (!work.anchor) work.anchor = { part: '', offset: [0, 0, 0] };
+        if (!Array.isArray(work.rotate)) work.rotate = [0, 0, 0];
+        const spec = {
+            offset: { min: -span, max: span, step: span / 500, value: i => offset[i] || 0, show: v => Number(v).toFixed(span >= 10 ? 1 : 3) },
+            rotate: { min: -180, max: 180, step: 1, value: i => work.rotate[i] || 0, show: v => Math.round(v) + '°' }
+        }[this._fxTab === 'scale' ? 'offset' : this._fxTab];
+        const tabs = [{ id: 'offset', label: this._t('Offset') }, { id: 'rotate', label: this._t('Rotate') }, { id: 'scale', label: this._t('Scale') }];
+        const body = this._fxTab === 'scale'
+            ? this._scaleSlidersHtml('r3d-fxcard', work.scale)
+            : this._axisSlidersHtml('r3d-fxcard-slider', spec);
+        const trigger = work.trigger || 'action';
+        const triggerOptions = [['action', this._t('On demand')], ['moving', this._t('While moving')], ['walking', this._t('While walking')],
+            ['dashing', this._t('While dashing')], ['idle', this._t('While idle')], ['always', this._t('Always')]];
+        card.innerHTML = header
+            + `<div style="font-size:11px;color:var(--color-text-muted);margin:-4px 0 6px;">${this._k('r3dcard.effectHint')}</div>`
+            + this._tabStripHtml('r3d-fxcard-tab', tabs, this._fxTab)
+            + body
+            + `<div style="display:flex;align-items:center;gap:8px;margin:8px 0 4px;">
+                <span style="flex:0 0 62px;font-size:12px;color:var(--color-text);">${this._t('Play when')}</span>
+                <select class="r3d-fxcard-trigger" style="flex:1;min-width:0;padding:3px 6px;background:var(--color-bg-surface);color:var(--color-text);border:1px solid var(--color-border-input);">
+                    ${triggerOptions.map(([value, label]) => `<option value="${value}"${value === trigger ? ' selected' : ''}>${label}</option>`).join('')}
+                </select>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;margin:4px 0;">
+                ${trigger === 'action' ? `<label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--color-text);cursor:pointer;"><input type="checkbox" class="r3d-fxcard-loop"${work.loop ? ' checked' : ''}> ${this._k('r3dfx.loop')}</label>` : ''}
+                <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--color-text);cursor:pointer;margin-left:auto;"><input type="checkbox" class="r3d-fxcard-place"${this._tool === 'fxanchor' ? ' checked' : ''}> ${this._k('r3dfx.place')}</label>
+            </div>
+            <div style="display:flex;gap:6px;margin-top:8px;">
+                <button type="button" class="rr-btn-secondary r3d-fxcard-play" style="flex:1;">${this._k('r3dfx.play')}</button>
+                <button type="button" class="rr-button-primary r3d-fxcard-save" style="flex:1;">${this._k('r3dfx.save')}</button>
+            </div>`;
+        this._mountCardChooser(card);
+        card.querySelector('.r3d-card-close').addEventListener('click', () => {
+            this._leaveEffectMode();
+            this.renderEditCard();
+        });
+        card.querySelector('.r3d-card-undo').style.opacity = '0.35';
+        card.querySelector('.r3d-card-redo').style.opacity = '0.35';
+        card.querySelectorAll('.r3d-fxcard-tab').forEach(tab => tab.addEventListener('click', () => {
+            this._fxTab = tab.dataset.tab;
+            this.renderEditCard();
+        }));
+        const live = () => {
+            this._syncEffectAnchorMarker();
+            if (this._fxPreview && this._fxPreview.active) {
+                this._fxPreview.setTransform({ rotate: work.rotate, scale: work.scale });
+            }
+            this._updateEffectPreview();
+            this._lastInputAt = performance.now();
+        };
+        card.querySelectorAll('.r3d-fxcard-slider').forEach(slider => {
+            const readout = card.querySelector(`.r3d-fxcard-slider-val[data-i="${slider.dataset.i}"]`);
+            const apply = () => {
+                const i = Number(slider.dataset.i);
+                const value = Number(slider.value);
+                if (this._fxTab === 'rotate') work.rotate[i] = value;
+                else work.anchor.offset[i] = Math.round(value * 1000) / 1000;
+                if (readout) readout.textContent = spec.show(value);
+                live();
+            };
+            slider.addEventListener('input', apply);
+            slider.addEventListener('dblclick', () => { slider.value = this._fxTab === 'rotate' ? 0 : 0; apply(); });
+        });
+        this._bindScaleSliders(card, 'r3d-fxcard', work, live);
+        card.querySelector('.r3d-fxcard-loop')?.addEventListener('change', event => { work.loop = event.target.checked; });
+        card.querySelector('.r3d-fxcard-trigger').addEventListener('change', event => {
+            work.trigger = event.target.value;
+            this._stopEffectPreview();
+            this.renderEditCard();
+        });
+        card.querySelector('.r3d-fxcard-place').addEventListener('change', event => this.setTool(event.target.checked ? 'fxanchor' : 'orbit'));
+        card.querySelector('.r3d-fxcard-play').addEventListener('click', () => this._playEffectPreview(work));
+        card.querySelector('.r3d-fxcard-save').addEventListener('click', () => this._saveEffectWork());
+    }
+
+    /** The card in model mode: the model's own base transform, or its whole-model animations. */
+    _renderTransformCard(card, header) {
+        if (!this._transformWork) {
+            const base = typeof Reactor3D !== 'undefined' && Reactor3D.readModelTransform
+                ? Reactor3D.readModelTransform({ transform: this.rawTransform })
+                : { offset: [0, 0, 0], rotate: [0, 0, 0], scale: 1 };
+            this._transformWork = JSON.parse(JSON.stringify(base));
+        }
+        const work = this._transformWork;
+        const span = this._modelSpan();
+        const tab = this._cardTab === 'scale' ? 'scale' : this._cardTab === 'rotate' ? 'rotate' : 'offset';
+        const spec = {
+            offset: { min: -span, max: span, step: span / 500, value: i => work.offset[i] || 0, show: v => Number(v).toFixed(span >= 10 ? 1 : 3) },
+            rotate: { min: -180, max: 180, step: 1, value: i => work.rotate[i] || 0, show: v => Math.round(v) + '°' }
+        }[tab === 'scale' ? 'offset' : tab];
+        const body = tab === 'scale'
+            ? this._scaleSlidersHtml('r3d-tcard', work.scale)
+            : this._axisSlidersHtml('r3d-tcard-slider', spec);
+        card.innerHTML = header
+            + this._tabStripHtml('r3d-tcard-mode', [{ id: 'transform', label: this._k('r3dcard.transform') }, { id: 'animation', label: this._t('Animations') }], 'transform')
+            + `<div style="font-size:11px;color:var(--color-text-muted);margin:-4px 0 6px;">${this._k('r3dcard.transformHint')}</div>`
+            + this._tabStripHtml('r3d-tcard-tab', [{ id: 'offset', label: this._t('Offset') }, { id: 'rotate', label: this._t('Rotate') }, { id: 'scale', label: this._t('Scale') }], tab)
+            + body
+            + `<label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--color-text);cursor:pointer;margin-top:8px;" title="${this._k('r3dcard.collisionHint')}">
+                <input type="checkbox" class="r3d-tcard-collision"${this.rawCollision === 'mesh' ? ' checked' : ''}> ${this._k('r3dcard.collision')}</label>
+            <div style="display:flex;gap:6px;margin-top:10px;">
+                <button type="button" class="rr-btn-secondary r3d-tcard-reset" style="flex:1;">${this._t('Clear')}</button>
+                <button type="button" class="rr-button-primary r3d-tcard-save" style="flex:1;">${this._k('r3dcard.saveTransform')}</button>
+            </div>`;
+        this._mountCardChooser(card);
+        card.querySelector('.r3d-card-close').addEventListener('click', () => {
+            this._cardCollapsed = true;
+            this.deselectPart();
+            this.renderEditCard();
+        });
+        card.querySelector('.r3d-card-undo').style.opacity = '0.35';
+        card.querySelector('.r3d-card-redo').style.opacity = '0.35';
+        card.querySelectorAll('.r3d-tcard-mode').forEach(button => button.addEventListener('click', () => {
+            this._modelTab = button.dataset.tab;
+            this.renderEditCard();
+        }));
+        card.querySelectorAll('.r3d-tcard-tab').forEach(button => button.addEventListener('click', () => {
+            this._cardTab = button.dataset.tab;
+            this.renderEditCard();
+        }));
+        card.querySelectorAll('.r3d-tcard-slider').forEach(slider => {
+            const readout = card.querySelector(`.r3d-tcard-slider-val[data-i="${slider.dataset.i}"]`);
+            const apply = () => {
+                const i = Number(slider.dataset.i);
+                const value = Number(slider.value);
+                if (tab === 'rotate') work.rotate[i] = value;
+                else work.offset[i] = Math.round(value * 1000) / 1000;
+                if (readout) readout.textContent = spec.show(value);
+                this._applyBaseTransform();
+            };
+            slider.addEventListener('input', apply);
+            slider.addEventListener('dblclick', () => { slider.value = 0; apply(); });
+        });
+        this._bindScaleSliders(card, 'r3d-tcard', work, () => this._applyBaseTransform());
+        card.querySelector('.r3d-tcard-reset').addEventListener('click', () => {
+            this._transformWork = { offset: [0, 0, 0], rotate: [0, 0, 0], scale: 1 };
+            this._applyBaseTransform();
+            this.renderEditCard();
+        });
+        card.querySelector('.r3d-tcard-collision').addEventListener('change', event => {
+            this.rawCollision = event.target.checked ? 'mesh' : 'box';
+            this.saveRules();
+        });
+        card.querySelector('.r3d-tcard-save').addEventListener('click', () => {
+            this.rawTransform = JSON.parse(JSON.stringify(this._transformWork));
+            this.saveRules();
+            this.renderEditCard();
+        });
+    }
+
+    /** Put the working (or saved) base transform on the placed model. */
+    _applyBaseTransform() {
+        if (!this._object || typeof Reactor3D === 'undefined' || !Reactor3D.applyModelTransform) return;
+        const transform = Reactor3D.readModelTransform({ transform: this._transformWork || this.rawTransform });
+        Reactor3D.applyModelTransform(this._object, transform);
+        this._syncEffectAnchorMarker();
+        this._lastInputAt = performance.now();
+    }
+
+    /** Write the selected effect's working copy, keeping rules that fire it by its old name. */
+    _saveEffectWork() {
+        const work = this._effectWork;
+        const index = this.selectedEffect;
+        if (!work || index < 0) return;
+        const previous = this.rawEffects[index] && this.rawEffects[index].name;
+        if (previous && previous !== work.name) {
+            for (const raw of this.rawAnimations) {
+                for (const effect of raw.effects || []) if (effect.effect === previous) effect.effect = work.name;
+            }
+        }
+        this.rawEffects[index] = JSON.parse(JSON.stringify(work));
+        this.saveRules();
+        this.renderEffectList();
+        this.renderEffectForm();
+        this.renderEditCard();
+    }
+
+    addModelEffect() {
+        const base = 'effect';
+        let name = base, n = 2;
+        while (this.rawEffects.some(raw => raw && raw.name === name)) name = `${base}${n++}`;
+        this.rawEffects.push({ name, animation: 0, anchor: { part: '', offset: [0, 0, 0] }, scale: 1, loop: false });
+        this.saveRules();
+        this.selectEffect(this.rawEffects.length - 1);
+    }
+
+    deleteModelEffect() {
+        if (this.selectedEffect < 0 || !this.rawEffects[this.selectedEffect]) return;
+        const name = this.rawEffects[this.selectedEffect].name;
+        this.rawEffects.splice(this.selectedEffect, 1);
+        // Rules that fired it by name lose that step rather than firing nothing.
+        for (const raw of this.rawAnimations) {
+            if (Array.isArray(raw.effects)) raw.effects = raw.effects.filter(effect => effect.effect !== name);
+        }
+        this.saveRules();
+        this._stopEffectPreview();
+        this.selectEffect(Math.min(this.selectedEffect, this.rawEffects.length - 1));
+    }
+
+    /** Parts and bones an effect can anchor to, by name. */
+    _effectAnchorChoices() {
+        const names = [];
+        for (const part of this.customParts) if (part && part.name && names.indexOf(part.name) < 0) names.push(part.name);
+        if (this._object) {
+            this._object.traverse(node => {
+                if (node.isBone && node.name && names.indexOf(node.name) < 0) names.push(node.name);
+            });
+        }
+        return names;
+    }
+
+    renderEffectForm() {
+        const form = this._detail ? this._detail.querySelector('.r3d-effect-form') : null;
+        if (!form) return;
+        const work = this._effectWork;
+        if (!work) {
+            form.innerHTML = '';
+            return;
+        }
+        const escape = value => String(value == null ? '' : value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+        const control = 'flex:1;min-width:0;padding:3px 6px;font-size:11px;background:var(--color-bg-surface);color:var(--color-text);border:1px solid var(--color-border-input);border-radius:3px;';
+        const row = (label, body) => `
+            <div style="display:flex;align-items:center;gap:6px;margin:5px 0;">
+                <span style="flex:0 0 58px;font-size:11px;color:var(--color-text-muted);">${escape(label)}</span>${body}
+            </div>`;
+        const animations = this.databaseManager?.data?.animations || [];
+        const record = animations[Number(work.animation)];
+        const anchor = work.anchor && typeof work.anchor === 'object' ? work.anchor : { part: '', offset: [0, 0, 0] };
+        const choices = this._effectAnchorChoices();
+        const isVideo = work.type === 'video';
+        if (!work.video) work.video = { file: '', width: 0.3, height: 0.2, loop: true, audio: false, volume: 100 };
+        // Fractions of the model's size; pixel-era numbers convert on sight.
+        if (typeof Reactor3D !== 'undefined' && Reactor3D.videoEffectFraction) {
+            work.video.width = Reactor3D.videoEffectFraction(work.video.width, 0.3);
+            work.video.height = Reactor3D.videoEffectFraction(work.video.height, 0.2);
+        }
+        const safeVideo = escape(work.video.file || this._k('r3dfx.chooseVideo'));
+        // Authored text is escaped once, up front, and only the escaped
+        // strings reach the markup below.
+        const safeName = escape(work.name);
+        const safeAnimation = escape(record && record.name ? work.animation + ': ' + record.name : this._k('r3dfx.choose'));
+        const safeSound = escape(work.se && work.se.name ? work.se.name : this._k('r3dfx.noSound'));
+        const buttonStyle = 'flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left;';
+        form.innerHTML = `
+            ${row(this._k('r3dfx.effectName'), `<input type="text" class="r3d-fx-name" value="${safeName}" style="${control}">`)}
+            ${row(this._k('r3dfx.type'), `<select class="r3d-fx-type" style="${control}">
+                <option value="animation"${isVideo ? '' : ' selected'}>${escape(this._k('r3dfx.typeAnimation'))}</option>
+                <option value="video"${isVideo ? ' selected' : ''}>${escape(this._k('r3dfx.typeVideo'))}</option>
+            </select>`)}
+            ${isVideo ? row(this._k('r3dfx.video'), `<button type="button" class="rr-btn-secondary r3d-fx-video" style="${buttonStyle}">${safeVideo}</button>`)
+                + row(this._k('r3dfx.width'), `<input type="number" class="r3d-fx-vw" min="0.01" max="4" step="0.05" value="${escape(work.video.width)}" style="${control}">
+                    <span style="font-size:11px;color:var(--color-text-muted);">${escape(this._k('r3dfx.height'))}</span>
+                    <input type="number" class="r3d-fx-vh" min="0.01" max="4" step="0.05" value="${escape(work.video.height)}" style="${control}">`)
+                + row('', `<label style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--color-text);"><input type="checkbox" class="r3d-fx-vloop"${work.video.loop !== false ? ' checked' : ''}> ${escape(this._k('r3dfx.loop'))}</label>
+                    <label style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--color-text);margin-left:10px;"><input type="checkbox" class="r3d-fx-vaudio"${work.video.audio ? ' checked' : ''}> ${escape(this._k('r3dfx.audio'))}</label>`)
+              : row(this._k('r3dfx.animation'), `<button type="button" class="rr-btn-secondary r3d-fx-pick" style="${buttonStyle}">${safeAnimation}</button>`)}
+            ${row(this._k('r3dfx.anchor'), `<select class="r3d-fx-part" style="${control}">
+                <option value="">${escape(this._k('r3dfx.origin'))}</option>
+                ${choices.map(name => `<option value="${escape(name)}"${name === anchor.part ? ' selected' : ''}>${escape(name)}</option>`).join('')}
+            </select>`)}
+            ${row('', `<button type="button" class="rr-btn-secondary r3d-fx-place" style="flex:1;border-color:${this._tool === 'fxanchor' ? 'var(--color-accent)' : 'var(--color-border)'};">${escape(this._k('r3dfx.place'))}</button>`)}
+            ${row(this._k('r3dfx.sound'), `<button type="button" class="rr-btn-secondary r3d-fx-se" style="${buttonStyle}">${safeSound}</button>
+                <button type="button" class="rr-btn-secondary r3d-fx-se-clear" title="${escape(this._k('r3dfx.clearSound'))}" style="flex:0 0 auto;padding:0 8px;">&times;</button>`)}
+            <div style="display:flex;gap:6px;margin:8px 0;">
+                <button type="button" class="rr-btn-secondary r3d-fx-play" style="flex:1;">${escape(this._k('r3dfx.play'))}</button>
+                <button type="button" class="rr-button-primary r3d-fx-save" style="flex:1;">${escape(this._k('r3dfx.save'))}</button>
+            </div>`;
+        const q = selector => form.querySelector(selector);
+        const syncWork = () => {
+            work.name = q('.r3d-fx-name').value.trim() || work.name;
+            work.anchor = { part: q('.r3d-fx-part').value, offset: (work.anchor && work.anchor.offset) || [0, 0, 0] };
+            this._syncEffectAnchorMarker();
+        };
+        for (const selector of ['.r3d-fx-name', '.r3d-fx-part']) {
+            q(selector).addEventListener('change', syncWork);
+            q(selector).addEventListener('input', syncWork);
+        }
+        q('.r3d-fx-type').addEventListener('change', event => {
+            work.type = event.target.value === 'video' ? 'video' : 'animation';
+            this._stopEffectPreview();
+            this.renderEffectForm();
+            this.renderEditCard();
+        });
+        q('.r3d-fx-video')?.addEventListener('click', () => this._pickEffectVideo());
+        const videoField = (selector, apply) => q(selector)?.addEventListener('change', event => { apply(event.target); this._syncEffectAnchorMarker(); });
+        videoField('.r3d-fx-vw', el => { work.video.width = Math.min(4, Math.max(0.01, Number(el.value) || work.video.width)); if (this._fxVideo) this._updateVideoPreview(); });
+        videoField('.r3d-fx-vh', el => { work.video.height = Math.min(4, Math.max(0.01, Number(el.value) || work.video.height)); if (this._fxVideo) this._updateVideoPreview(); });
+        videoField('.r3d-fx-vloop', el => { work.video.loop = el.checked; });
+        videoField('.r3d-fx-vaudio', el => { work.video.audio = el.checked; });
+        q('.r3d-fx-pick')?.addEventListener('click', () => {
+            if (typeof AnimationPickerModal === 'undefined') return;
+            AnimationPickerModal.open({
+                databaseManager: this.databaseManager,
+                projectManager: this.projectController,
+                currentId: Number(work.animation) || 0,
+                onPick: id => {
+                    if (!(Number(id) > 0)) return;
+                    work.animation = Number(id);
+                    this.renderEffectForm();
+                }
+            });
+        });
+        q('.r3d-fx-se').addEventListener('click', () => this._pickModelEffectSe());
+        q('.r3d-fx-se-clear').addEventListener('click', () => { delete work.se; this.renderEffectForm(); });
+        q('.r3d-fx-place').addEventListener('click', () => this.setTool(this._tool === 'fxanchor' ? 'orbit' : 'fxanchor'));
+        q('.r3d-fx-play').addEventListener('click', () => { syncWork(); this._playEffectPreview(work); });
+        q('.r3d-fx-save').addEventListener('click', () => { syncWork(); this._saveEffectWork(); });
+    }
+
+    /** Choose the video from the project's movies folder. */
+    _pickEffectVideo() {
+        const work = this._effectWork;
+        if (!work) return;
+        const lister = typeof VideoSurfaceEditor !== 'undefined'
+            ? new VideoSurfaceEditor(this.databaseManager, this.projectController) : null;
+        const files = lister ? lister.movieFiles(this._project()) : [];
+        const picker = window.reactor?.databaseEditorUI;
+        const names = files.map(file => file.relativePath);
+        if (!names.length) {
+            alert(this._k('r3dfx.noVideos'));
+            return;
+        }
+        if (picker && typeof picker.showImagePicker === 'function') {
+            picker.showImagePicker(this._k('r3dfx.video'), names, name => {
+                if (!name) return;
+                work.video.file = name;
+                this._stopEffectPreview();
+                this.renderEffectForm();
+            }, () => '', work.video.file || undefined, { allowNone: false });
+            return;
+        }
+        const chosen = prompt(this._k('r3dfx.video'), work.video.file || names[0]);
+        if (chosen && names.indexOf(chosen) >= 0) {
+            work.video.file = chosen;
+            this.renderEffectForm();
+        }
+    }
+
+    /**
+     * A video effect previews as a plane on the anchor showing the movie,
+     * turned and sized as the game will place it: width and height are
+     * pixels, a tile being 48 of them, the same rule the surfaces use.
+     */
+    _playVideoPreview(raw) {
+        if (typeof THREE === 'undefined' || !this._scene || !raw.video || !raw.video.file) return;
+        this._stopVideoPreview();
+        const path = require('path');
+        const url = typeof RRAssetFiles !== 'undefined' && RRAssetFiles.toUrl
+            ? RRAssetFiles.toUrl(path.join(this._project().path, 'movies', raw.video.file))
+            : 'file://' + path.join(this._project().path, 'movies', raw.video.file);
+        const video = document.createElement('video');
+        video.muted = !raw.video.audio;
+        video.loop = raw.video.loop !== false;
+        video.playsInline = true;
+        video.src = url;
+        const texture = new THREE.VideoTexture(video);
+        if (THREE.SRGBColorSpace) texture.colorSpace = THREE.SRGBColorSpace;
+        const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ map: texture, side: THREE.DoubleSide, toneMapped: false }));
+        mesh.userData.__reactorOverlay = true;
+        mesh.renderOrder = 20;
+        // A child of the model, in the model's units, so it scales with it.
+        this._object.add(mesh);
+        this._fxVideo = { mesh, video, texture, raw };
+        video.play().catch(() => {});
+        this._updateVideoPreview();
+    }
+
+    _stopVideoPreview() {
+        const live = this._fxVideo;
+        if (!live) return;
+        try { live.video.pause(); live.video.src = ''; } catch (_) {}
+        live.mesh.parent?.remove(live.mesh);
+        live.mesh.geometry.dispose();
+        live.mesh.material.dispose();
+        live.texture.dispose();
+        this._fxVideo = null;
+    }
+
+    _updateVideoPreview() {
+        const live = this._fxVideo;
+        if (!live || !this._object) return;
+        const def = this._effectDef(live.raw) || live.raw;
+        const world = Reactor3D.effectAnchorWorld(this._object, def, new THREE.Vector3());
+        if (!world) return;
+        if (live.mesh.parent !== this._object) this._object.add(live.mesh);
+        live.mesh.position.copy(this._object.worldToLocal(world));
+        const axes = Reactor3D.scaleAxes ? Reactor3D.scaleAxes(def.scale) : [1, 1, 1];
+        const native = Reactor3D.videoEffectSize(def, this._template && this._template.userData.glbSize);
+        live.mesh.scale.set(native[0] * axes[0], native[1] * axes[1], 1);
+        const rotate = def.rotate || [0, 0, 0];
+        live.mesh.rotation.set(rotate[0] * Math.PI / 180, rotate[1] * Math.PI / 180, rotate[2] * Math.PI / 180, 'YXZ');
+        this._lastInputAt = performance.now();
+    }
+
+    _pickModelEffectSe() {
+        const work = this._effectWork;
+        if (!work || typeof RRAudioPickerModal === 'undefined' || typeof RRAssetFiles === 'undefined') return;
+        const path = require('path');
+        const folder = path.join(this._project().path, 'audio', 'se');
+        const current = work.se || { name: '', volume: 90, pitch: 100, pan: 0 };
+        RRAudioPickerModal.open({
+            title: this._k('r3dfx.sound'),
+            folderLabel: 'SE',
+            files: RRAssetFiles.listUnique(folder, RRAssetFiles.AUDIO_EXTENSIONS),
+            selected: current.name,
+            levels: { volume: current.volume, pitch: current.pitch, pan: current.pan },
+            loopDefault: false,
+            zIndex: 22000,
+            onOk: result => {
+                work.se = { name: result.name, volume: result.volume, pitch: result.pitch, pan: result.pan };
+                this.renderEffectForm();
+            }
+        });
+    }
+
+    /** Click on the model: the hit point becomes the anchor's offset, in the anchor part's space. */
+    _placeEffectAnchor(event) {
+        const work = this._effectWork;
+        if (!work || !this._object || typeof THREE === 'undefined') return;
+        const hits = this._raycastPointer(event.clientX, event.clientY) || [];
+        const hit = hits.find(entry => !(entry.object.userData && entry.object.userData.__reactorOverlay));
+        if (!hit) return;
+        const anchor = work.anchor && typeof work.anchor === 'object' ? work.anchor : { part: '', offset: [0, 0, 0] };
+        const frame = (anchor.part && this._object.getObjectByName(anchor.part)) || this._object;
+        frame.updateWorldMatrix(true, false);
+        const local = frame.worldToLocal(hit.point.clone());
+        work.anchor = { part: anchor.part || '', offset: [local.x, local.y, local.z].map(value => Math.round(value * 1000) / 1000) };
+        this.renderEffectForm();
+        this._syncEffectAnchorMarker();
+        this.renderEditCard();
+    }
+
+    /** Whether the pointer is on a marker sphere, in screen pixels. */
+    _pointerNearMarker(marker, clientX, clientY) {
+        if (!marker || !marker.visible || !this._camera) return false;
+        const canvas = this._detail.querySelector('.r3d-db-canvas');
+        const rect = canvas.getBoundingClientRect();
+        const at = marker.position.clone().project(this._camera);
+        const sx = rect.left + (at.x * 0.5 + 0.5) * rect.width;
+        const sy = rect.top + (-at.y * 0.5 + 0.5) * rect.height;
+        return Math.hypot(clientX - sx, clientY - sy) < 20;
+    }
+
+    /** After dragging the anchor marker: its new place, in the anchor's frame. */
+    _commitAnchorFromMarker() {
+        const work = this._effectWork;
+        if (!work || !this._fxMarker || !this._object) return;
+        const anchor = work.anchor && typeof work.anchor === 'object' ? work.anchor : { part: '', offset: [0, 0, 0] };
+        const frame = (anchor.part && this._object.getObjectByName(anchor.part)) || this._object;
+        frame.updateWorldMatrix(true, false);
+        const local = frame.worldToLocal(this._fxMarker.position.clone());
+        work.anchor = { part: anchor.part || '', offset: [local.x, local.y, local.z].map(value => Math.round(value * 1000) / 1000) };
+        this.renderEffectForm();
+        this.renderEditCard();
+        if (this._fxPreview && this._fxPreview.active) this._updateEffectPreview();
+    }
+
+    _effectMarker() {
+        if (this._fxMarker || typeof THREE === 'undefined' || !this._scene) return this._fxMarker;
+        // Sized from the placed model, not its native units: a model built
+        // at a hundred units a side is scaled to a couple of tiles here.
+        let span = 1.8;
+        if (this._object) {
+            const box = new THREE.Box3().setFromObject(this._object);
+            const size = box.getSize(new THREE.Vector3());
+            if (size.length() > 0) span = Math.max(size.x, size.y, size.z);
+        }
+        const radius = Math.max(0.01, span * 0.02);
+        const marker = new THREE.Mesh(
+            new THREE.SphereGeometry(radius, 12, 10),
+            new THREE.MeshBasicMaterial({ color: 0xff7ad9, depthTest: false, transparent: true, opacity: 0.9 }));
+        marker.renderOrder = 31;
+        marker.userData.__reactorOverlay = true;
+        marker.name = 'effect-anchor';
+        this._scene.add(marker);
+        this._fxMarker = marker;
+        return marker;
+    }
+
+    _syncEffectAnchorMarker() {
+        const work = this._effectWork;
+        if (!work || !this._object || typeof Reactor3D === 'undefined' || !Reactor3D.effectAnchorWorld) {
+            if (this._fxMarker) this._fxMarker.visible = false;
+            return;
+        }
+        const marker = this._effectMarker();
+        if (!marker) return;
+        const world = Reactor3D.effectAnchorWorld(this._object, this._effectDef(work) || work, marker.position);
+        marker.visible = !!world;
+    }
+
+    _effectPreviewLayer() {
+        if (this._fxPreview) return this._fxPreview;
+        if (typeof RRAnimationPreviewLayer === 'undefined' || !this._detail) return null;
+        const wrap = this._detail.querySelector('.r3d-canvas-wrap');
+        if (!wrap) return null;
+        this._fxPreview = new RRAnimationPreviewLayer(wrap);
+        return this._fxPreview;
+    }
+
+    /** Play an effect's database animation (and sound) over the viewport at its anchor. */
+    _playEffectPreview(raw) {
+        if (raw && raw.type === 'video') {
+            if (raw.se && raw.se.name) this._fireEffectPreview({ se: raw.se });
+            this._fxPreviewDef = raw;
+            this._playVideoPreview(raw);
+            return;
+        }
+        this._stopVideoPreview();
+        const layer = this._effectPreviewLayer();
+        const animations = this.databaseManager?.data?.animations || [];
+        const record = animations[Number(raw && raw.animation)];
+        if (raw && raw.se && raw.se.name) this._fireEffectPreview({ se: raw.se });
+        if (!layer || !record) return;
+        // The live object, not a snapshot: placing the anchor or sliding
+        // the card moves the playing preview at once.
+        this._fxPreviewDef = raw;
+        this._lastInputAt = performance.now();
+        layer.play(record, this._project().path, { loop: !!raw.loop || (raw.trigger && raw.trigger !== 'action'), transform: { rotate: raw.rotate || [0, 0, 0], scale: raw.scale } });
+        this._updateEffectPreview();
+    }
+
+    _stopEffectPreview() {
+        if (this._fxPreview) this._fxPreview.stop();
+        this._stopVideoPreview();
+        this._fxPreviewDef = null;
+        this._fxTriggered = null;
+    }
+
+    /**
+     * An effect that plays on its own previews the way a rule does: it
+     * runs while the simulated character is in its state (Walk, Dash, or
+     * idle between them) and stops when it leaves. The selected effect's
+     * unsaved trigger counts, so a change previews before it is saved.
+     */
+    _updateTriggeredEffectPreview() {
+        if (!this._object) return;
+        const list = this.rawEffects.map((raw, index) => index === this.selectedEffect && this._effectWork ? this._effectWork : raw);
+        const moving = !!this._sim.walking;
+        const dashing = !!this._sim.dashing;
+        let wanted = null;
+        let wantedIndex = -1;
+        list.forEach((raw, index) => {
+            if (wanted) return;
+            const trigger = raw && raw.trigger;
+            const playable = raw && (raw.type === 'video' ? !!(raw.video && raw.video.file) : Number(raw.animation) > 0);
+            if (!raw || !trigger || trigger === 'action' || !playable) return;
+            const active = trigger === 'always'
+                || (trigger === 'moving' && moving)
+                || (trigger === 'walking' && moving && !dashing)
+                || (trigger === 'dashing' && dashing)
+                || (trigger === 'idle' && !moving);
+            if (active) { wanted = raw; wantedIndex = index; }
+        });
+        const layer = this._fxPreview;
+        if (wanted) {
+            // Keyed by its place in the list, not its name: typing a new
+            // name must not read as a new effect and restart the video.
+            const playing = wanted.type === 'video' ? !!this._fxVideo : !!(layer && layer.active);
+            if (this._fxTriggered !== wantedIndex || !playing) {
+                this._playEffectPreview(wanted);
+                this._fxTriggered = wantedIndex;
+            } else if (this._fxPreviewDef !== wanted) {
+                // Selecting the effect swaps the record for its working
+                // copy (and deselecting swaps back): the preview keeps
+                // playing and reads the sliders from the copy, instead of
+                // re-applying the saved offset and scale every frame.
+                this._fxPreviewDef = wanted;
+            }
+        } else if (this._fxTriggered !== null && this._fxTriggered !== undefined) {
+            this._stopEffectPreview();
+        }
+    }
+
+    /** Each frame: keep the overlay on the anchor's projected position, sized to the model. */
+    _updateEffectPreview() {
+        if (this._fxVideo) this._updateVideoPreview();
+        const layer = this._fxPreview;
+        if (!layer || !layer.active || !this._fxPreviewDef || !this._object || !this._camera) return;
+        const canvas = this._detail.querySelector('.r3d-db-canvas');
+        const rect = canvas.getBoundingClientRect();
+        if (!rect.width || !rect.height) return;
+        const def = this._effectDef(this._fxPreviewDef) || this._fxPreviewDef;
+        const world = Reactor3D.effectAnchorWorld(this._object, def, new THREE.Vector3());
+        if (!world) return;
+        const at = world.clone().project(this._camera);
+        const x = (at.x * 0.5 + 0.5) * rect.width;
+        const y = (-at.y * 0.5 + 0.5) * rect.height;
+        // The same rule as the game: one native animation pixel is
+        // (pixels a tile covers here) / (tile size) screen pixels, and the
+        // overlay's 384 native pixels span eight tiles.
+        const up = world.clone().add(new THREE.Vector3(0, 1, 0)).project(this._camera);
+        const pixelsPerTile = Math.abs(up.y - at.y) * 0.5 * rect.height;
+        layer.moveTo(x, y, Math.max(24, pixelsPerTile * 8));
+        // Scale 1 is a model-sized frame: the model as shown here.
+        layer.setSpan(Reactor3D.modelSpanTiles ? Reactor3D.modelSpanTiles(this._object) : this._modelSpan() * this._scale);
+        const rotate = def.rotate || [0, 0, 0];
+        layer.setTransform({ rotate: [rotate[0], rotate[1] + this._object.rotation.y * 180 / Math.PI, rotate[2]], scale: def.scale });
+        this._lastInputAt = performance.now();
     }
 
     _bindEffects(card) {
@@ -2628,7 +3543,15 @@ class Database3DEditor {
                 const index = Number(label.dataset.i);
                 const effect = (this._work.effects || [])[index];
                 if (!effect) return;
-                if (effect.flash) {
+                if (effect.effect) {
+                    // A click steps to the next named effect on the model.
+                    const names = this.rawEffects.map(raw => raw && raw.name).filter(Boolean);
+                    if (names.length) {
+                        this._stashUndo();
+                        effect.effect = names[(names.indexOf(effect.effect) + 1) % names.length];
+                        commitFx();
+                    }
+                } else if (effect.flash) {
                     this._fxOpen = this._fxOpen === index ? -1 : index;
                     this.renderEditCard();
                 } else if (effect.se) {
@@ -2658,6 +3581,14 @@ class Database3DEditor {
             flash.color = (flash.color || [255, 255, 255, 180]).slice(0, 3).concat([Number(el.value)]);
         });
         bindFlash('.r3d-fx-flash-duration', (flash, el) => { flash.duration = Number(el.value); });
+        card.querySelector('.r3d-fx-add-named')?.addEventListener('click', () => {
+            const first = this.rawEffects.find(raw => raw && raw.name);
+            if (!first) return;
+            this._stashUndo();
+            if (!Array.isArray(this._work.effects)) this._work.effects = [];
+            this._work.effects.push({ at: 0.5, effect: first.name });
+            commitFx();
+        });
         const addEffect = effect => {
             this._stashUndo();
             if (!Array.isArray(this._work.effects)) this._work.effects = [];
@@ -2780,6 +3711,14 @@ class Database3DEditor {
                 event.preventDefault();
                 return;
             }
+            // The effect anchor drags in the camera plane, like the pivot.
+            if (event.button === 0 && !event.ctrlKey && this._cardMode === 'effect'
+                && this._pointerNearMarker(this._fxMarker, event.clientX, event.clientY)) {
+                mode = 'fxdrag';
+                canvas.style.cursor = 'move';
+                event.preventDefault();
+                return;
+            }
             // Rig markers drag the same way, mirrored to their twin.
             if (event.button === 0 && !event.ctrlKey && this._rigMode) {
                 const markerKey = this._rigMarkerUnderPointer(event.clientX, event.clientY);
@@ -2809,6 +3748,8 @@ class Database3DEditor {
                 marquee.style.height = '0px';
             } else if (this._tool === 'pivot') {
                 mode = 'pivot';
+            } else if (this._tool === 'fxanchor') {
+                mode = 'fxanchor';
             }
             event.preventDefault();
         });
@@ -2835,6 +3776,10 @@ class Database3DEditor {
                 if (point) this._pivotMarker.position.copy(point);
             } else if (mode === 'rigdrag' && this._rigDragKey) {
                 this._dragRigMarker(this._rigDragKey, event.clientX, event.clientY);
+            } else if (mode === 'fxdrag' && this._fxMarker) {
+                const point = this._cameraPlanePoint(event.clientX, event.clientY, this._fxMarker.position);
+                if (point) this._fxMarker.position.copy(point);
+                this._lastInputAt = performance.now();
             }
             lastX = event.clientX;
             lastY = event.clientY;
@@ -2860,8 +3805,12 @@ class Database3DEditor {
                 }
             } else if (mode === 'rigdrag') {
                 this._rigDragKey = null;
+            } else if (mode === 'fxdrag') {
+                this._commitAnchorFromMarker();
             } else if (mode === 'pivot' && stationary) {
                 this._placePivot(event);
+            } else if (mode === 'fxanchor' && stationary) {
+                this._placeEffectAnchor(event);
             } else if (mode === 'orbit' && stationary && event.button !== 2 && this._tool === 'orbit') {
                 this._pickPart(event);
             }
@@ -3743,6 +4692,8 @@ class Database3DEditor {
             list.appendChild(row);
         });
         this._renderEmbeddedClipRows(list);
+        this.renderEffectList();
+        this.renderEffectForm();
     }
 
     /**

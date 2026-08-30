@@ -251,15 +251,16 @@ test('a 3D classification change tells the 3D view', () => {
         'and lets go of it, or a second project would rebuild the first one too');
 });
 
-test('a map opened with the 3D box ticked comes up in 3D', () => {
-    // 3D is a view preference, not a property of the map, and the viewport is
-    // torn down when a project closes — so a project opened while the box was
-    // ticked showed a 2D canvas under a ticked box until it was unticked and
-    // reticked.
-    assert.match(controllerSource, /reconcileMap3DView/,
-        'the controller asks rather than assuming the viewport survived');
+test('a map last edited in 3D comes up in 3D, and only that map', () => {
+    // 3D is a view preference remembered per map, and the viewport is torn
+    // down when a project closes — so a project reopened on a 3D map has to
+    // ask for the viewport back rather than assume it survived, and a map
+    // left in 2D must not inherit the previous map's view.
+    assert.match(controllerSource, /reconcileMap3DView\(wanted\)/,
+        'the controller asks for the view the map remembers');
+    assert.match(controllerSource, /map3DViewRemembered\(this\.tilemapManager\?\.currentMap\?\.id\)/);
     const main = fs.readFileSync(path.join(editorRoot, 'src', 'main.js'), 'utf8');
-    assert.match(main, /reconcileMap3DView = \(\) => \{/);
-    assert.match(main, /if \(!this\.optionsManager\.getMap3DView\(\)\) return;/,
-        'and only turns it on when the preference actually asks for it');
+    assert.match(main, /reconcileMap3DView = \(wanted\) => \{/);
+    assert.match(main, /this\.applyMap3DViewPreference\(wanted === true\);/,
+        'and turns it on or off to match what that map remembers');
 });

@@ -39,6 +39,10 @@
     }
 
     const HEADER_BYTES = 16;
+    const ENCRYPTED_HEADER = Uint8Array.from([
+        0x52, 0x50, 0x47, 0x4d, 0x56, 0x00, 0x00, 0x00,
+        0x00, 0x03, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00
+    ]);
     // 89 50 4E 47 0D 0A 1A 0A + IHDR chunk length (13) + "IHDR"
     const PNG_HEADER = Uint8Array.from([
         0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
@@ -46,6 +50,11 @@
     ]);
     const ENCRYPTED_VARIANTS = {
         '.png': ['.png_', '.rpgmvp'],
+        '.jpg': ['.jpg_'],
+        '.jpeg': ['.jpeg_'],
+        '.webp': ['.webp_'],
+        '.svg': ['.svg_'],
+        '.gif': ['.gif_'],
         '.ogg': ['.ogg_', '.rpgmvo'],
         '.m4a': ['.m4a_', '.rpgmvm'],
         '.mp3': ['.mp3_'],
@@ -54,11 +63,46 @@
     };
     const MIME = {
         '.png': 'image/png', '.ogg': 'audio/ogg', '.m4a': 'audio/mp4',
-        '.mp3': 'audio/mpeg', '.wav': 'audio/wav', '.flac': 'audio/flac'
+        '.mp3': 'audio/mpeg', '.wav': 'audio/wav', '.flac': 'audio/flac',
+        '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp',
+        '.svg': 'image/svg+xml', '.gif': 'image/gif',
+        '.webm': 'video/webm', '.mp4': 'video/mp4', '.woff': 'font/woff',
+        '.woff2': 'font/woff2', '.ttf': 'font/ttf', '.otf': 'font/otf',
+        '.ico': 'image/x-icon'
     };
 
-    const keyByProject = new Map(); // project root -> Uint8Array | null
-    const urlByFile = new Map();    // encrypted file path -> { mtimeMs, size, url }
+    const urlByFile = new Map();    // encrypted file path -> physical identity, key, and URL
+
+    function hasEncryptedHeader(bytes) {
+        return bytes?.length >= HEADER_BYTES
+            && ENCRYPTED_HEADER.every((value, index) => bytes[index] === value);
+    }
+
+    function plausibleEncryptedPng(bytes) {
+        if (!hasEncryptedHeader(bytes) || bytes.length < HEADER_BYTES * 2 + 17) return false;
+        const view = new DataView(bytes.buffer, bytes.byteOffset + HEADER_BYTES * 2, 8);
+        const width = view.getUint32(0);
+        const height = view.getUint32(4);
+        if (!(width > 0 && height > 0 && width <= 100000 && height <= 100000)) return false;
+        const bitDepth = bytes[HEADER_BYTES * 2 + 8];
+        const colorType = bytes[HEADER_BYTES * 2 + 9];
+        const validDepths = {
+            0: [1, 2, 4, 8, 16], 2: [8, 16], 3: [1, 2, 4, 8], 4: [8, 16], 6: [8, 16]
+        }[colorType];
+        if (!validDepths?.includes(bitDepth)
+            || bytes[HEADER_BYTES * 2 + 10] !== 0
+            || bytes[HEADER_BYTES * 2 + 11] !== 0
+            || bytes[HEADER_BYTES * 2 + 12] > 1) return false;
+        let crc = 0xffffffff;
+        const updateCrc = value => {
+            crc ^= value;
+            for (let bit = 0; bit < 8; bit++) crc = (crc >>> 1) ^ (crc & 1 ? 0xedb88320 : 0);
+        };
+        for (const value of [0x49, 0x48, 0x44, 0x52]) updateCrc(value);
+        for (let index = 0; index < 13; index++) updateCrc(bytes[HEADER_BYTES * 2 + index]);
+        const storedCrc = new DataView(bytes.buffer, bytes.byteOffset + HEADER_BYTES * 2 + 13, 4).getUint32(0);
+        return (crc ^ 0xffffffff) >>> 0 === storedCrc;
+    }
 
     function fileUrl(filePath) {
         const raw = String(filePath);
@@ -103,7 +147,7 @@
     function projectRootFor(filePath) {
         if (!fs) return null;
         let dir = path.dirname(path.resolve(filePath));
-        for (let depth = 0; depth < 12; depth++) {
+        while (true) {
             try {
                 if (fs.existsSync(path.join(dir, 'data', 'System.json'))) return dir;
             } catch (error) {
@@ -116,28 +160,48 @@
         return null;
     }
 
+    function encryptedPngCandidates(projectRoot) {
+        const files = [];
+        const imageRoot = path.join(projectRoot, 'img');
+        if (typeof fs.lstatSync === 'function') {
+            try {
+                const stat = fs.lstatSync(imageRoot);
+                if (stat.isSymbolicLink?.() || !stat.isDirectory()) return files;
+            } catch (error) {
+                return files;
+            }
+        }
+        const pending = [imageRoot];
+        while (pending.length) {
+            const directory = pending.pop();
+            let entries;
+            try {
+                entries = fs.readdirSync(directory, { withFileTypes: true });
+            } catch (error) {
+                continue;
+            }
+            for (const entry of entries) {
+                if (entry.isSymbolicLink?.()) continue;
+                const target = path.join(directory, entry.name);
+                if (entry.isDirectory()) pending.push(target);
+                else if (entry.isFile() && /\.(png_|rpgmvp)$/i.test(entry.name)) files.push(target);
+            }
+        }
+        return files;
+    }
+
     function keyFromHex(hex) {
-        const pairs = typeof hex === 'string' ? hex.match(/.{2}/g) : null;
-        if (!pairs || pairs.length < HEADER_BYTES) return null;
-        return Uint8Array.from(pairs.slice(0, HEADER_BYTES), pair => parseInt(pair, 16));
+        if (typeof hex !== 'string' || !/^[0-9a-fA-F]{32}$/.test(hex)) return null;
+        const pairs = hex.match(/.{2}/g);
+        return Uint8Array.from(pairs, pair => parseInt(pair, 16));
     }
 
     /** Recover the key from an encrypted PNG's constant plaintext header. */
     function recoverKey(projectRoot) {
-        const probeDirs = ['img/system', 'img/tilesets', 'img/characters', 'img/pictures', 'img/faces'];
-        for (const rel of probeDirs) {
-            const dir = path.join(projectRoot, rel);
-            let entries;
+        for (const filePath of encryptedPngCandidates(projectRoot)) {
             try {
-                entries = fs.readdirSync(dir);
-            } catch (error) {
-                continue;
-            }
-            const name = entries.find(entry => /\.(png_|rpgmvp)$/i.test(entry));
-            if (!name) continue;
-            try {
-                const bytes = fs.readFileSync(path.join(dir, name));
-                if (bytes.length < HEADER_BYTES * 2) continue;
+                const bytes = readPrefix(filePath, 64);
+                if (!plausibleEncryptedPng(bytes)) continue;
                 const key = new Uint8Array(HEADER_BYTES);
                 for (let i = 0; i < HEADER_BYTES; i++) {
                     key[i] = bytes[HEADER_BYTES + i] ^ PNG_HEADER[i];
@@ -151,7 +215,6 @@
     }
 
     function keyFor(projectRoot) {
-        if (keyByProject.has(projectRoot)) return keyByProject.get(projectRoot);
         let key = null;
         try {
             const system = JSON.parse(
@@ -161,27 +224,16 @@
             key = null;
         }
         if (!key) key = recoverKey(projectRoot);
-        keyByProject.set(projectRoot, key);
         return key;
     }
 
     async function recoverKeyAsync(projectRoot) {
         if (!fs || typeof fs.readFileAsync !== 'function') return null;
-        const probeDirs = ['img/system', 'img/tilesets', 'img/characters', 'img/pictures', 'img/faces'];
-        for (const rel of probeDirs) {
-            const dir = path.join(projectRoot, rel);
-            let entries;
+        for (const filePath of encryptedPngCandidates(projectRoot)) {
             try {
-                entries = fs.readdirSync(dir);
-            } catch (error) {
-                continue;
-            }
-            const name = entries.find(entry => /\.(png_|rpgmvp)$/i.test(entry));
-            if (!name) continue;
-            try {
-                const value = await fs.readFileAsync(path.join(dir, name));
+                const value = await fs.readFileAsync(filePath);
                 const bytes = value instanceof Uint8Array ? value : new Uint8Array(value);
-                if (bytes.length < HEADER_BYTES * 2) continue;
+                if (!plausibleEncryptedPng(bytes)) continue;
                 const key = new Uint8Array(HEADER_BYTES);
                 for (let i = 0; i < HEADER_BYTES; i++) {
                     key[i] = bytes[HEADER_BYTES + i] ^ PNG_HEADER[i];
@@ -195,8 +247,6 @@
     }
 
     async function keyForAsync(projectRoot) {
-        const cached = keyByProject.get(projectRoot);
-        if (cached) return cached;
         let key = null;
         try {
             const system = JSON.parse(
@@ -205,8 +255,9 @@
         } catch (error) {
             key = null;
         }
-        if (!key) key = await recoverKeyAsync(projectRoot);
-        keyByProject.set(projectRoot, key);
+        if (!key) key = typeof fs.openSync === 'function'
+            ? recoverKey(projectRoot)
+            : await recoverKeyAsync(projectRoot);
         return key;
     }
 
@@ -215,6 +266,20 @@
         out.set(bytes.subarray(HEADER_BYTES));
         for (let i = 0; i < HEADER_BYTES && i < out.length; i++) {
             out[i] ^= key[i];
+        }
+        return out;
+    }
+
+    function encrypt(bytes, key) {
+        const source = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes || []);
+        if (!(key instanceof Uint8Array) || key.length !== HEADER_BYTES) {
+            throw new Error('A 16-byte RPG Maker encryption key is required.');
+        }
+        const out = new Uint8Array(HEADER_BYTES + source.length);
+        out.set(ENCRYPTED_HEADER);
+        out.set(source, HEADER_BYTES);
+        for (let i = 0; i < HEADER_BYTES && i < source.length; i++) {
+            out[HEADER_BYTES + i] ^= key[i];
         }
         return out;
     }
@@ -257,30 +322,64 @@
         return null;
     }
 
-    function dataUrlFor(encryptedPath, mime) {
-        let stat;
+    function physicalAssetRecord(filePath) {
+        if (!fs || !path || !filePath) return null;
         try {
-            stat = fs.statSync(encryptedPath);
+            if (fs.existsSync(filePath)) {
+                return { path: filePath, encrypted: false, sourceExtension: path.extname(filePath) };
+            }
+            const encrypted = encryptedPathFor(filePath);
+            if (encrypted) {
+                return { path: encrypted, encrypted: true, sourceExtension: path.extname(encrypted) };
+            }
+            const match = caseInsensitivePath(filePath);
+            if (match?.plain) {
+                return { path: match.plain, encrypted: false, sourceExtension: path.extname(match.plain) };
+            }
+            if (match?.encrypted) {
+                return { path: match.encrypted, encrypted: true, sourceExtension: path.extname(match.encrypted) };
+            }
         } catch (error) {
             return null;
         }
-        const cached = urlByFile.get(encryptedPath);
-        if (cached && cached.mtimeMs === stat.mtimeMs && cached.size === stat.size) {
-            return cached.url;
+        return null;
+    }
+
+    function dataUrlFor(encryptedPath, mime) {
+        let stat;
+        try {
+            stat = typeof fs.lstatSync === 'function'
+                ? fs.lstatSync(encryptedPath)
+                : fs.statSync(encryptedPath);
+            if (stat.isSymbolicLink?.() || !stat.isFile()) return null;
+        } catch (error) {
+            return null;
         }
         const projectRoot = projectRootFor(encryptedPath);
         const key = projectRoot ? keyFor(projectRoot) : null;
         if (!key) return null;
+        const keyId = Array.from(key, value => value.toString(16).padStart(2, '0')).join('');
+        const identity = {
+            dev: stat.dev, ino: stat.ino, size: stat.size,
+            mtimeMs: stat.mtimeMs, ctimeMs: stat.ctimeMs, keyId
+        };
+        const cached = urlByFile.get(encryptedPath);
+        if (cached && ['dev', 'ino', 'size', 'mtimeMs', 'ctimeMs', 'keyId']
+            .every(field => cached[field] === identity[field])) {
+            return cached.url;
+        }
         let bytes;
         try {
-            bytes = fs.readFileSync(encryptedPath);
+            bytes = typeof fs.openSync === 'function'
+                ? readPrefix(encryptedPath, Number.MAX_SAFE_INTEGER, identity)
+                : fs.readFileSync(encryptedPath);
         } catch (error) {
             return null;
         }
-        if (bytes.length <= HEADER_BYTES) return null;
+        if (!bytes || bytes.length <= HEADER_BYTES) return null;
         const url = 'data:' + mime + ';base64,'
             + Buffer.from(decrypt(bytes, key)).toString('base64');
-        urlByFile.set(encryptedPath, { mtimeMs: stat.mtimeMs, size: stat.size, url });
+        urlByFile.set(encryptedPath, { ...identity, url });
         return url;
     }
 
@@ -342,14 +441,44 @@
         return fileUrl(filePath);
     }
 
-    function readPrefix(target, limit) {
-        const fd = fs.openSync(target, 'r');
+    /** Resolve one already-cataloged physical file without preferring an alias. */
+    async function resolvePhysicalAssetUrlAsync(filePath, logicalExtension, encrypted = false) {
+        const mime = MIME[String(logicalExtension || '').toLowerCase()] || 'application/octet-stream';
+        const bytes = await readPhysicalAssetBytesAsync(filePath, encrypted);
+        if (!bytes) return null;
+        if (typeof window !== 'undefined' && typeof Blob === 'function' && URL?.createObjectURL) {
+            return URL.createObjectURL(new Blob([bytes], { type: mime }));
+        }
+        return 'data:' + mime + ';base64,' + Buffer.from(bytes).toString('base64');
+    }
+
+    function matchesExpectedIdentity(stat, expectedIdentity) {
+        if (!expectedIdentity) return true;
+        return ['dev', 'ino', 'size', 'mtimeMs', 'ctimeMs'].every(field =>
+            expectedIdentity[field] == null || stat[field] === expectedIdentity[field]);
+    }
+
+    function readPrefix(target, limit, expectedIdentity = null) {
+        const constants = fs.constants || {};
+        const flags = constants.O_RDONLY !== undefined
+            ? constants.O_RDONLY | (constants.O_NOFOLLOW || 0)
+            : 'r';
+        const fd = fs.openSync(target, flags);
         try {
-            const size = fs.fstatSync(fd).size;
+            const stat = fs.fstatSync(fd);
+            if (!stat.isFile()) return null;
+            if (!matchesExpectedIdentity(stat, expectedIdentity)) return null;
+            const size = stat.size;
             const length = Math.min(limit, size);
             const out = Buffer.alloc(length);
-            fs.readSync(fd, out, 0, length, 0);
-            return new Uint8Array(out.buffer, out.byteOffset, length);
+            let offset = 0;
+            while (offset < length) {
+                const read = fs.readSync(fd, out, offset, length - offset, offset);
+                if (!(read > 0)) break;
+                offset += read;
+            }
+            if (expectedIdentity && !matchesExpectedIdentity(fs.fstatSync(fd), expectedIdentity)) return null;
+            return new Uint8Array(out.buffer, out.byteOffset, offset);
         } finally {
             fs.closeSync(fd);
         }
@@ -408,16 +537,62 @@
     async function readAssetBytesAsync(filePath) {
         const sync = readAssetBytes(filePath, Number.MAX_SAFE_INTEGER);
         if (sync) return sync;
-        const host = typeof window !== 'undefined' ? window.RPGReactorWebHost : null;
-        if (host && host.fs && typeof host.fs.readFileAsync === 'function' && filePath) {
+        const record = physicalAssetRecord(filePath);
+        if (record && fs && typeof fs.readFileAsync === 'function') {
             try {
-                const bytes = await host.fs.readFileAsync(filePath);
-                return bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+                const value = await fs.readFileAsync(record.path);
+                const bytes = value instanceof Uint8Array ? value : new Uint8Array(value);
+                if (!record.encrypted) return bytes;
+                const projectRoot = projectRootFor(record.path);
+                const key = projectRoot ? await keyForAsync(projectRoot) : null;
+                return key && bytes.length > HEADER_BYTES ? decrypt(bytes, key) : null;
             } catch (error) {
                 return null;
             }
         }
         return null;
+    }
+
+    /** Read one already-cataloged physical file, decrypting that exact file when requested. */
+    async function readPhysicalAssetBytesAsync(filePath, encrypted = false, expectedIdentity = null) {
+        if (!fs || !filePath) return null;
+        try {
+            let value;
+            if (typeof fs.openSync === 'function') {
+                value = readPrefix(filePath, Number.MAX_SAFE_INTEGER, expectedIdentity);
+            } else if (typeof fs.readFileAsync === 'function') {
+                if (expectedIdentity && !matchesExpectedIdentity(fs.statSync(filePath), expectedIdentity)) return null;
+                value = await fs.readFileAsync(filePath);
+                if (expectedIdentity && !matchesExpectedIdentity(fs.statSync(filePath), expectedIdentity)) return null;
+            } else {
+                return null;
+            }
+            if (!value) return null;
+            const bytes = value instanceof Uint8Array ? value : new Uint8Array(value);
+            if (!encrypted) return bytes;
+            const projectRoot = projectRootFor(filePath);
+            const key = projectRoot ? await keyForAsync(projectRoot) : null;
+            return key && bytes.length > HEADER_BYTES ? decrypt(bytes, key) : null;
+        } catch (error) {
+            return null;
+        }
+    }
+
+    function invalidateProject(projectRoot) {
+        if (!projectRoot || !path) return;
+        const resolved = path.resolve(projectRoot);
+        const prefix = resolved.endsWith(path.sep) ? resolved : `${resolved}${path.sep}`;
+        for (const filePath of urlByFile.keys()) {
+            const candidate = path.resolve(filePath);
+            if (candidate === resolved || candidate.startsWith(prefix)) urlByFile.delete(filePath);
+        }
+    }
+
+    function invalidateAsset(filePath) {
+        if (!filePath || !path) return;
+        const record = physicalAssetRecord(filePath);
+        if (record) urlByFile.delete(record.path);
+        urlByFile.delete(filePath);
     }
 
     function useFileSystem(nextFs, nextPath, nextAssetUrl = null) {
@@ -429,9 +604,16 @@
     const api = {
         resolveAssetUrl,
         resolveAssetUrlAsync,
+        resolvePhysicalAssetUrlAsync,
+        physicalAssetRecord,
         assetExists,
         readAssetBytes,
         readAssetBytesAsync,
+        readPhysicalAssetBytesAsync,
+        encryptionKeyFor: keyFor,
+        encryptAssetBytes: encrypt,
+        invalidateAsset,
+        invalidateProject,
         useFileSystem
     };
     root.RREncryptedAssets = api;

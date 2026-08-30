@@ -26,12 +26,33 @@ test('every map property control still exists exactly once after the layout pass
         'map-disable-dashing-checkbox', 'map-parallax-image-select',
         'map-parallax-loop-x-checkbox', 'map-parallax-loop-y-checkbox',
         'map-parallax-sx-input', 'map-parallax-sy-input', 'map-parallax-show-checkbox',
-        'map-encounters-list', 'map-note-textarea'
+        'map-encounters-list', 'map-note-textarea',
+        'map-bgm-track', 'map-bgm-choose-btn', 'map-bgm-levels',
+        'map-bgs-track', 'map-bgs-choose-btn', 'map-bgs-levels',
+        'map-3d-checkbox', 'map-3d-options', 'map-3d-height-input',
+        'map-3d-floor-select', 'map-3d-walls-select', 'map-3d-ceiling-select',
+        'map-3d-floor-browse-btn', 'map-3d-walls-browse-btn', 'map-3d-ceiling-browse-btn'
     ];
     for (const id of ids) {
         const matches = modal.split(`id="${id}"`).length - 1;
         assert.equal(matches, 1, `${id} appears exactly once`);
     }
+    // The track's levels are chosen in the audio picker, not in the form.
+    for (const type of ['bgm', 'bgs']) {
+        for (const field of ['volume', 'pitch', 'pan', 'select', 'play-btn']) {
+            assert.equal(modal.includes(`id="map-${type}-${field}"`), false, `map-${type}-${field} is gone`);
+        }
+    }
+    // Every number field wears the themed stepper rather than the browser spinner.
+    for (const id of ['map-width-input', 'map-height-input', 'map-encounter-steps-input', 'map-3d-height-input',
+        'map-3d-camera-pitch', 'map-3d-camera-yaw', 'map-3d-camera-distance', 'map-3d-camera-fov']) {
+        assert.match(modal, new RegExp(`class="rr-number-stepper"><input class="rr-number-stepper-input"[^>]+id="${id}"`), id);
+        assert.equal((modal.match(new RegExp(`data-target="${id}"`, 'g')) || []).length, 2, id);
+    }
+    assert.doesNotMatch(modal, /rr-number-stepper-compact/);
+    assert.match(controller, /data-map-props-step/);
+    assert.match(controller, /input\.stepUp\(\)/);
+    assert.match(controller, /input\.stepDown\(\)/);
 });
 
 test('collapsible pickers declare display only once, so the checkbox governs them', () => {

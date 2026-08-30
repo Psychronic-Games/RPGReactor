@@ -121,7 +121,7 @@ class MapEditor3D {
 
     async ensureLibraries() {
         if (this.librariesLoaded) return true;
-        if (typeof window !== 'undefined' && window.THREE && window.Reactor3D) {
+        if (typeof window !== 'undefined' && window.pako && window.THREE && window.Reactor3D) {
             this.librariesLoaded = true;
             return true;
         }
@@ -137,10 +137,10 @@ class MapEditor3D {
         const host = typeof window !== 'undefined' ? window.RPGReactorWebHost : null;
         if (host?.mode === 'web' && host.projectRoot && typeof host.assetUrl === 'function') {
             const root = String(host.projectRoot).replace(/\/+$/, '');
-            const files = [
-                `${root}/js/libs/three.js`,
-                `${root}/js/reactor_3d.js`
-            ];
+            const files = [];
+            if (!window.pako) files.push(`${root}/js/libs/pako.min.js`);
+            if (!window.THREE) files.push(`${root}/js/libs/three.js`);
+            if (!window.Reactor3D) files.push(`${root}/js/reactor_3d.js`);
             try {
                 for (const file of files) {
                     await this.injectScriptUrl(host.assetUrl(file), file);
@@ -158,10 +158,10 @@ class MapEditor3D {
             return false;
         }
 
-        const files = [
-            this.path.join(runtimePath, 'libs', 'three.js'),
-            this.path.join(runtimePath, 'reactor_3d.js')
-        ];
+        const files = [];
+        if (typeof window === 'undefined' || !window.pako) files.push(this.path.join(runtimePath, 'libs', 'pako.min.js'));
+        if (typeof window === 'undefined' || !window.THREE) files.push(this.path.join(runtimePath, 'libs', 'three.js'));
+        if (typeof window === 'undefined' || !window.Reactor3D) files.push(this.path.join(runtimePath, 'reactor_3d.js'));
         for (const file of files) {
             if (!this.fs.existsSync(file)) {
                 this.lastError = `Missing ${file}`;
@@ -182,8 +182,8 @@ class MapEditor3D {
     }
 
     finishLibraryLoad() {
-        this.librariesLoaded = !!(window.THREE && window.Reactor3D);
-        if (!this.librariesLoaded) this.lastError = 'three.js did not define THREE.';
+        this.librariesLoaded = !!(window.pako && window.THREE && window.Reactor3D);
+        if (!this.librariesLoaded) this.lastError = 'A 3D runtime dependency did not load.';
         return this.librariesLoaded;
     }
 
@@ -457,6 +457,7 @@ class MapEditor3D {
         try { app?.render?.(); } catch (_) {}
         this._pixiWasRunning = false;
         window.reactor?.updateMapZoom?.();
+        this.projectController?.videoSurfacePreviewManager?.refreshBackend?.();
     }
 
     /**
@@ -561,6 +562,7 @@ class MapEditor3D {
 
         this.createHint(container);
         try {
+            Reactor3D.clearUnpackState?.(context);
             this.renderer = new THREE.WebGLRenderer({
                 canvas: this.canvas,
                 context,
@@ -680,7 +682,9 @@ class MapEditor3D {
         this.buildGrid(mapData);
         this.buildHoverCell();
         if (!await this.buildEvents(mapData, request)) return false;
+        this.buildProps(mapData, request);
         if (!this.rebuildIsCurrent(request, renderer)) return false;
+        this.projectController?.videoSurfacePreviewManager?.attachThree?.(this);
         // Frame the map when it is a different map, not on every rebuild.
         // A rebuild happens on every edit, and re-framing threw away wherever
         // the author had orbited and zoomed to — so the view jumped back and
@@ -890,24 +894,27 @@ class MapEditor3D {
         const projectPath = this.projectPath();
         if (!projectPath || !this.path || typeof Reactor3D === 'undefined') return {};
 
-        const layers = Reactor3D.parallaxGroundLayers(mapData);
-        if (!layers.length) return {};
+        // The room's floor, walls and ceiling are parallaxes too, and go
+        // through the same loader.
+        const names = Reactor3D.parallaxGroundLayers(mapData).map(layer => layer.name)
+            .concat(typeof Reactor3D.roomImageNames === 'function'
+                ? Reactor3D.roomImageNames(mapData) : []);
+        if (!names.length) return {};
 
         if (!this.parallaxImages) this.parallaxImages = {};
         const directory = this.path.join(projectPath, 'img', 'parallaxes');
         const loaded = {};
         const pending = [];
 
-        for (const layer of layers) {
-            const name = layer.name;
-            if (loaded[name]) continue;
+        for (const name of names) {
+            if (!name || loaded[name]) continue;
             const cached = this.parallaxImages[name];
             if (cached) {
                 loaded[name] = cached;
                 continue;
             }
-            const filePath = this.path.join(directory, `${name}.png`);
-            if (this.fs && !this.fs.existsSync(filePath)) continue;
+            const imageUrl = RRAssetFiles.imageUrlFor(directory, name);
+            if (!imageUrl) continue;
 
             pending.push(new Promise(resolve => {
                 const image = new Image();
@@ -920,7 +927,7 @@ class MapEditor3D {
                 // One parallax that will not load costs its own layer, the way
                 // a missing sheet costs its own tiles.
                 image.onerror = () => resolve();
-                image.src = this.assetUrl(filePath);
+                image.src = imageUrl;
             }));
         }
 
@@ -954,13 +961,18 @@ class MapEditor3D {
         this.billboards = [];
         this.labels = [];
         this.pickables = [];
+        this.animatedEvents = [];
         this.selected = null;
         const cube = new THREE.BoxGeometry(0.55, 0.55, 0.55);
 
         for (const event of mapData.events || []) {
             if (!event) continue;
             const elevation = Reactor3D.elevationAt(mapData, event.x, event.y);
-            const sprite = this.eventSprite(event, sheets);
+            // Preview Event shows a chosen page instead of the first one.
+            const previewIndex = MapEditor3D.previewPageIndex(mapData, event);
+            const page = event.pages?.[previewIndex ?? 0] || event.pages?.[0];
+            const sprite = this.eventSprite(event, sheets, page?.image, previewIndex !== null && page?.stepAnime ? page : null);
+            if (previewIndex !== null) this.previewEventModel(event, page, previewIndex, mapData, request);
             const mesh = sprite || new THREE.Mesh(cube, new THREE.MeshBasicMaterial({
                 color: this.eventColor(event),
                 transparent: true,
@@ -1038,9 +1050,95 @@ class MapEditor3D {
             this.placeEvent(mesh);
         }
 
+        this.buildStartMarkers(mapData);
         scene.add(this.eventGroup);
         this.faceCamera();
         return true;
+    }
+
+    /**
+     * The starting positions, drawn the way the 2D map draws them.
+     *
+     * The player's start is not an event, so nothing put it in the 3D view:
+     * the cell you begin on was invisible there. It gets the same wire box
+     * and label an event has, in the 2D marker's colour, plus an arrow on
+     * the ground for the way the player faces; the vehicles get box and
+     * label. None of it is pickable — a right-click on the cell opens the
+     * map menu, where Set Starting Position and Player Facing live.
+     */
+    buildStartMarkers(mapData) {
+        this.startMarkers = [];
+        if (!this.eventGroup || !mapData || typeof THREE === 'undefined') return;
+        const system = window.reactor?.databaseManager?.getSystem?.();
+        if (!system) return;
+        const tt = text => (window.I18n ? window.I18n.tText(text) : text);
+        const starts = [
+            { slot: system, name: 'Player', color: 0x00ff00, direction: MapEditor3D.startDirection(system) },
+            { slot: system.boat, name: 'Boat', color: 0x0088ff },
+            { slot: system.ship, name: 'Ship', color: 0xff8800 },
+            { slot: system.airship, name: 'Airship', color: 0xff00ff }
+        ];
+        const mapId = Number(mapData.id);
+        for (const start of starts) {
+            const slot = start.slot;
+            if (!slot || Number(slot.startMapId) !== mapId) continue;
+            const x = Number(slot.startX) || 0, y = Number(slot.startY) || 0;
+            const elevation = Reactor3D.elevationAt(mapData, x, y);
+            const pieces = [];
+            const box = this.eventBox(0.94, start.color);
+            box.position.set(x + 0.5, elevation + 0.47, y + 0.5);
+            pieces.push(box);
+            if (start.direction) {
+                const arrow = this.startArrow(start.direction, start.color);
+                arrow.position.set(x + 0.5, elevation + 0.02, y + 0.5);
+                pieces.push(arrow);
+            }
+            const label = this.textLabel(tt(start.name));
+            label.position.set(x + 0.5, elevation + 0.94 + 0.28, y + 0.5);
+            pieces.push(label);
+            this.billboards.push(label);
+            this.labels.push(label);
+            for (const piece of pieces) {
+                piece.userData.startMarker = true;
+                this.eventGroup.add(piece);
+                this.startMarkers.push(piece);
+            }
+        }
+    }
+
+    /** A flat arrow on the ground, pointing the way a map direction says. */
+    startArrow(direction, color) {
+        const shape = new THREE.Shape();
+        shape.moveTo(-0.16, -0.22);
+        shape.lineTo(0.16, -0.22);
+        shape.lineTo(0, 0.22);
+        shape.closePath();
+        const geometry = new THREE.ShapeGeometry(shape);
+        const arrow = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({
+            color, transparent: true, opacity: 0.9, side: THREE.DoubleSide
+        }));
+        // Laid flat, the shape's +y points north (-z); turned for the rest.
+        arrow.rotation.x = -Math.PI / 2;
+        arrow.rotation.z = { 8: 0, 4: Math.PI / 2, 6: -Math.PI / 2, 2: Math.PI }[direction] || 0;
+        return arrow;
+    }
+
+    /** Redraw the start markers after the start position or facing changed. */
+    refreshStartMarkers() {
+        if (!this.eventGroup) return;
+        for (const piece of this.startMarkers || []) {
+            this.eventGroup.remove(piece);
+            const at = this.labels.indexOf(piece);
+            if (at >= 0) this.labels.splice(at, 1);
+            const bill = this.billboards.indexOf(piece);
+            if (bill >= 0) this.billboards.splice(bill, 1);
+            piece.geometry?.dispose?.();
+            const materials = Array.isArray(piece.material) ? piece.material : piece.material ? [piece.material] : [];
+            for (const material of materials) { material.map?.dispose?.(); material.dispose?.(); }
+        }
+        this.buildStartMarkers(this.currentMap());
+        this.faceCamera();
+        this.updateLabelVisibility();
     }
 
     /**
@@ -1220,14 +1318,17 @@ class MapEditor3D {
         for (const event of mapData.events || []) {
             const name = event?.pages?.[0]?.image?.characterName;
             if (name) names.add(name);
+            const previewIndex = MapEditor3D.previewPageIndex(mapData, event);
+            const previewName = previewIndex !== null ? event.pages[previewIndex]?.image?.characterName : null;
+            if (previewName) names.add(previewName);
         }
 
         this.characterImages = this.characterImages || {};
         const directory = this.path.join(projectPath, 'img', 'characters');
         await Promise.all([...names].map(name => new Promise(resolve => {
             if (this.characterImages[name] !== undefined) return resolve();
-            const file = this.path.join(directory, name.endsWith('.png') ? name : `${name}.png`);
-            if (this.fs && !this.fs.existsSync(file)) {
+            const imageUrl = RRAssetFiles.imageUrlFor(directory, name);
+            if (!imageUrl) {
                 this.characterImages[name] = null;
                 return resolve();
             }
@@ -1236,7 +1337,7 @@ class MapEditor3D {
             // A missing sheet leaves that event as a plain cube rather than
             // failing the whole scene.
             image.onerror = () => { this.characterImages[name] = null; resolve(); };
-            image.src = this.assetUrl(file);
+            image.src = imageUrl;
         })));
         return this.characterImages;
     }
@@ -1249,8 +1350,432 @@ class MapEditor3D {
      * keeps that arithmetic in one place. Null when the event has no graphic,
      * which is also when the 2D editor shows a bare coloured square.
      */
-    eventSprite(event, sheets) {
-        const image = event?.pages?.[0]?.image;
+    /** The page Preview Event chose for this event, or null. */
+    static previewPageIndex(mapData, event) {
+        const previews = mapData?.reactor3d?.eventPreviews;
+        const page = previews ? previews[String(event?.id)] : undefined;
+        return Number.isInteger(page) && event?.pages?.[page] ? page : null;
+    }
+
+    /**
+     * A previewed page bound to a 3D model stands as the model itself, placed
+     * and scaled the way the game places it. Loads asynchronously and joins
+     * the event group only if this build is still the current one.
+     */
+    previewEventModel(event, page, pageIndex, mapData, request) {
+        if (typeof RREventPreviewModels === 'undefined' || !Reactor3D.eventModelSpec) return;
+        const spec = Reactor3D.eventModelSpec(mapData, event.id, pageIndex);
+        if (!spec) return;
+        const group = this.eventGroup;
+        const project = this.projectController?.getCurrentProject
+            ? this.projectController.getCurrentProject() : this.projectController?.currentProject;
+        RREventPreviewModels.templateFor(project, spec, this).then(template => {
+            if (!template || !this.rebuildIsCurrent(request) || this.eventGroup !== group) return;
+            const object = RREventPreviewModels.instance(template, spec, page?.image?.direction || 2);
+            const elevation = Reactor3D.elevationAt(mapData, event.x, event.y);
+            object.position.set(event.x + 0.5, elevation, event.y + 0.5);
+            object.userData.event = event;
+            object.userData.modelPreview = true;
+            group.add(object);
+            this.animateModel(object, template, null);
+            this.playModelEffects(object, template, '');
+        });
+    }
+
+    //-------------------------------------------------------------------------
+    // Model props
+    //
+    // The sidecar's `reactor3d.props`, placed as model instances in a group of
+    // their own. With the palette's M tab up they can be picked, dragged
+    // freely over the ground, turned with pose rings and placed by clicking
+    // the ground; `ModelPropsManager` owns the data and the 2D side.
+
+    propsManager() {
+        return this.projectController?.modelPropsManager || window.reactor?.modelPropsManager || null;
+    }
+
+    canEditProps() {
+        return !!this.propsManager()?.active;
+    }
+
+    buildProps(mapData, request = this._rebuildGeneration) {
+        this.disposeProps();
+        if (!this.mapScene || typeof RREventPreviewModels === 'undefined' || !Reactor3D.normalizeModelSpec) return;
+        const elevation = window.RRMapElevation;
+        const props = elevation ? elevation.props(mapData) : [];
+        if (!props.length) return;
+        const group = new THREE.Group();
+        group.name = 'model-props';
+        this.propGroup = group;
+        this.mapScene.scene().add(group);
+        const project = this.projectController?.getCurrentProject
+            ? this.projectController.getCurrentProject() : this.projectController?.currentProject;
+        for (const prop of props) {
+            const spec = Reactor3D.normalizeModelSpec(ModelPropsManager.specOf(prop));
+            if (!spec) continue;
+            RREventPreviewModels.templateFor(project, spec, this).then(template => {
+                if (!template || !this.rebuildIsCurrent(request) || this.propGroup !== group) return;
+                const object = RREventPreviewModels.instance(template, spec, prop.direction);
+                object.userData.propId = prop.id;
+                object.userData.modelPreview = true;
+                object.traverse(node => { node.userData.propId = prop.id; });
+                this.placeProp(object, prop, mapData);
+                group.add(object);
+                // Picking tests the box, not the mesh: a raycast through a
+                // million triangles on every mouse move is what jitters.
+                object.userData.pickBox = new THREE.Box3().setFromObject(object);
+                this.animateModel(object, template, prop.animation ? { name: prop.animation, repeat: !!prop.repeat } : null);
+                this.playModelEffects(object, template, prop.effect);
+                if (this.selectedPropId === prop.id) this.selectProp(prop.id);
+            });
+        }
+    }
+
+    placeProp(object, prop, mapData = this.currentMap()) {
+        const elevation = Reactor3D.elevationAt(mapData, Math.round(prop.x), Math.round(prop.y));
+        object.position.set(prop.x + 0.5, elevation + prop.z, prop.y + 0.5);
+        if (object.userData.pickBox) object.userData.pickBox.setFromObject(object);
+    }
+
+    /**
+     * Run a placed model's animation rules in the viewport, the way the
+     * game runs them: continuous rules on their own, and a starting action
+     * (a prop's chosen animation) on demand, repeating when asked.
+     */
+    animateModel(object, template, action) {
+        if (typeof RREventPreviewModels === 'undefined' || !RREventPreviewModels.animate) return;
+        const driver = RREventPreviewModels.animate(object, template);
+        if (!driver) return;
+        driver.object = object;
+        driver.start = this._modelFrame || 0;
+        driver.action = action ? { name: action.name, frame: driver.start, repeat: !!action.repeat } : null;
+        if (!this.animatedModels) this.animatedModels = [];
+        this.animatedModels.push(driver);
+    }
+
+    /**
+     * Play a placed model's effects in the viewport: the ones that play on
+     * their own (Always) and the one a prop was given, looping, at their
+     * anchors — a database animation as an overlay over the canvas, a video
+     * as a plane in the scene. State-triggered effects wait for the game.
+     */
+    playModelEffects(object, template, chosenName) {
+        const sidecar = template && template.userData.reactorSidecar;
+        if (!sidecar || typeof Reactor3D === 'undefined' || !Reactor3D.readModelEffects) return;
+        const project = this.projectController?.getCurrentProject
+            ? this.projectController.getCurrentProject() : this.projectController?.currentProject;
+        const animations = window.reactor?.databaseManager?.data?.animations || [];
+        const started = new Set();
+        for (const effect of Reactor3D.readModelEffects(sidecar)) {
+            if (effect.trigger !== 'always' && effect.name !== chosenName) continue;
+            if (started.has(effect.name)) continue;
+            started.add(effect.name);
+            if (effect.type === 'video' && effect.video && effect.video.file) {
+                const plane = this._videoEffectPlane(effect, project, template.userData.glbSize);
+                if (plane) {
+                    plane.userData.__reactorOverlay = true;
+                    object.add(plane);
+                    (this.effectPlays || (this.effectPlays = [])).push({ object, effect, plane });
+                }
+                continue;
+            }
+            const record = animations[effect.animation];
+            if (!record || typeof RRAnimationPreviewLayer === 'undefined') continue;
+            const wrap = this.canvas && this.canvas.parentElement;
+            if (!wrap) continue;
+            const layer = new RRAnimationPreviewLayer(wrap);
+            layer.wrap.style.zIndex = '3';
+            layer.play(record, project?.path || '', { loop: true, transform: { rotate: effect.rotate, scale: effect.scale } });
+            (this.effectPlays || (this.effectPlays = [])).push({ object, effect, layer });
+        }
+    }
+
+    _videoEffectPlane(effect, project, extent) {
+        if (!project?.path || typeof THREE === 'undefined') return null;
+        const path = require('path');
+        const file = path.join(project.path, 'movies', effect.video.file);
+        const url = typeof RRAssetFiles !== 'undefined' && RRAssetFiles.toUrl ? RRAssetFiles.toUrl(file) : 'file://' + file;
+        const video = document.createElement('video');
+        video.muted = true;
+        video.loop = effect.video.loop !== false;
+        video.playsInline = true;
+        video.src = url;
+        const texture = new THREE.VideoTexture(video);
+        if (THREE.SRGBColorSpace) texture.colorSpace = THREE.SRGBColorSpace;
+        const plane = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ map: texture, side: THREE.DoubleSide, toneMapped: false }));
+        // A fraction of the model's size, in its units, as a child of it.
+        const axes = Reactor3D.scaleAxes ? Reactor3D.scaleAxes(effect.scale) : [1, 1, 1];
+        const native = Reactor3D.videoEffectSize(effect, extent);
+        plane.scale.set(native[0] * axes[0], native[1] * axes[1], 1);
+        plane.userData.video = video;
+        plane.userData.texture = texture;
+        video.play().catch(() => {});
+        return plane;
+    }
+
+    /** Keep every playing effect on its anchor as the camera and models move. */
+    updateEffectPlays() {
+        const plays = (this.effectPlays || []).filter(play => play.object.parent);
+        this.effectPlays = plays;
+        if (!plays.length || !this.camera || !this.canvas) return;
+        const rect = this.canvas.getBoundingClientRect();
+        const scratch = this._effectScratch || (this._effectScratch = new THREE.Vector3());
+        for (const play of plays) {
+            if (play.plane) {
+                // In the model's own frame: the anchor point, turned by the effect.
+                const local = play.object.worldToLocal(Reactor3D.effectAnchorWorld(play.object, play.effect, scratch).clone());
+                play.plane.position.copy(local);
+                const rotate = play.effect.rotate || [0, 0, 0];
+                play.plane.rotation.set(rotate[0] * Math.PI / 180, rotate[1] * Math.PI / 180, rotate[2] * Math.PI / 180, 'YXZ');
+                continue;
+            }
+            const world = Reactor3D.effectAnchorWorld(play.object, play.effect, scratch);
+            if (!world) continue;
+            const at = world.clone().project(this.camera);
+            if (at.z > 1) { play.layer.wrap.style.display = 'none'; continue; }
+            const x = (at.x * 0.5 + 0.5) * rect.width;
+            const y = (-at.y * 0.5 + 0.5) * rect.height;
+            // Sized by how big a tile is on screen at the anchor, like the game's sprite.
+            const up = world.clone().add(new THREE.Vector3(0, 1, 0)).project(this.camera);
+            const pixelsPerTile = Math.abs(up.y - at.y) * 0.5 * rect.height;
+            // Same rule as the game: 384 native pixels span eight tiles.
+            play.layer.moveTo(x, y, Math.max(24, pixelsPerTile * 8));
+            const rotate = play.effect.rotate || [0, 0, 0];
+            // Scale 1 is a model-sized frame: this prop, at its size.
+            if (Reactor3D.modelSpanTiles) play.layer.setSpan(Reactor3D.modelSpanTiles(play.object));
+            play.layer.setTransform({ rotate: [rotate[0], rotate[1] + play.object.rotation.y * 180 / Math.PI, rotate[2]], scale: play.effect.scale });
+            if (play.layer.active) play.layer.wrap.style.display = 'block';
+        }
+    }
+
+    disposeEffectPlays(filter) {
+        for (const play of this.effectPlays || []) {
+            if (filter && !filter(play)) continue;
+            if (play.layer) play.layer.dispose();
+            if (play.plane) {
+                try { play.plane.userData.video.pause(); play.plane.userData.video.src = ''; } catch (_) {}
+                play.plane.parent?.remove(play.plane);
+                play.plane.geometry.dispose();
+                play.plane.material.dispose();
+                play.plane.userData.texture.dispose();
+            }
+        }
+        this.effectPlays = filter ? (this.effectPlays || []).filter(play => !filter(play)) : [];
+    }
+
+    /** Advance every animated model by the frames since the last tick. */
+    animateModels(now) {
+        this.updateEffectPlays();
+        const drivers = (this.animatedModels || []).filter(driver => driver.object.parent);
+        this.animatedModels = drivers;
+        if (!drivers.length || typeof Reactor3D === 'undefined' || !Reactor3D.applyModelAnimation) return;
+        const last = this._lastModelTick || now;
+        this._lastModelTick = now;
+        this._modelFrame = (this._modelFrame || 0) + Math.min(10, (now - last) / (1000 / 60));
+        const frame = Math.floor(this._modelFrame);
+        for (const driver of drivers) {
+            let action = driver.action;
+            if (action) {
+                const rule = driver.rules.find(entry => entry.trigger === 'action' && entry.name === action.name);
+                const duration = rule ? Reactor3D.modelRuleDuration(rule, driver.clips) : 0;
+                if (rule && frame - action.frame >= duration) {
+                    action = (action.repeat || rule.repeat) ? Object.assign({}, action, { frame }) : null;
+                    driver.action = action;
+                }
+            }
+            Reactor3D.applyModelAnimation(driver.binding, driver.rules, {
+                frame, moving: false, dashing: false, distance: 0, scale: 1,
+                action: action ? { name: action.name, frame: action.frame } : null
+            });
+        }
+    }
+
+    /** Rebuild only the props, after one was added, moved, turned or removed. */
+    refreshProps() {
+        const mapData = this.currentMap();
+        if (!mapData || !this.mapScene) return;
+        this.buildProps(mapData, this._rebuildGeneration);
+    }
+
+    disposeProps() {
+        this.selectPropRings(null);
+        this.disposeEffectPlays(play => play.object.userData.propId !== undefined);
+        if (this.animatedModels) this.animatedModels = this.animatedModels.filter(driver => !driver.object.userData.propId);
+        if (!this.propGroup) return;
+        for (const child of this.propGroup.children) {
+            child.traverse(node => {
+                const materials = Array.isArray(node.material) ? node.material : node.material ? [node.material] : [];
+                for (const material of materials) material.dispose?.();
+            });
+        }
+        this.propGroup.parent?.remove(this.propGroup);
+        this.propGroup = null;
+    }
+
+    propObject(id) {
+        return this.propGroup?.children.find(child => child.userData.propId === id) || null;
+    }
+
+    /** The prop under the pointer, by id, or null — by bounding box, which is cheap and enough to pick. */
+    propAt(clientX, clientY) {
+        if (!this.propGroup || !this.propGroup.children.length || !this.camera || !this.canvas) return null;
+        const rect = this.canvas.getBoundingClientRect();
+        if (!rect.width || !rect.height) return null;
+        this._raycaster = this._raycaster || new THREE.Raycaster();
+        this._raycaster.setFromCamera(new THREE.Vector2(
+            ((clientX - rect.left) / rect.width) * 2 - 1,
+            -((clientY - rect.top) / rect.height) * 2 + 1
+        ), this.camera);
+        const ray = this._raycaster.ray;
+        const point = this._pickPoint || (this._pickPoint = new THREE.Vector3());
+        let best = null;
+        for (const child of this.propGroup.children) {
+            if (child.userData.propId === undefined) continue;
+            const box = child.userData.pickBox || (child.userData.pickBox = new THREE.Box3().setFromObject(child));
+            if (!ray.intersectBox(box, point)) continue;
+            const distance = point.distanceTo(ray.origin);
+            if (!best || distance < best.distance) best = { id: child.userData.propId, distance };
+        }
+        return best ? best.id : null;
+    }
+
+    /** Where the pointer meets the map, in tiles (fractional), or null off the map. */
+    groundPointAt(clientX, clientY) {
+        const mapData = this.currentMap();
+        if (!this.mapScene || !this.camera || !this.canvas || !mapData) return null;
+        const rect = this.canvas.getBoundingClientRect();
+        if (!rect.width || !rect.height) return null;
+        this._raycaster = this._raycaster || new THREE.Raycaster();
+        this._raycaster.setFromCamera(new THREE.Vector2(
+            ((clientX - rect.left) / rect.width) * 2 - 1,
+            -((clientY - rect.top) / rect.height) * 2 + 1
+        ), this.camera);
+        const hits = this._raycaster.intersectObjects(this.mapScene._meshes, false);
+        let point = hits.length ? hits[0].point : null;
+        if (!point) {
+            const ground = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+            point = this._raycaster.ray.intersectPlane(ground, new THREE.Vector3());
+        }
+        if (!point) return null;
+        const x = Math.max(0, Math.min(mapData.width - 1, point.x - 0.5));
+        const y = Math.max(0, Math.min(mapData.height - 1, point.z - 0.5));
+        return { x: Math.round(x * 100) / 100, y: Math.round(y * 100) / 100 };
+    }
+
+    /** Mark a prop as the selected one and put the pose rings on it. */
+    selectProp(id) {
+        this.selectedPropId = id || null;
+        const object = this.selectedPropId ? this.propObject(this.selectedPropId) : null;
+        this.selectPropRings(object);
+    }
+
+    selectPropRings(object) {
+        if (this.propRings) {
+            RRPoseRings3D.dispose(this.propRings);
+            this.propRings = null;
+        }
+        if (!object || typeof RRPoseRings3D === 'undefined' || !this.propGroup) return;
+        const prop = this.propsManager()?.prop(object.userData.propId);
+        if (!prop) return;
+        const radius = Math.max(0.6, prop.size * prop.scale * 0.6 + 0.2);
+        this.propRings = RRPoseRings3D.create(THREE, radius, 'prop-rings');
+        this.propGroup.add(this.propRings.root);
+        this.syncPropRings();
+    }
+
+    syncPropRings() {
+        if (!this.propRings) return;
+        const prop = this.propsManager()?.prop(this.selectedPropId);
+        const object = this.propObject(this.selectedPropId);
+        if (!prop || !object) return;
+        const centre = object.position.clone();
+        centre.y += prop.size * prop.scale * 0.5;
+        RRPoseRings3D.sync(this.propRings, centre, prop.yaw, prop.pitch, true);
+    }
+
+    _propRect() {
+        const surface = this.inputSurface || this.canvas;
+        const rect = surface?.getBoundingClientRect?.();
+        return rect?.width && rect?.height ? rect : null;
+    }
+
+    /** A ring under the pointer on the selected prop, as a drag to hold. */
+    pickPropRing(clientX, clientY) {
+        const prop = this.propsManager()?.prop(this.selectedPropId);
+        if (!prop || !this.propRings) return null;
+        const grab = RRPoseRings3D.pick(THREE, this.propRings, this.camera, this._propRect(), clientX, clientY,
+            { yaw: prop.yaw, pitch: prop.pitch, roll: prop.roll });
+        if (grab) RRPoseRings3D.emphasize(this.propRings, grab.axis, true);
+        return grab;
+    }
+
+    dragPropRing(grab, clientX, clientY) {
+        const value = RRPoseRings3D.drag(THREE, grab, this.camera, this._propRect(), clientX, clientY);
+        if (value === null) return;
+        const manager = this.propsManager();
+        const prop = manager?.prop(this.selectedPropId);
+        if (!prop || prop[grab.axis] === value) return;
+        // Turn the placed instance in place; the sidecar and the flat map catch up on release.
+        const object = this.propObject(this.selectedPropId);
+        const spec = Reactor3D.normalizeModelSpec(ModelPropsManager.specOf(Object.assign({}, prop, { [grab.axis]: value })));
+        if (object && spec && Reactor3D.applyEventModelPose) {
+            Reactor3D.applyEventModelPose(object, spec, prop.direction, { preview: true, faceYaw: 0 });
+        }
+        this._propRingPending = { id: prop.id, axis: grab.axis, value };
+        manager.elevation()?.updateProp(manager.currentMap, prop.id, { [grab.axis]: value });
+        this.syncPropRings();
+    }
+
+    dragPropTo(id, point) {
+        const manager = this.propsManager();
+        const prop = manager?.prop(id);
+        const object = this.propObject(id);
+        if (!prop || !object || !point) return;
+        if (prop.x === point.x && prop.y === point.y) return;
+        manager.elevation()?.updateProp(manager.currentMap, id, { x: point.x, y: point.y });
+        this.placeProp(object, manager.prop(id));
+        this.syncPropRings();
+        this._propMoved = true;
+    }
+
+    finishPropDrag() {
+        if (this.canvas) this.canvas.style.cursor = 'default';
+        if (this.propRings) RRPoseRings3D.emphasize(this.propRings, null, false);
+        const moved = this._propMoved || this._propRingPending;
+        this._propMoved = false;
+        this._propRingPending = null;
+        // The sidecar already holds the new values; the flat map redraws from it.
+        if (moved) {
+            const manager = this.propsManager();
+            manager?.render?.();
+            manager?._syncPanel?.();
+        }
+    }
+
+    /** Advance stepping-animation previews at the game's cadence. */
+    animateEventPreviews(now) {
+        this.animateModels(now);
+        if (!this.animatedEvents?.length) return;
+        const last = this._lastPreviewTick || now;
+        this._lastPreviewTick = now;
+        const frames = Math.min(10, (now - last) / (1000 / 60));
+        for (const anim of this.animatedEvents) {
+            anim.count += frames;
+            if (anim.count < anim.wait) continue;
+            anim.count = 0;
+            anim.pattern = (anim.pattern + 1) % 4;
+            const shown = anim.pattern < 3 ? anim.pattern : 1;
+            const ctx = anim.canvas.getContext('2d');
+            ctx.clearRect(0, 0, anim.canvas.width, anim.canvas.height);
+            ctx.imageSmoothingEnabled = false;
+            ctx.drawImage(anim.sheet, anim.baseX + shown * anim.frameWidth, anim.baseY,
+                anim.frameWidth, anim.frameHeight, 0, 0, anim.canvas.width, anim.canvas.height);
+            anim.texture.needsUpdate = true;
+        }
+    }
+
+    eventSprite(event, sheets, pageImage, animatedPage = null) {
+        const image = pageImage || event?.pages?.[0]?.image;
         const sheet = image && image.characterName && sheets[image.characterName];
         if (!sheet || !sheet.width) return null;
 
@@ -1295,12 +1820,24 @@ class MapEditor3D {
             new THREE.MeshBasicMaterial({ map: texture, transparent: true, alphaTest: 0.4 })
         );
         mesh.userData.height = height;
+        if (animatedPage) {
+            const speed = Number(animatedPage.moveSpeed) || 3;
+            this.animatedEvents.push({
+                sheet, canvas, texture, baseX, baseY, frameWidth, frameHeight,
+                pattern: Number.isInteger(image.pattern) ? image.pattern : 1, count: 0,
+                wait: (9 - Math.min(6, Math.max(1, speed))) * 3
+            });
+        }
         return mesh;
     }
 
     /** The event's number and name, as the 2D map labels its squares. */
     eventLabel(event) {
-        const text = `${String(event.id).padStart(3, '0')}: ${event.name || ''}`.trim();
+        return this.textLabel(`${String(event.id).padStart(3, '0')}: ${event.name || ''}`.trim());
+    }
+
+    /** A camera-facing name plate that holds its size on screen. */
+    textLabel(text) {
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
         const font = 'bold 24px sans-serif';
@@ -1458,11 +1995,27 @@ class MapEditor3D {
     }
 
     clearScene() {
+        this.projectController?.videoSurfacePreviewManager?.detachThree?.();
+        this.animatedModels = [];
+        this.disposeEffectPlays();
+        this.disposeProps();
         if (this.eventGroup) {
             for (const child of this.eventGroup.children) {
-                child.geometry.dispose();
-                if (child.material.map) child.material.map.dispose();
-                child.material.dispose();
+                if (child.userData?.modelPreview) {
+                    // A previewed model: instance materials are ours, the
+                    // geometry belongs to the shared template.
+                    child.traverse(node => {
+                        const materials = Array.isArray(node.material) ? node.material : node.material ? [node.material] : [];
+                        for (const material of materials) material.dispose?.();
+                    });
+                    continue;
+                }
+                child.geometry?.dispose?.();
+                const materials = Array.isArray(child.material) ? child.material : child.material ? [child.material] : [];
+                for (const material of materials) {
+                    material.map?.dispose?.();
+                    material.dispose?.();
+                }
             }
             this.eventGroup.parent?.remove(this.eventGroup);
             this.eventGroup = null;
@@ -1539,11 +2092,48 @@ class MapEditor3D {
                 }
             }
 
+            // With the props tab up: a ring turns the selected prop, a prop
+            // is picked up and carried freely, and the bare ground takes a
+            // new prop. Ctrl still orbits.
+            if (event.button === 0 && !event.shiftKey && !event.ctrlKey
+                && !this.pointer.paint && this.canEditProps()) {
+                const manager = this.propsManager();
+                const ring = this.pickPropRing(event.clientX, event.clientY);
+                if (ring) {
+                    manager.pushUndo?.();
+                    this.pointer.propRing = ring;
+                } else {
+                    const hitId = this.propAt(event.clientX, event.clientY);
+                    if (hitId) {
+                        manager.select(hitId, { fromThree: true });
+                        this.selectProp(hitId);
+                        const prop = manager.prop(hitId);
+                        const point = this.groundPointAt(event.clientX, event.clientY);
+                        manager.pushUndo?.();
+                        this.pointer.propDrag = { id: hitId, offsetX: point ? point.x - prop.x : 0, offsetY: point ? point.y - prop.y : 0 };
+                        if (this.canvas) this.canvas.style.cursor = 'grabbing';
+                    } else {
+                        const point = this.groundPointAt(event.clientX, event.clientY);
+                        if (point && manager.model) {
+                            const id = manager.place(point.x, point.y);
+                            if (id) this.pointer.propPlaced = true;
+                        } else {
+                            manager.select(null, { fromThree: true });
+                            this.selectProp(null);
+                        }
+                    }
+                }
+                if (this.pointer.propRing || this.pointer.propDrag || this.pointer.propPlaced) {
+                    this.pointer.pan = false;
+                    this.pointer.propHold = true;
+                }
+            }
+
             // With the event tool up and no brush in hand, a left drag that
             // starts on an event carries it, exactly as it does on the 2D
             // canvas. Starting anywhere else still orbits.
             if (event.button === 0 && !event.shiftKey && !event.ctrlKey
-                && !this.pointer.paint && this.canDragEvents()) {
+                && !this.pointer.paint && !this.pointer.propHold && this.canDragEvents()) {
                 const mesh = this.eventAt(event.clientX, event.clientY);
                 if (mesh) {
                     this.pointer.drag = mesh;
@@ -1574,6 +2164,18 @@ class MapEditor3D {
                     // "nothing happened" from "already at that height".
                     window.reactor?.updateMapCoordinates?.(tile.x, tile.y);
                 }
+            } else if (this.pointer.propRing) {
+                this.dragPropRing(this.pointer.propRing, event.clientX, event.clientY);
+            } else if (this.pointer.propDrag) {
+                const point = this.groundPointAt(event.clientX, event.clientY);
+                if (point) {
+                    this.dragPropTo(this.pointer.propDrag.id, {
+                        x: Math.round((point.x - this.pointer.propDrag.offsetX) * 100) / 100,
+                        y: Math.round((point.y - this.pointer.propDrag.offsetY) * 100) / 100
+                    });
+                }
+            } else if (this.pointer.propHold) {
+                // A placement is a click; the drag that follows moves nothing.
             } else if (this.pointer.drag) {
                 const tile = this.tileAt(event.clientX, event.clientY);
                 if (tile) {
@@ -1596,6 +2198,10 @@ class MapEditor3D {
                 return;
             }
             if (!drag || drag.pan) return;
+            if (drag.propHold) {
+                this.finishPropDrag();
+                return;
+            }
 
             // Orbiting sweeps the pointer across the canvas and must not also
             // select whatever it happens to finish on. A few pixels of travel
@@ -1874,6 +2480,14 @@ class MapEditor3D {
     updateHover(clientX, clientY, tile = this.tileAt(clientX, clientY)) {
         this.updateHoverCell(tile);
         if (!this.canvas) return;
+        if (this.canEditProps()) {
+            const at = performance.now();
+            if (this._propHoverAt && at - this._propHoverAt < 33) return;
+            this._propHoverAt = at;
+            const overProp = this.propAt(clientX, clientY) !== null;
+            this.canvas.style.cursor = overProp ? 'grab' : (this.propsManager()?.model ? 'copy' : 'default');
+            return;
+        }
         const over = this.canSelectEvents() && this.eventAt(clientX, clientY);
         this.canvas.style.cursor = over
             ? (this.canDragEvents() ? 'grab' : 'pointer')
@@ -2145,6 +2759,7 @@ class MapEditor3D {
 
     /** The camera moved, the hover moved, a key or pointer was used in the last second, or a flight is on. */
     previewActive(now) {
+        if (this.projectController?.videoSurfacePreviewManager?.previewActive?.()) return true;
         if (this.flying()) return true;
         const camera = this.camera;
         const cameraKey = camera
@@ -2164,6 +2779,8 @@ class MapEditor3D {
     render(now) {
         if (!this.renderer || !this.camera || !this.mapScene) return;
         this.animateAutotiles(now);
+        this.animateEventPreviews(now);
+        this.projectController?.videoSurfacePreviewManager?.updateThree?.();
         const scene = this.mapScene.scene();
         const background = scene.background;
         const autoClear = this.renderer.autoClear;
@@ -2178,16 +2795,35 @@ class MapEditor3D {
             this.renderer.autoClear = true;
             this.renderer.render(scene, this.camera);
 
-            if (this.mapScene.hasAbove()) {
+            // The above-characters overlay (layer >= 5 video surfaces) is the
+            // game's third slot: composited over star tiles and world alike,
+            // so it gets its own pass and stays out of the star-tile one.
+            const overlay = this.mapScene._aboveBillboardsGroup;
+            const overlayVisible = overlay ? overlay.visible : null;
+            const hideEditorLayers = () => {
                 if (this.eventGroup) this.eventGroup.visible = false;
                 if (this.grid) this.grid.visible = false;
                 if (this.hoverCell) this.hoverCell.visible = false;
+            };
+            if (this.mapScene.hasAbove()) {
+                hideEditorLayers();
                 scene.background = null;
                 this.renderer.autoClear = false;
                 this.renderer.clearDepth();
                 this.mapScene.setPass('above');
+                if (overlay) overlay.visible = false;
                 this.renderer.render(scene, this.camera);
             }
+            if (overlay && overlay.children.length) {
+                hideEditorLayers();
+                scene.background = null;
+                this.renderer.autoClear = false;
+                this.renderer.clearDepth();
+                this.mapScene.setPass('overlay');
+                overlay.visible = true;
+                this.renderer.render(scene, this.camera);
+            }
+            if (overlay && overlayVisible !== null) overlay.visible = overlayVisible;
         } finally {
             scene.background = background;
             this.renderer.autoClear = autoClear;
@@ -2222,6 +2858,12 @@ class MapEditor3D {
         this.mapScene.setAnimationFrame(Math.floor((timestamp - this._animationStartedAt) / 500));
     }
 }
+
+/** The facing System.json gives the player start, down when it says nothing. */
+MapEditor3D.startDirection = function(system) {
+    const asked = Number(system && system.startDirection);
+    return [2, 4, 6, 8].indexOf(asked) >= 0 ? asked : 2;
+};
 
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = MapEditor3D;

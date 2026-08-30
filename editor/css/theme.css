@@ -1706,6 +1706,101 @@ input[type="radio"]:disabled,
     border-color: var(--color-border-input);
 }
 
+.rr-number-stepper {
+    display: flex;
+    width: 100%;
+    overflow: hidden;
+    background: var(--color-bg-input-alt);
+    border: 1px solid var(--color-border-input);
+    border-radius: var(--radius-md);
+    transition: border-color var(--ease-base), box-shadow var(--ease-base);
+}
+.rr-number-stepper:focus-within {
+    border-color: var(--color-accent-border-strong);
+    box-shadow: 0 0 0 1px var(--color-accent-tint-15);
+}
+.rr-number-stepper-input {
+    flex: 1;
+    min-width: 0;
+    padding: 8px;
+    background: transparent;
+    border: 0;
+    color: var(--color-text);
+    font-size: 12px;
+    outline: none;
+    appearance: textfield;
+}
+.rr-number-stepper-input::-webkit-inner-spin-button,
+.rr-number-stepper-input::-webkit-outer-spin-button {
+    margin: 0;
+    -webkit-appearance: none;
+}
+.rr-number-stepper-buttons {
+    display: grid;
+    grid-template-rows: 1fr 1fr;
+    width: 28px;
+    border-left: 1px solid var(--color-border-input);
+}
+.rr-number-stepper-buttons button {
+    padding: 0;
+    background: var(--color-bg-button);
+    border: 0;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    font-size: 8px;
+    line-height: 1;
+}
+.rr-number-stepper-buttons button + button {
+    border-top: 1px solid var(--color-border-input);
+}
+.rr-number-stepper-buttons button:hover,
+.rr-number-stepper-buttons button:focus-visible {
+    background: var(--color-accent-tint-25);
+    color: var(--color-accent-bright);
+    outline: none;
+}
+/* Every number field wears the themed stepper (NumberSteppers.js wraps the
+   ones not authored with it), so the browser's own spinner never shows. */
+input[type="number"] {
+    appearance: textfield;
+    -moz-appearance: textfield;
+}
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+    margin: 0;
+    -webkit-appearance: none;
+}
+.rr-number-stepper-auto {
+    display: inline-flex;
+    vertical-align: middle;
+    box-sizing: border-box;
+}
+.rr-number-stepper-auto .rr-number-stepper-input {
+    padding: 4px 6px;
+    font-size: inherit;
+}
+.rr-number-stepper-auto .rr-number-stepper-buttons {
+    width: 22px;
+}
+.rr-number-stepper-auto .rr-number-stepper-buttons button {
+    font-size: 7px;
+}
+
+.rr-number-stepper-compact {
+    border-radius: 3px;
+}
+.rr-number-stepper-compact .rr-number-stepper-input {
+    width: 100%;
+    padding: 3px 4px;
+    font-size: 10px;
+}
+.rr-number-stepper-compact .rr-number-stepper-buttons {
+    width: 20px;
+}
+.rr-number-stepper-compact .rr-number-stepper-buttons button {
+    font-size: 6px;
+}
+
 /* Input-affix browse button -- the "..." (or "Browse") button glued to the
  * right edge of a text input. Sized to match input vertical height (6px x 12px,
  * 12px font) so it stays flush. Black fill keeps the input itself visually
@@ -1893,6 +1988,218 @@ input[type="radio"]:disabled,
     display: flex;
     gap: 10px;
     justify-content: flex-end;
+}
+
+/* Project resource catalog */
+.rr-resource-modal {
+    width: min(1180px, calc(100vw - 24px));
+    height: min(760px, calc(100vh - 24px));
+    overflow: hidden;
+}
+.rr-resource-body {
+    flex: 1;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: 180px minmax(300px, 1fr) 330px;
+    background: var(--color-bg-surface);
+}
+.rr-resource-folders {
+    min-width: 0;
+    overflow-y: auto;
+    padding: 6px;
+    border-right: 1px solid var(--color-border);
+    background: var(--color-bg-panel);
+}
+.rr-resource-folder {
+    width: 100%;
+    padding: 7px 9px;
+    border: 0;
+    border-left: 3px solid transparent;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--color-text);
+    font: inherit;
+    font-size: 11px;
+    text-align: left;
+    cursor: pointer;
+}
+.rr-resource-folder:hover {
+    background: var(--color-bg-hover);
+    color: var(--color-text-strong);
+}
+.rr-resource-folder.active {
+    border-left-color: var(--color-accent-bright);
+    background: var(--color-selection-deep);
+    color: var(--color-text-strong);
+    font-weight: 650;
+}
+.rr-resource-browser-host {
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+    border-right: 1px solid var(--color-border);
+}
+.rr-resource-file.rr-resource-selected {
+    background-color: var(--color-selection-deep) !important;
+    color: var(--color-text-strong) !important;
+    box-shadow: inset 3px 0 0 var(--color-accent-bright);
+}
+.rr-resource-preview {
+    min-width: 0;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    padding: 12px;
+    overflow-y: auto;
+    background: linear-gradient(150deg, var(--color-bg-panel), var(--color-bg-base));
+}
+.rr-resource-preview-stage {
+    flex: 1;
+    min-height: 210px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: auto;
+    padding: 10px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    background-color: var(--color-bg-deep);
+    background-image: linear-gradient(45deg, var(--color-bg-panel) 25%, transparent 25%),
+        linear-gradient(-45deg, var(--color-bg-panel) 25%, transparent 25%),
+        linear-gradient(45deg, transparent 75%, var(--color-bg-panel) 75%),
+        linear-gradient(-45deg, transparent 75%, var(--color-bg-panel) 75%);
+    background-position: 0 0, 0 8px, 8px -8px, -8px 0;
+    background-size: 16px 16px;
+}
+.rr-resource-preview-stage img,
+.rr-resource-preview-stage video {
+    display: block;
+    max-width: 100%;
+    max-height: 390px;
+    object-fit: contain;
+}
+.rr-resource-preview-stage audio {
+    width: 100%;
+}
+.rr-resource-model-preview {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    min-height: 250px;
+    overflow: hidden;
+    border-radius: var(--radius-sm);
+    background: #11151f;
+}
+.rr-resource-model-canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+    cursor: grab;
+    touch-action: none;
+}
+.rr-resource-model-message {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    background: rgba(5, 8, 18, 0.72);
+    color: var(--color-text-muted);
+    font-size: 11px;
+    line-height: 1.5;
+    text-align: center;
+    pointer-events: none;
+}
+.rr-resource-model-message.error {
+    color: var(--color-danger-bright);
+}
+.rr-resource-font-sample {
+    color: var(--color-text-strong);
+    font-size: 28px;
+    line-height: 1.45;
+    overflow-wrap: anywhere;
+}
+.rr-resource-empty {
+    color: var(--color-text-muted);
+    font-size: 12px;
+    line-height: 1.5;
+    text-align: center;
+}
+.rr-resource-metadata {
+    display: grid;
+    grid-template-columns: max-content minmax(0, 1fr);
+    gap: 5px 10px;
+    margin: 12px 0 0;
+    color: var(--color-text);
+    font-size: 10px;
+}
+.rr-resource-metadata dt {
+    color: var(--color-text-muted);
+    font-weight: 650;
+}
+.rr-resource-metadata dd {
+    min-width: 0;
+    margin: 0;
+    overflow-wrap: anywhere;
+}
+.rr-resource-destination-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-top: 1px solid var(--color-border);
+    background: var(--color-bg-panel);
+    color: var(--color-text-muted);
+    font-size: 11px;
+}
+.rr-resource-destination-row select {
+    min-width: 180px;
+    max-width: 380px;
+    padding: 5px 8px;
+    border: 1px solid var(--color-border-input);
+    border-radius: var(--radius-sm);
+    background: var(--color-bg-input);
+    color: var(--color-text);
+}
+.rr-resource-footer {
+    align-items: center;
+    justify-content: space-between;
+}
+.rr-resource-status {
+    min-width: 0;
+    color: var(--color-text-muted);
+    font-size: 10px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.rr-resource-status.error {
+    color: var(--color-danger-bright);
+}
+.rr-resource-actions {
+    flex: 0 0 auto;
+    display: flex;
+    gap: 6px;
+}
+
+@media (max-width: 900px) {
+    .rr-resource-modal {
+        height: calc(100vh - 12px);
+    }
+    .rr-resource-body {
+        grid-template-columns: 150px minmax(240px, 1fr);
+    }
+    .rr-resource-preview {
+        display: none;
+    }
+    .rr-resource-footer {
+        align-items: stretch;
+        flex-direction: column;
+    }
+    .rr-resource-actions {
+        overflow-x: auto;
+    }
 }
 
 /* System sound pools */

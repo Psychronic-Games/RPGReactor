@@ -295,6 +295,49 @@ test('reference pickers are accessible, searchable, lead with None, and write ID
     assert.equal(stored, '1');
 });
 
+test('animation references use the live preview picker and preserve string storage', () => {
+    const context = sandbox();
+    const opens = [];
+    context.AnimationPickerModal = { open: options => opens.push(options) };
+    let stored;
+    const control = context.RRPluginParamWidgets.create({
+        schema: schema('animation'), value: '1', onChange: value => { stored = value; },
+        context: widgetContext(database())
+    });
+
+    byClass(control, 'rr-plugin-data-ref-browse').dispatch('click');
+    assert.equal(opens.length, 1);
+    assert.equal(opens[0].projectPath, '/project');
+    assert.equal(opens[0].currentId, 1);
+    assert.equal(opens[0].allowNormalAttack, false);
+
+    opens[0].onPick(3);
+    assert.equal(stored, '3');
+    assert.equal(byClass(control, 'rr-plugin-data-ref-id').value, '3');
+    assert.equal(byClass(control, 'rr-plugin-data-ref-label').title, '0003: animation Three');
+    assert.equal(byClass(context.document.body, 'rr-plugin-choice-picker'), undefined,
+        'the generic ID picker was not opened');
+
+    let arrayStored;
+    const array = context.RRPluginParamWidgets.create({
+        schema: schema('animation[]'), value: '["1"]',
+        onChange: value => { arrayStored = value; }, context: widgetContext(database())
+    });
+    byClass(array, 'rr-plugin-data-ref-browse').dispatch('click');
+    opens[1].onPick(3);
+    assert.equal(arrayStored, '["3"]');
+});
+
+test('animation references retain the generic picker when live preview is unavailable', () => {
+    const context = sandbox();
+    const control = context.RRPluginParamWidgets.create({
+        schema: schema('animation'), value: '1', onChange() {},
+        context: widgetContext(database())
+    });
+    byClass(control, 'rr-plugin-data-ref-browse').dispatch('click');
+    assert.ok(byClass(context.document.body, 'rr-plugin-choice-picker'));
+});
+
 test('all reference arrays preserve string/parsed shape, malformed raw input, and Add starts at 0', () => {
     const context = sandbox();
     const db = database();

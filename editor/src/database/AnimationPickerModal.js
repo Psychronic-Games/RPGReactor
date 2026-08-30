@@ -21,6 +21,14 @@ class AnimationPickerModal {
         return anim ? `${String(anim.id).padStart(4, '0')}: ${anim.name || ''}` : `#${id}`;
     }
 
+    static projectRootOf({ projectPath, projectManager } = {}) {
+        if (projectPath) return String(projectPath);
+        const project = projectManager && typeof projectManager.getCurrentProject === 'function'
+            ? projectManager.getCurrentProject()
+            : null;
+        return project?.path ? String(project.path) : '';
+    }
+
     /**
      * Wire every .db-anim-picker button inside container to open the modal.
      */
@@ -49,10 +57,10 @@ class AnimationPickerModal {
         });
     }
 
-    static open({ databaseManager, projectManager, currentId, allowNormalAttack, onPick }) {
+    static open({ databaseManager, projectManager, projectPath, currentId, allowNormalAttack, onPick }) {
         const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const animations = (databaseManager.getAnimations ? databaseManager.getAnimations() : []).filter(a => a);
-        const project = projectManager && projectManager.getCurrentProject ? projectManager.getCurrentProject() : null;
+        const projectRoot = AnimationPickerModal.projectRootOf({ projectPath, projectManager });
 
         let selectedId = currentId || 0;
         let playTimer = null;
@@ -70,7 +78,7 @@ class AnimationPickerModal {
         `;
         const modal = document.createElement('div');
         modal.style.cssText = `
-            width: 720px; max-width: 92vw; height: 520px; max-height: 88vh;
+            width: 720px; max-width: 92vw; height: 560px; max-height: 88vh;
             background: var(--color-bg-surface);
             border: 1px solid var(--color-accent-border-strong);
             border-radius: 6px; box-shadow: var(--shadow-popup, 0 8px 32px rgba(0,0,0,0.6));
@@ -87,12 +95,13 @@ class AnimationPickerModal {
                            style="margin: 8px; flex: 0 0 auto;">
                     <div class="anim-picker-list audio-scroll" style="flex: 1; overflow-y: auto; min-height: 0;"></div>
                 </div>
-                <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 12px; min-height: 0;">
-                    <canvas class="anim-picker-canvas" width="384" height="384"
-                            style="width: 100%; max-width: 384px; aspect-ratio: 1; background: #000; border: 1px solid var(--color-border); border-radius: 4px; image-rendering: auto;"></canvas>
-                    <canvas class="anim-picker-fx" width="384" height="384"
-                            style="display: none; width: 100%; max-width: 384px; aspect-ratio: 1; background: #000; border: 1px solid var(--color-border); border-radius: 4px;"></canvas>
-                    <div class="anim-picker-caption" style="font-size: 12px; color: var(--color-text-muted); min-height: 16px;"></div>
+                 <div class="anim-picker-stage" style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 10px 12px; min-height: 0; overflow: hidden;">
+                     <canvas class="anim-picker-canvas" width="384" height="384"
+                            style="width: auto; height: auto; max-width: 100%; max-height: calc(100% - 64px); aspect-ratio: 1; border: 1px solid var(--color-border); border-radius: 4px; image-rendering: auto;"></canvas>
+                     <canvas class="anim-picker-fx" width="384" height="384"
+                            style="display: none; width: auto; height: auto; max-width: 100%; max-height: calc(100% - 64px); aspect-ratio: 1; border: 1px solid var(--color-border); border-radius: 4px;"></canvas>
+                     <div class="anim-picker-caption" style="font-size: 12px; color: var(--color-text-muted); min-height: 16px;"></div>
+                    <div class="anim-picker-backdrop"></div>
                 </div>
             </div>
             <div style="padding: 10px 14px; background: var(--color-bg-panel); border-top: 1px solid var(--color-border); display: flex; justify-content: flex-end; gap: 8px;">
@@ -109,42 +118,55 @@ class AnimationPickerModal {
         const fxCanvas = modal.querySelector('.anim-picker-fx');
         const caption = modal.querySelector('.anim-picker-caption');
         const ctx = canvas.getContext('2d');
+        const previewBackdrop = window.RRPreviewBackdrop;
+        let backdrop = previewBackdrop.color();
+        let backdropRgb = previewBackdrop.rgb01();
+        let playbackGeneration = 0;
+        const applyBackdrop = () => {
+            canvas.style.background = backdrop;
+            fxCanvas.style.background = backdrop;
+        };
+        applyBackdrop();
 
         // Effekseer playback state: one WebGL context reused across selections,
         // loaded effects cached per effectName.
-        const fx = { gl: null, ctx: null, ready: false, handle: null, raf: null, effects: new Map() };
+        const fx = {
+            gl: null, ctx: null, ready: false, handle: null, raf: null,
+            effects: new Map(), waiters: new Map()
+        };
         const ensureEffekseer = () => {
             if (fx.ready) return true;
             if (typeof effekseer === 'undefined' || typeof RR_loadEffekseerEffectFromFile === 'undefined') return false;
-            fx.gl = fxCanvas.getContext('webgl', { premultipliedAlpha: false, alpha: true });
+            fx.gl = fxCanvas.getContext('webgl', { premultipliedAlpha: false, alpha: false });
             if (!fx.gl) return false;
             fx.ctx = effekseer.createContext();
             if (!fx.ctx) return false;
             fx.ctx.init(fx.gl);
-            fx.ctx.setRestorationOfStatesFlag(false);
+            fx.ctx.setRestorationOfStatesFlag(true);
             fx.ready = true;
             return true;
         };
 
         // --- Playback ---
         const stopPlayback = () => {
+            playbackGeneration++;
             if (playTimer) { cancelAnimationFrame(playTimer); playTimer = null; }
             if (fx.raf) { cancelAnimationFrame(fx.raf); fx.raf = null; }
             if (fx.handle) { try { fx.handle.stop(); } catch (e) {} fx.handle = null; }
             if (fx.gl) {
-                fx.gl.clearColor(0, 0, 0, 0);
+                fx.gl.clearColor(backdropRgb[0], backdropRgb[1], backdropRgb[2], 1);
                 fx.gl.clear(fx.gl.COLOR_BUFFER_BIT | fx.gl.DEPTH_BUFFER_BIT);
             }
             playAnim = null;
             fxCanvas.style.display = 'none';
             canvas.style.display = '';
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-            ctx.fillStyle = '#000';
+            ctx.fillStyle = backdrop;
             ctx.fillRect(0, 0, canvas.width, canvas.height);
         };
 
         const renderPlayFrame = () => {
-            ctx.fillStyle = '#000';
+            ctx.fillStyle = backdrop;
             ctx.fillRect(0, 0, canvas.width, canvas.height);
             if (!playAnim || !playAnim.frames || playAnim.frames.length === 0) return;
             const frameData = playAnim.frames[playFrame % playAnim.frames.length];
@@ -177,7 +199,7 @@ class AnimationPickerModal {
             }
         };
 
-        const startSprite = (anim) => {
+        const startSprite = (anim, generation) => {
             playAnim = anim;
             playFrame = 0;
             caption.textContent = `${anim.frames.length} ${tt('frames')}`;
@@ -189,12 +211,11 @@ class AnimationPickerModal {
                     const img = new Image();
                     img.onload = () => { sheets[slot] = img; resolve(); };
                     img.onerror = () => resolve();
-                    img.src = RRAssetFiles.urlFor(path.join(project.path, 'img', 'animations'), name, ['.png']);
+                    img.src = RRAssetFiles.imageUrlFor(path.join(projectRoot, 'img', 'animations'), name);
                 });
             };
-            const token = anim;
             Promise.all([load(anim.animation1Name, 1), load(anim.animation2Name, 2)]).then(() => {
-                if (playAnim !== token) return; // selection changed while loading
+                if (playbackGeneration !== generation) return;
                 // 15fps MV cadence paced by rAF: a setInterval at 66.7ms
                 // drifts and fires late whenever the main thread is busy,
                 // which read as juddery playback. Elapsed time advances the
@@ -204,7 +225,7 @@ class AnimationPickerModal {
                 let last = performance.now();
                 let acc = 0;
                 const loop = () => {
-                    if (playAnim !== token) return;
+                    if (playbackGeneration !== generation) return;
                     const now = performance.now();
                     acc += now - last;
                     last = now;
@@ -222,7 +243,7 @@ class AnimationPickerModal {
             });
         };
 
-        const startEffekseer = (anim) => {
+        const startEffekseer = (anim, generation) => {
             if (!ensureEffekseer()) {
                 caption.textContent = tt('No preview available');
                 return;
@@ -231,10 +252,9 @@ class AnimationPickerModal {
             fxCanvas.style.display = '';
             playAnim = anim;
             caption.textContent = tt('Loading...');
-            const token = anim;
 
             const begin = (effect) => {
-                if (playAnim !== token) return;
+                if (playbackGeneration !== generation) return;
                 caption.textContent = `Effekseer: ${anim.effectName}`;
                 let aliveTicks = 0;
                 let deadTicks = 0;
@@ -247,7 +267,7 @@ class AnimationPickerModal {
                     const scale = (anim.scale || 100) / 100;
                     const speed = (anim.speed || 100) / 100;
                     const rot = anim.rotation || { x: 0, y: 0, z: 0 };
-                    const rx = ((180 - rot.x) * Math.PI) / 180;
+                    const rx = (rot.x * Math.PI) / 180;
                     const ry = (rot.y * Math.PI) / 180;
                     const rz = (rot.z * Math.PI) / 180;
                     fx.handle.setLocation((anim.offsetX || 0) * 0.1, (anim.offsetY || 0) * 0.1, 0);
@@ -261,7 +281,7 @@ class AnimationPickerModal {
                 let acc = 0;
                 const step = 1000 / 60;
                 const loop = () => {
-                    if (playAnim !== token) return;
+                    if (playbackGeneration !== generation) return;
                     const now = Date.now();
                     acc += now - last;
                     last = now;
@@ -275,11 +295,11 @@ class AnimationPickerModal {
                     if (acc > step * 5) acc = 0;
                     const gl = fx.gl;
                     gl.viewport(0, 0, fxCanvas.width, fxCanvas.height);
-                    gl.clearColor(0, 0, 0, 0);
+                    gl.clearColor(backdropRgb[0], backdropRgb[1], backdropRgb[2], 1);
                     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
                     const p = -1.2;
                     const ax = fxCanvas.height / fxCanvas.width; // aspect-neutral x (1 on the square canvas)
-                    fx.ctx.setProjectionMatrix([ax, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1, p, 0, 0, 0, 1]);
+                    fx.ctx.setProjectionMatrix([ax, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, p, 0, 0, 0, 1]);
                     fx.ctx.setCameraMatrix([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, -10, 1]);
                     fx.ctx.beginDraw();
                     if (fx.handle && fx.handle.exists) {
@@ -301,37 +321,89 @@ class AnimationPickerModal {
             };
 
             const cached = fx.effects.get(anim.effectName);
-            if (cached && cached.isLoaded) { begin(cached); return; }
+            if (cached) {
+                if (cached.isLoaded) begin(cached);
+                else {
+                    const waiters = fx.waiters.get(anim.effectName) || [];
+                    waiters.push(begin);
+                    fx.waiters.set(anim.effectName, waiters);
+                }
+                return;
+            }
             const path = require('path');
-            const effectFile = RRAssetFiles.find(path.join(project.path, 'effects'), anim.effectName, ['.efkefc']);
+            const effectFile = RRAssetFiles.find(path.join(projectRoot, 'effects'), anim.effectName, ['.efkefc']);
             if (!effectFile) {
                 caption.textContent = tt('No preview available');
                 return;
             }
             const effectPath = effectFile.absolutePath;
+            let effect = null;
+            let syncLoaded = false;
+            let loadFailed = false;
+            const install = () => {
+                if (!effect) return;
+                fx.effects.set(anim.effectName, effect);
+                const waiters = fx.waiters.get(anim.effectName) || [];
+                fx.waiters.delete(anim.effectName);
+                for (const waiter of waiters) waiter(effect);
+            };
+            fx.waiters.set(anim.effectName, [begin]);
+            const onLoaded = () => {
+                if (effect) install();
+                else syncLoaded = true;
+            };
+            const onError = () => {
+                loadFailed = true;
+                fx.waiters.delete(anim.effectName);
+                fx.effects.delete(anim.effectName);
+                if (effect) {
+                    try { fx.ctx.releaseEffect(effect); } catch (error) {}
+                }
+                if (playbackGeneration === generation) caption.textContent = tt('No preview available');
+            };
             try {
-                const effect = RR_loadEffekseerEffectFromFile(fx.ctx, effectPath, 1.0,
-                    () => { fx.effects.set(anim.effectName, effect); begin(effect); },
-                    () => { if (playAnim === token) caption.textContent = tt('No preview available'); });
+                effect = RR_loadEffekseerEffectFromFile(fx.ctx, effectPath, 1.0,
+                    onLoaded,
+                    onError);
+                if (effect && !loadFailed) fx.effects.set(anim.effectName, effect);
+                else if (effect && loadFailed) {
+                    try { fx.ctx.releaseEffect(effect); } catch (error) {}
+                }
             } catch (e) {
+                fx.waiters.delete(anim.effectName);
                 caption.textContent = tt('No preview available');
+                return;
             }
+            if (syncLoaded) install();
         };
 
         const startPlayback = (anim) => {
             stopPlayback();
-            if (!anim || !project) {
+            const generation = playbackGeneration;
+            if (!anim || !projectRoot) {
                 caption.textContent = '';
                 return;
             }
             if (anim.effectName) {
-                startEffekseer(anim);
+                startEffekseer(anim, generation);
             } else if (anim.frames && anim.frames.length > 0) {
-                startSprite(anim);
+                startSprite(anim, generation);
             } else {
                 caption.textContent = tt('No preview available');
             }
         };
+
+        modal.querySelector('.anim-picker-backdrop').appendChild(
+            previewBackdrop.createSwitcher(() => {
+                backdrop = previewBackdrop.color();
+                backdropRgb = previewBackdrop.rgb01();
+                applyBackdrop();
+                if (playAnim?.frames?.length) renderPlayFrame();
+                else if (!playAnim) {
+                    ctx.fillStyle = backdrop;
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                }
+            }));
 
         // --- List ---
         const entries = [];
@@ -390,6 +462,7 @@ class AnimationPickerModal {
                     try { fx.ctx.releaseEffect(effect); } catch (e) {}
                 }
                 fx.effects.clear();
+                fx.waiters.clear();
                 try { effekseer.releaseContext(fx.ctx); } catch (e) {}
                 fx.ctx = null;
                 fx.ready = false;
@@ -422,3 +495,4 @@ class AnimationPickerModal {
 if (typeof window !== 'undefined') {
     window.AnimationPickerModal = AnimationPickerModal;
 }
+if (typeof module !== 'undefined' && module.exports) module.exports = AnimationPickerModal;

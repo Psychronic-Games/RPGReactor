@@ -317,9 +317,9 @@ class EventEditor {
         noteRow.style.gap = '8px';
         noteRow.innerHTML = `
             <label style="font-weight: bold; min-width: 80px; flex-shrink: 0;">${this._t('event.note')}</label>
-            <textarea class="event-note-input"
-                      style="flex: 1; padding: 6px 8px; min-height: 40px; resize: vertical; font-family: monospace; font-size: 11px; background: var(--color-bg-surface); color: var(--color-text); border: 1px solid var(--color-border-input); border-radius: 3px;"
-                      data-event-id="${event.id}">${rrEscapeHtml(event.note)}</textarea>
+            <textarea class="event-note-input database-field-value"
+                      style="flex: 1; min-height: 40px; padding: 6px 8px; font-size: 11px; font-weight: 400;"
+                      data-field="note" data-event-id="${event.id}">${rrEscapeHtml(event.note)}</textarea>
         `;
 
         header.appendChild(topRow);
@@ -560,7 +560,7 @@ class EventEditor {
 
         // Create header with info
         const header = document.createElement('div');
-        header.className = 'database-section-header';
+        header.className = 'database-section-header event-commands-banner';
         header.style.marginBottom = '12px';
         header.textContent = this._t('event.commandsTotal', { count: currentPage.list ? currentPage.list.length : 0 });
         contentsArea.appendChild(header);

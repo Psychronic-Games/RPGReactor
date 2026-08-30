@@ -79,6 +79,7 @@ test('character and face pickers use the shared searchable Unicode browser', () 
 
     const consumers = [
         'src/DatabaseEditorUI.js',
+        'src/database/DatabaseAnimationEditor.js',
         'src/database/DatabaseSystem1Editor.js',
         'src/event/CharacterGraphicPicker.js',
         'src/event/ModelGraphicPicker.js',
@@ -100,6 +101,7 @@ test('character and face pickers use the shared searchable Unicode browser', () 
 test('asset-image pickers opt into recursive folder rendering', () => {
     for (const relativePath of [
         'src/DatabaseEditorUI.js',
+        'src/database/DatabaseAnimationEditor.js',
         'src/database/DatabaseSystem1Editor.js',
         'src/event/CharacterGraphicPicker.js',
         'src/database/DatabaseTilesetEditor.js',

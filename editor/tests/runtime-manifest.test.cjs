@@ -34,6 +34,7 @@ test('every reactor_main runtime manifest entry is tracked in the runtime bundle
 
     const required = [
         'js/reactor_picture_extensions.js',
+        'js/reactor_video_surfaces.js',
         'js/reactor_mv_compat.js',
         'js/libs/effekseer.wasm',
         'js/libs/pako.min.js',
@@ -46,14 +47,17 @@ test('every reactor_main runtime manifest entry is tracked in the runtime bundle
     }
 });
 
-test('picture extensions load after picture classes and before compatibility/plugins', () => {
+test('picture and video extensions load after sprites and before compatibility/plugins', () => {
     const { scripts } = readRuntimeManifest(path.join(runtimeRoot, 'reactor_main.js'));
     const spritesIndex = scripts.indexOf('js/reactor_sprites.js');
     const pictureIndex = scripts.indexOf('js/reactor_picture_extensions.js');
+    const videoIndex = scripts.indexOf('js/reactor_video_surfaces.js');
     const compatIndex = scripts.indexOf('js/reactor_mv_compat.js');
     const pluginsIndex = scripts.indexOf('js/reactor_plugins.js');
 
     assert.ok(spritesIndex < pictureIndex, 'picture classes load before their aliases');
+    assert.ok(pictureIndex < videoIndex, 'video surfaces load after picture extensions');
+    assert.ok(videoIndex < compatIndex, 'video surfaces load before compatibility');
     assert.ok(pictureIndex < compatIndex, 'picture extensions load before compatibility');
     assert.ok(pictureIndex < pluginsIndex, 'picture extensions load before plugins');
 });

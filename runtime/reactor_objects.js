@@ -5139,9 +5139,31 @@ Game_Enemy.prototype.transform = function(enemyId) {
 };
 
 Game_Enemy.prototype.meetsCondition = function(action) {
-    const param1 = action.conditionParam1;
-    const param2 = action.conditionParam2;
-    switch (action.conditionType) {
+    if (Array.isArray(action.conditions)) {
+        return action.conditions.every(condition =>
+            condition &&
+            Number.isInteger(condition.type) &&
+            condition.type > 0 &&
+            this.meetsActionCondition(
+                condition.type,
+                condition.param1,
+                condition.param2,
+                action
+            )
+        );
+    }
+    return this.meetsActionCondition(
+        action.conditionType,
+        action.conditionParam1,
+        action.conditionParam2,
+        action
+    );
+};
+
+Game_Battler.prototype.meetsActionCondition = function(
+    type, param1, param2, action
+) {
+    switch (type) {
         case 1:
             return this.meetsTurnCondition(param1, param2);
         case 2:
@@ -5154,12 +5176,16 @@ Game_Enemy.prototype.meetsCondition = function(action) {
             return this.meetsPartyLevelCondition(param1);
         case 6:
             return this.meetsSwitchCondition(param1);
+        case 7:
+            return this.meetsTpCondition(param1, param2);
+        case 8:
+            return this.meetsTargetStateCondition(param1, action);
         default:
-            return true;
+            return Number(type) === 0;
     }
 };
 
-Game_Enemy.prototype.meetsTurnCondition = function(param1, param2) {
+Game_Battler.prototype.meetsTurnCondition = function(param1, param2) {
     const n = this.turnCount();
     if (param2 === 0) {
         return n === param1;
@@ -5168,23 +5194,53 @@ Game_Enemy.prototype.meetsTurnCondition = function(param1, param2) {
     }
 };
 
-Game_Enemy.prototype.meetsHpCondition = function(param1, param2) {
+Game_Battler.prototype.meetsHpCondition = function(param1, param2) {
     return this.hpRate() >= param1 && this.hpRate() <= param2;
 };
 
-Game_Enemy.prototype.meetsMpCondition = function(param1, param2) {
+Game_Battler.prototype.meetsMpCondition = function(param1, param2) {
     return this.mpRate() >= param1 && this.mpRate() <= param2;
 };
 
-Game_Enemy.prototype.meetsStateCondition = function(param) {
+Game_Battler.prototype.meetsTpCondition = function(param1, param2) {
+    return this.tpRate() >= param1 && this.tpRate() <= param2;
+};
+
+Game_Battler.prototype.meetsStateCondition = function(param) {
     return this.isStateAffected(param);
 };
 
-Game_Enemy.prototype.meetsPartyLevelCondition = function(param) {
+Game_Battler.prototype.meetsTargetStateCondition = function(param, action) {
+    return this.actionTargetCandidates(action).some(battler =>
+        battler.isStateAffected(param)
+    );
+};
+
+Game_Battler.prototype.actionTargetCandidates = function(action) {
+    const skill = action ? $dataSkills[action.skillId] : null;
+    const scope = skill ? skill.scope : 0;
+    if (scope === 11) {
+        return [this];
+    }
+    const candidates = [];
+    if ([1, 2, 3, 4, 5, 6, 14].includes(scope)) {
+        candidates.push(...this.opponentsUnit().aliveMembers());
+    }
+    if ([9, 10].includes(scope)) {
+        candidates.push(...this.friendsUnit().deadMembers());
+    } else if ([12, 13].includes(scope)) {
+        candidates.push(...this.friendsUnit().members());
+    } else if ([7, 8, 14].includes(scope)) {
+        candidates.push(...this.friendsUnit().aliveMembers());
+    }
+    return candidates;
+};
+
+Game_Battler.prototype.meetsPartyLevelCondition = function(param) {
     return $gameParty.highestLevel() >= param;
 };
 
-Game_Enemy.prototype.meetsSwitchCondition = function(param) {
+Game_Battler.prototype.meetsSwitchCondition = function(param) {
     return $gameSwitches.value(param);
 };
 
@@ -7275,7 +7331,16 @@ Game_CharacterBase.prototype.screenY = function() {
 };
 
 Game_CharacterBase.prototype.screenZ = function() {
+    // Priority 3, "Above Characters (Sorted by Y)": drawn on the above layer
+    // like priority 2, but ordinary characters standing in front of it are
+    // lifted onto that layer too (Sprite_Character.reactorSortedZ), so the
+    // tilemap's y-sort puts them over it and those behind stay under it.
+    if (this._priorityType === 3) return 5;
     return this._priorityType * 2 + 1;
+};
+
+Game_CharacterBase.prototype.isSortedAbovePriority = function() {
+    return this._priorityType === 3;
 };
 
 Game_CharacterBase.prototype.isNearTheScreen = function() {
@@ -8231,7 +8296,11 @@ Game_Player.prototype.setupForNewGame = function() {
     const mapId = $dataSystem.startMapId;
     const x = $dataSystem.startX;
     const y = $dataSystem.startY;
-    this.reserveTransfer(mapId, x, y, 2, 0);
+    // The editor's "Player Facing" (System.json `startDirection`); a
+    // project without one starts facing down, as always.
+    const asked = Number($dataSystem.startDirection);
+    const direction = [2, 4, 6, 8].indexOf(asked) >= 0 ? asked : 2;
+    this.reserveTransfer(mapId, x, y, direction, 0);
 };
 
 Game_Player.prototype.requestMapReload = function() {

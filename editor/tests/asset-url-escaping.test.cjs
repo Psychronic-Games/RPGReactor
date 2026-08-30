@@ -58,7 +58,7 @@ test('desktop preview consumers use the shared escaped asset resolver', () => {
         'src/event/EventCommandList.js',
         'src/event/EventPageEditor.js'
     ].map(relative => fs.readFileSync(path.join(editorRoot, relative), 'utf8'));
-    for (const source of sources) assert.match(source, /RRAssetFiles\.toUrl\(/);
+    for (const source of sources) assert.match(source, /RRAssetFiles\.(?:toUrl|imageUrlFor)\(/);
 
     const window = { RPGReactorAssetUrl: filePath => `resolved:${filePath}` };
     vm.runInNewContext(fs.readFileSync(path.join(editorRoot, 'src', 'utils', 'IconPicker.js'), 'utf8'), {

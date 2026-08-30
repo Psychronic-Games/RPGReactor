@@ -324,6 +324,21 @@
         browse.className = 'rr-btn-browse rr-plugin-data-ref-browse';
         browse.textContent = text('Browse...', context.tt);
         browse.addEventListener('click', () => {
+            if (refs.baseType(schema.type) === 'animation' && context.database && context.projectPath
+                    && root.AnimationPickerModal?.open) {
+                root.AnimationPickerModal.open({
+                    databaseManager: context.database,
+                    projectPath: context.projectPath,
+                    currentId: Number(input.value) || 0,
+                    allowNormalAttack: false,
+                    onPick: next => {
+                        input.value = String(next);
+                        onChange(input.value);
+                        refresh();
+                    }
+                });
+                return;
+            }
             const items = [{ label: labels.none, value: '0' }];
             for (const entry of refs.entriesFor(schema.type, context.database, refOptions(context))) {
                 items.push({

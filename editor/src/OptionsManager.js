@@ -159,6 +159,19 @@ class OptionsManager {
         return this.settings.showGrid === true;
     }
 
+    getShowVideoPreviews() {
+        return this.settings.showVideoPreviews !== false;
+    }
+
+    setShowVideoPreviews(enabled) {
+        const next = enabled !== false;
+        this.settings.showVideoPreviews = next;
+        this._saveSettings();
+        window.dispatchEvent(new CustomEvent('rr-video-previews-changed', {
+            detail: { enabled: next }
+        }));
+    }
+
     setShowGrid(enabled) {
         const next = enabled === true;
         this.settings.showGrid = next;

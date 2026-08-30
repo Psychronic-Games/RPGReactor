@@ -248,6 +248,53 @@ class ProjectController {
         }
     }
 
+    captureProjectOwnership() {
+        if (!this.projectLoaded || !this.currentProject?.path) return null;
+        const path = this.projectManager?.path || require('path');
+        const fs = this.projectManager?.fs || require('fs');
+        let canonicalRoot = path.resolve(this.currentProject.path);
+        if (typeof nw !== 'undefined' && typeof fs.realpathSync === 'function') {
+            canonicalRoot = fs.realpathSync(canonicalRoot);
+        }
+        return {
+            project: this.currentProject,
+            projectPath: this.currentProject.path,
+            canonicalRoot,
+            lockPath: this.projectLockPath,
+            lockToken: this.projectLockToken
+        };
+    }
+
+    verifyProjectOwnership(snapshot, options = {}) {
+        if (!snapshot || !this.projectLoaded || this.currentProject !== snapshot.project
+            || this.currentProject?.path !== snapshot.projectPath) {
+            throw new Error('The open project changed while the resource operation was in progress.');
+        }
+
+        const path = this.projectManager?.path || require('path');
+        const fs = this.projectManager?.fs || require('fs');
+        let canonicalRoot = path.resolve(this.currentProject.path);
+        if (typeof nw !== 'undefined' && typeof fs.realpathSync === 'function') {
+            canonicalRoot = fs.realpathSync(canonicalRoot);
+        }
+        if (canonicalRoot !== snapshot.canonicalRoot) {
+            throw new Error('The project folder changed while the resource operation was in progress.');
+        }
+
+        if (options.requireWrite && typeof nw !== 'undefined') {
+            if (!snapshot.lockPath || !snapshot.lockToken
+                || this.projectLockPath !== snapshot.lockPath
+                || this.projectLockToken !== snapshot.lockToken) {
+                throw new Error('The project write lock is no longer owned by this editor.');
+            }
+            const lock = this._readProjectLock(fs, snapshot.lockPath);
+            if (lock.token !== snapshot.lockToken || lock.pid !== process.pid) {
+                throw new Error('The project write lock changed while the resource operation was in progress.');
+            }
+        }
+        return true;
+    }
+
     getLastMapStorageKey() {
         const projectPath = this.currentProject?.path || 'default';
         return `lastMapId:${encodeURIComponent(projectPath)}`;
@@ -374,6 +421,7 @@ class ProjectController {
         if (!this.projectLoaded) return;
         if (!await this.confirmUnsavedChanges()) return;
 
+        this.videoSurfacePreviewManager?.beforeMapChange?.();
         if (typeof this.disableMap3DView === 'function') await this.disableMap3DView();
         this.releaseProjectLock();
         if (this.tilemapManager) this.tilemapManager.destroy();
@@ -386,7 +434,7 @@ class ProjectController {
         // Don't clear the saved path - keep it for next session
         // localStorage.removeItem('lastProjectPath');
 
-        this._notifyForgeProjectChanged();
+        this._notifyProjectChanged();
         this.uiManager.showWelcomeScreen();
         this.uiManager.updateStatus('Project closed');
         this.projectLoaded = false;
@@ -409,13 +457,17 @@ class ProjectController {
         return this.applicationCloseRequest;
     }
 
-    /** Drop stale Forge tool project paths when the open project changes. */
-    _notifyForgeProjectChanged() {
+    /** Drop project-bound tool state when the open project changes. */
+    _notifyProjectChanged() {
         try {
-            const forge = (typeof window !== 'undefined' && window.reactor && window.reactor.forgeManager) || null;
+            const reactor = typeof window !== 'undefined' ? window.reactor : null;
+            const forge = reactor?.forgeManager || null;
             if (forge && typeof forge.onProjectChanged === 'function') forge.onProjectChanged();
+            const resources = reactor?.resourceManager || null;
+            if (resources && typeof resources.onProjectChanged === 'function') resources.onProjectChanged();
+            this.videoSurfacePreviewManager?.onProjectChanged?.();
         } catch (e) {
-            console.warn('Forge project-change notify failed:', e);
+            console.warn('Project-change notify failed:', e);
         }
     }
 
@@ -566,13 +618,14 @@ class ProjectController {
         // Load database
         this.uiManager.updateStatus('Loading database...');
         this.logProjectOpen('populate:start', { projectPath: this.currentProject?.path || null });
-        this._notifyForgeProjectChanged();
+        this._notifyProjectChanged();
         const dbLoaded = await this.databaseManager.loadAllData(this.currentProject.path);
         this.logProjectOpen('populate:database', { loaded: dbLoaded });
 
         if (!dbLoaded) {
             this.uiManager.updateStatus('Error loading database');
             this.logProjectOpen('populate:database-failed');
+            this.videoSurfacePreviewManager?.beforeMapChange?.();
             if (typeof this.disableMap3DView === 'function') await this.disableMap3DView();
             this.releaseProjectLock();
             if (this.tilemapManager) this.tilemapManager.destroy();
@@ -580,7 +633,7 @@ class ProjectController {
             this.lastLoadedProjectPath = null;
             this.currentProject = null;
             this.projectLoaded = false;
-            this._notifyForgeProjectChanged();
+            this._notifyProjectChanged();
             await this.uiManager.showWelcomeScreen();
             this.updateWindowTitle();
             alert(this._tt('The project database could not be loaded. Check the JSON files for parse errors.'));
@@ -628,6 +681,7 @@ class ProjectController {
         if (!this.tilemapManager || projectHasChanged) {
             // Clean up old TilemapManager before replacing it
             if (this.tilemapManager) {
+                this.videoSurfacePreviewManager?.beforeMapChange?.();
                 this.tilemapManager.destroy();
             }
 
@@ -1390,6 +1444,7 @@ class ProjectController {
 
         this.uiManager.updateStatus(`Loading map ${mapId}...`);
 
+        this.videoSurfacePreviewManager?.beforeMapChange?.();
         const success = await tilemapManager.loadMap(mapId);
         if (request !== this._mapLoadRequest || tilemapManager !== this.tilemapManager) return false;
 
@@ -1411,6 +1466,7 @@ class ProjectController {
 
             return true;
         } else {
+            this.videoSurfacePreviewManager?.setMap?.(tilemapManager.currentMap, tilemapManager);
             this.uiManager.updateStatus(`Failed to load map ${mapId}`);
             return false;
         }
@@ -1459,15 +1515,16 @@ class ProjectController {
      * A no-op — and free — while the viewport is off.
      */
     refreshMap3DView() {
-        if (!this.mapEditor3D?.isEnabled?.()) {
-            // 3D is a view preference rather than a property of the map, and
-            // the viewport is torn down when a project closes — so a project
-            // opened with the box already ticked came up with a 2D canvas
-            // under a ticked box, and only unticking and reticking it put the
-            // two back in agreement. Reconcile instead of assuming.
-            if (typeof this.reconcileMap3DView === 'function') this.reconcileMap3DView();
+        const enabled = !!this.mapEditor3D?.isEnabled?.();
+        // 3D is a view preference remembered per map: a map last edited in
+        // 3D comes back in 3D, in this session or the next, and switching to
+        // a map that was left in 2D switches the view with it.
+        const wanted = this.map3DViewRemembered(this.tilemapManager?.currentMap?.id);
+        if (wanted !== enabled && typeof this.reconcileMap3DView === 'function') {
+            this.reconcileMap3DView(wanted);
             return;
         }
+        if (!enabled) return;
         this.mapEditor3D.rebuild().catch(error => {
             console.error('Failed to rebuild the 3D view:', error);
             this.mapEditor3D.fail?.(error);
@@ -1764,6 +1821,9 @@ class ProjectController {
                     try {
                         map = JSON.parse(fs.readFileSync(mapPath, 'utf8'));
                         map.id = mapId;
+                        // The 3D section edits the sidecar, which lives beside
+                        // the map rather than in it.
+                        this.tilemapManager?.loadMapSidecar?.(map);
                     } catch (e) {
                         console.error(`Could not read ${mapFile}:`, e);
                         alert(`${this._tt('Could not open map properties:')} ${mapFile} ${this._tt('is unreadable or corrupt.')}`);
@@ -1903,57 +1963,18 @@ class ProjectController {
         this.populateTilesetDropdown();
         this.selectTilesetOption(document.getElementById('map-tileset-select'), mapData.tilesetId || 1);
 
-        // BGM Settings
-        const bgmCheckbox = document.getElementById('map-autoplay-bgm-checkbox');
-        const bgmPicker = document.getElementById('map-bgm-picker');
-        bgmCheckbox.checked = mapData.autoplayBgm || false;
-        bgmPicker.style.display = bgmCheckbox.checked ? 'block' : 'none';
-
-        this.populateAudioDropdown('map-bgm-select', 'bgm');
-        this.attachMapAudioBrowse('bgm');
-        const bgmSelect = document.getElementById('map-bgm-select');
-        const bgmName = mapData.bgm?.name || '';
-        bgmSelect.value = bgmName;
-
-        // If BGM not found in folder, add it as missing option
-        if (bgmName && bgmSelect.value !== bgmName) {
-            const option = document.createElement('option');
-            option.value = bgmName;
-            option.textContent = `${bgmName} ${this._tt('(missing)')}`;
-            option.style.color = '#ff6666';
-            bgmSelect.appendChild(option);
-            bgmSelect.value = bgmName;
+        // BGM / BGS: the track and its levels are chosen in the audio
+        // picker, which is also where it plays; the form shows the choice.
+        this._mapAudio = {
+            bgm: this.mapAudioChoice(mapData.bgm, 100),
+            bgs: this.mapAudioChoice(mapData.bgs, 80)
+        };
+        for (const type of ['bgm', 'bgs']) {
+            const checkbox = document.getElementById(`map-autoplay-${type}-checkbox`);
+            checkbox.checked = (type === 'bgm' ? mapData.autoplayBgm : mapData.autoplayBgs) || false;
+            document.getElementById(`map-${type}-picker`).style.display = checkbox.checked ? 'block' : 'none';
+            this.renderMapAudioChoice(type);
         }
-
-        document.getElementById('map-bgm-volume').value = mapData.bgm?.volume ?? 100;
-        document.getElementById('map-bgm-pitch').value = mapData.bgm?.pitch ?? 100;
-        document.getElementById('map-bgm-pan').value = mapData.bgm?.pan ?? 0;
-
-        // BGS Settings
-        const bgsCheckbox = document.getElementById('map-autoplay-bgs-checkbox');
-        const bgsPicker = document.getElementById('map-bgs-picker');
-        bgsCheckbox.checked = mapData.autoplayBgs || false;
-        bgsPicker.style.display = bgsCheckbox.checked ? 'block' : 'none';
-
-        this.populateAudioDropdown('map-bgs-select', 'bgs');
-        this.attachMapAudioBrowse('bgs');
-        const bgsSelect = document.getElementById('map-bgs-select');
-        const bgsName = mapData.bgs?.name || '';
-        bgsSelect.value = bgsName;
-
-        // If BGS not found in folder, add it as missing option
-        if (bgsName && bgsSelect.value !== bgsName) {
-            const option = document.createElement('option');
-            option.value = bgsName;
-            option.textContent = `${bgsName} ${this._tt('(missing)')}`;
-            option.style.color = '#ff6666';
-            bgsSelect.appendChild(option);
-            bgsSelect.value = bgsName;
-        }
-
-        document.getElementById('map-bgs-volume').value = mapData.bgs?.volume ?? 80;
-        document.getElementById('map-bgs-pitch').value = mapData.bgs?.pitch ?? 100;
-        document.getElementById('map-bgs-pan').value = mapData.bgs?.pan ?? 0;
 
         // Battleback Settings
         const battlebackCheckbox = document.getElementById('map-specify-battleback-checkbox');
@@ -1989,8 +2010,11 @@ class ProjectController {
         document.getElementById('map-parallax-sx-input').value = mapData.parallaxSx || 0;
         document.getElementById('map-parallax-sy-input').value = mapData.parallaxSy || 0;
 
-        // Note
-        document.getElementById('map-note-textarea').value = mapData.note || '';
+        // 3D
+        this.populateMap3DForm(mapData);
+
+        // Note, less the <3d> tag the 3D checkbox stands for.
+        document.getElementById('map-note-textarea').value = this.noteWithout3D(mapData.note);
 
         // Encounters
         this.populateEncountersList(mapData.encounterList || []);
@@ -2048,216 +2072,225 @@ class ProjectController {
         return select.value;
     }
 
-    /**
-     * The map properties "…" button beside a BGM/BGS dropdown opens the
-     * shared Audio Player-styled picker; OK writes the choice back into the
-     * dropdown and the volume/pitch/pan fields.
-     */
-    attachMapAudioBrowse(type) {
-        const button = document.getElementById(`map-${type}-browse-btn`);
-        if (!button) return;
-        button.onclick = () => {
-            if (!this.currentProject?.path || !window.RRAudioPickerModal) return;
-            const path = require('path');
-            const folder = path.join(this.currentProject.path, 'audio', type);
-            const select = document.getElementById(`map-${type}-select`);
-            const readNumber = (id, fallback) => {
-                const value = parseInt(document.getElementById(id)?.value, 10);
-                return Number.isFinite(value) ? value : fallback;
-            };
-            const label = type.toUpperCase();
+    /** The height-field/sidecar module, absent on a host that never loaded it. */
+    mapElevation() {
+        if (typeof RRMapElevation !== 'undefined' && RRMapElevation) return RRMapElevation;
+        return (typeof window !== 'undefined' && window.RRMapElevation) || null;
+    }
 
-            RRAudioPickerModal.open({
-                title: `${this._tt('Select')} ${label} ${this._tt('File')}`,
-                folderLabel: label,
-                files: RRAssetFiles.listUnique(folder, RRAssetFiles.AUDIO_EXTENSIONS),
-                selected: select?.value || '',
-                levels: {
-                    volume: readNumber(`map-${type}-volume`, type === 'bgs' ? 80 : 100),
-                    pitch: readNumber(`map-${type}-pitch`, 100),
-                    pan: readNumber(`map-${type}-pan`, 0)
-                },
-                loopDefault: true,
-                zIndex: 10010,
-                onOk: result => {
-                    if (select) {
-                        select.value = result.name;
-                        // A track missing from the dropdown (fresh file, or
-                        // none) still needs to stick as the value.
-                        if (select.value !== result.name) {
-                            const option = document.createElement('option');
-                            option.value = result.name;
-                            option.textContent = result.name;
-                            select.appendChild(option);
-                            select.value = result.name;
-                        }
-                    }
-                    document.getElementById(`map-${type}-volume`).value = result.volume;
-                    document.getElementById(`map-${type}-pitch`).value = result.pitch;
-                    document.getElementById(`map-${type}-pan`).value = result.pan;
-                }
-            });
+    /** A map's bgm/bgs record with the defaults filled in. */
+    mapAudioChoice(audio, defaultVolume) {
+        const number = (value, fallback) => {
+            const parsed = parseInt(value, 10);
+            return Number.isFinite(parsed) ? parsed : fallback;
         };
-    }
-
-    populateAudioDropdown(selectId, type) {
-        const select = document.getElementById(selectId);
-        select.innerHTML = `<option value="">${this._t('common.none')}</option>`;
-
-        if (!this.currentProject || !this.currentProject.path || (typeof nw === 'undefined' && !window.RPGReactorHost)) {
-            return;
-        }
-
-        const fs = require('fs');
-        const path = require('path');
-        const audioFolder = path.join(this.currentProject.path, 'audio', type);
-
-        // Check if folder exists
-        if (!fs.existsSync(audioFolder)) {
-            return;
-        }
-
-        const files = RRAssetFiles.listNames(audioFolder, RRAssetFiles.AUDIO_EXTENSIONS);
-
-        // RPG Maker stores extensionless relative names with forward slashes.
-        files.forEach(file => {
-            const option = document.createElement('option');
-            option.value = file;
-            option.textContent = file;
-            select.appendChild(option);
-        });
-    }
-
-    getMapAudioPreviewPath(type) {
-        const name = document.getElementById(`map-${type}-select`)?.value || '';
-        if (!name || !this.currentProject?.path || (typeof nw === 'undefined' && !window.RPGReactorHost)) return null;
-
-        const fs = require('fs');
-        const path = require('path');
-        const audioFolder = path.join(this.currentProject.path, 'audio', type);
-        const file = RRAssetFiles.find(audioFolder, name, RRAssetFiles.AUDIO_EXTENSIONS);
-        return file ? RRAssetFiles.toUrl(file.absolutePath) : null;
-    }
-
-    getMapAudioPreviewParams(type) {
-        const defaultVolume = type === 'bgs' ? 80 : 100;
-        const readNumber = (id, fallback) => {
-            const value = parseInt(document.getElementById(id)?.value, 10);
-            return Number.isFinite(value) ? value : fallback;
-        };
-
         return {
-            audioType: type,
-            volume: readNumber(`map-${type}-volume`, defaultVolume),
-            pitch: readNumber(`map-${type}-pitch`, 100),
-            pan: readNumber(`map-${type}-pan`, 0),
-            loop: true
+            name: (audio && audio.name) || '',
+            volume: number(audio && audio.volume, defaultVolume),
+            pitch: number(audio && audio.pitch, 100),
+            pan: number(audio && audio.pan, 0)
         };
     }
 
-    updateMapAudioPreviewStatus(type, message, isError = false) {
-        const status = document.getElementById(`map-${type}-preview-status`);
-        if (!status) return;
-        status.textContent = message;
-        status.style.color = isError ? '#ff6666' : 'var(--color-text-muted)';
+    /** Show the chosen track and its levels for `type` ('bgm' | 'bgs'). */
+    renderMapAudioChoice(type) {
+        const choice = this._mapAudio?.[type];
+        const track = document.getElementById(`map-${type}-track`);
+        const levels = document.getElementById(`map-${type}-levels`);
+        if (!choice || !track) return;
+        track.textContent = choice.name || this._t('common.none');
+        track.style.color = choice.name ? 'var(--color-text)' : 'var(--color-text-muted)';
+        if (levels) {
+            levels.textContent = choice.name
+                ? this._t('mapProps.levels', { volume: choice.volume, pitch: choice.pitch, pan: choice.pan })
+                : '';
+        }
     }
 
-    playMapAudioPreview(type) {
-        const audioPlayer = window.reactor?.audioPlayer;
-        if (!audioPlayer) {
-            this.updateMapAudioPreviewStatus(type, this._t('mapProps.audioUnavailable'), true);
-            return;
-        }
+    /**
+     * Choose a BGM/BGS track in the shared audio picker, which plays it and
+     * carries the volume/pitch/pan cards; OK writes the whole choice back.
+     */
+    openMapAudioPicker(type) {
+        if (!this.currentProject?.path || !window.RRAudioPickerModal) return;
+        const path = require('path');
+        const folder = path.join(this.currentProject.path, 'audio', type);
+        const choice = this._mapAudio?.[type] || this.mapAudioChoice(null, type === 'bgs' ? 80 : 100);
+        const label = type.toUpperCase();
 
-        const name = document.getElementById(`map-${type}-select`)?.value || '';
-        if (!name) {
-            this.stopMapAudioPreview(type);
-            this.updateMapAudioPreviewStatus(type, this._t('mapProps.noTrack'), true);
-            return;
-        }
-
-        const filePath = this.getMapAudioPreviewPath(type);
-        if (!filePath) {
-            this.updateMapAudioPreviewStatus(type, this._t('mapProps.notFound', { name }), true);
-            return;
-        }
-
-        audioPlayer.playExternal(filePath, this.getMapAudioPreviewParams(type));
-        // The previews share the global bgm/bgs channels with the music
-        // player — remember WE started this one, so closing the modal only
-        // stops our preview and never the user's own music.
-        this._mapAudioPreviewActive = this._mapAudioPreviewActive || {};
-        this._mapAudioPreviewActive[type] = true;
-        this.updateMapAudioPreviewStatus(type, this._t('mapProps.previewing', { name }));
-    }
-
-    pauseMapAudioPreview(type) {
-        if (!this._mapAudioPreviewActive?.[type]) return;   // nothing of ours is playing
-        const audioPlayer = window.reactor?.audioPlayer;
-        const channel = audioPlayer?.getChannel?.(type);
-        if (!channel) return;
-        channel.audio.pause();
-        channel.playing = false;
-        this.updateMapAudioPreviewStatus(type, this._t('mapProps.previewPaused'));
-    }
-
-    stopMapAudioPreview(type) {
-        // Only stop the channel if the MODAL started playback on it — the
-        // music player shares these channels, and unconditional stops here
-        // killed the user's music on OK/Cancel.
-        if (this._mapAudioPreviewActive?.[type]) {
-            const audioPlayer = window.reactor?.audioPlayer;
-            if (audioPlayer) {
-                audioPlayer.stopExternal(type);
+        RRAudioPickerModal.open({
+            title: `${this._tt('Select')} ${label} ${this._tt('File')}`,
+            folderLabel: label,
+            files: RRAssetFiles.listUnique(folder, RRAssetFiles.AUDIO_EXTENSIONS),
+            selected: choice.name,
+            levels: { volume: choice.volume, pitch: choice.pitch, pan: choice.pan },
+            loopDefault: true,
+            zIndex: 10010,
+            onOk: result => {
+                this._mapAudio[type] = this.mapAudioChoice(result, type === 'bgs' ? 80 : 100);
+                this.renderMapAudioChoice(type);
             }
-            this._mapAudioPreviewActive[type] = false;
-        }
-        this.updateMapAudioPreviewStatus(type, this._t('mapProps.noPreview'));
-    }
-
-    stopMapAudioPreviews() {
-        this.stopMapAudioPreview('bgm');
-        this.stopMapAudioPreview('bgs');
-    }
-
-    setupMapAudioPreviewControls(type) {
-        const select = document.getElementById(`map-${type}-select`);
-        const playBtn = document.getElementById(`map-${type}-play-btn`);
-        const pauseBtn = document.getElementById(`map-${type}-pause-btn`);
-        const stopBtn = document.getElementById(`map-${type}-stop-btn`);
-        const volumeInput = document.getElementById(`map-${type}-volume`);
-        const pitchInput = document.getElementById(`map-${type}-pitch`);
-        const panInput = document.getElementById(`map-${type}-pan`);
-
-        if (!select || !playBtn || !pauseBtn || !stopBtn) return;
-
-        const styleHover = (button) => {
-            button.onmouseenter = () => { button.style.backgroundColor = 'var(--color-accent-tint-25)'; };
-            button.onmouseleave = () => { button.style.backgroundColor = 'var(--color-bg-panel)'; };
-        };
-
-        [playBtn, pauseBtn, stopBtn].forEach(styleHover);
-
-        playBtn.onclick = () => this.playMapAudioPreview(type);
-        pauseBtn.onclick = () => this.pauseMapAudioPreview(type);
-        stopBtn.onclick = () => this.stopMapAudioPreview(type);
-        select.onchange = () => {
-            this.stopMapAudioPreview(type);
-            if (select.value) {
-                this.updateMapAudioPreviewStatus(type, `Selected ${select.value}`);
-            }
-        };
-
-        [volumeInput, pitchInput, panInput].forEach(input => {
-            if (!input) return;
-            input.oninput = () => {
-                const audioPlayer = window.reactor?.audioPlayer;
-                const channel = audioPlayer?.getChannel?.(type);
-                if (channel?.playing) {
-                    this.playMapAudioPreview(type);
-                }
-            };
         });
+    }
+
+    /** The note with the `<3d>` tag taken out; the 3D checkbox shows it. */
+    noteWithout3D(note) {
+        const elevation = this.mapElevation();
+        const text = typeof note === 'string' ? note : '';
+        if (!elevation) return text;
+        return text.replace(/<3d>/gi, '').replace(/\n{3,}/g, '\n\n').trim();
+    }
+
+    /** Fill the 3D section: the switch, the room's height and its images. */
+    populateMap3DForm(mapData) {
+        const elevation = this.mapElevation();
+        const checkbox = document.getElementById('map-3d-checkbox');
+        const options = document.getElementById('map-3d-options');
+        if (!checkbox || !options) return;
+        checkbox.checked = !!(elevation && elevation.hasNote(mapData));
+        options.style.display = checkbox.checked ? 'block' : 'none';
+
+        const room = elevation ? elevation.room(mapData) : { height: 4, floor: '', walls: '', ceiling: '' };
+        const height = document.getElementById('map-3d-height-input');
+        if (height) height.value = room.height;
+        for (const piece of ['floor', 'walls', 'ceiling']) {
+            const select = document.getElementById(`map-3d-${piece}-select`);
+            if (!select) continue;
+            this.fillParallaxSelect(select, room[piece]);
+        }
+
+        // The default camera: a mode, and blank overrides meaning "the mode's own".
+        const camera = elevation && elevation.camera ? elevation.camera(mapData) : { mode: 'fixed' };
+        const modeSelect = document.getElementById('map-3d-camera-select');
+        if (modeSelect) modeSelect.value = camera.mode || 'fixed';
+        for (const key of ['pitch', 'yaw', 'distance', 'fov']) {
+            const input = document.getElementById(`map-3d-camera-${key}`);
+            if (input) input.value = camera[key] === null || camera[key] === undefined ? '' : camera[key];
+        }
+    }
+
+    /** The default camera as the form has it now. */
+    readMap3DCameraForm() {
+        const value = id => document.getElementById(id)?.value ?? '';
+        return {
+            mode: value('map-3d-camera-select') || 'fixed',
+            pitch: value('map-3d-camera-pitch'),
+            yaw: value('map-3d-camera-yaw'),
+            distance: value('map-3d-camera-distance'),
+            fov: value('map-3d-camera-fov')
+        };
+    }
+
+    /** The room as the form has it now. */
+    readMap3DForm() {
+        const elevation = this.mapElevation();
+        const value = id => document.getElementById(id)?.value || '';
+        const height = parseInt(value('map-3d-height-input'), 10);
+        return {
+            height: elevation ? elevation.clampRoomHeight(height) : height,
+            floor: value('map-3d-floor-select'),
+            walls: value('map-3d-walls-select'),
+            ceiling: value('map-3d-ceiling-select')
+        };
+    }
+
+    /**
+     * Choose a room image the way the parallax background is chosen: by
+     * looking at it, with `(None)` as one of the entries.
+     */
+    openRoomImagePicker(piece) {
+        const tt = text => this._tt(text);
+        const folder = this.parallaxFolder();
+        const assets = window.RRAssetFiles;
+        const picker = typeof window !== 'undefined' ? window.reactor?.databaseEditorUI : null;
+        const select = document.getElementById(`map-3d-${piece}-select`);
+        if (!folder || !assets || !select || !picker || typeof picker.showImagePicker !== 'function') return;
+
+        let files = [];
+        try {
+            files = assets.listImageReferences(folder);
+        } catch (error) {
+            console.error('Error reading parallaxes folder:', error);
+        }
+        if (files.length === 0) {
+            alert(tt('No parallax images found in img/parallaxes folder'));
+            return;
+        }
+        const titles = {
+            floor: 'mapProps.pickFloor',
+            walls: 'mapProps.pickWalls',
+            ceiling: 'mapProps.pickCeiling'
+        };
+        picker.showImagePicker(
+            this._t(titles[piece] || 'mapProps.pickFloor'),
+            files,
+            name => {
+                if (![...select.options].some(option => option.value === name)) {
+                    const option = document.createElement('option');
+                    option.value = name;
+                    option.textContent = name || this._t('common.none');
+                    select.appendChild(option);
+                }
+                select.value = name;
+            },
+            name => assets.imageUrlFor(folder, name),
+            select.value || undefined,
+            { selectButtonLabel: tt('Use This Parallax'), allowNone: true }
+        );
+    }
+
+    /**
+     * Write the map's 3D switch and room to its sidecar, reporting whether
+     * either changed.
+     *
+     * The map file has already been written by then: the room lives in
+     * `Map###.r3d.json`, never in the map, and the note carries the switch.
+     * For the loaded map the tilemap manager owns the file; any other map is
+     * written directly.
+     */
+    saveMap3DSettings(mapData, room, wants3D) {
+        const elevation = this.mapElevation();
+        const target = this.currentEditingMap;
+        if (!elevation || !target) return false;
+        // The sidecar sizes itself from the map, which may just have been resized.
+        target.width = mapData.width;
+        target.height = mapData.height;
+        let changed = elevation.setRoom(target, room);
+        if (typeof elevation.setCamera === 'function') {
+            changed = elevation.setCamera(target, this.readMap3DCameraForm()) || changed;
+        }
+        const sidecar = target.reactor3d;
+        if (wants3D && sidecar && typeof sidecar === 'object' && sidecar.mode !== elevation.MODE_3D) {
+            sidecar.mode = elevation.MODE_3D;
+            changed = true;
+        }
+        if (!changed) return false;
+
+        const isCurrent = this.tilemapManager?.currentMap?.id === mapData.id;
+        if (isCurrent && typeof this.tilemapManager.saveMapSidecar === 'function') {
+            if (!this.tilemapManager.saveMapSidecar()) {
+                alert(this._t('mapProps.sidecarNotSaved'));
+            }
+            return true;
+        }
+        if (typeof nw === 'undefined' || !this.currentProject?.path) return true;
+        const fs = require('fs');
+        const path = require('path');
+        const filePath = path.join(this.currentProject.path, 'data', elevation.fileNameFor(mapData.id));
+        if (this.tilemapManager?.unreadableMapSidecars?.has(filePath)) {
+            console.error(`Refusing to overwrite unreadable ${path.basename(filePath)}.`);
+            return true;
+        }
+        try {
+            elevation.save(fs, path, this.currentProject.path, target, {
+                writeFileAtomicSync: (fsModule, file, data, encoding) =>
+                    this._writeFileAtomic(fsModule, file, data, encoding)
+            });
+        } catch (error) {
+            console.error('Error saving the map 3D sidecar:', error);
+            alert(this._t('mapProps.sidecarNotSaved'));
+        }
+        return true;
     }
 
     populateBattlebackDropdowns() {
@@ -2277,7 +2310,7 @@ class ProjectController {
 
         // Load battleback1 images
         if (fs.existsSync(bb1Folder)) {
-            const files = RRAssetFiles.listNames(bb1Folder, ['.png']);
+            const files = RRAssetFiles.listImageReferences(bb1Folder);
 
             files.forEach(file => {
                 const option = document.createElement('option');
@@ -2289,7 +2322,7 @@ class ProjectController {
 
         // Load battleback2 images
         if (fs.existsSync(bb2Folder)) {
-            const files = RRAssetFiles.listNames(bb2Folder, ['.png']);
+            const files = RRAssetFiles.listImageReferences(bb2Folder);
 
             files.forEach(file => {
                 const option = document.createElement('option');
@@ -2301,30 +2334,43 @@ class ProjectController {
     }
 
     populateParallaxDropdown() {
-        const select = document.getElementById('map-parallax-image-select');
+        this.fillParallaxSelect(document.getElementById('map-parallax-image-select'));
+    }
+
+    /**
+     * List every parallax image in `select`, then point it at `value`.
+     *
+     * A name the map holds that is not on disk is still listed, flagged as
+     * missing, so the assignment sticks and the author can see what is gone.
+     */
+    fillParallaxSelect(select, value) {
+        if (!select) return;
         select.innerHTML = `<option value="">${this._t('common.none')}</option>`;
 
-        if (!this.currentProject || !this.currentProject.path || (typeof nw === 'undefined' && !window.RPGReactorHost)) {
-            return;
+        if (this.currentProject && this.currentProject.path && (typeof nw !== 'undefined' || window.RPGReactorHost)) {
+            const fs = require('fs');
+            const path = require('path');
+            const parallaxFolder = path.join(this.currentProject.path, 'img', 'parallaxes');
+            if (fs.existsSync(parallaxFolder)) {
+                RRAssetFiles.listImageReferences(parallaxFolder).forEach(file => {
+                    const option = document.createElement('option');
+                    option.value = file;
+                    option.textContent = file;
+                    select.appendChild(option);
+                });
+            }
         }
 
-        const fs = require('fs');
-        const path = require('path');
-        const parallaxFolder = path.join(this.currentProject.path, 'img', 'parallaxes');
-
-        // Check if folder exists
-        if (!fs.existsSync(parallaxFolder)) {
-            return;
-        }
-
-        const files = RRAssetFiles.listNames(parallaxFolder, ['.png']);
-
-        files.forEach(file => {
+        if (value === undefined) return;
+        select.value = value || '';
+        if (value && select.value !== value) {
             const option = document.createElement('option');
-            option.value = file;
-            option.textContent = file;
+            option.value = value;
+            option.textContent = `${value} ${this._tt('(missing)')}`;
+            option.style.color = '#ff6666';
             select.appendChild(option);
-        });
+            select.value = value;
+        }
     }
 
     populateEncountersList(encounters) {
@@ -2506,13 +2552,11 @@ class ProjectController {
         // OK button
         okBtn.addEventListener('click', async () => {
             if (!await this.saveMapProperties()) return;
-            this.stopMapAudioPreviews();
             document.getElementById('map-properties-modal').style.display = 'none';
         });
 
         // Cancel and Close buttons
         const closeModal = () => {
-            this.stopMapAudioPreviews();
             document.getElementById('map-properties-modal').style.display = 'none';
         };
         cancelBtn.addEventListener('click', closeModal);
@@ -2530,12 +2574,39 @@ class ProjectController {
         // Toggle checkboxes
         this._bindMapPropertiesListener('map-autoplay-bgm-checkbox', 'change', (e) => {
             document.getElementById('map-bgm-picker').style.display = e.target.checked ? 'block' : 'none';
-            if (!e.target.checked) this.stopMapAudioPreview('bgm');
         });
-
         this._bindMapPropertiesListener('map-autoplay-bgs-checkbox', 'change', (e) => {
             document.getElementById('map-bgs-picker').style.display = e.target.checked ? 'block' : 'none';
-            if (!e.target.checked) this.stopMapAudioPreview('bgs');
+        });
+        // The track is chosen in the audio picker; the name shown is a second way in.
+        this._bindMapPropertiesListener('map-bgm-choose-btn', 'click', () => this.openMapAudioPicker('bgm'));
+        this._bindMapPropertiesListener('map-bgm-track', 'click', () => this.openMapAudioPicker('bgm'));
+        this._bindMapPropertiesListener('map-bgs-choose-btn', 'click', () => this.openMapAudioPicker('bgs'));
+        this._bindMapPropertiesListener('map-bgs-track', 'click', () => this.openMapAudioPicker('bgs'));
+
+        // 3D: the checkbox reveals the room, and each image picks like a parallax.
+        this._bindMapPropertiesListener('map-3d-checkbox', 'change', (e) => {
+            document.getElementById('map-3d-options').style.display = e.target.checked ? 'block' : 'none';
+        });
+        for (const piece of ['floor', 'walls', 'ceiling']) {
+            this._bindMapPropertiesListener(`map-3d-${piece}-browse-btn`, 'click',
+                () => this.openRoomImagePicker(piece));
+        }
+        // Themed step buttons stand in for the browser spinner on every number
+        // field of the dialog.
+        document.querySelectorAll('#map-properties-modal [data-map-props-step]').forEach(button => {
+            button.onclick = () => {
+                const input = document.getElementById(button.dataset.target);
+                if (!input || input.disabled) return;
+                const direction = Number(button.dataset.mapPropsStep) > 0 ? 1 : -1;
+                try {
+                    direction > 0 ? input.stepUp() : input.stepDown();
+                } catch (error) {
+                    input.value = (Number(input.value) || 0) + direction * (Number(input.step) || 1);
+                }
+                input.dispatchEvent(new Event('input', { bubbles: true }));
+                input.dispatchEvent(new Event('change', { bubbles: true }));
+            };
         });
 
         this._bindMapPropertiesListener('map-specify-battleback-checkbox', 'change', (e) => {
@@ -2552,9 +2623,11 @@ class ProjectController {
             () => this.openParallaxPicker());
         this._bindMapPropertiesListener('map-parallax-image-select', 'change',
             () => this.updateParallaxPreview());
+        this._bindMapPropertiesListener('map-battleback1-browse-btn', 'click',
+            () => this.openBattlebackPicker(1));
+        this._bindMapPropertiesListener('map-battleback2-browse-btn', 'click',
+            () => this.openBattlebackPicker(2));
 
-        this.setupMapAudioPreviewControls('bgm');
-        this.setupMapAudioPreviewControls('bgs');
     }
 
     /** The folder a project keeps its parallaxes in, or null outside one. */
@@ -2587,7 +2660,7 @@ class ProjectController {
             img.removeAttribute('src');
             return;
         }
-        img.src = assets.urlFor(folder, name, ['.png']);
+        img.src = assets.imageUrlFor(folder, name);
         // A name still in the map data whose file has gone says so here rather
         // than showing a broken image and leaving it to be puzzled over.
         img.onerror = () => {
@@ -2619,7 +2692,7 @@ class ProjectController {
 
         let files = [];
         try {
-            files = assets.listNames(folder, ['.png']);
+            files = assets.listImageReferences(folder);
         } catch (error) {
             console.error('Error reading parallaxes folder:', error);
         }
@@ -2630,19 +2703,11 @@ class ProjectController {
 
         const select = document.getElementById('map-parallax-image-select');
         const current = select ? select.value : '';
-        // A sentinel rather than an empty string: the picker labels every
-        // entry with its own name, and a blank row cannot be clicked with
-        // any confidence about what it will do.
-        const NONE = tt('(None)');
-        // The picker shows an image for whichever entry is highlighted, so
-        // this one gets a transparent pixel rather than a broken-image icon.
-        const BLANK = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
 
         picker.showImagePicker(
             tt('Select Parallax Background'),
-            [NONE, ...files],
-            (chosen) => {
-                const name = chosen === NONE ? '' : chosen;
+            files,
+            (name) => {
                 if (!select) return;
                 // A file on disk that the dropdown has not been rebuilt for
                 // would otherwise silently refuse the assignment.
@@ -2656,10 +2721,36 @@ class ProjectController {
                 this.updateParallaxPreview();
                 select.dispatchEvent(new Event('change', { bubbles: true }));
             },
-            (name) => name === NONE ? BLANK : assets.urlFor(folder, name, ['.png']),
+            (name) => assets.imageUrlFor(folder, name),
             current || undefined,
-            { selectButtonLabel: tt('Use This Parallax') }
+            { selectButtonLabel: tt('Use This Parallax'), allowNone: true }
         );
+    }
+
+    openBattlebackPicker(layer) {
+        const picker = typeof window !== 'undefined' ? window.reactor?.databaseEditorUI : null;
+        const select = document.getElementById(`map-battleback${layer}-select`);
+        if (!this.currentProject?.path || !select) return;
+        if (typeof nw === 'undefined' && !window.RPGReactorHost) return;
+        if (typeof picker?.browseImageFolder !== 'function') return;
+
+        picker.browseImageFolder({
+            projectPath: this.currentProject.path,
+            folder: layer === 2 ? 'battlebacks2' : 'battlebacks1',
+            title: this._tt(layer === 2 ? 'Select Battleback 2' : 'Select Battleback 1'),
+            current: select.value || '',
+            allowNone: true,
+            onPick: (name) => {
+                if (![...select.options].some(option => option.value === name)) {
+                    const option = document.createElement('option');
+                    option.value = name;
+                    option.textContent = name || this._tt('(None)');
+                    select.appendChild(option);
+                }
+                select.value = name;
+                select.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+        });
     }
 
     writeMapDataFile(mapData) {
@@ -2716,10 +2807,13 @@ class ProjectController {
             return false;
         }
 
-        const readNumber = (id, fallback) => {
-            const value = parseInt(document.getElementById(id).value, 10);
-            return Number.isFinite(value) ? value : fallback;
-        };
+        const elevation = this.mapElevation();
+        const noteText = document.getElementById('map-note-textarea').value || '';
+        // The checkbox is the switch; a tag typed into the note counts too, so
+        // the two can never disagree in the saved map.
+        const wants3D = !!document.getElementById('map-3d-checkbox')?.checked || /<3d>/i.test(noteText);
+        const room = this.readMap3DForm();
+        const audio = this._mapAudio || {};
 
         // Collect data from form
         const mapData = {
@@ -2734,20 +2828,10 @@ class ProjectController {
             disableDashing: document.getElementById('map-disable-dashing-checkbox').checked,
 
             autoplayBgm: document.getElementById('map-autoplay-bgm-checkbox').checked,
-            bgm: {
-                name: document.getElementById('map-bgm-select').value || '',
-                volume: readNumber('map-bgm-volume', 100),
-                pitch: readNumber('map-bgm-pitch', 100),
-                pan: readNumber('map-bgm-pan', 0)
-            },
+            bgm: this.mapAudioChoice(audio.bgm, 100),
 
             autoplayBgs: document.getElementById('map-autoplay-bgs-checkbox').checked,
-            bgs: {
-                name: document.getElementById('map-bgs-select').value || '',
-                volume: readNumber('map-bgs-volume', 80),
-                pitch: readNumber('map-bgs-pitch', 100),
-                pan: readNumber('map-bgs-pan', 0)
-            },
+            bgs: this.mapAudioChoice(audio.bgs, 80),
 
             specifyBattleback: document.getElementById('map-specify-battleback-checkbox').checked,
             battleback1Name: document.getElementById('map-battleback1-select').value || '',
@@ -2760,7 +2844,7 @@ class ProjectController {
             parallaxSx: parseInt(document.getElementById('map-parallax-sx-input').value) || 0,
             parallaxSy: parseInt(document.getElementById('map-parallax-sy-input').value) || 0,
 
-            note: document.getElementById('map-note-textarea').value || '',
+            note: this.noteWithout3D(noteText),
 
             encounterList: this.getEncounterListFromForm(),
 
@@ -2768,6 +2852,11 @@ class ProjectController {
             data: this.currentEditingMap.data || [],
             events: this.currentEditingMap.events || []
         };
+
+        if (wants3D) {
+            if (elevation) elevation.addNote(mapData);
+            else mapData.note = `${mapData.note}${mapData.note ? '\n' : ''}<3d>`;
+        }
 
         // Initialize data array if creating new map
         if (this.isCreatingNewMap && (!mapData.data || mapData.data.length === 0)) {
@@ -2822,6 +2911,7 @@ class ProjectController {
                 }
                 this.savedMapInfosState = JSON.stringify(this.currentProject.maps || []);
             }
+            this.saveMap3DSettings(mapData, room, wants3D);
 
             // Refresh maps list
             this.renderMapsList();
@@ -2833,6 +2923,7 @@ class ProjectController {
             // If this is the currently loaded map, check dimensions BEFORE any updates
             let dimensionsChanged = false;
             let tilesetChanged = false;
+            const was3D = !!(elevation && elevation.hasNote(this.currentEditingMap));
             if (this.tilemapManager && this.tilemapManager.currentMap && this.tilemapManager.currentMap.id === mapData.id) {
                 dimensionsChanged =
                     this.tilemapManager.currentMap.width !== mapData.width ||
@@ -2859,6 +2950,7 @@ class ProjectController {
                 }
             }
             this.savedMapInfosState = JSON.stringify(this.currentProject.maps || []);
+            const roomChanged = this.saveMap3DSettings(mapData, room, wants3D);
             if (this.tilemapManager?.currentMap?.id === mapData.id) {
                 this.tilemapManager.captureSavedMapState();
             }
@@ -2874,12 +2966,50 @@ class ProjectController {
                 } else {
                     // Just re-render parallax to reflect changes
                     await this.tilemapManager.renderParallax();
+                    // The room and the switch are drawn by the 3D view.
+                    if (roomChanged || was3D !== wants3D) this.refreshMap3DView();
                 }
             }
 
             this.uiManager.updateStatus(`Updated map: ${mapData.name}`);
         }
         return true;
+    }
+
+    /** The per-project store of which maps are edited in 3D. */
+    map3DViewMemoryKey() {
+        const projectPath = this.currentProject?.path;
+        return projectPath ? `rrMap3DViewMaps:${projectPath}` : null;
+    }
+
+    _map3DViewMemory() {
+        const key = this.map3DViewMemoryKey();
+        if (!key || typeof localStorage === 'undefined') return {};
+        try {
+            const parsed = JSON.parse(localStorage.getItem(key) || '{}');
+            return parsed && typeof parsed === 'object' ? parsed : {};
+        } catch (error) {
+            return {};
+        }
+    }
+
+    /** Whether `mapId` was last left in the 3D view. Off until it is ticked. */
+    map3DViewRemembered(mapId) {
+        if (!Number.isInteger(mapId)) return false;
+        return this._map3DViewMemory()[String(mapId)] === true;
+    }
+
+    rememberMap3DView(mapId, enabled) {
+        const key = this.map3DViewMemoryKey();
+        if (!key || !Number.isInteger(mapId) || typeof localStorage === 'undefined') return;
+        const memory = this._map3DViewMemory();
+        if (enabled) memory[String(mapId)] = true;
+        else delete memory[String(mapId)];
+        try {
+            localStorage.setItem(key, JSON.stringify(memory));
+        } catch (error) {
+            // Storage refused (quota, private mode): the view still works, it is just not remembered.
+        }
     }
 
     mapDimensionError(width, height) {

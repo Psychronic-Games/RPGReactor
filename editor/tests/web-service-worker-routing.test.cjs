@@ -24,12 +24,19 @@ function loadWorker(scope) {
         URL, Response: class {}, Promise, console: { warn() {} },
         fetch: async () => ({ stub: true })
     };
-    vm.runInNewContext(`${workerSource}\nglobalThis.__projectRelativePath = projectRelativePath;`, sandbox);
-    return { relativePath: sandbox.__projectRelativePath, listeners };
+    vm.runInNewContext(`${workerSource}\nglobalThis.__projectRelativePath = projectRelativePath; globalThis.__contentType = contentType;`, sandbox);
+    return { relativePath: sandbox.__projectRelativePath, contentType: sandbox.__contentType, listeners };
 }
 
 const APP_SCOPE = 'https://example.com/rpgreactor/';
-const { relativePath, listeners } = loadWorker(APP_SCOPE);
+const { relativePath, contentType, listeners } = loadWorker(APP_SCOPE);
+
+test('the virtual project serves every Reactor image format with the correct MIME type', () => {
+    assert.equal(contentType('image.jpg'), 'image/jpeg');
+    assert.equal(contentType('image.webp'), 'image/webp');
+    assert.equal(contentType('image.svg'), 'image/svg+xml');
+    assert.equal(contentType('image.gif'), 'image/gif');
+});
 
 test('a project asset resolves to its path below the project root', () => {
     assert.equal(relativePath(new URL(`${APP_SCOPE}project/data/Map001.json`)), 'data/Map001.json');

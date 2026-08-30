@@ -131,6 +131,7 @@ function copyPackagedFlatRuntime(sourceRoot, destination) {
         'notification_helper.exe', 'resources.pak', 'snapshot_blob.bin',
         'v8_context_snapshot.bin', 'vk_swiftshader_icd.json',
         'nwjc', 'nwjc.exe', 'chromedriver', 'chromedriver.exe',
+        'rpg-reactor-codec.json', 'RPG_REACTOR_CODEC_NOTICE.txt', 'FFmpeg-LGPL-2.1.txt',
         '.rpg-reactor-nw-runtime.json',
     ]);
     const runtimeExtensions = new Set(['.bin', '.dat', '.dll', '.pak', '.so']);

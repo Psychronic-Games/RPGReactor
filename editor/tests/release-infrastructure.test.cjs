@@ -25,6 +25,7 @@ test('release CLI config pins trusted NW.js and bundled Demo staging', () => {
         assert.equal(workerData.nwVersionPolicy, 'exact');
         assert.equal(workerData.releaseBuild, true);
         assert.equal(workerData.allowBundledRuntime, false);
+        assert.equal(workerData.includeProprietaryCodecs, target !== 'web');
         assert.equal(workerData.nativeSigning.mode, 'unsigned');
         assert.match(workerData.releaseHashManifestPath, /release-hashes\.json$/);
     }
@@ -171,8 +172,10 @@ test('artifact publication can recover when the tag has no release yet', () => {
     ]);
 });
 
-test('the single third-party notices document includes complete pako/stb terms', () => {
+test('the single third-party notices document includes codec, pako, and stb terms', () => {
     const notices = readRepo('THIRD_PARTY_NOTICES.md');
+    assert.match(notices, /nwjs-ffmpeg-prebuilt/);
+    assert.match(notices, /does not itself\s+grant patent rights/);
     assert.match(notices, /https:\/\/github\.com\/nodeca\/pako/);
     assert.match(notices, /https:\/\/github\.com\/nothings\/stb\/blob\/master\/stb_vorbis\.c/);
     assert.match(notices, /Vitaly Puzrin and Andrei Tuputcyn/);

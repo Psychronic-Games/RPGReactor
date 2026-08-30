@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Layer 1">
+  <defs>
+    <linearGradient id="b" x1="8" y1="3" x2="56" y2="61" gradientUnits="userSpaceOnUse"><stop stop-color="#0876ed"/><stop offset=".48" stop-color="#07399f"/><stop offset="1" stop-color="#03142f"/></linearGradient>
+    <radialGradient id="g"><stop stop-color="#fff"/><stop offset=".2" stop-color="#fff7b0"/><stop offset=".55" stop-color="#ffd529"/><stop offset=".78" stop-color="#ff7414"/><stop offset="1" stop-color="#d7318f"/></radialGradient>
+  </defs>
+  <g stroke-linejoin="round">
+    <path d="M3 7l29 7v2L3 9zm58 0-29 7v2l29-7z" fill="#03102a" stroke="#075cdd" stroke-width="1.2"/><path d="M3 7 32 0l29 7-29 7z" fill="url(#b)" stroke="#24bdf3" stroke-width="2"/>
+    <path d="m3 23 29 7v2L3 25zm58 0-29 7v2l29-7z" fill="#03102a" stroke="#075cdd" stroke-width="1.2"/><path d="m3 23 29-7 29 7-29 7z" fill="url(#b)" stroke="#075cdd" stroke-width="2"/>
+    <path d="m3 39 29 7v2L3 41zm58 0-29 7v2l29-7z" fill="#03102a" stroke="#075cdd" stroke-width="1.2"/><path d="m3 39 29-7 29 7-29 7z" fill="url(#b)" stroke="#075cdd" stroke-width="2"/>
+    <path d="m3 55 29 7v2L3 57zm58 0-29 7v2l29-7z" fill="#7a164f" stroke="#d7318f" stroke-width="1.5"/><path d="m3 55 29-7 29 7-29 7z" fill="#d7318f" stroke="#ffbf22" stroke-width="2.5"/>
+  </g>
+  <ellipse cx="32" cy="55" rx="10" ry="5" fill="url(#g)" stroke="#d7318f" stroke-width="1.5"/>
+  <text x="32" y="61" text-anchor="middle" fill="#f7fdff" stroke="#010718" stroke-width="3.5" paint-order="stroke" font-family="Arial,sans-serif" font-size="18" font-weight="900">1</text>
+</svg>

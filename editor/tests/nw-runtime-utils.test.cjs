@@ -180,12 +180,14 @@ test('deployment dialogs expose stable, editor, and exact NW.js versions', () =>
     const nativeDownloadSource = fs.readFileSync(path.join(editorRoot, 'build-scripts', 'native-download.js'), 'utf8');
 
     for (const source of [buildSource, distSource]) {
-        assert.match(source, /<option value="stable" selected>\$\{tt\('Latest stable'\)\}<\/option>/);
-        assert.match(source, /<option value="editor">\$\{tt\('Same as editor'\)\}<\/option>/);
+        assert.match(source, /<option value="stable">\$\{tt\('Latest stable'\)\}<\/option>/);
+        assert.match(source, /<option value="editor" selected>\$\{tt\('Same as editor'\)\}<\/option>/);
         assert.match(source, /<option value="exact">\$\{tt\('Specific version'\)\}<\/option>/);
         assert.match(source, /nwVersionPolicy/);
         assert.match(source, /includeProprietaryCodecs/);
         assert.match(source, /Include third-party H\.264\/AAC codec/);
+        assert.match(source, /include-proprietary-codecs" type="checkbox" checked/,
+            'desktop codec support is enabled by default');
         assert.match(source, /type="text" placeholder="\$\{tt\('Search versions\.\.\.'\)\}"/,
             'the picker avoids Chromium search-field controls that bypass Reactor themes');
         assert.match(source, /class="nw-version-menu" role="listbox" hidden/);
@@ -195,8 +197,8 @@ test('deployment dialogs expose stable, editor, and exact NW.js versions', () =>
             'specific versions must come from the official searchable release list');
         assert.match(source, /min-width: 16px; min-height: 16px; max-width: 16px; max-height: 16px; flex: 0 0 16px/,
             'codec checkbox dimensions remain square inside flex layouts');
-        assert.doesNotMatch(source, /Exact-version nwjs-ffmpeg-prebuilt overlay|Downloads the exact NW\.js-version binary/,
-            'codec option does not include an explanatory blurb');
+        assert.match(source, /Requires a trusted hash for the exact NW\.js version/,
+            'codec option explains exact-version trust and redistribution requirements');
     }
     assert.match(distSource, /overflow-y: auto; padding-right: 12px; scrollbar-gutter: stable/,
         'Deploy Editor options leave space beside the scrollbar');
@@ -211,7 +213,9 @@ test('deployment dialogs expose stable, editor, and exact NW.js versions', () =>
         'the custom release picker supports keyboard navigation');
     assert.match(themeSource, /\.nw-version-menu \{[\s\S]*?overflow-y: auto[\s\S]*?background: var\(--color-bg-surface\)/,
         'the release menu is scrollable and uses Reactor theme tokens');
-    assert.match(distSource, /codec\.disabled = type === 'minimal'/);
+    assert.match(distSource, /const disabled = type === 'minimal' \|\| web/);
+    assert.match(workerSource, /releaseBuild: true,[\s\S]*?getReleaseHashManifest\(true\)/,
+        'native codec downloads always require a checked-in trusted hash');
     assert.match(workerSource, /nwRuntime\.findCachedFile\(cacheCandidates, archiveName\)/);
     assert.match(workerSource, /packagedFlatRuntime/);
     assert.match(workerSource, /nwRuntime\.extractArchive\(archivePath, extractDir\)/);
@@ -220,6 +224,10 @@ test('deployment dialogs expose stable, editor, and exact NW.js versions', () =>
         'web builds must not require a writable NW.js cache during worker startup');
 
     const distWorkerSource = fs.readFileSync(path.join(editorRoot, 'build-scripts', 'dist-editor-worker.js'), 'utf8');
+    assert.match(workerSource, /canUseBundled[\s\S]*?includeProprietaryCodecs && localRuntimeVersion/,
+        'unchecked game builds do not inherit a potentially overlaid local runtime');
+    assert.match(distWorkerSource, /bundledMatches = includeProprietaryCodecs && allowBundledRuntime/,
+        'unchecked editor packages do not inherit a potentially overlaid local runtime');
     for (const source of [workerSource, distWorkerSource]) {
         assert.match(source, /const DOWNLOAD_IDLE_TIMEOUT_MS = 180000/,
             'large NW.js archives tolerate up to three minutes of socket inactivity');

@@ -1,6 +1,6 @@
 /**
  * AudioCommandEditor - Editor for audio-related event commands
- * Handles Play BGM, Play BGS, Play ME, Play SE, Fadeout BGM, Fadeout BGS, Stop SE
+ * Handles Play and Change BGM/ME, Play BGS/SE, Fadeout BGM/BGS, and Stop SE
  * Uses the global audio player for synchronized playback
  */
 class AudioCommandEditor {
@@ -163,6 +163,9 @@ class AudioCommandEditor {
      */
     getCommandType(code) {
         const types = {
+            132: { name: 'Change Battle BGM', folder: 'bgm', hasParams: true },
+            133: { name: 'Change Victory ME', folder: 'me', hasParams: true },
+            139: { name: 'Change Defeat ME', folder: 'me', hasParams: true },
             241: { name: 'Play BGM', folder: 'bgm', hasParams: true },
             245: { name: 'Play BGS', folder: 'bgs', hasParams: true },
             249: { name: 'Play ME', folder: 'me', hasParams: true },
@@ -212,7 +215,7 @@ class AudioCommandEditor {
     }
 
     /**
-     * Play BGM/BGS/ME/SE use the same current browser/player as every other
+     * Audio-object commands use the same current browser/player as every other
      * audio surface. The preview-only loop toggle is not serialized.
      */
     showPlayCommandPicker() {

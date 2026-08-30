@@ -8,6 +8,10 @@
     "nwjs-sdk-v0.107.0-osx-x64.zip": "e1344a94d52cdc5bcba9344dae6c57e7032b926dd806694962dd1c6efa966e9b",
     "nwjs-sdk-v0.107.0-win-x64.zip": "926c5529a2714a05a3d2f5b9e1f66de64e8375f80a50fa7cbbeb620fcb77234e"
   },
-  "codecs": {},
-  "policy": "Public release builds require the exact archive names they acquire to be pinned here with trusted SHA-256 values. NW.js 0.107.0 hashes are copied from https://dl.nwjs.io/v0.107.0/SHASUMS256.txt. Do not populate this file from an archive downloaded during the same build."
+  "codecs": {
+    "0.107.0-linux-x64.zip": "8f92b1afc9deda5d896d73af02c26896e2a8877ae05aec6a5fe2fcc34fb59179",
+    "0.107.0-osx-x64.zip": "b4c6a41f479a08d0c852e84d62c57ba9770d3f756acf566b13058c8da640e371",
+    "0.107.0-win-x64.zip": "ac72259f4a086dd590082d6845e5ebbe0f6614c938d818d7ca0ff8dec7129f46"
+  },
+  "policy": "Public release builds require the exact archive names they acquire to be pinned here with trusted SHA-256 values. NW.js 0.107.0 hashes are copied from https://dl.nwjs.io/v0.107.0/SHASUMS256.txt. Codec hashes are copied from the GitHub asset digests for https://github.com/nwjs-ffmpeg-prebuilt/nwjs-ffmpeg-prebuilt/releases/tag/0.107.0; corresponding immutable build and FFmpeg source revisions are recorded in nw-codec-utils.js. Do not populate this file from an archive downloaded during the same build."
 }

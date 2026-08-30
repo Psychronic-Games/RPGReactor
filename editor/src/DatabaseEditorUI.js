@@ -650,9 +650,11 @@ class DatabaseEditorUI {
                 }
             }
             let requiredIndex = focusedId === null ? -1 : filteredData.findIndex(entry => entry.id === focusedId);
-            const targetCount = !append && options.preserveScroll
-                ? Math.max(batchSize, previousRenderedCount, requiredIndex + 1)
-                : renderedCount + batchSize;
+            const targetCount = type === 'animations'
+                ? filteredData.length
+                : (!append && options.preserveScroll
+                    ? Math.max(batchSize, previousRenderedCount, requiredIndex + 1)
+                    : renderedCount + batchSize);
             const end = Math.min(targetCount, filteredData.length);
             const visibleData = filteredData.slice(renderedCount, end);
 
@@ -2428,10 +2430,25 @@ class DatabaseEditorUI {
         const previewEl = document.getElementById('image-picker-preview');
         const closeBtn = document.getElementById('image-picker-close-btn');
 
+        if (this._imagePickerBaseZIndex === undefined) {
+            this._imagePickerBaseZIndex = modal.style.zIndex || '';
+        }
+        modal.style.zIndex = options.zIndex !== undefined
+            ? String(options.zIndex)
+            : this._imagePickerBaseZIndex;
+
         titleEl.textContent = title;
         listEl.innerHTML = '';
         listEl.style.overflow = 'hidden';
         previewEl.innerHTML = `<p style="color: var(--color-text-muted); text-align: center;">${tt('Select an image to preview')}</p>`;
+
+        const clearPreview = () => {
+            for (const image of previewEl.querySelectorAll?.('img') || []) {
+                image.removeAttribute?.('src');
+                image.src = '';
+            }
+            previewEl.innerHTML = '';
+        };
 
         const showPreview = file => {
                 const imagePath = getImagePathCallback(file);
@@ -2445,7 +2462,7 @@ class DatabaseEditorUI {
                 let selectedIndex = file === currentFile ? parseInt(options.currentIndex || 0) : 0;
                 if (isNaN(selectedIndex) || selectedIndex < 0 || (!isFaceSheet && selectedIndex > maxIndex)) selectedIndex = 0;
 
-                previewEl.innerHTML = '';
+                clearPreview();
 
                 const wrapper = document.createElement('div');
                 wrapper.style.cssText = 'display: flex; flex-direction: column; align-items: center; gap: 16px; width: 100%;';
@@ -2563,7 +2580,7 @@ class DatabaseEditorUI {
                 openFolderBtn.id = 'image-picker-open-folder-btn';
                 openFolderBtn.textContent = tt('Open in Folder');
                 openFolderBtn.title = tt('Open containing folder in file manager');
-                openFolderBtn.style.cssText = 'background: var(--color-border-subtle); border: 1px solid var(--color-border-input); color: var(--color-text-strong); padding: 10px 16px; border-radius: 4px; cursor: pointer; font-size: 13px;';
+                openFolderBtn.className = 'rr-btn-secondary';
                 buttonRow.appendChild(openFolderBtn);
 
                 wrapper.appendChild(buttonRow);
@@ -2572,12 +2589,11 @@ class DatabaseEditorUI {
                 // Add select button handler
                 selectBtn.addEventListener('click', () => {
                     modal.style.display = 'none';
+                    clearPreview();
                     onSelectCallback(file, selectedIndex);
                 });
 
                 // Add open-in-folder button handler
-                openFolderBtn.addEventListener('mouseenter', () => openFolderBtn.style.background = 'var(--color-accent-tint-25)');
-                openFolderBtn.addEventListener('mouseleave', () => openFolderBtn.style.background = 'var(--color-border-subtle)');
                 openFolderBtn.addEventListener('click', () => {
                     // Strip file:// prefix to get the filesystem path
                     let filePath = imagePath;
@@ -2601,6 +2617,7 @@ class DatabaseEditorUI {
                 label: tt('(None)'),
                 onClick: () => {
                     modal.style.display = 'none';
+                    clearPreview();
                     onSelectCallback('', 0);
                 }
             } : null
@@ -2619,7 +2636,76 @@ class DatabaseEditorUI {
         // Close button handler
         closeBtn.onclick = () => {
             modal.style.display = 'none';
+            clearPreview();
         };
+    }
+
+    static imageBrowser(projectController) {
+        const project = projectController?.getCurrentProject
+            ? projectController.getCurrentProject()
+            : projectController?.currentProject;
+        const picker = typeof window !== 'undefined' ? window.reactor?.databaseEditorUI : null;
+        if (!project?.path || typeof picker?.createImageBrowseButton !== 'function') return null;
+        return { picker, projectPath: project.path };
+    }
+
+    browseImageFolder(request) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
+        const assets = typeof RRAssetFiles !== 'undefined' ? RRAssetFiles : null;
+        if (!request?.projectPath || !request.folder || !assets
+            || typeof request.onPick !== 'function') return false;
+
+        const folder = require('path').join(request.projectPath, 'img', request.folder);
+        let files = [];
+        try {
+            files = assets.listImageReferences(folder);
+        } catch (error) {
+            console.error(`Error reading img/${request.folder}:`, error);
+        }
+        if (files.length === 0) {
+            alert(`${tt('No files found in:')} img/${request.folder}`);
+            return false;
+        }
+
+        this.showImagePicker(
+            request.title,
+            files,
+            request.onPick,
+            name => assets.imageUrlFor(folder, name),
+            request.current || undefined,
+            {
+                allowNone: !!request.allowNone,
+                sheetType: request.sheetType,
+                currentIndex: request.currentIndex,
+                selectButtonLabel: request.selectButtonLabel,
+                zIndex: request.zIndex
+            }
+        );
+        return true;
+    }
+
+    createImageBrowseButton(input, request) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'rr-image-browse-btn';
+        button.textContent = tt('Browse…');
+        button.style.cssText = 'flex: 0 0 auto; padding: 6px 12px; background: var(--color-border-subtle); color: var(--color-text-strong); border: 1px solid var(--color-border-input); border-radius: 3px; cursor: pointer; font-size: 12px;';
+
+        const fill = (field, value) => {
+            field.value = value;
+            field.dispatchEvent(new Event('input', { bubbles: true }));
+        };
+        button.addEventListener('click', () => this.browseImageFolder({
+            ...request,
+            current: String(input.value || '').replace(/\.png$/i, '') || undefined,
+            currentIndex: request.indexInput ? Number(request.indexInput.value) || 0 : 0,
+            onPick: (chosen, index) => {
+                fill(input, chosen);
+                if (request.indexInput && request.sheetType) fill(request.indexInput, index);
+            }
+        }));
+        return button;
     }
 
     /**

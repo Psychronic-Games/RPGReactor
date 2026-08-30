@@ -11,7 +11,7 @@ the cycle — see the [root changelog](../CHANGELOG.md), the detailed
 release: 0.96.0 was tagged and published on 2026-07-27 with these items still
 open, and they carry forward through 0.98.3. Re-verified against the local
 projects on 2026-08-24: all three items stand exactly as described. Validation
-stood at 777 passing Node tests at the time of the audit; it is 1,785 as of the
+stood at 777 passing Node tests at the time of the audit; it is 1,954 as of the
 0.98.4 cycle.
 
 The projects named below are local compatibility-corpus copies under

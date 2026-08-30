@@ -6,7 +6,9 @@
 
         html, body {
             height: 100%;
-            overflow: hidden;
+            overflow-x: auto;
+            overflow-y: hidden;
+            scrollbar-width: thin;
         }
 
         body {
@@ -506,7 +508,10 @@
 
         .sidebar-header {
             background-color: var(--color-bg-panel);
-            padding: 8px 12px;
+            /* The accent strip every section header carries (Plugin Manager,
+               event editor banners), so the sidebar reads as the same family. */
+            border-left: 3px solid var(--color-accent);
+            padding: 8px 12px 8px 9px;
             font-size: 12px;
             font-weight: 600;
             text-transform: uppercase;
@@ -791,23 +796,49 @@
 
         /* Audio track lists: a slim accent pill that reads against the
            list background instead of vanishing into it. */
-        .audio-scroll::-webkit-scrollbar {
+        .audio-scroll,
+        .rr-accent-scrollbar {
+            scrollbar-color: var(--color-accent-muted) var(--color-bg-deep);
+            scrollbar-width: thin;
+        }
+
+        .audio-scroll::-webkit-scrollbar,
+        .rr-accent-scrollbar::-webkit-scrollbar {
             width: 8px;
         }
 
-        .audio-scroll::-webkit-scrollbar-track {
+        .audio-scroll::-webkit-scrollbar-track,
+        .rr-accent-scrollbar::-webkit-scrollbar-track {
             background: var(--color-bg-deep);
             border-radius: 4px;
             box-shadow: inset 0 0 0 1px var(--color-border);
         }
 
-        .audio-scroll::-webkit-scrollbar-thumb {
+        .audio-scroll::-webkit-scrollbar-thumb,
+        .rr-accent-scrollbar::-webkit-scrollbar-thumb {
             background: linear-gradient(180deg, var(--color-accent), var(--color-accent-muted));
             border-radius: 4px;
         }
 
-        .audio-scroll::-webkit-scrollbar-thumb:hover {
+        .audio-scroll::-webkit-scrollbar-thumb:hover,
+        .rr-accent-scrollbar::-webkit-scrollbar-thumb:hover {
             background: var(--color-accent-hover);
+        }
+
+        @media (max-width: 620px) {
+            .rr-effect-picker-modal {
+                height: min(90vh, 760px);
+            }
+
+            .rr-effect-picker-body {
+                flex-direction: column;
+                overflow-y: auto;
+            }
+
+            #effect-browser-host,
+            .rr-effect-picker-preview {
+                min-height: 240px;
+            }
         }
 
         /* Database Viewer */
@@ -1522,6 +1553,14 @@
             margin-bottom: 6px;
             overflow-wrap: anywhere;
             white-space: normal;
+        }
+
+        .event-commands-banner {
+            background-color: var(--color-bg-toolbar);
+            border-left: 3px solid var(--color-accent);
+            border-bottom: 1px solid var(--color-border);
+            border-radius: 0 var(--radius-md) var(--radius-md) 0;
+            padding: 5px 10px;
         }
 
         /* Light themes: white-on-white blends in, so swap to brand accent. */
@@ -3063,6 +3102,13 @@
 /* Map Properties body: pack the panels into as many columns as the window
    allows. CSS columns rather than grid because grid aligns rows — one tall
    panel would then reserve empty space beside every shorter one. */
+/* Field labels in Map Properties: readable at a glance rather than 11px muted. */
+.map-props-label {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--color-text);
+}
+
 .map-props-columns {
     /* Two at most. General Settings is one indivisible tall panel, so a third
        column cannot balance against it — it just strands a short panel on its

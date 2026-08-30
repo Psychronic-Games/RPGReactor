@@ -6,6 +6,59 @@ const zlib = require('zlib');
 const nwRuntime = require('./nw-runtime-utils');
 
 const REPOSITORY = 'nwjs-ffmpeg-prebuilt/nwjs-ffmpeg-prebuilt';
+const NOTICE_NAME = 'RPG_REACTOR_CODEC_NOTICE.txt';
+const LICENSE_NAME = 'FFmpeg-LGPL-2.1.txt';
+const PROVENANCE = {
+    '0.107.0': {
+        buildCommit: '44c5d44e78c457149c8bee98aeca9a7bb1d5659c',
+        ffmpegCommit: 'e18f48eba6b367ac68b9c477ae6cbe224e36b031',
+    },
+};
+
+function provenance(version) {
+    const record = PROVENANCE[version];
+    if (!record) return null;
+    return {
+        buildCommit: record.buildCommit,
+        buildSource: `https://github.com/${REPOSITORY}/tree/${record.buildCommit}`,
+        buildScript: `https://github.com/${REPOSITORY}/blob/${record.buildCommit}/build.sh`,
+        ffmpegCommit: record.ffmpegCommit,
+        ffmpegSource: `https://chromium.googlesource.com/chromium/third_party/ffmpeg/+archive/${record.ffmpegCommit}.tar.gz`,
+    };
+}
+
+function codecNotice(metadata) {
+    const source = metadata.provenance;
+    return [
+        'RPG Reactor Proprietary Media Codec Notice',
+        '',
+        `This NW.js ${metadata.version} runtime includes a third-party FFmpeg binary`,
+        'with H.264/AAC support from:',
+        `https://github.com/${REPOSITORY}`,
+        '',
+        `Release asset: ${metadata.asset.name}`,
+        `Archive SHA-256: ${metadata.expectedHash}`,
+        `Archive hash trusted: ${metadata.hashTrusted === true}`,
+        '',
+        'License: GNU Lesser General Public License v2.1 or later',
+        `Complete license text: ${LICENSE_NAME}`,
+        ...(source ? [
+            `Build scripts commit: ${source.buildCommit}`,
+            `Build scripts: ${source.buildSource}`,
+            `Build script with source modification: ${source.buildScript}`,
+            `FFmpeg source commit: ${source.ffmpegCommit}`,
+            `Exact FFmpeg source archive: ${source.ffmpegSource}`,
+        ] : [
+            'Build and corresponding-source provenance was not recorded for this developer build.',
+        ]),
+        '',
+        'H.264/AVC and AAC may be covered by patents or licensing programs in',
+        'some jurisdictions. Distribution of this binary does not grant patent',
+        'rights. Review the applicable FFmpeg source license and obtain legal',
+        'advice for your jurisdiction and distribution model.',
+        ''
+    ].join('\n');
+}
 
 function cacheDirectories(appRoot) {
     const userBase = process.platform === 'win32'
@@ -34,6 +87,10 @@ function sha256(filePath) {
     const hash = crypto.createHash('sha256');
     hash.update(fs.readFileSync(filePath));
     return hash.digest('hex');
+}
+
+function sha256Buffer(buffer) {
+    return crypto.createHash('sha256').update(buffer).digest('hex');
 }
 
 function archiveIsValid(archivePath, platform) {
@@ -98,12 +155,20 @@ async function acquireArchive(options) {
         version,
         expectedHash: trustedHash || sha256(archivePath),
         hashTrusted: Boolean(trustedHash),
+        provenance: provenance(version),
     };
 }
 
-function extractBinary(archivePath, platform, tempRoot) {
+function extractBinary(archivePath, platform, tempRoot, expectedHash) {
     const expected = binaryName(platform);
     const archive = fs.readFileSync(archivePath);
+    if (expectedHash) {
+        const actualHash = sha256Buffer(archive);
+        if (actualHash !== expectedHash) {
+            throw new Error(`FFmpeg codec ${path.basename(archivePath)} changed after verification: ` +
+                `expected ${expectedHash}, got ${actualHash}.`);
+        }
+    }
     let eocd = -1;
     for (let i = archive.length - 22; i >= Math.max(0, archive.length - 65557); i--) {
         if (archive.readUInt32LE(i) === 0x06054b50) { eocd = i; break; }
@@ -159,6 +224,9 @@ function installBinary(binaryPath, runtimeRoot, platform, metadata) {
     fs.copyFileSync(binaryPath, destination);
     const installedHash = sha256(destination);
     if (installedHash !== binaryHash) throw new Error('Installed FFmpeg codec failed verification.');
+    const noticePath = path.join(runtimeRoot, NOTICE_NAME);
+    fs.writeFileSync(noticePath, codecNotice(metadata));
+    fs.copyFileSync(path.join(__dirname, 'licenses', LICENSE_NAME), path.join(runtimeRoot, LICENSE_NAME));
     fs.writeFileSync(path.join(runtimeRoot, 'rpg-reactor-codec.json'), JSON.stringify({
         schema: 1,
         source: `https://github.com/${REPOSITORY}`,
@@ -169,12 +237,21 @@ function installBinary(binaryPath, runtimeRoot, platform, metadata) {
         archiveSha256: metadata.expectedHash,
         archiveHashTrusted: metadata.hashTrusted === true,
         binarySha256: installedHash,
+        notice: NOTICE_NAME,
+        license: LICENSE_NAME,
+        licenseId: 'LGPL-2.1-or-later',
+        provenance: metadata.provenance || null,
     }, null, 2));
     return destination;
 }
 
 module.exports = {
     REPOSITORY,
+    NOTICE_NAME,
+    LICENSE_NAME,
+    PROVENANCE,
+    codecNotice,
+    provenance,
     cacheDirectories,
     assetName,
     binaryName,

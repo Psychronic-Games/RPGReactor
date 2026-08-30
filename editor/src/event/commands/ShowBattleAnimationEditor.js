@@ -178,23 +178,36 @@ class ShowBattleAnimationEditor {
         label.textContent = tt('Animation:');
         label.style.cssText = 'color: var(--color-text); font-size: 13px; min-width: 100px;';
 
-        const select = document.createElement('select');
-        select.style.cssText = 'padding:6px 10px; background-color:var(--color-bg-input); color:var(--color-text); border:1px solid var(--color-border-input); border-radius:3px; font-size:12px; flex:1;';
-
-        const animations = this.databaseManager.data.animations || [];
-        for (let i = 1; i < animations.length; i++) {
-            if (!animations[i]) continue;
-            const option = document.createElement('option');
-            option.value = i;
-            option.textContent = `${i.toString().padStart(4, '0')}: ${animations[i].name || tt('Unnamed')}`;
-            option.selected = (this.animationId === i);
-            select.appendChild(option);
-        }
-
-        select.addEventListener('change', (e) => { this.animationId = parseInt(e.target.value); });
+        const animations = this.databaseManager.getAnimations
+            ? this.databaseManager.getAnimations()
+            : this.databaseManager.data.animations || [];
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'database-field-value';
+        button.style.cssText = 'padding:6px 10px; background-color:var(--color-bg-input); color:var(--color-text); border:1px solid var(--color-border-input); border-radius:3px; font-size:12px; flex:1; text-align:left; cursor:pointer;';
+        const refresh = () => {
+            button.textContent = typeof AnimationPickerModal !== 'undefined'
+                ? AnimationPickerModal.label(animations, this.animationId)
+                : `#${this.animationId}`;
+        };
+        refresh();
+        button.addEventListener('click', () => {
+            if (typeof AnimationPickerModal === 'undefined') return;
+            AnimationPickerModal.open({
+                databaseManager: this.databaseManager,
+                projectManager: this.projectController,
+                currentId: this.animationId,
+                allowNormalAttack: false,
+                onPick: id => {
+                    if (!(Number(id) > 0)) return;
+                    this.animationId = Number(id);
+                    refresh();
+                }
+            });
+        });
 
         section.appendChild(label);
-        section.appendChild(select);
+        section.appendChild(button);
         return section;
     }
 

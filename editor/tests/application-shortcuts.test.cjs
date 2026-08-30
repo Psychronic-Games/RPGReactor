@@ -209,6 +209,7 @@ test('application shell exposes menu commands and the responsive welcome screen'
     assert.match(welcome, /class="welcome-cards"/);
 
     for (const href of [
+        'https://rpgcatalyst.com',
         'https://psychronic.itch.io',
         'https://store.steampowered.com/developer/psychronic',
         'https://github.com/Psychronic-Games?tab=repositories',
@@ -219,7 +220,18 @@ test('application shell exposes menu commands and the responsive welcome screen'
         assert.match(welcome, new RegExp(`href="${href.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"[^>]*target="_blank"`));
     }
 
+    const catalystLinks = html.match(/href="https:\/\/rpgcatalyst\.com"/g) || [];
+    assert.equal(catalystLinks.length, 3, 'Help, welcome, and About expose RPG Catalyst');
+    assert.match(html, /id="submenu-help"[\s\S]*?class="html-menu-option external-link" href="https:\/\/rpgcatalyst\.com"/);
+    assert.match(welcome, /href="https:\/\/discord\.gg\/hXacc38PTw"[\s\S]*?href="https:\/\/rpgcatalyst\.com"[^>]*>RPG Catalyst Forums<\/a>/);
+    const about = html.slice(html.indexOf('<!-- About Modal -->'), html.indexOf('<!-- Plugin Manager Modal -->'));
+    assert.match(about, /href="https:\/\/discord\.gg\/hXacc38PTw"[\s\S]*?href="https:\/\/rpgcatalyst\.com"[^>]*>RPG Catalyst Forums<\/a>/);
+    const uiManager = fs.readFileSync(path.join(editorRoot, 'src', 'UIManager.js'), 'utf8');
+    assert.match(uiManager, /label: 'RPG Catalyst Forums'[\s\S]*?nw\.Shell\.openExternal\('https:\/\/rpgcatalyst\.com'\)/);
+
     assert.match(styles, /#welcome-screen\s*\{[\s\S]*?overflow-y:\s*auto;/);
+    assert.match(styles, /#toolbar\s*\{[\s\S]*?overflow-x:\s*auto;/,
+        'all toolbar controls remain reachable at the minimum desktop width');
     assert.match(styles, /\.welcome-cards\s*\{[\s\S]*?grid-template-columns:/);
     assert.match(styles, /@media \(max-width: 720px\)/);
     assert.match(styles, /@media \(max-height: 760px\) and \(min-width: 721px\)/);
@@ -408,7 +420,26 @@ test('the New Project flow and list context menus no longer reach window dialogs
     assert.match(controller, /showQuickAccessContextMenu\(x, y\) \{[\s\S]*?toggleQuickAccess\(currentId\)/);
     const forge = fs.readFileSync(path.join(editorRoot, 'src', 'forge', 'ForgeManager.js'), 'utf8');
     const html = fs.readFileSync(path.join(editorRoot, 'index.html'), 'utf8');
-    assert.doesNotMatch(forge, /sickle/i, 'the Forge icon is an anvil, not a flag emblem');
-    const anvil = forge.match(/forge: \(size\) => `<svg[^`]*<path d="([^"]+)"/)[1];
-    assert.ok(html.includes(`<path d="${anvil}"`), 'the toolbar and the launcher share the anvil path');
+    assert.match(html, /data-action="eraser"[^>]*>[\s\S]*?images\/icon-erase\.svg/);
+    assert.equal(fs.existsSync(path.join(editorRoot, 'images', 'icon-erase.svg')), true);
+    assert.match(html, /data-action="shadow-pen"[^>]*>[\s\S]*?images\/icon-shadow-pen\.svg/);
+    assert.equal(fs.existsSync(path.join(editorRoot, 'images', 'icon-shadow-pen.svg')), true);
+    for (const [tool, icon] of [
+        ['pencil', 'single'], ['rectangle', 'area'], ['circle', 'circular-area'], ['fill', 'fill']
+    ]) {
+        assert.match(html, new RegExp(`data-tool="${tool}"[^>]*>[\\s\\S]*?images/icon-${icon}\\.svg`));
+        assert.equal(fs.existsSync(path.join(editorRoot, 'images', `icon-${icon}.svg`)), true);
+    }
+    assert.doesNotMatch(forge, /sickle/i, 'the Forge brand icon is not a flag emblem');
+    assert.match(forge, /large gold anvil and curved four-point spark remain clear at 22px/i);
+    assert.match(forge, /Speaker with two sound waves/);
+    for (const icon of ['database', 'plugins', 'speaker', 'forge', 'LA', 'L1', 'L2', 'L3', 'L4']) {
+        assert.match(html, new RegExp(`images/icon-${icon}\\.svg`));
+        assert.equal(fs.existsSync(path.join(editorRoot, 'images', `icon-${icon}.svg`)), true);
+    }
+    for (const icon of ['database', 'plugins', 'speaker', 'forge', 'resource-manager', 'single', 'area', 'circular-area', 'fill', 'LA', 'L1', 'L2', 'L3', 'L4']) {
+        const svg = fs.readFileSync(path.join(editorRoot, 'images', `icon-${icon}.svg`), 'utf8');
+        assert.match(svg, /#d7318f/i, `${icon} uses magenta trim`);
+        assert.match(svg, /#ffd52[0-9a-f]/i, `${icon} uses a gold core`);
+    }
 });

@@ -55,7 +55,7 @@ function createWorkerData({ editorRoot, target, mode, outputDir, env = process.e
         nwVersionPolicy: 'exact',
         editorNwVersion: NW_VERSION,
         outputDir,
-        includeProprietaryCodecs: false,
+        includeProprietaryCodecs: Boolean(definition.workerPlatform),
         createLinuxAppImage: false,
         releaseBuild: true,
         allowBundledRuntime: false,

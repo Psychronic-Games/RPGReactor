@@ -170,8 +170,8 @@ test('dragging an event needs the event tool and an empty hand', () => {
 test('a drag only starts on an event', () => {
     // Starting anywhere else has to keep orbiting, or the camera is lost.
     assert.match(source, /const mesh = this\.eventAt\(event\.clientX, event\.clientY\);\n\s*if \(mesh\) \{\n\s*this\.pointer\.drag = mesh;/);
-    assert.match(source, /!this\.pointer\.paint && this\.canDragEvents\(\)/,
-        'and never while a stroke is being painted');
+    assert.match(source, /!this\.pointer\.paint && !this\.pointer\.propHold && this\.canDragEvents\(\)/,
+        'and never while a stroke is being painted or a prop is being held');
 });
 
 test('undo is captured on the first cell crossed, not on the press', () => {

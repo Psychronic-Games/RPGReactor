@@ -210,8 +210,8 @@ test('the note is the switch and the sidecar is the data', () => {
     // read because nothing asked for the file.
     const runtime = fs.readFileSync(
         path.join(repoRoot, 'runtime', 'reactor_managers.js'), 'utf8');
-    assert.match(runtime, /if \(!mapData \|\| !mapData\.meta \|\| !mapData\.meta\["3d"\]\) return;/,
-        'the note still gates the fetch');
+    assert.match(runtime, /if \(!mapData \|\| !this\._lastMapSrc \|\| typeof Reactor3D === "undefined"\) return;/,
+        'the fetch is no longer gated by the note: a flat map still loads its event models and previews');
 
     const map = { note: 'a note' };
     assert.equal(elevation.hasNote(map), false);

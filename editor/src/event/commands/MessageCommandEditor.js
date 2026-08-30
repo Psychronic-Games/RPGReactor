@@ -481,7 +481,7 @@ class MessageCommandEditor {
             return;
         }
 
-        const files = RRAssetFiles.listNames(facesFolder, ['.png']);
+        const files = RRAssetFiles.listImageReferences(facesFolder);
 
         if (files.length === 0) {
             alert(this._t('No face images found'));
@@ -599,7 +599,7 @@ class MessageCommandEditor {
         const renderFaceGrid = (filename) => {
             faceGridContainer.innerHTML = '';
 
-            const imagePath = path.join(projectPath, 'img', 'faces', filename + '.png');
+            const facesFolder = path.join(projectPath, 'img', 'faces');
             const faceSheet = new Image();
 
             faceSheet.onload = () => {
@@ -662,7 +662,7 @@ class MessageCommandEditor {
             faceSheet.onerror = () => {
                 faceGridContainer.innerHTML = `<div style="color: #ff6666; padding: 20px;">${this._t('Failed to load faceset image')}</div>`;
             };
-            faceSheet.src = RRAssetFiles.toUrl(imagePath);
+            faceSheet.src = RRAssetFiles.imageUrlFor(facesFolder, filename);
         };
 
         // Footer
@@ -683,9 +683,11 @@ class MessageCommandEditor {
             margin-right: auto;
         `;
         openFolderBtn.addEventListener('click', () => {
-            const facePath = selectedFilename
-                ? path.join(projectPath, 'img', 'faces', selectedFilename + '.png')
-                : path.join(projectPath, 'img', 'faces');
+            const facesFolder = path.join(projectPath, 'img', 'faces');
+            const selectedFile = selectedFilename
+                ? RRAssetFiles.findImage(facesFolder, selectedFilename)
+                : null;
+            const facePath = selectedFile ? selectedFile.absolutePath : facesFolder;
             if (typeof nw !== 'undefined') {
                 nw.Shell.showItemInFolder(facePath);
             }
@@ -774,7 +776,7 @@ class MessageCommandEditor {
         `;
 
         const path = require('path');
-        const imagePath = path.join(projectPath, 'img', 'faces', filename + '.png');
+        const facesFolder = path.join(projectPath, 'img', 'faces');
 
         // Load the face image
         const faceSheet = new Image();
@@ -836,7 +838,7 @@ class MessageCommandEditor {
         faceSheet.onerror = () => {
             content.innerHTML = `<div style="color: #ff6666; padding: 20px;">${this._t('Failed to load face image')}</div>`;
         };
-        faceSheet.src = RRAssetFiles.toUrl(imagePath);
+        faceSheet.src = RRAssetFiles.imageUrlFor(facesFolder, filename);
 
         container.appendChild(header);
         container.appendChild(content);
@@ -874,8 +876,8 @@ class MessageCommandEditor {
         if (!currentProject) return;
 
         const path = require('path');
-        // Always add .png extension since files don't include it in the database
-        const imagePath = path.join(currentProject.path, 'img', 'faces', this.faceImage + '.png');
+        const facesFolder = path.join(currentProject.path, 'img', 'faces');
+        const imagePath = RRAssetFiles.imageUrlFor(facesFolder, this.faceImage);
 
         const faceSheet = new Image();
 
@@ -895,7 +897,7 @@ class MessageCommandEditor {
         faceSheet.onerror = () => {
             console.error('Failed to load face image:', imagePath);
         };
-        faceSheet.src = RRAssetFiles.toUrl(imagePath);
+        faceSheet.src = imagePath;
     }
 
     /**

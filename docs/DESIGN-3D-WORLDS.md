@@ -169,10 +169,34 @@ file. That is the constraint the whole design serves.
 
 ```
 Tilesets.r3d.json     shape + material per tile, structure definitions
-Map###.r3d.json       elevation, structure placements, per-placement facing
+Map###.r3d.json       elevation, structure placements, per-placement facing,
+                      the room (floor/walls/ceiling parallaxes + height)
 ```
 
 - A project with no 3D maps gains no files and never downloads three.js.
+- The camera is a mode plus overrides (`reactor3d.camera`): fixed (HD-2D),
+  top-down, isometric, third person, first person. Fixed follows the display
+  like the 2D map, so scroll, zoom and camera plugins keep working; the
+  player-relative modes follow the player and turn with them. The mouse
+  owns the look in those modes; the third-person camera never goes under
+  the floor (it slides in as you look up), and the character looks where
+  the camera looks.
+- Model props (`reactor3d.props`) are 3D models placed from the palette. The
+  game does not learn a second kind of thing: each becomes a model-bound
+  event at load (ids from 10000), so drawing, facing and footprint collision
+  are the event model's.
+- Model effects live in the model's own `model.json` (`effects[]`): a
+  database animation or a video surface anchored to a part or bone, scaled
+  relative to the model (1 = a frame as tall as the model's longest side, at
+  whatever size the instance is placed), played on demand or by state; an
+  effect on one face of the model hides when that face turns away. Drawn by
+  the game's ordinary animation sprites over the 3D canvas, so plugins that
+  touch animations still apply.
+- The player start's facing is the one key added to an MZ file:
+  `System.json.startDirection`, which MZ ignores and Reactor defaults to down.
+- The room is three parallax images and a height. Walls and ceiling show
+  their inside face only, so the over-the-shoulder camera looks through the
+  near wall and the ceiling into the room; a camera inside sees all of it.
 - A 3D map opened in RPG Maker MZ is an ordinary map; the sidecars are ignored.
 - Game logic — `Game_Map`, passability, regions, the interpreter — is untouched,
   because 3D remains a *view* of the same six planes.

@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Undo">
+  <defs>
+    <linearGradient id="undo-body" x1="15" y1="15" x2="55" y2="52" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0876ed"/>
+      <stop offset=".55" stop-color="#07399f"/>
+      <stop offset="1" stop-color="#03142f"/>
+    </linearGradient>
+    <linearGradient id="undo-head" x1="6" y1="5" x2="24" y2="31" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#fff59c"/>
+      <stop offset=".45" stop-color="#ffd529"/>
+      <stop offset="1" stop-color="#f08a0c"/>
+    </linearGradient>
+  </defs>
+
+  <path d="M16 18h12c17 0 27 10 27 25 0 9-5 15-13 18" fill="none" stroke="#01030a" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M16 18h12c17 0 27 10 27 25 0 9-5 15-13 18" fill="none" stroke="url(#undo-body)" stroke-width="11" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M22 4 5 18l17 15z" fill="#01030a" stroke="#01030a" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M21 7 8 18l13 12z" fill="url(#undo-head)" stroke="#d7318f" stroke-width="2" stroke-linejoin="round"/>
+  <path d="M28 22c14 0 22 8 22 21" fill="none" stroke="#24bdf3" stroke-width="2.5" stroke-linecap="round" opacity=".9"/>
+</svg>

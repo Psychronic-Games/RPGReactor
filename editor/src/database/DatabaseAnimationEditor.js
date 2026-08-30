@@ -694,7 +694,7 @@ class DatabaseAnimationEditor {
                 const animDir = path.join(currentProject.path, 'img', 'animations');
                 let files;
                 try {
-                    files = RRAssetFiles.listNames(animDir, ['.png']);
+                    files = RRAssetFiles.listImageReferences(animDir);
                 } catch (e) {
                     alert(tt('No img/animations folder found'));
                     return;
@@ -711,7 +711,7 @@ class DatabaseAnimationEditor {
                     // Re-render the detail view so the display updates
                     self.showAnimationDetail(container, animation);
                 };
-                const previewCb = fileName => RRAssetFiles.urlFor(animDir, fileName, ['.png']);
+                const previewCb = fileName => RRAssetFiles.imageUrlFor(animDir, fileName);
                 if (this.parentEditor && this.parentEditor.showImagePicker) {
                     this.parentEditor.showImagePicker(title, files, cb, previewCb);
                 } else {
@@ -943,7 +943,7 @@ class DatabaseAnimationEditor {
             try {
                 const dir = pathMod.join(project.path, 'img', subdir);
                 if (!fs.existsSync(dir)) return [];
-                return RRAssetFiles.listNames(dir, ['.png']);
+                return RRAssetFiles.listImageReferences(dir);
             } catch (e) { return []; }
         };
 
@@ -959,32 +959,54 @@ class DatabaseAnimationEditor {
             localStorage.setItem('rpg-reactor.animPreview.targetId', this._previewTargetEnemyId || '');
         };
 
-        // Background battleback 1 dropdown
+        const bindBattlebackPicker = (trigger, files, folder, current, title, onPick) => {
+            if (!trigger) return;
+            trigger.dataset.value = current || '';
+            const open = () => {
+                if (!this.parentEditor?.showImagePicker) return;
+                const imageRoot = pathMod.join(project.path, 'img', folder);
+                this.parentEditor.showImagePicker(
+                    tt(title),
+                    files,
+                    selected => onPick(selected || ''),
+                    name => RRAssetFiles.imageUrlFor(imageRoot, name),
+                    trigger.dataset.value || undefined,
+                    { allowNone: true }
+                );
+            };
+            trigger.addEventListener('click', open);
+            trigger.addEventListener('keydown', event => {
+                if (event.key !== 'Enter' && event.key !== ' ') return;
+                event.preventDefault();
+                open();
+            });
+        };
+
+        // Background battleback 1 picker
         const bb1Select = document.getElementById('preview-bb1-select');
-        if (bb1Select) {
-            const bb1Opts = [{ value: '', label: tt('(none)') }, ...bb1Files.map(n => ({ value: n, label: n }))];
-            this._attachGoldDropdown(bb1Select, bb1Opts, this._previewBB1Name || '', (value, label) => {
+        bindBattlebackPicker(
+            bb1Select, bb1Files, 'battlebacks1', this._previewBB1Name,
+            'Select Battleback 1', value => {
                 this._previewBB1Name = value || null;
                 bb1Select.dataset.value = value;
-                bb1Select.firstChild ? bb1Select.firstChild.nodeValue = label : (bb1Select.textContent = label);
-                bb1Select.textContent = label;
+                bb1Select.textContent = value || tt('(none)');
                 persist();
                 this._loadPreviewImages();
-            });
-        }
+            }
+        );
 
-        // Background battleback 2 dropdown
+        // Background battleback 2 picker
         const bb2Select = document.getElementById('preview-bb2-select');
-        if (bb2Select) {
-            const bb2Opts = [{ value: '', label: tt('(none)') }, ...bb2Files.map(n => ({ value: n, label: n }))];
-            this._attachGoldDropdown(bb2Select, bb2Opts, this._previewBB2Name || '', (value, label) => {
+        bindBattlebackPicker(
+            bb2Select, bb2Files, 'battlebacks2', this._previewBB2Name,
+            'Select Battleback 2', value => {
                 this._previewBB2Name = value || null;
                 bb2Select.dataset.value = value;
-                bb2Select.textContent = label;
+                bb2Select.textContent = value || tt('(none)');
                 persist();
                 this._loadPreviewImages();
-            });
-        }
+            }
+        );
 
         // Enemy target dropdown
         const targetSelect = document.getElementById('preview-target-select');
@@ -1096,7 +1118,6 @@ class DatabaseAnimationEditor {
 
     _loadPreviewImages() {
         const pathMod = require('path');
-        const fs = require('fs');
         const project = this.projectManager.getCurrentProject();
         if (!project) return;
 
@@ -1112,7 +1133,8 @@ class DatabaseAnimationEditor {
             this._previewBB1Img = new Image();
             this._previewBB1Img.onload = done;
             this._previewBB1Img.onerror = () => { this._previewBB1Img = null; done(); };
-            this._previewBB1Img.src = RRAssetFiles.urlFor(pathMod.join(project.path, 'img', 'battlebacks1'), this._previewBB1Name, ['.png']);
+            this._previewBB1Img.src = RRAssetFiles.imageUrlFor(
+                pathMod.join(project.path, 'img', 'battlebacks1'), this._previewBB1Name);
         } else {
             this._previewBB1Img = null;
         }
@@ -1123,7 +1145,8 @@ class DatabaseAnimationEditor {
             this._previewBB2Img = new Image();
             this._previewBB2Img.onload = done;
             this._previewBB2Img.onerror = () => { this._previewBB2Img = null; done(); };
-            this._previewBB2Img.src = RRAssetFiles.urlFor(pathMod.join(project.path, 'img', 'battlebacks2'), this._previewBB2Name, ['.png']);
+            this._previewBB2Img.src = RRAssetFiles.imageUrlFor(
+                pathMod.join(project.path, 'img', 'battlebacks2'), this._previewBB2Name);
         } else {
             this._previewBB2Img = null;
         }
@@ -1137,9 +1160,10 @@ class DatabaseAnimationEditor {
                 const searchDirs = ['enemies', 'sv_enemies', 'characters'];
                 let imagePath = null;
                 for (const dir of searchDirs) {
-                    const tryPath = pathMod.join(project.path, 'img', dir, enemy.battlerName + '.png');
-                    if (fs.existsSync(tryPath)) {
-                        imagePath = RRAssetFiles.toUrl(tryPath);
+                    const imageRoot = pathMod.join(project.path, 'img', dir);
+                    const battlerFile = RRAssetFiles.findImage(imageRoot, enemy.battlerName);
+                    if (battlerFile) {
+                        imagePath = RRAssetFiles.toUrl(battlerFile.absolutePath);
                         break;
                     }
                 }
@@ -1228,6 +1252,7 @@ class DatabaseAnimationEditor {
     }
 
     _drawPreviewBackground(ctx, canvas) {
+        this._previewBackgroundRevision = (this._previewBackgroundRevision || 0) + 1;
         // Fill black base
         ctx.fillStyle = '#000';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -1617,15 +1642,19 @@ class DatabaseAnimationEditor {
         frameInput.value = timingData.frame || 0;
         seNameInput.value = timingData.se?.name || tt('None');
 
-        // Populate SE volume and pitch
+        // Populate SE volume, pitch, and pan
         const seVolumeSlider = document.getElementById('timing-se-volume');
         const seVolumeValue = document.getElementById('timing-se-volume-value');
         const sePitchSlider = document.getElementById('timing-se-pitch');
         const sePitchValue = document.getElementById('timing-se-pitch-value');
+        const sePanSlider = document.getElementById('timing-se-pan');
+        const sePanValue = document.getElementById('timing-se-pan-value');
         const seVol = timingData.se?.volume !== undefined ? timingData.se.volume : 90;
         const sePit = timingData.se?.pitch !== undefined ? timingData.se.pitch : 100;
+        const sePan = timingData.se?.pan !== undefined ? timingData.se.pan : 0;
         if (seVolumeSlider) { seVolumeSlider.value = seVol; seVolumeValue.textContent = seVol; }
         if (sePitchSlider) { sePitchSlider.value = sePit; sePitchValue.textContent = sePit; }
+        if (sePanSlider) { sePanSlider.value = sePan; sePanValue.textContent = sePan; }
 
         const flashColor = timingData.flashColor || [0, 0, 0, 0];
         redSlider.value = flashColor[0] || 0;
@@ -1745,7 +1774,7 @@ class DatabaseAnimationEditor {
                                     </svg>${tt('Pick SE')}</button>
                                 <button id="timing-se-clear" style="padding: 8px 12px; background: var(--color-bg-button); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 3px; cursor: pointer; font-size: 11px;">${tt('Clear')}</button>
                             </div>
-                            <div style="display: flex; gap: 12px; align-items: center;">
+                            <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)) auto; gap: 12px; align-items: center;">
                                 <div style="display: flex; align-items: center; gap: 6px; flex: 1;">
                                     <span style="font-size: 11px; color: var(--color-text-muted); white-space: nowrap;">${tt('Vol:')}</span>
                                     <input type="range" id="timing-se-volume" min="0" max="100" value="90" style="flex: 1;">
@@ -1755,6 +1784,11 @@ class DatabaseAnimationEditor {
                                     <span style="font-size: 11px; color: var(--color-text-muted); white-space: nowrap;">${tt('Pitch:')}</span>
                                     <input type="range" id="timing-se-pitch" min="50" max="150" value="100" style="flex: 1;">
                                     <span id="timing-se-pitch-value" style="font-size: 11px; color: var(--color-text); min-width: 28px; text-align: right;">100</span>
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 6px; flex: 1;">
+                                    <span style="font-size: 11px; color: var(--color-text-muted); white-space: nowrap;">${tt('Pan:')}</span>
+                                    <input type="range" id="timing-se-pan" min="-100" max="100" value="0" style="flex: 1;">
+                                    <span id="timing-se-pan-value" style="font-size: 11px; color: var(--color-text); min-width: 28px; text-align: right;">0</span>
                                 </div>
                                 <button id="timing-se-preview" style="padding: 4px 10px; background: var(--color-bg-panel); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 3px; cursor: pointer; font-size: 11px;">&#9654; ${tt('Preview')}</button>
                             </div>
@@ -1803,7 +1837,13 @@ class DatabaseAnimationEditor {
                         <!-- Duration -->
                         <div style="margin-top: 12px;">
                             <div style="font-size: 11px; color: var(--color-text-muted); margin-bottom: 6px;">${tt('Duration:')}</div>
-                            <input type="number" id="timing-duration" min="1" value="8" style="width: 100%; padding: 8px; background: var(--color-bg-input-alt); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 3px; font-size: 12px;">
+                            <div class="rr-number-stepper">
+                                <input type="number" id="timing-duration" class="rr-number-stepper-input" min="1" value="8">
+                                <div class="rr-number-stepper-buttons">
+                                    <button type="button" data-timing-duration-step="1" aria-label="+1">&#9650;</button>
+                                    <button type="button" data-timing-duration-step="-1" aria-label="-1">&#9660;</button>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
@@ -1857,6 +1897,15 @@ class DatabaseAnimationEditor {
         greenSlider?.addEventListener('input', updateColorPreview);
         blueSlider?.addEventListener('input', updateColorPreview);
         intensitySlider?.addEventListener('input', updateColorPreview);
+        container.querySelectorAll('[data-timing-duration-step]').forEach(button => {
+            button.addEventListener('click', () => {
+                const duration = document.getElementById('timing-duration');
+                const step = Number(button.dataset.timingDurationStep);
+                const current = DatabaseAnimationEditor.readNumericInput('timing-duration', 1);
+                duration.value = Math.max(1, current + step);
+                duration.dispatchEvent(new Event('input', { bubbles: true }));
+            });
+        });
 
         // Open modal
         addBtn?.addEventListener('click', () => {
@@ -1868,6 +1917,12 @@ class DatabaseAnimationEditor {
             // Reset form fields
             document.getElementById('timing-frame').value = 0;
             document.getElementById('timing-se-name').value = noneLabel;
+            document.getElementById('timing-se-volume').value = 90;
+            document.getElementById('timing-se-volume-value').textContent = '90';
+            document.getElementById('timing-se-pitch').value = 100;
+            document.getElementById('timing-se-pitch-value').textContent = '100';
+            document.getElementById('timing-se-pan').value = 0;
+            document.getElementById('timing-se-pan-value').textContent = '0';
             redSlider.value = 0;
             greenSlider.value = 0;
             blueSlider.value = 0;
@@ -1906,6 +1961,7 @@ class DatabaseAnimationEditor {
             const seName = document.getElementById('timing-se-name').value;
             const seVolume = DatabaseAnimationEditor.readNumericInput('timing-se-volume', 90);
             const sePitch = parseInt(document.getElementById('timing-se-pitch').value) || 100;
+            const sePan = DatabaseAnimationEditor.readNumericInput('timing-se-pan', 0);
             const flashType = parseInt(document.querySelector('input[name="flash-type"]:checked').value);
             const red = parseInt(redSlider.value);
             const green = parseInt(greenSlider.value);
@@ -1938,7 +1994,7 @@ class DatabaseAnimationEditor {
                         frame: frame,
                         se: {
                             name: seName,
-                            pan: 0,
+                            pan: sePan,
                             pitch: sePitch,
                             volume: seVolume
                         }
@@ -1979,7 +2035,7 @@ class DatabaseAnimationEditor {
                     frame: frame,
                     se: seName && seName !== noneLabel ? {
                         name: seName,
-                        pan: 0,
+                        pan: sePan,
                         pitch: sePitch,
                         volume: seVolume
                     } : { name: '', pan: 0, pitch: 100, volume: 90 },
@@ -2004,14 +2060,17 @@ class DatabaseAnimationEditor {
             closeModal();
         });
 
-        // SE volume/pitch slider labels
+        // SE volume/pitch/pan slider labels
         const seVolumeSlider = document.getElementById('timing-se-volume');
         const seVolumeValue = document.getElementById('timing-se-volume-value');
         const sePitchSlider = document.getElementById('timing-se-pitch');
         const sePitchValue = document.getElementById('timing-se-pitch-value');
+        const sePanSlider = document.getElementById('timing-se-pan');
+        const sePanValue = document.getElementById('timing-se-pan-value');
 
         seVolumeSlider?.addEventListener('input', () => { seVolumeValue.textContent = seVolumeSlider.value; });
         sePitchSlider?.addEventListener('input', () => { sePitchValue.textContent = sePitchSlider.value; });
+        sePanSlider?.addEventListener('input', () => { sePanValue.textContent = sePanSlider.value; });
 
         // SE preview button
         const sePreviewBtn = document.getElementById('timing-se-preview');
@@ -2047,6 +2106,8 @@ class DatabaseAnimationEditor {
             seVolumeValue.textContent = '90';
             sePitchSlider.value = 100;
             sePitchValue.textContent = '100';
+            sePanSlider.value = 0;
+            sePanValue.textContent = '0';
         });
 
         // SE pick button - show file picker
@@ -2061,173 +2122,31 @@ class DatabaseAnimationEditor {
 
             if (!fs.existsSync(seFolder)) { alert(tt('SE folder not found: audio/se')); return; }
 
-            const files = RRAssetFiles.listNames(seFolder, RRAssetFiles.AUDIO_EXTENSIONS);
-
-            if (files.length === 0) { alert(tt('No audio files found in audio/se')); return; }
-
-            this._showSEPicker(files, seFolder, document.getElementById('timing-se-name'));
-        });
-    }
-
-    /**
-     * Show SE file picker modal
-     */
-    _showSEPicker(files, seFolder, seNameInput) {
-        const tt = text => window.I18n ? window.I18n.tText(text) : text;
-        const noneLabel = tt('None');
-        let selectedFile = seNameInput.value !== noneLabel ? seNameInput.value : null;
-        let pickerAudio = null;
-
-        const picker = document.createElement('div');
-        picker.style.cssText = `
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background-color: rgba(0, 0, 0, 0.8); z-index: 10001;
-            display: flex; justify-content: center; align-items: center;
-        `;
-
-        const container = document.createElement('div');
-        container.className = 'rr-modal';
-        container.style.cssText = 'width: min(500px, calc(100vw - 24px)); height: 70vh;';
-
-        // Header
-        const header = document.createElement('div');
-        header.className = 'rr-modal-header';
-        header.style.cssText = 'flex-direction: column; align-items: stretch; gap: 8px; flex-shrink: 0;';
-
-        const titleRow = document.createElement('div');
-        titleRow.style.cssText = 'display: flex; justify-content: space-between; align-items: center;';
-        titleRow.innerHTML = `
-            <div class="rr-modal-title">${tt('Select Sound Effect')}</div>
-            <button class="rr-modal-close" type="button">×</button>
-        `;
-        header.appendChild(titleRow);
-
-        // Preview controls in header
-        const previewRow = document.createElement('div');
-        previewRow.style.cssText = 'display: flex; gap: 8px; align-items: center;';
-
-        const playBtn = document.createElement('button');
-        playBtn.innerHTML = `&#9654; ${tt('Preview')}`;
-        playBtn.className = 'rr-btn-chip';
-
-        const stopBtn = document.createElement('button');
-        stopBtn.innerHTML = `&#9632; ${tt('Stop')}`;
-        stopBtn.className = 'rr-btn-chip';
-
-        previewRow.appendChild(playBtn);
-        previewRow.appendChild(stopBtn);
-        header.appendChild(previewRow);
-        container.appendChild(header);
-
-        // Search
-        const searchInput = document.createElement('input');
-        searchInput.type = 'text';
-        searchInput.placeholder = tt('Search SE files...');
-        searchInput.style.cssText = `
-            margin: 8px; padding: 6px 10px; background-color: var(--color-bg-input); color: var(--color-text);
-            border: 1px solid var(--color-border-input); border-radius: 3px; font-size: 12px; outline: none; flex-shrink: 0;
-        `;
-        container.appendChild(searchInput);
-
-        // File list
-        const listEl = document.createElement('div');
-        listEl.style.cssText = 'flex: 1; overflow-y: auto; padding: 0 8px 8px 8px;';
-
-        const items = [];
-        files.forEach(name => {
-            const item = document.createElement('div');
-            item.textContent = name;
-            item.dataset.seName = name;
-            item.style.cssText = `
-                padding: 6px 10px; cursor: pointer; border-bottom: 1px solid var(--color-border);
-                font-size: 12px; color: var(--color-text);
-            `;
-
-            if (name === selectedFile) {
-                item.style.backgroundColor = 'var(--color-selection-mid)';
-                item.style.color = 'var(--color-link)';
-            }
-
-            item.addEventListener('mouseenter', () => { if (item.dataset.seName !== selectedFile) item.style.backgroundColor = 'var(--color-bg-list-item)'; });
-            item.addEventListener('mouseleave', () => { if (item.dataset.seName !== selectedFile) item.style.backgroundColor = ''; });
-
-            item.addEventListener('click', () => {
-                listEl.querySelectorAll('div').forEach(d => { d.style.backgroundColor = ''; d.style.color = 'var(--color-text)'; });
-                selectedFile = name;
-                item.style.backgroundColor = 'var(--color-selection-mid)';
-                item.style.color = 'var(--color-link)';
+            const files = RRAssetFiles.listUnique(seFolder, RRAssetFiles.AUDIO_EXTENSIONS);
+            const seNameInput = document.getElementById('timing-se-name');
+            RRAudioPickerModal.open({
+                title: 'Select Sound Effect',
+                folderLabel: 'SE',
+                files,
+                selected: seNameInput.value !== noneLabel ? seNameInput.value : '',
+                levels: {
+                    volume: DatabaseAnimationEditor.readNumericInput('timing-se-volume', 90),
+                    pitch: DatabaseAnimationEditor.readNumericInput('timing-se-pitch', 100),
+                    pan: DatabaseAnimationEditor.readNumericInput('timing-se-pan', 0)
+                },
+                loopDefault: false,
+                zIndex: 10600,
+                onOk: result => {
+                    seNameInput.value = result.name || noneLabel;
+                    seVolumeSlider.value = result.volume;
+                    seVolumeValue.textContent = result.volume;
+                    sePitchSlider.value = result.pitch;
+                    sePitchValue.textContent = result.pitch;
+                    sePanSlider.value = result.pan;
+                    sePanValue.textContent = result.pan;
+                }
             });
-
-            item.addEventListener('dblclick', () => {
-                selectedFile = name;
-                confirmAndClose();
-            });
-
-            listEl.appendChild(item);
-            items.push({ el: item, name: name.toLowerCase() });
         });
-        container.appendChild(listEl);
-
-        // Search filter
-        let searchTimeout = null;
-        searchInput.addEventListener('input', () => {
-            clearTimeout(searchTimeout);
-            searchTimeout = setTimeout(() => {
-                const q = searchInput.value.toLowerCase().trim();
-                items.forEach(({ el, name }) => { el.style.display = (!q || name.includes(q)) ? '' : 'none'; });
-            }, 150);
-        });
-
-        // Footer
-        const footer = document.createElement('div');
-        footer.className = 'rr-modal-footer';
-        footer.style.flexShrink = '0';
-
-        const cancelBtn = document.createElement('button');
-        cancelBtn.textContent = tt('Cancel');
-        cancelBtn.className = 'rr-btn-secondary';
-
-        const okBtn = document.createElement('button');
-        okBtn.textContent = tt('OK');
-        okBtn.className = 'rr-button-primary';
-
-        footer.appendChild(cancelBtn);
-        footer.appendChild(okBtn);
-        container.appendChild(footer);
-        picker.appendChild(container);
-
-        // Event handlers
-        const stopAudio = () => { if (pickerAudio) { pickerAudio.pause(); pickerAudio = null; } };
-
-        playBtn.addEventListener('click', () => {
-            if (!selectedFile) return;
-            stopAudio();
-            const audioFile = RRAssetFiles.find(seFolder, selectedFile, RRAssetFiles.AUDIO_EXTENSIONS);
-            if (!audioFile) return;
-            pickerAudio = new Audio(RRAssetFiles.toUrl(audioFile.absolutePath));
-            pickerAudio.volume = 0.9;
-            pickerAudio.play().catch(err => console.warn('Failed to play SE:', err));
-        });
-
-        stopBtn.addEventListener('click', stopAudio);
-
-        const closePicker = () => { stopAudio(); picker.remove(); };
-
-        const confirmAndClose = () => {
-            if (selectedFile) {
-                seNameInput.value = selectedFile;
-            }
-            closePicker();
-        };
-
-        titleRow.querySelector('button').addEventListener('click', closePicker);
-        cancelBtn.addEventListener('click', closePicker);
-        okBtn.addEventListener('click', confirmAndClose);
-
-        picker.addEventListener('click', (e) => { if (e.target === picker) closePicker(); });
-
-        document.body.appendChild(picker);
-        searchInput.focus();
     }
 
     showCellPropertiesModal(animation, frameIndex, cellIndex, renderFrame) {
@@ -2366,7 +2285,8 @@ class DatabaseAnimationEditor {
 
             if (animation.animation1Name) {
                 const path = require('path');
-                const imgPath = path.join(currentProject.path, 'img', 'animations', animation.animation1Name + '.png');
+                const imageRoot = path.join(currentProject.path, 'img', 'animations');
+                const imgPath = RRAssetFiles.imageUrlFor(imageRoot, animation.animation1Name);
                 const img1 = new Image();
                 const promise1 = new Promise((resolve) => {
                     img1.onload = () => {
@@ -2377,14 +2297,15 @@ class DatabaseAnimationEditor {
                         console.warn(`Failed to load: ${imgPath}`);
                         resolve();
                     };
-                    img1.src = RRAssetFiles.toUrl(imgPath);
+                    img1.src = imgPath;
                 });
                 promises.push(promise1);
             }
 
             if (animation.animation2Name) {
                 const path = require('path');
-                const imgPath = path.join(currentProject.path, 'img', 'animations', animation.animation2Name + '.png');
+                const imageRoot = path.join(currentProject.path, 'img', 'animations');
+                const imgPath = RRAssetFiles.imageUrlFor(imageRoot, animation.animation2Name);
                 const img2 = new Image();
                 const promise2 = new Promise((resolve) => {
                     img2.onload = () => {
@@ -2395,7 +2316,7 @@ class DatabaseAnimationEditor {
                         console.warn(`Failed to load: ${imgPath}`);
                         resolve();
                     };
-                    img2.src = RRAssetFiles.toUrl(imgPath);
+                    img2.src = imgPath;
                 });
                 promises.push(promise2);
             }
@@ -2780,7 +2701,8 @@ class DatabaseAnimationEditor {
 
             if (animation.animation1Name) {
                 const path = require('path');
-                const imgPath = path.join(currentProject.path, 'img', 'animations', animation.animation1Name + '.png');
+                const imageRoot = path.join(currentProject.path, 'img', 'animations');
+                const imgPath = RRAssetFiles.imageUrlFor(imageRoot, animation.animation1Name);
                 const img1 = new Image();
                 const promise1 = new Promise((resolve) => {
                     img1.onload = () => {
@@ -2791,14 +2713,15 @@ class DatabaseAnimationEditor {
                         console.warn(`Failed to load: ${imgPath}`);
                         resolve();
                     };
-                    img1.src = RRAssetFiles.toUrl(imgPath);
+                    img1.src = imgPath;
                 });
                 promises.push(promise1);
             }
 
             if (animation.animation2Name) {
                 const path = require('path');
-                const imgPath = path.join(currentProject.path, 'img', 'animations', animation.animation2Name + '.png');
+                const imageRoot = path.join(currentProject.path, 'img', 'animations');
+                const imgPath = RRAssetFiles.imageUrlFor(imageRoot, animation.animation2Name);
                 const img2 = new Image();
                 const promise2 = new Promise((resolve) => {
                     img2.onload = () => {
@@ -2809,7 +2732,7 @@ class DatabaseAnimationEditor {
                         console.warn(`Failed to load: ${imgPath}`);
                         resolve();
                     };
-                    img2.src = RRAssetFiles.toUrl(imgPath);
+                    img2.src = imgPath;
                 });
                 promises.push(promise2);
             }
@@ -3707,6 +3630,77 @@ class DatabaseAnimationEditor {
         stopBtn.style.opacity = '0.5';
     }
 
+    _blitPreviewBackground(gl, source) {
+        if (!gl || !source || !source.width) return false;
+        if (!this._effekseerPreviewBlits) this._effekseerPreviewBlits = new WeakMap();
+        let blit = this._effekseerPreviewBlits.get(gl);
+        if (!blit) {
+            const compile = (type, shaderSource) => {
+                const shader = gl.createShader(type);
+                gl.shaderSource(shader, shaderSource);
+                gl.compileShader(shader);
+                return shader;
+            };
+            const program = gl.createProgram();
+            gl.attachShader(program, compile(gl.VERTEX_SHADER,
+                'attribute vec2 aPos; varying vec2 vUv;' +
+                'void main() { vUv = aPos * 0.5 + 0.5; gl_Position = vec4(aPos, 0.0, 1.0); }'));
+            gl.attachShader(program, compile(gl.FRAGMENT_SHADER,
+                'precision mediump float; varying vec2 vUv; uniform sampler2D uTex;' +
+                'void main() { gl_FragColor = texture2D(uTex, vUv); }'));
+            gl.linkProgram(program);
+            if (!gl.getProgramParameter(program, gl.LINK_STATUS)) return false;
+            const buffer = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+            gl.bufferData(gl.ARRAY_BUFFER,
+                new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+            blit = {
+                program,
+                buffer,
+                aPos: gl.getAttribLocation(program, 'aPos'),
+                uTex: gl.getUniformLocation(program, 'uTex'),
+                texture: gl.createTexture(),
+                revision: -1,
+                width: 0,
+                height: 0
+            };
+            this._effekseerPreviewBlits.set(gl, blit);
+        }
+
+        gl.useProgram(blit.program);
+        gl.bindBuffer(gl.ARRAY_BUFFER, blit.buffer);
+        gl.enableVertexAttribArray(blit.aPos);
+        gl.vertexAttribPointer(blit.aPos, 2, gl.FLOAT, false, 0, 0);
+        gl.activeTexture(gl.TEXTURE0);
+        gl.bindTexture(gl.TEXTURE_2D, blit.texture);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+        gl.uniform1i(blit.uTex, 0);
+        gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+        gl.disable(gl.DEPTH_TEST);
+        gl.enable(gl.BLEND);
+        gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+        let drew = false;
+        try {
+            const revision = this._previewBackgroundRevision || 0;
+            if (blit.revision !== revision || blit.width !== source.width || blit.height !== source.height) {
+                gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, source);
+                blit.revision = revision;
+                blit.width = source.width;
+                blit.height = source.height;
+            }
+            gl.drawArrays(gl.TRIANGLES, 0, 3);
+            drew = true;
+        } catch (error) {
+            // Keep the Canvas2D layer visible if Chromium rejects an upload.
+        }
+        gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+        gl.disable(gl.BLEND);
+        return drew;
+    }
+
     setupEffekseerAnimationPlayback(animation, expectedGeneration = this._previewSetupGeneration) {
         const canvasContainer = document.getElementById('animation-preview-canvas');
         const playBtn = document.getElementById('animation-play-btn');
@@ -3854,7 +3848,9 @@ class DatabaseAnimationEditor {
 
                 // Initialize Effekseer with WebGL context
                 effekseerContext.init(gl);
-                effekseerContext.setRestorationOfStatesFlag(false);
+                // This context also receives the Canvas2D scene blit before
+                // each effect draw, so Effekseer must restore its GL state.
+                effekseerContext.setRestorationOfStatesFlag(true);
 
                 console.debug('Effekseer context initialized for preview');
                 return true;
@@ -3975,13 +3971,18 @@ class DatabaseAnimationEditor {
             gl.viewport(0, 0, canvas.width, canvas.height);
             gl.clearColor(0, 0, 0, 0);
             gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+            const composited = editorSelf._blitPreviewBackground(
+                gl, editorSelf._previewBgCanvas);
+            if (composited && effekseerContext.captureBackground) {
+                effekseerContext.captureBackground(0, 0, canvas.width, canvas.height);
+            }
 
             // RPG Maker MZ style setup - balanced FOV
             const viewportSize = canvas.height * 1.2; // Balanced FOV to fill canvas without clipping
             // x is scaled by height/width so one world unit spans the same
             // number of pixels on both axes (round spheres on a wide canvas)
             const x = canvas.height / canvas.width; // * (mirror ? -1 : 1)
-            const y = -1;
+            const y = 1;
             const p = -(viewportSize / canvas.height);
 
             // Set projection matrix - RPG Maker MZ style (pass as ARRAY!)
@@ -4108,8 +4109,7 @@ class DatabaseAnimationEditor {
                 const offsetX = animation.offsetX || 0;
                 const offsetY = animation.offsetY || 0;
 
-                // Convert rotation from degrees to radians (offset X by 180 to match RPG Maker)
-                const rx = ((180 - rotation.x) * Math.PI) / 180;
+                const rx = (rotation.x * Math.PI) / 180;
                 const ry = (rotation.y * Math.PI) / 180;
                 const rz = (rotation.z * Math.PI) / 180;
 
@@ -4258,7 +4258,7 @@ class DatabaseAnimationEditor {
                 if (handle && isPlaying) {
                     const scale = animation.scale / 100;
                     const speed = animation.speed / 100;
-                    const rx = ((180 - animation.rotation.x) * Math.PI) / 180; // Offset X by 180 to match RPG Maker
+                    const rx = (animation.rotation.x * Math.PI) / 180;
                     const ry = (animation.rotation.y * Math.PI) / 180;
                     const rz = (animation.rotation.z * Math.PI) / 180;
 
@@ -4578,7 +4578,7 @@ class DatabaseAnimationEditor {
 
                 // Update live effect if playing
                 if (handle && isPlaying) {
-                    const rx = ((180 - rotationX) * Math.PI) / 180; // Offset X by 180 to match RPG Maker
+                    const rx = (rotationX * Math.PI) / 180;
                     const ry = (rotationY * Math.PI) / 180;
                     const rz = (rotationZ * Math.PI) / 180;
                     handle.setRotation(rx, ry, rz);
@@ -4677,33 +4677,22 @@ class DatabaseAnimationEditor {
         // Remove existing modal if any
         const existingModal = document.getElementById('effect-picker-modal');
         if (existingModal) existingModal.remove();
+        const previousFocus = document.activeElement;
 
         const modalHTML = `
-            <div id="effect-picker-modal" style="display: flex; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); z-index: 10000; align-items: center; justify-content: center;">
-                <div class="rr-modal" style="width: min(800px, calc(100vw - 24px)); max-height: 80vh;">
+            <div id="effect-picker-modal" class="rr-modal-overlay" style="z-index: 10600;">
+                <div class="rr-modal rr-effect-picker-modal" role="dialog" aria-modal="true" aria-labelledby="effect-picker-title" style="width: min(960px, calc(100vw - 24px)); max-height: 80vh;">
                     <div class="rr-modal-header">
-                        <div class="rr-modal-title">${tt('Select Effect File')}</div>
-                        <button id="effect-picker-close" class="rr-modal-close" type="button">×</button>
+                        <div id="effect-picker-title" class="rr-modal-title">${tt('Select Effect File')}</div>
+                        <button id="effect-picker-close" class="rr-modal-close" type="button" aria-label="${tt('Close')}">×</button>
                     </div>
 
-                    <div style="display: flex; gap: 16px; flex: 1; min-height: 0; padding: 16px;">
+                    <div class="rr-effect-picker-body" style="display: flex; gap: 16px; flex: 1; min-height: 0; padding: 16px;">
                         <!-- Left: Effect list -->
-                        <div style="flex: 1; display: flex; flex-direction: column; min-width: 250px;">
-                            <div style="margin-bottom: 12px;">
-                                <input type="text" id="effect-search" placeholder="${tt('Search effects...')}" style="width: 100%; padding: 8px; background: var(--color-bg-input-alt); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 3px; font-size: 12px;">
-                            </div>
-
-                            <div id="effect-list" style="display: flex; flex-direction: column; gap: 4px; max-height: 450px; overflow-y: auto; flex: 1;">
-                                ${effectFiles.length > 0 ? effectFiles.map(effectName => `
-                                    <div class="effect-item" data-effect="${rrEscapeHtml(effectName)}" style="padding: 10px; background: ${animation.effectName === effectName ? 'var(--color-info)' : 'var(--color-bg-input-alt)'}; border: 1px solid var(--color-border-input); border-radius: 3px; cursor: pointer; font-size: 12px; color: var(--color-text); transition: background 0.2s;">
-                                        ${rrEscapeHtml(effectName)}
-                                    </div>
-                                `).join('') : `<div style="padding: 20px; text-align: center; color: var(--color-text-muted);">${tt('No effect files found in effects/ folder')}</div>`}
-                            </div>
-                        </div>
+                        <div id="effect-browser-host" style="flex: 1; min-width: 250px; min-height: 0; overflow: hidden; border: 1px solid var(--color-border); border-radius: 4px;"></div>
 
                         <!-- Right: Preview -->
-                        <div style="flex: 1; display: flex; flex-direction: column; background: var(--color-bg-panel); border: 1px solid var(--color-border); border-radius: 4px; padding: 10px;">
+                        <div class="rr-effect-picker-preview" style="flex: 1; display: flex; flex-direction: column; background: var(--color-bg-panel); border: 1px solid var(--color-border); border-radius: 4px; padding: 10px;">
                             <div style="font-size: 12px; color: var(--color-text-muted); margin-bottom: 8px;">${tt('Preview')}</div>
                             <div style="flex: 1; display: flex; align-items: center; justify-content: center; background: var(--color-bg-deep); border: 1px solid var(--color-border-input); border-radius: 3px; position: relative;">
                                 <canvas id="effect-preview-canvas" width="400" height="300" style="max-width: 100%; max-height: 100%;"></canvas>
@@ -4726,8 +4715,7 @@ class DatabaseAnimationEditor {
         const closeBtn = document.getElementById('effect-picker-close');
         const cancelBtn = document.getElementById('effect-picker-cancel');
         const okBtn = document.getElementById('effect-picker-ok');
-        const searchInput = document.getElementById('effect-search');
-        const effectList = document.getElementById('effect-list');
+        const browserHost = document.getElementById('effect-browser-host');
         const previewCanvas = document.getElementById('effect-preview-canvas');
         const previewMessage = document.getElementById('effect-preview-message');
 
@@ -4740,6 +4728,36 @@ class DatabaseAnimationEditor {
         let previewHandle = null;
         let previewAnimationFrameId = null;
         let currentPreviewEffect = null;
+        let previewRequestId = 0;
+        let modalClosed = false;
+        const loadedEffects = new Set();
+        const pendingEffects = new Set();
+
+        const stopPreviewPlayback = () => {
+            previewRequestId++;
+            if (previewAnimationFrameId) {
+                cancelAnimationFrame(previewAnimationFrameId);
+                previewAnimationFrameId = null;
+            }
+            if (previewHandle) {
+                try { previewHandle.stop(); } catch (e) {}
+                previewHandle = null;
+            }
+            currentPreviewEffect = null;
+        };
+
+        const releasePreviewEffect = () => {
+            if (!previewEffect || !previewEffekseerContext) return;
+            try {
+                // Stopped instances retire on subsequent updates; advance them
+                // before freeing their effect memory.
+                previewEffekseerContext.update();
+                previewEffekseerContext.update();
+                previewEffekseerContext.releaseEffect(previewEffect);
+            } catch (e) {}
+            loadedEffects.delete(previewEffect);
+            previewEffect = null;
+        };
 
         const initPreview = () => {
             if (!window._effekseerReady) {
@@ -4763,7 +4781,7 @@ class DatabaseAnimationEditor {
                 }
 
                 previewEffekseerContext.init(previewGL);
-                previewEffekseerContext.setRestorationOfStatesFlag(false);
+                previewEffekseerContext.setRestorationOfStatesFlag(true);
                 return true;
             } catch (e) {
                 console.error('Preview initialization error:', e);
@@ -4775,16 +4793,10 @@ class DatabaseAnimationEditor {
         const playPreview = (effectName) => {
             if (!previewEffekseerContext || !previewGL) return;
 
-            // Stop current preview
-            if (previewAnimationFrameId) {
-                cancelAnimationFrame(previewAnimationFrameId);
-                previewAnimationFrameId = null;
-            }
-            if (previewHandle) {
-                previewHandle.stop();
-                previewHandle = null;
-            }
+            stopPreviewPlayback();
+            releasePreviewEffect();
 
+            const requestId = previewRequestId;
             currentPreviewEffect = effectName;
             previewMessage.style.display = 'none';
 
@@ -4797,14 +4809,20 @@ class DatabaseAnimationEditor {
             const effectPath = effectFile.absolutePath;
 
             const startPlayback = () => {
-                if (currentPreviewEffect !== effectName) return; // Effect changed
+                if (requestId !== previewRequestId || currentPreviewEffect !== effectName) return;
 
                 previewHandle = previewEffekseerContext.play(previewEffect);
                 if (previewHandle) {
-                    previewHandle.setLocation(0, 0, 0);
-                    previewHandle.setRotation(0, 0, 0);
-                    previewHandle.setScale(1.0, 1.0, 1.0); // Normal scale (wider FOV now)
-                    previewHandle.setSpeed(1);
+                    const scale = (animation.scale || 100) / 100;
+                    const speed = (animation.speed || 100) / 100;
+                    const rotation = animation.rotation || { x: 0, y: 0, z: 0 };
+                    const offsetScale = 0.1;
+                    previewHandle.setLocation((animation.offsetX || 0) * offsetScale,
+                        (animation.offsetY || 0) * offsetScale, 0);
+                    previewHandle.setRotation((rotation.x * Math.PI) / 180,
+                        (rotation.y * Math.PI) / 180, (rotation.z * Math.PI) / 180);
+                    previewHandle.setScale(scale, scale, scale);
+                    previewHandle.setSpeed(speed);
                 }
 
                 // Render loop
@@ -4813,7 +4831,7 @@ class DatabaseAnimationEditor {
                 const fixedTimeStep = 1000 / 60;
 
                 const render = () => {
-                    if (currentPreviewEffect !== effectName) return;
+                    if (requestId !== previewRequestId || currentPreviewEffect !== effectName) return;
 
                     const now = Date.now();
                     const deltaTime = now - lastTime;
@@ -4836,8 +4854,8 @@ class DatabaseAnimationEditor {
 
                     // Setup matrices - balanced FOV
                     const viewportSize = previewCanvas.height * 1.2; // Balanced FOV to fill canvas without clipping
-                    const x = 1;
-                    const y = -1;
+                    const x = previewCanvas.height / previewCanvas.width;
+                    const y = 1;
                     const p = -(viewportSize / previewCanvas.height);
 
                     previewEffekseerContext.setProjectionMatrix([
@@ -4871,6 +4889,8 @@ class DatabaseAnimationEditor {
 
             const onError = (message) => {
                 console.error('Preview load error:', message);
+                if (modalClosed || requestId !== previewRequestId
+                        || currentPreviewEffect !== effectName) return;
                 previewMessage.style.display = 'block';
                 previewMessage.textContent = tt('Failed to load effect');
             };
@@ -4882,8 +4902,22 @@ class DatabaseAnimationEditor {
             // previewEffect after the user has picked a different effect.
             let pending = null;
             let syncLoaded = false;
+            let syncFailed = false;
+            const releasePending = () => {
+                if (!pending) return;
+                pendingEffects.delete(pending);
+                try { previewEffekseerContext?.releaseEffect(pending); } catch (e) {}
+                pending = null;
+            };
             const install = () => {
-                if (currentPreviewEffect !== effectName) return;
+                if (modalClosed) return;
+                pendingEffects.delete(pending);
+                loadedEffects.add(pending);
+                if (requestId !== previewRequestId || currentPreviewEffect !== effectName) {
+                    try { previewEffekseerContext.releaseEffect(pending); } catch (e) {}
+                    loadedEffects.delete(pending);
+                    return;
+                }
                 previewEffect = pending;
                 startPlayback();
             };
@@ -4891,39 +4925,53 @@ class DatabaseAnimationEditor {
                 if (pending) install();
                 else syncLoaded = true;
             };
+            const handleError = message => {
+                if (pending) releasePending();
+                else syncFailed = true;
+                onError(message);
+            };
 
             try {
-                pending = RR_loadEffekseerEffectFromFile(previewEffekseerContext, effectPath, 1.0, onLoad, onError);
+                pending = RR_loadEffekseerEffectFromFile(
+                    previewEffekseerContext, effectPath, 1.0, onLoad, handleError
+                );
+                if (pending) pendingEffects.add(pending);
             } catch (e) {
-                onError(e.message);
+                handleError(e.message);
+                return;
+            }
+            if (syncFailed) {
+                releasePending();
                 return;
             }
             if (syncLoaded) install();
         };
 
         // Initialize preview
-        if (initPreview()) {
+        const previewReady = initPreview();
+        if (previewReady) {
             previewMessage.textContent = tt('Select an effect to preview');
         }
 
         // Close modal
-        const closeModal = () => {
+        const closeModal = (restoreFocus = true) => {
+            if (modalClosed) return;
+            modalClosed = true;
             // Clean up preview, releasing the WebGL/effekseer context pair —
             // contexts are capped per page and survive DOM removal.
-            if (previewAnimationFrameId) {
-                cancelAnimationFrame(previewAnimationFrameId);
-                previewAnimationFrameId = null;
-            }
-            if (previewHandle) {
-                try { previewHandle.stop(); } catch (e) {}
-                previewHandle = null;
-            }
-            currentPreviewEffect = null;
+            stopPreviewPlayback();
             if (previewEffekseerContext) {
-                try { if (previewEffect) previewEffekseerContext.releaseEffect(previewEffect); } catch (e) {}
+                releasePreviewEffect();
+                for (const effect of loadedEffects) {
+                    try { previewEffekseerContext.releaseEffect(effect); } catch (e) {}
+                }
+                loadedEffects.clear();
+                for (const effect of pendingEffects) {
+                    try { previewEffekseerContext.releaseEffect(effect); } catch (e) {}
+                }
+                pendingEffects.clear();
                 try { effekseer.releaseContext(previewEffekseerContext); } catch (e) {}
                 previewEffekseerContext = null;
-                previewEffect = null;
             }
             if (previewGL) {
                 const lose = previewGL.getExtension && previewGL.getExtension('WEBGL_lose_context');
@@ -4932,54 +4980,86 @@ class DatabaseAnimationEditor {
             }
 
             modal.remove();
+            document.removeEventListener('keydown', onKeyDown);
+            if (restoreFocus) previousFocus?.focus?.();
         };
+
+        const confirmSelection = () => {
+            animation.effectName = selectedEffect;
+            this.databaseManager?.updateAnimation?.(animation.id, animation);
+            const effectNameDisplay = document.getElementById('effekseer-effect-name');
+            if (effectNameDisplay) effectNameDisplay.textContent = selectedEffect || tt('None');
+            closeModal(false);
+            this.showAnimationDetail(container, animation);
+            document.getElementById('effekseer-pick-effect')?.focus();
+        };
+
+        const browser = RRPickerIndex.createBrowser({
+            files: effectFiles,
+            selectedName: selectedEffect,
+            folders: true,
+            searchPlaceholder: tt('Search effects...'),
+            emptyText: tt('No effect files found in effects/ folder'),
+            itemClass: 'effect-item',
+            onSelect: effectName => {
+                selectedEffect = effectName;
+                if (previewReady) playPreview(effectName);
+            },
+            leadingItem: {
+                label: tt('(None)'),
+                onClick: () => {
+                    selectedEffect = '';
+                    stopPreviewPlayback();
+                    releasePreviewEffect();
+                    previewMessage.style.display = 'block';
+                    previewMessage.textContent = tt('Select an effect to preview');
+                },
+                onDoubleClick: confirmSelection
+            }
+        });
+        browser.list.classList.add('rr-accent-scrollbar');
+        browser.rail.classList.add('rr-accent-scrollbar');
+        browserHost.appendChild(browser.element);
+        browser.list.addEventListener('dblclick', event => {
+            const item = event.target.closest('.rr-picker-file-item');
+            if (!item?.dataset.fileName) return;
+            selectedEffect = item.dataset.fileName;
+            confirmSelection();
+        });
+        if (selectedEffect) {
+            browser.scrollTo(selectedEffect);
+            if (previewReady) playPreview(selectedEffect);
+        }
+        browser.focusSelected();
+
+        const onKeyDown = event => {
+            if (event.key === 'Escape') {
+                event.preventDefault();
+                closeModal();
+            } else if (event.key === 'Tab') {
+                const focusable = Array.from(modal.querySelectorAll(
+                    'button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])'
+                ));
+                if (!focusable.length) return;
+                const first = focusable[0];
+                const last = focusable[focusable.length - 1];
+                if (event.shiftKey && document.activeElement === first) {
+                    event.preventDefault();
+                    last.focus();
+                } else if (!event.shiftKey && document.activeElement === last) {
+                    event.preventDefault();
+                    first.focus();
+                }
+            }
+        };
+        document.addEventListener('keydown', onKeyDown);
 
         closeBtn.addEventListener('click', closeModal);
         cancelBtn.addEventListener('click', closeModal);
         okBtn.addEventListener('mouseenter', () => { okBtn.style.backgroundColor = 'var(--color-accent-muted)'; });
         okBtn.addEventListener('mouseleave', () => { okBtn.style.backgroundColor = 'var(--color-accent)'; });
 
-        // Effect item click
-        effectList.addEventListener('click', (e) => {
-            const item = e.target.closest('.effect-item');
-            if (!item) return;
-
-            selectedEffect = item.dataset.effect;
-
-            // Update selection visual
-            effectList.querySelectorAll('.effect-item').forEach(el => {
-                el.style.background = el.dataset.effect === selectedEffect ? 'var(--color-info)' : 'var(--color-bg-input-alt)';
-            });
-
-            // Play preview
-            playPreview(selectedEffect);
-        });
-
-        // Search functionality
-        searchInput.addEventListener('input', (e) => {
-            const searchTerm = e.target.value.toLowerCase();
-            effectList.querySelectorAll('.effect-item').forEach(item => {
-                const effectName = item.dataset.effect.toLowerCase();
-                item.style.display = effectName.includes(searchTerm) ? 'block' : 'none';
-            });
-        });
-
-        // OK button
-        okBtn.addEventListener('click', () => {
-            if (selectedEffect) {
-                animation.effectName = selectedEffect;
-
-                // Update the effect name display
-                const effectNameDisplay = document.getElementById('effekseer-effect-name');
-                if (effectNameDisplay) {
-                    effectNameDisplay.textContent = selectedEffect;
-                }
-
-                // Reload the animation detail view to update playback
-                this.showAnimationDetail(container, animation);
-            }
-            closeModal();
-        });
+        okBtn.addEventListener('click', confirmSelection);
 
         // Close on background click
         modal.addEventListener('click', (e) => {

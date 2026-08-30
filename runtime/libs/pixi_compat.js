@@ -214,28 +214,57 @@
     }
 
     // v8 still ships the v5 Graphics drawing API (beginFill, drawRect, ...)
-    // as working shims, but nags a one-shot deprecation warning per method.
-    // MZ plugins use that API forever and nobody can act on the nag, so burn
-    // the one-shots at load with warn muted; real warnings stay untouched.
+    // as working shims, but each nags a deprecation warning. MZ plugins use
+    // that API forever, so replace the shims with silent equivalents that do
+    // exactly what PIXI's do, on the v8 context API.
     if (PIXI.Graphics && PIXI.Graphics.prototype && PIXI.Graphics.prototype.beginFill) {
-        try {
-            const scratch = new PIXI.Graphics();
-            const realWarn = console.warn;
-            console.warn = function() {};
-            try {
-                scratch.beginFill(0);
-                if (scratch.lineStyle) scratch.lineStyle(1, 0);
-                if (scratch.drawRect) scratch.drawRect(0, 0, 1, 1);
-                if (scratch.drawCircle) scratch.drawCircle(0, 0, 1);
-                if (scratch.drawRoundedRect) scratch.drawRoundedRect(0, 0, 1, 1, 1);
-                if (scratch.drawEllipse) scratch.drawEllipse(0, 0, 1, 1);
-                if (scratch.drawPolygon) scratch.drawPolygon([0, 0, 1, 0, 1, 1]);
-                if (scratch.endFill) scratch.endFill();
-            } finally {
-                console.warn = realWarn;
-                scratch.destroy(true);
-            }
-        } catch (e) { /* the nags simply stay */ }
+        const proto = PIXI.Graphics.prototype;
+        const defaults = PIXI.GraphicsContext && PIXI.GraphicsContext.defaultStrokeStyle;
+        const call = (graphics, method, args) => {
+            graphics.context[method](...args);
+            return graphics;
+        };
+        const quiet = {
+            beginFill(color, alpha) {
+                const fillStyle = {};
+                if (color !== undefined) fillStyle.color = color;
+                if (alpha !== undefined) fillStyle.alpha = alpha;
+                this.context.fillStyle = fillStyle;
+                return this;
+            },
+            endFill() {
+                this.context.fill();
+                const strokeStyle = this.context.strokeStyle;
+                if (!defaults || strokeStyle.width !== defaults.width
+                    || strokeStyle.color !== defaults.color || strokeStyle.alpha !== defaults.alpha) {
+                    this.context.stroke();
+                }
+                return this;
+            },
+            lineStyle(width, color, alpha) {
+                const strokeStyle = {};
+                if (width) strokeStyle.width = width;
+                if (color) strokeStyle.color = color;
+                if (alpha) strokeStyle.alpha = alpha;
+                this.context.strokeStyle = strokeStyle;
+                return this;
+            },
+            drawRect(...args) { return call(this, 'rect', args); },
+            drawCircle(...args) { return call(this, 'circle', args); },
+            drawEllipse(...args) { return call(this, 'ellipse', args); },
+            drawPolygon(...args) { return call(this, 'poly', args); },
+            drawRoundedRect(...args) { return call(this, 'roundRect', args); },
+            drawStar(...args) { return call(this, 'star', args); }
+        };
+        const targets = {
+            drawRect: 'rect', drawCircle: 'circle', drawEllipse: 'ellipse',
+            drawPolygon: 'poly', drawRoundedRect: 'roundRect', drawStar: 'star'
+        };
+        for (const name of Object.keys(quiet)) {
+            if (typeof proto[name] !== 'function') continue;
+            if (targets[name] && typeof proto[targets[name]] !== 'function') continue;
+            Object.defineProperty(proto, name, { value: quiet[name], writable: true, configurable: true });
+        }
     }
 
     // -------------------------------------------------------------------------

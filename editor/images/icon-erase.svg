@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Eraser">
+  <defs>
+    <linearGradient id="body" x1="29" y1="21" x2="55" y2="43" gradientUnits="userSpaceOnUse"><stop stop-color="#0876ed"/><stop offset=".5" stop-color="#07399f"/><stop offset="1" stop-color="#03142f"/></linearGradient>
+    <linearGradient id="tip" x1="8" y1="21" x2="29" y2="43" gradientUnits="userSpaceOnUse"><stop stop-color="#ff8b7d"/><stop offset=".45" stop-color="#d7318f"/><stop offset="1" stop-color="#761f63"/></linearGradient>
+    <clipPath id="eraser-shape"><rect x="8" y="21" width="48" height="22" rx="5"/></clipPath>
+  </defs>
+
+  <!-- The layer-aware tile being removed. -->
+  <path d="M23 35h36v25H19V47" fill="#03142f" stroke="#010718" stroke-width="7" stroke-linejoin="round"/>
+  <path d="M23 35h36v25H19V47m20-12v25M19 47h40" fill="none" stroke="#24bdf3" stroke-width="2.8" stroke-linejoin="round"/>
+  <path d="M6 48h8v8H6zm8 8h7v6h-7z" fill="#d7318f" stroke="#010718" stroke-width="2"/>
+  <path d="M3 42h5v5H3z" fill="#ffd529" stroke="#010718" stroke-width="1.5"/>
+
+  <!-- Clean diagonal eraser with a distinct soft tip and rigid blue body. -->
+  <g transform="rotate(-42 32 32)" stroke-linejoin="round">
+    <rect x="6" y="19" width="52" height="26" rx="7" fill="#010718" stroke="#01030a" stroke-width="3"/>
+    <g clip-path="url(#eraser-shape)">
+      <path d="M8 21h21v22H8z" fill="url(#tip)"/>
+      <path d="M29 21h27v22H29z" fill="url(#body)"/>
+      <path d="M12 24h13v3H12z" fill="#ffb08b" opacity=".75"/>
+      <path d="M34 24h17v3H34z" fill="#24bdf3" opacity=".8"/>
+    </g>
+    <path d="M29 21v22" stroke="#010718" stroke-width="3"/>
+    <path d="M32 23v18" stroke="#d7318f" stroke-width="1.5"/>
+  </g>
+</svg>

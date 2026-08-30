@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Auto Layer">
+  <defs>
+    <linearGradient id="b" x1="8" y1="3" x2="56" y2="61" gradientUnits="userSpaceOnUse"><stop stop-color="#0876ed"/><stop offset=".48" stop-color="#07399f"/><stop offset="1" stop-color="#03142f"/></linearGradient>
+    <radialGradient id="g"><stop stop-color="#fff"/><stop offset=".25" stop-color="#fff6a2"/><stop offset=".62" stop-color="#ffd529"/><stop offset=".78" stop-color="#ff7414"/><stop offset="1" stop-color="#d7318f"/></radialGradient>
+  </defs>
+  <g stroke-linejoin="round">
+    <path d="M3 7l29 7v2L3 9zm58 0-29 7v2l29-7z" fill="#03102a" stroke="#075cdd" stroke-width="1.2"/><path d="M3 7 32 0l29 7-29 7z" fill="url(#b)" stroke="#24bdf3" stroke-width="2"/>
+    <path d="m3 23 29 7v2L3 25zm58 0-29 7v2l29-7z" fill="#03102a" stroke="#075cdd" stroke-width="1.2"/><path d="m3 23 29-7 29 7-29 7z" fill="url(#b)" stroke="#075cdd" stroke-width="2"/>
+    <path d="m3 39 29 7v2L3 41zm58 0-29 7v2l29-7z" fill="#03102a" stroke="#075cdd" stroke-width="1.2"/><path d="m3 39 29-7 29 7-29 7z" fill="url(#b)" stroke="#24bdf3" stroke-width="2"/>
+    <path d="m3 55 29 7v2L3 57zm58 0-29 7v2l29-7z" fill="#03102a" stroke="#075cdd" stroke-width="1.2"/><path d="m3 55 29-7 29 7-29 7z" fill="url(#b)" stroke="#075cdd" stroke-width="2"/>
+  </g>
+  <g fill="url(#g)" stroke="#d7318f" stroke-width="1.2"><path d="m32 4 3 3-3 3-3-3z"/><path d="m32 20 3 3-3 3-3-3z"/><path d="m32 36 3 3-3 3-3-3z"/><path d="m32 52 3 3-3 3-3-3z"/></g>
+  <text x="32" y="45" text-anchor="middle" fill="#f7fdff" stroke="#010718" stroke-width="4" paint-order="stroke" font-family="Arial,sans-serif" font-size="20" font-weight="900">A</text>
+  <path d="M25 46h14" stroke="#d7318f" stroke-width="2.2" stroke-linecap="round"/>
+</svg>

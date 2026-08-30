@@ -363,9 +363,8 @@ class EventPageEditor {
 
         const img = new Image();
         const path = require('path');
-        // Add .png extension if not already present (RPG Maker stores names without extension)
-        const filename = image.characterName.endsWith('.png') ? image.characterName : image.characterName + '.png';
-        const imgPath = RRAssetFiles.toUrl(path.join(currentProject.path, 'img', 'characters', filename));
+        const imgPath = RRAssetFiles.imageUrlFor(
+            path.join(currentProject.path, 'img', 'characters'), image.characterName);
 
         console.log('Loading character preview:', imgPath);
 
@@ -765,6 +764,7 @@ class EventPageEditor {
                     <option value="0" ${page.priorityType === 0 ? 'selected' : ''}>${this._t('event.belowCharacters')}</option>
                     <option value="1" ${page.priorityType === 1 ? 'selected' : ''}>${this._t('event.sameAsCharacters')}</option>
                     <option value="2" ${page.priorityType === 2 ? 'selected' : ''}>${this._t('event.aboveCharacters')}</option>
+                    <option value="3" ${page.priorityType === 3 ? 'selected' : ''}>${this._t('event.aboveCharactersSorted')}</option>
                 </select>
             </div>
         `;

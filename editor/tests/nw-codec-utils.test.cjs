@@ -17,6 +17,14 @@ test('codec assets resolve to pinned direct release URLs without the GitHub API'
         'codec extraction must work on stock Windows without external unzip');
 });
 
+test('desktop workers require trusted codec hashes even for interactive builds', () => {
+    for (const file of ['build-worker.js', 'dist-editor-worker.js']) {
+        const source = fs.readFileSync(path.join(editorRoot, 'build-scripts', file), 'utf8');
+        assert.match(source, /releaseBuild: true,[\s\S]*?hashManifest: getReleaseHashManifest\(true\)/,
+            `${file} fails closed for unpinned native libraries`);
+    }
+});
+
 test('codec archives are validated, cached, extracted, and installed', async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'rpg-reactor-codec-'));
     let downloads = 0;
@@ -41,12 +49,18 @@ test('codec archives are validated, cached, extracted, and installed', async () 
             'https://github.com/nwjs-ffmpeg-prebuilt/nwjs-ffmpeg-prebuilt/releases/download/0.113.0/0.113.0-linux-x64.zip',
         ]);
         assert.equal(acquired.expectedHash, codec.sha256(prepared));
-        const extracted = codec.extractBinary(acquired.archivePath, 'linux', path.join(root, 'extract'));
+        const extracted = codec.extractBinary(acquired.archivePath, 'linux', path.join(root, 'extract'), acquired.expectedHash);
         const destination = codec.installBinary(extracted, runtime, 'linux', acquired);
         assert.equal(fs.readFileSync(destination, 'utf8'), 'codec binary');
         const installedMetadata = JSON.parse(fs.readFileSync(path.join(runtime, 'rpg-reactor-codec.json'), 'utf8'));
         assert.equal(installedMetadata.nwVersion, '0.113.0');
-        assert.equal(Object.hasOwn(installedMetadata, 'notice'), false);
+        assert.equal(installedMetadata.notice, codec.NOTICE_NAME);
+        assert.equal(installedMetadata.license, codec.LICENSE_NAME);
+        assert.equal(fs.existsSync(path.join(runtime, codec.LICENSE_NAME)), true);
+        const notice = fs.readFileSync(path.join(runtime, codec.NOTICE_NAME), 'utf8');
+        assert.match(notice, /H\.264\/AAC support/);
+        assert.match(notice, /Archive SHA-256/);
+        assert.match(notice, /does not grant patent\s+rights/);
 
         await codec.acquireArchive({
             ...options,
@@ -56,6 +70,37 @@ test('codec archives are validated, cached, extracted, and installed', async () 
     } finally {
         fs.rmSync(root, { recursive: true, force: true });
     }
+});
+
+test('trusted codec bytes are rechecked atomically when extracted', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'rpg-reactor-codec-race-'));
+    try {
+        const source = path.join(root, 'source');
+        const archive = path.join(root, 'codec.zip');
+        fs.mkdirSync(source);
+        fs.writeFileSync(path.join(source, 'libffmpeg.so'), 'trusted codec');
+        execFileSync('zip', ['-q', archive, 'libffmpeg.so'], { cwd: source });
+        const expectedHash = codec.sha256(archive);
+        fs.writeFileSync(archive, 'replaced after verification');
+        assert.throws(
+            () => codec.extractBinary(archive, 'linux', path.join(root, 'extract'), expectedHash),
+            /changed after verification/);
+    } finally {
+        fs.rmSync(root, { recursive: true, force: true });
+    }
+});
+
+test('pinned codec provenance is immutable and included in notices', () => {
+    const record = codec.provenance('0.107.0');
+    assert.equal(record.buildCommit, '44c5d44e78c457149c8bee98aeca9a7bb1d5659c');
+    assert.equal(record.ffmpegCommit, 'e18f48eba6b367ac68b9c477ae6cbe224e36b031');
+    const notice = codec.codecNotice({
+        version: '0.107.0', asset: { name: 'fixture.zip' }, expectedHash: 'a'.repeat(64),
+        hashTrusted: true, provenance: record,
+    });
+    assert.match(notice, /GNU Lesser General Public License v2\.1 or later/);
+    assert.match(notice, new RegExp(record.buildCommit));
+    assert.match(notice, new RegExp(record.ffmpegCommit));
 });
 
 test('corrupt cached and downloaded codec archives are rejected', async () => {

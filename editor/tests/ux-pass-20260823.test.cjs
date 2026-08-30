@@ -93,7 +93,14 @@ test('troop, battle test, and animation dialogs are on the standard chrome', () 
     const anim = source('database', 'DatabaseAnimationEditor.js');
     assert.doesNotMatch(anim, /#3a3a3a/);
     assert.match(anim, /effect-picker-ok" class="rr-button-primary"/);
-    assert.match(anim, /Select Sound Effect[\s\S]{0,200}rr-modal-close/);
+    assert.match(anim, /RRAudioPickerModal\.open\(\{[\s\S]*?title: 'Select Sound Effect'/);
+    assert.match(anim, /effect-picker-modal" class="rr-modal-overlay"/);
+    assert.match(anim, /class="rr-modal rr-effect-picker-modal" role="dialog" aria-modal="true" aria-labelledby="effect-picker-title"/);
+    assert.doesNotMatch(anim, /effect-browser-host[^\n]*<\/div>\s*<\/div>\s*\n\s*<!-- Right: Preview -->/,
+        'the effect browser and preview remain in the same two-column body');
+    assert.match(anim, /class="rr-effect-picker-preview"/,
+        'the live effect preview occupies the right pane');
+    assert.match(anim, /class="rr-number-stepper"[\s\S]*?data-timing-duration-step="1"[\s\S]*?data-timing-duration-step="-1"/);
 });
 
 test('event command dialogs use the shared footer buttons and stay responsive', () => {

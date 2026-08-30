@@ -74,7 +74,10 @@ test('a map lists every model it can show before its first frame', () => {
         assert.deepEqual(names, [
             'Actors/hero', 'Actors/legacy-flat', 'Enemies/monster-plant', 'Vehicles/car'
         ], 'events dedupe, character slots join, face-only slots stay out');
-        assert.deepEqual(Reactor3D.collectMapModelSpecs({}), [], 'a 2D map preloads nothing');
+        assert.deepEqual(Reactor3D.collectMapModelSpecs({}).map(spec => spec.name).sort(),
+            ['Actors/hero', 'Actors/legacy-flat'], 'a flat map still preloads the party models it draws as sprites');
+        Reactor3D._databaseSidecar = null;
+        assert.deepEqual(Reactor3D.collectMapModelSpecs({}), [], 'nothing bound, nothing preloaded');
     } finally {
         Reactor3D._databaseSidecar = savedSidecar;
         Reactor3D._databaseSidecarState = savedState;

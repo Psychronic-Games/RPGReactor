@@ -50,10 +50,11 @@ test('the fallback still applies when there is nothing to read', () => {
 });
 
 test('negative values are preserved rather than treated as absent', () => {
-    // Not reachable from this slider, but the helper must not invent a value
-    // for controls whose range includes negatives, such as pan.
     assert.equal(
         DatabaseAnimationEditor.readNumericInput('pan', 0, docWith({ pan: '-50' })), -50);
+    assert.match(source, /id="timing-se-pan" min="-100" max="100"/);
+    assert.match(source, /readNumericInput\('timing-se-pan', 0\)/);
+    assert.match(source, /pan: sePan/);
 });
 
 test('the SE volume read no longer uses a truthy default', () => {
@@ -65,6 +66,13 @@ test('the SE volume read no longer uses a truthy default', () => {
 test('the neighbouring reads are left alone, since zero is out of their range', () => {
     // timing-duration is min="1", timing-se-pitch is min="50": a || default
     // cannot discard a legitimate value there, so they were not churned.
-    assert.match(source, /id="timing-duration" min="1"/);
+    assert.match(source, /id="timing-duration"[^>]*min="1"/);
     assert.match(source, /id="timing-se-pitch" min="50"/);
+});
+
+test('animation timing SE delegates to the complete shared audio picker', () => {
+    assert.match(source, /RRAssetFiles\.listUnique\(seFolder, RRAssetFiles\.AUDIO_EXTENSIONS\)/);
+    assert.match(source, /RRAudioPickerModal\.open\(\{[\s\S]*?folderLabel: 'SE'[\s\S]*?volume:[\s\S]*?pitch:[\s\S]*?pan:[\s\S]*?loopDefault: false[\s\S]*?zIndex: 10600/);
+    assert.match(source, /onOk: result => \{[\s\S]*?result\.name \|\| noneLabel[\s\S]*?result\.volume[\s\S]*?result\.pitch[\s\S]*?result\.pan/);
+    assert.doesNotMatch(source, /_showSEPicker\(/);
 });

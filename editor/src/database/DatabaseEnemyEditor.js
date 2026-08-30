@@ -432,9 +432,163 @@ class DatabaseEnemyEditor {
     // ACTION PATTERNS
     // ==========================================
 
+    conditionTypeCatalog() {
+        return [
+            { id: 1, label: 'Turn', fields: [
+                { param: 1, label: 'Start', value: 1 },
+                { param: 2, label: 'Interval', value: 0 }
+            ] },
+            { id: 2, label: 'HP', percent: true, fields: [
+                { param: 1, label: 'Minimum', value: 0 },
+                { param: 2, label: 'Maximum', value: 1 }
+            ] },
+            { id: 3, label: 'MP', percent: true, fields: [
+                { param: 1, label: 'Minimum', value: 0 },
+                { param: 2, label: 'Maximum', value: 1 }
+            ] },
+            { id: 7, label: 'TP', percent: true, fields: [
+                { param: 1, label: 'Minimum', value: 0 },
+                { param: 2, label: 'Maximum', value: 1 }
+            ] },
+            { id: 4, label: 'User State', fields: [
+                { param: 1, kind: 'state', value: 1 }
+            ] },
+            { id: 8, label: 'Target State', fields: [
+                { param: 1, kind: 'state', value: 1 }
+            ] },
+            { id: 5, label: 'Party Level', fields: [
+                { param: 1, label: 'Minimum', value: 1 }
+            ] },
+            { id: 6, label: 'Switch', fields: [
+                { param: 1, kind: 'switch', value: 1 }
+            ] }
+        ];
+    }
+
+    actionConditions(action) {
+        if (Array.isArray(action?.conditions)) {
+            return action.conditions
+                .filter(condition => Number.isInteger(condition?.type) && condition.type > 0)
+                .map(condition => ({
+                    type: condition.type,
+                    param1: Number(condition.param1) || 0,
+                    param2: Number(condition.param2) || 0
+                }));
+        }
+        const type = Number(action?.conditionType) || 0;
+        if (type <= 0) return [];
+        return [{
+            type,
+            param1: Number(action?.conditionParam1) || 0,
+            param2: Number(action?.conditionParam2) || 0
+        }];
+    }
+
+    setActionConditions(action, conditions) {
+        action.conditions = conditions;
+        const first = conditions[0];
+        action.conditionType = first ? first.type : 0;
+        action.conditionParam1 = first ? first.param1 : 0;
+        action.conditionParam2 = first ? first.param2 : 0;
+    }
+
+    mergeEditedActionConditions(action, editedConditions) {
+        const catalogIds = new Set(this.conditionTypeCatalog().map(type => type.id));
+        const editedByType = new Map(editedConditions.map(condition => [condition.type, condition]));
+        if (!Array.isArray(action?.conditions)) {
+            const legacyType = action?.conditionType;
+            if (Number.isInteger(legacyType) && legacyType > 0 && !catalogIds.has(legacyType)) {
+                return [{
+                    type: action.conditionType,
+                    param1: action.conditionParam1,
+                    param2: action.conditionParam2
+                }, ...editedConditions];
+            }
+            return editedConditions;
+        }
+        const emitted = new Set();
+        const merged = [];
+
+        for (const condition of action.conditions) {
+            const type = condition?.type;
+            if (!Number.isInteger(type) || !catalogIds.has(type)) {
+                merged.push(condition);
+            } else if (editedByType.has(type)) {
+                if (emitted.has(type)) {
+                    merged.push(condition);
+                } else {
+                    merged.push({ ...condition, ...editedByType.get(type) });
+                    emitted.add(type);
+                }
+            }
+        }
+        for (const condition of editedConditions) {
+            if (!emitted.has(condition.type)) merged.push(condition);
+        }
+        return merged;
+    }
+
+    conditionStateName(stateId) {
+        const states = this.databaseManager.getStates() || [];
+        const state = states.find(entry => entry && entry.id === stateId);
+        return state ? state.name : `#${stateId}`;
+    }
+
+    describeRateCondition(label, condition) {
+        return `${label} ${this.formatConditionPercent(condition.param1)}% ~ ${this.formatConditionPercent(condition.param2)}%`;
+    }
+
+    describeCondition(condition) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
+        switch (condition.type) {
+            case 1:
+                return condition.param2 > 0
+                    ? `${tt('Turn')} ${condition.param1} + ${condition.param2}n`
+                    : `${tt('Turn')} ${condition.param1}`;
+            case 2:
+                return this.describeRateCondition(tt('HP'), condition);
+            case 3:
+                return this.describeRateCondition(tt('MP'), condition);
+            case 7:
+                return this.describeRateCondition(tt('TP'), condition);
+            case 4:
+                return `${tt('User State')}: ${this.conditionStateName(condition.param1)}`;
+            case 8:
+                return `${tt('Target State')}: ${this.conditionStateName(condition.param1)}`;
+            case 5:
+                return `${tt('Party Lv')} >= ${condition.param1}`;
+            case 6:
+                return `${tt('Switch')} #${condition.param1} ${tt('ON')}`;
+            default:
+                return tt('Unknown');
+        }
+    }
+
+    describeConditions(action) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
+        if (Array.isArray(action?.conditions)) {
+            if (action.conditions.length === 0) return tt('Always');
+            return action.conditions
+                .map(condition => {
+                    const type = condition?.type;
+                    if (!Number.isInteger(type) || type <= 0) return tt('Unknown');
+                    return this.describeCondition({
+                        type,
+                        param1: Number(condition.param1) || 0,
+                        param2: Number(condition.param2) || 0
+                    });
+                })
+                .join(` ${tt('and')} `);
+        }
+        const conditions = this.actionConditions(action);
+        if (conditions.length === 0) return tt('Always');
+        return conditions
+            .map(condition => this.describeCondition(condition))
+            .join(` ${tt('and')} `);
+    }
+
     buildActionsHTML(enemy) {
         const tt = text => window.I18n ? window.I18n.tText(text) : text;
-        const conditionNames = ['Always', 'Turn', 'HP', 'MP', 'State', 'Party Level', 'Switch'];
 
         if (!enemy.actions || enemy.actions.length === 0) {
             return `<tr><td colspan="4" style="text-align: center; color: var(--color-text-muted);">${tt('No action patterns (right-click to add)')}</td></tr>`;
@@ -445,28 +599,11 @@ class DatabaseEnemyEditor {
             const skill = skills.find(s => s && s.id === action.skillId);
             const skillName = skill ? skill.name : `${tt('Skill')} #${action.skillId}`;
 
-            let condDesc = tt(conditionNames[action.conditionType] || 'Unknown');
-            if (action.conditionType === 1) {
-                condDesc = `${tt('Turn')} ${action.conditionParam1}a + ${action.conditionParam2}b`;
-            } else if (action.conditionType === 2) {
-                condDesc = `${tt('HP')} ${this.formatConditionPercent(action.conditionParam1)}% ~ ${this.formatConditionPercent(action.conditionParam2)}%`;
-            } else if (action.conditionType === 3) {
-                condDesc = `${tt('MP')} ${this.formatConditionPercent(action.conditionParam1)}% ~ ${this.formatConditionPercent(action.conditionParam2)}%`;
-            } else if (action.conditionType === 4) {
-                const states = this.databaseManager.getStates() || [];
-                const state = states.find(s => s && s.id === action.conditionParam1);
-                condDesc = `${tt('State')}: ${state ? state.name : '#' + action.conditionParam1}`;
-            } else if (action.conditionType === 5) {
-                condDesc = `${tt('Party Lv')} >= ${action.conditionParam1}`;
-            } else if (action.conditionType === 6) {
-                condDesc = `${tt('Switch')} #${action.conditionParam1} ${tt('ON')}`;
-            }
-
             return `
                 <tr class="action-row" data-action-index="${index}">
                     <td class="action-indicator" style="width: 3px; padding: 0; border: none; background: transparent;"></td>
                     <td>${this.escapeHTML(skillName)}</td>
-                    <td>${this.escapeHTML(condDesc)}</td>
+                    <td>${this.escapeHTML(this.describeConditions(action))}</td>
                     <td>${action.rating}</td>
                 </tr>
             `;
@@ -637,7 +774,7 @@ class DatabaseEnemyEditor {
 
     addAction(enemy) {
         const firstSkill = (this.databaseManager.getSkills() || []).find(skill => skill && skill.id > 0);
-        const draft = { skillId: firstSkill?.id || 1, conditionType: 0, conditionParam1: 0, conditionParam2: 0, rating: 5 };
+        const draft = { skillId: firstSkill?.id || 1, conditionType: 0, conditionParam1: 0, conditionParam2: 0, conditions: [], rating: 5 };
         this.showActionEditorModal(enemy, -1, draft);
     }
 
@@ -655,6 +792,104 @@ class DatabaseEnemyEditor {
         this.refreshEnemyDetail(enemy);
     }
 
+    getConditionStateOptions(selectedId) {
+        const states = (this.databaseManager.getStates() || [])
+            .filter(state => state && state.id > 0);
+        const options = states.map(state =>
+            `<option value="${state.id}" ${state.id === selectedId ? 'selected' : ''}>#${state.id} ${this.escapeHTML(state.name || '')}</option>`);
+        if (selectedId > 0 && !states.some(state => state.id === selectedId)) {
+            options.unshift(`<option value="${selectedId}" selected>#${selectedId}</option>`);
+        }
+        return options.join('');
+    }
+
+    getConditionSwitchOptions(selectedId) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
+        const names = this.databaseManager.getSystem()?.switches || [];
+        const options = [];
+        for (let id = 1; id < names.length; id++) {
+            const name = String(names[id] || '').trim()
+                || `${tt('Switch')} ${String(id).padStart(4, '0')}`;
+            options.push(`<option value="${id}" ${id === selectedId ? 'selected' : ''}>#${id} ${this.escapeHTML(name)}</option>`);
+        }
+        if (selectedId > 0 && selectedId >= names.length) {
+            options.unshift(`<option value="${selectedId}" selected>#${selectedId}</option>`);
+        }
+        return options.join('');
+    }
+
+    buildConditionFieldsHTML(type, condition) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
+        const fieldStyle = 'padding: 4px 6px; background: var(--color-bg-menubar); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 3px; font-size: 12px; box-sizing: border-box;';
+        const captionStyle = 'font-size: 11px; color: var(--color-text-muted);';
+
+        return type.fields.map(field => {
+            const stored = condition && (field.param === 2 ? condition.param2 : condition.param1);
+            const raw = condition ? stored : field.value;
+            const attrs = `class="action-cond-field" data-cond-type="${type.id}" data-cond-param="${field.param}"`;
+
+            if (field.kind === 'state') {
+                return `<select ${attrs} style="${fieldStyle} flex: 1; min-width: 0;">${this.getConditionStateOptions(Number(raw) || 1)}</select>`;
+            }
+            if (field.kind === 'switch') {
+                return `
+                    <select ${attrs} style="${fieldStyle} flex: 1; min-width: 0;">${this.getConditionSwitchOptions(Number(raw) || 1)}</select>
+                    <span style="${captionStyle}">${tt('ON')}</span>`;
+            }
+
+            const shown = type.percent ? this.formatConditionPercent(raw) : (Number(raw) || 0);
+            const range = type.percent ? 'min="0" max="100" step="0.01"' : 'min="0" step="1"';
+            return `
+                <span style="display: flex; align-items: center; gap: 4px;">
+                    <span style="${captionStyle}">${tt(field.label)}</span>
+                    <input type="number" ${attrs} value="${shown}" ${range} style="${fieldStyle} width: 76px;">
+                    ${type.percent ? `<span style="${captionStyle}">%</span>` : ''}
+                </span>`;
+        }).join('');
+    }
+
+    buildConditionRowsHTML(conditions) {
+        return this.conditionTypeCatalog().map(type => {
+            const tt = text => window.I18n ? window.I18n.tText(text) : text;
+            const condition = conditions.find(entry => entry.type === type.id);
+            return `
+                <div class="action-cond-row" data-cond-type="${type.id}" style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                    <input type="checkbox" class="action-cond-toggle" data-cond-type="${type.id}" ${condition ? 'checked' : ''}>
+                    <label style="min-width: 92px; flex-shrink: 0; font-size: 12px;">${tt(type.label)}</label>
+                    ${this.buildConditionFieldsHTML(type, condition)}
+                </div>`;
+        }).join('');
+    }
+
+    syncConditionRowStates(modal) {
+        modal.querySelectorAll('.action-cond-row').forEach(row => {
+            const checked = row.querySelector('.action-cond-toggle')?.checked;
+            row.style.opacity = checked ? '1' : '0.5';
+            row.querySelectorAll('.action-cond-field').forEach(field => {
+                field.disabled = !checked;
+            });
+        });
+    }
+
+    readConditionsFromModal(modal) {
+        const conditions = [];
+        for (const type of this.conditionTypeCatalog()) {
+            const toggle = modal.querySelector(`.action-cond-toggle[data-cond-type="${type.id}"]`);
+            if (!toggle?.checked) continue;
+
+            const read = param => {
+                const field = modal.querySelector(`.action-cond-field[data-cond-type="${type.id}"][data-cond-param="${param}"]`);
+                const value = field ? parseFloat(field.value) : NaN;
+                if (!Number.isFinite(value)) return 0;
+                return type.percent
+                    ? Math.min(1, Math.max(0, Math.round(value * 100) / 10000))
+                    : Math.max(0, Math.round(value));
+            };
+            conditions.push({ type: type.id, param1: read(1), param2: read(2) });
+        }
+        return conditions;
+    }
+
     showActionEditorModal(enemy, actionIndex, action) {
         const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const draft = { ...action };
@@ -664,17 +899,12 @@ class DatabaseEnemyEditor {
 
         const modal = document.createElement('div');
         modal.className = 'rr-modal';
-        modal.style.cssText = 'width: min(450px, calc(100vw - 24px));';
+        modal.style.cssText = 'width: min(560px, calc(100vw - 24px));';
 
         const skills = this.databaseManager.getSkills() || [];
         const skillOptions = skills
             .filter(s => s && s.id > 0)
             .map(s => `<option value="${s.id}" ${s.id === draft.skillId ? 'selected' : ''}>#${s.id} ${this.escapeHTML(s.name || '')}</option>`)
-            .join('');
-
-        const conditionTypes = ['Always', 'Turn', 'HP', 'MP', 'State', 'Party Level', 'Switch'];
-        const conditionOptions = conditionTypes
-            .map((name, idx) => `<option value="${idx}" ${idx === draft.conditionType ? 'selected' : ''}>${tt(name)}</option>`)
             .join('');
 
         const inputStyle = 'width: 100%; padding: 6px; background: var(--color-bg-menubar); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 3px; font-size: 12px; box-sizing: border-box;';
@@ -690,17 +920,12 @@ class DatabaseEnemyEditor {
                     <select id="action-edit-skill" style="${inputStyle}">${skillOptions}</select>
                 </div>
                 <div>
-                    <label class="database-field-label" style="display: block; margin-bottom: 4px;">${tt('Condition Type:')}</label>
-                    <select id="action-edit-condType" style="${inputStyle}">${conditionOptions}</select>
-                </div>
-                <div style="display: flex; gap: 12px;">
-                    <div style="flex: 1;">
-                        <label class="database-field-label" style="display: block; margin-bottom: 4px;">${tt('Param 1:')}</label>
-                        <input type="number" id="action-edit-param1" value="${draft.conditionType === 2 || draft.conditionType === 3 ? this.formatConditionPercent(draft.conditionParam1) : draft.conditionParam1 || 0}" style="${inputStyle}">
+                    <label class="database-field-label" style="display: block; margin-bottom: 4px;">${tt('Conditions')}</label>
+                    <div id="action-edit-conditions" style="display: flex; flex-direction: column; gap: 6px; padding: 8px; background: var(--color-bg-input); border: 1px solid var(--color-border); border-radius: 4px;">
+                        ${this.buildConditionRowsHTML(this.actionConditions(action))}
                     </div>
-                    <div style="flex: 1;">
-                        <label class="database-field-label" style="display: block; margin-bottom: 4px;">${tt('Param 2:')}</label>
-                        <input type="number" id="action-edit-param2" value="${draft.conditionType === 2 || draft.conditionType === 3 ? this.formatConditionPercent(draft.conditionParam2) : draft.conditionParam2 || 0}" style="${inputStyle}">
+                    <div style="margin-top: 4px; font-size: 11px; color: var(--color-text-muted);">
+                        ${tt('Every checked condition must be met. With none checked the action is always available.')}
                     </div>
                 </div>
                 <div>
@@ -709,6 +934,11 @@ class DatabaseEnemyEditor {
                 </div>
             </div>
         `;
+
+        modal.querySelectorAll('.action-cond-toggle').forEach(toggle => {
+            toggle.addEventListener('change', () => this.syncConditionRowStates(modal));
+        });
+        this.syncConditionRowStates(modal);
 
         const btnRow = document.createElement('div');
         btnRow.className = 'rr-modal-footer';
@@ -723,13 +953,11 @@ class DatabaseEnemyEditor {
         okBtn.className = 'rr-button-primary';
         okBtn.addEventListener('click', () => {
             draft.skillId = parseInt(modal.querySelector('#action-edit-skill').value) || 1;
-            draft.conditionType = parseInt(modal.querySelector('#action-edit-condType').value) || 0;
-            draft.conditionParam1 = parseFloat(modal.querySelector('#action-edit-param1').value) || 0;
-            draft.conditionParam2 = parseFloat(modal.querySelector('#action-edit-param2').value) || 0;
-            if (draft.conditionType === 2 || draft.conditionType === 3) {
-                draft.conditionParam1 /= 100;
-                draft.conditionParam2 /= 100;
-            }
+            const editedConditions = this.readConditionsFromModal(modal);
+            this.setActionConditions(
+                draft,
+                this.mergeEditedActionConditions(action, editedConditions)
+            );
             draft.rating = Math.max(1, Math.min(10, parseInt(modal.querySelector('#action-edit-rating').value) || 5));
 
             if (!enemy.actions) enemy.actions = [];
@@ -1105,13 +1333,12 @@ class DatabaseEnemyEditor {
         if (!project) return;
 
         const path = require('path');
-        const fs = require('fs');
 
         // Search for battler image across directories
         const searchDirs = ['enemies', 'sv_enemies', 'characters'];
         let imagePath = null;
         for (const dir of searchDirs) {
-            const battlerFile = RRAssetFiles.find(path.join(project.path, 'img', dir), battlerName, ['.png']);
+            const battlerFile = RRAssetFiles.findImage(path.join(project.path, 'img', dir), battlerName);
             if (battlerFile) {
                 imagePath = RRAssetFiles.toUrl(battlerFile.absolutePath);
                 break;
@@ -1183,13 +1410,13 @@ class DatabaseEnemyEditor {
         const searchDirs = ['enemies', 'sv_enemies', 'characters'];
 
         // Collect files from all battler directories
-        const fileMap = new Map(); // name -> record (first directory wins for preview)
+        const fileMap = new Map(); // reference -> directory (first directory wins for preview)
         for (const dir of searchDirs) {
             const dirPath = path.join(project.path, 'img', dir);
             try {
                 if (fs.existsSync(dirPath)) {
-                    RRAssetFiles.listUnique(dirPath, ['.png']).forEach(file => {
-                        if (!fileMap.has(file.name)) fileMap.set(file.name, file);
+                    RRAssetFiles.listImageReferences(dirPath).forEach(reference => {
+                        if (!fileMap.has(reference)) fileMap.set(reference, dirPath);
                     });
                 }
             } catch (e) {
@@ -1206,8 +1433,8 @@ class DatabaseEnemyEditor {
             this.refreshEnemyDetail(enemy);
             this.parentEditor?.refreshListIcon?.(enemy, 'enemies');
         }, (fileName) => {
-            const file = fileMap.get(fileName);
-            return file ? RRAssetFiles.toUrl(file.absolutePath) : '';
+            const dirPath = fileMap.get(fileName);
+            return dirPath ? RRAssetFiles.imageUrlFor(dirPath, fileName) : '';
         }, enemy.battlerName, { allowNone: true });
     }
 

@@ -157,7 +157,6 @@ class CharacterGraphicPicker {
 
         try {
             const fs = require('fs');
-            const path = require('path');
 
             if (!fs.existsSync(charactersPath)) {
                 fileList.innerHTML = `<div style="color: var(--color-text-muted); padding: 12px;">${this._t('Characters folder not found')}</div>`;
@@ -167,11 +166,8 @@ class CharacterGraphicPicker {
 
             console.debug('Characters folder exists, reading files...');
 
-            const files = RRAssetFiles.listUnique(charactersPath, ['.png'])
-                .map(file => ({
-                    fullName: file.relativePath,
-                    baseName: file.name
-                }));
+            const files = RRAssetFiles.listImageReferences(charactersPath)
+                .map(reference => ({ fullName: reference, baseName: reference }));
 
             console.debug('Found character files:', files);
 
@@ -222,25 +218,23 @@ class CharacterGraphicPicker {
     /**
      * Show sprite preview and selection grid
      * @param {HTMLElement} previewArea - The preview area element
-     * @param {string} fullFilename - Full filename with extension (for loading image)
-     * @param {string} baseName - Base filename without extension (for display and storage)
+     * @param {string} fullFilename - Extension-aware image reference
+     * @param {string} baseName - Reference used for display and storage
      */
     showSpritePreview(previewArea, fullFilename, baseName = null, currentSelection = null) {
-        // If baseName not provided, strip extension from fullFilename
-        if (!baseName) {
-            baseName = fullFilename.replace(/\.(png|jpg|jpeg|gif)$/i, '');
-        }
+        if (!baseName) baseName = fullFilename;
 
         const projectPath = this.currentProject?.path;
 
-        // Use file:// protocol for NW.js
         const path = require('path');
-        const imagePath = RRAssetFiles.toUrl(path.join(projectPath, 'img', 'characters', fullFilename));
+        const imageFile = RRAssetFiles.findImage(
+            path.join(projectPath, 'img', 'characters'), fullFilename);
+        const imagePath = imageFile ? RRAssetFiles.toUrl(imageFile.absolutePath) : '';
 
         console.debug('Loading character sprite:', imagePath);
 
         previewArea.innerHTML = '';
-        previewArea.dataset.selectedFile = baseName;  // Store base name without extension
+        previewArea.dataset.selectedFile = baseName;
         const previewGeneration = (this._previewGeneration || 0) + 1;
         this._previewGeneration = previewGeneration;
 

@@ -51,6 +51,7 @@ test('application version matches package metadata in every startup surface', ()
 const DEPLOYABLE_RUNTIME_FILES = [
     'reactor_main.js', 'reactor_core.js', 'reactor_managers.js',
     'reactor_objects.js', 'reactor_scenes.js', 'reactor_sprites.js', 'reactor_picture_extensions.js',
+    'reactor_video_surfaces.js',
     'reactor_windows.js', 'reactor_mv_compat.js', 'reactor_plugins.js',
     path.join('libs', 'pixi.js'), path.join('libs', 'pixi_compat.js'),
     path.join('libs', 'pako.min.js'), path.join('libs', 'lz-string.js'), path.join('libs', 'localforage.min.js'),
@@ -106,6 +107,7 @@ test('the bundled Demo satisfies the deployment runtime requirements', () => {
     const manifest = fs.readFileSync(path.join(demoRoot, 'js', 'reactor_main.js'), 'utf8');
     const listed = Array.from(manifest.matchAll(/"js\/([^"]+\.js)"/g), match => match[1]);
     assert.ok(listed.includes('reactor_picture_extensions.js'), 'the loader manifest lists the picture extensions');
+    assert.ok(listed.includes('reactor_video_surfaces.js'), 'the loader manifest lists video surfaces');
     assert.ok(listed.includes('libs/lz-string.js'), 'the loader manifest lists LZString');
     const unloadable = listed.filter(file => !fs.existsSync(path.join(demoRoot, 'js', file)));
     assert.deepEqual(unloadable, [], `the Demo loader would 404 on: ${unloadable.join(', ')}`);
@@ -119,6 +121,7 @@ test('runtime corescript files are present', () => {
         'reactor_managers.js',
         'reactor_objects.js',
         'reactor_picture_extensions.js',
+        'reactor_video_surfaces.js',
         'reactor_plugins.js',
         'reactor_scenes.js',
         'reactor_sprites.js',
@@ -293,6 +296,81 @@ test('opening a Reactor project refreshes its versioned runtime but preserves pl
         });
         assert.equal((await manager.refreshReactorRuntime(projectPath, projectData)).updated, false,
             'a current project is not rewritten every time it opens');
+    } finally {
+        fs.rmSync(tempRoot, { recursive: true, force: true });
+    }
+});
+
+test('opening a same-version Reactor project refreshes an older runtime revision once', async () => {
+    const ProjectManager = loadBrowserClass(path.join(repoRoot, 'src', 'ProjectManager.js'), 'ProjectManager');
+    const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'rpg-reactor-runtime-revision-test-'));
+    const runtimePath = path.join(tempRoot, 'runtime');
+    const projectPath = path.join(tempRoot, 'Project');
+    fs.mkdirSync(runtimePath, { recursive: true });
+    fs.mkdirSync(path.join(projectPath, 'js'), { recursive: true });
+    fs.writeFileSync(path.join(projectPath, 'index.html'), '<script src="js/reactor_main.js"></script>');
+    fs.writeFileSync(path.join(projectPath, 'js', 'reactor_main.js'),
+        '// RPG Reactor runtime version: 0.98.4\n// RPG Reactor runtime revision: old\n');
+    fs.writeFileSync(path.join(projectPath, 'js', 'reactor_plugins.js'), 'var $plugins = [{ name: "KeepMe" }];');
+    fs.writeFileSync(path.join(runtimePath, 'reactor_main.js'),
+        '// RPG Reactor runtime version: 0.98.4\n// RPG Reactor runtime revision: current\n');
+    fs.writeFileSync(path.join(runtimePath, 'reactor_plugins.js'), 'var $plugins = [];');
+
+    try {
+        const manager = new ProjectManager();
+        manager.getRuntimePath = () => runtimePath;
+        manager.getEngineVersion = () => '0.98.4';
+        const projectData = {
+            name: 'Existing', version: '0.98.4', engine: 'RPG Reactor', engineVersion: '0.98.4'
+        };
+        assert.equal((await manager.refreshReactorRuntime(projectPath, projectData)).updated, true);
+        assert.match(fs.readFileSync(path.join(projectPath, 'js', 'reactor_main.js'), 'utf8'),
+            /runtime revision: current/);
+        assert.equal(fs.readFileSync(path.join(projectPath, 'js', 'reactor_plugins.js'), 'utf8'),
+            'var $plugins = [{ name: "KeepMe" }];');
+        assert.equal((await manager.refreshReactorRuntime(projectPath, projectData)).updated, false);
+    } finally {
+        fs.rmSync(tempRoot, { recursive: true, force: true });
+    }
+});
+
+test('a failed runtime refresh leaves the revision marker stale so the next open retries', async () => {
+    const ProjectManager = loadBrowserClass(path.join(repoRoot, 'src', 'ProjectManager.js'), 'ProjectManager');
+    const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'rpg-reactor-runtime-retry-test-'));
+    const runtimePath = path.join(tempRoot, 'runtime');
+    const projectPath = path.join(tempRoot, 'Project');
+    fs.mkdirSync(runtimePath, { recursive: true });
+    fs.mkdirSync(path.join(projectPath, 'js'), { recursive: true });
+    fs.writeFileSync(path.join(projectPath, 'index.html'), '<script src="js/reactor_main.js"></script>');
+    fs.writeFileSync(path.join(projectPath, 'js', 'reactor_main.js'),
+        '// RPG Reactor runtime version: 0.98.4\n// RPG Reactor runtime revision: old\n');
+    fs.writeFileSync(path.join(runtimePath, 'reactor_main.js'),
+        '// RPG Reactor runtime version: 0.98.4\n// RPG Reactor runtime revision: current\n');
+    fs.writeFileSync(path.join(runtimePath, 'reactor_sprites.js'), '// current sprites\n');
+
+    try {
+        const manager = new ProjectManager();
+        manager.getRuntimePath = () => runtimePath;
+        manager.getEngineVersion = () => '0.98.4';
+        const copyFileSync = manager.fs.copyFileSync.bind(manager.fs);
+        manager.fs = {
+            ...manager.fs,
+            copyFileSync(source, target) {
+                if (path.basename(source) === 'reactor_sprites.js') throw new Error('injected copy failure');
+                copyFileSync(source, target);
+            }
+        };
+        const projectData = {
+            name: 'Existing', version: '0.98.4', engine: 'RPG Reactor', engineVersion: '0.98.4'
+        };
+        assert.equal((await manager.refreshReactorRuntime(projectPath, projectData)).ok, false);
+        assert.match(fs.readFileSync(path.join(projectPath, 'js', 'reactor_main.js'), 'utf8'),
+            /runtime revision: old/);
+
+        manager.fs = fs;
+        assert.equal((await manager.refreshReactorRuntime(projectPath, projectData)).updated, true);
+        assert.match(fs.readFileSync(path.join(projectPath, 'js', 'reactor_main.js'), 'utf8'),
+            /runtime revision: current/);
     } finally {
         fs.rmSync(tempRoot, { recursive: true, force: true });
     }

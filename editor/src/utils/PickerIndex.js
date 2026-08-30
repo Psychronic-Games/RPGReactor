@@ -193,9 +193,9 @@
             item.addEventListener('mouseleave', () => {
                 if (item.dataset.fileName !== selectedName) item.style.backgroundColor = '';
             });
-            item.addEventListener('click', () => {
+            item.addEventListener('click', event => {
                 setSelected(name);
-                if (options.onSelect) options.onSelect(name, item);
+                if (options.onSelect) options.onSelect(name, item, event);
             });
             item.addEventListener('keydown', event => {
                 if (event.key !== 'Enter' && event.key !== ' ') return;
@@ -335,6 +335,7 @@
 
             setSelected(selectedName, false);
             if (sections[0]) setActiveSection(sections[0].key);
+            if (options.onRender) options.onRender(list);
         };
 
         /**

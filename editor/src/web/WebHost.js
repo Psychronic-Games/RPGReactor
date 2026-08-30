@@ -146,6 +146,19 @@
         return `${absolute ? '/' : ''}${parts.join('/')}` || (absolute ? '/' : '.');
     }
 
+    function safeRelativePath(value) {
+        const normalized = String(value || '').replace(/\\/g, '/');
+        if (!normalized || normalized.startsWith('/') || /^[A-Za-z]:/.test(normalized)
+            || /[\0-\x1f\x7f<>:"|?*]/.test(normalized)) {
+            throw new Error(tt('The export path is not safe.'));
+        }
+        const parts = normalized.split('/');
+        if (parts.some(part => !part || part === '.' || part === '..' || /[. ]$/.test(part))) {
+            throw new Error(tt('The export path is not safe.'));
+        }
+        return parts.join('/');
+    }
+
     function createPathApi() {
         return {
             sep: '/',
@@ -213,10 +226,14 @@
     function createFileSystem(manifest, db) {
         const entries = new Map();
         const contents = new Map(Object.entries(manifest.mutable || {}));
+        const bundledEntries = new Map();
+        const bundledContents = new Map(contents);
+        const storedPaths = new Set();
         const pending = new Set();
 
         for (const entry of manifest.files || []) entries.set(entry.path, { ...entry });
         entries.set('', { path: '', type: 'directory', size: 0 });
+        for (const [entryPath, entry] of entries) bundledEntries.set(entryPath, { ...entry });
 
         const ensureParents = relativePath => {
             const parts = relativePath.split('/');
@@ -300,7 +317,9 @@
                     path: relativePath,
                     type: 'file',
                     size: typeof stored === 'string' ? new Blob([stored]).size : stored.byteLength,
+                    updatedAt: Date.now(),
                 });
+                storedPaths.add(relativePath);
                 persist(relativePath, stored);
             },
             appendFileSync(filePath, data) {
@@ -347,6 +366,7 @@
                 const relativePath = projectRelative(filePath);
                 entries.delete(relativePath);
                 contents.delete(relativePath);
+                storedPaths.delete(relativePath);
                 track(new Promise((resolve, reject) => {
                     const request = db.transaction(STORE_NAME, 'readwrite').objectStore(STORE_NAME).delete(relativePath);
                     request.onsuccess = resolve;
@@ -360,6 +380,21 @@
                         if (key === relativePath || key.startsWith(`${relativePath}/`)) this.unlinkSync(`${PROJECT_ROOT}/${key}`);
                     }
                 } else this.unlinkSync(filePath);
+            },
+            rmdirSync(dirPath) {
+                const relativePath = projectRelative(dirPath);
+                const entry = entries.get(relativePath);
+                if (!entry || entry.type !== 'directory') {
+                    const error = new Error(tt('Not a directory: {dirPath}', { dirPath }));
+                    error.code = 'ENOTDIR';
+                    throw error;
+                }
+                if (this.readdirSync(dirPath).length) {
+                    const error = new Error(tt('Directory is not empty: {dirPath}', { dirPath }));
+                    error.code = 'ENOTEMPTY';
+                    throw error;
+                }
+                entries.delete(relativePath);
             },
             copyFileSync(source, destination) {
                 this.writeFileSync(destination, this.readFileSync(source));
@@ -379,6 +414,22 @@
                 throw error;
             },
             hasPendingWriteFailures() { return failures.length > 0; },
+            hasStoredFile(filePath) { return storedPaths.has(projectRelative(filePath)); },
+            restoreBundledFileSync(filePath) {
+                const relativePath = projectRelative(filePath);
+                const bundledEntry = bundledEntries.get(relativePath);
+                if (bundledEntry) entries.set(relativePath, { ...bundledEntry });
+                else entries.delete(relativePath);
+                if (bundledContents.has(relativePath)) contents.set(relativePath, bundledContents.get(relativePath));
+                else contents.delete(relativePath);
+                storedPaths.delete(relativePath);
+                track(new Promise((resolve, reject) => {
+                    const request = db.transaction(STORE_NAME, 'readwrite').objectStore(STORE_NAME).delete(relativePath);
+                    request.onsuccess = resolve;
+                    request.onerror = () => reject(request.error);
+                }), relativePath);
+            },
+            _entryIdentity(filePath) { return entries.get(projectRelative(filePath)) || null; },
             _applyStored(record) {
                 ensureParents(record.path);
                 contents.set(record.path, record.data);
@@ -388,6 +439,7 @@
                     size: typeof record.data === 'string' ? new Blob([record.data]).size : record.data.byteLength,
                     updatedAt: record.updatedAt,
                 });
+                storedPaths.add(record.path);
             },
         };
         return fs;
@@ -427,15 +479,61 @@
         return new Blob([data], { type: mimeType || 'application/octet-stream' });
     }
 
-    async function writeDirectoryFile(rootHandle, relativePath, blob) {
-        const parts = normalizePath(relativePath).split('/').filter(part => part && part !== '..');
+    async function writeDirectoryFile(rootHandle, relativePath, blob, createdDirectories = null, destination = null, state = null) {
+        const parts = safeRelativePath(relativePath).split('/');
         const fileName = parts.pop();
-        let directory = rootHandle;
-        for (const part of parts) directory = await directory.getDirectoryHandle(part, { create: true });
-        const fileHandle = await directory.getFileHandle(fileName, { create: true });
+        let directory = destination?.directory || rootHandle;
+        if (!destination) {
+            for (const part of parts) {
+                const parent = directory;
+                try {
+                    directory = await parent.getDirectoryHandle(part);
+                } catch (error) {
+                    if (error.name !== 'NotFoundError') throw error;
+                    directory = await parent.getDirectoryHandle(part, { create: true });
+                    createdDirectories?.push({ parent, name: part, handle: directory });
+                }
+            }
+        }
+        const fileHandle = destination?.handle
+            || await directory.getFileHandle(fileName, { create: true });
+        if (state) Object.assign(state, { directory, fileName, handle: fileHandle });
         const writable = await fileHandle.createWritable();
         await writable.write(blob);
         await writable.close();
+        return { directory, fileName, handle: fileHandle };
+    }
+
+    async function existingDirectoryFile(rootHandle, relativePath) {
+        const parts = safeRelativePath(relativePath).split('/');
+        const fileName = parts.pop();
+        let directory = rootHandle;
+        try {
+            for (const part of parts) directory = await directory.getDirectoryHandle(part);
+            const handle = await directory.getFileHandle(fileName);
+            return { directory, fileName, handle, file: await handle.getFile() };
+        } catch (error) {
+            if (error.name === 'NotFoundError') return null;
+            throw error;
+        }
+    }
+
+    async function sameBlobBytes(left, right) {
+        if (!left || !right || left.size !== right.size) return false;
+        const leftBytes = new Uint8Array(await left.arrayBuffer());
+        const rightBytes = new Uint8Array(await right.arrayBuffer());
+        return leftBytes.every((value, index) => value === rightBytes[index]);
+    }
+
+    function bytesOf(value) {
+        if (typeof value === 'string') return new TextEncoder().encode(value);
+        return value instanceof Uint8Array ? value : new Uint8Array(value);
+    }
+
+    function sameBytes(left, right) {
+        const a = bytesOf(left);
+        const b = bytesOf(right);
+        return a.length === b.length && a.every((value, index) => value === b[index]);
     }
 
     function installFileUrlBridge(host) {
@@ -564,7 +662,7 @@
             return new URL(`project/${relativePath}`, document.baseURI).href;
         },
         async flush() { if (this.fs) await this.fs.flush(); },
-        async saveFile({ data, projectPath = null, suggestedName = 'download.bin', mimeType = 'application/octet-stream' }) {
+        async saveFile({ data, projectPath = null, suggestedName = 'download.bin', mimeType = 'application/octet-stream', beforeWrite = null }) {
             const blob = await valueToBlob(data, mimeType);
             if (projectPath) {
                 this.fs.writeFileSync(projectPath, new Uint8Array(await blob.arrayBuffer()));
@@ -575,6 +673,7 @@
             if (window.showSaveFilePicker) {
                 try {
                     const handle = await window.showSaveFilePicker({ suggestedName });
+                    await beforeWrite?.();
                     const writable = await handle.createWritable();
                     await writable.write(blob);
                     await writable.close();
@@ -585,6 +684,7 @@
                 }
             }
 
+            await beforeWrite?.();
             const url = URL.createObjectURL(blob);
             const link = document.createElement('a');
             link.href = url;
@@ -596,18 +696,112 @@
             setTimeout(() => URL.revokeObjectURL(url), 1000);
             return { path: suggestedName, project: false, downloaded: true };
         },
-        async saveFiles({ files, projectRoot = null, suggestedDirectoryName = 'RPG Reactor Export' }) {
+        async saveFiles({ files, projectRoot = null, suggestedDirectoryName = 'RPG Reactor Export', confirmOverwrite = null, beforeWrite = null }) {
             if (projectRoot) {
+                const root = normalizePath(projectRoot);
+                const prepared = [];
+                const targets = new Set();
                 for (const file of files) {
+                    const relativePath = safeRelativePath(file.path);
                     const blob = await valueToBlob(file.data, file.mimeType);
-                    this.fs.writeFileSync(normalizePath(`${projectRoot}/${file.path}`), new Uint8Array(await blob.arrayBuffer()));
+                    const target = normalizePath(`${root}/${relativePath}`);
+                    if (targets.has(target)) throw new Error(tt('The export contains duplicate target paths.'));
+                    targets.add(target);
+                    const existed = this.fs.existsSync(target);
+                    const previousValue = existed ? await this.fs.readFileAsync(target) : null;
+                    prepared.push({
+                        target,
+                        data: new Uint8Array(await blob.arrayBuffer()),
+                        existed,
+                        hadStoredOverlay: existed && !!this.fs.hasStoredFile?.(target),
+                        previous: typeof previousValue === 'string'
+                            ? new TextEncoder().encode(previousValue)
+                            : previousValue
+                    });
                 }
-                await this.flush();
-                return { path: projectRoot, project: true };
+                const existingPaths = prepared.filter(item => item.existed).map(item => item.target);
+                if (existingPaths.length) {
+                    const allowed = confirmOverwrite
+                        ? await confirmOverwrite(existingPaths)
+                        : window.confirm(tt('{count} destination file(s) already exist. Replace them?', { count: existingPaths.length }));
+                    if (!allowed) return null;
+                }
+                await beforeWrite?.();
+                const written = [];
+                const createdDirectories = new Map();
+                try {
+                    for (const item of prepared) {
+                        const existsNow = this.fs.existsSync(item.target);
+                        if (existsNow !== item.existed) {
+                            throw new Error(tt('An export target changed before it could be written.'));
+                        }
+                        if (existsNow) {
+                            const current = await this.fs.readFileAsync(item.target);
+                            if (!sameBytes(current, item.previous)) {
+                                throw new Error(tt('An export target changed before it could be written.'));
+                            }
+                        }
+                        const relativeTarget = item.target.slice(root.length).replace(/^\/+/, '');
+                        const parts = relativeTarget ? relativeTarget.split('/') : [];
+                        parts.pop();
+                        let parent = root;
+                        const missingParents = [];
+                        for (const part of parts) {
+                            parent = normalizePath(`${parent}/${part}`);
+                            if (!this.fs.existsSync(parent)) missingParents.push(parent);
+                        }
+                        this.fs.writeFileSync(item.target, item.data);
+                        for (const directory of missingParents) {
+                            if (!createdDirectories.has(directory)) {
+                                createdDirectories.set(directory, this.fs._entryIdentity?.(directory));
+                            }
+                        }
+                        written.push(item);
+                    }
+                    await this.flush();
+                } catch (error) {
+                    const rollbackErrors = [];
+                    for (const item of written.reverse()) {
+                        try {
+                            if (!this.fs.existsSync(item.target)
+                                || !sameBytes(await this.fs.readFileAsync(item.target), item.data)) {
+                                throw new Error(tt('An export target changed before rollback could restore it.'));
+                            }
+                            if (item.existed && item.hadStoredOverlay) this.fs.writeFileSync(item.target, item.previous);
+                            else if (item.existed) this.fs.restoreBundledFileSync(item.target);
+                            else if (this.fs.existsSync(item.target)) this.fs.unlinkSync(item.target);
+                        } catch (rollbackError) {
+                            rollbackErrors.push(rollbackError);
+                        }
+                    }
+                    for (const [directory, identity] of [...createdDirectories].sort(([a], [b]) => b.length - a.length)) {
+                        try {
+                            if (this.fs._entryIdentity?.(directory) !== identity) {
+                                throw new Error(tt('An export directory changed before rollback could remove it.'));
+                            }
+                            if (identity && !this.fs.readdirSync(directory).length) {
+                                this.fs.rmdirSync(directory);
+                            }
+                        } catch (rollbackError) {
+                            if (rollbackError?.code !== 'ENOENT' && rollbackError?.code !== 'ENOTEMPTY') {
+                                rollbackErrors.push(rollbackError);
+                            }
+                        }
+                    }
+                    try { await this.flush(); } catch (rollbackError) { rollbackErrors.push(rollbackError); }
+                    if (!rollbackErrors.length) throw error;
+                    throw new Error(`${error.message} ${tt('Export rollback was incomplete:')} ${rollbackErrors.map(item => item.message).join('; ')}`);
+                }
+                return { path: root, project: true };
             }
             if (files.length === 1) {
                 const file = files[0];
-                return this.saveFile({ data: file.data, suggestedName: file.path, mimeType: file.mimeType });
+                return this.saveFile({
+                    data: file.data,
+                    suggestedName: file.path,
+                    mimeType: file.mimeType,
+                    beforeWrite
+                });
             }
             if (!window.showDirectoryPicker) {
                 throw new Error(tt('This export contains multiple files. Use a browser with directory picker support or open a project first.'));
@@ -619,8 +813,101 @@
                 if (error.name === 'AbortError') return null;
                 throw error;
             }
+            const existing = [];
             for (const file of files) {
-                await writeDirectoryFile(directory, file.path, await valueToBlob(file.data, file.mimeType));
+                const found = await existingDirectoryFile(directory, file.path);
+                if (found) existing.push({ path: file.path, ...found });
+            }
+            if (existing.length) {
+                const allowed = confirmOverwrite
+                    ? await confirmOverwrite(existing.map(item => item.path))
+                    : window.confirm(tt('{count} destination file(s) already exist. Replace them?', { count: existing.length }));
+                if (!allowed) return null;
+            }
+            for (const item of existing) {
+                item.snapshot = new Blob([await item.file.arrayBuffer()], { type: item.file.type });
+            }
+            const existingByPath = new Map(existing.map(item => [normalizePath(item.path), item]));
+            const prepared = [];
+            const targets = new Set();
+            for (const file of files) {
+                const relativePath = safeRelativePath(file.path);
+                const target = normalizePath(relativePath);
+                if (targets.has(target)) throw new Error(tt('The export contains duplicate target paths.'));
+                targets.add(target);
+                prepared.push({ ...file, path: relativePath, blob: await valueToBlob(file.data, file.mimeType) });
+            }
+            const written = [];
+            const createdDirectories = [];
+            try {
+                await beforeWrite?.();
+                for (const file of prepared) {
+                    const previous = existingByPath.get(normalizePath(file.path)) || null;
+                    const current = await existingDirectoryFile(directory, file.path);
+                    if ((!previous && current) || (previous && !current)
+                        || (previous && current && previous.handle.isSameEntry
+                            && !await previous.handle.isSameEntry(current.handle))
+                        || (previous && current && (previous.file.size !== current.file.size
+                            || previous.file.lastModified !== current.file.lastModified
+                            || !await sameBlobBytes(previous.file, current.file)))) {
+                        throw new Error(tt('An export target changed before it could be written.'));
+                    }
+                    const rollback = {
+                        path: normalizePath(file.path), previous,
+                        expected: file.blob, written: null
+                    };
+                    written.push(rollback);
+                    rollback.written = await writeDirectoryFile(
+                        directory, file.path, file.blob, createdDirectories, current, rollback);
+                }
+            } catch (error) {
+                const rollbackErrors = [];
+                for (const item of written.reverse()) {
+                    try {
+                        const current = await existingDirectoryFile(directory, item.path);
+                        if (!current) {
+                            if (!item.previous) continue;
+                            throw new Error(tt('An export target changed before rollback could restore it.'));
+                        }
+                        if (item.handle?.isSameEntry && !await item.handle.isSameEntry(current.handle)) {
+                            throw new Error(tt('An export target changed before rollback could restore it.'));
+                        }
+                        const containsExport = await sameBlobBytes(item.expected, current.file);
+                        if (!containsExport) {
+                            if (item.previous && await sameBlobBytes(item.previous.snapshot, current.file)) continue;
+                            if (!item.previous && current.file.size === 0) {
+                                if (typeof current.handle.remove === 'function') await current.handle.remove();
+                                else await current.directory.removeEntry(current.fileName);
+                                continue;
+                            }
+                            throw new Error(tt('An export target changed before rollback could restore it.'));
+                        }
+                        if (item.previous) {
+                            await writeDirectoryFile(directory, item.path, item.previous.snapshot, null, current);
+                        } else {
+                            if (typeof current.handle.remove === 'function') await current.handle.remove();
+                            else await current.directory.removeEntry(current.fileName);
+                        }
+                    } catch (rollbackError) {
+                        if (rollbackError?.name !== 'NotFoundError' || item.previous) {
+                            rollbackErrors.push(rollbackError);
+                        }
+                    }
+                }
+                for (const item of createdDirectories.reverse()) {
+                    try {
+                        const current = await item.parent.getDirectoryHandle(item.name);
+                        if (item.handle.isSameEntry && !await item.handle.isSameEntry(current)) {
+                            throw new Error(tt('An export directory changed before rollback could remove it.'));
+                        }
+                        if (typeof item.handle.remove === 'function') await item.handle.remove();
+                        else await item.parent.removeEntry(item.name);
+                    } catch (rollbackError) {
+                        if (rollbackError?.name !== 'NotFoundError') rollbackErrors.push(rollbackError);
+                    }
+                }
+                if (!rollbackErrors.length) throw error;
+                throw new Error(`${error.message} ${tt('Export rollback was incomplete:')} ${rollbackErrors.map(item => item.message).join('; ')}`);
             }
             return { path: directory.name, project: false };
         },

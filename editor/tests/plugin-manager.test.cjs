@@ -126,6 +126,22 @@ test('Plugin Help exposes highlighted next/previous search controls and shortcut
     assert.match(styles, /\.plugin-help-content::\-webkit-resizer\s*\{[^}]*var\(--color-accent-deep\)[^}]*var\(--color-accent-bright\)/s);
 });
 
+test('Plugin Manager opens plugin URLs externally and themes its scroll regions', () => {
+    const source = fs.readFileSync(path.join(repoRoot, 'src', 'PluginManager.js'), 'utf8');
+    const uiSource = fs.readFileSync(path.join(repoRoot, 'src', 'UIManager.js'), 'utf8');
+    const styles = fs.readFileSync(path.join(repoRoot, 'css', 'styles.css'), 'utf8');
+
+    assert.match(source, /urlLink\.className = 'external-link'/);
+    assert.match(source, /urlLink\.rel = 'noreferrer'/);
+    assert.match(uiSource, /closest\('a\.external-link'\)/);
+    assert.match(uiSource, /nw\.Shell\.openExternal\(href\)/);
+    assert.match(source, /pluginListContainer\.className = 'rr-accent-scrollbar'/);
+    assert.match(source, /detailsContainer\.classList\.add\('rr-accent-scrollbar'\)/);
+    assert.match(source, /helpContent\.classList\.add\('rr-accent-scrollbar'\)/);
+    assert.match(styles, /\.rr-accent-scrollbar\s*\{[^}]*scrollbar-color:[^}]*var\(--color-accent-muted\)[^}]*var\(--color-bg-deep\)/s);
+    assert.match(styles, /\.rr-accent-scrollbar::\-webkit-scrollbar-thumb\s*\{[^}]*var\(--color-accent\)[^}]*var\(--color-accent-muted\)/s);
+});
+
 test('MV nested struct arrays parse and serialize without flattening RPG Maker JSON strings', () => {
     const PluginManager = loadBrowserClass(path.join(repoRoot, 'src', 'PluginManager.js'), 'PluginManager');
     const manager = Object.create(PluginManager.prototype);

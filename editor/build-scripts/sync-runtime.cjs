@@ -61,19 +61,19 @@ for (const project of projects) {
         if (PER_PROJECT.has(path.basename(rel))) continue;
         const source = path.join(runtimeRoot, rel);
         const destination = path.join(target, rel);
-        // Only files the project already has: a project that never shipped a
-        // file does not gain one here, because adding to someone's js/ is a
-        // different decision from keeping it current.
-        if (!fs.existsSync(destination)) continue;
-        if (fs.readFileSync(source).equals(fs.readFileSync(destination))) continue;
+        if (fs.existsSync(destination)
+            && fs.readFileSync(source).equals(fs.readFileSync(destination))) continue;
         stale.push(rel);
-        if (!checkOnly) fs.copyFileSync(source, destination);
+        if (!checkOnly) {
+            fs.mkdirSync(path.dirname(destination), { recursive: true });
+            fs.copyFileSync(source, destination);
+        }
     }
     if (!stale.length) continue;
     drifted += stale.length;
     if (!checkOnly) copied += stale.length;
     console.log(`${project}:`);
-    for (const rel of stale) console.log(`  ${checkOnly ? 'stale' : 'updated'}  ${rel}`);
+    for (const rel of stale) console.log(`  ${checkOnly ? 'missing/stale' : 'updated'}  ${rel}`);
 }
 
 if (!drifted) {

@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Database">
+  <defs>
+    <linearGradient id="db-blue" x1="12" y1="7" x2="51" y2="58" gradientUnits="userSpaceOnUse"><stop stop-color="#075cdd"/><stop offset=".5" stop-color="#072b95"/><stop offset="1" stop-color="#03102a"/></linearGradient>
+    <radialGradient id="db-gold"><stop stop-color="#fff"/><stop offset=".14" stop-color="#fffbd5"/><stop offset=".36" stop-color="#ffd52b"/><stop offset=".6" stop-color="#ff9a0b"/><stop offset=".8" stop-color="#f0440b"/><stop offset="1" stop-color="#d7318f"/></radialGradient>
+    <filter id="db-glow" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="1.2" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  </defs>
+  <path d="M9 15c0-7 10-11 23-11s23 4 23 11v34c0 7-10 11-23 11S9 56 9 49z" fill="#01040f" stroke="#01030a" stroke-width="6"/>
+  <path d="M10 15c0-6 10-10 22-10s22 4 22 10v34c0 6-10 10-22 10s-22-4-22-10z" fill="url(#db-blue)" stroke="#075cdd" stroke-width="2.4"/>
+  <ellipse cx="32" cy="15" rx="18" ry="6.5" fill="#071943" stroke="#ff4fd2" stroke-width="2.1"/>
+  <path d="M11 26c4.5 4 12 6 21 6s16.5-2 21-6M11 39c4.5 4 12 6 21 6s16.5-2 21-6" fill="none" stroke="#d7318f" stroke-width="2"/>
+  <path d="M11 48c4.5 4 12 6 21 6s16.5-2 21-6" fill="none" stroke="#d7318f" stroke-width="2"/>
+  <path d="M15 19v5m34-5v5M15 32v5m34-5v5M15 45v4m34-4v4" stroke="#a92588" stroke-width="2.2"/>
+  <path d="M51 20v5m0 8v4m0 8v3" stroke="#d7318f" stroke-width="1.8" stroke-linecap="round"/>
+  <circle cx="32" cy="38" r="9" fill="#020612" stroke="#01030a" stroke-width="4"/>
+  <circle cx="32" cy="38" r="7" fill="#8f1f68" stroke="#d7318f" stroke-width="1.8"/>
+  <circle cx="32" cy="38" r="6.3" fill="#01030a"/>
+  <circle cx="32" cy="38" r="5.2" fill="url(#db-gold)" stroke="#01030a" stroke-width="1.4" filter="url(#db-glow)"/>
+  <path d="M32 27v4m-11 7h4m14 0h4m-11 9v4" stroke="#23bdf3" stroke-width="1.5"/>
+</svg>

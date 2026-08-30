@@ -25,14 +25,11 @@
  */
 
 // ─── Forge icon set (inline SVG, currentColor) ───────────────────────────────
-// Each entry returns an SVG string at the requested pixel size. Stroke-based
-// outline style with rounded joins; uses `currentColor` so the icon inherits
-// the surrounding text color (typically var(--color-accent-bright)).
+// Each entry returns icon markup at the requested pixel size. Tool glyphs
+// inherit currentColor; brand marks keep the luminous editor palette.
 const FORGE_ICONS = {
-    // Anvil: horn to the left, flat face, waist, flared base, with a
-    // spark off the face. A filled silhouette reads at 22px; the previous
-    // emblem read as a flag, not a forge.
-    forge: (size) => `<svg width="${size}" height="${size}" viewBox="0 0 24 24" style="display: block;" aria-hidden="true"><path d="M 22 5 H 9 C 6.2 5, 3.6 6.3, 2 8.6 C 4 9.6, 6.4 10, 9 10 H 10 V 14 H 7 L 5.5 18 H 18.5 L 17 14 H 14 V 10 H 20 C 21.1 10, 22 9.1, 22 8 Z" fill="#ffd700"/><path d="M 19.5 0.5 Q 20 2.5 22 3 Q 20 3.5 19.5 5.5 Q 19 3.5 17 3 Q 19 2.5 19.5 0.5 Z" fill="#fff066"/></svg>`,
+    // A large gold anvil and curved four-point spark remain clear at 22px.
+    forge: (size) => `<img src="images/icon-forge.svg" width="${size}" height="${size}" style="display: block;" alt="">`,
 
     // Person silhouette (head + shoulders).
     characterGenerator: (size) => `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="display: block;" aria-hidden="true"><circle cx="12" cy="7.5" r="4"/><path d="M4.5 21v-1a6 6 0 0 1 6-6h3a6 6 0 0 1 6 6v1"/></svg>`,

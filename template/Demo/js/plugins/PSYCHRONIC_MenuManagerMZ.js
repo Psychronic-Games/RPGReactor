@@ -7,6 +7,12 @@
  * @plugindesc [v1.5.0] Menu Manager MZ - Independent Positioning with Animated Character Sprites
  * @author Psychronic
  * @url https://psychronic.itch.io
+ * @param debugLogging
+ * @text Debug Logging
+ * @desc Print the menu manager's layout and font diagnostics to the console. Off keeps the console clean.
+ * @type boolean
+ * @default false
+ *
  * @help PSYCHRONIC_MenuManagerMZ.js
  * @version 1.5.0
  *
@@ -668,6 +674,12 @@
 
     // Get plugin parameters
     const parameters = PluginManager.parameters(pluginName);
+    const debugLogging = String(parameters.debugLogging || 'false') === 'true';
+    const debugLog = (...args) => { if (debugLogging) debugLog(...args); };
+    const debugTrace = (...args) => { if (debugLogging) debugTrace(...args); };
+    const debugGroup = (...args) => { if (debugLogging) debugGroup(...args); };
+    const debugGroupEnd = () => { if (debugLogging) debugGroupEnd(); };
+    const debugTable = (...args) => { if (debugLogging) debugTable(...args); };
     const menuSettings = JSON.parse(parameters['menuSettings'] || '{}');
     const commandSettings = JSON.parse(parameters['commandSettings'] || '{}');
     const statusSettings = JSON.parse(parameters['statusSettings'] || '{}');
@@ -692,7 +704,7 @@
                 this.setupEventListeners();
                 this.setupSpriteAnimation();
 
-// [silenced]                 console.log('MenuManager initialized with fonts:', this.availableFonts);
+// [silenced]                 debugLog('MenuManager initialized with fonts:', this.availableFonts);
             } catch (e) {
                 console.warn('MenuManager initialization failed:', e);
                 // Ensure we have at least basic configs
@@ -852,7 +864,7 @@
         }
 
         static setupSpriteAnimation() {
-// [silenced]             console.log('=== Setting up sprite animation ===');
+// [silenced]             debugLog('=== Setting up sprite animation ===');
 
             this.spriteAnimationData = {
                 currentDirection: 0,
@@ -864,7 +876,7 @@
             };
 
             if (this.statusConfig && this.statusConfig.useCharacterSprites) {
-                console.log('Starting sprite animation with intervals');
+                debugLog('Starting sprite animation with intervals');
                 this.startSpriteAnimationLoop();
             }
         }
@@ -874,7 +886,7 @@
                 return;
             }
 
-            console.log('Starting interval-based animation');
+            debugLog('Starting interval-based animation');
             this.animationLoopRunning = true;
             this.spriteAnimationData.isPaused = false;
 
@@ -900,7 +912,7 @@
         }
 
         static stopSpriteAnimationLoop() {
-            console.log('Stopping animation loop');
+            debugLog('Stopping animation loop');
             this.animationLoopRunning = false;
 
             if (this.spriteAnimationData.animationTimer) {
@@ -960,7 +972,7 @@
                 walkFrame: adjustedFrame
             };
 
-            console.log(`Animation frame for actor ${actorIndex}:`, result);
+            debugLog(`Animation frame for actor ${actorIndex}:`, result);
             return result;
         }
 
@@ -990,7 +1002,7 @@
                 fontFace.load().then((loadedFace) => {
                     document.fonts.add(loadedFace);
                     this.availableFonts[fontName] = fontName;
-// [silenced]                     console.log(`Custom font ${fontName} loaded successfully`);
+// [silenced]                     debugLog(`Custom font ${fontName} loaded successfully`);
                 }).catch((error) => {
                     console.warn(`Failed to load custom font ${fontName}:`, error);
                 });
@@ -1172,7 +1184,7 @@
                 y = Graphics.boxHeight - height - 8;
             }
 
-            console.log('Gold Window Rect - X:', x, 'Y:', y, 'W:', width, 'H:', height);
+            debugLog('Gold Window Rect - X:', x, 'Y:', y, 'W:', width, 'H:', height);
 
             return new Rectangle(x, y, width, height);
         }
@@ -1213,13 +1225,13 @@
         }
 
         static debugPositioning() {
-            console.log('=== Menu Manager Debug Info ===');
-            console.log('Independent Positioning:', this.isIndependentPositioning());
-            console.log('Command Window Rect:', this.getMenuRect());
-            console.log('Status Window Rect:', this.getStatusRect());
-            console.log('Gold Window Rect:', this.getGoldRect());
-            console.log('Menu Config:', this.menuConfig);
-            console.log('==============================');
+            debugLog('=== Menu Manager Debug Info ===');
+            debugLog('Independent Positioning:', this.isIndependentPositioning());
+            debugLog('Command Window Rect:', this.getMenuRect());
+            debugLog('Status Window Rect:', this.getStatusRect());
+            debugLog('Gold Window Rect:', this.getGoldRect());
+            debugLog('Menu Config:', this.menuConfig);
+            debugLog('==============================');
         }
 
         static getStatusDisplayMode() {
@@ -1249,12 +1261,12 @@
             const requestedFont = this.uiConfig.effectiveFontFace || this.uiConfig.fontFace || 'GameFont';
 
             // Debug logging
-            console.log(`Requested font: ${requestedFont}`);
-            console.log(`Available fonts:`, this.availableFonts);
+            debugLog(`Requested font: ${requestedFont}`);
+            debugLog(`Available fonts:`, this.availableFonts);
 
             // Check if the requested font is available
             if (this.availableFonts && this.availableFonts[requestedFont]) {
-                console.log(`Using font: ${requestedFont}`);
+                debugLog(`Using font: ${requestedFont}`);
                 return this.availableFonts[requestedFont];
             }
 
@@ -1308,7 +1320,7 @@
 
         this.addWindow(this._contextControlPanel);
 
-        console.log('Control panel created at:', rect.x, rect.y, rect.width, rect.height);
+        debugLog('Control panel created at:', rect.x, rect.y, rect.width, rect.height);
     };
 
     Scene_Menu.prototype.onControlPanelOk = function() {
@@ -1414,13 +1426,13 @@
 
         // Debug gold window
         if (this._goldWindow) {
-            console.log('=== GOLD WINDOW STATE ===');
-            console.log('Position:', this._goldWindow.x, this._goldWindow.y);
-            console.log('Size:', this._goldWindow.width, this._goldWindow.height);
-            console.log('Visible:', this._goldWindow.visible);
-            console.log('Opacity:', this._goldWindow.opacity);
-            console.log('Openness:', this._goldWindow.openness);
-            console.log('========================');
+            debugLog('=== GOLD WINDOW STATE ===');
+            debugLog('Position:', this._goldWindow.x, this._goldWindow.y);
+            debugLog('Size:', this._goldWindow.width, this._goldWindow.height);
+            debugLog('Visible:', this._goldWindow.visible);
+            debugLog('Opacity:', this._goldWindow.opacity);
+            debugLog('Openness:', this._goldWindow.openness);
+            debugLog('========================');
         }
     };
 
@@ -1454,7 +1466,7 @@
         if (MenuManager.isIndependentPositioning()) {
             // Use custom gold window with independent positioning
             this._goldWindow = new Window_CustomGold(rect);
-            console.log('Created custom gold window at:', rect.x, rect.y, rect.width, rect.height);
+            debugLog('Created custom gold window at:', rect.x, rect.y, rect.width, rect.height);
         } else {
             // Use default gold window
             this._goldWindow = new Window_Gold(rect);
@@ -1568,7 +1580,7 @@
         // User selected an equipment slot
         const slot = this._infoWindow.item();
         if (slot) {
-            console.log('Selected equipment slot:', slot.slotName);
+            debugLog('Selected equipment slot:', slot.slotName);
             // TODO: Open equipment selection window for this slot
             // For now, go to equip scene
             const actor = $gameParty.members()[this._selectedActorIndex];
@@ -1649,9 +1661,9 @@
                     this._statusWindow._container.style.padding = '0px';
                 }
 
-                console.log('Applied CSS margin/padding overrides to status window');
+                debugLog('Applied CSS margin/padding overrides to status window');
             } catch (error) {
-                console.log('Could not apply CSS overrides:', error);
+                debugLog('Could not apply CSS overrides:', error);
             }
         }
     };
@@ -2309,10 +2321,10 @@
 
     // NEW: Calculate sprite size based on scale
     Window_MenuStatus.prototype.calculateSpriteSize = function(actor, scale, maxSize) {
-        console.log('=== Calculating sprite size ===');
-        console.log('Actor:', actor.name());
-        console.log('Scale:', scale);
-        console.log('Max size:', maxSize);
+        debugLog('=== Calculating sprite size ===');
+        debugLog('Actor:', actor.name());
+        debugLog('Scale:', scale);
+        debugLog('Max size:', maxSize);
 
         if (!actor._characterName) {
             // Return default size for actors without sprites
@@ -2379,9 +2391,9 @@
                 }
             }
 
-            console.log('Base frame size:', baseFrameWidth, 'x', baseFrameHeight);
-            console.log('Scaled size:', scaledWidth, 'x', scaledHeight);
-            console.log('Aspect ratio:', aspectRatio);
+            debugLog('Base frame size:', baseFrameWidth, 'x', baseFrameHeight);
+            debugLog('Scaled size:', scaledWidth, 'x', scaledHeight);
+            debugLog('Aspect ratio:', aspectRatio);
 
             return {
                 displayWidth: scaledWidth,
@@ -2405,12 +2417,12 @@
 
     // NEW: Draw animated character sprite with improved debugging
     Window_MenuStatus.prototype.drawActorCharacterSprite = function(actor, centerX, y, spriteData) {
-        console.log('=== Attempting to draw character sprite with scaling ===');
-        console.log('Actor:', actor.name());
-        console.log('Character name:', actor._characterName);
-        console.log('Character index:', actor._characterIndex);
-        console.log('Position:', centerX, y);
-        console.log('Sprite data:', spriteData);
+        debugLog('=== Attempting to draw character sprite with scaling ===');
+        debugLog('Actor:', actor.name());
+        debugLog('Character name:', actor._characterName);
+        debugLog('Character index:', actor._characterIndex);
+        debugLog('Position:', centerX, y);
+        debugLog('Sprite data:', spriteData);
 
         if (!actor._characterName) {
             console.warn('Actor has no character sprite:', actor.name());
@@ -2422,15 +2434,15 @@
 
         try {
             const bitmap = ImageManager.loadCharacter(actor._characterName);
-            console.log('Bitmap loaded:', bitmap);
-            console.log('Bitmap ready:', bitmap.isReady());
+            debugLog('Bitmap loaded:', bitmap);
+            debugLog('Bitmap ready:', bitmap.isReady());
 
             if (bitmap.isReady()) {
                 this.drawCharacterSpriteImmediateScaled(bitmap, actor, centerX, y, spriteData);
             } else {
-                console.log('Bitmap not ready, adding load listener');
+                debugLog('Bitmap not ready, adding load listener');
                 bitmap.addLoadListener(() => {
-                    console.log('Bitmap loaded via listener');
+                    debugLog('Bitmap loaded via listener');
                     this.drawCharacterSpriteImmediateScaled(bitmap, actor, centerX, y, spriteData);
                 });
             }
@@ -3102,10 +3114,10 @@
     Scene_Menu.prototype.statusWindowRect = function() {
         // Debug logging for troubleshooting
         if (MenuManager.isIndependentPositioning()) {
-            console.log('=== Status Window Positioning Debug ===');
-            console.log('Independent positioning enabled');
-            console.log('Graphics.boxWidth:', Graphics.boxWidth);
-            console.log('Graphics.boxHeight:', Graphics.boxHeight);
+            debugLog('=== Status Window Positioning Debug ===');
+            debugLog('Independent positioning enabled');
+            debugLog('Graphics.boxWidth:', Graphics.boxWidth);
+            debugLog('Graphics.boxHeight:', Graphics.boxHeight);
             MenuManager.debugPositioning();
         }
 
@@ -3113,13 +3125,13 @@
         if (MenuManager.isIndependentPositioning()) {
             const independentRect = MenuManager.getStatusRect();
             if (independentRect) {
-                console.log('Using independent rect:', independentRect);
-                console.log('Status window will be positioned at:', independentRect.x, independentRect.y);
-                console.log('Status window size:', independentRect.width, 'x', independentRect.height);
+                debugLog('Using independent rect:', independentRect);
+                debugLog('Status window will be positioned at:', independentRect.x, independentRect.y);
+                debugLog('Status window size:', independentRect.width, 'x', independentRect.height);
 
                 // Force the window to use the FULL screen width with no margins
                 const fullWidthRect = new Rectangle(0, independentRect.y, Graphics.boxWidth, independentRect.height);
-                console.log('FORCING full width rect:', fullWidthRect);
+                debugLog('FORCING full width rect:', fullWidthRect);
                 return fullWidthRect;
             }
             // If independent positioning is enabled but failed, create a fallback that's still independent
@@ -3128,7 +3140,7 @@
         }
 
         // Original linked positioning logic (only when independent positioning is disabled)
-        console.log('Using linked positioning (independent positioning disabled)');
+        debugLog('Using linked positioning (independent positioning disabled)');
         const commandRect = this.commandWindowRect();
 
         if (MenuManager.statusConfig.displayMode === 'horizontal') {
@@ -3170,12 +3182,12 @@
     };
 
     Scene_Menu.prototype.goldWindowRect = function() {
-        console.log('=== goldWindowRect called ===');
-        console.trace(); // This will show the call stack
+        debugLog('=== goldWindowRect called ===');
+        debugTrace(); // This will show the call stack
 
         if (MenuManager.isIndependentPositioning()) {
             const rect = MenuManager.getGoldRect();
-            console.log('Returning independent rect:', rect);
+            debugLog('Returning independent rect:', rect);
             return rect;
         }
 
@@ -3183,7 +3195,7 @@
         const wh = this.calcWindowHeight(1, true);
         const wx = Graphics.boxWidth - ww;
         const wy = this.mainAreaBottom() - wh;
-        console.log('Returning default rect:', wx, wy, ww, wh);
+        debugLog('Returning default rect:', wx, wy, ww, wh);
         return new Rectangle(wx, wy, ww, wh);
     };
 
@@ -3311,7 +3323,7 @@
             this.contents.fontSize = fontSize;
 
             // Debug: verify font application
-            console.log(`Applied font: ${fontFace}, size: ${fontSize}`);
+            debugLog(`Applied font: ${fontFace}, size: ${fontSize}`);
 
             // Force redraw if content exists
             if (this.contents && this._allTextHeight) {

@@ -104,6 +104,7 @@ class TilesetPaletteViewer {
                     ${this.createLayerTab('G')}
                     ${this.createLayerTab('R', TilesetPaletteViewer.tabIcon('region'))}
                     ${this.createLayerTab('O', TilesetPaletteViewer.tabIcon('object3d'))}
+                    ${this.createLayerTab('M', TilesetPaletteViewer.tabIcon('model3d'), '3D-M')}
                 </div>
 
                 <!-- Tileset Preview Canvas -->
@@ -119,6 +120,9 @@ class TilesetPaletteViewer {
 
                 <!-- 3D object UI Container (shown when O tab is active) -->
                 <div id="object3d-ui-container" style="flex: 1; display: none; min-height: 0;"></div>
+
+                <!-- Model props UI Container (shown when M tab is active) -->
+                <div id="model-props-ui-container" style="flex: 1; display: none; min-height: 0;"></div>
 
                 <!-- Selection Info -->
                 <div id="selection-info" style="padding: 8px; background-color: var(--color-bg-list-item); border-top: 1px solid var(--color-border); font-size: 10px; color: var(--color-text-muted); flex-shrink: 0;">
@@ -162,6 +166,17 @@ class TilesetPaletteViewer {
                 `<rect x="${x}" y="${y}" width="5.5" height="5.5" rx="1.2" fill="${fill}"/>`
             ).join('') + '</svg>';
         }
+        if (kind === 'model3d') {
+            // A model on a stand: a teal monitor-shaped block on a plinth,
+            // distinct from the amber cube of the object tab beside it.
+            return open
+                + '<path d="M2.5 12.5h11v2h-11z" fill="#6b7a8a"/>'
+                + '<path d="M6.5 10.5h3v2h-3z" fill="#8a9aab"/>'
+                + '<path d="M3 2.5 8 1l5 1.5v6L8 10 3 8.5z" fill="#2fbfb0"/>'
+                + '<path d="M3 2.5 8 4v6L3 8.5z" fill="#1f8f85"/>'
+                + '<path d="M13 2.5 8 4v6l5-1.5z" fill="#17706a"/>'
+                + '<path d="M8.6 4.6l3.4-1v3.6l-3.4 1z" fill="#c8fff8"/></svg>';
+        }
         /*
          * A cube, as three faces meeting in the middle rather than as an
          * outline: the silhouette alone is a hexagon, and a hexagon at twelve
@@ -174,11 +189,11 @@ class TilesetPaletteViewer {
             + '<path d="M14.5 5.25 8 9v6.5l6.5-3.75z" fill="#b3541e"/></svg>';
     }
 
-    createLayerTab(layerName, icon = '') {
+    createLayerTab(layerName, icon = '', label = layerName) {
         const isActive = layerName === this.currentLayer;
         const displayText = icon
-            ? `<span style="display: inline-flex; align-items: center; gap: 3px;">${icon}${layerName}</span>`
-            : layerName;
+            ? `<span style="display: inline-flex; align-items: center; gap: 3px;">${icon}${label}</span>`
+            : label;
         return `
             <button
                 class="tileset-layer-tab ${isActive ? 'active' : ''}"
@@ -363,12 +378,15 @@ class TilesetPaletteViewer {
         const selectionInfo = document.getElementById('selection-info');
 
         const object3dContainer = document.getElementById('object3d-ui-container');
+        const modelPropsContainer = document.getElementById('model-props-ui-container');
 
+        if (layerName !== 'M') this.onModelPropsTabLeft?.();
         if (layerName === 'R') {
             // Show region UI, hide tileset preview
             if (tilesetContainer) tilesetContainer.style.display = 'none';
             if (regionContainer) regionContainer.style.display = 'flex';
             if (object3dContainer) object3dContainer.style.display = 'none';
+            if (modelPropsContainer) modelPropsContainer.style.display = 'none';
             if (selectionInfo) selectionInfo.style.display = 'none';
 
             // Trigger region UI initialization (will be handled by main app)
@@ -379,13 +397,23 @@ class TilesetPaletteViewer {
             if (tilesetContainer) tilesetContainer.style.display = 'none';
             if (regionContainer) regionContainer.style.display = 'none';
             if (object3dContainer) object3dContainer.style.display = 'flex';
+            if (modelPropsContainer) modelPropsContainer.style.display = 'none';
             if (selectionInfo) selectionInfo.style.display = 'none';
             this.onObject3DTabSelected?.();
+        } else if (layerName === 'M') {
+            // Model props: 3D models placed on the map from a list.
+            if (tilesetContainer) tilesetContainer.style.display = 'none';
+            if (regionContainer) regionContainer.style.display = 'none';
+            if (object3dContainer) object3dContainer.style.display = 'none';
+            if (modelPropsContainer) modelPropsContainer.style.display = 'flex';
+            if (selectionInfo) selectionInfo.style.display = 'none';
+            this.onModelPropsTabSelected?.();
         } else {
             // Show tileset preview, hide region UI
             if (tilesetContainer) tilesetContainer.style.display = 'block';
             if (regionContainer) regionContainer.style.display = 'none';
             if (object3dContainer) object3dContainer.style.display = 'none';
+            if (modelPropsContainer) modelPropsContainer.style.display = 'none';
             if (selectionInfo) selectionInfo.style.display = 'block';
 
             // Hide regions overlay when switching away from R tab

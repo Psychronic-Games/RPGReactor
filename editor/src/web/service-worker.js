@@ -34,6 +34,8 @@ function contentType(pathname) {
         jpg: 'image/jpeg',
         jpeg: 'image/jpeg',
         webp: 'image/webp',
+        gif: 'image/gif',
+        svg: 'image/svg+xml',
         ogg: 'audio/ogg',
         m4a: 'audio/mp4',
         mp3: 'audio/mpeg',

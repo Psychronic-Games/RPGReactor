@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Plugins">
+  <defs>
+    <linearGradient id="pl-blue" x1="17" y1="8" x2="47" y2="56" gradientUnits="userSpaceOnUse"><stop stop-color="#075cdd"/><stop offset=".52" stop-color="#072b95"/><stop offset="1" stop-color="#03102a"/></linearGradient>
+    <radialGradient id="pl-gold"><stop stop-color="#fff"/><stop offset=".14" stop-color="#fffbd5"/><stop offset=".36" stop-color="#ffd52c"/><stop offset=".6" stop-color="#ff9a0b"/><stop offset=".8" stop-color="#f0440b"/><stop offset="1" stop-color="#d7318f"/></radialGradient>
+    <filter id="pl-glow" x="-70%" y="-70%" width="240%" height="240%"><feGaussianBlur stdDeviation="1.4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  </defs>
+  <g transform="rotate(-42 32 32)">
+    <path d="M21 2h22v16l-5 6H26l-5-6z" fill="#01040e" stroke="#01030a" stroke-width="7" stroke-linejoin="round"/>
+    <path d="M22 2h20v15l-5 6H27l-5-6z" fill="url(#pl-blue)" stroke="#075cdd" stroke-width="2.4" stroke-linejoin="round"/>
+    <path d="M27 24v6m10-6v6" stroke="#01030a" stroke-width="7" stroke-linecap="round"/>
+    <path d="M27 24v6m10-6v6" stroke="#ffd52c" stroke-width="2.9" stroke-linecap="round"/>
+    <path d="M27 10h10M27 16h10" stroke="#3689ea" stroke-width="2"/>
+    <path d="M18 47v5c0 5 4 9 9 9h10c5 0 9-4 9-9v-5H36v5h-8v-5z" fill="#01040e" stroke="#01030a" stroke-width="7" stroke-linejoin="round"/>
+    <path d="M19 47v5c0 4.5 3.5 8 8 8h10c4.5 0 8-3.5 8-8v-5h-9v5h-8v-5z" fill="url(#pl-blue)" stroke="#075cdd" stroke-width="2.4" stroke-linejoin="round"/>
+    <path d="M32 33v5" stroke="#01030a" stroke-width="7" stroke-linecap="round"/>
+    <path d="M32 33v5" stroke="#ffd52c" stroke-width="2.7" stroke-linecap="round" filter="url(#pl-glow)"/>
+    <path d="M27 37l5 6 5-6z" fill="#01030a" stroke="#01030a" stroke-width="5" stroke-linejoin="round"/>
+    <path d="M28 37l4 5 4-5z" fill="url(#pl-gold)" stroke="#fff08c" stroke-width="1" stroke-linejoin="round" filter="url(#pl-glow)"/>
+    <path d="M24 56h16" stroke="#d7318f" stroke-width="2" stroke-linecap="round"/>
+  </g>
+</svg>

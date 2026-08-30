@@ -169,6 +169,11 @@ class UIManager {
             case 'audio-player':
                 this.callbacks.showAudioPlayer();
                 break;
+            case 'resource-manager':
+                if (this.callbacks.showResourceManager) {
+                    this.callbacks.showResourceManager();
+                }
+                break;
             case 'toggle-event-mode':
                 if (this.callbacks.toggleEventMode) {
                     this.callbacks.toggleEventMode();
@@ -342,6 +347,10 @@ class UIManager {
         // Tools menu
         const toolsMenu = new nw.Menu();
         toolsMenu.append(new nw.MenuItem({
+            label: 'Resource Manager',
+            click: () => this.callbacks.showResourceManager()
+        }));
+        toolsMenu.append(new nw.MenuItem({
             label: '♪ Audio Player',
             click: () => this.callbacks.showAudioPlayer()
         }));
@@ -363,6 +372,11 @@ class UIManager {
                     win.showDevTools();
                 }
             }
+        }));
+        helpMenu.append(new nw.MenuItem({ type: 'separator' }));
+        helpMenu.append(new nw.MenuItem({
+            label: 'RPG Catalyst Forums',
+            click: () => nw.Shell.openExternal('https://rpgcatalyst.com')
         }));
         helpMenu.append(new nw.MenuItem({ type: 'separator' }));
         helpMenu.append(new nw.MenuItem({
@@ -1249,6 +1263,11 @@ class UIManager {
                 // Open plugins manager
                 if (this.callbacks.showPluginManager) {
                     this.callbacks.showPluginManager();
+                }
+                break;
+            case 'resource-manager':
+                if (this.callbacks.showResourceManager) {
+                    this.callbacks.showResourceManager();
                 }
                 break;
             case 'audio-player':

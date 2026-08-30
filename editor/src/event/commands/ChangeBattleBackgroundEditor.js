@@ -100,6 +100,15 @@ class ChangeBattleBackgroundEditor {
 
         bb1Row.appendChild(bb1Label);
         bb1Row.appendChild(bb1Input);
+        const browse = DatabaseEditorUI.imageBrowser(this.projectController);
+        if (browse) {
+            bb1Row.appendChild(browse.picker.createImageBrowseButton(bb1Input, {
+                projectPath: browse.projectPath,
+                folder: 'battlebacks1',
+                title: tt('Select Battleback 1'),
+                zIndex: 10007
+            }));
+        }
         content.appendChild(bb1Row);
 
         // Battleback 2 input
@@ -120,6 +129,14 @@ class ChangeBattleBackgroundEditor {
 
         bb2Row.appendChild(bb2Label);
         bb2Row.appendChild(bb2Input);
+        if (browse) {
+            bb2Row.appendChild(browse.picker.createImageBrowseButton(bb2Input, {
+                projectPath: browse.projectPath,
+                folder: 'battlebacks2',
+                title: tt('Select Battleback 2'),
+                zIndex: 10007
+            }));
+        }
         content.appendChild(bb2Row);
 
         container.appendChild(content);

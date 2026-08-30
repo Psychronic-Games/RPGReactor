@@ -324,8 +324,7 @@ class ShowPictureEditor {
         const assetFiles = typeof RRAssetFiles !== 'undefined'
             ? RRAssetFiles
             : require('../../utils/AssetFiles.js');
-        const pictureName = String(this.pictureName).replace(/\.png$/i, '');
-        return assetFiles.find(path.join(project.path, 'img', 'pictures'), pictureName, ['.png']);
+        return assetFiles.findImage(path.join(project.path, 'img', 'pictures'), this.pictureName);
     }
 
     syncPictureField(property) {
@@ -751,6 +750,21 @@ class ShowPictureEditor {
 
         // Picture Name
         const imageRow = this.createTextInput('Image:', 'pictureName', 'Enter picture filename');
+        const imageInput = imageRow.querySelector('[data-picture-property="pictureName"]');
+        imageRow.style.flexWrap = 'wrap';
+        imageInput.style.minWidth = '0';
+        const browse = DatabaseEditorUI.imageBrowser(this.projectController);
+        if (browse) {
+            imageRow.appendChild(browse.picker.createImageBrowseButton(
+                imageInput,
+                {
+                    projectPath: browse.projectPath,
+                    folder: 'pictures',
+                    title: tt('Select Picture'),
+                    zIndex: 10007
+                }
+            ));
+        }
         const quickSettingButton = document.createElement('button');
         quickSettingButton.type = 'button';
         quickSettingButton.className = 'show-picture-quick-setting-btn';

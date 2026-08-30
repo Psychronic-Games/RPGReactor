@@ -1,9 +1,8 @@
 /**
  * Hammer and Sickle — the Soviet emblem (also still in use by various
  * communist movements and on flags such as the People's Republic of
- * China's earlier variants). Geometry is ported from the existing
- * FORGE_ICONS.forge brand icon (which itself is scaled from the canonical
- * Soviet flag SVG): a sickle blade traced from 5 cubic Béziers + handle
+ * China's earlier variants). Geometry is adapted from the canonical Soviet
+ * flag SVG: a sickle blade traced from 5 cubic Béziers + handle
  * parallelogram + grip ellipse, plus a hammer with a straight handle,
  * head, and rounded butt cap.
  *

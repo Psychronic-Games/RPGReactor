@@ -106,7 +106,7 @@ The test suite statically rejects hard dependencies on ignored local projects.
 The distribution worker copies the tracked Reactor One project from
 `template/Demo`, preserves its authored content and plugin configuration, and
 refreshes its Reactor runtime files from the staged runtime.
-The current 0.98.4 baseline is **1,785 passing Node tests with no failures**;
+The current 0.98.4 baseline is **1,954 Node tests**;
 retain older counts only where a document clearly labels a historical release.
 
 When the optional authored-project compatibility corpus is present locally,
@@ -245,6 +245,8 @@ Inspect every `artifact-manifest-*.json` and confirm:
 - `releaseBuild` is true and `starter` is `bundled-demo`.
 - Every listed size and SHA-256 matches the adjacent file.
 - Archives include `THIRD_PARTY_NOTICES.md` with bundled component credits and license details.
+- Every desktop archive built with native codecs contains `rpg-reactor-codec.json`, `RPG_REACTOR_CODEC_NOTICE.txt`, and the complete `FFmpeg-LGPL-2.1.txt`; verify the recorded NW.js version, archive/binary SHA-256 values, immutable `nwjs-ffmpeg-prebuilt` build revision, corresponding FFmpeg source revision, and patent notice. Build once with codecs disabled and confirm a clean official runtime is used with none of those overlay files present.
+- Minimal and Web archives contain no native codec overlay or codec metadata.
 - The Web archive contains the tracked bundled Reactor One Demo starter.
 
 Platform inspection commands:
@@ -273,6 +275,11 @@ On each actual target OS, extract into a new directory and perform these tests:
 7. Close and reopen the project, then make one desktop deployment.
 8. Launch the packaged editor twice and confirm two independent editor processes open with different `nw.App.dataPath` values; closing either process must leave the other running.
 9. Open the Web ZIP over HTTPS or localhost, edit Reactor One, toggle 3D off/on, reload, and confirm browser persistence and Playtest.
+10. In Resource Manager, import a small valid model into a new nested name and confirm it creates only `source/<original-case filename>` plus empty `textures/`; retry the same destination and confirm the existing folder is untouched. Confirm `.blend` gives export guidance and existing 3D resources still cannot be deleted.
+11. Load representative PNG, JPG/JPEG, WebP, SVG, and GIF images through converted battleback, parallax, enemy-detail, title, animation, event character/face, Change Actor/Vehicle Image, System 1 vehicle, Picture, and Reactor UI Picture paths, then playtest. Confirm explicit extensions persist, extensionless PNG resolves, and GIF animates. Do not infer support for tilesets, plugin fields, database actor/list thumbnails, Reactor UI character/face/party-face/System/Title/Icon sources, balloons, or fixed sheets such as IconSet; those retain PNG contracts.
+12. Author Show/Transform/Stop Video Surface on 2D and 3D maps. Verify screen/map/event/player anchors and direct move. Verify PIXI projective corner warp with Z and Depth acting in 3D only (Z = elevation, Depth = toward the camera); verify the 3D-screen DOM preview reshapes/clips without claiming perspective-correct pixels; verify rectangular Three.js world placement, Z, and world-camera culling in preview. Confirm every editor preview draws the authored scanlines and PIXI/DOM previews omit culling, while playtest applies authored screen-pixel PIXI or world-distance Three.js culling. Confirm numeric synchronization, playback/audio/wait/stop, exact source navigation, and preview cleanup after cancel/map/project changes.
+13. Repeatedly switch actor/model previews and close/reopen their modal. Confirm no blank stale preview, duplicate cold-render stall, resize loop, or accumulating WebGL contexts.
+14. Inspect the SVG toolbar set in dark and light themes at normal desktop width and a narrow Web layout. Confirm Fill reads as a pouring bucket, Shadow Pen reads as applying darkness rather than sparks, Undo/Redo are an unmistakable mirrored pair, disabled states remain legible, every tool fits at supported desktop widths, and Web horizontal scrolling reaches every tool. Base desktop overflow remains unchanged and is not claimed to scroll.
 
 Do not continue if Windows signature status, macOS notarization, starter
 contents, save/reopen, or playtest fails.

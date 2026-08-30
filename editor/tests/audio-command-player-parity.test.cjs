@@ -69,13 +69,46 @@ test('Play SE uses the same player without enabling preview looping', () => {
     } finally {
         fs.rmSync(root, { recursive: true, force: true });
     }
+    const changeRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'rr-audio-change-'));
+    try {
+        for (const folder of ['bgm', 'me']) fs.mkdirSync(path.join(changeRoot, 'audio', folder), { recursive: true });
+        withAudioGlobals(opened => {
+            const cases = [[132, 'bgm'], [133, 'me'], [139, 'me']];
+            for (const [code, folder] of cases) {
+                let saved = null;
+                const editor = new AudioCommandEditor({}, { currentProject: { path: changeRoot } });
+                editor.show(null, code, command => { saved = command; });
+                const picker = opened.at(-1);
+                assert.equal(picker.folderLabel, folder.toUpperCase());
+                picker.onOk({ name: 'Cue', volume: 72, pitch: 96, pan: -12 });
+                assert.deepEqual(saved, {
+                    code, indent: 0,
+                    parameters: [{ name: 'Cue', volume: 72, pitch: 96, pan: -12 }]
+                });
+            }
+        });
+    } finally {
+        fs.rmSync(changeRoot, { recursive: true, force: true });
+    }
 });
 
 test('Troop audio commands route through AudioCommandEditor for insert and edit', () => {
     const source = fs.readFileSync(path.join(editorRoot, 'src', 'database', 'DatabaseTroopEditor.js'), 'utf8');
-    assert.match(source, /\[241, 242, 245, 246, 249, 250, 251\]\.includes\(command\.code\)[\s\S]{0,300}?getCommandEditor\('audio', AudioCommandEditor\)\.show\(null, command\.code/);
-    assert.match(source, /\[241, 242, 245, 246, 249, 250, 251\]\.includes\(cmd\.code\)[\s\S]{0,300}?getCommandEditor\('audio', AudioCommandEditor\)\.show\(cmd, cmd\.code/);
+    assert.match(source, /\[132, 133, 139, 241, 242, 245, 246, 249, 250, 251\]\.includes\(command\.code\)[\s\S]{0,300}?getCommandEditor\('audio', AudioCommandEditor\)\.show\(null, command\.code/);
+    assert.match(source, /\[132, 133, 139, 241, 242, 245, 246, 249, 250, 251\]\.includes\(cmd\.code\)[\s\S]{0,300}?getCommandEditor\('audio', AudioCommandEditor\)\.show\(cmd, cmd\.code/);
     assert.match(source, /249: \[\{ name: '', volume: 90, pitch: 100, pan: 0 \}\]/);
+    assert.match(source, /140: \['changeVehicleBGM', ChangeVehicleBGMEditor\]/);
+    const eventList = fs.readFileSync(path.join(editorRoot, 'src', 'event', 'EventCommandList.js'), 'utf8');
+    const common = fs.readFileSync(path.join(editorRoot, 'src', 'database', 'DatabaseCommonEventEditor.js'), 'utf8');
+    const vehicle = fs.readFileSync(path.join(editorRoot, 'src', 'event', 'commands', 'ChangeVehicleBGMEditor.js'), 'utf8');
+    for (const code of [132, 133, 139]) {
+        assert.match(eventList, new RegExp(`code === ${code}[\\s\\S]{0,120}?audioEditor\\.show\\([^,]+, code`));
+        assert.match(common, new RegExp(`${code}: \\[\\{ name: '', volume: 90, pitch: 100, pan: 0 \\}\\]`));
+    }
+    assert.match(common, /\[132, 133, 139, 241, 242, 245, 246, 249, 250, 251\]\.includes\(code\)/);
+    assert.match(vehicle, /RRAudioPickerModal\.open\(\{/);
+    assert.match(vehicle, /folderLabel: 'BGM'/);
+    assert.match(vehicle, /levels: \{ volume: this\.volume, pitch: this\.pitch, pan: this\.pan \}/);
 });
 
 test('plugin music arguments use the shared player loop defaults', () => {
