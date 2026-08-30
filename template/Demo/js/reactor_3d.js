@@ -10942,7 +10942,7 @@ Reactor3D.spawnAnchoredAnimation = function(effect, character, holder) {
     // front of it. The sprite stays for its timings.
     const viewport = spriteset._reactor3d ? spriteset._reactor3d.viewport : null;
     if (viewport && animation.effectName) {
-        const play = this.EffekseerScene.begin(viewport, animation);
+        const play = this.EffekseerScene.begin(viewport, animation, sprite);
         if (play) {
             entry.fx3d = play;
             // World units: the authored scale only. The screen factor in
@@ -10967,73 +10967,29 @@ Reactor3D.MAX_ANCHORED_PER_MODEL = 8;
  * The game's animation sprites draw on a 2D overlay above everything, so an
  * effect on a model could never go behind the model's own struts or a wall,
  * and its place came from projecting the anchor with last frame's camera.
- * Effekseer itself cannot draw on the scene's WebGL2 context (its programs
- * are WebGL 1), so it keeps a context of its own, an offscreen canvas: each
- * effect is drawn there from the scene's camera - the same projection and
- * view, at the world anchor, in world units - and the picture is then put
- * into the scene as a screen-sized quad standing at the anchor's depth. The
- * effect lands exactly where the anchor is, and whatever the scene has in
- * front of the anchor hides it. Cost: one small texture upload per live
- * effect per frame, at `SCALE` of the screen.
- *
- * The animation sprite still exists, hidden, for the record's sound and
- * flash timings and its lifetime.
+ * Effekseer cannot draw on the scene's WebGL 2 context (its programs are
+ * WebGL 1), and a second Effekseer context fights the first over one global
+ * object table. So the effect stays on the overlay's own context: its
+ * sprite's handle is drawn - during the update, before the game renders -
+ * from the scene's camera into a corner of the overlay canvas, that corner
+ * is copied into a texture, and the overlay is cleared again by the frame's
+ * ordinary overlay pass. The texture goes into the scene as a screen-sized
+ * quad standing at the anchor's depth: the effect lands exactly where the
+ * anchor is, and whatever the scene has in front of the anchor hides it.
+ * Cost: one draw and one small canvas copy per live effect per frame, at
+ * `SCALE` of the screen. The sprite itself stays hidden and keeps the
+ * record's sound and flash timings and its lifetime.
  */
 Reactor3D.EffekseerScene = {
-    /** Offscreen render size as a fraction of the screen; effects are soft, the upload is not free. */
+    /** Render size as a fraction of the screen; effects are soft, the copy is not free. */
     SCALE: 0.5,
     _live: [],
     _pass: "all",
 
-    /** The offscreen canvas and its own Effekseer context, made on first use. */
-    ensure() {
-        if (this._context) return this._context;
-        if (this._failed || typeof effekseer === "undefined" || !effekseer.createContext || typeof document === "undefined") return null;
-        try {
-            const canvas = document.createElement("canvas");
-            const gl = canvas.getContext("webgl", { alpha: true, premultipliedAlpha: false, antialias: false, depth: true, preserveDrawingBuffer: false })
-                || canvas.getContext("experimental-webgl", { alpha: true, premultipliedAlpha: false });
-            if (!gl) throw new Error("no WebGL for the effect canvas");
-            const context = effekseer.createContext();
-            context.init(gl, { instanceMaxCount: 4000, squareMaxCount: 12000 });
-            context.setRestorationOfStatesFlag(true);
-            this._canvas = canvas;
-            this._gl = gl;
-            this._context = context;
-            this._effects = {};
-            this.resize();
-            return context;
-        } catch (error) {
-            console.error("Reactor3D: Effekseer could not set up the effect canvas:", error);
-            this._failed = true;
-            return null;
-        }
-    },
-
-    resize() {
-        const width = Math.max(64, Math.round((typeof Graphics !== "undefined" ? Graphics.width : 816) * this.SCALE));
-        const height = Math.max(64, Math.round((typeof Graphics !== "undefined" ? Graphics.height : 624) * this.SCALE));
-        if (this._canvas.width !== width || this._canvas.height !== height) {
-            this._canvas.width = width;
-            this._canvas.height = height;
-        }
-    },
-
-    effectFor(animation) {
-        const url = typeof EffectManager !== "undefined" ? EffectManager.makeUrl(animation.effectName) : null;
-        if (!url) return null;
-        if (!this._effects[url]) {
-            this._effects[url] = this._context.loadEffect(url, 1, () => {}, () => {
-                console.error("Reactor3D: Effekseer effect failed to load for the 3D scene: " + url);
-            });
-        }
-        return this._effects[url];
-    },
-
     /** The screen-sized quad that carries one effect's picture at its anchor's depth. */
-    quadFor(play) {
-        const texture = new THREE.Texture(this._canvas);
-        texture.flipY = false;
+    quadFor(scratch) {
+        const texture = new THREE.Texture(scratch);
+        texture.flipY = true;
         texture.premultiplyAlpha = false;
         texture.minFilter = THREE.LinearFilter;
         texture.magFilter = THREE.LinearFilter;
@@ -11066,17 +11022,20 @@ Reactor3D.EffekseerScene = {
         return { mesh, texture, material };
     },
 
-    /** Begin an anchored animation in the scene; null when it cannot. */
-    begin(viewport, animation) {
-        if (!animation || !animation.effectName || !viewport || typeof THREE === "undefined") return null;
-        const context = this.ensure();
+    /** Begin an anchored animation in the scene for `sprite`'s handle; null when it cannot. */
+    begin(viewport, animation, sprite) {
+        if (!animation || !animation.effectName || !viewport || !sprite || typeof THREE === "undefined") return null;
+        if (typeof Graphics === "undefined" || !Graphics.effekseer || !Graphics._effekseerGL || !Graphics._effekseerCanvas) return null;
         const scene = viewport._scene;
-        if (!context || !scene) return null;
-        const effect = this.effectFor(animation);
-        if (!effect) return null;
-        const quad = this.quadFor();
+        if (!scene || typeof document === "undefined") return null;
+        const scratch = document.createElement("canvas");
+        scratch.width = 4;
+        scratch.height = 4;
+        const quad = this.quadFor(scratch);
         scene.add(quad.mesh);
-        const play = { viewport, animation, effect, handle: null, done: false, quad, world: new THREE.Vector3(), scale: [1, 1, 1], rotation: [0, 0, 0], placed: false };
+        // The sprite keeps its hands off the handle: the anchor owns its place.
+        sprite._reactorInScene = true;
+        const play = { viewport, animation, sprite, scratch, done: false, quad, world: new THREE.Vector3(), scale: [1, 1, 1], rotation: [0, 0, 0], placed: false, ready: false };
         this._live.push(play);
         return play;
     },
@@ -11100,7 +11059,6 @@ Reactor3D.EffekseerScene = {
     stop(play) {
         if (!play || play.done) return;
         play.done = true;
-        try { if (play.handle) play.handle.stop(); } catch (error) { /* already gone */ }
         const quad = play.quad;
         if (quad) {
             if (quad.mesh.parent) quad.mesh.parent.remove(quad.mesh);
@@ -11120,43 +11078,54 @@ Reactor3D.EffekseerScene = {
 
     /**
      * Draw every live play from the scene's camera and hand the pictures to
-     * their quads. Called once per frame before the 3D passes render.
+     * their quads. Called once per frame before the 3D passes render; the
+     * frame's overlay pass clears the corner again afterwards.
      */
     render(viewport) {
-        if (!this._live.length || !this._context) return;
+        if (!this._live.length) return;
         const camera = viewport && viewport._camera;
         const renderer = viewport && viewport.renderer ? viewport.renderer() : null;
-        if (!camera || !renderer) return;
-        this.resize();
-        const gl = this._gl, context = this._context, canvas = this._canvas;
-        const size = viewport.targetSize ? viewport.targetSize() : { width: canvas.width, height: canvas.height };
+        const efx = typeof Graphics !== "undefined" ? Graphics.effekseer : null;
+        const gl = typeof Graphics !== "undefined" ? Graphics._effekseerGL : null;
+        const overlay = typeof Graphics !== "undefined" ? Graphics._effekseerCanvas : null;
+        if (!camera || !renderer || !efx || !gl || !overlay) return;
+        const width = Math.max(16, Math.min(overlay.width, Math.round(overlay.width * this.SCALE)));
+        const height = Math.max(16, Math.min(overlay.height, Math.round(overlay.height * this.SCALE)));
+        const size = viewport.targetSize ? viewport.targetSize() : { width: overlay.width, height: overlay.height };
         camera.updateMatrixWorld();
         const clip = this._clip || (this._clip = new THREE.Vector4());
         try {
-            context.update(1);
-            context.setProjectionMatrix(camera.projectionMatrix.elements);
-            context.setCameraMatrix(camera.matrixWorldInverse.elements);
             for (const play of this._live) {
                 if (play.done || !play.placed) continue;
-                if (!play.handle) {
-                    if (!play.effect.isLoaded) continue;
-                    play.handle = context.play(play.effect, 0, 0, 0);
-                    if (!play.handle) { play.done = true; continue; }
-                    play.handle.setSpeed((play.animation.speed || 100) / 100);
-                }
-                play.handle.setLocation(play.world.x, play.world.y, play.world.z);
-                play.handle.setScale(play.scale[0], play.scale[1], play.scale[2]);
-                play.handle.setRotation(play.rotation[0], play.rotation[1], play.rotation[2]);
+                const handle = play.sprite && play.sprite._handle;
+                if (!handle || !handle.exists) { play.ready = false; play.quad.mesh.visible = false; continue; }
+                handle.setLocation(play.world.x, play.world.y, play.world.z);
+                handle.setScale(play.scale[0], play.scale[1], play.scale[2]);
+                handle.setRotation(play.rotation[0], play.rotation[1], play.rotation[2]);
                 // The anchor's depth in clip space is where the quad stands.
                 clip.set(play.world.x, play.world.y, play.world.z, 1).applyMatrix4(camera.matrixWorldInverse).applyMatrix4(camera.projectionMatrix);
                 if (clip.w <= 0) { play.ready = false; play.quad.mesh.visible = false; continue; }
-                gl.viewport(0, 0, canvas.width, canvas.height);
+                gl.viewport(0, 0, width, height);
+                gl.enable(gl.SCISSOR_TEST);
+                gl.scissor(0, 0, width, height);
                 gl.clearColor(0, 0, 0, 0);
                 gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-                context.beginDraw();
-                context.drawHandle(play.handle);
-                context.endDraw();
-                // Uploaded now, before the canvas is drawn over for the next play.
+                efx.setProjectionMatrix(camera.projectionMatrix.elements);
+                efx.setCameraMatrix(camera.matrixWorldInverse.elements);
+                efx.beginDraw();
+                efx.drawHandle(handle);
+                efx.endDraw();
+                gl.disable(gl.SCISSOR_TEST);
+                // The corner, copied out before the next play draws over it:
+                // the GL origin is the bottom left, so it is the last rows.
+                const scratch = play.scratch;
+                if (scratch.width !== width || scratch.height !== height) {
+                    scratch.width = width;
+                    scratch.height = height;
+                }
+                const ctx = scratch.getContext("2d");
+                ctx.clearRect(0, 0, width, height);
+                ctx.drawImage(overlay, 0, overlay.height - height, width, height, 0, 0, width, height);
                 play.quad.texture.needsUpdate = true;
                 renderer.initTexture(play.quad.texture);
                 play.quad.material.uniforms.depth.value = clip.z / clip.w;

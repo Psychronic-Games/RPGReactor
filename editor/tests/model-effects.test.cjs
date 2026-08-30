@@ -269,7 +269,7 @@ test('anchored Effekseer effects go into the 3D scene at the anchor, in world un
     const THREE = global.THREE;
     const scene = Reactor3D.EffekseerScene;
     assert.equal(scene.begin(null, { effectName: 'x' }), null, 'no viewport, no play');
-    assert.equal(scene.begin({ _scene: {} }, { name: 'MV sheet' }), null, 'an MV animation stays on the overlay');
+    assert.equal(scene.begin({ _scene: {} }, { name: 'MV sheet' }, {}), null, 'an MV animation stays on the overlay');
     // sync() takes the numbers; the handle is touched only in render().
     const object = new THREE.Group();
     object.userData.glbSize = { x: 1, y: 2, z: 1 };
@@ -282,7 +282,9 @@ test('anchored Effekseer effects go into the 3D scene at the anchor, in world un
     assert.equal(+play.scale[0].toFixed(3), +(20 / 26 * 2.05).toFixed(3), 'one Effekseer unit = span * scale / 26 tiles');
     assert.equal(+play.rotation[1].toFixed(4), +(Math.PI / 2).toFixed(4));
     const source = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_3d.js'), 'utf8');
-    assert.match(source, /canvas\.getContext\("webgl", \{ alpha: true, premultipliedAlpha: false/, 'its own WebGL 1 context: Effekseer cannot draw on the scene\'s WebGL 2 one');
+    assert.match(source, /Graphics\.effekseer[\s\S]*efx\.drawHandle\(handle\)/, 'drawn with the overlay context: Effekseer cannot draw on the scene\'s WebGL 2 one, and a second context fights the first');
+    assert.match(source, /ctx\.drawImage\(overlay, 0, overlay\.height - height, width, height, 0, 0, width, height\)/, 'the corner is copied out of the overlay canvas');
+    assert.match(fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_sprites.js'), 'utf8'), /if \(this\._reactorInScene\) return;/, 'the hidden sprite leaves the handle alone');
     assert.match(source, /gl_Position = vec4\(position\.xy, depth, 1\.0\)/, 'a screen quad standing at the anchor depth');
     assert.match(fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_sprites.js'), 'utf8'), /Reactor3D\.EffekseerScene\.render\(state\.viewport\)/, 'drawn before the passes');
 });

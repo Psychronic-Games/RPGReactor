@@ -1519,6 +1519,9 @@ Sprite_Animation.prototype.reactor3DScale = function() {
 };
 
 Sprite_Animation.prototype.updateEffectGeometry = function() {
+    // An effect drawn inside the 3D scene is placed by its anchor
+    // (Reactor3D.EffekseerScene), not by this sprite.
+    if (this._reactorInScene) return;
     const scale = (this._animation.scale / 100) * this.reactor3DScale();
     const r = Math.PI / 180;
     // The projection handles screen-space Y. Rotating 180 degrees around X

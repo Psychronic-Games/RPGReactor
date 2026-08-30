@@ -118,12 +118,15 @@ Last updated 2026-08-29.
   1.35× tower in DB, ~1.25× in game (its beam clips the frame).
   `effectFacesCamera`: box-face heuristic, no geometry; interior anchors
   always show — now only for MV sheet animations. Effekseer effects on 3D
-  maps are drawn in the scene (`Reactor3D.EffekseerScene`): own offscreen
-  WebGL 1 canvas rendered from the three camera, uploaded into a
-  screen-sized quad at the anchor's clip depth. DEAD END, do not retry:
-  Effekseer 1.70b on three's WebGL 2 context — its `useProgram` fails
-  (INVALID_OPERATION), and even `init` alone leaves PIXI's filter draws
-  failing → black frame. Verified in third person on the Demo: the core
+  maps are drawn in the scene (`Reactor3D.EffekseerScene`): the hidden
+  sprite's handle is drawn with the 3D camera into a corner of the existing
+  overlay canvas, copied out, and shown on a screen-sized quad at the
+  anchor's clip depth. TWO DEAD ENDS, do not retry: (1) Effekseer 1.70b on
+  three's WebGL 2 context — `useProgram` INVALID_OPERATION, even `init`
+  alone leaves PIXI's filter draws failing → black frame; (2) a second
+  Effekseer context (own WebGL 1 canvas) — the library's object table is
+  global, so both contexts bind each other's programs/textures ("object
+  does not belong to this context" spam, massive lag). One context only. Verified in third person on the Demo: the core
   glows inside the tower chamber, hidden by the frame and by the player. NOTE: Demo Map001 event 2 (EV002) has a note
   `flashlight 20 25 #5555FF 0 -24 1` that the light shim draws as a huge
   purple cone over the reactor — that is what looks like a giant "effect",
