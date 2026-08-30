@@ -131,6 +131,15 @@ Last updated 2026-08-29.
   `flashlight 20 25 #5555FF 0 -24 1` that the light shim draws as a huge
   purple cone over the reactor — that is what looks like a giant "effect",
   not the Core animation. Left as authored.
+- Model maps draw under ONE depth buffer (editor `render()` → `setPass('world')`,
+  runtime `scene.modelsInWorld`): the split passes with `clearDepth()` are the
+  2D sandwich for sprite maps only. Symptom when wrong: a layer ≥ 5 video
+  surface or star tile paints over a tower it stands behind as you rotate.
+  Editor effect previews on the map use `AnimationPreviewLayer.setWorld` +
+  the runtime's depth quad (`quadFor`): a 600-tile VERTICAL plane stood on
+  the anchor facing the camera (`standQuad`), not a screen-depth plane —
+  from above the tower base is farther than the mid-height anchor. A WebGL
+  canvas source ignores three's flipY: use the quad's `flip` uniform.
 - Player start facing: `System.json.startDirection`; 3D start markers are
   in `eventGroup` (not pickable), rebuilt by `refreshStartMarkers`.
 - Editor 3D view plays rules + Always effects + a prop's chosen effect

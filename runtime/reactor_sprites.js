@@ -4556,6 +4556,8 @@ Spriteset_Map.prototype.updateReactor3D = function() {
         this.createReactor3DSprite(state.viewport, state.scene);
     }
     const split = this._reactor3dAbove || this._reactor3dLights;
+    // One depth buffer for everything on a map with models (see setPass).
+    state.scene.modelsInWorld = !!modelsInWorld;
     // Anchored Effekseer effects are drawn from this frame's camera and
     // handed to their in-scene quads before the passes render.
     if (typeof Reactor3D !== "undefined" && Reactor3D.EffekseerScene) Reactor3D.EffekseerScene.render(state.viewport);

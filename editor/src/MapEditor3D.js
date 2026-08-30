@@ -1485,8 +1485,22 @@ class MapEditor3D {
             if (!wrap) continue;
             const layer = new RRAnimationPreviewLayer(wrap);
             layer.wrap.style.zIndex = '3';
+            const play = { object, effect, layer, record };
+            // An Effekseer effect is drawn from this view's camera and shown
+            // on a screen-sized quad at the anchor's depth, like the game:
+            // a model in front of it hides it. An MV sheet stays an overlay.
+            if (record.effectName && Reactor3D.EffekseerScene && Reactor3D.EffekseerScene.quadFor && this.mapScene) {
+                play.quad = Reactor3D.EffekseerScene.quadFor(layer.fxCanvas);
+                // A WebGL canvas reaches three top-down whatever flipY says;
+                // the quad flips V itself. (The game's source is a 2D copy.)
+                play.quad.texture.flipY = false;
+                play.quad.material.uniforms.flip.value = 1;
+                play.quad.mesh.userData.__reactorOverlay = true;
+                this.mapScene.scene().add(play.quad.mesh);
+                layer.setWorld({ projection: this.camera.projectionMatrix.elements, view: this.camera.matrixWorldInverse.elements, position: [0, 0, 0], scale: [1, 1, 1], rotation: [0, 0, 0] });
+            }
             layer.play(record, project?.path || '', { loop: true, transform: { rotate: effect.rotate, scale: effect.scale } });
-            (this.effectPlays || (this.effectPlays = [])).push({ object, effect, layer });
+            (this.effectPlays || (this.effectPlays = [])).push(play);
         }
     }
 
@@ -1531,6 +1545,10 @@ class MapEditor3D {
             }
             const world = Reactor3D.effectAnchorWorld(play.object, play.effect, scratch);
             if (!world) continue;
+            if (play.quad) {
+                this._placeEffectQuad(play, world);
+                continue;
+            }
             const at = world.clone().project(this.camera);
             if (at.z > 1) { play.layer.wrap.style.display = 'none'; continue; }
             const x = (at.x * 0.5 + 0.5) * rect.width;
@@ -1548,9 +1566,48 @@ class MapEditor3D {
         }
     }
 
+    /**
+     * Keep an in-scene effect on its anchor: the camera's matrices and the
+     * handle's world placement go to the layer, the quad takes the anchor's
+     * clip depth, and its texture is the layer's canvas as of this frame.
+     */
+    _placeEffectQuad(play, world) {
+        const camera = this.camera;
+        camera.updateMatrixWorld();
+        const clip = this._effectClip || (this._effectClip = new THREE.Vector4());
+        clip.set(world.x, world.y, world.z, 1).applyMatrix4(camera.matrixWorldInverse).applyMatrix4(camera.projectionMatrix);
+        const mesh = play.quad.mesh;
+        if (clip.w <= 0) { mesh.visible = false; return; }
+        const record = play.record;
+        const rot = record.rotation || { x: 0, y: 0, z: 0 };
+        const rotate = play.effect.rotate || [0, 0, 0];
+        const r = Math.PI / 180;
+        const axes = Reactor3D.scaleAxes ? Reactor3D.scaleAxes(play.effect.scale) : [1, 1, 1];
+        const span = Reactor3D.modelSpanTiles ? (Reactor3D.modelSpanTiles(play.object) || 1) : 1;
+        const unit = span / 26 * ((record.scale || 100) / 100);
+        play.layer.setWorld({
+            projection: camera.projectionMatrix.elements,
+            view: camera.matrixWorldInverse.elements,
+            position: [world.x, world.y, world.z],
+            scale: [unit * axes[0], unit * axes[1], unit * axes[2]],
+            rotation: [(rot.x + rotate[0]) * r, (rot.y + rotate[1]) * r + play.object.rotation.y, (rot.z + rotate[2]) * r]
+        });
+        const size = this.renderer.getDrawingBufferSize(this._effectSize || (this._effectSize = new THREE.Vector2()));
+        play.quad.material.uniforms.resolution.value.set(size.x, size.y);
+        Reactor3D.EffekseerScene.standQuad(mesh, world, camera);
+        play.quad.texture.needsUpdate = true;
+        mesh.visible = !!play.layer.active;
+    }
+
     disposeEffectPlays(filter) {
         for (const play of this.effectPlays || []) {
             if (filter && !filter(play)) continue;
+            if (play.quad) {
+                play.quad.mesh.parent?.remove(play.quad.mesh);
+                play.quad.mesh.geometry.dispose();
+                play.quad.material.dispose();
+                play.quad.texture.dispose();
+            }
             if (play.layer) play.layer.dispose();
             if (play.plane) {
                 try { play.plane.userData.video.pause(); play.plane.userData.video.src = ''; } catch (_) {}
@@ -2791,6 +2848,20 @@ class MapEditor3D {
             // Match the tilemap's two canvases. Lower geometry and events share
             // real 3D depth; starred geometry starts with a fresh depth buffer
             // and therefore overlays them, as the 2D upper tile layer does.
+            //
+            // Not on a map with models: there everything is a thing standing
+            // somewhere, and a star tile or an above-characters screen behind
+            // a tower belongs behind it. The game draws such a map under one
+            // depth buffer (the "world" pass), and so does this view.
+            const mapData = this.currentMap();
+            const modelsInWorld = !!(mapData && Reactor3D._hasEventModelsNow && Reactor3D._hasEventModelsNow(mapData));
+            this.mapScene.modelsInWorld = modelsInWorld;
+            if (modelsInWorld) {
+                this.mapScene.setPass('world');
+                this.renderer.autoClear = true;
+                this.renderer.render(scene, this.camera);
+                return;
+            }
             this.mapScene.setPass('below');
             this.renderer.autoClear = true;
             this.renderer.render(scene, this.camera);

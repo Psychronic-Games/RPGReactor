@@ -4887,9 +4887,14 @@ Reactor3D.MapScene.prototype.setPass = function(which) {
     // over the star-flagged tiles in the above pass.
     if (this._modelsGroup) this._modelsGroup.visible = all || world || which === "below";
     // Above-characters events stay a composite overlay — MZ's z=5 draws over
-    // characters and star tiles alike, which no depth buffer can express.
+    // characters and star tiles alike, which no depth buffer can express —
+    // on a map of 2D sprites. With models in the world everything is a
+    // thing standing somewhere, and a screen behind a tower belongs behind
+    // it: the world pass takes the overlay too, and the overlay pass has
+    // nothing left to draw.
     if (this._aboveBillboardsGroup) {
-        this._aboveBillboardsGroup.visible = all || which === "above" || which === "overlay";
+        this._aboveBillboardsGroup.visible = all
+            || (this.modelsInWorld ? world : (which === "above" || which === "overlay"));
     }
     // Never with the others: the light pass is composited by addition and the
     // rest by covering, so drawing them together would blend one as the other.
@@ -6868,7 +6873,11 @@ Reactor3D.hasEventModels = function(mapData) {
 };
 
 Reactor3D._hasEventModelsNow = function(mapData) {
-    const events = mapData && mapData.reactor3d && mapData.reactor3d.events;
+    const sidecar = mapData && mapData.reactor3d;
+    // Props are models too (the game makes events of them at load; the
+    // editor holds them as props).
+    if (sidecar && Array.isArray(sidecar.props) && sidecar.props.some(prop => prop && prop.name)) return true;
+    const events = sidecar && sidecar.events;
     if (!events || typeof events !== "object") return false;
     return Object.keys(events).some(id => {
         const pages = events[id];
@@ -10983,6 +10992,8 @@ Reactor3D.MAX_ANCHORED_PER_MODEL = 8;
 Reactor3D.EffekseerScene = {
     /** Render size as a fraction of the screen; effects are soft, the copy is not free. */
     SCALE: 0.5,
+    /** The effect plane's side, in tiles: enough to cover the view from any distance a map allows. */
+    QUAD_SPAN: 600,
     _live: [],
     _pass: "all",
 
@@ -10996,16 +11007,25 @@ Reactor3D.EffekseerScene = {
         texture.generateMipmaps = false;
         if (THREE.SRGBColorSpace) texture.colorSpace = THREE.SRGBColorSpace;
         const material = new THREE.ShaderMaterial({
-            uniforms: { map: { value: texture }, resolution: { value: new THREE.Vector2(1, 1) }, depth: { value: 0 } },
+            // `flip`: 1 when the source's rows arrive top-down regardless of
+            // the texture's flipY (a WebGL canvas handed to three directly).
+            uniforms: { map: { value: texture }, resolution: { value: new THREE.Vector2(1, 1) }, depth: { value: 0 }, flip: { value: 0 } },
+            // A big vertical plane standing on the anchor, turned to face the
+            // camera: its depth follows real height, so the part of a tall
+            // effect near the floor is judged against what stands at the
+            // floor and the part up high against what stands up high. A flat
+            // screen-depth plane got a tower's base wrong from above.
             vertexShader: [
-                "uniform float depth;",
-                "void main() { gl_Position = vec4(position.xy, depth, 1.0); }"
+                "void main() { gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }"
             ].join("\n"),
             fragmentShader: [
                 "uniform sampler2D map;",
                 "uniform vec2 resolution;",
+                "uniform float flip;",
                 "void main() {",
-                "    vec4 c = texture2D(map, gl_FragCoord.xy / resolution);",
+                "    vec2 uv = gl_FragCoord.xy / resolution;",
+                "    if (flip > 0.5) uv.y = 1.0 - uv.y;",
+                "    vec4 c = texture2D(map, uv);",
                 "    if (c.a <= 0.002) discard;",
                 "    gl_FragColor = c;",
                 "}"
@@ -11014,7 +11034,8 @@ Reactor3D.EffekseerScene = {
             depthTest: true,
             depthWrite: false
         });
-        const mesh = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), material);
+        const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), material);
+        mesh.scale.setScalar(Reactor3D.EffekseerScene.QUAD_SPAN);
         mesh.frustumCulled = false;
         mesh.renderOrder = 5000;
         mesh.visible = false;
@@ -11068,6 +11089,15 @@ Reactor3D.EffekseerScene = {
         }
         const at = this._live.indexOf(play);
         if (at >= 0) this._live.splice(at, 1);
+    },
+
+    /** Stand the plane on the anchor, facing the camera about the vertical. */
+    standQuad(mesh, world, camera) {
+        mesh.position.copy(world);
+        const target = this._standTarget || (this._standTarget = new THREE.Vector3());
+        target.set(camera.position.x, world.y, camera.position.z);
+        mesh.lookAt(target);
+        mesh.updateMatrixWorld();
     },
 
     setPass(which) {
@@ -11128,7 +11158,7 @@ Reactor3D.EffekseerScene = {
                 ctx.drawImage(overlay, 0, overlay.height - height, width, height, 0, 0, width, height);
                 play.quad.texture.needsUpdate = true;
                 renderer.initTexture(play.quad.texture);
-                play.quad.material.uniforms.depth.value = clip.z / clip.w;
+                this.standQuad(play.quad.mesh, play.world, camera);
                 play.quad.material.uniforms.resolution.value.set(size.width, size.height);
                 play.ready = true;
                 play.quad.mesh.visible = this._pass === "all" || this._pass === "world" || this._pass === "below";

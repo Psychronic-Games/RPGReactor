@@ -73,6 +73,29 @@
             this.span = Number(tiles) > 0 ? Number(tiles) : 1;
         }
 
+        /**
+         * World mode: draw the effect from a real camera instead of the
+         * picker's fixed frame. `world` carries the camera's projection and
+         * view matrices (column-major, 16 numbers each) and the handle's
+         * final position, scale and rotation (radians); the caller shows the
+         * canvas inside its scene (a depth quad) rather than this overlay,
+         * which stays hidden. `null` returns to the overlay.
+         */
+        setWorld(world) {
+            this.world = world || null;
+            if (this.world) {
+                this.wrap.style.display = 'none';
+                if (this.size < 512) {
+                    this.size = 512;
+                    this.mvCanvas.width = this.mvCanvas.height = 512;
+                    this.fxCanvas.width = this.fxCanvas.height = 512;
+                }
+                if (this.fx.handle && this.fx.handle.exists && this._applyHandleTransform) this._applyHandleTransform();
+            } else if (this.active) {
+                this.wrap.style.display = 'block';
+            }
+        }
+
         /** Turn (degrees, x/y/z) and scale the playing animation on top of its record's own. */
         setTransform(transform) {
             const rotate = Array.isArray(transform && transform.rotate) ? transform.rotate : [0, 0, 0];
@@ -112,7 +135,7 @@
             this.active = true;
             this.loop = !!options.loop;
             if (options.transform) this.setTransform(options.transform);
-            this.wrap.style.display = 'block';
+            this.wrap.style.display = this.world ? 'none' : 'block';
             const generation = ++this.generation;
             if (animation.effectName) return this._startEffekseer(animation, projectRoot, generation);
             if (Array.isArray(animation.frames) && animation.frames.length) return this._startSprite(animation, projectRoot, generation);
@@ -253,6 +276,14 @@
                 let alive = 0, dead = 0;
                 this._applyHandleTransform = () => {
                     if (!fx.handle) return;
+                    const world = this.world;
+                    if (world) {
+                        fx.handle.setLocation(world.position[0], world.position[1], world.position[2]);
+                        fx.handle.setRotation(world.rotation[0], world.rotation[1], world.rotation[2]);
+                        fx.handle.setScale(world.scale[0], world.scale[1], world.scale[2]);
+                        fx.handle.setSpeed((animation.speed || 100) / 100);
+                        return;
+                    }
                     const extra = this.transform;
                     const base = (animation.scale || 100) / 100;
                     const rot = animation.rotation || { x: 0, y: 0, z: 0 };
@@ -286,10 +317,18 @@
                     gl.viewport(0, 0, this.size, this.size);
                     gl.clearColor(0, 0, 0, 0);
                     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-                    // 26 units tall = the span: q * size / 26 pixels per unit.
-                    const q = this.span / OVERLAY_TILES;
-                    fx.ctx.setProjectionMatrix([q, 0, 0, 0, 0, q, 0, 0, 0, 0, 1, -1.2, 0, 0, 0, 1]);
-                    fx.ctx.setCameraMatrix([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, -10, 1]);
+                    if (this.world) {
+                        // A real camera: the anchor moves with the model and
+                        // the view, so the handle is placed every frame.
+                        this._applyHandleTransform();
+                        fx.ctx.setProjectionMatrix(this.world.projection);
+                        fx.ctx.setCameraMatrix(this.world.view);
+                    } else {
+                        // 26 units tall = the span: q * size / 26 pixels per unit.
+                        const q = this.span / OVERLAY_TILES;
+                        fx.ctx.setProjectionMatrix([q, 0, 0, 0, 0, q, 0, 0, 0, 0, 1, -1.2, 0, 0, 0, 1]);
+                        fx.ctx.setCameraMatrix([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, -10, 1]);
+                    }
                     fx.ctx.beginDraw();
                     if (fx.handle && fx.handle.exists) {
                         fx.ctx.drawHandle(fx.handle);
