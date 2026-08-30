@@ -50,7 +50,8 @@ class DatabaseArmorEditor {
                     <div class="db-row-cols db-row-grow">
                         <span class="db-col">
                             <label>${tt('Description')}</label>
-                            <textarea class="database-field-value" rows="2" data-field="description" data-armor-id="${armor.id}">${rrEscapeHtml(armor.description)}</textarea>
+                            <textarea class="database-field-value" rows="2" data-field="description" data-armor-id="${armor.id}" data-rr-textcodes="help">${rrEscapeHtml(armor.description)}</textarea>
+                            <div data-rr-textcodes-panel="help" style="margin-top: 4px;"></div>
                         </span>
                     </div>
                     <div class="db-row-cols">

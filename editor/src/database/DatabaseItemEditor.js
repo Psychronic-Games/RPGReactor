@@ -59,7 +59,8 @@ class DatabaseItemEditor {
                     <div class="db-row-cols db-row-grow">
                         <span class="db-col">
                             <label>${tt('Description')}</label>
-                            <textarea class="database-field-value" rows="2" data-field="description" data-item-id="${item.id}">${rrEscapeHtml(item.description)}</textarea>
+                            <textarea class="database-field-value" rows="2" data-field="description" data-item-id="${item.id}" data-rr-textcodes="help">${rrEscapeHtml(item.description)}</textarea>
+                            <div data-rr-textcodes-panel="help" style="margin-top: 4px;"></div>
                         </span>
                     </div>
                     <div class="db-row-cols">

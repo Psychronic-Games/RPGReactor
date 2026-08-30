@@ -940,6 +940,55 @@ class EventCommandList {
     }
 
     /**
+     * The current project's decoded windowskin, or null while it loads.
+     * Rendering a command row cannot await, so this never blocks.
+     */
+    /**
+     * RRWindowskin, however this file was loaded.
+     *
+     * This class is required directly by tests with no `window`, where a bare
+     * `window.RRWindowskin` is a ReferenceError rather than undefined - and
+     * simply giving up there would drop every `\C[n]` to one colour instead of
+     * the stock palette, which is worse than the table this replaced.
+     */
+    static windowskins() {
+        if (typeof RRWindowskin !== 'undefined') return RRWindowskin;
+        if (typeof window !== 'undefined' && window.RRWindowskin) return window.RRWindowskin;
+        if (typeof require === 'function') return require('../utils/Windowskin.js');
+        return null;
+    }
+
+    projectWindowskin() {
+        const skins = EventCommandList.windowskins();
+        if (!skins || typeof skins.peek !== 'function') return null;
+        const controller = this.eventEditor && this.eventEditor.projectController;
+        const project = controller && controller.getCurrentProject
+            ? controller.getCurrentProject()
+            : null;
+        if (!project || !project.path) return null;
+
+        const record = skins.peek(typeof require === 'function'
+            ? require('path').join(project.path, 'img', 'system', 'Window.png')
+            : `${project.path}/img/system/Window.png`);
+
+        // The first list render happens before the sheet has decoded, so it
+        // draws the fallback palette. Redraw once, when the real one arrives -
+        // otherwise the wrong colours stay on screen until the author happens
+        // to do something that rebuilds the list.
+        if (!record && !this._awaitingWindowskin && typeof document !== 'undefined') {
+            this._awaitingWindowskin = true;
+            document.addEventListener('rr-windowskin-loaded', () => {
+                this._awaitingWindowskin = false;
+                if (this.currentPage) {
+                    this.refreshCommandList(this.currentPage, this.currentPageIndex);
+                }
+            }, { once: true });
+        }
+
+        return record;
+    }
+
+    /**
      * Convert RPG Maker text codes to HTML for preview
      * @param {string} text - The text with codes like \C[6]
      * @returns {string} - HTML string with color spans
@@ -947,41 +996,18 @@ class EventCommandList {
     convertTextCodesToHTML(text) {
         if (!text) return '';
 
-        // RPG Maker MZ default text colors (matching the engine's color palette)
-        const textColors = [
-            'var(--color-text-strong)', // 0 - Normal (white)
-            '#20a0d6', // 1 - System (light blue)
-            '#ff784c', // 2 - Crisis (orange-red)
-            '#66cc40', // 3 - Death (green)
-            '#99ccff', // 4 - Gauge Back (light blue)
-            '#ccc0a8', // 5 - HP Gauge (tan)
-            '#ffff80', // 6 - MP Gauge (yellow)
-            '#80ff80', // 7 - TP Gauge (light green)
-            '#c0c0c0', // 8 - TP Cost (gray)
-            'var(--color-syntax-comment)', // 9 - Pending (dark gray)
-            '#ff2020', // 10 - HP Damage (red)
-            '#e08040', // 11 - HP Recover (orange)
-            '#20b0ff', // 12 - MP Damage (blue)
-            '#4080c0', // 13 - MP Recover (darker blue)
-            '#d040a0', // 14 - TP Damage (purple)
-            '#00a040', // 15 - TP Recover (dark green)
-            '#c08040', // 16 - Exp (brown)
-            '#ffff40', // 17 - Gold (bright yellow)
-            '#ff6060', // 18 - Item (light red)
-            '#a0a0ff', // 19 - Weapon (light purple)
-            '#60e060', // 20 - Armor (light green)
-            '#ff80ff', // 21 - Key Item (pink)
-            '#c0c0c0', // 22 - Equip (light gray)
-            'var(--color-danger-light)', // 23 - Power Up (light red)
-            '#8080ff', // 24 - Power Down (light blue)
-            '#80ff80', // 25 - Buff (light green)
-            'var(--color-danger-light)', // 26 - Debuff (light red)
-            'var(--color-text-strong)', // 27 - Default
-            'var(--color-syntax-comment)', // 28 - Gray
-            '#ff6666', // 29 - Red
-            '#66ff66', // 30 - Green
-            '#6666ff'  // 31 - Blue
-        ];
+        // `\C[n]` is not a fixed palette - it samples a pixel from the
+        // project's own windowskin, so a custom skin has entirely different
+        // colours. This used to be a hardcoded table that also substituted
+        // editor CSS variables for six entries, which meant the list drew
+        // colours the game would never produce. RRWindowskin reads the real
+        // sheet; until it has decoded, textColor falls back to the stock
+        // palette, and the next render picks up the real one.
+        const skins = EventCommandList.windowskins();
+        const skin = this.projectWindowskin();
+        const colorAt = index => (skins
+            ? skins.textColor(skin, index)
+            : 'var(--color-text-strong)');
 
         const escapeHtml = typeof globalThis.rrEscapeHtml === 'function'
             ? globalThis.rrEscapeHtml
@@ -990,13 +1016,11 @@ class EventCommandList {
 
         // Replace \C[n] or \c[n] with color spans
         html = html.replace(/\\[Cc]\[(\d+)\]/g, (match, colorIndex) => {
-            const index = parseInt(colorIndex);
-            const color = textColors[index] || textColors[0];
-            return `</span><span style="color: ${color}">`;
+            return `</span><span style="color: ${colorAt(parseInt(colorIndex, 10))}">`;
         });
 
         // Wrap in initial color span
-        html = `<span style="color: ${textColors[0]}">${html}</span>`;
+        html = `<span style="color: ${colorAt(0)}">${html}</span>`;
 
         // Clean up any empty spans
         html = html.replace(/<span[^>]*><\/span>/g, '');
@@ -2791,6 +2815,18 @@ class EventCommandList {
         return null;
     }
 
+    /**
+     * Reading and writing a run of Show Text boxes, shared with the common
+     * event and troop editors so the 101/401 walk exists once rather than in
+     * every host that can hold an event command.
+     */
+    static messageBoxes() {
+        if (typeof RRMessageBoxes !== 'undefined') return RRMessageBoxes;
+        if (typeof window !== 'undefined' && window.RRMessageBoxes) return window.RRMessageBoxes;
+        if (typeof require === 'function') return require('../utils/MessageBoxes.js');
+        return null;
+    }
+
     static generatedLoopRangeContaining(list, index) {
         const LoopClass = this.loopEditorClass();
         if (!LoopClass || !Array.isArray(list)) return null;
@@ -4168,43 +4204,23 @@ class EventCommandList {
 
         // Message commands (Show Text)
         if (code === 101) {
-            // Gather the text lines (401 commands) that follow this message
-            const textLines = [];
-            for (let i = index + 1; i < page.list.length; i++) {
-                if (page.list[i].code === 401) {
-                    textLines.push(page.list[i].parameters[0] || '');
-                } else {
-                    break;
-                }
-            }
+            // The whole run of consecutive boxes, not just this one. Each 101
+            // carries its own face, name, background and position, so the
+            // editor gets every header and hands back a replacement for the
+            // entire run - which is what lets one dialog edit a conversation.
+            const boxes = EventCommandList.messageBoxes();
+            const run = boxes.collectRun(page.list, index);
 
-            // Create a message data object to pass to the editor
-            const messageData = {
-                command: command,
-                textLines: textLines
-            };
-
-            this.messageEditor.show(messageData, (commands) => {
+            this.messageEditor.show({ boxes: run.boxes }, (commands) => {
+                if (!commands || !commands.length) return;
                 rebaseReplacement(commands);
-                // Replace the message command and its text lines
-                // First, remove the old message and all its 401 lines
-                let removeCount = 1; // Start with the 101 command itself
-                for (let i = index + 1; i < page.list.length; i++) {
-                    if (page.list[i].code === 401) {
-                        removeCount++;
-                    } else {
-                        break;
-                    }
-                }
 
-                // Remove old commands
-                page.list.splice(index, removeCount);
-
-                // Insert new commands
+                page.list.splice(index, run.count);
                 commands.forEach((cmd, i) => {
                     page.list.splice(index + i, 0, cmd);
                 });
 
+                this.selectedIndices = [index];
                 this.refreshCommandList(page, pageIndex);
             });
             return;

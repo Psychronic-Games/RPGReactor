@@ -1559,6 +1559,16 @@ class DatabaseEditorUI {
             // Generic display for other types
             this.showGenericDetail(detailEl, entry, type);
         }
+        // Text-code menus and reference panels on the fields that carry
+        // `data-rr-textcodes` (descriptions, skill and state messages).
+        if (window.RRDatabaseTextCodes && detailEl.querySelector('[data-rr-textcodes]')) {
+            if (this._textCodeDetach) this._textCodeDetach();
+            this._textCodeDetach = window.RRDatabaseTextCodes.decorate(detailEl, {
+                projectPath: () => (this.currentProject && this.currentProject.path) || '',
+                databaseManager: this.databaseManager,
+                projectController: { getCurrentProject: () => this.currentProject }
+            });
+        }
         this.wireLiveDatabaseNameSync(detailEl, entry, type);
         if (window.I18n) window.I18n.applyText(detailEl);
     }

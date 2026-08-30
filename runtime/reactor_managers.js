@@ -3023,7 +3023,13 @@ BattleManager.invokeAction = function(subject, target) {
 BattleManager.invokeNormalAction = function(subject, target) {
     const realTarget = this.applySubstitute(target);
     this._action.apply(realTarget);
+    // Only this path names the item for the skill outcome lines. A counterattack
+    // applies a Game_Action of its own and a reflection reverses subject and
+    // target, so neither should print the original skill's Message 3 or 4 - and
+    // both reach displayActionResults too. See displaySkillOutcome.
+    this._logWindow.setOutcomeItem(this._action.item());
     this._logWindow.displayActionResults(subject, realTarget);
+    this._logWindow.setOutcomeItem(null);
 };
 
 BattleManager.invokeCounterAttack = function(subject, target) {

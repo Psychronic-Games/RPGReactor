@@ -59,10 +59,38 @@ test('Show Text keeps the Top window position', () => {
     // positionType 0 is Top and is falsy; 946 authored Show Text commands in
     // the bundled projects use it. Opening one and pressing OK moved the
     // message window to the bottom.
+    //
+    // The header read moved into RRMessageBoxes when the Show Text editor
+    // learned to hold a run of boxes, so the guard follows it there. Both the
+    // shared reader and the editor's own fallback are checked, because either
+    // one regressing reintroduces the same bug.
+    const boxes = fs.readFileSync(path.join(editorRoot, 'src', 'utils', 'MessageBoxes.js'), 'utf8');
+    assert.match(boxes, /positionType: parameters\[3\] \?\? 2/);
+    assert.doesNotMatch(boxes, /positionType: parameters\[3\] \|\| 2/);
+    assert.match(boxes, /header\.positionType \?\? 2/, 'and is written back unchanged');
+
     const source = fs.readFileSync(path.join(commandsDir, 'MessageCommandEditor.js'), 'utf8');
-    assert.match(source, /this\.positionType = command\.parameters\[3\] \?\? 2;/);
-    assert.doesNotMatch(source, /this\.positionType = command\.parameters\[3\] \|\| 2;/);
+    assert.match(source, /positionType: command\.parameters\[3\] \?\? 2,/);
+    assert.doesNotMatch(source, /positionType: command\.parameters\[3\] \|\| 2/);
+
     assert.match(objectsSource, /\$gameMessage\.setPositionType\(params\[3\]\)/);
+});
+
+test('a run of Show Text boxes round-trips without losing a header', () => {
+    // The editor now replaces every command in the run rather than only the
+    // first box and its lines. Reading and rebuilding has to be lossless, or
+    // opening a conversation and pressing OK silently rewrites it.
+    const MessageBoxes = require(path.join(editorRoot, 'src', 'utils', 'MessageBoxes.js'));
+    const list = [
+        { code: 101, indent: 0, parameters: ['Evil', 7, 0, 0, 'Coder'] },
+        { code: 401, indent: 0, parameters: ['one'] },
+        { code: 401, indent: 0, parameters: ['two'] },
+        { code: 101, indent: 0, parameters: ['', 0, 1, 1, ''] },
+        { code: 401, indent: 0, parameters: ['three'] }
+    ];
+    const run = MessageBoxes.collectRun(list, 0);
+    assert.equal(run.count, list.length, 'the whole run is claimed');
+    assert.deepEqual(MessageBoxes.buildCommands(run.boxes, 0), list);
 });
 
 test('Fadeout BGM and BGS are written in seconds, as the engine reads them', () => {

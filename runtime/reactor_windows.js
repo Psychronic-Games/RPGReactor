@@ -5373,6 +5373,9 @@ Window_BattleLog.prototype.initialize = function(rect) {
     this._waitMode = "";
     this._baseLineStack = [];
     this._spriteset = null;
+    // The skill whose outcome messages the next displayActionResults may show.
+    // See setOutcomeItem.
+    this._outcomeItem = null;
     this.refresh();
 };
 
@@ -5727,6 +5730,7 @@ Window_BattleLog.prototype.displayActionResults = function(subject, target) {
         this.displayDamage(target);
         this.displayAffectedStatus(target);
         this.displayFailure(target);
+        this.displaySkillOutcome(subject, target);
         this.push("waitForNewLine");
         this.push("popBaseLine");
     }
@@ -5736,6 +5740,44 @@ Window_BattleLog.prototype.displayFailure = function(target) {
     if (target.result().isHit() && !target.result().success) {
         this.push("addText", TextManager.actionFailure.format(target.name()));
     }
+};
+
+/**
+ * Name the skill whose outcome messages displayActionResults may show.
+ *
+ * The item travels on the window rather than as a third argument because
+ * displayActionResults is one of the most-aliased methods in the engine, and the
+ * wrappers in the wild call through with exactly two parameters - a third would
+ * be dropped silently. BattleManager sets this for the normal action path only
+ * and clears it afterwards, so a counterattack (which applies a Game_Action of
+ * its own) and a reflection (which reverses subject and target) cannot attribute
+ * the original skill's outcome line to the wrong battler.
+ */
+Window_BattleLog.prototype.setOutcomeItem = function(item) {
+    this._outcomeItem = item || null;
+};
+
+/**
+ * Skill Message 3 and Message 4 - the outcome lines.
+ *
+ * Message 1 and 2 announce the action before it resolves, in displayAction.
+ * These two report what it did, once per target, exactly as displayCritical and
+ * displayFailure already do: Message 3 when the action connected and had an
+ * effect, Message 4 when it missed, was evaded, or did nothing. Both take the
+ * same %1 user / %2 skill arguments Message 1 and 2 take.
+ *
+ * A skill that sets neither shows neither - displayItemMessage ignores an empty
+ * or absent string, which is every skill authored before these fields did
+ * anything.
+ */
+Window_BattleLog.prototype.displaySkillOutcome = function(subject, target) {
+    const item = this._outcomeItem;
+    if (!item || !DataManager.isSkill(item)) {
+        return;
+    }
+    const result = target.result();
+    const succeeded = result.isHit() && result.success;
+    this.displayItemMessage(succeeded ? item.message3 : item.message4, subject, item);
 };
 
 Window_BattleLog.prototype.displayCritical = function(target) {

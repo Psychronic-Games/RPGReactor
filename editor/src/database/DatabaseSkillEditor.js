@@ -66,7 +66,8 @@ class DatabaseSkillEditor {
                     <div class="db-row-cols db-row-grow">
                         <span class="db-col">
                             <label>${tt('Description')}</label>
-                            <textarea class="database-field-value" rows="2" data-field="description" data-skill-id="${skill.id}">${rrEscapeHtml(skill.description)}</textarea>
+                            <textarea class="database-field-value" rows="2" data-field="description" data-skill-id="${skill.id}" data-rr-textcodes="help">${rrEscapeHtml(skill.description)}</textarea>
+                            <div data-rr-textcodes-panel="help" style="margin-top: 4px;"></div>
                         </span>
                     </div>
 
@@ -169,13 +170,15 @@ class DatabaseSkillEditor {
             <div class="database-section-content">
                 <div class="db-form">
                     <label>${tt('Message 1')}</label>
-                    <input type="text" class="database-field-value" value="${rrEscapeHtml(skill.message1)}" data-field="message1" data-skill-id="${skill.id}">
+                    <input type="text" class="database-field-value" value="${rrEscapeHtml(skill.message1)}" data-field="message1" data-skill-id="${skill.id}" data-rr-textcodes="battlelog:skillMessage">
                     <label>${tt('Message 2')}</label>
-                    <input type="text" class="database-field-value" value="${rrEscapeHtml(skill.message2)}" data-field="message2" data-skill-id="${skill.id}">
+                    <input type="text" class="database-field-value" value="${rrEscapeHtml(skill.message2)}" data-field="message2" data-skill-id="${skill.id}" data-rr-textcodes="battlelog:skillMessage">
                     <label>${tt('Message 3')}</label>
-                    <input type="text" class="database-field-value" value="${rrEscapeHtml(skill.message3)}" data-field="message3" data-skill-id="${skill.id}">
+                    <input type="text" class="database-field-value" value="${rrEscapeHtml(skill.message3)}" data-field="message3" data-skill-id="${skill.id}" data-rr-textcodes="battlelog:skillMessage">
                     <label>${tt('Message 4')}</label>
-                    <input type="text" class="database-field-value" value="${rrEscapeHtml(skill.message4)}" data-field="message4" data-skill-id="${skill.id}">
+                    <input type="text" class="database-field-value" value="${rrEscapeHtml(skill.message4)}" data-field="message4" data-skill-id="${skill.id}" data-rr-textcodes="battlelog:skillMessage">
+                    <div style="grid-column: 1 / -1; font-size: 11px; color: var(--color-text-muted); margin-top: -2px;">${tt('Messages 1 and 2 are shown when the skill is used. Message 3 is shown when it connects, Message 4 when it misses or has no effect. %1 = user name, %2 = skill name')}</div>
+                    <div data-rr-textcodes-panel="battlelog:skillMessage" style="grid-column: 1 / -1;"></div>
                 </div>
             </div>
         `;

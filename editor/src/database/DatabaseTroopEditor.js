@@ -1338,6 +1338,17 @@ class DatabaseTroopEditor {
                 if (container) this.renderCommandList(container, page);
             };
 
+            // Show Text had no branch here at all: inserting one dropped a bare
+            // default header with no way to type into it, and double-clicking it
+            // afterwards did nothing. Battle messages are ordinary Show Text
+            // commands and go through the same editor as everywhere else.
+            if (command.code === 101) {
+                // A troop page only ever runs in battle, so the battle-only
+                // text codes are real here and offered.
+                this.getCommandEditor('message', MessageCommandEditor)
+                    .show({ inBattle: true }, insertCommands);
+                return;
+            }
             if (command.code === 111) {
                 this.getCommandEditor('conditionalBranch', ConditionalBranchEditor).show(null, insertCommands);
                 return;
@@ -1511,6 +1522,19 @@ class DatabaseTroopEditor {
                 refresh();
             }, context);
         };
+
+        if (cmd.code === 101) {
+            const run = ECL.messageBoxes().collectRun(page.list, idx);
+            const messageEditor = this.getCommandEditor('message', MessageCommandEditor);
+            messageEditor.show({ boxes: run.boxes, inBattle: true }, commands => {
+                if (!commands?.length) return;
+                page.list.splice(idx, run.count);
+                ECL.rebaseInsertIndent(commands, cmd.indent || 0);
+                commands.forEach((command, i) => page.list.splice(idx + i, 0, command));
+                refresh();
+            });
+            return;
+        }
 
         if (cmd.code === 111) {
             const { branches, endIndex } = ECL.collectBranchStructure(page.list, idx, [411], 412, true);

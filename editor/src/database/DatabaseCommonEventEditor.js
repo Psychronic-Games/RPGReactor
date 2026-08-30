@@ -367,7 +367,9 @@ class DatabaseCommonEventEditor {
 
             // Commands that need editors opened immediately on insert
             if (code === 101) {
-                this.getEditor('message', MessageCommandEditor).show(null, insertAndRefresh);
+                // See the edit path: a common event may run in battle.
+                this.getEditor('message', MessageCommandEditor)
+                    .show({ inBattle: true }, insertAndRefresh);
                 return;
             }
             if (code === 102) {
@@ -596,23 +598,17 @@ class DatabaseCommonEventEditor {
             }, ...showArgs);
         };
 
-        // Show Text (101) - multi-line with 401 continuation
+        // Show Text (101) - a run of boxes, each with its own 401 continuation
         if (code === 101) {
-            const textLines = [];
-            for (let i = idx + 1; i < event.list.length; i++) {
-                if (event.list[i].code === 401) textLines.push(event.list[i].parameters[0] || '');
-                else break;
-            }
-            const messageData = { command, textLines };
+            const run = ECL.messageBoxes().collectRun(event.list, idx);
             const editor = this.getEditor('message', MessageCommandEditor);
-            editor.show(messageData, (commands) => {
+            // A common event can be called from a troop page as easily as from
+            // the map, and nothing here says which. Offer the battle codes: one
+            // that resolves to nothing outside battle costs less than one an
+            // author needs and cannot find.
+            editor.show({ boxes: run.boxes, inBattle: true }, (commands) => {
                 if (commands && commands.length > 0) {
-                    let removeCount = 1;
-                    for (let i = idx + 1; i < event.list.length; i++) {
-                        if (event.list[i].code === 401) removeCount++;
-                        else break;
-                    }
-                    event.list.splice(idx, removeCount);
+                    event.list.splice(idx, run.count);
                     ECL.rebaseInsertIndent(commands, command.indent || 0);
                     commands.forEach((cmd, i) => event.list.splice(idx + i, 0, cmd));
                     refreshList();

@@ -53,11 +53,14 @@ Last updated 2026-08-29.
   `databaseEntryLabels` was the one live fix), #31 enemy Max TP + layout,
   #16 Add State duration override, #15 Grow Max TP + ranges + Change
   Parameter Random. Runtime revision `20260829.42`, 2,005 tests.
+  Also DONE: #29 Show Text multi-box/text codes/preview (contributed diff
+  applied selectively; review fixes: scripts wired, IconPickerModal dropped
+  for RRIconPicker, Window.png via RREncryptedAssets, byte-identical OK on
+  untouched boxes, web `require` guard; locales hand-written) and #30 database
+  text codes (the base was never attached — written here to the issue's spec;
+  the attached addendum gives Skill Message 3/4 runtime meaning).
   REMAINING (all L): #17 multi-element skills (needs a VisuStella
-  `getActionObjectElements` shim + an element-set popover), #29 Show Text
-  multi-box/text-code menu/preview (5,000-line contributed diff, does not
-  apply as-is: reconcile its IconPickerModal with utils/IconPicker.js,
-  hand-write its machine-drafted locales) then #30 (depends on #29), #11 BGM
+  `getActionObjectElements` shim + an element-set popover), #11 BGM
   palettes (design question: the plan puts new keys on Map###.json top level;
   this codebase's convention is a sidecar — decide before building), #9 Quest
   Manager (VisuStella-specific; suggest a read-only first cut without the

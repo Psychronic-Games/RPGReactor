@@ -158,21 +158,23 @@ class DatabaseStateEditor {
             <div class="database-section-content">
                 <div class="state-message-help"><code>%1</code><span>= ${tt('Actor')} / ${tt('Enemy')} ${tt('Name')}</span></div>
                 <div class="state-message-row">
-                    <input id="state-message1-${state.id}" type="text" class="database-field-value" value="${this.escapeHTML(state.message1 || '')}" data-field="message1" data-state-id="${state.id}">
+                    <input id="state-message1-${state.id}" type="text" class="database-field-value" value="${this.escapeHTML(state.message1 || '')}" data-field="message1" data-state-id="${state.id}" data-rr-textcodes="battlelog:stateMessage">
                     <label for="state-message1-${state.id}" class="database-field-label">${tt('Actor Afflicted:')}</label>
                 </div>
                 <div class="state-message-row">
-                    <input id="state-message2-${state.id}" type="text" class="database-field-value" value="${this.escapeHTML(state.message2 || '')}" data-field="message2" data-state-id="${state.id}">
+                    <input id="state-message2-${state.id}" type="text" class="database-field-value" value="${this.escapeHTML(state.message2 || '')}" data-field="message2" data-state-id="${state.id}" data-rr-textcodes="battlelog:stateMessage">
                     <label for="state-message2-${state.id}" class="database-field-label">${tt('Enemy Afflicted:')}</label>
                 </div>
                 <div class="state-message-row">
-                    <input id="state-message3-${state.id}" type="text" class="database-field-value" value="${this.escapeHTML(state.message3 || '')}" data-field="message3" data-state-id="${state.id}">
+                    <input id="state-message3-${state.id}" type="text" class="database-field-value" value="${this.escapeHTML(state.message3 || '')}" data-field="message3" data-state-id="${state.id}" data-rr-textcodes="battlelog:stateMessage">
                     <label for="state-message3-${state.id}" class="database-field-label">${tt('State Persists:')}</label>
                 </div>
                 <div class="state-message-row">
-                    <input id="state-message4-${state.id}" type="text" class="database-field-value" value="${this.escapeHTML(state.message4 || '')}" data-field="message4" data-state-id="${state.id}">
+                    <input id="state-message4-${state.id}" type="text" class="database-field-value" value="${this.escapeHTML(state.message4 || '')}" data-field="message4" data-state-id="${state.id}" data-rr-textcodes="battlelog:stateMessage">
                     <label for="state-message4-${state.id}" class="database-field-label">${tt('State Removed:')}</label>
                 </div>
+                <div style="font-size: 11px; color: var(--color-text-muted); margin-top: 6px;">${tt('%1 = name of the affected battler. %2 is not replaced here.')}</div>
+                <div data-rr-textcodes-panel="battlelog:stateMessage"></div>
             </div>
         `;
         gridWrapper.appendChild(messagesSection);
