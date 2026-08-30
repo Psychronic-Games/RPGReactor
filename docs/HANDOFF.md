@@ -20,9 +20,9 @@ Last updated 2026-08-29.
   preview lifecycle cleanup; and an expanded themed SVG toolbar set including Fill, Shadow Pen,
   Undo/Redo, draw modes, layers, Audio, Database, Plugins, Resource Manager, and
   Forge.
-- Validation: **1,957 passing Node tests**, no failures, skips, or TODOs
-  (`cd editor && npm test`, ~57 s), re-run 2026-08-29 with the whole tree
-  staged (runtime revision `20260829.38`). Focused Resource Manager, model transaction,
+- Validation: **2,069 passing Node tests**, no failures, skips, or TODOs
+  (`cd editor && npm test`, ~60 s), re-run 2026-08-29 on the committed tree
+  (runtime revision `20260829.45`). Focused Resource Manager, model transaction,
   image-format, Video Surface, actor-preview, localization, asset URL, and System
   browser suites pass. `npm audit` reports zero vulnerabilities; source syntax,
   runtime-focused checks, and `git diff --check` pass. Existing real Web
@@ -52,7 +52,9 @@ Last updated 2026-08-29.
   #23 Referenced by (contributed code applied; `databaseListLabels` →
   `databaseEntryLabels` was the one live fix), #31 enemy Max TP + layout,
   #16 Add State duration override, #15 Grow Max TP + ranges + Change
-  Parameter Random. Runtime revision `20260829.42`, 2,005 tests.
+  Parameter Random; then #29/#30 (below). Later the same evening: anchored
+  Effekseer effects drawn inside the 3D scene (game and editor), and model
+  maps drawn under one depth buffer. Runtime revision `20260829.45`.
   Also DONE: #29 Show Text multi-box/text codes/preview (contributed diff
   applied selectively; review fixes: scripts wired, IconPickerModal dropped
   for RRIconPicker, Window.png via RREncryptedAssets, byte-identical OK on
