@@ -53,3 +53,22 @@ test('the map context menu does not reach for a translator it never declared', (
     assert.ok(start >= 0 && end > start);
     if (/\btt\(/.test(body)) assert.match(body, /const tt = /, 'tt is defined where it is used');
 });
+
+test('a submenu opened at the bottom or right edge is shifted back on screen', () => {
+    const EventManager = require(path.join(editorRoot, 'src', 'EventManager.js'));
+    const fake = (rect) => ({ style: {}, getBoundingClientRect: () => rect });
+    // Four rows of 36px opening at y=700 in a 720px window: 144px tall, bottom at 844.
+    let sub = fake({ top: 700, bottom: 844, left: 200, right: 350 });
+    let applied = EventManager.keepSubmenuOnScreen(sub, { top: 700 }, { width: 1280, height: 720 });
+    assert.equal(applied.top, -(844 - 712), 'moved up by its overhang plus the margin');
+    assert.equal(sub.style.top, `${applied.top}px`);
+    assert.equal(applied.flipped, false);
+    sub = fake({ top: 100, bottom: 244, left: 1200, right: 1350 });
+    applied = EventManager.keepSubmenuOnScreen(sub, { top: 100 }, { width: 1280, height: 720 });
+    assert.equal(applied.top, 0, 'fits vertically: untouched');
+    assert.equal(applied.flipped, true, 'runs off the right: opens to the left');
+    assert.equal(sub.style.right, '100%');
+    sub = fake({ top: 4, bottom: 900, left: 0, right: 100 });
+    applied = EventManager.keepSubmenuOnScreen(sub, { top: 4 }, { width: 1280, height: 720 });
+    assert.equal(applied.top, 0, 'never above the top of the window');
+});

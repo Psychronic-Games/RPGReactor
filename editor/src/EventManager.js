@@ -852,6 +852,10 @@ class EventManager {
                     if (item.enabled === false) return;
                     menuItem.style.backgroundColor = 'var(--color-accent-tint-25)';
                     submenu.style.display = 'block';
+                    // A submenu opened near the bottom or right edge would run
+                    // off the window and be clipped to its first entry.
+                    EventManager.keepSubmenuOnScreen(submenu, menuItem.getBoundingClientRect(),
+                        { width: window.innerWidth, height: window.innerHeight });
                 });
 
                 menuItem.addEventListener('mouseleave', () => {
@@ -2970,6 +2974,33 @@ class EventManager {
         this.eventSprites.clear();
     }
 }
+
+/**
+ * Shift a just-opened submenu back inside the viewport: up by however much
+ * it overhangs the bottom, and to the item's left side when it overhangs the
+ * right. Positions are relative to the item, which is the submenu's offset
+ * parent. Returns the offsets applied, for tests.
+ */
+EventManager.keepSubmenuOnScreen = function(submenu, itemRect, viewport) {
+    submenu.style.top = '0px';
+    submenu.style.left = '100%';
+    submenu.style.right = 'auto';
+    const rect = submenu.getBoundingClientRect();
+    const margin = 8;
+    const applied = { top: 0, flipped: false };
+    const overhang = rect.bottom - (viewport.height - margin);
+    if (overhang > 0) {
+        // No higher than the top of the window.
+        applied.top = -Math.min(overhang, Math.max(0, itemRect.top - margin)) || 0;
+        submenu.style.top = `${applied.top}px`;
+    }
+    if (rect.right > viewport.width - margin) {
+        submenu.style.left = 'auto';
+        submenu.style.right = '100%';
+        applied.flipped = true;
+    }
+    return applied;
+};
 
 /** The four facings a player can start with, and the words the picker uses for them. */
 EventManager.DIRECTIONS = [[2, 'Down'], [4, 'Left'], [6, 'Right'], [8, 'Up']];
