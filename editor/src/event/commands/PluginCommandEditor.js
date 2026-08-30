@@ -961,9 +961,11 @@ class PluginCommandEditor {
             return;
         }
 
-        const files = RRAssetFiles.listNames(browseDir, [
-            '.png', '.jpg', '.jpeg', '.webp', '.bmp', ...RRAssetFiles.AUDIO_EXTENSIONS
-        ], { recursive: Boolean(arg.dir) });
+        // Only the kinds of file the argument's folder holds: an image folder
+        // lists images, an audio folder audio, movies videos; a folder that
+        // says nothing (or none at all) lists every kind.
+        const files = RRAssetFiles.listNames(browseDir, PluginCommandEditor.extensionsForDir(arg.dir),
+            { recursive: Boolean(arg.dir) });
 
         if (files.length === 0) {
             alert(tt('No files found in:') + ' ' + (arg.dir || browseDir));
@@ -1202,6 +1204,20 @@ class PluginCommandEditor {
 }
 
 // Export
+/** The file extensions a plugin argument's `@dir` folder can hold. */
+PluginCommandEditor.extensionsForDir = function(dir) {
+    const folder = String(dir || '').trim().replace(/^\.?[\\/]+/, '').replace(/[\\/]+$/, '').toLowerCase();
+    const root = folder.split(/[\\/]/)[0];
+    const images = RRAssetFiles.IMAGE_EXTENSIONS || ['.png', '.jpg', '.jpeg', '.webp'];
+    const audio = RRAssetFiles.AUDIO_EXTENSIONS || ['.ogg', '.mp3', '.wav', '.flac', '.m4a'];
+    if (root === 'img') return images.slice();
+    if (root === 'audio') return audio.slice();
+    if (root === 'movies') return ['.webm', '.mp4'];
+    if (root === 'fonts') return ['.woff', '.woff2', '.ttf', '.otf'];
+    if (root === 'effects') return ['.efkefc'];
+    return [...images, '.bmp', ...audio, '.webm', '.mp4'];
+};
+
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = PluginCommandEditor;
 }
