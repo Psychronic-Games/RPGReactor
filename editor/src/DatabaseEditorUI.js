@@ -19,6 +19,10 @@ class DatabaseEditorUI {
         // Clipboard for list copy/cut/paste
         this.listClipboard = null;  // { type, entry }
 
+        // Backs the list context menu's Referenced by command. Holds the
+        // manager, not a snapshot, so it always scans the live database.
+        this.referenceFinder = new DatabaseReferenceFinder(databaseManager);
+
         // Initialize modular editors
         this.commonUI = new DatabaseCommonUI(databaseManager, { getCurrentProject: () => this.currentProject });
         this.actorEditor = new DatabaseActorEditor(databaseManager, { getCurrentProject: () => this.currentProject }, this.commonUI, this);
@@ -744,7 +748,18 @@ class DatabaseEditorUI {
             getSelectedEntries,
             selectIds,
             selectAll: () => selectIds(filteredData.map(entry => entry.id), focusedId, false),
-            refresh: () => { refreshData(); refreshList(); }
+            refresh: () => { refreshData(); refreshList(); },
+            // Select one entry and put it on screen. The list renders in
+            // batches, so an entry past the rendered window has no row to
+            // select or scroll to until populateList extends to it -- which
+            // it does off focusedId, set by selectIds just above.
+            reveal: (id) => {
+                if (!filteredData.some(entry => entry.id === id)) return false;
+                selectIds([id], id);
+                populateList(searchInput.value, false, { preserveScroll: true });
+                listEl.querySelector(`[data-entry-id="${id}"]`)?.scrollIntoView({ block: 'center' });
+                return true;
+            }
         };
         this._activeDatabaseList = listSession;
 
@@ -957,8 +972,22 @@ class DatabaseEditorUI {
                 if (session?.type === type) session.selectAll();
             }, enabled: true },
         ];
+        if (DatabaseReferenceFinder.targetTypes.includes(type)) {
+            items.push({ separator: true });
+            items.push({
+                label: window.I18n ? window.I18n.tText('Referenced by') : 'Referenced by',
+                action: () => this.showReferencesModal(this.databaseManager.data[type]?.[entry.id] || entry, type),
+                enabled: true
+            });
+        }
 
         items.forEach(item => {
+            if (item.separator) {
+                const rule = document.createElement('div');
+                rule.style.cssText = 'height: 1px; margin: 4px 6px; background-color: var(--color-border);';
+                menu.appendChild(rule);
+                return;
+            }
             const mi = document.createElement('div');
             mi.textContent = item.label;
             mi.style.cssText = `padding: 5px 12px; cursor: ${item.enabled ? 'pointer' : 'not-allowed'}; color: ${item.enabled ? 'var(--color-text)' : 'var(--color-text-dim)'}; font-size: 12px; border-radius: 2px;`;
@@ -981,6 +1010,179 @@ class DatabaseEditorUI {
             if (!menu.contains(e.target)) { menu.remove(); document.removeEventListener('mousedown', closeMenu); }
         };
         setTimeout(() => document.addEventListener('mousedown', closeMenu), 50);
+    }
+
+    /**
+     * "Referenced by": every other database record that points at `entry`,
+     * grouped by type, each row opening that record. Intra-database and
+     * structured fields only -- see DatabaseReferenceFinder for what that
+     * deliberately leaves out.
+     */
+    showReferencesModal(entry, type) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
+        const translateWhere = reference => (reference.whereKind === 'eventCommand' && window.I18n?.tEventCommandName)
+            ? window.I18n.tEventCommandName(reference.where)
+            : tt(reference.where);
+        const references = this.referenceFinder.findReferences(type, entry?.id);
+        // Group order follows the database navigation, so the modal reads in
+        // the same order as the sidebar the rows jump into.
+        const order = [...DatabaseReferenceFinder.targetTypes, 'system'];
+        references.sort((a, b) => (order.indexOf(a.type) - order.indexOf(b.type)) || (a.id - b.id));
+
+        const overlay = document.createElement('div');
+        overlay.className = 'rr-modal-overlay';
+        const modal = document.createElement('div');
+        modal.className = 'rr-modal rr-references-modal';
+        modal.style.cssText = 'width: 560px;';
+
+        const header = document.createElement('div');
+        header.className = 'rr-modal-header';
+        header.innerHTML = `
+            <div class="rr-modal-title">${rrEscapeHtml(tt('Referenced by'))}${references.length ? ` (${references.length})` : ''}</div>
+            <button class="rr-modal-close" type="button">&times;</button>
+        `;
+
+        const body = document.createElement('div');
+        body.className = 'rr-modal-body';
+        // Entry names are author text; the generic exact-text pass must not
+        // translate a record that happens to be called "Item" or "Skill".
+        body.setAttribute('data-rr-i18n-skip', '');
+        body.style.cssText = 'gap: 0; padding-top: 0;';
+
+        const subject = document.createElement('div');
+        subject.style.cssText = 'position: sticky; top: 0; z-index: 1; background: var(--color-bg-base); padding: 12px 0 10px; color: var(--color-text-muted); font-size: 12px; border-bottom: 1px solid var(--color-border);';
+        const subjectLabels = this.databaseEntryLabels(entry, type);
+        subject.textContent = `${this._dbTitle(type, type)} #${entry?.id} · ${subjectLabels.primary}`;
+        body.appendChild(subject);
+
+        const close = () => {
+            overlay.remove();
+            document.removeEventListener('keydown', onKeyDown, true);
+        };
+        const onKeyDown = event => {
+            if (event.key !== 'Escape') return;
+            event.stopPropagation();
+            close();
+        };
+
+        if (references.length === 0) {
+            const empty = document.createElement('div');
+            empty.style.cssText = 'padding: 28px 4px; text-align: center; color: var(--color-text-muted); font-size: 13px;';
+            empty.textContent = tt('Nothing in the database references this entry.');
+            body.appendChild(empty);
+        } else {
+            let group = null;
+            references.forEach(reference => {
+                if (reference.type !== group) {
+                    group = reference.type;
+                    const heading = document.createElement('div');
+                    heading.style.cssText = 'margin: 14px 0 4px; font-size: 11px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; color: var(--color-accent-bright);';
+                    heading.textContent = group === 'system'
+                        ? this._dbTitle('system1', 'System 1')
+                        : this._dbTitle(group, group);
+                    body.appendChild(heading);
+                }
+                body.appendChild(this._referenceRow(reference, translateWhere, close));
+            });
+        }
+
+        const footer = document.createElement('div');
+        footer.className = 'rr-modal-footer';
+        const closeBtn = document.createElement('button');
+        closeBtn.type = 'button';
+        closeBtn.className = 'rr-btn-secondary';
+        closeBtn.textContent = tt('Close');
+        footer.appendChild(closeBtn);
+
+        modal.append(header, body, footer);
+        overlay.appendChild(modal);
+        header.querySelector('.rr-modal-close').addEventListener('click', close);
+        closeBtn.addEventListener('click', close);
+        overlay.addEventListener('mousedown', event => { if (event.target === overlay) close(); });
+        document.addEventListener('keydown', onKeyDown, true);
+        document.body.appendChild(overlay);
+        closeBtn.focus();
+    }
+
+    /** One clickable row of the Referenced by list. */
+    _referenceRow(reference, translateWhere, close) {
+        const source = this.databaseManager.data?.[reference.type]?.[reference.id] || null;
+        const row = document.createElement('div');
+        row.className = 'database-list-item rr-reference-row';
+        row.style.cssText = 'border-bottom: 1px solid var(--color-bg-menubar); border-radius: 3px;';
+        row.dataset.referenceType = reference.type;
+        row.dataset.referenceId = String(reference.id);
+
+        if (source && this.listIconTypes.includes(reference.type)) {
+            const iconSpan = document.createElement('span');
+            iconSpan.className = 'database-list-icon';
+            this.applyListIcon(iconSpan, source, reference.type);
+            row.appendChild(iconSpan);
+        }
+
+        const nameSpan = document.createElement('span');
+        nameSpan.className = 'database-list-name';
+        if (reference.type === 'system') {
+            nameSpan.textContent = this._dbTitle('system1', 'System 1');
+        } else {
+            const labels = source
+                ? this.databaseEntryLabels(source, reference.type)
+                : { primary: this._t('common.unnamed'), secondary: '' };
+            nameSpan.textContent = labels.primary;
+            if (labels.secondary) {
+                const altSpan = document.createElement('span');
+                altSpan.className = 'database-list-alt';
+                altSpan.textContent = labels.secondary;
+                nameSpan.appendChild(altSpan);
+            }
+        }
+        row.appendChild(nameSpan);
+
+        const whereSpan = document.createElement('span');
+        whereSpan.className = 'rr-reference-where';
+        whereSpan.style.cssText = 'margin: 0 10px; color: var(--color-text-muted); font-size: 11px; white-space: nowrap;';
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
+        const parts = [translateWhere(reference)];
+        if (reference.page) parts.push(`${tt('Page')} ${reference.page}`);
+        if (reference.count > 1) parts.push(`×${reference.count}`);
+        whereSpan.textContent = parts.join(' · ');
+        row.appendChild(whereSpan);
+
+        if (reference.type !== 'system') {
+            const idSpan = document.createElement('span');
+            idSpan.className = 'database-list-id';
+            idSpan.textContent = `#${reference.id}`;
+            row.appendChild(idSpan);
+        }
+
+        const open = () => {
+            close();
+            this.navigateToDatabaseEntry(reference.type, reference.id);
+        };
+        row.tabIndex = 0;
+        row.setAttribute('role', 'button');
+        row.addEventListener('click', open);
+        row.addEventListener('keydown', event => {
+            if (event.key !== 'Enter' && event.key !== ' ') return;
+            event.preventDefault();
+            open();
+        });
+        return row;
+    }
+
+    /**
+     * Open a database section and select one entry in it. 'system' has no
+     * list, so it just opens System 1, where the referencing fields live.
+     */
+    navigateToDatabaseEntry(type, id) {
+        if (type === 'system') {
+            this.openDatabase('system1');
+            return true;
+        }
+        this.openDatabase(type);
+        const session = this._activeDatabaseList;
+        if (session?.type !== type || !session.reveal) return false;
+        return session.reveal(id);
     }
 
     showDatabaseActionMenu(x, y, items) {

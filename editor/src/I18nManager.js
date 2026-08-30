@@ -10937,6 +10937,25 @@ Object.assign(RR_TEXT_TRANSLATIONS.vi, { 'Per tile': 'Mỗi ô' });
 Object.assign(RR_TEXT_TRANSLATIONS.th, { 'Per tile': 'ต่อไทล์' });
 Object.assign(RR_TEXT_TRANSLATIONS.tr, { 'Per tile': 'Kare başına' });
 
+// Database list -> Referenced by.
+Object.assign(RR_TEXT_TRANSLATIONS.ja, { 'Referenced by': '参照元', 'Nothing in the database references this entry.': 'このデータを参照しているものはデータベース内にありません。' });
+Object.assign(RR_TEXT_TRANSLATIONS.es, { 'Referenced by': 'Referenciado por', 'Nothing in the database references this entry.': 'Ningún elemento de la base de datos hace referencia a esta entrada.' });
+Object.assign(RR_TEXT_TRANSLATIONS['zh-Hant'], { 'Referenced by': '被引用於', 'Nothing in the database references this entry.': '資料庫中沒有任何項目引用此條目。' });
+Object.assign(RR_TEXT_TRANSLATIONS['zh-Hans'], { 'Referenced by': '被引用于', 'Nothing in the database references this entry.': '数据库中没有任何项目引用此条目。' });
+Object.assign(RR_TEXT_TRANSLATIONS.ru, { 'Referenced by': 'Где используется', 'Nothing in the database references this entry.': 'Ничто в базе данных не ссылается на эту запись.' });
+Object.assign(RR_TEXT_TRANSLATIONS.pt, { 'Referenced by': 'Referenciado por', 'Nothing in the database references this entry.': 'Nada no banco de dados faz referência a esta entrada.' });
+Object.assign(RR_TEXT_TRANSLATIONS.de, { 'Referenced by': 'Verwendet von', 'Nothing in the database references this entry.': 'Nichts in der Datenbank verweist auf diesen Eintrag.' });
+Object.assign(RR_TEXT_TRANSLATIONS.fr, { 'Referenced by': 'Référencé par', 'Nothing in the database references this entry.': 'Aucun élément de la base de données ne référence cette entrée.' });
+Object.assign(RR_TEXT_TRANSLATIONS.el, { 'Referenced by': 'Αναφέρεται από', 'Nothing in the database references this entry.': 'Τίποτα στη βάση δεδομένων δεν αναφέρεται σε αυτήν την καταχώριση.' });
+Object.assign(RR_TEXT_TRANSLATIONS.ko, { 'Referenced by': '참조하는 항목', 'Nothing in the database references this entry.': '데이터베이스에서 이 항목을 참조하는 것이 없습니다.' });
+Object.assign(RR_TEXT_TRANSLATIONS.ar, { 'Referenced by': 'مُشار إليه من', 'Nothing in the database references this entry.': 'لا يوجد في قاعدة البيانات ما يشير إلى هذا الإدخال.' });
+Object.assign(RR_TEXT_TRANSLATIONS.it, { 'Referenced by': 'Referenziato da', 'Nothing in the database references this entry.': 'Nessun elemento del database fa riferimento a questa voce.' });
+Object.assign(RR_TEXT_TRANSLATIONS.pl, { 'Referenced by': 'Używane przez', 'Nothing in the database references this entry.': 'Nic w bazie danych nie odwołuje się do tego wpisu.' });
+Object.assign(RR_TEXT_TRANSLATIONS.id, { 'Referenced by': 'Direferensikan oleh', 'Nothing in the database references this entry.': 'Tidak ada di basis data yang mereferensikan entri ini.' });
+Object.assign(RR_TEXT_TRANSLATIONS.vi, { 'Referenced by': 'Được tham chiếu bởi', 'Nothing in the database references this entry.': 'Không có mục nào trong cơ sở dữ liệu tham chiếu đến mục này.' });
+Object.assign(RR_TEXT_TRANSLATIONS.th, { 'Referenced by': 'ถูกอ้างอิงโดย', 'Nothing in the database references this entry.': 'ไม่มีรายการใดในฐานข้อมูลที่อ้างอิงถึงรายการนี้' });
+Object.assign(RR_TEXT_TRANSLATIONS.tr, { 'Referenced by': 'Nerede kullanılıyor', 'Nothing in the database references this entry.': 'Veritabanında bu kaydı kullanan hiçbir öğe yok.' });
+
 Object.assign(RR_EVENT_COMMAND_NAMES.ja, {
     'Show Scrolling Text': '文章のスクロール表示'
 });
