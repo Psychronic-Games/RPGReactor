@@ -38,7 +38,10 @@ class DatabaseEnemyEditor {
         // General Settings
         const generalSection = document.createElement('div');
         generalSection.className = 'database-section';
-        generalSection.style.flex = '1';
+        // Parameters carries nine rows of label + value and needs the room;
+        // General and Drop Items each give up a little. Below the 900px
+        // container breakpoint the stylesheet wraps the sections instead.
+        generalSection.style.flex = '0.9 1 0';
         generalSection.style.minWidth = '0';
         generalSection.innerHTML = `
             <div class="database-section-header">${tt('General')}</div>
@@ -95,11 +98,11 @@ class DatabaseEnemyEditor {
         }
 
         // Parameters Section
-        const params = enemy.params || [0, 0, 0, 0, 0, 0, 0, 0];
-        const paramNames = ['Max HP', 'Max MP', 'Attack', 'Defense', 'M.Attack', 'M.Defense', 'Agility', 'Luck'].map(name => tt(name));
+        const paramRows = this.parameterRows(enemy);
         const paramsSection = document.createElement('div');
         paramsSection.className = 'database-section';
-        paramsSection.style.flexShrink = '0';
+        paramsSection.style.flex = '1.6 1 0';
+        paramsSection.style.minWidth = '0';
         paramsSection.innerHTML = `
             <div class="database-section-header">${tt('Parameters')}</div>
             <div class="database-section-content">
@@ -111,17 +114,18 @@ class DatabaseEnemyEditor {
                         </tr>
                     </thead>
                     <tbody>
-                        ${paramNames.map((name, idx) => `
+                        ${paramRows.map(row => `
                             <tr>
-                                <td>${name}</td>
+                                <td>${row.label}</td>
                                 <td>
                                     <input type="number"
-                                           class="database-field-value database-field-value-small"
-                                           value="${this.escapeHTML(params[idx] || 0)}"
-                                           data-field="params"
-                                           data-param-index="${idx}"
+                                           class="database-field-value database-field-value-small enemy-param-input"
+                                           value="${this.escapeHTML(row.value)}"
+                                           min="0"
+                                           data-field="${row.field}"
+                                           ${row.index === null ? '' : `data-param-index="${row.index}"`}
                                            data-enemy-id="${enemy.id}"
-                                           style="width: 80px; background: var(--color-bg-panel);">
+                                           style="width: ${this.paramInputWidth(row.value)}; background: var(--color-bg-panel);">
                                 </td>
                             </tr>
                         `).join('')}
@@ -134,7 +138,7 @@ class DatabaseEnemyEditor {
         // Drop Items Section (3 fixed slots)
         const dropItemsSection = document.createElement('div');
         dropItemsSection.className = 'database-section';
-        dropItemsSection.style.flex = '1';
+        dropItemsSection.style.flex = '0.9 1 0';
         dropItemsSection.style.minWidth = '0';
         dropItemsSection.innerHTML = `
             <div class="database-section-header">${tt('Drop Items')}</div>
@@ -325,7 +329,59 @@ class DatabaseEnemyEditor {
             });
             // Setup drop kind change listeners for show/hide behavior
             this.setupDropKindListeners(enemy);
+            this.setupDropRateListeners(enemy);
+            this.setupParamInputListeners(enemy);
         }, 0);
+    }
+
+    // ==========================================
+    // PARAMETERS
+    // ==========================================
+
+    /**
+     * The rows of the Parameters table. Max TP is the third resource pool,
+     * so it reads under Max HP and Max MP; it is a row of the table but not a
+     * parameter: no param index, its own field, and so never a ninth entry in
+     * the eight-slot `params` array every engine loop indexes by paramId.
+     */
+    parameterRows(enemy) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
+        const params = (enemy && enemy.params) || [0, 0, 0, 0, 0, 0, 0, 0];
+        const rows = ['Max HP', 'Max MP', 'Attack', 'Defense', 'M.Attack', 'M.Defense', 'Agility', 'Luck']
+            .map((name, idx) => ({ label: tt(name), value: params[idx] || 0, field: 'params', index: idx }));
+        rows.splice(2, 0, { label: tt('Max TP'), value: this.enemyMaxTp(enemy), field: 'maxTp', index: null });
+        return rows;
+    }
+
+    /**
+     * An enemy that was never given a Max TP has no `maxTp` key, and the
+     * runtime falls back to Game_BattlerBase's 100 for it; the box shows
+     * that same 100 and writes nothing until the value is changed.
+     */
+    enemyMaxTp(enemy) {
+        const raw = enemy ? enemy.maxTp : undefined;
+        const authored = typeof raw === 'number' || (typeof raw === 'string' && raw.trim() !== '');
+        const stored = authored ? Number(raw) : NaN;
+        return Number.isFinite(stored) ? Math.max(0, stored) : DatabaseEnemyEditor.DEFAULT_MAX_TP;
+    }
+
+    /**
+     * A value box sized to the number it holds, in `ch` (a digit in the
+     * field's own font) plus the chrome beside the digits: 20px padding, 2px
+     * border, the 15px spinner Chromium lays out inside the content box and
+     * an 11px gap before it. Two digits is the floor, nine the ceiling.
+     */
+    paramInputWidth(value) {
+        const digits = String(value ?? '').replace(/[^0-9]/g, '').length;
+        return `calc(${Math.min(9, Math.max(2, digits))}ch + 48px)`;
+    }
+
+    setupParamInputListeners(enemy) {
+        document.querySelectorAll(`.enemy-param-input[data-enemy-id="${enemy.id}"]`).forEach(input => {
+            const resize = () => { input.style.width = this.paramInputWidth(input.value); };
+            input.addEventListener('input', resize);
+            resize();
+        });
     }
 
     // ==========================================
@@ -352,30 +408,34 @@ class DatabaseEnemyEditor {
             html += `
                 <div style="margin-bottom: 10px; padding: 8px; background: var(--color-bg-base); border: 1px solid var(--color-border); border-radius: 4px;">
                     <div style="font-size: 11px; color: var(--color-text-muted); margin-bottom: 4px;">${tt('Drop Slot')} ${i + 1}</div>
-                    <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
-                        <div style="display: flex; align-items: center; gap: 4px;">
-                            <label class="database-field-label" style="font-size: 11px;">${tt('Kind:')}</label>
-                            <select class="database-field-value" style="width: 90px; font-size: 11px;"
-                                    data-field="dropItems" data-drop-index="${i}" data-drop-field="kind" data-enemy-id="${enemy.id}">
-                                <option value="0" ${drop.kind === 0 ? 'selected' : ''}>${tt('None')}</option>
-                                <option value="1" ${drop.kind === 1 ? 'selected' : ''}>${tt('Item')}</option>
-                                <option value="2" ${drop.kind === 2 ? 'selected' : ''}>${tt('Weapon')}</option>
-                                <option value="3" ${drop.kind === 3 ? 'selected' : ''}>${tt('Armor')}</option>
-                            </select>
+                    <div style="display: flex; flex-direction: column; gap: 6px;">
+                        <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0;">
+                            <div style="display: flex; align-items: center; gap: 4px; flex: 0 0 auto;">
+                                <label class="database-field-label" style="font-size: 11px;">${tt('Kind:')}</label>
+                                <select class="database-field-value" style="width: 90px; font-size: 11px;"
+                                        data-field="dropItems" data-drop-index="${i}" data-drop-field="kind" data-enemy-id="${enemy.id}">
+                                    <option value="0" ${drop.kind === 0 ? 'selected' : ''}>${tt('None')}</option>
+                                    <option value="1" ${drop.kind === 1 ? 'selected' : ''}>${tt('Item')}</option>
+                                    <option value="2" ${drop.kind === 2 ? 'selected' : ''}>${tt('Weapon')}</option>
+                                    <option value="3" ${drop.kind === 3 ? 'selected' : ''}>${tt('Armor')}</option>
+                                </select>
+                            </div>
+                            <div style="display: ${drop.kind === 0 ? 'none' : 'flex'}; align-items: center; gap: 4px; flex: 1 1 140px; min-width: 140px;" id="enemy-drop-dataid-wrapper-${enemy.id}-${i}">
+                                <label class="database-field-label" style="font-size: 11px;">${tt('Item:')}</label>
+                                <select class="database-field-value" style="flex: 1 1 auto; min-width: 0; font-size: 11px;"
+                                        data-field="dropItems" data-drop-index="${i}" data-drop-field="dataId" data-enemy-id="${enemy.id}"
+                                        id="enemy-drop-dataid-${enemy.id}-${i}">
+                                    ${this.getDropDataIdOptions(drop.kind, drop.dataId)}
+                                </select>
+                            </div>
                         </div>
-                        <div style="display: flex; align-items: center; gap: 4px; ${drop.kind === 0 ? 'display: none;' : ''}" id="enemy-drop-dataid-wrapper-${enemy.id}-${i}">
-                            <label class="database-field-label" style="font-size: 11px;">${tt('Item:')}</label>
-                            <select class="database-field-value" style="width: 150px; font-size: 11px;"
-                                    data-field="dropItems" data-drop-index="${i}" data-drop-field="dataId" data-enemy-id="${enemy.id}"
-                                    id="enemy-drop-dataid-${enemy.id}-${i}">
-                                ${this.getDropDataIdOptions(drop.kind, drop.dataId)}
-                            </select>
-                        </div>
-                        <div style="display: flex; align-items: center; gap: 4px; ${drop.kind === 0 ? 'display: none;' : ''}" id="enemy-drop-denom-wrapper-${enemy.id}-${i}">
+                        <div style="display: ${drop.kind === 0 ? 'none' : 'flex'}; align-items: center; gap: 4px;" id="enemy-drop-denom-wrapper-${enemy.id}-${i}">
                             <label class="database-field-label" style="font-size: 11px;">1 /</label>
                             <input type="number" class="database-field-value database-field-value-small" style="width: 60px; font-size: 11px;"
                                    value="${drop.denominator || 1}" min="1"
                                    data-field="dropItems" data-drop-index="${i}" data-drop-field="denominator" data-enemy-id="${enemy.id}">
+                            <span class="database-field-label" id="enemy-drop-rate-${enemy.id}-${i}" data-rr-i18n-skip
+                                  style="font-size: 11px; color: var(--color-text-muted); min-width: 46px;">${this.formatDropRate(drop.denominator)}</span>
                         </div>
                     </div>
                 </div>
@@ -401,6 +461,31 @@ class DatabaseEnemyEditor {
             .join('');
     }
 
+    /**
+     * The chance a `1 / X` denominator is, shown beside it. Trailing zeros
+     * are dropped: 1/1 reads 100%, 1/3 reads 33.333%.
+     */
+    formatDropRate(denominator) {
+        const denom = Math.max(1, parseInt(denominator, 10) || 1);
+        const percent = 100 / denom;
+        const text = percent >= 100 ? '100' : percent.toFixed(3).replace(/\.?0+$/, '');
+        return `${text}%`;
+    }
+
+    /**
+     * The readout carries `data-rr-i18n-skip` and must keep it: the i18n
+     * pass treats every `.database-field-label` as static copy and rewrites
+     * it back to the first text it saw on each later DOM change.
+     */
+    setupDropRateListeners(enemy) {
+        for (let i = 0; i < 3; i++) {
+            const input = document.querySelector(`input[data-drop-index="${i}"][data-drop-field="denominator"][data-enemy-id="${enemy.id}"]`);
+            const readout = document.getElementById(`enemy-drop-rate-${enemy.id}-${i}`);
+            if (!input || !readout) continue;
+            input.addEventListener('input', () => { readout.textContent = this.formatDropRate(input.value); });
+        }
+    }
+
     setupDropKindListeners(enemy) {
         for (let i = 0; i < 3; i++) {
             const kindSelect = document.querySelector(`select[data-drop-index="${i}"][data-drop-field="kind"][data-enemy-id="${enemy.id}"]`);
@@ -418,8 +503,10 @@ class DatabaseEnemyEditor {
                     if (dataIdWrapper) dataIdWrapper.style.display = 'none';
                     if (denomWrapper) denomWrapper.style.display = 'none';
                 } else {
-                    if (dataIdWrapper) dataIdWrapper.style.display = '';
-                    if (denomWrapper) denomWrapper.style.display = '';
+                    // 'flex', not '': clearing the inline display drops the
+                    // row to block and re-flows the controls it holds.
+                    if (dataIdWrapper) dataIdWrapper.style.display = 'flex';
+                    if (denomWrapper) denomWrapper.style.display = 'flex';
                     if (dataIdSelect) {
                         dataIdSelect.innerHTML = this.getDropDataIdOptions(newKind, 1);
                     }
@@ -1313,6 +1400,11 @@ class DatabaseEnemyEditor {
             console.log(`Updated enemy ${enemyId} dropItems[${idx}].${dropField} to:`, value);
         }
         // Handle numeric fields
+        else if (fieldName === 'maxTp') {
+            // Beside exp and gold, never in params: that array is indexed by
+            // paramId and has exactly eight entries.
+            enemy.maxTp = Math.max(0, parseInt(value) || 0);
+        }
         else if (fieldName === 'battlerHue' || fieldName === 'exp' || fieldName === 'gold') {
             enemy[fieldName] = parseInt(value) || 0;
             console.log(`Updated enemy ${enemyId} field ${fieldName} to:`, value);
@@ -1474,3 +1566,7 @@ class DatabaseEnemyEditor {
             : require('../utils/HtmlEscape.js')(str);
     }
 }
+
+// What Game_BattlerBase.prototype.maxTp returns for an enemy that carries no
+// maxTp of its own.
+DatabaseEnemyEditor.DEFAULT_MAX_TP = 100;

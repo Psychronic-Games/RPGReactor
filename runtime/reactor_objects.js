@@ -5014,6 +5014,27 @@ Game_Enemy.prototype.paramBase = function(paramId) {
     return this.enemy().params[paramId];
 };
 
+// Max TP is per-enemy rather than the flat 100 every battler used to get. It
+// is not part of params -- that array is indexed by paramId and has exactly
+// eight entries -- so it sits beside exp and gold as its own field, and an
+// enemy that has never been given one is left to whatever
+// Game_BattlerBase.prototype.maxTp says, which is the 100 it always was. That
+// fallback is looked up rather than inlined so a plugin that replaces maxTp
+// still governs every enemy the database has not spoken for.
+Game_Enemy.prototype.maxTp = function() {
+    const raw = this.enemy().maxTp;
+    // Only a number, or a string holding one, counts as authored. Number()
+    // reads null, '' and [] as 0, and a silent zero-TP enemy is a worse
+    // answer to malformed data than the default is.
+    const authored = typeof raw === 'number'
+        || (typeof raw === 'string' && raw.trim() !== '');
+    const value = authored ? Number(raw) : NaN;
+    if (Number.isFinite(value)) {
+        return Math.max(0, value + (this._maxTpPlus || 0));
+    }
+    return Game_BattlerBase.prototype.maxTp.call(this);
+};
+
 Game_Enemy.prototype.exp = function() {
     return this.enemy().exp;
 };
