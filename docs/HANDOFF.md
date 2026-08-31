@@ -39,7 +39,11 @@ exit 0. NW.js derives the Chromium user-data dir from manifest `name`
 it, and Chromium NEVER migrates a profile backwards — one run of a
 newer-Chromium build bricks all older-runtime builds on that machine,
 invisibly on clean testers. Fixes: bundled manifest name is now
-`rpg-reactor-nw<major><minor>` (repo manifest untouched; nothing reads
+`rpg-reactor-<appVersion>-nw<major><minor>` (owner ruling after users
+confirmed profile deletion also fixed OLDER versions: a FRESH profile every
+release, zero stale-profile risk, prefs re-seed per release until the
+0.98.5 fs-backed store; games stay runtime-scoped only — plugins may keep
+real data in browser storage) (repo manifest untouched; nothing reads
 manifest.name at runtime — guarded by profile-scoped-runtime.test.cjs);
 build refuses NW downgrades below build-scripts/shipped-runtime.json
 (RPGREACTOR_ALLOW_RUNTIME_DOWNGRADE=1 overrides). DEFERRED to 0.98.5: move

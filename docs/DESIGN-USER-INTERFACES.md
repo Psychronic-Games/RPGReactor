@@ -275,7 +275,7 @@ active phase.
 | RPG Maker MV project on Reactor | Uses the existing MV compatibility layer |
 | Standalone MZ plugin | Deferred, not shipped |
 
-The full tracked validation contains **2,136 Node tests**.
+The full tracked validation contains **2,150 Node tests**.
 Focused coverage includes schemas, typed rows and named contexts, actor bindings
 and tokens, generated baselines, functional Options and Save/Load semantics,
 role-safe post-plugin routing and fallback, styling, focus, nine-slice behavior,

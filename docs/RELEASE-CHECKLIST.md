@@ -21,8 +21,9 @@ class of report.
 migrates its user profile forward only; a downgrade dies on a fatal
 profile-schema CHECK with exit code 0 and no window — on every machine that
 ran the newer build, and on none of your clean test machines. Shipped
-manifests are profile-scoped (`rpg-reactor-nw0107`) so runtimes never share
-a profile, and the build refuses a downgrade below
+editor manifests are profile-scoped per release and runtime
+(`rpg-reactor-<version>-nw0107`, a fresh profile every release; games are
+scoped per runtime) so builds never share a profile, and the build refuses a downgrade below
 `editor/build-scripts/shipped-runtime.json` (raise that version in the same
 commit that upgrades NW.js 0.107.0 to anything newer).
 
@@ -128,7 +129,7 @@ The test suite statically rejects hard dependencies on ignored local projects.
 The distribution worker copies the tracked Reactor One project from
 `template/Demo`, preserves its authored content and plugin configuration, and
 refreshes its Reactor runtime files from the staged runtime.
-The current 0.98.4 baseline is **2,136 Node tests**;
+The current 0.98.4 baseline is **2,150 Node tests**;
 retain older counts only where a document clearly labels a historical release.
 
 When the optional authored-project compatibility corpus is present locally,

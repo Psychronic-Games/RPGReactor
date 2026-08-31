@@ -1219,8 +1219,13 @@ function buildWeb(stageRoot, stagingDir) {
     {
         const manifestPath = path.join(stageRoot, 'package.json');
         const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+        // Scoped to the release AND the runtime: a brand-new profile every
+        // version, so no stale-profile state of any kind can ever eat a
+        // launch. Editor preferences re-seed once per release until the
+        // file-backed settings store lands; a launch that always works
+        // beats a remembered window size.
         const profileKey = String(nwVersion).split('.').slice(0, 2).join('');
-        manifest.name = `rpg-reactor-nw${profileKey}`;
+        manifest.name = `rpg-reactor-${appVersion}-nw${profileKey}`;
         if (!manifest.name_for_display) manifest.name_for_display = 'RPG Reactor';
         fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + '\n');
         logInfo(`Profile-scoped manifest name: ${manifest.name}`);

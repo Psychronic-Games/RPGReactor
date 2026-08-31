@@ -19,8 +19,8 @@ const read = relativePath => fs.readFileSync(path.join(editorRoot, relativePath)
 
 test('the bundled manifest name is scoped to the NW.js runtime', () => {
     const worker = read('build-scripts/dist-editor-worker.js');
-    assert.match(worker, /rpg-reactor-nw\$\{profileKey\}|`rpg-reactor-nw\$\{/,
-        'the staging step rewrites the bundled name per runtime');
+    assert.match(worker, /rpg-reactor-\$\{appVersion\}-nw\$\{profileKey\}/,
+        'the staging step rewrites the bundled name per release and runtime');
     assert.match(worker, /name_for_display/,
         'the user-visible name is asserted alongside the rewrite');
 });
