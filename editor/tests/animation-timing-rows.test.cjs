@@ -145,3 +145,55 @@ test('the panel actually renders a row for each sound on the frame', () => {
     assert.ok(text.includes('Blow1'), 'the first sound on the frame is on screen');
     assert.ok(text.includes('Fire1'), 'and so is the second, which used to be invisible');
 });
+
+test('a previewed timing rolls its pool and pitch the way the game does', () => {
+    // The previews play through an <audio> element, not AudioManager, so they
+    // miss the resolver the runtime resolves variants in -- a timing with a
+    // pool used to preview its first take at its authored pitch, every time.
+    const modal = require(path.join(editorRoot, 'src', 'utils', 'SystemSoundSlotModal.js'));
+    const Preview = vm.runInNewContext(`${source}\nDatabaseAnimationEditor;`, {
+        console: { debug() {}, warn() {} },
+        require,
+        window: { RRSystemSoundSlotModal: modal },
+        document: { getElementById: () => null, createElement: () => ({ style: {}, appendChild() {} }) },
+        rrEscapeHtml: value => String(value)
+    });
+
+    const timing = {
+        name: 'Fire1', volume: 90, pitch: 100, pan: 0,
+        variants: [{ name: 'Fire2', volume: 80, pitch: 105, pan: 5 }],
+        pitchRandom: { min: 95, max: 105 }
+    };
+
+    // Every take in the pool is reachable, and every pitch stays in range.
+    const heard = new Set();
+    for (let attempt = 0; attempt < 200; attempt++) {
+        const se = Preview.resolvePreviewSe(timing);
+        heard.add(se.name);
+        assert.ok(se.pitch >= 95 && se.pitch <= 105, `pitch ${se.pitch} is inside the range`);
+    }
+    assert.deepEqual([...heard].sort(), ['Fire1', 'Fire2']);
+    assert.equal(timing.pitch, 100, 'the stored timing is not rewritten by a preview');
+});
+
+test('a plain SE previews as itself, and an empty one plays nothing', () => {
+    const Preview = vm.runInNewContext(`${source}\nDatabaseAnimationEditor;`, {
+        console: { debug() {}, warn() {} },
+        require,
+        window: {},
+        document: { getElementById: () => null, createElement: () => ({ style: {}, appendChild() {} }) },
+        rrEscapeHtml: value => String(value)
+    });
+    const plain = { name: 'Blow1', volume: 90, pitch: 100, pan: 0 };
+    assert.equal(Preview.resolvePreviewSe(plain), plain, 'no pool, no range, no work');
+    assert.equal(Preview.resolvePreviewSe({ name: '' }), null);
+    assert.equal(Preview.resolvePreviewSe(null), null);
+});
+
+test('all three animation previews go through the resolver', () => {
+    // The Animations page play button, the Effekseer play button, and the
+    // timing dialog's own preview.
+    assert.equal((source.match(/DatabaseAnimationEditor\.resolvePreviewSe\(/g) || []).length, 3);
+    assert.equal(/const se = timing\.se;\n\s+if \(!se \|\| !se\.name\) return;/.test(source), false,
+        'no preview reads the stored SE straight any more');
+});

@@ -327,7 +327,10 @@ test('an animation timing keeps its pool across a save, and shows it in the list
     assert.match(source, /RRSystemSoundSlotModal\.open\(\{/,
         'the timing modal opens the same slot modal System 1 uses, not a second one');
 
-    const saveSites = source.match(/\.\.\.\(this\._timingSeExtras \|\| \{\}\)/g) || [];
+    // Anchored on the field that precedes them in the two save literals, so the
+    // preview handler -- which reads the same extras, to roll what it plays --
+    // is not counted as a third save path.
+    const saveSites = source.match(/volume: seVolume,\s*\.\.\.\(this\._timingSeExtras \|\| \{\}\)/g) || [];
     assert.equal(saveSites.length, 2,
         'both save paths -- Effekseer soundTimings and sprite timings -- carry the extras');
 

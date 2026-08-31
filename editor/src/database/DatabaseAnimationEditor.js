@@ -2107,17 +2107,26 @@ class DatabaseAnimationEditor {
 
             const path = require('path');
             const seFolder = path.join(currentProject.path, 'audio', 'se');
-            const audioFile = RRAssetFiles.find(seFolder, seName, RRAssetFiles.AUDIO_EXTENSIONS);
-            if (!audioFile) return;
-            previewAudio = new Audio(RRAssetFiles.toUrl(audioFile.absolutePath));
             // The volume slider is min="0" and 0 is a real setting, so a truthy
             // default would preview a silent timing at almost full volume. The
             // pitch slider is min="50", so it cannot reach a falsy value.
-            previewAudio.volume = DatabaseAnimationEditor.readNumericInput('timing-se-volume', 90) / 100;
+            const authored = {
+                name: seName,
+                volume: DatabaseAnimationEditor.readNumericInput('timing-se-volume', 90),
+                pitch: parseInt(sePitchSlider.value, 10) || 100,
+                pan: DatabaseAnimationEditor.readNumericInput('timing-se-pan', 0),
+                ...(this._timingSeExtras || {})
+            };
+            const se = DatabaseAnimationEditor.resolvePreviewSe(authored);
+            if (!se) return;
+            const audioFile = RRAssetFiles.find(seFolder, se.name, RRAssetFiles.AUDIO_EXTENSIONS);
+            if (!audioFile) return;
+            previewAudio = new Audio(RRAssetFiles.toUrl(audioFile.absolutePath));
+            previewAudio.volume = (Number.isFinite(se.volume) ? se.volume : 90) / 100;
             // A pitch here is a playback rate, and Chromium time-stretches by
             // default -- which preserves the pitch and so cancels the setting.
             previewAudio.preservesPitch = false;
-            previewAudio.playbackRate = (parseInt(sePitchSlider.value, 10) || 100) / 100;
+            previewAudio.playbackRate = (se.pitch || 100) / 100;
             previewAudio.play().catch(err => console.warn('Failed to play SE preview:', err));
         });
 
@@ -2215,6 +2224,30 @@ class DatabaseAnimationEditor {
                 }
             });
         });
+    }
+
+    /**
+     * The take to preview, rolled the way the game rolls it.
+     *
+     * A previewed SE is played through an `<audio>` element rather than through
+     * `AudioManager`, so it does not pass the resolver the runtime resolves
+     * variants and random pitch in - a timing carrying a pool would preview its
+     * first take at its authored pitch, every time, and disagree with the game.
+     * `RRSystemSoundSlotModal.auditionPick` is the same draw the slot dialog's
+     * own play button makes, and mirrors `AudioManager.resolveSeVariant`; using
+     * it rather than a third implementation is what keeps the three in step.
+     *
+     * Returns the SE unchanged when it carries neither key, and null when there
+     * is nothing to play.
+     */
+    static resolvePreviewSe(se) {
+        if (!se || !se.name) return null;
+        const modal = typeof window !== 'undefined' ? window.RRSystemSoundSlotModal : null;
+        if (!modal || (!se.variants && !se.pitchRandom)) return se;
+        const draft = modal.draftFor(se);
+        const pick = modal.auditionPick(draft.sounds, draft.pitchRandom);
+        if (!pick) return se;
+        return { ...pick.sound, pitch: pick.pitch };
     }
 
     /**
@@ -3245,8 +3278,10 @@ class DatabaseAnimationEditor {
             const allTimings = [...spriteTimings, ...effekseerTimings];
 
             allTimings.forEach(timing => {
-                const se = timing.se;
-                if (!se || !se.name) return;
+                // Rolled per play, as the runtime rolls it: a pool picks a take
+                // and a range replaces the pitch.
+                const se = DatabaseAnimationEditor.resolvePreviewSe(timing.se);
+                if (!se) return;
 
                 const path = require('path');
                 const seFolder = path.join(currentProject.path, 'audio', 'se');
@@ -4167,8 +4202,8 @@ class DatabaseAnimationEditor {
             const soundTimings = animation.soundTimings.filter(st => st.frame === frameIndex && st.se && st.se.name);
 
             soundTimings.forEach(timing => {
-                const se = timing.se;
-                if (!se || !se.name) return;
+                const se = DatabaseAnimationEditor.resolvePreviewSe(timing.se);
+                if (!se) return;
 
                 const path = require('path');
                 const seFolder = path.join(currentProject.path, 'audio', 'se');
