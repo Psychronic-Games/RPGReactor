@@ -19,6 +19,13 @@ retries when the warm-up resolves. The one-per-track BGM 404 on web is BY
 DESIGN: extensionless refs probe .ogg first, `WebAudio._onError` walks the
 other extensions (reactor_core ~7620) — only a host-provided extension
 manifest could remove the network-log line; noted as a future option.
+.35: web playtest is an IFRAME OVER THE LIVE EDITOR (WebHost
+openPlaytest/createPlaytestModal) - editor app.stop() + MapEditor3D
+.suspended gate while it is open (resume must NOT app.start() when 3D owns
+rendering); MSAA capped at 2x once canvasPixelRatio >= 2;
+Graphics.maxCanvasPixelRatio is the opt-down knob. Browser rAF is
+vsync-locked: 60 on a 60Hz panel is full speed, desktop 180 is an uncapped
+panel, not a Reactor difference.
 Also .34: `Graphics._defaultStretchMode` returns true everywhere — web
 playtests (itch) opened at native size until F3; no persistence involved,
 the F3 toggle at reactor_core ~1649 is per-session.

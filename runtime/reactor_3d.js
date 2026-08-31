@@ -406,7 +406,13 @@ Reactor3D.minRenderScale = 0.5;
 
 /** MSAA for a given scale: a half-size target has nothing left to smooth. */
 Reactor3D.samplesForScale = function(scale) {
-    const base = Math.max(0, Math.floor(this.renderTargetSamples || 0));
+    let base = Math.max(0, Math.floor(this.renderTargetSamples || 0));
+    // Native-resolution targets (fullscreen at 2x and beyond) already cost
+    // several times the pixels; full multisampling on top of that is what
+    // pushes a browser GPU past its frame budget. Edges keep 2x there.
+    const ratio = typeof Graphics !== "undefined" && Graphics.canvasPixelRatio
+        ? Graphics.canvasPixelRatio() : 1;
+    if (ratio >= 2) base = Math.min(base, 2);
     if (scale >= 1) return base;
     if (scale >= 0.75) return Math.min(base, 2);
     return 0;

@@ -486,6 +486,12 @@
             modal.style.display = 'none';
             const frame = modal.querySelector('iframe');
             if (frame) frame.src = 'about:blank';
+            // Wake the editor back up. When the 3D view is enabled its own
+            // loop renders and PIXI's ticker stays stopped, exactly as the
+            // 3D view arranged it.
+            const editor3d = window.reactor?.projectController?.mapEditor3D;
+            if (editor3d) editor3d.suspended = false;
+            if (!editor3d?.isEnabled?.()) window.reactor?.projectController?.app?.start?.();
         };
         toolbar.appendChild(close);
         const frame = document.createElement('iframe');
@@ -941,6 +947,13 @@
             const frame = modal.querySelector('iframe');
             frame.src = `project/index.html?${mode}&rrSnapshot=${Date.now()}`;
             modal.style.display = 'flex';
+            // The playtest runs in an iframe over the live editor; nothing
+            // used to stop the editor's own rendering, so its PIXI app and
+            // 3D view kept burning the same GPU the game needs. Sleep them
+            // until the overlay closes.
+            window.reactor?.projectController?.app?.stop?.();
+            const editor3d = window.reactor?.projectController?.mapEditor3D;
+            if (editor3d) editor3d.suspended = true;
             return true;
         },
         async resetProject() {

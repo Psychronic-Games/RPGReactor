@@ -3392,6 +3392,10 @@ class MapEditor3D {
             // pointer moved over it — those handlers render directly — and
             // otherwise showed nothing at all.
             if (!this.enabled) { this.frame = null; return; }
+            // Suspended (the browser playtest runs in an overlay iframe):
+            // keep the loop alive but do no GPU work — the playtest owns
+            // the machine until the overlay closes.
+            if (this.suspended) { this.frame = requestAnimationFrame(tick); return; }
             this.frame = null;
             try {
                 this.stepFly(now);

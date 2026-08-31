@@ -1443,8 +1443,16 @@ Graphics._canRender = function() {
  */
 Graphics.canvasPixelRatio = function() {
     const scale = this._realScale || 1;
-    return Math.max(1, Math.min(scale, 4));
+    return Math.max(1, Math.min(scale, this.maxCanvasPixelRatio || 4));
 };
+
+/**
+ * Ceiling for the backing-store scale. A project that would rather trade
+ * the native-resolution enlargement for frame rate on weak GPUs sets this
+ * to 1 (a script call or plugin): the canvas renders at game size again
+ * and the browser stretches it as it did before.
+ */
+Graphics.maxCanvasPixelRatio = 4;
 
 Graphics._updateRealScale = function() {
     if (this._stretchEnabled && this._width > 0 && this._height > 0) {
