@@ -64,6 +64,13 @@
     --color-syntax-string:        #ce9178;
     --color-syntax-comment:       #808080;
 
+    /* The pale base an animation preview can be judged against. Held here
+       rather than as a literal in the switcher so a theme can move it, and so
+       the stylesheet stays the one place a colour is decided. Only the Light
+       swatch reads it: Mid and Dark are fixed points an author picks *because*
+       they are neutral, and Dark is the default. */
+    --color-preview-backdrop:     #c8c8c8;
+
     /* ---------- Surfaces (background layers from deepest to lightest) ----- */
     --color-bg-deep:              #000000;        /* modal/header strip */
     --color-bg-base:              #1a1a1a;        /* primary canvas */

@@ -22,11 +22,32 @@
 
     const SETTINGS_KEY = 'rr-settings';
     const SETTING = 'animationPreviewBackdrop';
+    // `color` is the value to use when the token cannot be read; only the light
+    // swatch has one, because it is the only one the stylesheet has an opinion
+    // about. Mid and Dark are fixed points chosen for being neutral.
     const CHOICES = Object.freeze([
-        Object.freeze({ id: 'light', color: '#c8c8c8' }),
+        Object.freeze({ id: 'light', color: '#c8c8c8', token: '--color-preview-backdrop' }),
         Object.freeze({ id: 'mid', color: '#6b6b6b' }),
         Object.freeze({ id: 'dark', color: '#000000' })
     ]);
+
+    /**
+     * A swatch's colour, read from the stylesheet where it has a token there.
+     *
+     * Falls back to the literal whenever there is no cascade to read - a test
+     * requiring this file in Node, a theme that never defined the token - and
+     * whenever what comes back is not a six-digit hex, because `rgb01` slices
+     * the string by position to get its WebGL channels.
+     */
+    function colorOf(entry) {
+        if (!entry || !entry.token) return entry ? entry.color : '#000000';
+        try {
+            const resolved = root.ThemeColors && root.ThemeColors.resolve(entry.token, entry.color);
+            return /^#[0-9a-f]{6}$/i.test(resolved) ? resolved : entry.color;
+        } catch (error) {
+            return entry.color;
+        }
+    }
 
     function storage() {
         if (typeof window === 'undefined') return null;
@@ -66,7 +87,7 @@
     }
 
     function color() {
-        return choice().color;
+        return colorOf(choice());
     }
 
     function rgb01() {
@@ -96,9 +117,10 @@
             const button = root.document.createElement('button');
             button.type = 'button';
             button.dataset.value = entry.id;
-            button.title = `${tt('Background')}: ${entry.color}`;
+            const swatch = colorOf(entry);
+            button.title = `${tt('Background')}: ${swatch}`;
             button.setAttribute('aria-label', button.title);
-            button.style.cssText = `width:24px;height:18px;padding:0;border:1px solid var(--color-border-input);border-radius:3px;background:${entry.color};cursor:pointer;`;
+            button.style.cssText = `width:24px;height:18px;padding:0;border:1px solid var(--color-border-input);border-radius:3px;background:${swatch};cursor:pointer;`;
             button.addEventListener('click', () => {
                 set(entry.id);
                 refresh();
@@ -111,7 +133,7 @@
         return group;
     }
 
-    const api = { CHOICES, choice, set, color, rgb01, createSwitcher };
+    const api = { CHOICES, choice, colorOf, set, color, rgb01, createSwitcher };
     root.RRPreviewBackdrop = api;
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);

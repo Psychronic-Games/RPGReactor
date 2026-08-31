@@ -74,10 +74,12 @@ test('random pitch replaces the sound pitch over the inclusive range', () => {
 
 test('the audition mirrors the runtime rules it claims to mirror', () => {
     // Guards the comment in SystemSoundSlotModal.js: if either runtime rule is
-    // rewritten, this fails and the editor preview has to be revisited.
-    assert.match(runtimeSource, /\.filter\(se => se && se\.name\)/);
-    assert.match(runtimeSource, /variants\[Math\.floor\(Math\.random\(\) \* variants\.length\)\]/);
-    assert.match(runtimeSource, /pitch: min \+ Math\.floor\(Math\.random\(\) \* \(max - min \+ 1\)\)/);
+    // rewritten, this fails and the editor preview has to be revisited. The
+    // rules live on AudioManager rather than SoundManager, because every SE the
+    // engine plays resolves them, not only the system sound slots.
+    assert.match(runtimeSource, /\.filter\(entry => entry && entry\.name\)/);
+    assert.match(runtimeSource, /pool\[Math\.floor\(Math\.random\(\) \* pool\.length\)\]/);
+    assert.match(runtimeSource, /return min \+ Math\.floor\(Math\.random\(\) \* \(max - min \+ 1\)\);/);
     assert.match(runtimeSource, /min = Math\.max\(50, Math\.min\(150, min\)\)/);
 });
 

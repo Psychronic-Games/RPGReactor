@@ -178,19 +178,38 @@ test('a parameter box is sized from its digits, with a floor and a ceiling', () 
     assert.equal(chOf(25), 2);
     assert.equal(chOf(200), 3);
     assert.equal(chOf(123456), 6, 'a six-digit Max HP gets the room it needs');
-    assert.equal(chOf('1234567890123'), 9, 'and something absurd cannot push the column out');
+    assert.equal(chOf('1234567890123'), 13, 'a thirteen-digit value is still shown whole');
+    assert.equal(chOf('123456789012345678'), 15,
+        'and past the length a Number holds exactly, the box stops growing');
     assert.equal(chOf(''), 2, 'an empty box does not collapse');
     assert.equal(chOf('-40'), 2, 'the sign is not a digit');
 });
 
-test('the width allowance leaves the digits clear of the number spinner', () => {
-    // Chromium lays the spinner inside the input's content box, so the only
-    // thing that can put space between the last digit and the arrows is the
-    // width. Measured in the running editor: 20px of padding, 2px of border and
-    // a 15px spinner sit beside the digits, so anything at or under 37px is a
-    // box whose value runs straight into the arrows.
+test('the width allowance leaves the digits clear of the arrows', () => {
+    // What sits beside the digits is no longer Chromium's spinner: theme.css
+    // suppresses that on every number field and NumberSteppers puts its own
+    // 22px button column there, on top of 12px of input padding and the
+    // wrapper's 2px of border. Measured in the running editor, so anything at
+    // or under 36px is a box whose value runs straight into the arrows.
     const editor = loadEnemyEditor();
     const allowance = Number(/\+\s*(\d+)px/.exec(editor.paramInputWidth(1))[1]);
-    assert.ok(allowance >= 45,
-        `width allowance ${allowance}px leaves only ${allowance - 37}px between the digits and the spinner`);
+    assert.ok(allowance >= 44,
+        `width allowance ${allowance}px leaves only ${allowance - 36}px between the digits and the arrows`);
+});
+
+test('the Parameter column is pinned to its labels, so a growing box cannot move it', () => {
+    // The table was two columns sized from their content, so the width a box
+    // took to fit another digit came out of the Parameter column: measured in
+    // the running editor, typing nine digits walked every box 83px to the
+    // left, towards its own label, and shrank the label column by the same
+    // 83px. Pinning the Parameter column to its own longest label leaves that
+    // slack in the Value column instead, for a box to grow into.
+    assert.match(enemyEditorSource,
+        /<th style="width: 1px; white-space: nowrap;">\$\{tt\('Parameter'\)\}<\/th>/,
+        'the Parameter column collapses to its own content');
+    assert.match(enemyEditorSource,
+        /<td style="white-space: nowrap;">\$\{row\.label\}<\/td>/,
+        'and the labels stay on one line, so that content is the longest of them');
+    assert.doesNotMatch(enemyEditorSource, /table-layout: fixed/,
+        'the Value column takes the rest rather than being pinned itself');
 });

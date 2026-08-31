@@ -10346,10 +10346,9 @@ Reactor3D.fireModelEffect = function(effect, character, holder) {
     }
     if (effect.se) {
         if (typeof AudioManager !== "undefined") {
-            AudioManager.playSe({
-                name: effect.se.name, volume: effect.se.volume,
-                pitch: effect.se.pitch, pan: effect.se.pan
-            });
+            // Passed whole: rebuilding it from four fields would drop the
+            // variant pool and pitch range AudioManager resolves.
+            AudioManager.playSe(effect.se);
         }
     } else if (effect.animation) {
         // A database animation — MV sprite sheet or Effekseer alike —
@@ -11252,7 +11251,7 @@ Reactor3D.takeModelEffects = function(character) {
 Reactor3D.fireNamedEffect = function(effect, character, holder) {
     if (!effect) return;
     if (effect.se && typeof AudioManager !== "undefined") {
-        AudioManager.playSe({ name: effect.se.name, volume: effect.se.volume, pitch: effect.se.pitch, pan: effect.se.pan });
+        AudioManager.playSe(effect.se);
     }
     if (effect.flash) {
         if (effect.flash.target === "screen") {

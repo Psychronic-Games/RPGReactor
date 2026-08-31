@@ -252,7 +252,7 @@ class DatabaseSystem1Editor {
             vehicleBtns.forEach(btn => {
                 btn.addEventListener('click', () => {
                     const vehicle = btn.dataset.vehicle;
-                    this.showVehicleImagePicker(system, vehicle, container);
+                    this.showVehicleImagePicker(system, vehicle);
                 });
             });
 
@@ -297,6 +297,9 @@ class DatabaseSystem1Editor {
             // runs with the rest of the wiring rather than inside the markup
             // that builds it.
             this.renderTitlePreview(container, system);
+            // Draws into a <canvas> the markup above has to have built first,
+            // so it runs with the rest of the wiring rather than inside it.
+            ['boat', 'ship', 'airship'].forEach(key => this.renderVehiclePreview(container, system, key));
 
         }, 0);
     }
@@ -376,23 +379,20 @@ class DatabaseSystem1Editor {
         column.appendChild(currencySection);
 
         // Row 4: Vehicle Images (with Change buttons)
-        const vehicleImages = `
-            <div class="form-row" style="display: flex; align-items: center; gap: 6px;">
-                <label class="database-field-label" style="min-width: 50px;">${tt('Boat:')}</label>
-                <input type="text" class="database-field-value" style="flex: 1;" value="${rrEscapeHtml(system.boat?.characterName || '')}" readonly>
-                <button class="vehicle-change-btn rr-btn-chip" data-vehicle="boat">${tt('Change')}</button>
-            </div>
-            <div class="form-row" style="display: flex; align-items: center; gap: 6px; margin-top: 6px;">
-                <label class="database-field-label" style="min-width: 50px;">${tt('Ship:')}</label>
-                <input type="text" class="database-field-value" style="flex: 1;" value="${rrEscapeHtml(system.ship?.characterName || '')}" readonly>
-                <button class="vehicle-change-btn rr-btn-chip" data-vehicle="ship">${tt('Change')}</button>
-            </div>
-            <div class="form-row" style="display: flex; align-items: center; gap: 6px; margin-top: 6px;">
-                <label class="database-field-label" style="min-width: 50px;">${tt('Airship:')}</label>
-                <input type="text" class="database-field-value" style="flex: 1;" value="${rrEscapeHtml(system.airship?.characterName || '')}" readonly>
-                <button class="vehicle-change-btn rr-btn-chip" data-vehicle="airship">${tt('Change')}</button>
-            </div>
-        `;
+        //
+        // A vehicle stores a sheet name and a bare cell index. The row draws
+        // that cell, so the index is checkable without opening anything.
+        const vehicleRow = (key, label) => `
+            <div class="form-row" style="display: flex; align-items: center; gap: 6px;${key === 'boat' ? '' : ' margin-top: 6px;'}">
+                <canvas class="vehicle-sprite-preview" data-vehicle="${key}" width="40" height="40" style="flex: 0 0 40px; width: 40px; height: 40px; border: 1px solid var(--color-border); border-radius: 3px; background-color: var(--color-bg-deep); image-rendering: pixelated;"></canvas>
+                <label class="database-field-label" style="min-width: 50px;">${label}</label>
+                <input type="text" class="database-field-value" style="flex: 1; min-width: 0;" value="${rrEscapeHtml(system[key]?.characterName || '')}" readonly>
+                <button class="vehicle-change-btn rr-btn-chip" data-vehicle="${key}">${tt('Change')}</button>
+            </div>`;
+        const vehicleImages =
+            vehicleRow('boat', tt('Boat:'))
+            + vehicleRow('ship', tt('Ship:'))
+            + vehicleRow('airship', tt('Airship:'));
         const vehicleSection = this.createSection(tt('Vehicle Images'), vehicleImages);
         column.appendChild(vehicleSection);
 
@@ -667,14 +667,21 @@ class DatabaseSystem1Editor {
         const soundLabels = RRSystemSoundSlotModal.SOUND_LABELS;
 
         let soundRows = '';
-        soundLabels.forEach((label, idx) => {
+        RRSystemSoundSlotModal.SOUND_ORDER.forEach(idx => {
             const se = system.sounds?.[idx] || {};
             const variants = Array.isArray(se.variants) ? se.variants.length : 0;
             const range = RRSystemSoundSlotModal.pitchRange(se.pitchRandom);
-            const details = `${se.name || tt('(None)')}${variants ? ` +${variants}` : ''}${range ? `  P${range.min}-${range.max}` : ''}`;
+            // A slot 24-25 a project has never written falls back to Recovery in
+            // the runtime rather than playing nothing, so it must not read
+            // `(None)` here -- that is the picked-and-blanked state, which really
+            // is silent. Naming the slot it borrows from reuses a phrase the
+            // catalog already carries in all 17 locales.
+            const inheritsRecovery = (idx === 24 || idx === 25) && !system.sounds?.[idx];
+            const shownName = inheritsRecovery ? `(${tt('Recovery')})` : (se.name || tt('(None)'));
+            const details = `${shownName}${variants ? ` +${variants}` : ''}${range ? `  P${range.min}-${range.max}` : ''}`;
             soundRows += `
                 <tr class="sound-row" data-sound-index="${idx}" style="cursor: pointer;">
-                    <td>${tt(label)}</td>
+                    <td>${tt(soundLabels[idx])}</td>
                     <td>${rrEscapeHtml(details)}</td>
                 </tr>
             `;
@@ -770,41 +777,78 @@ class DatabaseSystem1Editor {
         }
     }
 
-    showVehicleImagePicker(system, vehicleKey, container) {
-        const tt = text => window.I18n ? window.I18n.tText(text) : text;
-        const path = require('path');
-        const fs = require('fs');
+    /**
+     * Draw one vehicle as the map draws it: the character at its own index on
+     * the sheet, facing down, mid-step.
+     */
+    renderVehiclePreview(container, system, vehicleKey) {
+        const canvas = container.querySelector(`.vehicle-sprite-preview[data-vehicle="${vehicleKey}"]`);
+        if (!canvas) return;
+        const context = canvas.getContext('2d');
+        if (!context) return;
+        context.clearRect(0, 0, canvas.width, canvas.height);
 
+        const name = system[vehicleKey]?.characterName || '';
         const project = this.projectManager.getCurrentProject();
-        if (!project) { alert(tt('No project loaded')); return; }
+        if (!name || !project?.path) return;
 
-        const charactersPath = path.join(project.path, 'img', 'characters');
-        if (!fs.existsSync(charactersPath)) { alert(tt('Characters folder not found')); return; }
+        const path = require('path');
+        const url = RRAssetFiles.urlFor(path.join(project.path, 'img', 'characters'), name, ['.png']);
+        if (!url) return;
 
-        const files = RRAssetFiles.listImageReferences(charactersPath);
+        const image = new Image();
+        image.onload = () => {
+            // A `$` sheet holds one character in 3 columns x 4 rows; every
+            // other sheet holds eight, four across, each with that same 3x4
+            // block. The index only means anything on the second kind.
+            const big = RRAssetFiles.isBigCharacter(name);
+            const frameWidth = image.width / (big ? 3 : 12);
+            const frameHeight = image.height / (big ? 4 : 8);
+            const index = big ? 0 : Math.min(7, Math.max(0, Number(system[vehicleKey]?.characterIndex) || 0));
+            const sx = ((index % 4) * 3 + 1) * frameWidth;
+            const sy = Math.floor(index / 4) * 4 * frameHeight;
 
-        if (files.length === 0) { alert(tt('No character images found')); return; }
+            const scale = Math.min(canvas.width / frameWidth, canvas.height / frameHeight, 2);
+            const width = Math.max(1, Math.round(frameWidth * scale));
+            const height = Math.max(1, Math.round(frameHeight * scale));
+            context.imageSmoothingEnabled = false;
+            context.drawImage(
+                image, sx, sy, frameWidth, frameHeight,
+                Math.round((canvas.width - width) / 2), Math.round((canvas.height - height) / 2),
+                width, height
+            );
+        };
+        image.src = url;
+    }
 
-        this.parentEditor.showImagePicker(tt('Select Vehicle Image'), files, (selectedFile) => {
-            if (!system[vehicleKey]) {
-                system[vehicleKey] = { characterName: '', characterIndex: 0, startMapId: 0, startX: 0, startY: 0 };
+    /**
+     * Pick a vehicle's sprite by clicking the cell it uses.
+     *
+     * The index used to be typed into a `prompt()` against a sheet whose
+     * dialog had already closed. CharacterGraphicPicker is the same cell grid
+     * every other character graphic in the editor is chosen from; a vehicle
+     * stores only the name and the index, so the frame's pattern and direction
+     * are read from the click and then dropped.
+     */
+    showVehicleImagePicker(system, vehicleKey) {
+        if (!system[vehicleKey]) {
+            system[vehicleKey] = { characterName: '', characterIndex: 0, startMapId: 0, startX: 0, startY: 0 };
+        }
+        const vehicle = system[vehicleKey];
+
+        new CharacterGraphicPicker(this.projectManager).show(
+            vehicle.characterName || '', vehicle.characterIndex || 0, 1, 2,
+            result => {
+                vehicle.characterName = result.characterName || '';
+                vehicle.characterIndex = Number(result.characterIndex) || 0;
+
+                const detailEl = document.getElementById('database-detail');
+                if (detailEl) {
+                    detailEl.innerHTML = '';
+                    this.showSystem1Detail(detailEl);
+                }
             }
-            system[vehicleKey].characterName = selectedFile;
-
-            const indexChoice = prompt(tt('Enter character index (0-7) on the sprite sheet:'), system[vehicleKey].characterIndex || '0');
-            if (indexChoice !== null) {
-                system[vehicleKey].characterIndex = parseInt(indexChoice);
-            }
-
-            // Refresh
-            const detailEl = document.getElementById('database-detail');
-            if (detailEl) {
-                detailEl.innerHTML = '';
-                this.showSystem1Detail(detailEl);
-            }
-        }, (fileName) => {
-            return RRAssetFiles.imageUrlFor(charactersPath, fileName);
-        });
+        );
     }
 
     showCommandWindowModal(system, container) {

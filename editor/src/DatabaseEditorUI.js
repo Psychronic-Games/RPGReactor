@@ -1658,6 +1658,14 @@ class DatabaseEditorUI {
                 span.style.backgroundPosition = `-${(idx % sheet.columns) * SIZE}px -${Math.floor(idx / sheet.columns) * SIZE}px`;
                 span.classList.add('has-icon');
             };
+            // Without this a missing or unreadable face leaves a permanently
+            // blank ringed box and logs nothing - indistinguishable from the
+            // URL bug this function just had.
+            img.onerror = () => {
+                span.style.backgroundImage = 'none';
+                span.classList.remove('has-icon');
+                console.warn(`Database list icon: could not load face ${facePath}`);
+            };
             img.src = url;
             return;
         }
@@ -1692,6 +1700,12 @@ class DatabaseEditorUI {
                     span.style.backgroundPosition =
                         `${-(1 * fw * scale) + (SIZE - fw * scale) / 2}px ${(SIZE - fh * scale) / 2}px`;
                     span.classList.add('has-icon');
+                };
+                img.onerror = () => {
+                    span.style.backgroundImage = 'none';
+                    span.style.imageRendering = '';
+                    span.classList.remove('has-icon');
+                    console.warn(`Database list icon: could not load battler ${battlerPath}`);
                 };
                 img.src = imageUrl(battlerPath);
             } else {

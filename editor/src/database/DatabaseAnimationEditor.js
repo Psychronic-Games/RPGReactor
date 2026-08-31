@@ -151,31 +151,20 @@ class DatabaseAnimationEditor {
             return;
         }
 
-        const timingsMap = new Map();
-        const ensureTiming = frame => {
-            const safeFrame = Number.isFinite(frame) ? frame : 0;
-            if (!timingsMap.has(safeFrame)) {
-                timingsMap.set(safeFrame, {
-                    frame: safeFrame,
-                    se: { name: '', pan: 0, pitch: 100, volume: 90 },
-                    flashScope: 0,
-                    flashColor: [0, 0, 0, 0],
-                    flashDuration: 0
-                });
-            }
-            return timingsMap.get(safeFrame);
-        };
-
-        (animation.soundTimings || []).forEach(timing => {
-            ensureTiming(timing.frame).se = timing.se || { name: '', pan: 0, pitch: 100, volume: 90 };
-        });
-        (animation.flashTimings || []).forEach(timing => {
-            const combined = ensureTiming(timing.frame);
+        // Paired the same way the panel pairs them, so a frame carrying two SEs
+        // converts to two MV timings rather than one. Sprite_AnimationMV plays
+        // every timing it is given, so the second is not redundant.
+        const converted = DatabaseAnimationEditor.timingRows(animation).map(row => ({
+            frame: Number.isFinite(row.frame) ? row.frame : 0,
+            se: row.se || { name: '', pan: 0, pitch: 100, volume: 90 },
             // MZ flash timings always target battlers, so MV's closest scope is 1.
-            combined.flashScope = 1;
-            combined.flashColor = DatabaseAnimationEditor.normalizeFlashColor(timing.color);
-            combined.flashDuration = Number.isFinite(timing.duration) ? timing.duration : 0;
-        });
+            // Keyed on the entry existing rather than on its colour: a stock
+            // flash timing may carry no colour at all and is still a flash.
+            flashScope: row.flashIndex >= 0 ? 1 : 0,
+            flashColor: row.flashIndex >= 0
+                ? DatabaseAnimationEditor.normalizeFlashColor(row.flashColor) : [0, 0, 0, 0],
+            flashDuration: Number.isFinite(row.flashDuration) ? row.flashDuration : 0
+        }));
 
         delete animation.effectName;
         delete animation.displayType;
@@ -193,7 +182,7 @@ class DatabaseAnimationEditor {
         animation.animation2Hue = 0;
         animation.position = 1;
         animation.frames = [[]];
-        animation.timings = Array.from(timingsMap.values()).sort((a, b) => a.frame - b.frame);
+        animation.timings = converted.sort((a, b) => a.frame - b.frame);
     }
 
     static canAddMVCell(frame) {
@@ -1422,48 +1411,9 @@ class DatabaseAnimationEditor {
         const isSpriteAnimation = DatabaseAnimationEditor.isSpriteAnimation(animation);
         const isEffekseer = !isSpriteAnimation && animation.effectName !== undefined;
 
-        // Collect all timings
-        let timingsData = [];
-
-        if (isSpriteAnimation && animation.timings && animation.timings.length > 0) {
-            // Sprite-based animation (MV format): timings array with combined SE and flash
-            timingsData = animation.timings.map(timing => ({
-                frame: timing.frame,
-                se: timing.se,
-                flashScope: timing.flashScope,
-                flashColor: timing.flashColor,
-                flashDuration: timing.flashDuration
-            }));
-        } else if (isEffekseer) {
-            // Effekseer animation (MZ format): separate soundTimings and flashTimings
-            // Merge soundTimings and flashTimings by frame
-            const timingsMap = new Map();
-
-            // Add sound timings
-            if (animation.soundTimings && animation.soundTimings.length > 0) {
-                animation.soundTimings.forEach(st => {
-                    if (!timingsMap.has(st.frame)) {
-                        timingsMap.set(st.frame, { frame: st.frame });
-                    }
-                    timingsMap.get(st.frame).se = st.se;
-                });
-            }
-
-            // Add flash timings
-            if (animation.flashTimings && animation.flashTimings.length > 0) {
-                animation.flashTimings.forEach(ft => {
-                    if (!timingsMap.has(ft.frame)) {
-                        timingsMap.set(ft.frame, { frame: ft.frame });
-                    }
-                    timingsMap.get(ft.frame).flashColor = ft.color;
-                    timingsMap.get(ft.frame).flashDuration = ft.duration;
-                    timingsMap.get(ft.frame).flashScope = 1;
-                });
-            }
-
-            // Convert map to array and sort by frame
-            timingsData = Array.from(timingsMap.values()).sort((a, b) => a.frame - b.frame);
-        }
+        // Collect all timings. One row per stored entry, not per frame -- see
+        // DatabaseAnimationEditor.timingRows.
+        const timingsData = DatabaseAnimationEditor.timingRows(animation);
 
         // Clear list
         timingsList.innerHTML = '';
@@ -1520,10 +1470,17 @@ class DatabaseAnimationEditor {
                 this.populateTimingsList(animation);
             });
 
-            // Format SE info compactly
+            // Format SE info compactly. A pool or a pitch range is worth seeing
+            // from the list: the row otherwise names one take of several and
+            // reads as a fixed sound.
+            const extras = DatabaseAnimationEditor.seExtras(timing.se);
+            const poolCount = extras.variants ? extras.variants.filter(entry => entry?.name).length : 0;
+            const range = extras.pitchRandom;
+            const badge = `${poolCount ? ` +${poolCount}` : ''}`
+                + `${range && range.min != null && range.max != null ? `  P${range.min}-${range.max}` : ''}`;
             const seInfo = seName && timing.se?.volume !== undefined
-                ? `${seName} (${tt('Vol:')}${timing.se.volume} ${tt('Pitch:')}${timing.se.pitch})`
-                : (seName || tt('None'));
+                ? `${seName} (${tt('Vol:')}${timing.se.volume} ${tt('Pitch:')}${timing.se.pitch})${badge}`
+                : (seName ? `${seName}${badge}` : tt('None'));
 
             // When selected, the entry has a gold-tinted background. All text
             // bumps to bright white for max contrast (gold-on-gold is invisible).
@@ -1631,28 +1588,75 @@ class DatabaseAnimationEditor {
         }
     }
 
-    // Helper: returns the merged timings array (the same view populateTimingsList renders)
+    /**
+     * The timing rows the panel shows, each carrying the identity of the data
+     * it came from.
+     *
+     * An Effekseer animation stores sound and flash timings in two arrays, and
+     * a frame may hold more than one of either -- the stock Hit Fire plays
+     * Blow1 and Fire1 together on frame 0, and `Sprite_Animation` fires every
+     * match, so both are heard. This list used to key a Map on the frame
+     * number, which meant the second SE on a frame was invisible and, worse,
+     * destroyed: edit and remove both worked by clearing everything on that
+     * frame and writing back the one row the list knew about.
+     *
+     * Rows now pair sound and flash by position within a frame rather than by
+     * the frame itself, so a frame with two SEs and one flash is two rows, and
+     * every row names the exact array entries it edits. `soundIndex`,
+     * `flashIndex` and `timingIndex` are -1 when the row has no such entry.
+     */
+    static timingRows(animation) {
+        if (DatabaseAnimationEditor.isSpriteAnimation(animation)) {
+            // Sprite timings are already one entry per row.
+            return (animation.timings || []).map((timing, index) => ({
+                frame: timing.frame,
+                se: timing.se,
+                flashScope: timing.flashScope,
+                flashColor: timing.flashColor,
+                flashDuration: timing.flashDuration,
+                timingIndex: index, soundIndex: -1, flashIndex: -1
+            }));
+        }
+        if (animation.effectName === undefined) return [];
+
+        const byFrame = new Map();
+        const bucket = frame => {
+            if (!byFrame.has(frame)) byFrame.set(frame, { sounds: [], flashes: [] });
+            return byFrame.get(frame);
+        };
+        (animation.soundTimings || []).forEach((st, index) => bucket(st.frame).sounds.push(index));
+        (animation.flashTimings || []).forEach((ft, index) => bucket(ft.frame).flashes.push(index));
+
+        const rows = [];
+        for (const frame of [...byFrame.keys()].sort((a, b) => a - b)) {
+            const { sounds, flashes } = byFrame.get(frame);
+            const count = Math.max(sounds.length, flashes.length);
+            for (let position = 0; position < count; position++) {
+                const soundIndex = position < sounds.length ? sounds[position] : -1;
+                const flashIndex = position < flashes.length ? flashes[position] : -1;
+                const sound = soundIndex >= 0 ? animation.soundTimings[soundIndex] : null;
+                const flash = flashIndex >= 0 ? animation.flashTimings[flashIndex] : null;
+                rows.push({
+                    frame,
+                    se: sound ? sound.se : undefined,
+                    flashColor: flash ? flash.color : undefined,
+                    flashDuration: flash ? flash.duration : undefined,
+                    flashScope: flash ? (flash.scope === 2 || flash.scope === 3 ? flash.scope : 1) : undefined,
+                    timingIndex: -1, soundIndex, flashIndex
+                });
+            }
+        }
+        return rows;
+    }
+
+    // Helper: returns the merged timings array (the same view populateTimingsList
+    // renders), without the row identities -- this feeds the clipboard, and a
+    // pasted row is a new entry rather than the one it was copied from.
     _collectMergedTimings(animation) {
-        const isSpriteAnimation = DatabaseAnimationEditor.isSpriteAnimation(animation);
-        const isEffekseer = !isSpriteAnimation && animation.effectName !== undefined;
-        if (isSpriteAnimation && animation.timings && animation.timings.length > 0) {
-            return animation.timings.map(t => ({ ...t }));
-        }
-        if (isEffekseer) {
-            const map = new Map();
-            (animation.soundTimings || []).forEach(st => {
-                if (!map.has(st.frame)) map.set(st.frame, { frame: st.frame });
-                map.get(st.frame).se = st.se;
-            });
-            (animation.flashTimings || []).forEach(ft => {
-                if (!map.has(ft.frame)) map.set(ft.frame, { frame: ft.frame });
-                map.get(ft.frame).flashColor = ft.color;
-                map.get(ft.frame).flashDuration = ft.duration;
-                map.get(ft.frame).flashScope = ft.scope === 2 || ft.scope === 3 ? ft.scope : 1;
-            });
-            return Array.from(map.values()).sort((a, b) => a.frame - b.frame);
-        }
-        return [];
+        return DatabaseAnimationEditor.timingRows(animation).map(row => {
+            const { timingIndex, soundIndex, flashIndex, ...timing } = row;
+            return timing;
+        });
     }
 
     // Helper: appends a single timing in the format the current animation expects.
@@ -1691,40 +1695,9 @@ class DatabaseAnimationEditor {
         const isSpriteAnimation = DatabaseAnimationEditor.isSpriteAnimation(animation);
         const isEffekseer = !isSpriteAnimation && animation.effectName !== undefined;
 
-        let timingData;
-        let timingsData = [];
-
-        if (isSpriteAnimation && animation.timings && animation.timings.length > 0) {
-            timingsData = animation.timings;
-        } else if (isEffekseer) {
-            // Merge soundTimings and flashTimings
-            const timingsMap = new Map();
-
-            if (animation.soundTimings && animation.soundTimings.length > 0) {
-                animation.soundTimings.forEach(st => {
-                    if (!timingsMap.has(st.frame)) {
-                        timingsMap.set(st.frame, { frame: st.frame });
-                    }
-                    timingsMap.get(st.frame).se = st.se;
-                });
-            }
-
-            if (animation.flashTimings && animation.flashTimings.length > 0) {
-                animation.flashTimings.forEach(ft => {
-                    if (!timingsMap.has(ft.frame)) {
-                        timingsMap.set(ft.frame, { frame: ft.frame });
-                    }
-                    timingsMap.get(ft.frame).flashColor = ft.color;
-                    timingsMap.get(ft.frame).flashDuration = ft.duration;
-                    timingsMap.get(ft.frame).flashScope = 1;
-                });
-            }
-
-            timingsData = Array.from(timingsMap.values()).sort((a, b) => a.frame - b.frame);
-        }
-
+        const timingsData = DatabaseAnimationEditor.timingRows(animation);
         if (index >= timingsData.length) return;
-        timingData = timingsData[index];
+        const timingData = timingsData[index];
 
         // Open modal and populate with existing data
         const modal = document.getElementById('timing-modal');
@@ -1740,6 +1713,7 @@ class DatabaseAnimationEditor {
         // Populate fields
         frameInput.value = timingData.frame || 0;
         seNameInput.value = timingData.se?.name || tt('None');
+        this._timingSeExtras = DatabaseAnimationEditor.seExtras(timingData.se);
 
         // Populate SE volume, pitch, and pan
         const seVolumeSlider = document.getElementById('timing-se-volume');
@@ -1787,58 +1761,25 @@ class DatabaseAnimationEditor {
         modal.style.display = 'flex';
     }
 
+    /**
+     * Delete exactly the entries the row at `index` names. It used to delete
+     * every sound and flash timing sharing that row's frame, which took a
+     * second SE on the frame with it -- silently, because the list had never
+     * shown that one.
+     */
     removeTiming(animation, index) {
-        const isEffekseer = !DatabaseAnimationEditor.isSpriteAnimation(animation);
+        const row = DatabaseAnimationEditor.timingRows(animation)[index];
+        if (!row) return;
 
-        if (isEffekseer) {
-            // For Effekseer, rebuild the timings map to find which frame to remove
-            const timingsMap = new Map();
-
-            // Add sound timings
-            if (animation.soundTimings && animation.soundTimings.length > 0) {
-                animation.soundTimings.forEach(st => {
-                    if (!timingsMap.has(st.frame)) {
-                        timingsMap.set(st.frame, { frame: st.frame });
-                    }
-                    timingsMap.get(st.frame).se = st.se;
-                });
-            }
-
-            // Add flash timings
-            if (animation.flashTimings && animation.flashTimings.length > 0) {
-                animation.flashTimings.forEach(ft => {
-                    if (!timingsMap.has(ft.frame)) {
-                        timingsMap.set(ft.frame, { frame: ft.frame });
-                    }
-                    timingsMap.get(ft.frame).flashColor = ft.color;
-                });
-            }
-
-            // Convert to sorted array and get the frame at the given index
-            const timingsArray = Array.from(timingsMap.values()).sort((a, b) => a.frame - b.frame);
-            if (index >= timingsArray.length) return;
-
-            const frameToRemove = timingsArray[index].frame;
-
-            // Remove from soundTimings if exists
-            if (animation.soundTimings) {
-                animation.soundTimings = animation.soundTimings.filter(st => st.frame !== frameToRemove);
-            }
-
-            // Remove from flashTimings if exists
-            if (animation.flashTimings) {
-                animation.flashTimings = animation.flashTimings.filter(ft => ft.frame !== frameToRemove);
-            }
-
-            console.debug('Removed timing at frame', frameToRemove);
-        } else {
-            // For sprite-based, remove from timings array
-            if (animation.timings && index < animation.timings.length) {
-                animation.timings.splice(index, 1);
-            }
-
-            console.debug('Removed timing at index', index);
+        if (row.timingIndex >= 0) {
+            animation.timings.splice(row.timingIndex, 1);
+            console.debug('Removed timing at index', row.timingIndex);
+            return;
         }
+        if (row.soundIndex >= 0) animation.soundTimings.splice(row.soundIndex, 1);
+        if (row.flashIndex >= 0) animation.flashTimings.splice(row.flashIndex, 1);
+        console.debug('Removed timing entries at frame', row.frame,
+            { sound: row.soundIndex, flash: row.flashIndex });
     }
 
     setupTimingModal(animation, container) {
@@ -1871,6 +1812,7 @@ class DatabaseAnimationEditor {
                                         <path d="M11 5.5a3.4 3.4 0 0 1 0 5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
                                         <path d="M13 3.5a6.2 6.2 0 0 1 0 9" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
                                     </svg>${tt('Pick SE')}</button>
+                                <button id="timing-se-variants" class="rr-btn-secondary" style="font-size: 11px;">${tt('Variants...')}</button>
                                 <button id="timing-se-clear" style="padding: 8px 12px; background: var(--color-bg-button); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 3px; cursor: pointer; font-size: 11px;">${tt('Clear')}</button>
                             </div>
                             <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)) auto; gap: 12px; align-items: center;">
@@ -2003,6 +1945,7 @@ class DatabaseAnimationEditor {
             saveBtn.textContent = tt('Add Timing');
             saveBtn.dataset.editMode = 'false';
             delete saveBtn.dataset.editIndex;
+            this._timingSeExtras = {};
 
             // Reset form fields
             document.getElementById('timing-frame').value = 0;
@@ -2078,67 +2021,54 @@ class DatabaseAnimationEditor {
                 if (seName && seName !== noneLabel) {
                     if (!animation.soundTimings) animation.soundTimings = [];
 
-                    // Check if there's already a sound timing at this frame
-                    const existingIndex = animation.soundTimings.findIndex(st => st.frame === frame);
+                    // Appended, not replaced: a frame may carry more than one
+                    // SE, and Sprite_Animation plays every one of them. An edit
+                    // removed this row's own entry before getting here.
                     const seData = {
                         frame: frame,
                         se: {
                             name: seName,
                             pan: sePan,
                             pitch: sePitch,
-                            volume: seVolume
+                            volume: seVolume,
+                            ...(this._timingSeExtras || {})
                         }
                     };
 
-                    if (existingIndex >= 0) {
-                        animation.soundTimings[existingIndex] = seData;
-                    } else {
-                        animation.soundTimings.push(seData);
-                    }
+                    animation.soundTimings.push(seData);
                 }
 
                 // Add flash timing if flash type is not None
                 if (flashType !== 0) {
                     if (!animation.flashTimings) animation.flashTimings = [];
 
-                    // Check if there's already a flash timing at this frame
-                    const existingIndex = animation.flashTimings.findIndex(ft => ft.frame === frame);
                     const flashData = {
                         frame: frame,
                         duration: duration,
                         color: [red, green, blue, intensity]
                     };
 
-                    if (existingIndex >= 0) {
-                        animation.flashTimings[existingIndex] = flashData;
-                    } else {
-                        animation.flashTimings.push(flashData);
-                    }
+                    animation.flashTimings.push(flashData);
                 }
             } else {
                 // Sprite-based format: combined timings array
                 if (!animation.timings) animation.timings = [];
 
-                // Check if there's already a timing at this frame
-                const existingIndex = animation.timings.findIndex(t => t.frame === frame);
                 const timingData = {
                     frame: frame,
                     se: seName && seName !== noneLabel ? {
                         name: seName,
                         pan: sePan,
                         pitch: sePitch,
-                        volume: seVolume
+                        volume: seVolume,
+                        ...(this._timingSeExtras || {})
                     } : { name: '', pan: 0, pitch: 100, volume: 90 },
                     flashScope: flashType,
                     flashColor: [red, green, blue, intensity],
                     flashDuration: duration
                 };
 
-                if (existingIndex >= 0) {
-                    animation.timings[existingIndex] = timingData;
-                } else {
-                    animation.timings.push(timingData);
-                }
+                animation.timings.push(timingData);
             }
 
             // Refresh the timings list
@@ -2177,14 +2107,26 @@ class DatabaseAnimationEditor {
 
             const path = require('path');
             const seFolder = path.join(currentProject.path, 'audio', 'se');
-            const audioFile = RRAssetFiles.find(seFolder, seName, RRAssetFiles.AUDIO_EXTENSIONS);
-            if (!audioFile) return;
-            previewAudio = new Audio(RRAssetFiles.toUrl(audioFile.absolutePath));
             // The volume slider is min="0" and 0 is a real setting, so a truthy
             // default would preview a silent timing at almost full volume. The
             // pitch slider is min="50", so it cannot reach a falsy value.
-            previewAudio.volume = DatabaseAnimationEditor.readNumericInput('timing-se-volume', 90) / 100;
-            previewAudio.playbackRate = (parseInt(sePitchSlider.value, 10) || 100) / 100;
+            const authored = {
+                name: seName,
+                volume: DatabaseAnimationEditor.readNumericInput('timing-se-volume', 90),
+                pitch: parseInt(sePitchSlider.value, 10) || 100,
+                pan: DatabaseAnimationEditor.readNumericInput('timing-se-pan', 0),
+                ...(this._timingSeExtras || {})
+            };
+            const se = DatabaseAnimationEditor.resolvePreviewSe(authored);
+            if (!se) return;
+            const audioFile = RRAssetFiles.find(seFolder, se.name, RRAssetFiles.AUDIO_EXTENSIONS);
+            if (!audioFile) return;
+            previewAudio = new Audio(RRAssetFiles.toUrl(audioFile.absolutePath));
+            previewAudio.volume = (Number.isFinite(se.volume) ? se.volume : 90) / 100;
+            // A pitch here is a playback rate, and Chromium time-stretches by
+            // default -- which preserves the pitch and so cancels the setting.
+            previewAudio.preservesPitch = false;
+            previewAudio.playbackRate = (se.pitch || 100) / 100;
             previewAudio.play().catch(err => console.warn('Failed to play SE preview:', err));
         });
 
@@ -2192,6 +2134,7 @@ class DatabaseAnimationEditor {
         const seClearBtn = document.getElementById('timing-se-clear');
         seClearBtn?.addEventListener('click', () => {
             document.getElementById('timing-se-name').value = noneLabel;
+            this._timingSeExtras = {};
             seVolumeSlider.value = 90;
             seVolumeValue.textContent = '90';
             sePitchSlider.value = 100;
@@ -2237,6 +2180,86 @@ class DatabaseAnimationEditor {
                 }
             });
         });
+
+        // A timing's SE takes a variant pool and a random pitch range the same
+        // way a System 1 slot does, because AudioManager resolves both for every
+        // SE the engine plays rather than only for the system sound slots. The
+        // slot modal is opened as-is rather than reimplemented here, so the two
+        // surfaces cannot drift apart.
+        document.getElementById('timing-se-variants')?.addEventListener('click', () => {
+            const currentProject = this.projectManager.getCurrentProject();
+            if (!currentProject) { alert(tt('No project loaded')); return; }
+
+            const seNameInput = document.getElementById('timing-se-name');
+            const name = seNameInput.value !== noneLabel ? seNameInput.value : '';
+            if (!name) { alert(tt('Pick a sound effect first')); return; }
+
+            const fs = require('fs');
+            const path = require('path');
+            const seFolder = path.join(currentProject.path, 'audio', 'se');
+            if (!fs.existsSync(seFolder)) { alert(tt('SE folder not found: audio/se')); return; }
+
+            RRSystemSoundSlotModal.open({
+                label: `${tt('SE:')} ${name}`,
+                // The levels come from the live sliders, not from the stored
+                // timing: they may have been dragged since the modal opened.
+                slot: {
+                    name,
+                    volume: DatabaseAnimationEditor.readNumericInput('timing-se-volume', 90),
+                    pitch: DatabaseAnimationEditor.readNumericInput('timing-se-pitch', 100),
+                    pan: DatabaseAnimationEditor.readNumericInput('timing-se-pan', 0),
+                    ...this._timingSeExtras
+                },
+                files: RRAssetFiles.listUnique(seFolder, RRAssetFiles.AUDIO_EXTENSIONS),
+                zIndex: 10600,
+                onOk: result => {
+                    seNameInput.value = result.name || noneLabel;
+                    seVolumeSlider.value = result.volume;
+                    seVolumeValue.textContent = result.volume;
+                    sePitchSlider.value = result.pitch;
+                    sePitchValue.textContent = result.pitch;
+                    sePanSlider.value = result.pan;
+                    sePanValue.textContent = result.pan;
+                    this._timingSeExtras = DatabaseAnimationEditor.seExtras(result);
+                }
+            });
+        });
+    }
+
+    /**
+     * The take to preview, rolled the way the game rolls it.
+     *
+     * A previewed SE is played through an `<audio>` element rather than through
+     * `AudioManager`, so it does not pass the resolver the runtime resolves
+     * variants and random pitch in - a timing carrying a pool would preview its
+     * first take at its authored pitch, every time, and disagree with the game.
+     * `RRSystemSoundSlotModal.auditionPick` is the same draw the slot dialog's
+     * own play button makes, and mirrors `AudioManager.resolveSeVariant`; using
+     * it rather than a third implementation is what keeps the three in step.
+     *
+     * Returns the SE unchanged when it carries neither key, and null when there
+     * is nothing to play.
+     */
+    static resolvePreviewSe(se) {
+        if (!se || !se.name) return null;
+        const modal = typeof window !== 'undefined' ? window.RRSystemSoundSlotModal : null;
+        if (!modal || (!se.variants && !se.pitchRandom)) return se;
+        const draft = modal.draftFor(se);
+        const pick = modal.auditionPick(draft.sounds, draft.pitchRandom);
+        if (!pick) return se;
+        return { ...pick.sound, pitch: pick.pitch };
+    }
+
+    /**
+     * The keys a timing's SE carries beyond the four the sliders own. Held
+     * apart because the save path rebuilds the SE from those four, and a pool
+     * set here would otherwise be dropped the next time the timing was saved.
+     */
+    static seExtras(se) {
+        const extras = {};
+        if (Array.isArray(se?.variants) && se.variants.length > 0) extras.variants = se.variants;
+        if (se?.pitchRandom) extras.pitchRandom = se.pitchRandom;
+        return extras;
     }
 
     showCellPropertiesModal(animation, frameIndex, cellIndex, renderFrame) {
@@ -3255,8 +3278,10 @@ class DatabaseAnimationEditor {
             const allTimings = [...spriteTimings, ...effekseerTimings];
 
             allTimings.forEach(timing => {
-                const se = timing.se;
-                if (!se || !se.name) return;
+                // Rolled per play, as the runtime rolls it: a pool picks a take
+                // and a range replaces the pitch.
+                const se = DatabaseAnimationEditor.resolvePreviewSe(timing.se);
+                if (!se) return;
 
                 const path = require('path');
                 const seFolder = path.join(currentProject.path, 'audio', 'se');
@@ -3269,6 +3294,9 @@ class DatabaseAnimationEditor {
                 // Handle pitch (playbackRate)
                 // RPG Maker pitch: 50-150, where 100 is normal
                 // Web Audio playbackRate: 0.5-1.5, where 1.0 is normal
+                // preservesPitch off, or Chromium time-stretches the clip and
+                // the pitch setting is inaudible.
+                audio.preservesPitch = false;
                 audio.playbackRate = (se.pitch || 100) / 100;
 
                 // Pan is not supported in HTML5 Audio without Web Audio API
@@ -4174,8 +4202,8 @@ class DatabaseAnimationEditor {
             const soundTimings = animation.soundTimings.filter(st => st.frame === frameIndex && st.se && st.se.name);
 
             soundTimings.forEach(timing => {
-                const se = timing.se;
-                if (!se || !se.name) return;
+                const se = DatabaseAnimationEditor.resolvePreviewSe(timing.se);
+                if (!se) return;
 
                 const path = require('path');
                 const seFolder = path.join(currentProject.path, 'audio', 'se');
@@ -4184,6 +4212,7 @@ class DatabaseAnimationEditor {
 
                 const audio = new Audio(RRAssetFiles.toUrl(audioFile.absolutePath));
                 audio.volume = (Number.isFinite(se.volume) ? se.volume : 90) / 100;
+                audio.preservesPitch = false;
                 audio.playbackRate = (se.pitch || 100) / 100;
 
                 audio.play().catch(err => {

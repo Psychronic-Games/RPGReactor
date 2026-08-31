@@ -331,7 +331,6 @@ class PluginCommandEditor {
         }
 
         for (const command of commands) command.structDefinitions = structDefinitions;
-        console.log('Parsed commands:', commands);
         return commands;
     }
 

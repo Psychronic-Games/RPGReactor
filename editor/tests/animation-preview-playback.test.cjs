@@ -249,3 +249,37 @@ test('effect-file preview applies the animation transform, scale, speed, and off
     assert.match(database, /requestId !== previewRequestId/,
         'repeated A-B-A selections cannot install an older same-name load');
 });
+
+test('the light backdrop reads the stylesheet, and falls back when it cannot', () => {
+    // The pale base is a colour the theme has an opinion about, so it lives in
+    // theme.css rather than as a literal in the switcher. Mid and Dark are
+    // fixed points an author picks *because* they are neutral, and Dark stays
+    // the default: an additive effect is drawn to be seen over a game.
+    const theme = fs.readFileSync(path.join(editorRoot, 'css', 'theme.css'), 'utf8');
+    assert.match(theme, /--color-preview-backdrop:\s+#c8c8c8;/);
+
+    const [light, mid, dark] = PreviewBackdrop.CHOICES;
+    assert.equal(light.token, '--color-preview-backdrop');
+    assert.equal(mid.token, undefined, 'Mid is a fixed point, not a themed one');
+    assert.equal(dark.token, undefined);
+
+    // With no cascade to read -- this file required in Node -- the literal wins
+    // rather than the call throwing.
+    assert.equal(PreviewBackdrop.colorOf(light), '#c8c8c8');
+
+    const real = globalThis.ThemeColors.resolve;
+    try {
+        globalThis.ThemeColors.resolve = () => '#123456';
+        assert.equal(PreviewBackdrop.colorOf(light), '#123456', 'a themed value wins');
+        assert.equal(PreviewBackdrop.colorOf(dark), '#000000', 'an untokened swatch is untouched');
+
+        // rgb01 slices the string by position, so anything that is not a
+        // six-digit hex has to fall back rather than produce NaN channels.
+        globalThis.ThemeColors.resolve = () => 'rgb(200, 200, 200)';
+        assert.equal(PreviewBackdrop.colorOf(light), '#c8c8c8');
+        globalThis.ThemeColors.resolve = () => { throw new Error('no cascade'); };
+        assert.equal(PreviewBackdrop.colorOf(light), '#c8c8c8');
+    } finally {
+        globalThis.ThemeColors.resolve = real;
+    }
+});
