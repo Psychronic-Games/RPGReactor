@@ -9045,6 +9045,30 @@ for (const [locale, translations] of Object.entries(RR_TROOP_BATTLEBACK_LAYER_TR
     RR_TEXT_TRANSLATIONS[locale]['Upper Layer:'] = translations[1];
 }
 
+// Machine-assisted first pass; flagged for review like the rest of the catalog.
+const RR_SYSTEM_SOUND_AUDITION_TRANSLATIONS = {
+    ja: 'ゲームでの再生と同じようにスロットを試聴します。',
+    es: 'Escucha la ranura tal como la reproduce el juego.',
+    'zh-Hant': '以遊戲實際播放的方式試聽此音效槽。',
+    'zh-Hans': '以游戏实际播放的方式试听此音效槽。',
+    ru: 'Прослушивание слота так, как его воспроизводит игра.',
+    pt: 'Ouve o slot da mesma forma que o jogo o reproduz.',
+    de: 'Spielt den Slot so ab, wie das Spiel ihn abspielt.',
+    fr: 'Écoute le slot tel que le jeu le joue.',
+    el: 'Ακρόαση της θέσης όπως την αναπαράγει το παιχνίδι.',
+    ko: '게임에서 재생되는 방식 그대로 슬롯을 미리 들어봅니다.',
+    ar: 'يستمع إلى الفتحة بالطريقة نفسها التي يشغّلها بها اللعبة.',
+    it: 'Ascolta lo slot così come lo riproduce il gioco.',
+    pl: 'Odsłuchuje slot tak, jak odtwarza go gra.',
+    id: 'Mendengarkan slot ini persis seperti yang dimainkan gim.',
+    vi: 'Nghe thử ô âm thanh đúng như cách trò chơi phát nó.',
+    th: 'ฟังตัวอย่างช่องเสียงนี้แบบเดียวกับที่เกมเล่นจริง',
+    tr: 'Yuvayı, oyunun çaldığı şekilde dinletir.'
+};
+for (const [locale, translation] of Object.entries(RR_SYSTEM_SOUND_AUDITION_TRANSLATIONS)) {
+    RR_TEXT_TRANSLATIONS[locale]['Auditions the slot the way the game plays it.'] = translation;
+}
+
 Object.assign(RR_TEXT_TRANSLATIONS['zh-Hans'], {
     'Class': '职业',
     'Critical': '会心',

@@ -2325,6 +2325,36 @@ input[type="number"]::-webkit-outer-spin-button {
     border-style: solid;
     background: var(--color-accent-tint-25);
 }
+/* Auditions the whole slot: one sound at random, at a random pitch. */
+.rr-system-sound-audition {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    padding: 9px 11px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: var(--color-bg-panel);
+}
+.rr-system-sound-audition-result {
+    min-width: 0;
+    overflow: hidden;
+    color: var(--color-text-muted);
+    font-size: 11px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.rr-system-sound-play {
+    color: var(--color-accent-bright);
+}
+.rr-system-sound-icon:disabled {
+    opacity: .4;
+    cursor: default;
+}
+.rr-system-sound-icon:disabled:hover {
+    border-color: transparent;
+    background: transparent;
+    color: var(--color-text-muted);
+}
 .rr-system-pitch-card {
     display: grid;
     grid-template-columns: minmax(130px, .7fr) 1fr 1fr;

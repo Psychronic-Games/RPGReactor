@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- The System 1 sound slot dialog can be auditioned. The slot is what the game randomises over — SoundManager picks one of its sounds at random and then replaces the pitch from the Random Pitch range — and nothing in the dialog played that: the per-sound picker auditions one file at its own fixed pitch. A play/stop pair below the pitch card now draws exactly the way `SoundManager.playSystemSound` and `applySystemSoundPitch` do, reading the Random Pitch controls as they stand rather than as they stood when the dialog opened, and names what it drew (`Sound 2 · Fire2 · Pitch 103`) so repeated presses show the spread. Play is disabled for a slot with no sound; the audio graph is released on every close path.
 - Database > System 1 can reach both title screen layers. `Scene_Title` draws `img/titles1` and then `img/titles2` over it, and every new project is given a `title2Name` field, but the tab exposed one `Title Image:` row wired to `title1Name` — the upper layer had no way in. The row is now a pair, `Lower Layer:` / `Upper Layer:`, each opening the picker for its own folder and writing its own System field; `(None)` clears either one, and a missing `img/titles2` lists as empty rather than alerting. A composite preview under the rows stacks the two at the game's own resolution, the way the title screen stacks them.
 
 ## [0.98.4] - 2026-08-31
