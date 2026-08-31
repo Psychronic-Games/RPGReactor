@@ -1028,8 +1028,8 @@ class DatabaseEnemyEditor {
                     </div>
                 </div>
                 <div>
-                    <label class="database-field-label" style="display: block; margin-bottom: 4px;">${tt('Rating (1-10):')}</label>
-                    <input type="number" id="action-edit-rating" value="${draft.rating || 5}" min="1" max="10" style="${inputStyle}">
+                    <label class="database-field-label" style="display: block; margin-bottom: 4px;">${tt('Rating (1-9):')}</label>
+                    <input type="number" id="action-edit-rating" value="${draft.rating || 5}" min="1" max="9" style="${inputStyle}">
                 </div>
             </div>
         `;
@@ -1057,7 +1057,7 @@ class DatabaseEnemyEditor {
                 draft,
                 this.mergeEditedActionConditions(action, editedConditions)
             );
-            draft.rating = Math.max(1, Math.min(10, parseInt(modal.querySelector('#action-edit-rating').value) || 5));
+            draft.rating = Math.max(1, Math.min(9, parseInt(modal.querySelector('#action-edit-rating').value) || 5));
 
             if (!enemy.actions) enemy.actions = [];
             if (actionIndex >= 0) enemy.actions[actionIndex] = draft;

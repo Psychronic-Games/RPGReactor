@@ -2,6 +2,30 @@
 
 Last updated 2026-08-30.
 
+## 2026-08-30 — pre-release: issue #33 remainder + black map on project switch
+
+Issue #33 audit: sections 1 (User/Target Lacks State via `!meetsStateCondition`)
+and 4 (enemy Max TP) were already shipped. Landed tonight: the scope fix —
+`actionTargetCandidates` now asks a probe `Game_Action`'s isFor* predicates
+instead of numeric scope lists (a `<Target: ...>` notetag string matched no
+list → zero candidates → Target State silently never held; the probe inherits
+plugin predicate redefinitions) — and ratings 1-9 (label/max/clamp, 17 locales
+by digit rewrite). Test harness loads the REAL predicate slice from
+reactor_objects into the vm; remember [[feedback-vm-realm-deepequal]]: `.map`
+on a vm array stays vm-realm, use `Array.from(list, fn)`.
+
+Black map opening project B over project A (Explore-agent trace): the switch
+path never called `disableMap3DView()` (closeProject does), so three kept the
+shared canvas through the TilemapManager rebuild; and `MapEditor3D._framedMap`
+("mapId:WxH", usually "1:WxH" in both projects) plus `this.view` survived, so
+the camera stayed aimed at project A's last orbit. Fixed: disable-first in
+`populateProjectUI`'s projectHasChanged branch, `_framedMap`/`view` reset in
+the project-change purge, `RREventPreviewModels.clear()` in
+`_notifyProjectChanged` (cache keys are model-name-only — cross-project mesh
+bleed). DEFERRED (post-0.98.4): awaiting `refreshMap3DView`'s fire-and-forget
+reconcile; forcing full setEnabled cycle on project change in the
+wanted===enabled short-circuit.
+
 ## 2026-08-30 — Show Text live miniature
 
 `MessageCommandEditor.renderMiniPreview()`: a canvas under the text field
@@ -15,6 +39,16 @@ it and keyup/click on the textarea cover pure caret moves. No new i18n
 strings. Guarded in `message-text-codes.test.cjs`.
 
 ## 2026-08-30 — sharp by default (runtime 20260830.29/.30)
+
+Second regression (.31): the pool shim's `getOptimalTexture` destroyed a
+stale-sized full-screen texture mid-render — "[BindGroup] destroyed while
+still bound to a shader" pairs on every size change with a filter live
+(Haven's Pixelate; user's final-testing report). The popped texture is out
+of circulation the moment it's rejected, so destroy is deferred two
+`requestAnimationFrame`s (immediate fallback when rAF is absent — the vm
+tests). Verified on a HavenCopy harness: full-screen ColorMatrixFilter +
+6-step resize storm, 12 retired, 0 warnings. `logcap.js` via
+`inject_js_start` captures console.warn/error from boot.
 
 F4-spam regression from the pixel-ratio work, repro'd in the harness (new
 game → `$gameScreen.startTint` → six alternating `nw.Window.get().resizeTo`

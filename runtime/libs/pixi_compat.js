@@ -137,7 +137,24 @@
             let texture = this._texturePool[key].pop();
             if (texture && (texture.source.pixelWidth !== pixelWidth ||
                             texture.source.pixelHeight !== pixelHeight)) {
-                try { texture.destroy(true); } catch (e) { /* already gone */ }
+                // Destroying here fires "[BindGroup] ... destroyed while still
+                // bound to a shader": the filter that used this texture last
+                // frame keeps it in a bind group until it re-binds, and this
+                // code runs mid-render. The texture is out of circulation the
+                // moment it is popped — nothing returns it to the pool — so
+                // wait two frames (every filter has re-bound by then) and
+                // destroy it quietly.
+                const stale = texture;
+                PIXI.TexturePool.__reactorStaleRetired =
+                    (PIXI.TexturePool.__reactorStaleRetired || 0) + 1;
+                const retire = function() {
+                    try { stale.destroy(true); } catch (e) { /* already gone */ }
+                };
+                if (typeof requestAnimationFrame === "function") {
+                    requestAnimationFrame(function() { requestAnimationFrame(retire); });
+                } else {
+                    retire();
+                }
                 texture = null;
             }
             if (!texture) {

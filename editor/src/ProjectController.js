@@ -466,6 +466,12 @@ class ProjectController {
             const resources = reactor?.resourceManager || null;
             if (resources && typeof resources.onProjectChanged === 'function') resources.onProjectChanged();
             this.videoSurfacePreviewManager?.onProjectChanged?.();
+            // Event model previews cache by model name alone; two projects
+            // sharing a model name would show the first one's mesh (or its
+            // cached load failure) on the second.
+            if (typeof window !== 'undefined' && window.RREventPreviewModels?.clear) {
+                window.RREventPreviewModels.clear();
+            }
         } catch (e) {
             console.warn('Project-change notify failed:', e);
         }
@@ -679,6 +685,15 @@ class ProjectController {
 
         // Initialize or recreate tilemap manager if project changed
         if (!this.tilemapManager || projectHasChanged) {
+            // The previous project may still hold the 3D view (closeProject
+            // disables it; opening straight over an open project did not):
+            // tearing the TilemapManager down while three.js owns the shared
+            // canvas leaves the new project's first map black until a map
+            // switch. Start every open from a cold viewport so the switch
+            // takes the same path as a fresh open.
+            if (typeof this.disableMap3DView === 'function') {
+                await this.disableMap3DView();
+            }
             // Clean up old TilemapManager before replacing it
             if (this.tilemapManager) {
                 this.videoSurfacePreviewManager?.beforeMapChange?.();

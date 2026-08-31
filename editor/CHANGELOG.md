@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased - 0.98.4]
 
 ### Fixed
+- Project switch: opening a project over another no longer shows the first map black (3D view now disabled and re-framed across the switch; cross-project model preview cache cleared).
+- Enemy AI (GitHub #33): Target State conditions work on plugin string scopes (`<Target: ...>`) — candidates group via probe Game_Action predicates; action ratings are 1-9 across all locales.
 - Backdrop-close sweep: 110 `target === modal/overlay` close handlers excised across 102 files (brace-aware, listener shells kept); only UIManager's stateless confirm/alert/reload dialogs keep the gesture; guarded by `no-backdrop-close.test.cjs`.
 - The event page's inline model preview centres skinned characters properly: their measured box can collapse at the feet (bind-pose vertices the skeleton hides), and subtracting that centre aimed the camera at the ankles — the declared extent places the middle when the box is clearly degenerate.
 - `scanMessageLine` consumes the punctuation codes (. | ! > < ^ $ after a backslash) as zero-width; in-game parity proof via `fx-msgparity.cjs` (TextCodes injected into the live game: identical width and identical cut index against `Bitmap.measureTextWidth`).

@@ -674,6 +674,12 @@ class MapEditor3D {
             // same name, and keeping the first one's picture would draw the
             // wrong floor under the second one's map.
             this.parallaxImages = {};
+            // The framing key and the orbit belong to the previous project:
+            // both projects usually open on map 1, and matching dimensions
+            // kept a camera aimed at the OLD project's last-orbited spot — a
+            // black first view until a map switch re-framed it.
+            this._framedMap = null;
+            this.view = { yaw: 0, pitch: 34, distance: 24, target: { x: 0, y: 0, z: 0 } };
             this._cachedProjectPath = projectPath;
         }
 

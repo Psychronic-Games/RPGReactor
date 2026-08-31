@@ -15,11 +15,11 @@ const repoRoot = path.resolve(__dirname, '..', '..');
 const compat = fs.readFileSync(
     path.join(repoRoot, 'runtime', 'libs', 'pixi_compat.js'), 'utf8');
 
-function applyShim(PIXI, window) {
+function applyShim(PIXI, window, extras) {
     const start = compat.indexOf('    if (PIXI.TextureSource && PIXI.TexturePool &&');
     const end = compat.indexOf('\n    }\n', start) + '\n    }\n'.length;
     assert.ok(start >= 0 && end > start, 'the texture pool wrap is locatable');
-    vm.runInNewContext(compat.slice(start, end), { PIXI, window });
+    vm.runInNewContext(compat.slice(start, end), Object.assign({ PIXI, window }, extras || {}));
 }
 
 const nextPow2 = v => { v += v === 0 ? 1 : 0; v--; v |= v >>> 1; v |= v >>> 2; v |= v >>> 4; v |= v >>> 8; v |= v >>> 16; return v + 1; };
@@ -92,7 +92,28 @@ test('full-screen textures round-trip through the pool and antialias keys stay s
     assert.notEqual(PIXI.TexturePool._poolKeyHash[aa.uid], PIXI.TexturePool._poolKeyHash[first.uid]);
 });
 
-test('a resized canvas destroys the stale full-screen texture instead of reusing it', () => {
+test('a resized canvas retires the stale full-screen texture: fresh replacement now, destroy two frames later', () => {
+    const { PIXI, destroyed } = fakePool();
+    const window = { Graphics: { _canvas: { width: 816, height: 624 } } };
+    // Destroying mid-render fires "[BindGroup] destroyed while still bound to
+    // a shader" (last frame's filter still holds the texture), so the shim
+    // defers the destroy by two animation frames.
+    const rafQueue = [];
+    applyShim(PIXI, window, { requestAnimationFrame: cb => rafQueue.push(cb) });
+    const old = PIXI.TexturePool.getOptimalTexture(816, 624, 1, false);
+    PIXI.TexturePool.returnTexture(old);
+    window.Graphics._canvas.width = 1280;
+    window.Graphics._canvas.height = 720;
+    const fresh = PIXI.TexturePool.getOptimalTexture(1280, 720, 1, false);
+    assert.deepEqual([fresh.source.pixelWidth, fresh.source.pixelHeight], [1280, 720]);
+    assert.notEqual(fresh.uid, old.uid, 'the stale texture is never reused');
+    assert.deepEqual(destroyed, [], 'not destroyed while a bind group may hold it');
+    // Two frames pass; every filter has re-bound by now.
+    while (rafQueue.length) rafQueue.shift()();
+    assert.deepEqual(destroyed, [old.uid]);
+});
+
+test('without requestAnimationFrame the stale texture is destroyed immediately', () => {
     const { PIXI, destroyed } = fakePool();
     const window = { Graphics: { _canvas: { width: 816, height: 624 } } };
     applyShim(PIXI, window);
@@ -100,8 +121,7 @@ test('a resized canvas destroys the stale full-screen texture instead of reusing
     PIXI.TexturePool.returnTexture(old);
     window.Graphics._canvas.width = 1280;
     window.Graphics._canvas.height = 720;
-    const fresh = PIXI.TexturePool.getOptimalTexture(1280, 720, 1, false);
-    assert.deepEqual([fresh.source.pixelWidth, fresh.source.pixelHeight], [1280, 720]);
+    PIXI.TexturePool.getOptimalTexture(1280, 720, 1, false);
     assert.deepEqual(destroyed, [old.uid]);
 });
 

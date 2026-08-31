@@ -62,9 +62,17 @@ function loadRuntimeConditions(overrides = {}) {
     Game_Enemy.prototype = Object.create(Game_Battler.prototype);
     Game_Enemy.prototype.constructor = Game_Enemy;
 
+    // The candidate walk asks a probe Game_Action, so the shipped scope
+    // predicates ride along verbatim; setSkill/item are the only members the
+    // probe touches beyond them.
+    function Game_Action(subject) { this._subject = subject; this._item = null; }
+    Game_Action.prototype.setSkill = function(id) { this._item = world.skills[id] || null; };
+    Game_Action.prototype.item = function() { return this._item; };
+
     const context = {
         Game_Battler,
         Game_Enemy,
+        Game_Action,
         BattleManager: { isTpb: () => false },
         $dataSkills: world.skills,
         $gameTroop: { turnCount: () => world.turn - 1 },
@@ -72,6 +80,10 @@ function loadRuntimeConditions(overrides = {}) {
         $gameSwitches: { value: id => !!world.switches[id] }
     };
     vm.runInNewContext(objectsSource.slice(start, end), context);
+    const predicateStart = objectsSource.indexOf('Game_Action.prototype.checkItemScope = function');
+    const predicateEnd = objectsSource.indexOf('Game_Action.prototype.isForOne = function');
+    assert.ok(predicateStart >= 0 && predicateEnd > predicateStart, 'the shipped scope predicates can be extracted');
+    vm.runInNewContext(objectsSource.slice(predicateStart, predicateEnd), context);
 
     const enemy = new context.Game_Enemy();
     Object.assign(enemy, {
@@ -540,6 +552,31 @@ test('all scope IDs 0 through 14 produce exactly their intended candidate group'
             candidate => candidate.name);
         assert.deepEqual(names, expected[scope], `scope ${scope}`);
     }
+});
+
+test('a notetag string scope reaches candidates only through the predicates, and follows their redefinition', () => {
+    const opponent = battler('opponent');
+    const friend = battler('friend');
+    const { context, enemy } = loadRuntimeConditions({
+        skills: { 200: { scope: 'ENEMY OR ALLY' } },
+        opponents: [opponent],
+        friends: [friend]
+    });
+    enemy.name = 'user';
+    // Stock predicates read numeric lists; a string scope matches none, so
+    // the skill has no candidates at all...
+    assert.deepEqual(Array.from(enemy.actionTargetCandidates({ skillId: 200 })), []);
+    // ...until a plugin reroutes a predicate to parse the string, the way
+    // BattleCore's <Target: ...> support does. The probe inherits it.
+    context.Game_Action.prototype.isForOpponent = function() {
+        const scope = this.item().scope;
+        return typeof scope === 'string'
+            ? scope.indexOf('ENEMY') >= 0
+            : this.checkItemScope([1, 2, 3, 4, 5, 6, 14]);
+    };
+    const names = Array.from(enemy.actionTargetCandidates({ skillId: 200 }),
+        candidate => candidate.name);
+    assert.deepEqual(names, ['opponent']);
 });
 
 test('offensive skills inspect opponents and supportive skills inspect allies', () => {

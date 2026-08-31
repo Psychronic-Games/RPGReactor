@@ -1582,22 +1582,22 @@ const RR_TEXT_TRANSLATIONS = {
 };
 
 Object.assign(RR_TEXT_TRANSLATIONS.ja, {
-    'Armor Type:': '防具タイプ:', 'Equip Type:': '装備タイプ:', 'Item Type': 'アイテムタイプ', 'Item Type:': 'アイテムタイプ:', 'Consumable': '消耗品', 'Element:': '属性:', 'Formula:': '計算式:', 'Variance:': '分散度:', 'Critical:': '会心:', 'Nickname:': '二つ名:', 'Class:': '職業:', 'Initial Level:': '初期レベル:', 'Max Level:': '最大レベル:', 'Profile:': 'プロフィール:', 'Battler Image:': 'バトラー画像:', 'Battler Hue:': 'バトラー色相:', 'EXP:': '経験値:', 'Gold:': 'ゴールド:', 'Kind:': '種類:', 'Condition Type:': '条件タイプ:', 'Param 1:': 'パラメータ 1:', 'Param 2:': 'パラメータ 2:', 'Rating (1-10):': 'レーティング (1-10):', 'Currency Unit:': '通貨単位:', 'Window Tone:': 'ウィンドウトーン:', 'Title Image:': 'タイトル画像:', 'Background:': '背景:', 'Offset X:': 'オフセット X:', 'Offset Y:': 'オフセット Y:', 'Volume:': '音量:', 'Pitch:': 'ピッチ:', 'Pan:': 'パン:', 'Select Platform(s)': 'プラットフォームを選択', 'NW.js Runtime': 'NW.js ランタイム', 'Output Directory': '出力フォルダー', 'Build Log': 'ビルドログ', 'Find Event': 'イベント検索', 'Search by name or ID:': '名前またはIDで検索:', 'Select Animation': 'アニメーションを選択'
+    'Armor Type:': '防具タイプ:', 'Equip Type:': '装備タイプ:', 'Item Type': 'アイテムタイプ', 'Item Type:': 'アイテムタイプ:', 'Consumable': '消耗品', 'Element:': '属性:', 'Formula:': '計算式:', 'Variance:': '分散度:', 'Critical:': '会心:', 'Nickname:': '二つ名:', 'Class:': '職業:', 'Initial Level:': '初期レベル:', 'Max Level:': '最大レベル:', 'Profile:': 'プロフィール:', 'Battler Image:': 'バトラー画像:', 'Battler Hue:': 'バトラー色相:', 'EXP:': '経験値:', 'Gold:': 'ゴールド:', 'Kind:': '種類:', 'Condition Type:': '条件タイプ:', 'Param 1:': 'パラメータ 1:', 'Param 2:': 'パラメータ 2:', 'Rating (1-9):': 'レーティング (1-9):', 'Currency Unit:': '通貨単位:', 'Window Tone:': 'ウィンドウトーン:', 'Title Image:': 'タイトル画像:', 'Background:': '背景:', 'Offset X:': 'オフセット X:', 'Offset Y:': 'オフセット Y:', 'Volume:': '音量:', 'Pitch:': 'ピッチ:', 'Pan:': 'パン:', 'Select Platform(s)': 'プラットフォームを選択', 'NW.js Runtime': 'NW.js ランタイム', 'Output Directory': '出力フォルダー', 'Build Log': 'ビルドログ', 'Find Event': 'イベント検索', 'Search by name or ID:': '名前またはIDで検索:', 'Select Animation': 'アニメーションを選択'
 });
 Object.assign(RR_TEXT_TRANSLATIONS.es, {
-    'Armor Type:': 'Tipo de armadura:', 'Equip Type:': 'Tipo de equipo:', 'Item Type': 'Tipo de objeto', 'Item Type:': 'Tipo de objeto:', 'Consumable': 'Consumible', 'Element:': 'Elemento:', 'Formula:': 'Fórmula:', 'Variance:': 'Variación:', 'Critical:': 'Crítico:', 'Nickname:': 'Apodo:', 'Class:': 'Clase:', 'Initial Level:': 'Nivel inicial:', 'Max Level:': 'Nivel máximo:', 'Profile:': 'Perfil:', 'Battler Image:': 'Imagen de batalla:', 'Battler Hue:': 'Tono de batalla:', 'EXP:': 'EXP:', 'Gold:': 'Oro:', 'Kind:': 'Tipo:', 'Condition Type:': 'Tipo de condición:', 'Param 1:': 'Parámetro 1:', 'Param 2:': 'Parámetro 2:', 'Rating (1-10):': 'Prioridad (1-10):', 'Currency Unit:': 'Unidad monetaria:', 'Window Tone:': 'Tono de ventana:', 'Title Image:': 'Imagen de título:', 'Background:': 'Fondo:', 'Offset X:': 'Desplazamiento X:', 'Offset Y:': 'Desplazamiento Y:', 'Volume:': 'Volumen:', 'Pitch:': 'Tono:', 'Pan:': 'Paneo:', 'Select Platform(s)': 'Seleccionar plataformas', 'NW.js Runtime': 'Runtime de NW.js', 'Output Directory': 'Directorio de salida', 'Build Log': 'Registro de compilación', 'Find Event': 'Buscar evento', 'Search by name or ID:': 'Buscar por nombre o ID:', 'Select Animation': 'Seleccionar animación'
+    'Armor Type:': 'Tipo de armadura:', 'Equip Type:': 'Tipo de equipo:', 'Item Type': 'Tipo de objeto', 'Item Type:': 'Tipo de objeto:', 'Consumable': 'Consumible', 'Element:': 'Elemento:', 'Formula:': 'Fórmula:', 'Variance:': 'Variación:', 'Critical:': 'Crítico:', 'Nickname:': 'Apodo:', 'Class:': 'Clase:', 'Initial Level:': 'Nivel inicial:', 'Max Level:': 'Nivel máximo:', 'Profile:': 'Perfil:', 'Battler Image:': 'Imagen de batalla:', 'Battler Hue:': 'Tono de batalla:', 'EXP:': 'EXP:', 'Gold:': 'Oro:', 'Kind:': 'Tipo:', 'Condition Type:': 'Tipo de condición:', 'Param 1:': 'Parámetro 1:', 'Param 2:': 'Parámetro 2:', 'Rating (1-9):': 'Prioridad (1-9):', 'Currency Unit:': 'Unidad monetaria:', 'Window Tone:': 'Tono de ventana:', 'Title Image:': 'Imagen de título:', 'Background:': 'Fondo:', 'Offset X:': 'Desplazamiento X:', 'Offset Y:': 'Desplazamiento Y:', 'Volume:': 'Volumen:', 'Pitch:': 'Tono:', 'Pan:': 'Paneo:', 'Select Platform(s)': 'Seleccionar plataformas', 'NW.js Runtime': 'Runtime de NW.js', 'Output Directory': 'Directorio de salida', 'Build Log': 'Registro de compilación', 'Find Event': 'Buscar evento', 'Search by name or ID:': 'Buscar por nombre o ID:', 'Select Animation': 'Seleccionar animación'
 });
 Object.assign(RR_TEXT_TRANSLATIONS['zh-Hant'], {
-    'Armor Type:': '防具類型:', 'Equip Type:': '裝備類型:', 'Item Type': '物品類型', 'Item Type:': '物品類型:', 'Consumable': '消耗品', 'Element:': '屬性:', 'Formula:': '公式:', 'Variance:': '分散度:', 'Critical:': '會心:', 'Nickname:': '暱稱:', 'Class:': '職業:', 'Initial Level:': '初始等級:', 'Max Level:': '最高等級:', 'Profile:': '簡介:', 'Battler Image:': '戰鬥圖像:', 'Battler Hue:': '戰鬥色相:', 'EXP:': '經驗值:', 'Gold:': '金錢:', 'Kind:': '種類:', 'Condition Type:': '條件類型:', 'Param 1:': '參數 1:', 'Param 2:': '參數 2:', 'Rating (1-10):': '評級 (1-10):', 'Currency Unit:': '貨幣單位:', 'Window Tone:': '視窗色調:', 'Title Image:': '標題圖片:', 'Background:': '背景:', 'Offset X:': '偏移 X:', 'Offset Y:': '偏移 Y:', 'Volume:': '音量:', 'Pitch:': '音高:', 'Pan:': '聲像:', 'Select Platform(s)': '選擇平台', 'NW.js Runtime': 'NW.js 執行環境', 'Output Directory': '輸出資料夾', 'Build Log': '建置記錄', 'Find Event': '尋找事件', 'Search by name or ID:': '依名稱或 ID 搜尋:', 'Select Animation': '選擇動畫'
+    'Armor Type:': '防具類型:', 'Equip Type:': '裝備類型:', 'Item Type': '物品類型', 'Item Type:': '物品類型:', 'Consumable': '消耗品', 'Element:': '屬性:', 'Formula:': '公式:', 'Variance:': '分散度:', 'Critical:': '會心:', 'Nickname:': '暱稱:', 'Class:': '職業:', 'Initial Level:': '初始等級:', 'Max Level:': '最高等級:', 'Profile:': '簡介:', 'Battler Image:': '戰鬥圖像:', 'Battler Hue:': '戰鬥色相:', 'EXP:': '經驗值:', 'Gold:': '金錢:', 'Kind:': '種類:', 'Condition Type:': '條件類型:', 'Param 1:': '參數 1:', 'Param 2:': '參數 2:', 'Rating (1-9):': '評級 (1-9):', 'Currency Unit:': '貨幣單位:', 'Window Tone:': '視窗色調:', 'Title Image:': '標題圖片:', 'Background:': '背景:', 'Offset X:': '偏移 X:', 'Offset Y:': '偏移 Y:', 'Volume:': '音量:', 'Pitch:': '音高:', 'Pan:': '聲像:', 'Select Platform(s)': '選擇平台', 'NW.js Runtime': 'NW.js 執行環境', 'Output Directory': '輸出資料夾', 'Build Log': '建置記錄', 'Find Event': '尋找事件', 'Search by name or ID:': '依名稱或 ID 搜尋:', 'Select Animation': '選擇動畫'
 });
 Object.assign(RR_TEXT_TRANSLATIONS['zh-Hans'], {
-    'Armor Type:': '防具类型:', 'Equip Type:': '装备类型:', 'Item Type': '物品类型', 'Item Type:': '物品类型:', 'Consumable': '消耗品', 'Element:': '属性:', 'Formula:': '公式:', 'Variance:': '分散度:', 'Critical:': '会心:', 'Nickname:': '昵称:', 'Class:': '职业:', 'Initial Level:': '初始等级:', 'Max Level:': '最高等级:', 'Profile:': '简介:', 'Battler Image:': '战斗图像:', 'Battler Hue:': '战斗色相:', 'EXP:': '经验值:', 'Gold:': '金钱:', 'Kind:': '种类:', 'Condition Type:': '条件类型:', 'Param 1:': '参数 1:', 'Param 2:': '参数 2:', 'Rating (1-10):': '评级 (1-10):', 'Currency Unit:': '货币单位:', 'Window Tone:': '窗口色调:', 'Title Image:': '标题图片:', 'Background:': '背景:', 'Offset X:': '偏移 X:', 'Offset Y:': '偏移 Y:', 'Volume:': '音量:', 'Pitch:': '音高:', 'Pan:': '声像:', 'Select Platform(s)': '选择平台', 'NW.js Runtime': 'NW.js 运行环境', 'Output Directory': '输出文件夹', 'Build Log': '构建日志', 'Find Event': '查找事件', 'Search by name or ID:': '按名称或 ID 搜索:', 'Select Animation': '选择动画'
+    'Armor Type:': '防具类型:', 'Equip Type:': '装备类型:', 'Item Type': '物品类型', 'Item Type:': '物品类型:', 'Consumable': '消耗品', 'Element:': '属性:', 'Formula:': '公式:', 'Variance:': '分散度:', 'Critical:': '会心:', 'Nickname:': '昵称:', 'Class:': '职业:', 'Initial Level:': '初始等级:', 'Max Level:': '最高等级:', 'Profile:': '简介:', 'Battler Image:': '战斗图像:', 'Battler Hue:': '战斗色相:', 'EXP:': '经验值:', 'Gold:': '金钱:', 'Kind:': '种类:', 'Condition Type:': '条件类型:', 'Param 1:': '参数 1:', 'Param 2:': '参数 2:', 'Rating (1-9):': '评级 (1-9):', 'Currency Unit:': '货币单位:', 'Window Tone:': '窗口色调:', 'Title Image:': '标题图片:', 'Background:': '背景:', 'Offset X:': '偏移 X:', 'Offset Y:': '偏移 Y:', 'Volume:': '音量:', 'Pitch:': '音高:', 'Pan:': '声像:', 'Select Platform(s)': '选择平台', 'NW.js Runtime': 'NW.js 运行环境', 'Output Directory': '输出文件夹', 'Build Log': '构建日志', 'Find Event': '查找事件', 'Search by name or ID:': '按名称或 ID 搜索:', 'Select Animation': '选择动画'
 });
 Object.assign(RR_TEXT_TRANSLATIONS.ru, {
-    'Armor Type:': 'Тип Брони:', 'Equip Type:': 'Тип Экипировки:', 'Item Type': 'Тип Предмета', 'Item Type:': 'Тип Предмета:', 'Consumable': 'Расходуемый', 'Element:': 'Элемент:', 'Formula:': 'Формула:', 'Variance:': 'Разброс:', 'Critical:': 'Крит:', 'Nickname:': 'Прозвище:', 'Class:': 'Класс:', 'Initial Level:': 'Начальный Уровень:', 'Max Level:': 'Макс. Уровень:', 'Profile:': 'Профиль:', 'Battler Image:': 'Изображение Бойца:', 'Battler Hue:': 'Оттенок Бойца:', 'EXP:': 'Опыт:', 'Gold:': 'Золото:', 'Kind:': 'Вид:', 'Condition Type:': 'Тип Условия:', 'Param 1:': 'Параметр 1:', 'Param 2:': 'Параметр 2:', 'Rating (1-10):': 'Рейтинг (1-10):', 'Currency Unit:': 'Валюта:', 'Window Tone:': 'Тон Окна:', 'Title Image:': 'Изображение Заголовка:', 'Background:': 'Фон:', 'Offset X:': 'Смещение X:', 'Offset Y:': 'Смещение Y:', 'Volume:': 'Громкость:', 'Pitch:': 'Тон:', 'Pan:': 'Панорама:', 'Select Platform(s)': 'Выбор Платформ', 'NW.js Runtime': 'Среда NW.js', 'Output Directory': 'Папка Вывода', 'Build Log': 'Журнал Сборки', 'Find Event': 'Найти Событие', 'Search by name or ID:': 'Поиск по имени или ID:', 'Select Animation': 'Выбрать Анимацию'
+    'Armor Type:': 'Тип Брони:', 'Equip Type:': 'Тип Экипировки:', 'Item Type': 'Тип Предмета', 'Item Type:': 'Тип Предмета:', 'Consumable': 'Расходуемый', 'Element:': 'Элемент:', 'Formula:': 'Формула:', 'Variance:': 'Разброс:', 'Critical:': 'Крит:', 'Nickname:': 'Прозвище:', 'Class:': 'Класс:', 'Initial Level:': 'Начальный Уровень:', 'Max Level:': 'Макс. Уровень:', 'Profile:': 'Профиль:', 'Battler Image:': 'Изображение Бойца:', 'Battler Hue:': 'Оттенок Бойца:', 'EXP:': 'Опыт:', 'Gold:': 'Золото:', 'Kind:': 'Вид:', 'Condition Type:': 'Тип Условия:', 'Param 1:': 'Параметр 1:', 'Param 2:': 'Параметр 2:', 'Rating (1-9):': 'Рейтинг (1-9):', 'Currency Unit:': 'Валюта:', 'Window Tone:': 'Тон Окна:', 'Title Image:': 'Изображение Заголовка:', 'Background:': 'Фон:', 'Offset X:': 'Смещение X:', 'Offset Y:': 'Смещение Y:', 'Volume:': 'Громкость:', 'Pitch:': 'Тон:', 'Pan:': 'Панорама:', 'Select Platform(s)': 'Выбор Платформ', 'NW.js Runtime': 'Среда NW.js', 'Output Directory': 'Папка Вывода', 'Build Log': 'Журнал Сборки', 'Find Event': 'Найти Событие', 'Search by name or ID:': 'Поиск по имени или ID:', 'Select Animation': 'Выбрать Анимацию'
 });
 Object.assign(RR_TEXT_TRANSLATIONS.pt, {
-    'Armor Type:': 'Tipo De Armadura:', 'Equip Type:': 'Tipo De Equipamento:', 'Item Type': 'Tipo De Item', 'Item Type:': 'Tipo De Item:', 'Consumable': 'Consumível', 'Element:': 'Elemento:', 'Formula:': 'Fórmula:', 'Variance:': 'Variação:', 'Critical:': 'Crítico:', 'Nickname:': 'Apelido:', 'Class:': 'Classe:', 'Initial Level:': 'Nível Inicial:', 'Max Level:': 'Nível Máximo:', 'Profile:': 'Perfil:', 'Battler Image:': 'Imagem De Batalha:', 'Battler Hue:': 'Matiz De Batalha:', 'EXP:': 'EXP:', 'Gold:': 'Ouro:', 'Kind:': 'Tipo:', 'Condition Type:': 'Tipo De Condição:', 'Param 1:': 'Parâmetro 1:', 'Param 2:': 'Parâmetro 2:', 'Rating (1-10):': 'Avaliação (1-10):', 'Currency Unit:': 'Unidade Monetária:', 'Window Tone:': 'Tom Da Janela:', 'Title Image:': 'Imagem Do Título:', 'Background:': 'Fundo:', 'Offset X:': 'Deslocamento X:', 'Offset Y:': 'Deslocamento Y:', 'Volume:': 'Volume:', 'Pitch:': 'Tom:', 'Pan:': 'Pan:', 'Select Platform(s)': 'Selecionar Plataformas', 'NW.js Runtime': 'Runtime NW.js', 'Output Directory': 'Diretório De Saída', 'Build Log': 'Log De Compilação', 'Find Event': 'Encontrar Evento', 'Search by name or ID:': 'Buscar por nome ou ID:', 'Select Animation': 'Selecionar Animação'
+    'Armor Type:': 'Tipo De Armadura:', 'Equip Type:': 'Tipo De Equipamento:', 'Item Type': 'Tipo De Item', 'Item Type:': 'Tipo De Item:', 'Consumable': 'Consumível', 'Element:': 'Elemento:', 'Formula:': 'Fórmula:', 'Variance:': 'Variação:', 'Critical:': 'Crítico:', 'Nickname:': 'Apelido:', 'Class:': 'Classe:', 'Initial Level:': 'Nível Inicial:', 'Max Level:': 'Nível Máximo:', 'Profile:': 'Perfil:', 'Battler Image:': 'Imagem De Batalha:', 'Battler Hue:': 'Matiz De Batalha:', 'EXP:': 'EXP:', 'Gold:': 'Ouro:', 'Kind:': 'Tipo:', 'Condition Type:': 'Tipo De Condição:', 'Param 1:': 'Parâmetro 1:', 'Param 2:': 'Parâmetro 2:', 'Rating (1-9):': 'Avaliação (1-9):', 'Currency Unit:': 'Unidade Monetária:', 'Window Tone:': 'Tom Da Janela:', 'Title Image:': 'Imagem Do Título:', 'Background:': 'Fundo:', 'Offset X:': 'Deslocamento X:', 'Offset Y:': 'Deslocamento Y:', 'Volume:': 'Volume:', 'Pitch:': 'Tom:', 'Pan:': 'Pan:', 'Select Platform(s)': 'Selecionar Plataformas', 'NW.js Runtime': 'Runtime NW.js', 'Output Directory': 'Diretório De Saída', 'Build Log': 'Log De Compilação', 'Find Event': 'Encontrar Evento', 'Search by name or ID:': 'Buscar por nome ou ID:', 'Select Animation': 'Selecionar Animação'
 });
 
 Object.assign(RR_TEXT_TRANSLATIONS.ja, {
@@ -1830,7 +1830,7 @@ Object.assign(RR_TEXT_TRANSLATIONS.de, {
     'Gold:': 'Gold:',
     'Param 1:': 'Parameter 1:',
     'Param 2:': 'Parameter 2:',
-    'Rating (1-10):': 'Bewertung (1-10):',
+    'Rating (1-9):': 'Bewertung (1-9):',
     'Currency Unit:': 'Währungseinheit:',
     'Window Tone:': 'Fensterfarbton:',
     'Title Image:': 'Titelbild:',
@@ -2192,7 +2192,7 @@ Object.assign(RR_TEXT_TRANSLATIONS.fr, {
     'Gold:': 'Or :',
     'Param 1:': 'Paramètre 1 :',
     'Param 2:': 'Paramètre 2 :',
-    'Rating (1-10):': 'Priorité (1-10) :',
+    'Rating (1-9):': 'Priorité (1-9) :',
     'Currency Unit:': 'Unité monétaire :',
     'Window Tone:': 'Teinte des fenêtres :',
     'Title Image:': 'Image de titre :',
@@ -2553,7 +2553,7 @@ Object.assign(RR_TEXT_TRANSLATIONS.el, {
     'Gold:': 'Χρυσός:',
     'Param 1:': 'Παράμετρος 1:',
     'Param 2:': 'Παράμετρος 2:',
-    'Rating (1-10):': 'Βαθμολογία (1-10):',
+    'Rating (1-9):': 'Βαθμολογία (1-9):',
     'Currency Unit:': 'Νομισματική μονάδα:',
     'Window Tone:': 'Τόνος παραθύρου:',
     'Title Image:': 'Εικόνα τίτλου:',
@@ -3063,7 +3063,7 @@ RR_TEXT_TRANSLATIONS['ko'] = {
     'Variance:': '분산도:', 'Critical:': '크리티컬:', 'Nickname:': '별명:', 'Class:': '직업:',
     'Initial Level:': '초기 레벨:', 'Max Level:': '최대 레벨:', 'Profile:': '프로필:', 'Battler Image:': '배틀러 이미지:',
     'Battler Hue:': '배틀러 색조:', 'EXP:': 'EXP:', 'Gold:': '소지금:', 'Kind:': '종류:',
-    'Condition Type:': '조건 타입:', 'Param 1:': '매개변수 1:', 'Param 2:': '매개변수 2:', 'Rating (1-10):': '레이팅 (1-10):',
+    'Condition Type:': '조건 타입:', 'Param 1:': '매개변수 1:', 'Param 2:': '매개변수 2:', 'Rating (1-9):': '레이팅 (1-9):',
     'Currency Unit:': '통화 단위:', 'Window Tone:': '윈도우 색조:', 'Title Image:': '타이틀 이미지:', 'Background:': '배경:',
     'Offset X:': '오프셋 X:', 'Offset Y:': '오프셋 Y:', 'Volume:': '음량:', 'Pitch:': '피치:',
     'Pan:': '위상:', 'Select Platform(s)': '플랫폼 선택', 'NW.js Runtime': 'NW.js 런타임', 'Output Directory': '출력 디렉터리',
@@ -3362,7 +3362,7 @@ RR_TEXT_TRANSLATIONS['ar'] = {
     'Variance:': 'التفاوت:', 'Critical:': 'الضربة الحاسمة:', 'Nickname:': 'اللقب:', 'Class:': 'الفئة:',
     'Initial Level:': 'المستوى الابتدائي:', 'Max Level:': 'المستوى الأقصى:', 'Profile:': 'النبذة:', 'Battler Image:': 'صورة المقاتل:',
     'Battler Hue:': 'تدرج لون المقاتل:', 'EXP:': 'EXP:', 'Gold:': 'الذهب:', 'Kind:': 'الصنف:',
-    'Condition Type:': 'نوع الشرط:', 'Param 1:': 'المعامل 1:', 'Param 2:': 'المعامل 2:', 'Rating (1-10):': 'التقييم (1-10):',
+    'Condition Type:': 'نوع الشرط:', 'Param 1:': 'المعامل 1:', 'Param 2:': 'المعامل 2:', 'Rating (1-9):': 'التقييم (1-9):',
     'Currency Unit:': 'وحدة العملة:', 'Window Tone:': 'درجة لون النافذة:', 'Title Image:': 'صورة العنوان:', 'Background:': 'الخلفية:',
     'Offset X:': 'إزاحة X:', 'Offset Y:': 'إزاحة Y:', 'Volume:': 'مستوى الصوت:', 'Pitch:': 'طبقة الصوت:',
     'Pan:': 'التوازن:', 'Select Platform(s)': 'اختر المنصة (المنصات)', 'NW.js Runtime': 'بيئة تشغيل NW.js', 'Output Directory': 'مجلد الإخراج',
@@ -5794,7 +5794,7 @@ RR_TEXT_TRANSLATIONS['it'] = {
     'Radar Sweep': 'Scansione radar', 'Radial Rays': 'Raggi radiali', 'Radioactive': 'Radioattivo', 'Radius': 'Raggio',
     'Rain': 'Pioggia', 'Rain Drops': 'Gocce di pioggia', 'Rainbow Rotation': 'Rotazione arcobaleno', 'Rainbow Spread': 'Dispersione arcobaleno',
     'Raise Preemptive': 'Aumenta attacco preventivo', 'Random': 'Casuale', 'Randomize': 'Randomizza', 'Range Rings': 'Anelli di distanza',
-    'Range: 0 (transparent) to 255 (opaque)': 'Intervallo: da 0 (trasparente) a 255 (opaco)', 'Rates': 'Tassi', 'Rating (1-10):': 'Valutazione (1-10):', 'Ray Color': 'Colore raggi',
+    'Range: 0 (transparent) to 255 (opaque)': 'Intervallo: da 0 (trasparente) a 255 (opaco)', 'Rates': 'Tassi', 'Rating (1-9):': 'Valutazione (1-9):', 'Ray Color': 'Colore raggi',
     'Ray Count': 'Numero raggi', 'Ray Length': 'Lunghezza raggi', 'Ray Spin': 'Rotazione raggi', 'Ray Width': 'Larghezza raggi',
     'Rays': 'Raggi', 'Reach': 'Estensione', 'Recovery': 'Recupero', 'Recovery Effect': 'Effetto recupero',
     'Refraction': 'Rifrazione', 'Region ID': 'ID regione', 'Regular Item': 'Oggetto normale', 'Release': 'Release',
@@ -6264,7 +6264,7 @@ RR_TEXT_TRANSLATIONS['pl'] = {
     'Radar Sweep': 'Omiatanie radaru', 'Radial Rays': 'Promienie radialne', 'Radioactive': 'Radioaktywny', 'Radius': 'Promień',
     'Rain': 'Deszcz', 'Rain Drops': 'Krople deszczu', 'Rainbow Rotation': 'Obrót tęczy', 'Rainbow Spread': 'Rozpiętość tęczy',
     'Raise Preemptive': 'Częstsze wyprzedzenie', 'Random': 'Losowy', 'Randomize': 'Losuj', 'Range Rings': 'Pierścienie zasięgu',
-    'Range: 0 (transparent) to 255 (opaque)': 'Zakres: 0 (przezroczysty) do 255 (nieprzezroczysty)', 'Rates': 'Współczynniki', 'Rating (1-10):': 'Ocena (1-10):', 'Ray Color': 'Kolor promieni',
+    'Range: 0 (transparent) to 255 (opaque)': 'Zakres: 0 (przezroczysty) do 255 (nieprzezroczysty)', 'Rates': 'Współczynniki', 'Rating (1-9):': 'Ocena (1-9):', 'Ray Color': 'Kolor promieni',
     'Ray Count': 'Liczba promieni', 'Ray Length': 'Długość promieni', 'Ray Spin': 'Obrót promieni', 'Ray Width': 'Szerokość promieni',
     'Rays': 'Promienie', 'Reach': 'Zasięg', 'Recovery': 'Leczenie', 'Recovery Effect': 'Efekt leczenia',
     'Refraction': 'Refrakcja', 'Region ID': 'ID regionu', 'Regular Item': 'Zwykły przedmiot', 'Release': 'Zwolnienie',
@@ -6734,7 +6734,7 @@ RR_TEXT_TRANSLATIONS['id'] = {
     'Radar Sweep': 'Sapuan Radar', 'Radial Rays': 'Sinar Radial', 'Radioactive': 'Radioaktif', 'Radius': 'Radius',
     'Rain': 'Hujan', 'Rain Drops': 'Tetes Hujan', 'Rainbow Rotation': 'Rotasi Pelangi', 'Rainbow Spread': 'Sebaran Pelangi',
     'Raise Preemptive': 'Tingkatkan Serangan Duluan', 'Random': 'Acak', 'Randomize': 'Acakkan', 'Range Rings': 'Cincin Jangkauan',
-    'Range: 0 (transparent) to 255 (opaque)': 'Rentang: 0 (transparan) hingga 255 (pekat)', 'Rates': 'Tingkat', 'Rating (1-10):': 'Rating (1-10):', 'Ray Color': 'Warna Sinar',
+    'Range: 0 (transparent) to 255 (opaque)': 'Rentang: 0 (transparan) hingga 255 (pekat)', 'Rates': 'Tingkat', 'Rating (1-9):': 'Rating (1-9):', 'Ray Color': 'Warna Sinar',
     'Ray Count': 'Jumlah Sinar', 'Ray Length': 'Panjang Sinar', 'Ray Spin': 'Putaran Sinar', 'Ray Width': 'Lebar Sinar',
     'Rays': 'Sinar', 'Reach': 'Jangkauan', 'Recovery': 'Pemulihan', 'Recovery Effect': 'Efek Pemulihan',
     'Refraction': 'Refraksi', 'Region ID': 'ID Region', 'Regular Item': 'Item Biasa', 'Release': 'Release',
@@ -7204,7 +7204,7 @@ RR_TEXT_TRANSLATIONS['vi'] = {
     'Radar Sweep': 'Quét radar', 'Radial Rays': 'Tia tỏa tròn', 'Radioactive': 'Phóng xạ', 'Radius': 'Bán kính',
     'Rain': 'Mưa', 'Rain Drops': 'Giọt mưa', 'Rainbow Rotation': 'Xoay cầu vồng', 'Rainbow Spread': 'Độ tỏa cầu vồng',
     'Raise Preemptive': 'Tăng đánh phủ đầu', 'Random': 'Ngẫu nhiên', 'Randomize': 'Ngẫu nhiên hóa', 'Range Rings': 'Vòng phạm vi',
-    'Range: 0 (transparent) to 255 (opaque)': 'Phạm vi: 0 (trong suốt) đến 255 (mờ đục)', 'Rates': 'Tỷ lệ', 'Rating (1-10):': 'Đánh giá (1-10):', 'Ray Color': 'Màu tia',
+    'Range: 0 (transparent) to 255 (opaque)': 'Phạm vi: 0 (trong suốt) đến 255 (mờ đục)', 'Rates': 'Tỷ lệ', 'Rating (1-9):': 'Đánh giá (1-9):', 'Ray Color': 'Màu tia',
     'Ray Count': 'Số tia', 'Ray Length': 'Chiều dài tia', 'Ray Spin': 'Xoay tia', 'Ray Width': 'Độ rộng tia',
     'Rays': 'Tia', 'Reach': 'Tầm với', 'Recovery': 'Hồi phục', 'Recovery Effect': 'Hiệu quả hồi phục',
     'Refraction': 'Khúc xạ', 'Region ID': 'ID vùng', 'Regular Item': 'Vật phẩm thường', 'Release': 'Nhả',
@@ -7674,7 +7674,7 @@ RR_TEXT_TRANSLATIONS['th'] = {
     'Radar Sweep': 'เรดาร์กวาด', 'Radial Rays': 'รังสีแผ่รัศมี', 'Radioactive': 'กัมมันตรังสี', 'Radius': 'รัศมี',
     'Rain': 'ฝน', 'Rain Drops': 'เม็ดฝน', 'Rainbow Rotation': 'การหมุนสีรุ้ง', 'Rainbow Spread': 'การกระจายสีรุ้ง',
     'Raise Preemptive': 'เพิ่มโอกาสชิงโจมตีก่อน', 'Random': 'สุ่ม', 'Randomize': 'สุ่มค่า', 'Range Rings': 'วงแหวนระยะ',
-    'Range: 0 (transparent) to 255 (opaque)': 'ช่วง: 0 (โปร่งใส) ถึง 255 (ทึบ)', 'Rates': 'อัตรา', 'Rating (1-10):': 'เรตติง (1-10):', 'Ray Color': 'สีรังสี',
+    'Range: 0 (transparent) to 255 (opaque)': 'ช่วง: 0 (โปร่งใส) ถึง 255 (ทึบ)', 'Rates': 'อัตรา', 'Rating (1-9):': 'เรตติง (1-9):', 'Ray Color': 'สีรังสี',
     'Ray Count': 'จำนวนรังสี', 'Ray Length': 'ความยาวรังสี', 'Ray Spin': 'การหมุนรังสี', 'Ray Width': 'ความกว้างรังสี',
     'Rays': 'รังสี', 'Reach': 'ระยะเอื้อม', 'Recovery': 'การฟื้นฟู', 'Recovery Effect': 'ผลการฟื้นฟู',
     'Refraction': 'การหักเห', 'Region ID': 'ID รีเจียน', 'Regular Item': 'ไอเทมทั่วไป', 'Release': 'รีลีส',
@@ -8144,7 +8144,7 @@ RR_TEXT_TRANSLATIONS['tr'] = {
     'Radar Sweep': 'Radar taraması', 'Radial Rays': 'Radyal ışınlar', 'Radioactive': 'Radyoaktif', 'Radius': 'Yarıçap',
     'Rain': 'Yağmur', 'Rain Drops': 'Yağmur damlaları', 'Rainbow Rotation': 'Gökkuşağı dönüşü', 'Rainbow Spread': 'Gökkuşağı yayılımı',
     'Raise Preemptive': 'İlk saldırı şansını artır', 'Random': 'Rastgele', 'Randomize': 'Rastgeleleştir', 'Range Rings': 'Menzil halkaları',
-    'Range: 0 (transparent) to 255 (opaque)': 'Aralık: 0 (saydam) - 255 (opak)', 'Rates': 'Oranlar', 'Rating (1-10):': 'Derece (1-10):', 'Ray Color': 'Işın rengi',
+    'Range: 0 (transparent) to 255 (opaque)': 'Aralık: 0 (saydam) - 255 (opak)', 'Rates': 'Oranlar', 'Rating (1-9):': 'Derece (1-9):', 'Ray Color': 'Işın rengi',
     'Ray Count': 'Işın sayısı', 'Ray Length': 'Işın uzunluğu', 'Ray Spin': 'Işın dönüşü', 'Ray Width': 'Işın genişliği',
     'Rays': 'Işınlar', 'Reach': 'Erişim', 'Recovery': 'İyileşme', 'Recovery Effect': 'İyileşme etkisi',
     'Refraction': 'Kırılma', 'Region ID': 'Bölge ID', 'Regular Item': 'Normal eşya', 'Release': 'Bırakma',

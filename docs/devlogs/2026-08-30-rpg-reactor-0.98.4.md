@@ -34,7 +34,7 @@ Fullscreen now renders at your monitor's actual pixels: 3D geometry comes out na
 
 ## Community fixes
 
-This cycle closed a stack of GitHub issues: Referenced By on every database record (#23), RPG Maker's familiar four-tab Conditional Branch, text codes with a live reference on descriptions and messages (#29, #30), enemy Max TP and smarter drop slots (#31), per-effect state durations (#16), random ranges on Grow and Change Parameter (#15), plugin-command file pickers that browse the right folder (#7), enemy action conditions for missing states (#32), and a PIXI 8 crash under VisuStella battle transitions (#28).
+This cycle closed a stack of GitHub issues: Referenced By on every database record (#23), RPG Maker's familiar four-tab Conditional Branch, text codes with a live reference on descriptions and messages (#29, #30), enemy Max TP and smarter drop slots (#31), per-effect state durations (#16), random ranges on Grow and Change Parameter (#15), plugin-command file pickers that browse the right folder (#7), enemy action conditions for missing states (#32), a PIXI 8 crash under VisuStella battle transitions (#28), and the #33 follow-ups: AI target grouping that honors plugin-rewritten scopes, and ratings authored 1-9.
 
 ## Try it
 

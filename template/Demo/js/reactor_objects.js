@@ -5298,20 +5298,32 @@ Game_Battler.prototype.meetsTargetStateCondition = function(param, action) {
 
 Game_Battler.prototype.actionTargetCandidates = function(action) {
     const skill = action ? $dataSkills[action.skillId] : null;
-    const scope = skill ? skill.scope : 0;
-    if (scope === 11) {
+    if (!skill) {
+        return [];
+    }
+    // Scope is not reliably a number: a <Target: ...> notetag plugin
+    // overwrites it with an uppercase string and reroutes the isFor*
+    // predicates to parse it, so a numeric list would give those skills
+    // zero candidates and their Target State conditions could never hold.
+    // Asking a probe action inherits any such redefinition; numeric scopes
+    // group exactly as the spelled-out lists did. Alive-friend runs before
+    // the catch-all friend check so the unconditional ally scopes still
+    // reach the dead.
+    const probe = new Game_Action(this);
+    probe.setSkill(action.skillId);
+    if (probe.isForUser()) {
         return [this];
     }
     const candidates = [];
-    if ([1, 2, 3, 4, 5, 6, 14].includes(scope)) {
+    if (probe.isForOpponent()) {
         candidates.push(...this.opponentsUnit().aliveMembers());
     }
-    if ([9, 10].includes(scope)) {
+    if (probe.isForDeadFriend()) {
         candidates.push(...this.friendsUnit().deadMembers());
-    } else if ([12, 13].includes(scope)) {
-        candidates.push(...this.friendsUnit().members());
-    } else if ([7, 8, 14].includes(scope)) {
+    } else if (probe.isForAliveFriend()) {
         candidates.push(...this.friendsUnit().aliveMembers());
+    } else if (probe.isForFriend()) {
+        candidates.push(...this.friendsUnit().members());
     }
     return candidates;
 };
