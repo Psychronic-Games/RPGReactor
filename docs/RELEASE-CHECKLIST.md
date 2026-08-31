@@ -17,6 +17,15 @@ Linux and for your own testing. Every Windows package ships a
 `Launch with log.bat` that captures the exit code and a log for exactly this
 class of report.
 
+**Never ship an NW.js older than the newest ever shipped.** Chromium
+migrates its user profile forward only; a downgrade dies on a fatal
+profile-schema CHECK with exit code 0 and no window — on every machine that
+ran the newer build, and on none of your clean test machines. Shipped
+manifests are profile-scoped (`rpg-reactor-nw0107`) so runtimes never share
+a profile, and the build refuses a downgrade below
+`editor/build-scripts/shipped-runtime.json` (raise that version in the same
+commit that upgrades NW.js 0.107.0 to anything newer).
+
 ## 1. Repository Configuration
 
 Configure the GitHub `release` environment with required reviewers if desired.

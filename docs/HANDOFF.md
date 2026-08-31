@@ -31,6 +31,24 @@ from the exe at byte 3189760, zip -d, re-concatenated; SHA256SUMS updated;
 old zip kept as .BROKEN-nul). LESSON: "works on Wine" clears nothing about
 native Windows file-name and trust semantics.
 
+ROOT CAUSE #2 (nul alone was not enough; diagnosed by a Claude session ON
+the Windows VM with --enable-logging=stderr): fatal
+`web_app_database.cc CHECK: metadata.version() 7 vs 5` during profile init,
+exit 0. NW.js derives the Chromium user-data dir from manifest `name`
+(`%LOCALAPPDATA%\rpg-reactor\User Data`), every build ever shipped shared
+it, and Chromium NEVER migrates a profile backwards — one run of a
+newer-Chromium build bricks all older-runtime builds on that machine,
+invisibly on clean testers. Fixes: bundled manifest name is now
+`rpg-reactor-nw<major><minor>` (repo manifest untouched; nothing reads
+manifest.name at runtime — guarded by profile-scoped-runtime.test.cjs);
+build refuses NW downgrades below build-scripts/shipped-runtime.json
+(RPGREACTOR_ALLOW_RUNTIME_DOWNGRADE=1 overrides). DEFERRED to 0.98.5: move
+editor prefs out of the Chromium profile (localStorage/IndexedDB) into an
+fs-backed store — until then every future NW bump resets editor prefs once.
+User repair for old builds: delete `%LOCALAPPDATA%\rpg-reactor\User
+Data\Default\Sync Data`. Games deployed by Reactor carry the same shared-
+profile landmine per game name — audit in 0.98.5.
+
 ## 2026-08-30 — web (itch) console cleanup (runtime 20260830.33)
 
 From the owner's itch web-editor test. Ours vs not-ours: `Unrecognized

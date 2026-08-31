@@ -1,0 +1,4 @@
+{
+  "comment": "The newest NW.js version ever shipped in a public build. Chromium migrates its profile forward only, so shipping an OLDER runtime than this bricks every install that ran the newer one — a fatal profile-schema CHECK that exits 0 with no window. The build refuses a downgrade unless RPGREACTOR_ALLOW_RUNTIME_DOWNGRADE=1. Raise this version in the same commit that upgrades the runtime.",
+  "nwVersion": "0.107.0"
+}

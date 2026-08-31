@@ -1186,6 +1186,46 @@ function buildWeb(stageRoot, stagingDir) {
         }
     }
 
+    // NW.js derives the Chromium user-data directory from the manifest's
+    // `name`, and Chromium migrates a profile forward ONLY: one run of a
+    // newer-Chromium build upgrades the on-disk schema, and every
+    // older-runtime build after it dies on a fatal CHECK during profile
+    // init — exit code 0, no window, and it works on every clean test
+    // machine (the 0.98.4 Windows report). Scope the shipped profile to
+    // the runtime so builds never share one; the repository manifest keeps
+    // plain `rpg-reactor`, and every user-visible surface already reads
+    // name_for_display / window.title instead.
+    await ensureNwVersion();
+    const shippedRuntime = JSON.parse(fs.readFileSync(
+        path.join(appRoot, 'build-scripts', 'shipped-runtime.json'), 'utf8'));
+    const versionParts = value => String(value).split('.').map(part => parseInt(part, 10) || 0);
+    const olderThan = (a, b) => {
+        const left = versionParts(a), right = versionParts(b);
+        for (let i = 0; i < 3; i++) {
+            if ((left[i] || 0) < (right[i] || 0)) return true;
+            if ((left[i] || 0) > (right[i] || 0)) return false;
+        }
+        return false;
+    };
+    // A stage-only run (tests, dry inspection) may pin any version; only a
+    // build that will actually ship enforces the floor.
+    if (!stageOnly && olderThan(nwVersion, shippedRuntime.nwVersion)
+        && process.env.RPGREACTOR_ALLOW_RUNTIME_DOWNGRADE !== '1') {
+        throw new Error(`NW.js ${nwVersion} is older than the newest version ever shipped `
+            + `(${shippedRuntime.nwVersion}). A runtime downgrade bricks the profile of every `
+            + `user who ran the newer build: Chromium never migrates a profile backwards. `
+            + `Set RPGREACTOR_ALLOW_RUNTIME_DOWNGRADE=1 only if you understand this.`);
+    }
+    {
+        const manifestPath = path.join(stageRoot, 'package.json');
+        const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+        const profileKey = String(nwVersion).split('.').slice(0, 2).join('');
+        manifest.name = `rpg-reactor-nw${profileKey}`;
+        if (!manifest.name_for_display) manifest.name_for_display = 'RPG Reactor';
+        fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + '\n');
+        logInfo(`Profile-scoped manifest name: ${manifest.name}`);
+    }
+
     // Forge GIF support is a runtime feature, but full node_modules trees are
     // intentionally excluded from editor distributions. Stage only the small
     // encoder/decoder dependency closure needed by import and export.
