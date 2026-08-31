@@ -148,9 +148,20 @@
         const buttonContainer = document.createElement('div');
         buttonContainer.style.cssText = 'display: flex; gap: 8px; justify-content: flex-end;';
 
+        // Captured, so a field or grid cell with focus cannot swallow the key
+        // first, and removed on close so a stale picker cannot answer for the
+        // one on screen.
+        const onKey = event => {
+            if (event.key === 'Escape') {
+                event.stopPropagation();
+                close();
+            }
+        };
         const close = () => {
+            document.removeEventListener('keydown', onKey, true);
             if (modal.parentNode) modal.parentNode.removeChild(modal);
         };
+        document.addEventListener('keydown', onKey, true);
 
         const cancelBtn = document.createElement('button');
         cancelBtn.textContent = tt('Cancel');

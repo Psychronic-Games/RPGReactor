@@ -12,7 +12,10 @@ const objectsSource = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_ob
  * Evaluates just the getDefaultTemplates() literal, which is self-contained.
  */
 function defaultTemplates() {
-    const at = uiSource.indexOf('getDefaultTemplates()');
+    // Anchor on the definition, not the first mention: call sites appear far
+    // earlier in the file, and anchoring on one made this slice swallow any
+    // `return {` added in between.
+    const at = uiSource.indexOf('getDefaultTemplates() {');
     assert.ok(at >= 0, 'getDefaultTemplates is present');
     const open = uiSource.indexOf('return {', at);
     let depth = 0, i = open + 'return '.length, quote = null;
