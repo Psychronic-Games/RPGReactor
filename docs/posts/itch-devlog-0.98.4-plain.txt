@@ -1,35 +1,19 @@
-RPG Reactor 0.98.4 is out. Last release let you rig 3D models in the editor. This one puts them in the world and makes the world behave.
+RPG Reactor 0.98.4: Build the World, Not Just the Map
 
-RPG Reactor is a free, open source editor and engine that runs your RPG Maker MZ and MV projects as-is. Same data files, same plugins, no conversion. PixiJS 8 for 2D, Three.js for 3D.
+RPG Reactor is a free, open source editor and engine for making RPGs. If you've used RPG Maker MZ or MV, you already know how to use it: open your existing project and everything is where you expect it, your maps, your database, your events, your plugins. No conversion, no import wizard. And everything new that Reactor adds is stored in side files, so RPG Maker can still open the same project like nothing happened.
 
-Height is a coordinate now:
+Last release let you rig and animate 3D models right in the editor, no Blender required. This release puts them in your world.
 
-Every event and prop has a Z in tiles. Set it in the Event Editor, drag it with 3D arrows, or move it in play with new Rise and Descend route steps. Collision is vertical overlap, so a catwalk overhead blocks nobody walking under it. Flat 2D maps are untouched.
+Your maps have height now. Put a catwalk over the street and walk under it. Raise an event into the air, drag it up and down with 3D arrows, or move it in play with new Rise and Descend route commands. Your flat 2D maps keep working exactly as before, this is all opt-in per map.
 
-Props you can trust:
+Decorating with 3D models finally feels like a map editor. A ghost preview follows your cursor, every placement is one Ctrl+Z from undone, and a card of sliders handles position, rotation, and scale. Collision hugs the actual shape of the model, so players stand next to the console instead of bumping an invisible wall a tile away, and a passage view shows exactly what blocks movement before you ever playtest.
 
-Placing a model got a ghost preview, undo, and a transform card with live sliders. Collision matches the actual mesh, so you stand next to a console instead of a tile away from an invisible wall. A Passage toggle shows exactly what the game blocks, in 2D and 3D, including under your models.
+Your world can act without stopping the player. An event can fire a whole animation sequence, a tank raising its cannon, firing, and recoiling, while the player walks away mid-scene. Scripts can wait in the background for a switch, a timer, or an animation to finish instead of freezing everyone in place. Screens on models play real videos, effects live inside the scene and hide behind walls, and the camera can follow in third person or drop to first person.
 
-Effects inside the world:
+Writing dialogue got a real editor. Edit an entire conversation as one list of boxes, watch a live preview of the current box drawn with your game's own window skin and font as you type, and see exactly which characters won't fit before a player ever does. Text codes come with a right-click menu and a reference that knows your plugins.
 
-Effekseer effects anchored on models now sit at real depth: they hide behind walls, scale with their model, and draw sharp. Video surfaces play on model parts, so a screen on a swinging arm keeps its movie on the glass.
+Any 3D model becomes game-ready on import. Grab something from an AI generator or an asset store, and the editor offers to optimize it on the way in so your game stays lean, with no visible difference. Rig it, animate it, place it, all inside Reactor.
 
-Events that don't freeze the player:
+The database keeps catching up with requests: see everything that references a skill or item with one right click, the Conditional Branch dialog RPG Maker users know, smarter enemy AI conditions, and more, much of it straight from GitHub issues. Keep them coming.
 
-Scoped Wait holds a script in the background on animations, time, a switch, or a variable. Model animations queue. The demo's tank fires its whole sequence while you walk away.
-
-Show Text grew up:
-
-Edit a whole conversation as one strip, with a live miniature of the current box drawn under the text field in your project's own windowskin and font. Overflow marks are pixel-identical to the game.
-
-Models shrink on import:
-
-AI-generated and store-bought models ship heavy. The new import optimizer caps textures, packs weights, and welds duplicate vertices with no visible quality change. Our own demo models went from 469MB to 168MB and look the same.
-
-Sharp, fast, everywhere:
-
-Fullscreen now renders 3D at your monitor's native pixels while UI keeps its smooth scaling, and the automatic blur under load is opt-in. Browser games launch scaled to their window instead of a tiny box. The browser editor's playtest runs at full speed now, and the browser demo opens straight into the 3D view.
-
-Plus a stack of community-requested database features (Referenced By on every record, RPG Maker's four-tab Conditional Branch, enemy Max TP, smarter enemy AI conditions, text codes on descriptions) and a pile of stability fixes from a weekend of hard testing, including a fullscreen freeze and a black map when switching projects.
-
-Free and open source. Open a project you already have and give it a go.
+Try it right now in your browser, no download, the demo opens straight into a 3D room you can edit. Or grab the desktop editor for Windows, Mac, or Linux. Free and open source, and your RPG Maker skills carry over on day one.
