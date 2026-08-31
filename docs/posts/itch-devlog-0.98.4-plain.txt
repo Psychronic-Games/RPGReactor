@@ -1,79 +1,94 @@
-RPG Reactor 0.98.4
+RPG Reactor 0.98.4: Build the World, Not Just the Map
 
-RPG Reactor is a free, open source editor and engine for making RPGs. It opens RPG Maker MZ and MV projects as-is: same files, same database, same plugins. Everything Reactor adds is stored in side files, so RPG Maker can still open the same project. Here is what 0.98.4 adds since 0.98.3.
+RPG Reactor is a free, open source editor and engine for making RPGs. It opens RPG Maker MZ and MV projects as-is: same files, same database, same plugins, no conversion. Everything Reactor adds is stored in side files, so RPG Maker can still open the same project like nothing happened. If you know RPG Maker, you already know this editor.
+
+0.98.3 let you rig and animate 3D models without ever leaving the editor. 0.98.4 puts them in your world and makes that world act. This is a big release, so here is all of it.
 
 3D WORLDS
 
-- Height is a real coordinate. Every event and prop has a Z in tiles: set it in the Event Editor, drag it with 3D arrows, and collision is by vertical overlap, so a catwalk overhead blocks nobody under it. Flat maps are untouched.
-- 3D models place like map tiles: a ghost preview follows the cursor, placement is undoable, and a transform card gives offset, rotation, and per-axis scale as live sliders.
-- Collision matches the actual mesh. You stand next to a console instead of a tile away, long vehicles block long footprints, and a big model turning sweeps only the arc its body covers.
-- A Passage toggle on the map header shows every blocked cell and edge the way the game reads them, in 2D and 3D, including under placed models.
-- 3D maps are built inside a room (floor, walls, ceiling), bare room floor is walkable, and a model map draws with true depth ordering everywhere.
-- Camera modes, including third person and first person, with a Change 3D Camera event command. The player start has a facing.
-- Light pools and beams lie flat on the ground as real 3D shapes, and beams stop at walls.
+Your maps stop being flat pictures.
+
+- Height is a real coordinate. Every event and prop has a Z in tiles: set it in the Event Editor, drag it with 3D arrows, and collision is by vertical overlap, so a catwalk overhead blocks nobody walking under it. Flat maps keep working exactly as before.
+- 3D models place like map tiles: a ghost preview follows the cursor, every placement is one Ctrl+Z from undone, and a transform card gives offset, rotation, and per-axis scale as live sliders.
+- Collision hugs the actual mesh. Players stand next to the console instead of a tile away, long vehicles block long footprints, and a big model turning sweeps only the arc its body really covers.
+- A Passage toggle on the map header shows every blocked cell and edge exactly the way the game reads them, in 2D and 3D, including under your placed models. No more guessing, no more invisible walls.
+- 3D maps are built inside a room (floor, walls, ceiling), bare room floor is walkable, and a model map draws with true depth everywhere: things behind the tower stay behind the tower.
+- Camera modes including third person and first person, switchable in play with the Change 3D Camera command. Your RPG can play like a 3D game when you want it to.
+- Light pools and beams lie flat on the ground as real 3D shapes, and beams stop at walls instead of glowing through them.
 
 3D MODELS, EFFECTS, AND VIDEO
 
-- The whole model is a poseable part from the moment it is imported; carve named sub-parts only when a piece moves on its own.
-- Effects anchor to parts and live inside the 3D scene: they sit at real depth, hide behind walls and characters, scale and turn with their model, and draw at full resolution.
-- Effects can be video surfaces: a real video on a plane at the anchor, for animated screens on consoles. A screen on a swinging arm keeps its movie on the glass, in game and in both editors.
-- Effects play by state (on demand, while moving, while idle, always), repeat without gaps, scale per axis, and preview exactly where they are placed.
-- Placed props run their animations and effects in the map editor's 3D view, so a reactor's core glow shows while you build.
-- Importing a 3D model offers an optimizer: textures, skin data, and duplicate geometry are compacted with no visible change, with an aggressive option, so AI-generated and store-bought models stop bloating your game.
+Models are not decorations, they are working machines.
+
+- The whole model is poseable from the moment it is imported; carve named sub-parts only when a piece needs to move on its own.
+- Effects anchor to parts and live inside the 3D scene: they sit at real depth, hide behind walls and characters, and scale and turn with their model.
+- Effects can be video surfaces: a real video playing on the model, for animated screens on consoles and monitors. A screen on a swinging arm keeps its movie on the glass, in game and in both editors.
+- Effects play by state (on demand, while moving, while idle, always), loop without gaps, scale per axis, and preview exactly where they are placed.
+- Placed props run their animations and effects in the map editor's 3D view, so a reactor's core glow shows while you build around it.
+- Importing a model offers a one-click optimizer: textures, skin data, and duplicate geometry are compacted with no visible change, so AI-generated and asset-store models stop bloating your game. Grab anything, drop it in, it is game-ready.
 - A map authored in 3D opens in the 3D editor view by default.
 
 EVENTS AND COMMANDS
 
-- Scoped Wait: a background wait that never freezes the player. Hold a script until animations finish (this event, the player, one event, or everything), a duration passes, a switch flips, or a variable compares true. The waiting event can keep its own route moving.
-- Background waits park onto their own runner, carried in saves: touch a second event while the first still waits and both behave independently.
-- Play Model Animation commands queue, so one event fires a whole sequence and ends immediately; the animation is picked from a dropdown of the model's own actions, with an optional Wait for Completion.
+Your world keeps moving while the player does.
+
+- Scoped Wait: a background wait that never freezes the player. Hold a script until animations finish (this event, the player, one event, or everything), a duration passes, a switch flips, or a variable compares true. The waiting event can even keep walking its own route.
+- Background waits park onto their own runner and ride in saves: trigger a second event while the first still waits and both behave independently.
+- Play Model Animation commands queue, so one event fires a whole sequence (a tank raises its cannon, fires, recoils) and ends immediately; animations are picked from a dropdown of the model's own actions, with optional Wait for Completion.
 - New command Transform 3D Model: ease any model event, the player, or a placed prop to a new offset, rotation, and scale over time.
-- Move routes gain Rise, Descend, Set Height, Face Ceiling, Face Ground, Stand Up, and Rotate, and every Reactor route step shows a readable name in the event list.
+- Move routes gain Rise, Descend, Set Height, Face Ceiling, Face Ground, Stand Up, and Rotate: lie a character in bed, drop them flat, or turn them to any angle. Every Reactor route step shows a readable name in the event list.
 - Effekseer animation flash timings support Target, Screen, and Hide Target.
 
 MESSAGES
 
-- Show Text edits a whole conversation as one strip of boxes: add, remove, reorder, no four-line truncation, and it works from troop battle events too.
-- A live miniature of the box being edited renders under the text field with your project's window skin, face, name box, colors, and icons, in your project's own font and resolution.
+Writing dialogue finally has a real editor.
+
+- Show Text edits a whole conversation as one strip of boxes: add, remove, reorder, no silent four-line cutoff, and it works from troop battle events too.
+- A live miniature of the box you are editing renders under the text field with your project's own window skin, face, name box, colors, and icons, in your project's font and resolution. What you see is what the player gets.
 - Overflow marking is pixel-identical to the game: escape codes cost what they cost in game, and only the characters that truly will not fit are highlighted.
-- Right-click text-code menu and a reference panel that lists vanilla codes, your enabled plugins' codes, and your project's custom codes; the same tools work on database descriptions and skill/state messages.
+- A right-click text-code menu and a reference panel that knows vanilla codes, your enabled plugins' codes, and your project's custom codes. The same tools work on database descriptions and skill/state messages.
 
 CUSTOM USER INTERFACES (PHASE 1)
 
-- A new User Interfaces tab: capture the menus your project already has and turn the capture into an editable visual draft.
-- Build with typed lists, actor data bindings, gauges, and display-only HUDs; options and file screens are functional.
+Start making the menus yours.
+
+- A new User Interfaces tab: capture the menus your project already shows and turn the capture into an editable visual draft.
+- Build with typed lists, actor data bindings, gauges, and display-only HUDs; options and file screens are already functional.
 - Seven stock menu baselines with seven safe replacement roles, so a custom screen can stand in for a stock one.
-- The custom-interface runtime is Reactor-only and rides in side files, so RPG Maker still opens the project.
+- It all rides in side files, so RPG Maker still opens the project untouched.
 
 DATABASE
 
-- Referenced By: right-click any database entry to see every record that points at it, grouped by section, each row opening the record.
-- Conditional Branch is RPG Maker's familiar four-tab dialog, with Reactor's own input conditions on a fifth tab.
-- Enemy AI: actions can require several named conditions at once, including states the user or target does NOT have, HP/MP/TP ranges, and more; targeting respects plugin-rewritten skill scopes; ratings are 1 to 9 as RPG Maker authors them.
+The unglamorous stuff that saves you hours, much of it straight from your GitHub issues.
+
+- Referenced By: right-click any database entry to see every record that points at it, grouped by section, each row opening the record. Finally answer "can I delete this?"
+- Conditional Branch is RPG Maker's familiar four-tab dialog, with Reactor's own input conditions (keyboard, mouse, pointer) on a fifth tab.
+- Enemy AI grows up: actions can require several named conditions at once, including states the user or target does NOT have; targeting respects plugin-rewritten skill scopes; ratings are 1 to 9 as RPG Maker authors them.
 - Enemies get their own Max TP, Grow and Change Parameter reach Max TP and can roll a random range, and Add State can set its own duration per skill.
-- Plugin command file pickers browse the right folder for the argument's type, and plugin parameter editing handles schemas and MZ command blocks end to end.
+- Plugin command file pickers browse the right folder for each argument, and plugin parameter editing handles schemas and MZ command blocks end to end.
 - Editor-only display names for database entries.
 
 AUDIO AND MEDIA
 
-- Play BGM/BGS/ME/SE commands and map audio use the full audio browser: cover art, folders, search, preview, and native loop points.
-- System sounds can draw from a pool of takes with optional pitch variation instead of repeating one identical sample.
-- More animation slots without slowing the database, album art resolved once and reused, and desktop video codecs verified.
-- Modern image format support extended across the editor.
+- Play BGM/BGS/ME/SE commands and map audio use the full audio browser everywhere: cover art, folders, search, preview, native loop points.
+- System sounds can draw from a pool of takes with optional pitch variation, so your cursor sound stops being one identical tick.
+- More animation slots without slowing the database, album art resolved once and reused, desktop video codecs verified, and wider modern image format support.
 
 EDITOR QUALITY OF LIFE
 
-- Clicking outside a dialog never closes it anymore, so a misclick cannot discard a page of work. Only plain confirm boxes keep click-away.
-- New Project is a proper dialog with a template choice; dropdowns always show the value they hold; steppers, pickers, and tool icons share one visual language.
-- The Resource Manager imports 3D models into the project's library.
+- Clicking outside a dialog never closes it anymore. A misclick cannot discard a page of work.
+- New Project is a proper dialog with a template choice, dropdowns always show the value they hold, and steppers, pickers, and tool icons share one visual language.
+- The Resource Manager imports 3D models straight into your project's library.
 - Autotile right-click picks the exact piece for Shift+click stamping, like RPG Maker.
 - All new interface text is reviewed and localized across every supported language.
 
 PERFORMANCE AND STABILITY
 
-- Fullscreen renders at your monitor's native resolution: 3D comes out sharp while windows and text keep smooth scaling. The automatic quality-drop blur is now opt-in.
-- Browser games launch scaled to their window, the browser editor's playtest runs at full speed, and the web editor's 3D suite works end to end.
-- 3D games do less work per frame: no per-frame picture copying, no hitching when models step into view or battles open, less garbage, and idle previews stop burning the GPU.
-- A weekend of release testing fixed a fullscreen freeze under screen tints, a black map when opening one project over another, plugin compatibility crashes reported from real projects, and a pile of console noise.
+Sharp by default, fast on modest machines.
 
-Try it in your browser with the bundled demo, or download the desktop editor for Windows, Mac, or Linux. Free and open source. Most of the database work this cycle came straight from GitHub issues, so keep them coming.
+- Fullscreen renders at your monitor's native resolution: 3D comes out sharp while windows and text keep their smooth scaling. The automatic quality-drop blur is now opt-in.
+- Browser games launch scaled to their window, the browser editor's playtest runs at full speed, and the web editor's 3D suite works end to end.
+- 3D games do less work per frame: no per-frame picture copying, no hitching when models step into view or battles open, and idle previews stop burning the GPU.
+- A weekend of hard release testing fixed a fullscreen freeze, a black map when switching projects, plugin compatibility crashes from real projects, and a pile of console noise.
+
+Try it right now in your browser, no download, the demo opens straight into a 3D room you can edit. Or grab the desktop editor for Windows, Mac, or Linux. Free and open source, and your RPG Maker skills carry over on day one. Most of the database work this cycle came straight from GitHub issues, so keep them coming.
