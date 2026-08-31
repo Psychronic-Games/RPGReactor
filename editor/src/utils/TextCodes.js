@@ -166,9 +166,9 @@
         // change, which a name box's do on every message.
         { id: 'pictures', title: 'Pictures', scope: ['message', 'choice', 'help'], codes: Object.freeze([
             { code: '\\picture<x>', param: 'text', insert: '\\picture<{n}>',
-                detail: 'Draws picture x (a filename) at the current text position.' },
+                detail: 'Draws picture x (a filename) at the current text position. Prefer \\I[n] in a description - a picture loads with a delay.' },
             { code: '\\CenterPicture<x>', param: 'text', insert: '\\CenterPicture<{n}>',
-                detail: 'Draws picture x centred in the window.' }
+                detail: 'Draws picture x centred in the window. Prefer \\I[n] in a description - a picture loads with a delay.' }
         ]) },
         { id: 'message', title: 'Message Window', scope: 'message', codes: Object.freeze([
             { code: '\\CommonEvent[x]', param: 'number', insert: '\\CommonEvent[{n}]',

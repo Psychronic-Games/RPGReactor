@@ -629,3 +629,22 @@ test('the message editor keeps a live miniature under the text field', () => {
     // Pinned to the bottom so the name-box headroom is the only empty band.
     assert.match(source, /positionType: 2/);
 });
+
+test('the picture codes steer an author towards an icon on a description field', () => {
+    // A picture loads asynchronously, so on a field whose window redraws often
+    // -- a description, a name box -- it arrives late or not at all. The codes
+    // stay offered; the description says what to prefer, and says it where an
+    // author reads before typing one.
+    // The picture codes are MessageCore's, so they live in the grouped catalogue.
+    const group = TextCodes.MESSAGE_CORE.find(entry => entry.id === 'pictures');
+    assert.ok(group, 'the Pictures group is still there');
+    const pictures = group.codes;
+    assert.equal(pictures.length, 2, 'the two picture codes are still offered');
+    for (const entry of pictures) {
+        assert.match(entry.detail, /a picture loads with a delay/);
+        // The backslash has to survive into the rendered string: a lone '\I'
+        // is an unknown escape in a JS literal and quietly becomes a bare I.
+        assert.ok(entry.detail.includes('Prefer ' + String.fromCharCode(92) + 'I[n] in a description'),
+            'the advice names the code, not a bare letter');
+    }
+});
