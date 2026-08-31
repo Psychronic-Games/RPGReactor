@@ -4042,6 +4042,14 @@ Game_Battler.prototype.performRecovery = function() {
     SoundManager.playRecovery();
 };
 
+Game_Battler.prototype.performMpRecovery = function() {
+    SoundManager.playMpRecovery();
+};
+
+Game_Battler.prototype.performTpRecovery = function() {
+    SoundManager.playTpRecovery();
+};
+
 Game_Battler.prototype.performEvasion = function() {
     SoundManager.playEvasion();
 };

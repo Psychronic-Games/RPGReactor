@@ -1769,6 +1769,27 @@ SoundManager.playUseSkill = function() {
     this.playSystemSound(23);
 };
 
+// Slots 24-25 postdate the 24-slot MZ sound schema, so a project last saved
+// before they existed has no entry at them at all. An absent slot falls back to
+// Recovery (16) -- the sound those heals already played -- while a slot that is
+// present with a blank name is a deliberate silence, exactly like every other
+// sound slot.
+SoundManager.playTypedRecovery = function(n) {
+    if ($dataSystem && $dataSystem.sounds[n]) {
+        this.playSystemSound(n);
+    } else {
+        this.playRecovery();
+    }
+};
+
+SoundManager.playMpRecovery = function() {
+    this.playTypedRecovery(24);
+};
+
+SoundManager.playTpRecovery = function() {
+    this.playTypedRecovery(25);
+};
+
 //-----------------------------------------------------------------------------
 // TextManager
 //

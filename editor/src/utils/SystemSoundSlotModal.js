@@ -10,7 +10,18 @@
         'Cursor', 'Ok', 'Cancel', 'Buzzer', 'Equip', 'Save', 'Load', 'Battle Start',
         'Escape', 'Enemy Attack', 'Enemy Damage', 'Enemy Collapse', 'Boss Collapse 1',
         'Boss Collapse 2', 'Actor Damage', 'Actor Collapse', 'Recovery', 'Miss',
-        'Evasion', 'Magic Evasion', 'Reflection', 'Shop', 'Use Item', 'Use Skill'
+        'Evasion', 'Magic Evasion', 'Reflection', 'Shop', 'Use Item', 'Use Skill',
+        'MP Recovery', 'TP Recovery'
+    ];
+
+    // Display order, by slot index -- not the same as slot order. MP and TP
+    // Recovery sit at 24-25 because they postdate the 24-slot MZ schema and
+    // appending was the only way to keep every older slot at its index, but
+    // they belong beside Recovery (16) on screen, which is where anyone setting
+    // up healing audio looks for them.
+    const SOUND_ORDER = [
+        0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 24, 25,
+        17, 18, 19, 20, 21, 22, 23
     ];
     let modalSequence = 0;
 
@@ -503,7 +514,7 @@
         setTimeout(() => closeButton.focus(), 0);
     }
 
-    const api = { SOUND_LABELS, applyDraft, audioValue, auditionPick, draftFor, open, pitchRange };
+    const api = { SOUND_LABELS, SOUND_ORDER, applyDraft, audioValue, auditionPick, draftFor, open, pitchRange };
     root.RRSystemSoundSlotModal = api;
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);
