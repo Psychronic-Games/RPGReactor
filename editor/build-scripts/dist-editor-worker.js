@@ -1330,6 +1330,23 @@ function buildWeb(stageRoot, stagingDir) {
                         logInfo('  Executable: RPG Reactor.exe');
                         logInfo('  Playtest runtime: nw.exe');
                     }
+                    // A silent no-launch on Windows (SmartScreen, Smart App
+                    // Control, Defender) is undiagnosable without output.
+                    // Ship a debug launcher that captures the exit code and
+                    // a log, so "it doesn't start" always comes with data.
+                    fs.writeFileSync(path.join(appDir, 'Launch with log.bat'), [
+                        '@echo off',
+                        'cd /d "%~dp0"',
+                        'echo Launching RPG Reactor with logging...',
+                        '"RPG Reactor.exe" --enable-logging=stderr 2> "%TEMP%\\RPGReactor-launch.log"',
+                        'echo Exit code: %ERRORLEVEL%',
+                        'echo Log saved to: %TEMP%\\RPGReactor-launch.log',
+                        'echo If no window appeared, check Windows Security -^> Protection history,',
+                        'echo and App ^& browser control -^> Smart App Control.',
+                        'pause',
+                        '',
+                    ].join('\r\n'));
+                    logInfo('  Debug launcher: Launch with log.bat');
                 } else if (plat === 'osx') {
                     const oldApp = path.join(appDir, 'nwjs.app');
                     const newApp = path.join(appDir, 'RPG Reactor.app');

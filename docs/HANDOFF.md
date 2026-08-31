@@ -2,6 +2,21 @@
 
 Last updated 2026-08-30.
 
+## 2026-08-31 — Windows no-launch: unsigned binaries vs fresh Windows
+
+The locally built Windows editor zip (dist-editor GUI, unsigned) would not
+launch on a fresh Windows 11 VM but ran under Wine; the same build's Linux
+artifact boots here and the payload zip is valid (checked: appended-zip
+readable, longest path 120 chars, all NW runtime files present). Diagnosis:
+unsigned 441MB appended-payload exe vs Windows trust machinery — Smart App
+Control (ON by default on fresh Win11, blocks unsigned silently),
+SmartScreen (MotW), Defender heuristics (vary per build = the chronic
+"inconsistent releases"). Wine enforces none of it. RULES: itch/GitHub
+Windows+macOS binaries must be the SIGNED CI release-candidate artifacts,
+never local builds (now at the top of RELEASE-CHECKLIST); every win package
+ships `Launch with log.bat` (exit code + %TEMP% log) so a silent no-launch
+always produces data.
+
 ## 2026-08-30 — web (itch) console cleanup (runtime 20260830.33)
 
 From the owner's itch web-editor test. Ours vs not-ours: `Unrecognized

@@ -4,6 +4,19 @@ This checklist is ordered. Do not publish artifacts from a dirty checkout,
 from a different commit than the release tag, or from an unsigned candidate
 run. Public editor releases use NW.js 0.107.0 exactly.
 
+**Never upload a locally built (unsigned) Windows or macOS editor package to
+itch or GitHub.** Fresh Windows installs refuse unsigned executables with
+little or no visible error: Windows 11's Smart App Control ships ON in
+evaluation mode and silently blocks them, SmartScreen interposes on
+Mark-of-the-Web downloads, and Defender's heuristics vary build to build —
+which reads as "the release randomly doesn't launch on some machines." Wine
+enforces none of this, so a Wine success proves nothing about native
+Windows. The signed release-candidate artifacts from CI are the only
+Windows/macOS binaries that go public; local `dist-editor` builds are for
+Linux and for your own testing. Every Windows package ships a
+`Launch with log.bat` that captures the exit code and a log for exactly this
+class of report.
+
 ## 1. Repository Configuration
 
 Configure the GitHub `release` environment with required reviewers if desired.
