@@ -1278,9 +1278,53 @@ class DatabaseEditorUI {
                     }
                 }},
                 { separator: true },
-                { label: tt('Select All'), shortcut: 'Ctrl+A', enabled: input.value.length > 0, action: () => input.select() }
+                { label: tt('Select All'), shortcut: 'Ctrl+A', enabled: input.value.length > 0, action: () => input.select() },
+                { separator: true },
+                { label: tt('Insert Icon...'), action: () => this.insertIconCode(input, selectionStart, selectionEnd) }
             ]);
         });
+    }
+
+    /**
+     * Pick an icon and write its `\I[n]` code into a text field.
+     *
+     * Element, skill-type and weapon-type names carry their icon inside the
+     * name because the System type lists are plain string arrays with no icon
+     * field, and Terms work the same way - `drawTextEx` expands the code
+     * wherever a window draws the text that way. Authoring one meant knowing the syntax and
+     * the cell number by heart, with the IconSet open in an image viewer to
+     * count. This is the same 2x grid the Items and Skills pages already use to
+     * choose an iconIndex; it writes the code instead of a field, which is what
+     * lets an author see the icon in a name without the editor having to guess
+     * what the name meant.
+     *
+     * The caret range is captured by the caller before the picker opens,
+     * because the modal takes focus off the field. The code replaces whatever
+     * that range covered, which makes "insert here" and "replace the code this
+     * name already starts with" the same operation.
+     */
+    insertIconCode(input, selectionStart, selectionEnd) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
+        if (typeof nw === 'undefined' && !window.RPGReactorHost) {
+            alert(tt('Icon selection requires the desktop editor or the browser project host'));
+            return;
+        }
+        if (!input || !this.currentProject) return;
+        const path = require('path');
+        const iconSetPath = path.join(this.currentProject.path, 'img', 'system', 'IconSet.png');
+        const originalValue = input.value;
+        // Open on the icon the name already names, so re-picking starts where
+        // the author left off rather than back at cell 0.
+        const current = window.RRIconCodes ? window.RRIconCodes.iconIndex(originalValue) : 0;
+        this.showIconPicker(current, selectedIconIndex => {
+            // The field can be gone or rewritten while the modal is open (a
+            // different row selected behind it); writing then would land the
+            // code in someone else's name.
+            if (!input.isConnected || input.value !== originalValue) return;
+            input.focus();
+            input.setRangeText(`\\I[${selectedIconIndex}]`, selectionStart, selectionEnd, 'end');
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+        }, iconSetPath);
     }
 
     writeDatabaseEntryClipboard(type, entries) {
@@ -1818,22 +1862,6 @@ class DatabaseEditorUI {
     }
 
     /**
-     * Get human-readable trait name from trait code
-     */
-    getTraitName(traitCode) {
-        // Trait codes from RPG Maker MZ
-        const traitNames = {
-            11: 'Element Rate', 12: 'Debuff Rate', 13: 'State Rate', 14: 'State Resist',
-            21: 'Parameter', 22: 'Ex-Parameter', 23: 'Sp-Parameter',
-            31: 'Attack Element', 32: 'Attack State', 33: 'Attack Speed', 34: 'Attack Times+',
-            41: 'Add Skill Type', 42: 'Seal Skill Type', 43: 'Add Skill', 44: 'Seal Skill',
-            51: 'Equip Weapon', 52: 'Equip Armor', 53: 'Lock Equip', 54: 'Seal Equip', 55: 'Slot Type',
-            61: 'Action Times+', 62: 'Special Flag', 63: 'Collapse Effect', 64: 'Party Ability'
-        };
-        return traitNames[traitCode] || `Trait ${traitCode}`;
-    }
-
-    /**
      * Get equipment slots for an actor (RPG Maker MZ compatible)
      */
     getActorEquipSlots(actor) {
@@ -1880,92 +1908,6 @@ class DatabaseEditorUI {
         }
 
         return false;
-    }
-
-    /**
-     * Get formatted trait value based on trait type
-     */
-    getTraitValue(trait) {
-        // Format trait value based on type
-        if (trait.code === 21) { // Parameter
-            const params = ['Max HP', 'Max MP', 'Attack', 'Defense', 'M.Attack', 'M.Defense', 'Agility', 'Luck'];
-            const change = Math.round((trait.value - 1) * 100);
-            return `${params[trait.dataId] || 'Param'} ${change >= 0 ? '+' : ''}${change}%`;
-        } else if (trait.code === 22) { // Ex-Parameter
-            const exParams = ['Hit Rate', 'Evasion', 'Critical Rate', 'Critical Evade', 'Magic Evade', 'Magic Reflect', 'Counter', 'HP Regen', 'MP Regen', 'TP Regen'];
-            return `${exParams[trait.dataId] || 'ExParam'} +${Math.round(trait.value * 100)}%`;
-        } else if (trait.code === 23) { // Sp-Parameter
-            const spParams = ['Target Rate', 'Guard Rate', 'Recovery Rate', 'Pharmacology', 'MP Cost Rate', 'TP Charge Rate', 'Physical Damage', 'Magical Damage', 'Floor Damage', 'Experience'];
-            return `${spParams[trait.dataId] || 'SpParam'} ${Math.round(trait.value * 100)}%`;
-        } else if (trait.code === 11) { // Element Rate
-            const elements = this.databaseManager.getSystem()?.elements || [];
-            const elementName = elements[trait.dataId] || `Element ${trait.dataId}`;
-            return `${elementName} ${Math.round(trait.value * 100)}%`;
-        } else if (trait.code === 12) { // Debuff Rate
-            const params = ['Max HP', 'Max MP', 'Attack', 'Defense', 'M.Attack', 'M.Defense', 'Agility', 'Luck'];
-            return `${params[trait.dataId] || 'Param'} Debuff ${Math.round(trait.value * 100)}%`;
-        } else if (trait.code === 13) { // State Rate
-            const state = this.databaseManager.getState(trait.dataId);
-            const stateName = state ? state.name : `State ${trait.dataId}`;
-            return `${stateName} ${Math.round(trait.value * 100)}%`;
-        } else if (trait.code === 14) { // State Resist
-            const state = this.databaseManager.getState(trait.dataId);
-            const stateName = state ? state.name : `State ${trait.dataId}`;
-            return `Resist ${stateName}`;
-        } else if (trait.code === 31) { // Attack Element
-            const elements = this.databaseManager.getSystem()?.elements || [];
-            const elementName = elements[trait.dataId] || `Element ${trait.dataId}`;
-            return `Attack Element: ${elementName}`;
-        } else if (trait.code === 32) { // Attack State
-            const state = this.databaseManager.getState(trait.dataId);
-            const stateName = state ? state.name : `State ${trait.dataId}`;
-            return `${stateName} ${Math.round(trait.value * 100)}% chance`;
-        } else if (trait.code === 33) { // Attack Speed
-            return `Attack Speed ${trait.value >= 0 ? '+' : ''}${trait.value}`;
-        } else if (trait.code === 34) { // Attack Times
-            return `Attack Times +${trait.value}`;
-        } else if (trait.code === 41 || trait.code === 42) { // Skill Type Add/Seal
-            const skillTypes = this.databaseManager.getSystem()?.skillTypes || [];
-            const skillTypeName = skillTypes[trait.dataId] || `Skill Type ${trait.dataId}`;
-            return trait.code === 41 ? `Add ${skillTypeName}` : `Seal ${skillTypeName}`;
-        } else if (trait.code === 43 || trait.code === 44) { // Skill Add/Seal
-            const skill = this.databaseManager.getSkill(trait.dataId);
-            const skillName = skill ? skill.name : `Skill ${trait.dataId}`;
-            return trait.code === 43 ? `Add ${skillName}` : `Seal ${skillName}`;
-        } else if (trait.code === 51 || trait.code === 52) { // Weapon/Armor Type Equip
-            if (trait.code === 51) {
-                const weaponTypes = this.databaseManager.getSystem()?.weaponTypes || [];
-                const weaponTypeName = weaponTypes[trait.dataId] || `Weapon Type ${trait.dataId}`;
-                return `Equip ${weaponTypeName}`;
-            } else {
-                const armorTypes = this.databaseManager.getSystem()?.armorTypes || [];
-                const armorTypeName = armorTypes[trait.dataId] || `Armor Type ${trait.dataId}`;
-                return `Equip ${armorTypeName}`;
-            }
-        } else if (trait.code === 53) { // Lock Equip
-            const equipTypes = this.databaseManager.getSystem()?.equipTypes || [];
-            const equipTypeName = equipTypes[trait.dataId] || `Equip ${trait.dataId}`;
-            return `Lock ${equipTypeName}`;
-        } else if (trait.code === 54) { // Seal Equip
-            const equipTypes = this.databaseManager.getSystem()?.equipTypes || [];
-            const equipTypeName = equipTypes[trait.dataId] || `Equip ${trait.dataId}`;
-            return `Seal ${equipTypeName}`;
-        } else if (trait.code === 55) { // Slot Type
-            return trait.dataId === 0 ? 'Normal Slot' : 'Dual Wield';
-        } else if (trait.code === 61) { // Action Times
-            return `Action Times +${Math.round(trait.value * 100)}%`;
-        } else if (trait.code === 62) { // Special Flag
-            const flags = ['Auto Battle', 'Guard', 'Substitute', 'Preserve TP'];
-            return flags[trait.dataId] || `Special Flag ${trait.dataId}`;
-        } else if (trait.code === 63) { // Collapse Effect
-            const effects = ['Boss Collapse', 'Instant Collapse', 'No Disappear'];
-            return effects[trait.dataId] || `Collapse ${trait.dataId}`;
-        } else if (trait.code === 64) { // Party Ability
-            const abilities = ['Encounter Half', 'Encounter None', 'Cancel Surprise', 'Raise Preemptive', 'Gold Double', 'Drop Item Double'];
-            return abilities[trait.dataId] || `Party Ability ${trait.dataId}`;
-        } else {
-            return `Data ${trait.dataId}, Value ${trait.value}`;
-        }
     }
 
     // Note: The animation detail methods are very long - I'll include the key parts
@@ -2928,6 +2870,12 @@ class DatabaseEditorUI {
      */
     showTypesEditor() {
         const tt = text => window.I18n ? window.I18n.tText(text) : text;
+        // Sized to the row rather than to the sheet: .rr-types-row is a dense
+        // 11px mono list with a 23px min-height, and the default 20px cell
+        // would push every row that has an icon 1px taller than its neighbours.
+        // 14px sits inside the height the text already occupies, so a list of
+        // 512 elements keeps one rhythm whether its names carry codes or not.
+        const TYPES_ICON_SIZE = 14;
         const system = this.databaseManager.getSystem();
         if (!system) {
             alert(tt('System data not loaded'));
@@ -3054,12 +3002,17 @@ class DatabaseEditorUI {
             if (!panel) return;
             const oldScroll = panel.querySelector('.rr-types-list')?.scrollTop || 0;
             const data = system[category.key];
+            // The list shows what the name means; the editor below it shows
+            // what the name is. A type list is where an `\I[n]` code is
+            // authored, so hiding it in the input would leave no way to type or
+            // correct one - but a column of codes is unreadable as a list of
+            // names, which is what the column is for.
             const rows = data.slice(1).map((value, offset) => {
                 const index = offset + 1;
                 return `
                     <div class="rr-types-row" role="option" aria-selected="false" data-index="${index}">
                         <span class="rr-types-id">${String(index).padStart(2, '0')}</span>
-                        <span class="rr-types-name">${rrEscapeHtml(value || '')}</span>
+                        <span class="rr-types-name">${this.commonUI.nameHtml(value || '', { size: TYPES_ICON_SIZE })}</span>
                     </div>
                 `;
             }).join('');
@@ -3108,6 +3061,16 @@ class DatabaseEditorUI {
                         const field = panel.querySelector('.rr-types-name-editor');
                         field.focus();
                         field.select();
+                    }},
+                    { label: tt('Insert Icon...'), enabled: selectedFor(category.key).size === 1, action: () => {
+                        const field = panel.querySelector('.rr-types-name-editor');
+                        if (!field || field.disabled) return;
+                        // Reached from the row list there is no caret to insert
+                        // at, so the code goes where the convention puts it -
+                        // at the front, replacing one the name already starts
+                        // with rather than stacking a second in front of it.
+                        const leading = /^\\I\[\d+\]/i.exec(field.value);
+                        this.insertIconCode(field, 0, leading ? leading[0].length : 0);
                     }}
                 ]);
             });
@@ -3160,7 +3123,10 @@ class DatabaseEditorUI {
                 data[index] = editor.value;
                 mutationGeneration++;
                 const name = panel.querySelector(`.rr-types-row[data-index="${index}"] .rr-types-name`);
-                if (name) name.textContent = editor.value;
+                // Repaint rather than assign text, so a code typed (or dropped
+                // in by Insert Icon, which fires this same event) becomes its
+                // icon in the row while the input keeps showing the code.
+                if (name) name.innerHTML = this.commonUI.nameHtml(editor.value, { size: TYPES_ICON_SIZE });
             });
             editor.addEventListener('keydown', event => {
                 if (event.key !== 'Enter') return;

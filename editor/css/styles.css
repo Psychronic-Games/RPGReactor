@@ -1073,6 +1073,23 @@
             background-color: var(--color-bg-deep);
         }
 
+        /* An `\I[n]` message code drawn as the icon it names, inline with the
+           text around it. Element and skill-type names carry one, so this
+           appears in dropdowns, trait rows and trait summaries wherever the
+           editor shows a name rather than editing it. The sheet crop itself
+           (background-image/size/position) is set per instance by
+           RRIconCodes. */
+        .rr-icon-code {
+            display: inline-block;
+            flex: 0 0 auto;
+            width: 20px;
+            height: 20px;
+            margin: 0 2px;
+            vertical-align: -5px;
+            background-repeat: no-repeat;
+            image-rendering: pixelated;
+        }
+
         .database-detail {
             flex: 1;
             min-width: 0;

@@ -9045,6 +9045,30 @@ for (const [locale, translations] of Object.entries(RR_TROOP_BATTLEBACK_LAYER_TR
     RR_TEXT_TRANSLATIONS[locale]['Upper Layer:'] = translations[1];
 }
 
+// Machine-assisted first pass; flagged for review like the rest of the catalog.
+const RR_SYSTEM_SOUND_AUDITION_TRANSLATIONS = {
+    ja: 'ゲームでの再生と同じようにスロットを試聴します。',
+    es: 'Escucha la ranura tal como la reproduce el juego.',
+    'zh-Hant': '以遊戲實際播放的方式試聽此音效槽。',
+    'zh-Hans': '以游戏实际播放的方式试听此音效槽。',
+    ru: 'Прослушивание слота так, как его воспроизводит игра.',
+    pt: 'Ouve o slot da mesma forma que o jogo o reproduz.',
+    de: 'Spielt den Slot so ab, wie das Spiel ihn abspielt.',
+    fr: 'Écoute le slot tel que le jeu le joue.',
+    el: 'Ακρόαση της θέσης όπως την αναπαράγει το παιχνίδι.',
+    ko: '게임에서 재생되는 방식 그대로 슬롯을 미리 들어봅니다.',
+    ar: 'يستمع إلى الفتحة بالطريقة نفسها التي يشغّلها بها اللعبة.',
+    it: 'Ascolta lo slot così come lo riproduce il gioco.',
+    pl: 'Odsłuchuje slot tak, jak odtwarza go gra.',
+    id: 'Mendengarkan slot ini persis seperti yang dimainkan gim.',
+    vi: 'Nghe thử ô âm thanh đúng như cách trò chơi phát nó.',
+    th: 'ฟังตัวอย่างช่องเสียงนี้แบบเดียวกับที่เกมเล่นจริง',
+    tr: 'Yuvayı, oyunun çaldığı şekilde dinletir.'
+};
+for (const [locale, translation] of Object.entries(RR_SYSTEM_SOUND_AUDITION_TRANSLATIONS)) {
+    RR_TEXT_TRANSLATIONS[locale]['Auditions the slot the way the game plays it.'] = translation;
+}
+
 Object.assign(RR_TEXT_TRANSLATIONS['zh-Hans'], {
     'Class': '职业',
     'Critical': '会心',
@@ -11220,6 +11244,25 @@ Object.assign(RR_TEXT_TRANSLATIONS.id, { 'Referenced by': 'Direferensikan oleh',
 Object.assign(RR_TEXT_TRANSLATIONS.vi, { 'Referenced by': 'Được tham chiếu bởi', 'Nothing in the database references this entry.': 'Không có mục nào trong cơ sở dữ liệu tham chiếu đến mục này.' });
 Object.assign(RR_TEXT_TRANSLATIONS.th, { 'Referenced by': 'ถูกอ้างอิงโดย', 'Nothing in the database references this entry.': 'ไม่มีรายการใดในฐานข้อมูลที่อ้างอิงถึงรายการนี้' });
 Object.assign(RR_TEXT_TRANSLATIONS.tr, { 'Referenced by': 'Nerede kullanılıyor', 'Nothing in the database references this entry.': 'Veritabanında bu kaydı kullanan hiçbir öğe yok.' });
+
+// Types and Terms text fields -> Insert Icon.
+Object.assign(RR_TEXT_TRANSLATIONS.ja, { 'Insert Icon...': 'アイコンを挿入...' });
+Object.assign(RR_TEXT_TRANSLATIONS.es, { 'Insert Icon...': 'Insertar icono...' });
+Object.assign(RR_TEXT_TRANSLATIONS['zh-Hant'], { 'Insert Icon...': '插入圖示...' });
+Object.assign(RR_TEXT_TRANSLATIONS['zh-Hans'], { 'Insert Icon...': '插入图标...' });
+Object.assign(RR_TEXT_TRANSLATIONS.ru, { 'Insert Icon...': 'Вставить иконку...' });
+Object.assign(RR_TEXT_TRANSLATIONS.pt, { 'Insert Icon...': 'Inserir ícone...' });
+Object.assign(RR_TEXT_TRANSLATIONS.de, { 'Insert Icon...': 'Icon einfügen...' });
+Object.assign(RR_TEXT_TRANSLATIONS.fr, { 'Insert Icon...': 'Insérer une icône...' });
+Object.assign(RR_TEXT_TRANSLATIONS.el, { 'Insert Icon...': 'Εισαγωγή εικονιδίου...' });
+Object.assign(RR_TEXT_TRANSLATIONS.ko, { 'Insert Icon...': '아이콘 삽입...' });
+Object.assign(RR_TEXT_TRANSLATIONS.ar, { 'Insert Icon...': 'إدراج أيقونة...' });
+Object.assign(RR_TEXT_TRANSLATIONS.it, { 'Insert Icon...': 'Inserisci icona...' });
+Object.assign(RR_TEXT_TRANSLATIONS.pl, { 'Insert Icon...': 'Wstaw ikonę...' });
+Object.assign(RR_TEXT_TRANSLATIONS.id, { 'Insert Icon...': 'Sisipkan ikon...' });
+Object.assign(RR_TEXT_TRANSLATIONS.vi, { 'Insert Icon...': 'Chèn biểu tượng...' });
+Object.assign(RR_TEXT_TRANSLATIONS.th, { 'Insert Icon...': 'แทรกไอคอน...' });
+Object.assign(RR_TEXT_TRANSLATIONS.tr, { 'Insert Icon...': 'Simge ekle...' });
 
 // Show Text boxes, the text-code menu and its pickers; database text-code panels (GitHub #29/#30).
 Object.assign(RR_TEXT_TRANSLATIONS.ja, { '(empty)': '(空)', '(no name)': '(名前なし)', 'Add Message Box': 'メッセージボックスを追加', 'Box {n} of {total}': 'ボックス {n} / {total}', 'Colors are read from this project’s windowskin.': '色はこのプロジェクトのウィンドウスキンから読み取ります。', 'Filter codes': 'コードを絞り込む', 'Insert Color Index': '色番号を挿入', 'Insert Control Character': '制御文字を挿入', 'Insert Icon Index': 'アイコン番号を挿入', 'Message Boxes': 'メッセージボックス', 'No IconSet found in this project.': 'このプロジェクトに IconSet がありません。', 'No enabled plugin in this project ships help text.': 'ヘルプ文を持つ有効なプラグインがありません。', 'No matching text codes.': '一致する制御文字がありません。', 'Plugin Help': 'プラグインヘルプ', 'Reference': 'リファレンス', 'Remove Message Box': 'メッセージボックスを削除', 'Search help': 'ヘルプを検索', 'Select a Color': '色を選択', 'Select a plugin to read its help.': 'ヘルプを読むプラグインを選択してください。', 'Text Codes': '制御文字', 'This box will be split into {n} message boxes on save.': 'このボックスは保存時に {n} 個のメッセージボックスに分割されます。', 'Windowskin could not be read — showing default colors.': 'ウィンドウスキンを読み取れないため、既定の色を表示しています。', '{n} characters': '{n} 文字', '{n} lines per box': '1ボックス {n} 行', 'Placeholders': 'プレースホルダー', 'Messages 1 and 2 are shown when the skill is used. Message 3 is shown when it connects, Message 4 when it misses or has no effect. %1 = user name, %2 = skill name': 'メッセージ1と2はスキル使用時に表示されます。メッセージ3は命中時、メッセージ4はミスまたは効果なしのときに表示されます。%1 = 使用者名、%2 = スキル名', '%1 = name of the affected battler. %2 is not replaced here.': '%1 = 対象バトラーの名前。%2 はここでは置き換えられません。', 'Double-click a code to insert it.': 'コードをダブルクリックすると挿入されます。' });

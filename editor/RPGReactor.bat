@@ -18,5 +18,10 @@ if exist "%APP_DIR%nwjs-win\nw.exe" (
 
 cd /d "%APP_DIR%"
 
-REM Launch the application using Windows-specific NW.js binaries
-"%NW_BINARY%" .
+REM Launch the application using Windows-specific NW.js binaries.
+REM `start` hands the editor off and lets this script exit. Without it cmd
+REM runs nw.exe synchronously, so a console window sits open behind the
+REM editor for the whole session -- and closing that window kills the
+REM editor with it. The Linux launcher deliberately stays in the
+REM foreground instead: it holds an instance lock it cleans up on EXIT.
+start "" "%NW_BINARY%" .

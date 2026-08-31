@@ -668,6 +668,10 @@ class DatabaseAnimationEditor {
                                     <span>${tt('Target')}</span>
                                 </label>
                                 <div id="preview-target-select" class="anim-gold-dropdown" tabindex="0" data-value="" style="font-size: 10px; min-width: 140px; max-width: 200px; padding: 3px 22px 3px 8px;">${tt('(none)')}</div>
+                                <!-- The shared backdrop swatches, same control and same
+                                     remembered choice as both animation pickers. Pinned
+                                     right, after the layers that draw over it. -->
+                                <div id="preview-backdrop-switcher" style="margin-left: auto; display: flex; align-items: center;"></div>
                             </div>
                         </div>
                     </div>
@@ -1090,6 +1094,30 @@ class DatabaseAnimationEditor {
             persist();
             this._loadPreviewImages();
         });
+
+        // Backdrop swatches -- the pickers' own control, not a copy of it, so
+        // the three choices and the remembered setting cannot drift apart
+        // between the surfaces that play an animation. RRPreviewBackdrop
+        // stores the choice itself; this only has to repaint.
+        this._installBackdropSwitcher();
+    }
+
+    /**
+     * Put the shared swatches in the preview row, replacing any already
+     * there rather than stacking a second set beside them.
+     *
+     * A switcher only refreshes its own highlight, on its own clicks, which
+     * is all the two pickers ever needed: they are modal, so no second
+     * switcher is ever on screen with them. The effect-file picker opens
+     * *over* this page, so for the first time two are alive at once and the
+     * one behind would keep showing the old swatch as pressed. Rebuilding it
+     * reads the stored choice again, which is why this is callable twice.
+     */
+    _installBackdropSwitcher() {
+        const anchor = document.getElementById('preview-backdrop-switcher');
+        if (!anchor || !window.RRPreviewBackdrop) return;
+        anchor.replaceChildren(
+            window.RRPreviewBackdrop.createSwitcher(() => this._repaintPreview()));
     }
 
     /**
@@ -1287,10 +1315,25 @@ class DatabaseAnimationEditor {
         ctx.restore();
     }
 
+    /**
+     * Paint the base this preview emulates the battle screen on, then the
+     * battlebacks and the target battler over it.
+     *
+     * The base used to be a hardcoded `#000`, on the reasoning that a battle
+     * screen starts black. That is true of the *screen*, but this is a viewing
+     * surface for one effect, usually with the battlebacks switched off -- and
+     * which base reads best then depends entirely on the animation, which is
+     * the whole argument RRPreviewBackdrop already makes for the two pickers.
+     * So the base is the shared choice rather than a constant, drawn with the
+     * shared swatches and remembering the same setting the pickers do. Black
+     * is not lost: it is the Dark swatch, one click away and identical to what
+     * this drew before. Whatever is chosen, the battlebacks and the battler
+     * still draw on top, so the battle-screen emulation is unchanged.
+     */
     _drawPreviewBackground(ctx, canvas) {
         this._previewBackgroundRevision = (this._previewBackgroundRevision || 0) + 1;
-        // Fill black base
-        ctx.fillStyle = '#000';
+        // Fill the chosen base (Dark == the '#000' this used to hardcode)
+        ctx.fillStyle = window.RRPreviewBackdrop ? window.RRPreviewBackdrop.color() : '#000';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
         // Draw battleback1
@@ -1329,7 +1372,18 @@ class DatabaseAnimationEditor {
         ctx.drawImage(scratch, 0, 0);
     }
 
-    _onPreviewImagesLoaded() {
+    /**
+     * Redraw whatever the preview is currently showing, in whichever mode it
+     * is in. Both modes need this whenever the background changes underneath
+     * them -- a battleback image finishing its load, or the backdrop being
+     * switched -- and neither is driven by a render loop while stopped.
+     *
+     * In Effekseer mode only the background canvas is repainted: the WebGL
+     * overlay above it is transparent while stopped, and while playing the
+     * render loop re-uploads this canvas every frame through
+     * _blitPreviewBackground, so a new base reaches the effect on its own.
+     */
+    _repaintPreview() {
         // Sprite mode: re-render current frame
         if (this._currentSpriteRenderFrame) {
             const frameIdx = window.currentAnimationFrameIndex || 0;
@@ -1343,6 +1397,10 @@ class DatabaseAnimationEditor {
                 this._drawPreviewBackground(bgCtx, this._previewBgCanvas);
             }
         }
+    }
+
+    _onPreviewImagesLoaded() {
+        this._repaintPreview();
     }
 
     populateTimingsList(animation) {
@@ -4754,8 +4812,14 @@ class DatabaseAnimationEditor {
                             <div style="font-size: 12px; color: var(--color-text-muted); margin-bottom: 8px;">${tt('Preview')}</div>
                             <div style="flex: 1; display: flex; align-items: center; justify-content: center; background: var(--color-bg-deep); border: 1px solid var(--color-border-input); border-radius: 3px; position: relative;">
                                 <canvas id="effect-preview-canvas" width="400" height="300" style="max-width: 100%; max-height: 100%;"></canvas>
-                                <div id="effect-preview-message" style="position: absolute; color: var(--color-text-muted); font-size: 12px; text-align: center;">${tt('Select an effect to preview')}</div>
+                                <!-- This one sits ON the canvas, so it needs a backing of
+                                     its own to stay readable on a light backdrop as well
+                                     as a dark one. -->
+                                <div id="effect-preview-message" style="position: absolute; color: var(--color-text); font-size: 12px; text-align: center; background: rgba(0, 0, 0, 0.6); padding: 4px 10px; border-radius: 3px;">${tt('Select an effect to preview')}</div>
                             </div>
+                            <!-- The shared backdrop swatches, same control and same
+                                 remembered choice as every other animation preview. -->
+                            <div id="effect-picker-backdrop" style="display: flex; justify-content: center; margin-top: 8px;"></div>
                         </div>
                     </div>
 
@@ -4778,6 +4842,16 @@ class DatabaseAnimationEditor {
         const previewMessage = document.getElementById('effect-preview-message');
 
         let selectedEffect = animation.effectName || '';
+
+        // The chosen backdrop, in both forms the two consumers need: a CSS
+        // string for what the canvas shows before the first GL clear, and
+        // floats for the clear itself. `let`, because the switcher below
+        // rewrites them and the render loop closes over them -- the same shape
+        // AnimationPickerModal and AnimationPicker use.
+        let previewBackdrop = window.RRPreviewBackdrop
+            ? window.RRPreviewBackdrop.color() : '#000000';
+        let previewBackdropRgb = window.RRPreviewBackdrop
+            ? window.RRPreviewBackdrop.rgb01() : [0, 0, 0];
 
         // Set up preview
         let previewEffekseerContext = null;
@@ -4848,6 +4922,32 @@ class DatabaseAnimationEditor {
             }
         };
 
+        // Backdrop swatches -- RRPreviewBackdrop's own control, so this picker
+        // offers the same three choices and remembers the same one as the two
+        // animation pickers and the Animations page behind it. The render loop
+        // reads previewBackdropRgb every frame, so a change reaches a playing
+        // effect by itself; the explicit clear here is for the idle canvas,
+        // which nothing would otherwise repaint until the next selection.
+        const effectBackdropAnchor = document.getElementById('effect-picker-backdrop');
+        if (effectBackdropAnchor && window.RRPreviewBackdrop) {
+            effectBackdropAnchor.appendChild(window.RRPreviewBackdrop.createSwitcher(() => {
+                previewBackdrop = window.RRPreviewBackdrop.color();
+                previewBackdropRgb = window.RRPreviewBackdrop.rgb01();
+                previewCanvas.style.background = previewBackdrop;
+                if (previewGL) {
+                    previewGL.clearColor(previewBackdropRgb[0], previewBackdropRgb[1], previewBackdropRgb[2], 1);
+                    previewGL.clear(previewGL.COLOR_BUFFER_BIT | previewGL.DEPTH_BUFFER_BIT);
+                }
+                // This modal opens over the Animations page, whose preview and
+                // swatches are still on screen behind it -- and neither repaints
+                // itself. Without this the page keeps the old base until it is
+                // touched again, which would make one shared choice look like two.
+                this._installBackdropSwitcher();
+                this._repaintPreview();
+            }));
+            previewCanvas.style.background = previewBackdrop;
+        }
+
         const playPreview = (effectName) => {
             if (!previewEffekseerContext || !previewGL) return;
 
@@ -4905,9 +5005,14 @@ class DatabaseAnimationEditor {
                         accumulator = 0;
                     }
 
-                    // Clear
+                    // Clear to the chosen backdrop (Dark == the opaque black
+                    // this used to hardcode). Opaque, not transparent: an
+                    // additive effect writes alpha into empty pixels, so a
+                    // transparent clear composites its black-backed quads onto
+                    // the page as black rectangles -- the reason both other
+                    // pickers draw on an opaque canvas too.
                     previewGL.viewport(0, 0, previewCanvas.width, previewCanvas.height);
-                    previewGL.clearColor(0, 0, 0, 1);
+                    previewGL.clearColor(previewBackdropRgb[0], previewBackdropRgb[1], previewBackdropRgb[2], 1);
                     previewGL.clear(previewGL.COLOR_BUFFER_BIT | previewGL.DEPTH_BUFFER_BIT);
 
                     // Setup matrices - balanced FOV

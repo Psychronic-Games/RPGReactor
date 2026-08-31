@@ -101,23 +101,12 @@ class DatabaseSystem1Editor {
 
         // Add event listeners
         setTimeout(() => {
-            // Title image picker button
-            const titleImagePickerBtn = container.querySelector('.title-image-picker-btn');
-            if (titleImagePickerBtn) {
-                titleImagePickerBtn.addEventListener('click', () => {
-                    this.showTitleImagePicker(system);
+            // Title image picker buttons -- one per title screen layer.
+            container.querySelectorAll('.title-image-picker-btn').forEach(button => {
+                button.addEventListener('click', () => {
+                    this.showTitleImagePicker(system, Number(button.dataset.titleLayer) || 1);
                 });
-
-                // Add hover effects
-                titleImagePickerBtn.addEventListener('mouseenter', () => {
-                    titleImagePickerBtn.style.backgroundColor = 'var(--color-accent-tint-35)';
-                    titleImagePickerBtn.style.borderColor = 'var(--color-bg-deep)';
-                });
-                titleImagePickerBtn.addEventListener('mouseleave', () => {
-                    titleImagePickerBtn.style.backgroundColor = 'var(--color-bg-panel)';
-                    titleImagePickerBtn.style.borderColor = 'var(--color-text-dim)';
-                });
-            }
+            });
 
             // Checkboxes
             const checkboxes = container.querySelectorAll('.system-checkbox');
@@ -304,6 +293,11 @@ class DatabaseSystem1Editor {
                 });
             }
 
+            // The preview draws into an element that has to exist first, so it
+            // runs with the rest of the wiring rather than inside the markup
+            // that builds it.
+            this.renderTitlePreview(container, system);
+
         }, 0);
     }
 
@@ -481,23 +475,29 @@ class DatabaseSystem1Editor {
         column.style.cssText = 'display: flex; flex-direction: column; gap: 16px;';
 
         // Row 1: Title Screen
-        const titleImageName = system.title1Name || '';
         const interfaceOptions = this.userInterfaceOptions(system.reactorTitleInterfaceId);
+        //
+        // Scene_Title builds its background from two sprites -- img/titles1,
+        // then img/titles2 drawn over it (runtime/reactor_scenes.js,
+        // Scene_Title.prototype.createBackground). Only the lower one was
+        // reachable here, so img/titles2, which every new project is given,
+        // had no way in. The layers are named the way the troop editor names
+        // its battleback layers.
+        const titleLayerRow = (layer, label, value) => `
+            <div class="form-row" style="display: flex; align-items: center; gap: 6px;${layer === 1 ? '' : ' margin-top: 6px;'}">
+                <label class="database-field-label" style="min-width: 84px;">${label}</label>
+                <input type="text" class="database-field-value" style="flex: 1; min-width: 0;" value="${rrEscapeHtml(value)}" readonly>
+                <button class="title-image-picker-btn rr-btn-chip" data-title-layer="${layer}">${tt('Choose Image')}</button>
+            </div>`;
         const titleScreen = `
             <div class="form-row" style="margin-bottom: 8px;">
                 <label class="database-field-label">${tt('Custom title interface:')}</label>
                 <select class="database-field-value system-title-interface" style="width: 100%;">${interfaceOptions}</select>
                 <div style="color: var(--color-text-muted); font-size: 11px; margin-top: 4px;">${tt('Stock title screen is used when no scene interface is selected or the record is unavailable.')}</div>
             </div>
-            <div class="form-row">
-                <label class="database-field-label">${tt('Title Image:')}</label>
-                <div style="display: flex; gap: 8px; align-items: center;">
-                    <input type="text" class="database-field-value" style="flex: 1;" value="${rrEscapeHtml(titleImageName)}" readonly>
-                    <button class="title-image-picker-btn" style="padding: 6px 12px; background: var(--color-bg-panel); color: var(--color-text-strong); border: 1px solid var(--color-text-dim); border-radius: 4px; cursor: pointer; white-space: nowrap; transition: background-color 0.2s, border-color 0.2s;">
-                        ${tt('Choose Image')}
-                    </button>
-                </div>
-            </div>
+            ${titleLayerRow(1, tt('Lower Layer:'), system.title1Name || '')}
+            ${titleLayerRow(2, tt('Upper Layer:'), system.title2Name || '')}
+            <div class="system-title-preview" style="margin-top: 8px; position: relative; width: 100%; border: 1px solid var(--color-border); border-radius: 3px; background-color: var(--color-bg-deep); overflow: hidden;"></div>
             <div class="form-row" style="margin-top: 8px;">
                 <label style="display: flex; align-items: center; gap: 8px; color: var(--color-text); cursor: pointer;">
                     <input type="checkbox" class="system-checkbox" ${system.optDrawTitle ? 'checked' : ''} data-field="optDrawTitle">
@@ -889,10 +889,63 @@ class DatabaseSystem1Editor {
         console.debug(`Updated system field ${fieldName} to:`, value);
     }
 
-    showTitleImagePicker(system) {
+    /**
+     * The game's own screen size, so a title preview is cropped and letterboxed
+     * the way the running game would crop and letterbox it.
+     */
+    gameResolution(system) {
+        const advanced = system?.advanced || {};
+        const width = Number(advanced.screenWidth);
+        const height = Number(advanced.screenHeight);
+        return {
+            width: Number.isFinite(width) && width > 0 ? width : 816,
+            height: Number.isFinite(height) && height > 0 ? height : 624
+        };
+    }
+
+    /**
+     * Stack the two title layers the way Scene_Title stacks them.
+     *
+     * The upper layer is an overlay -- a frame, a logo, a vignette -- and an
+     * overlay is only judged against what it sits on, so the row pair is
+     * followed by the composite rather than by two separate thumbnails.
+     */
+    renderTitlePreview(container, system) {
+        const box = container.querySelector('.system-title-preview');
+        if (!box) return;
+        box.replaceChildren();
+
+        const { width, height } = this.gameResolution(system);
+        box.style.aspectRatio = `${width} / ${height}`;
+
+        const project = this.projectManager.getCurrentProject();
+        if (!project?.path) return;
+        const path = require('path');
+
+        for (const layer of [1, 2]) {
+            const name = system[`title${layer}Name`] || '';
+            if (!name) continue;
+            const url = RRAssetFiles.imageUrlFor(path.join(project.path, 'img', `titles${layer}`), name);
+            if (!url) continue;
+            const image = document.createElement('img');
+            image.src = url;
+            image.style.cssText = 'position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain;';
+            box.appendChild(image);
+        }
+    }
+
+    /**
+     * Choose one of the two title screen layers.
+     *
+     * Scene_Title draws img/titles1 and then img/titles2 over it, so the
+     * preview is the composite: the layer being edited swaps live while the
+     * other one stays put beneath or above it. Either layer may be empty --
+     * `(None)` leads the list -- because ImageManager.loadBitmap answers an
+     * empty name with the empty bitmap.
+     */
+    showTitleImagePicker(system, layer = 1) {
         const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const path = require('path');
-        const fs = require('fs');
 
         const project = this.projectManager.getCurrentProject();
         if (!project) {
@@ -900,14 +953,14 @@ class DatabaseSystem1Editor {
             return;
         }
 
-        const titlesPath = path.join(project.path, 'img', 'titles1');
+        const edited = layer === 2 ? 2 : 1;
+        const other = edited === 1 ? 2 : 1;
+        const field = `title${edited}Name`;
+        const folder = `titles${edited}`;
+        const titlesPath = path.join(project.path, 'img', folder);
 
-        // Check if directory exists
-        if (!fs.existsSync(titlesPath)) {
-            alert(tt('titles1 folder not found'));
-            return;
-        }
-
+        // A project with no img/titles2 art is an ordinary project, so a
+        // missing or empty folder is an empty list rather than a dead end.
         const files = RRAssetFiles.listImageReferences(titlesPath);
 
         const overlay = document.createElement('div');
@@ -945,8 +998,9 @@ class DatabaseSystem1Editor {
             align-items: center;
             border-radius: 8px 8px 0 0;
         `;
+        const layerName = edited === 1 ? tt('Lower Layer:') : tt('Upper Layer:');
         header.innerHTML = `
-            <div style="font-size: 16px; font-weight: 600; color: var(--color-text);">${tt('Select Title Image')}</div>
+            <div style="font-size: 16px; font-weight: 600; color: var(--color-text);">${rrEscapeHtml(`${tt('Select Title Image')} — ${layerName.replace(/:$/, '')}`)}</div>
             <button style="background: none; border: none; color: var(--color-text-muted); font-size: 24px; cursor: pointer; padding: 0; width: 30px; height: 30px;">×</button>
         `;
         modal.appendChild(header);
@@ -971,14 +1025,40 @@ class DatabaseSystem1Editor {
             overflow: auto;
         `;
 
-        const previewImage = document.createElement('img');
-        previewImage.style.cssText = `
-            max-width: 100%;
-            max-height: calc(88vh - 190px);
-            object-fit: contain;
+        // Both layers share one box, so they line up here the way the title
+        // screen lines them up, at the game's own aspect ratio.
+        const resolution = this.gameResolution(system);
+        const stage = document.createElement('div');
+        stage.style.cssText = `
+            position: relative;
+            width: 100%;
+            max-width: 640px;
+            aspect-ratio: ${resolution.width} / ${resolution.height};
             border: 1px solid var(--color-border);
             background-color: var(--color-bg-surface);
         `;
+
+        const layerImage = () => {
+            const image = document.createElement('img');
+            image.style.cssText = 'position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain;';
+            image.style.display = 'none';
+            return image;
+        };
+        const lowerImage = layerImage();
+        const upperImage = layerImage();
+        stage.appendChild(lowerImage);
+        stage.appendChild(upperImage);
+        const editedImage = edited === 1 ? lowerImage : upperImage;
+        const otherImage = edited === 1 ? upperImage : lowerImage;
+
+        const otherName = system[`title${other}Name`] || '';
+        const otherUrl = otherName
+            ? RRAssetFiles.imageUrlFor(path.join(project.path, 'img', `titles${other}`), otherName)
+            : '';
+        if (otherUrl) {
+            otherImage.src = otherUrl;
+            otherImage.style.display = '';
+        }
 
         const previewLabel = document.createElement('div');
         previewLabel.style.cssText = `
@@ -989,32 +1069,41 @@ class DatabaseSystem1Editor {
         `;
         previewLabel.textContent = tt('Preview');
 
-        previewPanel.appendChild(previewImage);
+        previewPanel.appendChild(stage);
         previewPanel.appendChild(previewLabel);
 
-        let selectedFile = system.title1Name || '';
+        let selectedFile = system[field] || '';
 
         const updatePreview = (fileName) => {
-            const imageUrl = RRAssetFiles.imageUrlFor(titlesPath, fileName);
+            selectedFile = fileName || '';
+            const imageUrl = selectedFile ? RRAssetFiles.imageUrlFor(titlesPath, fileName) : '';
             if (!imageUrl) {
-                previewImage.src = '';
-                previewImage.style.display = 'none';
-                previewLabel.textContent = fileName ? tt('No preview') : tt('No image selected');
+                editedImage.removeAttribute('src');
+                editedImage.style.display = 'none';
+                previewLabel.textContent = selectedFile ? tt('No preview') : tt('No image selected');
                 return;
             }
-            selectedFile = fileName;
-            previewImage.style.display = '';
-            previewImage.src = imageUrl;
-            previewLabel.textContent = fileName;
+            editedImage.style.display = '';
+            editedImage.src = imageUrl;
+            previewLabel.textContent = selectedFile;
         };
 
         const browser = RRPickerIndex.createBrowser({
             files,
             selectedName: selectedFile,
+            // Same folder tree the audio, effect and character pickers use, so
+            // a titles subfolder reads as a folder rather than as a prefix.
             folders: true,
             searchPlaceholder: tt('Search files...'),
-            emptyText: `${tt('No files found in:')} img/titles1`,
-            onSelect: updatePreview
+            emptyText: `${tt('No files found in:')} img/${folder}`,
+            onSelect: updatePreview,
+            // Clearing a layer is the same kind of choice as picking one, and
+            // the upper layer is cleared often enough to need the option.
+            // createBrowser clears its own selection before calling this.
+            leadingItem: {
+                label: tt('(None)'),
+                onClick: () => updatePreview('')
+            }
         });
         browserPanel.appendChild(browser.element);
         workspace.appendChild(browserPanel);
@@ -1048,7 +1137,7 @@ class DatabaseSystem1Editor {
         okBtn.textContent = tt('OK');
         okBtn.className = 'rr-button-primary';
         okBtn.onclick = () => {
-            system.title1Name = selectedFile;
+            system[field] = selectedFile;
             close();
 
             const detailEl = document.getElementById('database-detail');
@@ -1057,7 +1146,7 @@ class DatabaseSystem1Editor {
                 this.showSystem1Detail(detailEl);
             }
 
-            console.debug('Updated title1Name to:', selectedFile);
+            console.debug(`Updated ${field} to:`, selectedFile);
         };
 
         footer.appendChild(cancelBtn);

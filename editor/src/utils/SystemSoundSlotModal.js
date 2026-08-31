@@ -41,6 +41,26 @@
         };
     }
 
+    /**
+     * The slot as the game will hear it. SoundManager.playSystemSound picks
+     * one of the named sounds at random, and applySystemSoundPitch then
+     * replaces that pitch from the slot range (runtime/reactor_managers.js);
+     * this repeats both steps. `random` is injected so a test can pin the draw.
+     */
+    function auditionPick(sounds, range, random) {
+        const draw = typeof random === 'function' ? random : Math.random;
+        const named = (Array.isArray(sounds) ? sounds : [])
+            .map((sound, index) => ({ sound: audioValue(sound), index }))
+            .filter(entry => entry.sound.name);
+        if (named.length === 0) return null;
+        const chosen = named[Math.min(named.length - 1, Math.floor(draw() * named.length))];
+        const bounds = pitchRange(range);
+        const pitch = bounds
+            ? bounds.min + Math.min(bounds.max - bounds.min, Math.floor(draw() * (bounds.max - bounds.min + 1)))
+            : chosen.sound.pitch;
+        return { sound: chosen.sound, index: chosen.index, pitch };
+    }
+
     function draftFor(slot) {
         const source = slot && typeof slot === 'object' ? slot : {};
         return {
@@ -156,6 +176,10 @@
             }
         };
 
+        // Assigned once the audition panel below exists; the row list is built
+        // before it and rebuilt after every add, remove and reorder.
+        let syncAudition = () => {};
+
         const renderSounds = () => {
             soundList.innerHTML = '';
             draft.sounds.forEach((sound, index) => {
@@ -225,6 +249,7 @@
                 row.appendChild(actions);
                 soundList.appendChild(row);
             });
+            syncAudition();
         };
         renderSounds();
         body.appendChild(soundList);
@@ -295,6 +320,123 @@
         rangePanel.appendChild(maxInput.wrapper);
         body.appendChild(rangePanel);
 
+        // ── Audition ─────────────────────────────────────────────────────
+        // SoundManager.playSystemSound picks one of the slot's named sounds at
+        // random, and applySystemSoundPitch then replaces that sound's pitch
+        // from the slot's pitchRandom range (runtime/reactor_managers.js). The
+        // audition repeats both steps, so what is heard here is what the game
+        // would have played. The range is read from the live controls rather
+        // than from draft.pitchRandom, which is only written on OK — toggling
+        // Random Pitch has to change the next press, not the next open.
+        const auditionPanel = document.createElement('div');
+        auditionPanel.className = 'rr-system-sound-audition';
+
+        const livePitchRange = () => (enabled.checked
+            ? pitchRange({ min: minInput.input.value, max: maxInput.input.value })
+            : null);
+
+        const audio = document.createElement('audio');
+        let audioContext = null;
+        let gainNode = null;
+        let pannerNode = null;
+
+        // Chromium caps live AudioContexts per page, so the graph is built once
+        // and closed with the dialog. createMediaElementSource may only be
+        // called once for an element, which the single build also satisfies.
+        const ensureGraph = () => {
+            if (audioContext) return;
+            const AudioContextClass = root.AudioContext || root.webkitAudioContext;
+            if (!AudioContextClass || root.reactor?.audioPlayer?.audioPlayer?.htmlAudioOnly) return;
+            try {
+                audioContext = new AudioContextClass();
+                const sourceNode = audioContext.createMediaElementSource(audio);
+                gainNode = audioContext.createGain ? audioContext.createGain() : null;
+                pannerNode = audioContext.createStereoPanner ? audioContext.createStereoPanner() : null;
+                if (!gainNode) {
+                    sourceNode.connect(audioContext.destination);
+                } else if (pannerNode) {
+                    sourceNode.connect(gainNode);
+                    gainNode.connect(pannerNode);
+                    pannerNode.connect(audioContext.destination);
+                } else {
+                    sourceNode.connect(gainNode);
+                    gainNode.connect(audioContext.destination);
+                }
+            } catch (error) {
+                try { if (audioContext) audioContext.close(); } catch (closeError) {}
+                audioContext = null;
+                gainNode = null;
+                pannerNode = null;
+            }
+        };
+
+        const stopAudition = () => {
+            audio.pause();
+            audio.currentTime = 0;
+        };
+
+        const releaseAudio = () => {
+            stopAudition();
+            if (!audioContext) return;
+            try { audioContext.close(); } catch (error) {}
+            audioContext = null;
+            gainNode = null;
+            pannerNode = null;
+        };
+
+        const auditionResult = document.createElement('div');
+        auditionResult.className = 'rr-system-sound-audition-result';
+        auditionResult.setAttribute('role', 'status');
+        auditionResult.textContent = tt('Auditions the slot the way the game plays it.');
+
+        const playAudition = () => {
+            const pick = auditionPick(draft.sounds, livePitchRange());
+            if (!pick) return;
+            const record = files.find(file => file.name === pick.sound.name);
+            if (!record?.absolutePath) {
+                auditionResult.textContent = tt('No preview');
+                return;
+            }
+            ensureGraph();
+            const source = root.RRAssetFiles.toUrl(record.absolutePath);
+            if (audio.dataset.source !== source) {
+                audio.src = source;
+                audio.dataset.source = source;
+            }
+            audio.currentTime = 0;
+            if (gainNode) gainNode.gain.value = pick.sound.volume / 100;
+            else audio.volume = Math.max(0, Math.min(1, pick.sound.volume / 100));
+            if (pannerNode) pannerNode.pan.value = pick.sound.pan / 100;
+            audio.playbackRate = Math.max(0.5, Math.min(1.5, pick.pitch / 100));
+            audio.preservesPitch = false;
+            // A context created before the first gesture starts suspended, and
+            // a suspended graph swallows the sound while play() still resolves.
+            if (audioContext?.state === 'suspended') audioContext.resume().catch(() => {});
+            audio.play().catch(error => console.error('Error playing audio:', error));
+
+            auditionResult.textContent =
+                `${tt('Sound')} ${pick.index + 1} · ${pick.sound.name} · ${tt('Pitch')} ${pick.pitch}`;
+        };
+
+        const playButton = iconButton('Play', 'M8 5v14l11-7z', playAudition);
+        playButton.classList.add('rr-system-sound-play');
+        const stopButton = iconButton('Stop', 'M6 6h12v12H6z', stopAudition);
+
+        const auditionButtons = document.createElement('div');
+        auditionButtons.className = 'rr-system-sound-actions';
+        auditionButtons.appendChild(playButton);
+        auditionButtons.appendChild(stopButton);
+        auditionPanel.appendChild(auditionButtons);
+        auditionPanel.appendChild(auditionResult);
+        body.appendChild(auditionPanel);
+
+        // Stop stays live even for an empty slot: it can be pressed against a
+        // sound that is still ringing after its row was removed.
+        syncAudition = () => {
+            playButton.disabled = !draft.sounds.some(sound => sound.name);
+        };
+        syncAudition();
+
         const footer = document.createElement('div');
         footer.className = 'rr-modal-footer';
         const cancelButton = actionButton('Cancel', () => close(false));
@@ -318,6 +460,7 @@
                     : null;
                 if (enabled.checked && !draft.pitchRandom) return;
             }
+            releaseAudio();
             overlay.remove();
             if (confirmed) options.onOk(applyDraft(options.slot, draft));
             else if (options.onCancel) options.onCancel();
@@ -360,7 +503,7 @@
         setTimeout(() => closeButton.focus(), 0);
     }
 
-    const api = { SOUND_LABELS, applyDraft, audioValue, draftFor, open, pitchRange };
+    const api = { SOUND_LABELS, applyDraft, audioValue, auditionPick, draftFor, open, pitchRange };
     root.RRSystemSoundSlotModal = api;
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);
