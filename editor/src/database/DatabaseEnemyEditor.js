@@ -367,18 +367,31 @@ class DatabaseEnemyEditor {
 
     /**
      * A value box sized to the number it holds, in `ch` (a digit in the
-     * field's own font) plus the chrome beside the digits: 20px padding, 2px
-     * border, the 15px spinner Chromium lays out inside the content box and
-     * an 11px gap before it. Two digits is the floor, nine the ceiling.
+     * field's own font) plus the chrome beside the digits: 12px of input
+     * padding, the wrapper's 1px borders and the 22px themed stepper, with
+     * the remainder slack so the caret never sits against the arrows. Two
+     * digits is the floor, nine the ceiling.
      */
     paramInputWidth(value) {
         const digits = String(value ?? '').replace(/[^0-9]/g, '').length;
         return `calc(${Math.min(9, Math.max(2, digits))}ch + 48px)`;
     }
 
+    /**
+     * NumberSteppers wraps every number field: it moves the field's width onto
+     * the `.rr-number-stepper` wrapper and leaves the input flexing to fill
+     * whatever the wrapper is. A width written to the input is therefore
+     * ignored, and the box stays at the size it was first rendered at while
+     * the digits typed into it run past the edge. Size whichever element
+     * actually owns the box, resolved on each pass because the wrapper is
+     * added by an observer rather than by this render.
+     */
     setupParamInputListeners(enemy) {
         document.querySelectorAll(`.enemy-param-input[data-enemy-id="${enemy.id}"]`).forEach(input => {
-            const resize = () => { input.style.width = this.paramInputWidth(input.value); };
+            const resize = () => {
+                const box = input.closest('.rr-number-stepper') || input;
+                box.style.width = this.paramInputWidth(input.value);
+            };
             input.addEventListener('input', resize);
             resize();
         });

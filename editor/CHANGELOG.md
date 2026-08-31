@@ -5,6 +5,12 @@ All notable changes to RPG Reactor will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **An enemy parameter box grows with the number typed into it again.** The Parameters table on the Enemies page sizes each value box to the digits it holds, so a one-digit Luck is not adrift in a box wide enough for a six-digit Max HP. That sizing and the themed number steppers landed in the same release, and the steppers won: `NumberSteppers` moves a field's width onto the `.rr-number-stepper` wrapper it wraps the input in and leaves the input flexing to fill whatever the wrapper is, so the width the resize handler wrote to the input had no effect. The box kept the width it was first rendered at and the digits typed past that ran off the edge - a Max HP of 1234567 read as `34567` in a three-digit box. The handler now sizes whichever element owns the box, resolved on each pass because the wrapper is added by an observer rather than by the page's own render. The width constant, written when a native spinner still sat inside the field, is restated against the chrome that is actually there: 12px of input padding, the wrapper's borders and the 22px stepper. The stepper's arrows were never affected and still step the value.
+
 ## [0.98.4] - 2026-08-31
 
 ### Fixed
