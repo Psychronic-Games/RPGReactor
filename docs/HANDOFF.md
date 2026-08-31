@@ -2,6 +2,24 @@
 
 Last updated 2026-08-30.
 
+## 2026-08-30 — web (itch) console cleanup (runtime 20260830.33)
+
+From the owner's itch web-editor test. Ours vs not-ours: `Unrecognized
+feature: monetization/xr/web-share` + `html-callback ERR_BLOCKED_BY_CLIENT`
+are itch's iframe and the user's adblocker — never chase those. Fixed:
+video-surface AbortError spam (play() aborted by pause/teardown at scene
+switches is lifecycle — `failed()` and the play().catch now skip
+`error.name === "AbortError"`); `SceneManager.onError` printed "undefined
+undefined" for promise rejections (no filename/lineno — now guarded); the
+map view's Effekseer preview on web threw "not preloaded for synchronous
+access" — `WebHost.preloadForSync(dir)` fetches a subtree into the sync
+`contents` cache (12MB for Demo effects/), `RR_loadEffekseerEffectFromFile`
+throws a shared retryable `rrWebWarming` miss, `AnimationPreviewLayer`
+retries when the warm-up resolves. The one-per-track BGM 404 on web is BY
+DESIGN: extensionless refs probe .ogg first, `WebAudio._onError` walks the
+other extensions (reactor_core ~7620) — only a host-provided extension
+manifest could remove the network-log line; noted as a future option.
+
 ## 2026-08-30 — pre-release: issue #33 remainder + black map on project switch
 
 Issue #33 audit: sections 1 (User/Target Lacks State via `!meetsStateCondition`)

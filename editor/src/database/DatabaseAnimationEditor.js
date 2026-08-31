@@ -26,7 +26,28 @@ function RR_loadEffekseerEffectFromFile(context, effectPath, scale, onLoad, onEr
     const fs = require('fs');
     const path = require('path');
     const baseDir = path.dirname(effectPath);
-    const bytes = fs.readFileSync(effectPath);
+    let bytes;
+    try {
+        bytes = fs.readFileSync(effectPath);
+    } catch (error) {
+        // On the web host binary files are not sync-readable until fetched
+        // once — and Effekseer's decode also reads textures synchronously
+        // through `redirect`. Warm the whole effects folder in the
+        // background and throw a retryable miss: a caller that retries
+        // after `rrWarming` resolves loads everything from cache.
+        if (typeof fs.preloadForSync === 'function') {
+            if (!RR_loadEffekseerEffectFromFile._warming) {
+                RR_loadEffekseerEffectFromFile._warming =
+                    Promise.resolve(fs.preloadForSync(baseDir)).catch(() => {});
+            }
+            const retryable = new Error(
+                'Effect files are still downloading for the web preview: ' + effectPath);
+            retryable.rrWebWarming = true;
+            retryable.rrWarming = RR_loadEffekseerEffectFromFile._warming;
+            throw retryable;
+        }
+        throw error;
+    }
     // Copy into a page-realm ArrayBuffer: NW.js runs Node and the DOM in
     // separate JS contexts, so the Buffer's underlying ArrayBuffer fails
     // loadEffect's `data instanceof ArrayBuffer` check — the runtime then

@@ -308,6 +308,29 @@
                 if (encoding) return new TextDecoder().decode(bytes);
                 return bytes;
             },
+            /**
+             * Fetch every file under a directory into the sync cache, so
+             * consumers built around readFileSync (the Effekseer loader
+             * reads an effect and its textures synchronously mid-decode)
+             * can run after one asynchronous warm-up.
+             */
+            async preloadForSync(dirPath) {
+                const prefix = projectRelative(dirPath).replace(/\/+$/, '') + '/';
+                const wanted = [];
+                for (const [relativePath, entry] of entries) {
+                    if (entry.type !== 'file') continue;
+                    if (!relativePath.startsWith(prefix)) continue;
+                    if (contents.has(relativePath)) continue;
+                    wanted.push(relativePath);
+                }
+                await Promise.all(wanted.map(async relativePath => {
+                    const url = new URL(`project/${relativePath.split('/').map(encodeURIComponent).join('/')}`, document.baseURI).href;
+                    const response = await fetch(url);
+                    if (!response.ok) return;
+                    contents.set(relativePath, new Uint8Array(await response.arrayBuffer()));
+                }));
+                return wanted.length;
+            },
             writeFileSync(filePath, data) {
                 const relativePath = projectRelative(filePath);
                 const stored = typeof data === 'string' ? data : new Uint8Array(data);

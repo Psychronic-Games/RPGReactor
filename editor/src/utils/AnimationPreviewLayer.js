@@ -425,6 +425,17 @@
                 fx.effects.set(animation.effectName, effect);
                 fx.waiters.set(animation.effectName, [begin]);
             } catch (error) {
+                if (error && error.rrWebWarming) {
+                    // The web host is fetching the effects folder; play this
+                    // effect as soon as the warm-up lands instead of logging
+                    // a red error for an expected first-visit state.
+                    error.rrWarming.then(() => {
+                        if (generation === this.generation) {
+                            this._startEffekseer(animation, projectRoot, generation);
+                        }
+                    });
+                    return false;
+                }
                 console.warn('Could not load the effect for a preview:', error);
                 return false;
             }

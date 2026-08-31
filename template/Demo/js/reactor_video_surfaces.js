@@ -591,6 +591,9 @@
                         this.awaitingGesture = true;
                         return;
                     }
+                    // An abort means pause() or teardown raced this start —
+                    // scene switches do that on purpose. Nothing to report.
+                    if (error && error.name === "AbortError") return;
                     this.manager.failed(this.id, this.generation, error);
                 });
             }
@@ -1266,7 +1269,12 @@
 
         failed(id, generation, error) {
             if (!this.isCurrent(id, generation)) return;
-            console.error("RPGReactor video surface " + id + " failed.", error);
+            // An aborted play() is teardown racing playback — a scene change
+            // pulled the element mid-start. That is lifecycle, not failure;
+            // a web build spammed one red AbortError per surface per switch.
+            if (!error || error.name !== "AbortError") {
+                console.error("RPGReactor video surface " + id + " failed.", error);
+            }
             this.stop(id);
         }
 

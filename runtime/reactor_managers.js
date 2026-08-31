@@ -2209,7 +2209,11 @@ SceneManager.terminate = function() {
 
 SceneManager.onError = function(event) {
     console.error(event.message);
-    console.error(event.filename, event.lineno);
+    // A promise rejection routed here has no source location; printing
+    // "undefined undefined" under every such error was pure noise.
+    if (event.filename !== undefined || event.lineno !== undefined) {
+        console.error(event.filename, event.lineno);
+    }
     try {
         this.stop();
         Graphics.printError("Error", event.message, event);
