@@ -365,6 +365,12 @@ class BattleTestConfigModal {
         visibleEquipSlots.forEach(({ etypeId, slotIndex, currentEquipId, compatibleItems }) => {
             const slotName = equipTypes[etypeId] || `${this._t('Slot')} ${slotIndex + 1}`;
             const row = this.createFormRow(slotName + ':');
+            // An equip type name can carry an `\I[n]` code like any other System
+            // type name. createFormRow sets textContent, so the label is
+            // repainted here rather than given markup it would print verbatim.
+            if (window.RRIconCodes && window.RRIconCodes.hasCode(slotName)) {
+                window.RRIconCodes.paint(row.querySelector('label'), slotName + ':');
+            }
 
             const select = document.createElement('select');
             select.style.cssText = 'width:100%;min-width:0;background:var(--color-bg-menubar);border:1px solid var(--color-border-input);color:var(--color-text);padding:4px;border-radius:3px;font-size:12px;';

@@ -664,7 +664,7 @@ class DatabaseClassEditor {
                     style="cursor: pointer; transition: all 0.15s ease;">
                     <td class="trait-indicator" style="width: 3px; padding: 0; border: none; background: transparent;"></td>
                     <td>${rrEscapeHtml(this.commonUI.getTraitName(trait.code))}</td>
-                    <td>${rrEscapeHtml(this.commonUI.getTraitValue(trait))}</td>
+                    <td>${this.commonUI.getTraitValueHtml(trait)}</td>
                 </tr>
             `).join('') :
             `<tr><td colspan="3" style="text-align: center; color: var(--color-text-muted);">${tt('No traits')}</td></tr>`;

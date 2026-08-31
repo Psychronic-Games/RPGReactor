@@ -262,7 +262,7 @@ class DatabaseEnemyEditor {
                                 <tr class="trait-row" data-trait-index="${index}">
                                     <td class="trait-indicator" style="width: 3px; padding: 0; border: none; background: transparent;"></td>
                                     <td>${this.escapeHTML(this.commonUI.getTraitName(trait.code))}</td>
-                                    <td>${this.escapeHTML(this.commonUI.getTraitValue(trait))}</td>
+                                    <td>${this.commonUI.getTraitValueHtml(trait)}</td>
                                 </tr>
                             `).join('') :
                             `<tr><td style="width: 3px; padding: 0; border: none; background: transparent;"></td><td colspan="2" style="text-align: center; color: var(--color-text-muted); font-style: italic; padding: 12px;">${tt('No traits')}</td></tr>`}

@@ -557,6 +557,10 @@ test('actor equipment hides unsupported slots and trait pickers preserve sparse 
         window, document, RREquipSlots, rrEscapeHtml
     });
     const actorEditor = Object.create(DatabaseActorEditor.prototype);
+    // The slot label is drawn through the shared name renderer, which turns an
+    // `\I[n]` code in an equip type name into an icon. These names carry none,
+    // so plain escaping is the whole of it here.
+    actorEditor.commonUI = { nameHtml: rrEscapeHtml };
     const actorClass = {
         id: 1,
         name: 'Pilot',

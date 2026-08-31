@@ -215,7 +215,7 @@ class DatabaseSystem2Editor {
             const motion = attackMotions[i] || { type: 0, weaponImageId: 0 };
             html += `
                 <tr class="attack-motion-row" data-idx="${i}" style="cursor: pointer;">
-                    <td style="color: var(--color-text); font-size: 12px;">${rrEscapeHtml(typeName || tt('(Bare Hands)'))}</td>
+                    <td style="color: var(--color-text); font-size: 12px;">${this.commonUI.nameHtml(typeName || tt('(Bare Hands)'))}</td>
                     <td style="color: var(--color-text-muted); font-size: 12px;">${tt(motionNames[motion.type] || 'Thrust')}</td>
                     <td style="color: var(--color-text-muted); font-size: 12px;">${tt(weaponImageNames[motion.weaponImageId] || 'None')}</td>
                 </tr>`;
@@ -489,7 +489,7 @@ class DatabaseSystem2Editor {
 
         modal.innerHTML = `
             <div style="background-color: var(--color-bg-panel); padding: 12px 16px; border-bottom: 1px solid var(--color-border); border-radius: 8px 8px 0 0; display: flex; justify-content: space-between; align-items: center;">
-                <div style="font-size: 16px; font-weight: 600; color: var(--color-text);">${tt('Edit Attack Motion')} — ${rrEscapeHtml(typeName || tt('(Bare Hands)'))}</div>
+                <div style="font-size: 16px; font-weight: 600; color: var(--color-text);">${tt('Edit Attack Motion')} — ${this.commonUI.nameHtml(typeName || tt('(Bare Hands)'))}</div>
                 <button class="atk-modal-close" style="background: none; border: none; color: var(--color-text-muted); font-size: 24px; cursor: pointer;">×</button>
             </div>
             <div style="padding: 16px; display: flex; flex-direction: column; gap: 12px;">

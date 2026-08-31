@@ -74,6 +74,30 @@
         return opt ? opt.textContent : '';
     };
 
+    // Element and skill-type names are stored with their icon in the name
+    // (`\I[78]Special`), because the System type lists have no icon field and
+    // `drawTextEx` expands the code where it is drawn. A native <select> could only
+    // ever show the markup; this popup is div-based, so it can show what the
+    // name means. Any <option> whose text carries no code renders exactly as
+    // it did - one textContent assignment.
+    const paintLabel = (target, text) => {
+        if (!target) return;
+        const codes = window.RRIconCodes;
+        if (codes && codes.hasCode(text)) {
+            codes.paint(target, text);
+        } else {
+            target.textContent = text;
+        }
+    };
+
+    // What type-to-filter matches against: the name as shown, so typing the
+    // name an author can see finds the row, and the code's digits do not
+    // compete with it.
+    const searchText = (text) => {
+        const codes = window.RRIconCodes;
+        return String((codes ? codes.strip(text) : text) || '').toLowerCase();
+    };
+
     const openPopupFor = (selectEl, triggerEl) => {
         closeOpenPopup();
         if (selectEl.disabled) return;
@@ -121,8 +145,8 @@
                 transition: background var(--ease-fast);
                 white-space: nowrap;
             `;
-            item.textContent = opt.textContent;
-            item.dataset.optText = (opt.textContent || '').toLowerCase();
+            paintLabel(item, opt.textContent);
+            item.dataset.optText = searchText(opt.textContent);
             if (!opt.disabled) {
                 item.addEventListener('mouseenter', () => {
                     if (!isActive) item.style.background = 'var(--color-accent-tint-15)';
@@ -135,7 +159,7 @@
                     // Synthesize change + input events so existing listeners fire.
                     selectEl.dispatchEvent(new Event('change', { bubbles: true }));
                     selectEl.dispatchEvent(new Event('input', { bubbles: true }));
-                    triggerEl.firstChild.nodeValue = opt.textContent;
+                    paintLabel(triggerEl.querySelector('.rr-shim-label'), opt.textContent);
                     closeOpenPopup();
                 });
             }
@@ -292,7 +316,12 @@
             transition: border-color var(--ease-base);
             min-width: 60px;
         `;
-        trigger.appendChild(document.createTextNode(getCurrentLabel(selectEl)));
+        // The label is a span rather than a bare text node so it can hold an
+        // icon alongside the text; the caret stays a sibling of it.
+        const label = document.createElement('span');
+        label.className = 'rr-shim-label';
+        paintLabel(label, getCurrentLabel(selectEl));
+        trigger.appendChild(label);
 
         // Gold caret
         const caret = document.createElement('span');
@@ -329,7 +358,7 @@
         // re-populates options (e.g. project switch), refresh the trigger
         // label and re-open popup data on next open.
         const refreshLabel = () => {
-            trigger.firstChild.nodeValue = getCurrentLabel(selectEl);
+            paintLabel(label, getCurrentLabel(selectEl));
         };
         selectEl.addEventListener('change', refreshLabel);
         // A programmatic `select.value = x` (a panel showing the selected

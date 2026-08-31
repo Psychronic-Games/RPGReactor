@@ -80,6 +80,78 @@ test('preview background blits once per frame and caches resources per GL contex
         ['flip', a.gl.UNPACK_FLIP_Y_WEBGL, false]);
 });
 
+test('every surface that plays an animation shares one backdrop control', () => {
+    // The Animations page used to hardcode a black base, on the reasoning that
+    // it emulates the battle screen. It still does emulate it -- battlebacks and
+    // the target battler draw over the base either way -- but with those off,
+    // which base reads best depends on the animation, which is the argument
+    // RRPreviewBackdrop already makes for the two pickers. So the page uses the
+    // pickers' own control and their remembered setting, rather than a third
+    // answer of its own. Black is the Dark swatch, asserted below.
+    const editor = read('src', 'database', 'DatabaseAnimationEditor.js');
+    assert.match(editor,
+        /ctx\.fillStyle = window\.RRPreviewBackdrop \? window\.RRPreviewBackdrop\.color\(\) : '#000';/,
+        'the 2D base comes from the shared choice');
+    assert.match(editor, /RRPreviewBackdrop\.createSwitcher\(/,
+        'and the page offers the shared swatches, not just the setting');
+    assert.doesNotMatch(editor, /ctx\.fillStyle = '#000';/,
+        'no hardcoded black base left');
+    assert.equal(PreviewBackdrop.choice('dark').color, '#000000',
+        'the base this page used to hardcode is still one click away');
+});
+
+test('the effect-file picker clears to the chosen backdrop too', () => {
+    // Effect File > Change... is a fourth surface that plays an effect while
+    // you choose it, and it cleared to an opaque black of its own. Its clear
+    // stays OPAQUE -- an additive effect writes alpha into empty pixels, so a
+    // transparent clear composites black rectangles onto the page -- but the
+    // colour is now the shared choice. The Animations page's own overlay is a
+    // different case and must keep clearing to transparent (0, 0, 0, 0): it is
+    // blitted onto the background canvas beneath it, so it has real pixels to
+    // blend against and needs none of its own.
+    const editor = read('src', 'database', 'DatabaseAnimationEditor.js');
+    assert.doesNotMatch(editor, /clearColor\(0, 0, 0, 1\)/,
+        'no opaque black clear left in the effect-file picker');
+    assert.equal((editor.match(/clearColor\(0, 0, 0, 0\)/g) || []).length, 2,
+        'the page overlay still clears to transparent, in both places');
+    assert.match(editor,
+        /previewGL\.clearColor\(previewBackdropRgb\[0\], previewBackdropRgb\[1\], previewBackdropRgb\[2\], 1\)/,
+        'the picker clears to the chosen backdrop');
+    assert.equal((editor.match(/RRPreviewBackdrop\.createSwitcher\(/g) || []).length, 2,
+        'both surfaces in this file offer the swatches');
+});
+
+test('the backdrop switcher repaints a stopped preview in both modes', () => {
+    // Neither mode runs a render loop while stopped, so changing the base has
+    // to redraw: the sprite frame, or the background canvas the Effekseer
+    // overlay is blitted from. Both live in _repaintPreview, which is what the
+    // switcher's onChange calls and what image loads reuse.
+    const editor = read('src', 'database', 'DatabaseAnimationEditor.js');
+    assert.match(editor, /createSwitcher\(\(\) => this\._repaintPreview\(\)\)/);
+    assert.match(editor, /_repaintPreview\(\) \{[\s\S]*?_currentSpriteRenderFrame\(frameIdx\)/);
+    assert.match(editor, /_repaintPreview\(\) \{[\s\S]*?_drawPreviewBackground\(bgCtx, this\._previewBgCanvas\)/);
+    assert.match(editor, /_onPreviewImagesLoaded\(\) \{\s*\n\s*this\._repaintPreview\(\);/);
+});
+
+test('the effect picker resyncs the Animations page it opens over', () => {
+    // A switcher refreshes its own highlight only, on its own clicks. That was
+    // enough for the two animation pickers, which are modal and never share the
+    // screen with a second switcher. Effect File > Change... opens OVER the
+    // Animations page, so for the first time two are alive at once: without a
+    // resync the page keeps the old base and the old pressed swatch behind the
+    // modal, and one shared choice looks like two. Rebuilding the page's
+    // switcher re-reads the stored choice, which is why it must replace rather
+    // than append -- otherwise each open stacks another row of swatches.
+    const editor = read('src', 'database', 'DatabaseAnimationEditor.js');
+    assert.match(editor, /_installBackdropSwitcher\(\) \{[\s\S]*?anchor\.replaceChildren\(/,
+        'the page switcher is replaced, never appended beside itself');
+    assert.doesNotMatch(editor, /backdropAnchor\.appendChild\(/,
+        'no append path left that could stack a second row');
+    assert.match(editor,
+        /this\._installBackdropSwitcher\(\);\s*\n\s*this\._repaintPreview\(\);/,
+        'the effect picker resyncs both the swatches and the base behind it');
+});
+
 class FakeElement {
     constructor(tag) {
         this.tagName = tag;

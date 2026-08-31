@@ -18,6 +18,7 @@ class DatabaseCommonUI {
             11: 'Element Rate', 12: 'Debuff Rate', 13: 'State Rate', 14: 'State Resist',
             21: 'Parameter', 22: 'Ex-Parameter', 23: 'Sp-Parameter',
             31: 'Attack Element', 32: 'Attack State', 33: 'Attack Speed', 34: 'Attack Times+',
+            35: 'Attack Skill',
             41: 'Add Skill Type', 42: 'Seal Skill Type', 43: 'Add Skill', 44: 'Seal Skill',
             51: 'Equip Weapon', 52: 'Equip Armor', 53: 'Lock Equip', 54: 'Seal Equip', 55: 'Slot Type',
             61: 'Action Times+', 62: 'Special Flag', 63: 'Collapse Effect', 64: 'Party Ability'
@@ -68,6 +69,9 @@ class DatabaseCommonUI {
             return `${tt('Attack Speed')} ${trait.value >= 0 ? '+' : ''}${trait.value}`;
         } else if (trait.code === 34) { // Attack Times
             return `${tt('Attack Times +')}${trait.value}`;
+        } else if (trait.code === 35) { // Attack Skill
+            const skill = this.databaseManager.getSkill(trait.dataId);
+            return skill ? skill.name : `${tt('Skill')} ${trait.dataId}`;
         } else if (trait.code === 41 || trait.code === 42) { // Skill Type Add/Seal
             const skillTypes = this.databaseManager.getSystem()?.skillTypes || [];
             const skillTypeName = skillTypes[trait.dataId] || `${tt('Skill Type')} ${trait.dataId}`;
@@ -110,6 +114,35 @@ class DatabaseCommonUI {
         } else {
             return `${tt('Data')} ${trait.dataId}, ${tt('Value')} ${trait.value}`;
         }
+    }
+
+    /**
+     * A stored name as escaped HTML, with any `\I[n]` it carries drawn as the
+     * icon it names.
+     *
+     * Element, skill-type, weapon-type, armor-type and equip-type names all
+     * carry their icon inside the name, because the System type lists are
+     * plain string arrays with no icon field. Whether that code becomes an
+     * icon in game depends on the window: `drawTextEx` expands it, `drawText`
+     * prints it. Either way it is the name the author wrote, and the editor
+     * should show what it means rather than its markup.
+     *
+     * Falls back to plain escaping when RRIconCodes is absent, which is what
+     * every one of these cells did before.
+     */
+    nameHtml(text, options) {
+        return typeof window !== 'undefined' && window.RRIconCodes
+            ? window.RRIconCodes.html(text, options)
+            : rrEscapeHtml(text);
+    }
+
+    /**
+     * getTraitValue as escaped HTML. A trait row is the one place such a name
+     * reaches a table cell verbatim - "Add \I[78]Special" - so without this
+     * the trait list reads as markup.
+     */
+    getTraitValueHtml(trait) {
+        return this.nameHtml(this.getTraitValue(trait));
     }
 
     /**

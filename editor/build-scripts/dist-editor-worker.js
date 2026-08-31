@@ -733,7 +733,7 @@ if not exist "%NW_DIR%\\nw.exe" (\r
     echo Runtime installed successfully.\r
     echo.\r
 )\r
-"%NW_DIR%\\nw.exe" .\r
+start "" "%NW_DIR%\\nw.exe" .\r
 `;
     const windowsPreflight = winHash ? [
         `    powershell -NoProfile -Command "if ((Get-FileHash -Algorithm SHA256 '%NW_ARCHIVE%').Hash.ToLower() -ne '${winHash}') { exit 1 }"`,
@@ -1548,7 +1548,7 @@ function buildWeb(stageRoot, stagingDir) {
             logInfo('  RPGReactor.sh');
 
             fs.writeFileSync(path.join(appDir, 'RPGReactor.bat'),
-                '@echo off\r\ncd /d "%~dp0"\r\nnwjs-win\\nw.exe .\r\n');
+                '@echo off\r\ncd /d "%~dp0"\r\nstart "" "nwjs-win\\nw.exe" .\r\n');
             logInfo('  RPGReactor.bat');
 
             fs.writeFileSync(path.join(appDir, 'RPGReactor.command'), [
