@@ -3012,18 +3012,46 @@ class ProjectController {
         }
     }
 
-    /** Whether `mapId` was last left in the 3D view. Off until it is ticked. */
+    /**
+     * Whether `mapId` should open in the 3D view: the remembered choice when
+     * there is one, otherwise 3D for a map authored in 3D — the Demo's first
+     * impression is its room, not the flat projection of it. An explicit
+     * "off" is stored as `false`, so turning 3D off sticks.
+     */
     map3DViewRemembered(mapId) {
         if (!Number.isInteger(mapId)) return false;
-        return this._map3DViewMemory()[String(mapId)] === true;
+        const stored = this._map3DViewMemory()[String(mapId)];
+        if (stored === true) return true;
+        if (stored === false) return false;
+        return this._mapAuthoredIn3D(mapId);
+    }
+
+    /** A map whose sidecar declares 3D mode was authored as a 3D map. */
+    _mapAuthoredIn3D(mapId) {
+        try {
+            const fs = require('fs');
+            const path = require('path');
+            const file = path.join(this.currentProject?.path || '',
+                'data', `Map${String(mapId).padStart(3, '0')}.r3d.json`);
+            if (!fs.existsSync(file)) return false;
+            try {
+                return JSON.parse(fs.readFileSync(file, 'utf8')).mode === '3d';
+            } catch (error) {
+                // The web host lists every file but only preloads some for
+                // synchronous reads; a sidecar it cannot open still exists,
+                // and existing is the signal that matters here.
+                return true;
+            }
+        } catch (error) {
+            return false;
+        }
     }
 
     rememberMap3DView(mapId, enabled) {
         const key = this.map3DViewMemoryKey();
         if (!key || !Number.isInteger(mapId) || typeof localStorage === 'undefined') return;
         const memory = this._map3DViewMemory();
-        if (enabled) memory[String(mapId)] = true;
-        else delete memory[String(mapId)];
+        memory[String(mapId)] = !!enabled;
         try {
             localStorage.setItem(key, JSON.stringify(memory));
         } catch (error) {
