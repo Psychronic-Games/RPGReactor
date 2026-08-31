@@ -4,7 +4,7 @@ All notable changes to RPG Reactor will be documented in this file.
 
 This root changelog summarizes public release progress for GitHub; larger releases group their fixes by theme. The detailed editor changelog lives at [`editor/CHANGELOG.md`](editor/CHANGELOG.md).
 
-## [Unreleased - 0.98.4]
+## [0.98.4] - 2026-08-31
 
 0.98.3 let you rig and animate 3D models inside the editor; 0.98.4 puts them in the world and makes the world behave. Height is a real coordinate for every event and prop; placed models get ghost previews, undo, a transform card, mesh-accurate collision, and a passage view; Effekseer effects and video surfaces live inside the 3D scene at true depth; Scoped Wait and queued model animations let events act without freezing the player; Show Text edits whole conversations with a live in-window miniature; a new import optimizer shrinks GLB models with no visible quality change (the bundled demo went 469MB to 168MB); fullscreen renders 3D at native resolution while UI stays smooth; and a stack of community-requested database features landed alongside a weekend of release-hardening fixes. Built on PixiJS 8 for 2D and Three.js for 3D.
 

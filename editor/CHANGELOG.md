@@ -5,7 +5,7 @@ All notable changes to RPG Reactor will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased - 0.98.4]
+## [0.98.4] - 2026-08-31
 
 ### Fixed
 - Project switch: opening a project over another no longer shows the first map black (3D view now disabled and re-framed across the switch; cross-project model preview cache cleared).
