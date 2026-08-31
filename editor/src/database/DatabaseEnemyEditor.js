@@ -106,11 +106,17 @@ class DatabaseEnemyEditor {
         paramsSection.innerHTML = `
             <div class="database-section-header">${tt('Parameters')}</div>
             <div class="database-section-content">
-                <table class="traits-table">
+                <!-- The value column is pinned to the widest box a value can
+                     reach, and the table laid out fixed, so growing a box cannot
+                     move it. Under auto layout the columns are sized from their
+                     content: a box widening to fit another digit took that width
+                     out of the Parameter column, which slid every box left
+                     towards its own label as the number was typed. -->
+                <table class="traits-table" style="table-layout: fixed;">
                     <thead>
                         <tr>
                             <th>${tt('Parameter')}</th>
-                            <th>${tt('Value')}</th>
+                            <th style="width: calc(9ch + 64px);">${tt('Value')}</th>
                         </tr>
                     </thead>
                     <tbody>
