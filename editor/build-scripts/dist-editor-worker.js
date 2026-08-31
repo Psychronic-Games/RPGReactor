@@ -482,7 +482,31 @@ function createArchive(archiveName, sourceDir, innerDirName, preserveSymlinks) {
     logGood(`Created: ${archiveName} (${sizeMB} MB)`);
 }
 
+/**
+ * Native Windows cannot create files named after DOS devices (aux|con|nul|prn,
+ * com1-9, lpt1-9, with or without extension) or names carrying <>:"|?* or a
+ * trailing dot/space. A payload holding one dies during NW's self-extraction
+ * with no window and no error — a stray `data/nul` shipped that way in every
+ * Windows package since 0.95.0. Refuse loudly at build time instead.
+ */
+function assertWindowsSafeNames(dir, offenders = [], base = dir) {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        const name = entry.name;
+        if (/^(aux|con|nul|prn|com[1-9]|lpt[1-9])(\..*)?$/i.test(name)
+            || /[<>:"|?*]/.test(name) || /[. ]$/.test(name)) {
+            offenders.push(path.relative(base, path.join(dir, name)));
+        }
+        if (entry.isDirectory()) assertWindowsSafeNames(path.join(dir, name), offenders, base);
+    }
+    if (dir === base && offenders.length) {
+        throw new Error('Windows cannot extract these file names; rename or delete them:\n  '
+            + offenders.slice(0, 10).join('\n  '));
+    }
+    return offenders;
+}
+
 function createNwPackage(sourceDir, destPath) {
+    assertWindowsSafeNames(sourceDir);
     if (fs.existsSync(destPath)) fs.rmSync(destPath, { force: true });
     normalizeArchiveTimestamps(sourceDir);
     if (process.platform === 'win32') {
@@ -1452,6 +1476,7 @@ function buildWeb(stageRoot, stagingDir) {
 
         } else if (packageType === 'universal') {
             logBlue('--- Building universal package ---');
+            assertWindowsSafeNames(stageRoot);
             const pkgDir = path.join(stagingDir, 'pkg-universal');
             const appDir = path.join(pkgDir, 'RPGReactor');
             copyDirRecursive(stageRoot, appDir);

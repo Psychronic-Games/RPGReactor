@@ -17,6 +17,20 @@ never local builds (now at the top of RELEASE-CHECKLIST); every win package
 ships `Launch with log.bat` (exit code + %TEMP% log) so a silent no-launch
 always produces data.
 
+ROOT CAUSE FOUND (after the SmartScreen-approved-then-nothing report):
+`template/Demo/data/nul` — 38 bytes of "(eval):1: command not found:
+taskkill", a `> nul` redirect run in a Linux shell, TRACKED SINCE 0.95.0 —
+plus untracked copies in Barebones/Parallax data/. Windows reserves nul/con/
+aux/prn/com1-9/lpt1-9 as device names and cannot create them as files; NW's
+payload self-extraction died on it, silently, in EVERY Windows package since
+0.95.0. Wine reserves nothing, hence "runs on wine". Fixed: files deleted,
+`assertWindowsSafeNames` guard in dist-editor-worker (createNwPackage +
+universal), `windows-safe-filenames.test.cjs` (tracked files + on-disk
+template/runtime walk), Desktop win zip patched in place (payload zip split
+from the exe at byte 3189760, zip -d, re-concatenated; SHA256SUMS updated;
+old zip kept as .BROKEN-nul). LESSON: "works on Wine" clears nothing about
+native Windows file-name and trust semantics.
+
 ## 2026-08-30 — web (itch) console cleanup (runtime 20260830.33)
 
 From the owner's itch web-editor test. Ours vs not-ours: `Unrecognized
