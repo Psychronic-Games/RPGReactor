@@ -53,10 +53,10 @@
     }
 
     /**
-     * The slot as the game will hear it. SoundManager.playSystemSound picks
-     * one of the named sounds at random, and applySystemSoundPitch then
-     * replaces that pitch from the slot range (runtime/reactor_managers.js);
-     * this repeats both steps. `random` is injected so a test can pin the draw.
+     * The slot as the game will hear it. AudioManager.resolveSeVariant picks
+     * one of the named sounds at random and replaces that pitch from the slot
+     * range (runtime/reactor_managers.js); this repeats both steps. `random` is
+     * injected so a test can pin the draw.
      */
     function auditionPick(sounds, range, random) {
         const draw = typeof random === 'function' ? random : Math.random;
@@ -332,9 +332,9 @@
         body.appendChild(rangePanel);
 
         // ── Audition ─────────────────────────────────────────────────────
-        // SoundManager.playSystemSound picks one of the slot's named sounds at
-        // random, and applySystemSoundPitch then replaces that sound's pitch
-        // from the slot's pitchRandom range (runtime/reactor_managers.js). The
+        // AudioManager.resolveSeVariant picks one of the slot's named sounds at
+        // random and replaces that sound's pitch from the slot's pitchRandom
+        // range (runtime/reactor_managers.js) -- the slot goes there whole. The
         // audition repeats both steps, so what is heard here is what the game
         // would have played. The range is read from the live controls rather
         // than from draft.pitchRandom, which is only written on OK — toggling

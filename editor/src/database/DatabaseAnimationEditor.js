@@ -1520,10 +1520,17 @@ class DatabaseAnimationEditor {
                 this.populateTimingsList(animation);
             });
 
-            // Format SE info compactly
+            // Format SE info compactly. A pool or a pitch range is worth seeing
+            // from the list: the row otherwise names one take of several and
+            // reads as a fixed sound.
+            const extras = DatabaseAnimationEditor.seExtras(timing.se);
+            const poolCount = extras.variants ? extras.variants.filter(entry => entry?.name).length : 0;
+            const range = extras.pitchRandom;
+            const badge = `${poolCount ? ` +${poolCount}` : ''}`
+                + `${range && range.min != null && range.max != null ? `  P${range.min}-${range.max}` : ''}`;
             const seInfo = seName && timing.se?.volume !== undefined
-                ? `${seName} (${tt('Vol:')}${timing.se.volume} ${tt('Pitch:')}${timing.se.pitch})`
-                : (seName || tt('None'));
+                ? `${seName} (${tt('Vol:')}${timing.se.volume} ${tt('Pitch:')}${timing.se.pitch})${badge}`
+                : (seName ? `${seName}${badge}` : tt('None'));
 
             // When selected, the entry has a gold-tinted background. All text
             // bumps to bright white for max contrast (gold-on-gold is invisible).
@@ -1740,6 +1747,7 @@ class DatabaseAnimationEditor {
         // Populate fields
         frameInput.value = timingData.frame || 0;
         seNameInput.value = timingData.se?.name || tt('None');
+        this._timingSeExtras = DatabaseAnimationEditor.seExtras(timingData.se);
 
         // Populate SE volume, pitch, and pan
         const seVolumeSlider = document.getElementById('timing-se-volume');
@@ -1871,6 +1879,7 @@ class DatabaseAnimationEditor {
                                         <path d="M11 5.5a3.4 3.4 0 0 1 0 5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
                                         <path d="M13 3.5a6.2 6.2 0 0 1 0 9" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
                                     </svg>${tt('Pick SE')}</button>
+                                <button id="timing-se-variants" class="rr-btn-secondary" style="font-size: 11px;">${tt('Variants...')}</button>
                                 <button id="timing-se-clear" style="padding: 8px 12px; background: var(--color-bg-button); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 3px; cursor: pointer; font-size: 11px;">${tt('Clear')}</button>
                             </div>
                             <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)) auto; gap: 12px; align-items: center;">
@@ -2003,6 +2012,7 @@ class DatabaseAnimationEditor {
             saveBtn.textContent = tt('Add Timing');
             saveBtn.dataset.editMode = 'false';
             delete saveBtn.dataset.editIndex;
+            this._timingSeExtras = {};
 
             // Reset form fields
             document.getElementById('timing-frame').value = 0;
@@ -2086,7 +2096,8 @@ class DatabaseAnimationEditor {
                             name: seName,
                             pan: sePan,
                             pitch: sePitch,
-                            volume: seVolume
+                            volume: seVolume,
+                            ...(this._timingSeExtras || {})
                         }
                     };
 
@@ -2127,7 +2138,8 @@ class DatabaseAnimationEditor {
                         name: seName,
                         pan: sePan,
                         pitch: sePitch,
-                        volume: seVolume
+                        volume: seVolume,
+                        ...(this._timingSeExtras || {})
                     } : { name: '', pan: 0, pitch: 100, volume: 90 },
                     flashScope: flashType,
                     flashColor: [red, green, blue, intensity],
@@ -2184,6 +2196,9 @@ class DatabaseAnimationEditor {
             // default would preview a silent timing at almost full volume. The
             // pitch slider is min="50", so it cannot reach a falsy value.
             previewAudio.volume = DatabaseAnimationEditor.readNumericInput('timing-se-volume', 90) / 100;
+            // A pitch here is a playback rate, and Chromium time-stretches by
+            // default -- which preserves the pitch and so cancels the setting.
+            previewAudio.preservesPitch = false;
             previewAudio.playbackRate = (parseInt(sePitchSlider.value, 10) || 100) / 100;
             previewAudio.play().catch(err => console.warn('Failed to play SE preview:', err));
         });
@@ -2192,6 +2207,7 @@ class DatabaseAnimationEditor {
         const seClearBtn = document.getElementById('timing-se-clear');
         seClearBtn?.addEventListener('click', () => {
             document.getElementById('timing-se-name').value = noneLabel;
+            this._timingSeExtras = {};
             seVolumeSlider.value = 90;
             seVolumeValue.textContent = '90';
             sePitchSlider.value = 100;
@@ -2237,6 +2253,62 @@ class DatabaseAnimationEditor {
                 }
             });
         });
+
+        // A timing's SE takes a variant pool and a random pitch range the same
+        // way a System 1 slot does, because AudioManager resolves both for every
+        // SE the engine plays rather than only for the system sound slots. The
+        // slot modal is opened as-is rather than reimplemented here, so the two
+        // surfaces cannot drift apart.
+        document.getElementById('timing-se-variants')?.addEventListener('click', () => {
+            const currentProject = this.projectManager.getCurrentProject();
+            if (!currentProject) { alert(tt('No project loaded')); return; }
+
+            const seNameInput = document.getElementById('timing-se-name');
+            const name = seNameInput.value !== noneLabel ? seNameInput.value : '';
+            if (!name) { alert(tt('Pick a sound effect first')); return; }
+
+            const fs = require('fs');
+            const path = require('path');
+            const seFolder = path.join(currentProject.path, 'audio', 'se');
+            if (!fs.existsSync(seFolder)) { alert(tt('SE folder not found: audio/se')); return; }
+
+            RRSystemSoundSlotModal.open({
+                label: `${tt('SE:')} ${name}`,
+                // The levels come from the live sliders, not from the stored
+                // timing: they may have been dragged since the modal opened.
+                slot: {
+                    name,
+                    volume: DatabaseAnimationEditor.readNumericInput('timing-se-volume', 90),
+                    pitch: DatabaseAnimationEditor.readNumericInput('timing-se-pitch', 100),
+                    pan: DatabaseAnimationEditor.readNumericInput('timing-se-pan', 0),
+                    ...this._timingSeExtras
+                },
+                files: RRAssetFiles.listUnique(seFolder, RRAssetFiles.AUDIO_EXTENSIONS),
+                zIndex: 10600,
+                onOk: result => {
+                    seNameInput.value = result.name || noneLabel;
+                    seVolumeSlider.value = result.volume;
+                    seVolumeValue.textContent = result.volume;
+                    sePitchSlider.value = result.pitch;
+                    sePitchValue.textContent = result.pitch;
+                    sePanSlider.value = result.pan;
+                    sePanValue.textContent = result.pan;
+                    this._timingSeExtras = DatabaseAnimationEditor.seExtras(result);
+                }
+            });
+        });
+    }
+
+    /**
+     * The keys a timing's SE carries beyond the four the sliders own. Held
+     * apart because the save path rebuilds the SE from those four, and a pool
+     * set here would otherwise be dropped the next time the timing was saved.
+     */
+    static seExtras(se) {
+        const extras = {};
+        if (Array.isArray(se?.variants) && se.variants.length > 0) extras.variants = se.variants;
+        if (se?.pitchRandom) extras.pitchRandom = se.pitchRandom;
+        return extras;
     }
 
     showCellPropertiesModal(animation, frameIndex, cellIndex, renderFrame) {
@@ -3269,6 +3341,9 @@ class DatabaseAnimationEditor {
                 // Handle pitch (playbackRate)
                 // RPG Maker pitch: 50-150, where 100 is normal
                 // Web Audio playbackRate: 0.5-1.5, where 1.0 is normal
+                // preservesPitch off, or Chromium time-stretches the clip and
+                // the pitch setting is inaudible.
+                audio.preservesPitch = false;
                 audio.playbackRate = (se.pitch || 100) / 100;
 
                 // Pan is not supported in HTML5 Audio without Web Audio API
@@ -4184,6 +4259,7 @@ class DatabaseAnimationEditor {
 
                 const audio = new Audio(RRAssetFiles.toUrl(audioFile.absolutePath));
                 audio.volume = (Number.isFinite(se.volume) ? se.volume : 90) / 100;
+                audio.preservesPitch = false;
                 audio.playbackRate = (se.pitch || 100) / 100;
 
                 audio.play().catch(err => {

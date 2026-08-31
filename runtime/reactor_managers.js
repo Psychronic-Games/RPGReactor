@@ -1472,7 +1472,74 @@ AudioManager.stopMe = function() {
     }
 };
 
+// Every take a slot or timing can play: the SE itself, then its variants,
+// with anything unnamed dropped.
+AudioManager.seVariantPool = function(se) {
+    const variants = se && Array.isArray(se.variants) ? se.variants : [];
+    return [se].concat(variants).filter(entry => entry && entry.name);
+};
+
+// A pitch inside `range`, or null when the range is absent or unusable. The
+// editor writes '' for a cleared control, which is not a zero -- Number('') is
+// 0 and would clamp to a silent-sounding 50 rather than meaning "no range".
+// Clamped to 50-150 because pitch is playback rate downstream.
+AudioManager.rollSePitch = function(range) {
+    if (!range || range.min == null || range.max == null) {
+        return null;
+    }
+    if (String(range.min).trim() === '' || String(range.max).trim() === '') {
+        return null;
+    }
+    let min = Math.round(Number(range.min));
+    let max = Math.round(Number(range.max));
+    if (!Number.isFinite(min) || !Number.isFinite(max)) {
+        return null;
+    }
+    min = Math.max(50, Math.min(150, min));
+    max = Math.max(50, Math.min(150, max));
+    if (min > max) {
+        return null;
+    }
+    return min + Math.floor(Math.random() * (max - min + 1));
+};
+
+// The SE to actually play. Resolution sits here rather than in SoundManager so
+// that every SE the engine plays gets it -- animation sound timings, the Play SE
+// event command, UI and 3D effect sounds -- and not only the system sound slots,
+// which are the only thing SoundManager is reached by.
+//
+// Returns `se` itself when neither key is set, so the common path allocates
+// nothing. Otherwise it returns a *fresh* object: the pool entries are live
+// $dataSystem/$dataAnimations objects, and writing a rolled pitch back into one
+// would persist it on the editor's next save.
+AudioManager.resolveSeVariant = function(se) {
+    if (!se || (!se.variants && !se.pitchRandom)) {
+        return se;
+    }
+    const pool = this.seVariantPool(se);
+    if (pool.length === 0) {
+        return se;
+    }
+    const picked = pool.length === 1
+        ? pool[0]
+        : pool[Math.floor(Math.random() * pool.length)];
+    const pitch = this.rollSePitch(se.pitchRandom);
+    // Nothing to vary: one take and no usable range. Returning the SE itself
+    // keeps a cleared pitch control indistinguishable from never having set
+    // one, and allocates nothing on what is much the commonest path.
+    if (pool.length === 1 && pitch === null) {
+        return se;
+    }
+    return {
+        name: picked.name,
+        volume: picked.volume,
+        pitch: pitch === null ? picked.pitch : pitch,
+        pan: picked.pan
+    };
+};
+
 AudioManager.playSe = function(se) {
+    se = this.resolveSeVariant(se);
     if (se.name) {
         // [Note] Do not play the same sound in the same frame.
         const latestBuffers = this._seBuffers.filter(
@@ -1510,6 +1577,7 @@ AudioManager.stopSe = function() {
 };
 
 AudioManager.playStaticSe = function(se) {
+    se = this.resolveSeVariant(se);
     if (se.name) {
         this.loadStaticSe(se);
         for (const buffer of this._staticBuffers) {
@@ -1633,44 +1701,38 @@ SoundManager.preloadImportantSounds = function() {
     this.loadSystemSound(3);
 };
 
+SoundManager.systemSoundSlot = function(n) {
+    return ($dataSystem && $dataSystem.sounds && $dataSystem.sounds[n]) || null;
+};
+
 SoundManager.loadSystemSound = function(n) {
-    for (const se of this.systemSoundVariants(n)) {
+    // Every take in the pool, not just the base one: playStaticSe would load a
+    // missing variant on demand, but the first play of it would then fire
+    // against a buffer that has not started fetching.
+    for (const se of AudioManager.seVariantPool(this.systemSoundSlot(n))) {
         AudioManager.loadStaticSe(se);
     }
 };
 
 SoundManager.playSystemSound = function(n) {
-    const variants = this.systemSoundVariants(n);
-    if (variants.length === 0) return;
-    const selected = variants.length === 1
-        ? variants[0]
-        : variants[Math.floor(Math.random() * variants.length)];
-    AudioManager.playStaticSe(this.applySystemSoundPitch(selected, $dataSystem.sounds[n]));
+    // The slot goes to AudioManager whole, pool and pitch range intact, and is
+    // resolved there. Nothing is rolled here, so nothing rolls twice.
+    const slot = this.systemSoundSlot(n);
+    if (slot) {
+        AudioManager.playStaticSe(slot);
+    }
 };
 
+// Kept because a plugin may alias either, and both keep their old shape and
+// meaning -- they simply no longer sit in the play path.
 SoundManager.systemSoundVariants = function(n) {
-    const slot = $dataSystem && $dataSystem.sounds && $dataSystem.sounds[n];
-    if (!slot) return [];
-    return [slot].concat(Array.isArray(slot.variants) ? slot.variants : [])
-        .filter(se => se && se.name);
+    return AudioManager.seVariantPool(this.systemSoundSlot(n));
 };
 
 SoundManager.applySystemSoundPitch = function(se, slot) {
-    const range = slot && slot.pitchRandom;
-    if (!range || range.min == null || range.max == null) return se;
-    if (String(range.min).trim() === '' || String(range.max).trim() === '') return se;
-    let min = Math.round(Number(range.min));
-    let max = Math.round(Number(range.max));
-    if (!Number.isFinite(min) || !Number.isFinite(max)) return se;
-    min = Math.max(50, Math.min(150, min));
-    max = Math.max(50, Math.min(150, max));
-    if (min > max) return se;
-    return {
-        name: se.name,
-        volume: se.volume,
-        pitch: min + Math.floor(Math.random() * (max - min + 1)),
-        pan: se.pan
-    };
+    const pitch = AudioManager.rollSePitch(slot && slot.pitchRandom);
+    if (pitch === null) return se;
+    return { name: se.name, volume: se.volume, pitch, pan: se.pan };
 };
 
 SoundManager.playCursor = function() {

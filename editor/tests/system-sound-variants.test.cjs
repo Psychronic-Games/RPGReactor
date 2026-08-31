@@ -8,10 +8,22 @@ const editorRoot = path.resolve(__dirname, '..');
 const repoRoot = path.resolve(editorRoot, '..');
 const modal = require(path.join(editorRoot, 'src', 'utils', 'SystemSoundSlotModal.js'));
 
+const runtimeSource = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_managers.js'), 'utf8');
+
+function slice(from, to, label) {
+    const start = runtimeSource.indexOf(from);
+    const end = runtimeSource.indexOf(to, start);
+    assert.ok(start >= 0 && end > start, `${label} is still where the test expects`);
+    return runtimeSource.slice(start, end);
+}
+
+/**
+ * The real SoundManager over the real AudioManager SE players, both lifted out
+ * of the shipped runtime. Variant and pitch resolution lives in AudioManager,
+ * so a harness that stubs it out would assert nothing about what actually
+ * plays -- which is the whole point of resolving at that depth.
+ */
 function soundManager(system, randomValues = [0]) {
-    const source = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_managers.js'), 'utf8');
-    const start = source.indexOf('function SoundManager()');
-    const end = source.indexOf('//-----------------------------------------------------------------------------\n// TextManager', start);
     const loaded = [];
     const played = [];
     let randomIndex = 0;
@@ -21,19 +33,41 @@ function soundManager(system, randomValues = [0]) {
         randomCalls += 1;
         return randomValues[Math.min(randomIndex++, randomValues.length - 1)];
     };
+    const audio = {
+        _seBuffers: [],
+        _staticBuffers: [],
+        createBuffer: (folder, name) => ({ name, frameCount: 0, play() {}, stop() {}, isPlaying: () => false, destroy() {} }),
+        isStaticSe: se => audio._staticBuffers.some(buffer => buffer.name === se.name)
+    };
+    audio.loadStaticSe = se => {
+        if (!se.name) return;
+        loaded.push(se);
+        if (!audio.isStaticSe(se)) audio._staticBuffers.push(audio.createBuffer('se/', se.name));
+    };
     const sandbox = {
         $dataSystem: system,
-        AudioManager: {
-            loadStaticSe: se => loaded.push(se),
-            playStaticSe: se => played.push(se)
-        },
+        AudioManager: audio,
+        Graphics: { frameCount: 0 },
         Error,
-        Math,
+        Math: math,
         Number
     };
-    sandbox.Math = math;
-    vm.runInNewContext(`${source.slice(start, end)}; this.SoundManager = SoundManager;`, sandbox);
-    return { SoundManager: sandbox.SoundManager, loaded, played, randomCalls: () => randomCalls };
+    // Ends before loadStaticSe so the stub above survives: the real one wants a
+    // WebAudio buffer, and what it would load is what this harness records.
+    const audioSection = slice('AudioManager.seVariantPool = function',
+        'AudioManager.loadStaticSe = function', 'the AudioManager SE players');
+    const soundSection = slice('function SoundManager()',
+        '//-----------------------------------------------------------------------------\n// TextManager',
+        'SoundManager');
+    vm.runInNewContext(`${audioSection}\n${soundSection}\nthis.SoundManager = SoundManager;`, sandbox);
+    // What reaches a buffer is what the player resolved, so recording here
+    // records exactly what a listener would hear.
+    audio.updateSeParameters = (buffer, se) => played.push(se);
+    audio.cleanupSe = () => {};
+    return {
+        SoundManager: sandbox.SoundManager, AudioManager: audio,
+        loaded, played, randomCalls: () => randomCalls
+    };
 }
 
 test('all 24 stock system sound slots are authorable, plus the two typed recovery slots', () => {
@@ -105,7 +139,10 @@ test('runtime uniformly selects candidates while preserving authored levels', ()
     primary.variants = [{ name: 'Cursor2', volume: 65, pitch: 87, pan: -20 }];
     const runtime = soundManager({ sounds: [primary] }, [0.999]);
     runtime.SoundManager.playSystemSound(0);
-    assert.deepEqual(runtime.played[0], primary.variants[0]);
+    // Spread to re-home the object: the resolver builds it inside the vm realm,
+    // so deepStrictEqual would compare prototypes and fail on structure it likes.
+    assert.deepEqual({ ...runtime.played[0] }, primary.variants[0]);
+    assert.equal(primary.variants[0].pitch, 87, 'the live database entry is untouched');
 });
 
 test('pitch randomization is inclusive, clamped, and never mutates database sounds', () => {
@@ -222,4 +259,104 @@ test('MP and TP recovery fall back to Recovery only when their slot is absent', 
         'a JSON hole reads as absent');
     assert.deepEqual(namesFor(stockSounds().concat([{ name: '' }, { name: '' }])), [],
         'a present-but-blank slot is a deliberate silence, not a fallback');
+});
+
+test('both SE players resolve the variant pool before they look at the name', () => {
+    // The depth is the feature. Resolving inside SoundManager reaches only the
+    // 26 system sound slots; resolving here reaches every SE the engine plays.
+    for (const player of ['playSe', 'playStaticSe']) {
+        const body = slice(`AudioManager.${player} = function(se) {`, '\n};', player);
+        const resolveAt = body.indexOf('this.resolveSeVariant(se)');
+        const nameAt = body.indexOf('se.name');
+        assert.ok(resolveAt >= 0, `${player} resolves the variant`);
+        assert.ok(resolveAt < nameAt, `${player} resolves before it reads the name`);
+    }
+});
+
+test('an animation timing SE draws from its pool, not only a system slot', () => {
+    // $dataAnimations soundTimings[i].se and the Play SE event command both go
+    // straight to AudioManager.playSe and never touch SoundManager, so before
+    // this they could not carry a pool at all.
+    const timing = {
+        name: 'Fire1', volume: 90, pitch: 100, pan: 0,
+        variants: [{ name: 'Fire2', volume: 80, pitch: 105, pan: 5 }]
+    };
+    const runtime = soundManager({ sounds: [] }, [0.999]);
+    runtime.AudioManager.playSe(timing);
+    assert.deepEqual({ ...runtime.played[0] }, timing.variants[0]);
+    assert.equal(timing.name, 'Fire1', 'the live database entry is untouched');
+});
+
+test('a timing with a pitch range but one take still varies', () => {
+    const timing = { name: 'Hit1', volume: 90, pitch: 100, pan: 0, pitchRandom: { min: 95, max: 105 } };
+    const runtime = soundManager({ sounds: [] }, [0.999999]);
+    runtime.AudioManager.playSe(timing);
+    assert.equal(runtime.played[0].pitch, 105);
+    assert.equal(timing.pitch, 100, 'the rolled pitch is not written back');
+});
+
+test('an ordinary SE is passed through untouched, allocating nothing', () => {
+    const plain = { name: 'Ok1', volume: 90, pitch: 100, pan: 0 };
+    const runtime = soundManager({ sounds: [] });
+    runtime.AudioManager.playSe(plain);
+    assert.equal(runtime.played[0], plain, 'same object: no pool, no range, no work');
+    assert.equal(runtime.randomCalls(), 0);
+});
+
+test('a system slot resolves once, not twice', () => {
+    // SoundManager used to pick the take and roll the pitch itself and then
+    // hand the result to playStaticSe. Now it hands over the slot whole, so the
+    // two layers cannot both roll.
+    const primary = {
+        name: 'Cursor1', volume: 90, pitch: 100, pan: 0,
+        variants: [{ name: 'Cursor2', volume: 90, pitch: 100, pan: 0 }]
+    };
+    const runtime = soundManager({ sounds: [primary] }, [0]);
+    runtime.SoundManager.playSystemSound(0);
+    assert.equal(runtime.played.length, 1);
+    assert.equal(runtime.randomCalls(), 1, 'one roll for the take, and no second resolution');
+});
+
+test('an animation timing keeps its pool across a save, and shows it in the list', () => {
+    // The timing modal rebuilds the SE from the four fields its sliders own, so
+    // a pool set through the slot modal has to be carried alongside them or it
+    // is dropped the next time the timing is saved.
+    const source = fs.readFileSync(
+        path.join(editorRoot, 'src', 'database', 'DatabaseAnimationEditor.js'), 'utf8');
+
+    assert.match(source, /RRSystemSoundSlotModal\.open\(\{/,
+        'the timing modal opens the same slot modal System 1 uses, not a second one');
+
+    const saveSites = source.match(/\.\.\.\(this\._timingSeExtras \|\| \{\}\)/g) || [];
+    assert.equal(saveSites.length, 2,
+        'both save paths -- Effekseer soundTimings and sprite timings -- carry the extras');
+
+    // seExtras is the one place that decides what "beyond the four fields" means.
+    const Editor = { seExtras: null };
+    const at = source.indexOf('static seExtras(se) {');
+    assert.ok(at >= 0, 'seExtras is still declared');
+    const body = source.slice(at, source.indexOf('\n    }', at));
+    vm.runInNewContext(`${body.replace('static seExtras', 'this.seExtras = function seExtras')}\n}`, Editor);
+
+    // JSON round-trip to re-home the vm realm's objects: deepStrictEqual
+    // compares prototypes and would reject structure it otherwise likes.
+    const extras = se => JSON.parse(JSON.stringify(Editor.seExtras(se)));
+    assert.deepEqual(extras({ name: 'Fire1', volume: 90 }), {},
+        'an ordinary SE carries nothing extra');
+    assert.deepEqual(extras({ name: 'Fire1', variants: [] }), {},
+        'an emptied pool is not stored as a pool');
+    assert.deepEqual(
+        extras({ name: 'Fire1', variants: [{ name: 'Fire2' }], pitchRandom: { min: 95, max: 105 } }),
+        { variants: [{ name: 'Fire2' }], pitchRandom: { min: 95, max: 105 } });
+});
+
+test('every animation SE preview turns preservesPitch off', () => {
+    // Chromium time-stretches by default, which preserves pitch and so makes a
+    // pitch setting inaudible -- the preview would disagree with the game.
+    const source = fs.readFileSync(
+        path.join(editorRoot, 'src', 'database', 'DatabaseAnimationEditor.js'), 'utf8');
+    const rates = source.match(/\.playbackRate = /g) || [];
+    const preserves = source.match(/\.preservesPitch = false/g) || [];
+    assert.equal(preserves.length, rates.length,
+        'every path that sets a playback rate also turns off pitch preservation');
 });
