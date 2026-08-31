@@ -160,7 +160,20 @@ function loadIconPicker({ sheetHeight = 640, fail = false } = {}) {
     const alerts = [];
     const context = {
         console,
-        document: { body, createElement: tag => new FakeElement(tag) },
+        // The picker listens for Escape at the document, captured, and drops
+        // the listener when it closes; the stub records both so a test can
+        // fire the key and see the handler go.
+        document: {
+            body,
+            createElement: tag => new FakeElement(tag),
+            keyHandlers: [],
+            addEventListener(type, handler) { if (type === 'keydown') this.keyHandlers.push(handler); },
+            removeEventListener(type, handler) {
+                if (type !== 'keydown') return;
+                const at = this.keyHandlers.indexOf(handler);
+                if (at >= 0) this.keyHandlers.splice(at, 1);
+            }
+        },
         Image,
         alert: message => alerts.push(message),
         window: null
@@ -209,4 +222,29 @@ test('a missing IconSet.png closes the picker and reports instead of showing an 
     assert.equal(body.children.length, 0, 'the overlay is gone');
     assert.deepEqual(alerts, ['IconSet.png was not found in img/system.']);
     assert.equal(picker.imageUrl('C:\\Game Dev\\p#1\\img\\system\\IconSet.png'), 'file://C:/Game%20Dev/p%231/img/system/IconSet.png');
+});
+
+test('Escape closes the icon picker, and the listener leaves with it', async () => {
+    // Cancel was the only way out, so the keyboard habit every other dialog in
+    // the editor answers to did nothing here.
+    const { picker, body, flush, context } = loadIconPicker();
+    const writes = [];
+    const field = picker.createField({ value: '5', iconSetPath: '/p/img/system/IconSet.png', onChange: v => writes.push(v) });
+    field.children[2].listeners.click();
+    await flush();
+
+    const modal = body.children.at(-1);
+    assert.equal(modal.className, 'rr-icon-picker-overlay');
+    assert.equal(context.document.keyHandlers.length, 1, 'the picker is listening');
+
+    let stopped = 0;
+    context.document.keyHandlers[0]({ key: 'ArrowRight', stopPropagation: () => { stopped += 1; } });
+    assert.equal(body.children.includes(modal), true, 'an ordinary key leaves it open');
+    assert.equal(stopped, 0);
+
+    context.document.keyHandlers[0]({ key: 'Escape', stopPropagation: () => { stopped += 1; } });
+    assert.equal(body.children.includes(modal), false, 'Escape closes it');
+    assert.equal(stopped, 1, 'and the key does not travel on');
+    assert.deepEqual(writes, [], 'closing without OK writes nothing');
+    assert.equal(context.document.keyHandlers.length, 0, 'the listener is gone with the dialog');
 });
