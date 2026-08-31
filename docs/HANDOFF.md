@@ -23,7 +23,13 @@ manifest could remove the network-log line; noted as a future option.
 openPlaytest/createPlaytestModal) - editor app.stop() + MapEditor3D
 .suspended gate while it is open (resume must NOT app.start() when 3D owns
 rendering); MSAA capped at 2x once canvasPixelRatio >= 2;
-Graphics.maxCanvasPixelRatio is the opt-down knob. Browser rAF is
+Graphics.maxCanvasPixelRatio is the opt-down knob.
+.36: _disposeTargets destroyed pass textures the instant a resize rebuilt
+them; the pass sprites rebuild off generation() one update LATER, so one
+render walked a dead texture (SpritePipe guard skipped it + logged the
+"destroy() leak" warning, ground blinked a frame). Same cure as the pool:
+defer the reap two rAF. Pattern: anything torn down mid-frame that a PIXI
+node still references gets the two-frame grace. Browser rAF is
 vsync-locked: 60 on a 60Hz panel is full speed, desktop 180 is an uncapped
 panel, not a Reactor difference.
 Also .34: `Graphics._defaultStretchMode` returns true everywhere — web

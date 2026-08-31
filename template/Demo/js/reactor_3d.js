@@ -571,18 +571,33 @@ Reactor3D.Viewport.prototype.generation = function() {
 };
 
 Reactor3D.Viewport.prototype._disposeTargets = function() {
-    for (const slot of Object.keys(this._targets || {})) {
-        try { this._targets[slot].dispose(); } catch (e) { /* already gone */ }
-    }
+    const targets = this._targets || {};
+    const passTextures = this._passTextures || {};
     this._targets = Object.create(null);
-    for (const slot of Object.keys(this._passTextures || {})) {
-        const entry = this._passTextures[slot];
-        // PIXI never created the GL texture, so it must not delete it either:
-        // the entry is dropped before the source is destroyed.
-        if (entry && entry.source && this._pixi) delete entry.source._gpuData[this._pixi.uid];
-        try { entry.texture.destroy(true); } catch (e) { /* already gone */ }
-    }
     this._passTextures = Object.create(null);
+    const pixi = this._pixi;
+    const reap = () => {
+        for (const slot of Object.keys(targets)) {
+            try { targets[slot].dispose(); } catch (e) { /* already gone */ }
+        }
+        for (const slot of Object.keys(passTextures)) {
+            const entry = passTextures[slot];
+            // PIXI never created the GL texture, so it must not delete it
+            // either: the entry is dropped before the source is destroyed.
+            if (entry && entry.source && pixi) delete entry.source._gpuData[pixi.uid];
+            try { entry.texture.destroy(true); } catch (e) { /* already gone */ }
+        }
+    };
+    // The pass sprites rebuild off the generation on their next update; a
+    // render can land between this dispose (a resize event) and that
+    // rebuild, and a sprite holding a destroyed texture is skipped — the
+    // ground blinks out for a frame and the compat guard logs a leak that
+    // is not one. Two frames from now nothing references the old passes.
+    if (typeof requestAnimationFrame === "function") {
+        requestAnimationFrame(function() { requestAnimationFrame(reap); });
+    } else {
+        reap();
+    }
 };
 
 Reactor3D.Viewport.prototype._target = function(slot) {

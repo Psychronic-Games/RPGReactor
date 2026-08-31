@@ -80,7 +80,7 @@ test('three renders into targets that hold the same bytes the canvas did, and bo
     assert.match(pass, /rotate: PIXI\.groupD8\.MIRROR_VERTICAL/, 'a framebuffer\'s first row is its bottom');
     assert.match(pass, /alphaMode: "premultiplied-alpha"/);
     const dispose = r3d.slice(r3d.indexOf('Reactor3D.Viewport.prototype._disposeTargets'), r3d.indexOf('Reactor3D.Viewport.prototype._target = function'));
-    assert.match(dispose, /delete entry\.source\._gpuData\[this\._pixi\.uid\];[\s\S]*?entry\.texture\.destroy\(true\)/, 'the GPU record is dropped before PIXI destroys the source');
+    assert.match(dispose, /delete entry\.source\._gpuData\[pixi\.uid\];[\s\S]*?entry\.texture\.destroy\(true\)/, 'the GPU record is dropped before PIXI destroys the source');
 });
 
 test('a shared pass is never copied, uploaded, or destroyed by the spriteset', () => {
