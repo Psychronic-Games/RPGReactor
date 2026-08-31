@@ -129,7 +129,11 @@ test('Effekseer preview consumes target flashes and always balances beginDraw/en
 });
 
 test('timing edits, position changes, and delayed setup keep the active detail coherent', () => {
-    assert.match(source, /editTiming\(animation, index\)[\s\S]*timingsMap\.get\(ft\.frame\)\.flashScope = 1/);
+    // editTiming reads its row from the shared builder rather than rebuilding a
+    // frame-keyed map of its own, which is what lets two sounds on one frame be
+    // edited separately instead of collapsing into one row.
+    assert.match(source, /editTiming\(animation, index\)[\s\S]{0,400}?DatabaseAnimationEditor\.timingRows\(animation\)/);
+    assert.match(source, /static timingRows\(animation\)/);
     assert.match(source, /animation\.position = parseInt\(opt\.value\);[\s\S]{0,300}?_currentSpriteRenderFrame/);
     assert.match(source, /_currentSpriteRenderStaticFrame = renderStaticFrame/);
     assert.match(source, /_refreshStaticAnimationPreview\(animation\)/);

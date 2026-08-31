@@ -12,7 +12,10 @@ const pma = fs.readFileSync(path.join(repoRoot, 'editor', 'src', 'event', 'comma
 test('Effekseer animations flash the screen and hide the target too', () => {
     assert.doesNotMatch(animEditor, /radio\.disabled = true;/, 'no flash choice is greyed out any more');
     assert.match(animEditor, /if \(timing\.flashScope === 2 \|\| timing\.flashScope === 3\) entry\.scope = timing\.flashScope;/, 'the scope rides the saved timing');
-    assert.match(animEditor, /flashScope = ft\.scope === 2 \|\| ft\.scope === 3 \? ft\.scope : 1;/, 'and rides back into the modal');
+    // The scope is read back in DatabaseAnimationEditor.timingRows, the one
+    // builder every timing surface now goes through; it used to be copied into
+    // three of them.
+    assert.match(animEditor, /flash\.scope === 2 \|\| flash\.scope === 3 \? flash\.scope : 1/, 'and rides back into the row');
     assert.match(sprites, /\$gameScreen\.startFlash\(timing\.color\.slice\(\), timing\.duration\);/, 'scope 2 is a real screen flash');
     assert.match(sprites, /this\._reactorHideDuration = Math\.max/, 'scope 3 hides the target for the duration');
     assert.match(sprites, /!\(this\._reactorHideDuration > 0\) &&/, 'the animation is not over while a target is hidden');

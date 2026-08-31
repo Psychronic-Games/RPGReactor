@@ -151,31 +151,20 @@ class DatabaseAnimationEditor {
             return;
         }
 
-        const timingsMap = new Map();
-        const ensureTiming = frame => {
-            const safeFrame = Number.isFinite(frame) ? frame : 0;
-            if (!timingsMap.has(safeFrame)) {
-                timingsMap.set(safeFrame, {
-                    frame: safeFrame,
-                    se: { name: '', pan: 0, pitch: 100, volume: 90 },
-                    flashScope: 0,
-                    flashColor: [0, 0, 0, 0],
-                    flashDuration: 0
-                });
-            }
-            return timingsMap.get(safeFrame);
-        };
-
-        (animation.soundTimings || []).forEach(timing => {
-            ensureTiming(timing.frame).se = timing.se || { name: '', pan: 0, pitch: 100, volume: 90 };
-        });
-        (animation.flashTimings || []).forEach(timing => {
-            const combined = ensureTiming(timing.frame);
+        // Paired the same way the panel pairs them, so a frame carrying two SEs
+        // converts to two MV timings rather than one. Sprite_AnimationMV plays
+        // every timing it is given, so the second is not redundant.
+        const converted = DatabaseAnimationEditor.timingRows(animation).map(row => ({
+            frame: Number.isFinite(row.frame) ? row.frame : 0,
+            se: row.se || { name: '', pan: 0, pitch: 100, volume: 90 },
             // MZ flash timings always target battlers, so MV's closest scope is 1.
-            combined.flashScope = 1;
-            combined.flashColor = DatabaseAnimationEditor.normalizeFlashColor(timing.color);
-            combined.flashDuration = Number.isFinite(timing.duration) ? timing.duration : 0;
-        });
+            // Keyed on the entry existing rather than on its colour: a stock
+            // flash timing may carry no colour at all and is still a flash.
+            flashScope: row.flashIndex >= 0 ? 1 : 0,
+            flashColor: row.flashIndex >= 0
+                ? DatabaseAnimationEditor.normalizeFlashColor(row.flashColor) : [0, 0, 0, 0],
+            flashDuration: Number.isFinite(row.flashDuration) ? row.flashDuration : 0
+        }));
 
         delete animation.effectName;
         delete animation.displayType;
@@ -193,7 +182,7 @@ class DatabaseAnimationEditor {
         animation.animation2Hue = 0;
         animation.position = 1;
         animation.frames = [[]];
-        animation.timings = Array.from(timingsMap.values()).sort((a, b) => a.frame - b.frame);
+        animation.timings = converted.sort((a, b) => a.frame - b.frame);
     }
 
     static canAddMVCell(frame) {
@@ -1422,48 +1411,9 @@ class DatabaseAnimationEditor {
         const isSpriteAnimation = DatabaseAnimationEditor.isSpriteAnimation(animation);
         const isEffekseer = !isSpriteAnimation && animation.effectName !== undefined;
 
-        // Collect all timings
-        let timingsData = [];
-
-        if (isSpriteAnimation && animation.timings && animation.timings.length > 0) {
-            // Sprite-based animation (MV format): timings array with combined SE and flash
-            timingsData = animation.timings.map(timing => ({
-                frame: timing.frame,
-                se: timing.se,
-                flashScope: timing.flashScope,
-                flashColor: timing.flashColor,
-                flashDuration: timing.flashDuration
-            }));
-        } else if (isEffekseer) {
-            // Effekseer animation (MZ format): separate soundTimings and flashTimings
-            // Merge soundTimings and flashTimings by frame
-            const timingsMap = new Map();
-
-            // Add sound timings
-            if (animation.soundTimings && animation.soundTimings.length > 0) {
-                animation.soundTimings.forEach(st => {
-                    if (!timingsMap.has(st.frame)) {
-                        timingsMap.set(st.frame, { frame: st.frame });
-                    }
-                    timingsMap.get(st.frame).se = st.se;
-                });
-            }
-
-            // Add flash timings
-            if (animation.flashTimings && animation.flashTimings.length > 0) {
-                animation.flashTimings.forEach(ft => {
-                    if (!timingsMap.has(ft.frame)) {
-                        timingsMap.set(ft.frame, { frame: ft.frame });
-                    }
-                    timingsMap.get(ft.frame).flashColor = ft.color;
-                    timingsMap.get(ft.frame).flashDuration = ft.duration;
-                    timingsMap.get(ft.frame).flashScope = 1;
-                });
-            }
-
-            // Convert map to array and sort by frame
-            timingsData = Array.from(timingsMap.values()).sort((a, b) => a.frame - b.frame);
-        }
+        // Collect all timings. One row per stored entry, not per frame -- see
+        // DatabaseAnimationEditor.timingRows.
+        const timingsData = DatabaseAnimationEditor.timingRows(animation);
 
         // Clear list
         timingsList.innerHTML = '';
@@ -1638,28 +1588,75 @@ class DatabaseAnimationEditor {
         }
     }
 
-    // Helper: returns the merged timings array (the same view populateTimingsList renders)
+    /**
+     * The timing rows the panel shows, each carrying the identity of the data
+     * it came from.
+     *
+     * An Effekseer animation stores sound and flash timings in two arrays, and
+     * a frame may hold more than one of either -- the stock Hit Fire plays
+     * Blow1 and Fire1 together on frame 0, and `Sprite_Animation` fires every
+     * match, so both are heard. This list used to key a Map on the frame
+     * number, which meant the second SE on a frame was invisible and, worse,
+     * destroyed: edit and remove both worked by clearing everything on that
+     * frame and writing back the one row the list knew about.
+     *
+     * Rows now pair sound and flash by position within a frame rather than by
+     * the frame itself, so a frame with two SEs and one flash is two rows, and
+     * every row names the exact array entries it edits. `soundIndex`,
+     * `flashIndex` and `timingIndex` are -1 when the row has no such entry.
+     */
+    static timingRows(animation) {
+        if (DatabaseAnimationEditor.isSpriteAnimation(animation)) {
+            // Sprite timings are already one entry per row.
+            return (animation.timings || []).map((timing, index) => ({
+                frame: timing.frame,
+                se: timing.se,
+                flashScope: timing.flashScope,
+                flashColor: timing.flashColor,
+                flashDuration: timing.flashDuration,
+                timingIndex: index, soundIndex: -1, flashIndex: -1
+            }));
+        }
+        if (animation.effectName === undefined) return [];
+
+        const byFrame = new Map();
+        const bucket = frame => {
+            if (!byFrame.has(frame)) byFrame.set(frame, { sounds: [], flashes: [] });
+            return byFrame.get(frame);
+        };
+        (animation.soundTimings || []).forEach((st, index) => bucket(st.frame).sounds.push(index));
+        (animation.flashTimings || []).forEach((ft, index) => bucket(ft.frame).flashes.push(index));
+
+        const rows = [];
+        for (const frame of [...byFrame.keys()].sort((a, b) => a - b)) {
+            const { sounds, flashes } = byFrame.get(frame);
+            const count = Math.max(sounds.length, flashes.length);
+            for (let position = 0; position < count; position++) {
+                const soundIndex = position < sounds.length ? sounds[position] : -1;
+                const flashIndex = position < flashes.length ? flashes[position] : -1;
+                const sound = soundIndex >= 0 ? animation.soundTimings[soundIndex] : null;
+                const flash = flashIndex >= 0 ? animation.flashTimings[flashIndex] : null;
+                rows.push({
+                    frame,
+                    se: sound ? sound.se : undefined,
+                    flashColor: flash ? flash.color : undefined,
+                    flashDuration: flash ? flash.duration : undefined,
+                    flashScope: flash ? (flash.scope === 2 || flash.scope === 3 ? flash.scope : 1) : undefined,
+                    timingIndex: -1, soundIndex, flashIndex
+                });
+            }
+        }
+        return rows;
+    }
+
+    // Helper: returns the merged timings array (the same view populateTimingsList
+    // renders), without the row identities -- this feeds the clipboard, and a
+    // pasted row is a new entry rather than the one it was copied from.
     _collectMergedTimings(animation) {
-        const isSpriteAnimation = DatabaseAnimationEditor.isSpriteAnimation(animation);
-        const isEffekseer = !isSpriteAnimation && animation.effectName !== undefined;
-        if (isSpriteAnimation && animation.timings && animation.timings.length > 0) {
-            return animation.timings.map(t => ({ ...t }));
-        }
-        if (isEffekseer) {
-            const map = new Map();
-            (animation.soundTimings || []).forEach(st => {
-                if (!map.has(st.frame)) map.set(st.frame, { frame: st.frame });
-                map.get(st.frame).se = st.se;
-            });
-            (animation.flashTimings || []).forEach(ft => {
-                if (!map.has(ft.frame)) map.set(ft.frame, { frame: ft.frame });
-                map.get(ft.frame).flashColor = ft.color;
-                map.get(ft.frame).flashDuration = ft.duration;
-                map.get(ft.frame).flashScope = ft.scope === 2 || ft.scope === 3 ? ft.scope : 1;
-            });
-            return Array.from(map.values()).sort((a, b) => a.frame - b.frame);
-        }
-        return [];
+        return DatabaseAnimationEditor.timingRows(animation).map(row => {
+            const { timingIndex, soundIndex, flashIndex, ...timing } = row;
+            return timing;
+        });
     }
 
     // Helper: appends a single timing in the format the current animation expects.
@@ -1698,40 +1695,9 @@ class DatabaseAnimationEditor {
         const isSpriteAnimation = DatabaseAnimationEditor.isSpriteAnimation(animation);
         const isEffekseer = !isSpriteAnimation && animation.effectName !== undefined;
 
-        let timingData;
-        let timingsData = [];
-
-        if (isSpriteAnimation && animation.timings && animation.timings.length > 0) {
-            timingsData = animation.timings;
-        } else if (isEffekseer) {
-            // Merge soundTimings and flashTimings
-            const timingsMap = new Map();
-
-            if (animation.soundTimings && animation.soundTimings.length > 0) {
-                animation.soundTimings.forEach(st => {
-                    if (!timingsMap.has(st.frame)) {
-                        timingsMap.set(st.frame, { frame: st.frame });
-                    }
-                    timingsMap.get(st.frame).se = st.se;
-                });
-            }
-
-            if (animation.flashTimings && animation.flashTimings.length > 0) {
-                animation.flashTimings.forEach(ft => {
-                    if (!timingsMap.has(ft.frame)) {
-                        timingsMap.set(ft.frame, { frame: ft.frame });
-                    }
-                    timingsMap.get(ft.frame).flashColor = ft.color;
-                    timingsMap.get(ft.frame).flashDuration = ft.duration;
-                    timingsMap.get(ft.frame).flashScope = 1;
-                });
-            }
-
-            timingsData = Array.from(timingsMap.values()).sort((a, b) => a.frame - b.frame);
-        }
-
+        const timingsData = DatabaseAnimationEditor.timingRows(animation);
         if (index >= timingsData.length) return;
-        timingData = timingsData[index];
+        const timingData = timingsData[index];
 
         // Open modal and populate with existing data
         const modal = document.getElementById('timing-modal');
@@ -1795,58 +1761,25 @@ class DatabaseAnimationEditor {
         modal.style.display = 'flex';
     }
 
+    /**
+     * Delete exactly the entries the row at `index` names. It used to delete
+     * every sound and flash timing sharing that row's frame, which took a
+     * second SE on the frame with it -- silently, because the list had never
+     * shown that one.
+     */
     removeTiming(animation, index) {
-        const isEffekseer = !DatabaseAnimationEditor.isSpriteAnimation(animation);
+        const row = DatabaseAnimationEditor.timingRows(animation)[index];
+        if (!row) return;
 
-        if (isEffekseer) {
-            // For Effekseer, rebuild the timings map to find which frame to remove
-            const timingsMap = new Map();
-
-            // Add sound timings
-            if (animation.soundTimings && animation.soundTimings.length > 0) {
-                animation.soundTimings.forEach(st => {
-                    if (!timingsMap.has(st.frame)) {
-                        timingsMap.set(st.frame, { frame: st.frame });
-                    }
-                    timingsMap.get(st.frame).se = st.se;
-                });
-            }
-
-            // Add flash timings
-            if (animation.flashTimings && animation.flashTimings.length > 0) {
-                animation.flashTimings.forEach(ft => {
-                    if (!timingsMap.has(ft.frame)) {
-                        timingsMap.set(ft.frame, { frame: ft.frame });
-                    }
-                    timingsMap.get(ft.frame).flashColor = ft.color;
-                });
-            }
-
-            // Convert to sorted array and get the frame at the given index
-            const timingsArray = Array.from(timingsMap.values()).sort((a, b) => a.frame - b.frame);
-            if (index >= timingsArray.length) return;
-
-            const frameToRemove = timingsArray[index].frame;
-
-            // Remove from soundTimings if exists
-            if (animation.soundTimings) {
-                animation.soundTimings = animation.soundTimings.filter(st => st.frame !== frameToRemove);
-            }
-
-            // Remove from flashTimings if exists
-            if (animation.flashTimings) {
-                animation.flashTimings = animation.flashTimings.filter(ft => ft.frame !== frameToRemove);
-            }
-
-            console.debug('Removed timing at frame', frameToRemove);
-        } else {
-            // For sprite-based, remove from timings array
-            if (animation.timings && index < animation.timings.length) {
-                animation.timings.splice(index, 1);
-            }
-
-            console.debug('Removed timing at index', index);
+        if (row.timingIndex >= 0) {
+            animation.timings.splice(row.timingIndex, 1);
+            console.debug('Removed timing at index', row.timingIndex);
+            return;
         }
+        if (row.soundIndex >= 0) animation.soundTimings.splice(row.soundIndex, 1);
+        if (row.flashIndex >= 0) animation.flashTimings.splice(row.flashIndex, 1);
+        console.debug('Removed timing entries at frame', row.frame,
+            { sound: row.soundIndex, flash: row.flashIndex });
     }
 
     setupTimingModal(animation, container) {
@@ -2088,8 +2021,9 @@ class DatabaseAnimationEditor {
                 if (seName && seName !== noneLabel) {
                     if (!animation.soundTimings) animation.soundTimings = [];
 
-                    // Check if there's already a sound timing at this frame
-                    const existingIndex = animation.soundTimings.findIndex(st => st.frame === frame);
+                    // Appended, not replaced: a frame may carry more than one
+                    // SE, and Sprite_Animation plays every one of them. An edit
+                    // removed this row's own entry before getting here.
                     const seData = {
                         frame: frame,
                         se: {
@@ -2101,37 +2035,25 @@ class DatabaseAnimationEditor {
                         }
                     };
 
-                    if (existingIndex >= 0) {
-                        animation.soundTimings[existingIndex] = seData;
-                    } else {
-                        animation.soundTimings.push(seData);
-                    }
+                    animation.soundTimings.push(seData);
                 }
 
                 // Add flash timing if flash type is not None
                 if (flashType !== 0) {
                     if (!animation.flashTimings) animation.flashTimings = [];
 
-                    // Check if there's already a flash timing at this frame
-                    const existingIndex = animation.flashTimings.findIndex(ft => ft.frame === frame);
                     const flashData = {
                         frame: frame,
                         duration: duration,
                         color: [red, green, blue, intensity]
                     };
 
-                    if (existingIndex >= 0) {
-                        animation.flashTimings[existingIndex] = flashData;
-                    } else {
-                        animation.flashTimings.push(flashData);
-                    }
+                    animation.flashTimings.push(flashData);
                 }
             } else {
                 // Sprite-based format: combined timings array
                 if (!animation.timings) animation.timings = [];
 
-                // Check if there's already a timing at this frame
-                const existingIndex = animation.timings.findIndex(t => t.frame === frame);
                 const timingData = {
                     frame: frame,
                     se: seName && seName !== noneLabel ? {
@@ -2146,11 +2068,7 @@ class DatabaseAnimationEditor {
                     flashDuration: duration
                 };
 
-                if (existingIndex >= 0) {
-                    animation.timings[existingIndex] = timingData;
-                } else {
-                    animation.timings.push(timingData);
-                }
+                animation.timings.push(timingData);
             }
 
             // Refresh the timings list
