@@ -94,7 +94,7 @@ class DatabaseItemBaseEditor {
                             entry.traits.map(trait => `
                                 <tr>
                                     <td>${rrEscapeHtml(this.commonUI.getTraitName(trait.code))}</td>
-                                    <td>${rrEscapeHtml(this.commonUI.getTraitValue(trait))}</td>
+                                    <td>${this.commonUI.getTraitValueHtml(trait)}</td>
                                 </tr>
                             `).join('') :
                             `<tr><td colspan="2" style="text-align: center; color: var(--color-text-muted);">${tt('No traits')}</td></tr>`}
