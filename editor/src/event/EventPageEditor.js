@@ -991,9 +991,23 @@ class EventPageEditor {
                 : template.clone(true);
             const extent = template.userData.glbSize || { x: 1, y: 1, z: 1 };
             const span = Math.max(extent.x, extent.y, extent.z, 0.0001);
-            mesh.scale.setScalar(1.4 / span);
+            const scale = 1.4 / span;
+            mesh.scale.setScalar(scale);
+            // A skinned character's vertices follow bones Box3 cannot see:
+            // its measured box can collapse to almost nothing at the feet,
+            // and subtracting THAT centre left the camera staring at the
+            // ankles. When the box is clearly smaller than the declared
+            // extent, the template's own measurement (feet at the origin,
+            // x/z centred) places the middle instead.
             const box = new THREE.Box3().setFromObject(mesh);
-            mesh.position.sub(box.getCenter(new THREE.Vector3()));
+            const boxHeight = Number.isFinite(box.min.y) && Number.isFinite(box.max.y)
+                ? box.max.y - box.min.y : 0;
+            const declaredHeight = extent.y * scale;
+            if (boxHeight >= declaredHeight * 0.5) {
+                mesh.position.sub(box.getCenter(new THREE.Vector3()));
+            } else {
+                mesh.position.set(0, -declaredHeight / 2, 0);
+            }
             const object = new THREE.Group();
             object.add(mesh);
             Reactor3D.applyEventModelPose(object, {

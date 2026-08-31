@@ -146,7 +146,10 @@ class MessageCommandEditor {
                 header: { ...box.header },
                 lines: (box.lines || []).slice()
             }));
-            this.activeIndex = 0;
+            // Open on the box that was actually clicked, not always the first.
+            const asked = Number(messageData.activeIndex);
+            this.activeIndex = Number.isInteger(asked)
+                ? Math.max(0, Math.min(asked, this.boxes.length - 1)) : 0;
         } else if (messageData && messageData.command && messageData.command.code === 101) {
             this.parseCommand(messageData.command, messageData.textLines || []);
         } else if (messageData && messageData.code === 101) {
@@ -249,9 +252,8 @@ class MessageCommandEditor {
 
         // Close on background click
         this.modal.addEventListener('click', (e) => {
-            if (e.target === this.modal) {
-                this.close();
-            }
+            // A click on the backdrop no longer closes the dialog: an accidental
+            // click beside it must never cost in-progress work. Close deliberately.
         });
 
         document.body.appendChild(this.modal);
@@ -646,16 +648,28 @@ class MessageCommandEditor {
             this.updateGuide();
         });
 
-        const guide = document.createElement('div');
-        guide.className = 'message-guide';
-        guide.style.cssText = `
-            position: absolute; top: 0; bottom: 0; width: 1px;
-            background: var(--color-accent); opacity: 0.45; pointer-events: none;
-            display: none;
+        // The overflow overlay mirrors the textarea glyph for glyph and
+        // paints only the characters the game window cannot fit — measured
+        // per line with the project's own font, escape codes consumed the
+        // way the game consumes them. A single ruler column could never say
+        // that: codes cost columns here but nothing in game, and a
+        // proportional font makes every line's budget different.
+        const overflow = document.createElement('pre');
+        overflow.className = 'message-overflow';
+        overflow.setAttribute('aria-hidden', 'true');
+        overflow.style.cssText = `
+            position: absolute; inset: 0; margin: 0; pointer-events: none;
+            padding: 8px 10px; border: 1px solid transparent; border-radius: 3px;
+            font-size: 13px; font-family: monospace; line-height: normal;
+            white-space: pre; overflow: hidden; color: transparent;
         `;
+        textarea.addEventListener('scroll', () => {
+            overflow.scrollTop = textarea.scrollTop;
+            overflow.scrollLeft = textarea.scrollLeft;
+        });
 
         stack.appendChild(textarea);
-        stack.appendChild(guide);
+        stack.appendChild(overflow);
         column.appendChild(stack);
 
         // Ctrl+Enter is OK, as it is in MZ. Enter alone stays a newline.
@@ -674,6 +688,20 @@ class MessageCommandEditor {
         hint.className = 'message-overflow-hint';
         hint.style.cssText = 'font-size: 11px; color: var(--color-text-muted); margin-top: -4px; min-height: 14px;';
         column.appendChild(hint);
+
+        // A live miniature of the box being edited, drawn the way the game
+        // draws it — windowskin, face, name box, colours, icons resolved.
+        // With more lines than one box holds, it follows the caret: the box
+        // under the cursor is the one shown.
+        const mini = document.createElement('canvas');
+        mini.className = 'message-mini-preview';
+        mini.style.cssText = 'display:block; width:100%; max-width:560px; height:auto; ' +
+            'margin-top:6px; border:1px solid var(--color-border); border-radius:3px; background:#101018;';
+        column.appendChild(mini);
+        this._textarea = textarea;
+        // Input redraws through updateGuide; these cover pure caret moves.
+        textarea.addEventListener('keyup', () => this.renderMiniPreview());
+        textarea.addEventListener('click', () => this.renderMiniPreview());
 
         return column;
     }
@@ -750,46 +778,60 @@ class MessageCommandEditor {
      * hides rather than lying.
      */
     updateGuide() {
+        this.renderMiniPreview();
         if (!this.modal) return;
-        const guide = this.modal.querySelector('.message-guide');
+        const overlay = this.modal.querySelector('.message-overflow');
         const textarea = this.modal.querySelector('.message-textarea');
-        if (!guide || !textarea || !window.RRTextCodes) return;
+        if (!overlay || !textarea || !window.RRTextCodes || !window.RRTextCodes.scanMessageLine) return;
 
-        if (window.RRTextCodes.hasWordWrap(this.textLines.join('\n'))) {
-            guide.style.display = 'none';
-            return;
-        }
+        overlay.textContent = '';
+        if (window.RRTextCodes.hasWordWrap(this.textLines.join('\n'))) return;
 
         const available = window.RRTextCodes.messageTextWidth(
             this._pluginList(), Boolean(this.faceImage));
-
-        // The game font's average advance at its own size, against the
-        // textarea's monospace advance, gives a column count that lands where
-        // text actually runs out rather than at an arbitrary character count.
         const context = this._measureContext();
-        const gameSize = window.RRWindowskin ? window.RRWindowskin.METRICS.DEFAULT_FONT_SIZE : 26;
-        context.font = `${gameSize}px ${this._previewFontFamily || 'sans-serif'}`;
-        const gameAdvance = context.measureText('MMMMMMMMMM').width / 10;
-        if (!gameAdvance) {
-            guide.style.display = 'none';
-            return;
-        }
-        const columns = Math.floor(available / gameAdvance);
+        const system = window.reactor?.databaseManager?.data?.system;
+        const projectSize = Number(system?.advanced?.fontSize);
+        const gameSize = Number.isFinite(projectSize) && projectSize > 0 ? projectSize
+            : (window.RRWindowskin ? window.RRWindowskin.METRICS.DEFAULT_FONT_SIZE : 26);
+        const data = window.reactor?.databaseManager?.data;
+        const substitutions = {
+            actor: id => (data?.actors?.[id]?.name) || 'Name',
+            partyMember: index => {
+                const actorId = system?.partyMembers?.[index - 1];
+                return (actorId && data?.actors?.[actorId]?.name) || 'Name';
+            },
+            currency: (system && system.currencyUnit) || 'G'
+        };
 
+        // Keep the overlay geometry glued to the textarea's.
         const style = window.getComputedStyle(textarea);
-        context.font = `${style.fontSize} ${style.fontFamily}`;
-        const editorAdvance = context.measureText('M').width;
-        const paddingLeft = parseFloat(style.paddingLeft) || 0;
-        const borderLeft = parseFloat(style.borderLeftWidth) || 0;
+        overlay.style.font = style.font;
+        overlay.style.lineHeight = style.lineHeight;
+        overlay.style.padding = style.padding;
 
-        const offset = borderLeft + paddingLeft + columns * editorAdvance;
-        if (offset <= 0 || offset > textarea.clientWidth + paddingLeft) {
-            guide.style.display = 'none';
-            return;
+        let anyOver = false;
+        const lines = textarea.value.split('\n');
+        for (let index = 0; index < lines.length; index++) {
+            const line = lines[index];
+            const scan = window.RRTextCodes.scanMessageLine(
+                line, context, this._previewFontFamily || 'sans-serif', gameSize, available, substitutions);
+            if (index > 0) overlay.appendChild(document.createTextNode('\n'));
+            if (scan.overflowIndex < 0) {
+                overlay.appendChild(document.createTextNode(line));
+                continue;
+            }
+            anyOver = true;
+            overlay.appendChild(document.createTextNode(line.slice(0, scan.overflowIndex)));
+            const over = document.createElement('span');
+            over.textContent = line.slice(scan.overflowIndex);
+            over.style.cssText = 'background: rgba(255, 196, 77, 0.3); border-left: 1px solid var(--color-accent); border-radius: 1px;';
+            over.title = `${Math.round(scan.width - available)}px`;
+            overlay.appendChild(over);
         }
-        guide.style.left = `${offset}px`;
-        guide.style.display = '';
-        guide.title = this._t('{n} characters').replace('{n}', columns);
+        overlay.style.display = anyOver ? '' : 'none';
+        overlay.scrollTop = textarea.scrollTop;
+        overlay.scrollLeft = textarea.scrollLeft;
     }
 
     _measureContext() {
@@ -1482,7 +1524,8 @@ class MessageCommandEditor {
         document.addEventListener('keydown', onKey, true);
         closeButton.addEventListener('click', close);
         overlay.addEventListener('click', event => {
-            if (event.target === overlay) close();
+            // A click on the backdrop no longer closes the dialog: an accidental
+            // click beside it must never cost in-progress work. Close deliberately.
         });
 
         this.ensurePreviewAssets().then(render);
@@ -1503,8 +1546,11 @@ class MessageCommandEditor {
 
         if (!this._skin) this._loadSkin();
 
-        if (this._previewFontFamily === undefined && window.RRWindowskin) {
-            this._previewFontFamily = null;
+        if (window.RRWindowskin) {
+            // Re-read every open: the game's font decides every measurement,
+            // and changing Main Font in System 2 must reach the next opened
+            // message without an editor restart. loadGameFont caches per
+            // file, so an unchanged font costs one small JSON read.
             let filename = '';
             try {
                 const path = require('path');
@@ -1524,8 +1570,11 @@ class MessageCommandEditor {
                 this._previewScreenWidth = 816;
                 this._previewScreenHeight = 624;
             }
-            this._previewFontFamily = await window.RRWindowskin.loadGameFont(
-                require('path').join(projectPath, 'fonts'), filename);
+            if (this._previewFontFamily === undefined || this._previewFontFile !== filename) {
+                this._previewFontFile = filename;
+                this._previewFontFamily = await window.RRWindowskin.loadGameFont(
+                    require('path').join(projectPath, 'fonts'), filename);
+            }
         }
 
         // The IconSet has to be decoded before the first draw, or every \I[n]
@@ -1548,6 +1597,44 @@ class MessageCommandEditor {
      * position, the face slab on the left, the name box above, and the text
      * with its colour and icon codes resolved.
      */
+    /**
+     * The live miniature under the text field: the box the caret sits in,
+     * drawn exactly as drawPreview draws a page but cropped to the window
+     * itself — plus headroom for the name box when there is one, which
+     * Window_NameBox places above the message window.
+     */
+    renderMiniPreview() {
+        const canvas = this.modal ? this.modal.querySelector('.message-mini-preview') : null;
+        if (!canvas || !window.RRWindowskin || !window.RRTextCodes) return;
+        const metrics = window.RRWindowskin.METRICS;
+        const rows = this._messageRows();
+        const header = this._activeHeader() || {};
+        const lines = this.textLines || [];
+        const chunks = window.RRMessageBoxes
+            ? window.RRMessageBoxes.splitLines(lines, rows)
+            : [lines];
+        let chunk = 0;
+        const area = this._textarea;
+        if (area && typeof area.selectionStart === 'number') {
+            const caretLine = String(area.value || '')
+                .slice(0, area.selectionStart).split('\n').length - 1;
+            chunk = Math.floor(caretLine / rows);
+        }
+        chunk = Math.max(0, Math.min(chunk, chunks.length - 1));
+        const height = rows * metrics.LINE_HEIGHT + metrics.PADDING * 2;
+        const width = window.RRTextCodes.messageTextWidth(this._pluginList(), false) + (4 + 8) * 2;
+        const headroom = header.speakerName ? metrics.LINE_HEIGHT + metrics.PADDING * 2 : 0;
+        canvas.width = width;
+        canvas.height = height + headroom;
+        // Bottom placement pins the window to the canvas floor, which leaves
+        // exactly the headroom above it; the game's real Top/Middle/Bottom
+        // placement is the full preview's business, not the miniature's.
+        this.drawPreview(canvas, {
+            header: Object.assign({}, header, { positionType: 2 }),
+            lines: chunks[chunk] || []
+        });
+    }
+
     drawPreview(canvas, page) {
         const context = canvas.getContext('2d');
         context.clearRect(0, 0, canvas.width, canvas.height);

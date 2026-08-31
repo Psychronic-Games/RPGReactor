@@ -156,9 +156,8 @@ class ControlVariablesEditor {
         this.modal.appendChild(container);
 
         this.modal.addEventListener('click', (e) => {
-            if (e.target === this.modal) {
-                this.close();
-            }
+            // A click on the backdrop no longer closes the dialog: an accidental
+            // click beside it must never cost in-progress work. Close deliberately.
         });
         this.modal.addEventListener('keydown', event => {
             if (event.key === 'Escape') this.close();
@@ -969,7 +968,8 @@ class ControlVariablesEditor {
             this.renderContent();
         });
         modal.addEventListener('click', event => {
-            if (event.target === modal) close();
+            // A click on the backdrop no longer closes the dialog: an accidental
+            // click beside it must never cost in-progress work. Close deliberately.
         });
         modal.addEventListener('keydown', event => {
             if (event.key === 'Escape') close();

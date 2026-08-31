@@ -186,7 +186,7 @@ class DatabaseEffectEditor {
         footer.querySelector('.ok-btn').addEventListener('click', () => {
             if (this.saveEffect(effect)) overlay.remove();
         });
-        overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+        // A click on the backdrop no longer closes the dialog: close deliberately.
 
         this.loadEffectTabContent(activeTab, tabContent, effect);
         document.body.appendChild(overlay);

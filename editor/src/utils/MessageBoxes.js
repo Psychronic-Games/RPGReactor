@@ -68,10 +68,24 @@
      * whatever was there.
      */
     function collectRun(list, index) {
+        // The run does not start where the click landed: walk BACKWARD to
+        // its first box first, or clicking the third box read a one-box run
+        // while clicking the first read all three - the same conversation
+        // opening as two different things depending on where it was hit.
+        let start = index;
+        while (start > 0) {
+            let k = start - 1;
+            while (k >= 0 && list[k] && list[k].code === TEXT_LINE) k--;
+            if (k >= 0 && k < start && list[k] && list[k].code === SHOW_TEXT) start = k;
+            else break;
+        }
+
         const boxes = [];
-        let cursor = index;
+        let activeIndex = 0;
+        let cursor = start;
 
         while (cursor < list.length && list[cursor] && list[cursor].code === SHOW_TEXT) {
+            if (cursor <= index) activeIndex = boxes.length;
             const command = list[cursor];
             const lines = [];
             cursor++;
@@ -85,7 +99,7 @@
             boxes.push({ header: readHeader(command), lines, indent: command.indent || 0, source: lines.slice() });
         }
 
-        return { boxes, endIndex: cursor - 1, count: cursor - index };
+        return { boxes, startIndex: start, endIndex: cursor - 1, count: cursor - start, activeIndex };
     }
 
     /**
@@ -95,8 +109,12 @@
     function collectOne(list, index) {
         const run = collectRun(list, index);
         if (!run.boxes.length) return { boxes: [], endIndex: index, count: 0 };
-        const first = run.boxes[0];
-        return { boxes: [first], endIndex: index + first.lines.length, count: first.lines.length + 1 };
+        // The box CONTAINING the index, now that the run is read from its
+        // true start.
+        let at = run.startIndex;
+        for (let i = 0; i < run.activeIndex; i++) at += 1 + run.boxes[i].lines.length;
+        const box = run.boxes[run.activeIndex];
+        return { boxes: [box], startIndex: at, endIndex: at + box.lines.length, count: box.lines.length + 1 };
     }
 
     /**

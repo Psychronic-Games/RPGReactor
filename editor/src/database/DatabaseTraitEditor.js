@@ -155,7 +155,8 @@ class DatabaseTraitEditor {
             }
         });
         overlay.addEventListener('click', (e) => {
-            if (e.target === overlay) overlay.remove();
+            // A click on the backdrop no longer closes the dialog: an accidental
+            // click beside it must never cost in-progress work. Close deliberately.
         });
 
         // Load initial tab content

@@ -77,7 +77,7 @@ test('runtime hooks lift props and read their free position after the events are
     const sprites = read('runtime/reactor_sprites.js');
     assert.match(sprites, /Reactor3D\.installPropHooks\(\)/);
     assert.match(sprites, /this\.y -= this\._character\._reactorLift \* \$gameMap\.tileHeight\(\);/);
-    assert.match(read('runtime/reactor_main.js'), /runtime revision: 20260830\.26/);
+    assert.match(read('runtime/reactor_main.js'), /runtime revision: 20260830\.30/);
 });
 
 test('the editor has a props tab, a manager, and 3D placement with pose rings', () => {
@@ -144,7 +144,7 @@ test('props are chosen in the model picker and can start with an animation or ef
     const runtime = read('runtime/reactor_3d.js');
     assert.match(runtime, /if \(prop\.animation\) Reactor3D\.playModelAnimation\(event, prop\.animation, \{ repeat: prop\.repeat \}\);/);
     assert.match(runtime, /if \(prop\.effect\) Reactor3D\.playModelEffect\(event, prop\.effect\);/);
-    assert.match(read('runtime/reactor_main.js'), /runtime revision: 20260830\.26/);
+    assert.match(read('runtime/reactor_main.js'), /runtime revision: 20260830\.30/);
 });
 
 test('editing a placed prop re-poses its instance instead of rebuilding the set', () => {

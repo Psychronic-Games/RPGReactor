@@ -356,9 +356,61 @@ test('the guide width narrows when a face is set', () => {
     const plugins = messageCore({ 'General:struct': JSON.stringify({ 'MessageWidth:num': '816' }) });
     const bare = TextCodes.messageTextWidth(plugins, false);
     const withFace = TextCodes.messageTextWidth(plugins, true);
-    assert.equal(bare, 816 - 24);
-    assert.equal(withFace, bare - (TextCodes.FACE_WIDTH + 8));
+    // Window_Base pads 12 a side; newLineX starts text 4px in, or 164 beside a face.
+    assert.equal(bare, 816 - 24 - 4);
+    assert.equal(withFace, 816 - 24 - 164);
     assert.ok(withFace < bare);
+});
+
+test('the guide width follows the project resolution, not the stock 816', () => {
+    // No plugin override: the project's UI area decides.
+    global.window = { reactor: { databaseManager: { data: { system: { advanced: { uiAreaWidth: 1280 } } } } } };
+    try {
+        assert.equal(TextCodes.messageTextWidth([], false), 1272 - 24 - 4, 'a 1280-wide game runs a 1272 box: 1244px of text');
+        assert.equal(TextCodes.messageTextWidth([], true), 1272 - 24 - 164);
+    } finally {
+        delete global.window;
+    }
+    // An explicit basis wins over the ambient project; the stock width is
+    // only the last resort.
+    assert.equal(TextCodes.messageTextWidth([], false, 1104), 1096 - 24 - 4);
+    assert.equal(TextCodes.messageTextWidth([], false), 808 - 24 - 4, 'no project in reach: MZ stock runs an 808 box');
+    // And a plugin's configured width still beats everything.
+    const plugins = messageCore({ 'General:struct': JSON.stringify({ 'MessageWidth:num': '600' }) });
+    assert.equal(TextCodes.messageTextWidth(plugins, false, 1280), 600 - 24 - 4);
+});
+
+test('the overflow scanner draws the line the way the game will', () => {
+    // A fake context: width = glyph count x (font size / 13), so size steps
+    // and substitutions are visible in the arithmetic.
+    let currentSize = 13;
+    const context = {
+        set font(value) { currentSize = parseFloat(value) || 13; },
+        get font() { return `${currentSize}px x`; },
+        measureText: text => ({ width: [...String(text)].length * (currentSize / 13) })
+    };
+    const scan = (line, available, subs) =>
+        TextCodes.scanMessageLine(line, context, 'x', 13, available, subs);
+
+    assert.deepEqual(scan('abcd', 10), { width: 4, overflowIndex: -1 }, 'plain text fits');
+    assert.equal(scan('abcdefghij', 5).overflowIndex, 5, 'and overflows at the exact character');
+    assert.equal(scan('\\C[6]abcd', 10).width, 4, 'a colour code costs nothing');
+    assert.equal(scan('\\SPEED[2]ab', 10).width, 2, 'an unknown bracketed code costs nothing either');
+    assert.equal(scan('\\I[64]', 100).width, 36, 'an icon costs its 36 pixels');
+    assert.equal(scan('a\\.b\\|c\\!d\\^', 100).width, 4, 'the punctuation codes draw nothing');
+    assert.equal(scan('\\\\ab', 10).width, 3, 'an escaped backslash is one drawn character');
+    const grown = scan('\\{ab', 100).width;
+    assert.ok(Math.abs(grown - 2 * (25 / 13)) < 1e-9, 'font-size steps change the pen');
+    assert.equal(scan('\\N[1]!', 100, { actor: () => 'Alice' }).width, 6, 'an actor code measures as the actual name');
+    assert.equal(scan('\\G', 100, { currency: 'cr' }).width, 2, 'currency measures as the unit');
+});
+
+test('the overflow measurement follows the project font, switch included', () => {
+    const fs = require('node:fs');
+    const editorSource = fs.readFileSync(path.join(srcRoot, 'event', 'commands', 'MessageCommandEditor.js'), 'utf8');
+    assert.match(editorSource, /this\._previewFontFile !== filename/, 'a changed Main Font reloads without a restart');
+    assert.match(editorSource, /advanced\.mainFontFilename \|\| ''/, 'the family comes from the project');
+    assert.match(editorSource, /advanced\.fontSize \|\| 26/, 'and so does the size');
 });
 
 test('word wrap is detected so the guide can stand down', () => {
@@ -443,6 +495,29 @@ test('a run of consecutive boxes is read as several boxes, headers intact', () =
     // The run ends before the End command.
     assert.equal(run.endIndex, 4);
     assert.equal(run.count, 5);
+});
+
+test('a click anywhere in a run reads the whole run and remembers the box hit', () => {
+    const list = [
+        { code: 230, indent: 0, parameters: [30] },
+        ...showText(['', 0, 0, 2, ''], ['one', 'two']),
+        ...showText(['', 0, 1, 0, ''], ['three']),
+        ...showText(['', 0, 0, 2, ''], ['four']),
+        { code: 0, indent: 0, parameters: [] }
+    ];
+    // Indices: 0 wait, 1..3 box A, 4..5 box B, 6..7 box C.
+    for (const [clicked, active] of [[1, 0], [3, 0], [4, 1], [5, 1], [6, 2], [7, 2]]) {
+        const run = MessageBoxes.collectRun(list, clicked);
+        assert.equal(run.startIndex, 1, `clicked ${clicked}: the run starts at its first box`);
+        assert.equal(run.boxes.length, 3, `clicked ${clicked}: the whole conversation is read`);
+        assert.equal(run.count, 7);
+        assert.equal(run.activeIndex, active, `clicked ${clicked}: opens on the box that was hit`);
+    }
+    // collectOne now means the box CONTAINING the index.
+    const one = MessageBoxes.collectOne(list, 4);
+    assert.deepEqual(one.boxes[0].lines, ['three']);
+    assert.equal(one.startIndex, 4);
+    assert.equal(one.count, 2);
 });
 
 test('position Top survives the round trip', () => {
@@ -537,4 +612,20 @@ test('a new box inherits the header it was added after', () => {
     assert.deepEqual(box.header, previous);
     assert.notEqual(box.header, previous, 'and is a copy, not a shared reference');
     assert.deepEqual(box.lines, ['']);
+});
+
+test('the message editor keeps a live miniature under the text field', () => {
+    const fs = require('node:fs');
+    const source = fs.readFileSync(
+        path.join(srcRoot, 'event', 'commands', 'MessageCommandEditor.js'), 'utf8');
+    // The canvas exists, updateGuide redraws it, and caret movement alone
+    // (keyup/click) redraws it too — typing is not the only way to change
+    // which box the cursor is in.
+    assert.match(source, /message-mini-preview/);
+    assert.match(source, /updateGuide\(\) \{\n        this\.renderMiniPreview\(\);/);
+    assert.match(source, /addEventListener\('keyup', \(\) => this\.renderMiniPreview\(\)\)/);
+    // The miniature shows the box the caret sits in, not always the first.
+    assert.match(source, /slice\(0, area\.selectionStart\)\.split\('\\n'\)\.length - 1/);
+    // Pinned to the bottom so the name-box headroom is the only empty band.
+    assert.match(source, /positionType: 2/);
 });

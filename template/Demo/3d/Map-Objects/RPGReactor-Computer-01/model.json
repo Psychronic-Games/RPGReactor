@@ -1,0 +1,38 @@
+{
+  "animations": [],
+  "effects": [
+    {
+      "name": "Animated Screen",
+      "animation": 0,
+      "anchor": {
+        "part": "",
+        "offset": [
+          -0.012,
+          1.592,
+          0.072
+        ]
+      },
+      "scale": [
+        0.28,
+        0.3,
+        0.25
+      ],
+      "loop": true,
+      "rotate": [
+        0,
+        0,
+        0
+      ],
+      "video": {
+        "file": "RPGReactor-Computer-Console-Interface.mp4",
+        "width": 1,
+        "height": 0.6666666666666666,
+        "loop": true,
+        "audio": false,
+        "volume": 100
+      },
+      "type": "video",
+      "trigger": "action"
+    }
+  ]
+}

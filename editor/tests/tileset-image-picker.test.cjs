@@ -89,7 +89,9 @@ test('the modal can be dismissed every usual way, and cleans up', () => {
     const body = pickerBody();
     assert.match(body, /closeButton\.addEventListener\('click', close\)/);
     assert.match(body, /cancelButton\.addEventListener\('click', close\)/);
-    assert.match(body, /if \(event\.target === overlay\) close\(\)/, 'backdrop');
+    // The backdrop deliberately does NOT close: an accidental click beside
+    // a dialog must never cost work, project-wide.
+    assert.doesNotMatch(body, /if \(event\.target === overlay\) close\(\)/);
     assert.match(body, /event\.key === 'Escape'/, 'escape');
     // The keydown listener is on document, so it has to come back off.
     assert.match(body, /document\.removeEventListener\('keydown', onKeyDown\)/);

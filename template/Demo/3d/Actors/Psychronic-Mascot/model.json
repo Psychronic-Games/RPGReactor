@@ -1,0 +1,18 @@
+{
+  "animations": [
+    {
+      "type": "clip",
+      "trigger": "walking",
+      "name": "Walking",
+      "clip": "Walking",
+      "part": ""
+    },
+    {
+      "type": "clip",
+      "trigger": "dashing",
+      "name": "Running",
+      "clip": "Running",
+      "part": ""
+    }
+  ]
+}

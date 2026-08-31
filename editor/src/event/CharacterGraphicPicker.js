@@ -571,9 +571,8 @@ class CharacterGraphicPicker {
 
         // Close on outside click
         modal.addEventListener('click', (e) => {
-            if (e.target === modal) {
-                closeModal();
-            }
+            // A click on the backdrop no longer closes the dialog: an accidental
+            // click beside it must never cost in-progress work. Close deliberately.
         });
     }
 }

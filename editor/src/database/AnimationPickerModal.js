@@ -483,7 +483,7 @@ class AnimationPickerModal {
         modal.querySelector('.anim-picker-close').addEventListener('click', cleanup);
         modal.querySelector('.anim-picker-cancel').addEventListener('click', cleanup);
         modal.querySelector('.anim-picker-ok').addEventListener('click', confirm);
-        overlay.addEventListener('mousedown', (ev) => { if (ev.target === overlay) cleanup(); });
+        // A click on the backdrop no longer closes the dialog: close deliberately.
 
         // Scroll the current selection into view
         const active = rows.find(r => r.style.background !== 'transparent');

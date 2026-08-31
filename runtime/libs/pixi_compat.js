@@ -1187,6 +1187,29 @@
     }
 
     // -------------------------------------------------------------------------
+    // v8's FilterSystem crashes after a renderer resolution change (toggling
+    // fullscreen while a screen tint runs): _filterStack keeps entries whose
+    // inputTexture was destroyed along with the old render targets, and
+    // _findFilterResolution dereferences their null source — every later frame
+    // then throws and the game freezes. Same walk, null-guarded: a dead entry
+    // falls back to the root resolution exactly as an empty stack does.
+    if (_isV8Pixi && PIXI.FilterSystem && PIXI.FilterSystem.prototype &&
+        typeof PIXI.FilterSystem.prototype._findFilterResolution === "function" &&
+        !PIXI.FilterSystem.prototype._findFilterResolution.__reactorNullGuarded) {
+        PIXI.FilterSystem.prototype._findFilterResolution = function(rootResolution) {
+            let currentIndex = this._filterStackIndex - 1;
+            while (currentIndex > 0 && this._filterStack[currentIndex].skip) {
+                --currentIndex;
+            }
+            const entry = currentIndex > 0 ? this._filterStack[currentIndex] : null;
+            const source = entry && entry.inputTexture && entry.inputTexture.source;
+            return source ? source._resolution : rootResolution;
+        };
+        PIXI.FilterSystem.prototype._findFilterResolution.__reactorNullGuarded = true;
+        compatLog("[pixi_compat] FilterSystem._findFilterResolution null-guarded (resolution changes)");
+    }
+
+    // -------------------------------------------------------------------------
     // v8 kept the name ParticleContainer and changed what it draws. It renders
     // `particleChildren` -- Particle objects handed to addParticle() -- and
     // ignores ordinary children completely. A plugin written against v5 does

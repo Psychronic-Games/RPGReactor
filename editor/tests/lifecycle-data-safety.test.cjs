@@ -128,7 +128,7 @@ test('EventManager commits editor changes with one undo snapshot and keeps cance
     assert.equal(manager.undoStack.length, 1);
 });
 
-test('EventManager routes the X button and backdrop through cancellation', () => {
+test('the X button cancels; the backdrop never does', () => {
     const listeners = {};
     const closeButton = { addEventListener: (name, handler) => { listeners.close = handler; } };
     const modal = {
@@ -142,8 +142,9 @@ test('EventManager routes the X button and backdrop through cancellation', () =>
     manager.eventEditor = { cancelChanges: () => cancellations++ };
     manager.setupEventEditorModal();
     listeners.close();
-    listeners.backdrop({ target: modal });
-    assert.equal(cancellations, 2);
+    assert.equal(cancellations, 1, 'the X routes through cancellation');
+    if (listeners.backdrop) listeners.backdrop({ target: modal });
+    assert.equal(cancellations, 1, 'a click beside the dialog costs nothing');
 });
 
 test('ProjectManager rejects unsafe names and non-empty creation targets without modifying them', async () => {

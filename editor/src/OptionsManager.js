@@ -232,7 +232,8 @@ class OptionsManager {
         this.modal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); display: none; align-items: center; justify-content: center; z-index: 10500;';
 
         this.modal.addEventListener('click', (e) => {
-            if (e.target === this.modal) this.close();
+            // A click on the backdrop no longer closes the dialog: an accidental
+            // click beside it must never cost in-progress work. Close deliberately.
         });
 
         document.body.appendChild(this.modal);

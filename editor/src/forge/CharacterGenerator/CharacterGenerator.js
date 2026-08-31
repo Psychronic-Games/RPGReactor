@@ -4689,7 +4689,7 @@ ${sheetJs}
         close.addEventListener('click', closeModal);
         footer.appendChild(close);
 
-        modal.addEventListener('mousedown', (e) => { if (e.target === modal) closeModal(); });
+        // A click on the backdrop no longer closes the dialog: close deliberately.
         document.addEventListener('keydown', escClose);
         document.body.appendChild(modal);
         text.focus();

@@ -97,9 +97,8 @@ class PluginManager {
 
             // Close when clicking the backdrop (not the window)
             modal.addEventListener('mousedown', (e) => {
-                if (e.target === modal) {
-                    this.hide();
-                }
+                // A click on the backdrop no longer closes the dialog: an accidental
+                // click beside it must never cost in-progress work. Close deliberately.
             });
 
             this.init(windowContainer);
@@ -616,9 +615,8 @@ class PluginManager {
 
         // Close on click outside
         overlay.addEventListener('click', (e) => {
-            if (e.target === overlay) {
-                closeModal();
-            }
+            // A click on the backdrop no longer closes the dialog: an accidental
+            // click beside it must never cost in-progress work. Close deliberately.
         });
         overlay.addEventListener('keydown', event => {
             if (event.key === 'Escape') {
@@ -850,9 +848,8 @@ class PluginManager {
 
         // Close on click outside
         overlay.addEventListener('click', (e) => {
-            if (e.target === overlay) {
-                document.body.removeChild(overlay);
-            }
+            // A click on the backdrop no longer closes the dialog: an accidental
+            // click beside it must never cost in-progress work. Close deliberately.
         });
     }
 

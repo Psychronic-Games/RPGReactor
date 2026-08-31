@@ -1306,7 +1306,7 @@ class DatabaseCommonEventEditor {
         dialog.appendChild(btnRow);
         dialog.querySelector('.raw-cmd-close').addEventListener('click', () => document.body.removeChild(modal));
         modal.appendChild(dialog);
-        modal.onclick = (e) => { if (e.target === modal) document.body.removeChild(modal); };
+        // A click on the backdrop no longer closes the dialog: close deliberately.
         document.body.appendChild(modal);
     }
 

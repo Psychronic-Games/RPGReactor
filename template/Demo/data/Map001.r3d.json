@@ -2,6 +2,30 @@
   "version": 1,
   "mode": "3d",
   "events": {
+    "2": {
+      "0": {
+        "name": "Actors/Psychronic-Mascot",
+        "file": "Psychronic-Mascot",
+        "ext": ".glb",
+        "size": 2,
+        "scale": 1,
+        "yaw": -0.37215798138506795,
+        "pitch": 0,
+        "roll": 0
+      }
+    },
+    "3": {
+      "0": {
+        "name": "Actors/Psychronic-Mascot",
+        "file": "Psychronic-Mascot",
+        "ext": ".glb",
+        "size": 4,
+        "scale": 1,
+        "yaw": 0,
+        "pitch": 0,
+        "roll": 0
+      }
+    },
     "22": {
       "0": {
         "name": "Vehicles/Oth97_CNO_Consul",
@@ -10119,6 +10143,7 @@
     ]
   },
   "eventPreviews": {
+    "3": 0,
     "22": 0,
     "23": 0,
     "24": 0,
@@ -10157,8 +10182,8 @@
       "ext": ".glb",
       "file": "RPGReactor-Computer-01",
       "texture": "",
-      "x": 16.56,
-      "y": 25.2,
+      "x": 20.01,
+      "y": 23.04,
       "z": 0,
       "yaw": 2.4,
       "pitch": 0,

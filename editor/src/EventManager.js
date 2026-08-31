@@ -1541,7 +1541,7 @@ class EventManager {
         document.body.appendChild(overlay);
         const close = () => overlay.remove();
         dialog.querySelector('.quick-event-cancel').addEventListener('click', close);
-        overlay.addEventListener('click', event => { if (event.target === overlay) close(); });
+        // A click on the backdrop no longer closes the dialog: close deliberately.
         overlay.addEventListener('keydown', event => { if (event.key === 'Escape') close(); });
         dialog.querySelector('.quick-event-create').addEventListener('click', () => {
             if ((kind === 'door' || kind === 'treasure') && !config.characterName) {
@@ -1709,10 +1709,8 @@ class EventManager {
         // Close modal when clicking outside
         if (modal) {
             modal.addEventListener('click', (e) => {
-                if (e.target === modal) {
-                    if (this.eventEditor) this.eventEditor.cancelChanges();
-                    else modal.style.display = 'none';
-                }
+                // A click on the backdrop no longer closes the dialog: an accidental
+                // click beside it must never cost in-progress work. Close deliberately.
             });
         }
     }

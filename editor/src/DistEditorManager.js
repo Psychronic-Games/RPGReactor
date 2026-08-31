@@ -203,7 +203,8 @@ class DistEditorManager {
 
         // Close on background click
         this.modal.addEventListener('click', (e) => {
-            if (e.target === this.modal) this.close();
+            // A click on the backdrop no longer closes the dialog: an accidental
+            // click beside it must never cost in-progress work. Close deliberately.
         });
 
         // Show/hide platform section based on package type

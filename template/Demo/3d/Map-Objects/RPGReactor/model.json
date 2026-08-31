@@ -1,0 +1,40 @@
+{
+  "animations": [],
+  "effects": [
+    {
+      "name": "Core",
+      "animation": 122,
+      "anchor": {
+        "part": "",
+        "offset": [
+          0.009,
+          0.947,
+          0.251
+        ]
+      },
+      "scale": 0.54,
+      "loop": true,
+      "rotate": [
+        0,
+        0,
+        0
+      ],
+      "trigger": "always",
+      "video": {
+        "file": "",
+        "width": 0.3,
+        "height": 0.2,
+        "loop": true,
+        "audio": false,
+        "volume": 100
+      }
+    }
+  ],
+  "pivots": {
+    "mesh_node": [
+      0.020162353566402447,
+      0.8638193291004209,
+      0.27448648788509394
+    ]
+  }
+}

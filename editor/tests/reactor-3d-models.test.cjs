@@ -756,7 +756,7 @@ test('the picker poses through rings around the model', () => {
     // A drag that slips past the modal edge "clicks" the backdrop (click
     // targets the common ancestor of press and release) and cancelled the
     // whole picker, dots and all. Closing needs press AND release there.
-    assert.match(source, /if \(e\.target === modal && backdropPressed\) this\._close\(\)/);
+    assert.doesNotMatch(source, /backdropPressed/, 'the backdrop-close machinery is gone entirely');
     // The overlay strip floats over the scene: its transparent flex gaps
     // must not eat clicks, and the gizmo ball — which reads as a ring
     // control — yields entirely while a side is armed, so a dot click on

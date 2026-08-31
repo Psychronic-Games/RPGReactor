@@ -1431,6 +1431,21 @@ Graphics._canRender = function() {
     return !!this._app.stage;
 };
 
+/**
+ * Backing-store scale for the game canvas: how many physical pixels back one
+ * game pixel on screen. Fullscreen used to stretch the finished frame with
+ * the browser's bilinear filter — a blur layer over the whole game. Rendering
+ * the backing store at the on-screen size instead leaves nothing to stretch:
+ * 3D geometry comes out native-sharp while UI bitmaps (windows, text,
+ * pictures) still enlarge through the GPU's smooth sampling and look exactly
+ * as soft as before. 1 when the frame is not enlarged — shrinking keeps a 1:1
+ * store — and capped so a video wall cannot demand an enormous framebuffer.
+ */
+Graphics.canvasPixelRatio = function() {
+    const scale = this._realScale || 1;
+    return Math.max(1, Math.min(scale, 4));
+};
+
 Graphics._updateRealScale = function() {
     if (this._stretchEnabled && this._width > 0 && this._height > 0) {
         const h = this._stretchWidth() / this._width;
@@ -1508,10 +1523,24 @@ Graphics._createCanvas = function() {
 };
 
 Graphics._updateCanvas = function() {
-    this._canvas.width = this._width;
-    this._canvas.height = this._height;
+    if (this._app && this._app.renderer) {
+        // The renderer owns the backing store: at pixel ratios above 1 the
+        // canvas holds ratio-times the game size and PIXI renders into all of
+        // it, so the CSS stretch below is 1:1 with physical pixels. One call
+        // carries the resolution — assigning `.resolution` first and resizing
+        // second walks the target system through a half-updated state that
+        // the filter pipeline crashed on (F4 spam with a screen tint active).
+        this._app.renderer.resize(this._width, this._height, this.canvasPixelRatio());
+    } else {
+        this._canvas.width = this._width;
+        this._canvas.height = this._height;
+    }
     this._canvas.style.zIndex = 1;
     this._centerElement(this._canvas);
+    // _centerElement sizes from the backing store, which the ratio inflated;
+    // the on-screen size is always the game size times the display scale.
+    this._canvas.style.width = this._width * this._realScale + "px";
+    this._canvas.style.height = this._height * this._realScale + "px";
     this._updateEffekseerCanvas();
 };
 

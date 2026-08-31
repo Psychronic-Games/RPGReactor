@@ -4231,16 +4231,16 @@ class EventCommandList {
             const boxes = EventCommandList.messageBoxes();
             const run = boxes.collectRun(page.list, index);
 
-            this.messageEditor.show({ boxes: run.boxes }, (commands) => {
+            this.messageEditor.show({ boxes: run.boxes, activeIndex: run.activeIndex }, (commands) => {
                 if (!commands || !commands.length) return;
                 rebaseReplacement(commands);
 
-                page.list.splice(index, run.count);
+                page.list.splice(run.startIndex, run.count);
                 commands.forEach((cmd, i) => {
-                    page.list.splice(index + i, 0, cmd);
+                    page.list.splice(run.startIndex + i, 0, cmd);
                 });
 
-                this.selectedIndices = [index];
+                this.selectedIndices = [run.startIndex];
                 this.refreshCommandList(page, pageIndex);
             });
             return;

@@ -5,10 +5,10 @@
     "screenHeight": 720,
     "uiAreaWidth": 1280,
     "uiAreaHeight": 720,
-    "numberFontFilename": "mplus-2p-bold-sub.woff",
+    "numberFontFilename": "_decterm.ttf",
     "fallbackFonts": "Verdana, sans-serif",
     "fontSize": 26,
-    "mainFontFilename": "mplus-1m-regular.woff",
+    "mainFontFilename": "_decterm.ttf",
     "screenScale": 1,
     "windowOpacity": 192,
     "picturesUpperLimit": 100
@@ -642,7 +642,7 @@
     "",
     ""
   ],
-  "versionId": 52888805,
+  "versionId": 20041192,
   "victoryMe": {
     "name": "Victory1",
     "pan": 0,

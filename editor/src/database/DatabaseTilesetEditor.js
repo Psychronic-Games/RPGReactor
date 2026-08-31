@@ -846,7 +846,8 @@ class DatabaseTilesetEditor {
         cancelButton.addEventListener('click', close);
         selectButton.addEventListener('click', confirm);
         overlay.addEventListener('click', event => {
-            if (event.target === overlay) close();
+            // A click on the backdrop no longer closes the dialog: an accidental
+            // click beside it must never cost in-progress work. Close deliberately.
         });
         document.addEventListener('keydown', onKeyDown);
 

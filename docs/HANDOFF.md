@@ -2,6 +2,92 @@
 
 Last updated 2026-08-30.
 
+## 2026-08-30 — Show Text live miniature
+
+`MessageCommandEditor.renderMiniPreview()`: a canvas under the text field
+reusing `drawPreview` cropped to the window — width from
+`messageTextWidth(plugins, false) + 24`, height `rows*36+24` plus 60px
+headroom only when a speaker name exists; header copied with
+`positionType: 2` so the window pins to the canvas floor and the headroom
+is exactly the name box's band. Caret decides the chunk
+(`splitLines(textLines, rows)`, caret line ÷ rows); `updateGuide()` redraws
+it and keyup/click on the textarea cover pure caret moves. No new i18n
+strings. Guarded in `message-text-codes.test.cjs`.
+
+## 2026-08-30 — sharp by default (runtime 20260830.29/.30)
+
+F4-spam regression from the pixel-ratio work, repro'd in the harness (new
+game → `$gameScreen.startTint` → six alternating `nw.Window.get().resizeTo`
+calls): PIXI v8's `FilterSystem._filterStack` keeps entries whose
+`inputTexture` was destroyed with the old targets; `_findFilterResolution`
+derefs the null source and EVERY later frame throws — the game freezes, not
+just glitches. A control run with `canvasPixelRatio` pinned to 1 stayed
+clean, so resolution change is the trigger. Fix: null-guarded
+`_findFilterResolution` shim in `runtime/libs/pixi_compat.js` (v8-gated,
+`__reactorNullGuarded`); dead entries fall back to root resolution. Verified:
+same storm, zero errors, frames advancing. Harness gotcha: `rsync
+--include='reactor_*.js' --exclude='*'` copies NOTHING (exclude wins for
+the directory walk) — use plain `cp runtime/reactor_*.js`.
+
+Second blur source: fullscreen/stretch enlarges the finished frame with the
+browser's bilinear filter. First attempt — `image-rendering: pixelated` on
+the canvas — made the UI jagged too and was REVERTED on the owner's call
+("3D jagged, normal stuff smoothed"). The shipped fix renders the backing
+store at the on-screen size instead: `Graphics.canvasPixelRatio()` =
+clamp(realScale, 1, 4); `_updateCanvas` sets `renderer.resolution = ratio` +
+`renderer.resize(w, h)` (CSS size forced back to logical × realScale — 
+`_centerElement` reads the inflated backing width, don't trust it alone);
+`Viewport.targetSize()` multiplies by the ratio and `Viewport.resize()`
+treats a ratio change as a resize (targets rebuild via generation). Result:
+3D renders at physical pixels (sharp), UI bitmaps enlarge via GPU linear
+sampling (smooth as ever). A dedicated 3D canvas CANNOT work here: the two
+passes ("below"/"above") sandwich 2D sprites inside the tilemap, so the 3D
+must stay in the PIXI scene. Effekseer's overlay canvas still CSS-stretches
+(glowy content, acceptable); in-scene effect quads are placed in clip space
+and keyed to the overlay's pixels, so the ratio doesn't move them — their
+textures just magnify inside the native-res pass.
+
+## 2026-08-30 — adaptive resolution off by default (runtime 20260830.27)
+
+`Reactor3D.adaptiveResolution` now defaults to `false`: the under-load render
+scale drop upscaled into a blur layer that lingered until five calm seconds
+passed, and the owner ruled sharp-first — soften only through a deliberate
+setting, never in anticipation. The controller is intact; a project opts in
+with `Reactor3D.adaptiveResolution = true`. MSAA (`renderTargetSamples`) is
+unrelated and stays. Test pins live as REGEXES (`20260830\.26`) in 4 test
+files — grep for the escaped form when bumping, a plain-string grep misses
+them.
+
+## 2026-08-30 — GLB optimizer: import dialog + Demo shrink
+
+`editor/src/utils/GlbOptimizer.js` (`RRGlbOptimizer`): `analyze` / `optimize` /
+`canvasEncoder` / `PRESETS`. DataView-only so node tests run it directly;
+texture encoding is an injected hook. Structure is preserved by in-place
+accessor/bufferView substitution everywhere except the tangent drop, which
+garbage-collects with a full reference remap (primitives, morph targets,
+animation samplers, skin bind matrices, images). Guards: `extensionsRequired`
+or sparse accessors bail unchanged; unknown vertex attributes (COLOR_0…) skip
+the weld; weights quantize only on solely-owned unstrided views. Wired into
+ResourceManager's models import via `UIManager.showModelOptimizeDialog`
+(optimize / aggressive / as-is, Cancel aborts); `validateModelBytes` still
+gates whatever comes out. Ten dialog phrases hand-translated into all 17
+`RR_TEXT_TRANSLATIONS` locales.
+
+Demo models replaced in place (owner has backups): Reactor 139→54, Computer-01
+138→54 (2K JPEG, tangents dropped, 900-cell decimation), MonitorArm 56→2.3 (an
+8K texture was the whole file), Carol 55.6→23.2, Fleagus 42.4→23.6, Mascot
+37.9→11.4 (2K JPEG + u16 weights + weld). Demo 767→467MB — under itch's 500MB.
+
+Verification pattern that worked: CDP harness on the scratchpad DemoCopy,
+`readModelAsync` load + clip parity via `root.__reactorClips` (clips are NOT in
+userData), and offscreen THREE render shots (bind pose) compared by eye — a
+400-cell grid showed hair crackle on Carol, the weld-level grid was
+pixel-identical. LESSON: putting quantized UV in the cluster key only dedups
+(neighbouring UVs differ by more than 1/1024); real collapse needs position
+buckets with a UV *tolerance* plus a normal-dot guard for hair cards. Skinned
+`glbSize` shifts ~1% after welding (bone-sampled box over merged weights) —
+compare heights with tolerance, not string equality.
+
 ## 2026-08-30 — vertical Z coordinate (runtime 20260830.8)
 
 Height is a coordinate now, not an offset. `_reactorLift` is every character's
@@ -27,6 +113,17 @@ Y writes `setEventZ` freely, pointer ray dropped onto the axis line in
 `axisTravel`); `syncGridLevel` draws a second grid plane plus the column's corner
 lines at the selection's height. Passage overlays skip placements with z > 0.5
 (a model in the air blocks nothing on the ground).
+
+Backdrop-close sweep (editor-only): clicking beside any dialog no longer
+closes it — 110 `target === modal/overlay` close handlers excised across 102
+files; only UIManager's stateless confirm/alert/reload keep the gesture and
+VideoSurfaceEditor's off-surface pointerdown stays (canvas tool exit, not a
+dialog). Guarded by `no-backdrop-close.test.cjs`. LESSON: the sweep's
+"nearest preceding if" heuristic ate ModelGraphicPicker's OK-commit block,
+because `backdropPressed = e.target === modal;` is an ASSIGNMENT — always
+audit a mass edit with `git diff` + a removed-lines classifier before
+trusting it; `git grep` at the base commit for non-if-form matches found the
+one collateral site.
 
 Per-event 3D refresh + selection fixes (editor-only): `rr-events-changed`
 used to route into the throttled FULL rebuild — deleting one event blinked

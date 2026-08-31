@@ -197,9 +197,8 @@ class ShowPictureEditor {
         this.modal.appendChild(container);
 
         this.modal.addEventListener('click', (e) => {
-            if (e.target === this.modal) {
-                this.close();
-            }
+            // A click on the backdrop no longer closes the dialog: an accidental
+            // click beside it must never cost in-progress work. Close deliberately.
         });
 
         document.body.appendChild(this.modal);
@@ -650,7 +649,8 @@ class ShowPictureEditor {
         closeButton.addEventListener('click', close);
         cancelButton.addEventListener('click', close);
         overlay.addEventListener('click', event => {
-            if (event.target === overlay) close();
+            // A click on the backdrop no longer closes the dialog: an accidental
+            // click beside it must never cost in-progress work. Close deliberately.
         });
         sprite.addEventListener('pointerdown', startDrag);
         anchor.addEventListener('pointerdown', startDrag);

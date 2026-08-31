@@ -1052,10 +1052,18 @@ class Database3DEditor {
         const extent = template.userData.glbSize || { x: 1, y: 1, z: 1 };
         const span = Math.max(extent.x, extent.y, extent.z, 0.0001);
         this._scale = 1.6 / span;
+        object.scale.setScalar(this._scale);
         // Orbit around the model's mid-height, not the ground plane: a
         // tall character aimed at its feet crops its head out of frame.
-        this._viewCenter = { x: -0.5, y: (extent.y * this._scale) / 2, z: -0.5 };
-        object.scale.setScalar(this._scale);
+        // Some skinned exports declare an extent smaller than the mesh they
+        // draw; the measured bind-pose bounds win when they stand taller.
+        let midHeight = (extent.y * this._scale) / 2;
+        const measured = new THREE.Box3().setFromObject(object);
+        if (Number.isFinite(measured.min.y) && Number.isFinite(measured.max.y)
+            && measured.max.y - measured.min.y > extent.y * this._scale + 1e-6) {
+            midHeight = (measured.min.y + measured.max.y) / 2;
+        }
+        this._viewCenter = { x: -0.5, y: midHeight, z: -0.5 };
         this._binding = Reactor3D.prepareModelInstance(object, object.__reactorClips);
         // Scene-graph plumbing is not a part: exporters wrap models in
         // root/scene/rig nodes that match every mesh at once, and a rule
@@ -4658,7 +4666,7 @@ class Database3DEditor {
         const close = () => overlay.remove();
         modal.querySelector('.r3d-presets-close').addEventListener('click', close);
         modal.querySelector('.r3d-presets-done').addEventListener('click', close);
-        overlay.addEventListener('click', event => { if (event.target === overlay) close(); });
+        // A click on the backdrop no longer closes the dialog: close deliberately.
 
         const grid = modal.querySelector('.r3d-preset-grid');
         for (const preset of presets) {

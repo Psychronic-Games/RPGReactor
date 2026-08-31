@@ -607,21 +607,126 @@
     // them out. These decide where the editor's guide line belongs.
     const DEFAULT_MESSAGE_WIDTH = 816;
     const FACE_WIDTH = 144;
-    const WINDOW_PADDING = 4;
-    const TEXT_PADDING = 8;
+    // Window_Base's padding is 12 a side, and Window_Message.newLineX starts
+    // text 4px in (spacing/5) — or faceWidth + 20 beside a face. The old
+    // 4+8 padding model over- and under-shot depending on the face.
+    const WINDOW_PADDING = 12;
+    const NEW_LINE_X = 4;
+    const FACE_MARGIN = FACE_WIDTH + 20;
+    // Scene_Boot trims 4px off each side of the UI area before it becomes
+    // Graphics.boxWidth: a 1280 game runs a 1272 box, stock 816 runs 808.
+    const BOX_MARGIN = 4;
+
+    /**
+     * The message window's width is the project's own UI area, not MZ's
+     * stock 816: a 1280-wide game gives its text far more room, and a guide
+     * drawn for 816 called lines long that fit with plenty to spare.
+     */
+    function projectBoxWidth() {
+        const system = typeof window !== 'undefined'
+            ? window.reactor?.databaseManager?.data?.system : null;
+        const advanced = system && system.advanced;
+        const width = Number(advanced && (advanced.uiAreaWidth || advanced.screenWidth));
+        const ui = Number.isFinite(width) && width > 0 ? width : DEFAULT_MESSAGE_WIDTH;
+        return ui - BOX_MARGIN * 2;
+    }
 
     /**
      * The width, in pixels, that text actually gets inside the message window -
      * which is what the editor's guide line has to mark. A face eats a fixed
-     * slab off the left, so the guide moves when one is set.
+     * slab off the left, so the guide moves when one is set. A plugin's
+     * configured width wins; otherwise the project's resolution decides.
      */
-    function messageTextWidth(plugins, hasFace) {
+    function messageTextWidth(plugins, hasFace, boxWidth) {
         const general = readGeneralStruct(plugins);
         const configured = Number(general && general['MessageWidth:num']);
-        const width = Number.isFinite(configured) && configured > 0 ? configured : DEFAULT_MESSAGE_WIDTH;
-        let inner = width - (WINDOW_PADDING + TEXT_PADDING) * 2;
-        if (hasFace) inner -= FACE_WIDTH + TEXT_PADDING;
-        return Math.max(0, inner);
+        const width = Number.isFinite(configured) && configured > 0 ? configured
+            : (Number.isFinite(boxWidth) && boxWidth > 0 ? boxWidth - BOX_MARGIN * 2 : projectBoxWidth());
+        const inner = width - WINDOW_PADDING * 2;
+        return Math.max(0, inner - (hasFace ? FACE_MARGIN : NEW_LINE_X));
+    }
+
+    /**
+     * Walk one raw message line the way Window_Message draws it and find
+     * where the window's width runs out. Escape codes are consumed, not
+     * measured: colours and speed cost nothing, an icon costs its 36 px,
+     * font-size steps change the pen, and the substitution codes measure as
+     * what they will say (an actor's real name, the currency unit, a
+     * stand-in for a variable's unknowable value).
+     *
+     * Returns { width, overflowIndex }: the line's drawn width in pixels and
+     * the RAW string index of the first character that no longer fits, or -1
+     * when the whole line fits.
+     */
+    function scanMessageLine(line, context, fontFamily, baseSize, available, substitutions) {
+        const text = String(line || '');
+        const subs = substitutions || {};
+        let size = baseSize > 0 ? baseSize : 26;
+        let width = 0;
+        let overflowIndex = -1;
+        const family = String(fontFamily || 'sans-serif');
+        const quoted = family.indexOf(',') >= 0 || family.indexOf('"') >= 0 ? family : `"${family}"`;
+        const setFont = () => { context.font = `${size}px ${quoted}, sans-serif`; };
+        setFont();
+        const measure = piece => piece ? context.measureText(piece).width : 0;
+        let i = 0;
+        while (i < text.length) {
+            const startedAt = i;
+            let advance = 0;
+            const ch = text[i];
+            if (ch === '\\') {
+                const rest = text.slice(i + 1);
+                let matched = null;
+                if (rest[0] === '\\') {
+                    advance = measure('\\');
+                    i += 2;
+                } else if ((matched = rest.match(/^I\[\d+\]/i))) {
+                    advance = 36; // ImageManager.iconWidth + the 4px MZ pads it with
+                    i += 1 + matched[0].length;
+                } else if ((matched = rest.match(/^V\[(\d+)\]/i))) {
+                    advance = measure(typeof subs.variable === 'function' ? subs.variable(Number(matched[1])) : '0000');
+                    i += 1 + matched[0].length;
+                } else if ((matched = rest.match(/^N\[(\d+)\]/i))) {
+                    advance = measure(typeof subs.actor === 'function' ? subs.actor(Number(matched[1])) : 'Name');
+                    i += 1 + matched[0].length;
+                } else if ((matched = rest.match(/^P\[(\d+)\]/i))) {
+                    advance = measure(typeof subs.partyMember === 'function' ? subs.partyMember(Number(matched[1])) : 'Name');
+                    i += 1 + matched[0].length;
+                } else if (rest[0] === 'G') {
+                    advance = measure(typeof subs.currency === 'string' ? subs.currency : 'G');
+                    i += 2;
+                } else if (rest[0] === '{') {
+                    size = Math.min(96, size + 12);
+                    setFont();
+                    i += 2;
+                } else if (rest[0] === '}') {
+                    size = Math.max(12, size - 12);
+                    setFont();
+                    i += 2;
+                } else if ('.|!><^$'.indexOf(rest[0]) >= 0) {
+                    // The punctuation codes: \. and \| wait, \! holds for
+                    // input, \> \< toggle instant text, \^ skips the key,
+                    // \$ opens the gold window. None of them draw a pixel —
+                    // measured as glyphs they pushed the overflow mark a
+                    // whole word early on a pause-heavy line.
+                    i += 2;
+                } else if ((matched = rest.match(/^[A-Za-z]+(\[[^\]]*\])?/))) {
+                    // Any other code — colour, speed, a plugin's — draws nothing.
+                    i += 1 + matched[0].length;
+                } else {
+                    advance = measure(ch);
+                    i += 1;
+                }
+            } else {
+                advance = measure(ch);
+                i += 1;
+            }
+            width += advance;
+            if (overflowIndex < 0 && advance > 0 && width > available + 1e-6) {
+                overflowIndex = startedAt;
+            }
+        }
+        return { width, overflowIndex };
     }
 
     /** Word wrap makes a per-line width guide meaningless; say so explicitly. */
@@ -734,6 +839,7 @@
         readManifest,
         messageRows,
         messageTextWidth,
+        scanMessageLine,
         hasWordWrap,
         DEFAULT_MESSAGE_WIDTH,
         FACE_WIDTH

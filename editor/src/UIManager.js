@@ -1108,12 +1108,152 @@ class UIManager {
             cancelButton.addEventListener('click', () => finish(null));
             okButton.addEventListener('click', submit);
             overlay.addEventListener('click', event => {
-                if (event.target === overlay) finish(null);
+                // A click on the backdrop no longer closes the dialog: an accidental
+                // click beside it must never cost in-progress work. Close deliberately.
             });
             document.addEventListener('keydown', handleKeyDown, true);
             document.body.appendChild(overlay);
             nameInput.focus();
             if (typeof nameInput.select === 'function') nameInput.select();
+        });
+    }
+
+    /**
+     * Import-time GLB shrink choices. Resolves to 'keep' | 'optimize' |
+     * 'aggressive', or null when the user cancels the import outright.
+     * `analysis` comes from RRGlbOptimizer.analyze.
+     */
+    showModelOptimizeDialog({ fileName = '', analysis = null } = {}) {
+        const tt = text => (typeof window !== 'undefined' && window.I18n) ? window.I18n.tText(text) : text;
+        const previouslyFocused = document.activeElement;
+        const megabytes = value => `${(value / 1048576).toFixed(1)}MB`;
+        const overlay = document.createElement('div');
+        overlay.id = 'rr-model-optimize-dialog';
+        overlay.className = 'rr-modal-overlay';
+
+        const modal = document.createElement('div');
+        modal.className = 'rr-modal';
+        modal.style.width = 'min(560px, 92vw)';
+        modal.setAttribute('role', 'dialog');
+        modal.setAttribute('aria-modal', 'true');
+        modal.setAttribute('aria-labelledby', 'rr-model-optimize-title');
+
+        const header = document.createElement('div');
+        header.className = 'rr-modal-header';
+        const titleEl = document.createElement('div');
+        titleEl.id = 'rr-model-optimize-title';
+        titleEl.className = 'rr-modal-title';
+        titleEl.textContent = tt('Import 3D Model');
+        const closeButton = document.createElement('button');
+        closeButton.type = 'button';
+        closeButton.className = 'rr-modal-close';
+        closeButton.setAttribute('aria-label', tt('Cancel'));
+        closeButton.textContent = '×';
+        header.append(titleEl, closeButton);
+
+        const body = document.createElement('div');
+        body.className = 'rr-modal-body';
+
+        const summary = document.createElement('div');
+        summary.style.cssText = 'color:var(--color-text);font-size:13px;';
+        const facts = [];
+        if (analysis) {
+            facts.push(`${megabytes(analysis.bytes)}`);
+            if (analysis.triangles) facts.push(`${analysis.triangles.toLocaleString()} ${tt('triangles')}`);
+            const largest = (analysis.images || []).reduce((best, image) =>
+                (!best || image.bytes > best.bytes) ? image : best, null);
+            if (largest && largest.width) {
+                facts.push(`${tt('largest texture')} ${largest.width}×${largest.height} (${megabytes(largest.bytes)})`);
+            }
+            const dead = (analysis.tangentBytes || 0) + (analysis.floatWeightBytes || 0);
+            if (dead) facts.push(`${megabytes(dead)} ${tt('reducible without visible change')}`);
+        }
+        summary.textContent = `${fileName}: ${facts.join(' · ')}`;
+
+        const choices = document.createElement('div');
+        choices.setAttribute('role', 'radiogroup');
+        choices.style.cssText = 'display:flex;flex-direction:column;gap:6px;margin-top:8px;';
+        const radios = [];
+        const addChoice = (value, label, detail, checked) => {
+            const row = document.createElement('label');
+            row.style.cssText = 'display:grid;grid-template-columns:auto 1fr;column-gap:10px;align-items:start;' +
+                'padding:8px 10px;border:1px solid var(--color-border);border-radius:var(--radius-sm, 4px);cursor:pointer;';
+            const radio = document.createElement('input');
+            radio.type = 'radio';
+            radio.name = 'rr-model-optimize-mode';
+            radio.value = value;
+            radio.checked = checked;
+            radio.style.cssText = 'margin-top:3px;';
+            const text = document.createElement('div');
+            const strong = document.createElement('div');
+            strong.style.cssText = 'color:var(--color-text-strong, var(--color-text));font-size:13px;';
+            strong.textContent = label;
+            const small = document.createElement('div');
+            small.style.cssText = 'color:var(--color-text-muted);font-size:12px;';
+            small.textContent = detail;
+            text.append(strong, small);
+            row.append(radio, text);
+            choices.appendChild(row);
+            radios.push(radio);
+        };
+        addChoice('optimize', tt('Optimize (recommended)'),
+            tt('Resize textures to 2K, compact skin weights, drop unused data, weld duplicate vertices. No visible change.'), true);
+        addChoice('aggressive', tt('Optimize aggressively'),
+            tt('Everything above plus mesh simplification. May soften very fine detail.'), false);
+        addChoice('keep', tt('Import as-is'),
+            tt('Keep every byte of the original file.'), false);
+        body.append(summary, choices);
+
+        const footer = document.createElement('div');
+        footer.className = 'rr-modal-footer';
+        const cancelButton = document.createElement('button');
+        cancelButton.type = 'button';
+        cancelButton.className = 'rr-btn-secondary';
+        cancelButton.textContent = tt('Cancel');
+        const okButton = document.createElement('button');
+        okButton.type = 'button';
+        okButton.className = 'rr-button-primary';
+        okButton.textContent = tt('Import');
+        footer.append(cancelButton, okButton);
+        modal.append(header, body, footer);
+        overlay.appendChild(modal);
+
+        return new Promise(resolve => {
+            let settled = false;
+            const finish = value => {
+                if (settled) return;
+                settled = true;
+                document.removeEventListener('keydown', handleKeyDown, true);
+                overlay.remove();
+                if (previouslyFocused && previouslyFocused.isConnected !== false &&
+                    typeof previouslyFocused.focus === 'function') {
+                    previouslyFocused.focus();
+                }
+                resolve(value);
+            };
+            const submit = () => {
+                const picked = radios.find(radio => radio.checked);
+                finish(picked ? picked.value : 'optimize');
+            };
+            const handleKeyDown = event => {
+                if (event.key === 'Escape') {
+                    event.preventDefault();
+                    finish(null);
+                } else if (event.key === 'Enter') {
+                    event.preventDefault();
+                    submit();
+                }
+            };
+            closeButton.addEventListener('click', () => finish(null));
+            cancelButton.addEventListener('click', () => finish(null));
+            okButton.addEventListener('click', submit);
+            overlay.addEventListener('click', event => {
+                // A click on the backdrop no longer closes the dialog: an accidental
+                // click beside it must never cost in-progress work. Close deliberately.
+            });
+            document.addEventListener('keydown', handleKeyDown, true);
+            document.body.appendChild(overlay);
+            okButton.focus();
         });
     }
 

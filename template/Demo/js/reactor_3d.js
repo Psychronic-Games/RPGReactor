@@ -391,13 +391,17 @@ Reactor3D.useSharedContext = true;
 /** MSAA samples for the shared-context targets at full scale; fewer as the scale drops. */
 Reactor3D.renderTargetSamples = 4;
 /**
- * Resolution of the 3D passes relative to the screen, 1 = native. The
- * ceiling the adaptive controller works under; set it lower for a fixed
- * saving (a script call or plugin can), or turn the controller off and
- * hold a scale with `Reactor3D.adaptiveResolution = false`.
+ * Resolution of the 3D passes relative to the screen, 1 = native.
+ *
+ * The adaptive controller — drop the scale when frames run long, climb back
+ * after calm — is OFF by default: the upscale reads as a blur layer over the
+ * whole scene, and a game that never asked for it should stay sharp. A
+ * project that wants the safety net on weak machines opts in deliberately
+ * with `Reactor3D.adaptiveResolution = true` (a script call or plugin);
+ * `renderScale` set below 1 holds a fixed saving either way.
  */
 Reactor3D.renderScale = 1;
-Reactor3D.adaptiveResolution = true;
+Reactor3D.adaptiveResolution = false;
 Reactor3D.minRenderScale = 0.5;
 
 /** MSAA for a given scale: a half-size target has nothing left to smooth. */
@@ -501,11 +505,17 @@ Reactor3D.Viewport.prototype.setRenderScale = function(scale) {
     this._generation++;
 };
 
-/** Target pixel size for the passes at the current scale. */
+/**
+ * Target pixel size for the passes at the current scale. The canvas pixel
+ * ratio rides along so an enlarged game (fullscreen) renders its 3D at the
+ * pixels actually on screen instead of upscaling a game-sized pass.
+ */
 Reactor3D.Viewport.prototype.targetSize = function() {
+    const ratio = typeof Graphics !== "undefined" && Graphics.canvasPixelRatio
+        ? Graphics.canvasPixelRatio() : 1;
     return {
-        width: Math.max(1, Math.round(this._width * this._scale)),
-        height: Math.max(1, Math.round(this._height * this._scale))
+        width: Math.max(1, Math.round(this._width * this._scale * ratio)),
+        height: Math.max(1, Math.round(this._height * this._scale * ratio))
     };
 };
 
@@ -829,10 +839,15 @@ Reactor3D.Viewport.prototype.resize = function() {
     const height = Graphics.height;
     if (this._shared || (!this._canvas && this._pixi)) {
         // The targets are the canvas here; a new size means new ones, and
-        // the sprites showing them rebuild off the generation.
-        if (width !== this._width || height !== this._height) {
+        // the sprites showing them rebuild off the generation. The canvas
+        // pixel ratio counts as size: fullscreen changes it without touching
+        // the game's width or height.
+        const ratio = typeof Graphics !== "undefined" && Graphics.canvasPixelRatio
+            ? Graphics.canvasPixelRatio() : 1;
+        if (width !== this._width || height !== this._height || ratio !== this._targetRatio) {
             this._width = width;
             this._height = height;
+            this._targetRatio = ratio;
             this._disposeTargets();
             this._generation++;
         }

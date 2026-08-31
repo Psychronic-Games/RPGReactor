@@ -326,7 +326,8 @@
 
         closeButton.addEventListener('click', () => close(false));
         overlay.addEventListener('click', event => {
-            if (event.target === overlay) close(false);
+            // A click on the backdrop no longer closes the dialog: an accidental
+            // click beside it must never cost in-progress work. Close deliberately.
         });
         overlay.addEventListener('keydown', event => {
             if (event.key === 'Escape') {

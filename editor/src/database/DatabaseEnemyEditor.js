@@ -1072,7 +1072,7 @@ class DatabaseEnemyEditor {
         modal.appendChild(btnRow);
         overlay.appendChild(modal);
         modal.querySelector('.action-edit-close')?.addEventListener('click', () => overlay.remove());
-        overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+        // A click on the backdrop no longer closes the dialog: close deliberately.
         document.body.appendChild(overlay);
     }
 

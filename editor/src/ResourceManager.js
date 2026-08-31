@@ -965,7 +965,7 @@ class ResourceManager {
         this.importButton.addEventListener('click', () => this.importFiles());
         this.exportButton.addEventListener('click', () => this.exportSelected());
         this.deleteButton.addEventListener('click', () => this.deleteSelected());
-        overlay.addEventListener('mousedown', event => { if (event.target === overlay) this.close(); });
+        // A click on the backdrop no longer closes the dialog: close deliberately.
         this.renderFolders();
     }
 
@@ -1444,13 +1444,40 @@ class ResourceManager {
                         throw new Error(map3d?.lastError || 'The 3D model validator is unavailable.');
                     }
                     if (generation !== this.operationGeneration) return;
+                    // GLBs get an optional shrink before they land in the
+                    // project: textures capped at 2K, float skin weights
+                    // packed to 16-bit, unused tangent streams dropped, and
+                    // duplicate vertices welded. The user picks the level;
+                    // validateModelBytes still gates whatever comes out.
+                    let importBytes = bytes;
+                    let shrunkNote = '';
+                    if (/\.glb$/i.test(file.name) && window.RRGlbOptimizer &&
+                        typeof this.uiManager?.showModelOptimizeDialog === 'function') {
+                        const analysis = window.RRGlbOptimizer.analyze(bytes);
+                        if (analysis) {
+                            const mode = await this.uiManager.showModelOptimizeDialog({
+                                fileName: file.name, analysis });
+                            if (mode === null || generation !== this.operationGeneration) return;
+                            if (mode !== 'keep') {
+                                const optimized = await window.RRGlbOptimizer.optimize(bytes, Object.assign({
+                                    encodeImage: window.RRGlbOptimizer.canvasEncoder()
+                                }, window.RRGlbOptimizer.PRESETS[mode]));
+                                if (generation !== this.operationGeneration) return;
+                                if (optimized.bytes !== bytes) {
+                                    importBytes = optimized.bytes;
+                                    shrunkNote = ` (${(bytes.length / 1048576).toFixed(1)}MB → ` +
+                                        `${(importBytes.length / 1048576).toFixed(1)}MB)`;
+                                }
+                            }
+                        }
+                    }
                     const result = ResourceManager.importModelFolder({
                         fs: this.fs,
                         path: this.path,
                         projectRoot: ownership.projectPath,
                         modelName,
                         sourceName: file.name,
-                        sourceBytes: bytes,
+                        sourceBytes: importBytes,
                         reactor3D: window.Reactor3D,
                         writeAtomic: window.RRWriteFileAtomicSync,
                         verifyOwnership: () => this.projectController.verifyProjectOwnership(
@@ -1458,7 +1485,7 @@ class ResourceManager {
                     });
                     if (generation === this.operationGeneration) {
                         this.refresh();
-                        this.setStatus(`Imported model ${result.modelName}.`);
+                        this.setStatus(`Imported model ${result.modelName}${shrunkNote}.`);
                     }
                 } catch (error) {
                     if (generation === this.operationGeneration) {

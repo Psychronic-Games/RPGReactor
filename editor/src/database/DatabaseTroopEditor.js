@@ -446,7 +446,7 @@ class DatabaseTroopEditor {
         };
 
         closeBtn.onclick = close;
-        overlay.onclick = (e) => { if (e.target === overlay) close(); };
+        // A click on the backdrop no longer closes the dialog: close deliberately.
         overlay.addEventListener('keydown', e => {
             if (e.key === 'Escape') {
                 e.preventDefault();
@@ -1526,11 +1526,11 @@ class DatabaseTroopEditor {
         if (cmd.code === 101) {
             const run = ECL.messageBoxes().collectRun(page.list, idx);
             const messageEditor = this.getCommandEditor('message', MessageCommandEditor);
-            messageEditor.show({ boxes: run.boxes, inBattle: true }, commands => {
+            messageEditor.show({ boxes: run.boxes, inBattle: true, activeIndex: run.activeIndex }, commands => {
                 if (!commands?.length) return;
-                page.list.splice(idx, run.count);
+                page.list.splice(run.startIndex, run.count);
                 ECL.rebaseInsertIndent(commands, cmd.indent || 0);
-                commands.forEach((command, i) => page.list.splice(idx + i, 0, command));
+                commands.forEach((command, i) => page.list.splice(run.startIndex + i, 0, command));
                 refresh();
             });
             return;
@@ -1706,7 +1706,7 @@ class DatabaseTroopEditor {
         dialog.appendChild(btnRow);
         dialog.querySelector('.raw-cmd-close').addEventListener('click', () => document.body.removeChild(modal));
         modal.appendChild(dialog);
-        modal.onclick = (e) => { if (e.target === modal) document.body.removeChild(modal); };
+        // A click on the backdrop no longer closes the dialog: close deliberately.
         document.body.appendChild(modal);
     }
 
@@ -2123,7 +2123,7 @@ class DatabaseTroopEditor {
 
         header.querySelector('.troop-cond-close').addEventListener('click', () => document.body.removeChild(modal));
         modal.appendChild(dialog);
-        modal.onclick = (e) => { if (e.target === modal) document.body.removeChild(modal); };
+        // A click on the backdrop no longer closes the dialog: close deliberately.
         document.body.appendChild(modal);
     }
 

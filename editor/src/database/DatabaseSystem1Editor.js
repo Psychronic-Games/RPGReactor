@@ -1066,7 +1066,8 @@ class DatabaseSystem1Editor {
 
         header.querySelector('button').onclick = close;
         overlay.addEventListener('click', event => {
-            if (event.target === overlay) close();
+            // A click on the backdrop no longer closes the dialog: an accidental
+            // click beside it must never cost in-progress work. Close deliberately.
         });
 
         overlay.appendChild(modal);

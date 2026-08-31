@@ -313,7 +313,7 @@ class DatabaseClassEditor {
                 readoutSpan.textContent = `${tt('Lv')}1: ${at(1)} → ${tt('Lv')}99: ${at(99)} → ${tt('Lv')}${capLevel}: ${at(capLevel)}`;
             }
         });
-        overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+        // A click on the backdrop no longer closes the dialog: close deliberately.
 
         recompute();
     }
@@ -635,7 +635,7 @@ class DatabaseClassEditor {
         const close = () => overlay.remove();
         modal.querySelector('.learning-edit-close').addEventListener('click', close);
         modal.querySelector('.learning-edit-cancel').addEventListener('click', close);
-        overlay.addEventListener('click', event => { if (event.target === overlay) close(); });
+        // A click on the backdrop no longer closes the dialog: close deliberately.
         modal.querySelector('.learning-edit-ok').addEventListener('click', () => {
             const maxLevel = globalThis.RR_LIMITS?.ACTOR_LEVEL || 999;
             draft.level = Math.max(1, Math.min(maxLevel, parseInt(modal.querySelector('.learning-edit-level').value) || 1));
@@ -1396,7 +1396,8 @@ class DatabaseClassEditor {
             overlay.remove();
         });
         overlay.addEventListener('click', (e) => {
-            if (e.target === overlay) overlay.remove();
+            // A click on the backdrop no longer closes the dialog: an accidental
+            // click beside it must never cost in-progress work. Close deliberately.
         });
 
         document.body.appendChild(overlay);

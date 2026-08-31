@@ -1098,7 +1098,7 @@ class DatabaseEditorUI {
         overlay.appendChild(modal);
         header.querySelector('.rr-modal-close').addEventListener('click', close);
         closeBtn.addEventListener('click', close);
-        overlay.addEventListener('mousedown', event => { if (event.target === overlay) close(); });
+        // A click on the backdrop no longer closes the dialog: close deliberately.
         document.addEventListener('keydown', onKeyDown, true);
         document.body.appendChild(overlay);
         closeBtn.focus();
@@ -2588,7 +2588,9 @@ class DatabaseEditorUI {
 
         // Footer buttons
         const footer = document.createElement('div');
-        footer.style.cssText = 'padding: 12px 20px; display: flex; justify-content: flex-end; gap: 8px; border-top: 1px solid var(--color-border); background-color: var(--color-bg-panel);';
+        // The bottom radii match the modal's own, or the footer's square
+        // corners poke past the rounded boundary.
+        footer.style.cssText = 'padding: 12px 20px; display: flex; justify-content: flex-end; gap: 8px; border-top: 1px solid var(--color-border); background-color: var(--color-bg-panel); border-radius: 0 0 6px 6px;';
 
         const cancelBtn = document.createElement('button');
         cancelBtn.textContent = tt('Cancel');
@@ -2604,7 +2606,8 @@ class DatabaseEditorUI {
 
         cancelBtn.onclick = close;
         header.querySelector('.modal-close').onclick = close;
-        overlay.onclick = (e) => { if (e.target === overlay) close(); };
+        // A destructive dialog closes on purpose only — Cancel or the cross —
+        // never from a stray click beside it.
 
         okBtn.onclick = () => {
             const newMax = Number(input.value);

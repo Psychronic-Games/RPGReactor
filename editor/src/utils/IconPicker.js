@@ -243,7 +243,8 @@
         });
 
         modal.onclick = (e) => {
-            if (e.target === modal) close();
+            // A click on the backdrop no longer closes the dialog: an accidental
+            // click beside it must never cost in-progress work. Close deliberately.
         };
         return modal;
     }

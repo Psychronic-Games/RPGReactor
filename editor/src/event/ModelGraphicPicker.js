@@ -273,18 +273,10 @@ class ModelGraphicPicker {
             }
             this._close();
         });
-        // A click's target is the common ancestor of press and release, so
-        // a drag that starts on the preview and slips past the modal edge
-        // "clicks" the backdrop — and cancelled the whole picker, dots and
-        // all. Only a press AND release both on the backdrop closes it.
-        let backdropPressed = false;
-        modal.addEventListener('pointerdown', e => {
-            backdropPressed = e.target === modal;
-        });
-        modal.addEventListener('click', e => {
-            if (e.target === modal && backdropPressed) this._close();
-            backdropPressed = false;
-        });
+        // A click on the backdrop no longer closes the dialog: an accidental
+        // click beside it must never cost in-progress work (OK, Cancel and
+        // the cross close it). The old press-and-release backdrop dance is
+        // gone with the gesture.
     }
 
     _close() {
@@ -682,6 +674,9 @@ class ModelGraphicPicker {
 
     _applyModelRotation() {
         if (!this._object) return;
+        // Rotation is input: without this the idle throttle kept the preview
+        // at ten frames a second through a ring drag, which read as lag.
+        this._lastInputAt = performance.now();
         this._object.rotation.order = 'YXZ';
         this._object.rotation.set(
             this.selectedPitch * Math.PI / 180,
@@ -1031,8 +1026,20 @@ class ModelGraphicPicker {
             // template's measured size: a skinned model's vertices follow
             // bones Box3 cannot see, so measuring the object reads empty
             // and a box-centre left animated models towering off-frame.
-            this._modelHeight = extent.y * previewScale;
-            model.position.set(0, -this._modelHeight / 2, 0);
+            let height = extent.y * previewScale;
+            let middle = height / 2;
+            // Some skinned exports declare an extent smaller than the mesh
+            // they draw; trusting it put the camera on the character's feet.
+            // The bind-pose bounds are on the geometry, so Box3 CAN see them —
+            // when they stand taller than the declared extent, they win.
+            const measured = new THREE.Box3().setFromObject(model);
+            if (Number.isFinite(measured.min.y) && Number.isFinite(measured.max.y)
+                && measured.max.y - measured.min.y > height + 1e-6) {
+                height = measured.max.y - measured.min.y;
+                middle = (measured.min.y + measured.max.y) / 2;
+            }
+            this._modelHeight = height;
+            model.position.set(0, -middle, 0);
             this._object = new THREE.Group();
             this._object.add(model);
             this._buildPoseRings();

@@ -129,7 +129,7 @@ class BattleTestConfigModal {
         dialog.appendChild(btnRow);
 
         this.modal.appendChild(dialog);
-        this.modal.onclick = (e) => { if (e.target === this.modal) this.close(); };
+        // A click on the backdrop no longer closes the dialog: close deliberately.
         document.body.appendChild(this.modal);
         if (window.I18n) window.I18n.applyText(this.modal);
 
