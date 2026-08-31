@@ -54,6 +54,17 @@ function RR_loadEffekseerEffectFromFile(context, effectPath, scale, onLoad, onEr
     // returns a dead effect with no onload/onerror ever firing.
     const arrayBuffer = new ArrayBuffer(bytes.byteLength);
     new Uint8Array(arrayBuffer).set(bytes);
+    // The web host hands back a Uint8Array, whose toString ignores 'base64'
+    // and joins decimal bytes with commas — an ERR_INVALID_URL data URL.
+    const toBase64 = (data) => {
+        if (typeof Buffer !== 'undefined' && Buffer.isBuffer(data)) return data.toString('base64');
+        const bytes = data instanceof Uint8Array ? data : new Uint8Array(data);
+        let binary = '';
+        for (let at = 0; at < bytes.length; at += 0x8000) {
+            binary += String.fromCharCode.apply(null, bytes.subarray(at, at + 0x8000));
+        }
+        return btoa(binary);
+    };
     const redirect = (resPath) => {
         try {
             const rel = String(resPath).replace(/\\/g, '/');
@@ -61,9 +72,9 @@ function RR_loadEffekseerEffectFromFile(context, effectPath, scale, onLoad, onEr
             if (/\.(png|jpe?g|webp)$/i.test(rel)) {
                 const mime = /\.png$/i.test(rel) ? 'image/png'
                     : /\.webp$/i.test(rel) ? 'image/webp' : 'image/jpeg';
-                return `data:${mime};base64,${data.toString('base64')}#.png`;
+                return `data:${mime};base64,${toBase64(data)}#.png`;
             }
-            return `data:application/octet-stream;base64,${data.toString('base64')}`;
+            return `data:application/octet-stream;base64,${toBase64(data)}`;
         } catch (e) {
             console.error('Effekseer resource not found:', resPath, e.message);
             return resPath;
