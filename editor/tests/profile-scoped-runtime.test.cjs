@@ -49,6 +49,16 @@ test('nothing reads the manifest name at runtime', () => {
     assert.deepEqual(offenders, []);
 });
 
+test('deployed games scope their profile to the bundled runtime too', () => {
+    const worker = read('build-scripts/build-worker.js');
+    assert.match(worker, /normalizeStagedPackage\(stagingDir, gameTitle, nwVersion\)/,
+        'the deploy passes the resolved runtime into the manifest write');
+    assert.match(worker, /\$\{baseName\}-\$\{profileKey\}/,
+        'every game name carries the runtime suffix');
+    assert.match(worker, /await ensureNwVersion\(\);\s*\n\s*normalizeStagedPackage/,
+        'the version is resolved before the manifest is written');
+});
+
 test('the build refuses a runtime downgrade below the newest ever shipped', () => {
     const shipped = JSON.parse(read('build-scripts/shipped-runtime.json'));
     assert.match(shipped.nwVersion, /^\d+\.\d+\.\d+$/);

@@ -46,8 +46,10 @@ build refuses NW downgrades below build-scripts/shipped-runtime.json
 editor prefs out of the Chromium profile (localStorage/IndexedDB) into an
 fs-backed store — until then every future NW bump resets editor prefs once.
 User repair for old builds: delete `%LOCALAPPDATA%\rpg-reactor\User
-Data\Default\Sync Data`. Games deployed by Reactor carry the same shared-
-profile landmine per game name — audit in 0.98.5.
+Data\Default\Sync Data`. Games deployed by Reactor carried the same
+landmine — FIXED same night: build-worker normalizeStagedPackage appends
+-nw<major><minor> to every game name (saves/config are files, unaffected);
+build.js (dev CLI, no NW selection) left alone.
 
 ## 2026-08-30 — web (itch) console cleanup (runtime 20260830.33)
 

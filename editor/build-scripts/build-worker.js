@@ -209,16 +209,24 @@ function slugifyPackageName(value) {
     return slug || 'game';
 }
 
-function normalizeStagedPackage(stagingDir, gameTitle) {
+function normalizeStagedPackage(stagingDir, gameTitle, bundledNwVersion) {
     const stagedPackagePath = path.join(stagingDir, 'package.json');
     if (!fs.existsSync(stagedPackagePath)) return;
 
     const stagedPackage = JSON.parse(fs.readFileSync(stagedPackagePath, 'utf8'));
     const titleSlug = slugifyPackageName(gameTitle);
     const currentName = slugifyPackageName(stagedPackage.name);
-    stagedPackage.name = currentName === 'rmmz-game'
+    const baseName = currentName === 'rmmz-game'
         ? `rpg-reactor-${titleSlug}`
         : currentName;
+    // NW.js keys the Chromium profile on this name, and Chromium never
+    // migrates a profile backwards: a game update shipping an older runtime
+    // than the player has already run dies on a fatal CHECK during profile
+    // init - exit 0, no window. Scope the profile to the bundled runtime so
+    // every runtime change starts a fresh, compatible profile. Desktop
+    // saves and config are files in the game folder; players lose nothing.
+    const profileKey = 'nw' + String(bundledNwVersion || '').split('.').slice(0, 2).join('');
+    stagedPackage.name = profileKey === 'nw' ? baseName : `${baseName}-${profileKey}`;
 
     fs.writeFileSync(stagedPackagePath, JSON.stringify(stagedPackage, null, 2));
 }
@@ -470,7 +478,8 @@ async function installProprietaryCodec(platform, runtimeRoot, runtimeVersion, pr
     progress(2, 'Staging game files...');
     validateProjectRuntime(projectPath);
     copyDirFiltered(projectPath, stagingDir, '');
-    normalizeStagedPackage(stagingDir, gameTitle);
+    await ensureNwVersion();
+    normalizeStagedPackage(stagingDir, gameTitle, nwVersion);
     if (assetOptimization.png || assetOptimization.audio) {
         logInfo('Optimizing staged assets...');
         progress(6, 'Optimizing staged assets...');
