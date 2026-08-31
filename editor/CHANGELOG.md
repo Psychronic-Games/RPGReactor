@@ -5,6 +5,11 @@ All notable changes to RPG Reactor will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- Database > System 1 can reach both title screen layers. `Scene_Title` draws `img/titles1` and then `img/titles2` over it, and every new project is given a `title2Name` field, but the tab exposed one `Title Image:` row wired to `title1Name` — the upper layer had no way in. The row is now a pair, `Lower Layer:` / `Upper Layer:`, each opening the picker for its own folder and writing its own System field; `(None)` clears either one, and a missing `img/titles2` lists as empty rather than alerting. A composite preview under the rows stacks the two at the game's own resolution, the way the title screen stacks them.
+
 ## [0.98.4] - 2026-08-31
 
 ### Fixed
