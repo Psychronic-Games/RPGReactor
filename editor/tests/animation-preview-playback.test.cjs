@@ -133,6 +133,25 @@ test('the backdrop switcher repaints a stopped preview in both modes', () => {
     assert.match(editor, /_onPreviewImagesLoaded\(\) \{\s*\n\s*this\._repaintPreview\(\);/);
 });
 
+test('the effect picker resyncs the Animations page it opens over', () => {
+    // A switcher refreshes its own highlight only, on its own clicks. That was
+    // enough for the two animation pickers, which are modal and never share the
+    // screen with a second switcher. Effect File > Change... opens OVER the
+    // Animations page, so for the first time two are alive at once: without a
+    // resync the page keeps the old base and the old pressed swatch behind the
+    // modal, and one shared choice looks like two. Rebuilding the page's
+    // switcher re-reads the stored choice, which is why it must replace rather
+    // than append -- otherwise each open stacks another row of swatches.
+    const editor = read('src', 'database', 'DatabaseAnimationEditor.js');
+    assert.match(editor, /_installBackdropSwitcher\(\) \{[\s\S]*?anchor\.replaceChildren\(/,
+        'the page switcher is replaced, never appended beside itself');
+    assert.doesNotMatch(editor, /backdropAnchor\.appendChild\(/,
+        'no append path left that could stack a second row');
+    assert.match(editor,
+        /this\._installBackdropSwitcher\(\);\s*\n\s*this\._repaintPreview\(\);/,
+        'the effect picker resyncs both the swatches and the base behind it');
+});
+
 class FakeElement {
     constructor(tag) {
         this.tagName = tag;

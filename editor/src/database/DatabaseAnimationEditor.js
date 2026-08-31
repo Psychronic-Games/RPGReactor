@@ -1099,11 +1099,25 @@ class DatabaseAnimationEditor {
         // the three choices and the remembered setting cannot drift apart
         // between the surfaces that play an animation. RRPreviewBackdrop
         // stores the choice itself; this only has to repaint.
-        const backdropAnchor = document.getElementById('preview-backdrop-switcher');
-        if (backdropAnchor && window.RRPreviewBackdrop) {
-            backdropAnchor.appendChild(
-                window.RRPreviewBackdrop.createSwitcher(() => this._repaintPreview()));
-        }
+        this._installBackdropSwitcher();
+    }
+
+    /**
+     * Put the shared swatches in the preview row, replacing any already
+     * there rather than stacking a second set beside them.
+     *
+     * A switcher only refreshes its own highlight, on its own clicks, which
+     * is all the two pickers ever needed: they are modal, so no second
+     * switcher is ever on screen with them. The effect-file picker opens
+     * *over* this page, so for the first time two are alive at once and the
+     * one behind would keep showing the old swatch as pressed. Rebuilding it
+     * reads the stored choice again, which is why this is callable twice.
+     */
+    _installBackdropSwitcher() {
+        const anchor = document.getElementById('preview-backdrop-switcher');
+        if (!anchor || !window.RRPreviewBackdrop) return;
+        anchor.replaceChildren(
+            window.RRPreviewBackdrop.createSwitcher(() => this._repaintPreview()));
     }
 
     /**
@@ -4924,6 +4938,12 @@ class DatabaseAnimationEditor {
                     previewGL.clearColor(previewBackdropRgb[0], previewBackdropRgb[1], previewBackdropRgb[2], 1);
                     previewGL.clear(previewGL.COLOR_BUFFER_BIT | previewGL.DEPTH_BUFFER_BIT);
                 }
+                // This modal opens over the Animations page, whose preview and
+                // swatches are still on screen behind it -- and neither repaints
+                // itself. Without this the page keeps the old base until it is
+                // touched again, which would make one shared choice look like two.
+                this._installBackdropSwitcher();
+                this._repaintPreview();
             }));
             previewCanvas.style.background = previewBackdrop;
         }
