@@ -19,6 +19,9 @@ retries when the warm-up resolves. The one-per-track BGM 404 on web is BY
 DESIGN: extensionless refs probe .ogg first, `WebAudio._onError` walks the
 other extensions (reactor_core ~7620) — only a host-provided extension
 manifest could remove the network-log line; noted as a future option.
+Also .34: `Graphics._defaultStretchMode` returns true everywhere — web
+playtests (itch) opened at native size until F3; no persistence involved,
+the F3 toggle at reactor_core ~1649 is per-session.
 
 ## 2026-08-30 — pre-release: issue #33 remainder + black map on project switch
 

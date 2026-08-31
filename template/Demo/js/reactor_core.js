@@ -1487,7 +1487,11 @@ Graphics._makeErrorHtml = function(name, message /*, error*/) {
 };
 
 Graphics._defaultStretchMode = function() {
-    return Utils.isNwjs() || Utils.isMobileDevice();
+    // Everywhere, not just NW.js and mobile: a browser playtest (itch embed
+    // included) opened at native game size and stayed small until someone
+    // discovered F3. The game fills whatever window it is given from the
+    // first frame; F3 still toggles back to 1:1.
+    return true;
 };
 
 Graphics._createErrorPrinter = function() {
