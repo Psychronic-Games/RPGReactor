@@ -1,0 +1,35 @@
+RPG Reactor 0.98.4 is out. Last release let you rig 3D models in the editor. This one puts them in the world and makes the world behave.
+
+RPG Reactor is a free, open source editor and engine that runs your RPG Maker MZ and MV projects as-is. Same data files, same plugins, no conversion.
+
+Height is a coordinate now:
+
+Every event and prop has a Z in tiles. Set it in the Event Editor, drag it with 3D arrows, or move it in play with new Rise and Descend route steps. Collision is vertical overlap, so a catwalk overhead blocks nobody walking under it. Flat 2D maps are untouched.
+
+Props you can trust:
+
+Placing a model got a ghost preview, undo, and a transform card with live sliders. Collision matches the actual mesh, so you stand next to a console instead of a tile away from an invisible wall. A Passage toggle shows exactly what the game blocks, in 2D and 3D, including under your models.
+
+Effects inside the world:
+
+Effekseer effects anchored on models now sit at real depth: they hide behind walls, scale with their model, and draw sharp. Video surfaces play on model parts, so a screen on a swinging arm keeps its movie on the glass.
+
+Events that don't freeze the player:
+
+Scoped Wait holds a script in the background on animations, time, a switch, or a variable. Model animations queue. The demo's tank fires its whole sequence while you walk away.
+
+Show Text grew up:
+
+Edit a whole conversation as one strip, with a live miniature of the current box drawn under the text field in your project's own windowskin and font. Overflow marks are pixel-identical to the game.
+
+Models shrink on import:
+
+AI-generated and store-bought models ship heavy. The new import optimizer caps textures, packs weights, and welds duplicate vertices with no visible change. Our own demo models went from 469MB to 168MB and look the same.
+
+Sharp, on purpose:
+
+Fullscreen renders 3D at your monitor's native pixels while UI keeps its smooth scaling. The automatic blur under load is opt-in now. Jaggy or soft is your call, not ours.
+
+Plus a stack of community-requested database features: Referenced By on every record, RPG Maker's four-tab Conditional Branch, enemy Max TP, text codes on descriptions, and more.
+
+Free and open source. Open a project you already have and give it a go.

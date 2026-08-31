@@ -106,7 +106,7 @@ The test suite statically rejects hard dependencies on ignored local projects.
 The distribution worker copies the tracked Reactor One project from
 `template/Demo`, preserves its authored content and plugin configuration, and
 refreshes its Reactor runtime files from the staged runtime.
-The current 0.98.4 baseline is **1,954 Node tests**;
+The current 0.98.4 baseline is **2,136 Node tests**;
 retain older counts only where a document clearly labels a historical release.
 
 When the optional authored-project compatibility corpus is present locally,

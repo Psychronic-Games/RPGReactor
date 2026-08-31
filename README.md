@@ -25,6 +25,7 @@ RPGReactor/
 - [Editor README](editor/README.md): detailed feature list, source launch steps, project structure, shortcuts, and technical notes.
 - [Changelog](CHANGELOG.md): GitHub-facing release progress and links to the detailed editor changelog.
 - [Handoff notes](docs/HANDOFF.md): current cycle state, open threads to pick up, manual release gates, and the engineering notes behind each recent piece of work.
+- [RPG Reactor 0.98.4 devlog](docs/devlogs/2026-08-30-rpg-reactor-0.98.4.md): height as a coordinate, 3D props and passage, in-world model effects and video surfaces, background waits, the Show Text overhaul, import-time model optimization.
 - [RPG Reactor 0.98.3 devlog](docs/devlogs/2026-08-23-rpg-reactor-0.98.3.md): in-editor rigging, preset motions, database 3D bindings, model preloading, and multi-format audio.
 - [Custom user interfaces design](docs/DESIGN-USER-INTERFACES.md): the User Interfaces database section, its runtime, how it stays invisible to RPG Maker, seven opt-in stock-scene replacements, and the workflows intentionally left stock.
 - [3D objects on the map](docs/devlogs/2026-08-02-3d-objects-on-the-map.md): how painted object groupings and tileset 3D classes build the HD-2D world.
@@ -51,20 +52,18 @@ RPGReactor/
 - **Build & deploy**: one-click isolated playtests; cross-platform game packaging for Windows, macOS, Linux, and Web; optional Linux AppImages for games and the editor; configurable NW.js releases and runtime locales; optional staged PNG/OGG optimization; and an editor distribution builder with SHA-256 checksums. Eligible full desktop packages default to an exact-NW.js-version H.264/AAC codec overlay verified by a trusted archive hash plus extracted-binary validation; users can disable it, and Web/Minimal packages never include it. Every overlay carries machine-readable provenance, recorded archive/binary hashes, the complete LGPL text, corresponding-source/build references, and a patent notice.
 - **Source-audited 18-language localization** across editor-generated interface text, with locale-key and placeholder validation, Arabic right-to-left direction, and project-authored game content deliberately left untouched; plus a theme system with multiple color palettes in light and dark modes.
 
-## What's New in 0.98.3
+## What's New in 0.98.4
 
 The full list for this release cycle is in the [changelog](CHANGELOG.md).
 
-- **Models rig inside the editor.** The Database 3D section fits a skeleton to any static model with draggable joint markers — Humanoid, Quadruped, Plant/Tree, and Vehicle templates — computes skin weights on the spot, and every bone becomes a poseable part. A plug-and-play motion library (walks, runs, jumps, swims, melee swings, held aiming stances and more) drops editable animation rules onto any rigged model, and on-demand poses can carry keyframe timelines.
-- **Anything in the database can be 3D.** Actors bind a model per surface — map character, face portrait, and side-view battler each independently 2D or 3D — while enemies render as live 3D battlers in battle and weapons, armor, and items carry bindings of their own. Everything lives in `data/Database.r3d.json` beside the MZ files, so RPG Maker tooling never sees an unfamiliar field.
-- **A GLB's baked animation clips just work.** Embedded clips are listed, playable, and adoptable as ordinary animations with a speed control; a skinning fix makes Meshy- and Mixamo-style centimetre-rigged exports play undistorted; and models exported facing forward need no facing marks at all.
-- **The 3D library organizes into folders.** `3d/Weapons/long-sword/…` nests freely, model lists show collapsible folders, and every path stays traversal-safe.
-- **Models load fast and play smooth.** Everything a map references preloads behind the loading fade with shaders and textures warmed before the first frame, GLB parsing and texture decoding run in a background worker (editor previews included), and rig weights moved out of `model.json` into a compact binary sidecar.
-- **Audio can ship as MP3, WAV, or FLAC — not just OGG** — with per-format loop tags and album art, every audio picker rebuilt in the Audio Player's interface, and deployment compressing all formats through one checkbox and quality choice.
-- **System sounds can use multiple takes** — every Cursor, OK, damage, shop, item, skill, and other stock slot can choose uniformly from an authored pool and optionally randomize pitch within a 50-150% range, while retaining the primary sound as the stock-runtime fallback.
-- **Play BGM/BGS/ME/SE commands use the full current audio browser** — cover art, recursive folders, search, thumbnails, seek/transport controls, volume/pitch/pan preview, and native loop points are consistent across map, Common, Troop, and plugin-command audio surfaces.
-- **Editor quality-of-life.** Class curves author the full 1–999 level range, an app-wide modal and responsiveness pass, event editor polish, image pickers gained a (None) choice, deploy dialogs follow the editor language, and the map grid stays complete at every zoom.
-- **PixiJS updated to 8.20** across the editor and runtime, verified against plugin-heavy MV-compat projects.
+- **Height is a real coordinate.** Every event and prop has a Z in tiles: set it in the Event Editor, drag it with 3D arrows, move it with the new Rise/Descend/Set Height route steps, and collision is by vertical overlap, so a catwalk overhead blocks nobody.
+- **3D props grew a full toolset.** Placement ghosts, undo, a transform card (offset, rotation, per-axis scale), collision that matches the actual mesh, a Passage view that draws blocked tiles in 2D and 3D alike, and drag arrows on the selection.
+- **Model effects live inside the world.** Effekseer effects anchored on models draw at their world position and depth, scale with the model, and hide behind geometry; video surfaces play on model parts (a screen on a swinging monitor arm keeps its movie on the glass), in game and in both editors.
+- **Events act without freezing the player.** Scoped Wait holds a script in the background on actions, time, a switch, or a variable; Play Model Animation queues; Transform 3D Model eases a model to a new pose. The tank fires its whole sequence while you walk away.
+- **Show Text is a conversation editor.** Whole message runs edit as one strip, a live miniature of the current box renders under the text field in the project's own windowskin and font, and overflow marks are pixel-identical to the game, escape codes measured the way the game measures them.
+- **3D models shrink on import.** The optimizer caps textures at 2K, packs skin weights, drops unused data, and welds duplicate vertices with no visible change, plus an optional mesh-simplification mode. The bundled Demo's six big models went 469MB to 168MB.
+- **The game stays sharp.** Fullscreen renders the canvas at on-screen size so 3D geometry is native-resolution while UI keeps its smooth scaling, and the adaptive-resolution blur is now opt-in.
+- **Database parity keeps landing.** Referenced By on every record, RPG Maker's four-tab Conditional Branch, enemy Max TP, per-effect state durations, random Grow/Change Parameter ranges, and text codes with live reference on descriptions and messages (GitHub #7, #15, #16, #23, #28-#32).
 
 ## Development Launchers
 
