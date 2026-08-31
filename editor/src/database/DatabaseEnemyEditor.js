@@ -106,23 +106,27 @@ class DatabaseEnemyEditor {
         paramsSection.innerHTML = `
             <div class="database-section-header">${tt('Parameters')}</div>
             <div class="database-section-content">
-                <!-- The value column is pinned to the widest box a value can
-                     reach, and the table laid out fixed, so growing a box cannot
-                     move it. Under auto layout the columns are sized from their
-                     content: a box widening to fit another digit took that width
-                     out of the Parameter column, which slid every box left
+                <!-- The Parameter column is pinned to its own longest label:
+                     a 1px width with the labels held on one line collapses it
+                     to exactly that, and the Value column takes everything
+                     left over. Two things follow. The values sit beside the
+                     labels rather than the pair being stretched to the ends of
+                     a panel that can be a thousand pixels wide, and a box has
+                     its own column's slack to grow into -- so the width it
+                     takes to fit another digit no longer comes out of the
+                     Parameter column, which is what slid every box left
                      towards its own label as the number was typed. -->
-                <table class="traits-table" style="table-layout: fixed;">
+                <table class="traits-table">
                     <thead>
                         <tr>
-                            <th>${tt('Parameter')}</th>
-                            <th style="width: calc(9ch + 64px);">${tt('Value')}</th>
+                            <th style="width: 1px; white-space: nowrap;">${tt('Parameter')}</th>
+                            <th>${tt('Value')}</th>
                         </tr>
                     </thead>
                     <tbody>
                         ${paramRows.map(row => `
                             <tr>
-                                <td>${row.label}</td>
+                                <td style="white-space: nowrap;">${row.label}</td>
                                 <td>
                                     <input type="number"
                                            class="database-field-value database-field-value-small enemy-param-input"
@@ -375,12 +379,19 @@ class DatabaseEnemyEditor {
      * A value box sized to the number it holds, in `ch` (a digit in the
      * field's own font) plus the chrome beside the digits: 12px of input
      * padding, the wrapper's 1px borders and the 22px themed stepper, with
-     * the remainder slack so the caret never sits against the arrows. Two
-     * digits is the floor, nine the ceiling.
+     * the remainder slack so the caret never sits against the arrows.
+     *
+     * Two digits is the floor, so a single digit is not a sliver. Fifteen is
+     * the ceiling, because that is the last length every value of which a
+     * Number holds exactly -- MAX_SAFE_INTEGER is sixteen digits and does not
+     * reach the end of them -- so a number the box refuses to widen for is
+     * already a number the engine cannot store. It is also short enough that
+     * the Value column still has slack at the narrowest the section is laid
+     * out, so even the widest box grows without moving anything.
      */
     paramInputWidth(value) {
         const digits = String(value ?? '').replace(/[^0-9]/g, '').length;
-        return `calc(${Math.min(9, Math.max(2, digits))}ch + 48px)`;
+        return `calc(${Math.min(15, Math.max(2, digits))}ch + 48px)`;
     }
 
     /**
