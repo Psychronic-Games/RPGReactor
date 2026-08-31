@@ -667,14 +667,21 @@ class DatabaseSystem1Editor {
         const soundLabels = RRSystemSoundSlotModal.SOUND_LABELS;
 
         let soundRows = '';
-        soundLabels.forEach((label, idx) => {
+        RRSystemSoundSlotModal.SOUND_ORDER.forEach(idx => {
             const se = system.sounds?.[idx] || {};
             const variants = Array.isArray(se.variants) ? se.variants.length : 0;
             const range = RRSystemSoundSlotModal.pitchRange(se.pitchRandom);
-            const details = `${se.name || tt('(None)')}${variants ? ` +${variants}` : ''}${range ? `  P${range.min}-${range.max}` : ''}`;
+            // A slot 24-25 a project has never written falls back to Recovery in
+            // the runtime rather than playing nothing, so it must not read
+            // `(None)` here -- that is the picked-and-blanked state, which really
+            // is silent. Naming the slot it borrows from reuses a phrase the
+            // catalog already carries in all 17 locales.
+            const inheritsRecovery = (idx === 24 || idx === 25) && !system.sounds?.[idx];
+            const shownName = inheritsRecovery ? `(${tt('Recovery')})` : (se.name || tt('(None)'));
+            const details = `${shownName}${variants ? ` +${variants}` : ''}${range ? `  P${range.min}-${range.max}` : ''}`;
             soundRows += `
                 <tr class="sound-row" data-sound-index="${idx}" style="cursor: pointer;">
-                    <td>${tt(label)}</td>
+                    <td>${tt(soundLabels[idx])}</td>
                     <td>${rrEscapeHtml(details)}</td>
                 </tr>
             `;

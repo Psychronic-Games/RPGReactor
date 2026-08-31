@@ -5539,6 +5539,14 @@ Window_BattleLog.prototype.performRecovery = function(target) {
     target.performRecovery();
 };
 
+Window_BattleLog.prototype.performMpRecovery = function(target) {
+    target.performMpRecovery();
+};
+
+Window_BattleLog.prototype.performTpRecovery = function(target) {
+    target.performTpRecovery();
+};
+
 Window_BattleLog.prototype.performEvasion = function(target) {
     target.performEvasion();
 };
@@ -5791,6 +5799,10 @@ Window_BattleLog.prototype.displayCritical = function(target) {
 };
 
 Window_BattleLog.prototype.displayDamage = function(target) {
+    // Cleared for every result display, so a target hit twice by one action
+    // still chimes twice.
+    this._mpRecoverySoundPushed = false;
+    this._tpRecoverySoundPushed = false;
     if (target.result().missed) {
         this.displayMiss(target);
     } else if (target.result().evaded) {
@@ -5799,6 +5811,17 @@ Window_BattleLog.prototype.displayDamage = function(target) {
         this.displayHpDamage(target);
         this.displayMpDamage(target);
         this.displayTpDamage(target);
+        // Backstop. The chime belongs to the battler, not to the log line, but
+        // it has only ever been pushed from inside the method that writes that
+        // line -- so a plugin suppressing the MP or TP line silences the heal
+        // along with it. VisuMZ_1_BattleCore is the common case: its ShowMpDmg
+        // and ShowTpDmg both ship false and it returns before the methods below
+        // ever run, while its own displayHpDamage replacement deliberately
+        // keeps the HP chime above the matching ShowHpDmg gate. Both calls
+        // no-op when the line did run and pushed the chime itself, so a shown
+        // line keeps its chime next to it rather than after every other line.
+        this.pushMpRecoverySound(target);
+        this.pushTpRecoverySound(target);
     }
 };
 
@@ -5840,20 +5863,43 @@ Window_BattleLog.prototype.displayHpDamage = function(target) {
 
 Window_BattleLog.prototype.displayMpDamage = function(target) {
     if (target.isAlive() && target.result().mpDamage !== 0) {
-        if (target.result().mpDamage < 0) {
-            this.push("performRecovery", target);
-        }
+        this.pushMpRecoverySound(target);
         this.push("addText", this.makeMpDamageText(target));
     }
 };
 
 Window_BattleLog.prototype.displayTpDamage = function(target) {
     if (target.isAlive() && target.result().tpDamage !== 0) {
-        if (target.result().tpDamage < 0) {
-            this.push("performRecovery", target);
-        }
+        this.pushTpRecoverySound(target);
         this.push("addText", this.makeTpDamageText(target));
     }
+};
+
+// Queue the recovery chime at most once per result display. Both the line
+// method above and displayDamage's backstop call these, and whichever gets
+// there first wins; a plugin that replaces the line method wholesale and pushes
+// the command itself would get a second chime from the backstop, so it should
+// call this instead of pushing directly.
+Window_BattleLog.prototype.pushMpRecoverySound = function(target) {
+    if (this._mpRecoverySoundPushed) {
+        return;
+    }
+    if (!target.isAlive() || target.result().mpDamage >= 0) {
+        return;
+    }
+    this._mpRecoverySoundPushed = true;
+    this.push("performMpRecovery", target);
+};
+
+Window_BattleLog.prototype.pushTpRecoverySound = function(target) {
+    if (this._tpRecoverySoundPushed) {
+        return;
+    }
+    if (!target.isAlive() || target.result().tpDamage >= 0) {
+        return;
+    }
+    this._tpRecoverySoundPushed = true;
+    this.push("performTpRecovery", target);
 };
 
 Window_BattleLog.prototype.displayAffectedStatus = function(target) {

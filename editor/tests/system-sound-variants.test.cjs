@@ -36,11 +36,23 @@ function soundManager(system, randomValues = [0]) {
     return { SoundManager: sandbox.SoundManager, loaded, played, randomCalls: () => randomCalls };
 }
 
-test('all 24 stock system sound slots are authorable', () => {
-    assert.equal(modal.SOUND_LABELS.length, 24);
-    assert.deepEqual(modal.SOUND_LABELS.slice(17), [
+test('all 24 stock system sound slots are authorable, plus the two typed recovery slots', () => {
+    assert.equal(modal.SOUND_LABELS.length, 26);
+    assert.deepEqual(modal.SOUND_LABELS.slice(17, 24), [
         'Miss', 'Evasion', 'Magic Evasion', 'Reflection', 'Shop', 'Use Item', 'Use Skill'
     ]);
+    assert.deepEqual(modal.SOUND_LABELS.slice(24), ['MP Recovery', 'TP Recovery']);
+});
+
+test('the two typed recovery rows render directly under Recovery', () => {
+    // Display order is deliberately not slot order. MP and TP Recovery are
+    // appended at 24-25 so every older slot keeps the index a saved project
+    // already wrote it at, but on screen they belong beside Recovery (16),
+    // which is where anyone setting up healing audio looks for them.
+    assert.deepEqual([...modal.SOUND_ORDER].sort((a, b) => a - b),
+        Array.from({ length: 26 }, (unused, i) => i),
+        'SOUND_ORDER is a permutation of every slot, so none is dropped or shown twice');
+    assert.deepEqual(modal.SOUND_ORDER.slice(16, 19), [16, 24, 25]);
 });
 
 test('slot drafts are isolated and preserve unknown keys when applied', () => {
@@ -137,4 +149,77 @@ test('System 1 loads the slot modal after its dependencies and merges legacy pic
     assert.ok(html.indexOf('src/utils/SystemSoundSlotModal.js') < html.indexOf('src/database/DatabaseSystem1Editor.js'));
     const source = fs.readFileSync(path.join(editorRoot, 'src', 'database', 'DatabaseSystem1Editor.js'), 'utf8');
     assert.match(source, /system\.sounds\[identifier\] = \{ \.\.\.system\.sounds\[identifier\], \.\.\.result \}/);
+});
+
+// Renders the real createColumn3 rather than asserting on its source, so the
+// row a user actually sees is what gets checked.
+function renderSoundTable(sounds) {
+    const system1Source = fs.readFileSync(
+        path.join(editorRoot, 'src', 'database', 'DatabaseSystem1Editor.js'), 'utf8');
+    const newElement = () => ({
+        style: {}, className: '', innerHTML: '', children: [],
+        appendChild(child) { this.children.push(child); }
+    });
+    const sandbox = {
+        console,
+        require,
+        window: {},
+        RRSystemSoundSlotModal: modal,
+        rrEscapeHtml: value => String(value),
+        document: { createElement: newElement }
+    };
+    const Editor = vm.runInNewContext(`${system1Source}\nDatabaseSystem1Editor;`, sandbox);
+    const editor = Object.create(Editor.prototype);
+    const column = editor.createColumn3({ sounds });
+    // Column 3 is Music then Sound; the sound table is the second section.
+    return column.children[1].innerHTML;
+}
+
+const stockSounds = () => Array.from({ length: 24 },
+    (unused, i) => ({ name: `Slot${i}`, volume: 90, pitch: 100, pan: 0 }));
+
+test('an untouched MP or TP recovery row names the slot it borrows, not "(None)"', () => {
+    // The runtime falls back to Recovery while 24-25 are absent, so a row
+    // reading `(None)` there would describe a silence that does not happen.
+    const html = renderSoundTable(stockSounds());
+
+    for (const idx of [24, 25]) {
+        const row = html.split('<tr').find(chunk => chunk.includes(`data-sound-index="${idx}"`));
+        assert.ok(row, `slot ${idx} has a row`);
+        assert.ok(row.includes('(Recovery)'), `slot ${idx} says it borrows Recovery`);
+        assert.ok(!row.includes('(None)'), `slot ${idx} does not claim to be silent`);
+    }
+
+    assert.ok(html.includes('MP Recovery'));
+    assert.ok(html.includes('TP Recovery'));
+});
+
+test('a picked-then-blanked MP recovery row reads as silent, because it is', () => {
+    const sounds = stockSounds().concat([{ name: '', volume: 90, pitch: 100, pan: 0 }]);
+    const html = renderSoundTable(sounds);
+    const row = html.split('<tr').find(chunk => chunk.includes('data-sound-index="24"'));
+    assert.ok(row.includes('(None)'), 'a written-but-blank slot is a real silence');
+    assert.ok(!row.includes('(Recovery)'));
+});
+
+test('MP and TP recovery fall back to Recovery only when their slot is absent', () => {
+    // Slots 24-25 postdate the 24-slot MZ schema, so a project last saved
+    // before they existed has no entry at them and has to keep playing the
+    // chime its heals already played. A slot that is present with a blank name
+    // is a deliberate silence and must not fall back.
+    const namesFor = sounds => {
+        const { SoundManager, played } = soundManager({ sounds });
+        SoundManager.playMpRecovery();
+        SoundManager.playTpRecovery();
+        return played.map(se => se.name);
+    };
+
+    assert.deepEqual(namesFor(stockSounds()), ['Slot16', 'Slot16'],
+        'a 24-slot project keeps the generic chime');
+    assert.deepEqual(namesFor(stockSounds().concat([{ name: 'MpHeal', volume: 90, pitch: 100, pan: 0 }])),
+        ['MpHeal', 'Slot16'], 'MP set, TP still absent');
+    assert.deepEqual(namesFor(stockSounds().concat([null, null])), ['Slot16', 'Slot16'],
+        'a JSON hole reads as absent');
+    assert.deepEqual(namesFor(stockSounds().concat([{ name: '' }, { name: '' }])), [],
+        'a present-but-blank slot is a deliberate silence, not a fallback');
 });

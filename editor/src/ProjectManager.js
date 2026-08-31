@@ -786,6 +786,10 @@ class ProjectManager {
                 params: ['Max HP', 'Max MP', 'Attack', 'Defense', 'M.Attack', 'M.Defense', 'Agility', 'Luck', 'Hit Rate', 'Evasion Rate'],
                 messages: {}
             },
+            // 24, not 26, on purpose: MP Recovery (24) and TP Recovery (25)
+            // fall back to Recovery while they are absent, and seeding them
+            // blank would mean silence instead -- a new project would then
+            // differ from every existing one.
             sounds: new Array(24).fill(null).map(() => ({ ...emptyAudio })),
             testBattlers: [],
             testTroopId: 1,
