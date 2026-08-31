@@ -1,6 +1,6 @@
 RPG Reactor 0.98.4 is out. Last release let you rig 3D models in the editor. This one puts them in the world and makes the world behave.
 
-RPG Reactor is a free, open source editor and engine that runs your RPG Maker MZ and MV projects as-is. Same data files, same plugins, no conversion.
+RPG Reactor is a free, open source editor and engine that runs your RPG Maker MZ and MV projects as-is. Same data files, same plugins, no conversion. PixiJS 8 for 2D, Three.js for 3D.
 
 Height is a coordinate now:
 
@@ -24,12 +24,12 @@ Edit a whole conversation as one strip, with a live miniature of the current box
 
 Models shrink on import:
 
-AI-generated and store-bought models ship heavy. The new import optimizer caps textures, packs weights, and welds duplicate vertices with no visible change. Our own demo models went from 469MB to 168MB and look the same.
+AI-generated and store-bought models ship heavy. The new import optimizer caps textures, packs weights, and welds duplicate vertices with no visible quality change. Our own demo models went from 469MB to 168MB and look the same.
 
-Sharp, on purpose:
+Sharp, fast, everywhere:
 
-Fullscreen renders 3D at your monitor's native pixels while UI keeps its smooth scaling. The automatic blur under load is opt-in now. Jaggy or soft is your call, not ours.
+Fullscreen now renders 3D at your monitor's native pixels while UI keeps its smooth scaling, and the automatic blur under load is opt-in. Browser games launch scaled to their window instead of a tiny box. The browser editor's playtest runs at full speed now, and the browser demo opens straight into the 3D view.
 
-Plus a stack of community-requested database features: Referenced By on every record, RPG Maker's four-tab Conditional Branch, enemy Max TP, text codes on descriptions, and more.
+Plus a stack of community-requested database features (Referenced By on every record, RPG Maker's four-tab Conditional Branch, enemy Max TP, smarter enemy AI conditions, text codes on descriptions) and a pile of stability fixes from a weekend of hard testing, including a fullscreen freeze and a black map when switching projects.
 
 Free and open source. Open a project you already have and give it a go.

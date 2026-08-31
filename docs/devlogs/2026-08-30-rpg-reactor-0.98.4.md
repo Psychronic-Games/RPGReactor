@@ -28,13 +28,13 @@ One dialog edits a whole run of message boxes as a strip: add, remove, reorder, 
 
 AI-generated and store-bought models ship heavy. The new import optimizer caps textures at 2K, packs skin weights, drops data the engine never reads, and welds duplicate vertices, with no visible change; an aggressive mode adds mesh simplification. The Demo's six biggest models went from 469MB to 168MB this way, and they look the same.
 
-## Sharp, on purpose
+## Sharp, fast, everywhere
 
-Fullscreen now renders at your monitor's actual pixels: 3D geometry comes out native-resolution sharp while windows and text keep their smooth scaling. The adaptive-resolution controller that quietly blurred the screen under load is opt-in now. If your game softens, it's because you chose to soften it.
+Fullscreen now renders at your monitor's actual pixels: 3D geometry comes out native-resolution sharp while windows and text keep their smooth scaling. The adaptive-resolution controller that quietly blurred the screen under load is opt-in now. If your game softens, it's because you chose to soften it. Browser games launch scaled to their window instead of a tiny box, the browser editor's playtest runs at full speed, and the browser demo opens straight into the 3D view.
 
 ## Community fixes
 
-This cycle closed a stack of GitHub issues: Referenced By on every database record (#23), RPG Maker's familiar four-tab Conditional Branch, text codes with a live reference on descriptions and messages (#29, #30), enemy Max TP and smarter drop slots (#31), per-effect state durations (#16), random ranges on Grow and Change Parameter (#15), plugin-command file pickers that browse the right folder (#7), enemy action conditions for missing states (#32), a PIXI 8 crash under VisuStella battle transitions (#28), and the #33 follow-ups: AI target grouping that honors plugin-rewritten scopes, and ratings authored 1-9.
+This cycle closed a stack of GitHub issues: Referenced By on every database record (#23), RPG Maker's familiar four-tab Conditional Branch, text codes with a live reference on descriptions and messages (#29, #30), enemy Max TP and smarter drop slots (#31), per-effect state durations (#16), random ranges on Grow and Change Parameter (#15), plugin-command file pickers that browse the right folder (#7), enemy action conditions for missing states (#32), a PIXI 8 crash under VisuStella battle transitions (#28), and the #33 follow-ups: AI target grouping that honors plugin-rewritten scopes, and ratings authored 1-9. A weekend of hard release testing also fixed a fullscreen freeze under screen tints, a black map when opening one project over another, and a pile of web console noise.
 
 ## Try it
 

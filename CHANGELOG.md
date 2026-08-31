@@ -6,6 +6,8 @@ This root changelog summarizes public release progress for GitHub; larger releas
 
 ## [Unreleased - 0.98.4]
 
+0.98.3 let you rig and animate 3D models inside the editor; 0.98.4 puts them in the world and makes the world behave. Height is a real coordinate for every event and prop; placed models get ghost previews, undo, a transform card, mesh-accurate collision, and a passage view; Effekseer effects and video surfaces live inside the 3D scene at true depth; Scoped Wait and queued model animations let events act without freezing the player; Show Text edits whole conversations with a live in-window miniature; a new import optimizer shrinks GLB models with no visible quality change (the bundled demo went 469MB to 168MB); fullscreen renders 3D at native resolution while UI stays smooth; and a stack of community-requested database features landed alongside a weekend of release-hardening fixes. Built on PixiJS 8 for 2D and Three.js for 3D.
+
 ### Fixed
 - Resizing a 3D game no longer blinks the ground out for a frame or logs a spurious "destroy() leak" warning (runtime `20260830.36`): the old render-pass textures were destroyed the instant a resize rebuilt them, one render ahead of the sprites that still showed them — they now retire two frames later, after every pass sprite has rebuilt.
 - Browser playtests run at full speed (runtime `20260830.35`): the web editor's playtest overlay used to leave the editor's own canvas and 3D view rendering behind the game, burning the same GPU — both now sleep until the overlay closes. Native-resolution 3D also drops multisampling from 4x to 2x once the display scale reaches 2x (the pixels already quadrupled there), and a project can trade the sharp enlargement back for frame rate with `Graphics.maxCanvasPixelRatio = 1`.
