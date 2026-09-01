@@ -6110,10 +6110,25 @@ Window.prototype._clampedCursorRect = function() {
     const cr = this._cursorRect;
     const innerW = Math.max(0, this._width - this._padding * 2);
     const innerH = Math.max(0, this._height - this._padding * 2);
-    const x = Math.max(cr.x, 0);
-    const y = Math.max(cr.y, 0);
-    const w = Math.max(0, Math.min(cr.width - (x - cr.x), innerW - x));
-    const h = Math.max(0, Math.min(cr.height - (y - cr.y), innerH - y));
+    // The cursor rect is in CONTENTS coordinates, and the client area holding
+    // the cursor sprite is shifted by -origin (Window._updateClientArea), so
+    // the visible band of the contents runs from origin to origin + inner.
+    // Clamping against inner alone -- as if origin were always zero -- cuts the
+    // bottom-most row short by exactly origin.y pixels.
+    //
+    // Window_Scrollable.updateOrigin sets origin.y = scrollY % itemHeight, so
+    // origin.y is non-zero precisely when innerHeight is not a whole number of
+    // rows. Scrolling to the last row lands on scrollMin, whose remainder is
+    // itemHeight - (innerHeight % itemHeight); the row is then fully on screen
+    // while the old clamp still trimmed the highlight to what would have been
+    // visible at scroll origin zero. That is the half-height last-row cursor.
+    const origin = this.origin;
+    const ox = origin ? origin.x : 0;
+    const oy = origin ? origin.y : 0;
+    const x = Math.max(cr.x, ox);
+    const y = Math.max(cr.y, oy);
+    const w = Math.max(0, Math.min(cr.x + cr.width, ox + innerW) - x);
+    const h = Math.max(0, Math.min(cr.y + cr.height, oy + innerH) - y);
     // Asked every frame by the cursor refresh; one rectangle per window,
     // reused. Callers read it immediately and never keep it.
     const rect = this._clampedCursorScratch || (this._clampedCursorScratch = new Rectangle(0, 0, 0, 0));

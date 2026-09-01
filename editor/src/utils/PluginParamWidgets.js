@@ -332,6 +332,12 @@
                     projectPath: context.projectPath,
                     currentId: Number(input.value) || 0,
                     allowNormalAttack: false,
+                    // A plugin may declare several animation parameters, and
+                    // every Browse button opened the same anonymous dialog.
+                    // Its own @text is what tells them apart.
+                    title: schema && schema.text
+                        ? `${text('Select Animation', context.tt)} — ${schema.text}`
+                        : '',
                     onPick: next => {
                         input.value = String(next);
                         onChange(input.value);

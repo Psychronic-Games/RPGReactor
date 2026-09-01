@@ -57,7 +57,7 @@ class AnimationPickerModal {
         });
     }
 
-    static open({ databaseManager, projectManager, projectPath, currentId, allowNormalAttack, onPick }) {
+    static open({ databaseManager, projectManager, projectPath, currentId, allowNormalAttack, onPick, title }) {
         const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const animations = (databaseManager.getAnimations ? databaseManager.getAnimations() : []).filter(a => a);
         const projectRoot = AnimationPickerModal.projectRootOf({ projectPath, projectManager });
@@ -86,7 +86,7 @@ class AnimationPickerModal {
         `;
         modal.innerHTML = `
             <div style="padding: 10px 14px; background: var(--color-bg-panel); border-bottom: 1px solid var(--color-border); display: flex; justify-content: space-between; align-items: center;">
-                <span style="font-weight: 600; color: var(--color-text-strong);">${tt('Select Animation')}</span>
+                <span class="anim-picker-title" style="font-weight: 600; color: var(--color-text-strong);">${tt('Select Animation')}</span>
                 <button type="button" class="anim-picker-close" style="background: none; border: none; color: var(--color-text-muted); font-size: 16px; cursor: pointer;">&#10005;</button>
             </div>
             <div style="flex: 1; display: grid; grid-template-columns: 300px 1fr; min-height: 0;">
@@ -109,6 +109,12 @@ class AnimationPickerModal {
                 <button type="button" class="anim-picker-ok tool-button" style="padding: 6px 18px; border-color: var(--color-accent-bright);">${tt('OK')}</button>
             </div>
         `;
+        // Written as textContent rather than into the template above: the title
+        // can carry a plugin's own @text, which is authored by whoever wrote the
+        // plugin and must not be parsed as markup. Absent, the dialog keeps its
+        // generic heading.
+        if (title) modal.querySelector('.anim-picker-title').textContent = String(title);
+
         overlay.appendChild(modal);
         document.body.appendChild(overlay);
 
