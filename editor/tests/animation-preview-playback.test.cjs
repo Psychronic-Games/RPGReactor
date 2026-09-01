@@ -283,3 +283,19 @@ test('the light backdrop reads the stylesheet, and falls back when it cannot', (
         globalThis.ThemeColors.resolve = real;
     }
 });
+
+test('the picker heading is addressable, and a supplied title is written as text', () => {
+    // The title can carry a plugin's own @text, which is authored by whoever
+    // wrote the plugin. Interpolating it into the template would make a
+    // parameter name into markup, so it is assigned as textContent after the
+    // template is parsed.
+    const modalSource = fs.readFileSync(
+        path.join(editorRoot, 'src', 'database', 'AnimationPickerModal.js'), 'utf8');
+    assert.match(modalSource, /static open\(\{[^}]*\btitle\b[^}]*\}\)/,
+        'open takes an optional title');
+    assert.match(modalSource, /class="anim-picker-title"/, 'the heading can be addressed');
+    assert.match(modalSource,
+        /if \(title\) modal\.querySelector\('\.anim-picker-title'\)\.textContent = String\(title\);/,
+        'and is written as text, never interpolated');
+    assert.equal(/\$\{title\}/.test(modalSource), false, 'the title never reaches the template');
+});

@@ -732,3 +732,28 @@ test('choice, generic complex, icon, file, and audio dispatch remain on their es
     const html = read('index.html');
     assert.ok(html.indexOf('src/utils/PluginDataRefs.js') < html.indexOf('src/utils/PluginParamWidgets.js'));
 });
+
+test('a plugin animation parameter names the picker it opens', () => {
+    // A plugin can declare several animation parameters, and every Browse
+    // button opened the same anonymous "Select Animation" dialog -- so which
+    // one you were choosing for was only knowable from what you had clicked.
+    const context = sandbox();
+    const opens = [];
+    context.AnimationPickerModal = { open: options => opens.push(options) };
+
+    const named = { ...schema('animation'), text: 'Impact Animation' };
+    const control = context.RRPluginParamWidgets.create({
+        schema: named, value: '1', onChange: () => {}, context: widgetContext(database())
+    });
+    byClass(control, 'rr-plugin-data-ref-browse').dispatch('click');
+    assert.equal(opens[0].title, 'Select Animation — Impact Animation');
+
+    // A parameter with no @text leaves the generic heading alone rather than
+    // showing a dangling dash.
+    const anonymous = { ...schema('animation'), text: '' };
+    const plain = context.RRPluginParamWidgets.create({
+        schema: anonymous, value: '1', onChange: () => {}, context: widgetContext(database())
+    });
+    byClass(plain, 'rr-plugin-data-ref-browse').dispatch('click');
+    assert.equal(opens[1].title, '');
+});
