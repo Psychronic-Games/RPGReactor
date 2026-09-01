@@ -389,11 +389,7 @@ class DatabaseEffectEditor {
                 code: 41, label: tt('Special Effect'),
                 control: this._selectHTML(41, `<option value="0" ${effect.code === 41 && effect.dataId === 0 ? 'selected' : ''}>${tt('Escape')}</option>`)
             }),
-            this._rowHTML(effect, {
-                code: 42, label: tt('Grow'),
-                control: this._selectHTML(42, paramOpts),
-                value: this._numberHTML(42, 'value1', rrEscapeHtml(effect.code === 42 ? effect.value1 : 1))
-            }),
+            this._growRowHTML(effect, paramOpts),
             this._growRangeRowHTML(effect),
             this._rowHTML(effect, {
                 code: 43, label: tt('Learn Skill'),
@@ -409,22 +405,41 @@ class DatabaseEffectEditor {
     }
 
     /**
-     * Grow's random range: ticked, the amount is drawn between the Grow
-     * row's number and this one (`value2`, which RPG Maker leaves at 0).
+     * The Grow row keeps both ends of the amount side by side — `value1`,
+     * a dash, then the upper end — so a range reads as one figure rather
+     * than as a number here and another on the row below. The upper box is
+     * greyed until the Random row beneath ticks it on.
+     */
+    _growRowHTML(effect, paramOpts) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
+        const on = effect.code === 42 && Math.floor(Number(effect.value2) || 0) !== 0;
+        const upper = on ? effect.value2 : (effect.code === 42 ? effect.value1 : 1);
+        const amount = rrEscapeHtml(effect.code === 42 ? effect.value1 : 1);
+        return `
+            <div class="effect-option rr-trait-row">
+                <input type="radio" name="effect-type" value="42" ${effect.code === 42 ? 'checked' : ''}>
+                <span class="rr-trait-label">${tt('Grow')}</span>
+                <span class="effect-grow-fields" style="grid-column: 3 / -1; display: flex; align-items: center; gap: 6px;">
+                    <span class="rr-trait-control" style="flex: 1 1 auto; min-width: 0;">${this._selectHTML(42, paramOpts)}</span>
+                    ${this._numberHTML(42, 'value1', amount, 'style="width: 60px; flex: 0 0 60px; box-sizing: border-box;"')}
+                    <span style="color: var(--color-text-muted); width: 14px; text-align: center;">–</span>
+                    <input type="number" class="effect-grow-max database-field-value" step="1" value="${rrEscapeHtml(upper)}" style="width: 60px; flex: 0 0 60px; box-sizing: border-box;" ${on ? '' : 'disabled'}>
+                </span>
+            </div>`;
+    }
+
+    /**
+     * Grow's random range: ticked, the amount is drawn between the two
+     * numbers on the Grow row (`value2`, which RPG Maker leaves at 0).
      * A sibling of the Grow row, like the Add State duration row.
      */
     _growRangeRowHTML(effect) {
         const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const on = effect.code === 42 && Math.floor(Number(effect.value2) || 0) !== 0;
-        const upper = on ? effect.value2 : (effect.code === 42 ? effect.value1 : 1);
         return `
             <div class="effect-grow-range rr-trait-row" data-code="42" style="margin-top: 6px;">
                 <input type="checkbox" class="effect-grow-random" style="margin: 0; justify-self: center;" ${on ? 'checked' : ''}>
                 <span class="rr-trait-label" style="color: var(--color-text-muted);">${tt('Random')}</span>
-                <span style="grid-column: 3 / -1; display: flex; align-items: center; gap: 8px;">
-                    <span style="color: var(--color-text-muted);">–</span>
-                    <input type="number" class="effect-grow-max database-field-value" step="1" value="${rrEscapeHtml(upper)}" style="width: 84px; box-sizing: border-box;" ${on ? '' : 'disabled'}>
-                </span>
             </div>`;
     }
 
@@ -433,8 +448,8 @@ class DatabaseEffectEditor {
         const row = container.querySelector ? container.querySelector('.effect-grow-range') : null;
         if (!row || effect.code !== 42) return;
         const random = row.querySelector('.effect-grow-random');
-        const maxInput = row.querySelector('.effect-grow-max');
-        if (random && random.checked) {
+        const maxInput = container.querySelector('.effect-grow-max');
+        if (random && random.checked && maxInput) {
             let a = Math.floor(Number(effect.value1) || 0);
             let b = Math.floor(parseFloat(maxInput.value) || 0);
             // The runtime reads a non-zero value2 as "ranged": keep the
@@ -451,14 +466,20 @@ class DatabaseEffectEditor {
         const row = container.querySelector ? container.querySelector('.effect-grow-range') : null;
         if (!row) return;
         const random = row.querySelector('.effect-grow-random');
-        const maxInput = row.querySelector('.effect-grow-max');
+        const maxInput = container.querySelector('.effect-grow-max');
+        if (!random || !maxInput) return;
         random.addEventListener('change', () => {
             maxInput.disabled = !random.checked;
             this._readGrowRange(container, effect);
         });
         maxInput.addEventListener('input', () => this._readGrowRange(container, effect));
         const amount = container.querySelector('input.effect-val[data-code="42"][data-field="value1"]');
-        if (amount) amount.addEventListener('input', () => this._readGrowRange(container, effect));
+        if (amount) amount.addEventListener('input', () => {
+            // Unticked, the greyed upper box echoes the amount, so the row
+            // reads "n – n" rather than showing a stale figure.
+            if (!random.checked) maxInput.value = amount.value;
+            this._readGrowRange(container, effect);
+        });
     }
 
     setupEffectRadioInputs(container, effect) {
