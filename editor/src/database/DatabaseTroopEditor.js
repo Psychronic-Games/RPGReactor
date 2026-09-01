@@ -197,7 +197,8 @@ class DatabaseTroopEditor {
 
         members.forEach((member, idx) => {
             const enemy = enemies.find(e => e && e.id === member.enemyId);
-            const enemyName = enemy ? `#${member.enemyId} ${enemy.name}` : `${tt('Enemy')} #${member.enemyId}`;
+            const entryLabels = enemy ? this.databaseEntryLabels(enemy, 'enemies') : null;
+            const enemyName = enemy ? `#${member.enemyId} ${entryLabels.primary || enemy.name}` : `${tt('Enemy')} #${member.enemyId}`;
 
             const row = document.createElement('div');
             row.className = 'troop-member-row';
@@ -312,6 +313,20 @@ class DatabaseTroopEditor {
         return true;
     }
 
+    // DatabaseEditorUI owns editor names: the store, the display mode, and the three
+    // orderings. Delegate rather than reimplement. The copy this replaced had already
+    // drifted from the owner on the day it was written -- it resolved the unnamed
+    // string by phrase where the owner resolves it by key -- and nothing but a test
+    // could reach it, because the one construction site always passes a parent.
+    // Without a parent there is no names store to read, so the game name is the whole
+    // answer and there is no secondary.
+    databaseEntryLabels(entry, type) {
+        if (typeof this.parentEditor?.databaseEntryLabels === 'function') {
+            return this.parentEditor.databaseEntryLabels(entry, type);
+        }
+        return { primary: String(entry?.name || ''), secondary: '', editorName: '' };
+    }
+
     showEnemyPicker(memberIdx = null) {
         const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const replacing = Number.isInteger(memberIdx);
@@ -320,7 +335,14 @@ class DatabaseTroopEditor {
         const enemies = this.databaseManager.getEnemies().filter(enemy => enemy && enemy.id > 0);
         const enemyLabels = new Map();
         const labels = enemies.map(enemy => {
-            const label = `${enemy.name || tt('Enemy')} [#${String(enemy.id).padStart(4, '0')}]`;
+            const entryLabels = this.databaseEntryLabels(enemy, 'enemies');
+            const primary = entryLabels.primary || enemy.name || tt('Enemy');
+            // An enemy whose editor name matches its game name would otherwise read
+            // "Goblin (Goblin)". RRPluginDataRefs.labelForEntry drops the parenthetical
+            // on the same test.
+            const alt = entryLabels.secondary && entryLabels.secondary !== primary
+                ? ` (${entryLabels.secondary})` : '';
+            const label = `${primary}${alt} [#${String(enemy.id).padStart(4, '0')}]`;
             enemyLabels.set(label, enemy);
             return label;
         });
@@ -374,10 +396,24 @@ class DatabaseTroopEditor {
         const showPreview = (enemy) => {
             previewPanel.innerHTML = '';
 
+            const entryLabels = this.databaseEntryLabels(enemy, 'enemies');
+            const primary = entryLabels.primary || enemy.name || tt('Enemy');
+
             const nameLabel = document.createElement('div');
             nameLabel.style.cssText = 'color: var(--color-accent-bright); font-size: 12px; font-weight: 600; text-align: center; word-break: break-word;';
-            nameLabel.textContent = `#${enemy.id} ${enemy.name}`;
+            nameLabel.textContent = `#${enemy.id} ${primary}`;
             previewPanel.appendChild(nameLabel);
+
+            // Styled here rather than with .database-list-alt: that class is written for
+            // a horizontal list row -- flex: 0 1 40%, margin-left: 6px, and nowrap with
+            // an ellipsis -- and this panel is a centred column, where those would push
+            // the label off-centre and truncate a long name instead of wrapping it.
+            if (entryLabels.secondary && entryLabels.secondary !== primary) {
+                const altLabel = document.createElement('div');
+                altLabel.style.cssText = 'color: var(--color-text-muted); font-size: 11px; text-align: center; word-break: break-word;';
+                altLabel.textContent = entryLabels.secondary;
+                previewPanel.appendChild(altLabel);
+            }
 
             const imgContainer = document.createElement('div');
             imgContainer.style.cssText = 'flex: 1; display: flex; align-items: center; justify-content: center; min-height: 80px;';
