@@ -373,9 +373,12 @@ test('map/common contexts route safely and troop allows Stop only', () => {
 });
 
 test('troop display uses the Reactor human label', () => {
+    // A troop page reads its summaries from EventCommandList, so the label a
+    // Reactor plugin command shows is decided in one place for both hosts.
     const troop = read('src/database/DatabaseTroopEditor.js');
-    assert.match(troop, /cmd\.code === 357 && p\[0\] === 'RPGReactor' && p\[2\]/);
-    assert.match(troop, /commandLabel \|\| ''/);
+    assert.match(troop, /getCommandInfo\(cmd, page, index\)/);
+    const list = read('src/event/EventCommandList.js');
+    assert.match(list, /code === 357 && pluginName === 'RPGReactor' && commandName/);
 });
 
 test('visual tooling contains a true quad, event anchor, 3D controls, and deterministic cleanup', () => {

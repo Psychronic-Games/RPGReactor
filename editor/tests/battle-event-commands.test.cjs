@@ -7,6 +7,7 @@ const vm = require('node:vm');
 const editorRoot = path.resolve(__dirname, '..');
 const commandsRoot = path.join(editorRoot, 'src', 'event', 'commands');
 const RREnemySlotOptions = require(path.join(commandsRoot, 'EnemySlotOptions.js'));
+const EventCommandList = require(path.join(editorRoot, 'src', 'event', 'EventCommandList.js'));
 // DatabaseEffectEditor is a browser script with no module.exports and a bare
 // rrEscapeHtml global, so it loads the way the other database editors are tested.
 function loadEffectEditor() {
@@ -27,15 +28,15 @@ const DatabaseEffectEditor = loadEffectEditor();
 // wired: the rest inserted a default command with no dialog at all, and opened
 // a raw JSON textarea of their parameters when double-clicked.
 const BATTLE_COMMANDS = {
-    331: 'changeEnemyHP',
-    332: 'changeEnemyMP',
-    333: 'changeEnemyState',
-    334: 'enemyRecoverAll',
-    335: 'enemyAppear',
-    336: 'enemyTransform',
-    337: 'showBattleAnimation',
-    339: 'forceAction',
-    342: 'changeEnemyTP'
+    331: 'changeEnemyHPEditor',
+    332: 'changeEnemyMPEditor',
+    333: 'changeEnemyStateEditor',
+    334: 'enemyRecoverAllEditor',
+    335: 'enemyAppearEditor',
+    336: 'enemyTransformEditor',
+    337: 'showBattleAnimationEditor',
+    339: 'forceActionEditor',
+    342: 'changeEnemyTPEditor'
 };
 
 // Enough of an element for a dialog to build itself: the selectors these
@@ -99,13 +100,8 @@ function loadTroopEditor() {
         RREnemySlotOptions
     };
     for (const name of [
-        'CommonEventEditor', 'ControlVariablesEditor', 'ShowPictureEditor',
-        'MovePictureEditor', 'ErasePictureEditor', 'ForceActionEditor',
-        'ChangeEnemyHPEditor', 'ChangeEnemyMPEditor', 'ChangeEnemyTPEditor',
-        'ChangeEnemyStateEditor', 'EnemyRecoverAllEditor', 'EnemyAppearEditor',
-        'EnemyTransformEditor', 'ShowBattleAnimationEditor',
-        'ConditionalBranchEditor', 'LoopEditor', 'AudioCommandEditor',
-        'ChangeVehicleBGMEditor', 'PluginCommandEditor'
+        'MessageCommandEditor', 'MovePictureEditor', 'ConditionalBranchEditor',
+        'LoopEditor', 'AudioCommandEditor', 'PluginCommandEditor', 'VideoSurfaceEditor'
     ]) context[name] = EditorStub;
     return vm.runInNewContext(`${source}\nDatabaseTroopEditor;`, context);
 }
@@ -118,7 +114,10 @@ function makeTroopEditor(DatabaseTroopEditor, code) {
     editor.commandPicker = { show: callback => callback({ code }) };
     editor.selectedCommandIndices = [];
     editor.persistTroop = () => {};
+    // The real statics for the shared table, stubs for the list surgery.
     editor._eventCommandListClass = () => ({
+        simpleCommandEditor: EventCommandList.simpleCommandEditor.bind(EventCommandList),
+        isNoParamCommand: EventCommandList.isNoParamCommand.bind(EventCommandList),
         safeInsertionIndex: (list, index) => index,
         insertionIndent: () => 0,
         rebaseInsertIndent: () => {},
@@ -127,12 +126,16 @@ function makeTroopEditor(DatabaseTroopEditor, code) {
         generatedCommand: () => null,
         pictureEditorFor: () => null
     });
-    editor.getCommandEditor = name => ({
+    const dialog = name => ({
         show(command, callback, context) {
             opened.push({ name, command, context });
             callback({ code, indent: 0, parameters: [0] });
         }
     });
+    editor.getCommandEditor = name => dialog(name);
+    // The battle dialogs now live on the shared EventCommandList instance,
+    // named by SIMPLE_COMMAND_EDITORS rather than by a list held here.
+    editor.commandDialogs = () => new Proxy({}, { get: (_t, prop) => dialog(String(prop)) });
     return { editor, opened };
 }
 
@@ -177,8 +180,9 @@ test('troop command rows read the operation and the battler out of the right par
         getAnimation: id => (id === 5 ? { id: 5, name: 'Burst' } : null)
     };
     editor.currentTroop = TROOP;
-    editor._eventCommandListClass = () => ({ generatedCommand: () => null });
-    const describe = (code, parameters) => editor.getCommandDisplay({ code, parameters }).description;
+    // Every other summary comes from EventCommandList now; this is the one part
+    // a troop page renders itself, because it is the one part only it can know.
+    const describe = (code, parameters) => editor.enemySlotDescription({ code, parameters });
 
     // p[1] is the operation, p[2] the operand type. Reading the sign out of
     // p[2] printed a decrease as a gain and every variable operand as a loss.
@@ -193,6 +197,15 @@ test('troop command rows read the operation and the battler out of the right par
     // for every Force Action ever authored.
     assert.equal(describe(339, [0, 1, 7, -1]), '#2 Treant: Fireball');
     assert.equal(describe(339, [1, 2, 7, -1]), 'Harold: Fireball');
+
+    // Anything else is the shared formatter's to describe, not this host's.
+    assert.equal(describe(311, [0, 0, 0, 100, false]), null);
+    assert.equal(describe(326, []), null);
+    const troopSource = fs.readFileSync(path.join(editorRoot, 'src', 'database', 'DatabaseTroopEditor.js'), 'utf8');
+    assert.match(troopSource, /getCommandInfo\(cmd, page, index\)/);
+    // The row colours stay this host's own: a battle page bands them more
+    // finely than the map list, and the rows look as they always have.
+    assert.match(troopSource, /code === 108 \|\| code === 109 \|\| code === 408/);
 });
 
 test('an enemy slot is named from the troop, and numbered when there is nothing to name', () => {
