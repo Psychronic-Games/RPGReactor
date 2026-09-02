@@ -11586,6 +11586,299 @@ Object.assign(RR_TEXT_TRANSLATIONS['th'], {
     'Import 3D Model': 'นำเข้าโมเดล 3D', 'Optimize (recommended)': 'ปรับให้เหมาะสม (แนะนำ)', 'Resize textures to 2K, compact skin weights, drop unused data, weld duplicate vertices. No visible change.': 'ย่อเท็กซ์เจอร์เป็น 2K บีบอัดน้ำหนักสกิน ลบข้อมูลที่ไม่ใช้ และรวมจุดยอดซ้ำ ไม่มีการเปลี่ยนแปลงที่มองเห็น', 'Optimize aggressively': 'ปรับให้เหมาะสมแบบเข้มข้น', 'Everything above plus mesh simplification. May soften very fine detail.': 'ทั้งหมดข้างต้นพร้อมการลดรายละเอียดเมช รายละเอียดที่ละเอียดมากอาจนุ่มนวลลง', 'Import as-is': 'นำเข้าตามเดิม', 'Keep every byte of the original file.': 'เก็บทุกไบต์ของไฟล์ต้นฉบับ', 'Import': 'นำเข้า', 'largest texture': 'เท็กซ์เจอร์ใหญ่สุด', 'reducible without visible change': 'ลดได้โดยไม่เห็นความแตกต่าง'
 });
 
+// Scope dropdown: the either-side scopes and the corrected random-target
+// labels (Skills and Items). Machine-assisted first pass, worded to match the
+// scope labels each locale already carries; pending native review.
+Object.assign(RR_TEXT_TRANSLATIONS['ja'], {
+    'One Random Enemy': '敵1体ランダム',
+    'Two Random Enemies': '敵2体ランダム',
+    'Three Random Enemies': '敵3体ランダム',
+    'Four Random Enemies': '敵4体ランダム',
+    'One Ally (Unconditional)': '味方単体（無条件）',
+    'All Allies (Unconditional)': '味方全体（無条件）',
+    'All Enemies & Allies': '敵味方全体',
+    'One Ally or Enemy': '味方または敵単体',
+    'One Enemy or Ally': '敵または味方単体',
+    'All Allies or All Enemies': '味方全体または敵全体',
+    'All Allies but User': '使用者以外の味方全体',
+    'One Random (Any Side)': '敵味方1体ランダム',
+    'Two Random (Any Side)': '敵味方2体ランダム',
+    'Three Random (Any Side)': '敵味方3体ランダム',
+    'Four Random (Any Side)': '敵味方4体ランダム'
+});
+Object.assign(RR_TEXT_TRANSLATIONS['es'], {
+    'One Random Enemy': 'Un enemigo aleatorio',
+    'Two Random Enemies': 'Dos enemigos aleatorios',
+    'Three Random Enemies': 'Tres enemigos aleatorios',
+    'Four Random Enemies': 'Cuatro enemigos aleatorios',
+    'One Ally (Unconditional)': 'Un aliado (incondicional)',
+    'All Allies (Unconditional)': 'Todos los aliados (incondicional)',
+    'All Enemies & Allies': 'Todos los enemigos y aliados',
+    'One Ally or Enemy': 'Un aliado o enemigo',
+    'One Enemy or Ally': 'Un enemigo o aliado',
+    'All Allies or All Enemies': 'Todos los aliados o todos los enemigos',
+    'All Allies but User': 'Todos los aliados excepto el usuario',
+    'One Random (Any Side)': 'Uno aleatorio (cualquier bando)',
+    'Two Random (Any Side)': 'Dos aleatorios (cualquier bando)',
+    'Three Random (Any Side)': 'Tres aleatorios (cualquier bando)',
+    'Four Random (Any Side)': 'Cuatro aleatorios (cualquier bando)'
+});
+Object.assign(RR_TEXT_TRANSLATIONS['zh-Hant'], {
+    'One Random Enemy': '隨機一名敵人',
+    'Two Random Enemies': '隨機兩名敵人',
+    'Three Random Enemies': '隨機三名敵人',
+    'Four Random Enemies': '隨機四名敵人',
+    'One Ally (Unconditional)': '單一盟友（無條件）',
+    'All Allies (Unconditional)': '所有盟友（無條件）',
+    'All Enemies & Allies': '所有敵人與盟友',
+    'One Ally or Enemy': '單一盟友或敵人',
+    'One Enemy or Ally': '單一敵人或盟友',
+    'All Allies or All Enemies': '所有盟友或所有敵人',
+    'All Allies but User': '所有盟友（不含使用者）',
+    'One Random (Any Side)': '隨機一名（任一方）',
+    'Two Random (Any Side)': '隨機兩名（任一方）',
+    'Three Random (Any Side)': '隨機三名（任一方）',
+    'Four Random (Any Side)': '隨機四名（任一方）'
+});
+Object.assign(RR_TEXT_TRANSLATIONS['zh-Hans'], {
+    'One Random Enemy': '随机一名敌人',
+    'Two Random Enemies': '随机两名敌人',
+    'Three Random Enemies': '随机三名敌人',
+    'Four Random Enemies': '随机四名敌人',
+    'One Ally (Unconditional)': '单个盟友（无条件）',
+    'All Allies (Unconditional)': '所有盟友（无条件）',
+    'All Enemies & Allies': '所有敌人与盟友',
+    'One Ally or Enemy': '单个盟友或敌人',
+    'One Enemy or Ally': '单个敌人或盟友',
+    'All Allies or All Enemies': '所有盟友或所有敌人',
+    'All Allies but User': '所有盟友（不含使用者）',
+    'One Random (Any Side)': '随机一名（任一方）',
+    'Two Random (Any Side)': '随机两名（任一方）',
+    'Three Random (Any Side)': '随机三名（任一方）',
+    'Four Random (Any Side)': '随机四名（任一方）'
+});
+Object.assign(RR_TEXT_TRANSLATIONS['ru'], {
+    'One Random Enemy': 'Один Случайный Враг',
+    'Two Random Enemies': 'Два Случайных Врага',
+    'Three Random Enemies': 'Три Случайных Врага',
+    'Four Random Enemies': 'Четыре Случайных Врага',
+    'One Ally (Unconditional)': 'Один Союзник (Безусловно)',
+    'All Allies (Unconditional)': 'Все Союзники (Безусловно)',
+    'All Enemies & Allies': 'Все Враги И Союзники',
+    'One Ally or Enemy': 'Один Союзник Или Враг',
+    'One Enemy or Ally': 'Один Враг Или Союзник',
+    'All Allies or All Enemies': 'Все Союзники Или Все Враги',
+    'All Allies but User': 'Все Союзники Кроме Пользователя',
+    'One Random (Any Side)': 'Один Случайный (Любая Сторона)',
+    'Two Random (Any Side)': 'Два Случайных (Любая Сторона)',
+    'Three Random (Any Side)': 'Три Случайных (Любая Сторона)',
+    'Four Random (Any Side)': 'Четыре Случайных (Любая Сторона)'
+});
+Object.assign(RR_TEXT_TRANSLATIONS['pt'], {
+    'One Random Enemy': 'Um Inimigo Aleatório',
+    'Two Random Enemies': 'Dois Inimigos Aleatórios',
+    'Three Random Enemies': 'Três Inimigos Aleatórios',
+    'Four Random Enemies': 'Quatro Inimigos Aleatórios',
+    'One Ally (Unconditional)': 'Um Aliado (Incondicional)',
+    'All Allies (Unconditional)': 'Todos Os Aliados (Incondicional)',
+    'All Enemies & Allies': 'Todos Os Inimigos E Aliados',
+    'One Ally or Enemy': 'Um Aliado Ou Inimigo',
+    'One Enemy or Ally': 'Um Inimigo Ou Aliado',
+    'All Allies or All Enemies': 'Todos Os Aliados Ou Todos Os Inimigos',
+    'All Allies but User': 'Todos Os Aliados Exceto O Usuário',
+    'One Random (Any Side)': 'Um Aleatório (Qualquer Lado)',
+    'Two Random (Any Side)': 'Dois Aleatórios (Qualquer Lado)',
+    'Three Random (Any Side)': 'Três Aleatórios (Qualquer Lado)',
+    'Four Random (Any Side)': 'Quatro Aleatórios (Qualquer Lado)'
+});
+Object.assign(RR_TEXT_TRANSLATIONS['de'], {
+    'One Random Enemy': 'Ein zufälliger Gegner',
+    'Two Random Enemies': 'Zwei zufällige Gegner',
+    'Three Random Enemies': 'Drei zufällige Gegner',
+    'Four Random Enemies': 'Vier zufällige Gegner',
+    'One Ally (Unconditional)': 'Ein Verbündeter (bedingungslos)',
+    'All Allies (Unconditional)': 'Alle Verbündeten (bedingungslos)',
+    'All Enemies & Allies': 'Alle Gegner & Verbündeten',
+    'One Ally or Enemy': 'Ein Verbündeter oder Gegner',
+    'One Enemy or Ally': 'Ein Gegner oder Verbündeter',
+    'All Allies or All Enemies': 'Alle Verbündeten oder alle Gegner',
+    'All Allies but User': 'Alle Verbündeten außer Anwender',
+    'One Random (Any Side)': 'Ein Zufälliger (beliebige Seite)',
+    'Two Random (Any Side)': 'Zwei Zufällige (beliebige Seite)',
+    'Three Random (Any Side)': 'Drei Zufällige (beliebige Seite)',
+    'Four Random (Any Side)': 'Vier Zufällige (beliebige Seite)'
+});
+Object.assign(RR_TEXT_TRANSLATIONS['fr'], {
+    'One Random Enemy': 'Un ennemi aléatoire',
+    'Two Random Enemies': 'Deux ennemis aléatoires',
+    'Three Random Enemies': 'Trois ennemis aléatoires',
+    'Four Random Enemies': 'Quatre ennemis aléatoires',
+    'One Ally (Unconditional)': 'Un allié (inconditionnel)',
+    'All Allies (Unconditional)': 'Tous les alliés (inconditionnel)',
+    'All Enemies & Allies': 'Tous les ennemis et alliés',
+    'One Ally or Enemy': 'Un allié ou ennemi',
+    'One Enemy or Ally': 'Un ennemi ou allié',
+    'All Allies or All Enemies': 'Tous les alliés ou tous les ennemis',
+    'All Allies but User': 'Tous les alliés sauf l\'utilisateur',
+    'One Random (Any Side)': 'Un aléatoire (n\'importe quel camp)',
+    'Two Random (Any Side)': 'Deux aléatoires (n\'importe quel camp)',
+    'Three Random (Any Side)': 'Trois aléatoires (n\'importe quel camp)',
+    'Four Random (Any Side)': 'Quatre aléatoires (n\'importe quel camp)'
+});
+Object.assign(RR_TEXT_TRANSLATIONS['el'], {
+    'One Random Enemy': 'Ένας τυχαίος εχθρός',
+    'Two Random Enemies': 'Δύο τυχαίοι εχθροί',
+    'Three Random Enemies': 'Τρεις τυχαίοι εχθροί',
+    'Four Random Enemies': 'Τέσσερις τυχαίοι εχθροί',
+    'One Ally (Unconditional)': 'Ένας σύμμαχος (χωρίς όρους)',
+    'All Allies (Unconditional)': 'Όλοι οι σύμμαχοι (χωρίς όρους)',
+    'All Enemies & Allies': 'Όλοι οι εχθροί και σύμμαχοι',
+    'One Ally or Enemy': 'Ένας σύμμαχος ή εχθρός',
+    'One Enemy or Ally': 'Ένας εχθρός ή σύμμαχος',
+    'All Allies or All Enemies': 'Όλοι οι σύμμαχοι ή όλοι οι εχθροί',
+    'All Allies but User': 'Όλοι οι σύμμαχοι εκτός από τον χρήστη',
+    'One Random (Any Side)': 'Ένας τυχαίος (οποιαδήποτε πλευρά)',
+    'Two Random (Any Side)': 'Δύο τυχαίοι (οποιαδήποτε πλευρά)',
+    'Three Random (Any Side)': 'Τρεις τυχαίοι (οποιαδήποτε πλευρά)',
+    'Four Random (Any Side)': 'Τέσσερις τυχαίοι (οποιαδήποτε πλευρά)'
+});
+Object.assign(RR_TEXT_TRANSLATIONS['ko'], {
+    'One Random Enemy': '적 1체 무작위',
+    'Two Random Enemies': '적 2체 무작위',
+    'Three Random Enemies': '적 3체 무작위',
+    'Four Random Enemies': '적 4체 무작위',
+    'One Ally (Unconditional)': '아군 단일 (무조건)',
+    'All Allies (Unconditional)': '아군 전체 (무조건)',
+    'All Enemies & Allies': '적과 아군 전체',
+    'One Ally or Enemy': '아군 또는 적 단일',
+    'One Enemy or Ally': '적 또는 아군 단일',
+    'All Allies or All Enemies': '아군 전체 또는 적 전체',
+    'All Allies but User': '사용자를 제외한 아군 전체',
+    'One Random (Any Side)': '1체 무작위 (양쪽)',
+    'Two Random (Any Side)': '2체 무작위 (양쪽)',
+    'Three Random (Any Side)': '3체 무작위 (양쪽)',
+    'Four Random (Any Side)': '4체 무작위 (양쪽)'
+});
+Object.assign(RR_TEXT_TRANSLATIONS['ar'], {
+    'One Random Enemy': 'عدو واحد عشوائي',
+    'Two Random Enemies': 'عدوان عشوائيان',
+    'Three Random Enemies': 'ثلاثة أعداء عشوائيين',
+    'Four Random Enemies': 'أربعة أعداء عشوائيين',
+    'One Ally (Unconditional)': 'حليف واحد (غير مشروط)',
+    'All Allies (Unconditional)': 'جميع الحلفاء (غير مشروط)',
+    'All Enemies & Allies': 'جميع الأعداء والحلفاء',
+    'One Ally or Enemy': 'حليف أو عدو واحد',
+    'One Enemy or Ally': 'عدو أو حليف واحد',
+    'All Allies or All Enemies': 'جميع الحلفاء أو جميع الأعداء',
+    'All Allies but User': 'جميع الحلفاء عدا المستخدم',
+    'One Random (Any Side)': 'واحد عشوائي (أي جانب)',
+    'Two Random (Any Side)': 'اثنان عشوائيان (أي جانب)',
+    'Three Random (Any Side)': 'ثلاثة عشوائيون (أي جانب)',
+    'Four Random (Any Side)': 'أربعة عشوائيون (أي جانب)'
+});
+Object.assign(RR_TEXT_TRANSLATIONS['it'], {
+    'One Random Enemy': 'Un nemico casuale',
+    'Two Random Enemies': 'Due nemici casuali',
+    'Three Random Enemies': 'Tre nemici casuali',
+    'Four Random Enemies': 'Quattro nemici casuali',
+    'One Ally (Unconditional)': 'Un alleato (incondizionato)',
+    'All Allies (Unconditional)': 'Tutti gli alleati (incondizionato)',
+    'All Enemies & Allies': 'Tutti i nemici e alleati',
+    'One Ally or Enemy': 'Un alleato o nemico',
+    'One Enemy or Ally': 'Un nemico o alleato',
+    'All Allies or All Enemies': 'Tutti gli alleati o tutti i nemici',
+    'All Allies but User': 'Tutti gli alleati tranne l\'utilizzatore',
+    'One Random (Any Side)': 'Uno casuale (qualsiasi schieramento)',
+    'Two Random (Any Side)': 'Due casuali (qualsiasi schieramento)',
+    'Three Random (Any Side)': 'Tre casuali (qualsiasi schieramento)',
+    'Four Random (Any Side)': 'Quattro casuali (qualsiasi schieramento)'
+});
+Object.assign(RR_TEXT_TRANSLATIONS['pl'], {
+    'One Random Enemy': 'Jeden losowy wróg',
+    'Two Random Enemies': 'Dwóch losowych wrogów',
+    'Three Random Enemies': 'Trzech losowych wrogów',
+    'Four Random Enemies': 'Czterech losowych wrogów',
+    'One Ally (Unconditional)': 'Jeden sojusznik (bezwarunkowo)',
+    'All Allies (Unconditional)': 'Wszyscy sojusznicy (bezwarunkowo)',
+    'All Enemies & Allies': 'Wszyscy wrogowie i sojusznicy',
+    'One Ally or Enemy': 'Jeden sojusznik lub wróg',
+    'One Enemy or Ally': 'Jeden wróg lub sojusznik',
+    'All Allies or All Enemies': 'Wszyscy sojusznicy lub wszyscy wrogowie',
+    'All Allies but User': 'Wszyscy sojusznicy oprócz użytkownika',
+    'One Random (Any Side)': 'Jeden losowy (dowolna strona)',
+    'Two Random (Any Side)': 'Dwóch losowych (dowolna strona)',
+    'Three Random (Any Side)': 'Trzech losowych (dowolna strona)',
+    'Four Random (Any Side)': 'Czterech losowych (dowolna strona)'
+});
+Object.assign(RR_TEXT_TRANSLATIONS['id'], {
+    'One Random Enemy': 'Satu Musuh Acak',
+    'Two Random Enemies': 'Dua Musuh Acak',
+    'Three Random Enemies': 'Tiga Musuh Acak',
+    'Four Random Enemies': 'Empat Musuh Acak',
+    'One Ally (Unconditional)': 'Satu Sekutu (Tanpa Syarat)',
+    'All Allies (Unconditional)': 'Semua Sekutu (Tanpa Syarat)',
+    'All Enemies & Allies': 'Semua Musuh & Sekutu',
+    'One Ally or Enemy': 'Satu Sekutu Atau Musuh',
+    'One Enemy or Ally': 'Satu Musuh Atau Sekutu',
+    'All Allies or All Enemies': 'Semua Sekutu Atau Semua Musuh',
+    'All Allies but User': 'Semua Sekutu Kecuali Pengguna',
+    'One Random (Any Side)': 'Satu Acak (Pihak Mana Pun)',
+    'Two Random (Any Side)': 'Dua Acak (Pihak Mana Pun)',
+    'Three Random (Any Side)': 'Tiga Acak (Pihak Mana Pun)',
+    'Four Random (Any Side)': 'Empat Acak (Pihak Mana Pun)'
+});
+Object.assign(RR_TEXT_TRANSLATIONS['vi'], {
+    'One Random Enemy': 'Một kẻ địch ngẫu nhiên',
+    'Two Random Enemies': 'Hai kẻ địch ngẫu nhiên',
+    'Three Random Enemies': 'Ba kẻ địch ngẫu nhiên',
+    'Four Random Enemies': 'Bốn kẻ địch ngẫu nhiên',
+    'One Ally (Unconditional)': 'Một đồng minh (vô điều kiện)',
+    'All Allies (Unconditional)': 'Tất cả đồng minh (vô điều kiện)',
+    'All Enemies & Allies': 'Tất cả kẻ địch và đồng minh',
+    'One Ally or Enemy': 'Một đồng minh hoặc kẻ địch',
+    'One Enemy or Ally': 'Một kẻ địch hoặc đồng minh',
+    'All Allies or All Enemies': 'Tất cả đồng minh hoặc tất cả kẻ địch',
+    'All Allies but User': 'Tất cả đồng minh trừ người dùng',
+    'One Random (Any Side)': 'Một ngẫu nhiên (bất kỳ phe nào)',
+    'Two Random (Any Side)': 'Hai ngẫu nhiên (bất kỳ phe nào)',
+    'Three Random (Any Side)': 'Ba ngẫu nhiên (bất kỳ phe nào)',
+    'Four Random (Any Side)': 'Bốn ngẫu nhiên (bất kỳ phe nào)'
+});
+Object.assign(RR_TEXT_TRANSLATIONS['th'], {
+    'One Random Enemy': 'ศัตรูหนึ่งตัวแบบสุ่ม',
+    'Two Random Enemies': 'ศัตรูสองตัวแบบสุ่ม',
+    'Three Random Enemies': 'ศัตรูสามตัวแบบสุ่ม',
+    'Four Random Enemies': 'ศัตรูสี่ตัวแบบสุ่ม',
+    'One Ally (Unconditional)': 'ฝ่ายเราหนึ่งคน (ไม่มีเงื่อนไข)',
+    'All Allies (Unconditional)': 'ฝ่ายเราทั้งหมด (ไม่มีเงื่อนไข)',
+    'All Enemies & Allies': 'ศัตรูและฝ่ายเราทั้งหมด',
+    'One Ally or Enemy': 'ฝ่ายเราหรือศัตรูหนึ่งคน',
+    'One Enemy or Ally': 'ศัตรูหรือฝ่ายเราหนึ่งคน',
+    'All Allies or All Enemies': 'ฝ่ายเราทั้งหมดหรือศัตรูทั้งหมด',
+    'All Allies but User': 'ฝ่ายเราทั้งหมดยกเว้นผู้ใช้',
+    'One Random (Any Side)': 'สุ่มหนึ่งคน (ฝ่ายใดก็ได้)',
+    'Two Random (Any Side)': 'สุ่มสองคน (ฝ่ายใดก็ได้)',
+    'Three Random (Any Side)': 'สุ่มสามคน (ฝ่ายใดก็ได้)',
+    'Four Random (Any Side)': 'สุ่มสี่คน (ฝ่ายใดก็ได้)'
+});
+Object.assign(RR_TEXT_TRANSLATIONS['tr'], {
+    'One Random Enemy': 'Bir rastgele düşman',
+    'Two Random Enemies': 'İki rastgele düşman',
+    'Three Random Enemies': 'Üç rastgele düşman',
+    'Four Random Enemies': 'Dört rastgele düşman',
+    'One Ally (Unconditional)': 'Bir müttefik (koşulsuz)',
+    'All Allies (Unconditional)': 'Tüm müttefikler (koşulsuz)',
+    'All Enemies & Allies': 'Tüm düşmanlar ve müttefikler',
+    'One Ally or Enemy': 'Bir müttefik veya düşman',
+    'One Enemy or Ally': 'Bir düşman veya müttefik',
+    'All Allies or All Enemies': 'Tüm müttefikler veya tüm düşmanlar',
+    'All Allies but User': 'Kullanıcı dışındaki tüm müttefikler',
+    'One Random (Any Side)': 'Bir rastgele (herhangi bir taraf)',
+    'Two Random (Any Side)': 'İki rastgele (herhangi bir taraf)',
+    'Three Random (Any Side)': 'Üç rastgele (herhangi bir taraf)',
+    'Four Random (Any Side)': 'Dört rastgele (herhangi bir taraf)'
+});
+
 // Reviewed entries are deliberately applied last. They correct legacy wording,
 // replace generated first-pass text, and complete newly routed UI phrases.
 const RR_REVIEWED_I18N = globalThis.RR_REVIEWED_TRANSLATIONS || {};

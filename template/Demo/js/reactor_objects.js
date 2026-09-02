@@ -1417,6 +1417,30 @@ Game_Action.HITTYPE_CERTAIN = 0;
 Game_Action.HITTYPE_PHYSICAL = 1;
 Game_Action.HITTYPE_MAGICAL = 2;
 
+// Action scopes. 0-14 are RPG Maker MZ's own values and keep MZ's exact
+// meaning, so data authored anywhere in the MZ ecosystem loads unchanged.
+//
+// 15 and up are Reactor's. MZ has no scope that reaches both sides of the
+// battle: an action is aimed at opponents or at friends, decided by the
+// scope, and the only way around it is a plugin that replaces item.scope
+// with a string it parses itself. These make "either side" an ordinary
+// database value instead, so the Scope dropdown can offer it and the
+// isFor* predicates below group it like any other scope.
+Game_Action.SCOPE_ONE_ALLY_OR_ENEMY = 15;
+Game_Action.SCOPE_ONE_ENEMY_OR_ALLY = 16;
+Game_Action.SCOPE_ALL_ONE_SIDE = 17;
+Game_Action.SCOPE_ALL_ALLIES_BUT_USER = 18;
+Game_Action.SCOPE_RANDOM_ANY_1 = 19;
+Game_Action.SCOPE_RANDOM_ANY_2 = 20;
+Game_Action.SCOPE_RANDOM_ANY_3 = 21;
+Game_Action.SCOPE_RANDOM_ANY_4 = 22;
+
+// Scopes whose side is decided when the target is chosen rather than by the
+// scope itself.
+Game_Action.EITHER_SIDE_SCOPES = [15, 16, 17];
+// Scopes that draw their targets at random from both sides at once.
+Game_Action.RANDOM_ANY_SCOPES = [19, 20, 21, 22];
+
 Game_Action.prototype.initialize = function(subject, forcing) {
     this._subjectActorId = 0;
     this._subjectEnemyIndex = -1;
@@ -1428,6 +1452,7 @@ Game_Action.prototype.initialize = function(subject, forcing) {
 Game_Action.prototype.clear = function() {
     this._item = new Game_Item();
     this._targetIndex = -1;
+    this._targetSideIsFriend = null;
 };
 
 Game_Action.prototype.setSubject = function(subject) {
@@ -1486,6 +1511,34 @@ Game_Action.prototype.setItemObject = function(object) {
 
 Game_Action.prototype.setTarget = function(targetIndex) {
     this._targetIndex = targetIndex;
+    this._targetSideIsFriend = null;
+};
+
+// Records which battler was chosen along with which side it was on. A target
+// index cannot carry that on its own - index 0 is both the first actor and
+// the first enemy - so the either-side scopes need the side stored beside it.
+// Separate from setTarget so every existing caller keeps its meaning.
+Game_Action.prototype.setTargetBattler = function(battler) {
+    if (!battler) {
+        return;
+    }
+    this._targetIndex = battler.index();
+    this._targetSideIsFriend = battler.isActor() === this.subject().isActor();
+};
+
+// The unit holding the chosen target: the side recorded at selection time, or
+// the side the scope opens on when nothing was recorded (an AI user, or a save
+// written before the side was tracked).
+Game_Action.prototype.targetSideUnit = function() {
+    if (this._targetSideIsFriend === true) {
+        return this.friendsUnit();
+    }
+    if (this._targetSideIsFriend === false) {
+        return this.opponentsUnit();
+    }
+    return this.isForAnyoneFocusFriends()
+        ? this.friendsUnit()
+        : this.opponentsUnit();
 };
 
 Game_Action.prototype.item = function() {
@@ -1512,12 +1565,17 @@ Game_Action.prototype.checkItemScope = function(list) {
     return list.includes(this.item().scope);
 };
 
+// The either-side and random-any scopes answer true to both isForOpponent and
+// isForFriend: they really can reach either side, and this pair of predicates
+// is what every consumer - the engine, action conditions, plugins - asks to
+// learn who an action may touch. makeTargets below is ordered to resolve them
+// before either of these can steer the action onto one fixed side.
 Game_Action.prototype.isForOpponent = function() {
-    return this.checkItemScope([1, 2, 3, 4, 5, 6, 14]);
+    return this.checkItemScope([1, 2, 3, 4, 5, 6, 14, 15, 16, 17, 19, 20, 21, 22]);
 };
 
 Game_Action.prototype.isForFriend = function() {
-    return this.checkItemScope([7, 8, 9, 10, 11, 12, 13, 14]);
+    return this.checkItemScope([7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22]);
 };
 
 Game_Action.prototype.isForEveryone = function() {
@@ -1525,7 +1583,7 @@ Game_Action.prototype.isForEveryone = function() {
 };
 
 Game_Action.prototype.isForAliveFriend = function() {
-    return this.checkItemScope([7, 8, 11, 14]);
+    return this.checkItemScope([7, 8, 11, 14, 15, 16, 17, 18, 19, 20, 21, 22]);
 };
 
 Game_Action.prototype.isForDeadFriend = function() {
@@ -1537,22 +1595,57 @@ Game_Action.prototype.isForUser = function() {
 };
 
 Game_Action.prototype.isForOne = function() {
-    return this.checkItemScope([1, 3, 7, 9, 11, 12]);
+    return this.checkItemScope([1, 3, 7, 9, 11, 12, 15, 16]);
 };
 
 Game_Action.prototype.isForRandom = function() {
-    return this.checkItemScope([3, 4, 5, 6]);
+    return this.checkItemScope([3, 4, 5, 6, 19, 20, 21, 22]);
 };
 
 Game_Action.prototype.isForAll = function() {
-    return this.checkItemScope([2, 8, 10, 13, 14]);
+    return this.checkItemScope([2, 8, 10, 13, 14, 17, 18]);
 };
 
 Game_Action.prototype.needsSelection = function() {
-    return this.checkItemScope([1, 7, 9, 12]);
+    return this.checkItemScope([1, 7, 9, 12, 15, 16, 17]);
+};
+
+// True when the action may reach either side, the side being settled when the
+// target is picked. Scope 17 is included: choosing a battler there chooses that
+// battler's whole side.
+Game_Action.prototype.isForAnyone = function() {
+    return this.checkItemScope(Game_Action.EITHER_SIDE_SCOPES);
+};
+
+// Which side an either-side scope opens its cursor on. Only the focus differs;
+// both scopes can still reach every living battler.
+Game_Action.prototype.isForAnyoneFocusFriends = function() {
+    return this.checkItemScope([15]);
+};
+
+Game_Action.prototype.isForAnyoneFocusOpponents = function() {
+    return this.checkItemScope([16, 17]);
+};
+
+// True when picking one battler picks that battler's entire living side.
+Game_Action.prototype.isForOneSide = function() {
+    return this.checkItemScope([17]);
+};
+
+// True for the random scopes that draw from both sides at once, as distinct
+// from scopes 3-6, which draw from opponents only.
+Game_Action.prototype.isForRandomAny = function() {
+    return this.checkItemScope(Game_Action.RANDOM_ANY_SCOPES);
+};
+
+Game_Action.prototype.isForAllAlliesButUser = function() {
+    return this.checkItemScope([18]);
 };
 
 Game_Action.prototype.numTargets = function() {
+    if (this.isForRandomAny()) {
+        return this.item().scope - 18;
+    }
     return this.isForRandom() ? this.item().scope - 2 : 0;
 };
 
@@ -1626,7 +1719,7 @@ Game_Action.prototype.decideRandomTarget = function() {
         target = this.opponentsUnit().randomTarget();
     }
     if (target) {
-        this._targetIndex = target.index();
+        this.setTargetBattler(target);
     } else {
         this.clear();
     }
@@ -1662,6 +1755,12 @@ Game_Action.prototype.makeTargets = function() {
     const targets = [];
     if (!this._forcing && this.subject().isConfused()) {
         targets.push(this.confusionTarget());
+    } else if (this.isForRandomAny()) {
+        targets.push(...this.targetsForRandomAny());
+    } else if (this.isForAnyone()) {
+        targets.push(...this.targetsForAnyone());
+    } else if (this.isForAllAlliesButUser()) {
+        targets.push(...this.targetsForAlliesButUser());
     } else if (this.isForEveryone()) {
         targets.push(...this.targetsForEveryone());
     } else if (this.isForOpponent()) {
@@ -1703,6 +1802,37 @@ Game_Action.prototype.targetsForEveryone = function() {
     const opponentMembers = this.opponentsUnit().aliveMembers();
     const friendMembers = this.friendsUnit().aliveMembers();
     return opponentMembers.concat(friendMembers);
+};
+
+// The side was settled when the target was chosen, so resolve against that
+// side and let the ordinary one-versus-all split take over from there.
+Game_Action.prototype.targetsForAnyone = function() {
+    const unit = this.targetSideUnit();
+    if (this.isForOneSide()) {
+        return unit.aliveMembers();
+    }
+    return this.targetsForAlive(unit);
+};
+
+// Each draw picks a side first, then a battler on it. Drawing from the two
+// units combined would instead favour whichever side has more members left.
+Game_Action.prototype.targetsForRandomAny = function() {
+    const targets = [];
+    const units = [this.friendsUnit(), this.opponentsUnit()];
+    for (let i = 0; i < this.numTargets(); i++) {
+        const living = units.filter(unit => unit.aliveMembers().length > 0);
+        if (living.length === 0) {
+            break;
+        }
+        targets.push(living[Math.randomInt(living.length)].randomTarget());
+    }
+    return targets;
+};
+
+Game_Action.prototype.targetsForAlliesButUser = function() {
+    return this.friendsUnit()
+        .aliveMembers()
+        .filter(member => member !== this.subject());
 };
 
 Game_Action.prototype.targetsForOpponents = function() {
@@ -1771,7 +1901,7 @@ Game_Action.prototype.evaluate = function() {
             value += targetValue;
         } else if (targetValue > value) {
             value = targetValue;
-            this._targetIndex = target.index();
+            this.setTargetBattler(target);
         }
     }
     value *= this.numRepeats();
@@ -1784,6 +1914,12 @@ Game_Action.prototype.evaluate = function() {
 Game_Action.prototype.itemTargetCandidates = function() {
     if (!this.isValid()) {
         return [];
+    } else if (this.isForAnyone() || this.isForRandomAny()) {
+        return this.opponentsUnit()
+            .aliveMembers()
+            .concat(this.friendsUnit().aliveMembers());
+    } else if (this.isForAllAlliesButUser()) {
+        return this.targetsForAlliesButUser();
     } else if (this.isForOpponent()) {
         return this.opponentsUnit().aliveMembers();
     } else if (this.isForUser()) {

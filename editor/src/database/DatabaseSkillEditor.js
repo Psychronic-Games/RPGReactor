@@ -26,8 +26,17 @@ class DatabaseSkillEditor {
 
         // Lookup arrays
         const tt = text => window.I18n ? window.I18n.tText(text) : text;
-        const scopeNames = ['None', 'One Enemy', 'All Enemies', '3 Random', '4 Random', '2 Random', '1 Random',
-                           'One Ally', 'All Allies', 'One Ally (Dead)', 'All Allies (Dead)', 'User'].map(tt);
+        // Index is the scope value stored in the data file, so order is load
+        // bearing. 0-14 are RPG Maker MZ's; 15-22 are Reactor's either-side
+        // scopes. The random entries count up because the runtime reads a
+        // random scope's target count from the scope number itself.
+        const scopeNames = ['None', 'One Enemy', 'All Enemies',
+                           'One Random Enemy', 'Two Random Enemies', 'Three Random Enemies', 'Four Random Enemies',
+                           'One Ally', 'All Allies', 'One Ally (Dead)', 'All Allies (Dead)', 'User',
+                           'One Ally (Unconditional)', 'All Allies (Unconditional)', 'All Enemies & Allies',
+                           'One Ally or Enemy', 'One Enemy or Ally', 'All Allies or All Enemies',
+                           'All Allies but User',
+                           'One Random (Any Side)', 'Two Random (Any Side)', 'Three Random (Any Side)', 'Four Random (Any Side)'].map(tt);
         const occasionNames = ['Always', 'Battle Only', 'Menu Only', 'Never'].map(tt);
         const damageTypeNames = ['None', 'HP Damage', 'MP Damage', 'HP Recover', 'MP Recover', 'HP Drain', 'MP Drain'].map(tt);
         const hitTypeNames = ['Certain', 'Physical', 'Magical'].map(tt);
