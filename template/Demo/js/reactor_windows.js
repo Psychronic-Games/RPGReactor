@@ -6378,16 +6378,38 @@ Window_BattleEnemy.prototype.show = function() {
 Window_BattleEnemy.prototype.hide = function() {
     Window_Selectable.prototype.hide.call(this);
     $gameTroop.select(null);
+    $gameParty.select(null);
+};
+
+// The battlers this window offers. Split out of refresh so that the either-side
+// scopes have a single place to widen the pool, and so a plugin can replace the
+// pool without also owning the redraw.
+Window_BattleEnemy.prototype.validTargets = function() {
+    const enemies = $gameTroop.aliveMembers();
+    const action = BattleManager.inputtingAction();
+    if (!action || !action.isForAnyone || !action.isForAnyone()) {
+        return enemies;
+    }
+    // Both sides are selectable; the scope only decides which end the cursor
+    // starts at, so the focused side is listed first.
+    const actors = $gameParty.aliveMembers();
+    return action.isForAnyoneFocusFriends()
+        ? actors.concat(enemies)
+        : enemies.concat(actors);
 };
 
 Window_BattleEnemy.prototype.refresh = function() {
-    this._enemies = $gameTroop.aliveMembers();
+    this._enemies = this.validTargets();
     Window_Selectable.prototype.refresh.call(this);
 };
 
 Window_BattleEnemy.prototype.select = function(index) {
     Window_Selectable.prototype.select.call(this, index);
+    // An either-side scope can put an actor in this window, so both units are
+    // told. Game_Unit.select deselects every member other than the one passed,
+    // which is what clears the highlight on the side not chosen.
     $gameTroop.select(this.enemy());
+    $gameParty.select(this.enemy());
 };
 
 Window_BattleEnemy.prototype.processTouch = function() {

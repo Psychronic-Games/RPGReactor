@@ -3475,7 +3475,14 @@ Scene_Battle.prototype.startEnemySelection = function() {
 
 Scene_Battle.prototype.onEnemyOk = function() {
     const action = BattleManager.inputtingAction();
-    action.setTarget(this._enemyWindow.enemyIndex());
+    const battler = this._enemyWindow.enemy();
+    if (battler) {
+        // The battler, not just its index: on an either-side scope the index
+        // alone cannot say which side the choice came from.
+        action.setTargetBattler(battler);
+    } else {
+        action.setTarget(this._enemyWindow.enemyIndex());
+    }
     this.hideSubInputWindows();
     this.selectNextCommand();
 };
@@ -3532,6 +3539,11 @@ Scene_Battle.prototype.onSelectAction = function() {
     const action = BattleManager.inputtingAction();
     if (!action.needsSelection()) {
         this.selectNextCommand();
+    } else if (action.isForAnyone()) {
+        // Either-side scopes always use the enemy window: it is the one that
+        // can list both parties at once. Which side the cursor opens on is
+        // settled by Window_BattleEnemy.validTargets, not here.
+        this.startEnemySelection();
     } else if (action.isForOpponent()) {
         this.startEnemySelection();
     } else {

@@ -166,8 +166,12 @@ test('the <select> shim paints option labels instead of assigning raw text', () 
         'the label is a span now, not the trigger\'s first text node');
 
     // Type-to-filter matches the name as shown, so the code's digits do not
-    // compete with it and typing a visible name still finds the row.
-    assert.match(source, /item\.dataset\.optText = searchText\(opt\.textContent\)/);
+    // compete with it and typing a visible name still finds the row. An option
+    // carrying an explanation is searchable by that too, so an author who knows
+    // what they want but not what it is called can still find it.
+    assert.match(source, /item\.dataset\.optText = searchText\(/);
+    assert.match(source, /searchText\(`\$\{opt\.textContent\} \$\{hint\}`\)/,
+        'the searchable text covers the label and its explanation');
     assert.match(source, /codes \? codes\.strip\(text\) : text/);
 });
 

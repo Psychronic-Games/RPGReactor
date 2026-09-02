@@ -25,8 +25,6 @@ class DatabaseItemEditor {
         wrapper.style.position = 'relative';
 
         const tt = text => window.I18n ? window.I18n.tText(text) : text;
-        const scopeNames = ['None', 'One Enemy', 'All Enemies', '3 Random', '4 Random', '2 Random', '1 Random',
-                           'One Ally', 'All Allies', 'One Ally (Dead)', 'All Allies (Dead)', 'User'].map(tt);
         const occasionNames = ['Always', 'Battle Only', 'Menu Only', 'Never'].map(tt);
         const hitTypeNames = ['Certain', 'Physical', 'Magical'].map(tt);
         const damageTypeNames = ['None', 'HP Damage', 'MP Damage', 'HP Recover', 'MP Recover', 'HP Drain', 'MP Drain'].map(tt);
@@ -78,7 +76,7 @@ class DatabaseItemEditor {
                         <span class="db-col">
                             <label>${tt('Scope')}</label>
                             <select class="database-field-value" data-field="scope" data-item-id="${item.id}">
-                                ${scopeNames.map((name, idx) => `<option value="${idx}" ${item.scope === idx ? 'selected' : ''}>${name}</option>`).join('')}
+                                ${ActionScopes.optionsHtml(item.scope)}
                             </select>
                         </span>
                         <span class="db-col">

@@ -26,8 +26,6 @@ class DatabaseSkillEditor {
 
         // Lookup arrays
         const tt = text => window.I18n ? window.I18n.tText(text) : text;
-        const scopeNames = ['None', 'One Enemy', 'All Enemies', '3 Random', '4 Random', '2 Random', '1 Random',
-                           'One Ally', 'All Allies', 'One Ally (Dead)', 'All Allies (Dead)', 'User'].map(tt);
         const occasionNames = ['Always', 'Battle Only', 'Menu Only', 'Never'].map(tt);
         const damageTypeNames = ['None', 'HP Damage', 'MP Damage', 'HP Recover', 'MP Recover', 'HP Drain', 'MP Drain'].map(tt);
         const hitTypeNames = ['Certain', 'Physical', 'Magical'].map(tt);
@@ -81,7 +79,7 @@ class DatabaseSkillEditor {
                         <span class="db-col">
                             <label>${tt('Scope')}</label>
                             <select class="database-field-value" data-field="scope" data-skill-id="${skill.id}">
-                                ${scopeNames.map((name, idx) => `<option value="${idx}" ${skill.scope === idx ? 'selected' : ''}>${name}</option>`).join('')}
+                                ${ActionScopes.optionsHtml(skill.scope)}
                             </select>
                         </span>
                         <span class="db-col">
