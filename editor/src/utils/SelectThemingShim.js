@@ -74,6 +74,16 @@
         return opt ? opt.textContent : '';
     };
 
+    // An <option> may carry a title: a sentence saying what choosing it means.
+    // The native control could only ever surface that as an OS tooltip on a row
+    // nobody hovers, so this popup renders it under the label instead, and the
+    // closed trigger keeps it as a tooltip for whatever is currently selected.
+    // An <option> with no title renders exactly as it did.
+    const getCurrentHint = (selectEl) => {
+        const opt = selectEl.options[selectEl.selectedIndex];
+        return opt ? (opt.title || '') : '';
+    };
+
     // Element and skill-type names are stored with their icon in the name
     // (`\I[78]Special`), because the System type lists have no icon field and
     // `drawTextEx` expands the code where it is drawn. A native <select> could only
@@ -135,6 +145,7 @@
         const renderOption = (opt) => {
             const item = document.createElement('div');
             const isActive = opt.value === selectEl.value;
+            const hint = opt.title || '';
             item.style.cssText = `
                 padding: 6px 12px;
                 cursor: ${opt.disabled ? 'not-allowed' : 'pointer'};
@@ -143,10 +154,35 @@
                 color: ${opt.disabled ? 'var(--color-text-dim)' : 'var(--color-text-strong)'};
                 background: ${isActive ? 'var(--color-accent-tint-25)' : 'transparent'};
                 transition: background var(--ease-fast);
-                white-space: nowrap;
+                white-space: ${hint ? 'normal' : 'nowrap'};
+                ${hint ? 'max-width: 460px;' : ''}
             `;
-            paintLabel(item, opt.textContent);
-            item.dataset.optText = searchText(opt.textContent);
+            if (hint) {
+                // The label keeps its own line and its nowrap, so an icon code
+                // still paints the way it does everywhere else; the sentence
+                // wraps beneath it.
+                const labelLine = document.createElement('div');
+                labelLine.style.whiteSpace = 'nowrap';
+                paintLabel(labelLine, opt.textContent);
+                item.appendChild(labelLine);
+                const hintLine = document.createElement('div');
+                hintLine.textContent = hint;
+                hintLine.style.cssText = `
+                    margin-top: 2px;
+                    font-size: var(--font-size-sm);
+                    font-weight: 400;
+                    line-height: 1.35;
+                    color: ${opt.disabled ? 'var(--color-text-dim)' : 'var(--color-text-muted)'};
+                `;
+                item.appendChild(hintLine);
+                item.title = hint;
+            } else {
+                paintLabel(item, opt.textContent);
+            }
+            // Typing part of an explanation finds the row too, which is the
+            // point of writing them: an author who knows what they want but not
+            // what it is called can search for "dead" or "random".
+            item.dataset.optText = searchText(`${opt.textContent} ${hint}`);
             if (!opt.disabled) {
                 item.addEventListener('mouseenter', () => {
                     if (!isActive) item.style.background = 'var(--color-accent-tint-15)';
@@ -160,6 +196,7 @@
                     selectEl.dispatchEvent(new Event('change', { bubbles: true }));
                     selectEl.dispatchEvent(new Event('input', { bubbles: true }));
                     paintLabel(triggerEl.querySelector('.rr-shim-label'), opt.textContent);
+                    triggerEl.title = hint;
                     closeOpenPopup();
                 });
             }
@@ -321,6 +358,7 @@
         const label = document.createElement('span');
         label.className = 'rr-shim-label';
         paintLabel(label, getCurrentLabel(selectEl));
+        trigger.title = getCurrentHint(selectEl);
         trigger.appendChild(label);
 
         // Gold caret
@@ -359,6 +397,7 @@
         // label and re-open popup data on next open.
         const refreshLabel = () => {
             paintLabel(label, getCurrentLabel(selectEl));
+            trigger.title = getCurrentHint(selectEl);
         };
         selectEl.addEventListener('change', refreshLabel);
         // A programmatic `select.value = x` (a panel showing the selected

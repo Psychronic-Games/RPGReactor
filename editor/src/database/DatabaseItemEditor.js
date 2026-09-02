@@ -25,17 +25,6 @@ class DatabaseItemEditor {
         wrapper.style.position = 'relative';
 
         const tt = text => window.I18n ? window.I18n.tText(text) : text;
-        // Index is the scope value stored in the data file, so order is load
-        // bearing. 0-14 are RPG Maker MZ's; 15-22 are Reactor's either-side
-        // scopes. The random entries count up because the runtime reads a
-        // random scope's target count from the scope number itself.
-        const scopeNames = ['None', 'One Enemy', 'All Enemies',
-                           'One Random Enemy', 'Two Random Enemies', 'Three Random Enemies', 'Four Random Enemies',
-                           'One Ally', 'All Allies', 'One Ally (Dead)', 'All Allies (Dead)', 'User',
-                           'One Ally (Unconditional)', 'All Allies (Unconditional)', 'All Enemies & Allies',
-                           'One Ally or Enemy', 'One Enemy or Ally', 'All Allies or All Enemies',
-                           'All Allies but User',
-                           'One Random (Any Side)', 'Two Random (Any Side)', 'Three Random (Any Side)', 'Four Random (Any Side)'].map(tt);
         const occasionNames = ['Always', 'Battle Only', 'Menu Only', 'Never'].map(tt);
         const hitTypeNames = ['Certain', 'Physical', 'Magical'].map(tt);
         const damageTypeNames = ['None', 'HP Damage', 'MP Damage', 'HP Recover', 'MP Recover', 'HP Drain', 'MP Drain'].map(tt);
@@ -87,7 +76,7 @@ class DatabaseItemEditor {
                         <span class="db-col">
                             <label>${tt('Scope')}</label>
                             <select class="database-field-value" data-field="scope" data-item-id="${item.id}">
-                                ${scopeNames.map((name, idx) => `<option value="${idx}" ${item.scope === idx ? 'selected' : ''}>${name}</option>`).join('')}
+                                ${ActionScopes.optionsHtml(item.scope)}
                             </select>
                         </span>
                         <span class="db-col">

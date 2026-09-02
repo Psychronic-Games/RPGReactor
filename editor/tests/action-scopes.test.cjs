@@ -24,6 +24,16 @@ const skillEditorSource = fs.readFileSync(
     path.join(repoRoot, 'editor', 'src', 'database', 'DatabaseSkillEditor.js'), 'utf8');
 const itemEditorSource = fs.readFileSync(
     path.join(repoRoot, 'editor', 'src', 'database', 'DatabaseItemEditor.js'), 'utf8');
+const actionScopesSource = fs.readFileSync(
+    path.join(repoRoot, 'editor', 'src', 'database', 'ActionScopes.js'), 'utf8');
+
+/** The shipped ActionScopes class, evaluated with I18n absent (English). */
+function loadActionScopes() {
+    const context = { window: {}, globalThis: undefined, module: undefined, console };
+    context.globalThis = context;
+    vm.runInNewContext(actionScopesSource + '\n;globalThis.__ActionScopes = ActionScopes;', context);
+    return context.__ActionScopes;
+}
 
 /** The Scope dropdown, in stored-value order. Index is the scope integer. */
 const SCOPE_LABELS = [
@@ -143,21 +153,57 @@ const names = list => Array.from(list).filter(Boolean).map(b => b.name);
 
 // --- the dropdown is the data format --------------------------------------
 
-test('both database editors offer the same scope list in stored-value order', () => {
-    const extract = (source, label) => {
-        const start = source.indexOf('const scopeNames = [');
-        assert.ok(start >= 0, `${label} declares scopeNames`);
-        const end = source.indexOf('].map(tt)', start);
-        assert.ok(end > start, `${label} scopeNames terminates`);
-        return Array.from(vm.runInNewContext(source.slice(source.indexOf('[', start), end + 1)));
-    };
+test('the scope list lives in one place and says what it has always said', () => {
+    assert.deepEqual(Array.from(loadActionScopes().labels()), SCOPE_LABELS);
+});
 
-    const skills = extract(skillEditorSource, 'DatabaseSkillEditor');
-    const items = extract(itemEditorSource, 'DatabaseItemEditor');
+test('both database editors take their scope list from ActionScopes', () => {
+    // Skills and Items write the same integer into the same field, so a second
+    // copy of the list is a second chance to get it wrong. They each held one.
+    for (const [source, label] of [[skillEditorSource, 'DatabaseSkillEditor'],
+                                   [itemEditorSource, 'DatabaseItemEditor']]) {
+        assert.match(source, /ActionScopes\.optionsHtml\(/,
+            `${label} builds its Scope options through ActionScopes`);
+        assert.doesNotMatch(source, /const scopeNames\s*=\s*\[/,
+            `${label} keeps no copy of the scope list`);
+    }
+});
 
-    assert.deepEqual(skills, SCOPE_LABELS);
-    assert.deepEqual(items, SCOPE_LABELS,
-        'Skills and Items must agree: both write the same integer into the same field');
+test('every scope carries an explanation, and no two are alike', () => {
+    const scopes = loadActionScopes();
+    const labels = Array.from(scopes.labels());
+    const hints = Array.from(scopes.hints());
+
+    assert.equal(hints.length, labels.length,
+        'one explanation per scope, or the two arrays have drifted apart');
+    assert.equal(new Set(labels).size, labels.length, 'no duplicate labels');
+    // Two scopes that read the same explanation are two scopes an author cannot
+    // tell apart, which is the problem the explanations exist to solve.
+    assert.equal(new Set(hints).size, hints.length, 'no duplicate explanations');
+    for (const [index, hint] of hints.entries()) {
+        assert.ok(hint && hint.trim().length > 0, `scope ${index} has an explanation`);
+    }
+});
+
+test('the rendered options carry their explanation as a title', () => {
+    const scopes = loadActionScopes();
+    const html = scopes.optionsHtml(15);
+    const labels = Array.from(scopes.labels());
+    const hints = Array.from(scopes.hints());
+
+    for (const [index, hint] of hints.entries()) {
+        assert.ok(html.includes(`value="${index}" title="`),
+            `scope ${index} renders a title`);
+        // & in "All Enemies & Allies" must not reach the markup raw.
+        const escaped = hint.replaceAll('&', '&amp;').replaceAll('<', '&lt;')
+            .replaceAll('>', '&gt;').replaceAll('"', '&quot;');
+        assert.ok(html.includes(escaped), `scope ${index} title text is present and escaped`);
+    }
+    assert.ok(html.includes('value="15" title="') && html.includes('selected'),
+        'the selected scope is marked');
+    assert.equal((html.match(/<option /g) || []).length, labels.length);
+    assert.ok(!html.includes('Allies & Allies') && html.includes('All Enemies &amp; Allies'),
+        'labels are escaped into the markup');
 });
 
 test('every scope label is translated in every supported locale', () => {
@@ -189,7 +235,9 @@ test('every scope label is translated in every supported locale', () => {
 
     const locales = Array.from(RR_LANGUAGES, l => l.id).filter(id => id !== 'en');
     const missing = [];
-    for (const phrase of SCOPE_LABELS) {
+    const scopes = loadActionScopes();
+    const phrases = Array.from(scopes.labels()).concat(Array.from(scopes.hints()));
+    for (const phrase of phrases) {
         for (const locale of locales) {
             const found = (text[locale] && text[locale][phrase])
                 || (deep && deep[locale] && deep[locale][phrase])
