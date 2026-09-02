@@ -1411,6 +1411,12 @@ class DatabaseTroopEditor {
                     .show(null, edited => edited && insertCommands([edited]), command.reactor, { type: 'troop' });
                 return;
             }
+            const battleEditor = this.battleCommandEditor(command.code);
+            if (battleEditor) {
+                this.getCommandEditor(battleEditor[0], battleEditor[1])
+                    .show(null, edited => edited && insertCommands(ECL.commandBlock(edited)), this.enemySlotContext());
+                return;
+            }
             const editorMap = {
                 117: ['commonEvent', CommonEventEditor],
                 122: ['variables', ControlVariablesEditor],
@@ -1418,7 +1424,6 @@ class DatabaseTroopEditor {
                 231: ['showPicture', ShowPictureEditor],
                 232: ['movePicture', MovePictureEditor],
                 235: ['erasePicture', ErasePictureEditor],
-                339: ['forceAction', ForceActionEditor],
                 356: ['pluginCommand', PluginCommandEditor],
                 357: ['pluginCommand', PluginCommandEditor]
             };
@@ -1439,6 +1444,55 @@ class DatabaseTroopEditor {
     _eventCommandListClass() {
         if (typeof EventCommandList !== 'undefined') return EventCommandList;
         return require('../event/EventCommandList.js');
+    }
+
+    /**
+     * The dialog a battle command opens, or null. One table, read by both the
+     * insert path and the edit path, because they had drifted: every command
+     * here except Force Action opened no dialog at all when inserted and the
+     * raw-parameters JSON box when double-clicked, even though the map event
+     * editor has wired all of them to these same classes for as long as they
+     * have existed. A code missing from here is not a no-op — it falls back to
+     * that JSON box.
+     *
+     * A switch rather than an object, so that resolving a plugin command's
+     * dialog never touches a battle command's class name. These classes are
+     * top-level `class` declarations in sibling scripts, and naming one that
+     * has not loaded is a ReferenceError, not an undefined.
+     */
+    battleCommandEditor(code) {
+        switch (code) {
+            case 331: return ['changeEnemyHP', ChangeEnemyHPEditor];
+            case 332: return ['changeEnemyMP', ChangeEnemyMPEditor];
+            case 333: return ['changeEnemyState', ChangeEnemyStateEditor];
+            case 334: return ['enemyRecoverAll', EnemyRecoverAllEditor];
+            case 335: return ['enemyAppear', EnemyAppearEditor];
+            case 336: return ['enemyTransform', EnemyTransformEditor];
+            case 337: return ['showBattleAnimation', ShowBattleAnimationEditor];
+            case 339: return ['forceAction', ForceActionEditor];
+            case 342: return ['changeEnemyTP', ChangeEnemyTPEditor];
+            default: return null;
+        }
+    }
+
+    /**
+     * What a battle command dialog needs to name its enemy slots. A troop page
+     * knows its members, so the dropdowns can read "#1 Cave Goblin" instead of
+     * "#1"; the names resolve the same way the Members list beside them does,
+     * editor names included.
+     */
+    enemySlotContext() {
+        return {
+            troop: this.currentTroop,
+            enemyName: enemy => this.databaseEntryLabels(enemy, 'enemies').primary || enemy.name
+        };
+    }
+
+    /** One slot as a command list row prints it, sharing the dialogs' naming. */
+    enemySlotLabel(index) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
+        if (index === -1) return tt('Entire Troop');
+        return RREnemySlotOptions.label(index, this.enemySlotContext(), this.databaseManager);
     }
 
     getCommandEditor(name, EditorClass) {
@@ -1526,9 +1580,10 @@ class DatabaseTroopEditor {
             334: [0],                    // Enemy Recover All
             335: [0],                    // Enemy Appear
             336: [0, 1],                // Enemy Transform
-            337: [0, 0, 1, false],       // Show Battle Animation
+            337: [0, 1, false],         // Show Battle Animation
             339: [0, 0, 1, -1],         // Force Action
             340: [],                     // Abort Battle
+            342: [0, 0, 0, 100],        // Change Enemy TP
             355: [''],                   // Script
         };
         return defaults[code] || [];
@@ -1635,8 +1690,9 @@ class DatabaseTroopEditor {
             replaceSingle(this.getCommandEditor('erasePicture', ErasePictureEditor));
             return;
         }
-        if (cmd.code === 339) {
-            replaceSingle(this.getCommandEditor('forceAction', ForceActionEditor));
+        const battleEditor = this.battleCommandEditor(cmd.code);
+        if (battleEditor) {
+            replaceSingle(this.getCommandEditor(battleEditor[0], battleEditor[1]), this.enemySlotContext());
             return;
         }
         if ([132, 133, 139, 241, 242, 245, 246, 249, 250, 251].includes(cmd.code)) {
@@ -1878,6 +1934,7 @@ class DatabaseTroopEditor {
             333: 'Change Enemy State', 334: 'Enemy Recover All',
             335: 'Enemy Appear', 336: 'Enemy Transform',
             337: 'Show Battle Anim', 339: 'Force Action', 340: 'Abort Battle',
+            342: 'Change Enemy TP',
             355: 'Script', 356: 'Plugin Command', 357: 'Plugin Command',
             401: '\u25B7 Text', 402: 'When', 403: 'When Cancel', 404: 'End Choices',
             405: '\u25B7 Scrolling Text', 408: '\u25B7 Comment',
@@ -1906,12 +1963,36 @@ class DatabaseTroopEditor {
             case 122: desc = `#${p[0]}${p[1] > p[0] ? '-' + p[1] : ''}`; break;
             case 230: desc = `${p[0]} ${tt('frames')}`; break;
             case 241: case 245: case 250: desc = p[0] ? (p[0].name || '') : ''; break;
-            case 331: desc = `${tt('Enemy')} #${p[0] + 1}: ${p[2] === 0 ? '+' : '-'}${p[3]}`; break;
-            case 332: desc = `${tt('Enemy')} #${p[0] + 1}: ${p[2] === 0 ? '+' : '-'}${p[3]}`; break;
-            case 333: { const st = this.databaseManager.getState(p[2]); desc = `${tt('Enemy')} #${p[0] + 1}: ${p[1] === 0 ? '+' : '-'} ${st ? st.name : `${tt('State')} ${p[2]}`}`; break; }
-            case 335: desc = `${tt('Enemy')} #${p[0] + 1}`; break;
-            case 336: { const en = this.databaseManager.getEnemy(p[1]); desc = `${tt('Enemy')} #${p[0] + 1} → ${en ? en.name : '#' + p[1]}`; break; }
-            case 339: desc = `${tt('Enemy')} #${p[0] + 1}`; break;
+            // p[1] is the operation and p[2] the operand type. These read the
+            // sign out of p[2], so every "Variable" operand printed as a
+            // decrease and every decrease by a constant printed as a gain.
+            case 331: case 332: case 342: {
+                const amount = p[2] === 0 ? p[3] : `${tt('Variable')} #${p[3]}`;
+                desc = `${this.enemySlotLabel(p[0])}: ${p[1] === 0 ? '+' : '-'}${amount}`;
+                break;
+            }
+            case 333: { const st = this.databaseManager.getState(p[2]); desc = `${this.enemySlotLabel(p[0])}: ${p[1] === 0 ? '+' : '-'} ${st ? st.name : `${tt('State')} ${p[2]}`}`; break; }
+            case 334: desc = this.enemySlotLabel(p[0]); break;
+            case 335: desc = this.enemySlotLabel(p[0]); break;
+            case 336: { const en = this.databaseManager.getEnemy(p[1]); desc = `${this.enemySlotLabel(p[0])} → ${en ? en.name : '#' + p[1]}`; break; }
+            case 337: {
+                const anim = this.databaseManager.getAnimation(p[1]);
+                const target = p[2] ? tt('Entire Troop') : this.enemySlotLabel(p[0]);
+                desc = `${target}: ${anim ? anim.name : `${tt('Animation')} #${p[1]}`}`;
+                break;
+            }
+            // p[0] is the battler type, not an enemy index -- this printed
+            // "Enemy #1" for every Force Action ever authored.
+            case 339: {
+                const skill = this.databaseManager.getSkill(p[2]);
+                const skillName = skill ? skill.name : `${tt('Skill')} #${p[2]}`;
+                const actor = p[0] === 1 ? this.databaseManager.getActor(p[1]) : null;
+                const who = p[0] === 1
+                    ? (actor ? actor.name : `${tt('Actor')} #${p[1]}`)
+                    : this.enemySlotLabel(p[1]);
+                desc = `${who}: ${skillName}`;
+                break;
+            }
             case 355: desc = p[0] || ''; break;
             case 356: case 357: {
                 const commandLabel = cmd.code === 357 && p[0] === 'RPGReactor' && p[2]

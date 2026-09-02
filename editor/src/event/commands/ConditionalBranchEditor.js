@@ -684,17 +684,12 @@ class ConditionalBranchEditor {
 
     // ---- Tab 3: Enemy, Character, Vehicle ----------------------------------
 
+    // Naming a troop slot is now shared with every battle command dialog, which
+    // used to print a bare "#3" where this one already printed "#3 Goblin".
+    // RREnemySlotOptions is that one implementation; this keeps the name it is
+    // called by here.
     _troopMemberOptions() {
-        const enemies = this._databaseEntries('getEnemies');
-        const members = this._troop && Array.isArray(this._troop.members) ? this._troop.members : [];
-        const count = Math.max(8, members.length);
-        const options = [];
-        for (let index = 0; index < count; index++) {
-            const member = members[index];
-            const enemy = member ? enemies.find(e => e && e.id === member.enemyId) : null;
-            options.push({ value: index, label: enemy ? `#${index + 1} ${enemy.name || ''}`.trim() : `#${index + 1}` });
-        }
-        return options;
+        return RREnemySlotOptions.list({ troop: this._troop }, this.databaseManager);
     }
 
     _currentMapEvents() {

@@ -263,27 +263,52 @@ class DatabaseEffectEditor {
     }
 
     /**
+     * Why the duration override is locked for a given Add State target, or ''
+     * when it is settable. Two targets have no turns of their own to override:
+     * a state that is never removed automatically, and Normal Attack
+     * (`dataId` 0), which is not a state at all but stands for whatever attack
+     * states the attacker carries, each with its own Min/Max Turns. The dialog
+     * offered a turn range for Normal Attack all the same, over two boxes
+     * showing "1 – 1" that corresponded to nothing.
+     */
+    static durationLock(dataId, state) {
+        if (Number(dataId) === 0) return 'attackStates';
+        if (state && state.autoRemovalTiming === 0) return 'never';
+        return '';
+    }
+
+    /** The note beside a locked duration, saying which lock it is. */
+    static durationNote(lock) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
+        if (lock === 'attackStates') return tt('Each attack state keeps its own turns');
+        if (lock === 'never') return tt('Not removed automatically');
+        return '';
+    }
+
+    /**
      * Add State's duration override: ticked, the state lasts the turns
      * given here (a range when the two differ) instead of its own Min/Max
      * Turns. Unticked, the boxes show the state's own turns, greyed.
      */
     _durationRowHTML(effect) {
         const tt = text => window.I18n ? window.I18n.tText(text) : text;
-        const override = effect.code === 21 && Number(effect.value2) > 0;
         const state = this.databaseManager && this.databaseManager.getState ? this.databaseManager.getState(effect.dataId) : null;
-        const min = override ? Number(effect.value2) : (state ? state.minTurns : 1);
-        const max = override ? Math.max(Number(effect.value2), Number(effect.value3) || 0) : (state ? state.maxTurns : 1);
-        const never = !!state && state.autoRemovalTiming === 0;
+        const lock = effect.code === 21 ? DatabaseEffectEditor.durationLock(effect.dataId, state) : '';
+        const override = effect.code === 21 && !lock && Number(effect.value2) > 0;
+        // With no state to read turns from, the boxes stay empty rather than
+        // showing a "1 – 1" that stands for nothing.
+        const min = override ? Number(effect.value2) : (state ? state.minTurns : '');
+        const max = override ? Math.max(Number(effect.value2), Number(effect.value3) || 0) : (state ? state.maxTurns : '');
         return `
             <div class="effect-duration rr-trait-row" data-code="21" style="margin-top: 6px;">
-                <input type="checkbox" class="effect-duration-override" style="margin: 0; justify-self: center;" ${override ? 'checked' : ''} ${never ? 'disabled' : ''}>
+                <input type="checkbox" class="effect-duration-override" style="margin: 0; justify-self: center;" ${override ? 'checked' : ''} ${lock ? 'disabled' : ''}>
                 <span class="rr-trait-label" style="color: var(--color-text-muted);">${tt('Duration')}</span>
                 <span style="grid-column: 3 / -1; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
                     <input type="number" class="effect-duration-min database-field-value" min="1" step="1" value="${min}" style="width: 84px; box-sizing: border-box;" ${override ? '' : 'disabled'}>
                     <span style="color: var(--color-text-muted);">–</span>
                     <input type="number" class="effect-duration-max database-field-value" min="1" step="1" value="${max}" style="width: 84px; box-sizing: border-box;" ${override ? '' : 'disabled'}>
                     <span style="color: var(--color-text-muted);">${tt('turns')}</span>
-                    <span class="effect-duration-note" style="font-size: 11px; color: var(--color-text-muted); ${never ? '' : 'display: none;'}">${tt('Not removed automatically')}</span>
+                    <span class="effect-duration-note" style="font-size: 11px; color: var(--color-text-muted); ${lock ? '' : 'display: none;'}">${DatabaseEffectEditor.durationNote(lock)}</span>
                 </span>
             </div>`;
     }
@@ -316,21 +341,36 @@ class DatabaseEffectEditor {
         const note = row.querySelector('.effect-duration-note');
         const stateSelect = container.querySelector('select.effect-sel[data-code="21"]');
         const refresh = () => {
+            const dataId = stateSelect ? (parseInt(stateSelect.value, 10) || 0) : effect.dataId;
             const state = this.databaseManager && this.databaseManager.getState && stateSelect
-                ? this.databaseManager.getState(parseInt(stateSelect.value) || 0) : null;
-            const never = !!state && state.autoRemovalTiming === 0;
-            override.disabled = never;
-            if (never) override.checked = false;
-            if (note) note.style.display = never ? '' : 'none';
-            const on = override.checked && !never;
+                ? this.databaseManager.getState(dataId) : null;
+            const lock = DatabaseEffectEditor.durationLock(dataId, state);
+            override.disabled = !!lock;
+            if (lock) override.checked = false;
+            if (note) {
+                note.textContent = DatabaseEffectEditor.durationNote(lock);
+                note.style.display = lock ? '' : 'none';
+            }
+            const on = override.checked && !lock;
             minInput.disabled = !on;
             maxInput.disabled = !on;
-            if (!on && state) { minInput.value = state.minTurns; maxInput.value = state.maxTurns; }
+            if (!on) {
+                minInput.value = state ? state.minTurns : '';
+                maxInput.value = state ? state.maxTurns : '';
+            }
             this._readDuration(container, effect);
         };
         override.addEventListener('change', refresh);
         for (const input of [minInput, maxInput]) input.addEventListener('input', () => this._readDuration(container, effect));
         if (stateSelect) stateSelect.addEventListener('change', refresh);
+        // Picking the Add State radio adopts whatever the dropdown is showing --
+        // Normal Attack, on an effect that had not been an Add State before -- so
+        // the row has to re-read its lock then too, not only when the dropdown
+        // changes. Registered after setupEffectRadioInputs so the effect is
+        // already updated by the time this runs.
+        for (const radio of container.querySelectorAll('input[type="radio"]')) {
+            radio.addEventListener('click', refresh);
+        }
     }
 
     createBuffTab(container, effect) {
