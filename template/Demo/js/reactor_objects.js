@@ -1818,13 +1818,24 @@ Game_Action.prototype.targetsForAnyone = function() {
 // units combined would instead favour whichever side has more members left.
 Game_Action.prototype.targetsForRandomAny = function() {
     const targets = [];
-    const units = [this.friendsUnit(), this.opponentsUnit()];
     for (let i = 0; i < this.numTargets(); i++) {
-        const living = units.filter(unit => unit.aliveMembers().length > 0);
+        const living = [this.friendsUnit(), this.opponentsUnit()]
+            .filter(unit => unit.aliveMembers().length > 0);
         if (living.length === 0) {
             break;
         }
-        targets.push(living[Math.randomInt(living.length)].randomTarget());
+        // A side with living members can still yield nothing when something
+        // upstream is narrowing the draw - Battle A.I. restricts randomTarget
+        // to the targets its conditions chose - so try the other side rather
+        // than spending the roll on nothing.
+        const first = Math.randomInt(living.length);
+        let target = null;
+        for (let n = 0; n < living.length && !target; n++) {
+            target = living[(first + n) % living.length].randomTarget();
+        }
+        if (target) {
+            targets.push(target);
+        }
     }
     return targets;
 };
