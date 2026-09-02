@@ -7,6 +7,7 @@ class ShowBattleAnimationEditor {
         this.projectController = projectController;
         this.modal = null;
         this.callback = null;
+        this.enemyContext = {};
 
         // Parameters: [enemyIndex, animationId, targetAll]
         this.enemyIndex = 0; // 0-7 (enemy member index)
@@ -14,8 +15,9 @@ class ShowBattleAnimationEditor {
         this.targetAll = false;
     }
 
-    show(command, callback) {
+    show(command, callback, context = {}) {
         this.callback = callback;
+        this.enemyContext = context || {};
 
         if (command && command.code === 337) {
             const params = command.parameters;
@@ -155,13 +157,9 @@ class ShowBattleAnimationEditor {
         label.style.cssText = 'color: var(--color-text); font-size: 13px; min-width: 100px;';
         const select = document.createElement('select');
         select.style.cssText = 'padding:6px 10px; background-color:var(--color-bg-input); color:var(--color-text); border:1px solid var(--color-border-input); border-radius:3px; font-size:12px; flex:1;';
-        for (let i = 0; i <= 7; i++) {
-            const option = document.createElement('option');
-            option.value = i;
-            option.textContent = `#${i + 1}`;
-            option.selected = (this.enemyIndex === i);
-            select.appendChild(option);
-        }
+        // A troop page names its slots ("#1 Goblin"); a map event has no troop and
+        // the number is the whole answer. RREnemySlotOptions owns both.
+        RREnemySlotOptions.fill(select, this.enemyIndex, this.enemyContext, this.databaseManager);
         select.addEventListener('change', (e) => { this.enemyIndex = parseInt(e.target.value); });
         section.appendChild(label);
         section.appendChild(select);

@@ -16,6 +16,94 @@ const NO_PARAM_EVENT_CODES = new Set([
 ]);
 
 /**
+ * Every command whose dialog is "open it with the command, take one command
+ * back" -- one editor, one command in, one command out, no continuation lines
+ * and no branch structure. Data rather than a chain of `if (code === N)`,
+ * because two hosts dispatch these: the map event list in this file, and
+ * DatabaseTroopEditor for a troop page's battle events. Keeping two chains in
+ * step by hand did not work -- Force Action reached the troop editor and the
+ * eight commands beside it did not, so a troop page offered them in the picker
+ * and then showed a raw JSON textarea of their parameters instead of a dialog.
+ *
+ * The value names the editor property on an EventCommandList instance. A third
+ * element, where present, is the options argument that dialog takes.
+ */
+const SIMPLE_COMMAND_EDITORS = {
+    103: ['inputNumberEditor'],
+    104: ['selectItemEditor'],
+    113: ['breakLoopEditor'],
+    117: ['commonEventEditor'],
+    118: ['labelEditor'],
+    119: ['jumpToLabelEditor'],
+    121: ['switchesEditor'],
+    122: ['variablesEditor'],
+    123: ['controlSelfSwitchEditor'],
+    124: ['controlTimerEditor'],
+    125: ['goldEditor'],
+    126: ['changeItemsEditor'],
+    127: ['changeWeaponsEditor'],
+    128: ['changeArmorsEditor'],
+    129: ['changePartyMemberEditor'],
+    134: ['toggleCommandEditor', { code: 134, title: 'Change Save Access', option0: 'Disable', option1: 'Enable' }],
+    135: ['toggleCommandEditor', { code: 135, title: 'Change Menu Access', option0: 'Disable', option1: 'Enable' }],
+    136: ['toggleCommandEditor', { code: 136, title: 'Change Encounter', option0: 'Disable', option1: 'Enable' }],
+    137: ['toggleCommandEditor', { code: 137, title: 'Change Formation Access', option0: 'Disable', option1: 'Enable' }],
+    138: ['changeWindowColorEditor'],
+    140: ['changeVehicleBGMEditor'],
+    201: ['transferPlayerEditor'],
+    202: ['setVehicleLocationEditor'],
+    203: ['setEventLocationEditor'],
+    204: ['scrollMapEditor'],
+    211: ['changeTransparencyEditor'],
+    212: ['showAnimationEditor'],
+    216: ['toggleCommandEditor', { code: 216, title: 'Change Player Followers', option0: 'Show', option1: 'Hide' }],
+    221: ['fadeScreenEditor'],
+    222: ['fadeScreenEditor'],
+    223: ['tintScreenEditor'],
+    224: ['flashScreenEditor'],
+    225: ['shakeScreenEditor'],
+    230: ['waitEditor'],
+    231: ['showPictureEditor'],
+    233: ['rotatePictureEditor'],
+    234: ['tintPictureEditor'],
+    235: ['erasePictureEditor'],
+    236: ['setWeatherEffectEditor'],
+    261: ['playMovieEditor'],
+    281: ['toggleCommandEditor', { code: 281, title: 'Change Map Name Display', option0: 'Enable', option1: 'Disable' }],
+    282: ['changeTilesetEditor'],
+    283: ['changeBattleBackgroundEditor'],
+    284: ['changeParallaxEditor'],
+    285: ['getLocationInfoEditor'],
+    301: ['battleProcessingEditor'],
+    303: ['nameInputProcessingEditor'],
+    311: ['changeHPEditor'],
+    312: ['changeMPEditor'],
+    313: ['changeStateEditor'],
+    314: ['recoverAllEditor'],
+    315: ['changeEXPEditor'],
+    316: ['changeLevelEditor'],
+    317: ['changeParameterEditor'],
+    318: ['changeSkillEditor'],
+    319: ['changeEquipmentEditor'],
+    320: ['changeNameEditor'],
+    321: ['changeClassEditor'],
+    322: ['changeActorImagesEditor'],
+    323: ['changeVehicleImageEditor'],
+    324: ['changeNicknameEditor'],
+    325: ['changeProfileEditor'],
+    326: ['changeTPEditor'],
+    331: ['changeEnemyHPEditor'],
+    332: ['changeEnemyMPEditor'],
+    333: ['changeEnemyStateEditor'],
+    334: ['enemyRecoverAllEditor'],
+    335: ['enemyAppearEditor'],
+    336: ['enemyTransformEditor'],
+    337: ['showBattleAnimationEditor'],
+    339: ['forceActionEditor'],
+    342: ['changeEnemyTPEditor']
+};
+
+/**
  * EventCommandList - Manages the interactive command list
  */
 class EventCommandList {
@@ -2897,6 +2985,21 @@ class EventCommandList {
     }
 
     /**
+     * The dialog for a one-command-in, one-command-out event command, as
+     * { editor, options }, or null. The one lookup both this list and
+     * DatabaseTroopEditor dispatch through -- see SIMPLE_COMMAND_EDITORS.
+     */
+    static simpleCommandEditor(code) {
+        const entry = SIMPLE_COMMAND_EDITORS[code];
+        return entry ? { editor: entry[0], options: entry[1] } : null;
+    }
+
+    /** True for a command with nothing to configure, which inserts as it is. */
+    static isNoParamCommand(code) {
+        return NO_PARAM_EVENT_CODES.has(code);
+    }
+
+    /**
      * Command operations
      */
     newCommand(page, pageIndex) {
@@ -2919,6 +3022,27 @@ class EventCommandList {
             const baseIndent = EventCommandList.insertionIndent(page.list, insertIndex);
 
             const code = command.code;
+
+            // A command whose dialog takes one command and hands one back, and a
+            // command with nothing to configure, are each fully described by a
+            // table above -- SIMPLE_COMMAND_EDITORS and NO_PARAM_EVENT_CODES.
+            const simple = EventCommandList.simpleCommandEditor(code);
+            if (simple) {
+                this[simple.editor].show(null, (edited) => {
+                    if (!edited) return;
+                    page.list.splice(insertIndex, 0, this._rebaseInsertIndent([edited], baseIndent)[0]);
+                    this.selectedIndices = [insertIndex];
+                    this.refreshCommandList(page, pageIndex);
+                }, simple.options);
+                return;
+            }
+            // Skip (109) is in that set but the picker never offers it.
+            if (code !== 109 && EventCommandList.isNoParamCommand(code)) {
+                page.list.splice(insertIndex, 0, { code, indent: baseIndent, parameters: [] });
+                this.selectedIndices = [insertIndex];
+                this.refreshCommandList(page, pageIndex);
+                return;
+            }
 
             // For message commands, open the editor immediately
             if (code === 101) {
@@ -2997,174 +3121,6 @@ class EventCommandList {
                 return;
             }
 
-            // For break loop commands, open the editor immediately
-            if (code === 113) {
-                this.breakLoopEditor.show(null, (command) => {
-                    if (command) {
-                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
-                        this.selectedIndices = [insertIndex];
-                        this.refreshCommandList(page, pageIndex);
-                    }
-                });
-                return;
-            }
-
-            // For wait commands, open the editor immediately
-            if (code === 230) {
-                this.waitEditor.show(null, (command) => {
-                    if (command) {
-                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
-                        this.selectedIndices = [insertIndex];
-                        this.refreshCommandList(page, pageIndex);
-                    }
-                });
-                return;
-            }
-
-            // For control switches commands, open the editor immediately
-            if (code === 121) {
-                this.switchesEditor.show(null, (command) => {
-                    if (command) {
-                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
-                        this.selectedIndices = [insertIndex];
-                        this.refreshCommandList(page, pageIndex);
-                    }
-                });
-                return;
-            }
-
-            // For control variables commands, open the editor immediately
-            if (code === 122) {
-                this.variablesEditor.show(null, (command) => {
-                    if (command) {
-                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
-                        this.selectedIndices = [insertIndex];
-                        this.refreshCommandList(page, pageIndex);
-                    }
-                });
-                return;
-            }
-
-            // For control self switch commands, open the editor immediately
-            if (code === 123) {
-                this.controlSelfSwitchEditor.show(null, (command) => {
-                    if (command) {
-                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
-                        this.selectedIndices = [insertIndex];
-                        this.refreshCommandList(page, pageIndex);
-                    }
-                });
-                return;
-            }
-
-            // For control timer commands, open the editor immediately
-            if (code === 124) {
-                this.controlTimerEditor.show(null, (command) => {
-                    if (command) {
-                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
-                        this.selectedIndices = [insertIndex];
-                        this.refreshCommandList(page, pageIndex);
-                    }
-                });
-                return;
-            }
-
-            // For change gold commands, open the editor immediately
-            if (code === 125) {
-                this.goldEditor.show(null, (command) => {
-                    if (command) {
-                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
-                        this.selectedIndices = [insertIndex];
-                        this.refreshCommandList(page, pageIndex);
-                    }
-                });
-                return;
-            }
-
-            // For change items commands, open the editor immediately
-            if (code === 126) {
-                this.changeItemsEditor.show(null, (command) => {
-                    if (command) {
-                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
-                        this.selectedIndices = [insertIndex];
-                        this.refreshCommandList(page, pageIndex);
-                    }
-                });
-                return;
-            }
-
-            // For change party member commands, open the editor immediately
-            if (code === 129) {
-                this.changePartyMemberEditor.show(null, (command) => {
-                    if (command) {
-                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
-                        this.selectedIndices = [insertIndex];
-                        this.refreshCommandList(page, pageIndex);
-                    }
-                });
-                return;
-            }
-
-            // For change weapons commands, open the editor immediately
-            if (code === 127) {
-                this.changeWeaponsEditor.show(null, (command) => {
-                    if (command) {
-                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
-                        this.selectedIndices = [insertIndex];
-                        this.refreshCommandList(page, pageIndex);
-                    }
-                });
-                return;
-            }
-
-            // For change armors commands, open the editor immediately
-            if (code === 128) {
-                this.changeArmorsEditor.show(null, (command) => {
-                    if (command) {
-                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
-                        this.selectedIndices = [insertIndex];
-                        this.refreshCommandList(page, pageIndex);
-                    }
-                });
-                return;
-            }
-
-            // For transfer player commands, open the editor immediately
-            if (code === 201) {
-                this.transferPlayerEditor.show(null, (command) => {
-                    if (command) {
-                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
-                        this.selectedIndices = [insertIndex];
-                        this.refreshCommandList(page, pageIndex);
-                    }
-                });
-                return;
-            }
-
-            // For set event location commands, open the editor immediately
-            if (code === 203) {
-                this.setEventLocationEditor.show(null, (command) => {
-                    if (command) {
-                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
-                        this.selectedIndices = [insertIndex];
-                        this.refreshCommandList(page, pageIndex);
-                    }
-                });
-                return;
-            }
-
-            // For scroll map commands, open the editor immediately
-            if (code === 204) {
-                this.scrollMapEditor.show(null, (command) => {
-                    if (command) {
-                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
-                        this.selectedIndices = [insertIndex];
-                        this.refreshCommandList(page, pageIndex);
-                    }
-                });
-                return;
-            }
-
             // For set movement route commands, open the editor immediately
             if (code === 205) {
                 this.setMovementRouteEditor.show(null, (command) => {
@@ -3190,30 +3146,6 @@ class EventCommandList {
                 return;
             }
 
-            // For change transparency commands, open the editor immediately
-            if (code === 211) {
-                this.changeTransparencyEditor.show(null, (command) => {
-                    if (command) {
-                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
-                        this.selectedIndices = [insertIndex];
-                        this.refreshCommandList(page, pageIndex);
-                    }
-                });
-                return;
-            }
-
-            // For show animation commands, open the editor immediately
-            if (code === 212) {
-                this.showAnimationEditor.show(null, (command) => {
-                    if (command) {
-                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
-                        this.selectedIndices = [insertIndex];
-                        this.refreshCommandList(page, pageIndex);
-                    }
-                });
-                return;
-            }
-
             // For show balloon icon commands, open the editor immediately
             if (code === 213) {
                 const eventData = this.eventEditor ? this.eventEditor.event : null;
@@ -3227,30 +3159,6 @@ class EventCommandList {
                 return;
             }
 
-            // For fade screen commands, open the editor immediately
-            if (code === 221 || code === 222) {
-                this.fadeScreenEditor.show(null, (command) => {
-                    if (command) {
-                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
-                        this.selectedIndices = [insertIndex];
-                        this.refreshCommandList(page, pageIndex);
-                    }
-                });
-                return;
-            }
-
-            // For show picture commands, open the editor immediately
-            if (code === 231) {
-                this.showPictureEditor.show(null, (command) => {
-                    if (command) {
-                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
-                        this.selectedIndices = [insertIndex];
-                        this.refreshCommandList(page, pageIndex);
-                    }
-                });
-                return;
-            }
-
             // For move picture commands, open the editor immediately
             if (code === 232) {
                 this.movePictureEditor.show(null, (editedCommand) => {
@@ -3261,18 +3169,6 @@ class EventCommandList {
                         this.refreshCommandList(page, pageIndex);
                     }
                 }, { commands: page.list, index: insertIndex });
-                return;
-            }
-
-            // For erase picture commands, open the editor immediately
-            if (code === 235) {
-                this.erasePictureEditor.show(null, (command) => {
-                    if (command) {
-                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
-                        this.selectedIndices = [insertIndex];
-                        this.refreshCommandList(page, pageIndex);
-                    }
-                });
                 return;
             }
 
@@ -3341,30 +3237,6 @@ class EventCommandList {
                 return;
             }
 
-            // Input Number
-            if (code === 103) {
-                this.inputNumberEditor.show(null, (command) => {
-                    if (command) {
-                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
-                        this.selectedIndices = [insertIndex];
-                        this.refreshCommandList(page, pageIndex);
-                    }
-                });
-                return;
-            }
-
-            // Select Item
-            if (code === 104) {
-                this.selectItemEditor.show(null, (command) => {
-                    if (command) {
-                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
-                        this.selectedIndices = [insertIndex];
-                        this.refreshCommandList(page, pageIndex);
-                    }
-                });
-                return;
-            }
-
             // Show Scrolling Text
             if (code === 105) {
                 this.showScrollingTextEditor.show(null, (commands) => {
@@ -3373,50 +3245,6 @@ class EventCommandList {
                         commands.forEach((cmd, i) => {
                             page.list.splice(insertIndex + i, 0, cmd);
                         });
-                        this.selectedIndices = [insertIndex];
-                        this.refreshCommandList(page, pageIndex);
-                    }
-                });
-                return;
-            }
-
-            // Exit Event Processing (no params)
-            if (code === 115) {
-                page.list.splice(insertIndex, 0, { code: 115, indent: baseIndent, parameters: [] });
-                this.selectedIndices = [insertIndex];
-                this.refreshCommandList(page, pageIndex);
-                return;
-            }
-
-            // Common Event
-            if (code === 117) {
-                this.commonEventEditor.show(null, (command) => {
-                    if (command) {
-                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
-                        this.selectedIndices = [insertIndex];
-                        this.refreshCommandList(page, pageIndex);
-                    }
-                });
-                return;
-            }
-
-            // Label
-            if (code === 118) {
-                this.labelEditor.show(null, (command) => {
-                    if (command) {
-                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
-                        this.selectedIndices = [insertIndex];
-                        this.refreshCommandList(page, pageIndex);
-                    }
-                });
-                return;
-            }
-
-            // Jump to Label
-            if (code === 119) {
-                this.jumpToLabelEditor.show(null, (command) => {
-                    if (command) {
-                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
                         this.selectedIndices = [insertIndex];
                         this.refreshCommandList(page, pageIndex);
                     }
@@ -3448,165 +3276,9 @@ class EventCommandList {
                 return;
             }
 
-            // Change Save Access (toggle)
-            if (code === 134) {
-                this.toggleCommandEditor.show(null, (command) => {
-                    if (command) {
-                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
-                        this.selectedIndices = [insertIndex];
-                        this.refreshCommandList(page, pageIndex);
-                    }
-                }, { code: 134, title: 'Change Save Access', option0: 'Disable', option1: 'Enable' });
-                return;
-            }
-
-            // Change Menu Access (toggle)
-            if (code === 135) {
-                this.toggleCommandEditor.show(null, (command) => {
-                    if (command) {
-                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
-                        this.selectedIndices = [insertIndex];
-                        this.refreshCommandList(page, pageIndex);
-                    }
-                }, { code: 135, title: 'Change Menu Access', option0: 'Disable', option1: 'Enable' });
-                return;
-            }
-
-            // Change Encounter (toggle)
-            if (code === 136) {
-                this.toggleCommandEditor.show(null, (command) => {
-                    if (command) {
-                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
-                        this.selectedIndices = [insertIndex];
-                        this.refreshCommandList(page, pageIndex);
-                    }
-                }, { code: 136, title: 'Change Encounter', option0: 'Disable', option1: 'Enable' });
-                return;
-            }
-
-            // Change Formation Access (toggle)
-            if (code === 137) {
-                this.toggleCommandEditor.show(null, (command) => {
-                    if (command) {
-                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
-                        this.selectedIndices = [insertIndex];
-                        this.refreshCommandList(page, pageIndex);
-                    }
-                }, { code: 137, title: 'Change Formation Access', option0: 'Disable', option1: 'Enable' });
-                return;
-            }
-
-            // Change Window Color
-            if (code === 138) {
-                this.changeWindowColorEditor.show(null, (command) => {
-                    if (command) {
-                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
-                        this.selectedIndices = [insertIndex];
-                        this.refreshCommandList(page, pageIndex);
-                    }
-                });
-                return;
-            }
-
             // Change Defeat ME
             if (code === 139) {
                 this.audioEditor.show(null, code, (command) => {
-                    if (command) {
-                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
-                        this.selectedIndices = [insertIndex];
-                        this.refreshCommandList(page, pageIndex);
-                    }
-                });
-                return;
-            }
-
-            // Change Vehicle BGM
-            if (code === 140) {
-                this.changeVehicleBGMEditor.show(null, (command) => {
-                    if (command) {
-                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
-                        this.selectedIndices = [insertIndex];
-                        this.refreshCommandList(page, pageIndex);
-                    }
-                });
-                return;
-            }
-
-            // Set Vehicle Location
-            if (code === 202) {
-                this.setVehicleLocationEditor.show(null, (command) => {
-                    if (command) {
-                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
-                        this.selectedIndices = [insertIndex];
-                        this.refreshCommandList(page, pageIndex);
-                    }
-                });
-                return;
-            }
-
-            // Get on/off Vehicle (no params)
-            if (code === 206) {
-                page.list.splice(insertIndex, 0, { code: 206, indent: baseIndent, parameters: [] });
-                this.selectedIndices = [insertIndex];
-                this.refreshCommandList(page, pageIndex);
-                return;
-            }
-
-            // Erase Event (no params)
-            if (code === 214) {
-                page.list.splice(insertIndex, 0, { code: 214, indent: baseIndent, parameters: [] });
-                this.selectedIndices = [insertIndex];
-                this.refreshCommandList(page, pageIndex);
-                return;
-            }
-
-            // Change Player Followers (toggle)
-            if (code === 216) {
-                this.toggleCommandEditor.show(null, (command) => {
-                    if (command) {
-                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
-                        this.selectedIndices = [insertIndex];
-                        this.refreshCommandList(page, pageIndex);
-                    }
-                }, { code: 216, title: 'Change Player Followers', option0: 'Show', option1: 'Hide' });
-                return;
-            }
-
-            // Gather Followers (no params)
-            if (code === 217) {
-                page.list.splice(insertIndex, 0, { code: 217, indent: baseIndent, parameters: [] });
-                this.selectedIndices = [insertIndex];
-                this.refreshCommandList(page, pageIndex);
-                return;
-            }
-
-            // Tint Screen
-            if (code === 223) {
-                this.tintScreenEditor.show(null, (command) => {
-                    if (command) {
-                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
-                        this.selectedIndices = [insertIndex];
-                        this.refreshCommandList(page, pageIndex);
-                    }
-                });
-                return;
-            }
-
-            // Flash Screen
-            if (code === 224) {
-                this.flashScreenEditor.show(null, (command) => {
-                    if (command) {
-                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
-                        this.selectedIndices = [insertIndex];
-                        this.refreshCommandList(page, pageIndex);
-                    }
-                });
-                return;
-            }
-
-            // Shake Screen
-            if (code === 225) {
-                this.shakeScreenEditor.show(null, (command) => {
                     if (command) {
                         page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
                         this.selectedIndices = [insertIndex];
@@ -3628,142 +3300,6 @@ class EventCommandList {
                 return;
             }
 
-            // Rotate Picture
-            if (code === 233) {
-                this.rotatePictureEditor.show(null, (command) => {
-                    if (command) {
-                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
-                        this.selectedIndices = [insertIndex];
-                        this.refreshCommandList(page, pageIndex);
-                    }
-                });
-                return;
-            }
-
-            // Tint Picture
-            if (code === 234) {
-                this.tintPictureEditor.show(null, (command) => {
-                    if (command) {
-                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
-                        this.selectedIndices = [insertIndex];
-                        this.refreshCommandList(page, pageIndex);
-                    }
-                });
-                return;
-            }
-
-            // Set Weather Effect
-            if (code === 236) {
-                this.setWeatherEffectEditor.show(null, (command) => {
-                    if (command) {
-                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
-                        this.selectedIndices = [insertIndex];
-                        this.refreshCommandList(page, pageIndex);
-                    }
-                });
-                return;
-            }
-
-            // Save BGM (no params)
-            if (code === 243) {
-                page.list.splice(insertIndex, 0, { code: 243, indent: baseIndent, parameters: [] });
-                this.selectedIndices = [insertIndex];
-                this.refreshCommandList(page, pageIndex);
-                return;
-            }
-
-            // Replay BGM (no params)
-            if (code === 244) {
-                page.list.splice(insertIndex, 0, { code: 244, indent: baseIndent, parameters: [] });
-                this.selectedIndices = [insertIndex];
-                this.refreshCommandList(page, pageIndex);
-                return;
-            }
-
-            // Play Movie
-            if (code === 261) {
-                this.playMovieEditor.show(null, (command) => {
-                    if (command) {
-                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
-                        this.selectedIndices = [insertIndex];
-                        this.refreshCommandList(page, pageIndex);
-                    }
-                });
-                return;
-            }
-
-            // Change Map Name Display (toggle)
-            if (code === 281) {
-                this.toggleCommandEditor.show(null, (command) => {
-                    if (command) {
-                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
-                        this.selectedIndices = [insertIndex];
-                        this.refreshCommandList(page, pageIndex);
-                    }
-                }, { code: 281, title: 'Change Map Name Display', option0: 'Enable', option1: 'Disable' });
-                return;
-            }
-
-            // Change Tileset
-            if (code === 282) {
-                this.changeTilesetEditor.show(null, (command) => {
-                    if (command) {
-                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
-                        this.selectedIndices = [insertIndex];
-                        this.refreshCommandList(page, pageIndex);
-                    }
-                });
-                return;
-            }
-
-            // Change Battle Background
-            if (code === 283) {
-                this.changeBattleBackgroundEditor.show(null, (command) => {
-                    if (command) {
-                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
-                        this.selectedIndices = [insertIndex];
-                        this.refreshCommandList(page, pageIndex);
-                    }
-                });
-                return;
-            }
-
-            // Change Parallax
-            if (code === 284) {
-                this.changeParallaxEditor.show(null, (command) => {
-                    if (command) {
-                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
-                        this.selectedIndices = [insertIndex];
-                        this.refreshCommandList(page, pageIndex);
-                    }
-                });
-                return;
-            }
-
-            // Get Location Info
-            if (code === 285) {
-                this.getLocationInfoEditor.show(null, (command) => {
-                    if (command) {
-                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
-                        this.selectedIndices = [insertIndex];
-                        this.refreshCommandList(page, pageIndex);
-                    }
-                });
-                return;
-            }
-
-            // Battle Processing
-            if (code === 301) {
-                this.battleProcessingEditor.show(null, (command) => {
-                    if (command) {
-                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
-                        this.selectedIndices = [insertIndex];
-                        this.refreshCommandList(page, pageIndex);
-                    }
-                });
-                return;
-            }
-
             // Shop Processing (multi-command)
             if (code === 302) {
                 this.shopProcessingEditor.show(null, (commands) => {
@@ -3776,358 +3312,6 @@ class EventCommandList {
                         this.refreshCommandList(page, pageIndex);
                     }
                 });
-                return;
-            }
-
-            // Name Input Processing
-            if (code === 303) {
-                this.nameInputProcessingEditor.show(null, (command) => {
-                    if (command) {
-                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
-                        this.selectedIndices = [insertIndex];
-                        this.refreshCommandList(page, pageIndex);
-                    }
-                });
-                return;
-            }
-
-            // Change HP
-            if (code === 311) {
-                this.changeHPEditor.show(null, (command) => {
-                    if (command) {
-                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
-                        this.selectedIndices = [insertIndex];
-                        this.refreshCommandList(page, pageIndex);
-                    }
-                });
-                return;
-            }
-
-            // Change MP
-            if (code === 312) {
-                this.changeMPEditor.show(null, (command) => {
-                    if (command) {
-                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
-                        this.selectedIndices = [insertIndex];
-                        this.refreshCommandList(page, pageIndex);
-                    }
-                });
-                return;
-            }
-
-            // Change State
-            if (code === 313) {
-                this.changeStateEditor.show(null, (command) => {
-                    if (command) {
-                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
-                        this.selectedIndices = [insertIndex];
-                        this.refreshCommandList(page, pageIndex);
-                    }
-                });
-                return;
-            }
-
-            // Recover All
-            if (code === 314) {
-                this.recoverAllEditor.show(null, (command) => {
-                    if (command) {
-                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
-                        this.selectedIndices = [insertIndex];
-                        this.refreshCommandList(page, pageIndex);
-                    }
-                });
-                return;
-            }
-
-            // Change EXP
-            if (code === 315) {
-                this.changeEXPEditor.show(null, (command) => {
-                    if (command) {
-                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
-                        this.selectedIndices = [insertIndex];
-                        this.refreshCommandList(page, pageIndex);
-                    }
-                });
-                return;
-            }
-
-            // Change Level
-            if (code === 316) {
-                this.changeLevelEditor.show(null, (command) => {
-                    if (command) {
-                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
-                        this.selectedIndices = [insertIndex];
-                        this.refreshCommandList(page, pageIndex);
-                    }
-                });
-                return;
-            }
-
-            // Change Parameter
-            if (code === 317) {
-                this.changeParameterEditor.show(null, (command) => {
-                    if (command) {
-                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
-                        this.selectedIndices = [insertIndex];
-                        this.refreshCommandList(page, pageIndex);
-                    }
-                });
-                return;
-            }
-
-            // Change Skill
-            if (code === 318) {
-                this.changeSkillEditor.show(null, (command) => {
-                    if (command) {
-                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
-                        this.selectedIndices = [insertIndex];
-                        this.refreshCommandList(page, pageIndex);
-                    }
-                });
-                return;
-            }
-
-            // Change Equipment
-            if (code === 319) {
-                this.changeEquipmentEditor.show(null, (command) => {
-                    if (command) {
-                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
-                        this.selectedIndices = [insertIndex];
-                        this.refreshCommandList(page, pageIndex);
-                    }
-                });
-                return;
-            }
-
-            // Change Name
-            if (code === 320) {
-                this.changeNameEditor.show(null, (command) => {
-                    if (command) {
-                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
-                        this.selectedIndices = [insertIndex];
-                        this.refreshCommandList(page, pageIndex);
-                    }
-                });
-                return;
-            }
-
-            // Change Class
-            if (code === 321) {
-                this.changeClassEditor.show(null, (command) => {
-                    if (command) {
-                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
-                        this.selectedIndices = [insertIndex];
-                        this.refreshCommandList(page, pageIndex);
-                    }
-                });
-                return;
-            }
-
-            // Change Actor Images
-            if (code === 322) {
-                this.changeActorImagesEditor.show(null, (command) => {
-                    if (command) {
-                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
-                        this.selectedIndices = [insertIndex];
-                        this.refreshCommandList(page, pageIndex);
-                    }
-                });
-                return;
-            }
-
-            // Change Vehicle Image
-            if (code === 323) {
-                this.changeVehicleImageEditor.show(null, (command) => {
-                    if (command) {
-                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
-                        this.selectedIndices = [insertIndex];
-                        this.refreshCommandList(page, pageIndex);
-                    }
-                });
-                return;
-            }
-
-            // Change Nickname
-            if (code === 324) {
-                this.changeNicknameEditor.show(null, (command) => {
-                    if (command) {
-                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
-                        this.selectedIndices = [insertIndex];
-                        this.refreshCommandList(page, pageIndex);
-                    }
-                });
-                return;
-            }
-
-            // Change Profile
-            if (code === 325) {
-                this.changeProfileEditor.show(null, (command) => {
-                    if (command) {
-                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
-                        this.selectedIndices = [insertIndex];
-                        this.refreshCommandList(page, pageIndex);
-                    }
-                });
-                return;
-            }
-
-            // Change TP
-            if (code === 326) {
-                this.changeTPEditor.show(null, (command) => {
-                    if (command) {
-                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
-                        this.selectedIndices = [insertIndex];
-                        this.refreshCommandList(page, pageIndex);
-                    }
-                });
-                return;
-            }
-
-            // Change Enemy HP
-            if (code === 331) {
-                this.changeEnemyHPEditor.show(null, (command) => {
-                    if (command) {
-                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
-                        this.selectedIndices = [insertIndex];
-                        this.refreshCommandList(page, pageIndex);
-                    }
-                });
-                return;
-            }
-
-            // Change Enemy MP
-            if (code === 332) {
-                this.changeEnemyMPEditor.show(null, (command) => {
-                    if (command) {
-                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
-                        this.selectedIndices = [insertIndex];
-                        this.refreshCommandList(page, pageIndex);
-                    }
-                });
-                return;
-            }
-
-            // Change Enemy State
-            if (code === 333) {
-                this.changeEnemyStateEditor.show(null, (command) => {
-                    if (command) {
-                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
-                        this.selectedIndices = [insertIndex];
-                        this.refreshCommandList(page, pageIndex);
-                    }
-                });
-                return;
-            }
-
-            // Enemy Recover All
-            if (code === 334) {
-                this.enemyRecoverAllEditor.show(null, (command) => {
-                    if (command) {
-                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
-                        this.selectedIndices = [insertIndex];
-                        this.refreshCommandList(page, pageIndex);
-                    }
-                });
-                return;
-            }
-
-            // Enemy Appear
-            if (code === 335) {
-                this.enemyAppearEditor.show(null, (command) => {
-                    if (command) {
-                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
-                        this.selectedIndices = [insertIndex];
-                        this.refreshCommandList(page, pageIndex);
-                    }
-                });
-                return;
-            }
-
-            // Enemy Transform
-            if (code === 336) {
-                this.enemyTransformEditor.show(null, (command) => {
-                    if (command) {
-                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
-                        this.selectedIndices = [insertIndex];
-                        this.refreshCommandList(page, pageIndex);
-                    }
-                });
-                return;
-            }
-
-            // Show Battle Animation
-            if (code === 337) {
-                this.showBattleAnimationEditor.show(null, (command) => {
-                    if (command) {
-                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
-                        this.selectedIndices = [insertIndex];
-                        this.refreshCommandList(page, pageIndex);
-                    }
-                });
-                return;
-            }
-
-            // Force Action
-            if (code === 339) {
-                this.forceActionEditor.show(null, (command) => {
-                    if (command) {
-                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
-                        this.selectedIndices = [insertIndex];
-                        this.refreshCommandList(page, pageIndex);
-                    }
-                });
-                return;
-            }
-
-            // Abort Battle (no params)
-            if (code === 340) {
-                page.list.splice(insertIndex, 0, { code: 340, indent: baseIndent, parameters: [] });
-                this.selectedIndices = [insertIndex];
-                this.refreshCommandList(page, pageIndex);
-                return;
-            }
-
-            // Change Enemy TP
-            if (code === 342) {
-                this.changeEnemyTPEditor.show(null, (command) => {
-                    if (command) {
-                        page.list.splice(insertIndex, 0, this._rebaseInsertIndent([command], baseIndent)[0]);
-                        this.selectedIndices = [insertIndex];
-                        this.refreshCommandList(page, pageIndex);
-                    }
-                });
-                return;
-            }
-
-            // Open Menu Screen (no params)
-            if (code === 351) {
-                page.list.splice(insertIndex, 0, { code: 351, indent: baseIndent, parameters: [] });
-                this.selectedIndices = [insertIndex];
-                this.refreshCommandList(page, pageIndex);
-                return;
-            }
-
-            // Open Save Screen (no params)
-            if (code === 352) {
-                page.list.splice(insertIndex, 0, { code: 352, indent: baseIndent, parameters: [] });
-                this.selectedIndices = [insertIndex];
-                this.refreshCommandList(page, pageIndex);
-                return;
-            }
-
-            // Game Over (no params)
-            if (code === 353) {
-                page.list.splice(insertIndex, 0, { code: 353, indent: baseIndent, parameters: [] });
-                this.selectedIndices = [insertIndex];
-                this.refreshCommandList(page, pageIndex);
-                return;
-            }
-
-            // Return to Title Screen (no params)
-            if (code === 354) {
-                page.list.splice(insertIndex, 0, { code: 354, indent: baseIndent, parameters: [] });
-                this.selectedIndices = [insertIndex];
-                this.refreshCommandList(page, pageIndex);
                 return;
             }
 
@@ -4221,6 +3405,17 @@ class EventCommandList {
         // nothing to change after the fact, so don't fall through to the
         // "will be implemented" placeholder alert.
         if (NO_PARAM_EVENT_CODES.has(code)) return;
+
+        // See SIMPLE_COMMAND_EDITORS: one editor, one command in, one back.
+        const simple = EventCommandList.simpleCommandEditor(code);
+        if (simple) {
+            this[simple.editor].show(command, (edited) => {
+                if (!edited) return;
+                replaceSingle(edited);
+                this.refreshCommandList(page, pageIndex);
+            }, simple.options);
+            return;
+        }
 
         // Message commands (Show Text)
         if (code === 101) {
@@ -4392,160 +3587,6 @@ class EventCommandList {
             return;
         }
 
-        // Break Loop command
-        if (code === 113) {
-            this.breakLoopEditor.show(command, (editedCommand) => {
-                if (editedCommand) {
-                    replaceSingle(editedCommand);
-                    this.refreshCommandList(page, pageIndex);
-                }
-            });
-            return;
-        }
-
-        // Wait command
-        if (code === 230) {
-            this.waitEditor.show(command, (editedCommand) => {
-                if (editedCommand) {
-                    replaceSingle(editedCommand);
-                    this.refreshCommandList(page, pageIndex);
-                }
-            });
-            return;
-        }
-
-        // Control Switches command
-        if (code === 121) {
-            this.switchesEditor.show(command, (editedCommand) => {
-                if (editedCommand) {
-                    replaceSingle(editedCommand);
-                    this.refreshCommandList(page, pageIndex);
-                }
-            });
-            return;
-        }
-
-        // Control Variables command
-        if (code === 122) {
-            this.variablesEditor.show(command, (editedCommand) => {
-                if (editedCommand) {
-                    replaceSingle(editedCommand);
-                    this.refreshCommandList(page, pageIndex);
-                }
-            });
-            return;
-        }
-
-        // Control Self Switch command
-        if (code === 123) {
-            this.controlSelfSwitchEditor.show(command, (editedCommand) => {
-                if (editedCommand) {
-                    replaceSingle(editedCommand);
-                    this.refreshCommandList(page, pageIndex);
-                }
-            });
-            return;
-        }
-
-        // Control Timer command
-        if (code === 124) {
-            this.controlTimerEditor.show(command, (editedCommand) => {
-                if (editedCommand) {
-                    replaceSingle(editedCommand);
-                    this.refreshCommandList(page, pageIndex);
-                }
-            });
-            return;
-        }
-
-        // Change Gold command
-        if (code === 125) {
-            this.goldEditor.show(command, (editedCommand) => {
-                if (editedCommand) {
-                    replaceSingle(editedCommand);
-                    this.refreshCommandList(page, pageIndex);
-                }
-            });
-            return;
-        }
-
-        // Change Items command
-        if (code === 126) {
-            this.changeItemsEditor.show(command, (editedCommand) => {
-                if (editedCommand) {
-                    replaceSingle(editedCommand);
-                    this.refreshCommandList(page, pageIndex);
-                }
-            });
-            return;
-        }
-
-        // Change Party Member command
-        if (code === 129) {
-            this.changePartyMemberEditor.show(command, (editedCommand) => {
-                if (editedCommand) {
-                    replaceSingle(editedCommand);
-                    this.refreshCommandList(page, pageIndex);
-                }
-            });
-            return;
-        }
-
-        // Change Weapons command
-        if (code === 127) {
-            this.changeWeaponsEditor.show(command, (editedCommand) => {
-                if (editedCommand) {
-                    replaceSingle(editedCommand);
-                    this.refreshCommandList(page, pageIndex);
-                }
-            });
-            return;
-        }
-
-        // Change Armors command
-        if (code === 128) {
-            this.changeArmorsEditor.show(command, (editedCommand) => {
-                if (editedCommand) {
-                    replaceSingle(editedCommand);
-                    this.refreshCommandList(page, pageIndex);
-                }
-            });
-            return;
-        }
-
-        // Transfer Player command
-        if (code === 201) {
-            this.transferPlayerEditor.show(command, (editedCommand) => {
-                if (editedCommand) {
-                    replaceSingle(editedCommand);
-                    this.refreshCommandList(page, pageIndex);
-                }
-            });
-            return;
-        }
-
-        // Set Event Location command
-        if (code === 203) {
-            this.setEventLocationEditor.show(command, (editedCommand) => {
-                if (editedCommand) {
-                    replaceSingle(editedCommand);
-                    this.refreshCommandList(page, pageIndex);
-                }
-            });
-            return;
-        }
-
-        // Scroll Map command
-        if (code === 204) {
-            this.scrollMapEditor.show(command, (editedCommand) => {
-                if (editedCommand) {
-                    replaceSingle(editedCommand);
-                    this.refreshCommandList(page, pageIndex);
-                }
-            });
-            return;
-        }
-
         // Set Movement Route command
         if (code === 205) {
             this.setMovementRouteEditor.show(command, (editedCommand) => {
@@ -4580,28 +3621,6 @@ class EventCommandList {
             return;
         }
 
-        // Change Transparency command
-        if (code === 211) {
-            this.changeTransparencyEditor.show(command, (editedCommand) => {
-                if (editedCommand) {
-                    replaceSingle(editedCommand);
-                    this.refreshCommandList(page, pageIndex);
-                }
-            });
-            return;
-        }
-
-        // Show Animation command
-        if (code === 212) {
-            this.showAnimationEditor.show(command, (editedCommand) => {
-                if (editedCommand) {
-                    replaceSingle(editedCommand);
-                    this.refreshCommandList(page, pageIndex);
-                }
-            });
-            return;
-        }
-
         // Show Balloon Icon command
         if (code === 213) {
             const eventData = this.eventEditor ? this.eventEditor.event : null;
@@ -4611,39 +3630,6 @@ class EventCommandList {
                     this.refreshCommandList(page, pageIndex);
                 }
             }, eventData);
-            return;
-        }
-
-        // Fadeout/Fadein Screen commands
-        if (code === 221 || code === 222) {
-            this.fadeScreenEditor.show(command, (editedCommand) => {
-                if (editedCommand) {
-                    replaceSingle(editedCommand);
-                    this.refreshCommandList(page, pageIndex);
-                }
-            });
-            return;
-        }
-
-        // Show Picture command
-        if (code === 231) {
-            this.showPictureEditor.show(command, (editedCommand) => {
-                if (editedCommand) {
-                    replaceSingle(editedCommand);
-                    this.refreshCommandList(page, pageIndex);
-                }
-            });
-            return;
-        }
-
-        // Erase Picture command
-        if (code === 235) {
-            this.erasePictureEditor.show(command, (editedCommand) => {
-                if (editedCommand) {
-                    replaceSingle(editedCommand);
-                    this.refreshCommandList(page, pageIndex);
-                }
-            });
             return;
         }
 
@@ -4740,28 +3726,6 @@ class EventCommandList {
             return;
         }
 
-        // Input Number command
-        if (code === 103) {
-            this.inputNumberEditor.show(command, (editedCommand) => {
-                if (editedCommand) {
-                    replaceSingle(editedCommand);
-                    this.refreshCommandList(page, pageIndex);
-                }
-            });
-            return;
-        }
-
-        // Select Item command
-        if (code === 104) {
-            this.selectItemEditor.show(command, (editedCommand) => {
-                if (editedCommand) {
-                    replaceSingle(editedCommand);
-                    this.refreshCommandList(page, pageIndex);
-                }
-            });
-            return;
-        }
-
         // Show Scrolling Text command
         if (code === 105) {
             const textLines = [];
@@ -4793,39 +3757,6 @@ class EventCommandList {
             return;
         }
 
-        // Common Event command
-        if (code === 117) {
-            this.commonEventEditor.show(command, (editedCommand) => {
-                if (editedCommand) {
-                    replaceSingle(editedCommand);
-                    this.refreshCommandList(page, pageIndex);
-                }
-            });
-            return;
-        }
-
-        // Label command
-        if (code === 118) {
-            this.labelEditor.show(command, (editedCommand) => {
-                if (editedCommand) {
-                    replaceSingle(editedCommand);
-                    this.refreshCommandList(page, pageIndex);
-                }
-            });
-            return;
-        }
-
-        // Jump to Label command
-        if (code === 119) {
-            this.jumpToLabelEditor.show(command, (editedCommand) => {
-                if (editedCommand) {
-                    replaceSingle(editedCommand);
-                    this.refreshCommandList(page, pageIndex);
-                }
-            });
-            return;
-        }
-
         // Change Battle BGM command
         if (code === 132) {
             this.audioEditor.show(command, code, (editedCommand) => {
@@ -4848,130 +3779,9 @@ class EventCommandList {
             return;
         }
 
-        // Change Save Access (toggle)
-        if (code === 134) {
-            this.toggleCommandEditor.show(command, (editedCommand) => {
-                if (editedCommand) {
-                    replaceSingle(editedCommand);
-                    this.refreshCommandList(page, pageIndex);
-                }
-            }, { code: 134, title: 'Change Save Access', option0: 'Disable', option1: 'Enable' });
-            return;
-        }
-
-        // Change Menu Access (toggle)
-        if (code === 135) {
-            this.toggleCommandEditor.show(command, (editedCommand) => {
-                if (editedCommand) {
-                    replaceSingle(editedCommand);
-                    this.refreshCommandList(page, pageIndex);
-                }
-            }, { code: 135, title: 'Change Menu Access', option0: 'Disable', option1: 'Enable' });
-            return;
-        }
-
-        // Change Encounter (toggle)
-        if (code === 136) {
-            this.toggleCommandEditor.show(command, (editedCommand) => {
-                if (editedCommand) {
-                    replaceSingle(editedCommand);
-                    this.refreshCommandList(page, pageIndex);
-                }
-            }, { code: 136, title: 'Change Encounter', option0: 'Disable', option1: 'Enable' });
-            return;
-        }
-
-        // Change Formation Access (toggle)
-        if (code === 137) {
-            this.toggleCommandEditor.show(command, (editedCommand) => {
-                if (editedCommand) {
-                    replaceSingle(editedCommand);
-                    this.refreshCommandList(page, pageIndex);
-                }
-            }, { code: 137, title: 'Change Formation Access', option0: 'Disable', option1: 'Enable' });
-            return;
-        }
-
-        // Change Window Color command
-        if (code === 138) {
-            this.changeWindowColorEditor.show(command, (editedCommand) => {
-                if (editedCommand) {
-                    replaceSingle(editedCommand);
-                    this.refreshCommandList(page, pageIndex);
-                }
-            });
-            return;
-        }
-
         // Change Defeat ME command
         if (code === 139) {
             this.audioEditor.show(command, code, (editedCommand) => {
-                if (editedCommand) {
-                    replaceSingle(editedCommand);
-                    this.refreshCommandList(page, pageIndex);
-                }
-            });
-            return;
-        }
-
-        // Change Vehicle BGM command
-        if (code === 140) {
-            this.changeVehicleBGMEditor.show(command, (editedCommand) => {
-                if (editedCommand) {
-                    replaceSingle(editedCommand);
-                    this.refreshCommandList(page, pageIndex);
-                }
-            });
-            return;
-        }
-
-        // Set Vehicle Location command
-        if (code === 202) {
-            this.setVehicleLocationEditor.show(command, (editedCommand) => {
-                if (editedCommand) {
-                    replaceSingle(editedCommand);
-                    this.refreshCommandList(page, pageIndex);
-                }
-            });
-            return;
-        }
-
-        // Change Player Followers (toggle)
-        if (code === 216) {
-            this.toggleCommandEditor.show(command, (editedCommand) => {
-                if (editedCommand) {
-                    replaceSingle(editedCommand);
-                    this.refreshCommandList(page, pageIndex);
-                }
-            }, { code: 216, title: 'Change Player Followers', option0: 'Show', option1: 'Hide' });
-            return;
-        }
-
-        // Tint Screen command
-        if (code === 223) {
-            this.tintScreenEditor.show(command, (editedCommand) => {
-                if (editedCommand) {
-                    replaceSingle(editedCommand);
-                    this.refreshCommandList(page, pageIndex);
-                }
-            });
-            return;
-        }
-
-        // Flash Screen command
-        if (code === 224) {
-            this.flashScreenEditor.show(command, (editedCommand) => {
-                if (editedCommand) {
-                    replaceSingle(editedCommand);
-                    this.refreshCommandList(page, pageIndex);
-                }
-            });
-            return;
-        }
-
-        // Shake Screen command
-        if (code === 225) {
-            this.shakeScreenEditor.show(command, (editedCommand) => {
                 if (editedCommand) {
                     replaceSingle(editedCommand);
                     this.refreshCommandList(page, pageIndex);
@@ -4988,116 +3798,6 @@ class EventCommandList {
                     this.refreshCommandList(page, pageIndex);
                 }
             }, { commands: page.list, index });
-            return;
-        }
-
-        // Rotate Picture command
-        if (code === 233) {
-            this.rotatePictureEditor.show(command, (editedCommand) => {
-                if (editedCommand) {
-                    replaceSingle(editedCommand);
-                    this.refreshCommandList(page, pageIndex);
-                }
-            });
-            return;
-        }
-
-        // Tint Picture command
-        if (code === 234) {
-            this.tintPictureEditor.show(command, (editedCommand) => {
-                if (editedCommand) {
-                    replaceSingle(editedCommand);
-                    this.refreshCommandList(page, pageIndex);
-                }
-            });
-            return;
-        }
-
-        // Set Weather Effect command
-        if (code === 236) {
-            this.setWeatherEffectEditor.show(command, (editedCommand) => {
-                if (editedCommand) {
-                    replaceSingle(editedCommand);
-                    this.refreshCommandList(page, pageIndex);
-                }
-            });
-            return;
-        }
-
-        // Play Movie command
-        if (code === 261) {
-            this.playMovieEditor.show(command, (editedCommand) => {
-                if (editedCommand) {
-                    replaceSingle(editedCommand);
-                    this.refreshCommandList(page, pageIndex);
-                }
-            });
-            return;
-        }
-
-        // Change Map Name Display (toggle)
-        if (code === 281) {
-            this.toggleCommandEditor.show(command, (editedCommand) => {
-                if (editedCommand) {
-                    replaceSingle(editedCommand);
-                    this.refreshCommandList(page, pageIndex);
-                }
-            }, { code: 281, title: 'Change Map Name Display', option0: 'Enable', option1: 'Disable' });
-            return;
-        }
-
-        // Change Tileset command
-        if (code === 282) {
-            this.changeTilesetEditor.show(command, (editedCommand) => {
-                if (editedCommand) {
-                    replaceSingle(editedCommand);
-                    this.refreshCommandList(page, pageIndex);
-                }
-            });
-            return;
-        }
-
-        // Change Battle Background command
-        if (code === 283) {
-            this.changeBattleBackgroundEditor.show(command, (editedCommand) => {
-                if (editedCommand) {
-                    replaceSingle(editedCommand);
-                    this.refreshCommandList(page, pageIndex);
-                }
-            });
-            return;
-        }
-
-        // Change Parallax command
-        if (code === 284) {
-            this.changeParallaxEditor.show(command, (editedCommand) => {
-                if (editedCommand) {
-                    replaceSingle(editedCommand);
-                    this.refreshCommandList(page, pageIndex);
-                }
-            });
-            return;
-        }
-
-        // Get Location Info command
-        if (code === 285) {
-            this.getLocationInfoEditor.show(command, (editedCommand) => {
-                if (editedCommand) {
-                    replaceSingle(editedCommand);
-                    this.refreshCommandList(page, pageIndex);
-                }
-            });
-            return;
-        }
-
-        // Battle Processing command
-        if (code === 301) {
-            this.battleProcessingEditor.show(command, (editedCommand) => {
-                if (editedCommand) {
-                    replaceSingle(editedCommand);
-                    this.refreshCommandList(page, pageIndex);
-                }
-            });
             return;
         }
 
@@ -5121,292 +3821,6 @@ class EventCommandList {
                     this.refreshCommandList(page, pageIndex);
                 }
             }, page.list, index);
-            return;
-        }
-
-        // Name Input Processing command
-        if (code === 303) {
-            this.nameInputProcessingEditor.show(command, (editedCommand) => {
-                if (editedCommand) {
-                    replaceSingle(editedCommand);
-                    this.refreshCommandList(page, pageIndex);
-                }
-            });
-            return;
-        }
-
-        // Change HP command
-        if (code === 311) {
-            this.changeHPEditor.show(command, (editedCommand) => {
-                if (editedCommand) {
-                    replaceSingle(editedCommand);
-                    this.refreshCommandList(page, pageIndex);
-                }
-            });
-            return;
-        }
-
-        // Change MP command
-        if (code === 312) {
-            this.changeMPEditor.show(command, (editedCommand) => {
-                if (editedCommand) {
-                    replaceSingle(editedCommand);
-                    this.refreshCommandList(page, pageIndex);
-                }
-            });
-            return;
-        }
-
-        // Change State command
-        if (code === 313) {
-            this.changeStateEditor.show(command, (editedCommand) => {
-                if (editedCommand) {
-                    replaceSingle(editedCommand);
-                    this.refreshCommandList(page, pageIndex);
-                }
-            });
-            return;
-        }
-
-        // Recover All command
-        if (code === 314) {
-            this.recoverAllEditor.show(command, (editedCommand) => {
-                if (editedCommand) {
-                    replaceSingle(editedCommand);
-                    this.refreshCommandList(page, pageIndex);
-                }
-            });
-            return;
-        }
-
-        // Change EXP command
-        if (code === 315) {
-            this.changeEXPEditor.show(command, (editedCommand) => {
-                if (editedCommand) {
-                    replaceSingle(editedCommand);
-                    this.refreshCommandList(page, pageIndex);
-                }
-            });
-            return;
-        }
-
-        // Change Level command
-        if (code === 316) {
-            this.changeLevelEditor.show(command, (editedCommand) => {
-                if (editedCommand) {
-                    replaceSingle(editedCommand);
-                    this.refreshCommandList(page, pageIndex);
-                }
-            });
-            return;
-        }
-
-        // Change Parameter command
-        if (code === 317) {
-            this.changeParameterEditor.show(command, (editedCommand) => {
-                if (editedCommand) {
-                    replaceSingle(editedCommand);
-                    this.refreshCommandList(page, pageIndex);
-                }
-            });
-            return;
-        }
-
-        // Change Skill command
-        if (code === 318) {
-            this.changeSkillEditor.show(command, (editedCommand) => {
-                if (editedCommand) {
-                    replaceSingle(editedCommand);
-                    this.refreshCommandList(page, pageIndex);
-                }
-            });
-            return;
-        }
-
-        // Change Equipment command
-        if (code === 319) {
-            this.changeEquipmentEditor.show(command, (editedCommand) => {
-                if (editedCommand) {
-                    replaceSingle(editedCommand);
-                    this.refreshCommandList(page, pageIndex);
-                }
-            });
-            return;
-        }
-
-        // Change Name command
-        if (code === 320) {
-            this.changeNameEditor.show(command, (editedCommand) => {
-                if (editedCommand) {
-                    replaceSingle(editedCommand);
-                    this.refreshCommandList(page, pageIndex);
-                }
-            });
-            return;
-        }
-
-        // Change Class command
-        if (code === 321) {
-            this.changeClassEditor.show(command, (editedCommand) => {
-                if (editedCommand) {
-                    replaceSingle(editedCommand);
-                    this.refreshCommandList(page, pageIndex);
-                }
-            });
-            return;
-        }
-
-        // Change Actor Images command
-        if (code === 322) {
-            this.changeActorImagesEditor.show(command, (editedCommand) => {
-                if (editedCommand) {
-                    replaceSingle(editedCommand);
-                    this.refreshCommandList(page, pageIndex);
-                }
-            });
-            return;
-        }
-
-        // Change Vehicle Image command
-        if (code === 323) {
-            this.changeVehicleImageEditor.show(command, (editedCommand) => {
-                if (editedCommand) {
-                    replaceSingle(editedCommand);
-                    this.refreshCommandList(page, pageIndex);
-                }
-            });
-            return;
-        }
-
-        // Change Nickname command
-        if (code === 324) {
-            this.changeNicknameEditor.show(command, (editedCommand) => {
-                if (editedCommand) {
-                    replaceSingle(editedCommand);
-                    this.refreshCommandList(page, pageIndex);
-                }
-            });
-            return;
-        }
-
-        // Change Profile command
-        if (code === 325) {
-            this.changeProfileEditor.show(command, (editedCommand) => {
-                if (editedCommand) {
-                    replaceSingle(editedCommand);
-                    this.refreshCommandList(page, pageIndex);
-                }
-            });
-            return;
-        }
-
-        // Change TP command
-        if (code === 326) {
-            this.changeTPEditor.show(command, (editedCommand) => {
-                if (editedCommand) {
-                    replaceSingle(editedCommand);
-                    this.refreshCommandList(page, pageIndex);
-                }
-            });
-            return;
-        }
-
-        // Change Enemy HP command
-        if (code === 331) {
-            this.changeEnemyHPEditor.show(command, (editedCommand) => {
-                if (editedCommand) {
-                    replaceSingle(editedCommand);
-                    this.refreshCommandList(page, pageIndex);
-                }
-            });
-            return;
-        }
-
-        // Change Enemy MP command
-        if (code === 332) {
-            this.changeEnemyMPEditor.show(command, (editedCommand) => {
-                if (editedCommand) {
-                    replaceSingle(editedCommand);
-                    this.refreshCommandList(page, pageIndex);
-                }
-            });
-            return;
-        }
-
-        // Change Enemy State command
-        if (code === 333) {
-            this.changeEnemyStateEditor.show(command, (editedCommand) => {
-                if (editedCommand) {
-                    replaceSingle(editedCommand);
-                    this.refreshCommandList(page, pageIndex);
-                }
-            });
-            return;
-        }
-
-        // Enemy Recover All command
-        if (code === 334) {
-            this.enemyRecoverAllEditor.show(command, (editedCommand) => {
-                if (editedCommand) {
-                    replaceSingle(editedCommand);
-                    this.refreshCommandList(page, pageIndex);
-                }
-            });
-            return;
-        }
-
-        // Enemy Appear command
-        if (code === 335) {
-            this.enemyAppearEditor.show(command, (editedCommand) => {
-                if (editedCommand) {
-                    replaceSingle(editedCommand);
-                    this.refreshCommandList(page, pageIndex);
-                }
-            });
-            return;
-        }
-
-        // Enemy Transform command
-        if (code === 336) {
-            this.enemyTransformEditor.show(command, (editedCommand) => {
-                if (editedCommand) {
-                    replaceSingle(editedCommand);
-                    this.refreshCommandList(page, pageIndex);
-                }
-            });
-            return;
-        }
-
-        // Show Battle Animation command
-        if (code === 337) {
-            this.showBattleAnimationEditor.show(command, (editedCommand) => {
-                if (editedCommand) {
-                    replaceSingle(editedCommand);
-                    this.refreshCommandList(page, pageIndex);
-                }
-            });
-            return;
-        }
-
-        // Force Action command
-        if (code === 339) {
-            this.forceActionEditor.show(command, (editedCommand) => {
-                if (editedCommand) {
-                    replaceSingle(editedCommand);
-                    this.refreshCommandList(page, pageIndex);
-                }
-            });
-            return;
-        }
-
-        // Change Enemy TP command
-        if (code === 342) {
-            this.changeEnemyTPEditor.show(command, (editedCommand) => {
-                if (editedCommand) {
-                    replaceSingle(editedCommand);
-                    this.refreshCommandList(page, pageIndex);
-                }
-            });
             return;
         }
 

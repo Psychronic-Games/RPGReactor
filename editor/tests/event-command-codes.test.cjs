@@ -40,7 +40,12 @@ test('Skip display remains consistent in troop events and parameterless editing'
     const troopSource = fs.readFileSync(path.join(editorRoot, 'src', 'database', 'DatabaseTroopEditor.js'), 'utf8');
 
     assert.match(listSource, /NO_PARAM_EVENT_CODES = new Set\(\[[\s\S]*?109, \/\/ Skip/);
-    assert.match(troopSource, /108: 'Comment', 109: 'Skip', 111: 'If'/);
+    // The names a troop page prints come from EventCommandList now: the copy
+    // that used to sit in DatabaseTroopEditor knew a shorter table, which is
+    // how a battle page came to print "Cmd 342" for Change Enemy TP.
+    assert.match(listSource, /109: \{ name: 'Skip'/);
+    assert.match(troopSource, /getCommandInfo\(cmd, page, index\)/);
+    // The row colours are still banded by this host, more finely than the map.
     assert.match(troopSource, /code === 108 \|\| code === 109 \|\| code === 408/);
 });
 
@@ -50,9 +55,14 @@ test('Troop Force Action and Abort Battle use the MZ command codes', () => {
     assert.deepEqual(editor.getDefaultParams(339), [0, 0, 1, -1]);
     assert.deepEqual(editor.getDefaultParams(340), []);
 
-    const source = fs.readFileSync(path.join(editorRoot, 'src', 'database', 'DatabaseTroopEditor.js'), 'utf8');
-    assert.match(source, /339: 'Force Action', 340: 'Abort Battle'/);
-    assert.doesNotMatch(source, /338: 'Force Action'/);
+    const source = fs.readFileSync(path.join(editorRoot, 'src', 'event', 'EventCommandList.js'), 'utf8');
+    assert.match(source, /339: \{ name: 'Force Action'/);
+    assert.match(source, /340: \{ name: 'Abort Battle'/);
+    assert.doesNotMatch(source, /338: \{ name: 'Force Action'/);
+    // Force Action's dialog reaches a battle page through the shared table, not
+    // a list held beside it -- which is where it was, alone, for as long as
+    // both hosts existed.
+    assert.equal(EventCommandList.simpleCommandEditor(339).editor, 'forceActionEditor');
 });
 
 test('schema-invalid generated metadata falls back to ordinary Script summaries', () => {

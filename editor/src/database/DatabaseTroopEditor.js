@@ -1225,7 +1225,7 @@ class DatabaseTroopEditor {
             if (isEnd) {
                 div.innerHTML = `<span style="color: var(--color-border-input);">${tt('End')}</span>`;
             } else {
-                const info = this.getCommandDisplay(cmd);
+                const info = this.getCommandDisplay(cmd, page, idx);
                 div.innerHTML = `<span style="color: var(--color-text-dim); min-width: 32px; display: inline-block;">${String(idx + 1).padStart(3, '0')}</span>` +
                     `<span style="color: ${info.color}; font-weight: 600; margin-right: 8px;">${this.escapeHTML(info.name)}</span>` +
                     `<span style="color: var(--color-text);">${this.escapeHTML(info.description)}</span>`;
@@ -1412,13 +1412,7 @@ class DatabaseTroopEditor {
                 return;
             }
             const editorMap = {
-                117: ['commonEvent', CommonEventEditor],
-                122: ['variables', ControlVariablesEditor],
-                140: ['changeVehicleBGM', ChangeVehicleBGMEditor],
-                231: ['showPicture', ShowPictureEditor],
                 232: ['movePicture', MovePictureEditor],
-                235: ['erasePicture', ErasePictureEditor],
-                339: ['forceAction', ForceActionEditor],
                 356: ['pluginCommand', PluginCommandEditor],
                 357: ['pluginCommand', PluginCommandEditor]
             };
@@ -1427,6 +1421,23 @@ class DatabaseTroopEditor {
                 const editor = this.getCommandEditor(editorConfig[0], editorConfig[1]);
                 const context = command.code === 232 ? { commands: page.list, index: insertIndex } : undefined;
                 editor.show(null, edited => edited && insertCommands(ECL.commandBlock(edited)), context);
+                return;
+            }
+            const run = DatabaseTroopEditor.RUN_COMMAND_DIALOGS[command.code];
+            if (run) {
+                const editor = this.commandDialogs()[run[0]];
+                const args = new Array(run[1]).fill(null);
+                editor.show(null, ...args, commands => insertCommands(ECL.commandBlock(commands)));
+                return;
+            }
+            const simple = this.simpleCommandDialog(command.code);
+            if (simple) {
+                simple.editor.show(null, edited => edited && insertCommands(ECL.commandBlock(edited)),
+                    this.commandDialogContext(command.code, simple.options));
+                return;
+            }
+            if (ECL.isNoParamCommand(command.code)) {
+                insertCommands([{ code: command.code, indent: 0, parameters: [] }]);
                 return;
             }
 
@@ -1439,6 +1450,111 @@ class DatabaseTroopEditor {
     _eventCommandListClass() {
         if (typeof EventCommandList !== 'undefined') return EventCommandList;
         return require('../event/EventCommandList.js');
+    }
+
+    /**
+     * The command dialogs, held as one EventCommandList used purely as the bag
+     * of editor instances SIMPLE_COMMAND_EDITORS names. A battle page therefore
+     * dispatches through the same table the map event list does, instead of a
+     * second hand-maintained list beside it: the second list is what left
+     * Force Action working here and the eight battle commands beside it, plus
+     * every actor, party and screen command, showing a raw JSON textarea of
+     * their parameters.
+     *
+     * `currentPage` is left null on it. That is what keeps the keyboard and
+     * language listeners its constructor installs inert, so this instance can
+     * never act on the map editor's command list.
+     */
+    /** Change Enemy HP through Force Action: every command that picks a slot. */
+    static get ENEMY_SLOT_COMMANDS() {
+        return new Set([331, 332, 333, 334, 335, 336, 337, 339, 342]);
+    }
+
+    commandDialogs() {
+        if (!this._commandDialogs) {
+            const ECL = this._eventCommandListClass();
+            const list = new ECL({
+                databaseManager: this.databaseManager,
+                projectController: this.projectManager
+            });
+            // The whole host surface a shared dispatch touches: where a change
+            // lands, and what stays selected after it. Overriding this is what
+            // lets EventCommandList.editCommand run against a battle page and
+            // write back here instead of into the map editor's list.
+            list.refreshCommandList = page => {
+                this.persistTroop();
+                this.selectedCommandIndices = Array.from(list.selectedIndices || []);
+                const container = document.getElementById('battle-command-list');
+                if (container) this.renderCommandList(container, page);
+            };
+            this._commandDialogs = list;
+        }
+        return this._commandDialogs;
+    }
+
+    /**
+     * Commands whose dialog hands back a run rather than one command: a Show
+     * Choices with its branches, a Comment or a Script with its continuation
+     * lines, a Shop with its goods. Replacing such a run correctly is a
+     * different rule per command, and EventCommandList already implements every
+     * one of them -- so its own editCommand runs against this page rather than
+     * a second copy of those rules living here.
+     */
+    static get RUN_COMMANDS() {
+        return new Set([102, 105, 108, 302, 355]);
+    }
+
+    /**
+     * The same commands on the way in, where the dialog hands back the whole
+     * run to insert. `extraArgs` is what the dialog takes between the command
+     * and the callback.
+     */
+    static get RUN_COMMAND_DIALOGS() {
+        return {
+            102: ['choicesEditor', 0],
+            105: ['showScrollingTextEditor', 0],
+            108: ['commentEditor', 2],
+            302: ['shopProcessingEditor', 0],
+            355: ['scriptEditor', 2]
+        };
+    }
+
+    /** The dialog for a table-driven command, with its options, or null. */
+    simpleCommandDialog(code) {
+        const simple = this._eventCommandListClass().simpleCommandEditor(code);
+        if (!simple) return null;
+        const editor = this.commandDialogs()[simple.editor];
+        return editor ? { editor, options: simple.options } : null;
+    }
+
+    /**
+     * The third argument a command's dialog takes here. A toggle command's own
+     * configuration comes from the table; a command that addresses an enemy
+     * slot gets this page's troop, so the dropdown can name it.
+     */
+    commandDialogContext(code, options) {
+        if (options) return options;
+        return DatabaseTroopEditor.ENEMY_SLOT_COMMANDS.has(code) ? this.enemySlotContext() : undefined;
+    }
+
+    /**
+     * What a battle command dialog needs to name its enemy slots. A troop page
+     * knows its members, so the dropdowns can read "#1 Cave Goblin" instead of
+     * "#1"; the names resolve the same way the Members list beside them does,
+     * editor names included.
+     */
+    enemySlotContext() {
+        return {
+            troop: this.currentTroop,
+            enemyName: enemy => this.databaseEntryLabels(enemy, 'enemies').primary || enemy.name
+        };
+    }
+
+    /** One slot as a command list row prints it, sharing the dialogs' naming. */
+    enemySlotLabel(index) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
+        if (index === -1) return tt('Entire Troop');
+        return RREnemySlotOptions.label(index, this.enemySlotContext(), this.databaseManager);
     }
 
     getCommandEditor(name, EditorClass) {
@@ -1526,9 +1642,10 @@ class DatabaseTroopEditor {
             334: [0],                    // Enemy Recover All
             335: [0],                    // Enemy Appear
             336: [0, 1],                // Enemy Transform
-            337: [0, 0, 1, false],       // Show Battle Animation
+            337: [0, 1, false],         // Show Battle Animation
             339: [0, 0, 1, -1],         // Force Action
             340: [],                     // Abort Battle
+            342: [0, 0, 0, 100],        // Change Enemy TP
             355: [''],                   // Script
         };
         return defaults[code] || [];
@@ -1615,28 +1732,8 @@ class DatabaseTroopEditor {
             return;
         }
 
-        if (cmd.code === 117) {
-            replaceSingle(this.getCommandEditor('commonEvent', CommonEventEditor));
-            return;
-        }
-        if (cmd.code === 122) {
-            replaceSingle(this.getCommandEditor('variables', ControlVariablesEditor));
-            return;
-        }
-        if (cmd.code === 231) {
-            replaceSingle(this.getCommandEditor('showPicture', ShowPictureEditor));
-            return;
-        }
         if (cmd.code === 232) {
             replaceSingle(this.getCommandEditor('movePicture', MovePictureEditor), { commands: page.list, index: idx });
-            return;
-        }
-        if (cmd.code === 235) {
-            replaceSingle(this.getCommandEditor('erasePicture', ErasePictureEditor));
-            return;
-        }
-        if (cmd.code === 339) {
-            replaceSingle(this.getCommandEditor('forceAction', ForceActionEditor));
             return;
         }
         if ([132, 133, 139, 241, 242, 245, 246, 249, 250, 251].includes(cmd.code)) {
@@ -1646,10 +1743,6 @@ class DatabaseTroopEditor {
                 page.list[idx] = edited;
                 refresh();
             });
-            return;
-        }
-        if (cmd.code === 140) {
-            replaceSingle(this.getCommandEditor('changeVehicleBGM', ChangeVehicleBGMEditor));
             return;
         }
         if (cmd.code === 357 && cmd.parameters?.[0] === 'RPGReactor'
@@ -1698,6 +1791,23 @@ class DatabaseTroopEditor {
                 return;
             }
         }
+
+        if (DatabaseTroopEditor.RUN_COMMANDS.has(cmd.code)) {
+            const list = this.commandDialogs();
+            list.selectedIndices = [idx];
+            list.editCommand(idx, page, this.currentBattlePageIndex);
+            return;
+        }
+
+        // The shared table, the same one the map event list dispatches through.
+        // Anything below this line is a command with no dialog anywhere, and the
+        // raw parameter array is all there is to show for it.
+        const simple = this.simpleCommandDialog(cmd.code);
+        if (simple) {
+            replaceSingle(simple.editor, this.commandDialogContext(cmd.code, simple.options));
+            return;
+        }
+        if (ECL.isNoParamCommand(cmd.code)) return;
 
         const modal = document.createElement('div');
         modal.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(0,0,0,0.8); display: flex; align-items: center; justify-content: center; z-index: 10005;';
@@ -1832,6 +1942,16 @@ class DatabaseTroopEditor {
         if (container) this.renderCommandList(container, page);
     }
 
+    // COMMAND DISPLAY -- delegated to EventCommandList, the way
+    // DatabaseCommonEventEditor already does it. The copy that used to live
+    // here knew a smaller name table and a shorter description switch, so a
+    // battle page printed "Cmd 342" over a raw parameter list where the map
+    // event list printed "Change Enemy TP", and read Change Enemy HP's sign out
+    // of the wrong parameter. What this host still owns is the enemy slot: a
+    // troop page can name it, and no other host can.
+
+    // The colours stay this host's own: a battle page bands them more finely
+    // than the map list does, and the rows look the way they always have.
     getCommandColor(code) {
         if (code === 0) return 'var(--color-border-input)';
         if (code >= 101 && code <= 105) return 'var(--color-syntax-type)';
@@ -1846,89 +1966,57 @@ class DatabaseTroopEditor {
         return 'var(--color-text-muted)';
     }
 
-    getCommandDisplay(cmd) {
-        const tt = text => window.I18n ? window.I18n.tText(text) : text;
-        const ECL = this._eventCommandListClass();
-        if (ECL.generatedCommand(cmd, 'eventCall') || ECL.generatedCommand(cmd, 'picture') ||
-            ECL.generatedCommand(cmd, 'inputCondition') ||
-            ECL.generatedCommand(cmd, 'control-variables-expression')) {
-            const formatter = Object.create(ECL.prototype);
-            formatter.eventEditor = { databaseManager: this.databaseManager };
-            return formatter.getCommandInfo(cmd);
-        }
-        const names = {
-            0: 'End', 101: 'Show Text', 102: 'Show Choices', 103: 'Input Number',
-            104: 'Select Item', 105: 'Show Scrolling Text',
-            108: 'Comment', 109: 'Skip', 111: 'If', 112: 'Loop', 113: 'Break Loop',
-            115: 'Exit Event', 117: 'Common Event', 118: 'Label', 119: 'Jump to Label',
-            121: 'Control Switches', 122: 'Control Variables',
-            123: 'Control Self Switch', 124: 'Control Timer',
-            125: 'Change Gold', 126: 'Change Items', 127: 'Change Weapons',
-            128: 'Change Armors', 129: 'Change Party Member',
-            201: 'Transfer Player', 205: 'Set Movement Route',
-            212: 'Show Animation', 230: 'Wait',
-            231: 'Show Picture', 232: 'Move Picture', 235: 'Erase Picture',
-            241: 'Play BGM', 242: 'Fadeout BGM', 245: 'Play BGS',
-            246: 'Fadeout BGS', 249: 'Play ME', 250: 'Play SE', 251: 'Stop SE',
-            301: 'Battle Processing', 311: 'Change HP', 312: 'Change MP',
-            313: 'Change State', 314: 'Recover All',
-            315: 'Change EXP', 316: 'Change Level', 317: 'Change Parameter',
-            318: 'Change Skill', 319: 'Change Equipment',
-            331: 'Change Enemy HP', 332: 'Change Enemy MP',
-            333: 'Change Enemy State', 334: 'Enemy Recover All',
-            335: 'Enemy Appear', 336: 'Enemy Transform',
-            337: 'Show Battle Anim', 339: 'Force Action', 340: 'Abort Battle',
-            355: 'Script', 356: 'Plugin Command', 357: 'Plugin Command',
-            401: '\u25B7 Text', 402: 'When', 403: 'When Cancel', 404: 'End Choices',
-            405: '\u25B7 Scrolling Text', 408: '\u25B7 Comment',
-            411: 'Else', 412: 'End', 413: 'Repeat Above',
-            601: 'If Win', 602: 'If Escape', 603: 'If Lose', 604: 'End',
-            655: 'Script', 657: 'Plugin Command'
+    getCommandDisplay(cmd, page, index) {
+        const info = this.commandDialogs().getCommandInfo(cmd, page, index);
+        const named = this.enemySlotDescription(cmd);
+        return {
+            name: info.name,
+            color: this.getCommandColor(cmd.code),
+            description: named === null ? info.description : named
         };
+    }
 
-        const name = names[cmd.code] ? tt(names[cmd.code]) : `Cmd ${cmd.code}`;
-        const color = this.getCommandColor(cmd.code);
-        let desc = '';
-
+    /**
+     * A battle command's summary, with the enemy named from this page's troop
+     * rather than numbered. Null for everything else, which the shared
+     * formatter describes perfectly well.
+     */
+    enemySlotDescription(cmd) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const p = cmd.parameters || [];
+        const db = this.databaseManager;
         switch (cmd.code) {
-            case 101: desc = p[4] ? p[4] : (p[0] ? `${tt('Face:')} ${p[0]}` : ''); break;
-            case 108: case 408: desc = p[0] || ''; break;
-            case 401: case 405: desc = p[0] || ''; break;
-            case 111: {
-                const types = ['Switch', 'Variable', 'Self Sw', 'Timer', 'Actor', 'Enemy', 'Character', 'Gold', 'Item', 'Weapon', 'Armor', 'Button', 'Script'];
-                desc = types[p[0]] ? tt(types[p[0]]) : `${tt('Type')} ${p[0]}`;
-                if (p[0] === 0) desc = `${tt('Switch')} #${p[1]} ${p[2] === 0 ? tt('ON') : tt('OFF')}`;
-                break;
+            case 331: case 332: case 342: {
+                const amount = p[2] === 0 ? p[3] : `${tt('Variable')} #${p[3]}`;
+                return `${this.enemySlotLabel(p[0])}: ${p[1] === 0 ? '+' : '-'}${amount}`;
             }
-            case 117: desc = `#${p[0]}`; break;
-            case 121: desc = `#${p[0]}${p[1] > p[0] ? '-' + p[1] : ''} = ${p[2] === 0 ? tt('ON') : tt('OFF')}`; break;
-            case 122: desc = `#${p[0]}${p[1] > p[0] ? '-' + p[1] : ''}`; break;
-            case 230: desc = `${p[0]} ${tt('frames')}`; break;
-            case 241: case 245: case 250: desc = p[0] ? (p[0].name || '') : ''; break;
-            case 331: desc = `${tt('Enemy')} #${p[0] + 1}: ${p[2] === 0 ? '+' : '-'}${p[3]}`; break;
-            case 332: desc = `${tt('Enemy')} #${p[0] + 1}: ${p[2] === 0 ? '+' : '-'}${p[3]}`; break;
-            case 333: { const st = this.databaseManager.getState(p[2]); desc = `${tt('Enemy')} #${p[0] + 1}: ${p[1] === 0 ? '+' : '-'} ${st ? st.name : `${tt('State')} ${p[2]}`}`; break; }
-            case 335: desc = `${tt('Enemy')} #${p[0] + 1}`; break;
-            case 336: { const en = this.databaseManager.getEnemy(p[1]); desc = `${tt('Enemy')} #${p[0] + 1} → ${en ? en.name : '#' + p[1]}`; break; }
-            case 339: desc = `${tt('Enemy')} #${p[0] + 1}`; break;
-            case 355: desc = p[0] || ''; break;
-            case 356: case 357: {
-                const commandLabel = cmd.code === 357 && p[0] === 'RPGReactor' && p[2]
-                    ? p[2] : p[1];
-                desc = p[0] ? `${p[0]}: ${commandLabel || ''}` : '';
-                break;
+            case 333: {
+                const state = db.getState(p[2]);
+                return `${this.enemySlotLabel(p[0])}: ${p[1] === 0 ? '+' : '-'} ${state ? state.name : `${tt('State')} ${p[2]}`}`;
             }
-            case 402: desc = p[1] || `${tt('Choice')} ${p[0]}`; break;
+            case 334: case 335:
+                return this.enemySlotLabel(p[0]);
+            case 336: {
+                const enemy = db.getEnemy(p[1]);
+                return `${this.enemySlotLabel(p[0])} \u2192 ${enemy ? enemy.name : '#' + p[1]}`;
+            }
+            case 337: {
+                const anim = db.getAnimation(p[1]);
+                const target = p[2] ? tt('Entire Troop') : this.enemySlotLabel(p[0]);
+                return `${target}: ${anim ? anim.name : `${tt('Animation')} #${p[1]}`}`;
+            }
+            case 339: {
+                const skill = db.getSkill(p[2]);
+                const skillName = skill ? skill.name : `${tt('Skill')} #${p[2]}`;
+                const actor = p[0] === 1 ? db.getActor(p[1]) : null;
+                const who = p[0] === 1
+                    ? (actor ? actor.name : `${tt('Actor')} #${p[1]}`)
+                    : this.enemySlotLabel(p[1]);
+                return `${who}: ${skillName}`;
+            }
             default:
-                if (p.length > 0 && p.length <= 3) desc = p.map(v => typeof v === 'string' ? v : JSON.stringify(v)).join(', ');
-                else if (p.length > 3) desc = p.slice(0, 3).map(v => typeof v === 'string' ? v : JSON.stringify(v)).join(', ') + '...';
+                return null;
         }
-
-        const maxLen = 80;
-        if (desc.length > maxLen) desc = desc.substring(0, maxLen) + '...';
-
-        return { name, color, description: desc };
     }
 
     // Page management

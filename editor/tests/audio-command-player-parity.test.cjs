@@ -97,8 +97,11 @@ test('Troop audio commands route through AudioCommandEditor for insert and edit'
     assert.match(source, /\[132, 133, 139, 241, 242, 245, 246, 249, 250, 251\]\.includes\(command\.code\)[\s\S]{0,300}?getCommandEditor\('audio', AudioCommandEditor\)\.show\(null, command\.code/);
     assert.match(source, /\[132, 133, 139, 241, 242, 245, 246, 249, 250, 251\]\.includes\(cmd\.code\)[\s\S]{0,300}?getCommandEditor\('audio', AudioCommandEditor\)\.show\(cmd, cmd\.code/);
     assert.match(source, /249: \[\{ name: '', volume: 90, pitch: 100, pan: 0 \}\]/);
-    assert.match(source, /140: \['changeVehicleBGM', ChangeVehicleBGMEditor\]/);
     const eventList = fs.readFileSync(path.join(editorRoot, 'src', 'event', 'EventCommandList.js'), 'utf8');
+    // Change Vehicle BGM used to be listed in the troop editor by hand. It now
+    // reaches a troop page through the table both hosts dispatch, which is where
+    // the entry has to exist for the dialog to open there.
+    assert.match(eventList, /^    140: \['changeVehicleBGMEditor'\],$/m);
     const common = fs.readFileSync(path.join(editorRoot, 'src', 'database', 'DatabaseCommonEventEditor.js'), 'utf8');
     const vehicle = fs.readFileSync(path.join(editorRoot, 'src', 'event', 'commands', 'ChangeVehicleBGMEditor.js'), 'utf8');
     for (const code of [132, 133, 139]) {

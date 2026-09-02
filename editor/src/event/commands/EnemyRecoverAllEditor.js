@@ -7,13 +7,15 @@ class EnemyRecoverAllEditor {
         this.projectController = projectController;
         this.modal = null;
         this.callback = null;
+        this.enemyContext = {};
 
         // Parameters: [enemyIndex]
         this.enemyIndex = 0; // 0-7 (enemy member index), -1=Entire Troop
     }
 
-    show(command, callback) {
+    show(command, callback, context = {}) {
         this.callback = callback;
+        this.enemyContext = context || {};
 
         if (command && command.code === 334) {
             const params = command.parameters;
@@ -128,13 +130,9 @@ class EnemyRecoverAllEditor {
         entireOption.selected = (this.enemyIndex === -1);
         select.appendChild(entireOption);
 
-        for (let i = 0; i <= 7; i++) {
-            const option = document.createElement('option');
-            option.value = i;
-            option.textContent = `#${i + 1}`;
-            option.selected = (this.enemyIndex === i);
-            select.appendChild(option);
-        }
+        // A troop page names its slots ("#1 Goblin"); a map event has no troop and
+        // the number is the whole answer. RREnemySlotOptions owns both.
+        RREnemySlotOptions.fill(select, this.enemyIndex, this.enemyContext, this.databaseManager);
         select.addEventListener('change', (e) => { this.enemyIndex = parseInt(e.target.value); });
         section.appendChild(label);
         section.appendChild(select);
