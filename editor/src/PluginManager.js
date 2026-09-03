@@ -1371,7 +1371,7 @@ class PluginManager {
             const project = this.projectController.getCurrentProject();
             const dirPath = this.path.join(project.path, dir);
             if (this.fs.existsSync(dirPath)) {
-                const imageExts = ['.png', '.jpg', '.jpeg', '.webp', '.bmp'];
+                const imageExts = ['.png', '.jpg', '.jpeg', '.webp', '.bmp', '.apng'];
                 const validExts = String(dir).includes('img') ? imageExts : RRAssetFiles.AUDIO_EXTENSIONS;
                 for (const fileName of RRAssetFiles.listNames(dirPath, validExts)) {
                     const opt = document.createElement('option');

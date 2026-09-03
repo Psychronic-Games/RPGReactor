@@ -45,14 +45,16 @@ test('image references keep PNG compatibility and preserve explicit modern exten
     try {
         for (const relativePath of [
             'Poster.png', 'Poster.jpg', 'Nested/Card.jpeg', 'Nested/Card.webp',
-            'Vector.svg', 'Animated.gif', 'Legacy.jpg.png', 'Secret.webp_'
+            'Vector.svg', 'Animated.gif', 'Legacy.jpg.png', 'Secret.webp_',
+            'Motion.apng', 'Cipher.apng_'
         ]) {
             const filePath = path.join(root, relativePath);
             fs.mkdirSync(path.dirname(filePath), { recursive: true });
             fs.writeFileSync(filePath, 'fixture');
         }
         assert.deepEqual(AssetFiles.listImageReferences(root), [
-            'Animated.gif', 'Legacy.jpg', 'Nested/Card.jpeg', 'Nested/Card.webp',
+            'Animated.gif', 'Cipher.apng', 'Legacy.jpg', 'Motion.apng',
+            'Nested/Card.jpeg', 'Nested/Card.webp',
             'Poster', 'Poster.jpg', 'Secret.webp', 'Vector.svg'
         ]);
         assert.equal(AssetFiles.findImage(root, 'Poster').relativePath, 'Poster.png');
@@ -60,6 +62,10 @@ test('image references keep PNG compatibility and preserve explicit modern exten
         assert.equal(AssetFiles.findImage(root, 'Poster.jpg').relativePath, 'Poster.jpg');
         assert.equal(AssetFiles.findImage(root, 'Legacy.jpg').relativePath, 'Legacy.jpg.png');
         assert.equal(AssetFiles.findImage(root, 'Secret.webp').sourceExtension, '.webp_');
+        // .apng keeps its extension in the reference, as every non-PNG image
+        // does, so it never collides with a same-named .png.
+        assert.equal(AssetFiles.findImage(root, 'Motion.apng').relativePath, 'Motion.apng');
+        assert.equal(AssetFiles.findImage(root, 'Cipher.apng').sourceExtension, '.apng_');
     } finally {
         fs.rmSync(root, { recursive: true, force: true });
     }
