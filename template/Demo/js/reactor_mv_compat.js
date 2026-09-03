@@ -4534,7 +4534,11 @@
         // over an all-dead troop, and the input gate then blocked the
         // battle-end check until the player attacked the empty field.
         // MV verbatim: victory beats the next input every time.
+        // This replaces the stock body outright, so it must emit the
+        // stock body's event itself — a runtime that muted its own feed
+        // on MV-authored games would be a gap, not a compatibility choice.
         BattleManager.endAction = function() {
+            ReactorEvents.emit("actionEnd", { subject: this._subject });
             this._logWindow.endAction(this._subject);
             this._phase = "turn";
         };

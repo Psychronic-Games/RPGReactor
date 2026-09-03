@@ -2071,6 +2071,7 @@ Game_Action.prototype.apply = function(target) {
         this.applyItemUserEffect(target);
     }
     this.updateLastTarget(target);
+    ReactorEvents.emit("actionApplied", { action: this, subject: this.subject(), target, result });
 };
 
 Game_Action.prototype.makeDamageValue = function(target, critical) {
@@ -2954,12 +2955,14 @@ Game_BattlerBase.prototype.die = function() {
     this._hp = 0;
     this.clearStates();
     this.clearBuffs();
+    ReactorEvents.emit("battlerDied", { battler: this });
 };
 
 Game_BattlerBase.prototype.revive = function() {
     if (this._hp === 0) {
         this._hp = 1;
     }
+    ReactorEvents.emit("battlerRevived", { battler: this });
 };
 
 Game_BattlerBase.prototype.states = function() {
@@ -3832,12 +3835,14 @@ Game_Battler.prototype.refresh = function() {
 
 Game_Battler.prototype.addState = function(stateId) {
     if (this.isStateAddable(stateId)) {
-        if (!this.isStateAffected(stateId)) {
+        const renewed = this.isStateAffected(stateId);
+        if (!renewed) {
             this.addNewState(stateId);
             this.refresh();
         }
         this.resetStateCounts(stateId);
         this._result.pushAddedState(stateId);
+        ReactorEvents.emit("stateAdded", { battler: this, stateId, renewed });
     }
 };
 
@@ -3873,6 +3878,7 @@ Game_Battler.prototype.removeState = function(stateId) {
         this.eraseState(stateId);
         this.refresh();
         this._result.pushRemovedState(stateId);
+        ReactorEvents.emit("stateRemoved", { battler: this, stateId });
     }
 };
 
@@ -4024,23 +4030,31 @@ Game_Battler.prototype.consumeItem = function(item) {
 };
 
 Game_Battler.prototype.gainHp = function(value) {
+    const before = this.hp;
     this._result.hpDamage = -value;
     this._result.hpAffected = true;
     this.setHp(this.hp + value);
+    ReactorEvents.emit("hpChanged", { battler: this, delta: value, before, after: this.hp });
 };
 
 Game_Battler.prototype.gainMp = function(value) {
+    const before = this.mp;
     this._result.mpDamage = -value;
     this.setMp(this.mp + value);
+    ReactorEvents.emit("mpChanged", { battler: this, delta: value, before, after: this.mp });
 };
 
 Game_Battler.prototype.gainTp = function(value) {
+    const before = this.tp;
     this._result.tpDamage = -value;
     this.setTp(this.tp + value);
+    ReactorEvents.emit("tpChanged", { battler: this, delta: value, before, after: this.tp, silent: false });
 };
 
 Game_Battler.prototype.gainSilentTp = function(value) {
+    const before = this.tp;
     this.setTp(this.tp + value);
+    ReactorEvents.emit("tpChanged", { battler: this, delta: value, before, after: this.tp, silent: true });
 };
 
 Game_Battler.prototype.initTp = function() {

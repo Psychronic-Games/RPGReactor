@@ -1303,6 +1303,139 @@ ReactorProfiler.dump = function() {
 
 window.$reactorProfiler = ReactorProfiler;
 
+//-----------------------------------------------------------------------------
+/**
+ * The runtime's battle event feed: a read-only, synchronous notification
+ * channel the engine emits into at fixed points of a battle — start and end,
+ * turns, actions, HP/MP/TP changes, death, revival, state changes — so that a
+ * plugin which only needs to OBSERVE combat can subscribe here instead of
+ * wrapping a dozen prototype methods it never meant to change.
+ *
+ * Additive by design. Nothing existing is routed through it: every wrapper a
+ * plugin already installs on `Game_Action.prototype.apply` or
+ * `Game_Battler.prototype.gainHp` runs exactly as before, and a listener's
+ * return value is ignored, so a subscriber cannot alter an outcome — that is
+ * still what the prototype chain is for. Listeners run in subscription order.
+ * A listener that throws is reported on the console and skipped, and the ones
+ * after it still run, because a statistics plugin's bug must not end a battle.
+ * Costs one property read per emit point while nobody is listening.
+ *
+ * The event names, their payloads and their exact emit points are documented
+ * in `docs/RUNTIME-EVENTS.md`, and a test holds that document and this source
+ * to the same list, so neither can drift from the other.
+ *
+ *     const off = ReactorEvents.on("hpChanged", ({ battler, delta }) => {
+ *         if (battler.isActor() && delta < 0) tally(battler, -delta);
+ *     });
+ *     off(); // unsubscribe
+ *
+ * @namespace
+ */
+function ReactorEvents() {
+    throw new Error("This is a static class");
+}
+
+ReactorEvents._listeners = Object.create(null);
+
+/**
+ * Subscribes `listener` to the event `name`. Returns a function that removes
+ * exactly this subscription — the tidy way to unsubscribe a closure.
+ *
+ * @param {string} name
+ * @param {function(object)} listener Receives the event's payload object.
+ * @returns {function()} Call to unsubscribe.
+ */
+ReactorEvents.on = function(name, listener) {
+    if (typeof listener !== "function") {
+        throw new TypeError("ReactorEvents.on: listener must be a function");
+    }
+    const list = this._listeners[name] || (this._listeners[name] = []);
+    list.push(listener);
+    return () => this.off(name, listener);
+};
+
+/**
+ * Subscribes for one delivery only; the subscription removes itself before
+ * the listener runs.
+ *
+ * @param {string} name
+ * @param {function(object)} listener
+ * @returns {function()} Call to unsubscribe early.
+ */
+ReactorEvents.once = function(name, listener) {
+    const off = this.on(name, payload => {
+        off();
+        listener(payload);
+    });
+    return off;
+};
+
+/**
+ * Removes one subscription. Removing a listener that is not subscribed is a
+ * no-op. Removing from inside a listener takes effect for the next emit, not
+ * for the one in flight.
+ *
+ * @param {string} name
+ * @param {function(object)} listener
+ */
+ReactorEvents.off = function(name, listener) {
+    const list = this._listeners[name];
+    if (!list) return;
+    const index = list.indexOf(listener);
+    if (index >= 0) list.splice(index, 1);
+    if (list.length === 0) delete this._listeners[name];
+};
+
+/**
+ * Delivers `payload` to every listener of `name`, in subscription order. The
+ * engine calls this at its emit points. A plugin may emit its own events too,
+ * and should prefix their names so they cannot collide with the runtime's.
+ *
+ * @param {string} name
+ * @param {object} payload Passed to each listener as its only argument.
+ */
+ReactorEvents.emit = function(name, payload) {
+    const list = this._listeners[name];
+    if (!list) return;
+    // Snapshot, so a listener subscribing or unsubscribing mid-dispatch
+    // neither skips a neighbour nor receives the event it just asked for.
+    const listeners = list.slice();
+    for (const listener of listeners) {
+        try {
+            listener(payload);
+        } catch (e) {
+            console.error("[ReactorEvents] listener for \"" + name + "\" threw", e);
+        }
+    }
+};
+
+/**
+ * How many listeners `name` has right now.
+ *
+ * @param {string} name
+ * @returns {number}
+ */
+ReactorEvents.listenerCount = function(name) {
+    const list = this._listeners[name];
+    return list ? list.length : 0;
+};
+
+/**
+ * Drops every listener of `name`, or of every event when called with no name.
+ * For tests and hot-reload tooling; the engine never calls it.
+ *
+ * @param {string} [name]
+ */
+ReactorEvents.clear = function(name) {
+    if (name === undefined) {
+        this._listeners = Object.create(null);
+    } else {
+        delete this._listeners[name];
+    }
+};
+
+window.$reactorEvents = ReactorEvents;
+
 // Console helper: dump the live animation sprites of the current scene —
 // count, animation id/name, rate, remaining duration, drawn cells, and a
 // sample of cell opacities. For diagnosing looping-animation stacking or
