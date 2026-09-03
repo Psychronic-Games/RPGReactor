@@ -3,6 +3,7 @@
 This folder contains release notes, audit history, and maintainer workflows that are not required for normal RPG Reactor editor use.
 
 - [Handoff](HANDOFF.md): current cycle state, open threads, manual release gates, and the engineering notes behind recent work.
+- [Runtime events](RUNTIME-EVENTS.md): the `ReactorEvents` feed — a read-only, synchronous notification channel the runtime emits into at fixed points of a battle, so a plugin that only observes combat can subscribe to a fact instead of wrapping the method where it happens. Lists every event with its exact emit point and payload, the guarantees (additive, isolated from throwing listeners, free while idle), what deliberately does not fire, a worked migration of an observer plugin, and the limits — chiefly that a plugin which *replaces* rather than wraps an emitting method silences that event.
 - [Deep Audit Backlog — 2026-07-25](AUDIT-BACKLOG-2026-07-25.md): three authored-data items from the 0.96.0 file-by-file correctness audit that need a project-owner decision rather than a code change (re-verified 2026-08-24, all still open).
 - [Demo: assets not on disk](demo-missing-se.md): SE names and character/battler art the bundled Demo references but no longer ships, kept current while stock assets are replaced.
 - [Deep Audit Backlog — 2026-07-13](AUDIT-BACKLOG-2026-07-13.md): cleared historical record of the seven-subsystem audit findings and their 0.95.0 disposition.
