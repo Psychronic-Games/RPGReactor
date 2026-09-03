@@ -989,7 +989,7 @@ ImageManager.faceHeight = 144;
 ImageManager._cache = {};
 ImageManager._system = {};
 ImageManager._emptyBitmap = new Bitmap(1, 1);
-ImageManager._imageExtensions = [".png", ".jpg", ".jpeg", ".webp", ".svg", ".gif"];
+ImageManager._imageExtensions = [".png", ".jpg", ".jpeg", ".webp", ".svg", ".gif", ".apng"];
 
 ImageManager.loadAnimation = function(filename) {
     return this.loadBitmap("img/animations/", filename);
