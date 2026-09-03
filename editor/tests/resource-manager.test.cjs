@@ -61,7 +61,7 @@ test('resource categories cover RPG Maker, Reactor, and read-only 3D roots', () 
     assert.equal(models.allowImport, true);
     assert.equal(models.preview, 'model');
     assert.deepEqual(folders.find(item => item.path === 'img/pictures').extensions,
-        ['.png', '.jpg', '.jpeg', '.webp', '.svg', '.gif']);
+        ['.png', '.jpg', '.jpeg', '.webp', '.svg', '.gif', '.apng']);
     const sorted = ResourceManager.sortedFolders(folders).map(item => item.label);
     assert.deepEqual(sorted, sorted.slice().sort((a, b) =>
         a.localeCompare(b, undefined, { sensitivity: 'base', numeric: true })));

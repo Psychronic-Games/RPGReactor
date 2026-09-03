@@ -5,7 +5,7 @@ class ResourceManager {
     static folderDefinitions(audioExtensions = null) {
         const audio = audioExtensions || ['.ogg', '.mp3', '.wav', '.flac', '.m4a'];
         const images = typeof RRAssetFiles !== 'undefined' && RRAssetFiles.IMAGE_EXTENSIONS
-            ? RRAssetFiles.IMAGE_EXTENSIONS : ['.png', '.jpg', '.jpeg', '.webp', '.svg', '.gif'];
+            ? RRAssetFiles.IMAGE_EXTENSIONS : ['.png', '.jpg', '.jpeg', '.webp', '.svg', '.gif', '.apng'];
         const image = (id, label, path) => ({ id, label, path, extensions: images, preview: 'image', encryption: 'image' });
         return [
             image('animations', 'Animations', 'img/animations'),
@@ -200,7 +200,7 @@ class ResourceManager {
         if (folder.preview === 'image') {
             const png = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
             const ascii = (start, length) => Buffer.from(bytes.subarray(start, start + length)).toString('ascii');
-            const invalid = extension === '.png'
+            const invalid = ['.png', '.apng'].includes(extension)
                 ? bytes.length < png.length || png.some((value, index) => bytes[index] !== value)
                 : ['.jpg', '.jpeg'].includes(extension)
                     ? bytes.length < 4 || bytes[0] !== 0xff || bytes[1] !== 0xd8 || bytes[2] !== 0xff
@@ -212,6 +212,11 @@ class ResourceManager {
                             : false;
             if (invalid) throw new Error(`${sourceName} is not a valid ${extension.slice(1).toUpperCase()} file.`);
             if (extension === '.svg') ResourceManager.validateSvg(bytes, sourceName);
+            // A still image under an .apng name costs the runtime a byte read
+            // and animates nothing, so say so at import rather than at play.
+            if (extension === '.apng' && !ResourceManager.hasApngAnimation(bytes)) {
+                throw new Error(`${sourceName} carries no APNG animation (no acTL chunk); import it as .png instead.`);
+            }
         }
 
         const existing = ResourceManager.listRecords(fs, path, assetFiles, projectRoot, folder);
@@ -318,6 +323,30 @@ class ResourceManager {
         }
         options.encryptedAssets?.invalidateProject(projectRoot);
         return { collision: false, destination, logicalName, cleanupErrors };
+    }
+
+    /**
+     * Whether PNG bytes carry APNG animation, i.e. an `acTL` chunk ahead of
+     * the first `IDAT`. Mirrors `Bitmap.hasApngAnimation` in the runtime,
+     * which cannot be loaded here; `apng-support.test.cjs` holds the two to
+     * the same answers.
+     */
+    static hasApngAnimation(bytes) {
+        const signature = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+        if (!bytes || bytes.length < 8) return false;
+        if (signature.some((value, index) => bytes[index] !== value)) return false;
+        let offset = 8;
+        while (offset + 12 <= bytes.length) {
+            const length = (bytes[offset] * 0x1000000) + (bytes[offset + 1] << 16)
+                + (bytes[offset + 2] << 8) + bytes[offset + 3];
+            if (length > 0x7fffffff) return false;
+            const type = String.fromCharCode(bytes[offset + 4], bytes[offset + 5],
+                bytes[offset + 6], bytes[offset + 7]);
+            if (type === 'acTL') return true;
+            if (type === 'IDAT' || type === 'IEND') return false;
+            offset += 12 + length;
+        }
+        return false;
     }
 
     static validateSvg(bytes, sourceName = 'SVG') {

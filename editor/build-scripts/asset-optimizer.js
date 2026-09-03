@@ -194,9 +194,30 @@ async function loadOxipng() {
     return oxipng;
 }
 
+function hasApngAnimation(bytes) {
+    const signature = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+    if (!bytes || bytes.length < 8) return false;
+    if (signature.some((value, index) => bytes[index] !== value)) return false;
+    let offset = 8;
+    while (offset + 12 <= bytes.length) {
+        const length = bytes.readUInt32BE(offset);
+        if (length > 0x7fffffff) return false;
+        const type = bytes.toString('ascii', offset + 4, offset + 8);
+        if (type === 'acTL') return true;
+        if (type === 'IDAT' || type === 'IEND') return false;
+        offset += 12 + length;
+    }
+    return false;
+}
+
 async function optimizePngFile(filePath, level = 3) {
     const original = fs.readFileSync(filePath);
     const originalStat = fs.statSync(filePath);
+    // oxipng rewrites chunks and drops APNG animation, and only the dimensions
+    // are checked afterwards, so a flattened animation would pass unnoticed.
+    if (hasApngAnimation(original)) {
+        return { before: original.length, after: original.length, changed: false, skipped: 'apng' };
+    }
     const dimensions = pngDimensions(original);
     const optimize = await loadOxipng();
     const input = original.buffer.slice(original.byteOffset, original.byteOffset + original.byteLength);
@@ -649,6 +670,7 @@ module.exports = {
     hostAssetNames,
     acquireFfmpeg,
     pngDimensions,
+    hasApngAnimation,
     optimizePngFile,
     loopComments,
     lameQuality,

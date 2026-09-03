@@ -23,7 +23,7 @@
     const ENCRYPTED_TO_PLAIN = {
         '.png_': '.png', '.rpgmvp': '.png',
         '.jpg_': '.jpg', '.jpeg_': '.jpeg', '.webp_': '.webp',
-        '.svg_': '.svg', '.gif_': '.gif',
+        '.svg_': '.svg', '.gif_': '.gif', '.apng_': '.apng',
         '.ogg_': '.ogg', '.rpgmvo': '.ogg',
         '.m4a_': '.m4a', '.rpgmvm': '.m4a',
         '.mp3_': '.mp3', '.wav_': '.wav', '.flac_': '.flac'
@@ -32,7 +32,7 @@
     // Every format the runtime can play, in resolution priority order:
     // when the same name exists in several formats, the earliest wins.
     const AUDIO_EXTENSIONS = ['.ogg', '.mp3', '.wav', '.flac', '.m4a'];
-    const IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.webp', '.svg', '.gif'];
+    const IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.webp', '.svg', '.gif', '.apng'];
 
     const list = (rootDir, extensions, options = {}) => {
         if (!rootDir) return [];

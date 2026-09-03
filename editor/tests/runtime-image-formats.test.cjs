@@ -37,6 +37,7 @@ test('ImageManager preserves explicit Reactor formats and legacy extensionless P
         ['Portrait.svg', 'img/pictures/Portrait.svg'],
         ['Portrait.gif', 'img/pictures/Portrait.gif'],
         ['Nested/Title #1.GIF', 'img/pictures/Nested/Title%20%231.GIF'],
+        ['Portrait.apng', 'img/pictures/Portrait.apng'],
         ['Portrait.custom', 'img/pictures/Portrait.custom.png'],
     ]);
     for (const [name, url] of expected) {
@@ -59,6 +60,31 @@ test('Bitmap supports candidate fallback, encrypted MIME, and animated GIF textu
     assert.match(coreSource, /this\._baseTexture\.update\(\)/);
     assert.match(coreSource, /this\._revokeObjectUrl\(\)/);
     assert.match(coreSource, /\.rpgmvp/);
+});
+
+test('Bitmap._mimeType names every format the loader can request', () => {
+    const start = coreSource.indexOf('Bitmap._mimeType = function(url)');
+    const end = coreSource.indexOf('\nBitmap._isAnimatedImage = function', start);
+    assert.ok(start >= 0 && end > start);
+    function Bitmap() {}
+    new Function('Bitmap', coreSource.slice(start, end))(Bitmap);
+    const expected = new Map([
+        ['img/pictures/A.png', 'image/png'],
+        ['img/pictures/A.jpg', 'image/jpeg'],
+        ['img/pictures/A.jpeg', 'image/jpeg'],
+        ['img/pictures/A.webp', 'image/webp'],
+        ['img/pictures/A.svg', 'image/svg+xml'],
+        ['img/pictures/A.gif', 'image/gif'],
+        ['img/pictures/A.apng', 'image/apng'],
+        // The encrypted suffix and a cache-busting query are both stripped.
+        ['img/pictures/A.apng_', 'image/apng'],
+        ['img/pictures/A.apng?v=3', 'image/apng'],
+        // Anything unrecognised is served as PNG, as the loader assumes.
+        ['img/pictures/A.custom', 'image/png'],
+    ]);
+    for (const [url, mime] of expected) {
+        assert.equal(Bitmap._mimeType(url), mime, url);
+    }
 });
 
 test('Reactor UI strips legacy PNG suffixes but preserves explicit modern formats', () => {

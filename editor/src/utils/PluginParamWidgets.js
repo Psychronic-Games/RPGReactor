@@ -66,7 +66,7 @@
             const parts = String(schema.dir).split(/[\\/]+/).filter(Boolean);
             const directory = context.path.join(context.projectPath, ...parts);
             if (!context.fs.existsSync(directory)) return [];
-            return root.RRAssetFiles.listUnique(directory, ['.png', '.jpg', '.jpeg', '.webp', '.bmp']);
+            return root.RRAssetFiles.listUnique(directory, ['.png', '.jpg', '.jpeg', '.webp', '.bmp', '.apng']);
         } catch (error) {
             return [];
         }

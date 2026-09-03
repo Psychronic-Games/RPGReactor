@@ -2220,6 +2220,8 @@ Bitmap.prototype.initialize = function(width, height) {
     this._urlIndex = 0;
     this._objectUrl = null;
     this._animatedImage = false;
+    this._apng = null;
+    this._apngDecodeUrl = "";
     this._paintOpacity = 255;
     this._smooth = true;
     this._loadListeners = [];
@@ -2566,6 +2568,7 @@ Object.defineProperty(Bitmap.prototype, "paintOpacity", {
  */
 Bitmap.prototype.destroy = function() {
     this._revokeObjectUrl();
+    this._apng = null;
     if (this._baseTexture) {
         this._baseTexture.destroy();
         this._baseTexture = null;
@@ -2919,6 +2922,11 @@ Bitmap.prototype._startLoading = function() {
     }
     if (Utils.hasEncryptedImages()) {
         this._startDecrypting();
+    } else if (Bitmap._isApngUrl(this._url)) {
+        // Compositing frames needs the file's bytes, and an <img> only ever
+        // hands back frame one -- see the APNG section below.
+        this._url = Utils.resolveFileCase(this._url, "");
+        this._requestBytes(this._url);
     } else {
         this._url = Utils.resolveFileCase(this._url, "");
         this._image.src = this._url;
@@ -2943,15 +2951,40 @@ Bitmap.prototype._requestEncrypted = function(url) {
     xhr.send();
 };
 
+Bitmap.prototype._requestBytes = function(url) {
+    this._apngDecodeUrl = url;
+    const xhr = new XMLHttpRequest();
+    xhr.open("GET", url);
+    xhr.responseType = "arraybuffer";
+    xhr.onload = () => {
+        // A file:// read reports status 0 on success, as _requestEncrypted
+        // already assumes.
+        if (xhr.status < 400) this._onImageBytes(xhr.response);
+        else this._onError();
+    };
+    xhr.onerror = this._onError.bind(this);
+    xhr.send();
+};
+
 Bitmap.prototype._onXhrLoad = function(xhr) {
     if (xhr.status < 400) {
-        const arrayBuffer = Utils.decryptArrayBuffer(xhr.response);
-        const blob = new Blob([arrayBuffer], { type: Bitmap._mimeType(this._url) });
-        this._objectUrl = URL.createObjectURL(blob);
-        this._image.src = this._objectUrl;
+        this._onImageBytes(Utils.decryptArrayBuffer(xhr.response));
     } else {
         this._onEncryptedError();
     }
+};
+
+Bitmap.prototype._onImageBytes = function(arrayBuffer) {
+    const animation = Bitmap._isApngUrl(this._url) ? Bitmap.parseApng(arrayBuffer) : null;
+    if (animation) {
+        this._loadApngFrames(animation);
+        return;
+    }
+    // Not animated after all -- a still PNG under an .apng name, say. Hand it
+    // to the browser as any other image.
+    const blob = new Blob([arrayBuffer], { type: Bitmap._mimeType(this._url) });
+    this._objectUrl = URL.createObjectURL(blob);
+    this._image.src = this._objectUrl;
 };
 
 Bitmap.prototype._onEncryptedError = function() {
@@ -2972,6 +3005,17 @@ Bitmap.prototype._revokeObjectUrl = function() {
 };
 
 Bitmap.prototype._onLoad = function() {
+    // Second entry point for frame decoding, and in practice the usual one:
+    // VisuMZ_0_CoreEngine replaces _startLoading outright, so the branch there
+    // never runs in a VisuStella project and an .apng arrives here as an <img>
+    // holding frame one. The bytes come back off the cache the <img> just
+    // filled. Staying "loading" until the frames are ready matters -- swapping
+    // the base texture after the load listeners fired would leave every sprite
+    // holding the still one.
+    if (Bitmap._isApngUrl(this._url) && !this._apng && this._apngDecodeUrl !== this._url) {
+        this._requestBytes(this._url);
+        return;
+    }
     this._revokeObjectUrl();
     this._loadingState = "loaded";
     this._createBaseTexture(this._image);
@@ -2985,6 +3029,7 @@ Bitmap._mimeType = function(url) {
     if (clean.endsWith(".webp")) return "image/webp";
     if (clean.endsWith(".svg")) return "image/svg+xml";
     if (clean.endsWith(".gif")) return "image/gif";
+    if (clean.endsWith(".apng")) return "image/apng";
     return "image/png";
 };
 
@@ -2993,10 +3038,509 @@ Bitmap._isAnimatedImage = function(url) {
 };
 
 Bitmap.prototype._updateAnimatedImage = function() {
-    if (!this._animatedImage || this._loadingState !== "loaded" || !this._image
-        || this._canvas || !this._baseTexture || this._animatedFrame === Graphics.frameCount) return;
+    if (this._loadingState !== "loaded" || !this._baseTexture) return;
+    // Once per game frame at most, however many sprites share the bitmap.
+    if (this._animatedFrame === Graphics.frameCount) return;
+    if (this._apng) {
+        this._animatedFrame = Graphics.frameCount;
+        this._advanceApng();
+        return;
+    }
+    if (!this._animatedImage || !this._image || this._canvas) return;
     this._animatedFrame = Graphics.frameCount;
     this._baseTexture.update();
+};
+
+//-----------------------------------------------------------------------------
+// APNG playback.
+//
+// Chromium animates an APNG only where it paints the image itself. Reading one
+// back through `drawImage` or `texImage2D` yields the format's *default image*
+// -- frame one -- by specification, whether or not the element is in the DOM,
+// so re-uploading an <img> every frame animates nothing. (The same holds for
+// GIF, which is why `_animatedImage` on its own never produced motion.) Frames
+// have to be decoded here and composited by hand.
+//
+// `Bitmap.parseApng` splits the file into one standalone PNG per frame -- the
+// browser's own PNG decoder still does the pixel work -- and `_advanceApng`
+// composites those onto the bitmap's canvas under the APNG dispose and blend
+// rules. That canvas is what the base texture samples, so a frame change costs
+// one upload of one changed surface instead of 60 uploads a second of an
+// unchanging one.
+
+/**
+ * The shortest time a frame is held, in ms. APNG reads a delay of zero as "as
+ * fast as possible", which without a floor replays the whole loop every frame.
+ */
+Bitmap.APNG_MIN_DELAY_MS = 10;
+
+Bitmap._PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+
+/**
+ * Ancillary chunks that change how frame pixels decode, so every extracted
+ * frame needs its own copy. Text, timestamps and EXIF do not affect pixels.
+ */
+Bitmap._APNG_SHARED_CHUNKS = ["PLTE", "tRNS", "gAMA", "cHRM", "sRGB", "iCCP",
+    "sBIT", "bKGD", "hIST", "pHYs"];
+
+Bitmap._crcTable = null;
+
+Bitmap._crc32 = function(bytes) {
+    if (!Bitmap._crcTable) {
+        const table = new Int32Array(256);
+        for (let n = 0; n < 256; n++) {
+            let c = n;
+            for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+            table[n] = c;
+        }
+        Bitmap._crcTable = table;
+    }
+    const table = Bitmap._crcTable;
+    let crc = -1;
+    for (let i = 0; i < bytes.length; i++) {
+        crc = table[(crc ^ bytes[i]) & 0xff] ^ (crc >>> 8);
+    }
+    return (crc ^ -1) >>> 0;
+};
+
+Bitmap._asUint8 = function(source) {
+    if (!source) return null;
+    if (source instanceof Uint8Array) return source;
+    if (source instanceof ArrayBuffer) return new Uint8Array(source);
+    if (typeof ArrayBuffer !== "undefined" && ArrayBuffer.isView(source)) {
+        return new Uint8Array(source.buffer, source.byteOffset, source.byteLength);
+    }
+    return null;
+};
+
+/**
+ * Whether a url names a file the engine must decode frame by frame. Keyed on
+ * the extension rather than the file's contents: sniffing every `.png` would
+ * cost a byte read per image the game loads, and an author who wants animation
+ * can say so in the filename.
+ *
+ * @param {string} url - The image url, encrypted suffix and query allowed.
+ * @returns {boolean} True for an `.apng` url.
+ */
+Bitmap._isApngUrl = function(url) {
+    return String(url || "").replace(/[?#].*$/, "").replace(/_$/, "")
+        .toLowerCase().endsWith(".apng");
+};
+
+Bitmap._hasPngSignature = function(bytes) {
+    if (!bytes || bytes.length < 8) return false;
+    return Bitmap._PNG_SIGNATURE.every((value, index) => bytes[index] === value);
+};
+
+/**
+ * Whether an image file carries APNG animation, i.e. an `acTL` chunk ahead of
+ * the first `IDAT`. A file with `acTL` after `IDAT` is malformed and reads as a
+ * plain PNG, which is what the specification asks for.
+ *
+ * @param {ArrayBuffer|Uint8Array} source - The raw file bytes.
+ * @returns {boolean} True if the file is an animated PNG.
+ */
+Bitmap.hasApngAnimation = function(source) {
+    const bytes = Bitmap._asUint8(source);
+    if (!Bitmap._hasPngSignature(bytes)) return false;
+    // Walked chunk by chunk rather than over a fixed prefix: `acTL` follows
+    // IHDR, but an embedded colour profile can legally push it kilobytes in.
+    let offset = 8;
+    while (offset + 12 <= bytes.length) {
+        const length = (bytes[offset] * 0x1000000) + (bytes[offset + 1] << 16)
+            + (bytes[offset + 2] << 8) + bytes[offset + 3];
+        if (length > 0x7fffffff) return false;
+        const type = String.fromCharCode(bytes[offset + 4], bytes[offset + 5],
+            bytes[offset + 6], bytes[offset + 7]);
+        if (type === "acTL") return true;
+        if (type === "IDAT" || type === "IEND") return false;
+        offset += 12 + length;
+    }
+    return false;
+};
+
+/**
+ * Splits an APNG into one standalone PNG per frame.
+ *
+ * Returns null for anything that is not a usable animation -- not a PNG, no
+ * `acTL`, a single frame, a frame with no data -- so callers fall back to the
+ * ordinary static path rather than failing on a file the engine can still show.
+ *
+ * @param {ArrayBuffer|Uint8Array} source - The raw file bytes.
+ * @returns {?object} `{width, height, playCount, frames}`, `playCount` 0
+ *   meaning loop forever; each frame is `{x, y, width, height, delayMs,
+ *   disposeOp, blendOp, bytes}` where `bytes` is a complete one-frame PNG file.
+ */
+Bitmap.parseApng = function(source) {
+    const bytes = Bitmap._asUint8(source);
+    if (!Bitmap._hasPngSignature(bytes)) return null;
+    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    const shared = [];
+    const frames = [];
+    let header = null;
+    let playCount = 1;
+    let animated = false;
+    let pending = null;
+    let defaultImageAnimates = false;
+    let sawIdat = false;
+    let offset = 8;
+
+    while (offset + 12 <= bytes.length) {
+        const length = view.getUint32(offset);
+        if (length > 0x7fffffff || offset + 12 + length > bytes.length) break;
+        const type = String.fromCharCode(bytes[offset + 4], bytes[offset + 5],
+            bytes[offset + 6], bytes[offset + 7]);
+        if (type === "IEND") break;
+        const start = offset + 8;
+        const data = bytes.subarray(start, start + length);
+        switch (type) {
+            case "IHDR":
+                if (length < 13) return null;
+                header = data.slice();
+                break;
+            case "acTL":
+                if (length >= 8 && !sawIdat) {
+                    animated = true;
+                    playCount = view.getUint32(start + 4);
+                }
+                break;
+            case "fcTL":
+                if (length >= 26) {
+                    if (pending) frames.push(pending);
+                    // An `fcTL` before the first `IDAT` enlists the default
+                    // image as frame one; after it, the default image is a
+                    // still fallback and plays no part in the animation.
+                    if (!sawIdat) defaultImageAnimates = true;
+                    pending = {
+                        width: view.getUint32(start + 4),
+                        height: view.getUint32(start + 8),
+                        x: view.getUint32(start + 12),
+                        y: view.getUint32(start + 16),
+                        delayNum: view.getUint16(start + 20),
+                        delayDen: view.getUint16(start + 22),
+                        disposeOp: bytes[start + 24],
+                        blendOp: bytes[start + 25],
+                        parts: []
+                    };
+                }
+                break;
+            case "IDAT":
+                sawIdat = true;
+                if (pending && defaultImageAnimates) pending.parts.push(data);
+                break;
+            case "fdAT":
+                // The leading four bytes are the sequence number, not pixels.
+                if (pending && length > 4) {
+                    pending.parts.push(bytes.subarray(start + 4, start + length));
+                }
+                break;
+            default:
+                if (Bitmap._APNG_SHARED_CHUNKS.includes(type)) shared.push({ type, data });
+                break;
+        }
+        offset += 12 + length;
+    }
+    if (pending) frames.push(pending);
+    if (!animated || !header || frames.length < 2) return null;
+
+    const headerView = new DataView(header.buffer, header.byteOffset, header.byteLength);
+    const width = headerView.getUint32(0);
+    const height = headerView.getUint32(4);
+    if (!(width > 0) || !(height > 0)) return null;
+
+    const built = [];
+    for (const frame of frames) {
+        if (!frame.parts.length || !(frame.width > 0) || !(frame.height > 0)) return null;
+        if (frame.x + frame.width > width || frame.y + frame.height > height) return null;
+        const denominator = frame.delayDen || 100;
+        built.push({
+            x: frame.x,
+            y: frame.y,
+            width: frame.width,
+            height: frame.height,
+            delayMs: (frame.delayNum / denominator) * 1000,
+            disposeOp: frame.disposeOp,
+            blendOp: frame.blendOp,
+            bytes: Bitmap._buildFramePng(header, shared, frame)
+        });
+    }
+    return { width: width, height: height, playCount: playCount, frames: built };
+};
+
+Bitmap._buildFramePng = function(header, shared, frame) {
+    const chunk = (type, data) => {
+        const out = new Uint8Array(12 + data.length);
+        const view = new DataView(out.buffer);
+        view.setUint32(0, data.length);
+        for (let i = 0; i < 4; i++) out[4 + i] = type.charCodeAt(i);
+        out.set(data, 8);
+        view.setUint32(8 + data.length, Bitmap._crc32(out.subarray(4, 8 + data.length)));
+        return out;
+    };
+    // The frame's own IHDR carries its sub-rectangle size; everything else --
+    // bit depth, colour type, interlacing -- is inherited from the file.
+    const ihdr = header.slice(0, 13);
+    const ihdrView = new DataView(ihdr.buffer, ihdr.byteOffset, ihdr.byteLength);
+    ihdrView.setUint32(0, frame.width);
+    ihdrView.setUint32(4, frame.height);
+
+    let dataLength = 0;
+    for (const part of frame.parts) dataLength += part.length;
+    const data = new Uint8Array(dataLength);
+    let at = 0;
+    for (const part of frame.parts) {
+        data.set(part, at);
+        at += part.length;
+    }
+
+    const pieces = [new Uint8Array(Bitmap._PNG_SIGNATURE), chunk("IHDR", ihdr)];
+    // Kept in file order, which the source PNG already held in a legal one.
+    for (const entry of shared) pieces.push(chunk(entry.type, entry.data));
+    pieces.push(chunk("IDAT", data));
+    pieces.push(chunk("IEND", new Uint8Array(0)));
+
+    let total = 0;
+    for (const piece of pieces) total += piece.length;
+    const png = new Uint8Array(total);
+    let cursor = 0;
+    for (const piece of pieces) {
+        png.set(piece, cursor);
+        cursor += piece.length;
+    }
+    return png;
+};
+
+Bitmap.prototype._loadApngFrames = function(animation) {
+    const urls = [];
+    const images = [];
+    let remaining = animation.frames.length;
+    let failed = false;
+    const finish = () => {
+        for (const url of urls) URL.revokeObjectURL(url);
+        if (failed) this._onError();
+        else this._startApngAnimation(animation, images);
+    };
+    animation.frames.forEach((frame, index) => {
+        const url = URL.createObjectURL(new Blob([frame.bytes], { type: "image/png" }));
+        urls.push(url);
+        const image = new Image();
+        images[index] = image;
+        const done = () => {
+            if (--remaining === 0) finish();
+        };
+        image.onload = done;
+        image.onerror = () => {
+            failed = true;
+            done();
+        };
+        image.src = url;
+    });
+};
+
+Bitmap.prototype._startApngAnimation = function(animation, images) {
+    this._revokeObjectUrl();
+    this._image = null;
+    this._destroyCanvas();
+    // Canvas-backed deliberately: the canvas is the base texture's source, and
+    // it keeps `blt`, `getPixel` and `bitmap.context` reading the frame that is
+    // actually on screen.
+    this._createCanvas(animation.width, animation.height);
+    this._apng = {
+        frames: animation.frames,
+        images: images,
+        playCount: animation.playCount,
+        index: -1,
+        plays: 0,
+        paused: false,
+        finished: false,
+        due: Infinity,
+        restore: null,
+        restoreX: 0,
+        restoreY: 0
+    };
+    this._animatedImage = true;
+    this._loadingState = "loaded";
+    this._renderApngFrame(0);
+    this._apng.due = performance.now() + this._apngHoldTime(0);
+    if (this._baseTexture) this._baseTexture.update();
+    this._callLoadListeners();
+};
+
+Bitmap.prototype._apngHoldTime = function(index) {
+    const frame = this._apng.frames[index];
+    return Math.max(frame ? frame.delayMs : 0, Bitmap.APNG_MIN_DELAY_MS);
+};
+
+/**
+ * Composites one frame onto the canvas. Deliberately does not upload: callers
+ * batch that, so a seek replaying N frames still costs one texture update.
+ */
+Bitmap.prototype._renderApngFrame = function(index) {
+    const state = this._apng;
+    const context = this._context;
+    if (!state || !context) return;
+    const frame = state.frames[index];
+    const previous = state.index >= 0 ? state.frames[state.index] : null;
+    if (previous) {
+        if (previous.disposeOp === 2 && state.restore) {
+            context.putImageData(state.restore, state.restoreX, state.restoreY);
+        } else if (previous.disposeOp === 1) {
+            context.clearRect(previous.x, previous.y, previous.width, previous.height);
+        }
+    }
+    state.restore = null;
+    if (frame.disposeOp === 2) {
+        state.restore = context.getImageData(frame.x, frame.y, frame.width, frame.height);
+        state.restoreX = frame.x;
+        state.restoreY = frame.y;
+    }
+    // APNG_BLEND_OP_SOURCE replaces the region, alpha included, rather than
+    // compositing over what is already there.
+    if (frame.blendOp === 0) context.clearRect(frame.x, frame.y, frame.width, frame.height);
+    const image = state.images[index];
+    if (image) {
+        context.globalCompositeOperation = "source-over";
+        context.globalAlpha = 1;
+        context.drawImage(image, frame.x, frame.y);
+    }
+    state.index = index;
+};
+
+Bitmap.prototype._advanceApng = function() {
+    const state = this._apng;
+    if (state.paused || state.finished) return;
+    const now = performance.now();
+    if (now < state.due) return;
+    const total = state.frames.length;
+    let advanced = 0;
+    while (now >= state.due && advanced < total) {
+        let next = state.index + 1;
+        if (next >= total) {
+            state.plays++;
+            if (state.playCount > 0 && state.plays >= state.playCount) {
+                state.finished = true;
+                state.due = Infinity;
+                break;
+            }
+            next = 0;
+        }
+        this._renderApngFrame(next);
+        state.due += this._apngHoldTime(next);
+        advanced++;
+    }
+    // A long stall -- a scene load, a minimised window -- leaves `due` far in
+    // the past. Resync to now instead of sprinting the backlog next frame.
+    if (!state.finished && now >= state.due) {
+        state.due = now + this._apngHoldTime(state.index);
+    }
+    if (advanced > 0 && this._baseTexture) this._baseTexture.update();
+};
+
+/**
+ * Whether this bitmap is playing a decoded animation.
+ *
+ * @returns {boolean} True while frames are being composited.
+ */
+Bitmap.prototype.isAnimated = function() {
+    return !!this._apng;
+};
+
+/**
+ * The number of frames in the animation, or 0 for a still image.
+ *
+ * @readonly
+ * @type number
+ * @name Bitmap#animationFrameCount
+ */
+Object.defineProperty(Bitmap.prototype, "animationFrameCount", {
+    get: function() {
+        return this._apng ? this._apng.frames.length : 0;
+    },
+    configurable: true
+});
+
+/**
+ * The index of the frame on the canvas, or -1 for a still image.
+ *
+ * @readonly
+ * @type number
+ * @name Bitmap#animationFrame
+ */
+Object.defineProperty(Bitmap.prototype, "animationFrame", {
+    get: function() {
+        return this._apng ? this._apng.index : -1;
+    },
+    configurable: true
+});
+
+/**
+ * Holds the animation on the frame it is showing.
+ */
+Bitmap.prototype.pauseAnimation = function() {
+    if (this._apng) this._apng.paused = true;
+};
+
+/**
+ * Resumes a held animation from the frame it is showing.
+ */
+Bitmap.prototype.playAnimation = function() {
+    const state = this._apng;
+    if (!state || !state.paused) return;
+    state.paused = false;
+    state.due = performance.now() + this._apngHoldTime(state.index);
+};
+
+/**
+ * Whether the animation is held.
+ *
+ * @returns {boolean} True if paused.
+ */
+Bitmap.prototype.isAnimationPaused = function() {
+    return !!(this._apng && this._apng.paused);
+};
+
+/**
+ * Jumps to a frame. Earlier frames are replayed rather than skipped, because an
+ * APNG frame is a difference against the ones before it, not a whole picture.
+ *
+ * @param {number} index - The frame to show.
+ */
+Bitmap.prototype.seekAnimation = function(index) {
+    const state = this._apng;
+    if (!state) return;
+    const target = Math.max(0, Math.min(state.frames.length - 1, Math.floor(index) || 0));
+    this._context.clearRect(0, 0, this.width, this.height);
+    state.index = -1;
+    state.restore = null;
+    for (let i = 0; i <= target; i++) this._renderApngFrame(i);
+    state.finished = false;
+    state.due = performance.now() + this._apngHoldTime(target);
+    if (this._baseTexture) this._baseTexture.update();
+};
+
+/**
+ * Replays the animation from its first frame, loop count included.
+ */
+Bitmap.prototype.restartAnimation = function() {
+    if (!this._apng) return;
+    this._apng.plays = 0;
+    this.seekAnimation(0);
+};
+
+/**
+ * Overrides how many times the animation plays, ignoring the file's own
+ * `num_plays`.
+ *
+ * @param {number} count - Passes to play; 0 loops forever.
+ */
+Bitmap.prototype.setAnimationLoopCount = function(count) {
+    const state = this._apng;
+    if (!state) return;
+    state.playCount = Math.max(0, Math.floor(count) || 0);
+    if (state.playCount === 0 || state.plays < state.playCount) {
+        state.finished = false;
+        if (state.due === Infinity) state.due = performance.now();
+    }
 };
 
 Bitmap.prototype._callLoadListeners = function() {
