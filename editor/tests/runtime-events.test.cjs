@@ -31,7 +31,10 @@ const docSource = read(path.join(repoRoot, 'docs', 'RUNTIME-EVENTS.md'));
 /**
  * Every event the runtime emits, with how many emit points each has. Two
  * for `tpChanged` is deliberate: `gainTp` and `gainSilentTp` are separate
- * methods and the doc distinguishes them by the `silent` field.
+ * methods and the doc distinguishes them by the `silent` field. Two for
+ * `actionEnd` is deliberate too: `reactor_mv_compat.js` replaces
+ * `BattleManager.endAction` outright for MV-authored games, so that
+ * replacement has to emit the event the stock body would have.
  */
 const EXPECTED_EMITS = {
     battleStart: 1,
@@ -39,7 +42,7 @@ const EXPECTED_EMITS = {
     turnStart: 1,
     turnEnd: 1,
     actionStart: 1,
-    actionEnd: 1,
+    actionEnd: 2,
     actionApplied: 1,
     hpChanged: 1,
     mpChanged: 1,
@@ -263,6 +266,18 @@ test('actionEnd is emitted before the engine may release the subject', () => {
     const emit = src.indexOf('ReactorEvents.emit("actionEnd"');
     const release = src.indexOf('this._subject = null');
     assert.ok(emit >= 0 && release > emit);
+});
+
+test('the MV-semantics replacement of endAction emits actionEnd itself, first, so the runtime never mutes its own feed', () => {
+    const mvCompat = read(path.join(runtimeDir, 'reactor_mv_compat.js'));
+    const head = 'BattleManager.endAction = function() {';
+    const start = mvCompat.indexOf(head);
+    assert.ok(start >= 0, 'reactor_mv_compat.js replaces BattleManager.endAction for MV-authored games');
+    const body = mvCompat.slice(start, mvCompat.indexOf('};', start));
+    const emit = body.indexOf('ReactorEvents.emit("actionEnd", { subject: this._subject })');
+    const log = body.indexOf('this._logWindow.endAction(this._subject)');
+    assert.ok(emit >= 0, 'the replacement emits actionEnd');
+    assert.ok(log > emit, 'and does so before anything else in the body, matching the stock ordering');
 });
 
 test('actionStart hands listeners a copy of the target list, not the one the engine drains', () => {

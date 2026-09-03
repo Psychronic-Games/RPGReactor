@@ -138,11 +138,22 @@ before the action is applied to any target.
 ### `actionEnd`
 
 Emitted from `BattleManager.endAction`, as its **first** statement, before the
-engine may release the subject.
+engine may release the subject. Emitted from **two** places, because the
+runtime itself replaces this method for MV-authored games: the stock body in
+`reactor_managers.js`, and the verbatim-MV replacement that
+`reactor_mv_compat.js` installs under `mvGameSemantics`, which emits first for
+the same reason. A game receives one or the other, never both.
 
 | Field | |
 |---|---|
 | `subject` | `Game_Battler` — who just finished acting |
+
+**This is the event most likely to be silenced by a plugin stack.** See
+Limits: `VisuMZ_0_CoreEngine` reimplements `BattleManager.endAction` without
+calling the original, so on any project carrying it — which is every
+VisuStella project — neither emit point is reached. `actionApplied` (once per
+target) and `actionStart` still fire there and between them cover most of
+what an observer wants from an action's lifetime.
 
 ### `actionApplied`
 
@@ -323,9 +334,16 @@ number — and it never wanted to.
 - **A plugin that *replaces* an emitting method silences that event.** The
   emit lives inside the engine's method body. A wrapper that calls the
   original still reaches it; a wrapper that reimplements the method without
-  calling through does not. Which methods a given plugin stack replaces is a
-  property of that stack, and worth checking once with a listener on each
-  event before relying on it.
+  calling through does not. Measured on a project with the full VisuStella
+  stack and Order Turn Battle: thirteen of the fourteen events arrived.
+  `actionEnd` did not, because `VisuMZ_0_CoreEngine` — Tier 0, loaded before
+  anything that could have saved the original — reimplements
+  `BattleManager.endAction` verbatim with a null guard and no call-through.
+  Every one of the ten wrappers stacked above it saves and calls its
+  predecessor correctly; they are all wrapping CoreEngine's copy. The same
+  scan found no other emitting method replaced on that stack. Which methods a
+  given stack replaces is a property of that stack; a listener on each event
+  during one battle tells you in a minute.
 - **No priorities, no ordering across plugins** beyond subscription order,
   which is plugin load order for subscriptions made at load time. This is a
   notification feed, not a filter chain.
