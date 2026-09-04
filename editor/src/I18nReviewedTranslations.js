@@ -5,6 +5,13 @@
 globalThis.RR_REVIEWED_TRANSLATIONS = {
   "text": {
     "ja": {
+      "Show Battle UI": "戦闘UIを表示",
+      "Sideview": "サイドビュー",
+      "Frontview": "フロントビュー",
+      "Battle Log": "バトルログ",
+      "Turn Order": "ターン順",
+      "Turn-based": "ターン制",
+      "Please select at least one party member for the battle test.": "戦闘テストにはパーティメンバーを1人以上選択してください。",
       "Height (tiles):": "高さ（タイル）:",
       "Set Height...": "高さを設定...",
       "Set Height": "高さを設定",
@@ -124,6 +131,13 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Rig bound — {bones} bones, {vertices} vertices": "リグをバインドしました — ボーン {bones} 個、頂点 {vertices} 個"
     },
     "zh-Hant": {
+      "Show Battle UI": "顯示戰鬥介面",
+      "Sideview": "側視圖",
+      "Frontview": "正面視圖",
+      "Battle Log": "戰鬥記錄",
+      "Turn Order": "回合順序",
+      "Turn-based": "回合制",
+      "Please select at least one party member for the battle test.": "請至少為戰鬥測試選擇一名隊伍成員。",
       "Height (tiles):": "高度（格）:",
       "Set Height...": "設定高度...",
       "Set Height": "設定高度",
@@ -247,6 +261,13 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Rig bound — {bones} bones, {vertices} vertices": "骨架綁定完成 — {bones} 根骨骼，{vertices} 個頂點"
     },
     "zh-Hans": {
+      "Show Battle UI": "显示战斗界面",
+      "Sideview": "侧视图",
+      "Frontview": "正面视图",
+      "Battle Log": "战斗记录",
+      "Turn Order": "回合顺序",
+      "Turn-based": "回合制",
+      "Please select at least one party member for the battle test.": "请至少为战斗测试选择一名队伍成员。",
       "Height (tiles):": "高度（格）:",
       "Set Height...": "设置高度...",
       "Set Height": "设置高度",
@@ -371,6 +392,13 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Rig bound — {bones} bones, {vertices} vertices": "骨架绑定完成 — {bones} 根骨骼，{vertices} 个顶点"
     },
     "ko": {
+      "Show Battle UI": "전투 UI 표시",
+      "Sideview": "사이드뷰",
+      "Frontview": "프론트뷰",
+      "Battle Log": "전투 로그",
+      "Turn Order": "턴 순서",
+      "Turn-based": "턴제",
+      "Please select at least one party member for the battle test.": "전투 테스트를 위해 파티원을 한 명 이상 선택하세요.",
       "Height (tiles):": "높이 (타일):",
       "Set Height...": "높이 설정...",
       "Set Height": "높이 설정",
@@ -495,6 +523,13 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Rig bound — {bones} bones, {vertices} vertices": "리그 바인딩 완료 — 본 {bones}개, 버텍스 {vertices}개"
     },
     "es": {
+      "Show Battle UI": "Mostrar interfaz de batalla",
+      "Sideview": "Vista lateral",
+      "Frontview": "Vista frontal",
+      "Battle Log": "Registro de batalla",
+      "Turn Order": "Orden de turnos",
+      "Turn-based": "Por turnos",
+      "Please select at least one party member for the battle test.": "Selecciona al menos un miembro del grupo para la prueba de batalla.",
       "Height (tiles):": "Altura (casillas):",
       "Set Height...": "Fijar altura...",
       "Set Height": "Fijar altura",
@@ -652,6 +687,13 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Rig bound — {bones} bones, {vertices} vertices": "Rig vinculado — {bones} huesos, {vertices} vértices"
     },
     "pt": {
+      "Show Battle UI": "Mostrar interface de batalha",
+      "Sideview": "Visão lateral",
+      "Frontview": "Visão frontal",
+      "Battle Log": "Registro de batalha",
+      "Turn Order": "Ordem de turnos",
+      "Turn-based": "Por turnos",
+      "Please select at least one party member for the battle test.": "Selecione pelo menos um membro do grupo para o teste de batalha.",
       "Height (tiles):": "Altura (tiles):",
       "Set Height...": "Definir altura...",
       "Set Height": "Definir altura",
@@ -806,6 +848,13 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Rig bound — {bones} bones, {vertices} vertices": "Rig vinculado — {bones} ossos, {vertices} vértices"
     },
     "fr": {
+      "Show Battle UI": "Afficher l'interface de combat",
+      "Sideview": "Vue de côté",
+      "Frontview": "Vue de face",
+      "Battle Log": "Journal de combat",
+      "Turn Order": "Ordre des tours",
+      "Turn-based": "Tour par tour",
+      "Please select at least one party member for the battle test.": "Sélectionnez au moins un membre du groupe pour le test de combat.",
       "Height (tiles):": "Hauteur (tuiles) :",
       "Set Height...": "Définir la hauteur...",
       "Set Height": "Définir la hauteur",
@@ -958,6 +1007,13 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Rig bound — {bones} bones, {vertices} vertices": "Rig lié — {bones} os, {vertices} sommets"
     },
     "it": {
+      "Show Battle UI": "Mostra interfaccia di battaglia",
+      "Sideview": "Vista laterale",
+      "Frontview": "Vista frontale",
+      "Battle Log": "Registro di battaglia",
+      "Turn Order": "Ordine dei turni",
+      "Turn-based": "A turni",
+      "Please select at least one party member for the battle test.": "Seleziona almeno un membro del gruppo per il test di battaglia.",
       "Height (tiles):": "Altezza (tile):",
       "Set Height...": "Imposta altezza...",
       "Set Height": "Imposta altezza",
@@ -1120,6 +1176,13 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Rig bound — {bones} bones, {vertices} vertices": "Rig vincolato — {bones} ossa, {vertices} vertici"
     },
     "de": {
+      "Show Battle UI": "Kampf-UI anzeigen",
+      "Sideview": "Seitenansicht",
+      "Frontview": "Frontansicht",
+      "Battle Log": "Kampfprotokoll",
+      "Turn Order": "Zugreihenfolge",
+      "Turn-based": "Rundenbasiert",
+      "Please select at least one party member for the battle test.": "Wähle mindestens ein Gruppenmitglied für den Kampftest aus.",
       "Height (tiles):": "Höhe (Kacheln):",
       "Set Height...": "Höhe festlegen...",
       "Set Height": "Höhe festlegen",
@@ -1250,6 +1313,13 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Rig bound — {bones} bones, {vertices} vertices": "Rig gebunden — {bones} Bones, {vertices} Vertices"
     },
     "ru": {
+      "Show Battle UI": "Показать интерфейс боя",
+      "Sideview": "Вид сбоку",
+      "Frontview": "Вид спереди",
+      "Battle Log": "Журнал боя",
+      "Turn Order": "Порядок ходов",
+      "Turn-based": "Пошаговый",
+      "Please select at least one party member for the battle test.": "Выберите хотя бы одного участника группы для тестового боя.",
       "Height (tiles):": "Высота (тайлы):",
       "Set Height...": "Задать высоту...",
       "Set Height": "Задать высоту",
@@ -1387,6 +1457,13 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Rig bound — {bones} bones, {vertices} vertices": "Скелет привязан — {bones} костей, {vertices} вершин"
     },
     "pl": {
+      "Show Battle UI": "Pokaż interfejs walki",
+      "Sideview": "Widok z boku",
+      "Frontview": "Widok z przodu",
+      "Battle Log": "Dziennik walki",
+      "Turn Order": "Kolejność tur",
+      "Turn-based": "Turowy",
+      "Please select at least one party member for the battle test.": "Wybierz co najmniej jednego członka drużyny do testu walki.",
       "Height (tiles):": "Wysokość (kafelki):",
       "Set Height...": "Ustaw wysokość...",
       "Set Height": "Ustaw wysokość",
@@ -1523,6 +1600,13 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Rig bound — {bones} bones, {vertices} vertices": "Szkielet powiązany — {bones} kości, {vertices} wierzchołków"
     },
     "el": {
+      "Show Battle UI": "Εμφάνιση διεπαφής μάχης",
+      "Sideview": "Πλάγια όψη",
+      "Frontview": "Μπροστινή όψη",
+      "Battle Log": "Αρχείο μάχης",
+      "Turn Order": "Σειρά γύρων",
+      "Turn-based": "Ανά γύρους",
+      "Please select at least one party member for the battle test.": "Επιλέξτε τουλάχιστον ένα μέλος της ομάδας για τη δοκιμή μάχης.",
       "Height (tiles):": "Ύψος (πλακίδια):",
       "Set Height...": "Ορισμός ύψους...",
       "Set Height": "Ορισμός ύψους",
@@ -1659,6 +1743,13 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Rig bound — {bones} bones, {vertices} vertices": "Ο σκελετός συνδέθηκε — {bones} οστά, {vertices} κορυφές"
     },
     "ar": {
+      "Show Battle UI": "إظهار واجهة المعركة",
+      "Sideview": "عرض جانبي",
+      "Frontview": "عرض أمامي",
+      "Battle Log": "سجل المعركة",
+      "Turn Order": "ترتيب الأدوار",
+      "Turn-based": "بنظام الأدوار",
+      "Please select at least one party member for the battle test.": "يرجى اختيار عضو واحد على الأقل من الفريق لاختبار المعركة.",
       "Height (tiles):": "الارتفاع (بلاطات):",
       "Set Height...": "تعيين الارتفاع...",
       "Set Height": "تعيين الارتفاع",
@@ -1875,6 +1966,13 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Rig bound — {bones} bones, {vertices} vertices": "تم ربط الهيكل العظمي — {bones} عظمة، {vertices} رأسًا"
     },
     "tr": {
+      "Show Battle UI": "Savaş arayüzünü göster",
+      "Sideview": "Yan görünüm",
+      "Frontview": "Ön görünüm",
+      "Battle Log": "Savaş günlüğü",
+      "Turn Order": "Tur sırası",
+      "Turn-based": "Sıra tabanlı",
+      "Please select at least one party member for the battle test.": "Savaş testi için en az bir grup üyesi seçin.",
       "Height (tiles):": "Yükseklik (karo):",
       "Set Height...": "Yükseklik ayarla...",
       "Set Height": "Yükseklik ayarla",
@@ -2107,6 +2205,13 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Rig bound — {bones} bones, {vertices} vertices": "İskelet bağlandı — {bones} kemik, {vertices} köşe"
     },
     "id": {
+      "Show Battle UI": "Tampilkan UI pertempuran",
+      "Sideview": "Tampilan samping",
+      "Frontview": "Tampilan depan",
+      "Battle Log": "Log pertempuran",
+      "Turn Order": "Urutan giliran",
+      "Turn-based": "Berbasis giliran",
+      "Please select at least one party member for the battle test.": "Pilih setidaknya satu anggota party untuk uji pertempuran.",
       "Height (tiles):": "Ketinggian (petak):",
       "Set Height...": "Atur ketinggian...",
       "Set Height": "Atur ketinggian",
@@ -2269,6 +2374,13 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Rig bound — {bones} bones, {vertices} vertices": "Rig terikat — {bones} tulang, {vertices} verteks"
     },
     "vi": {
+      "Show Battle UI": "Hiện giao diện chiến đấu",
+      "Sideview": "Góc nhìn bên",
+      "Frontview": "Góc nhìn trước",
+      "Battle Log": "Nhật ký chiến đấu",
+      "Turn Order": "Thứ tự lượt",
+      "Turn-based": "Theo lượt",
+      "Please select at least one party member for the battle test.": "Hãy chọn ít nhất một thành viên tổ đội cho bài kiểm tra chiến đấu.",
       "Height (tiles):": "Độ cao (ô):",
       "Set Height...": "Đặt độ cao...",
       "Set Height": "Đặt độ cao",
@@ -2455,6 +2567,13 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Rig bound — {bones} bones, {vertices} vertices": "Đã liên kết rig — {bones} xương, {vertices} đỉnh"
     },
     "th": {
+      "Show Battle UI": "แสดง UI การต่อสู้",
+      "Sideview": "มุมมองด้านข้าง",
+      "Frontview": "มุมมองด้านหน้า",
+      "Battle Log": "บันทึกการต่อสู้",
+      "Turn Order": "ลำดับเทิร์น",
+      "Turn-based": "แบบเทิร์น",
+      "Please select at least one party member for the battle test.": "โปรดเลือกสมาชิกปาร์ตี้อย่างน้อยหนึ่งคนสำหรับการทดสอบการต่อสู้",
       "Height (tiles):": "ความสูง (ไทล์):",
       "Set Height...": "ตั้งความสูง...",
       "Set Height": "ตั้งความสูง",
