@@ -2,6 +2,9 @@
 // Handles launching and managing game playtesting
 
 class PlaytestManager {
+    // Battle test = playtest + battle test. See battleTest() for why both.
+    static BATTLE_TEST_MODE = 'test&btest';
+
     constructor(projectManager = null) {
         this.projectManager = projectManager;
         this.playtestProcess = null;
@@ -76,12 +79,20 @@ class PlaytestManager {
             return false;
         }
         console.log('Starting battle test for project:', projectPath);
+        // `btest` alone is not a playtest: `Utils.isOptionValid("test")` stays
+        // false, so `$gameTemp.isPlaytest()` is false and every plugin gated on
+        // it (VisuStella's Debugger declares its window classes only under
+        // `test`) never runs its declarations while its unconditional tail
+        // still references them - the game dies on the boot error screen
+        // before Scene_Boot. RPG Maker launches battle tests as `test btest`;
+        // one ampersand-delimited token is how this launcher spells that.
+        const mode = PlaytestManager.BATTLE_TEST_MODE;
         if (typeof window !== 'undefined' && window.RPGReactorHost?.mode === 'web') {
-            window.RPGReactorHost.openPlaytest('btest');
+            window.RPGReactorHost.openPlaytest(mode);
             return true;
         }
         if (typeof nw !== 'undefined') {
-            return this.launchPlaytestWindow(projectPath, 'btest');
+            return this.launchPlaytestWindow(projectPath, mode);
         } else {
             console.error('NW.js not available - cannot launch battle test');
             return false;
@@ -191,7 +202,10 @@ class PlaytestManager {
         try { canonicalProjectPath = fs.realpathSync(projectPath); } catch {}
         if (platform === 'win32') canonicalProjectPath = canonicalProjectPath.toLowerCase();
         const projectId = crypto.createHash('sha256').update(canonicalProjectPath).digest('hex').slice(0, 16);
-        const optionToken = String(options.optionToken || '').replace(/[^A-Za-z0-9_-]/g, '');
+        // A mode may carry several options (`test&btest`); the ampersand is
+        // what the runtime splits on, so it must survive into the profile name.
+        const optionToken = String(options.optionToken || '').replace(/[^A-Za-z0-9_&-]/g, '')
+            .split('&').filter(Boolean).join('&');
         const profileName = optionToken ? `${projectId}&${optionToken}` : projectId;
         const userDataDir = path.join(baseDir, 'RPGReactor', 'PlaytestProfile', versionDir, profileName);
 

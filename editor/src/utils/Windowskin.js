@@ -330,6 +330,8 @@
     /**
      * Draw a window the way the runtime would.
      * `background` follows the Show Text parameter: 0 window, 1 dim, 2 transparent.
+     * `frame: false` is a window with `frameVisible = false` (the battle
+     * status window): the back is drawn and the nine-slice frame is not.
      */
     function drawWindow(context, dest, record, options) {
         const settings = options || {};
@@ -344,6 +346,7 @@
 
         const opacity = Number.isFinite(settings.opacity) ? settings.opacity : METRICS.DEFAULT_OPACITY;
         drawBack(context, record, dest, opacity, settings.tone);
+        if (settings.frame === false) return;
         drawNineSlice(context, record.image, METRICS.FRAME_SRC, dest, METRICS.FRAME_MARGIN);
     }
 
