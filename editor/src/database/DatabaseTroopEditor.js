@@ -67,6 +67,10 @@ class DatabaseTroopEditor {
         this.battleback2Name = (system && system.battleback2Name) || '';
 
         this.configureBattleGeometry(system);
+        this.showBattleUI = this.loadBattleUIPreference();
+        this.battleUISetup = null;
+        this.actorBattlerImages = {};
+        this.actorFaceImages = {};
 
         const wrapper = document.createElement('div');
         wrapper.className = 'rr-troop-editor';
@@ -800,7 +804,38 @@ class DatabaseTroopEditor {
         section.className = 'database-section rr-troop-preview-section';
         section.style.cssText = 'display:flex;flex-direction:column;min-width:0;';
 
-        section.innerHTML = `<div class="database-section-header">${tt('Battle Preview')}</div>`;
+        const header = document.createElement('div');
+        header.className = 'database-section-header';
+        header.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:8px;';
+        const title = document.createElement('span');
+        title.textContent = tt('Battle Preview');
+        header.appendChild(title);
+
+        // The overlay draws the battle windows the runtime would put over this
+        // troop - status, commands, turn order, sideview party - so a placement
+        // can be judged against what actually covers the screen in play.
+        const toggle = document.createElement('label');
+        toggle.className = 'rr-troop-battle-ui-toggle';
+        toggle.style.cssText = 'display:inline-flex;align-items:center;gap:4px;font-weight:normal;font-size:11px;cursor:pointer;white-space:nowrap;';
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.id = 'troop-battle-ui-toggle';
+        checkbox.checked = !!this.showBattleUI;
+        checkbox.style.margin = '0';
+        checkbox.addEventListener('change', () => {
+            this.showBattleUI = checkbox.checked;
+            this.saveBattleUIPreference(this.showBattleUI);
+            if (this.showBattleUI && !this.battleUISetup) {
+                // First switch-on: the party art was never requested.
+                this.loadAndRenderCanvas();
+            } else {
+                this.renderCanvas();
+            }
+        });
+        toggle.appendChild(checkbox);
+        toggle.appendChild(document.createTextNode(tt('Show Battle UI')));
+        header.appendChild(toggle);
+        section.appendChild(header);
 
         const canvasContainer = document.createElement('div');
         canvasContainer.style.cssText = 'position:relative;display:flex;flex:1;min-height:220px;align-items:center;justify-content:center;background:var(--color-bg-deep);border:1px solid var(--color-border);overflow:hidden;';
@@ -950,6 +985,10 @@ class DatabaseTroopEditor {
             if (!found) done();
         });
 
+        if (this.showBattleUI) {
+            pending += this.loadBattleUIAssets(project, path, done);
+        }
+
         if (pending === 0) this.renderCanvas();
     }
 
@@ -1051,6 +1090,14 @@ class DatabaseTroopEditor {
                 ctx.lineWidth = 1;
             }
         });
+
+        // Drawn last so it covers the battlers the way the real windows do;
+        // enemySpriteBounds is already final, so hit-testing still reaches an
+        // enemy that sits under a window - which is the case worth noticing.
+        if (this.showBattleUI) {
+            const setup = this.battleUISetup || this.refreshBattleUISetup();
+            if (setup) this.drawBattleUIOverlay(ctx, setup);
+        }
     }
 
     // ==========================================
@@ -2263,6 +2310,9 @@ class DatabaseTroopEditor {
         const playtestManager = this.parentEditor.playtestManager;
         if (!playtestManager) { alert(tt('Playtest manager not available')); return; }
 
+        // Test_Troops.json is written from the database manager's copy, so the
+        // placement on screen must be in it before the dialog reads it.
+        this.persistTroop();
         new BattleTestConfigModal(this.databaseManager, project, this.currentTroopId, this.battleback1Name, this.battleback2Name, playtestManager).show();
     }
 
@@ -2312,6 +2362,735 @@ class DatabaseTroopEditor {
         btn.className = label === 'OK' ? 'rr-button-primary' : 'rr-btn-secondary';
         btn.onclick = onclick;
         return btn;
+    }
+
+    // ==========================================
+    // BATTLE UI OVERLAY
+    // ==========================================
+    //
+    // A schematic of the windows Scene_Battle puts over this troop, sized from
+    // the same numbers the runtime uses: the UI box (`configureBattleGeometry`),
+    // `Scene_Battle.statusWindowRect` / `actorCommandWindowRect`
+    // (runtime/reactor_scenes.js) and `Sprite_Actor.setActorHome`
+    // (runtime/reactor_sprites.js), with the VisuStella overrides read from the
+    // project's plugin manifest rather than assumed: BattleCore's layout style
+    // and command width, the enabled battle system, PartySystem's party size.
+    // It is a schematic and says so in its corner tag - a plugin's own JS
+    // (BattleCore's `HomePosJS`, a custom status window) is not evaluated.
+
+    static get BATTLE_UI_STORAGE_KEY() { return 'rpg-reactor.troopPreview.battleUI'; }
+
+    static get BATTLE_SYSTEM_PLUGINS() {
+        // Load-order-independent: the first enabled one wins, as in play only
+        // one of them can own BattleManager.
+        return ['OTB', 'CTB', 'ATB', 'BTB', 'STB', 'FTB', 'ETB', 'PTB'];
+    }
+
+    loadBattleUIPreference() {
+        try {
+            return localStorage.getItem(DatabaseTroopEditor.BATTLE_UI_STORAGE_KEY) === 'true';
+        } catch (error) {
+            return false;
+        }
+    }
+
+    saveBattleUIPreference(enabled) {
+        try {
+            localStorage.setItem(DatabaseTroopEditor.BATTLE_UI_STORAGE_KEY, enabled ? 'true' : 'false');
+        } catch (error) {
+            // Preference only; the toggle still works for this session.
+        }
+    }
+
+    /**
+     * The plugin manifest as an array of `{name, status, parameters}`, or null
+     * when the project has none. Reads the file the runtime loads
+     * (`js/reactor_plugins.js`), falling back to the MZ manifest for projects
+     * that have not been converted.
+     */
+    readPluginManifest() {
+        const project = this.projectManager?.getCurrentProject?.();
+        if (!project?.path || typeof require === 'undefined') return null;
+        // The shared reader (utils/TextCodes.js) already caches by mtime and
+        // knows why pluginManager.plugins cannot be asked; go through it.
+        const shared = (typeof window !== 'undefined' && window.RRTextCodes?.readManifest) || null;
+        if (shared) {
+            const plugins = shared(project.path);
+            return Array.isArray(plugins) ? plugins : null;
+        }
+        try {
+            const path = require('path');
+            const fs = require('fs');
+            for (const file of ['reactor_plugins.js', 'plugins.js']) {
+                const manifestPath = path.join(project.path, 'js', file);
+                if (!fs.existsSync(manifestPath)) continue;
+                return DatabaseTroopEditor.parsePluginManifest(fs.readFileSync(manifestPath, 'utf8'));
+            }
+        } catch (error) {
+            console.warn('Could not read the plugin manifest for the battle preview:', error);
+        }
+        return null;
+    }
+
+    /** `var $plugins = [...];` in either the pretty-printed or the one-line form. */
+    static parsePluginManifest(source) {
+        const text = String(source || '');
+        const start = text.indexOf('[');
+        const end = text.lastIndexOf(']');
+        if (start === -1 || end <= start) return null;
+        try {
+            const parsed = JSON.parse(text.slice(start, end + 1));
+            return Array.isArray(parsed) ? parsed : null;
+        } catch (error) {
+            return null;
+        }
+    }
+
+    /** The enabled manifest entry for `name`, or null. Disabled counts as absent. */
+    static enabledPlugin(manifest, name) {
+        if (!Array.isArray(manifest)) return null;
+        const entry = manifest.find(plugin => plugin && plugin.name === name && plugin.status === true);
+        return entry || null;
+    }
+
+    /** A VisuStella `:struct` parameter parsed, or `{}` when absent or malformed. */
+    static structParam(plugin, key) {
+        const raw = plugin?.parameters?.[key];
+        if (typeof raw !== 'string' || !raw.trim()) return {};
+        try {
+            const parsed = JSON.parse(raw);
+            return parsed && typeof parsed === 'object' ? parsed : {};
+        } catch (error) {
+            return {};
+        }
+    }
+
+    /**
+     * What the battle UI would look like for this project, from its System
+     * data and plugin manifest. Pure: no I/O, so it can be checked in a test.
+     */
+    detectBattleUISetup(system, manifest) {
+        const enabled = name => DatabaseTroopEditor.enabledPlugin(manifest, name);
+        const coreEngine = enabled('VisuMZ_0_CoreEngine');
+        const battleCore = enabled('VisuMZ_1_BattleCore');
+        const partySystem = enabled('VisuMZ_2_PartySystem');
+        const sideviewUI = enabled('VisuMZ_3_SideviewBattleUI');
+        const frontviewUI = enabled('VisuMZ_3_FrontviewBattleUI');
+
+        let turnSystem = null;
+        for (const code of DatabaseTroopEditor.BATTLE_SYSTEM_PLUGINS) {
+            if (enabled(`VisuMZ_2_BattleSystem${code}`)) { turnSystem = code.toLowerCase(); break; }
+        }
+        if (!turnSystem) {
+            // 0 turn-based, 1 TPB active, 2 TPB wait (System › Battle System).
+            turnSystem = Number(system?.battleSystem) > 0 ? 'tpb' : 'turn';
+        }
+
+        // Mirrors Scene_Battle.battleLayoutStyle in VisuMZ_1_BattleCore: a UI
+        // style whose plugin is missing silently becomes "default".
+        let layoutStyle = 'vanilla';
+        let commandWidth = 192;
+        let xpCommandLines = 4;
+        let showFacesListStyle = true;
+        if (battleCore) {
+            const layout = DatabaseTroopEditor.structParam(battleCore, 'BattleLayout:struct');
+            layoutStyle = String(layout['Style:str'] || 'default').toLowerCase().trim() || 'default';
+            if (layoutStyle === 'sideview_ui' && !sideviewUI) layoutStyle = 'default';
+            if (layoutStyle === 'frontview_ui' && !frontviewUI) layoutStyle = 'default';
+            commandWidth = Number(layout['CommandWidth:num']) || 192;
+            xpCommandLines = Number(layout['XPActorCommandLines:num']) || 4;
+            showFacesListStyle = String(layout['ShowFacesListStyle:eval'] ?? 'true').trim() !== 'false';
+        }
+
+        let maxBattleMembers = 4;
+        if (partySystem) {
+            const general = DatabaseTroopEditor.structParam(partySystem, 'General:struct');
+            maxBattleMembers = Math.max(1, Number(general['MaxBattleMembers:num']) || 4);
+        }
+
+        let repositionActors = false;
+        if (coreEngine) {
+            const ui = DatabaseTroopEditor.structParam(coreEngine, 'UI:struct');
+            repositionActors = String(ui['RepositionActors:eval']).trim() === 'true';
+        }
+
+        let turnOrder = null;
+        if (turnSystem === 'otb') {
+            const otb = DatabaseTroopEditor.structParam(enabled('VisuMZ_2_BattleSystemOTB'), 'TurnOrder:struct');
+            turnOrder = {
+                position: String(otb['DisplayPosition:str'] || 'top').toLowerCase(),
+                offsetX: Number(otb['DisplayOffsetX:num']) || 0,
+                offsetY: Number(otb['DisplayOffsetY:num']) || 0,
+                thin: Number(otb['SpriteThin:num']) || 72,
+                length: Number(otb['SpriteLength:num']) || 72,
+                subjectText: String(otb['UiSubjectText:str'] ?? '★'),
+                currentText: String(otb['UiCurrentText:str'] ?? 'CURRENT TURN'),
+                nextText: String(otb['UiNextText:str'] ?? 'NEXT TURN')
+            };
+        }
+
+        return {
+            sideView: !!system?.optSideView,
+            displayTp: !!system?.optDisplayTp,
+            screenWidth: this.screenWidth,
+            screenHeight: this.screenHeight,
+            boxWidth: this.boxWidth,
+            boxHeight: this.boxHeight,
+            boxX: (this.screenWidth - this.boxWidth) / 2,
+            boxY: (this.screenHeight - this.boxHeight) / 2,
+            hasManifest: Array.isArray(manifest),
+            coreEngine: !!coreEngine,
+            battleCore: !!battleCore,
+            repositionActors,
+            turnSystem,
+            turnOrder,
+            layoutStyle,
+            commandWidth,
+            xpCommandLines,
+            showFacesListStyle,
+            maxBattleMembers,
+            party: this.battleTestParty(system, maxBattleMembers)
+        };
+    }
+
+    /**
+     * The party a battle test would field: the System testBattlers slots that
+     * name a real actor, else the starting party, capped at the battle size.
+     */
+    battleTestParty(system, maxBattleMembers) {
+        const dm = this.databaseManager;
+        const getActor = id => (dm && typeof dm.getActor === 'function') ? dm.getActor(id) : null;
+        const fromTest = (system?.testBattlers || [])
+            .map(slot => ({ actor: getActor(Number(slot?.actorId) || 0), level: Number(slot?.level) || 1 }))
+            .filter(entry => entry.actor);
+        const members = fromTest.length ? fromTest
+            : (system?.partyMembers || [])
+                .map(id => getActor(Number(id) || 0))
+                .filter(Boolean)
+                .map(actor => ({ actor, level: Number(actor.initialLevel) || 1 }));
+        return members.slice(0, maxBattleMembers).map(entry => {
+            const cls = (dm && typeof dm.getClass === 'function') ? dm.getClass(entry.actor.classId) : null;
+            const param = index => {
+                const table = cls?.params?.[index];
+                return Array.isArray(table) ? (Number(table[entry.level]) || Number(table[table.length - 1]) || 0) : 0;
+            };
+            return { actor: entry.actor, level: entry.level, mhp: param(0), mmp: param(1) };
+        });
+    }
+
+    refreshBattleUISetup() {
+        const system = this.databaseManager.getSystem();
+        this.battleUISetup = this.detectBattleUISetup(system, this.readPluginManifest());
+        return this.battleUISetup;
+    }
+
+    /**
+     * Queue the art the overlay draws - sideview battlers, faces, the
+     * windowskin - through the caller's pending counter. Returns how many
+     * loads were started.
+     */
+    loadBattleUIAssets(project, path, done) {
+        const setup = this.refreshBattleUISetup();
+        if (!setup) return 0;
+        let started = 0;
+        const track = (cache, key, dir, reference) => {
+            if (!reference || cache[key]) return;
+            const file = RRAssetFiles.findImage(path.join(project.path, 'img', dir), reference);
+            if (!file) return;
+            const img = new Image();
+            img.onload = done;
+            img.onerror = () => { delete cache[key]; done(); };
+            img.src = RRAssetFiles.toUrl(file.absolutePath);
+            cache[key] = img;
+            started++;
+        };
+        for (const { actor } of setup.party) {
+            if (setup.sideView) track(this.actorBattlerImages, actor.battlerName, 'sv_actors', actor.battlerName);
+            track(this.actorFaceImages, actor.faceName, 'faces', actor.faceName);
+        }
+        if (!this.windowSkin && typeof window !== 'undefined' && window.RRWindowskin) {
+            started++;
+            window.RRWindowskin.load(path.join(project.path, 'img', 'system', 'Window.png'))
+                .then(record => { this.windowSkin = record; })
+                .catch(() => { this.windowSkin = null; })
+                .then(done);
+        }
+        return started;
+    }
+
+    drawBattleUIOverlay(ctx, setup) {
+        ctx.save();
+        if (setup.sideView) this.drawSideviewParty(ctx, setup);
+        if (setup.turnSystem === 'otb') this.drawOtbTurnOrder(ctx, setup);
+        else if (setup.turnSystem !== 'turn' && setup.turnSystem !== 'tpb') this.drawTurnOrderBar(ctx, setup);
+        else this.drawBattleLogArea(ctx, setup);
+        this.drawBattleWindows(ctx, setup);
+        this.drawBattleSetupTag(ctx, setup);
+        ctx.restore();
+    }
+
+    /**
+     * A window drawn with the project's own skin, or a plain stand-in without
+     * one. `frame: false` is Window_BattleStatus with `frameVisible = false`:
+     * the back is drawn, the nine-slice frame is not. `dim: true` is the
+     * background type 1 that BattleCore gives the XP-style actor command.
+     */
+    drawSkinWindow(ctx, rect, options = {}) {
+        const opacity = Number.isFinite(options.opacity) ? options.opacity
+            : (Number(this.databaseManager.getSystem()?.advanced?.windowOpacity) || 192);
+        const skin = this.windowSkin;
+        const dest = { x: rect.x, y: rect.y, w: rect.width, h: rect.height };
+        if (typeof window !== 'undefined' && window.RRWindowskin && (skin || options.dim)) {
+            window.RRWindowskin.drawWindow(ctx, dest, skin, {
+                opacity, background: options.dim ? 1 : 0, frame: options.frame !== false
+            });
+            return;
+        }
+        ctx.fillStyle = `rgba(16, 24, 48, ${(opacity / 255).toFixed(3)})`;
+        ctx.fillRect(rect.x, rect.y, rect.width, rect.height);
+        if (options.frame === false) return;
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(rect.x + 1, rect.y + 1, rect.width - 2, rect.height - 2);
+        ctx.lineWidth = 1;
+    }
+
+    skinColor(index, fallback) {
+        const skin = this.windowSkin;
+        if (skin && typeof window !== 'undefined' && window.RRWindowskin?.textColor) {
+            try { return window.RRWindowskin.textColor(skin, index) || fallback; } catch (error) { /* fall through */ }
+        }
+        return fallback;
+    }
+
+    /** Where Sprite_Actor.setActorHome puts each party slot, in battlefield coordinates. */
+    actorHomePosition(index, setup) {
+        if (setup.battleCore || (setup.coreEngine && setup.repositionActors)) {
+            // BattleCore's default HomePosJS and CoreEngine's RepositionActors
+            // are the same formula, centred on the screen and lifted by the
+            // party size so the last slot clears the status window.
+            const x = Math.round(setup.screenWidth / 2 + 192) - Math.floor((setup.screenWidth - setup.boxWidth) / 2) + index * 32;
+            const y = (setup.screenHeight - 200) - setup.maxBattleMembers * 48
+                - Math.floor((setup.screenHeight - setup.boxHeight) / 2) + index * 48;
+            return { x, y };
+        }
+        return { x: 600 + index * 32, y: 280 + index * 48 };
+    }
+
+    drawSideviewParty(ctx, setup) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
+        setup.party.forEach((entry, index) => {
+            const home = this.actorHomePosition(index, setup);
+            const pos = this.battleToCanvas(home.x, home.y);
+            const img = this.actorBattlerImages[entry.actor.battlerName];
+
+            // The shadow the runtime parents under every actor sprite.
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+            ctx.beginPath();
+            ctx.ellipse(pos.x, pos.y - 2, 30, 9, 0, 0, Math.PI * 2);
+            ctx.fill();
+
+            if (img && img.complete && img.naturalWidth) {
+                // Motion sheet: 9 columns x 6 rows; idle is column 0, row 0.
+                const cw = img.naturalWidth / 9;
+                const ch = img.naturalHeight / 6;
+                ctx.drawImage(img, 0, 0, cw, ch, Math.round(pos.x - cw / 2), Math.round(pos.y - ch), cw, ch);
+            } else {
+                const w = 64, h = 64;
+                ctx.fillStyle = 'rgba(64, 128, 255, 0.28)';
+                ctx.fillRect(pos.x - w / 2, pos.y - h, w, h);
+                ctx.strokeStyle = 'rgba(120, 180, 255, 0.9)';
+                ctx.strokeRect(pos.x - w / 2, pos.y - h, w, h);
+                ctx.fillStyle = '#fff';
+                ctx.font = '11px sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText(entry.actor.name || tt('Actor'), pos.x, pos.y - h / 2 + 4);
+                ctx.textAlign = 'start';
+            }
+        });
+    }
+
+    /** One face-sized turn-order chip; enemies get a red frame, actors a blue one. */
+    drawTurnChip(ctx, x, y, size, entry, isEnemy, subject) {
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
+        ctx.fillRect(x, y, size, size);
+        const face = entry && !isEnemy ? this.actorFaceImages[entry.actor.faceName] : null;
+        if (face && face.complete && face.naturalWidth) {
+            const src = RRFaceSheet.sourceRect(entry.actor.faceIndex, face);
+            if (src) ctx.drawImage(face, src.x, src.y, src.width, src.height, x, y, size, size);
+        } else if (isEnemy) {
+            const img = entry?.battlerName ? this.enemySpriteImages[entry.battlerName] : null;
+            if (img && img.complete && img.naturalWidth) {
+                const scale = Math.max(size / img.naturalWidth, size / img.naturalHeight);
+                const w = img.naturalWidth * scale, h = img.naturalHeight * scale;
+                ctx.save();
+                ctx.beginPath();
+                ctx.rect(x, y, size, size);
+                ctx.clip();
+                ctx.drawImage(img, x + (size - w) / 2, y + (size - h) / 2, w, h);
+                ctx.restore();
+            }
+        }
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = isEnemy ? '#ff5050' : '#5aa0ff';
+        ctx.strokeRect(x + 1, y + 1, size - 2, size - 2);
+        ctx.lineWidth = 1;
+        if (subject) {
+            ctx.fillStyle = '#ffd700';
+            ctx.font = 'bold 14px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(subject, x + size / 2, y + size + 14);
+            ctx.textAlign = 'start';
+        }
+    }
+
+    /** The battlers a turn bar would show, party then visible enemies, interleaved. */
+    turnOrderEntries(setup) {
+        const enemies = this.databaseManager.getEnemies();
+        const troopEntries = (this.currentTroop.members || [])
+            .filter(member => !member.hidden)
+            .map(member => enemies.find(e => e && e.id === member.enemyId))
+            .filter(Boolean)
+            .map(enemy => ({ enemy: true, entry: enemy }));
+        const partyEntries = setup.party.map(entry => ({ enemy: false, entry }));
+        const order = [];
+        const count = Math.max(partyEntries.length, troopEntries.length);
+        for (let i = 0; i < count; i++) {
+            if (partyEntries[i]) order.push(partyEntries[i]);
+            if (troopEntries[i]) order.push(troopEntries[i]);
+        }
+        return order;
+    }
+
+    drawOtbTurnOrder(ctx, setup) {
+        const to = setup.turnOrder;
+        const size = to.length;
+        const margin = 32;
+        const gap = 40;
+        const y = (to.position === 'bottom' ? setup.screenHeight - size - margin - 20 : setup.boxY + margin) + to.offsetY;
+        const left = setup.boxX + margin + to.offsetX;
+        const segmentWidth = (setup.boxWidth - margin * 2 - gap) / 2;
+
+        // The dark band behind both segments.
+        const band = ctx.createLinearGradient(left, 0, left + setup.boxWidth - margin * 2, 0);
+        band.addColorStop(0, 'rgba(0, 0, 0, 0.55)');
+        band.addColorStop(1, 'rgba(0, 0, 0, 0.15)');
+        ctx.fillStyle = band;
+        ctx.fillRect(left, y, segmentWidth, size);
+        ctx.fillRect(left + segmentWidth + gap, y, segmentWidth, size);
+
+        const entries = this.turnOrderEntries(setup);
+        const perSegment = Math.max(1, Math.floor(segmentWidth / (to.thin + 4)));
+        const drawSegment = (x0, label, subjectFirst) => {
+            entries.slice(0, perSegment).forEach((item, i) => {
+                const x = x0 + i * (to.thin + 4);
+                const isSubject = subjectFirst && i === 0;
+                this.drawTurnChip(ctx, x, y, size, item.entry, item.enemy, isSubject ? to.subjectText : '');
+            });
+            ctx.fillStyle = '#fff';
+            ctx.font = 'bold 12px sans-serif';
+            ctx.fillText(label, x0 + 6, y + size + 14);
+        };
+        drawSegment(left, to.currentText, true);
+        drawSegment(left + segmentWidth + gap, to.nextText, false);
+    }
+
+    drawTurnOrderBar(ctx, setup) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
+        const size = 64;
+        const y = setup.boxY + 24;
+        const left = setup.boxX + 32;
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+        ctx.fillRect(left, y, setup.boxWidth - 64, size);
+        const entries = this.turnOrderEntries(setup);
+        const perBar = Math.max(1, Math.floor((setup.boxWidth - 64) / (size + 4)));
+        entries.slice(0, perBar).forEach((item, i) => {
+            this.drawTurnChip(ctx, left + i * (size + 4), y, size, item.entry, item.enemy, '');
+        });
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 12px sans-serif';
+        ctx.fillText(`${tt('Turn Order')} (${setup.turnSystem.toUpperCase()})`, left + 6, y + size + 14);
+    }
+
+    /** Window_BattleLog has no frame; the area its first lines occupy is outlined. */
+    drawBattleLogArea(ctx, setup) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
+        const lines = 2;
+        const rect = { x: setup.boxX, y: setup.boxY, width: setup.boxWidth, height: lines * 36 + 24 };
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
+        ctx.fillRect(rect.x, rect.y, rect.width, rect.height);
+        ctx.setLineDash([6, 4]);
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+        ctx.strokeRect(rect.x + 0.5, rect.y + 0.5, rect.width - 1, rect.height - 1);
+        ctx.setLineDash([]);
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+        ctx.font = '12px sans-serif';
+        ctx.fillText(tt('Battle Log'), rect.x + 12, rect.y + 18);
+    }
+
+    /**
+     * The battle windows' rectangles in canvas pixels, transcribed from
+     * Scene_Battle in runtime/reactor_scenes.js and, when BattleCore is
+     * enabled, from its `statusWindowRect*` / `partyCommandWindowRect*` /
+     * `Window_ActorCommand.resizeWindow*` overrides for the resolved style.
+     * `isRightInputMode()` is true in this runtime. Every constant here is a
+     * runtime one: line height 36, selectable item height 44, padding 12,
+     * `Window_BattleStatus` padding 8 and extraHeight 10 while its frame is
+     * hidden (default / XP / portrait), 0 with it shown (list / border).
+     */
+    battleWindowRects(setup) {
+        const bx = setup.boxX, by = setup.boxY, bw = setup.boxWidth, bh = setup.boxHeight;
+        const W = setup.screenWidth, H = setup.screenHeight;
+        const lines = n => n * 44 + 24;                      // calcWindowHeight(n, true)
+        const cmdW = setup.commandWidth;
+        const style = setup.layoutStyle;
+        const members = Math.max(1, setup.party.length);
+
+        if (style === 'xp' || style === 'portrait') {
+            const statusH = lines(4) + 10;
+            const status = { x: bx, y: by + bh - statusH + 10, width: bw, height: statusH, frame: false, padding: 8, extra: 10 };
+            // Window_ActorCommand.resizeWindowXPStyle for the first actor, dimmed.
+            const colW = Math.round(bw / members);
+            const w = Math.max(Math.min(Math.round(bw / 3), colW), cmdW);
+            const h = lines(setup.xpCommandLines);
+            const minX = Math.floor((bw - W) / 2);
+            const x = Math.min(Math.max(Math.round((colW - w) / 2), minX), bw - minX - w);
+            const command = { x: bx + x, y: status.y - h, width: w, height: h, dim: true };
+            return { status, command, help: null };
+        }
+        if (style === 'border') {
+            const help = { x: bx + Math.round((bw - W) / 2), y: by - (H - bh) / 2, width: W, height: 2 * 36 + 24 };
+            const statusH = lines(4);
+            const status = { x: help.x, y: by + bh - statusH + (H - bh) / 2, width: W, height: statusH, frame: true, padding: 12, extra: 0 };
+            const w = Math.floor(W / 3);
+            const top = help.y + help.height;
+            const command = { x: bx + (W + bw) / 2 - w, y: top, width: w, height: status.y - top };
+            return { status, command, help };
+        }
+        if (style === 'list') {
+            const areaH = lines(Math.max(1, setup.maxBattleMembers));
+            const status = { x: bx, y: by + bh - areaH, width: bw - cmdW, height: areaH, frame: true, padding: 12, extra: 0 };
+            const command = { x: bx + bw - cmdW, y: by + bh - areaH, width: cmdW, height: areaH };
+            return { status, command, help: null };
+        }
+        // BattleCore "default", and the stock engine: the stock one sits 4px higher.
+        const areaH = lines(4);
+        const statusH = areaH + 10;
+        const status = {
+            x: bx, y: by + bh - statusH + 10 - (setup.battleCore ? 0 : 4),
+            width: bw - cmdW, height: statusH, frame: false, padding: 8, extra: 10
+        };
+        const command = { x: bx + bw - cmdW, y: by + bh - areaH, width: cmdW, height: areaH };
+        return { status, command, help: null };
+    }
+
+    /** Status and command windows, laid out by the resolved layout style. */
+    drawBattleWindows(ctx, setup) {
+        const { status, command, help } = this.battleWindowRects(setup);
+        if (help) this.drawSkinWindow(ctx, help);
+        this.drawSkinWindow(ctx, status, { frame: status.frame });
+        if (setup.layoutStyle === 'list') this.drawStatusList(ctx, status, setup);
+        else this.drawStatusColumns(ctx, status, setup);
+        this.drawSkinWindow(ctx, command, { dim: !!command.dim });
+        this.drawActorCommands(ctx, command, setup);
+    }
+
+    /**
+     * Window_Selectable.itemRect for column `index` of `cols`, then the
+     * itemRectWithPadding inset, both in canvas pixels. colSpacing is 8 and
+     * the item padding 8, as in runtime/reactor_windows.js.
+     */
+    statusItemRect(status, index, cols) {
+        const innerW = status.width - status.padding * 2;
+        const innerH = status.height - status.padding * 2;
+        const itemW = Math.floor(innerW / cols);
+        const rect = { x: status.x + status.padding + index * itemW + 4, y: status.y + status.padding, width: itemW - 8, height: innerH };
+        const padded = { x: rect.x + 8, y: rect.y, width: rect.width - 16, height: rect.height };
+        return { rect, padded };
+    }
+
+    /**
+     * A database name as a command window shows it: `\I[79]Magick` is drawn
+     * with an icon and the text, so the escape must not appear as text here.
+     * Bracketed codes, the single-character ones, and `\\` for a backslash.
+     */
+    static stripTextCodes(text) {
+        return String(text ?? '')
+            .replace(/\\[A-Za-z]+\[[^\]]*\]/g, '')
+            .replace(/\\[{}$.|!<>^]/g, '')
+            .replace(/\\\\/g, '\\')
+            .trim();
+    }
+
+    drawActorCommands(ctx, rect, setup) {
+        const system = this.databaseManager.getSystem();
+        const commands = system?.terms?.commands || [];
+        const skillTypes = (system?.skillTypes || []).slice(1).filter(name => name);
+        const items = [commands[2] || 'Attack', ...skillTypes, commands[3] || 'Guard', commands[4] || 'Item']
+            .map(name => DatabaseTroopEditor.stripTextCodes(name));
+        const padding = 12, itemPadding = 8;
+        const rows = Math.floor((rect.height - padding * 2) / 44);
+        ctx.font = '20px sans-serif';
+        ctx.textBaseline = 'middle';
+        items.slice(0, rows).forEach((name, i) => {
+            const y = rect.y + padding + i * 44;
+            if (i === 0) {
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.18)';
+                ctx.fillRect(rect.x + padding, y + 2, rect.width - padding * 2, 40);
+            }
+            ctx.fillStyle = this.skinColor(0, '#ffffff');
+            ctx.fillText(String(name), rect.x + padding + itemPadding, y + 22);
+        });
+        ctx.textBaseline = 'alphabetic';
+    }
+
+    /**
+     * One Sprite_Gauge as placeGauge draws it: a 128x32 bitmap at (x, y), the
+     * label in the 24px font at the top-left, the 12px bar along the bottom
+     * starting after the label, the value right-aligned in the 20px font.
+     */
+    drawGauge(ctx, x, y, label, rate, color1, color2, valueText) {
+        const width = 128, gaugeH = 12;
+        ctx.font = 'bold 24px sans-serif';
+        const gaugeX = Math.ceil(ctx.measureText(String(label)).width) + 6;
+        const gaugeY = y + 32 - gaugeH;
+        const barW = Math.max(0, width - gaugeX);
+        ctx.fillStyle = this.skinColor(19, '#202040');
+        ctx.fillRect(x + gaugeX, gaugeY, barW, gaugeH);
+        const fill = ctx.createLinearGradient(x + gaugeX, 0, x + width, 0);
+        fill.addColorStop(0, color1);
+        fill.addColorStop(1, color2);
+        ctx.fillStyle = fill;
+        ctx.fillRect(x + gaugeX + 1, gaugeY + 1, Math.max(0, (barW - 2) * Math.min(1, Math.max(0, rate))), gaugeH - 2);
+        ctx.fillStyle = this.skinColor(16, '#84aaff');
+        ctx.fillText(String(label), x, y + 3 + 20);
+        if (valueText) {
+            ctx.font = '20px sans-serif';
+            ctx.fillStyle = '#fff';
+            ctx.textAlign = 'right';
+            ctx.fillText(valueText, x + width, y + 3 + 18);
+            ctx.textAlign = 'start';
+        }
+    }
+
+    basicGaugeColors() {
+        return {
+            hp: [this.skinColor(20, '#63ff63'), this.skinColor(21, '#d3ff4b')],
+            mp: [this.skinColor(22, '#3a6cff'), this.skinColor(23, '#78b8ff')],
+            tp: [this.skinColor(28, '#28c87e'), this.skinColor(29, '#a0ff96')]
+        };
+    }
+
+    gaugeLabels() {
+        const basic = this.databaseManager.getSystem()?.terms?.basic || [];
+        return { hp: basic[3] || 'HP', mp: basic[5] || 'MP', tp: basic[7] || 'TP' };
+    }
+
+    drawFace(ctx, actor, x, y, width, height) {
+        const face = this.actorFaceImages[actor.faceName];
+        const src = face && face.complete && face.naturalWidth ? RRFaceSheet.sourceRect(actor.faceIndex, face) : null;
+        if (!src) return;
+        const w = Math.min(144, width), h = Math.min(144, height);
+        if (w <= 0 || h <= 0) return;
+        ctx.drawImage(face, src.x, src.y, w, h, x, y, w, h);
+    }
+
+    drawActorName(ctx, name, x, y) {
+        ctx.font = '26px sans-serif';
+        ctx.fillStyle = this.skinColor(0, '#ffffff');
+        ctx.fillText(String(name || ''), x, y + 22);
+    }
+
+    /**
+     * Window_BattleStatus with one column per party slot (stock engine, and
+     * BattleCore's default / XP / portrait / border). The stock engine draws
+     * the name and the 128px gauges flush left in the padded item rect;
+     * BattleCore's `drawItemStatusXPStyle`, which those four styles share,
+     * centres them on the cell. The face fills the cell down to the name.
+     */
+    drawStatusColumns(ctx, status, setup) {
+        const labels = this.gaugeLabels();
+        const colors = this.basicGaugeColors();
+        const style = setup.layoutStyle;
+        const cols = !setup.battleCore ? 4
+            : (style === 'xp' || style === 'portrait') ? Math.max(1, setup.party.length)
+                : setup.maxBattleMembers;
+        const numGauges = setup.displayTp ? 3 : 2;
+
+        setup.party.forEach((entry, i) => {
+            const { rect, padded } = this.statusItemRect(status, i, cols);
+            const bottom = padded.y + padded.height - status.extra;
+            const gaugesY = bottom - 24 * numGauges;
+            const nameY = gaugesY - 24;
+
+            // drawItemImage: the stock face for default and border, XP only in
+            // sideview (frontview centres the battler sprite there instead).
+            const showFace = !setup.battleCore || style === 'default' || style === 'border'
+                || (style === 'xp' && setup.sideView);
+            if (showFace) {
+                const faceH = nameY + 12 - (rect.y - 1);
+                this.drawFace(ctx, entry.actor, rect.x - 1, rect.y - 1, rect.width + 2, faceH);
+            }
+
+            const x = setup.battleCore ? Math.round(padded.x + (padded.width - 128) / 2) : padded.x;
+            this.drawActorName(ctx, entry.actor.name, x, nameY);
+            this.drawGauge(ctx, x, gaugesY, labels.hp, 1, colors.hp[0], colors.hp[1], entry.mhp ? String(entry.mhp) : '');
+            this.drawGauge(ctx, x, gaugesY + 24, labels.mp, 1, colors.mp[0], colors.mp[1], entry.mmp ? String(entry.mmp) : '');
+            if (setup.displayTp) this.drawGauge(ctx, x, gaugesY + 48, labels.tp, 0, colors.tp[0], colors.tp[1], '0');
+        });
+    }
+
+    /**
+     * BattleCore "list": one 44px row per actor, the face on the left when
+     * ShowFacesListStyle is on, the name 136px before the gauges, the gauges
+     * 136px apart - `drawItemStatusListStyle`, with its right-edge clamp.
+     */
+    drawStatusList(ctx, status, setup) {
+        const labels = this.gaugeLabels();
+        const colors = this.basicGaugeColors();
+        const innerW = status.width - status.padding * 2;
+        const gaugeCount = setup.displayTp ? 4 : 3;
+        const block = gaugeCount * 128 + (gaugeCount - 1) * 8 + 4;
+        setup.party.forEach((entry, i) => {
+            const rowY = status.y + status.padding + i * 44;
+            if (rowY + 44 > status.y + status.height) return;
+            const rect = { x: status.x + status.padding, y: rowY, width: innerW, height: 44 };
+            let nameX = setup.showFacesListStyle ? rect.x + 144 + 8 : rect.x + status.padding + 32;
+            nameX = Math.round(Math.min(rect.x + rect.width - block, nameX));
+            const y = Math.round(rect.y + (rect.height - 24) / 2);
+            if (setup.showFacesListStyle) this.drawFace(ctx, entry.actor, rect.x, rect.y, 144, 44);
+            this.drawActorName(ctx, entry.actor.name, nameX, y);
+            const gx = nameX + 136;
+            this.drawGauge(ctx, gx, y, labels.hp, 1, colors.hp[0], colors.hp[1], entry.mhp ? String(entry.mhp) : '');
+            this.drawGauge(ctx, gx + 136, y, labels.mp, 1, colors.mp[0], colors.mp[1], entry.mmp ? String(entry.mmp) : '');
+            if (setup.displayTp) this.drawGauge(ctx, gx + 272, y, labels.tp, 0, colors.tp[0], colors.tp[1], '0');
+        });
+    }
+
+    /** What the overlay believes about the project, in its top-right corner. */
+    battleSetupLabel(setup) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
+        const systemLabel = ['turn', 'tpb'].includes(setup.turnSystem)
+            ? (setup.turnSystem === 'tpb' ? 'TPB' : tt('Turn-based'))
+            : `VisuStella ${setup.turnSystem.toUpperCase()}`;
+        const view = setup.sideView ? tt('Sideview') : tt('Frontview');
+        const layout = setup.layoutStyle === 'vanilla' ? 'MZ' : `VisuStella ${setup.layoutStyle}`;
+        return `${systemLabel} • ${view} • ${layout} (${setup.screenWidth}×${setup.screenHeight})`;
+    }
+
+    drawBattleSetupTag(ctx, setup) {
+        const text = this.battleSetupLabel(setup);
+        ctx.font = 'bold 12px sans-serif';
+        const w = ctx.measureText(text).width + 16;
+        const h = 20;
+        const x = setup.screenWidth - w - 8;
+        const y = 6;
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+        ctx.fillRect(x, y, w, h);
+        ctx.strokeStyle = ThemeColors.resolve('--color-accent-bright', '#ffd700');
+        ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+        ctx.fillStyle = '#fff';
+        ctx.fillText(text, x + 8, y + 14);
     }
 
     escapeHTML(str) {

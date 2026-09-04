@@ -552,6 +552,14 @@ class BattleTestConfigModal {
             return;
         }
 
+        // Every slot set to (None) leaves the runtime with an empty party -
+        // `Game_Party.setupBattleTestMembers` skips actorId 0 - and Scene_Battle
+        // cannot open on nobody. Refuse here, where the fix is one dropdown away.
+        if (!BattleTestConfigModal.hasBattleParty(this.battlers, this.databaseManager)) {
+            alert(this._t('Please select at least one party member for the battle test.'));
+            return;
+        }
+
         // The test party/troop persist in System.json (as in MZ), but the
         // battleback picked for this run is preview-only — it goes into the
         // Test_ copy and must not overwrite the game's default battlebacks.
@@ -588,7 +596,15 @@ class BattleTestConfigModal {
 
         try {
             for (const [filename, data] of testFiles) {
-                this._writeFileAtomic(fs, path.join(dataDir, 'Test_' + filename), JSON.stringify(data));
+                // MapInfos is owned by the project controller and only handed
+                // to the database manager once a project is fully open; a
+                // section the manager never loaded is `undefined`, and
+                // `JSON.stringify(undefined)` is `undefined`, which
+                // `writeFileSync` rejects. Fall back to the file on disk, and
+                // to an empty list when the project has none.
+                const payload = data !== undefined ? data
+                    : BattleTestConfigModal.readProjectDataFile(fs, path.join(dataDir, filename));
+                this._writeFileAtomic(fs, path.join(dataDir, 'Test_' + filename), JSON.stringify(payload));
             }
         } catch (e) {
             alert(`${this._t('Failed to write test data:')} ${e.message}`);
@@ -604,5 +620,28 @@ class BattleTestConfigModal {
 
         this.close();
         this.playtestManager.battleTest(this.project.path);
+    }
+
+    /** True when at least one slot names an actor that exists in the database. */
+    static hasBattleParty(battlers, databaseManager) {
+        return (battlers || []).some(battler => {
+            const id = Number(battler && battler.actorId) || 0;
+            if (id <= 0) return false;
+            if (!databaseManager || typeof databaseManager.getActor !== 'function') return true;
+            return !!databaseManager.getActor(id);
+        });
+    }
+
+    /** The project's own copy of a database file, or an empty list if it has none. */
+    static readProjectDataFile(fs, filePath) {
+        try {
+            if (fs.existsSync(filePath)) {
+                const parsed = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+                if (parsed !== undefined) return parsed;
+            }
+        } catch (error) {
+            console.warn(`Could not read ${filePath} for the battle test:`, error);
+        }
+        return [];
     }
 }
