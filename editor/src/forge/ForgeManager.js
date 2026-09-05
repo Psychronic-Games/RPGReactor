@@ -41,7 +41,10 @@ const FORGE_ICONS = {
     soundEffectGenerator: (size) => `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="display: block;" aria-hidden="true"><path d="M11 5 L7 9 H3 V15 H7 L11 19 Z" fill="currentColor"/><path d="M15 9c1.6 1.6 1.6 4.4 0 6"/><path d="M18 6c3.2 3.2 3.2 8.8 0 12"/></svg>`,
 
     // Particle burst — core dot with radiating sparks of varied length.
-    effekseerGenerator: (size) => `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="display: block;" aria-hidden="true"><circle cx="12" cy="12" r="2.4" fill="currentColor" stroke="none"/><line x1="12" y1="7.5" x2="12" y2="3.5"/><line x1="12" y1="16.5" x2="12" y2="20.5"/><line x1="7.5" y1="12" x2="3.5" y2="12"/><line x1="16.5" y1="12" x2="20.5" y2="12"/><line x1="8.8" y1="8.8" x2="6.6" y2="6.6"/><line x1="15.2" y1="15.2" x2="17.4" y2="17.4"/><line x1="15.2" y1="8.8" x2="16.8" y2="7.2"/><line x1="8.8" y1="15.2" x2="7.2" y2="16.8"/></svg>`
+    effekseerGenerator: (size) => `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="display: block;" aria-hidden="true"><circle cx="12" cy="12" r="2.4" fill="currentColor" stroke="none"/><line x1="12" y1="7.5" x2="12" y2="3.5"/><line x1="12" y1="16.5" x2="12" y2="20.5"/><line x1="7.5" y1="12" x2="3.5" y2="12"/><line x1="16.5" y1="12" x2="20.5" y2="12"/><line x1="8.8" y1="8.8" x2="6.6" y2="6.6"/><line x1="15.2" y1="15.2" x2="17.4" y2="17.4"/><line x1="15.2" y1="8.8" x2="16.8" y2="7.2"/><line x1="8.8" y1="15.2" x2="7.2" y2="16.8"/></svg>`,
+
+    // Wrench over a document — a tool that comes from the project, not the editor.
+    projectTools: (size) => `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="display: block;" aria-hidden="true"><path d="M13.5 3.5H6.5A1.5 1.5 0 0 0 5 5v14a1.5 1.5 0 0 0 1.5 1.5h6"/><path d="M13.5 3.5 18 8v3"/><path d="M13.5 3.5V8H18"/><path d="M20.2 14.1a2.6 2.6 0 0 1-3.3 3.3l-2.6 2.6a1.1 1.1 0 0 1-1.6-1.6l2.6-2.6a2.6 2.6 0 0 1 3.3-3.3l-1.5 1.5 1.6 1.6z"/></svg>`
 };
 
 const FORGE_TOOLS = [
@@ -76,6 +79,14 @@ const FORGE_TOOLS = [
         icon: FORGE_ICONS.soundEffectGenerator,
         ctor: () => new SoundEffectGenerator(),
         getter: 'soundEffectGenerator'
+    },
+    {
+        id: 'project-tools',
+        nameKey: 'menu.projectTools',
+        descriptionKey: 'forge.projectTools.description',
+        icon: FORGE_ICONS.projectTools,
+        ctor: () => new ProjectTools(),
+        getter: 'projectTools'
     }
     // Future tools register here.
 ];

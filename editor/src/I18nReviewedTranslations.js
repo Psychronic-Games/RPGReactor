@@ -5,6 +5,16 @@
 globalThis.RR_REVIEWED_TRANSLATIONS = {
   "text": {
     "ja": {
+      "Tools run code from this project.": "ツールはこのプロジェクトのコードを実行します。",
+      "A tool runs sandboxed with no file access, and can only read and write database files through the editor. Only run tools you trust.": "ツールはサンドボックス内で実行され、ファイルにアクセスできません。エディターを介してデータベースファイルの読み書きのみが可能です。信頼できるツールのみを実行してください。",
+      "No project tools found.": "プロジェクトツールが見つかりません。",
+      "Place a self-contained .html tool in one of these project folders:": "自己完結型の .html ツールを次のいずれかのプロジェクトフォルダーに配置してください:",
+      "Run this project tool?": "このプロジェクトツールを実行しますか？",
+      "Back to tools": "ツール一覧に戻る",
+      "Could not read the tool file.": "ツールファイルを読み込めませんでした。",
+      "Save changes from this tool?": "このツールの変更を保存しますか？",
+      "Saved. Reload the project to see the change in the editor.": "保存しました。エディターに反映するにはプロジェクトを再読み込みしてください。",
+      "Could not save.": "保存できませんでした。",
       "Show Battle UI": "戦闘UIを表示",
       "Sideview": "サイドビュー",
       "Frontview": "フロントビュー",
@@ -131,6 +141,16 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Rig bound — {bones} bones, {vertices} vertices": "リグをバインドしました — ボーン {bones} 個、頂点 {vertices} 個"
     },
     "zh-Hant": {
+      "Tools run code from this project.": "工具會執行此專案中的程式碼。",
+      "A tool runs sandboxed with no file access, and can only read and write database files through the editor. Only run tools you trust.": "工具在沙箱中執行，無法存取檔案，只能透過編輯器讀寫資料庫檔案。請只執行你信任的工具。",
+      "No project tools found.": "找不到專案工具。",
+      "Place a self-contained .html tool in one of these project folders:": "請將獨立的 .html 工具放在下列任一專案資料夾中:",
+      "Run this project tool?": "要執行這個專案工具嗎？",
+      "Back to tools": "返回工具列表",
+      "Could not read the tool file.": "無法讀取工具檔案。",
+      "Save changes from this tool?": "要儲存這個工具的變更嗎？",
+      "Saved. Reload the project to see the change in the editor.": "已儲存。請重新載入專案以在編輯器中看到變更。",
+      "Could not save.": "無法儲存。",
       "Show Battle UI": "顯示戰鬥介面",
       "Sideview": "側視圖",
       "Frontview": "正面視圖",
@@ -261,6 +281,16 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Rig bound — {bones} bones, {vertices} vertices": "骨架綁定完成 — {bones} 根骨骼，{vertices} 個頂點"
     },
     "zh-Hans": {
+      "Tools run code from this project.": "工具会运行此项目中的代码。",
+      "A tool runs sandboxed with no file access, and can only read and write database files through the editor. Only run tools you trust.": "工具在沙箱中运行，无法访问文件，只能通过编辑器读写数据库文件。请只运行你信任的工具。",
+      "No project tools found.": "未找到项目工具。",
+      "Place a self-contained .html tool in one of these project folders:": "请将独立的 .html 工具放在以下任一项目文件夹中:",
+      "Run this project tool?": "要运行这个项目工具吗？",
+      "Back to tools": "返回工具列表",
+      "Could not read the tool file.": "无法读取工具文件。",
+      "Save changes from this tool?": "要保存此工具的更改吗？",
+      "Saved. Reload the project to see the change in the editor.": "已保存。请重新加载项目以在编辑器中看到更改。",
+      "Could not save.": "无法保存。",
       "Show Battle UI": "显示战斗界面",
       "Sideview": "侧视图",
       "Frontview": "正面视图",
@@ -392,6 +422,16 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Rig bound — {bones} bones, {vertices} vertices": "骨架绑定完成 — {bones} 根骨骼，{vertices} 个顶点"
     },
     "ko": {
+      "Tools run code from this project.": "도구는 이 프로젝트의 코드를 실행합니다.",
+      "A tool runs sandboxed with no file access, and can only read and write database files through the editor. Only run tools you trust.": "도구는 샌드박스에서 실행되어 파일에 접근할 수 없으며, 에디터를 통해서만 데이터베이스 파일을 읽고 쓸 수 있습니다. 신뢰할 수 있는 도구만 실행하세요.",
+      "No project tools found.": "프로젝트 도구를 찾을 수 없습니다.",
+      "Place a self-contained .html tool in one of these project folders:": "독립 실행형 .html 도구를 다음 프로젝트 폴더 중 하나에 넣으세요:",
+      "Run this project tool?": "이 프로젝트 도구를 실행할까요?",
+      "Back to tools": "도구 목록으로 돌아가기",
+      "Could not read the tool file.": "도구 파일을 읽을 수 없습니다.",
+      "Save changes from this tool?": "이 도구의 변경 사항을 저장할까요?",
+      "Saved. Reload the project to see the change in the editor.": "저장했습니다. 에디터에 반영하려면 프로젝트를 다시 불러오세요.",
+      "Could not save.": "저장할 수 없습니다.",
       "Show Battle UI": "전투 UI 표시",
       "Sideview": "사이드뷰",
       "Frontview": "프론트뷰",
@@ -523,6 +563,16 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Rig bound — {bones} bones, {vertices} vertices": "리그 바인딩 완료 — 본 {bones}개, 버텍스 {vertices}개"
     },
     "es": {
+      "Tools run code from this project.": "Las herramientas ejecutan código de este proyecto.",
+      "A tool runs sandboxed with no file access, and can only read and write database files through the editor. Only run tools you trust.": "Una herramienta se ejecuta aislada, sin acceso a archivos, y solo puede leer y escribir archivos de base de datos a través del editor. Ejecuta únicamente herramientas de confianza.",
+      "No project tools found.": "No se encontraron herramientas del proyecto.",
+      "Place a self-contained .html tool in one of these project folders:": "Coloca una herramienta .html autónoma en una de estas carpetas del proyecto:",
+      "Run this project tool?": "¿Ejecutar esta herramienta del proyecto?",
+      "Back to tools": "Volver a las herramientas",
+      "Could not read the tool file.": "No se pudo leer el archivo de la herramienta.",
+      "Save changes from this tool?": "¿Guardar los cambios de esta herramienta?",
+      "Saved. Reload the project to see the change in the editor.": "Guardado. Vuelve a cargar el proyecto para ver el cambio en el editor.",
+      "Could not save.": "No se pudo guardar.",
       "Show Battle UI": "Mostrar interfaz de batalla",
       "Sideview": "Vista lateral",
       "Frontview": "Vista frontal",
@@ -687,6 +737,16 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Rig bound — {bones} bones, {vertices} vertices": "Rig vinculado — {bones} huesos, {vertices} vértices"
     },
     "pt": {
+      "Tools run code from this project.": "As ferramentas executam código deste projeto.",
+      "A tool runs sandboxed with no file access, and can only read and write database files through the editor. Only run tools you trust.": "Uma ferramenta é executada isolada, sem acesso a arquivos, e só pode ler e gravar arquivos de banco de dados através do editor. Execute apenas ferramentas confiáveis.",
+      "No project tools found.": "Nenhuma ferramenta do projeto encontrada.",
+      "Place a self-contained .html tool in one of these project folders:": "Coloque uma ferramenta .html autônoma em uma destas pastas do projeto:",
+      "Run this project tool?": "Executar esta ferramenta do projeto?",
+      "Back to tools": "Voltar às ferramentas",
+      "Could not read the tool file.": "Não foi possível ler o arquivo da ferramenta.",
+      "Save changes from this tool?": "Salvar as alterações desta ferramenta?",
+      "Saved. Reload the project to see the change in the editor.": "Salvo. Recarregue o projeto para ver a alteração no editor.",
+      "Could not save.": "Não foi possível salvar.",
       "Show Battle UI": "Mostrar interface de batalha",
       "Sideview": "Visão lateral",
       "Frontview": "Visão frontal",
@@ -848,6 +908,16 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Rig bound — {bones} bones, {vertices} vertices": "Rig vinculado — {bones} ossos, {vertices} vértices"
     },
     "fr": {
+      "Tools run code from this project.": "Les outils exécutent du code provenant de ce projet.",
+      "A tool runs sandboxed with no file access, and can only read and write database files through the editor. Only run tools you trust.": "Un outil s'exécute en bac à sable, sans accès aux fichiers, et ne peut lire et écrire que des fichiers de base de données via l'éditeur. N'exécutez que des outils de confiance.",
+      "No project tools found.": "Aucun outil de projet trouvé.",
+      "Place a self-contained .html tool in one of these project folders:": "Placez un outil .html autonome dans l'un de ces dossiers du projet :",
+      "Run this project tool?": "Exécuter cet outil du projet ?",
+      "Back to tools": "Retour aux outils",
+      "Could not read the tool file.": "Impossible de lire le fichier de l'outil.",
+      "Save changes from this tool?": "Enregistrer les modifications de cet outil ?",
+      "Saved. Reload the project to see the change in the editor.": "Enregistré. Rechargez le projet pour voir la modification dans l'éditeur.",
+      "Could not save.": "Impossible d'enregistrer.",
       "Show Battle UI": "Afficher l'interface de combat",
       "Sideview": "Vue de côté",
       "Frontview": "Vue de face",
@@ -1007,6 +1077,16 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Rig bound — {bones} bones, {vertices} vertices": "Rig lié — {bones} os, {vertices} sommets"
     },
     "it": {
+      "Tools run code from this project.": "Gli strumenti eseguono codice di questo progetto.",
+      "A tool runs sandboxed with no file access, and can only read and write database files through the editor. Only run tools you trust.": "Uno strumento viene eseguito in sandbox, senza accesso ai file, e può solo leggere e scrivere file di database tramite l'editor. Esegui solo strumenti di cui ti fidi.",
+      "No project tools found.": "Nessuno strumento del progetto trovato.",
+      "Place a self-contained .html tool in one of these project folders:": "Inserisci uno strumento .html autonomo in una di queste cartelle del progetto:",
+      "Run this project tool?": "Eseguire questo strumento del progetto?",
+      "Back to tools": "Torna agli strumenti",
+      "Could not read the tool file.": "Impossibile leggere il file dello strumento.",
+      "Save changes from this tool?": "Salvare le modifiche di questo strumento?",
+      "Saved. Reload the project to see the change in the editor.": "Salvato. Ricarica il progetto per vedere la modifica nell'editor.",
+      "Could not save.": "Impossibile salvare.",
       "Show Battle UI": "Mostra interfaccia di battaglia",
       "Sideview": "Vista laterale",
       "Frontview": "Vista frontale",
@@ -1176,6 +1256,16 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Rig bound — {bones} bones, {vertices} vertices": "Rig vincolato — {bones} ossa, {vertices} vertici"
     },
     "de": {
+      "Tools run code from this project.": "Werkzeuge führen Code aus diesem Projekt aus.",
+      "A tool runs sandboxed with no file access, and can only read and write database files through the editor. Only run tools you trust.": "Ein Werkzeug läuft in einer Sandbox ohne Dateizugriff und kann Datenbankdateien nur über den Editor lesen und schreiben. Führe nur Werkzeuge aus, denen du vertraust.",
+      "No project tools found.": "Keine Projektwerkzeuge gefunden.",
+      "Place a self-contained .html tool in one of these project folders:": "Lege ein eigenständiges .html-Werkzeug in einen dieser Projektordner:",
+      "Run this project tool?": "Dieses Projektwerkzeug ausführen?",
+      "Back to tools": "Zurück zu den Werkzeugen",
+      "Could not read the tool file.": "Die Werkzeugdatei konnte nicht gelesen werden.",
+      "Save changes from this tool?": "Änderungen dieses Werkzeugs speichern?",
+      "Saved. Reload the project to see the change in the editor.": "Gespeichert. Lade das Projekt neu, um die Änderung im Editor zu sehen.",
+      "Could not save.": "Speichern nicht möglich.",
       "Show Battle UI": "Kampf-UI anzeigen",
       "Sideview": "Seitenansicht",
       "Frontview": "Frontansicht",
@@ -1313,6 +1403,16 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Rig bound — {bones} bones, {vertices} vertices": "Rig gebunden — {bones} Bones, {vertices} Vertices"
     },
     "ru": {
+      "Tools run code from this project.": "Инструменты выполняют код из этого проекта.",
+      "A tool runs sandboxed with no file access, and can only read and write database files through the editor. Only run tools you trust.": "Инструмент работает в песочнице без доступа к файлам и может только читать и записывать файлы базы данных через редактор. Запускайте только те инструменты, которым доверяете.",
+      "No project tools found.": "Инструменты проекта не найдены.",
+      "Place a self-contained .html tool in one of these project folders:": "Поместите автономный .html-инструмент в одну из этих папок проекта:",
+      "Run this project tool?": "Запустить этот инструмент проекта?",
+      "Back to tools": "Назад к инструментам",
+      "Could not read the tool file.": "Не удалось прочитать файл инструмента.",
+      "Save changes from this tool?": "Сохранить изменения из этого инструмента?",
+      "Saved. Reload the project to see the change in the editor.": "Сохранено. Перезагрузите проект, чтобы увидеть изменения в редакторе.",
+      "Could not save.": "Не удалось сохранить.",
       "Show Battle UI": "Показать интерфейс боя",
       "Sideview": "Вид сбоку",
       "Frontview": "Вид спереди",
@@ -1457,6 +1557,16 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Rig bound — {bones} bones, {vertices} vertices": "Скелет привязан — {bones} костей, {vertices} вершин"
     },
     "pl": {
+      "Tools run code from this project.": "Narzędzia uruchamiają kod z tego projektu.",
+      "A tool runs sandboxed with no file access, and can only read and write database files through the editor. Only run tools you trust.": "Narzędzie działa w piaskownicy bez dostępu do plików i może jedynie odczytywać i zapisywać pliki bazy danych poprzez edytor. Uruchamiaj tylko zaufane narzędzia.",
+      "No project tools found.": "Nie znaleziono narzędzi projektu.",
+      "Place a self-contained .html tool in one of these project folders:": "Umieść samodzielne narzędzie .html w jednym z tych folderów projektu:",
+      "Run this project tool?": "Uruchomić to narzędzie projektu?",
+      "Back to tools": "Powrót do narzędzi",
+      "Could not read the tool file.": "Nie można odczytać pliku narzędzia.",
+      "Save changes from this tool?": "Zapisać zmiany z tego narzędzia?",
+      "Saved. Reload the project to see the change in the editor.": "Zapisano. Wczytaj projekt ponownie, aby zobaczyć zmianę w edytorze.",
+      "Could not save.": "Nie można zapisać.",
       "Show Battle UI": "Pokaż interfejs walki",
       "Sideview": "Widok z boku",
       "Frontview": "Widok z przodu",
@@ -1600,6 +1710,16 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Rig bound — {bones} bones, {vertices} vertices": "Szkielet powiązany — {bones} kości, {vertices} wierzchołków"
     },
     "el": {
+      "Tools run code from this project.": "Τα εργαλεία εκτελούν κώδικα από αυτό το έργο.",
+      "A tool runs sandboxed with no file access, and can only read and write database files through the editor. Only run tools you trust.": "Ένα εργαλείο εκτελείται σε sandbox χωρίς πρόσβαση σε αρχεία και μπορεί μόνο να διαβάζει και να γράφει αρχεία βάσης δεδομένων μέσω του επεξεργαστή. Εκτελείτε μόνο εργαλεία που εμπιστεύεστε.",
+      "No project tools found.": "Δεν βρέθηκαν εργαλεία έργου.",
+      "Place a self-contained .html tool in one of these project folders:": "Τοποθετήστε ένα αυτόνομο εργαλείο .html σε έναν από αυτούς τους φακέλους του έργου:",
+      "Run this project tool?": "Εκτέλεση αυτού του εργαλείου έργου;",
+      "Back to tools": "Επιστροφή στα εργαλεία",
+      "Could not read the tool file.": "Δεν ήταν δυνατή η ανάγνωση του αρχείου εργαλείου.",
+      "Save changes from this tool?": "Αποθήκευση αλλαγών από αυτό το εργαλείο;",
+      "Saved. Reload the project to see the change in the editor.": "Αποθηκεύτηκε. Φορτώστε ξανά το έργο για να δείτε την αλλαγή στον επεξεργαστή.",
+      "Could not save.": "Δεν ήταν δυνατή η αποθήκευση.",
       "Show Battle UI": "Εμφάνιση διεπαφής μάχης",
       "Sideview": "Πλάγια όψη",
       "Frontview": "Μπροστινή όψη",
@@ -1743,6 +1863,16 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Rig bound — {bones} bones, {vertices} vertices": "Ο σκελετός συνδέθηκε — {bones} οστά, {vertices} κορυφές"
     },
     "ar": {
+      "Tools run code from this project.": "تُشغّل الأدوات تعليمات برمجية من هذا المشروع.",
+      "A tool runs sandboxed with no file access, and can only read and write database files through the editor. Only run tools you trust.": "تعمل الأداة في بيئة معزولة بلا وصول إلى الملفات، ولا يمكنها سوى قراءة ملفات قاعدة البيانات وكتابتها عبر المحرر. شغّل الأدوات الموثوقة فقط.",
+      "No project tools found.": "لم يتم العثور على أدوات للمشروع.",
+      "Place a self-contained .html tool in one of these project folders:": "ضع أداة .html مستقلة في أحد مجلدات المشروع التالية:",
+      "Run this project tool?": "هل تريد تشغيل أداة المشروع هذه؟",
+      "Back to tools": "العودة إلى الأدوات",
+      "Could not read the tool file.": "تعذّرت قراءة ملف الأداة.",
+      "Save changes from this tool?": "هل تريد حفظ تغييرات هذه الأداة؟",
+      "Saved. Reload the project to see the change in the editor.": "تم الحفظ. أعد تحميل المشروع لرؤية التغيير في المحرر.",
+      "Could not save.": "تعذّر الحفظ.",
       "Show Battle UI": "إظهار واجهة المعركة",
       "Sideview": "عرض جانبي",
       "Frontview": "عرض أمامي",
@@ -1966,6 +2096,16 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Rig bound — {bones} bones, {vertices} vertices": "تم ربط الهيكل العظمي — {bones} عظمة، {vertices} رأسًا"
     },
     "tr": {
+      "Tools run code from this project.": "Araçlar bu projedeki kodu çalıştırır.",
+      "A tool runs sandboxed with no file access, and can only read and write database files through the editor. Only run tools you trust.": "Bir araç, dosya erişimi olmadan yalıtılmış ortamda çalışır ve veritabanı dosyalarını yalnızca düzenleyici aracılığıyla okuyup yazabilir. Yalnızca güvendiğiniz araçları çalıştırın.",
+      "No project tools found.": "Proje aracı bulunamadı.",
+      "Place a self-contained .html tool in one of these project folders:": "Bağımsız bir .html aracını şu proje klasörlerinden birine koyun:",
+      "Run this project tool?": "Bu proje aracı çalıştırılsın mı?",
+      "Back to tools": "Araçlara dön",
+      "Could not read the tool file.": "Araç dosyası okunamadı.",
+      "Save changes from this tool?": "Bu aracın değişiklikleri kaydedilsin mi?",
+      "Saved. Reload the project to see the change in the editor.": "Kaydedildi. Değişikliği düzenleyicide görmek için projeyi yeniden yükleyin.",
+      "Could not save.": "Kaydedilemedi.",
       "Show Battle UI": "Savaş arayüzünü göster",
       "Sideview": "Yan görünüm",
       "Frontview": "Ön görünüm",
@@ -2205,6 +2345,16 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Rig bound — {bones} bones, {vertices} vertices": "İskelet bağlandı — {bones} kemik, {vertices} köşe"
     },
     "id": {
+      "Tools run code from this project.": "Alat menjalankan kode dari proyek ini.",
+      "A tool runs sandboxed with no file access, and can only read and write database files through the editor. Only run tools you trust.": "Alat berjalan dalam sandbox tanpa akses berkas, dan hanya dapat membaca serta menulis berkas basis data melalui editor. Jalankan hanya alat yang Anda percayai.",
+      "No project tools found.": "Tidak ada alat proyek yang ditemukan.",
+      "Place a self-contained .html tool in one of these project folders:": "Tempatkan alat .html mandiri di salah satu folder proyek berikut:",
+      "Run this project tool?": "Jalankan alat proyek ini?",
+      "Back to tools": "Kembali ke alat",
+      "Could not read the tool file.": "Tidak dapat membaca berkas alat.",
+      "Save changes from this tool?": "Simpan perubahan dari alat ini?",
+      "Saved. Reload the project to see the change in the editor.": "Tersimpan. Muat ulang proyek untuk melihat perubahan di editor.",
+      "Could not save.": "Tidak dapat menyimpan.",
       "Show Battle UI": "Tampilkan UI pertempuran",
       "Sideview": "Tampilan samping",
       "Frontview": "Tampilan depan",
@@ -2374,6 +2524,16 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Rig bound — {bones} bones, {vertices} vertices": "Rig terikat — {bones} tulang, {vertices} verteks"
     },
     "vi": {
+      "Tools run code from this project.": "Công cụ chạy mã từ dự án này.",
+      "A tool runs sandboxed with no file access, and can only read and write database files through the editor. Only run tools you trust.": "Công cụ chạy trong môi trường cách ly, không truy cập tệp, và chỉ có thể đọc và ghi tệp cơ sở dữ liệu thông qua trình chỉnh sửa. Chỉ chạy những công cụ bạn tin tưởng.",
+      "No project tools found.": "Không tìm thấy công cụ dự án nào.",
+      "Place a self-contained .html tool in one of these project folders:": "Đặt một công cụ .html độc lập vào một trong các thư mục dự án sau:",
+      "Run this project tool?": "Chạy công cụ dự án này?",
+      "Back to tools": "Quay lại danh sách công cụ",
+      "Could not read the tool file.": "Không thể đọc tệp công cụ.",
+      "Save changes from this tool?": "Lưu thay đổi từ công cụ này?",
+      "Saved. Reload the project to see the change in the editor.": "Đã lưu. Tải lại dự án để xem thay đổi trong trình chỉnh sửa.",
+      "Could not save.": "Không thể lưu.",
       "Show Battle UI": "Hiện giao diện chiến đấu",
       "Sideview": "Góc nhìn bên",
       "Frontview": "Góc nhìn trước",
@@ -2567,6 +2727,16 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "Rig bound — {bones} bones, {vertices} vertices": "Đã liên kết rig — {bones} xương, {vertices} đỉnh"
     },
     "th": {
+      "Tools run code from this project.": "เครื่องมือจะรันโค้ดจากโปรเจกต์นี้",
+      "A tool runs sandboxed with no file access, and can only read and write database files through the editor. Only run tools you trust.": "เครื่องมือทำงานในแซนด์บ็อกซ์โดยไม่มีสิทธิ์เข้าถึงไฟล์ และอ่านหรือเขียนไฟล์ฐานข้อมูลได้ผ่านโปรแกรมแก้ไขเท่านั้น เรียกใช้เฉพาะเครื่องมือที่คุณเชื่อถือ",
+      "No project tools found.": "ไม่พบเครื่องมือของโปรเจกต์",
+      "Place a self-contained .html tool in one of these project folders:": "วางเครื่องมือ .html แบบสมบูรณ์ในตัวไว้ในโฟลเดอร์โปรเจกต์ใดโฟลเดอร์หนึ่งต่อไปนี้:",
+      "Run this project tool?": "เรียกใช้เครื่องมือของโปรเจกต์นี้หรือไม่",
+      "Back to tools": "กลับไปที่เครื่องมือ",
+      "Could not read the tool file.": "ไม่สามารถอ่านไฟล์เครื่องมือได้",
+      "Save changes from this tool?": "บันทึกการเปลี่ยนแปลงจากเครื่องมือนี้หรือไม่",
+      "Saved. Reload the project to see the change in the editor.": "บันทึกแล้ว โหลดโปรเจกต์ใหม่เพื่อดูการเปลี่ยนแปลงในโปรแกรมแก้ไข",
+      "Could not save.": "ไม่สามารถบันทึกได้",
       "Show Battle UI": "แสดง UI การต่อสู้",
       "Sideview": "มุมมองด้านข้าง",
       "Frontview": "มุมมองด้านหน้า",
@@ -2779,6 +2949,8 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
   },
   "keyed": {
     "ja": {
+      "menu.projectTools": "プロジェクトツール",
+      "forge.projectTools.description": "プロジェクトに同梱されたHTMLツールをサンドボックスで実行します。",
       "options.databaseListLabels": "データベース一覧の表示名",
       "options.databaseListLabelsEditorFirst": "エディター名を優先",
       "options.databaseListLabelsGameFirst": "ゲーム内名を優先",
@@ -2805,6 +2977,8 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "mapProps.parallaxPreviewHint": "クリックして別の遠景画像を選択"
     },
     "zh-Hant": {
+      "menu.projectTools": "專案工具",
+      "forge.projectTools.description": "以沙箱方式執行專案隨附的 HTML 工具。",
       "options.databaseListLabels": "資料庫清單顯示名稱",
       "options.databaseListLabelsEditorFirst": "編輯器名稱優先",
       "options.databaseListLabelsGameFirst": "遊戲名稱優先",
@@ -2835,6 +3009,8 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "mapProps.parallaxPreviewHint": "按一下以選擇其他遠景圖像"
     },
     "zh-Hans": {
+      "menu.projectTools": "项目工具",
+      "forge.projectTools.description": "以沙箱方式运行项目自带的 HTML 工具。",
       "options.databaseListLabels": "数据库列表显示名称",
       "options.databaseListLabelsEditorFirst": "编辑器名称优先",
       "options.databaseListLabelsGameFirst": "游戏名称优先",
@@ -2865,6 +3041,8 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "mapProps.parallaxPreviewHint": "单击以选择其他远景图像"
     },
     "ko": {
+      "menu.projectTools": "프로젝트 도구",
+      "forge.projectTools.description": "프로젝트에 포함된 HTML 도구를 샌드박스에서 실행합니다.",
       "options.databaseListLabels": "데이터베이스 목록 표시 이름",
       "options.databaseListLabelsEditorFirst": "에디터 이름 우선",
       "options.databaseListLabelsGameFirst": "게임 이름 우선",
@@ -2890,6 +3068,8 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "mapProps.parallaxPreviewHint": "클릭하여 다른 원경 이미지 선택"
     },
     "es": {
+      "menu.projectTools": "Herramientas del proyecto",
+      "forge.projectTools.description": "Ejecuta en un entorno aislado las herramientas HTML incluidas en tu proyecto.",
       "options.databaseListLabels": "Etiquetas de las listas de la base de datos",
       "options.databaseListLabelsEditorFirst": "Nombre del editor primero",
       "options.databaseListLabelsGameFirst": "Nombre del juego primero",
@@ -2915,6 +3095,8 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "mapProps.parallaxPreviewHint": "Haz clic para elegir otra imagen de paralaje"
     },
     "pt": {
+      "menu.projectTools": "Ferramentas do projeto",
+      "forge.projectTools.description": "Execute em ambiente isolado as ferramentas HTML incluídas no seu projeto.",
       "options.databaseListLabels": "Etiquetas das listas do banco de dados",
       "options.databaseListLabelsEditorFirst": "Nome do editor primeiro",
       "options.databaseListLabelsGameFirst": "Nome do jogo primeiro",
@@ -2940,6 +3122,8 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "mapProps.parallaxPreviewHint": "Clique para escolher outra imagem de paralaxe"
     },
     "fr": {
+      "menu.projectTools": "Outils du projet",
+      "forge.projectTools.description": "Exécutez en bac à sable les outils HTML fournis avec votre projet.",
       "options.databaseListLabels": "Libellés des listes de la base de données",
       "options.databaseListLabelsEditorFirst": "Nom de l’éditeur en premier",
       "options.databaseListLabelsGameFirst": "Nom du jeu en premier",
@@ -2965,6 +3149,8 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "mapProps.parallaxPreviewHint": "Cliquez pour choisir une autre image de parallaxe"
     },
     "it": {
+      "menu.projectTools": "Strumenti del progetto",
+      "forge.projectTools.description": "Esegui in modalità sandbox gli strumenti HTML inclusi nel progetto.",
       "options.databaseListLabels": "Etichette degli elenchi del database",
       "options.databaseListLabelsEditorFirst": "Prima il nome dell’editor",
       "options.databaseListLabelsGameFirst": "Prima il nome del gioco",
@@ -2992,6 +3178,8 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "mapProps.parallaxPreviewHint": "Fai clic per scegliere un’altra immagine di parallasse"
     },
     "de": {
+      "menu.projectTools": "Projektwerkzeuge",
+      "forge.projectTools.description": "HTML-Werkzeuge aus dem Projekt in einer Sandbox ausführen.",
       "options.databaseListLabels": "Beschriftungen der Datenbanklisten",
       "options.databaseListLabelsEditorFirst": "Editorname zuerst",
       "options.databaseListLabelsGameFirst": "Spielname zuerst",
@@ -3019,6 +3207,8 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "mapProps.parallaxPreviewHint": "Klicken, um ein anderes Parallaxenbild auszuwählen"
     },
     "ru": {
+      "menu.projectTools": "Инструменты проекта",
+      "forge.projectTools.description": "Запуск HTML-инструментов из проекта в песочнице.",
       "options.databaseListLabels": "Названия в списках базы данных",
       "options.databaseListLabelsEditorFirst": "Сначала имя в редакторе",
       "options.databaseListLabelsGameFirst": "Сначала имя в игре",
@@ -3044,6 +3234,8 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "mapProps.parallaxPreviewHint": "Нажмите, чтобы выбрать другой параллакс"
     },
     "pl": {
+      "menu.projectTools": "Narzędzia projektu",
+      "forge.projectTools.description": "Uruchamiaj w piaskownicy narzędzia HTML dołączone do projektu.",
       "options.databaseListLabels": "Etykiety list bazy danych",
       "options.databaseListLabelsEditorFirst": "Najpierw nazwa w edytorze",
       "options.databaseListLabelsGameFirst": "Najpierw nazwa w grze",
@@ -3069,6 +3261,8 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "mapProps.parallaxPreviewHint": "Kliknij, aby wybrać inną paralaksę"
     },
     "el": {
+      "menu.projectTools": "Εργαλεία έργου",
+      "forge.projectTools.description": "Εκτέλεση σε sandbox των εργαλείων HTML που συνοδεύουν το έργο σας.",
       "options.databaseListLabels": "Ετικέτες λιστών βάσης δεδομένων",
       "options.databaseListLabelsEditorFirst": "Πρώτα το όνομα επεξεργαστή",
       "options.databaseListLabelsGameFirst": "Πρώτα το όνομα παιχνιδιού",
@@ -3100,6 +3294,8 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "mapProps.parallaxPreviewHint": "Κάντε κλικ για να επιλέξετε διαφορετική εικόνα παράλλαξης"
     },
     "ar": {
+      "menu.projectTools": "أدوات المشروع",
+      "forge.projectTools.description": "شغّل أدوات HTML المرفقة مع مشروعك في بيئة معزولة.",
       "common.none": "(لا شيء)",
       "eventCtx.airship": "منطاد",
       "eventFind.searchBy": "البحث بالاسم أو المعرّف:",
@@ -3142,6 +3338,8 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "mapProps.parallaxPreviewHint": "انقر لاختيار صورة خلفية بانورامية أخرى"
     },
     "tr": {
+      "menu.projectTools": "Proje Araçları",
+      "forge.projectTools.description": "Projenizle gelen HTML araçlarını yalıtılmış ortamda çalıştırın.",
       "eventCtx.airship": "Hava gemisi",
       "mapProps.troop": "Düşman grubu",
       "menu.troops": "Düşman grupları",
@@ -3178,6 +3376,8 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "mapProps.parallaxPreviewHint": "Farklı bir paralaks seçmek için tıklayın"
     },
     "id": {
+      "menu.projectTools": "Alat Proyek",
+      "forge.projectTools.description": "Jalankan alat HTML bawaan proyek Anda dalam sandbox.",
       "toolbar.title.heightBrush": "Kuas Ketinggian (lukis elevasi untuk peta 3D)",
       "toolbar.height": "Ketinggian:",
       "toolbar.height.set": "Atur ke",
@@ -3203,6 +3403,8 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "mapProps.parallaxPreviewHint": "Klik untuk memilih paralaks lain"
     },
     "vi": {
+      "menu.projectTools": "Công cụ dự án",
+      "forge.projectTools.description": "Chạy các công cụ HTML đi kèm dự án của bạn trong môi trường cách ly.",
       "toolbar.title.heightBrush": "Cọ độ cao (vẽ cao độ cho bản đồ 3D)",
       "toolbar.height": "Độ cao:",
       "toolbar.height.set": "Đặt thành",
@@ -3231,6 +3433,8 @@ globalThis.RR_REVIEWED_TRANSLATIONS = {
       "mapProps.parallaxPreviewHint": "Nhấp để chọn parallax khác"
     },
     "th": {
+      "menu.projectTools": "เครื่องมือของโปรเจกต์",
+      "forge.projectTools.description": "เรียกใช้เครื่องมือ HTML ที่มากับโปรเจกต์ของคุณในแซนด์บ็อกซ์",
       "toolbar.title.heightBrush": "แปรงปรับความสูง (ระบายระดับความสูงสำหรับแผนที่ 3D)",
       "toolbar.height": "ความสูง:",
       "toolbar.height.set": "ตั้งเป็น",

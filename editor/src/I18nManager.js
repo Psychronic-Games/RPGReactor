@@ -12322,6 +12322,12 @@ for (const [catalog, tables] of [
     }
 }
 
+// Forge > Project Tools: hosts project-supplied HTML tools in a sandbox.
+Object.assign(RR_I18N_STRINGS.en, {
+    'menu.projectTools': "Project Tools",
+    'forge.projectTools.description': "Run HTML tools that ship with your project, sandboxed."
+});
+
 // Map Properties: the audio picker flow and the 3D room (hand-written).
 Object.assign(RR_I18N_STRINGS.en, {
     'mapProps.choose': 'Choose…',
