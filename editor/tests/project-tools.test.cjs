@@ -1,0 +1,156 @@
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+const test = require('node:test');
+
+const editorRoot = path.resolve(__dirname, '..');
+const toolSource = path.join(editorRoot, 'src', 'forge', 'ProjectTools', 'ProjectTools.js');
+const ProjectTools = require(toolSource);
+
+/**
+ * Builds a throwaway project plus the small set of globals ProjectTools touches,
+ * and returns a harness that drives its postMessage bridge directly.
+ */
+function makeHarness() {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'rr-project-tools-'));
+    fs.mkdirSync(path.join(root, 'data'), { recursive: true });
+    fs.mkdirSync(path.join(root, 'utilitis'), { recursive: true });
+    fs.mkdirSync(path.join(root, 'img', 'sv_enemies'), { recursive: true });
+    fs.writeFileSync(path.join(root, 'data', 'Enemies.json'), JSON.stringify([null, { id: 1, name: 'Bat', note: '' }]), 'utf8');
+    fs.writeFileSync(path.join(root, 'data', 'States.json'), JSON.stringify([null, { id: 1, name: 'KO' }]), 'utf8');
+    fs.writeFileSync(path.join(root, 'utilitis', 'HitboxEditor.html'), '<p>tool</p>', 'utf8');
+    fs.writeFileSync(path.join(root, 'utilitis', 'notes.txt'), 'not a tool', 'utf8');
+    fs.writeFileSync(path.join(root, 'secret.txt'), 'must never leave the project', 'utf8');
+    // Smallest valid PNG.
+    fs.writeFileSync(path.join(root, 'img', 'sv_enemies', 'Bat.png'), Buffer.from(
+        '89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000a49444154789c636000000200010005fe02fea7c1b7ed0000000049454e44ae426082',
+        'hex'
+    ));
+
+    const posted = [];
+    const frameWindow = { postMessage: (m) => posted.push(m) };
+    const state = { confirmAnswer: true };
+
+    const previousWindow = global.window;
+    const previousAlert = global.alert;
+    global.window = {
+        confirm: () => state.confirmAnswer,
+        alert: () => {},
+        addEventListener() {},
+        removeEventListener() {},
+        I18n: null
+    };
+    global.alert = () => {};
+    if (typeof globalThis.rrEscapeHtml !== 'function') {
+        globalThis.rrEscapeHtml = require(path.join(editorRoot, 'src', 'utils', 'HtmlEscape.js'));
+    }
+
+    const tool = new ProjectTools();
+    tool.projectController = { getCurrentProject: () => ({ path: root, name: 'Temp' }) };
+    tool._syncProjectPath();
+    tool.frame = { contentWindow: frameWindow };
+
+    return {
+        root, tool, posted, state,
+        send: (msg, source) => tool._onToolMessage({ source: source || frameWindow, data: msg }),
+        last: () => posted[posted.length - 1],
+        cleanup() {
+            global.window = previousWindow;
+            global.alert = previousAlert;
+            fs.rmSync(root, { recursive: true, force: true });
+        }
+    };
+}
+
+test('project tool discovery finds .html files and ignores everything else', () => {
+    const h = makeHarness();
+    try {
+        const found = h.tool._discoverTools();
+        assert.equal(found.length, 1);
+        assert.equal(found[0].name, 'HitboxEditor');
+        assert.equal(found[0].relPath, 'utilitis/HitboxEditor.html');
+    } finally { h.cleanup(); }
+});
+
+test('the bridge answers only its own frame, and only known message types', () => {
+    const h = makeHarness();
+    try {
+        const before = h.posted.length;
+        h.send({ type: 'reactor:ready' }, { postMessage() {} });
+        h.send('a string');
+        h.send(null);
+        h.send({ type: 'reactor:something-else' });
+        assert.equal(h.posted.length, before);
+
+        h.send({ type: 'reactor:ready' });
+        const init = h.last();
+        assert.equal(init.type, 'reactor:init');
+        assert.equal(init.data['Enemies.json'][1].name, 'Bat');
+        assert.equal(init.data['States.json'][1].name, 'KO');
+    } finally { h.cleanup(); }
+});
+
+test('images are served from img/ only, and never from outside it', () => {
+    const h = makeHarness();
+    try {
+        h.send({ type: 'reactor:image', path: 'sv_enemies/Bat' });
+        assert.equal(h.last().ok, true);
+        assert.ok(h.last().dataUrl.startsWith('data:image/png;base64,'));
+
+        for (const bad of [
+            '../secret.txt',
+            '../../../../../../Windows/win.ini',
+            'sv_enemies/Bat\u0000.png',
+            ''
+        ]) {
+            h.send({ type: 'reactor:image', path: bad });
+            assert.equal(h.last().ok, false, `expected refusal for ${JSON.stringify(bad)}`);
+        }
+
+        fs.writeFileSync(path.join(h.root, 'img', 'evil.js'), 'nope', 'utf8');
+        h.send({ type: 'reactor:image', path: 'evil.js' });
+        assert.equal(h.last().ok, false, 'a non-image inside img/ must be refused');
+    } finally { h.cleanup(); }
+});
+
+test('saves are whitelisted, confirmed, and written as pretty JSON', () => {
+    const h = makeHarness();
+    const target = path.join(h.root, 'data', 'Enemies.json');
+    try {
+        h.send({ type: 'reactor:save', file: '../../evil.json', data: [1] });
+        assert.equal(h.last().ok, false);
+        assert.equal(h.last().error, 'File not allowed');
+
+        h.send({ type: 'reactor:save', file: 'Enemies.json' });
+        assert.equal(h.last().ok, false);
+
+        h.state.confirmAnswer = false;
+        const untouched = fs.readFileSync(target, 'utf8');
+        h.send({ type: 'reactor:save', file: 'Enemies.json', data: [null, { id: 1, name: 'CHANGED' }] });
+        assert.equal(h.last().ok, false);
+        assert.equal(fs.readFileSync(target, 'utf8'), untouched, 'a declined confirmation must not write');
+
+        h.state.confirmAnswer = true;
+        h.send({ type: 'reactor:save', file: 'Enemies.json', data: [null, { id: 1, name: 'CHANGED' }] });
+        assert.equal(h.last().ok, true);
+        const written = fs.readFileSync(target, 'utf8');
+        assert.ok(written.includes('\n  '), 'expected the two-space indentation DatabaseManager writes');
+        assert.equal(JSON.parse(written)[1].name, 'CHANGED');
+        assert.equal(fs.existsSync(`${target}.tmp`), false, 'the temp file must not survive');
+    } finally { h.cleanup(); }
+});
+
+test('the hosting frame stays sandboxed without allow-same-origin', () => {
+    // This is the whole security model. A frame that can reach the parent document
+    // can use the editor's own require(), so the sandbox value must stay exactly
+    // "allow-scripts". Measured under nwjs-sdk-v0.115.0; see the file header.
+    const source = fs.readFileSync(toolSource, 'utf8');
+    const values = [...source.matchAll(/setAttribute\(\s*['"]sandbox['"]\s*,\s*['"]([^'"]*)['"]\s*\)/g)].map(m => m[1]);
+    assert.ok(values.length >= 1, 'ProjectTools must set a sandbox attribute on its frame');
+    for (const value of values) {
+        assert.equal(value.trim(), 'allow-scripts');
+    }
+    assert.ok(!/sandbox\s*\.\s*add|sandbox\s*\+=/.test(source), 'the sandbox token list must never be widened');
+    assert.ok(source.includes('srcdoc'), 'the tool must be loaded through srcdoc, not a file:// src');
+});
