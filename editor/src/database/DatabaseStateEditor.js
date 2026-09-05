@@ -44,6 +44,13 @@ class DatabaseStateEditor {
                             <input type="text" class="database-field-value" value="${this.escapeHTML(state.name || '')}" data-field="name" data-state-id="${state.id}">
                         </span>
                     </div>
+                    <div class="db-row-cols db-row-grow">
+                        <span class="db-col">
+                            <label>${tt('Description')}</label>
+                            <textarea class="database-field-value" rows="2" data-field="description" data-state-id="${state.id}" data-rr-textcodes="help">${this.escapeHTML(state.description || '')}</textarea>
+                            <div data-rr-textcodes-panel="help" style="margin-top: 4px;"></div>
+                        </span>
+                    </div>
                     <div class="db-row-cols">
                         <span class="db-col">
                             <label>${tt('Priority')}</label>

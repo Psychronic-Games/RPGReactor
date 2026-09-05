@@ -1646,7 +1646,7 @@
                 const actor = this.resolveActor(node, scene);
                 const states = actor && actor.states ? actor.states() : [];
                 for (const state of states) add({ key: "state:" + state.id, kind: "state", id: state.id, value: state.id,
-                    actorId: actor.actorId ? actor.actorId() : 0, name: state.name, description: state.message3 || state.message1 || "",
+                    actorId: actor.actorId ? actor.actorId() : 0, name: state.name, description: state.description || state.message3 || state.message1 || "",
                     iconIndex: state.iconIndex || 0, data: state, defaultText: "\\I[" + (state.iconIndex || 0) + "]{name}" });
                 break;
             }
@@ -1845,6 +1845,16 @@
         P.initialize = function(node) {
             this._uiNode = node;
             Sprite_Gauge.prototype.initialize.call(this);
+            // PIXI 8's Container constructor writes an own `label` string, which
+            // shadows Sprite_Gauge.prototype.label() and makes redraw() throw
+            // "this.label is not a function" for any gauge that draws its label
+            // - taking the whole scene down with it. js/libs/pixi_compat.js
+            // deletes such shadows for the global MZ classes it wraps, but this
+            // class is created here at runtime and never passes through that
+            // wrapper, so it has to clear its own.
+            for (const key of Object.keys(this)) {
+                if (typeof P[key] === "function") delete this[key];
+            }
         };
         P.isVariable = function() { return this._uiNode.gauge === "variable"; };
         P.isExp = function() { return this._uiNode.gauge === "exp"; };

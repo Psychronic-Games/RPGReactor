@@ -114,6 +114,11 @@ test('Status is a read-only menu-actor baseline with complete actor data and pag
     ]);
     assert.deepStrictEqual(status.nodes.filter(node => node.type === 'button').map(node => node.action.type), ['previousMenuActor', 'nextMenuActor', 'close']);
     assert.strictEqual(status.cancel.type, 'close');
+    const states = status.nodes.find(node => node.type === 'list' && node.dataSource === 'actorStates');
+    const detail = status.nodes.find(node => node.type === 'text' && node.text === '{context.description}');
+    assert.strictEqual(states.contextName, 'selectedState');
+    assert.strictEqual(detail.contextName, 'selectedState', 'the highlighted state describes itself under the list');
+    assert.strictEqual(detail.x + status.nodes.find(node => node.id === detail.parent).x, states.x + 12, 'the detail box sits in the States column');
 });
 
 test('Options, Save, and Load baselines use typed sources and semantic actions only', () => {

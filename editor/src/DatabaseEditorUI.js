@@ -1791,7 +1791,7 @@ class DatabaseEditorUI {
             // motion and overlay index the battler's state pose and overlay
             // sheet; without them stateMotionIndex/stateOverlayIndex hand the
             // sprites undefined and the state shows nothing at all.
-            states: { name: 'New State', iconIndex: 0, restriction: 0, priority: 50, motion: 0, overlay: 0, removeAtBattleEnd: false, removeByRestriction: false, autoRemovalTiming: 0, minTurns: 1, maxTurns: 1, removeByDamage: false, chanceByDamage: 100, removeByWalking: false, stepsToRemove: 100, traits: [], note: '', messageType: 1, message1: '', message2: '', message3: '', message4: '' },
+            states: { name: 'New State', description: '', iconIndex: 0, restriction: 0, priority: 50, motion: 0, overlay: 0, removeAtBattleEnd: false, removeByRestriction: false, autoRemovalTiming: 0, minTurns: 1, maxTurns: 1, removeByDamage: false, chanceByDamage: 100, removeByWalking: false, stepsToRemove: 100, traits: [], note: '', messageType: 1, message1: '', message2: '', message3: '', message4: '' },
             // displayType drives Spriteset_Base.isAnimationForEach, which tests
             // it with a strict === 0. The Type control can convert this record
             // into an immediately editable stock MV sprite animation.
