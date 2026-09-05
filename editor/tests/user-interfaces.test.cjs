@@ -817,6 +817,24 @@ test('actor parameter, equipment, and state Lists use the selected actor binding
         'a state describes itself with its Description field, and falls back to its messages');
 });
 
+test('a gauge sprite keeps its label method against PIXI 8 own properties', () => {
+    // PIXI 8's Container ctor sets an own "label" string. It shadows
+    // Sprite_Gauge.prototype.label(), and Sprite_Gauge.redraw() calls
+    // this.label() on every draw, so a labelled gauge threw and took the
+    // scene with it - the stock Status screen showed only an error.
+    const sandbox = loadRuntimeUI();
+    function SpriteGauge() {}
+    SpriteGauge.prototype.initialize = function() { this.label = 'Sprite'; this.name = 'Sprite'; };
+    SpriteGauge.prototype.label = function() { return 'HP'; };
+    sandbox.Sprite_Gauge = SpriteGauge;
+    const Gauge = sandbox.ReactorUI.gaugeSpriteClass();
+    const node = sandbox.ReactorUI.normalizeNode({ type: 'gauge', gauge: 'hp', showLabel: true });
+    const sprite = new Gauge(node);
+    assert.equal(typeof sprite.label, 'function', 'the PIXI-set own property no longer shadows the method');
+    assert.equal(sprite.label(), 'HP');
+    assert.equal(sprite._uiNode, node, 'the node the class sets itself survives the sweep');
+});
+
 test('EXP and variable gauges calculate their authored progress and maximums', () => {
     const sandbox = loadRuntimeUI();
     function SpriteGauge() {}
