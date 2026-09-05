@@ -1646,7 +1646,7 @@
                 const actor = this.resolveActor(node, scene);
                 const states = actor && actor.states ? actor.states() : [];
                 for (const state of states) add({ key: "state:" + state.id, kind: "state", id: state.id, value: state.id,
-                    actorId: actor.actorId ? actor.actorId() : 0, name: state.name, description: state.message3 || state.message1 || "",
+                    actorId: actor.actorId ? actor.actorId() : 0, name: state.name, description: state.description || state.message3 || state.message1 || "",
                     iconIndex: state.iconIndex || 0, data: state, defaultText: "\\I[" + (state.iconIndex || 0) + "]{name}" });
                 break;
             }

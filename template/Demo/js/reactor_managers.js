@@ -293,6 +293,28 @@ DataManager.onLoad = function(object) {
         this.loadMapSidecar(object);
     } else {
         this.extractArrayMetadata(object);
+        if (object === window.$dataStates) this.bridgeStateDescriptions(object);
+    }
+};
+
+// A state's description field is Reactor's own; RPG Maker states never had
+// one. Plugins that show a state description read it from the note as a
+// <Help Description> block instead, so the loaded state carries its field as
+// that block when the author wrote neither it nor a <State Tooltip
+// Description>. An explicit block keeps precedence, and the note on disk is
+// untouched: this runs on the in-memory data every load. <In-Battle Status
+// Description> is deliberately not a reason to skip, since that tag only
+// replaces the text in one window and leaves the others reading the field.
+DataManager.STATE_DESCRIPTION_TAGS = /<(?:HELP|HELP DESCRIPTION|DESCRIPTION|(?:STATE )?TOOLTIP DESCRIPTION)>/i;
+
+DataManager.bridgeStateDescriptions = function(states) {
+    if (!Array.isArray(states)) return;
+    for (const state of states) {
+        if (!state || typeof state.description !== "string" || !state.description.trim()) continue;
+        const note = typeof state.note === "string" ? state.note : "";
+        if (this.STATE_DESCRIPTION_TAGS.test(note)) continue;
+        const block = "<Help Description>\n" + state.description + "\n</Help Description>";
+        state.note = note ? note + "\n" + block : block;
     }
 };
 

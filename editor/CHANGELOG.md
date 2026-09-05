@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **States have a Description.** The States tab gains a Description field under the name, with the same text-code menu the Skill description has, stored as `description` on the state record. RPG Maker states never had one, so the plugins that show a state's description all read it from a `<Help Description>` block in the note instead; on load the runtime now gives a described state that block in memory when the author wrote neither it nor a `<State Tooltip Description>`, so VisuStella's State Tooltips, Battle Core's in-battle Status window and the Equip Passive System help window all display the field with no plugin change. An authored block keeps precedence, and the note on disk is never rewritten. Battle Core's `<In-Battle Status Description>` is left alone as well: it only replaces the text in that one window, so the field still reaches the others.
+
+    Without any plugin the field reaches the Reactor UI: an `actorStates` List row's `{description}` is now the state's Description, falling back to its persist or afflicted message as before, and the stock Status screen shows the highlighted state's description in a box under its States list. Existing projects keep the Status interface they already have. A `%1` placeholder in a description is a plugin convention for the state's display value; the stock UI shows it literally.
+
 ### Fixed
 
 - **Battle Test launches a battle again.** The Troops tab's *Battle Test...* wrote its `Test_*.json` files and started NW.js with `btest`, and the game died on its error screen before `Scene_Boot` ran. `btest` alone is not a playtest: `Utils.isOptionValid("test")` stays false, so `$gameTemp.isPlaytest()` is false and any plugin that declares its classes only under `test` — VisuStella's Debugger wraps every window class in exactly that guard while its `Imported` flag is set unconditionally — leaves anything referencing those classes to throw. RPG Maker starts a battle test as `test btest`; the launcher now passes one `test&btest` token on every host, and the Windows profile name it folds the mode into keeps the ampersand, since that is what the runtime splits `nw.App.argv[0]` on. Verified on a project with some two hundred plugins including the Debugger: the same launch that previously stopped on `Cannot read properties of undefined (reading 'prototype')` reaches `Scene_Battle` with the configured party and troop.

@@ -39,8 +39,9 @@ function defaultTemplates() {
 // helpers/derive-authored-data-shapes.cjs.
 const authored = require(path.join(__dirname, 'helpers', 'authored-data-shapes.json'));
 
-// Reactor stores troop notes, which the engine's own editor does not write.
-const REACTOR_EXTRAS = { troops: new Set(['note']) };
+// Reactor stores troop notes and state descriptions, which the engine's own
+// editor does not write.
+const REACTOR_EXTRAS = { troops: new Set(['note']), states: new Set(['description']) };
 
 test('a newly created record has every field authored records always carry', () => {
     // A field on 100% of authored records is one the runtime is entitled to
