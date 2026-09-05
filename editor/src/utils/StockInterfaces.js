@@ -294,8 +294,14 @@
             b.list('Equipment', 0, 'actorEquipment', m.boxX + paramsWidth, bodyY, equipmentWidth, bodyHeight, {
                 actorSource: 'menuActor'
             });
-            b.list('States', 0, 'actorStates', m.boxX + paramsWidth + equipmentWidth, bodyY,
-                remainder - equipmentWidth, bodyHeight, { actorSource: 'menuActor' });
+            const statesX = m.boxX + paramsWidth + equipmentWidth;
+            const statesWidth = remainder - equipmentWidth;
+            const stateDetailHeight = fittingHeight(2);
+            b.list('States', 0, 'actorStates', statesX, bodyY, statesWidth, bodyHeight - stateDetailHeight,
+                { actorSource: 'menuActor', contextName: 'selectedState' });
+            const stateDetail = b.box('Selected state', statesX, bodyY + bodyHeight - stateDetailHeight, statesWidth, stateDetailHeight);
+            b.text(stateDetail.id, '{context.description}', PADDING, PADDING, Math.max(0, statesWidth - PADDING * 2),
+                { name: 'State description', height: stateDetailHeight - PADDING * 2, wrap: true, fitText: true, contextName: 'selectedState' });
             const profile = b.box('Profile', m.boxX, bodyY + bodyHeight, m.boxWidth, profileHeight);
             b.text(profile.id, '{actor.profile}', PADDING, PADDING, m.boxWidth - PADDING * 2,
                 Object.assign({ name: 'Profile', height: profileHeight - PADDING * 2, wrap: true, fitText: true }, actor));

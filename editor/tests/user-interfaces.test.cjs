@@ -805,14 +805,16 @@ test('actor parameter, equipment, and state Lists use the selected actor binding
     const sandbox = loadRuntimeUI();
     const sword = { id: 2, name: 'Sword', description: 'Blade', iconIndex: 16, price: 100 };
     const poison = { id: 5, name: 'Poison', iconIndex: 32, message3: 'Poisoned' };
-    const actor = { actorId: () => 3, param: id => id + 10, equips: () => [sword], equipSlots: () => [1], states: () => [poison] };
+    const burn = { id: 6, name: 'Burn', iconIndex: 33, description: 'Fire damage each turn.', message3: 'Burning' };
+    const actor = { actorId: () => 3, param: id => id + 10, equips: () => [sword], equipSlots: () => [1], states: () => [poison, burn] };
     sandbox.$gameActors.actor = () => actor;
     sandbox.$dataSystem.equipTypes = ['', 'Weapon'];
     sandbox.TextManager = { param: id => 'Param ' + id };
     const rows = source => sandbox.ReactorUI.listRows(sandbox.ReactorUI.normalizeNode({ type: 'list', dataSource: source, actorSource: 'actorId', actorId: 3 }));
     assert.equal(JSON.stringify(rows('actorParameters').slice(0, 2).map(row => [row.key, row.paramName, row.paramValue])), '[["parameter:0","Param 0",10],["parameter:1","Param 1",11]]');
     assert.equal(JSON.stringify(rows('actorEquipment').map(row => [row.key, row.name, row.paramName])), '[["equipment:0","Sword","Weapon"]]');
-    assert.equal(JSON.stringify(rows('actorStates').map(row => [row.key, row.description])), '[["state:5","Poisoned"]]');
+    assert.equal(JSON.stringify(rows('actorStates').map(row => [row.key, row.description])), '[["state:5","Poisoned"],["state:6","Fire damage each turn."]]',
+        'a state describes itself with its Description field, and falls back to its messages');
 });
 
 test('EXP and variable gauges calculate their authored progress and maximums', () => {

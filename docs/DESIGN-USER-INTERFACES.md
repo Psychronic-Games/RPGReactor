@@ -74,7 +74,8 @@ List sources are fixed and typed:
 - `skills`: skills for the bound actor, optionally filtered by skill type.
 - `actorParameters`: MHP, MMP, ATK, DEF, MAT, MDF, AGI, and LUK rows.
 - `actorEquipment`: one row per equipment slot, including empty slots.
-- `actorStates`: the bound actor's active states.
+- `actorStates`: the bound actor's active states; `{description}` is the state's
+  Description field, falling back to its persist or afflicted message.
 - `options`: the running game's supported configuration rows.
 - `saveSlots`: autosave/manual slot metadata and availability.
 - `variableRange`: a bounded range of game variables.
