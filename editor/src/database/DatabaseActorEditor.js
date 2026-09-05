@@ -52,10 +52,24 @@ class DatabaseActorEditor {
 
         wrapper.appendChild(middleRow);
 
-        // ROW 3: Note (full width)
+        // ROW 3: Note (full width), or Passive States (left) + Note (right)
+        // when the project's plugins give an actor's note a passive to hold.
         const noteSection = this.createNoteSection(actor);
-        noteSection.style.marginTop = '16px';
-        wrapper.appendChild(noteSection);
+        const passiveSection = window.RRPassiveStates?.createSection({
+            objectType: 'actor', record: actor,
+            databaseManager: this.databaseManager, projectManager: this.projectManager
+        });
+        if (passiveSection) {
+            const bottomRow = document.createElement('div');
+            bottomRow.className = 'database-actor-pair';
+            bottomRow.style.marginTop = '16px';
+            bottomRow.appendChild(passiveSection);
+            bottomRow.appendChild(noteSection);
+            wrapper.appendChild(bottomRow);
+        } else {
+            noteSection.style.marginTop = '16px';
+            wrapper.appendChild(noteSection);
+        }
 
         // Add wrapper to container
         container.appendChild(wrapper);

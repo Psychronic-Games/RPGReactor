@@ -244,6 +244,16 @@ class DatabaseEnemyEditor {
             }
         }, 0);
 
+        // Passive States row (only when the project's plugins read them)
+        const passiveSection = window.RRPassiveStates?.createSection({
+            objectType: 'enemy', record: enemy,
+            databaseManager: this.databaseManager, projectManager: this.projectManager
+        });
+        if (passiveSection) {
+            passiveSection.style.marginBottom = '16px';
+            wrapper.appendChild(passiveSection);
+        }
+
         // Traits + Note row (side by side)
         const traitsNoteRow = document.createElement('div');
         traitsNoteRow.className = 'database-enemy-bottom-row';

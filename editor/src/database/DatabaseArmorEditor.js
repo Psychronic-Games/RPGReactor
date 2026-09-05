@@ -188,6 +188,13 @@ class DatabaseArmorEditor {
             }
         }, 0);
 
+        // Passive States (only when the project's plugins read them)
+        const passiveSection = window.RRPassiveStates?.createSection({
+            objectType: 'armor', record: armor,
+            databaseManager: this.databaseManager, projectManager: this.projectManager
+        });
+        if (passiveSection) gridWrapper.appendChild(passiveSection);
+
         // Note Section
         const noteSection = document.createElement('div');
         noteSection.className = 'database-section';
