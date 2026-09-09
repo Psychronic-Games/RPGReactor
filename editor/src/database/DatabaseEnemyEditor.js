@@ -239,6 +239,7 @@ class DatabaseEnemyEditor {
                     <button class="action-btn-edit rr-btn-chip" disabled>${tt('Edit')}</button>
                     <button class="action-btn-delete rr-btn-chip" disabled>${tt('Delete')}</button>
                 </div>
+                ${this.buildForecastHTML(enemy)}
             </div>
         `;
         wrapper.appendChild(actionsSection);
@@ -253,6 +254,7 @@ class DatabaseEnemyEditor {
                 this.setupActionKeyboardShortcuts(actionsSection, actionsTable, enemy);
                 this.updateActionButtonStates(actionsSection, actionsTable);
             }
+            this.setupForecast(actionsSection, enemy);
         }, 0);
 
         // Passive States row (only when the project's plugins read them)
@@ -724,6 +726,226 @@ class DatabaseEnemyEditor {
                 </tr>
             `;
         }).join('');
+    }
+
+    // ==========================================
+    // BEHAVIOUR FORECAST
+    // ==========================================
+
+    /**
+     * The rating column is the most misread number on this screen. It is not a
+     * weight of its own: the runtime takes the highest rating among the actions
+     * valid at that moment and discards everything below a window measured down
+     * from it, so a row dies whenever a better-rated row is valid beside it and
+     * revives when that rival cannot pay its cost. The panel below spells that
+     * out for a chosen situation, and lists the rows that can never win.
+     */
+    forecastApi() {
+        return typeof RREnemyActionForecast !== 'undefined' ? RREnemyActionForecast : null;
+    }
+
+    forecastRules() {
+        const api = this.forecastApi();
+        if (!api) return null;
+        return api.rules(this.databaseManager.getPluginManifest?.() || []);
+    }
+
+    /** What-if values, kept across the detail rebuild that follows every edit. */
+    forecastState(enemy) {
+        if (!this._forecast || this._forecast.enemyId !== enemy.id) {
+            this._forecast = {
+                enemyId: enemy.id,
+                open: this._forecast ? this._forecast.open : false,
+                values: {
+                    turn: 1, hpRate: 1, partyLevel: 99,
+                    mp: this.forecastApi()?.maxMp(enemy) ?? 0,
+                    tp: this.forecastApi()?.maxTp(enemy) ?? 100,
+                    userStates: [], targetStates: [], switches: []
+                }
+            };
+        }
+        return this._forecast;
+    }
+
+    forecastRuleText(rules) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
+        if (rules.style === 'random' || rules.style === 'casual') {
+            return tt('Battle AI picks at random, ignoring ratings.');
+        }
+        if (rules.style === 'gambit') {
+            return tt('Battle AI uses gambit order: the first valid action wins.');
+        }
+        if (rules.window === 0) return tt('Only the highest valid rating is ever chosen.');
+        return tt('Only ratings within {n} of the highest valid rating are ever chosen.')
+            .replace('{n}', rules.window);
+    }
+
+    forecastReasonText(entry) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
+        switch (entry.reason) {
+            case 'no-skill': return tt('The skill no longer exists.');
+            case 'occasion': return tt('This skill cannot be used in battle.');
+            case 'cost': return tt('The cost is higher than this enemy can hold.');
+            case 'condition': return tt('These conditions can never hold together.');
+            default:
+                return tt('Outranked whenever it is usable: the ceiling never drops below {n}.')
+                    .replace('{n}', entry.ceiling);
+        }
+    }
+
+    forecastSkillName(skillId) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
+        const skill = (this.databaseManager.getSkills() || []).find(s => s && s.id === skillId);
+        return skill ? skill.name : `${tt('Skill')} #${skillId}`;
+    }
+
+    buildForecastHTML(enemy) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
+        const api = this.forecastApi();
+        const rules = this.forecastRules();
+        if (!api || !rules || !enemy.actions || enemy.actions.length === 0) return '';
+
+        const skills = this.databaseManager.getSkills() || [];
+        const { dead, truncated } = api.audit(enemy, skills, rules);
+        const state = this.forecastState(enemy);
+
+        const badge = truncated
+            ? `<span class="enemy-forecast-badge is-unknown">${tt('Too many combinations to check.')}</span>`
+            : dead.length
+                ? `<span class="enemy-forecast-badge is-dead">${
+                    tt('{n} of {total} unreachable').replace('{n}', dead.length).replace('{total}', enemy.actions.length)
+                }</span>`
+                : `<span class="enemy-forecast-badge is-clean">${tt('Every action can fire')}</span>`;
+
+        return `
+            <details class="enemy-forecast" id="enemy-forecast-${enemy.id}"${state.open ? ' open' : ''}>
+                <summary class="enemy-forecast-summary">
+                    <span>${tt('Behaviour forecast')}</span>
+                    ${badge}
+                </summary>
+                <div class="enemy-forecast-body">
+                    <p class="enemy-forecast-rule">${this.escapeHTML(this.forecastRuleText(rules))}</p>
+                    ${this.buildForecastControlsHTML(enemy)}
+                    <div class="enemy-forecast-pool"></div>
+                    ${this.buildForecastDeadHTML(dead, truncated)}
+                    <p class="enemy-forecast-note">${tt('Plugins can add conditions this panel cannot see.')}</p>
+                </div>
+            </details>
+        `;
+    }
+
+    /** Only the variables that can change this enemy's outcome get a control. */
+    buildForecastControlsHTML(enemy) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
+        const api = this.forecastApi();
+        const vars = api.variables(enemy, this.databaseManager.getSkills() || []);
+        const values = this.forecastState(enemy).values;
+        const parts = [];
+
+        const number = (key, label, value, min, max) => `
+            <label class="enemy-forecast-control">
+                <span>${label}</span>
+                <input type="number" data-forecast="${key}" value="${value}" min="${min}" max="${max}" step="1">
+            </label>`;
+
+        // HP reads as a whole value beside MP and TP rather than as a percent,
+        // even though the conditions underneath it are rates.
+        const maxHp = Math.max(1, Number(enemy.params?.[0]) || 1);
+        if (vars.turn) parts.push(number('turn', tt('Turn'), values.turn, 1, 999));
+        if (vars.hp) parts.push(number('hp', tt('HP'), Math.round(values.hpRate * maxHp), 0, maxHp));
+        if (vars.mp) parts.push(number('mp', tt('MP'), values.mp, 0, api.maxMp(enemy)));
+        if (vars.tp) parts.push(number('tp', tt('TP'), values.tp, 0, api.maxTp(enemy)));
+        if (vars.partyLevel) parts.push(number('partyLevel', tt('Party Level'), values.partyLevel, 1, 99));
+
+        const toggles = (ids, key, label, name) => {
+            for (const id of ids) {
+                const checked = values[key].includes(id) ? ' checked' : '';
+                parts.push(`
+                    <label class="enemy-forecast-control is-toggle">
+                        <input type="checkbox" data-forecast="${key}" value="${id}"${checked}>
+                        <span>${label}: ${this.escapeHTML(name(id))}</span>
+                    </label>`);
+            }
+        };
+        const switchName = id => (this.databaseManager.getSystem()?.switches || [])[id] || `#${id}`;
+        toggles(vars.userStates, 'userStates', tt('User State'), id => this.conditionStateName(id));
+        toggles(vars.targetStates, 'targetStates', tt('Target State'), id => this.conditionStateName(id));
+        toggles(vars.switches, 'switches', tt('Switch'), switchName);
+
+        return parts.length ? `<div class="enemy-forecast-controls">${parts.join('')}</div>` : '';
+    }
+
+    buildForecastDeadHTML(dead, truncated) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
+        if (truncated || dead.length === 0) return '';
+        const rows = dead.map(entry => `
+            <li>
+                <span class="enemy-forecast-dead-name">${this.escapeHTML(this.forecastSkillName(entry.action.skillId))}</span>
+                <span class="enemy-forecast-dead-rating">${tt('Rating')} ${entry.action.rating}</span>
+                <span class="enemy-forecast-dead-why">${this.escapeHTML(this.forecastReasonText(entry))}</span>
+            </li>`).join('');
+        return `
+            <div class="enemy-forecast-dead">
+                <div class="enemy-forecast-dead-header">${tt('Never fires')}</div>
+                <ul>${rows}</ul>
+            </div>`;
+    }
+
+    renderForecastPool(panel, enemy) {
+        const tt = text => window.I18n ? window.I18n.tText(text) : text;
+        const host = panel.querySelector('.enemy-forecast-pool');
+        if (!host) return;
+        const api = this.forecastApi();
+        const rules = this.forecastRules();
+        const values = this.forecastState(enemy).values;
+        const result = api.forecast(enemy, this.databaseManager.getSkills() || [], rules, values);
+
+        if (result.entries.length === 0) {
+            host.innerHTML = `<p class="enemy-forecast-empty">${tt('No action can be chosen here.')}</p>`;
+            return;
+        }
+        const rows = result.entries.map(entry => {
+            const percent = Math.round(entry.chance * 100);
+            return `
+                <li>
+                    <span class="enemy-forecast-pool-name">${this.escapeHTML(this.forecastSkillName(entry.action.skillId))}</span>
+                    <span class="enemy-forecast-pool-rating">${tt('Rating')} ${entry.rating}</span>
+                    <span class="enemy-forecast-pool-bar"><span style="width:${percent}%"></span></span>
+                    <span class="enemy-forecast-pool-share">${result.exact ? '' : '~'}${percent}%</span>
+                </li>`;
+        }).join('');
+        host.innerHTML = `
+            <div class="enemy-forecast-ceiling">${tt('Rating ceiling')} ${result.ceiling}</div>
+            <ul class="enemy-forecast-pool-list">${rows}</ul>`;
+    }
+
+    setupForecast(section, enemy) {
+        const panel = section.querySelector('.enemy-forecast');
+        if (!panel) return;
+        const state = this.forecastState(enemy);
+
+        panel.addEventListener('toggle', () => { state.open = panel.open; });
+
+        panel.querySelectorAll('[data-forecast]').forEach(input => {
+            const key = input.dataset.forecast;
+            input.addEventListener('change', () => {
+                if (input.type === 'checkbox') {
+                    const id = Number(input.value);
+                    const list = state.values[key];
+                    const at = list.indexOf(id);
+                    if (input.checked && at < 0) list.push(id);
+                    if (!input.checked && at >= 0) list.splice(at, 1);
+                } else if (key === 'hp') {
+                    const maxHp = Math.max(1, Number(enemy.params?.[0]) || 1);
+                    state.values.hpRate = Math.min(maxHp, Math.max(0, Number(input.value) || 0)) / maxHp;
+                } else {
+                    state.values[key] = Math.max(0, Number(input.value) || 0);
+                }
+                this.renderForecastPool(panel, enemy);
+            });
+        });
+
+        this.renderForecastPool(panel, enemy);
     }
 
     setupActionInteraction(table, enemy) {
