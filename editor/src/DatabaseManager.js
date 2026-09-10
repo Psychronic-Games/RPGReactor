@@ -199,21 +199,42 @@ class DatabaseManager {
         return (typeof globalThis !== 'undefined' && globalThis.RRTileset3DClass) || null;
     }
 
+    /**
+     * The project's plugin list, straight off disk.
+     *
+     * The Plugin Manager's own array is empty until that screen has been
+     * opened, so anything that needs to know what the game actually runs has
+     * to read the manifest itself. Callers get a snapshot; nothing here caches,
+     * because the editor rewrites the file whenever it saves.
+     */
+    getPluginManifest() {
+        if (!this.projectPath || !this.fs || !this.path) return [];
+        for (const name of ['reactor_plugins.js', 'plugins.js']) {
+            const file = this.path.join(this.projectPath, 'js', name);
+            if (!this.fs.existsSync(file)) continue;
+            try {
+                // The manifest runs to megabytes on a large project, so re-read
+                // it only when the file itself has moved on. The editor
+                // rewrites it whenever the Plugin Manager saves, and the
+                // timestamp catches that without a parse.
+                const stamp = `${file}:${this.fs.statSync(file).mtimeMs}`;
+                if (this._pluginManifest && this._pluginManifest.stamp === stamp) {
+                    return this._pluginManifest.plugins;
+                }
+                const match = this.fs.readFileSync(file, 'utf8')
+                    .match(/(?:var|let|const)\s+\$plugins\s*=\s*(\[[\s\S]*\]);/);
+                const plugins = match ? JSON.parse(match[1]) : [];
+                this._pluginManifest = { stamp, plugins };
+                return plugins;
+            } catch (error) { console.warn('Could not read the plugin manifest:', error); }
+            break;
+        }
+        return [];
+    }
+
     getMaxBattleMembers() {
         if (typeof ReactorBattleData === 'undefined') return 4;
-        let plugins = [];
-        if (this.projectPath && this.fs && this.path) {
-            for (const name of ['reactor_plugins.js', 'plugins.js']) {
-                const file = this.path.join(this.projectPath, 'js', name);
-                if (!this.fs.existsSync(file)) continue;
-                try {
-                    const match = this.fs.readFileSync(file, 'utf8').match(/(?:var|let|const)\s+\$plugins\s*=\s*(\[[\s\S]*\]);/);
-                    if (match) plugins = JSON.parse(match[1]);
-                } catch (error) { console.warn('Could not read the existing party limit:', error); }
-                break;
-            }
-        }
-        return ReactorBattleData.maxBattleMembers(this.data.system, plugins);
+        return ReactorBattleData.maxBattleMembers(this.data.system, this.getPluginManifest());
     }
 
     /** The live classification store, created empty on first use. */
