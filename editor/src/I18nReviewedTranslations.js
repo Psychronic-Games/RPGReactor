@@ -5440,3 +5440,28 @@ Object.assign(globalThis.RR_REVIEWED_TRANSLATIONS.text.ja, {Motion:'モーショ
  };
  for(const [locale,row] of Object.entries(rows)){const values=row.split('|');keys.forEach((key,i)=>globalThis.RR_REVIEWED_TRANSLATIONS.text[locale][key]=values[i]);}
 }
+
+// Battle AI on-the-spot turn counting, noted on the behaviour forecast panel.
+{
+ const keys=["Battle AI counts turns on the spot, so a turn condition can sit one turn earlier than it reads."];
+ const rows={
+  "ja": "バトルAIはその場でターンを数えるため、ターン条件が表示より1ターン早く成立することがあります。",
+  "es": "La IA de combate cuenta los turnos sobre la marcha, así que una condición de turno puede cumplirse un turno antes de lo que indica.",
+  "zh-Hant": "戰鬥AI即時計算回合，因此回合條件可能比顯示的早一個回合成立。",
+  "zh-Hans": "战斗AI即时计算回合，因此回合条件可能比显示的早一个回合成立。",
+  "ru": "Боевой ИИ считает ходы на месте, поэтому условие хода может выполниться на ход раньше, чем указано.",
+  "pt": "A IA de batalha conta os turnos na hora, então uma condição de turno pode valer um turno antes do indicado.",
+  "de": "Die Kampf-KI zählt Runden sofort, daher kann eine Rundenbedingung eine Runde früher greifen als angegeben.",
+  "fr": "L’IA de combat compte les tours sur le moment, donc une condition de tour peut se réaliser un tour plus tôt qu’indiqué.",
+  "el": "Η ΤΝ μάχης μετρά τους γύρους επιτόπου, οπότε μια συνθήκη γύρου μπορεί να ισχύσει έναν γύρο νωρίτερα από ό,τι δείχνει.",
+  "ko": "전투 AI는 턴을 즉석에서 세므로, 턴 조건이 표시보다 한 턴 빠르게 성립할 수 있습니다.",
+  "ar": "يحسب ذكاء المعركة الأدوار في حينها، لذا قد يتحقق شرط الدور قبل المعروض بدور واحد.",
+  "it": "L’IA di battaglia conta i turni sul momento, quindi una condizione di turno può valere un turno prima di quanto indicato.",
+  "pl": "SI walki liczy tury na bieżąco, więc warunek tury może zajść o turę wcześniej, niż wskazuje.",
+  "id": "AI pertarungan menghitung giliran saat itu juga, jadi kondisi giliran bisa terpenuhi satu giliran lebih awal.",
+  "vi": "AI chiến đấu đếm lượt ngay tại chỗ, nên điều kiện lượt có thể đúng sớm hơn một lượt so với hiển thị.",
+  "th": "AI การต่อสู้นับเทิร์นทันที เงื่อนไขเทิร์นจึงอาจเป็นจริงเร็วกว่าที่แสดงหนึ่งเทิร์น",
+  "tr": "Savaş YZ’si turları anında sayar, bu yüzden bir tur koşulu göründüğünden bir tur önce geçerli olabilir."
+ };
+ for(const [locale,row] of Object.entries(rows)){const values=row.split('|');keys.forEach((key,i)=>globalThis.RR_REVIEWED_TRANSLATIONS.text[locale][key]=values[i]);}
+}

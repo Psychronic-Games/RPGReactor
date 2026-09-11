@@ -828,6 +828,7 @@ class DatabaseEnemyEditor {
                     ${this.buildForecastControlsHTML(enemy)}
                     <div class="enemy-forecast-pool"></div>
                     ${this.buildForecastDeadHTML(dead, truncated)}
+                    ${rules.onSpotAI ? `<p class="enemy-forecast-note">${tt('Battle AI counts turns on the spot, so a turn condition can sit one turn earlier than it reads.')}</p>` : ''}
                     <p class="enemy-forecast-note">${tt('Plugins can add conditions this panel cannot see.')}</p>
                 </div>
             </details>
@@ -851,7 +852,8 @@ class DatabaseEnemyEditor {
         // HP reads as a whole value beside MP and TP rather than as a percent,
         // even though the conditions underneath it are rates.
         const maxHp = Math.max(1, Number(enemy.params?.[0]) || 1);
-        if (vars.turn) parts.push(number('turn', tt('Turn'), values.turn, 1, 999));
+        const minTurn = this.forecastRules()?.minTurn ?? 1;
+        if (vars.turn) parts.push(number('turn', tt('Turn'), values.turn, minTurn, 999));
         if (vars.hp) parts.push(number('hp', tt('HP'), Math.round(values.hpRate * maxHp), 0, maxHp));
         if (vars.mp) parts.push(number('mp', tt('MP'), values.mp, 0, api.maxMp(enemy)));
         if (vars.tp) parts.push(number('tp', tt('TP'), values.tp, 0, api.maxTp(enemy)));
@@ -935,6 +937,12 @@ class DatabaseEnemyEditor {
                     const at = list.indexOf(id);
                     if (input.checked && at < 0) list.push(id);
                     if (!input.checked && at >= 0) list.splice(at, 1);
+                } else if (key === 'turn') {
+                    // Typing below the floor would show a turn the game cannot
+                    // reach, which is the opposite of what this panel is for.
+                    const minTurn = this.forecastRules()?.minTurn ?? 1;
+                    state.values.turn = Math.max(minTurn, Number(input.value) || 0);
+                    input.value = state.values.turn;
                 } else if (key === 'hp') {
                     const maxHp = Math.max(1, Number(enemy.params?.[0]) || 1);
                     state.values.hpRate = Math.min(maxHp, Math.max(0, Number(input.value) || 0)) / maxHp;

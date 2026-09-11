@@ -29,7 +29,8 @@
 
     /* The engine's own window: ratingZero = max - 3, keep rating > ratingZero. */
     const ENGINE_RULES = Object.freeze({
-        source: 'engine', style: 'classic', window: 3, inclusive: false
+        source: 'engine', style: 'classic', window: 3, inclusive: false,
+        onSpotAI: false, minTurn: 1
     });
 
     /**
@@ -39,6 +40,19 @@
      * is a different comparison from the engine's `rating > max - 3` as well as
      * a different width. Its `random` and `casual` styles ignore rating
      * entirely; `gambit` always takes the first valid row.
+     *
+     * `minTurn` is the lowest value a turn condition can ever see. Reactor's
+     * `Game_Battler.turnCount` returns `$gameTroop.turnCount() + 1`, so the
+     * first battle turn is 1 and a condition on turn 0 is unreachable. Battle
+     * AI's on-the-spot mode drops that `+ 1`, and turn 0 becomes reachable.
+     *
+     * Whether that mode's branch is actually taken also depends on the battle
+     * system, which is not knowable here: CoreEngine resolves it through
+     * `$gameSystem.getBattleSystem()`, and a plugin command can change it
+     * mid-game. So on-the-spot widens the search to include turn 0 rather than
+     * trying to decide. Widening can only ever drop a warning, never invent
+     * one, which is the safe direction for a panel whose whole value is that
+     * its "never fires" verdicts are trustworthy.
      */
     function rules(plugins) {
         const battleAI = (plugins || []).find(p => p && p.status === true && p.name === 'VisuMZ_3_BattleAI');
@@ -46,7 +60,11 @@
         const general = parseStruct(battleAI.parameters && battleAI.parameters['General:struct']);
         const style = String(general['EnemyStyleAI:str'] || 'classic').toLowerCase().trim();
         const variance = clamp(Number(general['EnemyRatingVariance:num']), 0, 9, 0);
-        return { source: 'battleAI', style, window: variance, inclusive: true };
+        const onSpotAI = String(general['OnSpotAI:eval']).trim() === 'true';
+        return {
+            source: 'battleAI', style, window: variance, inclusive: true,
+            onSpotAI, minTurn: onSpotAI ? 0 : 1
+        };
     }
 
     function parseStruct(raw) {
@@ -236,19 +254,20 @@
     const MAX_TOGGLE_IDS = 8;      // 2^8 subsets per toggle group
     const MAX_GRID_POINTS = 300000;
 
-    function axisValues(enemy, skills, vars) {
+    function axisValues(enemy, skills, vars, rules_) {
+        const minTurn = Number.isFinite(rules_ && rules_.minTurn) ? rules_.minTurn : 1;
         const byId = skillIndex(skills);
         const all = (enemy.actions || []).flatMap(a => conditions(a));
         const tpMax = maxTp(enemy) || DEFAULT_MAX_TP;
         const mpMax = maxMp(enemy);
 
-        const turns = new Set([1]);
+        const turns = new Set([minTurn, 1]);
         for (const c of all) {
             if (c.type !== TURN) continue;
-            if (c.param2 === 0) { if (c.param1 > 0) turns.add(c.param1); continue; }
+            if (c.param2 === 0) { if (c.param1 >= minTurn) turns.add(c.param1); continue; }
             // A repeating window needs one hit and one miss inside the period.
-            for (let k = 0; k < 3; k++) turns.add(Math.max(1, c.param1 + c.param2 * k));
-            turns.add(Math.max(1, c.param1 + 1));
+            for (let k = 0; k < 3; k++) turns.add(Math.max(minTurn, c.param1 + c.param2 * k));
+            turns.add(Math.max(minTurn, c.param1 + 1));
         }
 
         const rates = type => {
@@ -274,7 +293,7 @@
         };
 
         return {
-            turns: vars.turn ? [...turns].sort((a, b) => a - b) : [1],
+            turns: vars.turn ? [...turns].sort((a, b) => a - b) : [Math.max(minTurn, 1)],
             hpRates: vars.hp ? rates(HP) : [1],
             mps: vars.mp ? resource('mpCost', mpMax, MP) : [mpMax],
             tps: vars.tp ? resource('tpCost', tpMax, TP) : [tpMax],
@@ -312,7 +331,7 @@
     function reachable(enemy, skills, rules_) {
         const byId = skillIndex(skills);
         const vars = variables(enemy, byId);
-        const axes = axisValues(enemy, byId, vars);
+        const axes = axisValues(enemy, byId, vars, rules_);
         const tpMax = maxTp(enemy) || DEFAULT_MAX_TP;
         const mpMax = maxMp(enemy);
         const points = axes.turns.length * axes.hpRates.length * axes.mps.length
