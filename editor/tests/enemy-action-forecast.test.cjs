@@ -56,7 +56,10 @@ test('a zero-width Battle AI window keeps only the ceiling, and picks uniformly'
 });
 
 test('reads the rule in force from the plugin manifest', () => {
-    assert.deepEqual(ENGINE, { source: 'engine', style: 'classic', window: 3, inclusive: false });
+    assert.deepEqual(ENGINE, {
+        source: 'engine', style: 'classic', window: 3, inclusive: false,
+        onSpotAI: false, minTurn: 1
+    });
     assert.equal(BATTLE_AI_ZERO.source, 'battleAI');
     assert.equal(BATTLE_AI_ZERO.window, 0);
     assert.equal(BATTLE_AI_ZERO.inclusive, true);
@@ -188,4 +191,40 @@ test('a missing skill is reported rather than treated as free', () => {
     const e = enemy([always(1, 5), always(99, 9)]);
     const { dead } = forecast.audit(e, skills, ENGINE);
     assert.deepEqual(dead.map(d => [d.action.skillId, d.reason]), [[99, 'no-skill']]);
+});
+
+const BATTLE_AI_ON_SPOT = forecast.rules([{
+    name: 'VisuMZ_3_BattleAI', status: true,
+    parameters: { 'General:struct': JSON.stringify({
+        'EnemyStyleAI:str': 'classic', 'EnemyRatingVariance:num': '0', 'OnSpotAI:eval': 'true'
+    }) }
+}]);
+
+test('on-the-spot turn counting is read from the manifest', () => {
+    assert.equal(ENGINE.onSpotAI, false);
+    assert.equal(ENGINE.minTurn, 1, 'turnCount is $gameTroop.turnCount() + 1, so turn 1 is first');
+    assert.equal(BATTLE_AI_ZERO.onSpotAI, false);
+    assert.equal(BATTLE_AI_ZERO.minTurn, 1);
+    assert.equal(BATTLE_AI_ON_SPOT.onSpotAI, true);
+    assert.equal(BATTLE_AI_ON_SPOT.minTurn, 0, 'on-the-spot drops the +1, so turn 0 is reachable');
+});
+
+test('a turn-0 gate is only called dead when turn 0 is genuinely out of reach', () => {
+    const skills = skillList([{ id: 1 }]);
+    const e = enemy([when(1, 3, 1, 0, 0)]);
+    // Engine and ordinary Battle AI: the first turn is 1, so turn 0 never comes.
+    assert.deepEqual(forecast.audit(e, skills, ENGINE).dead.map(d => d.reason), ['condition']);
+    assert.deepEqual(forecast.audit(e, skills, BATTLE_AI_ZERO).dead.map(d => d.reason), ['condition']);
+    // On-the-spot counting can reach turn 0, so the warning must be withheld.
+    assert.deepEqual(forecast.audit(e, skills, BATTLE_AI_ON_SPOT).dead, []);
+});
+
+test('widening the turn floor never invents a warning', () => {
+    // Whatever else changes, the on-the-spot sweep searches a superset of the
+    // ordinary one, so it can only ever report fewer unreachable rows.
+    const skills = skillList([{ id: 1 }, { id: 2 }, { id: 3 }]);
+    const e = enemy([when(1, 5, 1, 0, 0), when(2, 5, 1, 2, 0), always(3, 1)]);
+    const narrow = forecast.audit(e, skills, BATTLE_AI_ZERO).dead.map(d => d.index);
+    const wide = forecast.audit(e, skills, BATTLE_AI_ON_SPOT).dead.map(d => d.index);
+    for (const index of wide) assert.ok(narrow.includes(index), `row ${index} warned only when widened`);
 });
