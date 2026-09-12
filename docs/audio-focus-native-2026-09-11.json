@@ -1,0 +1,50 @@
+{
+  "dark": {
+    "checks": [
+      "bgm: arrows select the second track",
+      "bgm: focus stays in the track list",
+      "bgm: no outer browser focus bar",
+      "bgm: selected track has inset keyboard focus",
+      "bgs: arrows select the second track",
+      "bgs: focus stays in the track list",
+      "bgs: no outer browser focus bar",
+      "bgs: selected track has inset keyboard focus",
+      "me: arrows select the second track",
+      "me: focus stays in the track list",
+      "me: no outer browser focus bar",
+      "me: selected track has inset keyboard focus",
+      "se: arrows select the second track",
+      "se: focus stays in the track list",
+      "se: no outer browser focus bar",
+      "se: selected track has inset keyboard focus",
+      "shared audio picker uses inset row focus",
+      "no captured application errors"
+    ],
+    "failures": [],
+    "theme": "dark"
+  },
+  "light": {
+    "checks": [
+      "bgm: arrows select the second track",
+      "bgm: focus stays in the track list",
+      "bgm: no outer browser focus bar",
+      "bgm: selected track has inset keyboard focus",
+      "bgs: arrows select the second track",
+      "bgs: focus stays in the track list",
+      "bgs: no outer browser focus bar",
+      "bgs: selected track has inset keyboard focus",
+      "me: arrows select the second track",
+      "me: focus stays in the track list",
+      "me: no outer browser focus bar",
+      "me: selected track has inset keyboard focus",
+      "se: arrows select the second track",
+      "se: focus stays in the track list",
+      "se: no outer browser focus bar",
+      "se: selected track has inset keyboard focus",
+      "shared audio picker uses inset row focus",
+      "no captured application errors"
+    ],
+    "failures": [],
+    "theme": "light"
+  }
+}

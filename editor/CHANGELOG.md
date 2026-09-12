@@ -1,6 +1,22 @@
 # Changelog
 
-## [Unreleased]
+## [Unreleased - 0.98.6]
+
+See the [September 11 closeout](../docs/SESSION-2026-09-11.md) for the complete scope and final 3,082-test verification.
+
+### Added
+
+- Random startup splash selection from numbered PNG files, with automatic desktop discovery and a generated web-build list. Include the original and second splash artwork.
+
+- Add 16 editable action-sequence starters, equipped-item hand attachments, item/weapon/picture throws to allies or enemies, arcs/spin/return flights, and matching 2D/3D previews. Include a humanoid item-motion fallback and preserve authored motions. Runtime revision `20260911.6`. See `docs/HELD-ITEMS-AND-THROWS-2026-09-11.md`.
+
+- Expand visual action sequences with six independently assigned phases, class defaults, battler states/reactions, reusable routines, explicit multi-hit behavior, and 43 additional command types. Actors/enemies can explicitly select SV, character-set, static or 3D battlers with motion settings. Preserve assignment-card spacing; repair battle-room zoom. Runtime revision `20260911.5`. See `docs/ACTION-SEQUENCE-EXPANSION-2026-09-11.md`.
+
+- System 2 supports 48×48 icon cells (16 columns, 768px-wide sheets). Shared pickers, Database and message/interface previews, and runtime startup honor the configured icon size. Runtime revision `20260911.4`.
+
+- System 2 now offers default 2D camera zoom and X/Y framing offsets, with matching mouse/touch navigation, and 288×288 face cells (1152×576 for eight faces). Runtime revision `20260911.3`.
+
+- Support 64×64 and 8×8 tiles, zoom controls for tileset/character/interface previews, and optional pixelated whole-frame rendering in System 2.
 
 - **The behaviour forecast no longer assumes one way of counting turns.** Reactor's `Game_Battler.turnCount` returns `$gameTroop.turnCount() + 1`, so the first battle turn is 1 and a condition gated on turn 0 can never hold -- which is exactly what the panel reported. `VisuMZ_3_BattleAI`'s on-the-spot mode drops that `+ 1` on a non-TPB system, and turn 0 becomes reachable, so the same panel would have called a working action dead.
 
@@ -16,30 +32,70 @@
 
   The analysis is a standalone module, `src/utils/EnemyActionForecast.js`, with the runtime rule it mirrors pinned by a test, so the numbers cannot drift away from `selectAllActions` unnoticed. `DatabaseManager.getPluginManifest()` is the manifest reader the panel and the party-size lookup now share; it caches on the file's timestamp, because a manifest runs to megabytes on a large project and this one is consulted on every enemy click. The 17 new interface strings are a machine-assisted first pass across all 17 locales and want a native-speaker review.
 
+### Fixed
 
-- **A multi-line comment reads as a comment, and a plugin command's arguments fold away.** Every line of a comment after the first is a 408 continuation, and 408 was the one continuation code missing from the command-name table -- so a four-line `<Forced BGM>` block showed one `Comment` row followed by three red `Unknown (408)` rows, each beside its own perfectly readable text. 657 argument lines had the matching gap one level down: no case in the description switch, so a line the plugin command editor had already formatted fell through to the JSON fallback and rendered as `["Round Count = 1"]`. Both now say what they are.
+- Merge community-reviewed Simplified Chinese wording, apply reviewed catalogs last, and translate/search text-code help while preserving inserted codes.
 
-  Those argument rows also used to be shown twice. They rendered unconditionally as top-level rows, and the parent's own arrow rendered `parameters[3]` again underneath as nested key/value lines -- so expanding listed every argument a second time, under the plugin's internal keys rather than its labels, and collapsing removed only that second copy. The arrow is now the single control for them: the authored 657 rows are what it hides and shows, keeping the plugin's own argument names. A plugin command with arguments but no continuation rows still falls back to the nested rendering, so nothing authored earlier loses its display. On a real event this is the difference between 67 rows and 6.
+- Database tables use distinct cell backgrounds and full-row themed hover/focus feedback. Trait, effect and action selections keep their highlight after the pointer leaves.
 
-  Troop battle pages and common events build their own rows rather than going through the map editor's list, so they had neither the arrow nor the folding, and troop pages were additionally the one list of the three still showing 655 Script continuation lines that the other two had long since folded into their parent's summary. All three now answer the same way about which rows exist, through one shared lookup rather than three scans. On the largest common event in a project here that is 360 rows down to 97; a battle page's plugin command folds the same way.
+- Database menus expose all 20 sidebar sections in matching order; the HTML dropdown scrolls in short windows. Starting Positions puts Browse beside Map/X/Y when space permits, wrapping only as needed.
 
-- **A fade no longer fights whatever it interrupts, and a music sequence can fade in.** Scheduling a gain ramp over a running one does not replace it: the Web Audio timeline keeps both, so the level jumps to the older ramp's target, waits out its end time, and only then follows the new one. Measured in Chromium with `OfflineAudioContext`, driving the interrupt from `ctx.suspend()` so what has already rendered stays immutable: a `fadeOut(2)` arriving half a second into a `fadeIn(2)` jumped from 0.25 to full volume, held there until the fade-in's end time, and then fell over the half second left of its own two seconds. It is reachable today, because `replayBgm` fades in -- leaving a menu or a battle and immediately triggering a transfer or a gameover runs `Scene_Base.fadeOutAll` straight into it. Both pairs of fades now clear the timeline first, through one pair of helpers rather than four copies of the guard; a fade-out holds the level it is audibly at, and a fade-in still forces zero because a gain node is created open.
+- Database number fields match adjacent themed controls instead of using the generic grey spinner: compact padding, consistent text size and accent borders. Skills Invocation rows use tighter spacing.
 
-  Underneath that, fades were sharing one `GainNode` with the authored volume and the ME duck, and three writers on one `AudioParam` cancel each other. Ducking to 0.25 half a second into a two-second fade-in was swallowed whole -- the same numbers as a fade-in nothing interrupted -- so an ME would not have ducked the bed at all, and a volume slider moved during the same fade was dragged back to full by the running ramp. Sources now feed a fade stage that feeds the volume stage (`source -> _fadeGainNode -> _gainNode -> _pannerNode -> master`). The fade stage carries a plain 0..1 envelope and fades ramp only that; the volume setter and the duck keep `_gainNode` to themselves. Plugins that splice nodes attach downstream of `_gainNode`, so the new stage above it leaves their attachment points untouched.
+- Model inspection previews and thumbnails use neutral lighting independent of the current map, with theme-aware backgrounds. Light themes retain richer colorful panels and readable cost badges; the dark model-cost card keeps its black header and grey body. Main editor scrollbars use the accent. The tileset palette retains its original transparency background; the light-mode map controls use a separate white strip.
 
-  With that separation in place, a sequence entry can fade in: **Fade-in (s)** sits beside the palette's existing Fade-out and on a plain track row, and a palette fades in every layer it starts, including one it redraws from its pool later. A palette had only ever faded *out*, so the bed died away smoothly and the next entry began at full level instantly. Absent or zero, which is what every sequence authored before now carries, changes nothing.
+- Light themes have distinct menu and toolbar surfaces, vivid selections, stronger panel and field boundaries, and consistent field fills. Removed the toolbar icon dimming filter so artwork retains its original brightness across all seven palettes.
 
-  A fade-in also decides whether the handover overlaps. A palette used to fade out and only then advance, so its tail and the next entry never sounded together. When the entry that follows names a fade-in, the palette now starts its tail and the next entry begins over the top of it; the outgoing layers keep playing from a retiring pool until their fade is done, and are released then rather than at the moment they were replaced. An entry naming no fade-in -- every sequence authored before there was one, and every silence, which has no such field -- keeps the sequential timing it has always had, so nothing already built shifts by a second.
+- Database category and record rows have symmetric side insets so highlights no longer touch the scrollbar. The category scrollbar uses the theme accent instead of gray-on-gray.
 
-- **A music sequence can lead with an intro, walk its pool in order, and hand over when a track ends.** Three additions on top of the crossfade. **Intro** on any entry plays it on the sequence's first pass only, so an opening statement can sit above a bed that then repeats without it; a sequence made entirely of intros replays one rather than falling silent. **Order** on a layer chooses between drawing at random, never the same track twice running, and walking the pool in order. And a layer whose track reaches its own end now hands over the same way a timed palette does, measured from the buffer's own clock so a slow decode delays the hand-over with the track instead of cutting it short -- which means **Duration 0** no longer only means "until the map changes": each track plays in full and crossfades into the next. A track shorter than its own fade-out is left alone, since handing over would mean beginning its fade before it was heard.
+- Database UI quality pass: responsive form cards, symmetrical paired fields, tighter Actor layouts, aligned trait tables and States labels, wrapping System panels and tileset controls, readable number steppers, and 3D inspector headings that fit translated text. Plugin Manager stays within the app window when resizing or dragging.
 
-  A pool item carries its own **Volume**, trimming it against the rest of its pool. A layer's volume applies to every track it draws, so a pool assembled from two sources -- which rarely agree on level -- had no way to balance one against the other. The trim multiplies the layer's volume rather than replacing it, and the options slider still lands on top of both.
+- System 2 Pixelated Rendering uses a normal square checkbox; the SV Attack Motions table header starts flush inside its border.
 
-  A layer can be **Shuffled** as well as random or in order: it deals from a bag, so every track in the pool is heard before any of them comes round again, instead of each draw being independent and leaving one waiting its turn. The bag rides across a hand-over, or a cycling palette would deal a fresh one every time and never finish the one it was dealing. And a palette can **Move on after one track**: each layer plays a single draw and the sequence advances, which is what makes a random intro possible -- a palette of candidate openings, marked Intro and set to move on, plays exactly one of them and never returns. Its track running out crossfades into whatever follows, the same way a timed palette hands over.
+- Model-bound event previews in the editor’s 2D map view use the live surface-lighting renderer shared by placed props, with per-model lighting, refreshed positions and cleanup when previews are hidden.
 
-  An intro survives a battle. The saved-BGM shape already carried which map's sequence to bring back; it now also carries whether that sequence has come round, so a battle -- which stops the sequence outright and restarts a fresh one on the way back -- no longer replays an opening the player has heard. The same flag rides through save files and through boarding a vehicle. Arriving on the map afresh carries no flag, which is what keeps an intro an intro on every visit rather than only ever once.
+- Audio Player keyboard navigation highlights the selected track with an inset theme-colored outline, eliminating the white bar along the list edge. Shared audio pickers use the same inset row focus.
 
-  The help under the checkbox was rewritten to say what these do, and what the track above the checkbox is for. It is not played while a sequence is on: it is how save files, battles and vehicles refer to the music on that map, and it plays only if the sequence is turned off. Layer controls moved onto their own line beneath the layer title, the way the palette's timings already sit, because four controls and a delete button do not fit the column. New strings are translated across all 17 non-English locales -- a machine-assisted first pass, worth a native review.
+- States places Traits beside General and Duration/Notes beside Messages. Duration and Notes share a row on wide screens and wrap at smaller sizes; narrow detail panes stack the main cards. Trait selection now stays inside the Type cell, aligning every row with the table header.
+
+- Map sidebar Events now support Up/Down, Home/End and Enter without triggering map cursor shortcuts. Database keyboard focus is drawn inside selected rows instead of a clipped bar above the list. States Duration uses compact label/control rows and adjacent checkboxes.
+
+- Show Text face previews sample the configured face cells and fit large or small faces into the preview. Above-character stars remain legible at 8px tile size.
+
+- Face selection and rendering honor the configured face size, including 32×32 sheets. Zoomed tileset clicks use source coordinates, tiny flag borders stay inside their cells, and game windows honor Screen Scale without an inherited 1280×720 minimum. Runtime revision `20260911.2`.
+
+- Menu open/close and shop quantity/confirm buttons accept mouse and touch input again under Pixi 8. Restore legacy ancestor visibility checks and process each button press once, preventing duplicate fast-click actions. Runtime revision `20260911.1`.
+- Arrow keys and Home/End select maps, audio tracks, plugins and resource folders while keeping focus in their lists. Map-tree navigation works while Events is active; Database entry navigation retains list focus. File pickers select the first file correctly when Home is pressed before any selection.
+- Themed and searchable dropdowns keep keyboard navigation inside the popup. Arrows highlight choices without scrolling the underlying window, Enter confirms, and Escape cancels. Disabled options are skipped and retired popups release their listeners.
+- Trait and Effect dialogs keep a fixed frame across tabs, with a scrollable body for smaller windows. Assigned tileset filenames use clearer 13px text and full-name tooltips.
+- Unchecked Switch 1, Switch 2, Variable and Self Switch event conditions display blank, matching Item and Actor. Re-enabling restores stored IDs, the variable threshold and the self-switch letter.
+- Enemy forecasts honor random/casual/gambit selection, preserve an authored zero Max TP, and check repeating-turn intersections and narrow resource ranges. Oversized turn cycles report uncertainty instead of incorrectly declaring an action unreachable.
+
+- Rapid Actor/Class navigation cannot attach retired field handlers to a new record or open duplicate parameter dialogs. Detail refreshes retire their previews and callbacks before rebuilding.
+- Event-command shortcuts follow focus in the command list. Delete/cut/paste in page settings or another dialog cannot change the selected commands; Select All visibly updates the list.
+- Fast arrow navigation reveals database rows beyond the current rendered batch. Retired tileset pickers reject queued confirmation clicks and release their keyboard listeners.
+- Add replayable interaction-order regression tests and a native CI gate with seed/trace artifacts, covering rapid navigation, dialog retirement and delayed map loads.
+- Map-tree drag feedback no longer shifts rows under the pointer; self/descendant drops show no valid target. Cancelling an unsaved map switch keeps the current map highlighted, and Transfer Player map selection no longer interferes with the sidebar.
+- Mouse-wheel zoom preserves the map position under the cursor in 2D and 3D. At 2D map edges, retain only the margin needed for anchoring; panning and scrollbar travel respect that margin, and loading another map resets it.
+- Tileset, character and face pickers take keyboard focus when opened; arrow/Home/End navigation stays inside the picker instead of changing the underlying Database selection.
+- Database list boundaries and reselecting the current entry preserve the live detail view. Reserve preview width before drawing and discard delayed setup from old selections to prevent shifting fields and duplicate previews during rapid navigation.
+- Looping 3D effects reuse their drawing materials to avoid repeated shader-compilation stalls. Skip fully hidden room-floor drawing when an unchanged opaque parallax covers it, preserving the original image and authored quality settings.
+- Tileset flag buttons toggle their Key open/closed, and the Key has a Close button. Leaving the tileset view, closing Database, or switching maps resets the selected flag and brush without changing tileset settings.
+- Event-page settings scroll in short windows instead of collapsing the character/model preview. Keep a usable preview area and compact image controls across languages.
+- Unchecked Item/Actor page conditions display blank without losing their stored selections. Empty themed dropdowns retain the same line height as populated controls throughout the editor.
+- Web Battle Room videos recover from blocked autoplay after a click or keypress. Closing a room clears pending playback and retry listeners; missing media warns once without creating invalid textures.
+- Browser video play/pause cancellation no longer stops MZ battles through the unhandled-promise handler. Other asynchronous and programming errors retain normal error reporting.
+
+### Development
+
+- Open the 0.98.6 development cycle. New features, fixes, and compatibility updates will be recorded here.
+
+### Music sequences and event lists (PR #52)
+
+- Music sequences gain fade-in/crossfade, first-pass intros, ordered or shuffled pools, per-track volume and an option to advance after one track. Intro progress survives battle, save and vehicle transitions.
+- Separate audio fades from volume/ME ducking and cancel interrupted automation cleanly. Track-end transitions use the unwrapped playback position and the next entry that will actually play.
+- Multi-line comments show Comment instead of Unknown (408). Plugin argument rows fold once under their command across map, troop and common-event lists, using their authored labels.
+- Update music controls and translations across all 18 locales. Detailed incoming notes and integration evidence: [PR #52 integration](../docs/PR-INTEGRATION-2026-09-07.md).
 
 ## [0.98.5] - 2026-09-07
 

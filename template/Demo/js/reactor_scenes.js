@@ -351,6 +351,12 @@ Scene_Boot.prototype.startNormalGame = function() {
 };
 
 Scene_Boot.prototype.resizeScreen = function() {
+    const faceSize = Number($dataSystem.faceSize) || 144;
+    const iconSize = Number($dataSystem.iconSize) || 32;
+    ImageManager.iconWidth = iconSize;
+    ImageManager.iconHeight = iconSize;
+    ImageManager.faceWidth = faceSize;
+    ImageManager.faceHeight = faceSize;
     const screenWidth = $dataSystem.advanced.screenWidth;
     const screenHeight = $dataSystem.advanced.screenHeight;
     Graphics.resize(screenWidth, screenHeight);
@@ -369,6 +375,11 @@ Scene_Boot.prototype.adjustBoxSize = function() {
 
 Scene_Boot.prototype.adjustWindow = function() {
     if (Utils.isNwjs()) {
+        if (typeof nw !== "undefined" && nw.Window) {
+            const gameWindow = nw.Window.get();
+            gameWindow.setMinimumSize(1, 1);
+            if (gameWindow.isFullscreen) return;
+        }
         const scale = this.screenScale();
         const xDelta = Graphics.width * scale - window.innerWidth;
         const yDelta = Graphics.height * scale - window.innerHeight;

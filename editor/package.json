@@ -1,6 +1,6 @@
 {
   "name": "rpg-reactor",
-  "version": "0.98.5",
+  "version": "0.98.6",
   "private": true,
   "description": "An open-source, cross-platform RPG game editor and engine built on PixiJS 8 and Three.js, compatible with RPG Maker MV/MZ projects",
   "main": "index.html",
@@ -10,6 +10,8 @@
     "test": "node --test",
     "smoke:web": "node tests/smoke/web-editor-persistence.cjs",
     "smoke:nw": "node tests/smoke/nw-editor-save.cjs",
+    "smoke:nw-interactions": "node tests/smoke/nw-interaction-order.cjs",
+    "smoke:nw-keyboard": "node tests/smoke/nw-issue54.cjs",
     "smoke:nw-ui": "node tests/smoke/nw-user-interface-layout.cjs",
     "build": "node build-scripts/build.js",
     "build:win": "node build-scripts/build.js --platform=win",

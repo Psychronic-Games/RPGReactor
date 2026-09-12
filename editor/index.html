@@ -24,12 +24,38 @@
             z-index: 10000;
             flex-direction: column;
         ">
-            <img src="images/splash-screen.png" alt="RPG Reactor" width="1920" height="1200" style="width: 100%; height: auto; margin-bottom: 24px;" onerror="this.style.display='none'">
+            <img id="splash-image" data-splash-images="splash-screen-01.png,splash-screen-02.png" alt="RPG Reactor" width="1920" height="1200" style="width: 100%; height: auto; margin-bottom: 24px;">
+            <script>
+                (() => {
+                    const image = document.getElementById('splash-image');
+                    // Web packaging fills this list; desktop launches discover new art directly.
+                    let images = image.dataset.splashImages.split(',').filter(Boolean);
+                    try {
+                        if (typeof nw !== 'undefined' && typeof require === 'function') {
+                            const fs = require('fs');
+                            const { fileURLToPath } = require('url');
+                            const folder = fileURLToPath(new URL('images/', window.location.href));
+                            const discovered = fs.readdirSync(folder, { withFileTypes: true })
+                                .filter(entry => entry.isFile() && /^splash-screen-\d+\.png$/i.test(entry.name))
+                                .map(entry => entry.name).sort();
+                            if (discovered.length) images = discovered;
+                        }
+                    } catch (_) { /* The packaged list also works without filesystem access. */ }
+                    const showNext = () => {
+                        if (!images.length) { image.style.display = 'none'; return; }
+                        const index = Math.floor(Math.random() * images.length);
+                        image.src = 'images/' + images.splice(index, 1)[0];
+                    };
+                    // A missing or damaged image should not leave a broken-image icon at startup.
+                    image.onerror = showNext;
+                    showNext();
+                })();
+            </script>
             <div data-i18n="app.loading" style="color: #007acc; font-size: 18px; line-height: 22px; animation: pulse 1.5s infinite;">Loading...</div>
         </div>
 
         <!-- HTML Menu Bar (replaces non-functional native menu on Linux) -->
-        <div id="html-menu-bar" style="background-color: var(--color-bg-toolbar); color: var(--color-text); border-bottom: 1px solid var(--color-border); display: flex; padding: 0; user-select: none; font-size: 13px; flex-shrink: 0;">
+        <div id="html-menu-bar" style=" color: var(--color-text); border-bottom: 1px solid var(--color-border); display: flex; padding: 0; user-select: none; font-size: 13px; flex-shrink: 0;">
             <div class="html-menu-item" data-menu="file" style="position: relative; padding: 8px 16px; cursor: pointer;">
                 <span data-i18n="menu.file">File</span>
                 <div class="html-submenu" id="submenu-file" style="display: none; position: absolute; top: 100%; left: 0; background-color: var(--color-bg-toolbar); color: var(--color-text); border: 1px solid var(--color-border); min-width: 240px; z-index: 10000; box-shadow: var(--shadow-popup);">
@@ -47,7 +73,7 @@
             </div>
             <div class="html-menu-item" data-menu="database" style="position: relative; padding: 8px 16px; cursor: pointer;">
                 <span data-i18n="menu.database">Database</span>
-                <div class="html-submenu" id="submenu-database" style="display: none; position: absolute; top: 100%; left: 0; background-color: var(--color-bg-toolbar); color: var(--color-text); border: 1px solid var(--color-border); min-width: 200px; z-index: 10000; box-shadow: var(--shadow-popup);">
+                <div class="html-submenu rr-accent-scrollbar" id="submenu-database" style="display: none; position: absolute; top: 100%; left: 0; background-color: var(--color-bg-toolbar); color: var(--color-text); border: 1px solid var(--color-border); min-width: 200px; z-index: 10000; box-shadow: var(--shadow-popup);">
                     <div class="html-menu-option" data-db="actors" data-i18n="menu.actors" style="padding: 8px 16px; cursor: pointer;">Actors</div>
                     <div class="html-menu-option" data-db="classes" data-i18n="menu.classes" style="padding: 8px 16px; cursor: pointer;">Classes</div>
                     <div class="html-menu-option" data-db="skills" data-i18n="menu.skills" style="padding: 8px 16px; cursor: pointer;">Skills</div>
@@ -61,11 +87,14 @@
                     <div style="height: 1px; background: var(--color-border); margin: 4px 0;"></div>
                     <div class="html-menu-option" data-db="animations" data-i18n="menu.animations" style="padding: 8px 16px; cursor: pointer;">Animations</div>
                     <div class="html-menu-option" data-db="tilesets" data-i18n="menu.tilesets" style="padding: 8px 16px; cursor: pointer;">Tilesets</div>
+                    <div class="html-menu-option" data-db="reactor3d" data-i18n="menu.models3d" style="padding: 8px 16px; cursor: pointer;">3D Models</div>
                     <div class="html-menu-option" data-db="commonEvents" data-i18n="menu.commonEvents" style="padding: 8px 16px; cursor: pointer;">Common Events</div>
-                    <div class="html-menu-option" data-db="actionSequences" style="padding:8px 16px;cursor:pointer;">Action Sequences</div>
                     <div class="html-menu-option" data-db="userInterfaces" data-i18n="menu.userInterfaces" style="padding: 8px 16px; cursor: pointer;">User Interfaces</div>
+                    <div class="html-menu-option" data-db="actionSequences" data-i18n="menu.actionSequences" style="padding:8px 16px;cursor:pointer;">Action Sequences</div>
+                    <div class="html-menu-option" data-db="quests" data-i18n="menu.quests" style="padding: 8px 16px; cursor: pointer;">Quests</div>
                     <div style="height: 1px; background: var(--color-border); margin: 4px 0;"></div>
-                    <div class="html-menu-option" data-db="system" data-i18n="menu.system" style="padding: 8px 16px; cursor: pointer;">System</div>
+                    <div class="html-menu-option" data-db="system1" data-i18n="db.system1" style="padding: 8px 16px; cursor: pointer;">System 1</div>
+                    <div class="html-menu-option" data-db="system2" data-i18n="db.system2" style="padding: 8px 16px; cursor: pointer;">System 2</div>
                     <div class="html-menu-option" data-db="types" data-i18n="menu.types" style="padding: 8px 16px; cursor: pointer;">Types</div>
                     <div class="html-menu-option" data-db="terms" data-i18n="menu.terms" style="padding: 8px 16px; cursor: pointer;">Terms</div>
                 </div>
@@ -241,7 +270,7 @@
                     <!-- Events Section -->
                     <div class="sidebar-section resizable-section" id="events-section" style="display: none; flex: 1; min-height: 100px;">
                         <div class="sidebar-header" data-i18n="sidebar.events">Events</div>
-                        <div class="sidebar-content" id="events-list" style="overflow-y: auto; padding: 0; min-height: 0;">
+                        <div class="sidebar-content rr-accent-scrollbar" id="events-list" style="overflow-y: auto; padding: 4px 6px; min-height: 0;">
                             <div class="tree-item" data-i18n="sidebar.noEvents" style="color: var(--color-text-muted);">No events on this map</div>
                         </div>
                     </div>
@@ -253,10 +282,10 @@
                             <div id="map-tree-tab" class="map-tab active" data-i18n="sidebar.mapTree" style="flex: 1; padding: 6px 12px; text-align: center; cursor: pointer; font-size: 12px; border-right: 1px solid var(--color-border); background-color: var(--color-bg-surface); color: var(--color-text);">Map Tree</div>
                             <div id="quick-access-tab" class="map-tab" data-i18n="sidebar.quickAccess" style="flex: 1; padding: 6px 12px; text-align: center; cursor: pointer; font-size: 12px; background-color: var(--color-bg-list-item); color: var(--color-text-muted);">Quick Access</div>
                         </div>
-                        <div class="sidebar-content" id="maps-list" style="overflow-y: auto; flex: 1;">
+                        <div class="sidebar-content rr-accent-scrollbar" id="maps-list" style="overflow-y: auto; flex: 1;">
                             <div class="tree-item" data-i18n="sidebar.noMaps">No maps yet</div>
                         </div>
-                        <div class="sidebar-content" id="quick-access-list" style="overflow-y: auto; flex: 1; display: none;">
+                        <div class="sidebar-content rr-accent-scrollbar" id="quick-access-list" style="overflow-y: auto; flex: 1; display: none;">
                             <div class="tree-item" data-i18n="sidebar.noQuickAccessMaps">No quick access maps yet</div>
                         </div>
                     </div>
@@ -680,7 +709,7 @@
             <div class="modal-body">
                 <img src="images/logo.png" alt="RPG Reactor" style="max-width: 300px; width: 100%; height: auto; margin-bottom: 24px;" onerror="this.style.display='none'">
 
-                <h3 data-i18n="about.version" style="color: #e8b817; margin-bottom: 16px;">RPG Reactor v0.98.5</h3>
+                <h3 data-i18n="about.version" style="color: #e8b817; margin-bottom: 16px;">RPG Reactor v0.98.6</h3>
 
                 <p data-i18n="about.description" style="color: var(--color-text); line-height: 1.6; margin-bottom: 16px;">
                     An open-source, cross-platform RPG game engine built with NW.js, PixiJS v8, and Three.js

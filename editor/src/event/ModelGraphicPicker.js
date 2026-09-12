@@ -959,7 +959,7 @@ class ModelGraphicPicker {
             }
             if (!this._renderer) {
                 this._scene = new THREE.Scene();
-                this._scene.background = new THREE.Color(0x1a1a1e);
+                ModelPreview3D.updateBackground(this._scene);
                 this._camera = Reactor3D.createCamera({ fov: 40 });
                 this._renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
                 this._renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
@@ -1006,6 +1006,7 @@ class ModelGraphicPicker {
                         }
                         this._lastRenderAt = now;
                     }
+                    ModelPreview3D.updateBackground(this._scene);
                     Reactor3D.renderScene(this._renderer, this._scene, this._camera);
                     this._raf = requestAnimationFrame(tick);
                 };
@@ -1042,6 +1043,7 @@ class ModelGraphicPicker {
             model.position.set(0, -middle, 0);
             this._object = new THREE.Group();
             this._object.add(model);
+            ModelPreview3D.isolateLighting(this._object);
             this._buildPoseRings();
             this._applyModelRotation();
             this._rebuildFaceMarkers();

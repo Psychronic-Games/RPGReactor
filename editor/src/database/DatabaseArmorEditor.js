@@ -15,6 +15,7 @@ class DatabaseArmorEditor {
     }
 
     showArmorDetail(container, armor) {
+        const isCurrentDetail = this.parentEditor?.captureDetailContext?.() || (() => true);
         this.currentArmor = armor;
 
         const wrapper = document.createElement('div');
@@ -79,6 +80,7 @@ class DatabaseArmorEditor {
 
         // Add icon to the designated container after the DOM is ready
         setTimeout(() => {
+            if (!isCurrentDetail()) return;
             const iconContainer = document.getElementById(`armor-icon-container-${armor.id}`);
             if (iconContainer) {
                 this.parentEditor.addDatabasePreview(iconContainer, armor, 'armors');
@@ -179,6 +181,7 @@ class DatabaseArmorEditor {
 
         // Setup trait interaction after DOM is ready
         setTimeout(() => {
+            if (!isCurrentDetail()) return;
             const traitsTable = document.getElementById(`armor-traits-table-${armor.id}`);
             if (traitsTable) {
                 this.setupTraitInteraction(traitsTable, armor);
@@ -211,6 +214,7 @@ class DatabaseArmorEditor {
 
         // Add event listeners
         setTimeout(() => {
+            if (!isCurrentDetail()) return;
             const editableFields = container.querySelectorAll('[data-armor-id]');
             editableFields.forEach(field => {
                 field.addEventListener('change', (e) => {
@@ -260,7 +264,7 @@ class DatabaseArmorEditor {
                     indicator.style.setProperty('background-color', 'var(--color-accent-bright)', 'important');
                 }
                 contentCells.forEach(cell => {
-                    cell.style.setProperty('background-color', 'var(--color-bg-panel)', 'important');
+                    cell.style.setProperty('background-color', 'var(--color-bg-selected)', 'important');
                 });
             });
 
@@ -289,7 +293,7 @@ class DatabaseArmorEditor {
                     indicator.style.setProperty('background-color', 'var(--color-accent-bright)', 'important');
                 }
                 contentCells.forEach(cell => {
-                    cell.style.setProperty('background-color', 'var(--color-bg-panel)', 'important');
+                    cell.style.setProperty('background-color', 'var(--color-bg-selected)', 'important');
                 });
 
                 const section = table.closest('.database-section');
@@ -535,6 +539,9 @@ class DatabaseArmorEditor {
 
 
     refreshArmorDetail(armor) {
+        if (this.parentEditor?.showDatabaseDetail) {
+            return this.parentEditor.showDatabaseDetail(armor, 'armors');
+        }
         console.debug('DatabaseArmorEditor.refreshArmorDetail - Refreshing armor:', armor.id);
         console.debug('DatabaseArmorEditor.refreshArmorDetail - Armor traits:', armor.traits);
 

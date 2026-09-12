@@ -40,13 +40,8 @@ class UIManager {
             });
         });
 
-        // Sidebar tree items - delegate event to handle dynamically added items
-        document.addEventListener('click', (e) => {
-            if (e.target.classList.contains('tree-item')) {
-                document.querySelectorAll('.tree-item').forEach(i => i.classList.remove('selected'));
-                e.target.classList.add('selected');
-            }
-        });
+        // Map trees own their selection. ProjectController highlights only
+        // after a successful load; dialog trees must not change the sidebar.
 
         // HTML Menu Bar - Setup dropdown behavior
         const menuItems = document.querySelectorAll('.html-menu-item');
@@ -310,7 +305,7 @@ class UIManager {
             click: () => this.callbacks.openDatabase('tilesets')
         }));
         databaseMenu.append(new nw.MenuItem({
-            label: '3D',
+            label: '3D Models',
             click: () => this.callbacks.openDatabase('reactor3d')
         }));
         databaseMenu.append(new nw.MenuItem({
@@ -320,6 +315,14 @@ class UIManager {
         databaseMenu.append(new nw.MenuItem({
             label: 'User Interfaces',
             click: () => this.callbacks.openDatabase('userInterfaces')
+        }));
+        databaseMenu.append(new nw.MenuItem({
+            label: 'Action Sequences',
+            click: () => this.callbacks.openDatabase('actionSequences')
+        }));
+        databaseMenu.append(new nw.MenuItem({
+            label: 'Quests',
+            click: () => this.callbacks.openDatabase('quests')
         }));
         databaseMenu.append(new nw.MenuItem({ type: 'separator' }));
         databaseMenu.append(new nw.MenuItem({
@@ -503,6 +506,9 @@ class UIManager {
                     ArrowDown: [0, 1]
                 }[e.key]
                 : null;
+            // Sidebar lists own navigation even while Events is the active tool.
+            // This listener runs before the list's own keyboard handler.
+            if ((arrowDelta || e.key === 'Enter') && e.target?.closest?.('#maps-list, #quick-access-list, #events-list')) return;
             const eventEditorModal = document.getElementById('event-editor-modal');
             const eventEditorOpen = eventEditorModal && eventEditorModal.style.display !== 'none';
             const commandModifier = e.ctrlKey || e.metaKey;

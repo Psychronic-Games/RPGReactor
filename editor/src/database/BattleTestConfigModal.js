@@ -571,11 +571,18 @@ class BattleTestConfigModal {
             } catch (error) { console.warn('Could not read battle graphic settings:', error); }
             break;
         }
-        if (!system.optSideView && !charset) return [];
+
         const folder = charset ? 'characters' : 'sv_actors';
         return battlers.flatMap(battler => {
             const actor = this.databaseManager.getActor(battler.actorId);
-            if (!actor || window.RRDatabase3DBindings.get(this.project.path, 'actors', actor.id, 'battler')) return [];
+            if (!actor) return [];
+            const config=this.databaseManager.data.battlePresentation?.actors?.[actor.id]?.graphic;
+            if(config?.mode&&config.mode!=='auto'){
+                const graphic=ReactorBattleData.graphic(this.databaseManager.data.battlePresentation,'actors',actor.id,actor,window.RRDatabase3DBindings.get(this.project.path,'actors',actor.id,'battler'));
+                if(graphic.type==='model')return graphic.model?[]:[actor.name+': no battler model selected'];
+                return graphic.name&&window.RRAssetFiles.findImage(path.join(this.project.path,'img',graphic.folder),graphic.name)?[]:[actor.name+': img/'+graphic.folder+'/'+(graphic.name||'(none)')];
+            }
+            if ((!system.optSideView&&!charset)||window.RRDatabase3DBindings.get(this.project.path, 'actors', actor.id, 'battler')) return [];
             const name = charset ? actor.characterName : actor.battlerName;
             if (!name || window.RRAssetFiles.findImage(path.join(this.project.path, 'img', folder), name)) return [];
             return [`${actor.name}: img/${folder}/${name}`];

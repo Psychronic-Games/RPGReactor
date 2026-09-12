@@ -543,6 +543,29 @@ test('zoom is clamped at both ends', () => {
     assert.equal(view.view.distance, 400);
 });
 
+test('3D wheel zoom keeps the pointed ground location at the same screen coordinate', () => {
+    const THREE = require('three');
+    const view = viewport({}, { THREE });
+    view.canvas = { getBoundingClientRect: () => ({ left: 150, top: 80, width: 900, height: 600 }) };
+    view.camera = new THREE.PerspectiveCamera(50, 1.5, 0.1, 1000);
+    view.view.target = { x: 12.5, y: 0, z: 12.5 };
+    view.view.distance = 35;
+    view.applyCamera = () => Reactor3D.aimCamera(view.camera, view.view.target,
+        { pitch: 55, yaw: 25, distance: view.view.distance });
+    const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+    view.applyCamera();
+    for (const x of [250, 600, 950]) for (const y of [200, 380, 600]) for (const delta of [-100, 100]) {
+        const ndc = new THREE.Vector2((x - 150) / 900 * 2 - 1, -(y - 80) / 600 * 2 + 1);
+        const ray = new THREE.Raycaster();ray.setFromCamera(ndc, view.camera);
+        const anchor = ray.ray.intersectPlane(plane, new THREE.Vector3());
+        assert.ok(anchor);
+        view.zoom(delta, x, y);
+        const projected = anchor.clone().project(view.camera);
+        assert.ok(Math.abs(projected.x - ndc.x) < 1e-8 && Math.abs(projected.y - ndc.y) < 1e-8,
+            `cursor (${x}, ${y}) drifted after zoom ${delta}`);
+    }
+});
+
 //-----------------------------------------------------------------------------
 // Events
 

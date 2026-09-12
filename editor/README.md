@@ -2,7 +2,7 @@
 
 For the consolidated update, read the [0.98.5 release notes](../docs/posts/release-notes-0.98.5.md). Battle Rooms and visual Action Sequences are available as opt-in systems; see the [battle guide](../docs/BATTLE-PRESENTATION.md) for setup and current compatibility limits.
 
-RPG Reactor 0.98.5 is an open-source, cross-platform RPG game editor and runtime for RPG Maker MV/MZ-compatible projects, built on NW.js, PixiJS v8 and Three.js. RPG Reactor provides its own modern runtime, PixiJS 8 for 2D and Three.js for HD-2D/3D maps, while preserving compatibility with RPG Maker project data and targeting backwards compatibility with both RPG Maker MZ and MV plugins. Create 2D and HD-2D RPG games with a complete development environment featuring map editing, event scripting, database management, and game testing capabilities.
+RPG Reactor 0.98.6 (in development) is an open-source, cross-platform RPG game editor and runtime for RPG Maker MV/MZ-compatible projects, built on NW.js, PixiJS v8 and Three.js. RPG Reactor provides its own modern runtime, PixiJS 8 for 2D and Three.js for HD-2D/3D maps, while preserving compatibility with RPG Maker project data and targeting backwards compatibility with both RPG Maker MZ and MV plugins. Create 2D and HD-2D RPG games with a complete development environment featuring map editing, event scripting, database management, and game testing capabilities.
 
 ## Features
 
@@ -477,7 +477,7 @@ Database shortcuts are scoped to the active database section. The Types workspac
 - **Rendering**: PixiJS 8.20.0 for 2D and Three.js 0.185.1 for 3D maps and models, with compatibility shims and bundled PIXI 7-era library support for imported RPG Maker projects/plugins
 - **Animation Effects**: Effekseer
 - **Data Format**: RPG Maker MZ-compatible JSON plus stock MV-compatible LZString saves. The MV compatibility layer supports synchronous YEP-style local/browser save APIs, including custom directory, filename, and web-storage key contracts
-- **Tile Size**: RPG Maker MZ-compatible 48, 32, 24, or 16 pixels
+- **Tile Size**: 64, 48, 32, 24, 16, or 8 pixels. Sheet layouts stay fixed; image dimensions scale with the tile size. B–G sheets are each 16×16 tiles.
 - **Desktop platforms**: Windows (x64), macOS (x64), Linux (x64)
 - **Browser edition**: Modern HTTPS/localhost browsers with service-worker and IndexedDB support
 
@@ -487,7 +487,12 @@ The Node test suite covers project creation/import and version metadata, generat
 [`docs/STATUS.md`](../docs/STATUS.md). `npm run smoke:web` drives real Chromium
 through save, IndexedDB, and reload; `npm run smoke:nw` launches the editor
 through the matching NW.js SDK ChromeDriver and verifies a native project save.
-Both are CI gates. `npm run smoke:nw-ui` checks the responsive interface editor
+Both are CI gates. `npm run smoke:nw-interactions` also runs in CI: it checks rapid
+record changes, retired dialogs, keyboard ownership, delayed map loads and seeded
+navigation sequences in a disposable project. Set `RR_INTERACTION_SEED` to replay
+another sequence; failures retain the seed and action trace in the uploaded JSON.
+All NW.js smokes accept `--nw-root=/path/to/matching/sdk`.
+`npm run smoke:nw-ui` checks the responsive interface editor
 from 1280x720 through 2560x1440 as a local release gate. Prior GUI passes do not
 replace a fresh check of the candidate, and Node tests do not establish visual
 correctness or complete game compatibility.
@@ -498,6 +503,10 @@ npm test
 ```
 
 Use **Build → Create Deployment Package...** for game packages and **Build → Package Editor for Distribution...** for editor archives. The direct npm game-build scripts require an explicit project path and acknowledgment that their developer download is not release-authenticated, for example `npm run build:linux -- --project="/path/to/game" --developer-unverified-downloads`.
+
+### Startup splash artwork
+
+Each launch randomly selects a splash image. Add PNG artwork to `editor/images/` using names such as `splash-screen-03.png`, `splash-screen-04.png`, and so on (the current artwork is 1920 × 1200). Desktop launches discover these files automatically; rebuild the Web package to include new images there. Numbering gaps are allowed, and the same image may appear on consecutive launches.
 
 ### Build Architecture
 Both game builds and editor distribution builds use `worker_threads` to run in background threads without blocking the UI. Workers communicate via `postMessage` with `{ type: 'log', message, color }` for build log output and `{ type: 'progress', percent, status }` for progress bar updates. ESM `import()` hangs silently in NW.js worker threads, so all build workers use CommonJS exclusively.

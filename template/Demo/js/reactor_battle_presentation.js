@@ -40,15 +40,16 @@
     P.sequence=function(subject,action){
         const sequence=B.resolve(P.settings,P.sequences,{kind:DataManager.isSkill(action.item())?'skills':'items',itemId:action.item().id,
             isAttack:action.isAttack(),weaponIds:subject.weapons?.().map(w=>w.id)||[],
+            classId:subject.isActor()?subject.currentClass?.()?.id:0,magical:action.isMagical?.(),animationId:action.item().animationId>0?action.item().animationId:subject.attackAnimationId1?.()||0,
             battlerKind:subject.isActor()?'actors':'enemies',battlerId:subject.isActor()?subject.actorId():subject.enemyId()});
-        if(sequence?.steps.some(s=>s.type==='animation'&&s.animationId>0&&!$dataAnimations[s.animationId])){P.warn('A sequence animation is missing; existing action behavior is retained.');return null;}return sequence;
+        if(sequence?.steps.some(s=>s.type==='animation'&&s.animationId>0&&!$dataAnimations[s.animationId])){P.warn('A sequence animation is missing; existing action behavior is retained.');return null;}try{return sequence?B.expandCalls(sequence,P.sequences):null;}catch(error){P.warn(error);return null;}
     };
     P.compatibility=function(){
         const names=(PluginManager._scripts||[]).join(' ');
         const unsupported=names.match(/VE_BattleMotions|YEP_BattleEngineCore|VisuMZ_1_BattleCore|LeTBS/i);
         return unsupported ? 'The active '+unsupported[0]+' battle engine needs a presentation adapter. Existing behavior is retained.' : '';
     };
-    P.adapter=function(manager,subject,targets){
+    P.adapter=function(manager,subject,targets,stateOnly=false){
         const ss=manager._spriteset,room=ss?._reactorRoom;
         const visibleTargets=[...new Set(targets)],roles={user:ss?.findTargetSprite(subject)};
         visibleTargets.forEach((target,i)=>roles['target'+i]=ss?.findTargetSprite(target));
@@ -63,7 +64,7 @@
         const media=[];
         const adapter={context:{homes,target:homes.target,direction:homes.target&&homes.user&&homes.target.x<homes.user.x?-1:1},
             cue(step,start){
-                const chosen=step.role==='allTargets'?visibleTargets:step.role==='target'?[visibleTargets[step.targetIndex??0]]:[subject];
+                const chosen=step._chosen|| (step.role==='allTargets'?visibleTargets:step.role==='target'?[visibleTargets[step.targetIndex??0]]:[subject]);
                 if(step.type==='impact'){
                     // Drain the original occurrence list exactly once, preserving repeats.
                     adapter.pendingImpact=true;adapter.resolveNext();
@@ -89,7 +90,7 @@
                     const ticket={isPlaying:()=>tickets.some(t=>t.isPlaying()),cancel:()=>tickets.forEach(t=>t.cancel?.())};media.push(ticket);return ticket;
                 }
                 else if(step.type==='motion')for(const battler of chosen.filter(Boolean)){
-                    const sprite=ss.findTargetSprite(battler);sprite?.startMotion?.(step.motion==='idle'?'wait':['attack','punch'].includes(step.motion)?'thrust':step.motion==='run'?'walk':step.motion==='cast'?'spell':step.motion);
+                    const sprite=ss.findTargetSprite(battler);sprite?.startMotion?.(step.motion==='idle'?'wait':['attack','punch'].includes(step.motion)?'thrust':step.motion==='run'?'walk':step.motion==='cast'?'spell':step.motion);if(sprite&&P.graphicFor(battler)){P.requestGraphicMotion(sprite,step.motion);if(step.motion==='attack'&&P.graphicFor(battler).showWeapon!==false)battler.performAttack?.();}
                     const state=sprite?._reactorBattler;if(state){root.ReactorBattleRoomView.prepareMotions(state);const rule=state.rules?.find(r=>r.trigger==='action'&&r.name.toLowerCase()===step.motion?.toLowerCase());state.action=step.motion==='idle'?null:{name:rule?.name||step.motion,frame:state.frame};if(step.motion==='idle'&&state.binding)state.binding.movingAt=undefined;}
                     const model=room?.models.get(sprite?._reactorRoomKey);if(model){model.action=step.motion==='idle'?null:{name:step.motion,start:room.frame};if(step.motion==='idle'&&model.binding)model.binding.movingAt=undefined;}
                 }else if(step.type==='weapon'){
@@ -103,10 +104,11 @@
                 }
             },
             pose(positions,frame){
+                const posed=new Set();
                 for(const [key,logical] of Object.entries(positions)){
                     const p=B.visualPose(logical);
-                    if(key==='camera'){if(room)Object.assign(room.settings.camera,p);continue;}
-                    const sprite=roles[key];if(!sprite)continue;
+                    if(key==='camera'){if(!stateOnly&&room)Object.assign(room.settings.camera,p);continue;}
+                    const sprite=roles[key];if(!sprite||posed.has(sprite))continue;posed.add(sprite);sprite._rrSequenceFacing=p.facing;
                     if(room)sprite._reactorRoomPosition={...sprite._reactorRoomPosition,...p};
                     else{sprite._offsetX=p.x*48-sprite._homeX;sprite._offsetY=(p.y-p.z)*48-sprite._homeY;sprite.x=p.x*48;sprite.y=(p.y-p.z)*48;const old=saved.get(sprite);sprite.rotation=(old.rotation||0)+(old.model?0:(p.rotateZ||0)*Math.PI/180);if(old.model){old.model.rotation.set(old.modelRotation.x+(p.rotateX||0)*Math.PI/180,old.modelRotation.y+(p.rotateY||0)*Math.PI/180,old.modelRotation.z+(p.rotateZ||0)*Math.PI/180);old.model.scale.set(old.modelScale.x*(p.scaleX??1),old.modelScale.y*(p.scaleY??1),old.modelScale.z*(p.scaleZ??1));}const initialFacing=B.facingToward(homes[key],(key==='user'?homes.target:homes.user)||homes[key]),turn=p.facing!==undefined&&Math.sign(p.facing)!==Math.sign(initialFacing)?-1:1;sprite.scale?.set(old.scaleX*turn*(p.scale??1)*(old.model?1:(p.scaleX??1)),old.scaleY*(p.scale??1)*(old.model?1:(p.scaleY??1)));}
                 }
@@ -123,13 +125,237 @@
             clearProjectile(){room?.remove('extra:projectile');const g=adapter.projectile?.graphic;if(g){g.removeFromParent();g.bitmap.destroy();g.destroy();}adapter.projectile=null;},
             cleanup(cancelled){
                 if(cancelled)for(const ticket of media)ticket.cancel?.();
-                room?.endCinematicAction?.();
-                for(const [sprite,old] of saved){if(old.model){old.model.rotation.copy(old.modelRotation);old.model.scale.copy(old.modelScale);}sprite.rotation=old.rotation;sprite.scale?.set(old.scaleX,old.scaleY);Object.assign(sprite,{x:old.x,y:old.y,_offsetX:old.offsetX,_offsetY:old.offsetY});if(room){const role=Object.keys(roles).find(k=>roles[k]===sprite);sprite._reactorRoomPosition={...homes[role]};}}
-                if(room&&camera){Object.assign(room.settings.camera,camera);room.settings.cameraSource=cameraSource;}
+                if(!stateOnly)room?.endCinematicAction?.();
+                for(const [sprite,old] of saved){if(old.model){old.model.rotation.copy(old.modelRotation);old.model.scale.copy(old.modelScale);}delete sprite._rrSequenceFacing;sprite.rotation=old.rotation;sprite.scale?.set(old.scaleX,old.scaleY);Object.assign(sprite,{x:old.x,y:old.y,_offsetX:old.offsetX,_offsetY:old.offsetY});if(room){const role=Object.keys(roles).find(k=>roles[k]===sprite);sprite._reactorRoomPosition={...homes[role]};}}
+                if(!stateOnly&&room&&camera){Object.assign(room.settings.camera,camera);room.settings.cameraSource=cameraSource;}
                 adapter.clearProjectile();adapter.clearWeapon();
                 for(const sprite of saved.keys()){sprite.refreshMotion?.();if(sprite._reactorBattler){sprite._reactorBattler.action=null;const binding=sprite._reactorBattler.binding;if(binding){binding.latch={};binding.angles={};}}const model=room?.models.get(sprite._reactorRoomKey);if(model){model.action=null;if(model.binding){model.binding.latch={};model.binding.angles={};}}}
             }
-        };return adapter;
+        };adapter.owns=sprite=>saved.has(sprite);return P.extendAdapter(adapter,{manager,subject,targets,ss,room,roles,homes,saved});
+    };
+    P.sequenceVisuals=function({ss,room,subject,manager,targets}){
+        const prefix='extra:sequence:'+(P._visualSerial=(P._visualSerial||0)+1)+':',held=new Map(),flights=[];let serial=0,time=0,closed=false;
+        const point=(sprite,step,height)=>{
+            if(!sprite)return null;
+            const p=room?{...sprite._reactorRoomPosition}:{x:sprite.x/48,y:sprite.y/48,z:0,facing:(Math.sign(sprite._rrSequenceFacing)||sprite._rrFacing||Math.sign((ss.findTargetSprite(targets[0])?.x??sprite.x-1)-sprite.x)||-1)*90};
+            if(room)return room.attachmentPoint(sprite._reactorRoomKey,{...step,z:step.attachment&&step.attachment!=='offset'?(step.z||0):height??step.z},p);
+            const main=sprite._mainSprite||sprite,model=sprite._reactorBattler,world=root.ReactorBattleRoomView?.attachmentWorld(model,step.attachment,step.bone);
+            if(world&&model.camera){
+                const projected=world.project(model.camera),size=model.size||main._frame?.width||48;
+                const local={x:(projected.x+1)*size/2-(main.anchor?.x??.5)*size,y:(1-projected.y)*size/2-(main.anchor?.y??1)*size};
+                if(main.toGlobal&&ss._battleField.toLocal){const screen=ss._battleField.toLocal(main.toGlobal(local));return {x:screen.x/48+(step.x||0)*Math.sign(p.facing||1),y:screen.y/48+(step.y||0),z:step.z||0};}
+                return {x:p.x+local.x*(sprite.scale?.x||1)/48+(step.x||0)*Math.sign(p.facing||1),y:p.y+local.y*(sprite.scale?.y||1)/48+(step.y||0),z:step.z||0};
+            }
+            const width=(main._frame?.width||48)*Math.abs(sprite.scale?.x||1)*(main!==sprite?Math.abs(main.scale?.x||1):1)/48,heightPx=(main._frame?.height||96)*Math.abs(sprite.scale?.y||1)*(main!==sprite?Math.abs(main.scale?.y||1):1)/48;
+            if(main!==sprite){p.x+=(main.x||0)*(sprite.scale?.x||1)/48;p.y+=(main.y||0)*(sprite.scale?.y||1)/48;}
+            return B.attachmentPoint(p,{...step,z:step.attachment&&step.attachment!=='offset'?(step.z||0):height??step.z},width,heightPx);
+        };
+        const destroy=entry=>{room?.remove(entry.key);entry.graphic.removeFromParent();entry.graphic.destroy();if(entry.owned)entry.graphic.bitmap.destroy();};
+        const make=(step,battler)=>{
+            let bitmap,owned=false,rect;
+            if(step.weaponGraphic==='sheet'){
+                const id=Math.max(1,step.weaponImageId||1),index=(id-1)%12;bitmap=ImageManager.loadSystem('Weapons'+Math.ceil(id/12));rect={x:(Math.floor(index/6)*3+Math.max(0,Math.min(2,(step.weaponFrame||1)-1)))*96,y:index%6*64,width:96,height:64};
+            }else if(step.iconSource==='picture')bitmap=ImageManager.loadPicture(step.name);
+            else if(step.type==='projectile'&&(!step.iconSource||step.iconSource==='color')){const size=step.size||8;bitmap=new Bitmap(size,size);bitmap.fillAll(step.color||'#ffcc55');owned=true;}
+            else{bitmap=ImageManager.loadSystem('IconSet');const size=ImageManager.iconWidth||32,index=B.visualIcon(step,step.sourceRole==='user'?subject:battler,manager._action?.item?.());rect={x:index%16*size,y:Math.floor(index/16)*size,width:size,height:size};}
+            const graphic=new Sprite(bitmap);if(rect)graphic.setFrame(rect.x,rect.y,rect.width,rect.height);graphic.anchor.set(step.gripX??.5,step.gripY??.5);ss._battleField.addChild(graphic);
+            return {key:prefix+(serial++),graphic,rect,owned,step};
+        };
+        const draw=(entry,p,rotation,visible=true)=>{
+            const {graphic,step}=entry;if(!p||graphic.bitmap.isReady?.()===false){graphic.visible=false;return;}
+            const rect=entry.rect||{x:0,y:0,width:graphic.bitmap.width,height:graphic.bitmap.height};if(!rect.width||!rect.height)return;
+            if(room){room.sequenceBillboard(entry.key,graphic.bitmap.canvas,rect,p,{...step,rotation,visible});graphic.visible=false;}
+            else{graphic.x=p.x*48;graphic.y=(p.y-(p.z||0))*48;graphic.rotation=rotation*Math.PI/180;graphic.scale.set(step.scale??1);graphic.visible=visible;}
+            entry.point={...p};
+        };
+        const update=()=>{
+            if(closed)return;
+            for(const entry of held.values())draw(entry,point(entry.owner,entry.step),(entry.step.rotation||0));
+            for(const entry of flights){
+                entry.from||=point(entry.owner,entry.step,entry.step.startHeight??1);
+                const to=point(entry.target,{attachment:'offset',x:0,y:0,z:entry.step.endHeight??1},entry.step.endHeight??1),t=Math.min(1,Math.max(0,(time-entry.start)/Math.max(1,entry.step.duration)));
+                if(entry.from&&to)draw(entry,B.flightPoint(entry.from,to,t,entry.step.arc||0,entry.step.flight==='return'),(entry.step.rotation||0)+(time-entry.start)*(entry.step.spin||0),t<1);
+            }
+        };
+        (ss._rrSequenceVisualUpdates||=new Set()).add(update);if(room)(room.sequenceVisualUpdates||=new Set()).add(update);
+        return {held,flights,point,
+            cue(step,start,chosen,destinations){
+                if(!['weapon','projectile'].includes(step.type))return false;time=start;
+                if(step.type==='weapon')for(const battler of chosen){const owner=ss.findTargetSprite(battler);if(!owner)continue;const old=held.get(owner);if(old){destroy(old);held.delete(owner);}if(step.visible!==false)held.set(owner,{...make(step,battler),owner});}
+                else{
+                    const dest=step.destination||'target',recipients=destinations||(dest==='user'?[subject]:dest==='allTargets'?[...new Set(targets)]:dest==='subject'?[subject]:[targets[step.targetIndex||0]]);
+                    for(const battler of chosen)for(const target of recipients){const owner=ss.findTargetSprite(battler),targetSprite=ss.findTargetSprite(target);if(owner&&targetSprite)flights.push({...make(step,battler),owner,target:targetSprite,start});}
+                }return true;
+            },
+            pose(frame){time=frame;update();},
+            cleanup(){closed=true;ss._rrSequenceVisualUpdates?.delete(update);room?.sequenceVisualUpdates?.delete(update);for(const entry of [...held.values(),...flights])destroy(entry);held.clear();flights.length=0;}
+        };
+    };
+    P.extendAdapter=function(adapter,env){
+        const {manager,subject,targets,ss,room,roles,homes,saved}=env;
+        const visuals=P.sequenceVisuals(env);adapter.visuals=visuals;
+        const original={cue:adapter.cue,pose:adapter.pose,cleanup:adapter.cleanup},effects=[],layers=new Map(),restore=[],audioSaved={};
+        let selected=[],impactQueue=[],frame=0,formula=null,elements=null,rate=100;
+        const action=manager._action,log=manager._logWindow||root.SceneManager?._scene?._logWindow;
+        const all=()=>[...new Set([subject,...targets,...(root.$gameParty?.battleMembers?.()||[]),...(root.$gameTroop?.members?.()||[])])];
+        const choose=step=>B.selectTargets(step,{user:subject,subject:step.callRole?B.selectTargets({role:step.callRole,filter:step.callFilter},{user:subject,targets,actors:root.$gameParty?.battleMembers?.(),enemies:root.$gameTroop?.members?.(),friends:subject.friendsUnit?.().members(),opponents:subject.opponentsUnit?.().members()})[0]:subject,subjects:step.callRole?B.selectTargets({role:step.callRole,filter:step.callFilter},{user:subject,targets,actors:root.$gameParty?.battleMembers?.(),enemies:root.$gameTroop?.members?.(),friends:subject.friendsUnit?.().members(),opponents:subject.opponentsUnit?.().members()}):[subject],targets,selected,
+            actors:root.$gameParty?.battleMembers?.(),enemies:root.$gameTroop?.members?.(),friends:subject.friendsUnit?.().members(),opponents:subject.opponentsUnit?.().members(),moved:b=>ss.findTargetSprite(b)?.isMoving?.()});
+        const expression=(code,target=selected[0]||targets[0],statement=false)=>Function('user','subject','target','a','b','v','action','item',statement?String(code):'return ('+String(code)+');')(subject,subject,target,subject,target,root.$gameVariables?._data||[],action,action?.item?.());
+        adapter.condition=code=>{try{return !!expression(code);}catch(error){P.warn('Sequence condition: '+error.message);return false;}};
+        const number=(value,target)=>{const n=typeof value==='number'?value:Number(expression(value??'0',target));if(!Number.isFinite(n))throw Error('Sequence expression must return a finite number.');return n;};
+        const capture=sprite=>{
+            if(!sprite)return null;
+            if(!saved.has(sprite))saved.set(sprite,{x:sprite.x,y:sprite.y,offsetX:sprite._offsetX,offsetY:sprite._offsetY,rotation:sprite.rotation,scaleX:sprite.scale?.x??1,scaleY:sprite.scale?.y??1});
+            if(!spriteKeys.has(sprite)){const key='extraBattler'+spriteKeys.size;spriteKeys.set(sprite,key);roles[key]=sprite;homes[key]=room?{...sprite._reactorRoomPosition}:{x:sprite.x/48,y:sprite.y/48,z:0};}
+            if(!appearance.has(sprite)){const main=sprite._mainSprite||sprite;appearance.set(sprite,{opacity:sprite.opacity,tone:main.getColorTone?.(),blend:main.getBlendColor?.(),pose:sprite._rrHeldPose,motion:sprite._rrGraphicMotion,homeX:sprite._homeX,homeY:sprite._homeY});}
+            return spriteKeys.get(sprite);
+        };
+        const appearance=new Map(),spriteKeys=new Map();for(const [key,sprite] of Object.entries(roles))if(sprite&&!spriteKeys.has(sprite))spriteKeys.set(sprite,key);
+        const tween=(sprite,key,to,duration,start,apply,from)=>{effects.push({sprite,key,from,to,start,end:start+duration,apply});};
+        const layerPrefix='extra:sequence-layer:'+(P._layerSerial=(P._layerSerial||0)+1)+':';
+        const destroyLayer=key=>{const entry=layers.get(key);if(entry){if(entry.roomKey)room?.remove(entry.roomKey);entry.graphic.removeFromParent();entry.graphic.destroy();layers.delete(key);}};
+        const pending=()=>({blocking:true,isPlaying:()=>adapter.pendingImpact});
+        const damageCall=target=>{
+            const methods={};
+            const override=(key,fn)=>{methods[key]={own:Object.hasOwn(action,key),value:action[key]};action[key]=fn;};
+            if(action){
+                if(formula!==null)override('evalDamageFormula',function(target){const sign=[3,4].includes(this.item().damage.type)?-1:1;return Math.max(0,number(formula,target))*sign;});
+                if(elements)override('calcElementRate',target=>Math.max(...elements.map(id=>target.elementRate(id))));
+                if(rate!==100){const make=action.makeDamageValue;override('makeDamageValue',function(...args){return Math.round(make.apply(this,args)*rate/100);});}
+            }
+            try{manager.invokeAction(subject,target);}finally{for(const [key,entry] of Object.entries(methods)){if(entry.own)action[key]=entry.value;else delete action[key];}}
+        };
+        adapter.resolveNext=()=>{
+            if(impactQueue.length)damageCall(impactQueue.shift());
+            adapter.pendingImpact=impactQueue.length>0;
+        };
+        adapter.cue=(raw,start)=>{
+            frame=start;const step={...B.commandDefaults(raw.type),...raw},chosen=choose(step),sprites=chosen.map(b=>ss?.findTargetSprite(b)).filter(Boolean);
+            for(const sprite of sprites)capture(sprite);
+            raw._roles=sprites.map(s=>spriteKeys.get(s));raw._chosen=chosen;
+            if(visuals.cue(step,start,chosen,step.type==='projectile'?choose({role:step.destination||'target',targetIndex:step.targetIndex,callRole:step.callRole,callFilter:step.callFilter}):null))return;
+            if(['move','camera'].includes(step.type)){const target=ss?.findTargetSprite(selected[0]||targets[0]);if(target)raw._target=room?{...target._reactorRoomPosition}:{x:target.x/48,y:target.y/48,z:0};}
+            if(step.type==='impact'){
+                rate=number(step.rate??100);
+                if(adapter.hitPolicy==='authored'){impactQueue=chosen.slice();manager._targets=[];}
+                else impactQueue=manager._targets.splice(0);
+                adapter.pendingImpact=impactQueue.length>0;adapter.resolveNext();return pending();
+            }
+            if(step.type==='target'){selected=step.operation==='clear'?[]:chosen;return;}
+            if(step.type==='clearTargets'){manager._targets=[];impactQueue=[];adapter.pendingImpact=false;return;}
+            if(step.type==='formula'){formula=step.operation==='clear'?null:step.formula;return;}
+            if(step.type==='element'){elements=step.operation==='clear'?null:String(step.elements).split(',').map(Number).filter(n=>Number.isInteger(n)&&n>=0);if(elements&&!elements.length)throw Error('Select at least one damage element.');return;}
+            if(step.type==='eval'){expression(step.code,chosen[0],true);return;}
+            if(step.type==='event'){
+                const event=root.$dataCommonEvents?.[step.eventId];if(!event)throw Error('Missing common event #'+step.eventId);
+                const interpreter=new Game_Interpreter();interpreter.setup(event.list);let ticks=0;
+                return {blocking:true,isPlaying(){if(++ticks>18000)throw Error('Sequence common event exceeded five minutes.');interpreter.update();return interpreter.isRunning();},cancel(){interpreter.clear();}};
+            }
+            if(['hp','mp','tp','buff','state','kill'].includes(step.type)){
+                for(const battler of chosen){battler.clearResult?.();
+                    if(['hp','mp','tp'].includes(step.type)){const max=step.type==='hp'?battler.mhp:step.type==='mp'?battler.mmp:battler.maxTp();const value=number(step.amount,battler)*(step.percent==='percent'?max/100:1);battler['gain'+step.type.toUpperCase().replace('HP','Hp').replace('MP','Mp').replace('TP','Tp')](Math.round(value));}
+                    if(step.type==='state')battler[step.operation==='remove'?'removeState':'addState'](step.stateId);
+                    if(step.type==='buff'){const id=['mhp','mmp','atk','def','mat','mdf','agi','luk'].indexOf(step.param);battler[step.operation==='increase'?'addBuff':step.operation==='decrease'?'addDebuff':'removeBuff'](id,step.turns);}
+                    if(step.type==='kill')battler.addState(battler.deathStateId());
+                    if(step.show==='show'){battler.startDamagePopup?.();log?.displayActionResults?.(subject,battler);}
+                }return;
+            }
+            if(step.type==='item'){const amount=number(step.amount);if(step.kind==='gold')$gameParty.gainGold(amount);else $gameParty.gainItem(({items:root.$dataItems,weapons:root.$dataWeapons,armors:root.$dataArmors})[step.kind]?.[step.itemId],amount);return;}
+            if(step.type==='switch'){$gameSwitches.setValue(step.switchId,step.operation==='toggle'?!$gameSwitches.value(step.switchId):step.operation==='on');return;}
+            if(step.type==='variable'){const a=$gameVariables.value(step.variableId),b=number(step.amount),v={set:()=>b,add:()=>a+b,subtract:()=>a-b,multiply:()=>a*b,divide:()=>b?a/b:0,modulo:()=>b?a%b:0}[step.operation]();$gameVariables.setValue(step.variableId,v);return;}
+            if(['bgm','bgs','se'].includes(step.type)){
+                const suffix=step.type==='bgm'?'Bgm':step.type==='bgs'?'Bgs':'Se',op=step.operation;
+                if(op==='play')AudioManager['play'+suffix]({name:step.name,volume:step.volume,pitch:step.pitch,pan:step.pan});
+                else if(op==='system')SoundManager.playSystemSound(step.soundId);
+                else if(op==='save')audioSaved[suffix]=AudioManager['save'+suffix]?.();
+                else if(op==='resume'&&audioSaved[suffix])AudioManager['replay'+suffix]?.(audioSaved[suffix]);
+                else if(op==='fadeIn'||op==='fadeOut')AudioManager[op+suffix]?.(step.fade/60);
+                else if(op==='stop')AudioManager['stop'+suffix]?.();return;
+            }
+            if(step.type==='movie'){Video.play('movies/'+step.name);return {blocking:true,isPlaying:()=>Video.isPlaying(),cancel:()=>Video._element?.pause()};}
+            if(step.type==='battlestatus'||step.type==='battlelog'){
+                const window=step.type==='battlelog'?log:SceneManager._scene?._statusWindow;if(!window)return;
+                const visible=window.visible;restore.push(()=>window.visible=visible);
+                if(step.operation==='text')window.addText?.(step.text);else if(step.operation==='clear')window.clear?.();else window.visible=step.operation==='show';return;
+            }
+            if(step.type==='battleback'){
+                const a=ss._back1Sprite,b=ss._back2Sprite;if(!a||!b)return;
+                if(!adapter._battleback){adapter._battleback=[a.bitmap,b.bitmap];restore.push(()=>{[a.bitmap,b.bitmap]=adapter._battleback;});}
+                if(step.operation==='save')adapter._savedBattleback=[a.bitmap,b.bitmap];
+                else if(step.operation==='restore')[a.bitmap,b.bitmap]=adapter._savedBattleback||adapter._battleback;
+                else{a.bitmap=ImageManager.loadBattleback1(step.floor);b.bitmap=ImageManager.loadBattleback2(step.background);}return;
+            }
+            if(step.type==='flash'){$gameScreen.startFlash([step.red,step.green,step.blue,step.alpha],step.duration);return;}
+            if(step.type==='shake'){$gameScreen.startShake(step.power,step.speed,step.duration);return;}
+            if(step.type==='tint'&&step.space!=='battler'){
+                if(step.space==='screen'){const old=$gameScreen.tone().slice();restore.push(()=>$gameScreen.startTint(old,0));$gameScreen.startTint([step.red,step.green,step.blue,step.gray],step.duration);}
+                else{const sprite=step.space==='upper'?ss._back2Sprite:ss._back1Sprite;if(sprite){const tone=sprite.getColorTone();restore.push(()=>sprite.setColorTone(tone));tween(sprite,'tone',[step.red,step.green,step.blue,step.gray],step.duration,start,v=>sprite.setColorTone(v),tone);}}return;
+            }
+            if(['picture','icon','plane'].includes(step.type)){
+                const owners=step.type==='plane'||step.space==='screen'?[null]:sprites;
+                for(const owner of owners){const key=step.type+':'+step.index+':'+(owner?spriteKeys.get(owner):'screen');
+                    if(step.operation==='clear'){destroyLayer(key);continue;}
+                    if(step.operation==='move'){const entry=layers.get(key);if(entry){for(const k of ['x','y','opacity'])tween(entry,k,step[k],step.duration,start,v=>entry[k]=v,entry[k]);}continue;}
+                    destroyLayer(key);let bitmap;
+                    if(step.type==='icon')bitmap=ImageManager.loadSystem('IconSet');else bitmap=ImageManager.loadPicture(step.name);
+                    const graphic=step.type==='plane'?new TilingSprite(bitmap):new Sprite(bitmap);graphic.anchor?.set(.5,.5);
+                    if(step.type==='icon'){const battler=chosen[sprites.indexOf(owner)]||subject,item=step.source==='action'?action?.item():step.source==='equip'?battler.equips?.()[step.equipIndex-1]:step.source==='shield'?battler.armors?.()[0]:null,index=step.source==='icon'?step.iconIndex:item?.iconIndex||0,size=ImageManager.iconWidth||32;graphic.setFrame(index%16*size,Math.floor(index/16)*size,size,size);}
+                    if(step.type==='plane')graphic.move(step.x,step.y,step.width,step.height);
+                    const host=ss._battleField||ss;if(step.layer==='below')host.addChildAt(graphic,0);else host.addChild(graphic);
+                    layers.set(key,{graphic,owner,type:step.type,x:step.x,y:step.y,opacity:step.opacity,step,start,roomKey:layerPrefix+key});
+                }return;
+            }
+            if(step.type==='balloon'){
+                for(const sprite of sprites){const balloon=new Sprite_Balloon();balloon.setup(sprite,step.balloonId);ss._battleField.addChild(balloon);effects.push({balloon});restore.push(()=>{balloon.removeFromParent();balloon.destroy();});}return;
+            }
+            if(['direction','home','jump','leap','float','fall','opacity','pose','tint','whiten'].includes(step.type)){
+                for(const sprite of sprites){const main=sprite._mainSprite||sprite,key=capture(sprite),home=homes[key];
+                    if(step.type==='home'){if(step.operation==='here'){home.x=sprite.x/48;home.y=sprite.y/48;}else if(step.operation==='position'){home.x=step.x;home.y=step.y;}else{const old=saved.get(sprite);home.x=old.x/48;home.y=old.y/48;}continue;}
+                    if(step.type==='direction'){const target=step.direction==='opponents'?subject.opponentsUnit?.().members()?.[0]:selected[0]||targets[0],dest=ss.findTargetSprite(target),facing=step.direction==='left'?-1:step.direction==='right'?1:step.direction==='behind'?-(sprite._rrFacing||-1):Math.sign((step.direction==='home'?home.x*48:step.direction==='position'?step.position:dest?.x??sprite.x)-sprite.x)||-1;sprite._rrFacing=facing;effects.push({direction:sprite,facing});continue;}
+                    if(step.type==='pose'){sprite._rrHeldPose=step.operation==='clear'?null:{motion:step.motion,frame:Math.max(0,step.frame-1)};continue;}
+                    if(step.type==='opacity')tween(sprite,'opacity',Math.max(0,Math.min(255,step.opacity)),step.duration,start,v=>sprite.opacity=v,sprite.opacity);
+                    else if(step.type==='tint')tween(sprite,'tone',[step.red,step.green,step.blue,step.gray],step.duration,start,v=>main.setColorTone?.(v),main.getColorTone?.()||[0,0,0,0]);
+                    else if(step.type==='whiten'){main.setBlendColor?.([255,255,255,160]);tween(sprite,'whiten',0,Math.max(1,step.duration),start,v=>main.setBlendColor?.([255,255,255,v]),160);}
+                    else{effects.push({lift:sprite,kind:step.type,height:step.height,start,end:start+Math.max(1,step.duration),from:sprite._rrLift||0});}
+                }return;
+            }
+            if(step.type==='weapon'&&step.weaponGraphic==='sheet'){
+                adapter.clearWeapon();if(step.visible===false)return;
+                const id=Math.max(1,step.weaponImageId),index=(id-1)%12,graphic=new Sprite(ImageManager.loadSystem('Weapons'+Math.ceil(id/12)));graphic.setFrame((Math.floor(index/6)*3+Math.max(0,Math.min(2,step.weaponFrame-1)))*96,index%6*64,96,64);graphic.anchor.set(.5,.5);ss._battleField.addChild(graphic);adapter.weapon={graphic,step};return;
+            }
+            if(step.type==='motion'&&(step.motionIndex||step.motionFrames||step.motionSpeed||step.motionLoop&&step.motionLoop!=='default'))for(const sprite of sprites){sprite._rrMotionOverride={...(step.motionIndex?{index:step.motionIndex-1}:{}),...(step.motionFrames?{frames:step.motionFrames}:{}),...(step.motionSpeed?{speed:step.motionSpeed}:{}),...(step.motionLoop&&step.motionLoop!=='default'?{loop:step.motionLoop==='loop'?true:step.motionLoop==='hold'?'once':false}:{}),name:step.motion};}
+            else if(step.type==='motion')for(const sprite of sprites)delete sprite._rrMotionOverride;
+            if(step.type==='wait'&&step.waitFor&&step.waitFor!=='frames')return {blocking:true,isPlaying:()=>sprites.some(s=>step.waitFor==='move'?s.isMoving?.():step.waitFor==='animation'?s.isAnimationPlaying?.():step.waitFor==='popup'?s._damages?.length:step.waitFor==='effecting'?s.isEffecting?.():step.waitFor==='motion'?s._motion&&!s._motion.loop&&s._pattern<2:false)};
+            if(step.type==='animation'&&step.animationSource&&step.animationSource!=='id'){const id=action?.item()?.animationId??0;raw={...raw,animationId:step.animationSource==='weapon'||id===-1?subject.attackAnimationId1?.()||0:Math.max(0,id)};}
+            return original.cue(raw,start);
+        };
+        const updateRoomLayers=()=>{if(!room)return;for(const entry of layers.values()){
+            const {graphic,owner,step}=entry;if(!owner||step.space==='screen'||graphic.bitmap?.isReady?.()===false)continue;
+            const p=owner._reactorRoomPosition;if(!p)continue;
+            const offset=new root.THREE.Vector3(entry.x/48,-entry.y/48,0).applyQuaternion(room.camera.quaternion),point={x:p.x+offset.x,y:p.y+offset.z,z:(p.z||0)+offset.y};
+            const rect=graphic._frame?.width?graphic._frame:{x:0,y:0,width:graphic.bitmap.width,height:graphic.bitmap.height};
+            room.sequenceBillboard(entry.roomKey,graphic.bitmap.canvas,rect,point,{scale:step.scale,rotation:step.angle+(frame-entry.start)*step.spin,opacity:entry.opacity/255});graphic.visible=false;
+        }};
+        if(room)(room.sequenceVisualUpdates||=new Set()).add(updateRoomLayers);
+        adapter.pose=(positions,time)=>{
+            frame=time;original.pose(positions,time);
+            for(const effect of effects){
+                if(effect.balloon){effect.balloon.update();continue;}
+                if(effect.direction){const sprite=effect.direction,old=saved.get(sprite);sprite.scale.x=Math.abs(old.scaleX)*(effect.facing<0?1:-1);if(room)sprite._reactorRoomPosition.facing=effect.facing*90;continue;}
+                const t=Math.min(1,Math.max(0,(time-effect.start)/Math.max(1,effect.end-effect.start)));
+                if(effect.lift){const h=effect.kind==='jump'?effect.from+Math.sin(Math.PI*t)*effect.height:effect.kind==='leap'?effect.from+effect.height*(1-(1-t)*(1-t)):effect.kind==='float'?effect.from+effect.height*t:effect.from+(effect.height-effect.from)*t;effect.lift._rrLift=h;continue;}
+                const v=Array.isArray(effect.to)?effect.to.map((n,i)=>effect.from[i]+(n-effect.from[i])*t):effect.from+(effect.to-effect.from)*t;effect.apply(v);
+            }
+            for(const sprite of appearance.keys())if(sprite._rrLift){if(room)sprite._reactorRoomPosition.z=(positions[spriteKeys.get(sprite)]?.z||0)+sprite._rrLift;else sprite.y-=sprite._rrLift*48;}
+            visuals.pose(time);
+            for(const entry of layers.values()){const {graphic,owner,step}=entry;graphic.opacity=entry.opacity;graphic.rotation=(step.angle+(time-entry.start)*step.spin)*Math.PI/180;graphic.scale?.set(step.scale);if(entry.type==='plane'){graphic.origin.x=(time-entry.start)*step.scrollX;graphic.origin.y=(time-entry.start)*step.scrollY;}else{graphic.x=(owner?.x||0)+entry.x;graphic.y=(owner?.y||0)+entry.y;}}
+        };
+        adapter.cleanup=cancelled=>{try{original.cleanup(cancelled);}finally{
+            visuals.cleanup();room?.sequenceVisualUpdates?.delete(updateRoomLayers);
+            for(const fn of restore.reverse())fn();for(const key of [...layers.keys()])destroyLayer(key);
+            for(const [sprite,old] of appearance){sprite.opacity=old.opacity;const main=sprite._mainSprite||sprite;if(old.tone)main.setColorTone?.(old.tone);if(old.blend)main.setBlendColor?.(old.blend);sprite._rrHeldPose=old.pose;sprite._rrGraphicMotion=old.motion;sprite._rrLift=0;delete sprite._rrFacing;delete sprite._rrMotionOverride;sprite._homeX=old.homeX;sprite._homeY=old.homeY;}
+        }};
+        return adapter;
     };
     P.installPsychronicHud=function(){
         if(!(PluginManager._scripts||[]).some(name=>/PSYCHRONIC_ATB-MZ/i.test(name))||typeof Window_Base==='undefined')return;
@@ -273,6 +499,93 @@
             return busy.call(this);
         };
     };
+    P.battlerIdentity = battler => battler?.isActor?.()?{kind:'actors',id:battler.actorId(),classId:battler.currentClass?.()?.id||0}:{kind:'enemies',id:battler?.enemyId?.(),classId:0};
+    P.graphicFor = battler => {
+        if(!battler)return null;const {kind,id}=P.battlerIdentity(battler),config=P.settings[kind]?.[id]?.graphic;
+        if(!config?.mode||config.mode==='auto'||config.mode==='model')return null;
+        let graphic=B.graphic(P.settings,kind,id,battler.actor?.()||battler.enemy?.());
+        if(graphic.type==='character'&&battler.isDead?.()&&graphic.damagedName)graphic={...graphic,name:graphic.damagedName,index:graphic.damagedIndex||0,direction:graphic.damagedDirection||2};
+        const states=(battler.states?.()||[]).map(state=>({priority:state.priority,...P.settings.states?.[state.id]?.graphicMotion})).sort((a,b)=>(b.priority||0)-(a.priority||0));
+        const state=states.find(state=>state.motion||state.index!==undefined),name=P.battlerState(battler,{}),speed=(graphic.motions?.[name]?.speed||graphic.speed||12)*states.reduce((n,state)=>n*(state.speedMultiplier||1),1);
+        if(state||states.some(state=>state.speedMultiplier))graphic={...graphic,motions:{...graphic.motions,[name]:{...graphic.motions?.[name],...(state?{index:state.index??B.spriteMotions[state.motion]??1,frames:state.frames||undefined,direction:state.direction||undefined,loop:state.loop??true}:{}),speed:Math.max(1,state?.speed||speed)}}};
+        return graphic;
+    };
+    P.requestGraphicMotion = (sprite,name) => {sprite._rrGraphicMotion={name,start:sprite._rrGraphicFrame||0};};
+    P.battlerState = (battler,sprite) => {
+        if(battler.isDead?.())return 'dead';
+        const index=battler.stateMotionIndex?.();if(index===2)return 'sleep';if(index===1)return 'abnormal';
+        if(battler.isGuard?.()||battler.isGuardWaiting?.())return 'guard';
+        if(battler.isChanting?.())return 'chant';
+        if(battler.isDying?.())return 'dying';
+        if(sprite.isMoving?.())return 'moving';
+        if(battler.isInputting?.())return 'input';
+        if(battler.isActing?.())return 'ready';
+        return 'idle';
+    };
+    P.updateGraphicBitmap = (sprite,graphic,kind) => {
+        const key=JSON.stringify(graphic),main=sprite._mainSprite||sprite;
+        if(sprite._rrGraphicKey!==key){
+            if(sprite._reactorBattler){root.Reactor3D?.releaseBattlerState?.(sprite._reactorBattler);sprite._reactorBattler=null;}
+            sprite._rrGraphicBaseScale||={x:main.scale.x,y:main.scale.y,offsetY:main.y||0};
+            sprite._rrGraphicKey=key;sprite._rrGraphicFrame=0;
+            if(sprite._shadowSprite)sprite._shadowSprite.visible=!graphic.hideShadow;
+            main.bitmap=graphic.name?ImageManager.loadBitmap('img/'+graphic.folder+'/',graphic.name):new Bitmap(1,1);
+            const scale=Math.max(.1,Math.min(10,graphic.scale||1));
+            main.scale?.set(scale*(graphic.mirror?-1:1)*(kind==='enemies'&&graphic.type!=='static'?-1:1),scale);
+            if(kind==='enemies'){sprite.initVisibility?.();sprite.setHue?.(sprite._enemy.battlerHue?.()||0);}
+        }
+    };
+    P.updateGraphicFrame = (sprite,graphic) => {
+        const main=sprite._mainSprite||sprite,bitmap=main.bitmap;if(!bitmap?.isReady?.()||!bitmap.width||!bitmap.height)return;
+        const battler=sprite._actor||sprite._enemy,time=sprite._rrGraphicFrame||0;
+        let motion=sprite._rrGraphicMotion;
+        if(motion){const mapping=graphic.motions?.[motion.name]||{},length=(mapping.frames||graphic.frames||3)*(mapping.speed||graphic.speed||12);
+            if(mapping.loop!==true&&mapping.loop!=='once'&&time-motion.start>=length&&!['idle','moving','walk','run','guard','chant','victory','dead'].includes(motion.name))sprite._rrGraphicMotion=motion=null;}
+        const override=sprite._rrMotionOverride;if(override&&motion?.name===override.name)graphic={...graphic,motions:{...graphic.motions,[override.name]:{...graphic.motions?.[override.name],...override}}};
+        const held=sprite._rrHeldPose;const frame=B.graphicFrame(graphic,bitmap.width,bitmap.height,held?.motion||motion?.name||P.battlerState(battler,sprite),held?held.frame*(graphic.speed||12):motion?time-motion.start:time);
+        if(main!==sprite)main.y=-(graphic.offsetY||0);
+        main.setFrame(frame.x,frame.y,frame.width,frame.height);
+        if(main!==sprite)sprite.setFrame(0,0,frame.width,frame.height);
+    };
+    P.installGraphics = () => {
+        for(const [Class,kind] of [[root.Sprite_Actor,'actors'],[root.Sprite_Enemy,'enemies']])if(Class){
+            const bitmap=Class.prototype.updateBitmap,frame=Class.prototype.updateFrame,update=Class.prototype.update,motion=Class.prototype.startMotion;
+            Class.prototype.updateBitmap=function(...args){const g=P.graphicFor(this._actor||this._enemy);if(g){P.updateGraphicBitmap(this,g,kind);return;}if(this._rrGraphicKey){const main=this._mainSprite||this,old=this._rrGraphicBaseScale;if(old){main.scale.set(old.x,old.y);main.y=old.offsetY;}this._rrGraphicKey=null;this._rrGraphicBaseScale=null;this._battlerName='';}return bitmap?.apply(this,args);};
+            Class.prototype.updateFrame=function(...args){const g=P.graphicFor(this._actor||this._enemy);if(g){P.updateGraphicFrame(this,g);return;}return frame?.apply(this,args);};
+            Class.prototype.startMotion=function(name){P.requestGraphicMotion(this,name);return motion?.call(this,name);};
+            Class.prototype.update=function(...args){this._rrGraphicFrame=(this._rrGraphicFrame||0)+1;const result=update?.apply(this,args);if(kind==='enemies'&&P.graphicFor(this._enemy)&&this._enemy?.isWeaponAnimationRequested?.()){if(P.graphicFor(this._enemy).showWeapon!==false){if(!this._rrWeaponSprite){this._rrWeaponSprite=new Sprite_Weapon();this.addChild(this._rrWeaponSprite);}this._rrWeaponSprite.setup(this._enemy.weaponImageId());}this._enemy.clearWeaponAnimation();}return result;};
+        }
+        if(root.Game_Enemy){
+            const proto=Game_Enemy.prototype,weapons=proto.weapons,animation=proto.attackAnimationId1,perform=proto.performAttack;
+            proto.weapons=function(){const g=P.settings.enemies?.[this.enemyId()]?.graphic;return g?.weaponIds?.length?g.weaponIds.map(id=>$dataWeapons[id]).filter(Boolean):weapons?.call(this)||[];};
+            proto.attackAnimationId1=function(){return P.settings.enemies?.[this.enemyId()]?.graphic?.attackAnimationId||this.weapons()[0]?.animationId||animation?.call(this)||0;};
+            proto.performAttack=function(){const g=P.settings.enemies?.[this.enemyId()]?.graphic;if(g?.mode&&g.mode!=='auto'){this.requestMotion?.('thrust');if(g.showWeapon!==false){const type=this.weapons()[0]?.wtypeId,motion=$dataSystem.attackMotions?.[type];if(motion)this.startWeaponAnimation?.(motion.weaponImageId);}return;}return perform?.call(this);};
+        }
+        if(root.Sprite_Actor){const setup=Sprite_Actor.prototype.setupWeaponAnimation;Sprite_Actor.prototype.setupWeaponAnimation=function(){if(P.graphicFor(this._actor)?.showWeapon===false){this._actor.clearWeaponAnimation?.();return;}return setup?.call(this);};}
+        if(root.Game_Actor){const visible=Game_Actor.prototype.isSpriteVisible;Game_Actor.prototype.isSpriteVisible=function(){const g=P.settings.actors?.[this.actorId()]?.graphic;return g?.mode&&g.mode!=='auto'?true:visible.call(this);};}
+        for(const Class of [root.Game_Actor,root.Game_Enemy])if(Class){
+            const methods={performDamage:'damage',performEvasion:'evade',performMagicEvasion:'magicEvade',performCollapse:'collapse',performVictory:'victory',performEscape:'escape'};
+            for(const [method,name] of Object.entries(methods)){const prior=Class.prototype[method];Class.prototype[method]=function(...args){const result=prior?.apply(this,args),sprite=SceneManager._scene?._spriteset?.findTargetSprite(this);if(sprite)P.requestGraphicMotion(sprite,name);this._rrReaction=name;return result;};}
+            const perform=Class.prototype.performAction;Class.prototype.performAction=function(action){const result=perform?.call(this,action),sprite=SceneManager._scene?._spriteset?.findTargetSprite(this);if(sprite)P.requestGraphicMotion(sprite,action.isAttack?.()?'attack':action.isGuard?.()?'guard':action.isItem?.()?'item':action.isMagical?.()?'cast':'skill');return result;};
+        }
+    };
+    P.cancelStates=ss=>{for(const sprite of ss?.battlerSprites?.()||[]){sprite._rrStatePlayer?.cancel();sprite._rrStatePlayer=null;}};
+    P.updateStates=ss=>{
+        for(const sprite of ss.battlerSprites?.()||[]){
+            const battler=sprite._battler||sprite._actor||sprite._enemy;if(!battler)continue;
+            if(BattleManager._reactorSequence?.adapter.owns(sprite)){sprite._rrStatePlayer?.cancel();sprite._rrStatePlayer=null;continue;}
+            const identity=P.battlerIdentity(battler),state=battler._rrReaction||(sprite._rrStatePlayer&&!['idle','moving','input','ready','chant','guard','abnormal','sleep','dying','dead'].includes(sprite._rrStateName)?sprite._rrStateName:!sprite._rrEntered?'entry':P.battlerState(battler,sprite));
+            const reaction=!!battler._rrReaction||!sprite._rrEntered;sprite._rrEntered=true;
+            if(battler._rrReaction)delete battler._rrReaction;
+            if(state!==sprite._rrStateName||reaction){sprite._rrStatePlayer?.cancel();sprite._rrStatePlayer=null;sprite._rrStateName=state;sprite._rrStateFinished=false;}
+            if(!sprite._rrStatePlayer&&!sprite._rrStateFinished){
+                const action=BattleManager._action,item=action?.item?.(),binding=item?P.settings[DataManager.isSkill(item)?'skills':'items']?.[item.id]:null;const sequence=B.resolveState(P.settings,P.sequences,identity.kind,identity.id,state,identity.classId,binding);
+                if(sequence){const manager={_spriteset:ss,_targets:[],_logWindow:BattleManager._logWindow};sprite._rrStatePlayer=new B.Player(sequence,P.adapter(manager,battler,[],true));}
+                else sprite._rrStateFinished=true;
+            }
+            const player=sprite._rrStatePlayer;if(player){try{player.update();}catch(error){P.warn(error);player.cancel();}if(player.done){sprite._rrStatePlayer=null;sprite._rrStateFinished=!['idle','moving','input','ready','chant','guard','abnormal','sleep','dying','dead'].includes(state);}}
+        }
+    };
     P.install=function(){
         if(P.installed)return;P.installed=true;P.installRoomAnchors();P.installSequenceAnimations();P.installBattlebackLoading();P.installPartyLimit();P.installRoomEvents?.();P.installPsychronicHud();
         for(const [Class,kind] of [[root.Sprite_Actor,'actors'],[root.Sprite_Enemy,'enemies']])if(Class){
@@ -286,6 +599,8 @@
                 return updateBitmap.apply(this,args);
             };
         }
+        P.installGraphics();
+        const escapeFail=BattleManager.onEscapeFailure;if(escapeFail)BattleManager.onEscapeFailure=function(...args){const result=escapeFail.apply(this,args);for(const actor of $gameParty.battleMembers())actor._rrReaction='escapeFail';return result;};
         const start=BattleManager.startAction,update=BattleManager.updateAction,end=BattleManager.endBattle;
         const beginCamera=manager=>{const ss=manager._spriteset;ss?._reactorRoom?.beginCinematicAction?.(ss.findTargetSprite(manager._subject)?._reactorRoomKey,(manager._targets||[]).map(b=>ss.findTargetSprite(b)?._reactorRoomKey).filter(Boolean));};
         const invoke=BattleManager.invokeAction,endAction=BattleManager.endAction;
@@ -305,9 +620,9 @@
             const sequence=action&&P.sequence(subject,action),problem=sequence&&P.compatibility();
             if(problem)P.warn(problem);
             if(!sequence||problem){const result=start.call(this);beginCamera(this);return result;}
-            this._reactorSequence?.cancel();this._reactorStarting=true;
+            P.cancelStates(this._spriteset);this._reactorSequence?.cancel();this._reactorStarting=true;
             try{start.call(this);}finally{this._reactorStarting=false;}
-            this._reactorSequence=new B.Player(sequence,P.adapter(this,subject,this._targets.slice()));beginCamera(this);
+            const adapter=P.adapter(this,subject,this._targets.slice());adapter.hitPolicy=sequence.hitPolicy;this._reactorSequence=new B.Player(sequence,adapter);beginCamera(this);
         };
         BattleManager.updateAction=function(){
             const player=this._reactorSequence;
@@ -315,7 +630,7 @@
             try{if(player.adapter.pendingImpact){player.adapter.resolveNext();return;}player.update(1);}catch(error){P.warn(error);player.cancel();}
             if(player.done&&!player.adapter.pendingImpact){this._reactorSequence=null;this.endAction();}
         };
-        BattleManager.endBattle=function(...args){this._spriteset?._reactorRoom?.endCinematicAction?.();this._reactorSequence?.cancel();this._reactorSequence=null;return end.apply(this,args);};
+        BattleManager.endBattle=function(...args){P.cancelStates(this._spriteset);this._spriteset?._reactorRoom?.endCinematicAction?.();this._reactorSequence?.cancel();this._reactorSequence=null;return end.apply(this,args);};
         const force=BattleManager.forceAction;
         BattleManager.forceAction=function(...args){this._spriteset?._reactorRoom?.endCinematicAction?.();if(this._reactorSequence){this._reactorSequence.cancel();this._targets=[];}this._reactorSequence=null;return force.apply(this,args);};
         const create=Scene_Battle.prototype.create,ready=Scene_Battle.prototype.isReady,terminate=Scene_Battle.prototype.terminate;
@@ -329,9 +644,9 @@
                 P.createRoom(this,config,token).catch(P.warn).finally(()=>{if(this._reactorRoomToken===token)this._reactorRoomLoading=false;});}
         };
         Scene_Battle.prototype.isReady=function(){return !this._reactorRoomLoading&&ready.call(this);};
-        Scene_Battle.prototype.terminate=function(){this._reactorRoomToken=null;this._spriteset?._reactorRoom?.dispose();BattleManager._reactorSequence?.cancel();BattleManager._reactorSequence=null;return terminate.call(this);};
+        Scene_Battle.prototype.terminate=function(){P.cancelStates(this._spriteset);this._reactorRoomToken=null;this._spriteset?._reactorRoom?.dispose();BattleManager._reactorSequence?.cancel();BattleManager._reactorSequence=null;return terminate.call(this);};
         const updateSprites=Spriteset_Battle.prototype.update;
-        Spriteset_Battle.prototype.update=function(){updateSprites.call(this);if(this._reactorRoom)P.updateRoom(this);};
+        Spriteset_Battle.prototype.update=function(){updateSprites.call(this);P.updateStates(this);if(this._reactorRoom)P.updateRoom(this);else for(const update of this._rrSequenceVisualUpdates||[])update();};
         PluginManager.registerCommand('RPGReactor','BattleSequenceSkip',()=>{const player=BattleManager._reactorSequence;if(player){player.skip();while(player.adapter.pendingImpact)player.adapter.resolveNext();}});
         PluginManager.registerCommand('RPGReactor','BattleRoomCamera',function(args){const room=SceneManager._scene?._spriteset?._reactorRoom;if(room){Object.assign(room.settings.camera,room.cameraState());room.settings.cameraSource='custom';for(const key of ['x','y','z','yaw','pitch','distance'])if(args[key]!==undefined&&Number.isFinite(Number(args[key])))room.settings.camera[key]=Number(args[key]);}});
     };
@@ -364,7 +679,7 @@
             else {if(room.models.has(key))room.remove(key);}
             if(!spec&&main.bitmap?.isReady())room.billboard(key,main.bitmap.canvas,main._frame,{...p,flipX:actor?p.facing>0:p.facing<0},Math.max(.5,main._frame.height/48));
             const record=room.models.get(key)||room.billboards.get(key);
-            if(record?.object)record.object.visible=battler.isAppeared()&&sprite.opacity>0;
+            if(record?.object){record.object.visible=battler.isAppeared()&&sprite.opacity>0;record.object.traverse(object=>{for(const material of Array.isArray(object.material)?object.material:[object.material])if(material){material.userData||={};material.userData.rrOriginalOpacity??=material.opacity;material.opacity=material.userData.rrOriginalOpacity*sprite.opacity/255;if(sprite.opacity<255)material.transparent=true;}});}
             const projected=P.roomScreenPosition(sprite);if(projected){sprite.x=projected.x;sprite.y=projected.y;}
             if(main.texture)main.texture=PIXI.Texture.EMPTY;
         }

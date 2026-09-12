@@ -1,0 +1,282 @@
+[
+  {
+    "width": 2048,
+    "theme": "dark",
+    "type": "skills",
+    "background": "rgb(17, 17, 17)",
+    "border": "rgba(255, 215, 0, 0.5)",
+    "controls": [
+      {
+        "height": 27,
+        "width": 245
+      },
+      {
+        "height": 27,
+        "width": 245
+      },
+      {
+        "height": 27,
+        "width": 245
+      },
+      {
+        "height": 27,
+        "width": 245
+      },
+      {
+        "height": 27,
+        "width": 245
+      },
+      {
+        "height": 27,
+        "width": 245
+      }
+    ],
+    "expectedBackground": "rgb(17, 17, 17)",
+    "expectedBorder": "rgba(255, 215, 0, 0.5)",
+    "font": "13px",
+    "height": 27,
+    "overflow": false,
+    "padding": "4px 8px"
+  },
+  {
+    "width": 2048,
+    "theme": "dark",
+    "type": "items",
+    "background": "rgb(17, 17, 17)",
+    "border": "rgba(255, 215, 0, 0.5)",
+    "controls": [
+      {
+        "height": 27,
+        "width": 245
+      },
+      {
+        "height": 27,
+        "width": 245
+      },
+      {
+        "height": 27,
+        "width": 245
+      },
+      {
+        "height": 27,
+        "width": 245
+      }
+    ],
+    "expectedBackground": "rgb(17, 17, 17)",
+    "expectedBorder": "rgba(255, 215, 0, 0.5)",
+    "font": "13px",
+    "height": 27,
+    "overflow": false,
+    "padding": "4px 8px"
+  },
+  {
+    "width": 2048,
+    "theme": "light",
+    "type": "skills",
+    "background": "rgb(255, 255, 255)",
+    "border": "rgb(118, 84, 0)",
+    "controls": [
+      {
+        "height": 27,
+        "width": 245
+      },
+      {
+        "height": 27,
+        "width": 245
+      },
+      {
+        "height": 27,
+        "width": 245
+      },
+      {
+        "height": 27,
+        "width": 245
+      },
+      {
+        "height": 27,
+        "width": 245
+      },
+      {
+        "height": 27,
+        "width": 245
+      }
+    ],
+    "expectedBackground": "rgb(255, 255, 255)",
+    "expectedBorder": "rgb(118, 84, 0)",
+    "font": "13px",
+    "height": 27,
+    "overflow": false,
+    "padding": "4px 8px"
+  },
+  {
+    "width": 2048,
+    "theme": "light",
+    "type": "items",
+    "background": "rgb(255, 255, 255)",
+    "border": "rgb(118, 84, 0)",
+    "controls": [
+      {
+        "height": 27,
+        "width": 245
+      },
+      {
+        "height": 27,
+        "width": 245
+      },
+      {
+        "height": 27,
+        "width": 245
+      },
+      {
+        "height": 27,
+        "width": 245
+      }
+    ],
+    "expectedBackground": "rgb(255, 255, 255)",
+    "expectedBorder": "rgb(118, 84, 0)",
+    "font": "13px",
+    "height": 27,
+    "overflow": false,
+    "padding": "4px 8px"
+  },
+  {
+    "width": 1280,
+    "theme": "dark",
+    "type": "skills",
+    "background": "rgb(17, 17, 17)",
+    "border": "rgba(255, 215, 0, 0.5)",
+    "controls": [
+      {
+        "height": 27,
+        "width": 161.5
+      },
+      {
+        "height": 27,
+        "width": 161.5
+      },
+      {
+        "height": 27,
+        "width": 161.5
+      },
+      {
+        "height": 27,
+        "width": 161.5
+      },
+      {
+        "height": 27,
+        "width": 161.5
+      },
+      {
+        "height": 27,
+        "width": 161.5
+      }
+    ],
+    "expectedBackground": "rgb(17, 17, 17)",
+    "expectedBorder": "rgba(255, 215, 0, 0.5)",
+    "font": "13px",
+    "height": 27,
+    "overflow": false,
+    "padding": "4px 8px"
+  },
+  {
+    "width": 1280,
+    "theme": "dark",
+    "type": "items",
+    "background": "rgb(17, 17, 17)",
+    "border": "rgba(255, 215, 0, 0.5)",
+    "controls": [
+      {
+        "height": 27,
+        "width": 161.5
+      },
+      {
+        "height": 27,
+        "width": 161.5
+      },
+      {
+        "height": 27,
+        "width": 161.5
+      },
+      {
+        "height": 27,
+        "width": 161.5
+      }
+    ],
+    "expectedBackground": "rgb(17, 17, 17)",
+    "expectedBorder": "rgba(255, 215, 0, 0.5)",
+    "font": "13px",
+    "height": 27,
+    "overflow": false,
+    "padding": "4px 8px"
+  },
+  {
+    "width": 1280,
+    "theme": "light",
+    "type": "skills",
+    "background": "rgb(255, 255, 255)",
+    "border": "rgb(118, 84, 0)",
+    "controls": [
+      {
+        "height": 27,
+        "width": 161.5
+      },
+      {
+        "height": 27,
+        "width": 161.5
+      },
+      {
+        "height": 27,
+        "width": 161.5
+      },
+      {
+        "height": 27,
+        "width": 161.5
+      },
+      {
+        "height": 27,
+        "width": 161.5
+      },
+      {
+        "height": 27,
+        "width": 161.5
+      }
+    ],
+    "expectedBackground": "rgb(255, 255, 255)",
+    "expectedBorder": "rgb(118, 84, 0)",
+    "font": "13px",
+    "height": 27,
+    "overflow": false,
+    "padding": "4px 8px"
+  },
+  {
+    "width": 1280,
+    "theme": "light",
+    "type": "items",
+    "background": "rgb(255, 255, 255)",
+    "border": "rgb(118, 84, 0)",
+    "controls": [
+      {
+        "height": 27,
+        "width": 161.5
+      },
+      {
+        "height": 27,
+        "width": 161.5
+      },
+      {
+        "height": 27,
+        "width": 161.5
+      },
+      {
+        "height": 27,
+        "width": 161.5
+      }
+    ],
+    "expectedBackground": "rgb(255, 255, 255)",
+    "expectedBorder": "rgb(118, 84, 0)",
+    "font": "13px",
+    "height": 27,
+    "overflow": false,
+    "padding": "4px 8px"
+  }
+]

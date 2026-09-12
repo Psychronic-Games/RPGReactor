@@ -467,9 +467,9 @@ class DatabaseEffectEditor {
                 <span class="rr-trait-label">${tt('Grow')}</span>
                 <span class="effect-grow-fields" style="grid-column: 3 / -1; display: flex; align-items: center; gap: 6px;">
                     <span class="rr-trait-control" style="flex: 1 1 auto; min-width: 0;">${this._selectHTML(42, paramOpts)}</span>
-                    ${this._numberHTML(42, 'value1', amount, 'style="width: 60px; flex: 0 0 60px; box-sizing: border-box;"')}
+                    ${this._numberHTML(42, 'value1', amount, 'style="width: 76px; flex: 0 0 76px; box-sizing: border-box;"')}
                     <span style="color: var(--color-text-muted); width: 14px; text-align: center;">–</span>
-                    <input type="number" class="effect-grow-max database-field-value" step="1" value="${rrEscapeHtml(upper)}" style="width: 60px; flex: 0 0 60px; box-sizing: border-box;" ${on ? '' : 'disabled'}>
+                    <input type="number" class="effect-grow-max database-field-value" step="1" value="${rrEscapeHtml(upper)}" style="width: 76px; flex: 0 0 76px; box-sizing: border-box;" ${on ? '' : 'disabled'}>
                 </span>
             </div>`;
     }

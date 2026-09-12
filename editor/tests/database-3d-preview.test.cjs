@@ -40,7 +40,7 @@ test('a thumbnail waits for the textures, and an empty picture is neither shown 
     assert.match(db, /if \(bytes\.length <= Database3DEditor\.EMPTY_THUMBNAIL_BYTES\) return null;/, 'a cached empty one is drawn again');
     assert.match(db, /static EMPTY_THUMBNAIL_BYTES = 320;/);
     assert.match(db, /\|v\$\{Database3DEditor\.THUMBNAIL_CACHE_VERSION\}`\)/, 'the cache key carries a version, so a run of bad icons can be retired at once');
-    assert.match(db, /static THUMBNAIL_CACHE_VERSION = 3;/);
+    assert.match(db, /static THUMBNAIL_CACHE_VERSION = 4;/);
 });
 
 test('the effect layer makes its own Effekseer context current before updating and drawing', () => {

@@ -540,7 +540,10 @@ class DatabaseUserInterfaceEditor {
                                 <span class="rr-ui-reference-opacity-wrap"><input type="range" class="rr-ui-reference-opacity" min="10" max="100" value="60" title="${tt('Reference opacity')}"></span></label>
                             <button type="button" class="rr-btn-chip rr-ui-undo" title="Ctrl+Z">${tt('Undo')}</button>
                             <button type="button" class="rr-btn-chip rr-ui-redo" title="Ctrl+Y">${tt('Redo')}</button>
-                            <span class="rr-ui-size"></span>
+                            <label>${tt('Zoom')} <select class="rr-ui-zoom" aria-label="${tt('Interface zoom')}">
+                                <option value="0">${tt('Fit')}</option>
+                                ${[0.5, 1, 2, 3, 4, 6, 8].map(zoom => `<option value="${zoom}" ${this.previewZoom === zoom ? 'selected' : ''}>${zoom * 100}%</option>`).join('')}
+                            </select></label><span class="rr-ui-size"></span>
                         </span>
                     </div>
                     <div class="database-section-content rr-ui-canvas-host">
@@ -557,6 +560,11 @@ class DatabaseUserInterfaceEditor {
         container.appendChild(wrapper);
         this.wrapper = wrapper;
         this.canvas = wrapper.querySelector('.rr-ui-canvas');
+        wrapper.querySelector('.rr-ui-zoom').addEventListener('change', event => {
+            this.previewZoom = Number(event.target.value) || 0;
+            this.fitCanvas();
+            this.scheduleRender();
+        });
         this.ctx = this.canvas.getContext('2d');
 
         wrapper.querySelector('.rr-ui-mode').value = entry.mode;
@@ -3042,9 +3050,12 @@ class DatabaseUserInterfaceEditor {
         if (fitHeight && host.clientHeight > 0) {
             scale = Math.min(scale, Math.max(120, host.clientHeight - 20) / screen.height);
         }
-        this.scale = scale;
+        this.scale = this.previewZoom || scale;
         this.canvas.width = screen.width;
         this.canvas.height = screen.height;
+        this.canvas.style.imageRendering = 'pixelated';
+        this.canvas.style.flexShrink = '0';
+        this.canvas.style.maxWidth = 'none';
         this.canvas.style.width = Math.round(screen.width * this.scale) + 'px';
         this.canvas.style.height = Math.round(screen.height * this.scale) + 'px';
         const size = this.wrapper.querySelector('.rr-ui-size');
@@ -3404,18 +3415,20 @@ class DatabaseUserInterfaceEditor {
     }
 
     iconTile(image, index) {
+        const size = window.RRIconPicker?.sizeOf(this.databaseManager?.getSystem?.()) || 32;
+        const key = `${size}:${index}`;
         this._iconTiles ||= new WeakMap();
         let tiles = this._iconTiles.get(image);
         if (!tiles) { tiles = new Map(); this._iconTiles.set(image, tiles); }
-        if (!tiles.has(index)) {
+        if (!tiles.has(key)) {
             const tile = document.createElement('canvas');
-            tile.width = tile.height = 32;
+            tile.width = tile.height = size;
             const context = tile.getContext('2d');
             context.imageSmoothingEnabled = false;
-            context.drawImage(image, index % 16 * 32, Math.floor(index / 16) * 32, 32, 32, 0, 0, 32, 32);
-            tiles.set(index, tile);
+            context.drawImage(image, index % 16 * size, Math.floor(index / 16) * size, size, size, 0, 0, size, size);
+            tiles.set(key, tile);
         }
-        return tiles.get(index);
+        return tiles.get(key);
     }
 
     drawText(node, rect) {
@@ -4041,7 +4054,7 @@ class DatabaseUserInterfaceEditor {
         }
         const image = node.source === 'icon' ? this.iconTile(entry.image, node.index) : entry.image;
         let sx = 0, sy = 0, sw = image.width, sh = image.height;
-        if (node.source === 'face' || node.source === 'partyFace') { sw = 144; sh = 144; sx = (faceIndex % 4) * sw; sy = Math.floor(faceIndex / 4) * sh; }
+        if (node.source === 'face' || node.source === 'partyFace') { sw = RRFaceSheet.sizeOf(this.databaseManager?.getSystem?.()); sh = sw; sx = (faceIndex % 4) * sw; sy = Math.floor(faceIndex / 4) * sh; }
         else if (node.source === 'character') {
             const big = /^\$/.test(node.file) || /\$/.test(node.file);
             sw = image.width / (big ? 3 : 12); sh = image.height / (big ? 4 : 8);

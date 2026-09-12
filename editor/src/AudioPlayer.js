@@ -276,6 +276,7 @@ class AudioPlayer {
         // Load tracks for current type
         if (this.currentProject) {
             this.loadAudioTracks(this.audioPlayer.currentType);
+            document.getElementById('audio-track-list')?.focus({ preventScroll: true });
         } else {
             // Show a message in the track list
             const trackList = document.getElementById('audio-track-list');
@@ -700,6 +701,11 @@ class AudioPlayer {
         // Render track list with letter headers
         const trackListEl = document.getElementById('audio-track-list');
         trackListEl.innerHTML = '';
+        if (typeof RRPickerIndex !== 'undefined') RRPickerIndex.bindListNavigation(trackListEl, {
+            items: () => trackListEl.querySelectorAll('.audio-track-item'),
+            isSelected: item => item.classList.contains('playing'),
+            select: item => this.selectAudioTrack(item.dataset.track, item.dataset.type)
+        });
 
         // Album art loads lazily, only for rows that scroll into view.
         if (this._artObserver) this._artObserver.disconnect();

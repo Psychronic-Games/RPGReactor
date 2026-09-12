@@ -30,6 +30,23 @@
     })();
     window.$reactorCompatLog = compatLog;
 
+    // MZ's Sprite_Clickable and legacy plugins use worldVisible to decide
+    // whether a sprite accepts touch input. Pixi v8 removed that getter, so
+    // visible menu/shop buttons otherwise silently reject every press.
+    // Match the legacy contract: visibility of this object and its ancestors,
+    // independent of alpha/renderable, and current even before the next render.
+    if (PIXI.Container && !("worldVisible" in PIXI.Container.prototype)) {
+        Object.defineProperty(PIXI.Container.prototype, "worldVisible", {
+            configurable: true,
+            get() {
+                for (let object = this; object; object = object.parent) {
+                    if (!object.visible) return false;
+                }
+                return true;
+            }
+        });
+    }
+
     // -------------------------------------------------------------------------
     // v8 ships a `name` getter/setter on Container.prototype that delegates to
     // `label` (and emits a deprecation warning). MZ corescript later does

@@ -15,6 +15,7 @@ class DatabaseSkillEditor {
     }
 
     showSkillDetail(container, skill) {
+        const isCurrentDetail = this.parentEditor?.captureDetailContext?.() || (() => true);
         this.currentSkill = skill;
 
         const wrapper = document.createElement('div');
@@ -96,6 +97,7 @@ class DatabaseSkillEditor {
 
         // Add icon to the designated container after the DOM is ready
         setTimeout(() => {
+            if (!isCurrentDetail()) return;
             const iconContainer = document.getElementById(`skill-icon-container-${skill.id}`);
             if (iconContainer) {
                 this.parentEditor.addDatabasePreview(iconContainer, skill, 'skills');
@@ -109,7 +111,7 @@ class DatabaseSkillEditor {
 
         // ── Invocation Section ──
         const invocationSection = document.createElement('div');
-        invocationSection.className = 'database-section';
+        invocationSection.className = 'database-section database-skill-invocation';
         invocationSection.innerHTML = `
             <div class="database-section-header">${tt('Invocation')}</div>
             <div class="database-section-content">
@@ -262,6 +264,7 @@ class DatabaseSkillEditor {
 
         // Setup effect interaction after DOM is ready
         setTimeout(() => {
+            if (!isCurrentDetail()) return;
             const effectsTable = document.getElementById(`skill-effects-table-${skill.id}`);
             if (effectsTable) {
                 this.setupEffectInteraction(effectsTable, skill);
@@ -295,6 +298,7 @@ class DatabaseSkillEditor {
 
         // Add event listeners for all editable fields
         setTimeout(() => {
+            if (!isCurrentDetail()) return;
             AnimationPickerModal.bindTriggers(container, this.databaseManager, this.projectManager);
             ActionElements.bindTriggers(container, {
                 names: elementNames,
@@ -382,7 +386,7 @@ class DatabaseSkillEditor {
                     indicator.style.setProperty('background-color', 'var(--color-accent-bright)', 'important');
                 }
                 contentCells.forEach(cell => {
-                    cell.style.setProperty('background-color', 'var(--color-bg-panel)', 'important');
+                    cell.style.setProperty('background-color', 'var(--color-bg-selected)', 'important');
                 });
             });
 
@@ -411,7 +415,7 @@ class DatabaseSkillEditor {
                     indicator.style.setProperty('background-color', 'var(--color-accent-bright)', 'important');
                 }
                 contentCells.forEach(cell => {
-                    cell.style.setProperty('background-color', 'var(--color-bg-panel)', 'important');
+                    cell.style.setProperty('background-color', 'var(--color-bg-selected)', 'important');
                 });
                 table.closest('.database-section')?.focus();
                 this.updateEffectButtonStates(table.closest('.database-section'), table);
@@ -587,6 +591,9 @@ class DatabaseSkillEditor {
     }
 
     refreshSkillDetail(skill) {
+        if (this.parentEditor?.showDatabaseDetail) {
+            return this.parentEditor.showDatabaseDetail(skill, 'skills');
+        }
         const container = document.getElementById('database-detail');
         if (container) {
             container.innerHTML = '';

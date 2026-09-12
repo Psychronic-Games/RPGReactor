@@ -193,6 +193,59 @@ test('a missing skill is reported rather than treated as free', () => {
     assert.deepEqual(dead.map(d => [d.action.skillId, d.reason]), [[99, 'no-skill']]);
 });
 
+for (const style of ['random', 'casual']) {
+    test(`${style} AI gives usable actions equal shares regardless of rating`, () => {
+        const skills = skillList([{ id: 1 }, { id: 2 }]);
+        const e = enemy([always(1, 1), always(2, 9)]);
+        const rules = { ...BATTLE_AI_ZERO, style };
+        const result = forecast.forecast(e, skills, rules, {});
+        assert.deepEqual(result.entries.map(x => [x.index, x.chance]), [[0, 0.5], [1, 0.5]]);
+        assert.deepEqual(forecast.audit(e, skills, rules).dead, []);
+    });
+}
+
+test('gambit AI picks the first usable action and identifies priority blocking', () => {
+    const skills = skillList([{ id: 1, mpCost: 10 }, { id: 2 }, { id: 3 }]);
+    const e = enemy([always(1, 1), always(2, 2), always(3, 9)]);
+    const rules = { ...BATTLE_AI_ZERO, style: 'gambit' };
+    assert.deepEqual(forecast.forecast(e, skills, rules, {}).entries.map(x => x.index), [0]);
+    assert.deepEqual(forecast.forecast(e, skills, rules, { mp: 0 }).entries.map(x => x.index), [1]);
+    assert.deepEqual(forecast.audit(e, skills, rules).dead.map(x => [x.index, x.reason]), [[2, 'priority']]);
+});
+
+test('an action whose repeating conditions first intersect at turn 57 is reachable', () => {
+    const skills = skillList([{ id: 1 }]);
+    const e = enemy([{ ...always(1, 5), conditions: [
+        { type: 1, param1: 1, param2: 7 }, { type: 1, param1: 2, param2: 11 }
+    ] }]);
+    assert.equal(forecast.forecast(e, skills, ENGINE, { turn: 57 }).entries.length, 1);
+    assert.deepEqual(forecast.audit(e, skills, ENGINE), { dead: [], truncated: false });
+});
+
+test('a turn cycle beyond the audit budget reports uncertainty', () => {
+    const e = enemy([{ ...always(1, 5), conditions: [
+        { type: 1, param1: 1, param2: 997 }, { type: 1, param1: 2, param2: 991 }
+    ] }]);
+    assert.deepEqual(forecast.audit(e, skillList([{ id: 1 }]), ENGINE), { dead: [], truncated: true });
+});
+
+test('an authored zero Max TP cannot fund a TP-cost action', () => {
+    const skills = skillList([{ id: 1, tpCost: 1 }]);
+    const e = enemy([always(1, 5)], { maxTp: 0 });
+    assert.deepEqual(forecast.forecast(e, skills, ENGINE, {}).entries, []);
+    assert.deepEqual(forecast.audit(e, skills, ENGINE).dead.map(x => x.reason), ['cost']);
+});
+
+test('narrow resource conditions include integer values between rounded endpoints', () => {
+    const skills = skillList([{ id: 1 }]);
+    const e = enemy([when(1, 5, 3, 0.501, 0.509)]);
+    assert.deepEqual(forecast.audit(e, skills, ENGINE).dead.map(x => x.reason), ['condition']);
+    e.params[1] = 1000;
+    e.actions[0].conditionParam1 = 0.5004;
+    e.actions[0].conditionParam2 = 0.5016;
+    assert.deepEqual(forecast.audit(e, skills, ENGINE).dead, []);
+});
+
 const BATTLE_AI_ON_SPOT = forecast.rules([{
     name: 'VisuMZ_3_BattleAI', status: true,
     parameters: { 'General:struct': JSON.stringify({
@@ -227,4 +280,30 @@ test('widening the turn floor never invents a warning', () => {
     const narrow = forecast.audit(e, skills, BATTLE_AI_ZERO).dead.map(d => d.index);
     const wide = forecast.audit(e, skills, BATTLE_AI_ON_SPOT).dead.map(d => d.index);
     for (const index of wide) assert.ok(narrow.includes(index), `row ${index} warned only when widened`);
+});
+
+test('on-the-spot counting preserves complete repeating-turn intersections', () => {
+    const skills = skillList([{ id: 1 }, { id: 2 }]);
+    const e = enemy([
+        when(1, 5, 1, 0, 0),
+        { ...always(2, 5), conditions: [
+            { type: 1, param1: 1, param2: 7 }, { type: 1, param1: 2, param2: 11 }
+        ] }
+    ]);
+    assert.deepEqual(forecast.audit(e, skills, BATTLE_AI_ON_SPOT), { dead: [], truncated: false });
+    assert.deepEqual(forecast.audit(e, skills, BATTLE_AI_ZERO).dead.map(d => d.index), [0]);
+});
+
+test('turn-zero expansion preserves selection-style and resource corrections', () => {
+    const skills = skillList([{ id: 1 }, { id: 2 }, { id: 3, tpCost: 1 }]);
+    const e = enemy([when(1, 1, 1, 0, 0), always(2, 9), always(3, 9)], { maxTp: 0 });
+    for (const style of ['classic', 'random', 'casual', 'gambit']) {
+        const narrowRules = { ...BATTLE_AI_ZERO, style };
+        const wideRules = { ...BATTLE_AI_ON_SPOT, style };
+        const narrow = forecast.audit(e, skills, narrowRules).dead.map(d => d.index);
+        const wide = forecast.audit(e, skills, wideRules).dead;
+        assert.ok(wide.every(d => narrow.includes(d.index)), style);
+        assert.equal(wide.find(d => d.index === 2)?.reason, 'cost', style);
+        if (style !== 'classic') assert.ok(!wide.some(d => d.index === 0), style);
+    }
 });

@@ -20,6 +20,7 @@ class DatabaseEnemyEditor {
     // ==========================================
 
     showEnemyDetail(container, enemy) {
+        const isCurrentDetail = this.parentEditor?.captureDetailContext?.() || (() => true);
         const tt = text => window.I18n ? window.I18n.tText(text) : text;
         this.currentEnemy = enemy;
 
@@ -172,6 +173,7 @@ class DatabaseEnemyEditor {
 
         // Battler change button listener + preview + hue slider
         setTimeout(() => {
+            if (!isCurrentDetail()) return;
             if (!wrapper.isConnected || this.currentEnemy !== enemy) return;
             const battlerBtn = document.getElementById(`enemy-change-battler-${enemy.id}`);
             if (battlerBtn) {
@@ -246,6 +248,7 @@ class DatabaseEnemyEditor {
 
         // Setup action interaction after DOM is ready
         setTimeout(() => {
+            if (!isCurrentDetail()) return;
             const actionsTable = document.getElementById(`enemy-actions-table-${enemy.id}`);
             if (actionsTable) {
                 this.setupActionInteraction(actionsTable, enemy);
@@ -331,6 +334,7 @@ class DatabaseEnemyEditor {
 
         // Setup trait interaction after DOM is ready
         setTimeout(() => {
+            if (!isCurrentDetail()) return;
             const traitsTable = document.getElementById(`enemy-traits-table-${enemy.id}`);
             if (traitsTable) {
                 const traitsSect = traitsTable.closest('.database-section');
@@ -348,6 +352,7 @@ class DatabaseEnemyEditor {
 
         // Add event listeners for all editable fields
         setTimeout(() => {
+            if (!isCurrentDetail()) return;
             const editableFields = container.querySelectorAll('[data-enemy-id]');
             editableFields.forEach(field => {
                 field.addEventListener('change', (e) => {
@@ -777,12 +782,13 @@ class DatabaseEnemyEditor {
         }
         if (rules.window === 0) return tt('Only the highest valid rating is ever chosen.');
         return tt('Only ratings within {n} of the highest valid rating are ever chosen.')
-            .replace('{n}', rules.window);
+            .replace('{n}', rules.inclusive ? rules.window : Math.max(0, rules.window - 1));
     }
 
     forecastReasonText(entry) {
         const tt = text => window.I18n ? window.I18n.tText(text) : text;
         switch (entry.reason) {
+            case 'priority': return tt('Battle AI uses gambit order: the first valid action wins.');
             case 'no-skill': return tt('The skill no longer exists.');
             case 'occasion': return tt('This skill cannot be used in battle.');
             case 'cost': return tt('The cost is higher than this enemy can hold.');
@@ -917,7 +923,7 @@ class DatabaseEnemyEditor {
                 </li>`;
         }).join('');
         host.innerHTML = `
-            <div class="enemy-forecast-ceiling">${tt('Rating ceiling')} ${result.ceiling}</div>
+            ${result.ceiling === null ? '' : `<div class="enemy-forecast-ceiling">${tt('Rating ceiling')} ${result.ceiling}</div>`}
             <ul class="enemy-forecast-pool-list">${rows}</ul>`;
     }
 
@@ -968,7 +974,7 @@ class DatabaseEnemyEditor {
                     indicator.style.setProperty('background-color', 'var(--color-accent-bright)', 'important');
                 }
                 contentCells.forEach(cell => {
-                    cell.style.setProperty('background-color', 'var(--color-bg-panel)', 'important');
+                    cell.style.setProperty('background-color', 'var(--color-bg-selected)', 'important');
                 });
                 table.closest('.database-section')?.focus();
                 this.updateActionButtonStates(table.closest('.database-section'), table);
@@ -999,7 +1005,7 @@ class DatabaseEnemyEditor {
                     indicator.style.setProperty('background-color', 'var(--color-accent-bright)', 'important');
                 }
                 contentCells.forEach(cell => {
-                    cell.style.setProperty('background-color', 'var(--color-bg-panel)', 'important');
+                    cell.style.setProperty('background-color', 'var(--color-bg-selected)', 'important');
                 });
             });
 
@@ -1340,7 +1346,7 @@ class DatabaseEnemyEditor {
                     indicator.style.setProperty('background-color', 'var(--color-accent-bright)', 'important');
                 }
                 contentCells.forEach(cell => {
-                    cell.style.setProperty('background-color', 'var(--color-bg-panel)', 'important');
+                    cell.style.setProperty('background-color', 'var(--color-bg-selected)', 'important');
                 });
             });
 
@@ -1369,7 +1375,7 @@ class DatabaseEnemyEditor {
                     indicator.style.setProperty('background-color', 'var(--color-accent-bright)', 'important');
                 }
                 contentCells.forEach(cell => {
-                    cell.style.setProperty('background-color', 'var(--color-bg-panel)', 'important');
+                    cell.style.setProperty('background-color', 'var(--color-bg-selected)', 'important');
                 });
 
                 const section = table.closest('.database-section');
@@ -1824,6 +1830,9 @@ class DatabaseEnemyEditor {
     // ==========================================
 
     refreshEnemyDetail(enemy) {
+        if (this.parentEditor?.showDatabaseDetail) {
+            return this.parentEditor.showDatabaseDetail(enemy, 'enemies');
+        }
         const container = document.getElementById('database-detail') || document.querySelector('.database-detail-panel');
         if (container) {
             container.innerHTML = '';

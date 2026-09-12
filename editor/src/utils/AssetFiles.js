@@ -202,26 +202,31 @@
         return `file://${encodeURI(normalized).replace(/#/g, '%23').replace(/\?/g, '%3F')}`;
     };
 
-    // RPG Maker face sheets always have four 144px columns. Reactor also
+    // Face sheets have four columns at the configured System 2 face size. Reactor also
     // accepts additional complete rows instead of limiting selection to two.
     const FACE_COLUMNS = 4;
     const FACE_SIZE = 144;
-    const faceSheetMetrics = imageOrHeight => {
+    const faceSizeOf = (system = root.reactor?.databaseManager?.getSystem?.()) => {
+        const size = Number(typeof system === 'number' ? system : system?.faceSize);
+        return Number.isInteger(size) && size > 0 ? size : FACE_SIZE;
+    };
+    const faceSheetMetrics = (imageOrHeight, system) => {
+        const faceSize = faceSizeOf(system);
         const height = Number(imageOrHeight && typeof imageOrHeight === 'object'
             ? (imageOrHeight.naturalHeight || imageOrHeight.height)
             : imageOrHeight) || 0;
-        const rows = Math.floor(height / FACE_SIZE);
-        return { columns: FACE_COLUMNS, rows, count: FACE_COLUMNS * rows, faceSize: FACE_SIZE };
+        const rows = Math.floor(height / faceSize);
+        return { columns: FACE_COLUMNS, rows, count: FACE_COLUMNS * rows, faceSize };
     };
-    const faceSourceRect = (index, imageOrHeight) => {
+    const faceSourceRect = (index, imageOrHeight, system) => {
         const value = Number(index);
-        const sheet = faceSheetMetrics(imageOrHeight);
+        const sheet = faceSheetMetrics(imageOrHeight, system);
         if (!Number.isInteger(value) || value < 0 || value >= sheet.count) return null;
         return {
-            x: (value % FACE_COLUMNS) * FACE_SIZE,
-            y: Math.floor(value / FACE_COLUMNS) * FACE_SIZE,
-            width: FACE_SIZE,
-            height: FACE_SIZE
+            x: (value % FACE_COLUMNS) * sheet.faceSize,
+            y: Math.floor(value / FACE_COLUMNS) * sheet.faceSize,
+            width: sheet.faceSize,
+            height: sheet.faceSize
         };
     };
 
@@ -268,7 +273,8 @@
     root.RRAssetFiles = api;
     root.RRFaceSheet = {
         COLUMNS: FACE_COLUMNS,
-        FACE_SIZE,
+        get FACE_SIZE() { return faceSizeOf(); },
+        sizeOf: faceSizeOf,
         metrics: faceSheetMetrics,
         sourceRect: faceSourceRect
     };

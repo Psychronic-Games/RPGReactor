@@ -104,7 +104,7 @@ function sampleTileIds() {
     return ids;
 }
 
-const SIZES = [48, 32, 24, 16];
+const SIZES = [64, 48, 32, 24, 16, 8];
 const TILE_IDS = sampleTileIds();
 
 test('every size RPG Maker offers is carried into the renderer', () => {
@@ -115,7 +115,7 @@ test('every size RPG Maker offers is carried into the renderer', () => {
         assert.equal(manager.TILE_HEIGHT, size);
     }
     // An unrecognised value is a damaged file, not a new project shape.
-    assert.equal(managerAt(64).TILE_SIZE, 48);
+    assert.equal(managerAt(12).TILE_SIZE, 48);
     assert.equal(managerAt(undefined).TILE_SIZE, 48);
 });
 

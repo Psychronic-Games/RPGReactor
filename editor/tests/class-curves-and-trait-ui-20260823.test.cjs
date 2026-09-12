@@ -115,8 +115,8 @@ test('state messages explain their format token and duration controls align on t
     assert.match(state, /class="state-message-help"><code>%1<\/code>/);
     assert.match(state, /= \$\{tt\('Actor'\)\} \/ \$\{tt\('Enemy'\)\} \$\{tt\('Name'\)\}/);
     assert.match(state, /class="state-duration-row state-duration-check-row">\s*<input type="checkbox"/);
-    assert.match(styles, /\.state-duration-row\s*\{[^}]*grid-template-columns: 130px minmax\(0, 1fr\)/s);
-    assert.match(styles, /\.state-message-row\s*\{[^}]*grid-template-columns: minmax\(0, 1fr\) 140px/s);
+    assert.match(styles, /\.state-duration-row\s*\{[^}]*grid-template-columns: minmax\(0, 1fr\) minmax\(100px, 150px\)/s);
+    assert.match(styles, /\.state-message-row\s*\{[^}]*grid-template-columns: 140px minmax\(0, 1fr\)/s);
 });
 
 test('the Level 999 value label is translated in every locale', () => {

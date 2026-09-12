@@ -245,13 +245,15 @@ class DatabaseEditorUI {
             && dataGeneration === this.databaseManager?.dataGeneration;
     }
 
-    registerDetailModal(modal) {
+    registerDetailModal(modal, dispose = () => modal.remove()) {
         const current = this.captureDetailContext();
-        (this._detailCleanups ||= []).push(() => { modal.inert = true; modal.remove(); });
+        (this._detailCleanups ||= []).push(() => { modal.inert = true; dispose(); });
         return () => current() && modal.isConnected;
     }
 
     cleanupDatabaseDetail() {
+        this._renderedDetail = null;
+        this.tilesetEditor?.resetFlagEditing?.({ refresh: false });
         this.troopEditor?.disposePreviewLayout?.();
         this.actionSequenceEditor?.dispose();
         this.battlePresentationEditor?.dispose();
@@ -701,6 +703,11 @@ class DatabaseEditorUI {
         });
         searchInput.addEventListener('blur', () => { searchInput.style.borderColor = 'var(--color-border-input)'; });
         searchContainer.appendChild(searchInput);
+        if(type==='actionSequences'){
+            const starters=document.createElement('button');starters.type='button';starters.className='rr-btn-secondary';starters.style.cssText='width:100%;margin-top:6px';starters.textContent=tt('Add Starter Sequences');
+            starters.onclick=()=>{snapshotForUndo();const added=ReactorBattleData.addStarters(this.databaseManager.data.actionSequences);if(!added.length)return;this.databaseManager.mutationGeneration++;listSession.mutationGeneration++;refreshData();refreshList();selectIds([added[0].id]);};searchContainer.append(starters);
+        }
+
         listEl.parentNode.insertBefore(searchContainer, listEl);
 
         const applySelection = () => {
@@ -721,7 +728,7 @@ class DatabaseEditorUI {
             applySelection();
             if (!showDetail) return;
             const focusedEntry = data.find(entry => entry?.id === focusedId);
-            if (focusedEntry) this.showDatabaseDetail(focusedEntry, type);
+            if (focusedEntry) this.showDatabaseDetail(focusedEntry, type, { reuse: true });
             else { this.cleanupDatabaseDetail(); detailEl.innerHTML = this._selectEntryMarkup(type); }
         };
         const selectRange = (toId) => {
@@ -812,7 +819,7 @@ class DatabaseEditorUI {
                         : (getSelectedEntries().at(-1)?.id ?? null);
                     applySelection();
                     const focusedEntry = this.databaseManager.data[type]?.[focusedId];
-                    if (focusedEntry) this.showDatabaseDetail(focusedEntry, type);
+                    if (focusedEntry) this.showDatabaseDetail(focusedEntry, type, { reuse: true });
                     else { this.cleanupDatabaseDetail(); detailEl.innerHTML = this._selectEntryMarkup(type); }
                 });
                 item.addEventListener('contextmenu', event => {
@@ -825,7 +832,7 @@ class DatabaseEditorUI {
                     }
                     focusedId = entry.id;
                     applySelection();
-                    this.showDatabaseDetail(this.databaseManager.data[type]?.[entry.id] || entry, type);
+                    this.showDatabaseDetail(this.databaseManager.data[type]?.[entry.id] || entry, type, { reuse: true });
                     this.showListContextMenu(event.clientX, event.clientY, entry, data, type, populateList, searchInput, detailEl);
                 });
                 listEl.appendChild(item);
@@ -972,7 +979,12 @@ class DatabaseEditorUI {
         if (this._listKeyHandler) document.removeEventListener('keydown', this._listKeyHandler);
         const getSelectedEntry = () => data.find(entry => entry?.id === focusedId) || getSelectedEntries()[0] || null;
         const listKeyHandler = event => {
+            if (event.defaultPrevented) return;
             if (!viewer.classList.contains('active') || this._activeDatabaseList !== listSession) return;
+            // Body-mounted pickers are separate keyboard scopes, even though
+            // the database remains visible beneath them.
+            if (event.target instanceof Node && event.target !== document && event.target !== document.body
+                && !viewer.contains(event.target)) return;
             const tag = document.activeElement?.tagName;
             if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || document.activeElement?.isContentEditable) return;
             // Keys pressed inside the detail pane belong to the detail (a
@@ -983,20 +995,24 @@ class DatabaseEditorUI {
             if (key === 'arrowup' || key === 'arrowdown') {
                 if (filteredData.length === 0) return;
                 event.preventDefault();
+                event.stopPropagation();
                 const currentIndex = filteredData.findIndex(entry => entry.id === focusedId);
                 const delta = key === 'arrowup' ? -1 : 1;
                 const nextIndex = currentIndex < 0
                     ? (delta > 0 ? 0 : filteredData.length - 1)
                     : Math.max(0, Math.min(filteredData.length - 1, currentIndex + delta));
                 const next = filteredData[nextIndex];
+                if (!next || next.id === focusedId) return;
                 if (event.shiftKey && selectionAnchorId !== null) {
                     selectRange(next.id);
                     focusedId = next.id;
                     applySelection();
-                    this.showDatabaseDetail(next, type);
+                    this.showDatabaseDetail(next, type, { reuse: true });
                 } else {
                     selectIds([next.id], next.id);
                 }
+                listEl.focus({ preventScroll: true });
+                while (nextIndex >= renderedCount) populateList(searchInput.value, true);
                 listEl.querySelector(`[data-entry-id="${next.id}"]`)?.scrollIntoView({ block: 'nearest' });
                 return;
             }
@@ -1683,8 +1699,10 @@ class DatabaseEditorUI {
     /**
      * Show detail view for a specific database entry
      */
-    showDatabaseDetail(entry, type) {
-        if (this._databaseSaveInFlight) return;
+    showDatabaseDetail(entry, type, { reuse = false } = {}) {
+        if (this._databaseSaveInFlight || !entry) return;
+        if (reuse && this._renderedDetail?.entry === entry && this._renderedDetail.type === type
+            && this._renderedDetail.dataGeneration === this.databaseManager.dataGeneration) return;
         this.cleanupDatabaseDetail();
         const detailEl = document.getElementById('database-detail');
         detailEl.innerHTML = '';
@@ -1724,7 +1742,9 @@ class DatabaseEditorUI {
             // Generic display for other types
             this.showGenericDetail(detailEl, entry, type);
         }
-        if (['skills','items','weapons','actors','enemies'].includes(type)) this.battlePresentationEditor?.assignment(detailEl, type, entry);
+        if (['skills','items','weapons','actors','enemies','classes'].includes(type)) this.battlePresentationEditor?.assignment(detailEl, type, entry);
+        if (['actors','enemies'].includes(type)) this.battlePresentationEditor?.battlerGraphic(detailEl, type, entry);
+        if(type==='states')this.battlePresentationEditor?.stateGraphic(detailEl,entry);
         // Text-code menus and reference panels on the fields that carry
         // `data-rr-textcodes` (descriptions, skill and state messages).
         if (window.RRDatabaseTextCodes && detailEl.querySelector('[data-rr-textcodes]')) {
@@ -1737,6 +1757,7 @@ class DatabaseEditorUI {
         }
         this.wireLiveDatabaseNameSync(detailEl, entry, type);
         if (window.I18n) window.I18n.applyText(detailEl);
+        this._renderedDetail = { entry, type, dataGeneration: this.databaseManager.dataGeneration };
     }
 
     get listIconTypes() {
@@ -1971,7 +1992,7 @@ class DatabaseEditorUI {
         const blank = this.createBlankDatabaseEntry(type, id);
         if (!blank) return null;
         if (type === 'actionSequences') {
-            const refs = typeof ReactorBattleData !== 'undefined' ? ReactorBattleData.references(this.databaseManager.data.battlePresentation, id) : [];
+            const refs = typeof ReactorBattleData !== 'undefined' ? ReactorBattleData.references(this.databaseManager.data.battlePresentation, id,this.databaseManager.data.actionSequences) : [];
             if (refs.length) { alert('This sequence is assigned to ' + refs.map(r => r.kind + ' #' + r.id).join(', ') + '. Change those assignments before deleting it.'); return null; }
             entries[id] = null;
         } else {entries[id] = blank;const section=this.databaseManager.data.battlePresentation?.[type];if(section)delete section[id];}
@@ -2254,6 +2275,7 @@ class DatabaseEditorUI {
                 faceCanvasContainer.appendChild(faceCanvas);
 
                 const faceCtx = faceCanvas.getContext('2d');
+                faceCtx.imageSmoothingEnabled = false;
                 const faceImg = new Image();
 
                 const path = require('path');
@@ -2441,9 +2463,9 @@ class DatabaseEditorUI {
             const imgPath = RRAssetFiles.toUrl(path.join(this.currentProject.path, 'img', 'system', 'IconSet.png'));
 
             img.onload = () => {
-                // IconSet is 16 icons wide, each 32x32
+                // IconSet keeps sixteen columns at the configured source size.
                 const iconsPerRow = 16;
-                const iconSize = 32;
+                const iconSize = window.RRIconPicker?.sizeOf(this.databaseManager?.getSystem?.()) || 32;
 
                 const col = entry.iconIndex % iconsPerRow;
                 const row = Math.floor(entry.iconIndex / iconsPerRow);
@@ -2996,6 +3018,7 @@ class DatabaseEditorUI {
 
         // Show modal
         modal.style.display = 'flex';
+        browser.focusSelected();
 
         // Auto-select current file if provided
         if (currentFile) {

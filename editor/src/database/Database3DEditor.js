@@ -118,8 +118,9 @@ class Database3DEditor {
      *    and icons drawn while shadow samplers were empty (nothing at all)
      *    were cached under 1.
      * 3: render at 512px for sharp detail previews and high-density displays.
+     * 4: inspection lighting is independent of the current map.
      */
-    static THUMBNAIL_CACHE_VERSION = 3;
+    static THUMBNAIL_CACHE_VERSION = 4;
 
     static thumbnailCacheName(sourcePath, size, mtimeMs) {
         const crypto = require('crypto');
@@ -215,7 +216,7 @@ class Database3DEditor {
         this._detail = detailEl;
         detailEl.innerHTML = `
             <div style="display:flex;flex-direction:row;gap:0;height:100%;min-height:0;">
-                <div style="width:220px;flex:0 0 220px;display:flex;flex-direction:column;border-right:1px solid var(--color-border);min-height:0;">
+                <div class="r3d-browser-column" style="width:220px;flex:0 0 220px;display:flex;flex-direction:column;border-right:1px solid var(--color-border);min-height:0;">
                     <div style="padding:6px 10px;font-weight:bold;color:var(--color-text);border-bottom:1px solid var(--color-border);">${this._t('Models')}</div>
                     <div class="database-search-container" style="padding:8px;background-color:var(--color-bg-menubar);border-bottom:1px solid var(--color-border);flex-shrink:0;">
                         <input type="text" class="r3d-model-search" placeholder="${this._t('Search files...')}"
@@ -231,8 +232,8 @@ class Database3DEditor {
                         <div class="r3d-select-bar" style="position:absolute;top:8px;left:50%;transform:translateX(-50%);display:none;align-items:center;gap:8px;padding:4px 10px;background:var(--color-bg-panel);border:1px solid var(--color-accent);border-radius:4px;font-size:12px;color:var(--color-text);"></div>
                         <div class="r3d-rig-bar" style="position:absolute;top:8px;left:50%;transform:translateX(-50%);display:none;align-items:center;gap:8px;padding:4px 10px;background:var(--color-bg-panel);border:1px solid var(--color-accent);border-radius:4px;font-size:12px;color:var(--color-text);"></div>
                         <div class="r3d-marquee" style="position:absolute;display:none;border:1px dashed var(--color-accent);background:color-mix(in srgb, var(--color-accent) 15%, transparent);pointer-events:none;"></div>
-                        <div class="r3d-card" style="position:absolute;right:10px;top:10px;width:280px;display:none;background:var(--color-bg-panel);border:1px solid var(--color-border);border-radius:6px;padding:10px 12px;box-shadow:0 4px 18px rgba(0,0,0,0.35);"></div>
-                        <div class="r3d-stats-card" style="position:absolute;left:8px;bottom:8px;width:272px;max-height:55%;display:flex;flex-direction:column;background:color-mix(in srgb, var(--color-bg-panel) 92%, transparent);border:1px solid var(--color-border);border-radius:6px;box-shadow:0 4px 18px rgba(0,0,0,0.35);overflow:hidden;">
+                        <div class="r3d-card" style="position:absolute;right:10px;top:10px;width:280px;max-width:calc(100% - 56px);box-sizing:border-box;display:none;background:var(--color-bg-panel);border:1px solid var(--color-border);border-radius:6px;padding:10px 12px;box-shadow:0 4px 18px rgba(0,0,0,0.35);"></div>
+                        <div class="r3d-stats-card" style="position:absolute;left:8px;bottom:8px;width:272px;max-width:calc(100% - 16px);max-height:55%;display:flex;flex-direction:column;border:1px solid var(--color-border);border-radius:6px;box-shadow:0 4px 18px rgba(0,0,0,0.35);overflow:hidden;">
                             <div class="sidebar-header r3d-sec-header" data-sec="stats" style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:5px 10px 5px 7px;font-size:11px;">
                                 <span class="r3d-sec-toggle" style="flex:0 0 12px;font-size:10px;color:var(--color-text-muted);">▾</span>
                                 <span style="flex:1;">${this._t('What this model costs')}</span>
@@ -780,6 +781,7 @@ class Database3DEditor {
         const span = Math.max(extent.x, extent.y, extent.z, 0.0001);
         const scale = 1.6 / span;
         object.scale.setScalar(scale);
+        ModelPreview3D.isolateLighting(object);
         this._thumbScene.add(object);
         // Templates stand feet-at-origin: aim mid-height, dead centre
         // (aimCamera adds +0.5 to x/z, so -0.5 targets the true origin).
@@ -951,17 +953,16 @@ class Database3DEditor {
         // LOD_MIN_TRIANGLES get no distance levels because they are not worth
         // any, and a map's whole frame budget is a few hundred thousand.
         const triangles = a.triangles;
-        const band = triangles < 20000 ? { label: this._t('Light'), colour: 'var(--color-success, #4caf50)' }
-            : triangles < 150000 ? { label: this._t('Moderate'), colour: 'var(--color-warning, #d6a13a)' }
-            : triangles < 500000 ? { label: this._t('Heavy'), colour: 'var(--color-warning, #d6a13a)' }
-            : { label: this._t('Very heavy'), colour: 'var(--color-danger, #d05353)' };
+        const band = triangles < 20000 ? { label: this._t('Light'), kind: 'light' }
+            : triangles < 150000 ? { label: this._t('Moderate'), kind: 'warning' }
+            : triangles < 500000 ? { label: this._t('Heavy'), kind: 'warning' }
+            : { label: this._t('Very heavy'), kind: 'heavy' };
 
         const headline = document.createElement('div');
         headline.style.cssText = 'display:flex;align-items:baseline;gap:6px;margin-bottom:6px;';
         headline.innerHTML = `<span style="font-size:16px;color:var(--color-text);">${num(triangles)}</span>`
             + `<span style="${muted}">${this._t('triangles')}</span>`
-            + `<span style="margin-left:auto;padding:1px 7px;border-radius:9px;font-size:10px;`
-            + `background:${band.colour};color:var(--color-bg-deep);">${band.label}</span>`;
+            + `<span class="rr-model-cost-badge" data-cost="${band.kind}">${band.label}</span>`;
         host.appendChild(headline);
 
         const rows = [
@@ -1529,7 +1530,7 @@ class Database3DEditor {
         this._template = template;
         if (!this._renderer) {
             this._scene = new THREE.Scene();
-            this._scene.background = new THREE.Color(0x1a1a1e);
+            ModelPreview3D.updateBackground(this._scene);
             this._camera = Reactor3D.createCamera({ fov: 40 });
             this._renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
             this._renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
@@ -1607,6 +1608,7 @@ class Database3DEditor {
                     });
                 }
                 this._simFrame = frame;
+                ModelPreview3D.updateBackground(this._scene);
                 this._updatePreviewFx(frame, rules);
                 this._updateEffectPreview();
                 this._updateHover();
@@ -1737,6 +1739,7 @@ class Database3DEditor {
             .map(([name, count]) => ({ name, count }))
             .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
         this._object = object;
+        this._previewLighting = ModelPreview3D.isolateLighting(object);
         this._lastInputAt = performance.now();
         let triangles = 0;
         object.traverse(child => {
@@ -1786,7 +1789,7 @@ class Database3DEditor {
         this._fxT = -1;
         this._flashHolder = null;
         this._bgFlash = null;
-        this._scene?.background?.setHex?.(0x1a1a1e);
+        if (this._scene) ModelPreview3D.updateBackground(this._scene);
         for (const audio of this._previewSounds || []) {
             audio.pause();
             audio.src = '';
@@ -1860,7 +1863,7 @@ class Database3DEditor {
             + 'justify-content:center;border-radius:4px;cursor:pointer;'
             + 'border:1px solid ' + (active ? 'var(--color-accent)' : 'var(--color-border)') + ';'
             + 'background:' + (active ? 'var(--color-accent)' : 'var(--color-bg-panel)') + ';'
-            + 'color:' + (active ? 'var(--color-bg-deep)' : 'var(--color-text)') + ';';
+            + 'color:' + (active ? 'var(--color-accent-on)' : 'var(--color-text)') + ';';
         for (const tool of this._tools()) {
             const button = document.createElement('button');
             button.type = 'button';
@@ -2969,7 +2972,7 @@ class Database3DEditor {
                     style="flex:1;padding:4px 0;font-size:12px;border-radius:4px;cursor:pointer;
                     border:1px solid ${tab.id === this._cardTab ? 'var(--color-accent)' : 'var(--color-border)'};
                     background:${tab.id === this._cardTab ? 'var(--color-accent)' : 'var(--color-bg-surface)'};
-                    color:${tab.id === this._cardTab ? 'var(--color-bg-deep)' : 'var(--color-text)'};font-weight:bold;">${tab.label}</button>`).join('')}
+                    color:${tab.id === this._cardTab ? 'var(--color-accent-on)' : 'var(--color-text)'};font-weight:bold;">${tab.label}</button>`).join('')}
             </div>`
             + axes.map((axis, i) => `
                 <div style="display:flex;align-items:center;gap:8px;margin:6px 0;">
@@ -3043,7 +3046,7 @@ class Database3DEditor {
                     <option value="right">${this._t('Right (+X)')}</option>
                 </select>
                 <button type="button" class="r3d-card-pivot-place" title="${this._t('Place pivot (click the model)')}"
-                    style="width:26px;height:26px;border:1px solid ${this._tool === 'pivot' ? 'var(--color-accent)' : 'var(--color-border)'};border-radius:4px;cursor:pointer;background:${this._tool === 'pivot' ? 'var(--color-accent)' : 'var(--color-bg-surface)'};color:${this._tool === 'pivot' ? 'var(--color-bg-deep)' : 'var(--color-text)'};font-size:13px;line-height:1;">✛</button>`) : '')
+                    style="width:26px;height:26px;border:1px solid ${this._tool === 'pivot' ? 'var(--color-accent)' : 'var(--color-border)'};border-radius:4px;cursor:pointer;background:${this._tool === 'pivot' ? 'var(--color-accent)' : 'var(--color-bg-surface)'};color:${this._tool === 'pivot' ? 'var(--color-accent-on)' : 'var(--color-text)'};font-size:13px;line-height:1;">✛</button>`) : '')
             + (work.motion === 'pose' && work.trigger === 'action' && !(work.keys || []).length
                 ? row(this._t('At the end'),
                 `<select class="r3d-card-hold" ${selectStyle}>
@@ -3402,13 +3405,13 @@ class Database3DEditor {
         if (this._bgFlash && this._scene && this._scene.background) {
             const flash = this._bgFlash;
             const strength = (flash.color[3] / 255) * Math.max(0, 1 - flash.t / flash.duration);
-            this._scene.background.setRGB(
-                0.102 + (flash.color[0] / 255 - 0.102) * strength,
-                0.102 + (flash.color[1] / 255 - 0.102) * strength,
-                0.118 + (flash.color[2] / 255 - 0.118) * strength);
+            const base = ModelPreview3D.backgroundColor();
+            const color = new THREE.Color().setRGB(flash.color[0] / 255, flash.color[1] / 255,
+                flash.color[2] / 255, THREE.SRGBColorSpace);
+            this._scene.background.copy(base).lerp(color, strength);
             if (++flash.t > flash.duration) {
                 this._bgFlash = null;
-                this._scene.background.setHex(0x1a1a1e);
+                ModelPreview3D.updateBackground(this._scene);
             }
         }
     }
@@ -3717,7 +3720,7 @@ class Database3DEditor {
                 style="flex:1;padding:4px 0;font-size:12px;border-radius:4px;cursor:pointer;
                 border:1px solid ${tab.id === current ? 'var(--color-accent)' : 'var(--color-border)'};
                 background:${tab.id === current ? 'var(--color-accent)' : 'var(--color-bg-surface)'};
-                color:${tab.id === current ? 'var(--color-bg-deep)' : 'var(--color-text)'};font-weight:bold;">${tab.label}</button>`).join('')}
+                color:${tab.id === current ? 'var(--color-accent-on)' : 'var(--color-text)'};font-weight:bold;">${tab.label}</button>`).join('')}
         </div>`;
     }
 
@@ -4345,7 +4348,7 @@ class Database3DEditor {
         }
         // The model itself takes the light through the game's own shader.
         if (Reactor3D.packLightUniforms) {
-            Reactor3D.packLightUniforms(packed, { intensity: this.LIGHT_PREVIEW_AMBIENT, colour: 0xffffff });
+            Reactor3D.packLightUniforms(packed, { intensity: this.LIGHT_PREVIEW_AMBIENT, colour: 0xffffff }, this._previewLighting);
         }
     }
 
@@ -4621,39 +4624,30 @@ class Database3DEditor {
             + (tab === 'rotate' && !aimed ? `<div style="font-size:11px;color:var(--color-text-muted);margin:2px 0 4px;">${escape(this._k('lit.point'))}</div>` : '');
     }
 
-    /** How dark the rest of the model goes while a light previews on it. */
-    get LIGHT_PREVIEW_AMBIENT() { return 0.35; }
+    /** Dim only while explicitly editing a light; normal model inspection stays bright. */
+    get LIGHT_PREVIEW_AMBIENT() {
+        const effect = this._effectWork || this.rawEffects?.[this.selectedEffect];
+        return this._cardMode === 'effect' && effect?.type === 'light' ? 0.35 : 1;
+    }
 
-    /**
-     * Make the preview model take the lights, the way the map does: the
-     * runtime's lit-shader injection on its own unlit materials. On the way
-     * out the shared uniforms go back to what they held, so the map view
-     * behind the database keeps its own ambient.
-     */
+    /** Effect lights use the inspection model's field, leaving map uniforms untouched. */
     _lightPreviewLit(on) {
-        if (typeof Reactor3D === 'undefined' || !Reactor3D.lightUniforms) return;
-        const uniforms = Reactor3D.lightUniforms();
-        if (on) {
-            if (!this._litPreviewSaved) {
-                this._litPreviewSaved = { ambient: Array.from(uniforms.rrAmbient.value), count: uniforms.rrLightCount.value };
-            }
-            if (this._object && Reactor3D.litMaterial) {
-                this._object.traverse(node => {
-                    if (!node.isMesh || node.userData.__reactorOverlay) return;
-                    for (const material of Array.isArray(node.material) ? node.material : [node.material]) {
-                        if (!material || material.__reactorLit) continue;
-                        Reactor3D.litMaterial(material);
-                        material.needsUpdate = true;
-                    }
-                });
-            }
-            return;
+        if (typeof Reactor3D === 'undefined' || !this._object) return;
+        if (on && Reactor3D.litMaterial) {
+            this._object.traverse(node => {
+                if (!node.isMesh || node.userData.__reactorOverlay) return;
+                for (const material of [node.material].flat().filter(Boolean)) {
+                    if (material.__reactorLit) continue;
+                    Reactor3D.litMaterial(material);
+                    material.needsUpdate = true;
+                }
+            });
         }
-        const saved = this._litPreviewSaved;
-        this._litPreviewSaved = null;
-        if (!saved) return;
-        uniforms.rrAmbient.value.set(saved.ambient);
-        uniforms.rrLightCount.value = saved.count;
+        this._previewLighting = ModelPreview3D.isolateLighting(this._object, this._previewLighting);
+        if (!on) {
+            this._previewLighting.rrAmbient.value.set([1, 1, 1]);
+            this._previewLighting.rrLightCount.value = 0;
+        }
     }
 
     _stopLightPreview() {

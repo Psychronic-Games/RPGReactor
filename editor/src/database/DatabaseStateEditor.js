@@ -15,6 +15,7 @@ class DatabaseStateEditor {
     }
 
     showStateDetail(container, state) {
+        const isCurrentDetail = this.parentEditor?.captureDetailContext?.() || (() => true);
         this.currentState = state;
         const wrapper = document.createElement('div');
         wrapper.style.display = 'flex';
@@ -29,7 +30,7 @@ class DatabaseStateEditor {
 
         // General Settings with icon
         const generalSection = document.createElement('div');
-        generalSection.className = 'database-section';
+        generalSection.className = 'database-section state-general-section';
         generalSection.innerHTML = `
             <div class="database-section-header">${tt('General')}</div>
             <div class="database-section-content"><div class="db-general-grid">
@@ -84,6 +85,7 @@ class DatabaseStateEditor {
 
         // Add icon to the designated container after DOM ready
         setTimeout(() => {
+            if (!isCurrentDetail()) return;
             const iconContainer = document.getElementById(`state-icon-container-${state.id}`);
             if (iconContainer) {
                 this.parentEditor.addDatabasePreview(iconContainer, state, 'skills');
@@ -94,31 +96,30 @@ class DatabaseStateEditor {
         }, 0);
 
         const gridWrapper = document.createElement('div');
-        gridWrapper.className = 'database-sections-grid';
-        gridWrapper.appendChild(generalSection);
+        gridWrapper.className = 'database-sections-grid database-state-grid';
 
         // Duration Settings
         const durationSection = document.createElement('div');
-        durationSection.className = 'database-section';
+        durationSection.className = 'database-section state-duration-section';
         const showTurns = (state.autoRemovalTiming || 0) > 0;
         durationSection.innerHTML = `
             <div class="database-section-header">${tt('Duration')}</div>
             <div class="database-section-content">
                 <div class="state-duration-form">
                     <label class="state-duration-row">
+                        <span>${tt('Auto-Remove:')}</span>
                         <select class="database-field-value" data-field="autoRemovalTiming" data-state-id="${state.id}" id="state-auto-remove-${state.id}">
                             ${removalNames.map((name, idx) => `<option value="${idx}" ${state.autoRemovalTiming === idx ? 'selected' : ''}>${name}</option>`).join('')}
                         </select>
-                        <span>${tt('Auto-Remove:')}</span>
                     </label>
                     <div id="state-turns-row-${state.id}" class="state-duration-dependent" style="${showTurns ? '' : 'display: none;'}">
                         <label class="state-duration-row">
-                            <input type="number" class="database-field-value database-field-value-small" value="${this.escapeHTML(state.minTurns || 1)}" min="1" data-field="minTurns" data-state-id="${state.id}">
                             <span>${tt('Min Turns:')}</span>
+                            <input type="number" class="database-field-value database-field-value-small" value="${this.escapeHTML(state.minTurns || 1)}" min="1" data-field="minTurns" data-state-id="${state.id}">
                         </label>
                         <label class="state-duration-row">
-                            <input type="number" class="database-field-value database-field-value-small" value="${this.escapeHTML(state.maxTurns || 1)}" min="1" data-field="maxTurns" data-state-id="${state.id}">
                             <span>${tt('Max Turns:')}</span>
+                            <input type="number" class="database-field-value database-field-value-small" value="${this.escapeHTML(state.maxTurns || 1)}" min="1" data-field="maxTurns" data-state-id="${state.id}">
                         </label>
                     </div>
                     <label class="state-duration-row state-duration-check-row">
@@ -127,11 +128,11 @@ class DatabaseStateEditor {
                     </label>
                     <div id="state-chance-row-${state.id}" class="state-duration-dependent" style="${state.removeByDamage ? '' : 'display: none;'}">
                         <label class="state-duration-row">
+                            <span>${tt('Chance by Damage:')}</span>
                             <span class="state-duration-number">
                             <input type="number" class="database-field-value database-field-value-small" value="${this.escapeHTML(state.chanceByDamage != null ? state.chanceByDamage : 100)}" min="0" max="100" data-field="chanceByDamage" data-state-id="${state.id}">
                                 <span>%</span>
                             </span>
-                            <span>${tt('Chance by Damage:')}</span>
                         </label>
                     </div>
                     <label class="state-duration-row state-duration-check-row">
@@ -144,8 +145,8 @@ class DatabaseStateEditor {
                     </label>
                     <div id="state-steps-row-${state.id}" class="state-duration-dependent" style="${state.removeByWalking ? '' : 'display: none;'}">
                         <label class="state-duration-row">
-                            <input type="number" class="database-field-value database-field-value-small" value="${this.escapeHTML(state.stepsToRemove || 100)}" min="0" data-field="stepsToRemove" data-state-id="${state.id}">
                             <span>${tt('Steps to Remove:')}</span>
+                            <input type="number" class="database-field-value database-field-value-small" value="${this.escapeHTML(state.stepsToRemove || 100)}" min="0" data-field="stepsToRemove" data-state-id="${state.id}">
                         </label>
                     </div>
                     <label class="state-duration-row state-duration-check-row">
@@ -155,40 +156,38 @@ class DatabaseStateEditor {
                 </div>
             </div>
         `;
-        gridWrapper.appendChild(durationSection);
 
         // Messages Section
         const messagesSection = document.createElement('div');
-        messagesSection.className = 'database-section';
+        messagesSection.className = 'database-section state-messages-section';
         messagesSection.innerHTML = `
             <div class="database-section-header">${tt('Messages')}</div>
             <div class="database-section-content">
                 <div class="state-message-help"><code>%1</code><span>= ${tt('Actor')} / ${tt('Enemy')} ${tt('Name')}</span></div>
                 <div class="state-message-row">
-                    <input id="state-message1-${state.id}" type="text" class="database-field-value" value="${this.escapeHTML(state.message1 || '')}" data-field="message1" data-state-id="${state.id}" data-rr-textcodes="battlelog:stateMessage">
                     <label for="state-message1-${state.id}" class="database-field-label">${tt('Actor Afflicted:')}</label>
+                    <input id="state-message1-${state.id}" type="text" class="database-field-value" value="${this.escapeHTML(state.message1 || '')}" data-field="message1" data-state-id="${state.id}" data-rr-textcodes="battlelog:stateMessage">
                 </div>
                 <div class="state-message-row">
-                    <input id="state-message2-${state.id}" type="text" class="database-field-value" value="${this.escapeHTML(state.message2 || '')}" data-field="message2" data-state-id="${state.id}" data-rr-textcodes="battlelog:stateMessage">
                     <label for="state-message2-${state.id}" class="database-field-label">${tt('Enemy Afflicted:')}</label>
+                    <input id="state-message2-${state.id}" type="text" class="database-field-value" value="${this.escapeHTML(state.message2 || '')}" data-field="message2" data-state-id="${state.id}" data-rr-textcodes="battlelog:stateMessage">
                 </div>
                 <div class="state-message-row">
-                    <input id="state-message3-${state.id}" type="text" class="database-field-value" value="${this.escapeHTML(state.message3 || '')}" data-field="message3" data-state-id="${state.id}" data-rr-textcodes="battlelog:stateMessage">
                     <label for="state-message3-${state.id}" class="database-field-label">${tt('State Persists:')}</label>
+                    <input id="state-message3-${state.id}" type="text" class="database-field-value" value="${this.escapeHTML(state.message3 || '')}" data-field="message3" data-state-id="${state.id}" data-rr-textcodes="battlelog:stateMessage">
                 </div>
                 <div class="state-message-row">
-                    <input id="state-message4-${state.id}" type="text" class="database-field-value" value="${this.escapeHTML(state.message4 || '')}" data-field="message4" data-state-id="${state.id}" data-rr-textcodes="battlelog:stateMessage">
                     <label for="state-message4-${state.id}" class="database-field-label">${tt('State Removed:')}</label>
+                    <input id="state-message4-${state.id}" type="text" class="database-field-value" value="${this.escapeHTML(state.message4 || '')}" data-field="message4" data-state-id="${state.id}" data-rr-textcodes="battlelog:stateMessage">
                 </div>
                 <div style="font-size: 11px; color: var(--color-text-muted); margin-top: 6px;">${tt('%1 = name of the affected battler. %2 is not replaced here.')}</div>
                 <div data-rr-textcodes-panel="battlelog:stateMessage"></div>
             </div>
         `;
-        gridWrapper.appendChild(messagesSection);
 
         // Traits Section
         const traitsSection = document.createElement('div');
-        traitsSection.className = 'database-section';
+        traitsSection.className = 'database-section state-traits-section';
         traitsSection.setAttribute('tabindex', '0');
         traitsSection.style.outline = 'none';
         traitsSection.innerHTML = `
@@ -197,24 +196,29 @@ class DatabaseStateEditor {
                 ${this.buildTraitsTable(state)}
             </div>
         `;
-        gridWrapper.appendChild(traitsSection);
 
         // Note Section
         const noteSection = document.createElement('div');
-        noteSection.className = 'database-section';
+        noteSection.className = 'database-section state-note-section';
         noteSection.innerHTML = `
             <div class="database-section-header">${tt('Note')}</div>
             <div class="database-section-content">
                 <textarea class="database-field-value" rows="4" style="width: 100%;" data-field="note" data-state-id="${state.id}">${rrEscapeHtml(state.note)}</textarea>
             </div>
         `;
-        gridWrapper.appendChild(noteSection);
 
+        const durationNotes = document.createElement('div');
+        durationNotes.className = 'state-duration-notes';
+        durationNotes.append(durationSection, noteSection);
+        // Match keyboard/reading order to the two visual rows. The lower-right
+        // cards wrap independently before the whole page becomes one column.
+        gridWrapper.append(generalSection, traitsSection, messagesSection, durationNotes);
         wrapper.appendChild(gridWrapper);
         container.appendChild(wrapper);
 
         // Add event listeners
         setTimeout(() => {
+            if (!isCurrentDetail()) return;
             this.attachFieldListeners(container, state);
             this.attachTraitListeners(container, state);
         }, 0);
@@ -238,7 +242,7 @@ class DatabaseStateEditor {
                     ${state.traits && state.traits.length > 0 ?
                         state.traits.map((trait, idx) => `
                             <tr class="trait-row" data-trait-index="${idx}" style="cursor: pointer;">
-                                <td class="trait-indicator" style="width: 4px; padding: 0; background-color: transparent; transition: background-color 0.1s;"></td>
+                                <td class="trait-indicator" style="width: 3px; padding: 0; border: none; background: transparent; transition: background-color 0.1s;"></td>
                                 <td>${rrEscapeHtml(this.commonUI.getTraitName(trait.code))}</td>
                                 <td>${this.commonUI.getTraitValueHtml(trait)}</td>
                             </tr>
@@ -326,7 +330,7 @@ class DatabaseStateEditor {
 
             row.addEventListener('mouseenter', () => {
                 if (indicator) indicator.style.setProperty('background-color', 'var(--color-accent-bright)', 'important');
-                contentCells.forEach(cell => cell.style.setProperty('background-color', 'var(--color-bg-panel)', 'important'));
+                contentCells.forEach(cell => cell.style.setProperty('background-color', 'var(--color-bg-selected)', 'important'));
             });
 
             row.addEventListener('mouseleave', () => {
@@ -348,7 +352,7 @@ class DatabaseStateEditor {
                 });
                 row.classList.add('selected');
                 if (indicator) indicator.style.setProperty('background-color', 'var(--color-accent-bright)', 'important');
-                contentCells.forEach(cell => cell.style.setProperty('background-color', 'var(--color-bg-panel)', 'important'));
+                contentCells.forEach(cell => cell.style.setProperty('background-color', 'var(--color-bg-selected)', 'important'));
 
                 const section = table.closest('.database-section');
                 if (section) section.focus();
@@ -589,6 +593,9 @@ class DatabaseStateEditor {
     // ==========================================
 
     refreshStateDetail(state) {
+        if (this.parentEditor?.showDatabaseDetail) {
+            return this.parentEditor.showDatabaseDetail(state, 'states');
+        }
         const container = document.getElementById('database-detail');
         if (container) {
             container.innerHTML = '';

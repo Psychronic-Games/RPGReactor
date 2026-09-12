@@ -37,7 +37,7 @@ function normalizeI18nLanguage(language) {
     return RR_LANGUAGES.find(candidate => candidate.id.toLowerCase() === normalized)?.id || 'en';
 }
 
-const RR_APP_VERSION = '0.98.5';
+const RR_APP_VERSION = '0.98.6';
 
 const RR_DB_TYPE_KEYS = {
     actors: 'menu.actors', classes: 'menu.classes', skills: 'menu.skills', items: 'menu.items',
@@ -13635,20 +13635,6 @@ Object.assign(RR_TEXT_TRANSLATIONS['tr'], {
     'and %1 more': 've %1 tane daha'
 });
 
-// Reviewed entries are deliberately applied last. They correct legacy wording,
-// replace generated first-pass text, and complete newly routed UI phrases.
-const RR_REVIEWED_I18N = globalThis.RR_REVIEWED_TRANSLATIONS || {};
-for (const [catalog, tables] of [
-    [RR_REVIEWED_I18N.text, RR_TEXT_TRANSLATIONS],
-    [RR_REVIEWED_I18N.keyed, RR_I18N_STRINGS],
-    [RR_REVIEWED_I18N.commands, RR_EVENT_COMMAND_NAMES],
-    [RR_REVIEWED_I18N.sections, RR_EVENT_SECTION_NAMES]
-]) {
-    for (const [locale, translations] of Object.entries(catalog || {})) {
-        if (tables[locale]) Object.assign(tables[locale], translations);
-    }
-}
-
 // Map Properties: the BGM sequence (hand-written).
 Object.assign(RR_I18N_STRINGS.en, {
     'mapProps.bgmSequence': 'Play a sequence instead of one track',
@@ -18556,25 +18542,6 @@ class I18nManager {
     }
 }
 
-window.I18n = new I18nManager();
-
-// Early language apply: set <html lang> before the full app initializes.
-(function () {
-    try {
-        document.documentElement.lang = window.I18n.currentLanguage();
-        document.documentElement.dir = window.I18n.currentLanguage() === 'ar' ? 'rtl' : 'ltr';
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', () => {
-                window.I18n.apply(document);
-                window.I18n.observe();
-            });
-        } else {
-            window.I18n.apply(document);
-            window.I18n.observe();
-        }
-    } catch (e) { /* ignore */ }
-})();
-
 // Lighting event commands: Switch Light, Transform Light, Change Ambient Light (hand-written).
 Object.assign(RR_I18N_STRINGS['en'], {"lightcmd.target": "Light", "lightcmd.targetHint": "A light's id, or #tag for every light sharing that tag", "lightcmd.pickLight": "Pick from this map…", "lightcmd.state": "State", "lightcmd.on": "On", "lightcmd.off": "Off", "lightcmd.toggle": "Toggle", "lightcmd.change": "Change", "lightcmd.x": "X (tiles)", "lightcmd.y": "Y (tiles)", "lightcmd.height": "Height (tiles)", "lightcmd.yaw": "Direction", "lightcmd.pitch": "Pitch", "lightcmd.radius": "Reach (tiles)", "lightcmd.angle": "Cone Angle", "lightcmd.width": "Beam Width (tiles)", "lightcmd.intensity": "Intensity", "lightcmd.color": "Color", "lightcmd.duration": "Duration (frames)", "lightcmd.wait": "Wait for completion", "lightcmd.reset": "Reset to authored values", "lightcmd.ambientIntensity": "Brightness (%)", "lightcmd.unchanged": "(unchanged)"});
 Object.assign(RR_I18N_STRINGS['ja'], {"lightcmd.target": "照明", "lightcmd.targetHint": "照明のID、または同じタグを持つ全ての照明を指す #タグ", "lightcmd.pickLight": "このマップから選ぶ…", "lightcmd.state": "状態", "lightcmd.on": "オン", "lightcmd.off": "オフ", "lightcmd.toggle": "切替", "lightcmd.change": "変更", "lightcmd.x": "X（タイル）", "lightcmd.y": "Y（タイル）", "lightcmd.height": "高さ（タイル）", "lightcmd.yaw": "向き", "lightcmd.pitch": "仰角", "lightcmd.radius": "到達距離（タイル）", "lightcmd.angle": "照射角", "lightcmd.width": "ビーム幅（タイル）", "lightcmd.intensity": "強さ", "lightcmd.color": "色", "lightcmd.duration": "時間（フレーム）", "lightcmd.wait": "完了まで待つ", "lightcmd.reset": "設定値に戻す", "lightcmd.ambientIntensity": "明るさ（%）", "lightcmd.unchanged": "（変更なし）"});
@@ -18691,3 +18658,36 @@ Object.assign(RR_I18N_STRINGS["id"], {"lit.preset.compound": "Cahaya gabungan", 
 Object.assign(RR_I18N_STRINGS["vi"], {"lit.preset.compound": "Đèn tổ hợp", "lit.preset.fluorescent": "Huỳnh quang", "lit.components": "Thành phần", "lit.component": "Thành phần", "lit.compoundName": "Tên", "lit.componentId": "ID phần", "lit.addComponent": "Thêm", "lit.removeComponent": "Xóa thành phần", "lit.componentHint": "Cài đặt bên dưới chỉnh sửa thành phần này. Kéo trên bản đồ để di chuyển toàn bộ đèn."});
 Object.assign(RR_I18N_STRINGS["th"], {"lit.preset.compound": "แสงแบบรวม", "lit.preset.fluorescent": "ฟลูออเรสเซนต์", "lit.components": "องค์ประกอบ", "lit.component": "องค์ประกอบ", "lit.compoundName": "ชื่อ", "lit.componentId": "ID ส่วน", "lit.addComponent": "เพิ่ม", "lit.removeComponent": "ลบองค์ประกอบ", "lit.componentHint": "การตั้งค่าด้านล่างแก้ไของค์ประกอบนี้ ลากบนแผนที่เพื่อย้ายแสงทั้งหมด"});
 Object.assign(RR_I18N_STRINGS["tr"], {"lit.preset.compound": "Bileşik Işık", "lit.preset.fluorescent": "Floresan", "lit.components": "Bileşenler", "lit.component": "Bileşen", "lit.compoundName": "Ad", "lit.componentId": "Parça ID", "lit.addComponent": "Ekle", "lit.removeComponent": "Bileşeni kaldır", "lit.componentHint": "Aşağıdaki ayarlar bu bileşeni düzenler. Işığın tamamını taşımak için haritada sürükleyin."});
+
+// Reviewed entries are deliberately applied last. They correct legacy wording,
+// replace generated first-pass text, and complete newly routed UI phrases.
+const RR_REVIEWED_I18N = globalThis.RR_REVIEWED_TRANSLATIONS || {};
+for (const [catalog, tables] of [
+    [RR_REVIEWED_I18N.text, RR_TEXT_TRANSLATIONS],
+    [RR_REVIEWED_I18N.keyed, RR_I18N_STRINGS],
+    [RR_REVIEWED_I18N.commands, RR_EVENT_COMMAND_NAMES],
+    [RR_REVIEWED_I18N.sections, RR_EVENT_SECTION_NAMES]
+]) {
+    for (const [locale, translations] of Object.entries(catalog || {})) {
+        if (tables[locale]) Object.assign(tables[locale], translations);
+    }
+}
+
+window.I18n = new I18nManager();
+
+// Early language apply: set <html lang> before the full app initializes.
+(function () {
+    try {
+        document.documentElement.lang = window.I18n.currentLanguage();
+        document.documentElement.dir = window.I18n.currentLanguage() === 'ar' ? 'rtl' : 'ltr';
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', () => {
+                window.I18n.apply(document);
+                window.I18n.observe();
+            });
+        } else {
+            window.I18n.apply(document);
+            window.I18n.observe();
+        }
+    } catch (e) { /* ignore */ }
+})();

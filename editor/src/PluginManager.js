@@ -81,6 +81,8 @@ class PluginManager {
                 top: ${defaultY}px;
                 width: ${defaultW}px;
                 height: ${defaultH}px;
+                box-sizing: border-box;
+                max-width: calc(100vw - 24px);
                 min-width: min(700px, calc(100vw - 24px));
                 min-height: 400px;
                 background-color: var(--color-bg-surface);
@@ -103,6 +105,8 @@ class PluginManager {
 
             this.init(windowContainer);
             this._windowContainer = windowContainer;
+            this._viewportResizeHandler = () => this.fitWindowToViewport();
+            window.addEventListener('resize', this._viewportResizeHandler);
 
             // Keyboard shortcuts for copy/cut/paste
             this._keyHandler = (e) => {
@@ -151,6 +155,20 @@ class PluginManager {
         }
 
         modal.style.display = 'block';
+        this.fitWindowToViewport();
+        this.pluginListContainer?.focus({ preventScroll: true });
+    }
+
+    fitWindowToViewport() {
+        const win = this._windowContainer;
+        if (!win || !win.getClientRects().length) return;
+        const bounds = win.getBoundingClientRect();
+        const width = Math.min(bounds.width, window.innerWidth - 24);
+        const height = Math.min(bounds.height, window.innerHeight - 24);
+        win.style.width = `${width}px`;
+        win.style.height = `${height}px`;
+        win.style.left = `${Math.max(12, Math.min(bounds.left, window.innerWidth - width - 12))}px`;
+        win.style.top = `${Math.max(12, Math.min(bounds.top, window.innerHeight - height - 12))}px`;
     }
 
     /**
@@ -1056,7 +1074,7 @@ class PluginManager {
             margin-top: 12px;
             padding: 8px 16px;
             background-color: var(--color-accent);
-            color: var(--color-bg-deep);
+            color: var(--color-accent-on);
             border: 1px solid var(--color-accent);
             border-radius: 3px;
             cursor: pointer;
@@ -1485,7 +1503,7 @@ class PluginManager {
             button.style.cssText = `
                 padding: 6px 12px;
                 background-color: var(--color-accent);
-                color: var(--color-bg-deep);
+                color: var(--color-accent-on);
                 border: 1px solid var(--color-accent);
                 border-radius: 3px;
                 cursor: pointer;
@@ -1857,6 +1875,7 @@ class PluginManager {
             const onMove = (ev) => {
                 win.style.left = (ev.clientX - startX) + 'px';
                 win.style.top = (ev.clientY - startY) + 'px';
+                this.fitWindowToViewport();
             };
             const onUp = () => {
                 header.style.cursor = 'grab';
@@ -2087,6 +2106,7 @@ class PluginManager {
                 const newH = Math.max(400, startH + (ev.clientY - startY));
                 win.style.width = newW + 'px';
                 win.style.height = newH + 'px';
+                this.fitWindowToViewport();
             };
             const onUp = () => {
                 document.removeEventListener('mousemove', onMove);
@@ -2391,6 +2411,11 @@ class PluginManager {
      */
     renderPluginList() {
         this.pluginListContainer.innerHTML = '';
+        if (typeof RRPickerIndex !== 'undefined') RRPickerIndex.bindListNavigation(this.pluginListContainer, {
+            items: () => this.pluginListContainer.querySelectorAll('[data-index]'),
+            isSelected: item => Number(item.dataset.index) === this.selectedPluginIndex,
+            select: (item, event) => this.selectPluginFromEvent(Number(item.dataset.index), event)
+        });
 
         const visiblePlugins = this.getFilteredPluginEntries(this._pluginFilterQuery);
         visiblePlugins.forEach(({ plugin, index }) => {
@@ -3144,7 +3169,7 @@ class PluginManager {
             mark.className = `plugin-help-match${index === activeIndex ? ' active' : ''}`;
             mark.textContent = helpText.slice(match.index, match.index + match.length);
             mark.style.cssText = index === activeIndex
-                ? 'background:var(--color-accent);color:var(--color-bg-deep);border-radius:2px;outline:2px solid var(--color-accent-shadow);'
+                ? 'background:var(--color-accent);color:var(--color-accent-on);border-radius:2px;outline:2px solid var(--color-accent-shadow);'
                 : 'background:var(--color-accent-tint-35);color:var(--color-text-strong);border-radius:2px;';
             container.appendChild(mark);
             marks.push(mark);
@@ -3799,7 +3824,7 @@ class PluginManager {
             editButton.style.cssText = `
                 padding: 4px 12px;
                 background-color: var(--color-accent);
-                color: var(--color-bg-deep);
+                color: var(--color-accent-on);
                 border: 1px solid var(--color-accent);
                 border-radius: 2px;
                 cursor: pointer;

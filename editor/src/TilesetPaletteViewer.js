@@ -106,7 +106,7 @@ class TilesetPaletteViewer {
                 </div>
 
                 <!-- Tileset Preview Canvas -->
-                <div id="tileset-preview-container" style="flex: 1; overflow: auto; background-color: transparent; position: relative; min-height: 0;">
+                <div id="tileset-preview-container" class="rr-accent-scrollbar" style="flex: 1; overflow: auto; background-color: transparent; position: relative; min-height: 0;">
                     <canvas id="tileset-preview-canvas" style="display: block; image-rendering: pixelated; cursor: crosshair; min-width: 100%; min-height: 100%;"></canvas>
                     <div id="tileset-empty-message" style="display: none; padding: 20px; text-align: center; color: var(--color-text-dim); font-size: 11px;">
                         ${tt('No tileset image assigned')}<br/>${tt('for this layer')}
@@ -1080,7 +1080,7 @@ class TilesetPaletteViewer {
     // cannot parse var(--…) — resolve to concrete colors.
     drawCheckerboard(ctx, width, height, squareSize = 8) {
         const color1 = ThemeColors.resolve('--color-syntax-comment', '#6a6a6a');
-        const color2 = ThemeColors.resolve('--color-text-muted', '#999999');
+        const color2 = ThemeColors.resolve('--color-tileset-checker-secondary', '#999999');
 
         for (let y = 0; y < height; y += squareSize) {
             for (let x = 0; x < width; x += squareSize) {

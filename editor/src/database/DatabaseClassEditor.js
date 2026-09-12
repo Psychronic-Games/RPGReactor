@@ -46,7 +46,7 @@ class DatabaseClassEditor {
         wrapper.appendChild(columnsWrapper);
         container.appendChild(wrapper);
 
-        this.attachEventListeners(container, classEntry);
+        this.attachEventListeners(wrapper, classEntry);
     }
 
     createGeneralSection(classEntry) {
@@ -150,8 +150,9 @@ class DatabaseClassEditor {
 
         // Draw graphs after DOM is ready
         setTimeout(() => {
+            if (!section.isConnected) return;
             paramNames.forEach((name, idx) => {
-                const canvas = document.getElementById(`param-curve-${classEntry.id}-${idx}`);
+                const canvas = section.querySelector(`#param-curve-${classEntry.id}-${idx}`);
                 if (canvas) {
                     this.drawParameterCurve(canvas, params[idx] || [], paramColors[idx]);
                 }
@@ -512,6 +513,7 @@ class DatabaseClassEditor {
         `;
 
         setTimeout(() => {
+            if (!section.isConnected) return;
             const table = section.querySelector('.learnings-table');
             if (!table) return;
             this.setupLearningInteraction(section, table, classEntry);
@@ -535,7 +537,7 @@ class DatabaseClassEditor {
                 row.classList.add('selected');
                 const indicator = row.querySelector('.learning-indicator');
                 if (indicator) indicator.style.backgroundColor = 'var(--color-accent-bright)';
-                Array.from(row.querySelectorAll('td')).slice(1).forEach(cell => { cell.style.backgroundColor = 'var(--color-bg-panel)'; });
+                Array.from(row.querySelectorAll('td')).slice(1).forEach(cell => { cell.style.backgroundColor = 'var(--color-bg-selected)'; });
                 section.focus();
                 this.updateLearningButtonStates(section, table);
             });
@@ -702,7 +704,8 @@ class DatabaseClassEditor {
 
         // Add context menu handling and interaction effects
         setTimeout(() => {
-            const table = document.getElementById(`traits-table-${classEntry.id}`);
+            if (!section.isConnected) return;
+            const table = section.querySelector('.traits-table');
             if (table) {
                 this.setupTraitsContextMenu(table, classEntry);
                 this.setupTraitInteraction(table);
@@ -731,7 +734,7 @@ class DatabaseClassEditor {
                     indicator.style.setProperty('background-color', 'var(--color-accent-bright)', 'important');
                 }
                 contentCells.forEach(cell => {
-                    cell.style.setProperty('background-color', 'var(--color-bg-panel)', 'important');
+                    cell.style.setProperty('background-color', 'var(--color-bg-selected)', 'important');
                 });
             });
 
@@ -772,7 +775,7 @@ class DatabaseClassEditor {
                     indicator.style.setProperty('background-color', 'var(--color-accent-bright)', 'important');
                 }
                 contentCells.forEach(cell => {
-                    cell.style.setProperty('background-color', 'var(--color-bg-panel)', 'important');
+                    cell.style.setProperty('background-color', 'var(--color-bg-selected)', 'important');
                 });
 
                 // Focus the section so keyboard shortcuts work here
@@ -1033,6 +1036,9 @@ class DatabaseClassEditor {
 
 
     refreshClassDetail(classEntry) {
+        if (this.parentEditor?.showDatabaseDetail) {
+            return this.parentEditor.showDatabaseDetail(classEntry, 'classes');
+        }
         // Find the container and refresh
         const container = document.querySelector('.database-detail');
         if (container) {
@@ -1043,6 +1049,7 @@ class DatabaseClassEditor {
 
     attachEventListeners(container, classEntry) {
         setTimeout(() => {
+            if (!container.isConnected) return;
             const editableFields = container.querySelectorAll('[data-field]');
             editableFields.forEach(field => {
                 field.addEventListener('change', (e) => {

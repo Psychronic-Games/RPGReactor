@@ -3007,7 +3007,7 @@ class MapEditor3D {
             // scroll also zoomed the hidden 2D view, re-cropped its canvas and
             // overwrote the zoom readout with the 2D scale.
             event.stopPropagation();
-            this.zoom(event.deltaY);
+            this.zoom(event.deltaY, event.clientX, event.clientY);
         };
         this._onContextMenu = event => {
             // The browser menu is never wanted here — right-drag pans — but a
@@ -3392,9 +3392,39 @@ class MapEditor3D {
         this.applyCamera();
     }
 
-    zoom(deltaY) {
+    zoomAnchor(clientX, clientY) {
+        if (!this.camera || !this.canvas || !Number.isFinite(clientX) || !Number.isFinite(clientY)) return null;
+        const rect = this.canvas.getBoundingClientRect();
+        if (!(rect.width > 0 && rect.height > 0)) return null;
+        this.camera.updateMatrixWorld();
+        this._raycaster = this._raycaster || new THREE.Raycaster();
+        this._raycaster.setFromCamera(new THREE.Vector2(
+            (clientX - rect.left) / rect.width * 2 - 1,
+            -(clientY - rect.top) / rect.height * 2 + 1
+        ), this.camera);
+        const hit = this.raycastMapMeshes();
+        if (hit) return hit.point.clone();
+        // Empty map space uses the current orbit plane; rays looking away
+        // from that plane keep ordinary distance-only zoom.
+        return this._raycaster.ray.intersectPlane(
+            new THREE.Plane(new THREE.Vector3(0, 1, 0), -this.view.target.y), new THREE.Vector3());
+    }
+
+    zoom(deltaY, clientX, clientY) {
+        const anchor = this.zoomAnchor(clientX, clientY);
         const factor = deltaY > 0 ? 1.1 : 1 / 1.1;
-        this.view.distance = Math.min(400, Math.max(3, this.view.distance * factor));
+        const previousDistance = this.view.distance;
+        this.view.distance = Math.min(400, Math.max(3, previousDistance * factor));
+        if (anchor && previousDistance > 0) {
+            const ratio = this.view.distance / previousDistance;
+            // Scale both camera and orbit target about the pointed location.
+            // Changing distance alone always zooms toward the screen centre.
+            for (const axis of ['x', 'y', 'z']) {
+                // aimCamera centres the X/Z tile coordinates by half a tile.
+                const coordinate = anchor[axis] - (axis === 'y' ? 0 : 0.5);
+                this.view.target[axis] = coordinate + ratio * (this.view.target[axis] - coordinate);
+            }
+        }
         this.applyCamera();
     }
 

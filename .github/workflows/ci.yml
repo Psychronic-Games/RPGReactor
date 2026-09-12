@@ -70,6 +70,23 @@ jobs:
       - name: Run real NW.js editor save smoke
         working-directory: editor
         run: xvfb-run --auto-servernum npm run smoke:nw -- --nw-root="$NWJS_SDK_ROOT"
+      - name: Audit NW.js interaction order and delayed callbacks
+        working-directory: editor
+        run: xvfb-run --auto-servernum npm run smoke:nw-interactions -- --nw-root="$NWJS_SDK_ROOT"
+      - name: Verify list and dropdown keyboard navigation
+        working-directory: editor
+        run: xvfb-run --auto-servernum npm run smoke:nw-keyboard -- --nw-root="$NWJS_SDK_ROOT" --size=1280x720
+      - name: Upload interaction audit evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: interaction-audit
+          if-no-files-found: ignore
+          path: |
+            /tmp/rr-interaction-result.json
+            /tmp/rr-interaction-after.png
+            /tmp/rr-issue54-result.json
+            /tmp/rr-issue54-after.png
       - name: Clean up NW.js SDK
         if: always()
         shell: bash

@@ -1415,12 +1415,13 @@ class MessageCommandEditor {
             const source = RRFaceSheet.sourceRect(this.faceIndex, faceSheet);
             if (!source) return;
 
+            ctx.imageSmoothingEnabled = false;
             ctx.drawImage(
                 faceSheet,
                 source.x, source.y,
                 source.width, source.height,
                 0, 0,
-                RRFaceSheet.FACE_SIZE, RRFaceSheet.FACE_SIZE
+                canvas.width, canvas.height
             );
         };
 
@@ -1946,10 +1947,10 @@ class MessageCommandEditor {
             : null;
 
         const draw = image => {
-            const columns = (window.RRFaceSheet && window.RRFaceSheet.COLUMNS) || 4;
-            const index = header.faceIndex || 0;
+            const source = RRFaceSheet.sourceRect(header.faceIndex || 0, image);
+            if (!source) return;
             context.drawImage(image,
-                (index % columns) * size, Math.floor(index / columns) * size, size, size,
+                source.x, source.y, source.width, source.height,
                 x, y, size, size);
         };
 
@@ -1983,7 +1984,7 @@ class MessageCommandEditor {
      * exactly as buildTimeline counts them.
      */
     drawPreviewLine(context, line, x, y, fontSize, family, budget) {
-        const iconSize = 32;
+        const iconSize = window.RRIconPicker?.sizeOf(this.databaseManager?.getSystem?.()) || 32;
         let cursorX = x;
         let size = fontSize;
         context.fillStyle = window.RRWindowskin
@@ -2056,7 +2057,7 @@ class MessageCommandEditor {
         // IconSet, in which case the gap is the honest result.
         if (!this._iconSheet || !this._iconSheet.naturalWidth) return;
 
-        const size = 32;
+        const size = window.RRIconPicker?.sizeOf(this.databaseManager?.getSystem?.()) || 32;
         const columns = 16;
         context.drawImage(this._iconSheet,
             (index % columns) * size, Math.floor(index / columns) * size, size, size,

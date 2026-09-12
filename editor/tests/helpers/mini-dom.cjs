@@ -28,6 +28,10 @@ function createStyle() {
 /** `.class`, `tag`, or `tag.class` - the selectors the editor's widgets use. */
 function matches(element, selector) {
     return String(selector).split(',').map(part => part.trim()).some(part => {
+        const attributes = [...part.matchAll(/\[([^=\]]+)(?:="([^"]*)")?\]/g)];
+        if (attributes.some(([, key, value]) => element.getAttribute(key) === null
+            || value !== undefined && element.getAttribute(key) !== value)) return false;
+        part = part.replace(/\[[^\]]*\]/g, '');
         const [tag, ...classes] = part.split('.');
         if (tag && element.tagName !== tag.toUpperCase()) return false;
         const own = String(element.className || '').split(/\s+/);
@@ -45,6 +49,24 @@ function createElement(tagName) {
         parentNode: null,
         listeners: {},
         disabled: false,
+        attributes: {},
+        get parentElement() { return this.parentNode; },
+        setAttribute(key, value) {
+            this.attributes[key] = String(value);
+            if (key.startsWith('data-')) this.dataset[key.slice(5).replace(/-([a-z])/g, (_, c) => c.toUpperCase())] = String(value);
+        },
+        getAttribute(key) {
+            if (key.startsWith('data-')) return this.dataset[key.slice(5).replace(/-([a-z])/g, (_, c) => c.toUpperCase())] ?? null;
+            return this.attributes[key] ?? null;
+        },
+        focus() {
+            let root = this; while (root.parentNode) root = root.parentNode;
+            if (root.tagName === 'DOCUMENT') root.activeElement = this;
+        },
+        scrollIntoView() {},
+        getClientRects() { return this.isConnected && this.style.display !== 'none' ? [this.getBoundingClientRect()] : []; },
+        closest(selector) { return matches(this, selector) ? this : this.parentNode?.closest(selector); },
+        click() { this.fire('click'); },
 
         get isConnected() {
             let root = this; while (root.parentNode) root = root.parentNode;

@@ -1,5 +1,48 @@
 # Runtime performance checks
 
+## Acer 1440p movement pass — runtime 20260907.2
+
+**Removed repeat shader compilation from looping 3D effects and a fully hidden floor draw. No quality settings were reduced.** Three baseline walking samples aggregate to **25.47 FPS**, versus **26.07 FPS** across four optimized samples. That small difference is within substantial session variation: p95 remains 55.6 ms, and p99 and the worst frame did not improve overall. This does **not** establish resolved spikes or sustained 60/144 FPS.
+
+### Hardware and measurement
+
+AMD Ryzen 5 PRO 5650U, 12 logical processors, 15.3 GiB usable RAM, integrated AMD Radeon through normal ANGLE Direct3D11. Testing used the external Acer, not the laptop's 1920×1080/60 Hz display. The game canvas rendered at **2560×1440**; idle animation-frame intervals had a 6.9 ms median, consistent with the Acer's 144 Hz refresh. The window fits the image into its available client area; the rendering buffer remains full resolution.
+
+A disposable Demo copy and isolated NW.js profile preserve authored project data. Each measured route starts at (24,45), moves 24 tiles north and 24 south at speed 4, and finishes at (24,45), with collision bypass for repeatability. Four seconds of warmup precede each route; each completed route contains 384 measured animation-frame intervals and 385 3D renders. Browser frame limiting stays enabled. Test-only focus/background overrides allow measurement while the user works elsewhere. No test suite or CPU profiler ran during these samples; other desktop activity was not controlled.
+
+Baseline disables `Reactor3D.CoveredFloor.enabled` and `Reactor3D.EffekseerScene.reuseQuads`, disposing inactive cached quads before warmup. Optimized enables both. No resolution, texture/filtering, shadow/light budget, model-detail error limit, effect budget or antialiasing change is part of this pass. Older 1080p results below use a different workload and are not a direct baseline.
+
+| Sample, in collection order | FPS | Mean ms | p95 ms | p99 ms | Maximum ms | Shader compilations |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| baseline-a | 25.70 | 38.92 | 55.5 | 90.1 | 125.0 | 12 |
+| optimized-a | 26.13 | 38.27 | 48.8 | 166.7 | 291.8 | 0 |
+| optimized-b | 25.07 | 39.90 | 62.4 | 125.0 | 179.9 | 0 |
+| baseline-b | 24.58 | 40.69 | 55.7 | 132.2 | 207.9 | 12 |
+| optimized-c | 26.89 | 37.18 | 48.7 | 76.1 | 83.3 | 0 |
+| baseline-c | 26.19 | 38.18 | 55.5 | 83.1 | 125.0 | 12 |
+| optimized-d | 26.27 | 38.07 | 55.5 | 124.9 | 139.0 | 0 |
+
+Aggregate frame time is 39.26 → 38.35 ms, about 2.3% lower. Intervals over 50 ms account for 70/1152 baseline frames and 90/1536 optimized frames. Aggregate p99 is 104.4 → 118.0 ms and maximum is 207.9 → 291.8 ms. All seven samples are retained, including the slower optimized runs. The last pair includes additional image-decode readiness and conservative fallback guards; the first five used the same two rendering optimizations before those guards were finalized. See [machine-readable results and validation](benchmarks/2026-09-07-potato-1440p.json).
+
+### Changes and evidence
+
+- **Keep a bounded set of effect drawing quads across loops.** Disposing the final matching Three.js material also discarded its shader-source cache, causing identical shaders to compile again when the next effect began. Diagnostic program queries sometimes blocked for 15–50 ms. Retain at most four small quads/materials per owning scene; release every play's texture and GPU targets immediately, reset drawing uniforms before reuse, and dispose cached geometry/materials on scene teardown. Every baseline route compiled 12 shaders; every optimized route compiled zero after warmup.
+- **Skip the room floor only when an opaque parallax completely covers it.** Prove opacity against every source pixel once after decoding. Check the generated surfaces, camera bounds/near plane, transforms, depth/blend settings, visibility, shadow casting and intervening draws. Animated, translucent, edited, clipped, unknown and unsupported cases retain the original draw. Restore visibility after rendering, including exceptions. Frozen full-frame GPU comparisons for the eligible floor saved about 9.3% in one repeated comparison (17.55/17.99 → 15.38/16.86 ms); this is GPU time for a frozen view, not a live FPS promise.
+
+GPU pressure remains a major limit. An earlier instrumented moving sample after quad reuse measured a 35.8 ms median GPU interval, with 52.0 ms p95. These diagnostics include instrumentation and a different movement segment, so they are not used for the live comparison above. Individual-draw probes locate large costs in full-screen floor lighting, dense skinned characters and light bodies; timer queries around each draw disturb execution, so those timings are only prioritization evidence. Full utilization can amplify small bursts, but this pass does not attribute every stall to the GPU.
+
+Additional native-buffer reuse, shadow-lookup short-circuiting and shared shadow-coordinate experiments did not demonstrate sufficient repeatable benefit and were left out. The two shadow experiments matched pixels in three frozen views but did not justify changing production shaders. Existing quality levels remain intact.
+
+### Validation and remaining limits
+
+- Saved-build GPU comparisons: **11 floor cases match every channel at 2560×1440**. Five eligible views omit the lower draw; six boundary/transparency cases keep it. Three nonempty effect-quad comparisons also match exactly with material reuse. No WebGL errors.
+- Title → new map, image reload and resize 1600×900 → 2560×1440 pass. The custom `Scene_ReactorUI` title releases all plays, the quad pool and covered-floor registry; returning to the map restores live effects at four samples. Deferred image-decode completion cannot revive a cleared scene. Normal collision/input state is restored after tests.
+- **175 focused tests pass**, including eight new behavioral regressions. Both runtime/template synchronization checks pass for all 13 local projects. JavaScript syntax and whitespace checks pass.
+- Full Windows suite before final corrections: **2,912 passed, 34 failed, 1 skipped** (2,947 total). Ten old revision assertions and one template synchronization failure were corrected and passed on rerun. The remaining 23 failures concern platform paths/case, symlink/lock permissions, archive/codec tooling, packaging and thumbnail caching outside these rendering changes. The full suite was not rerun after those corrections; it is not claimed green.
+- Runtime **20260907.2** is synchronized to local projects. No authored map/settings changes, resolution reduction, release build, publication or commit was made by this pass. The isolated diagnostic window/server is closed after validation.
+
+Local detailed evidence is in ignored `scratchpad/perf-20260907/`: `host.cjs`, `route.cjs`, `measure.js`, all `final-baseline-*.json` / `final-optimized-*.json`, `final-quality.json`, `quad-quality.json`, `lifecycle.json`, `focused-final.log`, `sync-final.log` and `full-tests.log`. The compact JSON linked above is retained with the documentation. Remaining work is to reduce the expensive visible rendering and investigate the residual long frames without reducing fidelity.
+
 ## Shared GPU effects and exact frame reuse — runtime 20260905.5
 
 **Final normal-backend verification: 55.4 and 54.8 FPS at 1920×1080. Sustained 60 FPS is not yet achieved.** Revision 20260905.5 is installed in the engine and tracked Demo. The shared rendering changes also load in editor map and model previews. No resolution, texture filtering, shadow budget, effect antialiasing, effect pixel budget or model-detail error limit was reduced in these two passes (.4 and .5).

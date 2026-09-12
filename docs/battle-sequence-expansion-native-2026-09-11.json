@@ -1,0 +1,115 @@
+{
+  "layout": [
+    {
+      "w": 1920,
+      "h": 1080,
+      "gap": 16,
+      "graphic": true,
+      "overflow": 0,
+      "phases": 24
+    },
+    {
+      "w": 1280,
+      "h": 720,
+      "gap": 16,
+      "graphic": true,
+      "overflow": 0,
+      "phases": 24
+    }
+  ],
+  "compact": {
+    "expectedOptions": 56,
+    "foldsClosed": true,
+    "groupCount": 8,
+    "keptOpen": true,
+    "logMessage": true,
+    "optionCount": 56,
+    "primary": 3,
+    "quickAdded": true,
+    "stopped": [
+      "Duration (frames)",
+      "Operation"
+    ]
+  },
+  "disclosures": {
+    "initiallyClosed": true,
+    "keptOpen": true,
+    "phaseLabels": true,
+    "statesKeptOpen": true
+  },
+  "compactLayouts": [
+    {
+      "theme": "dark",
+      "w": 1920,
+      "h": 1080,
+      "overflowX": 0,
+      "overflowY": 0,
+      "stepHeight": 623
+    },
+    {
+      "theme": "dark",
+      "w": 1280,
+      "h": 720,
+      "overflowX": 0,
+      "overflowY": 0,
+      "stepHeight": 277
+    },
+    {
+      "theme": "light",
+      "w": 1920,
+      "h": 1080,
+      "overflowX": 0,
+      "overflowY": 0,
+      "stepHeight": 623
+    },
+    {
+      "theme": "light",
+      "w": 1280,
+      "h": 720,
+      "overflowX": 0,
+      "overflowY": 0,
+      "stepHeight": 277
+    }
+  ],
+  "commands": 43,
+  "graphics": {
+    "actor": {
+      "frame": {
+        "height": 48,
+        "type": "rectangle",
+        "width": 32,
+        "x": 64,
+        "y": 0
+      },
+      "key": "{\"mode\":\"sv\",\"name\":\"Fixture\",\"frames\":4,\"motionRows\":14,\"motionColumns\":1,\"scale\":1,\"type\":\"sv\",\"folder\":\"sv_actors\"}",
+      "model": false
+    },
+    "enemy": {
+      "frame": {
+        "height": 144,
+        "type": "rectangle",
+        "width": 144,
+        "x": 288,
+        "y": 144
+      },
+      "key": "{\"mode\":\"character\",\"name\":\"$Psychronic-Body-Male-01\",\"frames\":3,\"index\":0,\"type\":\"character\",\"folder\":\"characters\"}"
+    },
+    "errors": []
+  },
+  "playback": {
+    "done": true,
+    "errors": [],
+    "hits": [
+      0,
+      0
+    ],
+    "phases": [
+      "prepare",
+      "movement",
+      "execute",
+      "effect",
+      "return",
+      "finish"
+    ]
+  }
+}

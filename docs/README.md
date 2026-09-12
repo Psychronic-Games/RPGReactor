@@ -1,5 +1,26 @@
 # RPG Reactor Documentation
 
+- [September 11 session closeout](SESSION-2026-09-11.md) — full day summary, final verification, retained earlier work and compatibility limits.
+- [Equipped items and throws](HELD-ITEMS-AND-THROWS-2026-09-11.md) — hand attachments, ally throws and 16 editable starters.
+- [Expanded action sequences and battler graphics](ACTION-SEQUENCE-EXPANSION-2026-09-11.md) — phases, states, commands and visual graphic selection.
+- [Tiles and small pixel art](TILE-SIZES-AND-SMALL-PIXEL-ART-2026-09-11.md) — sheet dimensions, zoom and rendering/window settings.
+- [September 11 keyboard audit](KEYBOARD-SUPPORT-AUDIT-2026-09-11.md) — verified support and remaining gaps, including Tab traversal.
+- [Menu/shop touch repair](TOUCH-BUTTON-FIX-2026-09-11.md) and [PR #56 integration](PR-INTEGRATION-2026-09-11.md).
+
+- [Model inspection and richer light palettes](MODEL-PREVIEWS-AND-LIGHT-THEME-2026-09-11.md) — neutral preview lighting, dark cost-card styling, contrast and main editor scrollbars.
+
+- [Database and editor UI quality audit](UI-QUALITY-AUDIT-2026-09-11.md) — responsive layouts, field symmetry, native coverage and fixes.
+
+
+- [Editor event lighting and 48px icons](EVENT-LIGHTING-AND-ICONS-2026-09-11.md): live 2D model-event lighting and configured icon cells.
+
+- [Sidebar Events and States layout](SIDEBAR-AND-STATES-2026-09-11.md): event-list keyboard navigation, Database focus appearance and compact Duration controls.
+
+- [2D camera and 288px faces](CAMERA-AND-LARGE-FACES-2026-09-11.md): System 2 framing controls, large face sheets and verification.
+
+- [September 10 PR integration](PR-INTEGRATION-2026-09-10.md): enemy Behaviour forecast, integration corrections, validation and preserved local work.
+- [Keyboard/UI audit — issue #54](UI-KEYBOARD-AUDIT-2026-09-10.md): list focus, popup navigation, stable tabbed dialogs, readable tileset names and blank inactive event conditions.
+
 - [0.98.5 release notes](posts/release-notes-0.98.5.md): consolidated features, fixes, compatibility boundaries and validation.
 - [0.98.5 itch.io devlog](posts/itch-devlog-0.98.5.md): announcement text, with a [plain-text copy](posts/itch-devlog-0.98.5-plain.txt).
 

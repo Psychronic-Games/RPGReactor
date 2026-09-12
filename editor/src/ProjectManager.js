@@ -461,6 +461,10 @@ class ProjectManager {
 
     updateCopiedTemplateProject(targetPath, projectName, engineVersion) {
         this.writeProjectMetadata(targetPath, projectName, engineVersion);
+        if(typeof ReactorBattleData!=='undefined'){
+            const file=this.path.join(targetPath,'data','ActionSequences.json'),records=this.fs.existsSync(file)?RRJson.parse(this.fs.readFileSync(file)):[null];
+            if(ReactorBattleData.addStarters(records).length)this.writeJson(file,records);
+        }
 
         const packagePath = this.path.join(targetPath, 'package.json');
         if (this.fs.existsSync(packagePath)) {
@@ -634,8 +638,8 @@ class ProjectManager {
                 title: projectName,
                 width: 1280,
                 height: 720,
-                min_width: 1280,
-                min_height: 720,
+                min_width: 1,
+                min_height: 1,
                 position: 'center',
                 resizable: true,
                 frame: true,
@@ -650,6 +654,7 @@ class ProjectManager {
         const mapHeight = 13;
         const blankMapData = new Array(mapWidth * mapHeight * 6).fill(0);
         const emptyAudio = { name: '', pan: 0, pitch: 100, volume: 90 };
+        const sequences=[null];if(typeof ReactorBattleData!=='undefined')ReactorBattleData.addStarters(sequences);
 
         return {
             'Actors.json': [null],
@@ -665,6 +670,7 @@ class ProjectManager {
             'Troops.json': [null],
             'UserInterfaces.json': [null],
             'ReactorQuests.json': [null],
+            'ActionSequences.json': sequences,
             'Weapons.json': [null],
             'MapInfos.json': [null, {
                 id: 1,

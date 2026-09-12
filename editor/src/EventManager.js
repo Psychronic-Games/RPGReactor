@@ -2299,6 +2299,26 @@ class EventManager {
         return true;
     }
 
+    /** Read-only render records: negative IDs keep event previews separate
+     * from authored props while sharing their live surface-light renderer. */
+    modelPreviewProps() {
+        const map = this.currentMap;
+        const previews = [];
+        for (const event of map?.events || []) {
+            if (!event) continue;
+            const pageIndex = this.getEventPreviewPage(event);
+            if (pageIndex === null) continue;
+            const spec = map.reactor3d?.events?.[String(event.id)]?.[String(pageIndex)];
+            if (!spec?.name) continue;
+            previews.push({ ...spec, id: -event.id, x: event.x, y: event.y,
+                size: Number(spec.size) > 0 ? Number(spec.size) : 2,
+                scale: Number(spec.scale) > 0 ? Number(spec.scale) : 1,
+                z: Number(map.reactor3d?.eventZ?.[event.id]) || 0,
+                direction: event.pages[pageIndex].image?.direction || 2 });
+        }
+        return previews;
+    }
+
     renderEventPreviews() {
         const container = this.eventPreviewContainer;
         if (!container || !this.currentMap) return;
@@ -2316,6 +2336,8 @@ class EventManager {
             }
         }
         this._syncPreviewTicker();
+        const props = this.projectController?.modelPropsManager;
+        if (props?.currentMap === this.currentMap) props.render();
     }
 
     /** Stepping animation runs at the game's cadence: (9 - move speed) * 3 frames per pattern. */
@@ -2351,6 +2373,11 @@ class EventManager {
         if (!image) return null;
         const tw = this.tilemapManager?.TILE_WIDTH || 48;
         const th = this.tilemapManager?.TILE_HEIGHT || tw;
+        // Live model previews are drawn with placed props above the floor
+        // lighting; their textures already include ambient and surface lights.
+        const props = this.projectController?.modelPropsManager;
+        if (props?.currentMap === this.currentMap &&
+            this.currentMap?.reactor3d?.events?.[String(event.id)]?.[String(pageIndex)]?.name) return null;
         const modelSprite = this.createModelPreviewSprite(event, page, pageIndex);
         if (modelSprite) return modelSprite;
         if (image.tileId > 0) {
@@ -2528,6 +2555,23 @@ class EventManager {
 
         if (!eventsListEl || !eventsSectionEl) return;
 
+        // Rebinding retires the previous handlers; rows can be rebuilt after edits.
+        if (typeof RRPickerIndex !== 'undefined') {
+            RRPickerIndex.bindListNavigation(eventsListEl, {
+                items: () => eventsListEl.querySelectorAll('.event-list-item'),
+                isSelected: item => Number(item.dataset.eventId) === this.selectedEvent?.id,
+                select: item => this.selectEventById(Number(item.dataset.eventId))
+            });
+        }
+        eventsListEl.onkeydown = event => {
+            if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return;
+            if (event.key !== 'Enter') return;
+            event.preventDefault();
+            event.stopPropagation();
+            const selected = this.currentMap?.events?.find(entry => entry && entry.id === this.selectedEvent?.id);
+            if (selected && !event.repeat) this.editEvent(selected);
+        };
+
         // Show the events section when a map is loaded (use 'flex' explicitly for reliable layout)
         eventsSectionEl.style.display = 'flex';
 
@@ -2559,7 +2603,7 @@ class EventManager {
             item.style.cursor = 'pointer';
             item.style.fontSize = '14px';
             item.style.borderRadius = '3px';
-            item.style.margin = '2px 4px';
+            item.style.margin = '2px 0';
 
             // Click handler - select event on map
             item.addEventListener('click', (e) => {
@@ -2616,7 +2660,7 @@ class EventManager {
                 selectedItem.style.backgroundColor = 'var(--color-accent-tint-35)'; // Gold highlight
 
                 // Scroll into view if needed
-                selectedItem.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+                selectedItem.scrollIntoView({ block: 'nearest', behavior: 'instant' });
             }
         }
     }

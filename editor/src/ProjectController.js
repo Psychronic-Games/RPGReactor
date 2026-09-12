@@ -915,7 +915,7 @@ class ProjectController {
 
     // Filter maps based on search text
     filterMaps(searchText) {
-        const mapItems = document.querySelectorAll('[data-map-id]');
+        const mapItems = document.querySelectorAll('#maps-list [data-map-id], #quick-access-list [data-map-id]');
         const lowerSearch = searchText.toLowerCase();
 
         mapItems.forEach(item => {
@@ -929,9 +929,26 @@ class ProjectController {
     }
 
     // Render the maps list as hierarchical tree
+    bindMapListNavigation(list) {
+        if (typeof RRPickerIndex === 'undefined') return;
+        RRPickerIndex.bindListNavigation(list, {
+            items: () => list.querySelectorAll('[data-map-id]'),
+            isSelected: item => Number(item.dataset.mapId) === Number(list.dataset.keyboardMapId || this.tilemapManager?.currentMap?.id),
+            select: item => {
+                const id = Number(item.dataset.mapId);
+                const request = list._rrMapNavigation = (list._rrMapNavigation || 0) + 1;
+                list.dataset.keyboardMapId = String(id);
+                const finish = () => { if (list._rrMapNavigation === request) delete list.dataset.keyboardMapId; };
+                this.loadMap(id).then(finish, error => { finish(); console.warn('Could not load selected map:', error); });
+            }
+        });
+    }
+
     renderMapsList() {
+        this.clearMapDropFeedback();
         const mapsList = document.getElementById('maps-list');
         if (!mapsList) return;
+        this.bindMapListNavigation(mapsList);
 
         // Store the currently loaded map ID to re-highlight after render
         const currentMapId = this.tilemapManager?.currentMap?.id;
@@ -1055,110 +1072,69 @@ class ProjectController {
         }
     }
 
-    // Add drag and drop handlers to a map item
-    addMapDragHandlers(mapItem, map) {
-        let draggedElement = null;
-        let dropIndicator = null;
+    clearMapDropFeedback() {
+        this._mapDropTarget?.removeAttribute('data-map-drop');
+        this._mapDropTarget = null;
+    }
 
-        mapItem.addEventListener('dragstart', (e) => {
-            draggedElement = mapItem;
+    mapDropPosition(mapItem, clientY) {
+        const rect = mapItem.getBoundingClientRect();
+        if (clientY < rect.top + rect.height * 0.25) return 'before';
+        if (clientY > rect.bottom - rect.height * 0.25) return 'after';
+        return 'child';
+    }
+
+    canDropMap(draggedId, targetId) {
+        const maps = this.currentProject?.maps;
+        return !!(maps?.[draggedId] && maps?.[targetId] && draggedId !== targetId
+            && !this.isAncestor(draggedId, targetId));
+    }
+
+    // Paint feedback inside the row: inserting a sibling moves the target
+    // under a stationary pointer and repeatedly changes its drop zone.
+    addMapDragHandlers(mapItem, map) {
+        mapItem.addEventListener('dragstart', e => {
+            this.clearMapDropFeedback();
+            this._draggedMapId = map.id;
             mapItem.style.opacity = '0.5';
             e.dataTransfer.effectAllowed = 'move';
             e.dataTransfer.setData('text/plain', map.id);
         });
-
-        mapItem.addEventListener('dragend', (e) => {
-            mapItem.style.opacity = '1';
-            if (dropIndicator && dropIndicator.parentNode) {
-                dropIndicator.parentNode.removeChild(dropIndicator);
-            }
-            dropIndicator = null;
+        mapItem.addEventListener('dragend', () => {
+            mapItem.style.opacity = '';
+            this._draggedMapId = null;
+            this.clearMapDropFeedback();
         });
-
-        mapItem.addEventListener('dragover', (e) => {
+        mapItem.addEventListener('dragover', e => {
             e.preventDefault();
-            e.dataTransfer.dropEffect = 'move';
-
-            // Create or update drop indicator
-            if (!dropIndicator) {
-                dropIndicator = document.createElement('div');
-                dropIndicator.style.cssText = 'height: 2px; background-color: var(--color-link); margin: 2px 0;';
+            const valid = this.canDropMap(this._draggedMapId, map.id);
+            e.dataTransfer.dropEffect = valid ? 'move' : 'none';
+            if (!valid) { this.clearMapDropFeedback(); return; }
+            if (this._mapDropTarget !== mapItem) {
+                this.clearMapDropFeedback();
+                this._mapDropTarget = mapItem;
             }
-
-            // Determine drop position (above, below, or as child)
-            const rect = mapItem.getBoundingClientRect();
-            const mouseY = e.clientY;
-            const itemTop = rect.top;
-            const itemBottom = rect.bottom;
-            const itemHeight = rect.height;
-
-            // If hovering over top 25%, insert before
-            if (mouseY < itemTop + itemHeight * 0.25) {
-                if (mapItem.previousSibling !== dropIndicator) {
-                    mapItem.parentNode.insertBefore(dropIndicator, mapItem);
-                }
-            }
-            // If hovering over bottom 25%, insert after
-            else if (mouseY > itemBottom - itemHeight * 0.25) {
-                if (mapItem.nextSibling !== dropIndicator) {
-                    if (mapItem.nextSibling) {
-                        mapItem.parentNode.insertBefore(dropIndicator, mapItem.nextSibling);
-                    } else {
-                        mapItem.parentNode.appendChild(dropIndicator);
-                    }
-                }
-            }
-            // Middle 50% - make it a child
-            else {
-                // Visual feedback for making it a child (highlight the item)
-                mapItem.style.backgroundColor = 'var(--color-selection-deep)';
-                if (dropIndicator && dropIndicator.parentNode) {
-                    dropIndicator.parentNode.removeChild(dropIndicator);
-                    dropIndicator = null;
-                }
+            const position = this.mapDropPosition(mapItem, e.clientY);
+            if (mapItem.getAttribute('data-map-drop') !== position) {
+                mapItem.setAttribute('data-map-drop', position);
             }
         });
-
-        mapItem.addEventListener('dragleave', (e) => {
-            mapItem.style.backgroundColor = '';
-            if (dropIndicator && dropIndicator.parentNode) {
-                dropIndicator.parentNode.removeChild(dropIndicator);
-                dropIndicator = null;
-            }
+        mapItem.addEventListener('dragleave', e => {
+            // Crossing a label/icon inside the row does not leave the row.
+            if (e.relatedTarget instanceof Node && mapItem.contains(e.relatedTarget)) return;
+            if (this._mapDropTarget === mapItem) this.clearMapDropFeedback();
         });
-
-        mapItem.addEventListener('drop', (e) => {
+        mapItem.addEventListener('drop', e => {
             e.preventDefault();
             e.stopPropagation();
-            mapItem.style.backgroundColor = '';
-
-            const draggedMapId = parseInt(e.dataTransfer.getData('text/plain'));
-            const targetMapId = map.id;
-
-            if (draggedMapId === targetMapId) return; // Can't drop on itself
-
-            const rect = mapItem.getBoundingClientRect();
-            const mouseY = e.clientY;
-            const itemTop = rect.top;
-            const itemBottom = rect.bottom;
-            const itemHeight = rect.height;
-
-            // Determine drop action based on position
-            if (mouseY < itemTop + itemHeight * 0.25) {
-                // Drop before (same parent, adjust order)
-                this.moveMapBefore(draggedMapId, targetMapId);
-            } else if (mouseY > itemBottom - itemHeight * 0.25) {
-                // Drop after (same parent, adjust order)
-                this.moveMapAfter(draggedMapId, targetMapId);
-            } else {
-                // Drop as child
-                this.moveMapAsChild(draggedMapId, targetMapId);
-            }
-
-            if (dropIndicator && dropIndicator.parentNode) {
-                dropIndicator.parentNode.removeChild(dropIndicator);
-                dropIndicator = null;
-            }
+            const draggedId = this._draggedMapId;
+            const position = this.mapDropPosition(mapItem, e.clientY);
+            this.clearMapDropFeedback();
+            this._draggedMapId = null;
+            if (!this.canDropMap(draggedId, map.id)) return;
+            if (position === 'before') this.moveMapBefore(draggedId, map.id);
+            else if (position === 'after') this.moveMapAfter(draggedId, map.id);
+            else this.moveMapAsChild(draggedId, map.id);
         });
     }
 
@@ -1267,6 +1243,7 @@ class ProjectController {
     renderQuickAccessList() {
         const quickAccessList = document.getElementById('quick-access-list');
         if (!quickAccessList) return;
+        this.bindMapListNavigation(quickAccessList);
 
         // Store the currently loaded map ID to re-highlight after render
         const currentMapId = this.tilemapManager?.currentMap?.id;
@@ -1511,7 +1488,7 @@ class ProjectController {
     // Highlight the currently selected map in the maps list
     highlightCurrentMap(mapId) {
         let selectedElement = null;
-        document.querySelectorAll('[data-map-id]').forEach(item => {
+        document.querySelectorAll('#maps-list [data-map-id], #quick-access-list [data-map-id]').forEach(item => {
             item.classList.remove('selected');
             if (parseInt(item.getAttribute('data-map-id')) === mapId) {
                 item.classList.add('selected');

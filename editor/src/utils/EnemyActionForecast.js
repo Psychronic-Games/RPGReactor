@@ -179,6 +179,12 @@
      */
     function pool(valid, rules_) {
         if (valid.length === 0) return { ceiling: null, entries: [], exact: true };
+        if (['random', 'casual', 'gambit'].includes(rules_.style)) {
+            const kept = rules_.style === 'gambit' ? valid.slice(0, 1) : valid;
+            return { ceiling: null, exact: true, entries: kept.map(v => ({
+                ...v, rating: v.action.rating, weight: 1, chance: 1 / kept.length
+            })) };
+        }
         const ceiling = Math.max(...valid.map(v => v.action.rating));
         const zero = ceiling - rules_.window;
         const kept = valid.filter(v => rules_.inclusive ? v.action.rating >= zero : v.action.rating > zero);
@@ -203,7 +209,7 @@
     }
 
     function normalizeState(enemy, state) {
-        const tpMax = maxTp(enemy) || DEFAULT_MAX_TP;
+        const tpMax = maxTp(enemy);
         const mpMax = maxMp(enemy);
         const s = state || {};
         const tp = Number.isFinite(s.tp) ? s.tp : tpMax;
@@ -254,21 +260,47 @@
     const MAX_TOGGLE_IDS = 8;      // 2^8 subsets per toggle group
     const MAX_GRID_POINTS = 300000;
 
+    // One representative for every combination of turn conditions. Independent
+    // samples of each period miss intersections that first occur much later.
+    function turnValues(all, minTurn) {
+        const conditions = all.filter(c => c.type === TURN);
+        if (!conditions.length) return [1];
+        if (conditions.some(c => !Number.isSafeInteger(c.param1) || c.param1 < 0
+            || !Number.isSafeInteger(c.param2) || c.param2 < 0)) return null;
+        const gcd = (a, b) => b ? gcd(b, a % b) : a;
+        let period = 1;
+        const repeating = conditions.filter(c => c.param2 > 0);
+        for (const c of repeating) {
+            period = period / gcd(period, c.param2) * c.param2;
+            if (period > MAX_GRID_POINTS) return null;
+        }
+        const latest = Math.max(...conditions.map(c => c.param1));
+        let candidates;
+        if (repeating.length) {
+            const horizon = latest + period;
+            const count = horizon - minTurn + 1;
+            if (count > MAX_GRID_POINTS) return null;
+            candidates = Array.from({ length: count }, (_, i) => i + minTurn);
+        } else {
+            candidates = [minTurn, 1, ...conditions.flatMap(c => [c.param1 - 1, c.param1, c.param1 + 1])]
+                .filter(n => n >= minTurn);
+        }
+        const signatures = new Map();
+        for (const turn of candidates) {
+            const signature = conditions.map(c => meets(c, { turn }) ? '1' : '0').join('');
+            if (!signatures.has(signature)) signatures.set(signature, turn);
+        }
+        return [...signatures.values()];
+    }
+
     function axisValues(enemy, skills, vars, rules_) {
         const minTurn = Number.isFinite(rules_ && rules_.minTurn) ? rules_.minTurn : 1;
         const byId = skillIndex(skills);
         const all = (enemy.actions || []).flatMap(a => conditions(a));
-        const tpMax = maxTp(enemy) || DEFAULT_MAX_TP;
+        const tpMax = maxTp(enemy);
         const mpMax = maxMp(enemy);
-
-        const turns = new Set([minTurn, 1]);
-        for (const c of all) {
-            if (c.type !== TURN) continue;
-            if (c.param2 === 0) { if (c.param1 >= minTurn) turns.add(c.param1); continue; }
-            // A repeating window needs one hit and one miss inside the period.
-            for (let k = 0; k < 3; k++) turns.add(Math.max(minTurn, c.param1 + c.param2 * k));
-            turns.add(Math.max(minTurn, c.param1 + 1));
-        }
+        const turns = turnValues(all, minTurn);
+        if (!turns) return null;
 
         const rates = type => {
             const out = new Set([0, 1]);
@@ -288,12 +320,15 @@
                 const cost = Number((byId.get(a.skillId) || {})[key] || 0);
                 if (cost > 0 && cost <= max) { out.add(cost); out.add(Math.max(0, cost - 1)); }
             }
-            for (const rate of rates(rateType)) out.add(Math.round(rate * max));
+            for (const rate of rates(rateType)) {
+                const value = rate * max;
+                for (const n of [Math.floor(value) - 1, Math.floor(value), Math.ceil(value), Math.ceil(value) + 1]) out.add(n);
+            }
             return [...out].filter(v => v >= 0 && v <= max);
         };
 
         return {
-            turns: vars.turn ? [...turns].sort((a, b) => a - b) : [Math.max(minTurn, 1)],
+            turns,
             hpRates: vars.hp ? rates(HP) : [1],
             mps: vars.mp ? resource('mpCost', mpMax, MP) : [mpMax],
             tps: vars.tp ? resource('tpCost', tpMax, TP) : [tpMax],
@@ -332,7 +367,8 @@
         const byId = skillIndex(skills);
         const vars = variables(enemy, byId);
         const axes = axisValues(enemy, byId, vars, rules_);
-        const tpMax = maxTp(enemy) || DEFAULT_MAX_TP;
+        if (!axes) return { hit: null, truncated: true };
+        const tpMax = maxTp(enemy);
         const mpMax = maxMp(enemy);
         const points = axes.turns.length * axes.hpRates.length * axes.mps.length
             * axes.tps.length * axes.partyLevels.length * axes.userStateSets.length
@@ -407,10 +443,11 @@
             const skill = byId.get(action.skillId);
             if (!skill) { dead.push({ index, action, reason: 'no-skill' }); return; }
             if (skill.occasion === 2 || skill.occasion === 3) { dead.push({ index, action, reason: 'occasion' }); return; }
-            if (Number(skill.mpCost || 0) > maxMp(enemy) || Number(skill.tpCost || 0) > (maxTp(enemy) || DEFAULT_MAX_TP)) {
+            if (Number(skill.mpCost || 0) > maxMp(enemy) || Number(skill.tpCost || 0) > maxTp(enemy)) {
                 dead.push({ index, action, reason: 'cost' }); return;
             }
             if (!everValid.has(index)) { dead.push({ index, action, reason: 'condition' }); return; }
+            if (rules_.style === 'gambit') { dead.push({ index, action, reason: 'priority' }); return; }
             const ceiling = lowestCeiling.get(index);
             dead.push({
                 index, action, reason: 'outranked', ceiling,

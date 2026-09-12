@@ -1,6 +1,6 @@
 # Battle Rooms and Action Sequences
 
-The first implementation is available in runtime **20260906.6**. Existing projects continue to use their battlebacks and existing action behavior until a creator assigns the new presentation. Battle rules, damage formulas, skill costs, targeting and repeats remain in the normal battle system.
+Current implementation: runtime **20260911.6**, editor **0.98.6**. See the [phase/graphics guide](ACTION-SEQUENCE-EXPANSION-2026-09-11.md) and [held-item/throw guide](HELD-ITEMS-AND-THROWS-2026-09-11.md) for the September 11 expansion. Existing projects continue to use their battlebacks and existing action behavior until a creator assigns the new presentation. Battle rules, damage formulas, skill costs, targeting and repeats remain in the normal battle system.
 
 ## Battle party size
 
@@ -50,17 +50,17 @@ Runtime **20260906.9** skips a known-missing local one-shot sound with one diagn
 
 ## Build an Action Sequence
 
-1. Open **Database → Action Sequences**, then create an entry.
-2. Choose **Unarmed Punch**, **Melee Strike**, **Projectile Shot**, **Cast on Target**, **Heal**, or **Self Buff**, and click **Use Template**.
+1. Open **Database → Action Sequences**. Use **Add Starter Sequences** to add the 16 editable starters to an existing project, or create an entry. Save the database to persist the library.
+2. Choose a template such as **Unarmed Punch**, **Melee Strike**, **Heal**, **Use Item**, **Throw Item**, **Throw Weapon**, or **Boomerang**, and click **Use Template**. Movement and held-item routines provide reusable building blocks.
 3. Choose the preview user and target from existing actors/enemies. Their active 2D or 3D graphic is used. Preview casting is temporary; the sequence works with whichever battlers use it in battle. The default formation faces opponents toward one another; **Mirror Formation** reverses the sides.
 4. Play, pause, step a frame or scrub the timeline. Select a step to adjust its duration and properties. Drag steps to reorder them, duplicate/delete steps, or add another step. Undo/Redo applies to sequence edits.
 5. For movement keys, enter exact position, rotation and scale, or drag the user/target in the preview. Coordinates are relative to home or the current target; X offsets follow the attack direction. The Steps and Timeline buttons show the same ordered sequence.
-6. Keep one **Apply Action Effect** step at the desired impact time. This calls the existing battle resolver using the original target occurrences; skill repeats control the number of hits. Scrubbing the editor never applies gameplay effects.
-7. Save, then assign the sequence to the relevant actor, enemy, weapon, skill or item.
+6. Choose **Impact Behavior** under Options. **One Impact · Skill Repeats** uses one effect cue and the original repeated target occurrences. **Authored Hits · Each Impact Applies Once** lets each effect cue apply once to chosen unique battlers without multiplying skill repeats. Scrubbing the editor never applies gameplay effects.
+7. Save, then assign a complete action, matching action phase, or state/reaction sequence in the relevant actor, class, enemy, weapon, skill or item controls.
 
-Available steps cover movement, battler motions, sounds, database animations, a colored projectile, weapon icons, action impact, waits and camera position keys. Weapon icons can come from equipped equipment, the skill/item, or the icon picker; position, rotation, scale and visibility are editable. A model's named animation rules provide its motions. Templates begin with no selected animation or sound, so they do not depend on nonexistent sample files.
+Available commands cover movement, motions, held equipment, textured projectiles, animations, audio/media, action effects, targets, game data and conditional logic. See the [command coverage table](ACTION-SEQUENCE-EXPANSION-2026-09-11.md#command-coverage). Equipment/action icons, pictures and weapon-sheet frames support hand placement; models can use hand bones or a named bone, and sprites have adjustable grip/offset controls. Projectiles support allies, enemies, arcs, spin and return flights.
 
-This first timeline plays ordered steps. It does not yet provide independently overlapping tracks, arbitrary bone attachments, textured projectiles, automatic note-tag conversion or a room selector inside the sequence preview. The sequence preview uses a neutral stage; test final room framing in Troops. Camera keys move a room camera; battleback camera choreography requires further support.
+**Options → projection** selects a 2D or 3D sample view. The preview uses a neutral stage; test final room framing and gameplay commands in Battle Test. Branches use an explicit preview condition result instead of evaluating game scripts. Independently overlapping tracks, automatic notetag conversion and a room selector inside the sequence preview remain outside this workflow. Camera keys move a room camera; battleback camera choreography requires further support.
 
 ## Editing and previewing individual steps
 
@@ -89,13 +89,13 @@ Existing sequences without the optional motion `transform` and `targetIndex` pro
 
 ## First unarmed attack
 
-Runtime **20260906.10** adds **Unarmed Punch**: run toward the target for 30 frames, wind up and punch with impact at frame 46, recover, then run home and restore the original facing at frame 96. It contains no image, effect or sound references. **Add Step** also offers **Run to Target**, **Punch**, and **Return Home** building blocks; each expands into ordinary editable steps. Keep only one impact cue in a sequence.
+Runtime **20260906.10** adds **Unarmed Punch**: run toward the target for 30 frames, wind up and punch with impact at frame 46, recover, then run home and restore the original facing at frame 96. It contains no image, effect or sound references. **Add Step** also offers **Run to Target**, **Punch**, and **Return Home** building blocks; each expands into ordinary editable steps. Keep one impact cue when using the default Skill Repeats policy; use Authored Hits for deliberate multiple impacts.
 
 **Approach Target** stops on the attacker's side, including diagonal and mirrored formations. **Stop Short (tiles)** controls distance from the target (default 1.2); Y shifts sideways and Z changes height. **Facing** can follow movement, face the target, retain the current direction, or restore home facing. Dragging an approach key edits those same offsets. Adjust distance and duration for differently sized battlers.
 
 3D battlers reuse their configured running/walking clips. An authored action rule named `punch` takes priority; otherwise a compatible humanoid skeleton with a right upper arm, forearm and hand receives a generated short jab on that model instance. This fallback does not alter the model asset and cannot infer limbs for arbitrary creature rigs or static props. Such models need their own named motion rules. Side-view sprites use their thrust motion. Preview scrubbing samples exact clip poses, including backward seeks; game playback retains animation crossfades.
 
-Demo now contains sequence **#1 Unarmed Punch**, assigned under **Actors → Fleagus / Carol → Unarmed Attack Sequence**. Their normal default remains **Inherit**. For Battle Test, choose a configured actor, remove their weapon in the test equipment, then use **Attack**. Starting equipment, the saved test party, map formations and plugin choices were preserved. Explicit skill assignments retain priority.
+Demo now contains sequence **#1 Unarmed Punch**, assigned under **Actors → Fleagus / Carol → Unarmed Attack Sequence**. Their normal default follows lower-priority defaults (the former **Inherit** option). For Battle Test, choose a configured actor, remove their weapon in the test equipment, then use **Attack**. Starting equipment, the saved test party, map formations and plugin choices were preserved. Explicit skill assignments retain priority.
 
 ## Assign equipment and unarmed defaults
 
@@ -106,10 +106,14 @@ Action Sequences has its own database list. Troops contains room and battle-even
 | Skill or item: **Action Sequence** | Highest priority for that action |
 | Weapon: **Weapon Attack Sequence** | Normal attacks using that weapon, unless the skill overrides it; dual wield checks equipped order |
 | Actor: **Unarmed Attack Sequence** | Normal attacks with no equipped weapon, unless the attack skill overrides it |
-| Actor: **Default Action Sequence** | Actions without a skill/item/weapon/unarmed override |
+| Class: default action | After skill/item/weapon and applicable unarmed overrides, before the actor default |
+| Actor: **Default Action Sequence** | Actions without a higher-priority override |
 | Enemy: **Default Action Sequence** | Actions without a skill/item override |
-| **Inherit** | Continue looking through these defaults |
-| **Use Existing Behavior** | Stop lookup and use the project's existing action presentation |
+| **Follow Lower-Priority Defaults** (formerly Inherit) | Continue looking through these defaults |
+| **Use Engine / Plugin Action** (formerly Use Existing Behavior) | Stop lookup and use the project's existing action presentation |
+| **Assign Each Action Phase** | Assign Prepare, Movement, Execute/Attack, Effect/Impact, Return and Finish/Cleanup separately |
+
+Each phase can inherit, use its built-in behavior, or reference a sequence with the matching purpose. Execute invokes Effect at its Play Effect Phase cue. Battler state/reaction controls separately cover idle, movement, guard, damage and other states; they yield to active actions. Actors/enemies also have an explicit SV/character/static/model graphic selector. See the [assignment and graphics guide](ACTION-SEQUENCE-EXPANSION-2026-09-11.md).
 
 The builder lists **Where Used** references. Referenced sequences cannot be deleted or truncated by Change Maximum until their assignments are removed. Assignments travel with copied records inside the same project; copying into another project does not carry unrelated sequence IDs.
 

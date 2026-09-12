@@ -19,35 +19,162 @@ class BattlePresentationEditor {
     number(host,label,value,change,step=.1) {const input=this.element('input','database-field-value');input.type='number';input.step=step;input.value=value;input.onchange=()=>{if(Number.isFinite(input.valueAsNumber))change(input.valueAsNumber);};return this.field(host,label,input);}
     button(label,fn,raw=false) {const b=this.element('button','rr-btn-secondary',label,raw);b.type='button';b.onclick=fn;return b;}
     section(title) {const panel=this.element('div','database-section');panel.append(this.element('div','database-section-header',title));const body=this.element('div','database-section-content');panel.append(body);return {panel,body};}
+    preserveDisclosures(host) {
+        const keys=()=>{const counts=new Map();return [...host.querySelectorAll('details')].map(details=>{const title=details.querySelector('summary')?.getAttribute('data-i18n-text-source')||'',index=counts.get(title)||0;counts.set(title,index+1);return [title+':'+index,details];});};
+        const states=new Map(keys().map(([key,details])=>[key,details.open]));
+        return ()=>{for(const [key,details] of keys())if(states.has(key))details.open=states.get(key);};
+    }
     assignment(container,kind,record) {
-        if(!['skills','items','weapons','actors','enemies'].includes(kind))return;
-        const title=kind==='weapons'?'Weapon Attack Sequence':['actors','enemies'].includes(kind)?'Default Action Sequence':'Action Sequence';
-        const {panel,body}=this.section(title),settings=this.settings();panel.dataset.sequenceAssignment=kind;
-        const value=settings[kind]?.[record.id]||{mode:'inherit'};
-        const options=[['inherit','Inherit'],['existing','Use Existing Behavior'],...(this.db.data.actionSequences||[]).filter(Boolean).map(s=>['sequence:'+s.id,s.name||'#'+s.id,true])];
-        if(value.mode==='sequence'&&!this.db.data.actionSequences?.[value.sequenceId])options.push(['sequence:'+value.sequenceId,this.message('Missing Sequence #{id}',{id:value.sequenceId})]);
-        let open;const control=this.select(options,value.mode==='sequence'?'sequence:'+value.sequenceId:value.mode,selected=>{
-            settings[kind]||={};settings[kind][record.id]={...settings[kind][record.id],...(selected.startsWith('sequence:')?{mode:'sequence',sequenceId:Number(selected.split(':')[1])}:{mode:selected,sequenceId:undefined})};this.changed();if(open)open.disabled=!selected.startsWith('sequence:')||!this.db.data.actionSequences?.[Number(selected.split(':')[1])];
-        });const controls=this.element('div','rr-battle-assignment-controls');body.append(controls);controls.append(control);
-        open=this.button('Open Sequence',()=>{const id=Number(control.value.split(':')[1]);const sequence=this.db.data.actionSequences?.[id];if(sequence){this.parent.openDatabase('actionSequences');this.parent.showDatabaseDetail(sequence,'actionSequences');}});open.disabled=!control.value.startsWith('sequence:')||!this.db.data.actionSequences?.[Number(control.value.split(':')[1])];controls.append(open);
-        if(kind==='actors') {
-            const unarmed=value.unarmed||{mode:'inherit'};
-            const row=this.element('div','rr-battle-assignment-controls');row.style.marginTop='10px';
-            let unarmedOpen;const unarmedOptions=options.slice();if(unarmed.mode==='sequence'&&!this.db.data.actionSequences?.[unarmed.sequenceId]&&!unarmedOptions.some(o=>o[0]==='sequence:'+unarmed.sequenceId))unarmedOptions.push(['sequence:'+unarmed.sequenceId,this.message('Missing Sequence #{id}',{id:unarmed.sequenceId})]);
-            const select=this.select(unarmedOptions,unarmed.mode==='sequence'?'sequence:'+unarmed.sequenceId:unarmed.mode,selected=>{
-                settings.actors[record.id]||={mode:'inherit'};
-                settings.actors[record.id].unarmed=selected.startsWith('sequence:')?{mode:'sequence',sequenceId:Number(selected.split(':')[1])}:{mode:selected};this.changed();if(unarmedOpen)unarmedOpen.disabled=!selected.startsWith('sequence:')||!this.db.data.actionSequences?.[Number(selected.split(':')[1])];
-            });
-            this.field(body,'Unarmed Attack Sequence',row);row.append(select);
-            unarmedOpen=this.button('Open Sequence',()=>{const sequence=this.db.data.actionSequences?.[Number(select.value.split(':')[1])];if(sequence){this.parent.openDatabase('actionSequences');this.parent.showDatabaseDetail(sequence,'actionSequences');}});unarmedOpen.disabled=!select.value.startsWith('sequence:')||!this.db.data.actionSequences?.[Number(select.value.split(':')[1])];row.append(unarmedOpen);
-            body.append(this.element('p','rr-battle-help','Used only for a normal attack with no weapon equipped. Skills and weapon assignments keep their own behavior.'));
-        }
-        const help=kind==='weapons'?'Used for attacks with this weapon. A skill or item assignment takes priority.':kind==='actors'?'Used for unarmed attacks and actions without a skill, item or weapon override. Equip a weapon with its own sequence to change its attack.':kind==='enemies'?'Used when this enemy’s skill or item has no sequence override.':'This skill or item takes priority over equipped weapons and the actor/enemy default. Inherit uses those defaults.';
-        const hint=this.element('p','rr-battle-help',help);body.append(hint);
-        // Keep the card in the record's layout, so tall traits/notes cannot overlap it.
+        if(!['skills','items','weapons','actors','enemies','classes'].includes(kind))return;
+        const B=ReactorBattleData,settings=this.settings();
+        const {panel,body}=this.section('Action Sequences');panel.dataset.sequenceAssignment=kind;
+        const value=()=>settings[kind]?.[record.id]||{mode:'inherit'};
+        const set=binding=>{settings[kind]||={};settings[kind][record.id]=binding;this.changed();};
+        const renderBinding=(host,get,put,unarmed=false)=>{
+            const selected=get(),options=[['inherit','Follow Lower-Priority Defaults'],['existing','Use Engine / Plugin Action'],['phases','Assign Each Action Phase'],
+                ...(this.db.data.actionSequences||[]).filter(s=>s&&B.purpose(s)==='action').map(s=>['sequence:'+s.id,s.name||'#'+s.id,true])];
+            if(selected.mode==='sequence'&&!this.db.data.actionSequences?.[selected.sequenceId])options.push(['sequence:'+selected.sequenceId,this.message('Missing Sequence #{id}',{id:selected.sequenceId})]);
+            const row=this.element('div','rr-battle-assignment-controls');host.append(row);
+            let open;const pick=this.select(options,selected.mode==='sequence'?'sequence:'+selected.sequenceId:selected.mode||'inherit',id=>{
+                put({...get(),mode:id.startsWith('sequence:')?'sequence':id,...(id.startsWith('sequence:')?{sequenceId:Number(id.slice(9))}:{})});draw();
+            });pick.setAttribute('aria-label',this.text('Action Sequences'));row.append(pick);
+            const openSequence=id=>{const sequence=this.db.data.actionSequences?.[id];if(sequence){this.parent.openDatabase('actionSequences');this.parent.showDatabaseDetail(sequence,'actionSequences');}};
+            if(selected.mode==='sequence')row.append(this.button('Open Sequence',()=>openSequence(selected.sequenceId)));
+            const hint=selected.mode==='sequence'?'This complete sequence controls the entire action, including movement, impact and return.':selected.mode==='existing'?'Stops inheritance here and uses the engine or enabled battle plugin for the whole action.':selected.mode==='phases'?'Runs Prepare → Movement → Execute → Return → Finish. Execute calls Effect at the impact cue. Each phase can inherit independently.':
+                ['actors','enemies'].includes(kind)?(unarmed?'Falls back to the actor’s normal action assignment.':'Uses the engine or enabled battle plugin when no higher-priority assignment applies.'):
+                kind==='classes'?'Falls back to the actor’s assignment.':kind==='weapons'?'Falls back to the class and actor assignments.':'Uses the weapon (normal attacks), then class, then actor or enemy assignment.';
+            const explanation=this.element('details','rr-battle-assignment-help');explanation.append(this.element('summary','','Help'),this.element('p','rr-battle-help',hint));host.append(explanation);
+            if(selected.mode==='phases')for(const [phase,label,help] of B.actionPhases){const p=this.element('p','rr-battle-help');p.append(this.element('strong','',label),document.createTextNode(' — '+this.text(help)));explanation.append(p);}
+            if(selected.mode!=='phases')return;
+            const list=this.element('div','rr-battle-phase-list');host.append(list);
+            for(const [phase,label,help] of B.actionPhases){
+                const binding=get().phases?.[phase]||{mode:'inherit'},line=this.element('div','rr-battle-phase-row');list.append(line);
+                const caption=this.element('div','rr-battle-phase-caption');caption.title=this.text(help);caption.append(this.element('span','rr-battle-phase-number',String(B.actionPhases.findIndex(p=>p[0]===phase)+1),true),this.element('strong','',label));line.append(caption);
+                const choices=[['inherit','Follow Lower-Priority Phase'],['existing','Use Built-in Phase'],...(this.db.data.actionSequences||[]).filter(s=>s&&B.purpose(s)===phase).map(s=>['sequence:'+s.id,s.name||'#'+s.id,true])];
+                if(binding.mode==='sequence'&&!choices.some(o=>o[0]==='sequence:'+binding.sequenceId))choices.push(['sequence:'+binding.sequenceId,this.message('Missing or Incompatible Sequence #{id}',{id:binding.sequenceId})]);
+                const controls=this.element('div','rr-battle-assignment-controls');line.append(controls);
+                controls.append(this.select(choices,binding.mode==='sequence'?'sequence:'+binding.sequenceId:binding.mode,id=>{
+                    const next=id.startsWith('sequence:')?{mode:'sequence',sequenceId:Number(id.slice(9))}:{mode:id};put({...get(),phases:{...get().phases,[phase]:next}});draw();
+                }));
+                controls.querySelector('select').setAttribute('aria-label',this.text(label));
+                if(binding.mode==='sequence')controls.append(this.button('Open Sequence',()=>openSequence(binding.sequenceId)));
+                else controls.append(this.button('Create Phase',()=>{
+                    const records=this.db.data.actionSequences||=[null],id=records.length;
+                    records.push({...B.defaultPhase(phase,{isAttack:kind==='weapons'||unarmed}),id,name:(record.name||'#'+record.id)+' — '+this.text(label)});
+                    put({...get(),phases:{...get().phases,[phase]:{mode:'sequence',sequenceId:id}}});openSequence(id);
+                }));
+            }
+        };
+        const draw=()=>{const restore=this.preserveDisclosures(body);body.replaceChildren();renderBinding(body,value,set);
+            if(kind==='actors'){
+                const details=this.element('details','rr-battle-motion-details');details.append(this.element('summary','','Unarmed Attack Override'));const inner=this.element('div');details.append(inner);body.append(details);
+                renderBinding(inner,()=>value().unarmed||{mode:'inherit'},binding=>set({...value(),unarmed:binding}),true);
+            }
+            if(['actors','enemies','classes','skills','items'].includes(kind)){
+                const details=this.element('details','rr-battle-motion-details');details.append(this.element('summary','','Battler States and Reactions'));body.append(details);
+                details.append(this.element('p','rr-battle-help','These sequences animate the battler’s state or reaction. They do not apply action damage. Idle and moving sequences repeat while that state remains active.'));
+                for(const [state,label] of B.battlerStates.filter(([state])=>!['skills','items'].includes(kind)||['damage','evade','magicEvade','collapse'].includes(state))){
+                    const binding=value().states?.[state]||{mode:'inherit'},options=[['inherit','Follow Battler Defaults'],['existing','Use Built-in Motion'],...(this.db.data.actionSequences||[]).filter(s=>s&&B.purpose(s)==='motion').map(s=>['sequence:'+s.id,s.name||'#'+s.id,true])];
+                    const row=this.element('div','rr-battle-phase-row');details.append(row);row.append(this.element('strong','',label));const controls=this.element('div','rr-battle-assignment-controls');row.append(controls);controls.append(this.select(options,binding.mode==='sequence'?'sequence:'+binding.sequenceId:binding.mode,id=>{
+                        set({...value(),states:{...value().states,[state]:id.startsWith('sequence:')?{mode:'sequence',sequenceId:Number(id.slice(9))}:{mode:id}}});draw();
+                    }));
+                    controls.querySelector('select').setAttribute('aria-label',this.text(label));
+                    controls.append(this.button(binding.mode==='sequence'?'Open Sequence':'Create Motion',()=>{
+                        let id=binding.sequenceId;
+                        if(binding.mode!=='sequence'){const records=this.db.data.actionSequences||=[null];id=records.length;records.push({id,version:1,purpose:'motion',name:(record.name||'#'+record.id)+' — '+this.text(label),steps:[B.step('motion',{motion:state,duration:60})]});set({...value(),states:{...value().states,[state]:{mode:'sequence',sequenceId:id}}});}
+                        const sequence=this.db.data.actionSequences[id];if(sequence){this.parent.openDatabase('actionSequences');this.parent.showDatabaseDetail(sequence,'actionSequences');}
+                    }));
+                }
+            }
+            restore();
+        };draw();
         const layout=container.firstElementChild||container;
         if(layout!==container){layout.style.height='auto';layout.style.minHeight='100%';}
         panel.style.flexShrink='0';layout.append(panel);
+    }
+    battlerGraphic(container,kind,record) {
+        if(!['actors','enemies'].includes(kind))return;
+        const B=ReactorBattleData,settings=this.settings(),{panel,body}=this.section('Battler Graphic');panel.classList.add('rr-battler-graphic-card');
+        const get=()=>settings[kind]?.[record.id]?.graphic||{mode:'auto'};
+        const set=value=>{settings[kind]||={};settings[kind][record.id]={...settings[kind][record.id],graphic:value};this.changed();};
+        const model=()=>RRDatabase3DBindings.get(this.parent.currentProject.path,kind,record.id,kind==='actors'?'battler':undefined);
+        let generation=0;
+        const draw=()=>{
+            const restore=this.preserveDisclosures(body),token=++generation,g=get(),resolved=B.graphic(settings,kind,record.id,record,model());body.replaceChildren();
+            const explicit=g.mode&&g.mode!=='auto',legacy=kind==='actors'?[container.querySelectorAll('.database-actor-images .graphic-preview-box')[2]]:[container.querySelector('#enemy-battler-preview-'+record.id),container.querySelector('.enemy-image-controls'),container.querySelector('.rr-3d-binding-row')];
+            for(const node of legacy.filter(Boolean)){if(node.dataset.rrLegacyDisplay===undefined)node.dataset.rrLegacyDisplay=node.style.display;node.style.display=explicit?'none':node.dataset.rrLegacyDisplay;}
+            this.field(body,'Graphic Type',this.select(B.graphicModes,g.mode||'auto',mode=>{set({...g,mode});draw();}));
+            const controls=this.element('div','rr-battle-assignment-controls');body.append(controls);
+            controls.append(this.element('span','rr-battle-graphic-name',resolved.type==='model'?resolved.model?.name||this.text('No Model Selected'):resolved.name||this.text('No Image Selected'),true));
+            if(g.mode&&g.mode!=='auto')controls.append(this.button(resolved.type==='model'?'Choose Model…':'Choose Image…',()=>{
+                const commit=change=>{if(!panel.isConnected||token!==generation)return;set({...get(),...change});draw();};
+                if(resolved.type==='model'){
+                    new ModelGraphicPicker({getCurrentProject:()=>this.parent.currentProject,mapEditor3D:window.reactor?.mapEditor3D}).show(resolved.model,result=>commit({model:result}));
+                }else{
+                    const path=require('path'),folder=path.join(this.parent.currentProject.path,'img',resolved.folder),files=RRAssetFiles.listNames(folder,['.png']);
+                    this.parent.showImagePicker(this.text('Choose Battler Graphic'),files,(name,index)=>commit({name,index:index||0}),file=>RRAssetFiles.urlFor(folder,file,['.png']),resolved.name,
+                        {allowNone:true,...(resolved.type==='character'?{sheetType:'character',currentIndex:g.index||0}:{})});
+                }
+            }));
+            if(g.mode==='auto')body.append(this.element('p','rr-battle-help','Uses the existing battler image, 3D binding or enabled battle plugin. Choose an explicit type to override it without changing the map character or face.'));
+            else if(resolved.type!=='model'){
+                const basic=this.element('div','rr-battle-graphic-options');body.append(basic);
+                const options=this.element('details','rr-battle-motion-details');options.append(this.element('summary','','Advanced'));body.append(options);
+                const dimensions=this.element('div','rr-battle-graphic-options');options.append(dimensions);
+                this.number(basic,'Scale',g.scale||1,value=>{set({...get(),scale:Math.max(.1,Math.min(10,value))});draw();},.1);
+                this.number(dimensions,'Vertical Offset (pixels)',g.offsetY||0,value=>{set({...get(),offsetY:value});draw();},1);
+                const mirror=this.element('input');mirror.type='checkbox';mirror.checked=!!g.mirror;mirror.onchange=()=>{set({...get(),mirror:mirror.checked});draw();};this.field(basic,'Mirror',mirror);
+                for(const [key,label,def] of [['hideShadow','Hide Shadow',false],['showWeapon','Show Weapon Motion',true]]){const box=this.element('input');box.type='checkbox';box.checked=g[key]??def;box.onchange=()=>set({...get(),[key]:box.checked});this.field(dimensions,label,box);}
+                if(kind==='enemies'){
+                    this.field(dimensions,'Attack Animation',this.select([[0,'Use Weapon Animation'],...(this.db.data.animations||[]).filter(Boolean).map(a=>[a.id,a.name,true])],g.attackAnimationId||0,v=>set({...get(),attackAnimationId:Number(v)})));
+                    for(let slot=0;slot<2;slot++)this.field(dimensions,this.message('Weapon {n}',{n:slot+1}),this.select([[0,'None'],...(this.db.data.weapons||[]).filter(Boolean).map(w=>[w.id,w.name,true])],g.weaponIds?.[slot]||0,v=>{const ids=[...(get().weaponIds||[0,0])];ids[slot]=Number(v);set({...get(),weaponIds:ids});}));
+                }
+                if(resolved.type==='character'){
+                    const name=this.element('input','database-field-value');name.value=g.damagedName||'';name.onchange=()=>set({...get(),damagedName:name.value});this.field(options,'Defeated Character File',name);
+                    this.number(dimensions,'Defeated Character Index (1–8)',(g.damagedIndex||0)+1,v=>set({...get(),damagedIndex:Math.max(0,Math.min(7,Math.round(v)-1))}),1);
+                    this.field(dimensions,'Defeated Direction',this.select([[2,'Down'],[4,'Left'],[6,'Right'],[8,'Up']],g.damagedDirection||2,v=>set({...get(),damagedDirection:Number(v)})));
+                }
+                if(['sv','character'].includes(resolved.type)){
+                    this.number(dimensions,'Frames per Motion',g.frames||3,value=>{set({...get(),frames:Math.max(1,Math.min(60,Math.round(value)))});draw();},1);
+                    this.number(dimensions,'Frames per Step',g.speed||12,value=>set({...get(),speed:Math.max(1,Math.round(value))}),1);
+                    if(resolved.type==='sv'){
+                        this.number(dimensions,'Motion Columns',g.motionColumns||3,value=>{set({...get(),motionColumns:Math.max(1,Math.min(32,Math.round(value)))});draw();},1);
+                        this.number(dimensions,'Motion Rows',g.motionRows||6,value=>{set({...get(),motionRows:Math.max(1,Math.min(32,Math.round(value)))});draw();},1);
+                    }
+                    const details=this.element('details','rr-battle-motion-details');details.append(this.element('summary','','Sprite Motion Mapping'));body.append(details);
+                    for(const [motion,label] of [...B.battlerStates,['walk','Walk'],['run','Run'],['punch','Punch'],['cast','Cast'],['return','Return'],['attack','Attack'],['thrust','Thrust'],['swing','Swing'],['missile','Missile'],['skill','Skill'],['item','Item']]){
+                        const m=g.motions?.[motion]||{},row=this.element('div','rr-battle-sprite-motion');details.append(row);row.append(this.element('strong','',label));
+                        const update=patch=>set({...get(),motions:{...get().motions,[motion]:{...get().motions?.[motion],...patch}}});
+                        if(resolved.type==='sv')this.number(row,'Motion Index',(m.index??B.spriteMotions[motion]??1)+1,v=>update({index:Math.max(0,Math.round(v)-1)}),1);
+                        else this.field(row,'Direction',this.select([[2,'Down'],[4,'Left'],[6,'Right'],[8,'Up']],m.direction||4,v=>update({direction:Number(v)})));
+                        this.number(row,'Frames',m.frames||g.frames||3,v=>update({frames:Math.max(1,Math.min(g.frames||3,Math.round(v)))}),1);
+                        this.number(row,'Speed',m.speed||g.speed||12,v=>update({speed:Math.max(1,Math.round(v))}),1);
+                        this.field(row,'Playback',this.select([['default','Default'],['loop','Loop'],['once','Hold Last Frame'],['play','Play Once']],m.loop===undefined?'default':m.loop===true?'loop':m.loop==='once'?'once':'play',v=>update({loop:v==='default'?undefined:v==='loop'?true:v==='once'?'once':false})));
+                    }
+                }
+            }
+            restore();
+            const preview=this.element('canvas','rr-battler-graphic-preview');preview.width=240;preview.height=180;body.insertBefore(preview,body.children[2]||null);
+            if(resolved.type==='model'&&resolved.model){Promise.resolve(RRDatabase3DBindings.modelThumbnail(this.parent.reactor3dEditor,resolved.model)).then(url=>{if(token!==generation||!preview.isConnected||!url)return;const image=new Image();image.onload=()=>{if(token===generation){const scale=Math.min(240/image.width,180/image.height);preview.getContext('2d').drawImage(image,(240-image.width*scale)/2,(180-image.height*scale)/2,image.width*scale,image.height*scale);}};image.src=url;}).catch(console.warn);}
+            else if(resolved.name){const image=new Image();image.onload=()=>{if(token!==generation||!preview.isConnected)return;const f=B.graphicFrame(resolved,image.width,image.height),c=preview.getContext('2d'),scale=Math.min(220/f.width,160/f.height);c.imageSmoothingEnabled=false;c.save();c.translate(120,90-(resolved.offsetY||0));c.scale(resolved.mirror?-1:1,1);c.drawImage(image,f.x,f.y,f.width,f.height,-f.width*scale/2,-f.height*scale/2,f.width*scale,f.height*scale);c.restore();};image.src=RRAssetFiles.urlFor(require('path').join(this.parent.currentProject.path,'img',resolved.folder),resolved.name,['.png']);}
+        };draw();
+        const layout=container.firstElementChild||container;layout.append(panel);panel.style.marginTop='16px';panel.style.flexShrink='0';
+    }
+    stateGraphic(container,record){
+        const settings=this.settings(),{panel,body}=this.section('Battler Motion Override');
+        const get=()=>settings.states?.[record.id]?.graphicMotion||{};
+        const set=patch=>{settings.states||={};settings.states[record.id]={...settings.states[record.id],graphicMotion:{...get(),...patch}};this.changed();};
+        this.field(body,'Motion',this.select([['','Use Normal State Motion'],...Object.keys(ReactorBattleData.spriteMotions).map(v=>[v,v])],get().motion||'',v=>set({motion:v})));
+        this.number(body,'Idle Speed Multiplier',get().speedMultiplier||1,v=>set({speedMultiplier:Math.max(.1,v)}),.1);
+        const details=this.element('details','rr-battle-motion-details');details.append(this.element('summary','','Advanced'));const advanced=this.element('div','rr-battle-graphic-options');details.append(advanced);body.append(details);
+        this.number(advanced,'Motion Priority',get().priority??record.priority??50,v=>set({priority:Math.round(v)}),1);
+        this.number(advanced,'Custom Motion Index (0 = named motion)',get().index===undefined?0:get().index+1,v=>set({index:v>0?Math.round(v)-1:undefined}),1);
+        this.number(advanced,'Motion Frames (0 = graphic default)',get().frames||0,v=>set({frames:Math.max(0,Math.round(v))}),1);
+        this.field(advanced,'Direction',this.select([[0,'Use Graphic Direction'],[2,'Down'],[4,'Left'],[6,'Right'],[8,'Up']],get().direction||0,v=>set({direction:Number(v)})));
+        this.field(advanced,'Playback',this.select([['loop','Loop'],['once','Hold Last Frame'],['play','Play Once']],get().loop===false?'play':get().loop==='once'?'once':'loop',v=>set({loop:v==='loop'?true:v==='once'?'once':false})));
+        this.number(advanced,'Motion Speed (0 = graphic default)',get().speed||0,v=>set({speed:Math.max(0,Math.round(v))}),1);
+        body.append(this.element('p','rr-battle-help','When multiple states apply, the highest-priority state with an override controls the battler.'));
+        (container.firstElementChild||container).append(panel);panel.style.marginTop='16px';
     }
     roomPanel(troopEditor) {
         const {panel,body}=this.section('Battle Scene'),id=troopEditor.currentTroopId;
@@ -104,16 +231,16 @@ class BattlePresentationEditor {
             if(view.disposed||this.parent.currentProject!==project)return cast;
             const id=side==='actors'?this.db.getSystem()?.partyMembers?.[i]:troopEditor.currentTroop.members[i]?.enemyId;
             const item=side==='actors'?this.db.getActor(id):this.db.getEnemy(id);if(!item)continue;
-            const spec=RRDatabase3DBindings.get(project.path,side,id,side==='actors'?'battler':undefined),key='cast:'+side+':'+i;
+            const graphic=ReactorBattleData.graphic(this.settings(),side,id,item,RRDatabase3DBindings.get(project.path,side,id,side==='actors'?'battler':undefined)),spec=graphic.type==='model'?graphic.model:null,key='cast:'+side+':'+i;
             if(spec){await view.addModel(key,spec,ReactorBattleData.position(draft,side,i));cast.push({key,side,index:i});}
-            else if(item.battlerName){try{const bitmap=await assets.image(side==='actors'?'sv_actors':'enemies',item.battlerName),frame={x:0,y:0,width:bitmap.width/(side==='actors'?9:1),height:bitmap.height/(side==='actors'?6:1)};cast.push({key,side,index:i,bitmap,frame});}catch(error){console.warn(error);}}
+            else if(graphic.name){try{const bitmap=await assets.image(graphic.folder,graphic.name),frame=ReactorBattleData.graphicFrame(graphic,bitmap.width,bitmap.height);cast.push({key,side,index:i,bitmap,frame,graphic});}catch(error){console.warn(error);}}
         }
         return cast;
     }
     drawRoomCast(view,settings,cast) {
         for(const item of cast){
             const p=ReactorBattleData.position(settings,item.side,item.index);
-            if(item.bitmap)view.billboard(item.key,item.bitmap.image,item.frame,{...p,flipX:item.side==='actors'?p.facing>0:p.facing<0},Math.max(.5,item.frame.height/48));
+            if(item.bitmap)view.billboard(item.key,item.bitmap.image,item.frame,{...p,flipX:item.side==='actors'?p.facing>0:p.facing<0},Math.max(.2,item.frame.height/48)*(item.graphic?.scale||1));
             else view.place(item.key,p);
         }
     }
@@ -183,7 +310,7 @@ class BattlePresentationEditor {
     }
     cameraNavigation(view,changed) {
         // Reuse the map editor's orbit, pan, zoom and timed flight conventions.
-        const navigation={camera:view.camera,flyKeys:new Set(),flyFast:false,flying(){return this.flyKeys.size>0;}};
+        const navigation={camera:view.camera,flyKeys:new Set(),flyFast:false,flying(){return this.flyKeys.size>0;},zoomAnchor(){return null;}};
         navigation.begin=()=>{
             if(view.settings.cameraSource!=='custom')return false;
             const camera=view.camera,forward=camera.getWorldDirection(new THREE.Vector3());

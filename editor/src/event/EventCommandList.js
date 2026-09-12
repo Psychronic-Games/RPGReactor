@@ -517,18 +517,19 @@ class EventCommandList {
      */
     setupKeyboardShortcuts() {
         document.addEventListener('keydown', (e) => {
+            if (e.defaultPrevented) return;
             // Only handle if we have a current page (command list is active)
             if (!this.currentPage) return;
 
             const eventEditorModal = document.getElementById('event-editor-modal');
             if (!eventEditorModal || eventEditorModal.style.display === 'none') return;
 
-            const commandListRoot = document.getElementById('event-command-list');
-            if (commandListRoot && !commandListRoot.contains(e.target) && !eventEditorModal.contains(e.target)) return;
+            const commandListRoot = this._commandListRoot;
+            if (!commandListRoot?.isConnected || !commandListRoot.contains(e.target)) return;
 
             // Don't intercept when user is typing in an input, textarea, or contenteditable
             const tag = e.target.tagName;
-            if (tag === 'INPUT' || tag === 'TEXTAREA' || e.target.isContentEditable) return;
+            if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || e.target.isContentEditable) return;
 
             // Check for Ctrl/Cmd key
             const isCtrl = e.ctrlKey || e.metaKey;
@@ -538,8 +539,7 @@ class EventCommandList {
                 this.selectedIndices = this.currentPage.list
                     .map((command, index) => command?.code !== 0 ? index : -1)
                     .filter(index => index >= 0);
-                const container = document.getElementById('event-command-list');
-                if (container) this.refreshCommandList(this.currentPage, this.currentPageIndex);
+                this.updateSelectionStyles(this.currentPage);
             } else if (isCtrl && e.key === 'c') {
                 // Copy
                 e.preventDefault();
@@ -723,6 +723,14 @@ class EventCommandList {
         // Store current page for keyboard shortcuts
         this.currentPage = page;
         this.currentPageIndex = pageIndex;
+        this._commandListRoot = container;
+        container.tabIndex = 0;
+        container.onclick = event => {
+            if (!event.target.closest('input, textarea, select, button, [contenteditable]')) {
+                container.focus({ preventScroll: true });
+            }
+        };
+        container.oncontextmenu = () => container.focus({ preventScroll: true });
 
         container.innerHTML = '';
 
@@ -1272,8 +1280,8 @@ class EventCommandList {
             // Draw scaled down version (144x144 -> 32x32)
             ctx.drawImage(
                 faceSheet,
-                col * 144, row * 144,
-                144, 144,
+                col * RRFaceSheet.FACE_SIZE, row * RRFaceSheet.FACE_SIZE,
+                RRFaceSheet.FACE_SIZE, RRFaceSheet.FACE_SIZE,
                 0, 0,
                 32, 32
             );
@@ -4377,6 +4385,7 @@ class EventCommandList {
      * Refresh the command list display
      */
     refreshCommandList(page, pageIndex) {
+        const restoreFocus = this._commandListRoot?.contains(document.activeElement);
         // Repair any orphaned 505 entries before rendering
         if (page) {
             this._repairOrphaned505s(page);
@@ -4385,6 +4394,7 @@ class EventCommandList {
         const container = document.querySelector('.event-contents-area');
         if (container) {
             this.eventEditor.updateContentsColumn();
+            if (restoreFocus) this._commandListRoot?.focus({ preventScroll: true });
         }
     }
 }

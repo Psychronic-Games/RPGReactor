@@ -829,7 +829,7 @@ class AudioCommandEditor {
         browseBtn.style.cssText = `
             padding: 6px 16px;
             background-color: var(--color-accent);
-            color: var(--color-bg-deep);
+            color: var(--color-accent-on);
             border: 1px solid var(--color-accent);
             border-radius: 3px;
             cursor: pointer;

@@ -13,7 +13,7 @@ test('arrow keys walk the file list instead of scrolling it', () => {
     // list scroll only when the selection reaches its edge.
     assert.match(pickerSource, /const moveSelection = step => \{/);
     assert.match(pickerSource, /'ArrowDown' \|\| event\.key === 'ArrowUp'/);
-    assert.match(pickerSource, /event\.preventDefault\(\);\s*\n\s*moveSelection\(/,
+    assert.match(pickerSource, /event\.preventDefault\(\);\s*event\.stopPropagation\(\);\s*moveSelection\(/,
         'the native scroll is suppressed in favour of stepping');
     assert.match(pickerSource, /scrollIntoView\(\{ block: 'nearest' \}\)/,
         'scrolling happens only to keep the selection visible');

@@ -16,7 +16,10 @@
     'use strict';
 
     const ICONS_PER_ROW = 16;
-    const ICON_SIZE = 32;
+    const sizeOf = (system = root.reactor?.databaseManager?.getSystem?.()) => {
+        const size = Number(system?.iconSize);
+        return Number.isInteger(size) && size > 0 ? size : 32;
+    };
     const tt = text => root.I18n ? root.I18n.tText(text) : text;
 
     function imageUrl(filePath) {
@@ -60,10 +63,12 @@
     }
 
     function iconCount(img) {
+        const ICON_SIZE = sizeOf();
         return Math.ceil(img.height / ICON_SIZE) * ICONS_PER_ROW;
     }
 
     function drawIcon(canvas, img, index) {
+        const ICON_SIZE = sizeOf();
         const ctx = canvas.getContext('2d');
         if (!ctx) return;
         ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -71,6 +76,7 @@
         if (!img || i >= iconCount(img)) return;
         const col = i % ICONS_PER_ROW;
         const row = Math.floor(i / ICONS_PER_ROW);
+        ctx.imageSmoothingEnabled = false;
         ctx.drawImage(img, col * ICON_SIZE, row * ICON_SIZE, ICON_SIZE, ICON_SIZE, 0, 0, canvas.width, canvas.height);
     }
 
@@ -82,6 +88,7 @@
      * @param {{zIndex?: number}} [options]
      */
     function show(currentIconIndex, onSelectCallback, iconSetPath, options = {}) {
+        const ICON_SIZE = sizeOf();
         const zIndex = options.zIndex || 10000;
         const modal = document.createElement('div');
         modal.className = 'rr-icon-picker-overlay';
@@ -129,6 +136,8 @@
             cursor: pointer;
             image-rendering: pixelated;
             margin: 0 auto;
+            max-width: 100%;
+            height: auto;
         `;
         canvasContainer.appendChild(canvas);
         container.appendChild(canvasContainer);
@@ -192,7 +201,7 @@
 
         loadSheet(iconSetPath, true).then(img => {
             if (!modal.parentNode) return;
-            const scale = 2; // Icons at 2x for easier selection
+            const scale = 64 / ICON_SIZE; // Keep cells readable at every source size
             const imgRows = Math.ceil(img.height / ICON_SIZE);
             const maxIndex = imgRows * ICONS_PER_ROW - 1;
             canvas.width = ICONS_PER_ROW * ICON_SIZE * scale;
@@ -206,6 +215,7 @@
             cachedIconSheet.width = canvas.width;
             cachedIconSheet.height = canvas.height;
             const cacheCtx = cachedIconSheet.getContext('2d');
+            cacheCtx.imageSmoothingEnabled = false;
             for (let row = 0; row < imgRows; row++) {
                 for (let col = 0; col < ICONS_PER_ROW; col++) {
                     cacheCtx.drawImage(
@@ -239,8 +249,8 @@
 
             canvas.onclick = (e) => {
                 const rect = canvas.getBoundingClientRect();
-                const x = e.clientX - rect.left;
-                const y = e.clientY - rect.top;
+                const x = (e.clientX - rect.left - canvas.clientLeft) * canvas.width / canvas.clientWidth;
+                const y = (e.clientY - rect.top - canvas.clientTop) * canvas.height / canvas.clientHeight;
                 const col = Math.floor(x / (ICON_SIZE * scale));
                 const row = Math.floor(y / (ICON_SIZE * scale));
                 // A click in the border or past the sheet picks nothing.
@@ -272,6 +282,7 @@
      * @param {number} [options.zIndex] - overlay z-index for the picker.
      */
     function createField(options) {
+        const ICON_SIZE = sizeOf();
         const { value, iconSetPath, onChange, inputStyle, zIndex } = options;
         const row = document.createElement('div');
         row.className = 'rr-icon-field';
@@ -320,5 +331,5 @@
         return row;
     }
 
-    root.RRIconPicker = { show, createField, imageUrl, iconSetPathFor, ICONS_PER_ROW, ICON_SIZE };
+    root.RRIconPicker = { show, createField, imageUrl, iconSetPathFor, ICONS_PER_ROW, sizeOf, get ICON_SIZE() { return sizeOf(); } };
 })(typeof window !== 'undefined' ? window : globalThis);

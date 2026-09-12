@@ -29,10 +29,10 @@
  *
  * On translation: `label` is short UI chrome and is routed through I18n by the
  * callers, so those literals live in RR_TEXT_TRANSLATIONS. `detail` is
- * reference documentation quoted from the engine and plugin help, and is
- * rendered verbatim in English - the same treatment the Plugin Manager already
- * gives a plugin's @help text, which is likewise author prose the editor does
- * not translate. Keep `detail` out of any tt()/I18n.tText call: the i18n source
+ * reference documentation quoted from the engine and plugin help. TextCodeMenu
+ * renders a reviewed locale-specific translation when available, otherwise the
+ * original English sentence. Plugin-authored help remains verbatim. Keep
+ * `detail` out of any tt()/I18n.tText call: the i18n source
  * audit walks catalogue arrays that flow into those helpers and would demand
  * all seventeen locales for every sentence here.
  *
@@ -681,7 +681,7 @@
                     advance = measure('\\');
                     i += 2;
                 } else if ((matched = rest.match(/^I\[\d+\]/i))) {
-                    advance = 36; // ImageManager.iconWidth + the 4px MZ pads it with
+                    advance = (root.RRIconPicker?.ICON_SIZE || 32) + 4;
                     i += 1 + matched[0].length;
                 } else if ((matched = rest.match(/^V\[(\d+)\]/i))) {
                     advance = measure(typeof subs.variable === 'function' ? subs.variable(Number(matched[1])) : '0000');

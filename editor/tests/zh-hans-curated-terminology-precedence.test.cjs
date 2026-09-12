@@ -72,3 +72,82 @@ test('Chinese regional and underscore locale aliases normalize to script locales
     manager.setLanguage('zh_CN', { persist: false });
     assert.equal(manager.currentLanguage(), 'zh-Hans');
 });
+
+function loadReviewedEditor(language = 'zh-Hans') {
+    const { createContext } = require('./helpers/mini-dom.cjs');
+    const context = createContext({
+        dispatchEvent() {},
+        localStorage: { getItem() { return JSON.stringify({ language }); }, setItem() {} },
+        CustomEvent: class {}
+    });
+    const createElement = context.document.createElement;
+    context.document.createElement = tag => {
+        const element = createElement(tag);
+        if (tag === 'input' || tag === 'textarea') element.value = '';
+        Object.defineProperty(element, 'innerHTML', {
+            set(value) {
+                assert.equal(value, '', 'the reference panel only clears markup');
+                this.textContent = '';
+            }
+        });
+        return element;
+    };
+    vm.createContext(context);
+    for (const file of ['I18nDeepTranslations.js', 'I18nReviewedTranslations.js', 'I18nManager.js',
+        'utils/TextCodes.js', 'utils/TextCodeMenu.js']) {
+        vm.runInContext(fs.readFileSync(path.join(editorRoot, 'src', file), 'utf8'), context);
+    }
+    return context;
+}
+
+test('community-reviewed Chinese wording wins in the complete editor load order', () => {
+    const context = loadReviewedEditor('zh_CN');
+    const manager = context.I18n;
+    const terms = {
+        Class: '职业', Critical: '暴击', AGI: '敏捷', Rates: '抗性', Param: '能力值',
+        'State Resist': '状态免疫', 'Ex-Parameter': '追加能力值',
+        'Input Number': '处理数值输入', 'Show Text': '显示文字',
+        'Control Self Switch': '操作独立开关', 'Change Enemy MP': '增减敌方角色MP',
+        'Loading model...': '正在加载模型…', 'Presentation': '呈现方式',
+        'One argument per line: name=value': '每行一个参数：name=value'
+    };
+    for (const [source, expected] of Object.entries(terms)) assert.equal(manager.tText(source), expected, source);
+    for (const source of ['Input Number', 'Show Text', 'Control Self Switch', 'Change Enemy MP']) {
+        assert.equal(manager.tEventCommandName(source), terms[source], source);
+    }
+    assert.equal(manager.tDbType('actionSequences'), '动作序列');
+    assert.equal(manager.t('sidebar.tilesetPalette'), '图块集面板');
+    assert.equal(manager.t('toolbar.title.videoPreviews'), '显示媒体界面预览');
+    assert.equal(manager.t('about.version'), `RPG Reactor v${require('../package.json').version}`);
+    assert.equal(manager.t('db.search', { title: '角色' }), '搜索角色...');
+});
+
+test('text-code reference translates and searches Chinese without changing inserted codes or other locales', () => {
+    const context = loadReviewedEditor();
+    const field = context.document.createElement('textarea');
+    field.value = ''; field.selectionStart = 0; field.selectionEnd = 0;
+    field.setSelectionRange = (start, end) => { field.selectionStart = start; field.selectionEnd = end; };
+    const panel = context.RRTextCodeMenu.createReferencePanel(field);
+    const rows = () => panel.children[3].children.filter(row => row._rrCode);
+    const variableRow = () => rows().find(row => row._rrCode.code === '\\V[n]');
+    const source = 'Replaced with the value of the nth variable.';
+    assert.equal(variableRow().children[1].textContent, '替换为第 n 个变量的值。');
+    assert.equal(variableRow()._rrCode.detail, source);
+
+    const filter = panel.children[1];
+    filter.value = '变量'; filter.dispatchEvent({ type: 'input' });
+    assert.equal(rows().length, 1);
+    assert.equal(rows()[0]._rrCode.code, '\\V[n]');
+    filter.value = 'currency'; filter.dispatchEvent({ type: 'input' });
+    assert.equal(rows()[0]._rrCode.code, '\\G', 'English help remains searchable');
+    rows()[0].dispatchEvent({ type: 'dblclick', preventDefault() {} });
+    assert.equal(field.value, '\\G', 'insertion uses the original code');
+
+    filter.value = '';
+    for (const language of ['en', 'zh-Hant', 'ja', 'fr', 'zh-Hans']) {
+        context.I18n.setLanguage(language, { persist: false });
+        panel.refresh();
+        assert.equal(variableRow().children[1].textContent,
+            language === 'zh-Hans' ? '替换为第 n 个变量的值。' : source, language);
+    }
+});

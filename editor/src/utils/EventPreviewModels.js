@@ -174,6 +174,7 @@
                 thumbCamera = new THREE.OrthographicCamera(-0.5, 0.5, 0.5, -0.5, 0.01, 100);
             }
             const object = instance(template, { ...spec, size: 1, scale: 1 }, direction);
+            ModelPreview3D.isolateLighting(object);
             thumbScene.add(object);
             // Framed as the game frames its sprite: the map's pitch, about the
             // ground origin, so 2D preview and 2D play agree.

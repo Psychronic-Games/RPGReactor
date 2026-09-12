@@ -1077,6 +1077,11 @@ function buildWeb(stageRoot, stagingDir) {
     fs.copyFileSync(path.join(stageRoot, 'src', 'web', 'service-worker.js'), path.join(webRoot, 'service-worker.js'));
 
     let webHtml = sourceHtml.replace(scriptPattern, '');
+    // Browsers cannot list the images directory; bake the available splash art into the page.
+    const splashImages = fs.readdirSync(path.join(webRoot, 'images'), { withFileTypes: true })
+        .filter(entry => entry.isFile() && /^splash-screen-\d+\.png$/i.test(entry.name))
+        .map(entry => entry.name).sort();
+    webHtml = webHtml.replace(/data-splash-images="[^"]*"/, `data-splash-images="${splashImages.join(',')}"`);
     webHtml = webHtml.replace('</head>', [
         '    <script src="libs/pixi.js"></script>',
         '    <script src="libs/gif.js"></script>',

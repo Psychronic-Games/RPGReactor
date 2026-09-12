@@ -23,59 +23,32 @@ class DatabaseActorEditor {
         const wrapper = document.createElement('div');
         wrapper.style.cssText = 'display: flex; flex-direction: column; height: 100%; padding: 16px; overflow-y: auto;';
 
-        // ROW 1: General Settings (left) + Images (right)
-        const topRow = document.createElement('div');
-        topRow.className = 'database-actor-pair';
-
-        // General Settings Section
-        const generalSection = this.createGeneralSettingsSection(actor);
-        topRow.appendChild(generalSection);
-
-        // Images Section
-        const imagesSection = this.createImagesSection(actor);
-        topRow.appendChild(imagesSection);
-
-        wrapper.appendChild(topRow);
-
-        // ROW 2: Traits (left) + Equipment (right)
-        const middleRow = document.createElement('div');
-        middleRow.className = 'database-actor-pair';
-        middleRow.style.marginTop = '16px';
-
-        // Traits Section
-        const traitsSection = this.createTraitsSection(actor);
-        middleRow.appendChild(traitsSection);
-
-        // Equipment Section
-        const equipmentSection = this.createEquipmentSection(actor);
-        middleRow.appendChild(equipmentSection);
-
-        wrapper.appendChild(middleRow);
-
-        // ROW 3: Note (full width), or Passive States (left) + Note (right)
-        // when the project's plugins give an actor's note a passive to hold.
-        const noteSection = this.createNoteSection(actor);
+        // Independent columns let Traits use the space beneath General while
+        // the image slots keep their own height. They stack in narrow panes.
+        const columns = document.createElement('div');
+        columns.className = 'database-sections-grid database-item-columns database-actor-columns';
+        const details = document.createElement('div');
+        details.className = 'database-item-column';
+        const graphics = document.createElement('div');
+        graphics.className = 'database-item-column';
+        details.appendChild(this.createGeneralSettingsSection(actor));
+        details.appendChild(this.createTraitsSection(actor));
+        details.appendChild(this.createNoteSection(actor));
+        graphics.appendChild(this.createImagesSection(actor));
+        graphics.appendChild(this.createEquipmentSection(actor));
         const passiveSection = window.RRPassiveStates?.createSection({
             objectType: 'actor', record: actor,
             databaseManager: this.databaseManager, projectManager: this.projectManager
         });
-        if (passiveSection) {
-            const bottomRow = document.createElement('div');
-            bottomRow.className = 'database-actor-pair';
-            bottomRow.style.marginTop = '16px';
-            bottomRow.appendChild(passiveSection);
-            bottomRow.appendChild(noteSection);
-            wrapper.appendChild(bottomRow);
-        } else {
-            noteSection.style.marginTop = '16px';
-            wrapper.appendChild(noteSection);
-        }
+        if (passiveSection) graphics.appendChild(passiveSection);
+        columns.append(details, graphics);
+        wrapper.appendChild(columns);
 
         // Add wrapper to container
         container.appendChild(wrapper);
 
         // Add event listeners
-        this.attachEventListeners(container, actor);
+        this.attachEventListeners(wrapper, actor);
     }
 
     /**
@@ -84,7 +57,7 @@ class DatabaseActorEditor {
     createImagesSection(actor) {
         const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const imagesSection = document.createElement('div');
-        imagesSection.className = 'database-section';
+        imagesSection.className = 'database-section database-actor-images';
         imagesSection.style.display = 'flex';
         imagesSection.style.flexDirection = 'column';
 
@@ -382,7 +355,8 @@ class DatabaseActorEditor {
 
         // Add context menu handling, interaction effects, button wiring, and keyboard shortcuts
         setTimeout(() => {
-            const table = document.getElementById(`actor-traits-table-${actor.id}`);
+            if (!section.isConnected) return;
+            const table = section.querySelector('.traits-table');
             if (table) {
                 this.setupTraitsContextMenu(table, actor);
                 this.setupTraitInteraction(table);
@@ -414,7 +388,7 @@ class DatabaseActorEditor {
                     indicator.style.setProperty('background-color', 'var(--color-accent-bright)', 'important');
                 }
                 contentCells.forEach(cell => {
-                    cell.style.setProperty('background-color', 'var(--color-bg-panel)', 'important');
+                    cell.style.setProperty('background-color', 'var(--color-bg-selected)', 'important');
                 });
             });
 
@@ -445,7 +419,7 @@ class DatabaseActorEditor {
                 // Select this row
                 row.classList.add('trait-selected');
                 if (indicator) indicator.style.setProperty('background-color', 'var(--color-accent-bright)', 'important');
-                contentCells.forEach(cell => cell.style.setProperty('background-color', 'var(--color-bg-panel)', 'important'));
+                contentCells.forEach(cell => cell.style.setProperty('background-color', 'var(--color-bg-selected)', 'important'));
 
                 // Focus the section so keyboard shortcuts work here instead of on the list
                 const section = table.closest('.database-section');
@@ -754,6 +728,9 @@ class DatabaseActorEditor {
      * Refresh the actor detail view after changes
      */
     refreshActorDetail(actor) {
+        if (this.parentEditor?.showDatabaseDetail) {
+            return this.parentEditor.showDatabaseDetail(actor, 'actors');
+        }
         const container = document.querySelector('.database-detail');
         if (container) {
             container.innerHTML = '';
@@ -782,6 +759,7 @@ class DatabaseActorEditor {
      */
     attachEventListeners(container, actor) {
         setTimeout(() => {
+            if (!container.isConnected) return;
             // Equipment changes
             const equipSelects = container.querySelectorAll('.equipment-select');
             equipSelects.forEach(select => {

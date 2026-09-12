@@ -146,7 +146,8 @@ test('a light effect previews the way the game lights: presets shared, a soft co
     // The model takes the light through the game's shader injection, and the shared uniforms are put back after.
     assert.match(editor, /Reactor3D\.litMaterial\(material\);\s*material\.needsUpdate = true;/);
     assert.match(editor, /Reactor3D\.packLightUniforms\(packed, \{ intensity: this\.LIGHT_PREVIEW_AMBIENT/);
-    assert.match(editor, /uniforms\.rrAmbient\.value\.set\(saved\.ambient\);\s*uniforms\.rrLightCount\.value = saved\.count;/);
+    assert.match(editor, /colour: 0xffffff }, this\._previewLighting\);/);
+    assert.doesNotMatch(editor, /Reactor3D\.lightUniforms\(\)/, 'database preview never mutates the map lighting singleton');
     const three = fs.readFileSync(path.join(repoRoot, 'runtime', 'reactor_3d.js'), 'utf8');
     assert.match(three, /Reactor3D\.packLightUniforms = function\(lights, ambient, uniforms = this\.lightUniforms\(\)\) \{/);
     // Always / Moving / Idle keep a light on in the preview, like a movie.

@@ -2955,6 +2955,15 @@ SceneManager.onError = function(event) {
 };
 
 SceneManager.onReject = function(event) {
+    // Browser media startup is asynchronous. Legacy plugins can leave its
+    // promise uncaught when a scene pauses/unloads a video before it starts.
+    // This specific cancellation is not a game failure; other AbortErrors
+    // (fetch, storage, etc.) and programming errors must still be reported.
+    if (event.reason?.name === "AbortError" &&
+        /^The play\(\) request was interrupted\b/.test(String(event.reason.message || ""))) {
+        event.preventDefault?.();
+        return;
+    }
     // Catch uncaught exception in Promise
     event.message = event.reason;
     this.onError(event);

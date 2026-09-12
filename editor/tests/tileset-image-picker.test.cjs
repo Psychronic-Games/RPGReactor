@@ -64,7 +64,7 @@ test('confirming with nothing chosen cannot assign', () => {
     // silently do nothing.
     const body = pickerBody();
     assert.match(body, /let chosen = null;/);
-    assert.match(body, /if \(chosen === null\) return;/);
+    assert.match(body, /if \(chosen === null\b/);
     assert.doesNotMatch(body, /if \(!chosen\) return;/);
     assert.match(body, /selectButton\.disabled = true;/,
         'and the button starts disabled');

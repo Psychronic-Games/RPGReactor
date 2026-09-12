@@ -105,7 +105,7 @@ test('the game overlay context follows the same policy through Graphics', () => 
     assert.equal((sprites.match(/Graphics\.effekseer\.endDraw\(\);\s*\n\s*Graphics\.settleEffekseerState\(\);/g) || []).length, 2,
         'both Sprite_Animation draw paths settle after endDraw');
     assert.match(read('runtime/reactor_3d.js'), /efx\.endDraw\(\);\s*\n\s*if \(typeof Graphics !== "undefined" && Graphics\.settleEffekseerState\) Graphics\.settleEffekseerState\(\);/);
-    assert.match(read('runtime/reactor_main.js'), /runtime revision: 20260906\.19/);
+    assert.match(read('runtime/reactor_main.js'), /runtime revision: 20260911\.6/);
 });
 
 test('the editor lights pass draws nothing but the light group', () => {

@@ -100,7 +100,7 @@ curl --fail --location https://dl.nwjs.io/v0.107.0/SHASUMS256.txt
 ## 3. Clean-Checkout Validation
 
 Validate the commit intended for `vX.Y.Z` from a clean checkout. Replace
-`0.98.5` below with the exact `editor/package.json` version. This validation
+`0.98.6` below with the exact `editor/package.json` version. This validation
 does not create the tag; the source-release command in section 5 owns the
 release commit and tag.
 
@@ -120,7 +120,7 @@ cd ..
 git diff --check
 git diff --exit-code
 test -z "$(git status --porcelain=v1 --untracked-files=all)"
-node -e "const p=require('./editor/package.json'); if(p.version!=='0.98.5') process.exit(1)"
+node -e "const p=require('./editor/package.json'); if(p.version!=='0.98.6') process.exit(1)"
 ```
 
 The test suite statically rejects hard dependencies on ignored local projects.
@@ -139,13 +139,14 @@ node editor/build-scripts/sync-runtime.cjs --check
 ```
 
 Run the real editor smokes with matching browser and SDK drivers before the
-candidate is cut. CI performs the persistence checks in its `gui-smokes` job;
+candidate is cut. CI performs persistence and interaction-order checks in its `gui-smokes` job;
 the UI-layout smoke remains a local release gate:
 
 ```bash
 cd editor
 npm run smoke:web
 npm run smoke:nw -- --nw-root="/path/to/nwjs-sdk-v0.107.0"
+npm run smoke:nw-interactions -- --nw-root="/path/to/nwjs-sdk-v0.107.0"
 npm run smoke:nw-ui -- --nw-root="/path/to/nwjs-sdk-v0.107.0"
 ```
 
@@ -154,7 +155,10 @@ smoke launches the actual editor and verifies a native project save without
 initializing map rendering. The read-only NW.js UI smoke opens the tracked Demo
 without saving, verifies the closed contained Inspector drawer at 1280x720, and
 checks the three-column layouts at 1600x900, 1920x1080, and 2560x1440. The first
-two smokes run in CI's `gui-smokes` job; `smoke:nw-ui` is currently a local
+two smokes and `smoke:nw-interactions` run in CI's `gui-smokes` job; the latter
+checks rapid navigation, keyboard ownership, retired dialogs and delayed map
+loads using a disposable project, with replayable seeds and failure artifacts.
+`smoke:nw-ui` is currently a local
 release gate.
 
 For Haven (`template/Project3`), clear the playtest console, enter a battle that
@@ -167,7 +171,7 @@ depend on ignored project files being available.
 
 Before that smoke test, open Haven through the candidate editor and confirm its
 `project.rpgreactor` `engineVersion` and the version marker at the top of
-`js/reactor_main.js` both advance to `0.98.5`, while `js/reactor_plugins.js`
+`js/reactor_main.js` both advance to `0.98.6`, while `js/reactor_plugins.js`
 remains unchanged. Also compare `RPG_REACTOR_RUNTIME_REVISION` in the running
 game with the candidate entry point; a matching version alone does not detect
 a stale copy from earlier in the same development cycle.
@@ -186,7 +190,7 @@ verification:
 
 ```bash
 gh workflow run release-candidate.yml \
-  -f version=0.98.5 \
+  -f version=0.98.6 \
   -f publishable=false
 gh run list --workflow release-candidate.yml --limit 5
 ```
@@ -195,13 +199,13 @@ The equivalent local command may only build the host platform:
 
 ```bash
 node editor/build-scripts/release-editor.cjs \
-  --target linux --mode candidate --version 0.98.5 \
+  --target linux --mode candidate --version 0.98.6 \
   --output-root "$PWD/dist-editor/releases"
 ```
 
 Use targets `linux`, `windows`, `macos`, and `web`. Desktop targets are rejected
 on non-matching hosts. Each target gets a fresh
-`dist-editor/releases/v0.98.5/<target>/` directory and an
+`dist-editor/releases/v0.98.6/<target>/` directory and an
 `artifact-manifest-<target>.json` containing byte sizes and SHA-256 hashes.
 
 ## 5. Source Release And Publishable Candidate
@@ -214,13 +218,13 @@ after finalizing both changelogs and the other version surfaces.
 git switch main
 git pull --ff-only origin main
 git status --short
-node editor/build-scripts/cut-release.cjs 0.98.5 --dry-run
-node editor/build-scripts/cut-release.cjs 0.98.5
+node editor/build-scripts/cut-release.cjs 0.98.6 --dry-run
+node editor/build-scripts/cut-release.cjs 0.98.6
 ```
 
 The second command runs the full test suite again, finalizes both changelog
 headings, updates the package version and root README release link/count
-sentence, creates a release commit when needed, creates `v0.98.5`, and pushes
+sentence, creates a release commit when needed, creates `v0.98.6`, and pushes
 the branch and tag. The editor README, status page, other version prose, and
 validation dates are not automatically refreshed; review those before cutting
 the release. The tag starts **Publish Release**, which publishes
@@ -230,16 +234,16 @@ and verify the tag before starting signed builds:
 ```bash
 gh run list --workflow publish-release.yml --limit 5
 gh run watch SOURCE_RELEASE_RUN_ID
-gh release view v0.98.5
-test "$(git rev-parse v0.98.5^{commit})" = "$(git rev-parse origin/main)"
+gh release view v0.98.6
+test "$(git rev-parse v0.98.6^{commit})" = "$(git rev-parse origin/main)"
 ```
 
 Run the signed candidate from that immutable tag:
 
 ```bash
 gh workflow run release-candidate.yml \
-  --ref v0.98.5 \
-  -f version=0.98.5 \
+  --ref v0.98.6 \
+  -f version=0.98.6 \
   -f publishable=true
 gh run list --workflow release-candidate.yml --limit 5
 gh run watch RUN_ID
@@ -266,7 +270,7 @@ sha256sum /tmp/rpg-reactor-candidate/*/*
 
 Inspect every `artifact-manifest-*.json` and confirm:
 
-- `version` is `0.98.5`, `nwjsVersion` is `0.107.0`, and `sourceCommit` is the tag commit.
+- `version` is `0.98.6`, `nwjsVersion` is `0.107.0`, and `sourceCommit` is the tag commit.
 - `mode` is `publish`; Windows/macOS have `signed: true`.
 - `releaseBuild` is true and `starter` is `bundled-demo`.
 - Every listed size and SHA-256 matches the adjacent file.
@@ -293,7 +297,7 @@ xcrun stapler validate "RPG Reactor.app"
 On each actual target OS, extract into a new directory and perform these tests:
 
 1. Launch the editor without a console error or signing warning.
-2. Confirm About/package version is `0.98.5`.
+2. Confirm About/package version is `0.98.6`.
 3. Open the bundled Reactor One Demo and verify its maps, database, plugins, music, images, and effects are present.
 4. On Reactor One, check 3D, orbit the rendered map, uncheck 3D, confirm the 2D map is intact, then check 3D again. Repeat this on physical Windows and the other desktop targets; the process must remain alive throughout.
 5. Create and save a new project outside the extracted application directory.
@@ -321,12 +325,12 @@ is absent, it recovers with `gh release create --verify-tag`. It does not run
 the build worker.
 
 If recovery creates the release because **Publish Release** did not run, rerun
-**Publish Release** with version `0.98.5` before announcing the release. That
+**Publish Release** with version `0.98.6` before announcing the release. That
 replaces generated fallback notes with the authoritative changelog section.
 
 ```bash
 gh workflow run release.yml \
-  -f version=0.98.5 \
+  -f version=0.98.6 \
   -f candidate_run_id=RUN_ID \
   -f publish_itch=false
 gh run watch RELEASE_RUN_ID
@@ -357,15 +361,15 @@ Release as a draft or delete it and use the itch dashboard to select the prior
 build on each channel. Do not reuse the version or silently replace assets.
 
 ```bash
-gh release delete v0.98.5 --yes
+gh release delete v0.98.6 --yes
 ```
 
 If the tag points to the wrong commit, delete the remote tag only after the
 Release is removed and before announcing the version:
 
 ```bash
-git push origin :refs/tags/v0.98.5
-git tag -d v0.98.5
+git push origin :refs/tags/v0.98.6
+git tag -d v0.98.6
 ```
 
 Correct the source, increment the version, rerun the complete checklist, and

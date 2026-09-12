@@ -1,0 +1,328 @@
+{
+  "wide": {
+    "checks": [
+      "event click focuses the list",
+      "Down selects next event across sparse IDs",
+      "Right in the event list does not move the map selection",
+      "End selects last event",
+      "last event remains visible",
+      "Home and Up stop at the first event",
+      "rerendering does not duplicate key handlers",
+      "Enter opens the selected event once",
+      "database arrows retain list focus",
+      "database list has no browser-default focus bar",
+      "keyboard focus is shown inside the selected row",
+      "Duration checkboxes sit beside their labels",
+      "Duration numeric labels precede their controls",
+      "damage option hides its dependent field",
+      "damage option reveals its dependent field",
+      "Duration panel fits its shared row",
+      "Tab advances from minimum to maximum turns",
+      "numeric field arrows do not navigate database records",
+      "Traits shares the top row with General",
+      "Messages and Duration/Notes occupy the second row",
+      "Duration and Notes wrap only when their shared space is narrow",
+      "trait selection still enables Edit",
+      "trait marker has no protruding border",
+      "trait content aligns with its heading",
+      "narrow States view stacks the main cards",
+      "narrow Duration/Notes cards fit within the detail pane",
+      "no captured application errors"
+    ],
+    "failures": [],
+    "focus": {
+      "color": "rgb(204, 204, 204)",
+      "offset": "0px",
+      "style": "none"
+    },
+    "layout": [
+      {
+        "aligned": true,
+        "gap": 8
+      },
+      {
+        "aligned": true,
+        "gap": 8
+      },
+      {
+        "aligned": true,
+        "gap": 8
+      },
+      {
+        "aligned": true,
+        "gap": 8
+      }
+    ],
+    "cards": {
+      "duration": {
+        "bottom": 814,
+        "right": 1534,
+        "width": 341,
+        "x": 1193,
+        "y": 443
+      },
+      "general": {
+        "bottom": 427,
+        "right": 1177,
+        "width": 698,
+        "x": 479,
+        "y": 84
+      },
+      "grid": {
+        "bottom": 814,
+        "right": 1891,
+        "width": 1412,
+        "x": 479,
+        "y": 84
+      },
+      "messages": {
+        "bottom": 814,
+        "right": 1177,
+        "width": 698,
+        "x": 479,
+        "y": 443
+      },
+      "note": {
+        "bottom": 814,
+        "right": 1891,
+        "width": 341,
+        "x": 1550,
+        "y": 443
+      },
+      "pair": {
+        "bottom": 814,
+        "right": 1891,
+        "width": 698,
+        "x": 1193,
+        "y": 443
+      },
+      "traits": {
+        "bottom": 427,
+        "right": 1891,
+        "width": 698,
+        "x": 1193,
+        "y": 84
+      }
+    },
+    "narrow": {
+      "duration": {
+        "bottom": 1554,
+        "right": 1433,
+        "width": 506,
+        "x": 927,
+        "y": 1183
+      },
+      "general": {
+        "bottom": 598,
+        "right": 1433,
+        "width": 506,
+        "x": 927,
+        "y": 84
+      },
+      "grid": {
+        "bottom": 1757,
+        "right": 1433,
+        "width": 506,
+        "x": 927,
+        "y": 84
+      },
+      "messages": {
+        "bottom": 1167,
+        "right": 1433,
+        "width": 506,
+        "x": 927,
+        "y": 784
+      },
+      "note": {
+        "bottom": 1757,
+        "right": 1433,
+        "width": 506,
+        "x": 927,
+        "y": 1570
+      },
+      "pair": {
+        "bottom": 1757,
+        "right": 1433,
+        "width": 506,
+        "x": 927,
+        "y": 1183
+      },
+      "traits": {
+        "bottom": 768,
+        "right": 1433,
+        "width": 506,
+        "x": 927,
+        "y": 614
+      }
+    },
+    "language": "en",
+    "theme": "dark",
+    "viewport": [
+      1920,
+      1000
+    ]
+  },
+  "compact": {
+    "checks": [
+      "event click focuses the list",
+      "Down selects next event across sparse IDs",
+      "Right in the event list does not move the map selection",
+      "End selects last event",
+      "last event remains visible",
+      "Home and Up stop at the first event",
+      "rerendering does not duplicate key handlers",
+      "Enter opens the selected event once",
+      "database arrows retain list focus",
+      "database list has no browser-default focus bar",
+      "keyboard focus is shown inside the selected row",
+      "Duration checkboxes sit beside their labels",
+      "Duration numeric labels precede their controls",
+      "damage option hides its dependent field",
+      "damage option reveals its dependent field",
+      "Duration panel fits its shared row",
+      "Tab advances from minimum to maximum turns",
+      "numeric field arrows do not navigate database records",
+      "Traits shares the top row with General",
+      "Messages and Duration/Notes occupy the second row",
+      "Duration and Notes wrap only when their shared space is narrow",
+      "trait selection still enables Edit",
+      "trait marker has no protruding border",
+      "trait content aligns with its heading",
+      "narrow States view stacks the main cards",
+      "narrow Duration/Notes cards fit within the detail pane",
+      "no captured application errors"
+    ],
+    "failures": [],
+    "focus": {
+      "color": "rgb(31, 31, 31)",
+      "offset": "0px",
+      "style": "none"
+    },
+    "layout": [
+      {
+        "aligned": true,
+        "gap": 8
+      },
+      {
+        "aligned": true,
+        "gap": 8
+      },
+      {
+        "aligned": true,
+        "gap": 8
+      },
+      {
+        "aligned": true,
+        "gap": 8
+      }
+    ],
+    "cards": {
+      "duration": {
+        "bottom": 825,
+        "right": 1241,
+        "width": 373,
+        "x": 868,
+        "y": 451
+      },
+      "general": {
+        "bottom": 435,
+        "right": 852,
+        "width": 373,
+        "x": 479,
+        "y": 84
+      },
+      "grid": {
+        "bottom": 1030,
+        "right": 1241,
+        "width": 762,
+        "x": 479,
+        "y": 84
+      },
+      "messages": {
+        "bottom": 1030,
+        "right": 852,
+        "width": 373,
+        "x": 479,
+        "y": 451
+      },
+      "note": {
+        "bottom": 1030,
+        "right": 1241,
+        "width": 373,
+        "x": 868,
+        "y": 841
+      },
+      "pair": {
+        "bottom": 1030,
+        "right": 1241,
+        "width": 373,
+        "x": 868,
+        "y": 451
+      },
+      "traits": {
+        "bottom": 435,
+        "right": 1241,
+        "width": 373,
+        "x": 868,
+        "y": 84
+      }
+    },
+    "narrow": {
+      "duration": {
+        "bottom": 1591,
+        "right": 1113,
+        "width": 506,
+        "x": 607,
+        "y": 1217
+      },
+      "general": {
+        "bottom": 611,
+        "right": 1113,
+        "width": 506,
+        "x": 607,
+        "y": 84
+      },
+      "grid": {
+        "bottom": 1796,
+        "right": 1113,
+        "width": 506,
+        "x": 607,
+        "y": 84
+      },
+      "messages": {
+        "bottom": 1201,
+        "right": 1113,
+        "width": 506,
+        "x": 607,
+        "y": 805
+      },
+      "note": {
+        "bottom": 1796,
+        "right": 1113,
+        "width": 506,
+        "x": 607,
+        "y": 1607
+      },
+      "pair": {
+        "bottom": 1796,
+        "right": 1113,
+        "width": 506,
+        "x": 607,
+        "y": 1217
+      },
+      "traits": {
+        "bottom": 789,
+        "right": 1113,
+        "width": 506,
+        "x": 607,
+        "y": 627
+      }
+    },
+    "language": "zh-Hans",
+    "theme": "light",
+    "viewport": [
+      1280,
+      720
+    ]
+  }
+}

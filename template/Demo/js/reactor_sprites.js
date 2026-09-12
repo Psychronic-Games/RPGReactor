@@ -154,11 +154,11 @@ Sprite_Button.prototype.buttonData = function() {
 };
 
 Sprite_Button.prototype.update = function() {
+    // The superclass processes touch once, before we draw the pressed frame.
     Sprite_Clickable.prototype.update.call(this);
     this.checkBitmap();
     this.updateFrame();
     this.updateOpacity();
-    this.processTouch();
 };
 
 Sprite_Button.prototype.checkBitmap = function() {
@@ -4075,6 +4075,7 @@ Spriteset_Map.prototype.createLowerLayer = function() {
 };
 
 Spriteset_Map.prototype.update = function() {
+    this.updateReactor2DCamera();
     // Aim the camera before anything projects through it.
     //
     // Character sprites place themselves during the child update below, and
@@ -4108,6 +4109,30 @@ Spriteset_Map.prototype.update = function() {
     this.updateOffscreenCulling();
 };
 
+// Scale only the map, its weather and native world lighting. Pictures,
+// timers and scene UI retain their normal coordinates. The map's display
+// origin already accounts for the focus offset, including edge clamping.
+Spriteset_Map.prototype.updateReactor2DCamera = function() {
+    const zoom = $gameMap.reactorCameraZoom();
+    const x = $gameMap.reactorCameraOffset("x");
+    const y = $gameMap.reactorCameraOffset("y");
+    const previous = $gameMap._reactorCamera2DState;
+    if (!previous || previous.zoom !== zoom || previous.x !== x || previous.y !== y) {
+        // Preserve ordinary saved/scripted scroll positions until framing
+        // actually changes. Store on the map so reopening a menu does not
+        // recenter it, and loading a save retains the same framing state.
+        if (previous || zoom !== 1 || x !== 0 || y !== 0) {
+            $gamePlayer.center($gamePlayer._realX, $gamePlayer._realY);
+        }
+        $gameMap._reactorCamera2DState = { zoom, x, y };
+    }
+    if (zoom !== 1 || (this._reactorCameraAppliedZoom !== undefined && this._reactorCameraAppliedZoom !== 1)) {
+        this._baseSprite.scale.set(zoom, zoom);
+        if (this._weather) this._weather.scale.set(zoom, zoom);
+        this._reactorCameraAppliedZoom = zoom;
+    }
+};
+
 // Viewport culling. Big maps can carry hundreds of events, each with a
 // character sprite and often a plugin overlay window (event mini labels),
 // yielding 10k+ display objects of which only a small fraction is on
@@ -4129,9 +4154,10 @@ Spriteset_Map.prototype.updateOffscreenCulling = function() {
     }
     const margin = 384;
     const minX = -margin;
-    const maxX = Graphics.width + margin;
+    const cameraZoom = $gameMap.reactorCameraZoom?.() || 1;
+    const maxX = Graphics.width / cameraZoom + margin;
     const minY = -margin;
-    const maxY = Graphics.height + margin;
+    const maxY = Graphics.height / cameraZoom + margin;
     let reattachedToTilemap = false;
     for (const sprite of this._characterSprites) {
         const character = sprite._character;
@@ -4204,7 +4230,7 @@ Spriteset_Map.prototype.updateOffscreenCulling = function() {
         const child = this.children[i];
         if (!(child instanceof Window_Base)) continue;
         if (disabled) continue;
-        if (this._rrWindowDormant(child, minX, maxX, minY, maxY)) {
+        if (this._rrWindowDormant(child, minX, Graphics.width + margin, minY, Graphics.height + margin)) {
             // Parked this tick. The display-tree cascade in Spriteset_Base
             // .update already ran its update() a moment ago, so the catch-up
             // loop below must skip it or it steps twice on the transition
@@ -4226,7 +4252,7 @@ Spriteset_Map.prototype.updateOffscreenCulling = function() {
         }
         child._rrCulled = false;   // let update() run normally
         if (child.update) child.update();
-        if (disabled || !this._rrWindowDormant(child, minX, maxX, minY, maxY)) {
+        if (disabled || !this._rrWindowDormant(child, minX, Graphics.width + margin, minY, Graphics.height + margin)) {
             this.addChild(child);
         } else {
             child._rrCulled = true;
@@ -4793,6 +4819,11 @@ Spriteset_Map.prototype.updateReactorLighting2D = function() {
     const state = this._reactorFlatLights;
     if (!state) return;
 
+    const cameraZoom = $gameMap.reactorCameraZoom?.() || 1;
+    if (cameraZoom !== 1 || (state.cameraZoom !== undefined && state.cameraZoom !== 1)) {
+        state.glow.scale.set(cameraZoom, cameraZoom);
+        state.cameraZoom = cameraZoom;
+    }
     const ambient = Reactor3D.ambientFor($dataMap);
     state.darkness.tint = Reactor3D.flatAmbientTint(ambient);
     state.darkness.width = Graphics.width;

@@ -1,0 +1,234 @@
+{
+  "previews": [
+    {
+      "errors": [],
+      "flight": true,
+      "orthographic": true,
+      "position": {
+        "flipX": false,
+        "rotateZ": 0,
+        "x": 7.1466666666666665,
+        "y": 5.5,
+        "z": 1.8166666666666667
+      },
+      "projection": "2d",
+      "visible": true
+    },
+    {
+      "errors": [],
+      "flight": true,
+      "orthographic": false,
+      "position": {
+        "flipX": false,
+        "rotateZ": 0,
+        "x": 7.1466666666666665,
+        "y": 5.5,
+        "z": 1.8166666666666667
+      },
+      "projection": "3d",
+      "visible": true
+    }
+  ],
+  "cases": [
+    {
+      "mode": "flat-sprites",
+      "held": {
+        "bone": false,
+        "count": 1,
+        "expected": 97,
+        "frame": {
+          "height": 32,
+          "type": "rectangle",
+          "width": 32,
+          "x": 32,
+          "y": 192
+        },
+        "iconSize": 32,
+        "point": {
+          "x": 12.793333333333333,
+          "y": 5.833333333333333,
+          "z": 0.7999999999999999
+        },
+        "visible": true
+      },
+      "mid": {
+        "before": 494,
+        "frame": 28,
+        "from": {
+          "x": 12.793333333333333,
+          "y": 5.833333333333333,
+          "z": 0.7999999999999999
+        },
+        "hits": [],
+        "hp": 494,
+        "point": {
+          "x": 12.992444444444445,
+          "y": 6.366666666666666,
+          "z": 2.151111111111111
+        },
+        "visible": true
+      },
+      "end": {
+        "before": 494,
+        "done": true,
+        "errors": [],
+        "hits": [
+          2
+        ],
+        "hp": 514,
+        "left": 0,
+        "updates": 0
+      }
+    },
+    {
+      "mode": "flat-model",
+      "held": {
+        "bone": true,
+        "count": 1,
+        "expected": 97,
+        "frame": {
+          "height": 32,
+          "type": "rectangle",
+          "width": 32,
+          "x": 32,
+          "y": 192
+        },
+        "iconSize": 32,
+        "point": {
+          "x": 14.01237293033973,
+          "y": 3.56196222113221,
+          "z": 0
+        },
+        "visible": true
+      },
+      "mid": {
+        "before": 494,
+        "frame": 28,
+        "from": {
+          "x": 16.684500405384508,
+          "y": 3.277357135741687,
+          "z": 0
+        },
+        "hits": [],
+        "hp": 494,
+        "point": {
+          "x": 17.363877966957215,
+          "y": 5.173877774457232,
+          "z": 1.7777777777777777
+        },
+        "visible": true
+      },
+      "end": {
+        "before": 494,
+        "done": true,
+        "errors": [],
+        "hits": [
+          2
+        ],
+        "hp": 514,
+        "left": 0,
+        "updates": 0
+      }
+    },
+    {
+      "mode": "room-2d",
+      "held": {
+        "bone": true,
+        "count": 1,
+        "expected": 97,
+        "frame": {
+          "height": 32,
+          "type": "rectangle",
+          "width": 32,
+          "x": 32,
+          "y": 192
+        },
+        "iconSize": 32,
+        "point": {
+          "x": 27.89261574435161,
+          "y": 27.54689373747808,
+          "z": 1.1397620961608455
+        },
+        "visible": true
+      },
+      "mid": {
+        "before": 494,
+        "frame": 28,
+        "from": {
+          "x": 27.66345931166608,
+          "y": 27.54961930104171,
+          "z": 1.245690224520946
+        },
+        "hits": [],
+        "hp": 494,
+        "point": {
+          "x": 25.176281012110838,
+          "y": 28.856489007152796,
+          "z": 2.3590998825542195
+        },
+        "visible": true
+      },
+      "end": {
+        "before": 494,
+        "done": true,
+        "errors": [],
+        "hits": [
+          2
+        ],
+        "hp": 514,
+        "left": 0,
+        "updates": 0
+      }
+    },
+    {
+      "mode": "room-3d",
+      "held": {
+        "bone": true,
+        "count": 1,
+        "expected": 97,
+        "frame": {
+          "height": 32,
+          "type": "rectangle",
+          "width": 32,
+          "x": 32,
+          "y": 192
+        },
+        "iconSize": 32,
+        "point": {
+          "x": 27.89261574435161,
+          "y": 27.54689373747808,
+          "z": 1.1397620961608455
+        },
+        "visible": true
+      },
+      "mid": {
+        "before": 494,
+        "frame": 28,
+        "from": {
+          "x": 27.536751928788608,
+          "y": 27.591630728753344,
+          "z": 1.3714733849531369
+        },
+        "hits": [],
+        "hp": 494,
+        "point": {
+          "x": 25.11715090010135,
+          "y": 28.876094340084894,
+          "z": 2.4177986907559084
+        },
+        "visible": true
+      },
+      "end": {
+        "before": 494,
+        "done": true,
+        "errors": [],
+        "hits": [
+          2
+        ],
+        "hp": 514,
+        "left": 0,
+        "updates": 0
+      }
+    }
+  ]
+}

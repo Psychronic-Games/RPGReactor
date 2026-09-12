@@ -42,8 +42,8 @@ class ActionSequencePreview {
         const e=this.editor;e.playing=false;e.stepPlayback=null;this.transformPose=step;
         e.frame=ReactorBattleData.timeline(e.sequence)[e.selected].end;
     }
-    transformFields(step,change){const e=this.editor,U=e.ui,host=e.inspector;
-        const heading=U.element('h4','','Model Transform');host.append(heading);
+    transformFields(step,change,host=this.editor.inspector){const e=this.editor,U=e.ui;
+        if(host===e.inspector)host.append(U.element('h4','','Model Transform'));
         const enabled=U.element('input');enabled.type='checkbox';enabled.checked=!!step.transform;
         U.field(host,'Override Transform',enabled);enabled.onchange=()=>{change('transform',enabled.checked?ReactorBattleData.transform():undefined);if(enabled.checked){this.setTool('rotate');this.showTransformPose(step);}else this.transformPose=null;e.drawInspector();e.paint();};
         if(!step.transform){host.append(U.element('p','rr-battle-help','Enable to offset, rotate or reshape this motion.'));return;}

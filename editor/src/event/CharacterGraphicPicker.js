@@ -275,8 +275,31 @@ class CharacterGraphicPicker {
             const maxFrameWidth = isSingleCharacter ? spriteWidth / 3 : spriteWidth / 12;
             // Target: frames should be at most ~64px tall, scale up small ones (2x) but shrink large ones
             const targetHeight = 64;
-            this._frameScale = Math.min(2, targetHeight / maxFrameHeight);
+            this._frameScale = this.previewZoom || Math.min(8, targetHeight / maxFrameHeight);
             if (this._frameScale < 0.5) this._frameScale = 0.5; // Don't go too tiny
+
+            const zoomLabel = document.createElement('label');
+            zoomLabel.textContent = this._t('Zoom') + ' ';
+            const zoomControl = document.createElement('select');
+            zoomControl.className = 'character-preview-zoom';
+            zoomControl.setAttribute('aria-label', this._t('Zoom'));
+            const scales = [...new Set([0.5, 1, 2, 3, 4, 6, 8, this._frameScale])].sort((a,b)=>a-b);
+            for (const scale of scales) {
+                const option = document.createElement('option');
+                option.value = scale;
+                option.textContent = Math.round(scale * 100) + '%';
+                option.selected = scale === this._frameScale;
+                zoomControl.appendChild(option);
+            }
+            zoomLabel.appendChild(zoomControl);
+            previewArea.appendChild(zoomLabel);
+            zoomControl.addEventListener('change', () => {
+                this.previewZoom = Number(zoomControl.value);
+                selectionContainer.querySelectorAll('canvas').forEach(canvas => {
+                    canvas.style.width = Math.round(Number(canvas.dataset.frameWidth) * this.previewZoom) + 'px';
+                    canvas.style.height = Math.round(Number(canvas.dataset.frameHeight) * this.previewZoom) + 'px';
+                });
+            });
 
             // Selection container
             const selectionContainer = document.createElement('div');
@@ -474,6 +497,8 @@ class CharacterGraphicPicker {
         ctx.drawImage(img, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
 
         // Store selection data
+        canvas.dataset.frameWidth = sw;
+        canvas.dataset.frameHeight = sh;
         canvas.dataset.characterIndex = characterIndex;
         canvas.dataset.pattern = pattern;
         canvas.dataset.direction = direction;

@@ -1,5 +1,90 @@
 # Changelog
 
+## [Unreleased - 0.98.6]
+
+See the [September 11 closeout](docs/SESSION-2026-09-11.md) for the complete scope and final 3,082-test verification.
+
+### Added
+
+- Random startup splash selection from numbered PNG files, with automatic desktop discovery and a generated web-build list. Include the original and second splash artwork.
+
+- Add 16 editable action-sequence starters, equipped-item hand attachments, item/weapon/picture throws to allies or enemies, arcs/spin/return flights, and matching 2D/3D previews. Include a humanoid item-motion fallback and preserve authored motions. Runtime revision `20260911.6`. See `docs/HELD-ITEMS-AND-THROWS-2026-09-11.md`.
+
+- Expand visual action sequences with six independently assigned phases, class defaults, battler states/reactions, reusable routines, explicit multi-hit behavior, and 43 additional command types. Actors/enemies can explicitly select SV, character-set, static or 3D battlers with motion settings. Preserve assignment-card spacing; repair battle-room zoom. Runtime revision `20260911.5`. See `docs/ACTION-SEQUENCE-EXPANSION-2026-09-11.md`.
+
+- System 2 supports 48×48 icon cells (16 columns, 768px-wide sheets). Shared pickers, Database and message/interface previews, and runtime startup honor the configured icon size. Runtime revision `20260911.4`.
+
+- System 2 now offers default 2D camera zoom and X/Y framing offsets, with matching mouse/touch navigation, and 288×288 face cells (1152×576 for eight faces). Runtime revision `20260911.3`.
+
+- Support 64×64 and 8×8 tiles, zoom controls for tileset/character/interface previews, and optional pixelated whole-frame rendering in System 2.
+
+- Enemy Action Patterns gain a Behaviour forecast with adjustable battle conditions, eligible actions and their selection shares, and reasons for unreachable actions. Read known VisuStella Battle AI rules from the project plugin manifest; plugin-defined conditions remain outside the forecast.
+
+### Fixed
+
+- Merge community-reviewed Simplified Chinese wording, apply reviewed catalogs last, and translate/search text-code help while preserving inserted codes.
+
+- Database tables use distinct cell backgrounds and full-row themed hover/focus feedback. Trait, effect and action selections keep their highlight after the pointer leaves.
+
+- Database menus expose all 20 sidebar sections in matching order; the HTML dropdown scrolls in short windows. Starting Positions puts Browse beside Map/X/Y when space permits, wrapping only as needed.
+
+- Database number fields match adjacent themed controls instead of using the generic grey spinner: compact padding, consistent text size and accent borders. Skills Invocation rows use tighter spacing.
+
+- Model inspection previews and thumbnails use neutral lighting independent of the current map, with theme-aware backgrounds. Light themes retain richer colorful panels and readable cost badges; the dark model-cost card keeps its black header and grey body. Main editor scrollbars use the accent. The tileset palette retains its original transparency background; the light-mode map controls use a separate white strip.
+
+- Light themes have distinct menu and toolbar surfaces, vivid selections, stronger panel and field boundaries, and consistent field fills. Removed the toolbar icon dimming filter so artwork retains its original brightness across all seven palettes.
+
+- Database category and record rows have symmetric side insets so highlights no longer touch the scrollbar. The category scrollbar uses the theme accent instead of gray-on-gray.
+
+- Database UI quality pass: responsive form cards, symmetrical paired fields, tighter Actor layouts, aligned trait tables and States labels, wrapping System panels and tileset controls, readable number steppers, and 3D inspector headings that fit translated text. Plugin Manager stays within the app window when resizing or dragging.
+
+- System 2 Pixelated Rendering uses a normal square checkbox; the SV Attack Motions table header starts flush inside its border.
+
+- Model-bound event previews in the editor’s 2D map view use the live surface-lighting renderer shared by placed props, with per-model lighting, refreshed positions and cleanup when previews are hidden.
+
+- Audio Player keyboard navigation highlights the selected track with an inset theme-colored outline, eliminating the white bar along the list edge. Shared audio pickers use the same inset row focus.
+
+- States places Traits beside General and Duration/Notes beside Messages. Duration and Notes share a row on wide screens and wrap at smaller sizes; narrow detail panes stack the main cards. Trait selection now stays inside the Type cell, aligning every row with the table header.
+
+- Map sidebar Events now support Up/Down, Home/End and Enter without triggering map cursor shortcuts. Database keyboard focus is drawn inside selected rows instead of a clipped bar above the list. States Duration uses compact label/control rows and adjacent checkboxes.
+
+- Show Text face previews sample the configured face cells and fit large or small faces into the preview. Above-character stars remain legible at 8px tile size.
+
+- Face selection and rendering honor the configured face size, including 32×32 sheets. Zoomed tileset clicks use source coordinates, tiny flag borders stay inside their cells, and game windows honor Screen Scale without an inherited 1280×720 minimum. Runtime revision `20260911.2`.
+
+- Menu open/close and shop quantity/confirm buttons accept mouse and touch input again under Pixi 8. Restore legacy ancestor visibility checks and process each button press once, preventing duplicate fast-click actions. Runtime revision `20260911.1`.
+- Arrow keys and Home/End select maps, audio tracks, plugins and resource folders while keeping focus in their lists. Map-tree navigation works while Events is active; Database entry navigation retains list focus. File pickers select the first file correctly when Home is pressed before any selection.
+- Themed and searchable dropdowns keep keyboard navigation inside the popup. Arrows highlight choices without scrolling the underlying window, Enter confirms, and Escape cancels. Disabled options are skipped and retired popups release their listeners.
+- Trait and Effect dialogs keep a fixed frame across tabs, with a scrollable body for smaller windows. Assigned tileset filenames use clearer 13px text and full-name tooltips.
+- Unchecked Switch 1, Switch 2, Variable and Self Switch event conditions display blank, matching Item and Actor. Re-enabling restores stored IDs, the variable threshold and the self-switch letter.
+- Enemy forecasts honor random/casual/gambit selection, preserve an authored zero Max TP, and check repeating-turn intersections and narrow resource ranges. Oversized turn cycles report uncertainty instead of incorrectly declaring an action unreachable.
+
+- Rapid Actor/Class navigation cannot attach retired field handlers to a new record or open duplicate parameter dialogs. Detail refreshes retire their previews and callbacks before rebuilding.
+- Event-command shortcuts follow focus in the command list. Delete/cut/paste in page settings or another dialog cannot change the selected commands; Select All visibly updates the list.
+- Fast arrow navigation reveals database rows beyond the current rendered batch. Retired tileset pickers reject queued confirmation clicks and release their keyboard listeners.
+- Add replayable interaction-order regression tests and a native CI gate with seed/trace artifacts, covering rapid navigation, dialog retirement and delayed map loads.
+- Map-tree drag feedback no longer shifts rows under the pointer; self/descendant drops show no valid target. Cancelling an unsaved map switch keeps the current map highlighted, and Transfer Player map selection no longer interferes with the sidebar.
+- Mouse-wheel zoom preserves the map position under the cursor in 2D and 3D. At 2D map edges, retain only the margin needed for anchoring; panning and scrollbar travel respect that margin, and loading another map resets it.
+- Tileset, character and face pickers take keyboard focus when opened; arrow/Home/End navigation stays inside the picker instead of changing the underlying Database selection.
+- Database list boundaries and reselecting the current entry preserve the live detail view. Reserve preview width before drawing and discard delayed setup from old selections to prevent shifting fields and duplicate previews during rapid navigation.
+- Looping 3D effects reuse their drawing materials to avoid repeated shader-compilation stalls. Skip fully hidden room-floor drawing when an unchanged opaque parallax covers it, preserving the original image and authored quality settings.
+- Tileset flag buttons toggle their Key open/closed, and the Key has a Close button. Leaving the tileset view, closing Database, or switching maps resets the selected flag and brush without changing tileset settings.
+- Event-page settings scroll in short windows instead of collapsing the character/model preview. Keep a usable preview area and compact image controls across languages.
+- Unchecked Item/Actor page conditions display blank without losing their stored selections. Empty themed dropdowns retain the same line height as populated controls throughout the editor.
+- Web Battle Room videos recover from blocked autoplay after a click or keypress. Closing a room clears pending playback and retry listeners; missing media warns once without creating invalid textures.
+- Browser video play/pause cancellation no longer stops MZ battles through the unhandled-promise handler. Other asynchronous and programming errors retain normal error reporting.
+
+### Development
+
+- Open the 0.98.6 development cycle. New features, fixes, and compatibility updates will be recorded here.
+
+### Music sequences and event lists (PR #52)
+
+- Music sequences gain fade-in/crossfade, first-pass intros, ordered or shuffled pools, per-track volume and an option to advance after one track. Intro progress survives battle, save and vehicle transitions.
+- Separate audio fades from volume/ME ducking and cancel interrupted automation cleanly. Track-end transitions use the unwrapped playback position and the next entry that will actually play.
+- Multi-line comments show Comment instead of Unknown (408). Plugin argument rows fold once under their command across map, troop and common-event lists, using their authored labels.
+- Update music controls and translations across all 18 locales. Detailed incoming notes and integration evidence: [PR #52 integration](docs/PR-INTEGRATION-2026-09-07.md).
+
 ## [0.98.5] - 2026-09-07
 
 0.98.5 brings battle choreography into the editor: build a battle arena from a map, position the party and enemies, and assemble attacks from editable steps. It also adds native lighting, map media surfaces, quests, expanded interface authoring, and a substantial MV/MZ compatibility and editor reliability pass.

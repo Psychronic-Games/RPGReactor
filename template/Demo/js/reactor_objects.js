@@ -6807,12 +6807,45 @@ Game_Map.prototype.isOverworld = function() {
     return this.tileset() && this.tileset().mode === 0;
 };
 
+// Default 2D camera framing is expressed in logical game pixels. A 3D map
+// owns its projection and focus; these settings must not change its viewport.
+Game_Map.prototype.reactorCameraZoom = function() {
+    if (typeof Reactor3D !== "undefined" && Reactor3D.isMap3D?.($dataMap)) return 1;
+    const zoom = Number($dataSystem?.advanced?.camera2DZoom);
+    return Number.isFinite(zoom) ? Math.max(1, Math.min(8, zoom || 1)) : 1;
+};
+
+Game_Map.prototype.reactorCameraOffset = function(axis) {
+    if (typeof Reactor3D !== "undefined" && Reactor3D.isMap3D?.($dataMap)) return 0;
+    const value = Number($dataSystem?.advanced?.[axis === "x" ? "camera2DOffsetX" : "camera2DOffsetY"]);
+    return Number.isFinite(value) ? value : 0;
+};
+
+// Undo the existing event screen zoom/shake before undoing the map camera.
+// This is the inverse of Spriteset_Base + the map's _baseSprite transform.
+Game_Map.prototype.reactorCanvasToWorld = function(value, axis) {
+    const cameraZoom = this.reactorCameraZoom();
+    // Leave the legacy input contract intact when this camera is off; some
+    // imported projects already implement their own screen-zoom picking.
+    if (cameraZoom === 1 && this.reactorCameraOffset("x") === 0 && this.reactorCameraOffset("y") === 0) return value;
+    const screen = typeof $gameScreen !== "undefined" ? $gameScreen : null;
+    const zoom = screen?.zoomScale() || 1;
+    const pivot = screen ? (axis === "x" ? screen.zoomX() : screen.zoomY()) : 0;
+    const shift = Math.round(-pivot * (zoom - 1))
+        + (axis === "x" && screen ? Math.round(screen.shake()) : 0);
+    return (value - shift) / zoom / cameraZoom;
+};
+
 Game_Map.prototype.screenTileX = function() {
-    return Math.round((Graphics.width / this.tileWidth()) * 16) / 16;
+    const zoom = this.reactorCameraZoom();
+    return zoom === 1 ? Math.round((Graphics.width / this.tileWidth()) * 16) / 16
+        : Graphics.width / this.tileWidth() / zoom;
 };
 
 Game_Map.prototype.screenTileY = function() {
-    return Math.round((Graphics.height / this.tileHeight()) * 16) / 16;
+    const zoom = this.reactorCameraZoom();
+    return zoom === 1 ? Math.round((Graphics.height / this.tileHeight()) * 16) / 16
+        : Graphics.height / this.tileHeight() / zoom;
 };
 
 Game_Map.prototype.adjustX = function(x) {
@@ -6892,14 +6925,14 @@ Game_Map.prototype.distance = function(x1, y1, x2, y2) {
 Game_Map.prototype.canvasToMapX = function(x) {
     const tileWidth = this.tileWidth();
     const originX = this._displayX * tileWidth;
-    const mapX = Math.floor((originX + x) / tileWidth);
+    const mapX = Math.floor((originX + this.reactorCanvasToWorld(x, "x")) / tileWidth);
     return this.roundX(mapX);
 };
 
 Game_Map.prototype.canvasToMapY = function(y) {
     const tileHeight = this.tileHeight();
     const originY = this._displayY * tileHeight;
-    const mapY = Math.floor((originY + y) / tileHeight);
+    const mapY = Math.floor((originY + this.reactorCanvasToWorld(y, "y")) / tileHeight);
     return this.roundY(mapY);
 };
 
@@ -8752,11 +8785,17 @@ Game_Player.prototype.isCollided = function(x, y) {
 };
 
 Game_Player.prototype.centerX = function() {
-    return ($gameMap.screenTileX() - 1) / 2;
+    const span = $gameMap.screenTileX() - 1;
+    const offset = $gameMap.reactorCameraOffset("x") / $gameMap.tileWidth() / $gameMap.reactorCameraZoom();
+    if (offset === 0) return span / 2;
+    return Math.max(0, Math.min(Math.max(0, span), span / 2 + offset));
 };
 
 Game_Player.prototype.centerY = function() {
-    return ($gameMap.screenTileY() - 1) / 2;
+    const span = $gameMap.screenTileY() - 1;
+    const offset = $gameMap.reactorCameraOffset("y") / $gameMap.tileHeight() / $gameMap.reactorCameraZoom();
+    if (offset === 0) return span / 2;
+    return Math.max(0, Math.min(Math.max(0, span), span / 2 + offset));
 };
 
 Game_Player.prototype.center = function(x, y) {

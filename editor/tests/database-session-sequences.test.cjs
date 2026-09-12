@@ -98,7 +98,7 @@ test('an old thumbnail completion cannot populate or delete a new project cache'
 });
 
 test('slow tileset loads cannot replace a newer tab or paint after leaving the detail',()=>{
-    const images=[],container={isConnected:true,innerHTML:'',appendChild(){throw new Error('stale canvas attached');}};
+    const images=[],container={isConnected:true,innerHTML:'',classList:{toggle(){}},appendChild(){throw new Error('stale canvas attached');}};
     const sandbox={window:{},console:{debug(){},error(){}},rrEscapeHtml:String,
         document:{getElementById:()=>container,createElement:()=>({style:{}})},
         Image:class {constructor(){images.push(this);}}};

@@ -15,6 +15,7 @@ class DatabaseItemEditor {
     }
 
     showItemDetail(container, item) {
+        const isCurrentDetail = this.parentEditor?.captureDetailContext?.() || (() => true);
         this.currentItem = item;
 
         const wrapper = document.createElement('div');
@@ -102,6 +103,7 @@ class DatabaseItemEditor {
 
         // Add icon to the designated container after the DOM is ready
         setTimeout(() => {
+            if (!isCurrentDetail()) return;
             const iconContainer = document.getElementById(`item-icon-container-${item.id}`);
             if (iconContainer) {
                 this.parentEditor.addDatabasePreview(iconContainer, item, 'items');
@@ -241,6 +243,7 @@ class DatabaseItemEditor {
 
         // Setup effect interaction after DOM is ready
         setTimeout(() => {
+            if (!isCurrentDetail()) return;
             const effectsTable = document.getElementById(`item-effects-table-${item.id}`);
             if (effectsTable) {
                 this.setupEffectInteraction(effectsTable, item);
@@ -273,6 +276,7 @@ class DatabaseItemEditor {
 
         // Add event listeners for all editable fields
         setTimeout(() => {
+            if (!isCurrentDetail()) return;
             AnimationPickerModal.bindTriggers(container, this.databaseManager, this.projectManager);
             ActionElements.bindTriggers(container, {
                 names: elements,
@@ -360,7 +364,7 @@ class DatabaseItemEditor {
                     indicator.style.setProperty('background-color', 'var(--color-accent-bright)', 'important');
                 }
                 contentCells.forEach(cell => {
-                    cell.style.setProperty('background-color', 'var(--color-bg-panel)', 'important');
+                    cell.style.setProperty('background-color', 'var(--color-bg-selected)', 'important');
                 });
             });
 
@@ -389,7 +393,7 @@ class DatabaseItemEditor {
                     indicator.style.setProperty('background-color', 'var(--color-accent-bright)', 'important');
                 }
                 contentCells.forEach(cell => {
-                    cell.style.setProperty('background-color', 'var(--color-bg-panel)', 'important');
+                    cell.style.setProperty('background-color', 'var(--color-bg-selected)', 'important');
                 });
                 table.closest('.database-section')?.focus();
                 this.updateEffectButtonStates(table.closest('.database-section'), table);
@@ -565,6 +569,9 @@ class DatabaseItemEditor {
     }
 
     refreshItemDetail(item) {
+        if (this.parentEditor?.showDatabaseDetail) {
+            return this.parentEditor.showDatabaseDetail(item, 'items');
+        }
         const container = document.getElementById('database-detail');
         if (container) {
             container.innerHTML = '';

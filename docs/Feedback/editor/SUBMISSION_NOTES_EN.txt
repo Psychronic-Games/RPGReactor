@@ -1,0 +1,101 @@
+RPG Reactor Simplified Chinese Localization Patch
+=================================================
+
+Applies to: RPG Reactor v0.98.5 (editor source)
+Language: Simplified Chinese (zh-Hans), terminology aligned with the
+          official Simplified Chinese localization of RPG Maker MZ (1.10.0 help docs)
+How to apply: copy the files under editor/ in this archive over the matching
+          paths in the source repository, or merge them via diff.
+          Recommended: apply all 9 files together (3 translation data files
+          + 5 code fixes, see below).
+
+------------------------------------------------------------
+1. Translation data files (the bulk of the localization; 3 files)
+------------------------------------------------------------
+
+1. editor/src/I18nDeepTranslations.js
+   Adds a large number of zh-Hans plain-text translation keys
+   (RR_DEEP_TEXT_TRANSLATIONS) covering buttons, labels, tooltips and
+   dialog text across the editor. Only zh-Hans was added/changed.
+
+2. editor/src/I18nManager.js
+   - Text table RR_TEXT_TRANSLATIONS: zh-Hans fully revised (event
+     command names, trait names, terms, etc., aligned with MZ).
+   - Dot-key table RR_I18N_STRINGS: zh-Hans completed with 675 keys
+     (menus, toolbar, common UI, etc.).
+   - RR_EVENT_COMMAND_NAMES / RR_EVENT_SECTION_NAMES: event command and
+     section names aligned with MZ's official 106 event commands.
+   - RR_DB_TYPE_KEYS: mapping from database types to dot keys.
+   Only zh-Hans was added/changed; all other languages untouched.
+
+3. editor/src/I18nReviewedTranslations.js
+   [IMPORTANT] This is the final override layer (its own header reads
+   "Locally stored translations ... override legacy and generated
+   catalogs"). If the official repository does not ship this file,
+   please keep it and load it as usual; alternatively merge its zh-Hans
+   keys into the main text table and delete the file. All final reviewed
+   values live here (e.g. trait tabs = 抗性/能力值/攻击, event command
+   names, text-code group titles, loading prompts) and it has the
+   highest priority.
+
+------------------------------------------------------------
+2. Code fix files (needed for the translations to actually show; 5 files)
+------------------------------------------------------------
+
+4. editor/index.html
+   Fix: in the top menu bar's Database dropdown, the "Action Sequences"
+   entry was missing the data-i18n="menu.actionSequences" attribute, so
+   it always rendered in English. The attribute has been added (all
+   other entries already had it and are translated at runtime).
+
+5. editor/src/utils/TextCodeMenu.js
+   Added: TEXT_DETAIL_ZH map (111 entries) that translates the English
+   reference text (the detail field) of every entry in the text-code
+   reference panel into Simplified Chinese; the renderer now prefers the
+   Chinese text. Note: detail strings in TextCodes.js are intentionally
+   kept in English by design (per its comments, to avoid triggering the
+   17-locale audit), so the zh-Hans-specific map lives at the render
+   layer. TextCodes.js catalogue structure is unchanged; other languages
+   are unaffected.
+
+6. editor/src/ResourceManager.js
+   Fix: the 3D model preview loading prompt "Loading model..." was a
+   hard-coded English literal; it now goes through the this.text()
+   translation pipeline.
+
+7. editor/src/DatabaseEditorUI.js
+   Fix: database navigation/menu rendering so database types (Action
+   Sequences, etc.) display in Chinese via the tDbType dot-key path.
+
+8. editor/src/database/DatabaseTroopEditor.js
+   Fix: translated the troop-event "Span:" dropdown options
+   (whole battle / turn / moment, etc.).
+
+9. editor/src/database/DatabaseUserInterfaceEditor.js
+   Fix: translated the "User Interfaces" database editor (the
+   "Presentation" field and its dropdown options).
+
+------------------------------------------------------------
+3. Terminology reference (examples, for the author's review)
+------------------------------------------------------------
+  Event commands: 显示文字 / 处理数值输入 / 分支条件 / 操作独立开关 /
+    设置移动路线 / 乘降载具 / 变更画面色调 / 操作计时器 / 等级增减 / 商店处理 …
+  Traits: 状态免疫 / 普通能力值 / 追加能力值 / 特殊能力值 / 回避率 /
+    会心回避率 / 魔法回避率 / 反击率 / 受到攻击几率 / 药理知识 /
+    TP 填充率 / 攻击速度补正 / 攻击追加次数 / 攻击时属性 / 固定装备 /
+    双持 / 掩护 / 双倍掉落物品 …
+  Trait tabs: 抗性 / 能力值 / 攻击 / 技能 / 装备 / 其他
+  "Occasion" is rendered as 使用场合 (the MZ term).
+  Others: 暴击 / 敏捷 / 图块集 / 播放影像 / 强制战斗行动 / 暂存地点 …
+
+------------------------------------------------------------
+4. Notes
+------------------------------------------------------------
+- Only zh-Hans was touched; the other 16 locales are unchanged.
+- Simplified Chinese wording follows the official MZ localization;
+  proper nouns are kept as-is (Reactor / NW.js / Effekseer / BGM, etc.).
+- Placeholders in the text-code panel descriptions (\V[n], \I[n], etc.)
+  are preserved verbatim.
+- For future engine updates: as long as these 3 I18n data files and the
+  5 code fix files are not overwritten by an older version, the
+  localization will carry over without needing to be redone.

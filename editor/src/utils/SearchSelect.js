@@ -4,8 +4,8 @@
  * A button shows the current choice; opening it drops a panel with a filter
  * box and the entries under their group headings. Built for lists that can
  * run long (every part, bone and effect of a model), where a native select
- * offers no search and no headings. Keyboard: type to filter, Enter picks
- * the first match, Escape closes.
+ * offers no search and no headings. Keyboard: type to filter, arrows highlight
+ * a match, Enter picks it, Escape closes.
  *
  *   RRSearchSelect.create({
  *       groups: [{ label: 'Parts', items: [{ id: 'Head', label: 'Head' }] }],
@@ -106,6 +106,7 @@
                 empty.style.cssText = 'padding:8px;font-size:11px;color:var(--color-text-muted);';
                 list.appendChild(empty);
             }
+            keyboardRow = null;
         };
         const close = () => {
             panel.style.display = 'none';
@@ -119,10 +120,11 @@
             renderList();
             panel.style.display = 'flex';
             document.addEventListener('pointerdown', onOutside, true);
-            setTimeout(() => search.focus(), 0);
+            setTimeout(() => { if (panel.isConnected && panel.style.display === 'flex') search.focus({ preventScroll: true }); }, 0);
         };
         const pick = id => {
             close();
+            button.focus({ preventScroll: true });
             if (id === state.value) return;
             state.value = id;
             renderButton();
@@ -133,10 +135,23 @@
             else open();
         });
         search.addEventListener('input', renderList);
+        let keyboardRow = null;
         search.addEventListener('keydown', event => {
+            if (!['ArrowDown', 'ArrowUp', 'Enter', 'Escape'].includes(event.key)) return;
+            event.preventDefault(); event.stopPropagation();
+            if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+                const rows = Array.from(list.querySelectorAll('.rr-search-select-item'));
+                if (!rows.length) return;
+                const at = rows.indexOf(keyboardRow);
+                const next = at < 0 ? (event.key === 'ArrowDown' ? 0 : rows.length - 1)
+                    : Math.max(0, Math.min(rows.length - 1, at + (event.key === 'ArrowDown' ? 1 : -1)));
+                keyboardRow = rows[next];
+                rows.forEach(row => { row.style.boxShadow = row === keyboardRow ? 'inset 0 0 0 2px var(--color-accent-border-strong)' : ''; });
+                keyboardRow.scrollIntoView({ block: 'nearest' });
+            }
             if (event.key === 'Escape') { close(); button.focus(); }
             if (event.key === 'Enter') {
-                const first = list.querySelector('.rr-search-select-item');
+                const first = keyboardRow || list.querySelector('.rr-search-select-item');
                 if (first) pick(first.dataset.id);
             }
         });

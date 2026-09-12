@@ -165,7 +165,7 @@ test('unarmed assignment applies only to an unequipped normal attack and stays r
  const settings=B.empty(),sequences=[null,B.template('Unarmed Punch')];settings.actors[1]={mode:'inherit',unarmed:{mode:'sequence',sequenceId:1}};
  const request={kind:'skills',itemId:1,isAttack:true,weaponIds:[],battlerKind:'actors',battlerId:1};
  assert.equal(B.resolve(settings,sequences,request),sequences[1]);assert.equal(B.resolve(settings,sequences,{...request,weaponIds:[2]}),null);assert.equal(B.resolve(settings,sequences,{...request,isAttack:false,itemId:9}),null);
- settings.skills[1]={mode:'existing'};assert.equal(B.resolve(settings,sequences,request),null);assert.deepEqual(B.references(settings,1),[{kind:'actors',id:1}]);
+ settings.skills[1]={mode:'existing'};assert.equal(B.resolve(settings,sequences,request),null);assert.deepEqual(B.references(settings,1),[{kind:'actors',id:1,slot:'unarmed'}]);
 });
 test('unarmed punch approaches diagonal and mirrored targets, strikes once, and returns to its original facing',()=>{
  const sequence=B.template('Unarmed Punch');assert.deepEqual(B.validateSequence(sequence),[]);

@@ -1,0 +1,108 @@
+{
+  "wide": {
+    "checks": [
+      "event click focuses the list",
+      "Down selects next event across sparse IDs",
+      "Right in the event list does not move the map selection",
+      "End selects last event",
+      "last event remains visible",
+      "Home and Up stop at the first event",
+      "rerendering does not duplicate key handlers",
+      "Enter opens the selected event once",
+      "database arrows retain list focus",
+      "database list has no browser-default focus bar",
+      "keyboard focus is shown inside the selected row",
+      "Duration checkboxes sit beside their labels",
+      "Duration numeric labels precede their controls",
+      "damage option hides its dependent field",
+      "damage option reveals its dependent field",
+      "Duration panel stays compact",
+      "Tab advances from minimum to maximum turns",
+      "numeric field arrows do not navigate database records",
+      "no captured application errors"
+    ],
+    "failures": [],
+    "focus": {
+      "color": "rgb(204, 204, 204)",
+      "offset": "0px",
+      "style": "none"
+    },
+    "layout": [
+      {
+        "aligned": true,
+        "gap": 8
+      },
+      {
+        "aligned": true,
+        "gap": 8
+      },
+      {
+        "aligned": true,
+        "gap": 8
+      },
+      {
+        "aligned": true,
+        "gap": 8
+      }
+    ],
+    "language": "en",
+    "theme": "dark",
+    "viewport": [
+      1600,
+      900
+    ]
+  },
+  "compact": {
+    "checks": [
+      "event click focuses the list",
+      "Down selects next event across sparse IDs",
+      "Right in the event list does not move the map selection",
+      "End selects last event",
+      "last event remains visible",
+      "Home and Up stop at the first event",
+      "rerendering does not duplicate key handlers",
+      "Enter opens the selected event once",
+      "database arrows retain list focus",
+      "database list has no browser-default focus bar",
+      "keyboard focus is shown inside the selected row",
+      "Duration checkboxes sit beside their labels",
+      "Duration numeric labels precede their controls",
+      "damage option hides its dependent field",
+      "damage option reveals its dependent field",
+      "Duration panel stays compact",
+      "Tab advances from minimum to maximum turns",
+      "numeric field arrows do not navigate database records",
+      "no captured application errors"
+    ],
+    "failures": [],
+    "focus": {
+      "color": "rgb(31, 31, 31)",
+      "offset": "0px",
+      "style": "none"
+    },
+    "layout": [
+      {
+        "aligned": true,
+        "gap": 8
+      },
+      {
+        "aligned": true,
+        "gap": 8
+      },
+      {
+        "aligned": true,
+        "gap": 8
+      },
+      {
+        "aligned": true,
+        "gap": 8
+      }
+    ],
+    "language": "zh-Hans",
+    "theme": "light",
+    "viewport": [
+      1280,
+      720
+    ]
+  }
+}

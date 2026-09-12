@@ -1,5 +1,139 @@
 # Current project status
 
+## 2026-09-11 — Documentation and commit closeout
+
+The [complete session summary](SESSION-2026-09-11.md) covers Chinese corrections, PR #56, rotating splash art, touch/keyboard work, asset sizes and framing, database/theme refinements, model lighting, and expanded action sequences with equipped items and throws. It also identifies earlier pending work included in this snapshot.
+
+Current editor **0.98.6**, runtime **20260911.6**; latest full suite **3,082 passed**, zero failures/skips. Native authoring and held-item/throw checks pass in 2D/3D; all 13 local template runtimes match. Earlier entries retain intermediate versions/test counts and pre-commit status as history. Keyboard audit gaps remain explicit. This is a local development commit, not a release or push.
+
+## 2026-09-11 — Equipped items and throws
+
+Hand-attached equipment, action-item throws to comrades, arc/spin/return flights, shared 2D/3D previews, and 16 editable starter records are implemented. Existing assignments remain intact; the database has Add Starter Sequences for existing projects. Runtime `20260911.6`. [Behavior and verification](HELD-ITEMS-AND-THROWS-2026-09-11.md).
+
+## 2026-09-11 — Action sequences and battler graphics
+
+Six-phase assignments, class and state/reaction defaults, reusable routines, authored hit policy, 43 additional command types, and explicit actor/enemy graphics are implemented. Card spacing remains 16px; battle-room zoom is repaired. Runtime is now `20260911.5` across all 13 bundled projects. See [implementation and verification](ACTION-SEQUENCE-EXPANSION-2026-09-11.md).
+
+## 2026-09-11 — Model inspection and richer light palettes
+
+Inspection previews and thumbnails now use neutral lighting independent of the map, with theme-aware backdrops. Light palettes retain richer colored panels and readable cost badges. The cost card preserves a black header, bold white title and grey body in dark mode; colorful headers belong to light mode. Main editor scrollbars use the accent. Follow-up restores the original tileset palette background and gives the light-mode map controls a separate white strip. Native inspection, theme, effects and 2D event-lighting checks pass. [Details and evidence](MODEL-PREVIEWS-AND-LIGHT-THEME-2026-09-11.md).
+
+## 2026-09-11 — Database and editor UI quality pass
+
+- Database category and record rows have 6px side insets, keeping highlights clear of the scrollbar. The category scrollbar is accent-colored, including in dark mode.
+- Shared forms adapt to card width and align paired controls; Actor cards use independent columns, trait markers stay within table cells, and States labels precede their inputs.
+- Fixed System 1/2 wrapping, hidden spinner controls, empty tileset buttons, interface heading wrapping, 3D inspector overflow, and Plugin Manager positioning after viewport changes.
+- All seven light palettes now separate menu/toolbar surfaces, strengthen field and selection contrast, and preserve icon brightness.
+- Verification: 3,050 Node tests, 399 native screen/tab cases, 35 field checks, 14 icon theme variants, 112 light-theme text contrast pairs, and 33 asset checks pass. Native coverage includes all 20 Database pages, 22 dialogs, and 15 nested tab views per size. [Audit and verification](UI-QUALITY-AUDIT-2026-09-11.md).
+
+## 2026-09-11 — Editor event lighting and 48px icons
+
+- System 2 follow-up: normal square Pixelated Rendering checkbox and flush SV Attack Motions table header, verified at 1280×720 and 1920×1080.
+
+- Editor 2D model-event previews now share placed props' live lighting path. Added 48×48 icons throughout selection/source previews and runtime icon initialization.
+- **3,050 Node tests**, **33 native icon/small-art checks**, and native GPU event-lighting/lifecycle checks pass. Runtime **20260911.4** matches all 13 bundled projects; editor **0.98.6**. [Scope and evidence](EVENT-LIGHTING-AND-ICONS-2026-09-11.md).
+
+## 2026-09-11 — Audio keyboard focus appearance
+
+- Removed the Audio Player list's clipped outer focus bar and added inset, themed keyboard focus to selected tracks and shared audio-picker rows.
+- **36 native checks pass** in dark/light across all four audio categories and the shared picker. CSS-only change; editor/runtime versions unchanged. [Verification](SIDEBAR-AND-STATES-2026-09-11.md#audio-list-focus-follow-up).
+
+## 2026-09-11 — States card arrangement and trait alignment
+
+- Traits now sits beside General; Duration and Notes share the area beside Messages and wrap as space narrows. Main cards stack below the existing detail-width breakpoint. Trait hover/selection is inset in the Type cell, eliminating the offset marker column.
+- **3,048 Node tests and 54 native checks pass.** [Layout verification](SIDEBAR-AND-STATES-2026-09-11.md#states-layout-revision). Editor-only changes; runtime remains **20260911.3**.
+
+## 2026-09-11 — Sidebar Events and States layout
+
+- Added Events list Up/Down/Home/End navigation and Enter editing, isolated from map cursor shortcuts. Replaced the clipped Database focus bar with an inset selected-row outline. Compacted States Duration labels, controls and checkboxes.
+- **3,048 Node tests and 38 native checks pass**, including English/dark and Simplified Chinese/light. Editor remains **0.98.6**; runtime **20260911.3** unchanged. [Details and evidence](SIDEBAR-AND-STATES-2026-09-11.md).
+
+## 2026-09-11 — Picker size follow-up
+
+- Fixed Show Text source-cell sampling and preview sizing for non-144px faces, plus the 8px above-character star font. Actual Actor/Show Text picker clicks pass at 288px and 32px.
+- **3,048 Node tests and 56 native checks pass.** Editor-only changes; runtime remains **20260911.3**. See [picker verification](CAMERA-AND-LARGE-FACES-2026-09-11.md#picker-follow-up).
+
+## 2026-09-11 — 2D camera and 288px faces
+
+- Completed the remaining camera request: System 2 Advanced has 1–8× zoom and X/Y framing offsets, with matching pointer navigation, bounds and saved scroll behavior. Added the 288×288 face option.
+- **3,046 Node tests and 100 native checks pass** (75 camera, 25 large-face/small-art). Runtime **20260911.3**, editor **0.98.6**. See [behavior and verification](CAMERA-AND-LARGE-FACES-2026-09-11.md).
+
+## 2026-09-11 — Expanded tile sizes and small pixel-art fixes
+
+- Added 64px/8px tile support, tileset/character/interface preview zoom, configurable face slicing/runtime dimensions, native game-window sizing and opt-in whole-frame pixelated enlargement.
+- **3,038 Node tests and 66 native checks pass**, with resized copies of real tileset art at 64, 16 and 8 pixels. Runtime **20260911.2** synchronized to all 13 bundled projects; editor remains **0.98.6**.
+- The subsequent [camera follow-up](CAMERA-AND-LARGE-FACES-2026-09-11.md) completes default 2D zoom and framing offsets. See [details and evidence](TILE-SIZES-AND-SMALL-PIXEL-ART-2026-09-11.md).
+
+## 2026-09-11 — Menu and shop touch buttons
+
+- Restored the missing Pixi 8 `worldVisible` compatibility property, which caused visible menu/cancel and shop quantity/confirm buttons to reject all input. Removed duplicate touch processing so fast clicks dispatch once.
+- **3,034 automated tests pass**. Native mouse and simulated-touch checks pass **nine cases each** in Hendrix Action Combat and Barebones, including menu open/close, all quantity arrows, and a single confirmed purchase.
+- Runtime **20260911.1**, editor **0.98.6**. All 13 local project runtimes are synchronized; all 3,584 checked authored files and manifests remain byte-identical. Earlier local work is preserved. Details: [touch-button fix](TOUCH-BUTTON-FIX-2026-09-11.md).
+
+## 2026-09-10 — PR #55 integration and issue #54 keyboard/UI fixes
+
+- Fast-forwarded `main` to upstream merge **5732106** (PR #55: enemy Behaviour forecast), then restored existing local work. Reconciled the editor changelog and retained the prior 0.98.6 lifecycle, rendering and navigation fixes. Seven additional forecast regressions exposed and now cover selection-style, repeating-turn, zero-TP and resource-boundary errors in the incoming change.
+- Fixed issue #54 list selection/focus, popup arrow handling, stable Trait/Effect dialog sizing, tileset filename readability and inactive event-condition displays. An isolated pre-fix application reproduced 23 failing UI checks. Added `npm run smoke:nw-keyboard` and a native CI gate with JSON/screenshot artifacts.
+- **3,022 automated tests pass**. Native forecast checks pass 13 cases; the keyboard/UI audit passes 117 checks in English/dark at 1600×900 and Simplified Chinese/light at 1280×720, including real WebDriver arrow/Enter input. The existing 47-check interaction audit also passes. GitHub has not run the changed CI workflow.
+- Editor **0.98.6**, runtime **20260907.3** unchanged. Authored projects and earlier local work are preserved. Integration fixes remain uncommitted; no push, publication or GitHub issue/comment update. Details: [PR integration](PR-INTEGRATION-2026-09-10.md), [keyboard/UI audit](UI-KEYBOARD-AUDIT-2026-09-10.md).
+
+## 2026-09-07 — Interaction-order audit
+
+- Reproduced and fixed cross-record Actor/Class field writes, repeated handler/preview setup, event-command shortcuts reaching outside their list, invisible selection after rapid navigation across a database batch boundary, and retired tileset pickers assigning into a later record.
+- Added ten automated regressions and `npm run smoke:nw-interactions`. The native harness tests rapid revisits, nested keyboard scopes, queued retired-dialog actions, delayed/reordered map loads and seeded navigation. CI now includes this smoke and uploads seed/trace JSON plus a screenshot; that workflow update has been validated locally, not run on GitHub yet.
+- **2,997 automated tests pass**. The 47-check native interaction audit passes with three seeds (120 navigation actions per seed). Fresh broader audits pass 405 database state checks, 123 command entries, 19 database sections, 56 nested dialogs and 32 menu cases. See [interaction-order audit](INTERACTION-ORDER-AUDIT-2026-09-07.md) for reproduction details and coverage limits.
+- Editor-only 0.98.6 changes; runtime stays **20260907.3**. Previous working changes remain intact. No authored user project writes, commit, push or publication.
+
+## 2026-09-07 — Map and Database navigation regressions (issue #53)
+
+- Fixed map drag feedback jitter, cancelled-switch/Transfer Player ghost highlights, picker arrow-key routing, database boundary redraws and deferred preview/layout flicker.
+- Wheel zoom now preserves the cursor anchor in 2D and 3D. 2D edge zoom can leave a bounded margin; panning cannot extend it, scrollbars cover its full range, and switching maps clears it.
+- **2,987 automated tests and 73 native UI checks pass**, with no captured uncaught errors; 1,072 JavaScript syntax checks and patch hygiene pass. The native regression uses an isolated profile and disposable project/assets. See [navigation audit](UI-NAVIGATION-AUDIT-2026-09-07.md) for reproduced causes, measurements and coverage limits.
+- Editor-only changes for 0.98.6; runtime revision remains **20260907.3**. Existing local work and PR #52 integration are retained. No publication or GitHub issue update.
+
+## 2026-09-07 — PR #52 integrated into 0.98.6
+
+- Fast-forwarded `main` from `fa81c96` to upstream merge `8bb3f5b`, then restored the existing working changes. The only conflict was the editor changelog; incoming notes and local 0.98.6 fixes are retained. Existing media, tileset-key, event-page and rendering work remains uncommitted.
+- Incoming changes add music fade-in/crossfade, intros, pool ordering/shuffling, per-track volume and single-track palettes; isolate fades from volume/ducking; and correct comment/plugin-argument display and folding in map, troop and common-event lists.
+- Runtime revision **20260907.3**, synchronized across all 13 bundled projects. All 30 project plugin manifests remain byte-identical.
+- **2,984 automated tests pass**, plus 17 native UI checks and two real offline audio renders. Syntax checks and patch hygiene pass. See [integration details](PR-INTEGRATION-2026-09-07.md) for evidence, scope and retained backup/stash locations. No remote push.
+
+## 2026-09-07 — 1440p movement performance on integrated Radeon
+
+- Runtime **20260907.2** retains a bounded set of 3D effect quads between loops, eliminating repeat shader compilation after warmup, and skips a room floor only when a proven opaque parallax fully hides it. Preserve authored resolution, textures, shadows, antialiasing and model detail.
+- Tested a full 2560×1440 rendering buffer on the external Acer at 144 Hz. All seven walking samples aggregate to 25.47 FPS baseline versus 26.07 FPS optimized, with substantial variation and persistent spikes. Repeat shader compilations fall from 12 to zero per route; sustained 60/144 FPS remains unachieved. See [performance evidence and limits](PERFORMANCE.md).
+- Eleven full-resolution floor comparisons and three effect-quad comparisons match every channel. Image decoding, title/map cleanup and resizing pass; 175 focused tests and both synchronization checks pass. All 13 local projects carry the runtime. The broader Windows suite retains 23 failures outside the rendering paths after revision/sync corrections; it is not green. Authored data and unrelated changes are preserved.
+
+## 2026-09-07 — Tileset flag key lifecycle
+
+- Clicking an active tileset flag button now deselects it and hides the Key; every Key also has a localized Close button. Button highlights and accessible pressed states follow the active tool, and empty panels release their layout space. Keep the full Key reachable at 1280×720 when the sheet overflows horizontally.
+- Reset the nested compact editor when leaving a database detail (including close/reopen, record/section changes and project changes), and after a successful map load. Clear passage brushes, pending paint/3D gestures and 3D selections without changing authored flags.
+- Validation: **2,940 automated tests pass**. Native `editor/tests/smoke/nw-tileset-key.cjs` covers all eight flag modes, Close, brush reset, Database reopen, section/tileset changes and a map switch while Database is open; no captured uncaught errors and tileset data remains identical. `--before` reproduces the original passability toggle failure. Logs: `/tmp/rr-tileset-key-before.log`, `/tmp/rr-tileset-key-native.log`, `/tmp/rr-tileset-key-full.log`. Changed JavaScript syntax checks and `git diff --check` pass.
+- Editor-only fix for 0.98.6; runtime revision remains **20260907.1**. Native checks use a disposable Demo copy and isolated profile.
+
+## 2026-09-06 — Event-page layout and empty dropdowns
+
+- Reproduced the audience report in English at 1280×720: page configuration overwrote its scrollable parent with `overflow:hidden`, and the flexible image area reached zero height. Keep settings scrollable, give the image section a compact non-shrinking basis, and reserve at least 88px for the preview canvas.
+- Disabled Item/Actor conditions now display blank while retaining their saved IDs; re-enabling restores the prior choice. No project condition semantics or authored IDs are changed merely by opening the editor.
+- Blank selections exposed a shared dropdown sizing bug: an empty label removed the line box and collapsed the trigger to 10px. The shared select shim now reserves one line plus padding/borders, preserving populated-control sizing for every locale.
+- Validation: 2,937 automated tests pass. `editor/tests/smoke/nw-event-page-layout.cjs` checks the actual NW.js Event Editor at 1280×720, 1600×900 and 2560×1440 in English/Simplified Chinese/Traditional Chinese, light/dark themes, using a generated Chinese-named sprite. Checks include decoded pixels, preview size, dropdown dimensions, horizontal overflow, and condition ID round trips. `--before` reproduces the original zero-height preview. Logs: `/tmp/rr-event-page-layout-before.log`, `/tmp/rr-event-page-layout.log`, `/tmp/rr-event-page-tests.log`.
+- Editor-only change; runtime revision remains **20260907.1**. Tileset dimension support is outside this fix. Tests use temporary assets and an isolated profile, without opening or saving the user's Demo project.
+
+## 2026-09-06 — Web Battle Room media startup and cancellation
+
+- Battle Room playback now distinguishes browser autoplay denial/cancellation from invalid media. Retry directly during pointer/key/touch gestures, prevent overlapping play requests, and release retry listeners on success, failure, and disposal. Guard duplicate media errors and keep texture creation behind decoded-frame readiness.
+- MZ's promise-rejection handler ignores only `AbortError` messages identifying interrupted `play()` requests. This covers uncaught legacy-plugin video cancellation without suppressing fetch/storage cancellations or programming errors. No MV plugin behavior is replaced.
+- Added five behavioral tests and `editor/tests/smoke/web-battle-room-media.cjs`. Real Chromium iframe smoke uses generated WebM with audio: ten blocked players recover on a real click; immediate disposal and native legacy play/pause cancellation stay nonfatal; missing image/video warn once each. The autoplay regression fails against the hosted 0.98.5 room player.
+- Optional `ReactorQuests.json` and `.BattlePresentation.pending.json` requests already treat absence as empty data; their 404s are not fatal. Hosted itch policy/extension messages are separate from game media handling.
+- Validation: **2,937 automated tests pass**, the Chromium iframe media regression passes, changed runtime syntax checks pass, and `git diff --check` is clean.
+- Runtime revision **20260907.1**, synchronized to all 13 local projects. This is a source fix for the next 0.98.6 web build; the hosted archive has not been replaced. Full Demo browser battle verification hit a WebDriver timeout with software rendering; isolated real-browser media checks passed. Logs: `/tmp/rr-web-room-media-before.log`, `/tmp/rr-web-room-media-after.log`, `/tmp/rr-0.98.6-web-room-tests.log`.
+
+## 2026-09-06 — 0.98.6 development opened
+
+- The user reports 0.98.5 publication is complete. Start new work under **0.98.6**; keep the released 0.98.5 changelog and announcement documents as historical records.
+- Update desktop/package-lock, About/localized version, browser fallback, and runtime version stamps to 0.98.6. Runtime behavior/revision remains **20260906.19**.
+- Record upcoming changes under `[Unreleased - 0.98.6]` in both changelogs. Release instructions now target 0.98.6; the public download/source release reference remains 0.98.5 until the next release ships.
+
 ## 2026-09-06 — 0.98.5 release preparation
 
 - Consolidated the release into coherent feature notes covering Battle Rooms/Action Sequences, lighting/media, quests/interfaces/audio, and compatibility/reliability. Root and editor changelogs now share the same current summary; historical development detail is retained in `docs/releases/0.98.5-development-notes.md`.

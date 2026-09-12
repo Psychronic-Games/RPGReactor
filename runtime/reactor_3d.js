@@ -905,7 +905,13 @@ Reactor3D.EmptyPass = {
 Reactor3D.renderScene = function(renderer, scene, camera) {
     this.SkeletonUpdates.prepare(scene);
     const detail = this.GeometryDetail;
-    if (!detail.enabled || detail._failed || this.tier() !== 'weak') return renderer.render(scene, camera);
+    if (!detail.enabled || detail._failed || this.tier() !== 'weak') {
+        const auto = scene.matrixWorldAutoUpdate;
+        try {
+            if (auto) { scene.updateMatrixWorld(); scene.matrixWorldAutoUpdate = false; }
+            return this.CoveredFloor.draw(renderer, scene, camera);
+        } finally { scene.matrixWorldAutoUpdate = auto; }
+    }
     const sceneAuto = scene.matrixWorldAutoUpdate, cameraAuto = camera.matrixWorldAutoUpdate;
     const previous = detail._active;
     let swaps = [];
@@ -918,7 +924,7 @@ Reactor3D.renderScene = function(renderer, scene, camera) {
         const height = target?.height || renderer.domElement?.height || 1080;
         swaps = detail.begin(scene, camera, height);
         detail._active = swaps;
-        return renderer.render(scene, camera);
+        return this.CoveredFloor.draw(renderer, scene, camera);
     } finally {
         detail.end(swaps); detail._active = previous;
         scene.matrixWorldAutoUpdate = sceneAuto; camera.matrixWorldAutoUpdate = cameraAuto;
@@ -5058,6 +5064,7 @@ Reactor3D.MapScene.prototype.addParallaxGround = function(bitmap, tileSize, inde
     // Beneath the tile geometry in the same pass, so anything actually painted
     // on the map still draws over the picture of it.
     mesh.renderOrder = -1;
+    Reactor3D.CoveredFloor.register(this._scene, mesh, bitmap, "cover");
     // The first layer is the floor everything else is measured against; the
     // rest are dressing laid over it.
     if (!this._parallaxGround) this._parallaxGround = mesh;
@@ -5231,8 +5238,124 @@ Reactor3D.MapScene.prototype.addRoomPiece = function(piece, bitmap, roomHeight, 
         // Behind the parallax grounds, which are behind the tiles.
         mesh.renderOrder = -2;
         mesh.userData.roomPiece = piece;
+        Reactor3D.CoveredFloor.register(this._scene, mesh, bitmap, piece);
         this.belowGroup().add(mesh);
         this._meshes.push(mesh);
+    }
+};
+
+/** Skip a room floor only while an intact, opaque parallax hides it. */
+Reactor3D.CoveredFloor = {
+    enabled: true,
+    _scenes: new WeakMap(),
+    _surfaces: new WeakMap(),
+    _images: new WeakMap(),
+    opaque(image) {
+        // Live canvases/videos and unknown image types have no lasting alpha proof.
+        if (!image || image.tagName !== "IMG" || !image.complete || !image.naturalWidth) return false;
+        const known = this._images.get(image);
+        if (known && known.src === image.src && known.width === image.naturalWidth && known.height === image.naturalHeight) return known.opaque;
+        let opaque = false;
+        try {
+            const canvas = document.createElement("canvas");
+            canvas.width = image.naturalWidth; canvas.height = image.naturalHeight;
+            const context = canvas.getContext("2d", { willReadFrequently: true });
+            context.drawImage(image, 0, 0);
+            const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
+            opaque = true;
+            for (let i = 3; i < pixels.length; i += 4) if (pixels[i] !== 255) { opaque = false; break; }
+            canvas.width = canvas.height = 1;
+        } catch (_) { /* Tainted/unavailable image: draw the original floor. */ }
+        this._images.set(image, { src: image.src, width: image.naturalWidth, height: image.naturalHeight, opaque });
+        return opaque;
+    },
+    register(scene, mesh, bitmap, kind) {
+        const geometry = mesh.geometry, material = mesh.material, texture = material.map;
+        const image = bitmap.image;
+        const record = { mesh, bitmap, kind, geometry, material, texture, image, src: image?.src,
+            version: texture.version, sourceVersion: texture.source?.version,
+            compile: material.onBeforeCompile, before: material.onBeforeRender, draw: mesh.onBeforeRender,
+            positions: Array.from(geometry.attributes.position.array), indices: Array.from(geometry.index.array),
+            opaque: !bitmap._animatedImage && this.opaque(image) };
+        this._surfaces.set(mesh, record);
+        let entries = this._scenes.get(scene);
+        if (!entries) this._scenes.set(scene, entries = []);
+        entries.push(record);
+        // Cached image dimensions can arrive before decoding finishes. Do the
+        // one-time proof when decoding settles, never poll/read pixels per frame.
+        if (image?.tagName === "IMG" && !image.complete && typeof image.decode === "function") {
+            try { image.decode().then(() => {
+                if (this._scenes.get(scene) !== entries || !entries.includes(record)) return;
+                record.opaque = !bitmap._animatedImage && bitmap.image === image && image.src === record.src && this.opaque(image);
+            }, () => {}); } catch (_) { /* Unavailable decode keeps the original draw. */ }
+        }
+    },
+    intact(record, opaque) {
+        const { mesh, material: m, geometry: g, texture: t, bitmap, image } = record;
+        if (!mesh.visible || mesh.castShadow || mesh.geometry !== g || mesh.material !== m || !m.visible || m.map !== t || m.wireframe || m.vertexColors
+            || m.opacity !== 1 || m.blending !== THREE.NormalBlending || !m.colorWrite || !m.depthWrite || !m.depthTest
+            || m.depthFunc !== THREE.LessEqualDepth || m.stencilWrite || m.alphaMap || m.alphaHash || m.alphaToCoverage
+            || m.clippingPlanes?.length || m.polygonOffset || m.onBeforeCompile !== record.compile
+            || m.onBeforeRender !== record.before || mesh.onBeforeRender !== record.draw
+            || m.alphaTest > 1 || bitmap._animatedImage || bitmap.image !== image || image?.src !== record.src
+            || t.image !== image || t.version !== record.version || t.source?.version !== record.sourceVersion
+            || (opaque && !record.opaque)) return false;
+        const p = g.attributes.position?.array, index = g.index?.array;
+        if (g.drawRange.start !== 0 || g.drawRange.count < 6 || g.groups.length || g.morphAttributes.position || !p || !index
+            || p.length !== record.positions.length || index.length !== record.indices.length) return false;
+        for (let i = 0; i < p.length; i++) if (p[i] !== record.positions[i]) return false;
+        for (let i = 0; i < index.length; i++) if (index[i] !== record.indices[i]) return false;
+        // Factory floor vertices already carry world coordinates. Edited, rotated
+        // or scaled scene hierarchies keep the ordinary rendering path.
+        const e = mesh.matrixWorld.elements;
+        for (let i = 0; i < 16; i++) if (e[i] !== (i % 5 === 0 ? 1 : 0)) return false;
+        return true;
+    },
+    covers(floor, cover, camera) {
+        const projection = camera.projectionMatrix.elements;
+        if (!camera.isPerspectiveCamera || camera.parent || camera.reversedDepth
+            || camera.scale.x !== 1 || camera.scale.y !== 1 || camera.scale.z !== 1
+            || projection[11] !== -1 || projection[1] || projection[2] || projection[3] || projection[4]
+            || projection[6] || projection[7] || projection[8] || projection[9] || projection[12] || projection[13] || projection[15]
+            || Math.abs(projection[14] / (projection[10] - 1) - camera.near) > 1e-7
+            || floor.mesh.parent !== cover.mesh.parent || floor.mesh.renderOrder !== -2 || cover.mesh.renderOrder !== -1
+            || floor.material.side !== THREE.FrontSide || cover.material.side !== THREE.DoubleSide
+            || !this.intact(floor, false) || !this.intact(cover, true)) return false;
+        const f = floor.positions, c = cover.positions, eye = camera.position;
+        // With the eye inside the upper rectangle, every ray to the lower
+        // rectangle crosses it. Leave the boundary and near-plane cases alone.
+        if (f.length !== 12 || c.length !== 12 || !(c[1] > f[1])
+            || c[0] > f[0] || c[2] > f[2] || c[3] < f[3] || c[8] < f[8]
+            || eye.x <= c[0] + 0.01 || eye.x >= c[3] - 0.01 || eye.z <= c[2] + 0.01 || eye.z >= c[8] - 0.01) return false;
+        const nearReach = camera.near * Math.sqrt(1 + 1 / camera.projectionMatrix.elements[0] ** 2
+            + 1 / camera.projectionMatrix.elements[5] ** 2);
+        return Number.isFinite(nearReach) && eye.y - c[1] > nearReach + 0.01;
+    },
+    draw(renderer, scene, camera) {
+        const entries = this.enabled && this._scenes.get(scene), hidden = [];
+        if (entries && !scene.overrideMaterial && !renderer.clippingPlanes?.length && !renderer.xr?.isPresenting) {
+            for (const floor of entries) {
+                if (floor.kind !== "floor" || !floor.mesh.parent?.visible || !floor.mesh.layers.test(camera.layers)) continue;
+                const cover = entries.find(candidate => candidate.kind === "cover" && candidate.mesh.layers.test(camera.layers)
+                    && this.covers(floor, candidate, camera));
+                if (!cover) continue;
+                // A translucent surface drawn between the floors could retain the
+                // lower floor's colour when its depth prevents the upper draw.
+                // Only unchanged, opaque room pieces may intervene.
+                let safe = true;
+                scene.traverseVisible(object => {
+                    if (!safe || !object.material || object === floor.mesh || object === cover.mesh || !object.layers.test(camera.layers)) return;
+                    for (const m of [].concat(object.material || [])) {
+                        if (!m.visible || !m.transparent || object.renderOrder < -2 || object.renderOrder > -1) continue;
+                        const known = this._surfaces.get(object);
+                        if (!known || object.parent !== floor.mesh.parent || !this.intact(known, true)) safe = false;
+                    }
+                });
+                if (safe) { hidden.push(floor.mesh); floor.mesh.visible = false; }
+            }
+        }
+        try { return renderer.render(scene, camera); }
+        finally { for (const mesh of hidden) mesh.visible = true; }
     }
 };
 
@@ -5358,7 +5481,7 @@ Reactor3D.currentFlags = function() {
 Reactor3D.currentTileSize = function() {
     const size = typeof $dataSystem !== "undefined" && $dataSystem
         ? Number($dataSystem.tileSize) : 0;
-    return [48, 32, 24, 16].includes(size) ? size : 48;
+    return [64, 48, 32, 24, 16, 8].includes(size) ? size : 48;
 };
 
 Reactor3D.currentTilesetId = function() {
@@ -6775,6 +6898,7 @@ Reactor3D.beamBodyMaterial = function() {
 
 Reactor3D.MapScene.prototype.clear = function() {
     Reactor3D.EffekseerScene?.stopScene(this._scene);
+    Reactor3D.CoveredFloor?._scenes.delete(this._scene);
     this._animated = [];
     this._frame = -1;
     this._facade = null;
@@ -10530,6 +10654,10 @@ Reactor3D.databaseModelSpec = function(section, id) {
     this.loadDatabaseSidecar();
     const sidecar = this._databaseSidecar;
     let entry = sidecar && sidecar[section] && sidecar[section][String(id)];
+    if (section === 'enemies') {
+        const graphic = globalThis.ReactorBattlePresentation?.settings?.enemies?.[id]?.graphic;
+        if (graphic?.mode && graphic.mode !== 'auto') entry = graphic.mode === 'model' ? graphic.model || entry : null;
+    }
     // An actor binds per surface: character (map model), face, battler.
     // A flat legacy entry is its character slot.
     if (section === "actors") entry = this.actorEntrySlots(entry).character;
@@ -10550,6 +10678,8 @@ Reactor3D.actorSlotSpec = function(actorId, slot) {
     this.loadDatabaseSidecar();
     const sidecar = this._databaseSidecar;
     const entry = sidecar && sidecar.actors && sidecar.actors[String(actorId)];
+    const graphic = slot === 'battler' && globalThis.ReactorBattlePresentation?.settings?.actors?.[actorId]?.graphic;
+    if (graphic?.mode && graphic.mode !== 'auto') return this.normalizeModelSpec(graphic.mode === 'model' ? graphic.model || this.actorEntrySlots(entry)[slot] : null);
     return this.normalizeModelSpec(this.actorEntrySlots(entry)[slot]);
 };
 
@@ -14231,6 +14361,7 @@ Reactor3D.updateEnemyModelSprite = function(sprite) {
     let state = sprite._reactorBattler;
     if (!spec) {
         if (state) {
+            this.releaseBattlerState(state);
             sprite._reactorBattler = null;
             // Reload the stock battler art the model had replaced.
             sprite._battlerName = "";
@@ -14423,6 +14554,7 @@ Reactor3D.updateActorModelSprite = function(sprite) {
     let state = sprite._reactorBattler;
     if (!spec || !main) {
         if (state) {
+            this.releaseBattlerState(state);
             sprite._reactorBattler = null;
             sprite._battlerName = "";
         }
@@ -16079,9 +16211,11 @@ Reactor3D.EffekseerScene = {
     _live: [],
     _pass: "all",
     scissorEnabled: true,
+    reuseQuads: true,
+    _quadPools: new WeakMap(),
 
     /** The screen-sized quad that carries one effect's picture at its anchor's depth. */
-    quadFor(scratch) {
+    quadFor(scratch, scene) {
         const texture = new THREE.Texture(scratch);
         texture.flipY = true;
         texture.premultiplyAlpha = false;
@@ -16089,6 +16223,22 @@ Reactor3D.EffekseerScene = {
         texture.magFilter = THREE.LinearFilter;
         texture.generateMipmaps = false;
         if (THREE.SRGBColorSpace) texture.colorSpace = THREE.SRGBColorSpace;
+        // Keep a few tiny drawing quads between loops. Disposing the last
+        // material releases three's program AND shader-source cache entries,
+        // forcing the same shader to compile again when the effect restarts.
+        // Textures and render targets still belong to a single play.
+        const reused = this.reuseQuads && scene && this._quadPools.get(scene)?.pop();
+        if (reused) {
+            reused.texture = texture;
+            const uniforms = reused.material.uniforms;
+            uniforms.map.value = texture;
+            uniforms.resolution.value.set(1, 1);
+            uniforms.depth.value = uniforms.flip.value = 0;
+            uniforms.rectMin.value.set(0, 0);
+            uniforms.rectSize.value.set(1, 1);
+            reused.mesh.visible = false;
+            return reused;
+        }
         const material = new THREE.ShaderMaterial({
             // `flip`: 1 when the source's rows arrive top-down regardless of
             // the texture's flipY (a WebGL canvas handed to three directly).
@@ -16171,7 +16321,7 @@ Reactor3D.EffekseerScene = {
         const scratch = document.createElement("canvas");
         scratch.width = 4;
         scratch.height = 4;
-        const quad = this.quadFor(scratch);
+        const quad = this.quadFor(scratch, viewport._scene);
         scene.add(quad.mesh);
         // The sprite keeps its hands off the handle: the anchor owns its place.
         sprite._reactorInScene = true;
@@ -16209,9 +16359,20 @@ Reactor3D.EffekseerScene = {
         const quad = play.quad;
         if (quad) {
             if (quad.mesh.parent) quad.mesh.parent.remove(quad.mesh);
-            quad.mesh.geometry.dispose();
-            quad.material.dispose();
             quad.texture.dispose();
+            // Never retain a play's native image, GPU target or scratch canvas.
+            // The pool is bounded per owning scene and drained by stopScene.
+            let pool = play.scene && this._quadPools.get(play.scene);
+            if (this.reuseQuads && play.scene && quad.material.uniforms?.map && (!pool || pool.length < 4)) {
+                if (!pool) this._quadPools.set(play.scene, pool = []);
+                quad.texture = null;
+                quad.material.uniforms.map.value = null;
+                quad.mesh.visible = false;
+                pool.push(quad);
+            } else {
+                quad.mesh.geometry.dispose();
+                quad.material.dispose();
+            }
         }
         const at = this._live.indexOf(play);
         if (at >= 0) this._live.splice(at, 1);
@@ -16232,6 +16393,14 @@ Reactor3D.EffekseerScene = {
             finally {
                 if (sprite) { sprite._handle = null; sprite._playing = false; }
                 this.stop(play); Reactor3D.GpuEffects.restoreDefault();
+            }
+        }
+        const pool = this._quadPools.get(scene);
+        if (pool) {
+            this._quadPools.delete(scene);
+            for (const quad of pool) {
+                quad.mesh.geometry.dispose();
+                quad.material.dispose();
             }
         }
     },

@@ -45,7 +45,7 @@ function stubPickerDom(baseZIndex = '10001') {
     global.RRPickerIndex = {
         createBrowser(options) {
             calls.push(options);
-            return { element: fakeElement(), scrollTo() {} };
+            return { element: fakeElement(), scrollTo() {}, focusSelected() { options.focused = true; } };
         }
     };
     return { nodes, calls, ui: Object.create(DatabaseEditorUI.prototype) };
@@ -57,6 +57,7 @@ test('the shared picker lends its stacking level and keeps (None) pinned', () =>
 
     ui.showImagePicker('Select Picture', ['Ship'], () => {}, () => '', '', { zIndex: 10007 });
     assert.equal(nodes['image-picker-modal'].style.zIndex, '10007');
+    assert.equal(calls.at(-1).focused, true, 'the opened picker owns arrow navigation');
 
     ui.showImagePicker('Select Battleback 1', ['Grassland'],
         (name, index) => selected.push([name, index]), () => '', '', { allowNone: true });
@@ -243,7 +244,7 @@ test('a video picker previews the movie itself, playing and muted', () => {
         }
     };
     global.window = { I18n: null };
-    global.RRPickerIndex = { createBrowser: () => ({ element: fakeElement(), scrollTo() {} }) };
+    global.RRPickerIndex = { createBrowser: () => ({ element: fakeElement(), scrollTo() {}, focusSelected() {} }) };
 
     const ui = Object.create(DatabaseEditorUI.prototype);
     ui.showImagePicker('Video', ['Intro.webm'], () => {},

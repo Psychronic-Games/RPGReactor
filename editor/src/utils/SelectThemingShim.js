@@ -138,12 +138,17 @@
 
         // Scrollable list container (header/search stays pinned above it).
         const list = document.createElement('div');
+        popup.tabIndex = -1;
+        list.setAttribute('role', 'listbox');
         list.style.cssText = 'overflow-y: auto; flex: 1 1 auto; min-height: 0;';
         list.addEventListener('wheel', (ev) => ev.stopPropagation());
 
         // Render one row per option group/option.
         const renderOption = (opt) => {
             const item = document.createElement('div');
+            item.dataset.optionIndex = String(Array.from(selectEl.options).indexOf(opt));
+            item.setAttribute('role', 'option');
+            item.setAttribute('aria-disabled', String(opt.disabled || opt.parentElement?.disabled || false));
             const isActive = opt.value === selectEl.value;
             const hint = opt.title || '';
             item.style.cssText = `
@@ -203,7 +208,7 @@
             // point of writing them: an author who knows what they want but not
             // what it is called can search for "dead" or "random".
             item.dataset.optText = searchText(`${opt.textContent} ${hint}`);
-            if (!opt.disabled) {
+            if (item.getAttribute('aria-disabled') !== 'true') {
                 item.addEventListener('mouseenter', () => {
                     if (!isActive) item.style.background = 'var(--color-accent-tint-15)';
                 });
@@ -211,6 +216,7 @@
                     if (!isActive) item.style.background = 'transparent';
                 });
                 item.addEventListener('click', () => {
+                    selectEl.focus({ preventScroll: true });
                     selectEl.value = opt.value;
                     // Synthesize change + input events so existing listeners fire.
                     selectEl.dispatchEvent(new Event('change', { bubbles: true }));
@@ -250,7 +256,7 @@
             // Keep focus interactions inside the popup from closing it.
             search.addEventListener('mousedown', (ev) => ev.stopPropagation());
             popup.appendChild(search);
-            setTimeout(() => search.focus(), 0);
+            setTimeout(() => { if (openPopup === popup && search.isConnected) search.focus({ preventScroll: true }); }, 0);
         }
 
         // Walk children: support <optgroup> too.
@@ -278,6 +284,16 @@
         popup.appendChild(list);
         document.body.appendChild(popup);
         openPopup = popup;
+        popup.focus({ preventScroll: true });
+        let keyboardIndex = selectEl.selectedIndex;
+        const highlight = () => {
+            list.querySelectorAll('[data-option-index]').forEach(row => {
+                const active = Number(row.dataset.optionIndex) === keyboardIndex;
+                row.setAttribute('aria-selected', String(active));
+                row.style.boxShadow = active ? 'inset 0 0 0 2px var(--color-accent-border-strong)' : '';
+            });
+        };
+        highlight();
 
         // Auto-scroll to the currently-selected option so the user lands on it.
         const activeItem = list.querySelector('div[style*="accent-tint-25"]');
@@ -291,7 +307,31 @@
             }
         };
         const escClose = (ev) => {
-            if (ev.key === 'Escape') closeOpenPopup();
+            if (openPopup !== popup) return;
+            if (ev.key === 'Escape') {
+                ev.preventDefault(); ev.stopPropagation();
+                closeOpenPopup();
+                if (selectEl.isConnected) selectEl.focus({ preventScroll: true });
+                return;
+            }
+            if (ev.altKey || ev.ctrlKey || ev.metaKey) return;
+            const editing = ev.target.tagName === 'INPUT';
+            const step = { ArrowDown: 1, ArrowUp: -1, ArrowRight: 1, ArrowLeft: -1, Home: -Infinity, End: Infinity }[ev.key];
+            if (editing && !['ArrowDown', 'ArrowUp', 'Enter'].includes(ev.key)) return;
+            if (step === undefined && ev.key !== 'Enter' && (ev.key !== ' ' || editing)) return;
+            ev.preventDefault(); ev.stopPropagation();
+            const rows = Array.from(list.querySelectorAll('[data-option-index]'))
+                .filter(row => row.style.display !== 'none' && row.getAttribute('aria-disabled') !== 'true');
+            if (!rows.length) return;
+            let at = rows.findIndex(row => Number(row.dataset.optionIndex) === keyboardIndex);
+            if (step !== undefined) {
+                at = step === -Infinity ? 0 : step === Infinity ? rows.length - 1
+                    : at < 0 ? (step > 0 ? 0 : rows.length - 1)
+                    : Math.max(0, Math.min(rows.length - 1, at + step));
+                keyboardIndex = Number(rows[at].dataset.optionIndex);
+                highlight();
+                rows[at].scrollIntoView({ block: 'nearest' });
+            } else rows[Math.max(0, at)].click();
         };
         const scrollClose = (ev) => {
             // Popup is fixed-positioned; if the page scrolls, the popup would
@@ -313,6 +353,7 @@
             window.removeEventListener('scroll', scrollClose, true);
         };
         setTimeout(() => {
+            if (openPopup !== popup) return;
             document.addEventListener('mousedown', closeOnOutside, true);
             document.addEventListener('keydown', escClose, true);
             window.addEventListener('scroll', scrollClose, true);
@@ -375,7 +416,11 @@
             text-overflow: ellipsis;
             transition: border-color var(--ease-base);
             min-width: 60px;
+            box-sizing: border-box;
+            min-height: calc(1lh + 10px);
         `;
+        // Empty selections still need one line plus the vertical padding and
+        // borders. Otherwise a blank label collapses the control to 10px.
         // The label is a span rather than a bare text node so it can hold an
         // icon alongside the text; the caret stays a sibling of it.
         const label = document.createElement('span');
@@ -411,6 +456,12 @@
             } else {
                 openPopupFor(selectEl, trigger);
             }
+        });
+        selectEl.addEventListener('keydown', event => {
+            if (event.defaultPrevented || selectEl.disabled || event.altKey || event.ctrlKey || event.metaKey) return;
+            if (!['ArrowDown', 'ArrowUp', 'Enter', ' '].includes(event.key)) return;
+            event.preventDefault(); event.stopPropagation();
+            if (!openPopup) openPopupFor(selectEl, trigger);
         });
 
         wrapper.appendChild(trigger);

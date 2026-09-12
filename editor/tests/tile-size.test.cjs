@@ -18,7 +18,7 @@ test('the tile size comes from the project, not from an assumption', () => {
 
     // Anything else is more likely a damaged file than a project nobody has
     // seen, and guessing silently is what this module exists to stop.
-    assert.equal(metrics.tileSizeOf({ tileSize: 64 }), 48);
+    assert.equal(metrics.tileSizeOf({ tileSize: 12 }), 48);
     assert.equal(metrics.tileSizeOf({ tileSize: '32' }), 32, 'a string still reads as a number');
     assert.equal(metrics.tileSizeOf({}), 48);
     assert.equal(metrics.tileSizeOf(null), 48);

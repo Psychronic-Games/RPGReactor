@@ -11,7 +11,8 @@
     "mainFontFilename": "_decterm.ttf",
     "screenScale": 1,
     "windowOpacity": 192,
-    "picturesUpperLimit": 100
+    "picturesUpperLimit": 100,
+    "pixelatedRendering": true
   },
   "airship": {
     "bgm": {
@@ -620,7 +621,7 @@
     "",
     ""
   ],
-  "versionId": 23423339,
+  "versionId": 81037683,
   "victoryMe": {
     "name": "Victory1",
     "pan": 0,

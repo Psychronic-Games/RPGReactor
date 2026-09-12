@@ -482,18 +482,23 @@ class DatabaseTilesetEditor {
                             <button class="compact-layer-tab" data-tab="G" style="flex: 1; padding: 8px; font-size: 11px; background-color: var(--color-bg-panel); border: 1px solid var(--color-border-input); color: var(--color-text); border-radius: 3px; cursor: pointer;">G</button>
                         </div>
 
+                        <div style="padding: 6px 12px; border-bottom: 1px solid var(--color-border);">
+                            <label>${tt('Zoom')} <select id="tileset-preview-zoom" aria-label="${tt('Zoom')}">
+                                ${[0.5, 1, 2, 3, 4, 6, 8].map(zoom => `<option value="${zoom}" ${zoom === (this.previewZoom || Math.max(1, Math.ceil(32 / this.tileSize))) ? 'selected' : ''}>${zoom * 100}%</option>`).join('')}
+                            </select></label>
+                        </div>
                         <!-- Preview area: key, sheet, 3D preview.
                              The key and the preview live in the margins the
                              sheet was already leaving empty, so nothing the
                              author was looking at moves to make room. -->
-                        <div style="flex: 1; overflow: auto; padding: 16px; display: flex; align-items: flex-start; justify-content: center; gap: 16px;">
+                        <div style="flex: 1; overflow: auto; padding: 16px; display: flex; align-items: flex-start; justify-content: safe center; gap: 16px;">
                             <!-- Sticky, so the Key — and the tool palettes it
                                  hosts — stay reachable while a tall sheet
                                  scrolls; a sheet is up to 32 rows and the
                                  brushes were a full scroll away from the tiles
                                  being painted. -->
                             <div id="flag-mode-key" style="flex: 0 0 168px; align-self: flex-start; position: sticky; top: 0; max-height: 100%; overflow-y: auto;"></div>
-                            <div id="compact-tileset-canvas-container" style="max-width: 100%;">
+                            <div id="compact-tileset-canvas-container" style="flex: 0 0 auto;">
                                 <p style="color: var(--color-text-muted); font-size: 10px;">${tt('Click a layer on the left to view')}</p>
                             </div>
                             <!-- Sticky like the Key beside it: the 3D preview
@@ -510,8 +515,8 @@ class DatabaseTilesetEditor {
         // Set up event listeners for the compact UI
         this.setupCompactEventListeners();
 
-        // The key and the preview belong to whatever mode is already
-        // selected, so they are drawn on open rather than on first click.
+        // Synchronize the key, preview and button selection with the current
+        // tool state, including the neutral state after database cleanup.
         this.refreshFlagKey();
         this.refreshTile3DPreview();
 
@@ -537,9 +542,9 @@ class DatabaseTilesetEditor {
                         ${fileName ? '' : '-'}
                     </div>
                     <div style="flex: 1; min-width: 0;">
-                        <div style="font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                        <div style="font-size: 13px; line-height: 1.4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${rrEscapeHtml(fileName || tt('(None)'))}">
                             <span style="font-weight: 600; color: var(--color-accent-bright);">${label}</span>
-                            <span style="color: ${fileName ? 'var(--color-text-muted)' : 'var(--color-text-dim)'}; font-weight: normal; font-size: 9px;"> - ${rrEscapeHtml(fileName || tt('(None)'))}</span>
+                            <span class="compact-layer-filename" style="color: ${fileName ? 'var(--color-text)' : 'var(--color-text-muted)'}; font-weight: normal; font-size: 13px;"> - ${rrEscapeHtml(fileName || tt('(None)'))}</span>
                         </div>
                     </div>
                     <button class="rr-choose-tileset-image" data-index="${index}"
@@ -746,6 +751,8 @@ class DatabaseTilesetEditor {
         // null means nothing picked yet; '' is a real choice meaning clear the
         // slot, so the two cannot share a sentinel.
         let chosen = null;
+        let browser = null;
+        const detailCurrent = this.commonUI?.databaseEditor?.captureDetailContext?.() || (() => true);
         const markChosen = () => {
             selectButton.disabled = false;
             selectButton.style.opacity = '';
@@ -755,7 +762,7 @@ class DatabaseTilesetEditor {
             if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
         };
         const confirm = () => {
-            if (chosen === null) return;
+            if (chosen === null || !overlay.isConnected || !detailCurrent()) return;
             this.assignTilesetToLayer(layerIndex, chosen, layerName);
             close();
         };
@@ -807,7 +814,7 @@ class DatabaseTilesetEditor {
                 previewPane.appendChild(image);
             };
 
-            const browser = RRPickerIndex.createBrowser({
+            browser = RRPickerIndex.createBrowser({
                 files: files.map(file => file.name),
                 selectedName: this.currentTileset?.tilesetNames?.[layerIndex] || '',
                 folders: true,
@@ -858,7 +865,8 @@ class DatabaseTilesetEditor {
         document.addEventListener('keydown', onKeyDown);
 
         document.body.appendChild(overlay);
-        this.commonUI?.databaseEditor?.registerDetailModal(overlay);
+        this.commonUI?.databaseEditor?.registerDetailModal(overlay, close);
+        browser?.focusSelected();
     }
 
     // Browse for external tileset file (copies to project)
@@ -939,6 +947,23 @@ class DatabaseTilesetEditor {
         this.renderTabPreview(tab);
     }
 
+    bindPreviewZoom(container) {
+        const zoomControl = document.getElementById('tileset-preview-zoom');
+        if (zoomControl) zoomControl.onchange = () => {
+            this.previewZoom = Number(zoomControl.value) || 1;
+            container.querySelectorAll('canvas').forEach(canvas => this.applyPreviewZoom(canvas));
+        };
+    }
+
+    applyPreviewZoom(canvas) {
+        const zoom = this.previewZoom || Math.max(1, Math.ceil(32 / this.tileSize));
+        canvas.style.width = `${canvas.width * zoom}px`;
+        canvas.style.height = `${canvas.height * zoom}px`;
+        canvas.style.maxWidth = 'none';
+        canvas.style.flexShrink = '0';
+        canvas.style.imageRendering = 'pixelated';
+    }
+
     // Render preview for a specific tab (shows all layers in that tab stacked)
     renderTabPreview(tab) {
         const tt = text => window.I18n ? window.I18n.tText(text) : text;
@@ -947,6 +972,7 @@ class DatabaseTilesetEditor {
         const generation = this._canvasLoadGeneration = (this._canvasLoadGeneration || 0) + 1;
         const detailCurrent = this.parentEditor?.captureDetailContext?.() || (() => true);
         const isCurrent = () => generation === this._canvasLoadGeneration && detailCurrent() && container.isConnected;
+        this.bindPreviewZoom(container);
         const layerIndices = this.getLayerIndicesForTab(tab);
 
         // Both render paths below rebuild these; clearing here keeps a canvas
@@ -969,6 +995,7 @@ class DatabaseTilesetEditor {
             }
         }
 
+        container.classList.toggle('tileset-empty', images.length === 0);
         if (images.length === 0) {
             // An unassigned tab used to be dead space, leaving double-clicking a
             // row in the left column as the only way in. Offer the same picker
@@ -1095,6 +1122,7 @@ class DatabaseTilesetEditor {
                 this.attachPassageBrushDrag(canvas, index, isSplitSheet);
 
                 this.tabCanvases.push({ canvas, imageIndex: index, isSplitSheet });
+                this.applyPreviewZoom(canvas);
                 wrapper.appendChild(canvas);
 
                 loadedCount++;
@@ -1174,34 +1202,35 @@ class DatabaseTilesetEditor {
         document.querySelectorAll('.compact-flag-btn').forEach(btn => {
             btn.addEventListener('click', () => {
                 const mode = btn.dataset.mode;
-
-                console.debug('Flag button clicked:', mode);
-
-                // Remove active state from all flag buttons
-                document.querySelectorAll('.compact-flag-btn').forEach(b => {
-                    b.style.backgroundColor = 'var(--color-bg-panel)';
-                    b.style.borderColor = 'var(--color-border-input)';
-                });
-
-                // Highlight selected button
-                btn.style.backgroundColor = 'var(--color-bg-hover)';
-                btn.style.borderColor = 'var(--color-accent-bright)';
-
-                // Set edit mode. Entering or leaving 3D classification swaps
-                // what the overlay shows, not just what a click does, so the
-                // canvases already on screen have to be repainted.
-                const was3D = this.currentEditMode === 'tile3d';
-                this.currentEditMode = mode;
-                // Leaving 3D drops what was selected in it. Kept, it came back
-                // as a box round a rectangle the mode being returned to has no
-                // concept of.
-                if (was3D && mode !== 'tile3d') this.clearTile3DSelection();
-                if (was3D !== (mode === 'tile3d')) this.refreshOverlays();
-                this.refreshFlagKey();
-                this.refreshTile3DPreview();
-                console.debug(`Edit mode: ${mode}`);
+                this.setFlagEditMode(this.currentEditMode === mode ? null : mode);
             });
         });
+    }
+
+    setFlagEditMode(mode, { refresh = true } = {}) {
+        const was3D = this.currentEditMode === 'tile3d';
+        this.currentEditMode = mode;
+        this.passageBrush = null;
+        this._passageBrushDrag = null;
+        this._tile3dDrag = null;
+        if (mode !== 'tile3d') this.clearTile3DSelection();
+        if (!mode) {
+            this.selectedTile = null;
+            this.selectedDirection = null;
+            this.selectedTerrain = 0;
+            this.tile3dTool = 'select';
+        }
+        if (refresh) {
+            if (was3D || mode === 'tile3d' || !mode) this.refreshOverlays();
+            this.refreshFlagKey();
+            this.refreshTile3DPreview();
+        }
+    }
+
+    /** The database wrapper owns a separate compact editor instance. */
+    resetFlagEditing(options) {
+        this.setFlagEditMode(null, this.tilesetEditor ? { refresh: false } : options);
+        this.tilesetEditor?.resetFlagEditing(options);
     }
 
     // Load thumbnails for all layer slots
@@ -1209,6 +1238,7 @@ class DatabaseTilesetEditor {
         const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const container = document.getElementById('compact-tileset-canvas-container');
         if (!container) return;
+        this.bindPreviewZoom(container);
         const generation = this._canvasLoadGeneration = (this._canvasLoadGeneration || 0) + 1;
         const detailCurrent = this.parentEditor?.captureDetailContext?.() || (() => true);
         const isCurrent = () => generation === this._canvasLoadGeneration && detailCurrent() && container.isConnected;
@@ -1324,6 +1354,7 @@ class DatabaseTilesetEditor {
 
             // Replace container content with canvas
             container.innerHTML = '';
+            this.applyPreviewZoom(canvas);
             container.appendChild(canvas);
         };
 
@@ -1672,8 +1703,9 @@ class DatabaseTilesetEditor {
         ctx.fillStyle = fill;
         ctx.fillRect(x, y, w, h);
         ctx.strokeStyle = 'rgba(0, 0, 0, 0.9)';
-        ctx.lineWidth = 1;
-        ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+        const border = Math.min(1, w / 2, h / 2);
+        ctx.lineWidth = border;
+        ctx.strokeRect(x + border / 2, y + border / 2, w - border, h - border);
     }
 
     /**
@@ -2035,7 +2067,7 @@ class DatabaseTilesetEditor {
                 // Draw star for above characters (bit 4 set)
                 if (flag & 0x10) {
                     ctx.fillStyle = 'rgba(255, 215, 0, 0.95)';
-                    ctx.font = `bold ${this.tileSize - 10}px Arial`;
+                    ctx.font = `bold ${this.tileSize - 10 * this.markScale()}px Arial`;
                     ctx.textAlign = 'center';
                     ctx.textBaseline = 'middle';
                     this.drawFlagGlyph(ctx, '★', centerX, centerY);
@@ -2151,8 +2183,11 @@ class DatabaseTilesetEditor {
         }
 
         const rect = canvas.getBoundingClientRect();
-        const x = Math.floor((e.clientX - rect.left) / this.tileSize);
-        const y = Math.floor((e.clientY - rect.top) / this.tileSize);
+        const localX = (e.clientX - rect.left) * canvas.width / rect.width;
+        const localY = (e.clientY - rect.top) * canvas.height / rect.height;
+        const x = Math.floor(localX / this.tileSize);
+        const y = Math.floor(localY / this.tileSize);
+        if (x < 0 || y < 0 || x >= canvas.width / this.tileSize || y >= canvas.height / this.tileSize) return;
 
         const tilesX = Math.floor(canvas.width / this.tileSize);
         const tilesY = Math.floor(canvas.height / this.tileSize);
@@ -2202,8 +2237,8 @@ class DatabaseTilesetEditor {
             case '4dir':
                 // Detect which quadrant of the tile was clicked to toggle that direction
                 // Get click position within the tile
-                const tileOffsetX = (e.clientX - rect.left) - (x * this.tileSize);
-                const tileOffsetY = (e.clientY - rect.top) - (y * this.tileSize);
+                const tileOffsetX = localX - (x * this.tileSize);
+                const tileOffsetY = localY - (y * this.tileSize);
                 const halfTile = this.tileSize / 2;
 
                 // Determine which direction was clicked based on quadrant
@@ -2468,8 +2503,12 @@ class DatabaseTilesetEditor {
             : '';
         return `<div style="background:var(--color-bg-panel);border:1px solid var(--color-border);`
             + `border-radius:6px;padding:10px;">`
-            + `<h4 style="margin:0 0 8px 0;font-size:9px;text-transform:uppercase;`
-            + `letter-spacing:0.5px;color:var(--color-text-muted);">${tt('Key')}</h4>${items}${hint}</div>`;
+            + `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px;">`
+            + `<h4 style="margin:0;font-size:9px;text-transform:uppercase;`
+            + `letter-spacing:0.5px;color:var(--color-text-muted);">${tt('Key')}</h4>`
+            + `<button type="button" class="flag-key-close" style="font-size:10px;cursor:pointer;`
+            + `background:var(--color-bg-panel);color:var(--color-text);border:1px solid var(--color-border-input);`
+            + `border-radius:4px;padding:3px 6px;">${tt('Close')}</button></div>${items}${hint}</div>`;
     }
 
     /**
@@ -2538,13 +2577,21 @@ class DatabaseTilesetEditor {
 
     /** Redraw the tools and the key for whatever mode is selected. */
     refreshFlagKey() {
+        document.querySelectorAll('.compact-flag-btn').forEach(button => {
+            const active = button.dataset.mode === this.currentEditMode;
+            button.style.backgroundColor = active ? 'var(--color-bg-hover)' : 'var(--color-bg-panel)';
+            button.style.borderColor = active ? 'var(--color-accent-bright)' : 'var(--color-border-input)';
+            button.setAttribute('aria-pressed', String(active));
+        });
         const host = document.getElementById('flag-mode-key');
         if (!host) return;
+        host.style.display = this.currentEditMode ? '' : 'none';
         if (!this.tile3dTool) this.tile3dTool = 'select';
         const toolbar = this.currentEditMode === 'tile3d'
             ? DatabaseTilesetEditor.tile3dToolbar(this.tile3dTool) : '';
         host.innerHTML = toolbar
             + DatabaseTilesetEditor.flagKey(this.currentEditMode, this.passageBrush);
+        host.querySelector('.flag-key-close')?.addEventListener('click', () => this.resetFlagEditing());
         for (const canvas of host.querySelectorAll('canvas.flag-key-mark')) {
             this.drawKeyMark(canvas.getContext('2d'), canvas.dataset.mark, canvas.width);
         }
@@ -2766,6 +2813,7 @@ class DatabaseTilesetEditor {
     refreshTile3DPreview() {
         const host = document.getElementById('tile3d-preview');
         if (!host) return;
+        host.style.display = this.currentEditMode === 'tile3d' ? '' : 'none';
         const tt = text => (typeof window !== 'undefined' && window.I18n)
             ? window.I18n.tText(text) : text;
         if (this.currentEditMode !== 'tile3d') { host.innerHTML = ''; return; }

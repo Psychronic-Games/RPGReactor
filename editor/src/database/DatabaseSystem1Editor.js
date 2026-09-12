@@ -427,13 +427,19 @@ class DatabaseSystem1Editor {
         const posField = (label, mapVal, xVal, yVal, prefix, owner) => `
             <div class="form-row system-pos-row" data-pos-owner="${owner}" style="margin-bottom: 6px;">
                 <label class="database-field-label" style="min-width: 50px;">${label}:</label>
-                <div style="display: flex; gap: 4px; align-items: center;">
-                    <span style="color: var(--color-text-muted); font-size: 11px;">${tt('Map')}</span>
-                    <input type="number" class="database-field-value system-pos-field" style="width: 50px; font-size: 11px;" value="${mapVal}" min="0" data-pos-target="${prefix}MapId" data-pos-part="mapId">
-                    <span style="color: var(--color-text-muted); font-size: 11px;">${tt('X')}</span>
-                    <input type="number" class="database-field-value system-pos-field" style="width: 50px; font-size: 11px;" value="${xVal}" min="0" data-pos-target="${prefix}X" data-pos-part="x">
-                    <span style="color: var(--color-text-muted); font-size: 11px;">${tt('Y')}</span>
-                    <input type="number" class="database-field-value system-pos-field" style="width: 50px; font-size: 11px;" value="${yVal}" min="0" data-pos-target="${prefix}Y" data-pos-part="y">
+                <div class="system-pos-controls">
+                    <span class="system-pos-coordinate">
+                        <span style="color: var(--color-text-muted); font-size: 11px;">${tt('Map')}</span>
+                        <input type="number" class="database-field-value system-pos-field" style="width: 76px; font-size: 11px;" value="${mapVal}" min="0" data-pos-target="${prefix}MapId" data-pos-part="mapId">
+                    </span>
+                    <span class="system-pos-coordinate">
+                        <span style="color: var(--color-text-muted); font-size: 11px;">${tt('X')}</span>
+                        <input type="number" class="database-field-value system-pos-field" style="width: 76px; font-size: 11px;" value="${xVal}" min="0" data-pos-target="${prefix}X" data-pos-part="x">
+                    </span>
+                    <span class="system-pos-coordinate">
+                        <span style="color: var(--color-text-muted); font-size: 11px;">${tt('Y')}</span>
+                        <input type="number" class="database-field-value system-pos-field" style="width: 76px; font-size: 11px;" value="${yVal}" min="0" data-pos-target="${prefix}Y" data-pos-part="y">
+                    </span>
                     <button class="system-pos-picker-btn rr-btn-chip" data-pos-owner="${owner}">${tt('Browse...')}</button>
                 </div>
             </div>`;

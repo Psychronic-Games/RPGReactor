@@ -28,7 +28,9 @@ class EventPageEditor {
         container.style.flexDirection = 'column';
         container.style.gap = '4px';
 
-        container.style.overflow = 'hidden';
+        // Short windows must scroll the settings instead of collapsing the image.
+        container.style.overflowY = 'auto';
+        container.style.overflowX = 'hidden';
 
         // Conditions Section (full width)
         const conditionsSection = this.createConditionsSection(page, pageIndex);
@@ -37,8 +39,8 @@ class EventPageEditor {
 
         // Image Section (full width)
         const imageSection = this.createImageSection(page, pageIndex);
-        imageSection.style.flex = '1';
-        imageSection.style.minHeight = '0';
+        imageSection.style.flex = '1 0 180px';
+        imageSection.style.minHeight = '180px';
         imageSection.style.overflow = 'hidden';
         container.appendChild(imageSection);
 
@@ -174,6 +176,7 @@ class EventPageEditor {
                         data-page-index="${pageIndex}"
                         style="flex: 1; min-width: 0; padding: 3px; font-size: 11px;"
                         ${!conditions.selfSwitchValid ? 'disabled' : ''}>
+                    <option value="" ${!conditions.selfSwitchValid ? 'selected' : ''}></option>
                     <option value="A" ${conditions.selfSwitchCh === 'A' ? 'selected' : ''}>A</option>
                     <option value="B" ${conditions.selfSwitchCh === 'B' ? 'selected' : ''}>B</option>
                     <option value="C" ${conditions.selfSwitchCh === 'C' ? 'selected' : ''}>C</option>
@@ -194,6 +197,7 @@ class EventPageEditor {
                         data-page-index="${pageIndex}"
                         style="flex: 1; min-width: 0; padding: 3px; font-size: 11px;"
                         ${!conditions.itemValid ? 'disabled' : ''}>
+                    <option value="" disabled hidden></option>
                     ${this.generateOptionsFromArray(items, conditions.itemId || 1)}
                 </select>
             </div>
@@ -211,6 +215,7 @@ class EventPageEditor {
                         data-page-index="${pageIndex}"
                         style="flex: 1; min-width: 0; padding: 3px; font-size: 11px;"
                         ${!conditions.actorValid ? 'disabled' : ''}>
+                    <option value="" disabled hidden></option>
                     ${this.generateOptionsFromArray(actors, conditions.actorId || 1)}
                 </select>
             </div>
@@ -255,7 +260,7 @@ class EventPageEditor {
             </div>
 
             <div style="display: flex; flex-direction: column; gap: 3px;flex:1;min-height:0;">
-                <div style="background: var(--color-bg-surface); border: 1px solid var(--color-border); border-radius: 4px; overflow: hidden; width: 100%;flex:1;min-height:0;">
+                <div style="background: var(--color-bg-surface); border: 1px solid var(--color-border); border-radius: 4px; overflow: hidden; width: 100%;flex:1;min-height:88px;">
                     <canvas class="character-preview-canvas"
                             width="192"
                             height="88"
@@ -831,8 +836,33 @@ class EventPageEditor {
      * Attach event listeners for conditions
      */
     attachConditionListeners(section) {
+        // Display inactive conditions as blank without changing the
+        // stored ID. Re-enabling a condition restores the user's selection.
+        const syncCondition = checkbox => {
+            const field = checkbox.dataset.field.replace('Valid', '');
+            const page = this.parentEditor.currentEvent.pages[Number(checkbox.dataset.pageIndex)];
+            section.querySelectorAll(`[data-field^="${field}"]`).forEach(control => {
+                if (control.classList.contains('condition-checkbox')) return;
+                control.disabled = !checkbox.checked;
+                if (field === 'item' || field === 'actor') {
+                    control.value = checkbox.checked ? String(page.conditions[field + 'Id'] || 1) : '';
+                } else if (control.matches('.switch-picker-btn, .variable-picker-btn')) {
+                    const id = page.conditions[control.dataset.field] || 1;
+                    const system = this.databaseManager.getSystem() || {};
+                    const names = field === 'variable' ? system.variables : system.switches;
+                    const label = field === 'variable' ? 'Variable' : 'Switch';
+                    const fallback = `${window.I18n ? window.I18n.tText(label) : label} ${String(id).padStart(4, '0')}`;
+                    control.textContent = checkbox.checked ? `#${String(id).padStart(4, '0')}: ${names?.[id] || fallback}` : '';
+                } else if (control.dataset.field === 'variableValue') {
+                    control.value = checkbox.checked ? String(page.conditions.variableValue ?? 0) : '';
+                } else if (control.dataset.field === 'selfSwitchCh') {
+                    control.value = checkbox.checked ? (page.conditions.selfSwitchCh || 'A') : '';
+                }
+            });
+        };
         // Checkbox listeners
         section.querySelectorAll('.condition-checkbox').forEach(checkbox => {
+            syncCondition(checkbox);
             checkbox.addEventListener('change', (e) => {
                 const field = e.target.dataset.field;
                 const pageIndex = parseInt(e.target.dataset.pageIndex);
@@ -840,13 +870,7 @@ class EventPageEditor {
 
                 page.conditions[field] = e.target.checked;
 
-                // Enable/disable associated controls
-                const associatedControls = section.querySelectorAll(`[data-field^="${field.replace('Valid', '')}"]`);
-                associatedControls.forEach(control => {
-                    if (!control.classList.contains('condition-checkbox')) {
-                        control.disabled = !e.target.checked;
-                    }
-                });
+                syncCondition(checkbox);
             });
         });
 
@@ -1018,7 +1042,8 @@ class EventPageEditor {
                 faces: model.faces
             }, (page && page.image && page.image.direction) || 2, { preview: true, faceYaw: 0 });
             const scene = new THREE.Scene();
-            scene.background = new THREE.Color(0x1a1a1e);
+            ModelPreview3D.updateBackground(scene);
+            ModelPreview3D.isolateLighting(object);
             scene.add(object);
             const camera = Reactor3D.createCamera({ fov: 35 });
             const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -1038,6 +1063,7 @@ class EventPageEditor {
                     camera.updateProjectionMatrix();
                 }
                 Reactor3D.aimCamera(camera, { x: -0.5, y: 0, z: -0.5 }, { yaw: 0, pitch: 12, distance: 2.4 });
+                ModelPreview3D.updateBackground(scene);
                 Reactor3D.renderScene(renderer, scene, camera);
                 this._modelPreviewRaf = requestAnimationFrame(tick);
             };

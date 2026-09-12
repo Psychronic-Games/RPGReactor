@@ -121,7 +121,7 @@ test('every Plugin Manager surface routes icon and file values through the share
     assert.ok(html.indexOf('src/utils/IconPicker.js') < html.indexOf('src/event/commands/PluginCommandEditor.js'));
 });
 
-function loadIconPicker({ sheetHeight = 640, fail = false } = {}) {
+function loadIconPicker({ sheetHeight = 640, fail = false, iconSize = 32 } = {}) {
     class FakeElement {
         constructor(tag) {
             this.tagName = tag.toUpperCase();
@@ -145,6 +145,10 @@ function loadIconPicker({ sheetHeight = 640, fail = false } = {}) {
                 strokeRect(...args) { el.strokes.push(args); }
             };
         }
+        get clientWidth() { return this.cssWidth ?? this.width; }
+        get clientHeight() { return this.cssHeight ?? this.height; }
+        get clientLeft() { return 0; }
+        get clientTop() { return 0; }
         getBoundingClientRect() { return { left: 0, top: 0 }; }
     }
     const body = new FakeElement('body');
@@ -176,7 +180,8 @@ function loadIconPicker({ sheetHeight = 640, fail = false } = {}) {
         },
         Image,
         alert: message => alerts.push(message),
-        window: null
+        window: null,
+        reactor: { databaseManager: { getSystem: () => ({ iconSize }) } }
     };
     context.window = context;
     vm.runInNewContext(read('src/utils/IconPicker.js'), context);
@@ -247,4 +252,20 @@ test('Escape closes the icon picker, and the listener leaves with it', async () 
     assert.equal(stopped, 1, 'and the key does not travel on');
     assert.deepEqual(writes, [], 'closing without OK writes nothing');
     assert.equal(context.document.keyHandlers.length, 0, 'the listener is gone with the dialog');
+});
+
+
+test('all configured icon sizes select the final cell in a scaled picker', async () => {
+    for (const iconSize of [8,12,16,24,32,48]) {
+        const {picker,body,flush}=loadIconPicker({sheetHeight:iconSize*2,iconSize});
+        const field=picker.createField({value:31,iconSetPath:'/icons.png',onChange:()=>{}});
+        await flush();
+        assert.deepEqual(field.children[0].draws[0].slice(1,5),[15*iconSize,iconSize,iconSize,iconSize]);
+        let selected=-1;picker.show(0,index=>selected=index,'/icons.png');await flush();
+        const modal=body.children.at(-1),canvas=modal.children[0].children[1].children[0];
+        canvas.cssWidth=512;canvas.cssHeight=64;
+        canvas.onclick({clientX:496,clientY:48});
+        modal.children[0].children[2].children[1].children[1].onclick();
+        assert.equal(selected,31,`${iconSize}px icon in the final column`);
+    }
 });

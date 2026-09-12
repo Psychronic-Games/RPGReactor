@@ -1575,6 +1575,7 @@ Graphics._canRender = function() {
  * store — and capped so a video wall cannot demand an enormous framebuffer.
  */
 Graphics.canvasPixelRatio = function() {
+    if (typeof $dataSystem !== "undefined" && $dataSystem?.advanced?.pixelatedRendering === true) return 1;
     // The display's own scale counts: on a desktop scaled to 125% or 150%
     // a CSS pixel is more than one screen pixel, and a store sized in CSS
     // pixels was enlarged by the compositor's smooth filter — a blur over
@@ -1633,6 +1634,7 @@ Graphics.isUpscaled = function() {
 
 /** The filter the setting resolves to right now. */
 Graphics.upscaleFilterInUse = function() {
+    if (typeof $dataSystem !== "undefined" && $dataSystem?.advanced?.pixelatedRendering === true) return "nearest";
     if (this.upscaleFilter === "nearest" || this.upscaleFilter === "linear") return this.upscaleFilter;
     return this.gpuTier === "weak" ? "nearest" : "linear";
 };

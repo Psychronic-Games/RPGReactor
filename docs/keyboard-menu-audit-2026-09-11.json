@@ -1,0 +1,644 @@
+{
+  "menus": [
+    {
+      "arrowEntersMenu": false,
+      "focusableEntries": 0,
+      "headingTabIndex": -1,
+      "name": "file",
+      "escapeCloses": false
+    },
+    {
+      "arrowEntersMenu": false,
+      "focusableEntries": 0,
+      "headingTabIndex": -1,
+      "name": "database",
+      "escapeCloses": false
+    },
+    {
+      "arrowEntersMenu": false,
+      "focusableEntries": 0,
+      "headingTabIndex": -1,
+      "name": "plugins",
+      "escapeCloses": false
+    },
+    {
+      "arrowEntersMenu": false,
+      "focusableEntries": 0,
+      "headingTabIndex": -1,
+      "name": "tools",
+      "escapeCloses": false
+    },
+    {
+      "arrowEntersMenu": false,
+      "focusableEntries": 0,
+      "headingTabIndex": -1,
+      "name": "forge",
+      "escapeCloses": false
+    },
+    {
+      "arrowEntersMenu": false,
+      "focusableEntries": 0,
+      "headingTabIndex": -1,
+      "name": "build",
+      "escapeCloses": false
+    },
+    {
+      "arrowEntersMenu": false,
+      "focusableEntries": 1,
+      "headingTabIndex": -1,
+      "name": "help",
+      "escapeCloses": false
+    },
+    {
+      "focusableEntries": 0,
+      "initialFocusInside": false,
+      "name": "Map context",
+      "arrowEntersMenu": false,
+      "escapeCloses": false
+    },
+    {
+      "focusableEntries": 0,
+      "initialFocusInside": false,
+      "name": "Event context",
+      "arrowEntersMenu": false,
+      "escapeCloses": false
+    },
+    {
+      "focusableEntries": 2,
+      "initialFocusInside": false,
+      "name": "Database context",
+      "arrowEntersMenu": false,
+      "escapeCloses": true
+    },
+    {
+      "focusableEntries": 0,
+      "initialFocusInside": false,
+      "name": "Text context",
+      "arrowEntersMenu": false,
+      "escapeCloses": true
+    },
+    {
+      "focusableEntries": 0,
+      "initialFocusInside": false,
+      "name": "Plugin context",
+      "arrowEntersMenu": false,
+      "escapeCloses": true
+    }
+  ],
+  "dialogs": [
+    {
+      "focusableCount": 135,
+      "initialFocus": {
+        "cls": "",
+        "id": "audit-opener",
+        "tag": "BUTTON",
+        "text": "Audit opener"
+      },
+      "initialFocusInside": false,
+      "name": "Plugin manager",
+      "shiftTabContained": false,
+      "shiftTabDestination": {
+        "cls": "",
+        "id": "map-video-previews",
+        "tag": "INPUT",
+        "text": "on"
+      },
+      "tabContained": false,
+      "tabDestination": {
+        "cls": "",
+        "id": "audit-opener",
+        "tag": "BUTTON",
+        "text": "Audit opener"
+      },
+      "escapeCloses": false,
+      "escapeRestoresOpener": false
+    },
+    {
+      "focusableCount": 33,
+      "initialFocus": {
+        "cls": "rr-picker-file-item rr-resource-file",
+        "id": "",
+        "tag": "DIV",
+        "text": "Gamma-Ray-Beam.png"
+      },
+      "initialFocusInside": true,
+      "name": "Resource manager",
+      "shiftTabContained": true,
+      "shiftTabDestination": {
+        "cls": "rr-button-primary rr-resource-done",
+        "id": "",
+        "tag": "BUTTON",
+        "text": "Close"
+      },
+      "tabContained": true,
+      "tabDestination": {
+        "cls": "rr-modal-close rr-resource-close",
+        "id": "",
+        "tag": "BUTTON",
+        "text": "\u00d7"
+      },
+      "escapeCloses": true,
+      "escapeRestoresOpener": true
+    },
+    {
+      "focusableCount": 10,
+      "initialFocus": {
+        "cls": "",
+        "id": "audit-opener",
+        "tag": "BUTTON",
+        "text": "Audit opener"
+      },
+      "initialFocusInside": false,
+      "name": "Options",
+      "shiftTabContained": false,
+      "shiftTabDestination": {
+        "cls": "",
+        "id": "audit-opener",
+        "tag": "BUTTON",
+        "text": "Audit opener"
+      },
+      "tabContained": false,
+      "tabDestination": {
+        "cls": "html-menu-option",
+        "id": "language-button",
+        "tag": "BUTTON",
+        "text": "EN"
+      },
+      "escapeCloses": false,
+      "escapeRestoresOpener": false
+    },
+    {
+      "focusableCount": 7,
+      "initialFocus": {
+        "cls": "",
+        "id": "audit-opener",
+        "tag": "BUTTON",
+        "text": "Audit opener"
+      },
+      "initialFocusInside": false,
+      "name": "About",
+      "shiftTabContained": false,
+      "shiftTabDestination": {
+        "cls": "",
+        "id": "map-video-previews",
+        "tag": "INPUT",
+        "text": "on"
+      },
+      "tabContained": false,
+      "tabDestination": {
+        "cls": "",
+        "id": "audit-opener",
+        "tag": "BUTTON",
+        "text": "Audit opener"
+      },
+      "escapeCloses": false,
+      "escapeRestoresOpener": false
+    },
+    {
+      "focusableCount": 42,
+      "initialFocus": {
+        "cls": "",
+        "id": "audit-opener",
+        "tag": "BUTTON",
+        "text": "Audit opener"
+      },
+      "initialFocusInside": false,
+      "name": "Command picker",
+      "shiftTabContained": false,
+      "shiftTabDestination": {
+        "cls": "",
+        "id": "audit-opener",
+        "tag": "BUTTON",
+        "text": "Audit opener"
+      },
+      "tabContained": false,
+      "tabDestination": {
+        "cls": "html-menu-option",
+        "id": "language-button",
+        "tag": "BUTTON",
+        "text": "EN"
+      },
+      "escapeCloses": false,
+      "escapeRestoresOpener": false
+    },
+    {
+      "focusableCount": 104,
+      "initialFocus": {
+        "cls": "picker-item rr-picker-item is-selected",
+        "id": "",
+        "tag": "BUTTON",
+        "text": "#0001\nSwitch 0001"
+      },
+      "initialFocusInside": true,
+      "name": "Switch picker",
+      "shiftTabContained": false,
+      "shiftTabDestination": {
+        "cls": "",
+        "id": "audit-opener",
+        "tag": "BUTTON",
+        "text": "Audit opener"
+      },
+      "tabContained": false,
+      "tabDestination": {
+        "cls": "html-menu-option",
+        "id": "language-button",
+        "tag": "BUTTON",
+        "text": "EN"
+      },
+      "escapeCloses": true,
+      "escapeRestoresOpener": true
+    },
+    {
+      "focusableCount": 3,
+      "initialFocus": {
+        "cls": "rr-button-danger",
+        "id": "rr-themed-dialog-cancel",
+        "tag": "BUTTON",
+        "text": "Cancel"
+      },
+      "initialFocusInside": true,
+      "name": "Confirmation",
+      "shiftTabContained": false,
+      "shiftTabDestination": {
+        "cls": "",
+        "id": "audit-opener",
+        "tag": "BUTTON",
+        "text": "Audit opener"
+      },
+      "tabContained": false,
+      "tabDestination": {
+        "cls": "html-menu-option",
+        "id": "language-button",
+        "tag": "BUTTON",
+        "text": "EN"
+      },
+      "escapeCloses": true,
+      "escapeRestoresOpener": true
+    },
+    {
+      "focusableCount": 6,
+      "initialFocus": {
+        "cls": "audio-track-item playing",
+        "id": "",
+        "tag": "DIV",
+        "text": "(None)"
+      },
+      "initialFocusInside": true,
+      "name": "Audio picker",
+      "shiftTabContained": true,
+      "shiftTabDestination": {
+        "cls": "rr-button-primary",
+        "id": "",
+        "tag": "BUTTON",
+        "text": "OK"
+      },
+      "tabContained": true,
+      "tabDestination": {
+        "cls": "",
+        "id": "",
+        "tag": "BUTTON",
+        "text": "\u00d7"
+      },
+      "escapeCloses": true,
+      "escapeRestoresOpener": true
+    },
+    {
+      "focusableCount": 7,
+      "initialFocus": {
+        "cls": "rr-modal-close",
+        "id": "",
+        "tag": "BUTTON",
+        "text": "\u00d7"
+      },
+      "initialFocusInside": true,
+      "name": "System sound",
+      "shiftTabContained": true,
+      "shiftTabDestination": {
+        "cls": "rr-button-primary",
+        "id": "",
+        "tag": "BUTTON",
+        "text": "OK"
+      },
+      "tabContained": true,
+      "tabDestination": {
+        "cls": "rr-modal-close",
+        "id": "",
+        "tag": "BUTTON",
+        "text": "\u00d7"
+      },
+      "escapeCloses": true,
+      "escapeRestoresOpener": true
+    },
+    {
+      "focusableCount": 9,
+      "initialFocus": {
+        "cls": "",
+        "id": "audit-opener",
+        "tag": "BUTTON",
+        "text": "Audit opener"
+      },
+      "initialFocusInside": false,
+      "name": "Database",
+      "shiftTabContained": false,
+      "shiftTabDestination": {
+        "cls": "",
+        "id": "map-video-previews",
+        "tag": "INPUT",
+        "text": "on"
+      },
+      "tabContained": false,
+      "tabDestination": {
+        "cls": "",
+        "id": "audit-opener",
+        "tag": "BUTTON",
+        "text": "Audit opener"
+      },
+      "escapeCloses": false,
+      "escapeRestoresOpener": false
+    },
+    {
+      "focusableCount": 20,
+      "initialFocus": {
+        "cls": "",
+        "id": "audit-opener",
+        "tag": "BUTTON",
+        "text": "Audit opener"
+      },
+      "initialFocusInside": false,
+      "name": "Trait",
+      "shiftTabContained": false,
+      "shiftTabDestination": {
+        "cls": "",
+        "id": "audit-opener",
+        "tag": "BUTTON",
+        "text": "Audit opener"
+      },
+      "tabContained": false,
+      "tabDestination": {
+        "cls": "html-menu-option",
+        "id": "language-button",
+        "tag": "BUTTON",
+        "text": "EN"
+      },
+      "escapeCloses": false,
+      "escapeRestoresOpener": false
+    },
+    {
+      "focusableCount": 15,
+      "initialFocus": {
+        "cls": "",
+        "id": "audit-opener",
+        "tag": "BUTTON",
+        "text": "Audit opener"
+      },
+      "initialFocusInside": false,
+      "name": "Effect",
+      "shiftTabContained": false,
+      "shiftTabDestination": {
+        "cls": "",
+        "id": "audit-opener",
+        "tag": "BUTTON",
+        "text": "Audit opener"
+      },
+      "tabContained": false,
+      "tabDestination": {
+        "cls": "html-menu-option",
+        "id": "language-button",
+        "tag": "BUTTON",
+        "text": "EN"
+      },
+      "escapeCloses": false,
+      "escapeRestoresOpener": false
+    }
+  ],
+  "dropdowns": [
+    {
+      "name": "language",
+      "enterOpens": true,
+      "arrowEnters": false,
+      "escapeCloses": false
+    },
+    {
+      "name": "palette",
+      "enterOpens": true,
+      "arrowEnters": false,
+      "escapeCloses": false
+    }
+  ],
+  "fields": [
+    {
+      "id": "",
+      "index": 0,
+      "type": "text",
+      "tabDestination": {
+        "cls": "database-list",
+        "id": "database-list",
+        "tag": "DIV",
+        "text": "Fleagus Gustafario\n#1\nCarol Everson\n#2\nChase\n#3\nKaren\n#4\nHer"
+      },
+      "shiftTabReturns": true
+    },
+    {
+      "id": "",
+      "index": 1,
+      "type": "text",
+      "tabDestination": {
+        "cls": "database-field-value",
+        "id": "",
+        "tag": "INPUT",
+        "text": ""
+      },
+      "shiftTabReturns": true
+    },
+    {
+      "id": "",
+      "index": 2,
+      "type": "text",
+      "tabDestination": {
+        "cls": "database-field-value rr-editor-name-input",
+        "id": "",
+        "tag": "INPUT",
+        "text": ""
+      },
+      "shiftTabReturns": true
+    },
+    {
+      "id": "",
+      "index": 3,
+      "type": "text",
+      "tabDestination": {
+        "cls": "database-field-value",
+        "id": "",
+        "tag": "SELECT",
+        "text": "#1 Swordsman\n#2 Sorcerer\n#3 Priest\n#4 Knight\n#5 Martial Arti"
+      },
+      "shiftTabReturns": true
+    },
+    {
+      "id": "",
+      "index": 4,
+      "type": "number",
+      "tabDestination": {
+        "cls": "database-field-value rr-number-stepper-input",
+        "id": "",
+        "tag": "INPUT",
+        "text": "99"
+      },
+      "shiftTabReturns": true
+    },
+    {
+      "id": "",
+      "index": 5,
+      "type": "number",
+      "tabDestination": {
+        "cls": "database-field-value",
+        "id": "",
+        "tag": "TEXTAREA",
+        "text": ""
+      },
+      "shiftTabReturns": true
+    },
+    {
+      "id": "",
+      "index": 6,
+      "type": "textarea",
+      "tabDestination": {
+        "cls": "graphic-selector-button",
+        "id": "",
+        "tag": "BUTTON",
+        "text": "Change Model"
+      },
+      "shiftTabReturns": true
+    },
+    {
+      "id": "",
+      "index": 7,
+      "type": "checkbox",
+      "tabDestination": {
+        "cls": "graphic-selector-button",
+        "id": "",
+        "tag": "BUTTON",
+        "text": "Change Face"
+      },
+      "shiftTabReturns": true
+    }
+  ],
+  "errors": [],
+  "databaseCategories": [
+    {
+      "label": "Actors",
+      "tabIndex": -1,
+      "tag": "DIV"
+    },
+    {
+      "label": "Classes",
+      "tabIndex": -1,
+      "tag": "DIV"
+    },
+    {
+      "label": "Skills",
+      "tabIndex": -1,
+      "tag": "DIV"
+    },
+    {
+      "label": "Items",
+      "tabIndex": -1,
+      "tag": "DIV"
+    },
+    {
+      "label": "Weapons",
+      "tabIndex": -1,
+      "tag": "DIV"
+    },
+    {
+      "label": "Armors",
+      "tabIndex": -1,
+      "tag": "DIV"
+    },
+    {
+      "label": "Enemies",
+      "tabIndex": -1,
+      "tag": "DIV"
+    },
+    {
+      "label": "Troops",
+      "tabIndex": -1,
+      "tag": "DIV"
+    },
+    {
+      "label": "States",
+      "tabIndex": -1,
+      "tag": "DIV"
+    },
+    {
+      "label": "Animations",
+      "tabIndex": -1,
+      "tag": "DIV"
+    },
+    {
+      "label": "Tilesets",
+      "tabIndex": -1,
+      "tag": "DIV"
+    },
+    {
+      "label": "3D Models",
+      "tabIndex": -1,
+      "tag": "DIV"
+    },
+    {
+      "label": "Common Events",
+      "tabIndex": -1,
+      "tag": "DIV"
+    },
+    {
+      "label": "User Interfaces",
+      "tabIndex": -1,
+      "tag": "DIV"
+    },
+    {
+      "label": "Action Sequences",
+      "tabIndex": -1,
+      "tag": "DIV"
+    },
+    {
+      "label": "Quests",
+      "tabIndex": -1,
+      "tag": "DIV"
+    },
+    {
+      "label": "System 1",
+      "tabIndex": -1,
+      "tag": "DIV"
+    },
+    {
+      "label": "System 2",
+      "tabIndex": -1,
+      "tag": "DIV"
+    },
+    {
+      "label": "Types",
+      "tabIndex": -1,
+      "tag": "DIV"
+    },
+    {
+      "label": "Terms",
+      "tabIndex": -1,
+      "tag": "DIV"
+    }
+  ],
+  "switchArrow": {
+    "cls": "picker-item rr-picker-item is-selected",
+    "id": "",
+    "tag": "BUTTON",
+    "text": "#0001\nSwitch 0001"
+  },
+  "switchTab": {
+    "cls": "picker-item rr-picker-item",
+    "id": "",
+    "tag": "BUTTON",
+    "text": "#0002\nSwitch 0002"
+  },
+  "switchEnterSelected": 2,
+  "disabledSkipped": "Last",
+  "contextEnterActivates": true
+}

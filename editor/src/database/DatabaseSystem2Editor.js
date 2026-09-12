@@ -43,9 +43,9 @@ class DatabaseSystem2Editor {
 
         // 3 independent flex columns — each stacks tightly without shared row heights
         const columnsGrid = document.createElement('div');
+        columnsGrid.className = 'system2-columns-grid';
         columnsGrid.style.cssText = `
             display: grid;
-            grid-template-columns: 1fr 1.2fr 1fr;
             gap: 16px;
             padding: 16px;
             align-items: start;
@@ -200,7 +200,7 @@ class DatabaseSystem2Editor {
 
         let html = `
             <div style="overflow-y: auto; border: 1px solid var(--color-border); border-radius: 3px;">
-                <table class="traits-table" style="width: 100%;">
+                <table class="traits-table" style="width: 100%; margin-top: 0;">
                     <thead>
                         <tr>
                             <th>${tt('Type')}</th>
@@ -231,9 +231,9 @@ class DatabaseSystem2Editor {
     createAssetSizesSection(system) {
         const tt = text => window.I18n ? window.I18n.tText(text) : text;
         const groups = [
-            { title: 'Tile', field: 'tileSize', current: system.tileSize || 48, sizes: [48, 32, 24, 16], css: 'sys2-tile-size' },
-            { title: 'Icon', field: 'iconSize', current: system.iconSize || 32, sizes: [32, 24, 16, 12, 8], css: 'sys2-icon-size' },
-            { title: 'Face', field: 'faceSize', current: system.faceSize || 144, sizes: [144, 96, 48, 40, 32], css: 'sys2-face-size' },
+            { title: 'Tile', field: 'tileSize', current: system.tileSize || 48, sizes: [64, 48, 32, 24, 16, 8], css: 'sys2-tile-size' },
+            { title: 'Icon', field: 'iconSize', current: system.iconSize || 32, sizes: [48, 32, 24, 16, 12, 8], css: 'sys2-icon-size' },
+            { title: 'Face', field: 'faceSize', current: system.faceSize || 144, sizes: [288, 144, 96, 48, 40, 32], css: 'sys2-face-size' },
         ];
         let html = '<div style="display: flex; gap: 16px;">';
         for (const g of groups) {
@@ -287,7 +287,11 @@ class DatabaseSystem2Editor {
             { label: 'Screen Height', field: 'screenHeight', value: adv.screenHeight || 624, type: 'number' },
             { label: 'UI Area Width', field: 'uiAreaWidth', value: adv.uiAreaWidth || 816, type: 'number' },
             { label: 'UI Area Height', field: 'uiAreaHeight', value: adv.uiAreaHeight || 624, type: 'number' },
+            { label: 'Pixelated Rendering', field: 'pixelatedRendering', value: adv.pixelatedRendering === true, type: 'checkbox' },
             { label: 'Screen Scale', field: 'screenScale', value: adv.screenScale || 1, type: 'number', step: '0.1' },
+            { label: '2D Camera Zoom', field: 'camera2DZoom', value: adv.camera2DZoom ?? 1, type: 'number', step: '0.25', min: 1, max: 8 },
+            { label: '2D Camera Offset X (px)', field: 'camera2DOffsetX', value: adv.camera2DOffsetX ?? 0, type: 'number' },
+            { label: '2D Camera Offset Y (px)', field: 'camera2DOffsetY', value: adv.camera2DOffsetY ?? 0, type: 'number' },
             { label: 'Font Size', field: 'fontSize', value: adv.fontSize || 26, type: 'number' },
             { label: 'Window Opacity', field: 'windowOpacity', value: adv.windowOpacity || 192, type: 'number' },
             { label: 'Pictures Limit', field: 'picturesUpperLimit', value: adv.picturesUpperLimit || 100, type: 'number' },
@@ -299,9 +303,12 @@ class DatabaseSystem2Editor {
         for (const f of fields) {
             const ro = f.readonly ? ` readonly title="${tt('Read-only')}"` : '';
             const step = f.step ? ` step="${f.step}"` : '';
+            const bounds = f.min !== undefined ? ` min="${f.min}" max="${f.max}"` : '';
+            const inputClass = f.type === 'checkbox' ? 'system-checkbox' : 'database-field-value';
+            const inputStyle = f.type === 'checkbox' ? '' : 'width: 100%; font-size: 12px; box-sizing: border-box;';
             rows += `<tr>
                 <td style="color: var(--color-text); font-size: 12px; white-space: nowrap;">${tt(f.label)}</td>
-                <td><input type="${f.type}" class="database-field-value sys2-advanced-field" data-advanced-field="${f.field}" value="${rrEscapeHtml(f.value)}" style="width: 100%; font-size: 12px; box-sizing: border-box;"${step}${ro}></td>
+                <td><input type="${f.type}" class="${inputClass} sys2-advanced-field" aria-label="${rrEscapeHtml(tt(f.label))}" data-advanced-field="${f.field}" value="${rrEscapeHtml(f.value)}" style="${inputStyle}"${step}${bounds}${ro}${f.type === 'checkbox' && f.value ? ' checked' : ''}></td>
             </tr>`;
         }
         const advHTML = `
@@ -458,8 +465,15 @@ class DatabaseSystem2Editor {
                 const advField = e.target.dataset.advancedField;
                 if (advField) {
                     if (!system.advanced) system.advanced = {};
-                    const val = e.target.type === 'number' ? parseFloat(e.target.value) : e.target.value;
-                    system.advanced[advField] = val;
+                    const val = e.target.type === 'checkbox' ? e.target.checked : e.target.type === 'number' ? parseFloat(e.target.value) : e.target.value;
+                    if (advField.startsWith('camera2D')) {
+                        if (!Number.isFinite(val)) {
+                            e.target.value = system.advanced[advField] ?? (advField === 'camera2DZoom' ? 1 : 0);
+                            return;
+                        }
+                        system.advanced[advField] = advField === 'camera2DZoom' ? Math.max(1, Math.min(8, val)) : val;
+                        e.target.value = system.advanced[advField];
+                    } else system.advanced[advField] = val;
                 }
             });
         });

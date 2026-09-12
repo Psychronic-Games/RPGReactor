@@ -204,8 +204,8 @@ class DatabaseManager {
      *
      * The Plugin Manager's own array is empty until that screen has been
      * opened, so anything that needs to know what the game actually runs has
-     * to read the manifest itself. Callers get a snapshot; nothing here caches,
-     * because the editor rewrites the file whenever it saves.
+     * to read the manifest itself. Cache the parsed list until its path or
+     * modification time changes; callers treat the shared snapshot as read-only.
      */
     getPluginManifest() {
         if (!this.projectPath || !this.fs || !this.path) return [];
@@ -708,7 +708,7 @@ class DatabaseManager {
                 this.data[dataKey][i] = newEntry;
             }
         } else if (newMax < currentMax) {
-            if(dataKey==='actionSequences'){const B=typeof ReactorBattleData!=='undefined'?ReactorBattleData:require('../../runtime/reactor_battle_data.js');for(let id=newMax+1;id<=currentMax;id++)if(B.references(this.data.battlePresentation,id).length)return false;}
+            if(dataKey==='actionSequences'){const B=typeof ReactorBattleData!=='undefined'?ReactorBattleData:require('../../runtime/reactor_battle_data.js');for(let id=newMax+1;id<=currentMax;id++)if(B.references(this.data.battlePresentation,id,this.data.actionSequences).length)return false;}
             const presentation=this.data.battlePresentation?.[dataKey];if(presentation)for(const id of Object.keys(presentation))if(Number(id)>newMax)delete presentation[id];
             // Truncate array
             this.data[dataKey].length = newMax + 1;

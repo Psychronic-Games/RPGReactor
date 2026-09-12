@@ -502,7 +502,7 @@ test('both viewports render the maps once a frame before the first pass, and the
     assert.match(editor, /if \(sprite && Reactor3D\.Shadows\) Reactor3D\.Shadows\.markCaster\(mesh, false\);/);
     assert.equal((editor.match(/Reactor3D\.Shadows\.markCaster\(object, !!template\.userData\.animated\);/g) || []).length, 2, 'event models and props');
 
-    assert.match(read('runtime/reactor_main.js'), /runtime revision: 20260906\.19/);
+    assert.match(read('runtime/reactor_main.js'), /runtime revision: 20260911\.6/);
 });
 
 test("a casting light's maps hold their origin until the light has drifted a quarter tile", () => {

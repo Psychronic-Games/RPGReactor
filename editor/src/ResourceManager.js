@@ -1030,6 +1030,11 @@ class ResourceManager {
             this.folderNav.appendChild(button);
         }
         this.updateFolderSelection();
+        if (typeof RRPickerIndex !== 'undefined') RRPickerIndex.bindListNavigation(this.folderNav, {
+            items: () => this.folderNav.querySelectorAll('.rr-resource-folder'),
+            isSelected: item => item.dataset.folderId === this.folder.id,
+            select: item => this.selectFolder(item.dataset.folderId)
+        });
     }
 
     updateFolderSelection() {
@@ -1050,7 +1055,7 @@ class ResourceManager {
         this.overlay.style.display = 'flex';
         document.addEventListener('keydown', this._handleKeyDown, true);
         this.refresh();
-        this.folderNav.querySelector('.rr-resource-folder.active')?.focus();
+        this.browser?.focusSelected();
     }
 
     close() {
@@ -1074,6 +1079,8 @@ class ResourceManager {
 
     handleKeyDown(event) {
         if (this.overlay?.style.display === 'none' || document.getElementById('rr-themed-dialog')) return;
+        if (document.querySelector('.rr-shim-popup')?.contains(event.target)
+            || event.target.closest?.('.rr-search-select-panel')) return;
         if (event.key === 'Escape') {
             event.preventDefault();
             this.close();
@@ -1258,7 +1265,7 @@ class ResourceManager {
             canvas.className = 'rr-resource-model-canvas';
             const loading = document.createElement('div');
             loading.className = 'rr-resource-model-message';
-            loading.textContent = 'Loading model...';
+            loading.textContent = this.text('Loading model...');
             wrapper.append(canvas, loading);
             this.previewStage.appendChild(wrapper);
             try {

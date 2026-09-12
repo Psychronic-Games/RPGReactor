@@ -15,6 +15,7 @@ class DatabaseWeaponEditor {
     }
 
     showWeaponDetail(container, weapon) {
+        const isCurrentDetail = this.parentEditor?.captureDetailContext?.() || (() => true);
         this.currentWeapon = weapon;
 
         const wrapper = document.createElement('div');
@@ -80,6 +81,7 @@ class DatabaseWeaponEditor {
 
         // Add icon to the designated container after the DOM is ready
         setTimeout(() => {
+            if (!isCurrentDetail()) return;
             const iconContainer = document.getElementById(`weapon-icon-container-${weapon.id}`);
             if (iconContainer) {
                 this.parentEditor.addDatabasePreview(iconContainer, weapon, 'weapons');
@@ -180,6 +182,7 @@ class DatabaseWeaponEditor {
 
         // Setup trait interaction after DOM is ready
         setTimeout(() => {
+            if (!isCurrentDetail()) return;
             const traitsTable = document.getElementById(`weapon-traits-table-${weapon.id}`);
             if (traitsTable) {
                 this.setupTraitInteraction(traitsTable, weapon);
@@ -212,6 +215,7 @@ class DatabaseWeaponEditor {
 
         // Add event listeners
         setTimeout(() => {
+            if (!isCurrentDetail()) return;
             AnimationPickerModal.bindTriggers(container, this.databaseManager, this.projectManager);
             const editableFields = container.querySelectorAll('[data-weapon-id]');
             editableFields.forEach(field => {
@@ -262,7 +266,7 @@ class DatabaseWeaponEditor {
                     indicator.style.setProperty('background-color', 'var(--color-accent-bright)', 'important');
                 }
                 contentCells.forEach(cell => {
-                    cell.style.setProperty('background-color', 'var(--color-bg-panel)', 'important');
+                    cell.style.setProperty('background-color', 'var(--color-bg-selected)', 'important');
                 });
             });
 
@@ -291,7 +295,7 @@ class DatabaseWeaponEditor {
                     indicator.style.setProperty('background-color', 'var(--color-accent-bright)', 'important');
                 }
                 contentCells.forEach(cell => {
-                    cell.style.setProperty('background-color', 'var(--color-bg-panel)', 'important');
+                    cell.style.setProperty('background-color', 'var(--color-bg-selected)', 'important');
                 });
 
                 const section = table.closest('.database-section');
@@ -537,6 +541,9 @@ class DatabaseWeaponEditor {
 
 
     refreshWeaponDetail(weapon) {
+        if (this.parentEditor?.showDatabaseDetail) {
+            return this.parentEditor.showDatabaseDetail(weapon, 'weapons');
+        }
         console.debug('DatabaseWeaponEditor.refreshWeaponDetail - Refreshing weapon:', weapon.id);
         console.debug('DatabaseWeaponEditor.refreshWeaponDetail - Weapon traits:', weapon.traits);
 

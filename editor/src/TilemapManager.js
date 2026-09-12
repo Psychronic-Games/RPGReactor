@@ -21,6 +21,14 @@ class TilemapManager {
     }
 
     constructor(app, projectPath, databaseManager) {
+        if (typeof MutationObserver !== 'undefined' && typeof document !== 'undefined') {
+            this._themeObserver = new MutationObserver(() => {
+                if (this.currentMap && this.layers?.checkerboard) {
+                    this.renderPreviewBackground(this.currentMap.width, this.currentMap.height);
+                }
+            });
+            this._themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+        }
         this.app = app;
         this.projectPath = projectPath;
         this.databaseManager = databaseManager;
@@ -472,6 +480,7 @@ class TilemapManager {
         }
 
         // Create new container for tilemap
+        this._zoomPadding = null;
         this.container = new PIXI.Container();
         this.app.stage.addChild(this.container);
 
@@ -941,7 +950,7 @@ class TilemapManager {
                     this.setViewportTransform(
                         mouseX - worldX * newScale,
                         mouseY - worldY * newScale,
-                        newScale);
+                        newScale, { preserveAnchor: true });
 
                     // Update scrollbars
                     this.updateScrollbars();
@@ -1035,27 +1044,28 @@ class TilemapManager {
     }
 
     /**
-     * Shrink the PIXI renderer (background canvas) to match the map's scaled
-     * dimensions whenever the map is smaller than the natural canvas-container.
-     * This is what kills parallax bleed around the edges: the renderer simply
-     * doesn't exist outside the map's footprint, so the parent panel's bg shows.
-     * Called after every scale change (load, wheel zoom, window resize).
+     * Crop the PIXI renderer at the map's translated right/bottom edges.
+     * Include any leading margin required by cursor-anchored zoom, while
+     * leaving the remaining panel background outside the renderer.
+     * Called when the viewport transform or available panel size changes.
      */
-    applyViewportCrop() {
-        if (!this.app || !this.currentMap) return;
+    applyViewportCrop(transform = {}) {
+        if (!this.app?.renderer || !this.currentMap) return;
         const canvasContainer = document.getElementById('canvas-container');
         if (!canvasContainer) return;
         const rect = canvasContainer.getBoundingClientRect();
         if (rect.width <= 0 || rect.height <= 0) return;
 
-        const scale = this.container ? this.container.scale.x : 1;
+        const scale = transform.scale ?? (this.container ? this.container.scale.x : 1);
         const mapWidthPx = this.currentMap.width * this.TILE_SIZE * scale;
         const mapHeightPx = this.currentMap.height * this.TILE_SIZE * scale;
 
-        const targetW = Math.min(rect.width, mapWidthPx);
-        const targetH = Math.min(rect.height, mapHeightPx);
+        const targetW = Math.min(rect.width, Math.max(1, mapWidthPx + (transform.x ?? this.container.x)));
+        const targetH = Math.min(rect.height, Math.max(1, mapHeightPx + (transform.y ?? this.container.y)));
 
-        this.app.renderer.resize(targetW, targetH);
+        if (this.app.screen.width !== targetW || this.app.screen.height !== targetH) {
+            this.app.renderer.resize(targetW, targetH);
+        }
     }
 
     // Initialize custom scrollbars
@@ -1122,15 +1132,14 @@ class TilemapManager {
 
             const containerRect = document.getElementById('canvas-container').getBoundingClientRect();
             const viewportSize = direction === 'horizontal' ? containerRect.width : containerRect.height;
-            const mapSize = direction === 'horizontal' ?
-                (this.currentMap.width * this.TILE_WIDTH * this.container.scale.x) :
-                (this.currentMap.height * this.TILE_HEIGHT * this.container.scale.y);
-
-            const scrollableSize = mapSize - viewportSize;
+            const bounds = this.panBounds();
+            if (!bounds) return;
+            const scrollableSize = direction === 'horizontal'
+                ? bounds.maxX - bounds.minX : bounds.maxY - bounds.minY;
             const thumbTrackSize = direction === 'horizontal' ?
                 (containerRect.width - 14) : (containerRect.height - 14);
-
-            const ratio = scrollableSize / thumbTrackSize;
+            const thumbSize = Math.max(30, viewportSize / (viewportSize + scrollableSize) * thumbTrackSize);
+            const ratio = scrollableSize / Math.max(1, thumbTrackSize - thumbSize);
             const containerDelta = -delta * ratio;
 
             this.setViewportTransform(
@@ -1159,9 +1168,9 @@ class TilemapManager {
     /**
      * How far the view may be scrolled, in container pixels.
      *
-     * `x` runs from `minX` (the map's right edge against the viewport's) to 0
-     * (its left edge against the viewport's). When the map is smaller than the
-     * viewport there is nowhere to go and both ends are 0.
+     * Natural bounds align either map edge with the viewport. Cursor zoom
+     * can extend them by exactly the margin needed to preserve its anchor;
+     * ordinary panning cannot increase that margin. A new map resets it.
      *
      * Returns null when there is no map or no viewport to measure against, so
      * a caller can tell "do not move" from "clamp to zero".
@@ -1171,28 +1180,27 @@ class TilemapManager {
         const element = document.getElementById('canvas-container');
         const rect = element && element.getBoundingClientRect();
         if (!rect || !(rect.width > 0) || !(rect.height > 0)) return null;
+        const padding = this._zoomPadding || {};
         return {
-            minX: Math.min(0, rect.width - this.currentMap.width * this.TILE_WIDTH * scale),
-            minY: Math.min(0, rect.height - this.currentMap.height * this.TILE_HEIGHT * scale),
+            minX: Math.min(0, rect.width - this.currentMap.width * this.TILE_WIDTH * scale) - (padding.right || 0),
+            minY: Math.min(0, rect.height - this.currentMap.height * this.TILE_HEIGHT * scale) - (padding.bottom || 0),
+            maxX: padding.left || 0,
+            maxY: padding.top || 0,
             width: rect.width,
             height: rect.height
         };
     }
 
     /**
-     * Hold the view inside the map, and report where it ended up.
-     *
-     * Every path that moves the view goes through here rather than writing the
-     * same two `Math.max(min, Math.min(0, …))` lines again: panning, the
-     * scrollbar thumbs, wheel zoom and the scrollbar refresh had four copies
-     * between them and the pan had none, which is what let a drag leave the
-     * map at all.
+     * Hold the view inside its map/zoom bounds, and return those bounds.
+     * Scrollbar refresh and viewport transforms share panBounds so they
+     * cannot undo cursor anchoring with different clamping rules.
      */
     clampContainerToMap(scale = this.container.scale.x) {
         const bounds = this.panBounds(scale);
         if (!bounds) return null;
-        this.container.x = Math.max(bounds.minX, Math.min(0, this.container.x));
-        this.container.y = Math.max(bounds.minY, Math.min(0, this.container.y));
+        this.container.x = Math.max(bounds.minX, Math.min(bounds.maxX || 0, this.container.x));
+        this.container.y = Math.max(bounds.minY, Math.min(bounds.maxY || 0, this.container.y));
         return bounds;
     }
 
@@ -1203,19 +1211,19 @@ class TilemapManager {
         const rect = container.getBoundingClientRect();
 
         const scale = this.container.scale.x;
-        const mapWidth = this.currentMap.width * this.TILE_WIDTH * scale;
-        const mapHeight = this.currentMap.height * this.TILE_HEIGHT * scale;
-
-        this.clampContainerToMap(scale);
+        const bounds = this.clampContainerToMap(scale);
+        if (!bounds) return;
+        const horizontalRange = bounds.maxX - bounds.minX;
+        const verticalRange = bounds.maxY - bounds.minY;
 
         // Horizontal scrollbar
-        const needsHScroll = mapWidth > rect.width;
+        const needsHScroll = horizontalRange > 0;
         if (needsHScroll) {
             const trackWidth = rect.width - 14;
-            const thumbWidth = Math.max(30, (rect.width / mapWidth) * trackWidth);
-            const scrollRange = mapWidth - rect.width;
+            const thumbWidth = Math.max(30, (rect.width / (rect.width + horizontalRange)) * trackWidth);
+            const scrollRange = horizontalRange;
             const thumbRange = trackWidth - thumbWidth;
-            const thumbPos = (-this.container.x / scrollRange) * thumbRange;
+            const thumbPos = ((bounds.maxX - this.container.x) / scrollRange) * thumbRange;
 
             this.scrollbars.hThumb.style.width = thumbWidth + 'px';
             this.scrollbars.hThumb.style.left = thumbPos + 'px';
@@ -1225,13 +1233,13 @@ class TilemapManager {
         }
 
         // Vertical scrollbar
-        const needsVScroll = mapHeight > rect.height;
+        const needsVScroll = verticalRange > 0;
         if (needsVScroll) {
             const trackHeight = rect.height - 14;
-            const thumbHeight = Math.max(30, (rect.height / mapHeight) * trackHeight);
-            const scrollRange = mapHeight - rect.height;
+            const thumbHeight = Math.max(30, (rect.height / (rect.height + verticalRange)) * trackHeight);
+            const scrollRange = verticalRange;
             const thumbRange = trackHeight - thumbHeight;
-            const thumbPos = (-this.container.y / scrollRange) * thumbRange;
+            const thumbPos = ((bounds.maxY - this.container.y) / scrollRange) * thumbRange;
 
             this.scrollbars.vThumb.style.height = thumbHeight + 'px';
             this.scrollbars.vThumb.style.top = thumbPos + 'px';
@@ -1396,10 +1404,22 @@ class TilemapManager {
         }
     }
 
-    setViewportTransform(x, y, scale = this.container.scale.x) {
+    setViewportTransform(x, y, scale = this.container.scale.x, { preserveAnchor = false } = {}) {
+        if (preserveAnchor) {
+            // Cursor-anchored zoom may need a small margin at a map edge.
+            // Keep only that margin, rather than snapping the pointed tile to
+            // a new location. Ordinary panning cannot extend these bounds.
+            this._zoomPadding = null;
+            const bounds = this.panBounds(scale);
+            if (bounds) this._zoomPadding = {
+                left: Math.max(0, x), top: Math.max(0, y),
+                right: Math.max(0, bounds.minX - x), bottom: Math.max(0, bounds.minY - y)
+            };
+        }
         const pan = this.panBounds(scale);
-        const nextX = pan ? Math.max(pan.minX, Math.min(0, x)) : x;
-        const nextY = pan ? Math.max(pan.minY, Math.min(0, y)) : y;
+        const nextX = pan ? Math.max(pan.minX, Math.min(pan.maxX || 0, x)) : x;
+        const nextY = pan ? Math.max(pan.minY, Math.min(pan.maxY || 0, y)) : y;
+        this.applyViewportCrop({ x: nextX, y: nextY, scale });
         if (this.usesVirtualViewport()) {
             this.ensureVirtualViewportCoverage(nextX, nextY, scale);
         }
@@ -1555,8 +1575,8 @@ class TilemapManager {
         // PERFORMANCE: Clear sprite tracking when clearing map
         this.tileSprites = {};
 
-        // Render checkerboard background (for transparency visualization)
-        if (!options.virtualRefresh) this.renderCheckerboard(width, height);
+        // Render the solid transparency underlay for the editor
+        if (!options.virtualRefresh) this.renderPreviewBackground(width, height);
 
         // Render parallax background (non-blocking - loads in background while tiles render)
         if (!options.virtualRefresh) this.renderParallax();
@@ -2300,42 +2320,15 @@ class TilemapManager {
         }
     }
 
-    // Render checkerboard background for transparency visualization
-    renderCheckerboard(mapWidth, mapHeight) {
-        const tileSize = this.TILE_SIZE; // Size of each checkerboard square
-        const pixelWidth = mapWidth * this.TILE_WIDTH;
-        const pixelHeight = mapHeight * this.TILE_HEIGHT;
-
-        // PERFORMANCE: Create a tiny 2x2 tile checkerboard texture and tile it
-        // instead of drawing thousands of individual rects
-        const lightColor = 0xCCCCCC;
-        const darkColor = 0x999999;
-
-        // Create a 2-tile wide, 2-tile tall pattern using Graphics, then use as TilingSprite source
-        const patternSize = tileSize * 2;
-        const pattern = new PIXI.Graphics();
-        pattern.rect(0, 0, tileSize, tileSize).fill(lightColor);
-        pattern.rect(tileSize, 0, tileSize, tileSize).fill(darkColor);
-        pattern.rect(0, tileSize, tileSize, tileSize).fill(darkColor);
-        pattern.rect(tileSize, tileSize, tileSize, tileSize).fill(lightColor);
-
-        // Render the small pattern to a texture ONCE and reuse it — render
-        // textures are exempt from PIXI's texture GC, so allocating a fresh
-        // one per full re-render (every undo/redo/large-fill fallback)
-        // leaked a GPU framebuffer each time.
-        if (!this._checkerboardTexture) {
-            this._checkerboardTexture = PIXI.RenderTexture.create({ width: patternSize, height: patternSize });
-            this.app.renderer.render({ container: pattern, target: this._checkerboardTexture });
+    // A solid editor-only underlay keeps transparent tiles readable without a pattern.
+    renderPreviewBackground(mapWidth, mapHeight) {
+        const color = typeof ThemeColors !== 'undefined'
+            ? ThemeColors.resolve('--color-asset-preview-bg', '#24272d') : '#24272d';
+        this._previewBackground ||= new PIXI.Graphics();
+        this._previewBackground.clear().rect(0, 0, mapWidth * this.TILE_WIDTH, mapHeight * this.TILE_HEIGHT).fill(color);
+        if (this._previewBackground.parent !== this.layers.checkerboard) {
+            this.layers.checkerboard.addChild(this._previewBackground);
         }
-        pattern.destroy();
-
-        const checkerboard = new PIXI.TilingSprite({
-            texture: this._checkerboardTexture,
-            width: pixelWidth,
-            height: pixelHeight
-        });
-
-        this.layers.checkerboard.addChild(checkerboard);
     }
 
     // Render parallax background
@@ -3149,6 +3142,7 @@ class TilemapManager {
         if (this.container) {
             this.destroyAllVirtualChunkLayers();
             this.container.destroy({ children: true });
+            this._previewBackground = null;
             this.container = null;
         }
         this.currentMap = null;
@@ -3164,6 +3158,8 @@ class TilemapManager {
 
     // Full cleanup when this TilemapManager is being replaced (e.g., project switch)
     destroy() {
+        this._themeObserver?.disconnect();
+        this._themeObserver = null;
         this.destroyed = true;
         this.cancelPendingMapLoad();
 
@@ -3201,6 +3197,7 @@ class TilemapManager {
             this.destroyAllVirtualChunkLayers();
             this.app.stage.removeChild(this.container);
             this.container.destroy({ children: true });
+            this._previewBackground = null;
             this.container = null;
         }
 

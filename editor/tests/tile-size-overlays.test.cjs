@@ -75,7 +75,7 @@ function editorAt(tileSize, { store = null, flags = [], mode = 'tile3d', cols = 
     return { editor, width: cols * tileSize, height: rows * tileSize };
 }
 
-const SIZES = [48, 32, 24, 16];
+const SIZES = [64, 48, 32, 24, 16, 8];
 
 /** Every mark, normalised so a negative width reads as the box it really covers. */
 function marks(ops) {
@@ -248,5 +248,20 @@ test('no flag icon spills further into its neighbour than it does at 32', () => 
         assert.ok(overhangs[size] <= overhangs[32] + 1e-9,
             `${size}px flag icons overhang ${(overhangs[size] * 100).toFixed(1)}% of a tile, ` +
             `against ${(overhangs[32] * 100).toFixed(1)}% at 32`);
+    }
+});
+
+test('above-character stars use a valid font contained in every supported tile size', () => {
+    for (const size of SIZES) {
+        const { editor, width, height } = editorAt(size, { mode:'passage', flags:[0x10], cols:1, rows:1 });
+        const ctx = recordingContext();
+        const fonts = [];
+        editor.drawFlagGlyph = (context, glyph) => { if (glyph === '★') fonts.push(context.font); };
+        editor.drawCompactPassageOverlay(ctx, width, height, 5, false);
+        assert.ok(fonts.length);
+        for (const font of fonts) {
+            const height = Number(font.match(/(-?[\d.]+)px/)[1]);
+            assert.ok(height > 0 && height <= size, `${size}px tile: ${font}`);
+        }
     }
 });

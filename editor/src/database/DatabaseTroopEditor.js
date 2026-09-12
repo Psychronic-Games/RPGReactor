@@ -992,6 +992,7 @@ class DatabaseTroopEditor {
         const members = this.currentTroop.members || [];
         this.enemySpriteImages = {};
         this.enemyModelImages = {};
+        this.enemyGraphicImages = {};
 
         members.forEach(member => {
             const enemy = enemies.find(e => e && e.id === member.enemyId);
@@ -1001,6 +1002,16 @@ class DatabaseTroopEditor {
                 spec = typeof RRDatabase3DBindings !== 'undefined'
                     ? RRDatabase3DBindings.get(project.path, 'enemies', enemy.id) : null;
             } catch (error) { console.error('Could not load enemy model binding:', error); }
+            const config=this.databaseManager.data?.battlePresentation?.enemies?.[enemy.id]?.graphic;
+            if(config?.mode&&config.mode!=='auto'){
+                const graphic=ReactorBattleData.graphic(this.databaseManager.data.battlePresentation,'enemies',enemy.id,enemy,spec);
+                spec=graphic.type==='model'?graphic.model:null;
+                if(!spec){
+                    if(!graphic.name)return;
+                    pending++;const image=new Image();this.enemyGraphicImages[enemy.id]={image,graphic};image.onload=done;image.onerror=done;
+                    image.src=RRAssetFiles.imageUrlFor(path.join(project.path,'img',graphic.folder),graphic.name);return;
+                }
+            }
             if (spec) {
                 if (this.enemyModelImages[enemy.id]) return;
                 const record = this.enemyModelImages[enemy.id] = {
@@ -1077,6 +1088,12 @@ class DatabaseTroopEditor {
             if (!enemy) return;
             const home = this.battleToCanvas(member.x, member.y);
 
+            const explicit=this.enemyGraphicImages?.[enemy.id];
+            if(explicit?.image.complete&&explicit.image.naturalWidth){
+                const {image,graphic}=explicit,frame=ReactorBattleData.graphicFrame(graphic,image.naturalWidth,image.naturalHeight),scale=graphic.scale||1;
+                const bounds=this.getEnemyDrawRect(member,frame.width*scale,frame.height*scale);bounds.y-=graphic.offsetY||0;
+                ctx.save();ctx.globalAlpha=member.hidden?.4:1;ctx.translate(bounds.x+(graphic.mirror?bounds.width:0),bounds.y);if(graphic.mirror)ctx.scale(-1,1);ctx.drawImage(image,frame.x,frame.y,frame.width,frame.height,0,0,bounds.width,bounds.height);ctx.restore();this.enemySpriteBounds.push({...bounds,memberIndex:idx});return;
+            }
             const model = this.enemyModelImages[enemy.id];
             const img = model ? model.image : (enemy.battlerName ? this.enemySpriteImages[enemy.battlerName] : null);
 
@@ -1268,7 +1285,7 @@ class DatabaseTroopEditor {
         const topRow = document.createElement('div');
         topRow.style.cssText = 'display: flex; align-items: center; gap: 8px; margin-bottom: 6px; flex-wrap: wrap;';
 
-        const condBtn = this.createSmallButton('Conditions...', () => this.showConditionsModal(page));
+        const condBtn = this.createSmallButton(tt('Conditions') + '…', () => this.showConditionsModal(page));
         topRow.appendChild(condBtn);
 
         const condSummary = document.createElement('span');

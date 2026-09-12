@@ -73,6 +73,11 @@ class ModelPropsManager {
         this._ensureContainer();
         this.preview2D.bind();
         this.render();
+        // Retire any static event thumbnails built before this manager bound
+        // the new map; model previews now share the retained lighting path.
+        if (this.projectController?.eventManager?.currentMap === this.currentMap) {
+            this.projectController.eventManager.renderEventPreviews();
+        }
         this._syncPanel();
         if (this.active) this._bindPointer();
     }
@@ -104,7 +109,10 @@ class ModelPropsManager {
         for (const child of container.removeChildren()) {
             if (!child.__livePropPreview && !child.__livePropLight) child.destroy({ children: false });
         }
-        this.preview2D.sync(this.props());
+        const events = this.projectController?.eventManager;
+        const eventPreviews = events?.currentMap === this.currentMap ? events.modelPreviewProps?.() || [] : [];
+        const renderProps = this.props().concat(eventPreviews);
+        this.preview2D.sync(renderProps);
         this._footprintGeneration = (this._footprintGeneration || 0) + 1;
         this._ghost = null;
         this._sprites.clear();
@@ -112,7 +120,7 @@ class ModelPropsManager {
         const th = this.tilemapManager?.TILE_HEIGHT || tw;
         this._drawFootprint(container, tw, th);
         const depth = prop => prop.y + (prop.z || 0) * (Math.tan(55 * Math.PI / 180) - 1);
-        const props = this.props().slice().sort((a, b) => depth(a) - depth(b) || a.id - b.id);
+        const props = renderProps.sort((a, b) => depth(a) - depth(b) || a.id - b.id);
         for (const prop of props) {
             const sprite = this._spriteFor(prop, tw, th);
             if (!sprite) continue;
@@ -201,6 +209,7 @@ class ModelPropsManager {
     propAtPoint(px, py) {
         const entries = [...this._sprites.entries()].reverse();
         for (const [id, sprite] of entries) {
+            if (id < 0) continue; // Event previews are selected through Events.
             const bounds = sprite.getBounds ? sprite.getLocalBounds() : null;
             if (!bounds) continue;
             const left = sprite.x + bounds.x * (sprite.scale?.x || 1);

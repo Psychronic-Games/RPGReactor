@@ -30,6 +30,7 @@
     --color-accent-hover:         #e8b817;        /* gold hover state */
     --color-accent-shadow:        #2a2200;        /* deep gold-tinted shadow */
     --color-accent-on:            #000000;        /* text on solid accent fill */
+    --color-accent-hover-on:      #000000;
     --color-accent-tint-10:       rgba(255, 215, 0, 0.10);
     --color-accent-tint-15:       rgba(255, 215, 0, 0.15);
     --color-accent-tint-25:       rgba(255, 215, 0, 0.25);
@@ -70,6 +71,9 @@
        the stylesheet stays the one place a colour is decided. Only the Light
        swatch reads it: Mid and Dark are fixed points an author picks *because*
        they are neutral, and Dark is the default. */
+    --color-model-preview-bg:     #1a1a1e;
+    --color-asset-preview-bg:     #24272d;
+    --color-tileset-checker-secondary: var(--color-text-muted);
     --color-preview-backdrop:     #c8c8c8;
 
     /* ---------- Surfaces (background layers from deepest to lightest) ----- */
@@ -157,14 +161,18 @@
  * ============================================================================= */
 
 /* -----------------------------------------------------------------------------
- * LIGHT THEME — inverse of the default Gold-on-Dark. Surfaces are bright with
- * dark text; gold accent darkened to deep-goldenrod so it still pops on white.
+ * LIGHT THEME — white menu and content surfaces, colored toolbars and actions,
+ * distinct panel frames, and deep accents for readable text and field borders.
  * Same contrast targets as the dark theme on every interactive element.
  * --------------------------------------------------------------------------- */
 :root[data-theme="light"] {
+    --color-accent-hover-on:      #ffffff;
+    --color-model-preview-bg:     #e5e7eb;
+    --color-asset-preview-bg:     #e5e7eb;
+    --color-tileset-checker-secondary: #555555; /* original palette grey, independent of text contrast */
     /* ---------- Brand accent (darker gold so it pops on light) ------------- */
-    --color-accent:               #7f6105;
-    --color-accent-bright:        #7f6105;        /* deep goldenrod */
+    --color-accent:               #765400;
+    --color-accent-bright:        #765400;
     --color-accent-hover:         #7a5c05;
     --color-accent-shadow:        #f4e8a1;        /* light gold tinted shadow */
     --color-accent-on:            #ffffff;        /* text on solid accent fill */
@@ -178,7 +186,7 @@
     --color-accent-border-mid:    rgba(184, 134, 11, 0.70);
     --color-accent-border-strong: rgba(184, 134, 11, 0.85);
 
-    --color-accent-muted:         #9c7a10;
+    --color-accent-muted:         #765400;
     --color-accent-deep:          #7a5d05;        /* darker (active/pressed) */
 
     /* ---------- Link / blue palette (darker for light bg contrast) -------- */
@@ -203,37 +211,36 @@
     --color-syntax-comment:       #008000;
 
     /* ---------- Surfaces -------------------------------------------------
-     *   Page chrome is neutral light gray — panels, modals, menus all read
-     *   gray, NOT beige. Only interactive accents (buttons, dropdowns,
-     *   selected/hover rows) pop in yellow-gold so the brand still reads
-     *   without making the whole UI feel tinted.
+     *   White menus sit above a vivid gold toolbar. Panel frames separate
+     *   white content cards from the workspace; fields use a lighter tint
+     *   than buttons and selection fills so the interactive states stand out.
      * --------------------------------------------------------------------- */
     --color-bg-deep:              #ffffff;        /* extreme: paper white */
-    --color-bg-base:              #e0e0e0;        /* gray (page bg) */
-    --color-bg-panel:             #ededed;        /* lighter gray (group panels) */
+    --color-bg-base:              #fff6ca;
+    --color-bg-panel:             #ffeb89;
     --color-bg-surface:           #ffffff;        /* pure white (content area / modal body) */
-    --color-bg-menubar:           #cfcfcf;        /* mid gray (menu strip) */
-    --color-bg-toolbar:           #cfcfcf;        /* matches menubar in light (no separate hierarchy) */
-    --color-bg-input:             #ffe97a;        /* SATURATED YELLOW (inputs/dropdowns pop) */
-    --color-bg-input-alt:         #fae47e;        /* deeper yellow (readonly/alt) */
-    --color-bg-button:            #ffe97a;        /* YELLOW button accent */
-    --color-bg-button-hover:      #f5d540;
-    --color-bg-button-active:     #d4b020;
-    --color-bg-list-item:         #ededed;        /* neutral gray row */
-    --color-bg-list-item-alt:     #e3e3e3;
-    --color-bg-hover:             #fff3a8;        /* YELLOW on hover (accent) */
-    --color-bg-selected:          #e6c520;        /* gold selection */
+    --color-bg-menubar:           #ffffff;
+    --color-bg-toolbar:           #ffe078;
+    --color-bg-input:             #ffffff;
+    --color-bg-input-alt:         #fff6ca;
+    --color-bg-button:            #ffda3d;
+    --color-bg-button-hover:      #ffd020;
+    --color-bg-button-active:     #f4bd16;
+    --color-bg-list-item:         #ffffff;
+    --color-bg-list-item-alt:     #f2f4f7;
+    --color-bg-hover:             #ffea8a;
+    --color-bg-selected:          #ffdc38;
 
     /* ---------- Borders / dividers (neutral grays) ----------------------- */
-    --color-border:               #c5c5c5;
-    --color-border-input:         #a6841e;        /* yellow-gold input border for visibility */
-    --color-border-subtle:        #dddddd;
+    --color-border:               #87919f;
+    --color-border-input:         #765400;
+    --color-border-subtle:        #87919f;
 
     /* ---------- Text (dark on light) ------------------------------------- */
-    --color-text:                 #1f1f1f;
-    --color-text-strong:          #000000;
-    --color-text-muted:           #555555;
-    --color-text-dim:             #5f5f5f;
+    --color-text:                 #202633;
+    --color-text-strong:          #101722;
+    --color-text-muted:           #353c47;
+    --color-text-dim:             #424956;
     /* --color-text-link inherits the same var() expression — resolves to
        the light-theme --color-accent-bright (#b8860b) automatically. */
 
@@ -363,9 +370,13 @@
  * with deep pink accent text and saturated pink interactive elements.
  * --------------------------------------------------------------------------- */
 :root[data-theme="bubblegum-light"] {
+    --color-accent-hover-on:      #ffffff;
+    --color-model-preview-bg:     #e5e7eb;
+    --color-asset-preview-bg:     #e5e7eb;
+    --color-tileset-checker-secondary: #555555; /* original palette grey, independent of text contrast */
     /* ---------- Brand accent (darker pink so it pops on light) ----------- */
-    --color-accent:               #ad1457;
-    --color-accent-bright:        #c2185b;
+    --color-accent:               #a00051;
+    --color-accent-bright:        #a00051;
     --color-accent-hover:         #b0104c;
     --color-accent-shadow:        #fce4ec;
     --color-accent-on:            #ffffff;
@@ -378,7 +389,7 @@
     --color-accent-border:        rgba(194, 24, 91, 0.55);
     --color-accent-border-mid:    rgba(194, 24, 91, 0.70);
     --color-accent-border-strong: rgba(194, 24, 91, 0.85);
-    --color-accent-muted:         #d75088;
+    --color-accent-muted:         #a00051;
     --color-accent-deep:          #880e4f;
 
     /* ---------- Link / blue palette -------------------------------------- */
@@ -404,31 +415,31 @@
 
     /* ---------- Surfaces (pink-tinted white / light) --------------------- */
     --color-bg-deep:              #ffffff;
-    --color-bg-base:              #f0e8eb;
-    --color-bg-panel:             #faf3f5;
+    --color-bg-base:              #ffe5f1;
+    --color-bg-panel:             #ffbfdd;
     --color-bg-surface:           #ffffff;
-    --color-bg-menubar:           #d8c9cf;
-    --color-bg-toolbar:           #d8c9cf;
-    --color-bg-input:             #ffd1e8;          /* PINK input/dropdown */
-    --color-bg-input-alt:         #ffadc8;          /* deeper pink */
-    --color-bg-button:            #ffc8de;
-    --color-bg-button-hover:      #ff9bc1;
-    --color-bg-button-active:     #ff80b0;
-    --color-bg-list-item:         #f7eef2;
-    --color-bg-list-item-alt:     #ede2e8;
-    --color-bg-hover:             #ffd1e8;          /* pink on hover */
-    --color-bg-selected:          #ff6fa8;          /* vivid pink selection */
+    --color-bg-menubar:           #ffffff;
+    --color-bg-toolbar:           #ffbedc;
+    --color-bg-input:             #ffffff;
+    --color-bg-input-alt:         #ffe5f1;
+    --color-bg-button:            #ff9dcb;
+    --color-bg-button-hover:      #ff86be;
+    --color-bg-button-active:     #ff7bb7;
+    --color-bg-list-item:         #ffffff;
+    --color-bg-list-item-alt:     #f2f4f7;
+    --color-bg-hover:             #ffd8ea;
+    --color-bg-selected:          #ff95c5;
 
     /* ---------- Borders -------------------------------------------------- */
-    --color-border:               #cdb6be;
-    --color-border-input:         #d75088;
-    --color-border-subtle:        #e8d4dc;
+    --color-border:               #a36b87;
+    --color-border-input:         #a00051;
+    --color-border-subtle:        #a36b87;
 
     /* ---------- Text (dark on light) ------------------------------------- */
-    --color-text:                 #1f1f1f;
-    --color-text-strong:          #000000;
-    --color-text-muted:           #555555;
-    --color-text-dim:             #5f5f5f;
+    --color-text:                 #202633;
+    --color-text-strong:          #101722;
+    --color-text-muted:           #353c47;
+    --color-text-dim:             #424956;
 
     /* ---------- Semantic status colors (light tints) --------------------- */
     --color-success:              #d5ecd5;
@@ -501,9 +512,13 @@
  * OCEAN LIGHT — cool blue accents on cool light blue-gray pastel.
  * --------------------------------------------------------------------------- */
 :root[data-theme="ocean-light"] {
+    --color-accent-hover-on:      #ffffff;
+    --color-model-preview-bg:     #e5e7eb;
+    --color-asset-preview-bg:     #e5e7eb;
+    --color-tileset-checker-secondary: #555555; /* original palette grey, independent of text contrast */
     /* ---------- Brand accent (medium blue for light bg contrast) --------- */
-    --color-accent:               #1f6f9f;
-    --color-accent-bright:        #2e86c1;
+    --color-accent:               #00639e;
+    --color-accent-bright:        #00639e;
     --color-accent-hover:         #1a608a;
     --color-accent-shadow:        #d4e6f1;
     --color-accent-on:            #ffffff;
@@ -516,7 +531,7 @@
     --color-accent-border:        rgba(46, 134, 193, 0.55);
     --color-accent-border-mid:    rgba(46, 134, 193, 0.70);
     --color-accent-border-strong: rgba(46, 134, 193, 0.85);
-    --color-accent-muted:         #6fb5d8;
+    --color-accent-muted:         #00639e;
     --color-accent-deep:          #1a4e72;
 
     /* ---------- Link / blue palette -------------------------------------- */
@@ -542,31 +557,31 @@
 
     /* ---------- Surfaces (cool blue-gray tints) -------------------------- */
     --color-bg-deep:              #ffffff;
-    --color-bg-base:              #e8eef2;
-    --color-bg-panel:             #f3f7fa;
+    --color-bg-base:              #daf0ff;
+    --color-bg-panel:             #a5dcff;
     --color-bg-surface:           #ffffff;
-    --color-bg-menubar:           #c8d4dc;
-    --color-bg-toolbar:           #c8d4dc;
-    --color-bg-input:             #d6ecf5;          /* BLUE input/dropdown */
-    --color-bg-input-alt:         #aed6f1;          /* deeper blue */
-    --color-bg-button:            #c9e1f0;
-    --color-bg-button-hover:      #95c5e0;
-    --color-bg-button-active:     #5dade2;
-    --color-bg-list-item:         #ecf3f7;
-    --color-bg-list-item-alt:     #e0e9ef;
-    --color-bg-hover:             #d6ecf5;
-    --color-bg-selected:          #5dade2;
+    --color-bg-menubar:           #ffffff;
+    --color-bg-toolbar:           #abddff;
+    --color-bg-input:             #ffffff;
+    --color-bg-input-alt:         #daf0ff;
+    --color-bg-button:            #86ceff;
+    --color-bg-button-hover:      #69c4ff;
+    --color-bg-button-active:     #4bb8ff;
+    --color-bg-list-item:         #ffffff;
+    --color-bg-list-item-alt:     #f2f4f7;
+    --color-bg-hover:             #c8eaff;
+    --color-bg-selected:          #69c4ff;
 
     /* ---------- Borders -------------------------------------------------- */
-    --color-border:               #b8c5cd;
-    --color-border-input:         #5dade2;
-    --color-border-subtle:        #d8e2e8;
+    --color-border:               #628ca8;
+    --color-border-input:         #00639e;
+    --color-border-subtle:        #628ca8;
 
     /* ---------- Text (dark on light) ------------------------------------- */
-    --color-text:                 #1f1f1f;
-    --color-text-strong:          #000000;
-    --color-text-muted:           #555555;
-    --color-text-dim:             #5f5f5f;
+    --color-text:                 #202633;
+    --color-text-strong:          #101722;
+    --color-text-muted:           #353c47;
+    --color-text-dim:             #424956;
 
     /* ---------- Semantic status colors ----------------------------------- */
     --color-success:              #d5ecd5;
@@ -640,9 +655,13 @@
  * CASCADIA LIGHT — forest green accents on cool green-gray pastel surfaces.
  * --------------------------------------------------------------------------- */
 :root[data-theme="cascadia-light"] {
+    --color-accent-hover-on:      #ffffff;
+    --color-model-preview-bg:     #e5e7eb;
+    --color-asset-preview-bg:     #e5e7eb;
+    --color-tileset-checker-secondary: #555555; /* original palette grey, independent of text contrast */
     /* ---------- Brand accent (forest green, visible on light) ------------ */
-    --color-accent:               #1e7d1e;
-    --color-accent-bright:        #2e7d32;
+    --color-accent:               #006d3b;
+    --color-accent-bright:        #006d3b;
     --color-accent-hover:         #186818;
     --color-accent-shadow:        #d4e9d4;
     --color-accent-on:            #ffffff;
@@ -655,7 +674,7 @@
     --color-accent-border:        rgba(46, 125, 50, 0.55);
     --color-accent-border-mid:    rgba(46, 125, 50, 0.70);
     --color-accent-border-strong: rgba(46, 125, 50, 0.85);
-    --color-accent-muted:         #6fb56f;
+    --color-accent-muted:         #006d3b;
     --color-accent-deep:          #0a3d0a;
 
     /* ---------- Link / blue palette -------------------------------------- */
@@ -681,31 +700,31 @@
 
     /* ---------- Surfaces (cool green-gray tints) ------------------------- */
     --color-bg-deep:              #ffffff;
-    --color-bg-base:              #e8efe9;
-    --color-bg-panel:             #f3f9f4;
+    --color-bg-base:              #d8f6e5;
+    --color-bg-panel:             #a2eac0;
     --color-bg-surface:           #ffffff;
-    --color-bg-menubar:           #c8d6c9;
-    --color-bg-toolbar:           #c8d6c9;
-    --color-bg-input:             #d8f0d8;          /* GREEN input/dropdown */
-    --color-bg-input-alt:         #aedbae;          /* deeper green */
-    --color-bg-button:            #c9e6c9;
-    --color-bg-button-hover:      #95c595;
-    --color-bg-button-active:     #5dbb5d;
-    --color-bg-list-item:         #ecf5ec;
-    --color-bg-list-item-alt:     #e0ebe0;
-    --color-bg-hover:             #d8f0d8;
-    --color-bg-selected:          #5dbb5d;
+    --color-bg-menubar:           #ffffff;
+    --color-bg-toolbar:           #a8ecc4;
+    --color-bg-input:             #ffffff;
+    --color-bg-input-alt:         #d8f6e5;
+    --color-bg-button:            #85e6ac;
+    --color-bg-button-hover:      #64dc96;
+    --color-bg-button-active:     #48ce82;
+    --color-bg-list-item:         #ffffff;
+    --color-bg-list-item-alt:     #f2f4f7;
+    --color-bg-hover:             #c5f0d5;
+    --color-bg-selected:          #64dc96;
 
     /* ---------- Borders -------------------------------------------------- */
-    --color-border:               #b8cbb8;
-    --color-border-input:         #5dbb5d;
-    --color-border-subtle:        #d8e2d8;
+    --color-border:               #628f76;
+    --color-border-input:         #006d3b;
+    --color-border-subtle:        #628f76;
 
     /* ---------- Text (dark on light) ------------------------------------- */
-    --color-text:                 #1f1f1f;
-    --color-text-strong:          #000000;
-    --color-text-muted:           #555555;
-    --color-text-dim:             #5f5f5f;
+    --color-text:                 #202633;
+    --color-text-strong:          #101722;
+    --color-text-muted:           #353c47;
+    --color-text-dim:             #424956;
 
     /* ---------- Semantic status colors ----------------------------------- */
     --color-success:              #d5ecd5;
@@ -774,8 +793,12 @@
  * UNDERWORLD LIGHT — deep red accents on red-tinted light pastel.
  * --------------------------------------------------------------------------- */
 :root[data-theme="underworld-light"] {
-    --color-accent:               #c0392b;
-    --color-accent-bright:        #c62828;
+    --color-accent-hover-on:      #ffffff;
+    --color-model-preview-bg:     #e5e7eb;
+    --color-asset-preview-bg:     #e5e7eb;
+    --color-tileset-checker-secondary: #555555; /* original palette grey, independent of text contrast */
+    --color-accent:               #a8172b;
+    --color-accent-bright:        #a8172b;
     --color-accent-hover:         #8e0000;
     --color-accent-shadow:        #ffdfdf;
     --color-accent-on:            #ffffff;
@@ -788,7 +811,7 @@
     --color-accent-border:        rgba(198, 40, 40, 0.55);
     --color-accent-border-mid:    rgba(198, 40, 40, 0.70);
     --color-accent-border-strong: rgba(198, 40, 40, 0.85);
-    --color-accent-muted:         #d76060;
+    --color-accent-muted:         #a8172b;
     --color-accent-deep:          #6e0a0a;
 
     --color-link:                 #0066b3;
@@ -810,29 +833,29 @@
     --color-syntax-comment:       #008000;
 
     --color-bg-deep:              #ffffff;
-    --color-bg-base:              #f2e8e8;
-    --color-bg-panel:             #faf3f3;
+    --color-bg-base:              #ffe7e9;
+    --color-bg-panel:             #ffc4c8;
     --color-bg-surface:           #ffffff;
-    --color-bg-menubar:           #d8c8c8;
-    --color-bg-toolbar:           #d8c8c8;
-    --color-bg-input:             #ffd1d1;
-    --color-bg-input-alt:         #ffabab;
-    --color-bg-button:            #ffc8c8;
-    --color-bg-button-hover:      #ff9595;
-    --color-bg-button-active:     #ff6060;
-    --color-bg-list-item:         #f7eded;
-    --color-bg-list-item-alt:     #ede0e0;
-    --color-bg-hover:             #ffd1d1;
-    --color-bg-selected:          #ff6060;
+    --color-bg-menubar:           #ffffff;
+    --color-bg-toolbar:           #ffc1c8;
+    --color-bg-input:             #ffffff;
+    --color-bg-input-alt:         #ffe7e9;
+    --color-bg-button:            #ffabb4;
+    --color-bg-button-hover:      #ff9ca3;
+    --color-bg-button-active:     #ff858f;
+    --color-bg-list-item:         #ffffff;
+    --color-bg-list-item-alt:     #f2f4f7;
+    --color-bg-hover:             #ffd5dc;
+    --color-bg-selected:          #ff9ca3;
 
-    --color-border:               #cdb6b6;
-    --color-border-input:         #d75050;
-    --color-border-subtle:        #e8d4d4;
+    --color-border:               #a2737d;
+    --color-border-input:         #a8172b;
+    --color-border-subtle:        #a2737d;
 
-    --color-text:                 #1f1f1f;
-    --color-text-strong:          #000000;
-    --color-text-muted:           #555555;
-    --color-text-dim:             #5f5f5f;
+    --color-text:                 #202633;
+    --color-text-strong:          #101722;
+    --color-text-muted:           #353c47;
+    --color-text-dim:             #424956;
 
     --color-success:              #d5ecd5;
     --color-success-border:       #5cb85c;
@@ -900,8 +923,12 @@
  * (the namesake: vanilla cream + tangerine).
  * --------------------------------------------------------------------------- */
 :root[data-theme="creamsicle-light"] {
-    --color-accent:               #b35c0e;
-    --color-accent-bright:        #d35400;
+    --color-accent-hover-on:      #ffffff;
+    --color-model-preview-bg:     #e5e7eb;
+    --color-asset-preview-bg:     #e5e7eb;
+    --color-tileset-checker-secondary: #555555; /* original palette grey, independent of text contrast */
+    --color-accent:               #a03e00;
+    --color-accent-bright:        #a03e00;
     --color-accent-hover:         #9c500c;
     --color-accent-shadow:        #ffe8d0;
     --color-accent-on:            #ffffff;
@@ -914,7 +941,7 @@
     --color-accent-border:        rgba(211, 84, 0, 0.55);
     --color-accent-border-mid:    rgba(211, 84, 0, 0.70);
     --color-accent-border-strong: rgba(211, 84, 0, 0.85);
-    --color-accent-muted:         #e08a3a;
+    --color-accent-muted:         #a03e00;
     --color-accent-deep:          #6e2a00;
 
     --color-link:                 #0066b3;
@@ -936,29 +963,29 @@
     --color-syntax-comment:       #008000;
 
     --color-bg-deep:              #ffffff;
-    --color-bg-base:              #faf3e8;
-    --color-bg-panel:             #fefaef;
+    --color-bg-base:              #ffeed6;
+    --color-bg-panel:             #ffd29d;
     --color-bg-surface:           #ffffff;
-    --color-bg-menubar:           #e8d8c0;
-    --color-bg-toolbar:           #e8d8c0;
-    --color-bg-input:             #ffd8a8;
-    --color-bg-input-alt:         #ffb56e;
-    --color-bg-button:            #ffd0a0;
-    --color-bg-button-hover:      #ffac68;
-    --color-bg-button-active:     #ff8c30;
-    --color-bg-list-item:         #fff5e8;
-    --color-bg-list-item-alt:     #f5e8d8;
-    --color-bg-hover:             #ffd8a8;
-    --color-bg-selected:          #ff8c30;
+    --color-bg-menubar:           #ffffff;
+    --color-bg-toolbar:           #ffd09b;
+    --color-bg-input:             #ffffff;
+    --color-bg-input-alt:         #ffeed6;
+    --color-bg-button:            #ffc078;
+    --color-bg-button-hover:      #ffb45c;
+    --color-bg-button-active:     #ffa43d;
+    --color-bg-list-item:         #ffffff;
+    --color-bg-list-item-alt:     #f2f4f7;
+    --color-bg-hover:             #ffe0b6;
+    --color-bg-selected:          #ffb45c;
 
-    --color-border:               #cdb8a0;
-    --color-border-input:         #d77a30;
-    --color-border-subtle:        #ead8c0;
+    --color-border:               #a48660;
+    --color-border-input:         #a03e00;
+    --color-border-subtle:        #a48660;
 
-    --color-text:                 #1f1f1f;
-    --color-text-strong:          #000000;
-    --color-text-muted:           #555555;
-    --color-text-dim:             #5f5f5f;
+    --color-text:                 #202633;
+    --color-text-strong:          #101722;
+    --color-text-muted:           #353c47;
+    --color-text-dim:             #424956;
 
     --color-success:              #d5ecd5;
     --color-success-border:       #5cb85c;
@@ -1033,9 +1060,13 @@
  * ROYALTY LIGHT — deep purple primary with gold trim on light purple pastel.
  * --------------------------------------------------------------------------- */
 :root[data-theme="royalty-light"] {
+    --color-accent-hover-on:      #ffffff;
+    --color-model-preview-bg:     #e5e7eb;
+    --color-asset-preview-bg:     #e5e7eb;
+    --color-tileset-checker-secondary: #555555; /* original palette grey, independent of text contrast */
     /* ---------- Brand accent (deep purple visible on light) -------------- */
-    --color-accent:               #6c1d8e;
-    --color-accent-bright:        #8e44ad;
+    --color-accent:               #66229b;
+    --color-accent-bright:        #66229b;
     --color-accent-hover:         #5b2c70;
     --color-accent-shadow:        #f0e0fa;
     --color-accent-on:            #ffffff;
@@ -1051,7 +1082,7 @@
     --color-accent-border-mid:    rgba(184, 134, 11, 0.80);
     --color-accent-border-strong: rgba(184, 134, 11, 0.95);
 
-    --color-accent-muted:         #b585cc;
+    --color-accent-muted:         #66229b;
     --color-accent-deep:          #4a0d6e;
 
     /* ---------- Link / blue palette -------------------------------------- */
@@ -1077,31 +1108,31 @@
 
     /* ---------- Surfaces (light purple pastel) --------------------------- */
     --color-bg-deep:              #ffffff;
-    --color-bg-base:              #ede5f2;
-    --color-bg-panel:             #f9f3fb;
+    --color-bg-base:              #f4eaff;
+    --color-bg-panel:             #e4ceff;
     --color-bg-surface:           #ffffff;
-    --color-bg-menubar:           #d4c4d8;
-    --color-bg-toolbar:           #d4c4d8;
-    --color-bg-input:             #e8c9f0;         /* PURPLE input/dropdown */
-    --color-bg-input-alt:         #c79de0;
-    --color-bg-button:            #d4b3e4;
-    --color-bg-button-hover:      #b58cd1;
-    --color-bg-button-active:     #9b59b6;
-    --color-bg-list-item:         #f3e8f7;
-    --color-bg-list-item-alt:     #e8d8ed;
-    --color-bg-hover:             #e8c9f0;
-    --color-bg-selected:          #9b59b6;
+    --color-bg-menubar:           #ffffff;
+    --color-bg-toolbar:           #dfc2ff;
+    --color-bg-input:             #ffffff;
+    --color-bg-input-alt:         #f4eaff;
+    --color-bg-button:            #dbbaff;
+    --color-bg-button-hover:      #d2adff;
+    --color-bg-button-active:     #c79aff;
+    --color-bg-list-item:         #ffffff;
+    --color-bg-list-item-alt:     #f2f4f7;
+    --color-bg-hover:             #ebd6ff;
+    --color-bg-selected:          #d2adff;
 
     /* ---------- GOLD TRIM: panel/input borders are gold ------------------ */
-    --color-border:               #c9a82c;
-    --color-border-input:         #a6841e;
-    --color-border-subtle:        #ead67a;
+    --color-border:               #9e852b;
+    --color-border-input:         #66229b;
+    --color-border-subtle:        #9e852b;
 
     /* ---------- Text (dark on light) ------------------------------------- */
-    --color-text:                 #1f1f1f;
-    --color-text-strong:          #000000;
-    --color-text-muted:           #555555;
-    --color-text-dim:             #575757;
+    --color-text:                 #202633;
+    --color-text-strong:          #101722;
+    --color-text-muted:           #353c47;
+    --color-text-dim:             #424956;
 
     /* ---------- Semantic status colors ----------------------------------- */
     --color-success:              #d5ecd5;
@@ -1123,7 +1154,6 @@
  * the accent + token values for that palette/mode. Don't forget to add the
  * new "<palette>-light" name to the multi-selector light-mode overrides
  * below + in styles.css. */
- * ============================================================================= */
 
 /* =============================================================================
  * Reusable utility classes built on the token system.
@@ -1790,6 +1820,10 @@ input[type="number"]::-webkit-outer-spin-button {
     vertical-align: middle;
     box-sizing: border-box;
 }
+/* Conditional forms hide the original input; its generated controls follow. */
+.rr-number-stepper-auto:has(> input[hidden], > input[style*="display: none"], > input[style*="display:none"]) {
+    display: none;
+}
 .rr-number-stepper-auto .rr-number-stepper-input {
     padding: 4px 6px;
     font-size: inherit;
@@ -1969,6 +2003,14 @@ input[type="number"]::-webkit-outer-spin-button {
     justify-content: space-between;
     align-items: center;
 }
+/* Tabbed trait/effect editors keep their frame while their body scrolls. */
+.rr-modal:is(.trait-editor-modal, .effect-editor-modal) {
+    height: min(500px, 88vh);
+    overflow: hidden;
+}
+.rr-modal:is(.trait-editor-modal, .effect-editor-modal) > :not(.rr-modal-body) {
+    flex-shrink: 0;
+}
 .rr-modal-title {
     font-size: var(--font-size-lg);
     font-weight: 600;
@@ -2103,7 +2145,7 @@ input[type="number"]::-webkit-outer-spin-button {
     min-height: 250px;
     overflow: hidden;
     border-radius: var(--radius-sm);
-    background: #11151f;
+    background: var(--color-model-preview-bg);
 }
 .rr-resource-model-canvas {
     display: block;
@@ -2403,15 +2445,16 @@ input[type="number"]::-webkit-outer-spin-button {
 }
 .rr-system-pitch-controls {
     display: grid;
-    grid-template-columns: minmax(70px, 1fr) 52px;
+    grid-template-columns: minmax(70px, 1fr) 80px;
     gap: 7px;
     align-items: center;
 }
 .rr-system-pitch-controls input[type="range"] {
     min-width: 0;
 }
+.rr-system-pitch-controls > .rr-number-stepper-auto { width: 100% !important; }
 .rr-system-pitch-number {
-    width: 56px;
+    width: 80px;
     height: 28px;
     padding: 3px 4px;
     box-sizing: border-box;
@@ -3635,3 +3678,9 @@ input.rr-color-swatch[type="color"]::-webkit-color-swatch {
     margin-top: 4px;
     color: var(--color-text-muted);
 }
+
+/* Semantic cost badges pair foreground and background independently of theme. */
+.rr-model-cost-badge { margin-left:auto;padding:2px 8px;border-radius:9px;font-size:10px;font-weight:700; }
+.rr-model-cost-badge[data-cost="light"] { background:#7bdd99;color:#132018; }
+.rr-model-cost-badge[data-cost="warning"] { background:#ffcf54;color:#302100; }
+.rr-model-cost-badge[data-cost="heavy"] { background:#ff9a9a;color:#3b0b12; }

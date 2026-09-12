@@ -1,0 +1,382 @@
+[
+  {
+    "theme": "dark",
+    "type": "system1",
+    "selector": ".music-row",
+    "before": {
+      "cells": [
+        "color(srgb 0.199529 0.199529 0.199529)",
+        "color(srgb 0.199529 0.199529 0.199529)"
+      ],
+      "surface": "rgb(30, 30, 30)"
+    },
+    "hovered": {
+      "cells": [
+        "rgb(89, 75, 18)",
+        "rgb(89, 75, 18)"
+      ],
+      "surface": "rgb(30, 30, 30)"
+    }
+  },
+  {
+    "theme": "dark",
+    "type": "system1",
+    "selector": ".sound-row",
+    "before": {
+      "cells": [
+        "color(srgb 0.199529 0.199529 0.199529)",
+        "color(srgb 0.199529 0.199529 0.199529)"
+      ],
+      "surface": "rgb(30, 30, 30)"
+    },
+    "hovered": {
+      "cells": [
+        "rgb(89, 75, 18)",
+        "rgb(89, 75, 18)"
+      ],
+      "surface": "rgb(30, 30, 30)"
+    }
+  },
+  {
+    "theme": "dark",
+    "type": "actors",
+    "selector": ".traits-table tbody tr:has(td:not([class$=\"-indicator\"]))",
+    "before": {
+      "cells": [
+        "color(srgb 0.199529 0.199529 0.199529)"
+      ],
+      "surface": "rgb(30, 30, 30)"
+    },
+    "hovered": {
+      "cells": [
+        "rgb(89, 75, 18)"
+      ],
+      "surface": "rgb(30, 30, 30)"
+    }
+  },
+  {
+    "theme": "dark",
+    "type": "classes",
+    "selector": ".traits-table tbody tr:has(td:not([class$=\"-indicator\"]))",
+    "before": {
+      "cells": [
+        "color(srgb 0.199529 0.199529 0.199529)",
+        "color(srgb 0.199529 0.199529 0.199529)",
+        "color(srgb 0.199529 0.199529 0.199529)"
+      ],
+      "surface": "rgb(30, 30, 30)"
+    },
+    "hovered": {
+      "cells": [
+        "rgb(89, 75, 18)",
+        "rgb(89, 75, 18)",
+        "rgb(89, 75, 18)"
+      ],
+      "surface": "rgb(30, 30, 30)"
+    }
+  },
+  {
+    "theme": "dark",
+    "type": "skills",
+    "selector": ".traits-table tbody tr:has(td:not([class$=\"-indicator\"]))",
+    "before": {
+      "cells": [
+        "color(srgb 0.199529 0.199529 0.199529)",
+        "color(srgb 0.199529 0.199529 0.199529)"
+      ],
+      "surface": "rgb(30, 30, 30)"
+    },
+    "hovered": {
+      "cells": [
+        "rgb(89, 75, 18)",
+        "rgb(89, 75, 18)"
+      ],
+      "surface": "rgb(30, 30, 30)"
+    }
+  },
+  {
+    "theme": "dark",
+    "type": "items",
+    "selector": ".traits-table tbody tr:has(td:not([class$=\"-indicator\"]))",
+    "before": {
+      "cells": [
+        "color(srgb 0.199529 0.199529 0.199529)"
+      ],
+      "surface": "rgb(30, 30, 30)"
+    },
+    "hovered": {
+      "cells": [
+        "rgb(89, 75, 18)"
+      ],
+      "surface": "rgb(30, 30, 30)"
+    }
+  },
+  {
+    "theme": "dark",
+    "type": "weapons",
+    "selector": ".traits-table tbody tr:has(td:not([class$=\"-indicator\"]))",
+    "before": {
+      "cells": [
+        "color(srgb 0.199529 0.199529 0.199529)",
+        "color(srgb 0.199529 0.199529 0.199529)"
+      ],
+      "surface": "rgb(30, 30, 30)"
+    },
+    "hovered": {
+      "cells": [
+        "rgb(89, 75, 18)",
+        "rgb(89, 75, 18)"
+      ],
+      "surface": "rgb(30, 30, 30)"
+    }
+  },
+  {
+    "theme": "dark",
+    "type": "armors",
+    "selector": ".traits-table tbody tr:has(td:not([class$=\"-indicator\"]))",
+    "before": {
+      "cells": [
+        "color(srgb 0.199529 0.199529 0.199529)",
+        "color(srgb 0.199529 0.199529 0.199529)"
+      ],
+      "surface": "rgb(30, 30, 30)"
+    },
+    "hovered": {
+      "cells": [
+        "rgb(89, 75, 18)",
+        "rgb(89, 75, 18)"
+      ],
+      "surface": "rgb(30, 30, 30)"
+    }
+  },
+  {
+    "theme": "dark",
+    "type": "enemies",
+    "selector": ".traits-table tbody tr:has(td:not([class$=\"-indicator\"]))",
+    "before": {
+      "cells": [
+        "color(srgb 0.199529 0.199529 0.199529)",
+        "color(srgb 0.199529 0.199529 0.199529)",
+        "color(srgb 0.199529 0.199529 0.199529)"
+      ],
+      "surface": "rgb(30, 30, 30)"
+    },
+    "hovered": {
+      "cells": [
+        "rgb(89, 75, 18)",
+        "rgb(89, 75, 18)",
+        "rgb(89, 75, 18)"
+      ],
+      "surface": "rgb(30, 30, 30)"
+    }
+  },
+  {
+    "theme": "dark",
+    "type": "states",
+    "selector": ".traits-table tbody tr:has(td:not([class$=\"-indicator\"]))",
+    "before": {
+      "cells": [
+        "color(srgb 0.199529 0.199529 0.199529)",
+        "color(srgb 0.199529 0.199529 0.199529)"
+      ],
+      "surface": "rgb(30, 30, 30)"
+    },
+    "hovered": {
+      "cells": [
+        "rgb(89, 75, 18)",
+        "rgb(89, 75, 18)"
+      ],
+      "surface": "rgb(30, 30, 30)"
+    }
+  },
+  {
+    "theme": "light",
+    "type": "system1",
+    "selector": ".music-row",
+    "before": {
+      "cells": [
+        "color(srgb 0.895059 0.897882 0.904)",
+        "color(srgb 0.895059 0.897882 0.904)"
+      ],
+      "surface": "rgb(255, 255, 255)"
+    },
+    "hovered": {
+      "cells": [
+        "rgb(255, 220, 56)",
+        "rgb(255, 220, 56)"
+      ],
+      "surface": "rgb(255, 255, 255)"
+    }
+  },
+  {
+    "theme": "light",
+    "type": "system1",
+    "selector": ".sound-row",
+    "before": {
+      "cells": [
+        "color(srgb 0.895059 0.897882 0.904)",
+        "color(srgb 0.895059 0.897882 0.904)"
+      ],
+      "surface": "rgb(255, 255, 255)"
+    },
+    "hovered": {
+      "cells": [
+        "rgb(255, 220, 56)",
+        "rgb(255, 220, 56)"
+      ],
+      "surface": "rgb(255, 255, 255)"
+    }
+  },
+  {
+    "theme": "light",
+    "type": "actors",
+    "selector": ".traits-table tbody tr:has(td:not([class$=\"-indicator\"]))",
+    "before": {
+      "cells": [
+        "color(srgb 0.895059 0.897882 0.904)"
+      ],
+      "surface": "rgb(255, 255, 255)"
+    },
+    "hovered": {
+      "cells": [
+        "rgb(255, 220, 56)"
+      ],
+      "surface": "rgb(255, 255, 255)"
+    }
+  },
+  {
+    "theme": "light",
+    "type": "classes",
+    "selector": ".traits-table tbody tr:has(td:not([class$=\"-indicator\"]))",
+    "before": {
+      "cells": [
+        "color(srgb 0.895059 0.897882 0.904)",
+        "color(srgb 0.895059 0.897882 0.904)",
+        "color(srgb 0.895059 0.897882 0.904)"
+      ],
+      "surface": "rgb(255, 255, 255)"
+    },
+    "hovered": {
+      "cells": [
+        "rgb(255, 220, 56)",
+        "rgb(255, 220, 56)",
+        "rgb(255, 220, 56)"
+      ],
+      "surface": "rgb(255, 255, 255)"
+    }
+  },
+  {
+    "theme": "light",
+    "type": "skills",
+    "selector": ".traits-table tbody tr:has(td:not([class$=\"-indicator\"]))",
+    "before": {
+      "cells": [
+        "color(srgb 0.895059 0.897882 0.904)",
+        "color(srgb 0.895059 0.897882 0.904)"
+      ],
+      "surface": "rgb(255, 255, 255)"
+    },
+    "hovered": {
+      "cells": [
+        "rgb(255, 220, 56)",
+        "rgb(255, 220, 56)"
+      ],
+      "surface": "rgb(255, 255, 255)"
+    }
+  },
+  {
+    "theme": "light",
+    "type": "items",
+    "selector": ".traits-table tbody tr:has(td:not([class$=\"-indicator\"]))",
+    "before": {
+      "cells": [
+        "color(srgb 0.895059 0.897882 0.904)"
+      ],
+      "surface": "rgb(255, 255, 255)"
+    },
+    "hovered": {
+      "cells": [
+        "rgb(255, 220, 56)"
+      ],
+      "surface": "rgb(255, 255, 255)"
+    }
+  },
+  {
+    "theme": "light",
+    "type": "weapons",
+    "selector": ".traits-table tbody tr:has(td:not([class$=\"-indicator\"]))",
+    "before": {
+      "cells": [
+        "color(srgb 0.895059 0.897882 0.904)",
+        "color(srgb 0.895059 0.897882 0.904)"
+      ],
+      "surface": "rgb(255, 255, 255)"
+    },
+    "hovered": {
+      "cells": [
+        "rgb(255, 220, 56)",
+        "rgb(255, 220, 56)"
+      ],
+      "surface": "rgb(255, 255, 255)"
+    }
+  },
+  {
+    "theme": "light",
+    "type": "armors",
+    "selector": ".traits-table tbody tr:has(td:not([class$=\"-indicator\"]))",
+    "before": {
+      "cells": [
+        "color(srgb 0.895059 0.897882 0.904)",
+        "color(srgb 0.895059 0.897882 0.904)"
+      ],
+      "surface": "rgb(255, 255, 255)"
+    },
+    "hovered": {
+      "cells": [
+        "rgb(255, 220, 56)",
+        "rgb(255, 220, 56)"
+      ],
+      "surface": "rgb(255, 255, 255)"
+    }
+  },
+  {
+    "theme": "light",
+    "type": "enemies",
+    "selector": ".traits-table tbody tr:has(td:not([class$=\"-indicator\"]))",
+    "before": {
+      "cells": [
+        "color(srgb 0.895059 0.897882 0.904)",
+        "color(srgb 0.895059 0.897882 0.904)",
+        "color(srgb 0.895059 0.897882 0.904)"
+      ],
+      "surface": "rgb(255, 255, 255)"
+    },
+    "hovered": {
+      "cells": [
+        "rgb(255, 220, 56)",
+        "rgb(255, 220, 56)",
+        "rgb(255, 220, 56)"
+      ],
+      "surface": "rgb(255, 255, 255)"
+    }
+  },
+  {
+    "theme": "light",
+    "type": "states",
+    "selector": ".traits-table tbody tr:has(td:not([class$=\"-indicator\"]))",
+    "before": {
+      "cells": [
+        "color(srgb 0.895059 0.897882 0.904)",
+        "color(srgb 0.895059 0.897882 0.904)"
+      ],
+      "surface": "rgb(255, 255, 255)"
+    },
+    "hovered": {
+      "cells": [
+        "rgb(255, 220, 56)",
+        "rgb(255, 220, 56)"
+      ],
+      "surface": "rgb(255, 255, 255)"
+    }
+  }
+]

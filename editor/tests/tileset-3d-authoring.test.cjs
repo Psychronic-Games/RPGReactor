@@ -289,21 +289,22 @@ test('an unclassified tile is left unmarked so classified ones stand out', () =>
 });
 
 test('switching in and out of 3D mode repaints what is on screen', () => {
-    const source = fs.readFileSync(
-        path.join(editorRoot, 'src', 'database', 'DatabaseTilesetEditor.js'), 'utf8');
     // The mode changes what the overlay shows, not just what a click does, so
     // the canvases already drawn have to be repainted or the view lies.
-    assert.match(source, /was3D !== \(mode === 'tile3d'\)\) this\.refreshOverlays\(\)/);
-
     const editor = tilesetEditor();
+    editor.refreshFlagKey = () => {};
+    editor.refreshTile3DPreview = () => {};
     const repainted = [];
     editor.redrawCanvasOverlay = (canvas, imageIndex) => repainted.push(imageIndex);
     editor.tabCanvases = [
         { canvas: {}, imageIndex: 0, isSplitSheet: false },
         { canvas: {}, imageIndex: 4, isSplitSheet: false }
     ];
-    editor.refreshOverlays();
+    editor.setFlagEditMode('tile3d');
     assert.deepEqual(repainted, [0, 4], 'every stacked canvas of the A tab');
+    repainted.length = 0;
+    editor.setFlagEditMode('passability');
+    assert.deepEqual(repainted, [0, 4], 'leaving 3D restores passage overlays');
 });
 
 test('standalone saves write the classification beside Tilesets.json', () => {

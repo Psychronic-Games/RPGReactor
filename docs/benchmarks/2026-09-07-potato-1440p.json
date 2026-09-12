@@ -1,0 +1,550 @@
+{
+  "date": "2026-09-07",
+  "revision": "20260907.2",
+  "hardware": {
+    "cpu": "AMD Ryzen 5 PRO 5650U",
+    "logicalProcessors": 12,
+    "usableRamGiB": 15.3,
+    "gpu": "AMD Radeon integrated, ANGLE Direct3D11",
+    "display": "External Acer, 2560x1440 at 144 Hz; laptop 1920x1080 at 60 Hz",
+    "renderSize": [
+      2560,
+      1440
+    ]
+  },
+  "method": {
+    "project": "Disposable copy of Demo, Map001",
+    "route": "Start (24,45), 24 tiles north then 24 south, speed 4, collision bypass for repeatability, four-second warmup; 384 measured RAF intervals per completed route.",
+    "switches": [
+      "Reactor3D.CoveredFloor.enabled",
+      "Reactor3D.EffekseerScene.reuseQuads"
+    ],
+    "baseline": "Both switches off; drain inactive quad cache before warmup.",
+    "scheduling": "Normal browser frame limiter and Direct3D; test-only focus/background-throttling overrides. No concurrent tests or CPU profiler during these samples.",
+    "quality": "No changes to authored resolution, textures, antialiasing, lighting/shadow budgets, model detail, or effect budgets.",
+    "caveat": "Live-session variation is substantial. Aggregate difference does not establish a dependable FPS gain or resolved spikes. First five samples preceded additional decode-readiness and conservative fallback guards; all used the same rendering optimizations."
+  },
+  "runtimeSha256": "87d2eb9a42b24a5c076e8c4aff8cc4fc73ebdff0de114e484a04de4497ba678f",
+  "baseline": {
+    "runs": 3,
+    "frames": 1152,
+    "fps": 25.46987722723243,
+    "meanMs": 39.26206597222222,
+    "p95": 55.59999999999127,
+    "p99": 104.39999999999418,
+    "max": 207.90000000002328,
+    "over50": 70,
+    "shaderCompilations": [
+      12,
+      12,
+      12
+    ]
+  },
+  "optimized": {
+    "runs": 4,
+    "frames": 1536,
+    "fps": 26.07305207481061,
+    "meanMs": 38.35377604166672,
+    "p95": 55.59999999997672,
+    "p99": 118,
+    "max": 291.79999999998836,
+    "over50": 90,
+    "shaderCompilations": [
+      0,
+      0,
+      0,
+      0
+    ]
+  },
+  "samples": [
+    {
+      "name": "final-baseline-a",
+      "beginFlags": {
+        "floor": false,
+        "pool": 0,
+        "reuse": false
+      },
+      "compiles": 12,
+      "completed": true,
+      "endFlags": {
+        "floor": false,
+        "pool": 0,
+        "reuse": false
+      },
+      "endPos": [
+        24,
+        45
+      ],
+      "fps": 25.69507176553247,
+      "frames": 384,
+      "max": 125,
+      "meanMs": 38.91796875,
+      "over25": 379,
+      "over50": 22,
+      "p50": 34.80000000001746,
+      "p95": 55.5,
+      "p99": 90.10000000000582,
+      "renderMs": 13.428311687475675,
+      "renders": 385,
+      "startPos": [
+        24,
+        45
+      ],
+      "tickMs": 26.02545454378252,
+      "ticks": 385,
+      "longTasks": 8
+    },
+    {
+      "name": "final-optimized-a",
+      "beginFlags": {
+        "floor": true,
+        "pool": 0,
+        "reuse": true
+      },
+      "compiles": 0,
+      "completed": true,
+      "endFlags": {
+        "floor": true,
+        "pool": 0,
+        "reuse": true
+      },
+      "endPos": [
+        24,
+        45
+      ],
+      "fps": 26.13151501541347,
+      "frames": 384,
+      "max": 291.79999999998836,
+      "meanMs": 38.26796875000006,
+      "over25": 375,
+      "over50": 19,
+      "p50": 34.70000000001164,
+      "p95": 48.79999999998836,
+      "p99": 166.70000000001164,
+      "renderMs": 13.255324673962283,
+      "renders": 385,
+      "startPos": [
+        24,
+        45
+      ],
+      "tickMs": 25.284675323343897,
+      "ticks": 385,
+      "longTasks": 8
+    },
+    {
+      "name": "final-optimized-b",
+      "beginFlags": {
+        "floor": true,
+        "pool": 0,
+        "reuse": true
+      },
+      "compiles": 0,
+      "completed": true,
+      "endFlags": {
+        "floor": true,
+        "pool": 0,
+        "reuse": true
+      },
+      "endPos": [
+        24,
+        45
+      ],
+      "fps": 25.065274151436032,
+      "frames": 384,
+      "max": 179.89999999996508,
+      "meanMs": 39.895833333333336,
+      "over25": 375,
+      "over50": 37,
+      "p50": 34.79999999998836,
+      "p95": 62.40000000002328,
+      "p99": 125,
+      "renderMs": 13.144675322322103,
+      "renders": 385,
+      "startPos": [
+        24,
+        45
+      ],
+      "tickMs": 25.382077921830213,
+      "ticks": 385,
+      "longTasks": 12
+    },
+    {
+      "name": "final-baseline-b",
+      "beginFlags": {
+        "floor": false,
+        "pool": 0,
+        "reuse": false
+      },
+      "compiles": 12,
+      "completed": true,
+      "endFlags": {
+        "floor": false,
+        "pool": 0,
+        "reuse": false
+      },
+      "endPos": [
+        24,
+        45
+      ],
+      "fps": 24.575213593165017,
+      "frames": 384,
+      "max": 207.90000000002328,
+      "meanMs": 40.69140625,
+      "over25": 381,
+      "over50": 24,
+      "p50": 35,
+      "p95": 55.70000000006985,
+      "p99": 132.19999999995343,
+      "renderMs": 13.98285714310485,
+      "renders": 385,
+      "startPos": [
+        24,
+        45
+      ],
+      "tickMs": 26.201818182096854,
+      "ticks": 385,
+      "longTasks": 12
+    },
+    {
+      "name": "final-optimized-c",
+      "beginFlags": {
+        "floor": true,
+        "pool": 0,
+        "reuse": true
+      },
+      "compiles": 0,
+      "completed": true,
+      "endFlags": {
+        "floor": true,
+        "pool": 0,
+        "reuse": true
+      },
+      "endPos": [
+        24,
+        45
+      ],
+      "fps": 26.894146320964698,
+      "frames": 384,
+      "max": 83.29999999993015,
+      "meanMs": 37.18281250000018,
+      "over25": 377,
+      "over50": 13,
+      "p50": 34.800000000046566,
+      "p95": 48.699999999953434,
+      "p99": 76.09999999997672,
+      "renderMs": 12.823636363233838,
+      "renders": 385,
+      "startPos": [
+        24,
+        45
+      ],
+      "tickMs": 24.144935064501578,
+      "ticks": 385,
+      "longTasks": 1
+    },
+    {
+      "name": "final-baseline-c",
+      "beginFlags": {
+        "floor": false,
+        "pool": 0,
+        "reuse": false
+      },
+      "compiles": 12,
+      "completed": true,
+      "endFlags": {
+        "floor": false,
+        "pool": 0,
+        "reuse": false
+      },
+      "endPos": [
+        24,
+        45
+      ],
+      "fps": 26.19390309620121,
+      "frames": 384,
+      "max": 125,
+      "meanMs": 38.17682291666665,
+      "over25": 378,
+      "over50": 24,
+      "p50": 34.80000000000291,
+      "p95": 55.5,
+      "p99": 83.10000000000582,
+      "renderMs": 13.428571427952159,
+      "renders": 385,
+      "startPos": [
+        24,
+        45
+      ],
+      "tickMs": 26.448831169016948,
+      "ticks": 385,
+      "longTasks": 8
+    },
+    {
+      "name": "final-optimized-d",
+      "beginFlags": {
+        "floor": true,
+        "pool": 0,
+        "reuse": true
+      },
+      "compiles": 0,
+      "completed": true,
+      "endFlags": {
+        "floor": true,
+        "pool": 0,
+        "reuse": true
+      },
+      "endPos": [
+        24,
+        45
+      ],
+      "fps": 26.26844434715393,
+      "frames": 384,
+      "max": 139,
+      "meanMs": 38.0684895833333,
+      "over25": 373,
+      "over50": 21,
+      "p50": 34.70000000001164,
+      "p95": 55.5,
+      "p99": 124.89999999999418,
+      "renderMs": 14.307792208566294,
+      "renders": 385,
+      "startPos": [
+        24,
+        45
+      ],
+      "tickMs": 27.456623378047695,
+      "ticks": 385,
+      "longTasks": 10
+    }
+  ],
+  "floorImageChecks": {
+    "glError": 0,
+    "passed": true,
+    "result": [
+      {
+        "baselineDraws": 1,
+        "changedChannels": 0,
+        "maxDelta": 0,
+        "optimizedDraws": 0,
+        "p": [
+          24.5,
+          4.38,
+          42
+        ]
+      },
+      {
+        "baselineDraws": 1,
+        "changedChannels": 0,
+        "maxDelta": 0,
+        "optimizedDraws": 0,
+        "p": [
+          24.5,
+          4.38,
+          22
+        ]
+      },
+      {
+        "baselineDraws": 1,
+        "changedChannels": 0,
+        "maxDelta": 0,
+        "optimizedDraws": 0,
+        "p": [
+          24.5,
+          4.38,
+          49.9
+        ]
+      },
+      {
+        "baselineDraws": 1,
+        "changedChannels": 0,
+        "maxDelta": 0,
+        "optimizedDraws": 0,
+        "p": [
+          0.1,
+          4.38,
+          25
+        ]
+      },
+      {
+        "baselineDraws": 1,
+        "changedChannels": 0,
+        "maxDelta": 0,
+        "optimizedDraws": 0,
+        "p": [
+          49.9,
+          4.38,
+          25
+        ]
+      },
+      {
+        "baselineDraws": 1,
+        "changedChannels": 0,
+        "maxDelta": 0,
+        "optimizedDraws": 1,
+        "p": [
+          24.5,
+          0.06,
+          25
+        ]
+      },
+      {
+        "baselineDraws": 1,
+        "changedChannels": 0,
+        "maxDelta": 0,
+        "optimizedDraws": 1,
+        "p": [
+          24.5,
+          -0.02,
+          25
+        ]
+      },
+      {
+        "baselineDraws": 1,
+        "changedChannels": 0,
+        "maxDelta": 0,
+        "optimizedDraws": 1,
+        "p": [
+          24.5,
+          4.38,
+          56
+        ]
+      },
+      {
+        "baselineDraws": 1,
+        "changedChannels": 0,
+        "coverOpacity": 0.5,
+        "maxDelta": 0,
+        "optimizedDraws": 1,
+        "p": [
+          24.5,
+          4.38,
+          42
+        ]
+      },
+      {
+        "baselineDraws": 1,
+        "changedChannels": 0,
+        "maxDelta": 0,
+        "optimizedDraws": 1,
+        "p": [
+          24.5,
+          4.38,
+          42
+        ],
+        "wallOpacity": 0.5
+      },
+      {
+        "baselineDraws": 1,
+        "changedChannels": 0,
+        "coverVisible": false,
+        "maxDelta": 0,
+        "optimizedDraws": 1,
+        "p": [
+          24.5,
+          4.38,
+          42
+        ]
+      }
+    ]
+  },
+  "effectQuadImageChecks": {
+    "glError": 0,
+    "passed": true,
+    "results": [
+      {
+        "changed": 0,
+        "materialReused": true,
+        "max": 0,
+        "nonzero": true
+      },
+      {
+        "changed": 0,
+        "materialReused": true,
+        "max": 0,
+        "nonzero": true
+      },
+      {
+        "changed": 0,
+        "materialReused": true,
+        "max": 0,
+        "nonzero": true
+      }
+    ]
+  },
+  "lifecycle": {
+    "map": {
+      "canvas": [
+        2560,
+        1440
+      ],
+      "error": "",
+      "floor": [
+        {
+          "kind": "cover",
+          "opaque": true
+        },
+        {
+          "kind": "floor",
+          "opaque": true
+        },
+        {
+          "kind": "ceiling",
+          "opaque": true
+        },
+        {
+          "kind": "walls",
+          "opaque": true
+        },
+        {
+          "kind": "walls",
+          "opaque": true
+        },
+        {
+          "kind": "walls",
+          "opaque": true
+        },
+        {
+          "kind": "walls",
+          "opaque": true
+        }
+      ],
+      "forced": false,
+      "glError": 0,
+      "live": 2,
+      "revision": "20260907.2",
+      "samples": [
+        4
+      ],
+      "targets": [
+        4
+      ],
+      "through": false
+    },
+    "refresh": {
+      "meanMs": 7.066666666666666,
+      "medianMs": 6.900000000001455,
+      "screen": [
+        2560,
+        1440
+      ]
+    },
+    "title": {
+      "contexts": 1,
+      "floor": false,
+      "live": 0,
+      "pool": false,
+      "scene": "Scene_ReactorUI"
+    }
+  },
+  "tests": {
+    "focusedPassed": 175,
+    "runtimeSyncPassed": 2,
+    "fullWindowsRun": {
+      "tests": 2947,
+      "passed": 2912,
+      "failed": 34,
+      "skipped": 1
+    },
+    "subsequent": "Ten revision assertions and one template-sync failure corrected and passed on rerun; 23 platform/tooling failures remain outside this rendering change. Full suite not rerun after corrections."
+  }
+}

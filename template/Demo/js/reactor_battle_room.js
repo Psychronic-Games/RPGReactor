@@ -58,11 +58,12 @@
             const R=root.Reactor3D,T=root.THREE,binding=record.binding;
             record.rules=record.rules.slice();binding.clips=binding.clips.slice();
             const has=name=>record.rules.some(r=>r.trigger==='action'&&r.name.toLowerCase()===name);
+            const attackFallback=()=>{const punch=record.rules.find(r=>r.trigger==='action'&&r.name.toLowerCase()==='punch');if(punch&&!has('attack'))record.rules.push({...punch,name:'attack'});};attackFallback();
             for(const [name,trigger] of [['run','dashing'],['walk','walking']]) {
                 const rule=record.rules.find(r=>r.type==='clip'&&r.trigger===trigger)||record.rules.find(r=>r.type==='clip'&&r.trigger==='moving');
                 if(rule&&!has(name))record.rules.push({...rule,name,trigger:'action',repeat:true});
             }
-            if(has('punch'))return;
+            if(has('punch')&&has('item'))return;
             // Build one short jab for an available humanoid skeleton. Authored
             // Punch action rules win; these tracks live on this instance only.
             const bones=new Set();record.object.traverse(node=>{if(node.isSkinnedMesh)for(const bone of node.skeleton.bones)bones.add(bone);});
@@ -81,10 +82,17 @@
             };
             const windup=pose([0,-.8,.45],[0,.55,.8]),contact=pose([0,-.12,1],[0,-.02,1]);
             const times=[0,8/60,16/60,20/60,36/60],rest=[arm.quaternion.clone(),fore.quaternion.clone()];
-            const tracks=[arm,fore].map((bone,i)=>new T.QuaternionKeyframeTrack(bone.uuid+'.quaternion',times,[rest[i],windup[i],contact[i],contact[i],rest[i]].flatMap(q=>q.toArray())));
-            const clip=new T.AnimationClip('__reactor_unarmed_punch',36/60,tracks);binding.clips.push(clip);
-            if(!binding.mixer)binding.mixer=new T.AnimationMixer(binding.root);
-            record.rules.push(...R.readModelAnimationRules({animations:[{type:'clip',trigger:'action',name:'punch',clip:clip.name}]}));
+            const add=(name,clipName,times,poses)=>{
+                if(has(name))return;
+                const tracks=[arm,fore].map((bone,i)=>new T.QuaternionKeyframeTrack(bone.uuid+'.quaternion',times,poses.map(p=>p[i]).flatMap(q=>q.toArray())));
+                const clip=new T.AnimationClip(clipName,times.at(-1),tracks);binding.clips.push(clip);
+                if(!binding.mixer)binding.mixer=new T.AnimationMixer(binding.root);
+                record.rules.push(...R.readModelAnimationRules({animations:[{type:'clip',trigger:'action',name,clip:clip.name}]}));
+            };
+            add('punch','__reactor_unarmed_punch',times,[rest,windup,contact,contact,rest]);
+            // The item starter releases at frame 12. Authored item motions win.
+            const raised=pose([0,-.4,.8],[0,.9,.25]),release=pose([0,-.1,1],[0,.05,1]);
+            add('item','__reactor_item_toss',[0,6/60,12/60,24/60],[rest,raised,release,rest]);attackFallback();
         }
         async addModel(key, spec, position) {
             const R = root.Reactor3D;
@@ -156,6 +164,31 @@
             ctx.drawImage(source,frame.x,frame.y,frame.width,frame.height,0,0,width,heightPx);r.texture.needsUpdate=true;
             r.height=height;r.object.scale.set(height*frame.width/frame.height*(position.scale??1)*(position.scaleX??1)*(position.flipX?-1:1),height*(position.scale??1)*(position.scaleY??1),1);
             this.place(key,position);r.object.quaternion.copy(this.camera.quaternion);
+        }
+        static attachmentWorld(record, attachment, boneName) {
+            if(!record?.object||(!boneName&&!['rightHand','leftHand'].includes(attachment)))return null;
+            const name=boneName||attachment,cache=record.attachmentBones||=(new Map());
+            if(!cache.has(name)){
+                const normalize=value=>String(value).toLowerCase().replace(/^.*[:|]/,'').replace(/[^a-z0-9]/g,'');
+                const wanted=boneName?[normalize(boneName)]:attachment==='leftHand'?['lefthand','handl','lhand']:['righthand','handr','rhand'];let found=null;
+                record.object.traverse(node=>{if(!found&&wanted.includes(normalize(node.name)))found=node;});cache.set(name,found);
+            }
+            const bone=cache.get(name);if(!bone)return null;
+            record.object.updateMatrixWorld(true);return bone.getWorldPosition(new root.THREE.Vector3());
+        }
+        attachmentPoint(key, step, pose) {
+            const record=this.models.get(key)||this.billboards.get(key),p=pose||record?.position||{x:0,y:0,z:0},world=BattleRoomView.attachmentWorld(record,step.attachment,step.bone);
+            if(world)return {x:world.x-.5+(step.x||0)*Math.sign(p.facing||1),y:world.z-.5+(step.y||0),z:world.y+(step.z||0)};
+            const height=record?.billboard?record.height*(p.scale||1):(record?.spec?.size||2)*(p.scale||1),width=record?.billboard?height*record.canvas.width/record.canvas.height:height*.5;
+            return root.ReactorBattleData.attachmentPoint(p,step,width,height);
+        }
+        sequenceBillboard(key,source,frame,point,step={}) {
+            const scale=step.scale??1,height=frame.height/48*scale,width=frame.width/48*scale;
+            this.billboard(key,source,frame,{x:point.x,y:point.y,z:point.z-height/2,rotateZ:-(step.rotation||0),flipX:!!step.flipX},height);
+            const record=this.billboards.get(key);if(!record)return;
+            const q=this.camera.quaternion.clone().multiply(new root.THREE.Quaternion().setFromAxisAngle(new root.THREE.Vector3(0,0,1),-(step.rotation||0)*Math.PI/180));
+            const offset=new root.THREE.Vector3((.5-(step.gripX??.5))*width,((step.gripY??.5)-.5)*height,0).applyQuaternion(q);record.object.position.add(offset);
+            record.object.material.opacity=step.opacity??1;record.object.visible=step.visible!==false;
         }
         remove(key) {
             const r = this.models.get(key) || this.billboards.get(key); if (!r) return;
@@ -294,6 +327,7 @@
             const a=this.map.reactor3d?.lighting||{};
             R.packLightUniforms(lights,{intensity:a.ambient??1,colour:R.parseColour(a.ambientColour??'#ffffff')},this.uniforms);
             this.updateEffects();
+            for(const update of this.sequenceVisualUpdates||[])update();
             this.renderer.render(this.scene,this.camera);
         }
         effectActive(record,effect) {
@@ -388,11 +422,12 @@
                         if(!media.texture){media.texture=image?new T.Texture(element):new T.VideoTexture(element);media.texture.colorSpace=T.SRGBColorSpace;media.texture.generateMipmaps=false;media.texture.minFilter=T.LinearFilter;media.texture.needsUpdate=true;plane.material.map=media.texture;plane.material.needsUpdate=true;}
                         plane.visible=true;
                     };
-                    const failed=()=>{if(media.disposed)return;media.failed=true;plane.visible=false;element.pause?.();this.assets.warn?.('Could not play room media: '+effect.video.file);};
+                    const failed=error=>{if(media.disposed||media.failed)return;media.failed=true;plane.visible=false;media.clearGesture?.();element.pause?.();this.assets.warn?.('Could not play room media: '+effect.video.file+(error?.message?' ('+error.message+')':''));};
+                    media.fail=failed;
                     element.onerror=failed;
                     if(image)element.onload=ready;
-                    else {element.onloadeddata=ready;element.loop=effect.video.loop!==false;element.muted=this.assets.muteMedia===true||!effect.video.audio;element.volume=Math.max(0,Math.min(1,(effect.video.volume??100)/100));element.playsInline=true;element.playbackRate=Math.max(.05,Math.min(16,effect.video.playbackRate||1));}
-                    element.src=url;if(!image)element.play().catch(failed);
+                    else {element.onloadeddata=ready;element.loop=effect.video.loop!==false;element.muted=this.assets.muteMedia===true||!effect.video.audio;element.volume=Math.max(0,Math.min(1,(effect.video.volume??100)/100));element.defaultMuted=element.muted;element.preload='auto';element.playsInline=true;element.playbackRate=Math.max(.05,Math.min(16,effect.video.playbackRate||1));}
+                    element.src=url;if(!image)this.playMedia(media);
                 }
                 if(media.failed||!media.plane)continue;
                 if(effect.surface){this.updateMapMediaPlane(media,effect.surface);continue;}
@@ -404,8 +439,36 @@
                 const size=R.videoEffectSize(effect,record.object.userData.glbSize),axes=R.scaleAxes(effect.scale);media.plane.scale.set(size[0]*axes[0],size[1]*axes[1],1);
             }
         }
+        playMedia(media) {
+            if(media.disposed||media.failed||media.playPending)return;
+            const clearGesture=()=>{
+                if(!media.retryGesture)return;
+                for(const type of ['pointerdown','keydown','touchend'])document.removeEventListener(type,media.retryGesture,true);
+                media.retryGesture=null;
+            };
+            media.clearGesture=clearGesture;
+            const rejected=error=>{
+                media.playPending=false;
+                if(media.disposed||media.failed)return;
+                // Autoplay may be denied by the browser/iframe. A pause or load
+                // can also interrupt startup. Neither makes the media invalid.
+                if(error?.name==='NotAllowedError'||error?.name==='AbortError'){
+                    if(!media.retryGesture){
+                        media.retryGesture=()=>this.playMedia(media);
+                        for(const type of ['pointerdown','keydown','touchend'])document.addEventListener(type,media.retryGesture,true);
+                    }
+                    return;
+                }
+                media.fail(error);
+            };
+            media.playPending=true;
+            try {
+                const promise=media.element.play();
+                Promise.resolve(promise).then(()=>{media.playPending=false;clearGesture();},rejected);
+            } catch(error) {rejected(error);}
+        }
         stopMedia(media) {
-            if(media.disposed)return;media.disposed=true;
+            if(media.disposed)return;media.disposed=true;media.clearGesture?.();
             const element=media.element;if(element){element.onload=element.onerror=element.onloadeddata=null;element.pause?.();element.removeAttribute?.('src');element.load?.();}
             if(media.scanline){media.scanline.mesh.geometry.dispose();media.scanline.mesh.material.dispose();media.scanline.texture.dispose();}
             media.plane?.removeFromParent();media.plane?.geometry.dispose();media.plane?.material.dispose();media.texture?.dispose();

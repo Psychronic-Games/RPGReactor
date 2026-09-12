@@ -215,23 +215,23 @@ test('generic exact-text pass preserves complex controls', () => {
     assert.equal(simpleButton.getAttribute('data-i18n-text-source'), 'Plugins');
 });
 
-test('literal-string translation tables have identical key sets in every locale', () => {
+test('literal-string translation tables retain shared coverage and allow reviewed locale additions', () => {
     // tText falls back to English silently, so a locale missing keys ships
-    // a half-translated UI with no test failure — guard parity here.
-    const source = i18nSource();
-    const vmCtx = {};
-    vm.createContext(vmCtx);
-    vm.runInContext(
-        source.slice(0, source.indexOf('class I18nManager')) +
-        ';__tables = { text: RR_TEXT_TRANSLATIONS, commands: RR_EVENT_COMMAND_NAMES, sections: RR_EVENT_SECTION_NAMES };',
-        vmCtx
-    );
+    // a half-translated UI with no test failure — guard shared coverage here.
+    // Community reviews may add phrases for one locale before the others.
+    const { catalogs, reviewed } = loadI18nForTest();
+    const tables = { text: catalogs.text, commands: catalogs.commands, sections: catalogs.sections };
     const nonEnglish = ['ja', 'es', 'zh-Hant', 'zh-Hans', 'ru', 'pt', 'de', 'fr', 'el', 'ko', 'ar', 'it', 'pl', 'id', 'vi', 'th', 'tr'];
-    for (const [name, table] of Object.entries(vmCtx.__tables)) {
+    for (const [name, table] of Object.entries(tables)) {
         assert.deepEqual(Object.keys(table).sort(), [...nonEnglish].sort(), `${name} covers every non-English locale`);
         const refKeys = Array.from(Object.keys(table.ja)).sort();
         for (const lang of nonEnglish) {
-            assert.deepEqual(Array.from(Object.keys(table[lang])).sort(), refKeys, `${name}[${lang}] keys match ja`);
+            const additions = Object.keys(table[lang]).filter(key => !refKeys.includes(key));
+            for (const key of additions) {
+                assert.ok(Object.hasOwn(reviewed[name][lang], key), `${name}[${lang}][${key}] is a reviewed addition`);
+            }
+            assert.deepEqual(Array.from(Object.keys(table[lang])).filter(key => refKeys.includes(key)).sort(), refKeys,
+                `${name}[${lang}] retains shared keys`);
         }
     }
 });
@@ -267,13 +267,8 @@ test('localization source inventory recognizes static text calls and consumed sc
 });
 
 test('all statically routed localization source phrases exist in RR_TEXT_TRANSLATIONS', () => {
-    const source = i18nSource();
-    const vmCtx = {};
-    vm.createContext(vmCtx);
-    vm.runInContext(
-        source.slice(0, source.indexOf('class I18nManager')) + ';__text = RR_TEXT_TRANSLATIONS;',
-        vmCtx
-    );
+    const { catalogs } = loadI18nForTest();
+    const vmCtx = { __text: catalogs.text };
     const sourceKeys = new Set(Object.keys(vmCtx.__text.ja));
     const audit = auditTextTranslationCoverage(repoRoot, sourceKeys);
 
@@ -281,13 +276,8 @@ test('all statically routed localization source phrases exist in RR_TEXT_TRANSLA
 });
 
 test('literal translations preserve interpolation placeholders', () => {
-    const source = i18nSource();
-    const vmCtx = {};
-    vm.createContext(vmCtx);
-    vm.runInContext(
-        source.slice(0, source.indexOf('class I18nManager')) + ';__text = RR_TEXT_TRANSLATIONS;',
-        vmCtx
-    );
+    const { catalogs } = loadI18nForTest();
+    const vmCtx = { __text: catalogs.text };
     const placeholderPattern = /\{[^{}]+\}|%[1-9](?!\d)/g;
     const referenceKeys = Object.keys(vmCtx.__text.ja);
     for (const locale of Object.keys(vmCtx.__text)) {

@@ -2340,7 +2340,7 @@ class DatabaseAnimationEditor {
                     <!-- Black footer -->
                     <div style="background:var(--color-bg-deep); padding:12px 16px; border-top:1px solid var(--color-border); border-radius:0 0 6px 6px; display:flex; gap:10px; justify-content:flex-end;">
                         <button id="cell-modal-cancel" class="rr-btn-secondary">${tt('Cancel')}</button>
-                        <button id="cell-modal-save" style="padding:7px 18px; background:var(--color-accent); border:1px solid var(--color-accent); color:var(--color-bg-deep); border-radius:3px; cursor:pointer; font-size:12px; font-weight:bold;">${tt('Save')}</button>
+                        <button id="cell-modal-save" style="padding:7px 18px; background:var(--color-accent); border:1px solid var(--color-accent); color:var(--color-accent-on); border-radius:3px; cursor:pointer; font-size:12px; font-weight:bold;">${tt('Save')}</button>
                     </div>
                 </div>
             </div>

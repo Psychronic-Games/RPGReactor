@@ -2,6 +2,40 @@
  * Unicode-aware search, sections, and file-list UI shared by asset pickers.
  */
 (function(root) {
+    /** Keyboard selection for lists whose rows are rebuilt by their owner. */
+    const bindListNavigation = (element, options) => {
+        element._rrListNavigationCleanup?.();
+        element.tabIndex = 0;
+        const editable = target => target?.closest?.('input, textarea, select, [contenteditable="true"]');
+        const focus = event => {
+            if (!editable(event.target)) element.focus({ preventScroll: true });
+        };
+        const keydown = event => {
+            if (event.defaultPrevented || editable(event.target) || event.altKey || event.metaKey || event.ctrlKey) return;
+            const movement = { ArrowUp: -1, ArrowDown: 1, Home: -Infinity, End: Infinity }[event.key];
+            if (movement === undefined) return;
+            event.preventDefault();
+            event.stopPropagation();
+            const items = Array.from(options.items()).filter(item => item.getClientRects().length);
+            if (!items.length) return;
+            const at = items.findIndex(item => options.isSelected(item));
+            const next = movement === -Infinity ? 0 : movement === Infinity ? items.length - 1
+                : at < 0 ? (movement > 0 ? 0 : items.length - 1)
+                : Math.max(0, Math.min(items.length - 1, at + movement));
+            options.select(items[next], event);
+            // Selection may rebuild rows or details. Keep arrows on the list.
+            element.focus({ preventScroll: true });
+            const selected = Array.from(options.items()).find(item => options.isSelected(item));
+            (selected || items[next]).scrollIntoView({ block: 'nearest', inline: 'nearest' });
+        };
+        element.addEventListener('mousedown', focus);
+        element.addEventListener('keydown', keydown);
+        element._rrListNavigationCleanup = () => {
+            element.removeEventListener('mousedown', focus);
+            element.removeEventListener('keydown', keydown);
+        };
+        return element._rrListNavigationCleanup;
+    };
     const sectionKey = name => {
         const normalized = String(name || '').normalize('NFC');
         if (!normalized) return '#';
@@ -349,7 +383,7 @@
             const items = Array.from(list.querySelectorAll('.rr-picker-file-item'));
             if (!items.length) return;
             const at = items.findIndex(item => item.dataset.fileName === selectedName);
-            const next = at < 0
+            const next = step === -Infinity ? 0 : step === Infinity ? items.length - 1 : at < 0
                 ? (step > 0 ? 0 : items.length - 1)
                 : Math.max(0, Math.min(items.length - 1, at + step));
             const item = items[next];
@@ -370,10 +404,12 @@
         element.addEventListener('keydown', event => {
             if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
                 event.preventDefault();
+                event.stopPropagation();
                 moveSelection(event.key === 'ArrowDown' ? 1 : -1);
             } else if ((event.key === 'Home' || event.key === 'End')
                 && document.activeElement !== searchInput) {
                 event.preventDefault();
+                event.stopPropagation();
                 moveSelection(event.key === 'Home' ? -Infinity : Infinity);
             }
         });
@@ -433,13 +469,14 @@
             focusSelected() {
                 const items = Array.from(list.querySelectorAll('.rr-picker-file-item'));
                 const item = items.find(candidate => candidate.dataset.fileName === selectedName)
-                    || items[0];
+                    || items[0] || searchInput;
                 item?.focus({ preventScroll: true });
             }
         };
     };
 
     const api = {
+        bindListNavigation,
         buildFolderTree,
         compareNames,
         compareSectionKeys,

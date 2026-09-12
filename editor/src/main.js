@@ -127,6 +127,7 @@ class RPGReactor {
 
         // Set up callback for when maps are loaded
         this.projectController.onMapLoaded = () => {
+            this.databaseEditorUI?.tilesetEditor?.resetFlagEditing?.();
             // The grid is rebuilt with the map canvas, which knows nothing of
             // the preference — so it comes up hidden unless it is told again.
             this.applyShowGridPreference(this.optionsManager?.getShowGrid());

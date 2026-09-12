@@ -21,6 +21,54 @@ class ModelPreview3D {
         this.bindInput();
     }
 
+    /** Inspection viewports own their light field; map lighting is never borrowed. */
+    static isolateLighting(object, uniforms) {
+        const count = Reactor3D.SHADER_LIGHTS;
+        uniforms ||= {
+            rrLightCount: { value: 0 }, rrAmbient: { value: new Float32Array([1, 1, 1]) },
+            rrLightPos: { value: new Float32Array(count * 4) },
+            rrLightColor: { value: new Float32Array(count * 4) },
+            rrLightAim: { value: new Float32Array(count * 4) },
+            rrLightShadow: { value: new Float32Array(count).fill(-1) },
+            rrLightGridEnabled: { value: 0 }
+        };
+        this._lightingBindings ||= new WeakMap();
+        object.traverse(node => {
+            for (const material of [node.material].flat().filter(Boolean)) {
+                if (!material.__reactorLit) continue;
+                const bound = this._lightingBindings.get(material);
+                if (bound) { bound.uniforms = uniforms; continue; }
+                const binding = { uniforms };
+                this._lightingBindings.set(material, binding);
+                const compile = material.onBeforeCompile, key = material.customProgramCacheKey;
+                material.onBeforeCompile = function(shader, renderer) {
+                    compile.call(this, shader, renderer);
+                    Object.assign(shader.uniforms, binding.uniforms);
+                };
+                material.customProgramCacheKey = function() { return key.call(this) + '|inspection-light-field'; };
+                material.needsUpdate = true;
+            }
+        });
+        return uniforms;
+    }
+
+    /** Neutral backdrop follows the editor theme without changing the model's colors. */
+    static backgroundColor() {
+        const theme = document.documentElement.getAttribute('data-theme') || 'dark';
+        if (!this._background || this._backgroundTheme !== theme) {
+            const css = getComputedStyle(document.documentElement).getPropertyValue('--color-model-preview-bg').trim();
+            this._background = new THREE.Color(css || '#1a1a1e');
+            this._backgroundTheme = theme;
+        }
+        return this._background;
+    }
+
+    static updateBackground(scene) {
+        if (!scene) return;
+        if (!scene.background) scene.background = new THREE.Color();
+        scene.background.copy(this.backgroundColor());
+    }
+
     bindInput() {
         let dragging = false;
         let lastX = 0;
@@ -120,13 +168,14 @@ class ModelPreview3D {
         model.position.set(0, -(extent.y * scale) / 2, 0);
         this.object = new THREE.Group();
         this.object.add(model);
+        ModelPreview3D.isolateLighting(this.object);
         this.scene.add(this.object);
         this.lastInputAt = performance.now();
     }
 
     createRenderer() {
         this.scene = new THREE.Scene();
-        this.scene.background = new THREE.Color(0x11151f);
+        ModelPreview3D.updateBackground(this.scene);
         this.camera = Reactor3D.createCamera({ fov: 40 });
         this.renderer = new THREE.WebGLRenderer({ canvas: this.canvas, antialias: true });
         this.renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
@@ -155,6 +204,7 @@ class ModelPreview3D {
                 || Math.abs(this.viewGoal.distance - this.view.distance) > 0.001;
             if (moving || now - this.lastInputAt < 1000 || now - this.lastRenderAt >= 100) {
                 Reactor3D.aimCamera(this.camera, { x: -0.5, y: 0, z: -0.5 }, this.view);
+                ModelPreview3D.updateBackground(this.scene);
                 Reactor3D.renderScene(this.renderer, this.scene, this.camera);
                 this.lastRenderAt = now;
             }

@@ -16,10 +16,10 @@
  */
 (function(root) {
     const DEFAULT = 48;
-    // What RPG Maker itself offers. An unrecognised value is more likely a
+    // Reactor supports 8–64 pixel cells. An unrecognised value is more likely a
     // damaged file than a project nobody has seen before, and guessing wrong
     // silently is what this module exists to stop.
-    const SUPPORTED = [48, 32, 24, 16];
+    const SUPPORTED = [64, 48, 32, 24, 16, 8];
 
     /** The tile size a System.json record asks for, or 48. */
     const tileSizeOf = system => {

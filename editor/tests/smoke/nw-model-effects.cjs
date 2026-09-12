@@ -37,9 +37,17 @@ const driver=new WebDriverClient(path.join(process.env.NWJS_SDK_ROOT||path.join(
             layers.forEach((p,i)=>{
                 const layer=p._fxPreview;if(!layer?.active)return;
                 layer.drawNow?.();
-                const canvas=document.createElement('canvas');canvas.width=canvas.height=96;
-                const c=canvas.getContext('2d');c.drawImage(layer.fxCanvas,0,0,96,96);
-                const pixels=c.getImageData(0,0,96,96).data;
+                let pixels;
+                if(layer.fx.gpu&&layer._gpuColourTarget){
+                    // GPU overlays render to retained targets, not the fallback canvas.
+                    const target=layer._gpuColourTarget;
+                    pixels=new Uint8Array(target.width*target.height*4);
+                    __modelEditor._renderer.readRenderTargetPixels(target,0,0,target.width,target.height,pixels);
+                }else{
+                    const canvas=document.createElement('canvas');canvas.width=canvas.height=96;
+                    const c=canvas.getContext('2d');c.drawImage(layer.fxCanvas,0,0,96,96);
+                    pixels=c.getImageData(0,0,96,96).data;
+                }
                 if(pixels.some((v,index)=>index%4===3 && v>5))seen.add(i);
             });
             if(seen.size===2)return done({seen:seen.size,names:layers.map(p=>p._fxPreviewDef.name)});
